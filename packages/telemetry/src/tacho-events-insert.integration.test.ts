@@ -21,14 +21,17 @@ import {
 // (#3662) and that the live column set matches the migrated table (#3072).
 
 /** One small frame on `session`, the kind a host sends most of. */
-function unsealedFrame(session: string): UnsealedTachoEvent {
+function unsealedFrame(
+  session: string,
+  ts = new Date().toISOString(),
+): UnsealedTachoEvent {
   return {
     v: "tacho/1.0",
     event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
     session_id: "witness",
     session_uuid: session,
     root_session_uuid: session,
-    ts: new Date().toISOString(),
+    ts,
     fidelity: "sdk",
     source: "hook",
     agent: {
@@ -70,6 +73,53 @@ describe.skipIf(!process.env["CLICKHOUSE_URL"])(
       );
 
       expect(await storedRows(orgId, session)).toBe(1);
+    });
+
+    // #4297. The partition is the month the control plane received the row
+    // in, not the producer's clock. A host whose clock jumps sends one batch
+    // with frames in three months, and it lands in one partition, as one
+    // part, not one part per month.
+    it("files one batch in one partition whatever the producer's clock says", async () => {
+      const orgId = randomUUID();
+      const workspaceId = randomUUID();
+      const session = sessionUuid("tch_witness", randomUUID());
+      const events: TachoEvent[] = [];
+      let cursor = GENESIS_CURSOR;
+      for (const ts of [
+        "2026-01-15T10:00:00.000Z",
+        "2026-05-15T10:00:00.000Z",
+        "2031-01-01T00:00:00.000Z",
+      ]) {
+        const sealed = sealEvent(unsealedFrame(session, ts), cursor);
+        events.push(sealed.event);
+        cursor = sealed.next;
+      }
+
+      await runInTenantScope({ orgId, workspaceId }, () =>
+        insertTachoEvents(
+          events.map((event) => ({ event, chainVerified: true })),
+        ),
+      );
+
+      const result = await clickhouse().query({
+        query: `
+          SELECT uniqExact(_partition_id) AS partitions,
+                 uniqExact(_part) AS parts,
+                 any(_partition_id) = toString(toYYYYMM(now64(3, 'UTC'))) AS this_month
+          FROM tacho_events
+          WHERE org_id = {org:UUID} AND session_uuid = {session:UUID}
+        `,
+        query_params: { org: orgId, session },
+        format: "JSONEachRow",
+      });
+      const [row] = await result.json<{
+        partitions: string;
+        parts: string;
+        this_month: number | boolean;
+      }>();
+      expect(Number(row?.partitions)).toBe(1);
+      expect(Number(row?.parts)).toBe(1);
+      expect(Boolean(row?.this_month)).toBe(true);
     });
 
     // #4316. The largest request a host may send, as the smallest frames, is

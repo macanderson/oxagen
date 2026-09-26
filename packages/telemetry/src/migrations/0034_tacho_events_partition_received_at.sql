@@ -1,0 +1,38 @@
+-- 0034_tacho_events_partition_received_at.sql
+--
+-- Partition tacho_events by the month the control plane received each row
+-- (#4297, audit finding S-11 under #3944).
+--
+-- The table partitioned by toYYYYMM(ts), and ts is the producer's clock. A
+-- host whose clock was wrong filed its frames into the wrong month. A host
+-- whose clock jumped filed one batch into several months, and each insert
+-- wrote one part per month it touched, which adds parts and merge work on
+-- the node every organization shares. The retention TTL from 0032 reads
+-- received_at, so each ts partition also held rows that expire at different
+-- times, and expiry had to rewrite parts instead of dropping a month.
+--
+-- ClickHouse cannot change a partition key in place. The line below is a
+-- directive for the migration runner, not ClickHouse SQL, and applying it by
+-- hand fails. packages/telemetry/src/table-rebuild.ts carries it out:
+--
+-- 1. Create tacho_events_rebuild with the columns, indexes, TTL and settings
+--    of tacho_events, and the new key.
+-- 2. Copy the rows one received_at month at a time, one thread, insert blocks
+--    of about 4 MiB, and a 512 MiB bound per query. On ClickHouse 24.8 a
+--    600,000-row copy peaked at 85 MiB. The settings from 0033 keep the
+--    copy's parts compact and its merges vertical, so merges during the copy
+--    stay out of the 1.5 GiB cap too.
+-- 3. Swap the two tables with EXCHANGE TABLES, wait for inserts that began
+--    before the swap, and copy the latest two months again from the old
+--    table, since writes reached them during the copy. A row copied twice
+--    reads once: the engine is ReplacingMergeTree and every reader uses FINAL.
+-- 4. Drop the old table.
+--
+-- Each run reads where the rebuild stands from system.tables and carries on,
+-- so a run that stops part way is finished by the next one, including a
+-- replay by the ledger repair (#3698). On a cluster created from 0027 today
+-- the table already has the new key, and the directive does nothing.
+--
+-- Production held no rows in tacho_events on 2026-09-25 (system.parts: no
+-- active parts), so the first rebuild there copies nothing.
+REBUILD TABLE tacho_events PARTITION BY toYYYYMM(received_at);

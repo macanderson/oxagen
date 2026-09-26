@@ -4,11 +4,14 @@ import { fileURLToPath } from "node:url";
 import { BODY_MEMBER_NAMES, ENVELOPE_COLUMNS } from "@oxagen/tacho";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { splitStatements } from "./migrate";
+import { parseRebuildDirective } from "./table-rebuild";
 import {
   bodyColumnType,
   DROPPED_COLUMNS,
   RETIRED_COLUMNS,
   TACHO_EVENTS_MODIFIABLE_SETTINGS,
+  TACHO_EVENTS_PARTITION_KEY,
   TACHO_EVENTS_TABLE_SETTINGS,
   tachoEventsColumns,
   tachoEventsCreatedColumns,
@@ -196,11 +199,32 @@ describe("tacho_events DDL", () => {
     );
   });
 
+  it("partitions by the month the control plane received a row, forward as well as generated (#4297)", () => {
+    // The producer's clock filed a wrong-clock host's frames into the wrong
+    // month, one part per month per batch. 0027 creates the table with the
+    // server's clock for a cluster created today; 0034 rebuilds a table
+    // created with the old key. Both come from one constant.
+    expect(TACHO_EVENTS_PARTITION_KEY).toBe("toYYYYMM(received_at)");
+    expect(tachoEventsMigration()).toContain(
+      `PARTITION BY ${TACHO_EVENTS_PARTITION_KEY}\n`,
+    );
+    const forward = readFileSync(
+      join(here, "migrations", "0034_tacho_events_partition_received_at.sql"),
+      "utf8",
+    );
+    const statements = splitStatements(forward);
+    expect(statements).toHaveLength(1);
+    expect(parseRebuildDirective(statements[0] ?? "")).toEqual({
+      table: "tacho_events",
+      partitionBy: TACHO_EVENTS_PARTITION_KEY,
+    });
+  });
+
   it("orders by tenant, session, and seq under ReplacingMergeTree", () => {
     const ddl = tachoEventsMigration();
     expect(ddl).toContain("ENGINE = ReplacingMergeTree(received_at)");
     expect(ddl).toContain("ORDER BY (org_id, workspace_id, session_uuid, seq)");
-    expect(ddl).toContain("PARTITION BY toYYYYMM(ts)");
+    expect(ddl).toContain("PARTITION BY toYYYYMM(received_at)");
     expect(ddl).toContain("attrs Map(String, String)");
     expect(ddl).toContain("cost_usd_micros Nullable(UInt64)");
     expect(ddl).toContain("tool_targets Array(String)");

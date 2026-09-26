@@ -6,6 +6,11 @@ import { requireEnv } from "@oxagen/config/env";
 import { clickhouse, closeClickhouse } from "./clickhouse";
 import { withMigrationLock } from "./migration-lock";
 import { isDirectRunEntry } from "./is-direct-run";
+import {
+  clickhouseRebuildStore,
+  parseRebuildDirective,
+  rebuildPartitionKey,
+} from "./table-rebuild";
 
 /** Sleep helper for the cold-start retry loop. */
 function delay(ms: number): Promise<void> {
@@ -61,6 +66,38 @@ async function ensureDatabase(): Promise<void> {
   } finally {
     await bootstrap.close();
   }
+}
+
+/**
+ * The connection a `REBUILD TABLE` directive runs on (#4297).
+ *
+ * The shared client gives up on a request after 30 seconds, and a copy of a
+ * large partition can take longer. The server keeps running a write the client
+ * gave up on, so the migration would fail while the copy carried on unseen.
+ * This client waits up to 30 minutes per statement, the time `migration-gate`
+ * allows the whole job, and asks the server for a progress header every 10
+ * seconds so the SSM tunnel carries bytes while a copy runs. It skips the
+ * shared client's circuit breaker, as the bootstrap client above does: a
+ * migration should fail on the error itself.
+ */
+function rebuildClient(): ClickHouseClient {
+  const env = requireEnv([
+    "CLICKHOUSE_URL",
+    "CLICKHOUSE_USERNAME",
+    "CLICKHOUSE_PASSWORD",
+    "CLICKHOUSE_DATABASE",
+  ] as const);
+  return createClient({
+    url: env.CLICKHOUSE_URL,
+    username: env.CLICKHOUSE_USERNAME,
+    password: env.CLICKHOUSE_PASSWORD,
+    database: env.CLICKHOUSE_DATABASE,
+    request_timeout: 30 * 60_000,
+    clickhouse_settings: {
+      send_progress_in_http_headers: 1,
+      http_headers_progress_interval_ms: "10000",
+    },
+  });
 }
 
 export function splitStatements(sql: string): string[] {
@@ -479,6 +516,15 @@ function bareTableName(raw: string): string {
 export function tableStatements(sql: string): TableStatement[] {
   const found: TableStatement[] = [];
   for (const statement of splitStatements(sql)) {
+    // A rebuild changes the table's layout and keeps the table, which is an
+    // ALTER as far as the repair is concerned. Naming it lets a replay of the
+    // table's files include the rebuild, which does nothing when the table
+    // came back with the new key.
+    const rebuild = parseRebuildDirective(statement);
+    if (rebuild !== null) {
+      found.push({ verb: "alter", table: rebuild.table });
+      continue;
+    }
     const create =
       /^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w`.]+)/i.exec(
         statement,
@@ -759,16 +805,45 @@ async function migrateOnce(): Promise<void> {
   // error rather than the one that actually stopped the deploy. Closing it
   // properly means per-statement ledger granularity, which ClickHouse's lack
   // of DDL transactions makes its own piece of work; #2972 carries it.
-  for (const { file, sql } of bodies) {
-    if (applied.has(file)) continue;
-    for (const stmt of splitStatements(sql)) {
-      await ch.command({ query: stmt });
+  //
+  // A `REBUILD TABLE` directive is the one statement that is not sent as it
+  // is written. It goes to `rebuildPartitionKey`, which works out from the
+  // tables where an earlier run stopped, so a file that holds one replays
+  // cleanly under the rule above (#4297).
+  let rebuilds: ClickHouseClient | null = null;
+  try {
+    for (const { file, sql } of bodies) {
+      if (applied.has(file)) continue;
+      for (const stmt of splitStatements(sql)) {
+        const rebuild = parseRebuildDirective(stmt);
+        if (rebuild === null) {
+          await ch.command({ query: stmt });
+          continue;
+        }
+        rebuilds ??= rebuildClient();
+        const outcome = await rebuildPartitionKey(
+          clickhouseRebuildStore(rebuilds),
+          rebuild,
+        );
+        process.stdout.write(
+          JSON.stringify({
+            level: "info",
+            msg: "ClickHouse rebuild finished",
+            file,
+            table: rebuild.table,
+            partitionBy: rebuild.partitionBy,
+            outcome,
+          }) + "\n",
+        );
+      }
+      // A replayed file is already in the ledger. `appliedMigrations` reads
+      // `SELECT DISTINCT`, so a second row would be harmless, but a ledger that
+      // grows a row every time a repair runs is a ledger that stops reading as a
+      // list of what has been applied.
+      if (!replayed.has(file)) await recordApplied(ch, [file]);
     }
-    // A replayed file is already in the ledger. `appliedMigrations` reads
-    // `SELECT DISTINCT`, so a second row would be harmless, but a ledger that
-    // grows a row every time a repair runs is a ledger that stops reading as a
-    // list of what has been applied.
-    if (!replayed.has(file)) await recordApplied(ch, [file]);
+  } finally {
+    await rebuilds?.close();
   }
 }
 

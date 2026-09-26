@@ -397,7 +397,7 @@ CREATE TABLE IF NOT EXISTS tacho_events (
   chain_verified Bool
 )
 ENGINE = ReplacingMergeTree(received_at)
-PARTITION BY toYYYYMM(ts)
+PARTITION BY toYYYYMM(received_at)
 ORDER BY (org_id, workspace_id, session_uuid, seq)
 SETTINGS index_granularity = 8192, min_bytes_for_wide_part = 67108864, vertical_merge_algorithm_min_rows_to_activate = 1;
 

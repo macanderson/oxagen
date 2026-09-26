@@ -310,6 +310,19 @@ export function tachoEventsModifySettings(): string {
   return `ALTER TABLE ${TACHO_EVENTS_TABLE} MODIFY SETTING ${settingsList(TACHO_EVENTS_MODIFIABLE_SETTINGS)};`;
 }
 
+/**
+ * The month the control plane received a row in (#4297).
+ *
+ * The table first partitioned by `ts`, the producer's clock. A host whose
+ * clock was wrong filed its frames into the wrong month, and one whose clock
+ * jumped filed one batch into several, one part per month. The retention TTL
+ * (0032) reads `received_at`, so partitioning by `ts` also left rows of
+ * different expiry in one partition, and expiry rewrote parts instead of
+ * dropping a month. A cluster created from 0027 today gets this key, and
+ * 0034 rebuilds a table created with the old one.
+ */
+export const TACHO_EVENTS_PARTITION_KEY = "toYYYYMM(received_at)";
+
 /** The CREATE TABLE statement the migration carries. */
 export function tachoEventsCreateTable(): string {
   const lines = tachoEventsCreatedColumns().map(
@@ -320,7 +333,7 @@ export function tachoEventsCreateTable(): string {
     lines.join(",\n"),
     ")",
     "ENGINE = ReplacingMergeTree(received_at)",
-    "PARTITION BY toYYYYMM(ts)",
+    `PARTITION BY ${TACHO_EVENTS_PARTITION_KEY}`,
     "ORDER BY (org_id, workspace_id, session_uuid, seq)",
     `SETTINGS ${settingsList(TACHO_EVENTS_TABLE_SETTINGS)};`,
   ].join("\n");

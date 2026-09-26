@@ -496,6 +496,14 @@ export async function selectTachoStoredFrames(args: {
  * in, which is the day the host charged it to. `FINAL` collapses a
  * redelivered frame so it is counted once.
  *
+ * The table partitions by the month of `received_at` (#4297), so the `ts`
+ * filter alone reads every month the workspace holds. The `received_at`
+ * bound keeps the read to the months around the day. It does not change
+ * which frames count: a frame stamped on the day reached the control plane
+ * no earlier than the day's start less the host clock's lead, and the bound
+ * allows a lead of one day. A host whose clock runs further ahead stamps its
+ * frames with a day that has not begun.
+ *
  * `hostEnrollmentIds` are the agent's hosts, every status included: a host
  * revoked at noon still spent its morning. Returns micro-USD by host
  * enrollment id; a host with no priced call that day is absent.
@@ -524,6 +532,7 @@ export async function selectAgentDaySpend(args: {
         AND cost_usd_micros IS NOT NULL
         AND ts >= toDateTime64({start:String}, 3, 'UTC')
         AND ts < toDateTime64({start:String}, 3, 'UTC') + INTERVAL 1 DAY
+        AND received_at >= toDateTime64({start:String}, 3, 'UTC') - INTERVAL 1 DAY
       GROUP BY host_enrollment_id
     `,
     params: {

@@ -30,9 +30,13 @@
 
 ## 2. ClickHouse `tacho_events` — one row per event, every scalar typed
 
-Engine `ReplacingMergeTree(received_at)`, `PARTITION BY toYYYYMM(ts)`, `ORDER BY (org_id, workspace_id, session_uuid, seq)`, with a skipping index on `event_id_idem` and `tool_use_id`. Types: `LC` = `LowCardinality(String)`, `N(...)` = `Nullable`.
+Engine `ReplacingMergeTree(received_at)`, `PARTITION BY toYYYYMM(received_at)`, `ORDER BY (org_id, workspace_id, session_uuid, seq)`, with a skipping index on `event_id_idem` and `tool_use_id`. Types: `LC` = `LowCardinality(String)`, `N(...)` = `Nullable`.
 
-Retention: a row expires thirteen months after `received_at` (migration 0032). That is the hot window ADR-058 sets for a run's frame rows, and `tacho_events` holds the frame rows of wrapped sessions. The clock is the control plane's, not the producer's `ts`. The table TTL does not read a workspace's retention policy. A wrapped session has no archive segment yet, so an expired frame is gone, and its `tacho.sessions` row stays. Moving the partition key to `received_at` needs a table rebuild, which #4297 carries.
+Partition: the month the control plane received the row (#4297). The table first partitioned by `ts`, the producer's clock, so a host with a wrong clock filed its frames into the wrong month, and one batch from a host whose clock jumped wrote one part per month. Migration 0034 rebuilds a table created with the old key, one month at a time, and 0027 creates the table with this key. A read that filters on `ts` also bounds `received_at` when it can, so the read stays within a few partitions (`selectAgentDaySpend`).
+
+Storage settings (migration 0033, #4316): `min_bytes_for_wide_part = 67108864`, so every insert writes a compact part, and `vertical_merge_algorithm_min_rows_to_activate = 1`, so a merge into a wide part writes one column at a time. The table has about 385 columns, and a wide part written all at once takes about 1.3 GiB on ClickHouse 24.8, against the app node's 1.5 GiB cap (ADR-181).
+
+Retention: a row expires thirteen months after `received_at` (migration 0032). That is the hot window ADR-058 sets for a run's frame rows, and `tacho_events` holds the frame rows of wrapped sessions. The clock is the control plane's, not the producer's `ts`. The table TTL does not read a workspace's retention policy. A wrapped session has no archive segment yet, so an expired frame is gone, and its `tacho.sessions` row stays. Each partition holds one month of `received_at`, so its rows expire within one month of each other.
 
 ### 2.1 Tenancy and identity (stamped)
 | Column | Type | From |
