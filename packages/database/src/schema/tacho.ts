@@ -136,12 +136,19 @@ export const TACHO_COMMAND_TERMINAL_OUTCOMES = [
   "failed",
 ] as const;
 /**
- * What a command row is addressed to: the host that carries it, or the run
- * it steers. A broadcast (`@agents`, `@<agent>`) is resolved to one row per
- * recipient run at dispatch, so no row is addressed to an agent or a
- * workspace; the address travels in `payload.address`.
+ * What a command row is addressed to: the host that carries it, the run it
+ * steers, or an agent with no run in flight. A broadcast (`@agents`,
+ * `@<agent>`) is resolved to one row per recipient run at dispatch, and the
+ * address travels in `payload.address`.
+ *
+ * An `agent` row is a steer queued for the agent's next run (#2953):
+ * `target_id` is the agent key. When the agent's next root session starts,
+ * ingest re-addresses the row to that run (`target_kind` `run`, `target_id`
+ * its `tse_…`), and the host applies it before the run's first model call.
+ * No host acknowledges an `agent` row while it is still addressed to the
+ * agent. No row is addressed to a workspace.
  */
-export const TACHO_COMMAND_TARGET_KINDS = ["host", "run"] as const;
+export const TACHO_COMMAND_TARGET_KINDS = ["host", "run", "agent"] as const;
 /** Spec §7.3 delivery modes: which model request a steer rides. */
 export const TACHO_DELIVERY_MODES = [
   "next_step",
@@ -925,7 +932,10 @@ export const tachoControlCommands = tachoSchema.table(
     hostId: uuid("host_id"),
     sessionId: uuid("session_id"),
     targetKind: text("target_kind").notNull(),
-    /** The recipient's public id: `tch_…` for a host, `tse_…`/`arun_…` for a run. */
+    /**
+     * The recipient's public id: `tch_…` for a host, `tse_…`/`arun_…` for a
+     * run. The agent key (`org_ns.ws_ns.slug`) for an agent.
+     */
     targetId: text("target_id").notNull(),
     command: text("command").notNull(),
     payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),
