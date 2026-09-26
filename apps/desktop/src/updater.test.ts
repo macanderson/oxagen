@@ -15,6 +15,7 @@ const {
   formatBytes,
   installInBackground,
   installUpdate,
+  routeOffer,
 } = await import("./updater");
 
 const MB = 1024 * 1024;
@@ -382,5 +383,63 @@ describe("describeRestart", () => {
   it("says nothing when there was no collector to restart", () => {
     expect(describeRestart({ ok: true, outcome: "not_running" })).toBeNull();
     expect(describeRestart({ ok: true, outcome: "unsupported" })).toBeNull();
+  });
+});
+
+describe("routeOffer", () => {
+  const offer = {
+    version: "2.2.0",
+    currentVersion: "2.1.1",
+    update: asUpdate({ version: "2.2.0" }),
+  };
+  const silent = { auto_update: true, blocker: null, silent: true };
+  const gated = {
+    auto_update: true,
+    blocker: "Move it to Applications.",
+    silent: false,
+  };
+
+  it("installs in the background when the policy is silent", async () => {
+    const install = vi.fn(async () => {});
+    const prompt = vi.fn();
+    await expect(
+      routeOffer(offer, async () => silent, () => false, install, prompt),
+    ).resolves.toBe("installed");
+    expect(install).toHaveBeenCalledWith(offer);
+    expect(prompt).not.toHaveBeenCalled();
+  });
+
+  it("prompts when a gate fails, the setting is off, or the policy is unreadable", async () => {
+    const off = { auto_update: false, blocker: null, silent: false };
+    for (const policy of [gated, off, null]) {
+      const install = vi.fn(async () => {});
+      const prompt = vi.fn();
+      await expect(
+        routeOffer(offer, async () => policy, () => false, install, prompt),
+      ).resolves.toBe("prompted");
+      expect(install).not.toHaveBeenCalled();
+      expect(prompt).toHaveBeenCalledWith(offer);
+    }
+  });
+
+  it("prompts instead of starting a second install", async () => {
+    const install = vi.fn(async () => {});
+    const prompt = vi.fn();
+    await expect(
+      routeOffer(offer, async () => silent, () => true, install, prompt),
+    ).resolves.toBe("prompted");
+    expect(install).not.toHaveBeenCalled();
+    expect(prompt).toHaveBeenCalledWith(offer);
+  });
+
+  it("falls back to the prompt for the same version when the install fails", async () => {
+    const install = vi.fn(async () => {
+      throw new Error("signature mismatch");
+    });
+    const prompt = vi.fn();
+    await expect(
+      routeOffer(offer, async () => silent, () => false, install, prompt),
+    ).resolves.toBe("fell back");
+    expect(prompt).toHaveBeenCalledWith(offer);
   });
 });

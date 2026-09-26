@@ -116,6 +116,7 @@ vi.mock("./updater", () => ({
   installInBackground: vi.fn(),
   installUpdate: vi.fn(),
   restartApp: vi.fn(),
+  routeOffer: vi.fn(),
 }));
 
 const { App } = await import("./app");

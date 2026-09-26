@@ -16,7 +16,8 @@ import {
   type DownloadEvent,
   type Update,
 } from "@tauri-apps/plugin-updater";
-import type { restartTachoService } from "./bridge";
+import type { restartTachoService, UpdatePolicy } from "./bridge";
+import type { UpdateOffer } from "./update-watch";
 
 /** What `check()` found, minus the plugin handle. */
 export type UpdateCheck =
@@ -232,6 +233,37 @@ export async function installInBackground(
     await runAfterInstall(afterInstall, onLine);
   } finally {
     await hold(false);
+  }
+}
+
+/** Where `routeOffer` sent an offer. */
+export type OfferRoute = "installed" | "prompted" | "fell back";
+
+/**
+ * What the app does with the watch's offer (ADR-202 §1 and §3). It installs
+ * in the background when `update_policy` says silent and no install is
+ * running. Otherwise it prompts. An automatic install that rejects prompts
+ * for the same version, so a failure never leaves the offer with no way to
+ * install it. `install` logs its own error before it rejects.
+ */
+export async function routeOffer(
+  offer: UpdateOffer,
+  policy: () => Promise<UpdatePolicy | null>,
+  installing: () => boolean,
+  install: (offer: UpdateOffer) => Promise<void>,
+  prompt: (offer: UpdateOffer) => void,
+): Promise<OfferRoute> {
+  const current = await policy();
+  if (!current?.silent || installing()) {
+    prompt(offer);
+    return "prompted";
+  }
+  try {
+    await install(offer);
+    return "installed";
+  } catch {
+    prompt(offer);
+    return "fell back";
   }
 }
 

@@ -111,6 +111,7 @@ import {
   installInBackground,
   installUpdate,
   restartApp,
+  routeOffer,
 } from "./updater";
 
 const WRAP_AGENT_URL = "https://docs.oxagen.sh/docs/cli/wrap-an-agent";
@@ -254,9 +255,9 @@ export function App() {
       });
       setUpdatePrompt(offer);
     };
-    // ADR-202 §2 and §3: download, install under the hold, restart the
-    // collector, then offer Restart. A failure writes to the Activity log
-    // and falls back to the prompt for the same version.
+    // ADR-202 §2: download, install under the hold, restart the collector,
+    // then offer Restart. A failure writes to the Activity log and rejects,
+    // and `routeOffer` shows the prompt for the same version.
     const installAutomatically = async (offer: UpdateOffer) => {
       updateGateRef.current.installing = true;
       setAutoInstalling(offer.version);
@@ -290,7 +291,7 @@ export function App() {
       } catch (e) {
         const text = e instanceof Error ? e.message : String(e);
         setLog((prev) => [...prev, ...lines, { text, err: true }]);
-        prompt(offer);
+        throw e;
       } finally {
         updateGateRef.current.installing = false;
         setAutoInstalling(null);
@@ -302,15 +303,17 @@ export function App() {
       paused: () =>
         updateGateRef.current.installing || updateGateRef.current.checking,
       offer: (offer) => {
-        void (async () => {
-          const policy = await readUpdatePolicy();
-          if (policy !== null) setUpdatePolicy(policy);
-          if (policy?.silent && !updateGateRef.current.installing) {
-            await installAutomatically(offer);
-          } else {
-            prompt(offer);
-          }
-        })();
+        void routeOffer(
+          offer,
+          async () => {
+            const policy = await readUpdatePolicy();
+            if (policy !== null) setUpdatePolicy(policy);
+            return policy;
+          },
+          () => updateGateRef.current.installing,
+          installAutomatically,
+          prompt,
+        );
       },
       now: Date.now,
       setInterval: (run, ms) => window.setInterval(run, ms),
