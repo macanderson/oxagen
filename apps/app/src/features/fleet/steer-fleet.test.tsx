@@ -138,10 +138,11 @@ describe("Steer the fleet", () => {
     expect(release).toHaveTextContent(
       "in flight · tse_live · turn 12 · Cut the 3.2 release branch",
     );
-    // A sealed run is not in flight, so the agent is idle.
-    expect(option("acme.core.docs")).toHaveTextContent(
-      "no run in flight · reads this at its next run",
-    );
+    // A sealed run is not in flight, so the agent is idle. The picker cannot
+    // tell whether the agent has an enrolled host, so it promises nothing.
+    const docs = option("acme.core.docs");
+    expect(docs).toHaveTextContent("no run in flight");
+    expect(docs).not.toHaveTextContent("next run");
     expect(dialog()).toHaveTextContent(
       "Every agent in Core platform, selected by default.",
     );
@@ -153,12 +154,12 @@ describe("Steer the fleet", () => {
     expect(summary.closest("[data-sheet-footer]")).not.toBeNull();
   });
 
-  it("says idle agents read the steer at their next run", () => {
+  it("says only an idle agent with an enrolled host reads the steer at its next run", () => {
     renderDialog();
     const mode = screen.getByTestId("steer-mode");
     expect(mode).toHaveTextContent("At the boundary");
     expect(mode).toHaveTextContent(
-      "Nothing in flight is cut. Idle agents read it at their next run.",
+      "Nothing in flight is cut. An idle agent with an enrolled host reads it at its next run.",
     );
   });
 
