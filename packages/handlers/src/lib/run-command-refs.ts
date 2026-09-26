@@ -615,23 +615,41 @@ export async function readRunCommandRefFrames(
   return result.data;
 }
 
+/** A release's repository and tag as one key; a null repository keys as none. */
+function releaseKey(ref: ReleaseRef): string {
+  const repository =
+    ref.repository === null
+      ? ""
+      : `${ref.repository.owner}/${ref.repository.name}`.toLowerCase();
+  return `${repository}@${ref.tag}`;
+}
+
 /**
  * One frame's releases: the one the recorder named on a GitHub MCP release
  * call (`release.*` attrs), then each `gh release create` in its command
- * head, each tag once.
+ * head, each repository and tag once. One tag created in two repositories is
+ * two releases, as `readWorkReleases` counts them.
  */
 export function releaseRefsOfFrame(row: CommandRefFrameRow): ReleaseRef[] {
   const refs: ReleaseRef[] = [];
   const tag = row.release_tag;
+  let attrTag: string | null = null;
   if (tag !== "" && TAG.test(tag)) {
     const repository = repositoryOf(row.release_repository);
     // An attr that names a repository this parser cannot read is not a
     // release with no repository.
-    if (row.release_repository === "" || repository !== null)
+    if (row.release_repository === "" || repository !== null) {
       refs.push({ repository, tag });
+      attrTag = tag;
+    }
   }
-  for (const ref of releaseRefsOfCommand(row.command))
-    if (!refs.some((seen) => seen.tag === ref.tag)) refs.push(ref);
+  for (const ref of releaseRefsOfCommand(row.command)) {
+    // The attrs name the repository of the call a command without `-R`
+    // made, so that command's tag is the attrs' release.
+    if (ref.repository === null && ref.tag === attrTag) continue;
+    if (!refs.some((seen) => releaseKey(seen) === releaseKey(ref)))
+      refs.push(ref);
+  }
   return refs;
 }
 

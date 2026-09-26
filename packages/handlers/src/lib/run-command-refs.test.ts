@@ -220,6 +220,32 @@ describe("releaseRefsOfFrame", () => {
     ).toEqual([{ repository: acme, tag: "v1" }]);
   });
 
+  it("keeps one tag created in two repositories as two releases", () => {
+    expect(
+      releaseRefsOfFrame(
+        row({
+          command:
+            "gh release create v1 -R acme/app && gh release create v1 -R acme/web",
+        }),
+      ),
+    ).toEqual([
+      { repository: acme, tag: "v1" },
+      { repository: { owner: "acme", name: "web" }, tag: "v1" },
+    ]);
+  });
+
+  it("counts a release the attrs and the command's -R both name once, whatever the case", () => {
+    expect(
+      releaseRefsOfFrame(
+        row({
+          command: "gh release create v1 -R Acme/App",
+          release_repository: "acme/app",
+          release_tag: "v1",
+        }),
+      ),
+    ).toEqual([{ repository: acme, tag: "v1" }]);
+  });
+
   it("reads no release from an attr whose repository it cannot read (negative)", () => {
     expect(
       releaseRefsOfFrame(
