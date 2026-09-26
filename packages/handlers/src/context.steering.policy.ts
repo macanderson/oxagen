@@ -3,8 +3,9 @@
 // reads the file and the caller's roles, this decides.
 import { parse } from "smol-toml";
 import type { GovernanceMode } from "@oxagen/oxagen/contracts/context.steering.shared";
+import { LEGACY_GOVERNANCE_PATH } from "@oxagen/oxagen/steering-repo/paths";
 
-export const GOVERNANCE_PATH = ".oxagen/rules/governance.toml";
+export const GOVERNANCE_PATH = LEGACY_GOVERNANCE_PATH;
 
 /** The mode a new workspace runs under when no governance.toml exists (ADR-061 decision 1). */
 export const DEFAULT_GOVERNANCE_MODE: GovernanceMode = "team";

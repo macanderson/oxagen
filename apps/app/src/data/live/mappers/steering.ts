@@ -10,6 +10,7 @@ import type { contextRecordsGet } from "@oxagen/oxagen/contracts/context.records
 import type { contextRecordsList } from "@oxagen/oxagen/contracts/context.records.list";
 import type { contextSteeringFreshness } from "@oxagen/oxagen/contracts/context.steering.freshness";
 import type { repositoryTreeGet } from "@oxagen/oxagen/contracts/repository.tree.get";
+import { LEGACY_OXAGEN_DIR } from "@oxagen/oxagen/steering-repo/paths";
 import type { z } from "zod";
 import type {
   ContextPr,
@@ -247,7 +248,7 @@ export function toMemoryPage(
   };
 }
 
-const OXAGEN_DIR = ".oxagen/";
+const OXAGEN_DIR = `${LEGACY_OXAGEN_DIR}/`;
 
 /** `get_repository_tree` to the On disk panel: paths relative to `.oxagen/`. */
 export function toOxagenTree(

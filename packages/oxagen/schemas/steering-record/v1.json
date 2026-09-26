@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/steering-record/v1.json",
+  "title": "Steering record frontmatter",
+  "description": "The YAML frontmatter of a steering record: a Markdown file under steering/ in a steering repo.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "steering-record/v1"
+    },
+    "lineage": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1024,
+      "description": "One sentence, the record's line in the index an agent reads. At most 200 characters, or 1,024 for a skill."
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "business-rule",
+        "code-rule",
+        "constraint",
+        "procedure",
+        "skill",
+        "fact",
+        "preference",
+        "memory"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "A skill's folder name, as harnesses expect."
+    },
+    "effect": {
+      "type": "string",
+      "enum": [
+        "require",
+        "forbid"
+      ]
+    },
+    "force": {
+      "type": "string",
+      "enum": [
+        "must",
+        "should",
+        "may",
+        "info"
+      ]
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "workspace",
+        "repository",
+        "organization"
+      ]
+    },
+    "repos": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+(?:\\.[a-z0-9-]+)+(?:\\/(?!\\.\\.?(?:\\/|$))[a-z0-9_.-]+){2,}$"
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "The code repositories a run must be working in for the record to reach it. Required when scope is repository."
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^(?=[a-z0-9_*]{4,64}$)[a-z][a-z0-9_]{0,23}__(?:\\*|[a-z][a-z0-9_]*)$"
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Tool names, or <server>__* prefixes. The record reaches a request only when the run's toolbelt holds a match."
+    },
+    "applies_to": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1,
+      "description": "Path globs the record is about. load: match reads them."
+    },
+    "load": {
+      "type": "string",
+      "enum": [
+        "always",
+        "match",
+        "relevant",
+        "mention"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived"
+      ]
+    },
+    "origin": {
+      "type": "string",
+      "enum": [
+        "user",
+        "inferred"
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": [
+            "proposal",
+            "run",
+            "import"
+          ]
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "uri"
+      ],
+      "additionalProperties": false
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^rec_[a-z0-9_]+_[0-9a-f]{12}$",
+      "description": "Written by Oxagen on merge."
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Written by Oxagen on merge."
+    }
+  },
+  "required": [
+    "schema",
+    "lineage",
+    "label",
+    "kind",
+    "force",
+    "scope",
+    "status",
+    "origin",
+    "provenance"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "constraint"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "effect"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "skill"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "name",
+          "description"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scope": {
+            "const": "repository"
+          }
+        },
+        "required": [
+          "scope"
+        ]
+      },
+      "then": {
+        "required": [
+          "repos"
+        ]
+      }
+    },
+    {
+      "if": {
+        "not": {
+          "properties": {
+            "kind": {
+              "const": "skill"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      },
+      "then": {
+        "properties": {
+          "description": {
+            "maxLength": 200
+          }
+        }
+      }
+    }
+  ]
+}

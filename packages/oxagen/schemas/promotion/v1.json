@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/promotion/v1.json",
+  "title": "Ledger line",
+  "description": "One line of steering/promotions/<period>.jsonl: a merged steering PR, chained to the line before it by hash.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "promotion/v1"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The line's place in the whole chain, across files."
+    },
+    "at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "pull_request": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": [
+            "github",
+            "gitlab"
+          ]
+        },
+        "number": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "provider",
+        "number"
+      ],
+      "additionalProperties": false
+    },
+    "branch": {
+      "type": "string",
+      "pattern": "^(?:steering|memory|tools|agents|policy|workspace)\\/.+$",
+      "description": "Starts with the top-level folder the change touches."
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "solo",
+        "team",
+        "regulated"
+      ]
+    },
+    "approved_by": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[a-z0-9][a-z0-9._-]*$"
+      }
+    },
+    "merged_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "without_review": {
+      "type": "boolean",
+      "description": "True when the owner, or a role with merge_without_review, merged without an approval."
+    },
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!\\/)(?!.*\\/$)(?!.*\\/\\/)(?!(?:.*\\/)?\\.\\.?(?:\\/|$)).+$"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "added",
+              "modified",
+              "removed"
+            ]
+          },
+          "lineage": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^rec_[a-z0-9_]+_[0-9a-f]{12}$"
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "replaces": {
+            "type": "string",
+            "pattern": "^rec_[a-z0-9_]+_[0-9a-f]{12}$",
+            "description": "The id this record had before a format change, such as the v0.1 conversion."
+          }
+        },
+        "required": [
+          "path",
+          "action"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1
+    },
+    "prev": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The hash of the line before, or null on the first line of the chain."
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "sha256 over the RFC 8785 canonical JSON of this line without hash."
+    }
+  },
+  "required": [
+    "schema",
+    "seq",
+    "at",
+    "pull_request",
+    "branch",
+    "mode",
+    "approved_by",
+    "merged_by",
+    "without_review",
+    "changes",
+    "prev",
+    "hash"
+  ],
+  "additionalProperties": false
+}
