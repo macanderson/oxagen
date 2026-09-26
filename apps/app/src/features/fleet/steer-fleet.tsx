@@ -82,6 +82,15 @@ function interruptCarriers(runs: readonly RunRow[]): Set<string> {
   return carriers;
 }
 
+/** The agents with a wrapped run in flight, the runs a steer to an agent reaches. */
+function wrappedInFlight(runs: readonly RunRow[]): Set<string> {
+  const agents = new Set<string>();
+  for (const run of runs)
+    if (run.status === "live" && run.source === "tacho" && run.agentKey)
+      agents.add(run.agentKey);
+  return agents;
+}
+
 export function SteerFleetDialog({
   org,
   ws,
@@ -137,6 +146,8 @@ export function SteerFleetDialog({
   const interruptible = picked.filter((agent) =>
     carriers.has(agent.agentKey),
   ).length;
+  const wrapped = wrappedInFlight(runs);
+  const wrappedPicked = picked.some((agent) => wrapped.has(agent.agentKey));
   // Derived, so a selection that loses its last carrier turns Interrupt off.
   const interrupting = interrupt && interruptible > 0;
   const mode: FleetSteerMode = interrupting ? "interrupt" : "turn_boundary";
@@ -232,9 +243,13 @@ export function SteerFleetDialog({
           className="flex flex-col gap-2 text-sm"
         >
           <p>{t("queued", { count: receipt.commandIds.length })}</p>
-          {receipt.commandIds.length === 0 ? null : (
+          {receipt.commandIds.length > 0 ? (
             <p className="text-muted-foreground">{t("queuedDetail")}</p>
-          )}
+          ) : receipt.refused.length === 0 ? (
+            // Nothing refused and nothing queued: no run in flight, and no
+            // host enrolled as any selected agent to hold a steer for.
+            <p className="text-muted-foreground">{t("queuedNone")}</p>
+          ) : null}
           {receipt.refused.length === 0 ? null : (
             <p className="text-muted-foreground">
               {t("refused", {
@@ -372,7 +387,7 @@ export function SteerFleetDialog({
                 >
                   {interruptible > 0
                     ? t("interruptCarriers", { count: interruptible })
-                    : inFlight > 0
+                    : wrappedPicked
                       ? t("interruptNoCarrier")
                       : t("interruptNoRun")}
                 </span>

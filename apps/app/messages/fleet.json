@@ -29,7 +29,7 @@
       "interrupt": "Interrupt",
       "interruptCarriers": "{count, plural, one {# selected agent has a run that can be cut} other {# selected agents have a run that can be cut}}",
       "interruptNoCarrier": "No selected run in flight is on the gateway or contained tier, where a call in flight can be cut.",
-      "interruptNoRun": "No selected agent has a run in flight to interrupt.",
+      "interruptNoRun": "No selected agent has a wrapped run in flight to interrupt.",
       "interruptHint": "Interrupt cuts the call in flight at the proxy on the <mono>gateway</mono> and <mono>contained</mono> tiers. On the <mono>harness</mono> tier a steer lands at the next hook boundary.",
       "recorded": "Recorded per run as a <mono>control.steer</mono> frame attributed to you.",
       "note": "Oxagen never executes steering as an instruction; it enters as evidence at the steering position with operator authority.",
@@ -38,8 +38,9 @@
       "sendInterrupt": "Send & Interrupt",
       "sending": "Steering",
       "cancel": "Cancel",
-      "queued": "{count, plural, =0 {No selected agent has a run in flight or an enrolled host, so nothing took this steer.} one {Steer queued as # command.} other {Steer queued as # commands.}}",
+      "queued": "{count, plural, =0 {Nothing took this steer.} one {Steer queued as # command.} other {Steer queued as # commands.}}",
       "queuedDetail": "A run in flight takes its command at its next boundary. An idle agent's command waits for its next run.",
+      "queuedNone": "No selected agent has a run in flight or an enrolled host.",
       "refused": "{count, plural, one {# agent refused the steer} other {# agents refused the steer}}: {codes}."
     },
     "stats": {

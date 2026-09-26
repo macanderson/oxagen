@@ -34,7 +34,12 @@ const AGENTS = [
   { agentKey: "acme.core.docs" },
 ];
 const RUNS: RunRow[] = [
-  runRow({ id: "tse_live", agentKey: "acme.core.release-bot", turns: 12 }),
+  runRow({
+    id: "tse_live",
+    source: "tacho",
+    agentKey: "acme.core.release-bot",
+    turns: 12,
+  }),
   runRow({
     id: "arun_done",
     agentKey: "acme.core.docs",
@@ -162,7 +167,7 @@ describe("Steer the fleet", () => {
     const interrupt = screen.getByRole("switch", { name: "Interrupt" });
     expect(interrupt).toBeDisabled();
     expect(interrupt).toHaveAccessibleDescription(
-      "No selected agent has a run in flight to interrupt.",
+      "No selected agent has a wrapped run in flight to interrupt.",
     );
   });
 
@@ -351,10 +356,31 @@ describe("Steer the fleet", () => {
     await user.type(screen.getByLabelText("Steering text"), "Hold.");
     await user.click(send());
     const receipt = await screen.findByTestId("steer-receipt");
+    expect(receipt).toHaveTextContent("Nothing took this steer.");
     expect(receipt).toHaveTextContent(
-      "No selected agent has a run in flight or an enrolled host, so nothing took this steer.",
+      "No selected agent has a run in flight or an enrolled host.",
     );
     expect(receipt).not.toHaveTextContent("An idle agent's command");
+  });
+
+  it("names the refusal, not a missing host, when nothing took the steer because an agent refused it", async () => {
+    steerFleet.mockResolvedValue({
+      ok: true,
+      value: {
+        commandIds: [],
+        refused: [{ agentKey: "acme.core.docs", code: "host_offline" }],
+      },
+    });
+    renderDialog();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Steering text"), "Hold.");
+    await user.click(send());
+    const receipt = await screen.findByTestId("steer-receipt");
+    expect(receipt).toHaveTextContent("Nothing took this steer.");
+    expect(receipt).toHaveTextContent(
+      "1 agent refused the steer: acme.core.docs (host_offline).",
+    );
+    expect(receipt).not.toHaveTextContent("an enrolled host");
   });
 
   it("names a refusal and keeps the form (negative)", async () => {
