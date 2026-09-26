@@ -9,6 +9,8 @@ Hook-based records are client-attested. The process owner can remove the hooks, 
 
 The collector also has a loopback model proxy and an MCP gateway. Their controls apply to calls actually routed through them. A configured base URL alone does not establish that a run reached the gateway tier. Inspect the run's recorded tier and attribution before treating its cost or decisions as gateway-observed evidence.
 
+The MCP gateway serves Oxagen's own tools to Claude Desktop only. Claude Code, Codex, Cursor, and Stella call the MCP servers you configure directly, and their hooks check each call. See the [harness matrix](https://github.com/macanderson/oxagen/blob/main/docs/reference/harness-matrix.md#mcp-gateway) for what can be routed later and what never can.
+
 Supported harness adapters include Claude Code, Codex, Cursor, and Stella. A custom agent can call `tacho hook` around its own steps. The table below describes all four hook adapters.
 
 ## Install the Oxagen app

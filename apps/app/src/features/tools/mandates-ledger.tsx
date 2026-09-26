@@ -23,9 +23,11 @@
 // Grant a mandate sits in the ledger's header, and a requested row carries its
 // own Grant, which opens the same dialog on that draft (`grant-mandate.tsx`).
 // Both are drawn only for a reader whose org role some consequence can name
-// (`canGrantMandates` in tools.tsx). A draft whose agent is retired is offered
-// no Grant: retirement suspends the principal, so authority granted to it
-// could never be drawn, and the handler would still record it (#3124).
+// (`canGrantMandates` in tools.tsx). A draft whose agent the agents read names
+// retired is offered no Grant: retirement suspends the principal, so authority
+// granted to it could never be drawn. The read leaves retired agents out by
+// default (#4332), `retire_agent` revokes their drafts, and `grant_mandate`
+// refuses one with `agent_retired`, so the server holds the line either way.
 //
 // A row's mandate id is the link to that mandate's own page (#2957): its
 // authority, its ledger and its two governed writes. It was plain text here

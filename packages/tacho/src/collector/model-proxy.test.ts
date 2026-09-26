@@ -8,6 +8,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -24,6 +25,7 @@ import { deflateSync, gzipSync, zstdCompressSync } from "node:zlib";
 import { afterEach, describe, expect, it } from "vitest";
 import { verifyChain } from "../chain";
 import type { TachoEvent } from "../envelope";
+import { bodyIsPartial } from "../evidence/replay-grade";
 import type { FetchLike } from "../host/control-client";
 import { openCredentialStore } from "../host/credential-store";
 import { modelProxyPortFor, writeHostFile } from "../host/host-file";
@@ -806,6 +808,9 @@ describe("the loopback model proxy", () => {
     expect(frame!.content?.digest).toBe(
       sha(Buffer.from(body!.bytes_base64, "base64")),
     );
+    // The seal reads the same attr: this body holds half the call, so the
+    // session counts the frame as missing its body (#3372).
+    expect(bodyIsPartial(frame!.attrs)).toBe(true);
   });
 
   it("cuts a secret out of the recorded bytes, and chains the digest of what is left", async () => {
@@ -1793,6 +1798,44 @@ describe("the loopback model proxy", () => {
       }),
     ).toMatchObject({ status: 403 });
     void resumed;
+  });
+
+  it("cuts a paused session's model calls when the state write fails", async () => {
+    const fake = await vendor((_req, res) => {
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
+      res.write(ANTHROPIC_EVENTS[0]);
+    });
+    const { handle, plane, port, session, paths } = await boot(fake.url);
+    const uuid = await session("sess-full-disk");
+    await handle.tick();
+    const inFlight = call(port, {
+      path: "/anthropic/v1/messages",
+      headers: ["X-Claude-Code-Session-Id", "sess-full-disk"],
+      body: JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+    });
+    await until(() => fake.requests.length === 1);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // The pause takes effect, and then daemon.json cannot be written. The
+    // redelivered pause is answered from the ledger, so this tick is the only
+    // one that can cut the call.
+    rmSync(paths.daemonState, { force: true });
+    mkdirSync(join(paths.daemonState, "blocked"), { recursive: true });
+    plane.queue({
+      id: "cmd_pause",
+      command: "pause",
+      session_uuid: uuid,
+      reason: "reviewing this run",
+    });
+    await handle.tick().catch(() => undefined);
+    const cut = await Promise.race([
+      inFlight,
+      new Promise<undefined>((resolve) =>
+        setTimeout(() => resolve(undefined), 2_000),
+      ),
+    ]);
+    rmSync(paths.daemonState, { recursive: true, force: true });
+    expect(cut?.error).toBeDefined();
   });
 
   // A 403 here read to Claude Code as a failed login ("Please run /login"),

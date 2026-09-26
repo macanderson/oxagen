@@ -34,6 +34,7 @@ import {
   tachoStage,
 } from "./tacho-kinds";
 import {
+  bodyIsPartial,
   isTranscriptKind,
   countsLlmCallUsage,
   countsLlmCallSplit,
@@ -221,6 +222,12 @@ export interface FrameLlmCall {
   /** `request:<id>`, `message:<id>`: the keys the host's ledger joins sightings on. */
   keys: string[];
   source: string | null;
+  /**
+   * The body holds one half of the exchange, and the proxy marked the other
+   * missing (`bodyIsPartial`). The seal counts such a frame as missing its
+   * body.
+   */
+  partial: boolean;
 }
 
 /** What a frame's receipt timed. Null where it timed nothing. */
@@ -652,6 +659,7 @@ export function tachoFrame(stored: TachoFrameRowLike): RunFrame {
                 ? llmCallKeys(payload as Record<string, unknown>).ids
                 : [],
             source: blank(row.source ?? ""),
+            partial: bodyIsPartial(row.attrs),
           },
         }
       : {}),

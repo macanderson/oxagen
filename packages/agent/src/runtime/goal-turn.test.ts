@@ -77,6 +77,7 @@ import {
 import {
   RULE_AUTHORING_ROUNDS,
   ruleAuthoringGoal,
+  ruleAuthoringInstruction,
   type GraphRule,
 } from "./rule-authoring-goal";
 
@@ -345,9 +346,7 @@ function scriptModels(): void {
 }
 
 /** A ledger that keeps what it was told, in order. */
-function recordingLedger(
-  overrides: Partial<TurnLedger> = {},
-): TurnLedger & {
+function recordingLedger(overrides: Partial<TurnLedger> = {}): TurnLedger & {
   log: string[];
   verdicts: TurnLedgerGoalVerdict[];
   seals: TurnLedgerOutcome[];
@@ -680,5 +679,19 @@ describe("ruleAuthoringGoal", () => {
         start: { label: "Person", source: "x".repeat(2000) },
       }),
     ).toThrow();
+  });
+});
+
+describe("ruleAuthoringInstruction", () => {
+  it("asks for the rule and for the query the goal judges", () => {
+    const text = ruleAuthoringInstruction(RULE);
+    for (const word of ["OWNS_ACCOUNT", "hubspot", "stripe", "query_ontology"])
+      expect(text).toContain(word);
+    expect(text).not.toContain("note");
+  });
+
+  it("adds the person's note after the request, marked as theirs", () => {
+    const text = ruleAuthoringInstruction(RULE, "Join on email.");
+    expect(text.endsWith("The person's note: Join on email.")).toBe(true);
   });
 });

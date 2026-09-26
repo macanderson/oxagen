@@ -68,6 +68,7 @@ import {
   MODEL_CALL_EVENT_TYPES,
   TOOL_CALL_EVENT_TYPES,
 } from "@oxagen/run-ledger";
+import { modelCallHidesTurn } from "@oxagen/billing";
 import { modelFactsOf } from "./lib/model-facts";
 import {
   matchesPullRequestFilter,
@@ -348,7 +349,10 @@ export function ledgerRollupQuery(
           Number,
         ),
       opaqueModelCalls:
-        sql<number>`(count(*) filter (where ${IS_MODEL_CALL} and ${events.payloadInline} is null))::int`.mapWith(
+        // The cost rollup's rule, which is the seal's. Testing the payload for
+        // null alone counted an engine call as legible, so the Runs page listed
+        // `turns: 0` until compaction swapped in the seal's `null` (#3372).
+        sql<number>`(count(*) filter (where ${IS_MODEL_CALL} and ${modelCallHidesTurn(events.payloadInline)}))::int`.mapWith(
           Number,
         ),
     })

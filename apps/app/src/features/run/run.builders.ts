@@ -1128,6 +1128,7 @@ export function runRoster(
     nextCursor: null,
     totals: {
       identities: 1,
+      retired: 0,
       enrolled: 1,
       unenrolled: 0,
       holdingMandate: 0,

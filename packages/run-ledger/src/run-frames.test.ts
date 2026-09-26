@@ -1007,9 +1007,21 @@ describe("one model call reported by several sources", () => {
       duplicateOf: null,
       keys: ["request:req_1"],
       source: "otel_log",
+      partial: false,
     });
     expect(copy.costMicros).toBeNull();
     expect(copy.llmCall?.duplicateOf).toBe("otel_log");
+  });
+
+  it("marks a body the proxy kept one half of", () => {
+    const half = tachoFrame(
+      tachoRow(1, "llm_call", {
+        body,
+        source: "collector",
+        attrs: { "oxagen.response_body_omitted": "too_large" },
+      }),
+    );
+    expect(half.llmCall?.partial).toBe(true);
   });
 
   it("hides a copy with no body, keeps the richer body, and moves the counted spend onto the frame kept", () => {

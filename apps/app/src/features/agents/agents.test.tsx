@@ -72,12 +72,14 @@ async function renderAgents(
   reads: Parameters<typeof agentsSource>[0],
   cursor: string | null = null,
   container?: HTMLElement,
+  showRetired?: boolean,
 ) {
   const { source, calls } = agentsSource(reads);
   const element = await Agents({
     ctx,
     source,
     cursor,
+    ...(showRetired === undefined ? {} : { showRetired }),
     header: HEADER,
     viewerName: "Marcus Bell",
   });
@@ -152,7 +154,9 @@ afterEach(async () => {
 describe("Agents, loaded", () => {
   it("reads one agents page at the URL's cursor and draws the header it is handed", async () => {
     const calls = await renderAgents({ list: agentPage([agentRow()]) }, "c1");
-    expect(calls.list).toEqual([[ctx, { cursor: "c1" }]]);
+    expect(calls.list).toEqual([
+      [ctx, { cursor: "c1", includeRetired: false }],
+    ]);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       "Agents",
     );
@@ -253,8 +257,9 @@ describe("Agents, loaded", () => {
     );
   });
 
-  it("counts not yet enrolled by status, so a retired or suspended agent is in neither figure", async () => {
-    // Seven agents: two enrolled, three waiting, one retired, one suspended.
+  it("counts not yet enrolled by status, so a suspended agent is in neither figure", async () => {
+    // Seven live agents: two enrolled, three waiting, two suspended. A
+    // retired agent is in no total but `retired`.
     await renderAgents({
       list: agentPage([agentRow()], null, {
         identities: 7,
@@ -407,7 +412,8 @@ describe("Agents, loaded", () => {
         agentRow({ id: "agt_d", slug: "d", enforcementTier: "contained" }),
         agentRow({ id: "agt_e", slug: "e", enforcementTier: null }),
         // Negative: a retired or suspended agent is never healthy, whatever
-        // tier its last wrapped session recorded.
+        // tier its last wrapped session recorded. A retired row is listed
+        // only when a person chose to show deregistered agents.
         agentRow({
           id: "agt_f",
           slug: "f",
@@ -580,9 +586,24 @@ describe("Agents, loaded", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("offers no role or deregister action on a retired agent (negative)", async () => {
-    await renderAgents({ list: agentPage([agentRow({ status: "retired" })]) });
-    expect(cellsOf(only(rows())).at(-1)).toBe("Edit");
+  it("marks a shown retired agent deregistered and offers it no action (negative)", async () => {
+    await renderAgents(
+      {
+        list: agentPage([agentRow({ status: "retired" })], null, {
+          retired: 1,
+        }),
+      },
+      null,
+      undefined,
+      true,
+    );
+    const row = only(rows());
+    expect(row).toHaveAttribute("data-retired");
+    expect(cellsOf(row).at(-1)).toBe("deregistered");
+    const actions = within(row).getAllByRole("cell").at(-1);
+    if (actions === undefined) throw new Error("no actions cell");
+    expect(within(actions).queryAllByRole("link")).toEqual([]);
+    expect(within(actions).queryAllByRole("button")).toEqual([]);
   });
 
   it("opens the agent when a row is clicked anywhere but its actions", async () => {
@@ -784,6 +805,74 @@ describe("Agents list controls", () => {
     expect(
       within(beyond).getByRole("link", { name: "First agents" }),
     ).toHaveAttribute("href", "/acme/core-platform/agents");
+  });
+});
+
+describe("Agents, deregistered", () => {
+  const toggle = () => screen.queryByTestId("agents-deregistered-toggle");
+
+  it("offers no toggle when the workspace has no deregistered agent", async () => {
+    const calls = await renderAgents({ list: agentPage([agentRow()]) });
+    expect(calls.list).toEqual([
+      [ctx, { cursor: null, includeRetired: false }],
+    ]);
+    expect(toggle()).toBeNull();
+  });
+
+  it("offers a small link to show them, counted, beside the row range", async () => {
+    await renderAgents({
+      list: agentPage([agentRow()], null, { retired: 3 }),
+    });
+    const link = screen.getByRole("link", {
+      name: "Show deregistered agents (3)",
+    });
+    expect(link).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents?deregistered=show",
+    );
+    expect(link).toBe(toggle());
+    // Out of the way: under the table, not in the header or the toolbar.
+    expect(table().compareDocumentPosition(link)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(link.className).toContain("text-muted-foreground");
+  });
+
+  it("asks the read for retired agents when shown, and keeps them across pages", async () => {
+    const calls = await renderAgents(
+      { list: agentPage([agentRow()], "c2", { retired: 3 }) },
+      "c1",
+      undefined,
+      true,
+    );
+    expect(calls.list).toEqual([[ctx, { cursor: "c1", includeRetired: true }]]);
+    expect(
+      screen.getByRole("link", { name: "Hide deregistered agents" }),
+    ).toHaveAttribute("href", "/acme/core-platform/agents");
+    const beyond = screen.getByRole("navigation", {
+      name: "Agents beyond this page",
+    });
+    expect(
+      within(beyond).getByRole("link", { name: "More agents" }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/agents?deregistered=show&cursor=c2",
+    );
+    expect(
+      within(beyond).getByRole("link", { name: "First agents" }),
+    ).toHaveAttribute("href", "/acme/core-platform/agents?deregistered=show");
+  });
+
+  it("carries the link on the empty state when deregistered agents are all the workspace has", async () => {
+    await renderAgents({
+      list: agentPage([], null, { identities: 0, retired: 2 }),
+    });
+    const empty = screen.getByTestId("agents-empty");
+    expect(
+      within(empty).getByRole("link", {
+        name: "Show deregistered agents (2)",
+      }),
+    ).toHaveAttribute("href", "/acme/core-platform/agents?deregistered=show");
   });
 });
 
