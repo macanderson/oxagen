@@ -796,38 +796,42 @@ function PauseDialog({
     if (run === null || refusal !== null || pending) return;
     setFailure(null);
     startTransition(async () => {
-      const result = await dispatchRunCommand(
-        org,
-        ws,
-        run.id,
-        sent,
-        reason,
-      ).catch(() => UNANSWERED);
-      // React leaves a state update made after an await out of the
-      // transition, so it commits while `pending` still reads true: the
-      // answer drew under a disabled "Cancelling" button for one render.
-      // Wrapping the updates puts the answer and the enabled buttons in one
-      // commit.
-      startTransition(() => {
+      try {
+        const result = await dispatchRunCommand(
+          org,
+          ws,
+          run.id,
+          sent,
+          reason,
+        );
         const open = showingRef.current === run.id;
-        if (!result.ok) setFailure(failureText(result));
-        else if (result.value.commandIds.length === 0)
-          setFailure(command("noRecipient"));
-        else if (!open) {
-          // The dialog cannot close while a command is in flight, so this is
-          // a board that went away before the answer came. Read the page
-          // again, so the row shows what the command changed.
-          if (ledger) navigate.refresh();
-          else onQueued(run);
-        } else if (ledger) {
-          setReason("");
-          setApplied(command(`${LEDGER_COPY[sent]}.applied`));
-        } else {
-          setReason("");
-          onClose();
-          onQueued(run);
-        }
-      });
+        // An update after an `await` leaves the transition and draws while
+        // `pending` still holds the buttons, so a refusal showed beside a
+        // disabled Close. Each answer goes back in, and draws with them.
+        startTransition(() => {
+          if (!result.ok) setFailure(failureText(result));
+          else if (result.value.commandIds.length === 0)
+            setFailure(command("noRecipient"));
+          else if (!open) {
+            // The dialog cannot close while a command is in flight, so this
+            // is a board that went away before the answer came. Read the
+            // page again, so the row shows what the command changed.
+            if (ledger) navigate.refresh();
+            else onQueued(run);
+          } else if (ledger) {
+            setReason("");
+            setApplied(command(`${LEDGER_COPY[sent]}.applied`));
+          } else {
+            setReason("");
+            onClose();
+            onQueued(run);
+          }
+        });
+      } catch {
+        startTransition(() => {
+          setFailure(failureText(UNANSWERED));
+        });
+      }
     });
   }
 
