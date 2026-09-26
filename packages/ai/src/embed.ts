@@ -75,14 +75,26 @@ function embeddingUnavailable(err: unknown): EmbeddingUnavailableError {
 
 /** The platform's Voyage model, built per call so a rotated key takes effect. */
 function voyageModel(inputType: VoyageInputType | undefined): EmbeddingModelV4 {
-  const { VOYAGE_API_KEY } = requireEnv(["VOYAGE_API_KEY"] as const);
-  if (!VOYAGE_API_KEY) {
+  // An empty value fails the schema's min(1) inside requireEnv, and an unset
+  // one passes it as undefined. Both are the same fault to the caller: a 503
+  // naming the key, never a 500 from a config parse.
+  let apiKey: string | undefined;
+  let invalid: unknown;
+  try {
+    apiKey = requireEnv(["VOYAGE_API_KEY"] as const).VOYAGE_API_KEY;
+  } catch (err) {
+    invalid = err;
+  }
+  if (!apiKey) {
     throw new EmbeddingUnavailableError(
       "Embeddings are unavailable: VOYAGE_API_KEY is not set",
+      undefined,
+      undefined,
+      invalid === undefined ? undefined : { cause: invalid },
     );
   }
   return createVoyageEmbeddingModel({
-    apiKey: VOYAGE_API_KEY,
+    apiKey,
     modelId: EMBEDDING_MODEL,
     outputDimension: EMBEDDING_DIMENSIONS,
     inputType,
