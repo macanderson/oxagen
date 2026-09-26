@@ -435,6 +435,27 @@ describe("service managers", () => {
     );
   });
 
+  // #4317: found by the real Task Scheduler run in install-rig-real.test.ts.
+  // cmd.exe holds its working directory open, and the launcher outlives the
+  // daemon by up to a minute after uninstall, so a launcher that ran from
+  // the Tacho root left that directory behind after `unenroll --purge`.
+  it("runs the Windows launcher from the profile directory, never the Tacho root", () => {
+    const home = mkdtempSync(join(tmpdir(), "tacho-win-cwd-"));
+    const root = join(home, ".config", "oxagen", "tacho");
+    const launcher = join(root, "tachod.cmd");
+    const manager = serviceManagerFor({
+      platform: "win32",
+      home,
+      exec: fakeExec().exec,
+      launcherPath: launcher,
+      pidPath: join(root, "tachod.pid"),
+    });
+    manager.install({ ...SPEC, workingDirectory: root });
+    const text = readFileSync(launcher, "utf8");
+    expect(text).toContain(`cd /d "${home}"`);
+    expect(text).not.toContain(`cd /d "${root}"`);
+  });
+
   it("installs a per-user Task Scheduler task on Windows, and stops and observes the daemon by pid", () => {
     const home = mkdtempSync(join(tmpdir(), "tacho-win-"));
     const launcher = join(home, "tacho", "tachod.cmd");

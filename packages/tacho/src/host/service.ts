@@ -621,7 +621,17 @@ function schtasksManager(options: ServiceManagerOptions): ServiceManager {
       ensureDir(join(launcher, ".."), 0o755);
       writeSensitiveFileAtomic(
         launcher,
-        renderWindowsLauncher(spec, randomBytes(8).toString("hex")),
+        renderWindowsLauncher(
+          // The launcher runs from the profile directory, not the Tacho
+          // root. A running cmd.exe holds its working directory open, and
+          // the launcher lives on for up to a minute after uninstall kills
+          // the daemon, until its loop reads that its file is gone. From the
+          // Tacho root it kept `unenroll --purge` from removing the root, and
+          // an empty directory stayed behind (#4317). The daemon uses
+          // absolute paths only.
+          { ...spec, workingDirectory: options.home },
+          randomBytes(8).toString("hex"),
+        ),
         0o600,
       );
       options.exec("schtasks", ["/Delete", "/TN", SCHTASKS_NAME, "/F"]);
