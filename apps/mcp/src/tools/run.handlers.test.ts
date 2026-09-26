@@ -1,5 +1,6 @@
 // run.handlers.test.ts — handler invocation tests for the run recorder tools
 // (#2952, ADR-058): get_run_frame_body, get_run_transcript, get_run_turns,
+// get_run_context (ADR-193),
 // get_run_chain, bisect_runs, get_run_export, and seal_run (#4073, ADR-169).
 // fork_run, export_run and summarize_run check an org role in the handler and
 // an MCP context carries no user, so they have no MCP tool. get_run_export and
@@ -43,6 +44,10 @@ import runTurnsGetTool, {
   schema as turnsSchema,
   metadata as turnsMetadata,
 } from "./run.turns.get";
+import runContextGetTool, {
+  schema as contextSchema,
+  metadata as contextMetadata,
+} from "./run.context.get";
 import runChainGetTool, {
   schema as chainSchema,
   metadata as chainMetadata,
@@ -149,6 +154,58 @@ const CASES: ToolCase[] = [
       kinds: [],
       entries: [],
       cursor: null,
+      complete: true,
+    },
+  },
+  {
+    name: "get_run_context",
+    handler: runContextGetTool,
+    schema: contextSchema,
+    metadata: contextMetadata,
+    fields: ["runId"],
+    readOnly: true,
+    args: { runId: TACHO_ID },
+    validOutput: {
+      runId: TACHO_ID,
+      source: "wrapped",
+      windows: [
+        {
+          seq: "12",
+          responseSeq: "12",
+          modelCallId: "req_12",
+          provider: "anthropic",
+          model: "claude-opus-5",
+          promptTokens: 1000,
+          bytes: 2000,
+          blocks: [
+            { kind: "system", bytes: 200, items: 1, tokens: 100 },
+            { kind: "tools", bytes: 600, items: 18, tokens: 300 },
+            { kind: "conversation", bytes: 1200, items: 40, tokens: 600 },
+          ],
+        },
+      ],
+      unmeasured: 1,
+      assemblies: [],
+      complete: true,
+    },
+    // A block outside the window's five kinds.
+    invalidOutput: {
+      runId: TACHO_ID,
+      source: "wrapped",
+      windows: [
+        {
+          seq: "12",
+          responseSeq: "12",
+          modelCallId: null,
+          provider: null,
+          model: null,
+          promptTokens: null,
+          bytes: 1,
+          blocks: [{ kind: "memory", bytes: 1, items: 1, tokens: null }],
+        },
+      ],
+      unmeasured: 0,
+      assemblies: [],
       complete: true,
     },
   },

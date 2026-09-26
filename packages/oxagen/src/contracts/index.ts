@@ -105,6 +105,7 @@ import { publishedSteeringGet } from "./context.steering.published.get";
 import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runTurnsGet } from "./run.turns.get";
+import { runContextGet } from "./run.context.get";
 import { runWorkGet } from "./run.work.get";
 import { runIssuesGet } from "./run.issues.get";
 import { runOutputsGet } from "./run.outputs.get";
@@ -778,6 +779,7 @@ export {
   userProfileUpdate,
   runCostGet,
   runTurnsGet,
+  runContextGet,
   runOutputsGet,
   runWorkGet,
   runIssuesGet,
@@ -1187,6 +1189,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   userProfileUpdate,
   runCostGet,
   runTurnsGet,
+  runContextGet,
   runOutputsGet,
   runWorkGet,
   runIssuesGet,
