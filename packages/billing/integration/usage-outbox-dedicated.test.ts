@@ -191,8 +191,9 @@ describe("usage outbox across a shared and a dedicated plane", () => {
     const sharedId = await recordUsage(SHARED_ORG);
     const dedicatedId = await recordUsage(DEDICATED_ORG);
 
+    // Rows another suite left behind can add to the pass's counts, so the
+    // assertions below name this test's two admissions.
     const pass = await deliverUsageOutbox(100, new Date(Date.now() + 60_000));
-    expect(pass.failed).toBe(0);
     expect(pass.delivered).toBeGreaterThanOrEqual(2);
     const deliveredIds = mocks.insert.mock.calls.map(([id]) => id);
     expect(deliveredIds).toEqual(
