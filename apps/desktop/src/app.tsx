@@ -23,6 +23,7 @@ import {
   describeRemoval,
   isEnrolled,
   isRetired,
+  pendingRevokeText,
   statusBanner,
   TOAST_MS,
   uninstallFinished,
@@ -154,6 +155,9 @@ export function App() {
   // Set once an uninstall has left nothing behind: the Uninstall panel has
   // nothing more to offer and goes away until the machine is set up again.
   const [uninstalled, setUninstalled] = useState(false);
+  // The agent key whose revoke an uninstall could not finish: the retired
+  // host.json that named it is gone, so the screen after reads it from here.
+  const [pendingRevoke, setPendingRevoke] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   // Bumped after every sign-in so the org listing runs again: config.json's
@@ -342,7 +346,9 @@ export function App() {
   // A machine enrolled again, from here or from a terminal, has something to
   // uninstall again.
   useEffect(() => {
-    if (host !== null) setUninstalled(false);
+    if (host === null) return;
+    setUninstalled(false);
+    setPendingRevoke(null);
   }, [host]);
   useEffect(() => {
     if (toast === null) return;
@@ -814,6 +820,7 @@ export function App() {
         })),
         ...report.left.map((note) => ({ text: `left: ${note}`, err: true })),
       ]);
+      setPendingRevoke(report.pending_revoke?.agent_key ?? null);
       setNotice(describeRemoval(report, uninstallHint));
       if (uninstallFinished(report)) {
         setUninstalled(true);
@@ -1939,13 +1946,18 @@ export function App() {
         <p className="sub">
           {notice ?? "Run the setup again to register your agents."}
         </p>
-        {retiredHost && (
+        {retiredHost ? (
           <p className="sub">
             This machine was unenrolled while offline. {retiredHost.agent_key}{" "}
             still shows as active on the fleet page until the revoke goes
             through: sign in and uninstall, or revoke it from the fleet page.
           </p>
-        )}
+        ) : pendingRevoke !== null &&
+          !(notice ?? "").includes(pendingRevokeText(pendingRevoke)) ? (
+          // The uninstall's own notice says it first. Once another notice
+          // replaces that one, the step is still owed and still shown.
+          <p className="sub">{pendingRevokeText(pendingRevoke)}</p>
+        ) : null}
         <div className="row">
           <button type="button" className="primary" onClick={restartWizard}>
             Set up again

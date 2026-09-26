@@ -209,6 +209,30 @@ pub fn enrollment(roots: &Roots) -> Enrollment {
     }
 }
 
+/// An enrollment `tacho unenroll` retired while its revoke could not reach
+/// the control plane: the fleet page still lists it as active.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct PendingRevoke {
+    pub agent_key: String,
+    pub host_enrollment_id: String,
+}
+
+/// The revoke a retired `host.json` still owes, read before anything removes
+/// the file. `None` for any other enrollment state, and for a retired file
+/// that names no enrollment.
+pub fn pending_revoke(roots: &Roots) -> Option<PendingRevoke> {
+    if enrollment(roots) != Enrollment::Retired {
+        return None;
+    }
+    let host = read_host(&roots.tacho_root().join("host.json")).ok()??;
+    let field = |key: &str| host.get(key).and_then(Value::as_str).map(str::to_owned);
+    let host_enrollment_id = field("host_enrollment_id")?;
+    Some(PendingRevoke {
+        agent_key: field("agent_key").unwrap_or_else(|| host_enrollment_id.clone()),
+        host_enrollment_id,
+    })
+}
+
 /// `host.json` as the Connection panel reads it. `Ok(None)` means there is
 /// no file. A file that is there and cannot be read, or is not a JSON
 /// object, is an `Err` naming why: read as absent, it sent an enrolled

@@ -249,12 +249,43 @@ fn read_json_object(path: &Path) -> Map<String, Value> {
         .unwrap_or_default()
 }
 
-fn write_json_object(path: &Path, obj: &Map<String, Value>) -> Result<(), String> {
+/// `desktop.json`'s key for "this app created `~/.config`".
+const CONFIG_DIR_CREATED: &str = "configDirCreated";
+
+/// Write `desktop.json`. When `~/.config` is not there yet, this write is what
+/// creates it, and the file records that under `configDirCreated`, so
+/// Uninstall removes an empty `~/.config` only when Oxagen made it.
+fn write_desktop_config(roots: &Roots, config: &Map<String, Value>) -> Result<(), String> {
+    let mut config = config.clone();
+    if !roots.home.join(".config").exists() {
+        config.insert(CONFIG_DIR_CREATED.to_string(), Value::Bool(true));
+    }
+    let path = roots.desktop_config_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let text = serde_json::to_string_pretty(&Value::Object(obj.clone())).unwrap_or_else(|_| "{}".to_string());
-    crate::machine::write_atomic(path, &text)
+    let text = serde_json::to_string_pretty(&Value::Object(config)).unwrap_or_else(|_| "{}".to_string());
+    crate::machine::write_atomic(&path, &text)
+}
+
+/// Run at launch, before any sidecar can write under `~/.config/oxagen`.
+/// `oxagen login` and `tacho enroll` create `~/.config` when it is missing and
+/// record nothing, so Uninstall could not tell a `~/.config` Oxagen made from
+/// an empty one the person already had, and removed both (#4318). When it is
+/// missing, the app writes `desktop.json` first, and that write records it.
+pub fn record_config_dir(roots: &Roots) -> Result<(), String> {
+    if roots.home.join(".config").exists() {
+        return Ok(());
+    }
+    write_desktop_config(roots, &read_json_object(&roots.desktop_config_path()))
+}
+
+/// Whether `desktop.json` says this app created `~/.config`.
+fn config_dir_created(roots: &Roots) -> bool {
+    read_json_object(&roots.desktop_config_path())
+        .get(CONFIG_DIR_CREATED)
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 /// Pure: whether automatic linking is enabled, given an explicit setting and,
@@ -356,9 +387,8 @@ pub fn set_auto_link_cli(mut config: Map<String, Value>, enabled: bool) -> Map<S
 }
 
 pub(crate) fn write_auto_link_cli(roots: &Roots, enabled: bool) -> Result<(), String> {
-    let path = roots.desktop_config_path();
-    let config = set_auto_link_cli(read_json_object(&path), enabled);
-    write_json_object(&path, &config)
+    let config = set_auto_link_cli(read_json_object(&roots.desktop_config_path()), enabled);
+    write_desktop_config(roots, &config)
 }
 
 /// The persisted `autoLinkCli` preference.
@@ -1163,7 +1193,7 @@ fn record_created(roots: &Roots, paths: &[PathBuf]) -> Result<(), String> {
         "created".to_string(),
         Value::Array(created.into_iter().map(Value::String).collect()),
     );
-    write_json_object(&path, &config)
+    write_desktop_config(roots, &config)
 }
 
 /// Create `dir` and every missing parent, returning the ones that were made,
@@ -1296,10 +1326,9 @@ fn remove_created(roots: &Roots) -> Vec<String> {
             removed.push(item.clone());
         }
     }
-    let config_path = roots.desktop_config_path();
-    let mut config = read_json_object(&config_path);
+    let mut config = read_json_object(&roots.desktop_config_path());
     if config.remove("created").is_some() {
-        let _ = write_json_object(&config_path, &config);
+        let _ = write_desktop_config(roots, &config);
     }
     removed
 }
@@ -1740,6 +1769,10 @@ pub struct RemovalReport {
     pub removed: Vec<String>,
     /// Still on the machine, each with why.
     pub left: Vec<String>,
+    /// The revoke a retired `host.json` still owed when Uninstall removed it.
+    /// Nothing on the machine can finish it after that, so the report names
+    /// the agent key for the person to revoke on the fleet page (audit D-06).
+    pub pending_revoke: Option<crate::machine::PendingRevoke>,
 }
 
 /// Everything the app itself put on this machine, after `tacho unenroll` has
@@ -1757,7 +1790,13 @@ pub(crate) fn remove_everything_in(env: &InstallEnv, state: &CliInstallState) ->
     if crate::machine::enrollment(roots) == Enrollment::Live {
         return Err("this machine is still enrolled; unenroll first".into());
     }
-    let mut report = RemovalReport::default();
+    let mut report = RemovalReport {
+        // Read now: `host.json` goes with the Tacho root below.
+        pending_revoke: crate::machine::pending_revoke(roots),
+        ..RemovalReport::default()
+    };
+    // Read now as well: `desktop.json` goes with `~/.config/oxagen`.
+    let config_dir_created = config_dir_created(roots);
     // The durable copy: two ~120 MB binaries that nothing removed. Only when
     // the app is not running from it (it never is: the app runs its bundled
     // sidecars), and only the two files we copied plus the directories made
@@ -1787,10 +1826,11 @@ pub(crate) fn remove_everything_in(env: &InstallEnv, state: &CliInstallState) ->
             }
         }
     }
-    // `~/.config` itself, when creating `~/.config/oxagen` is the only reason
-    // it exists.
-    if let Some(parent) = roots.oxagen_dir().parent() {
-        crate::machine::remove_dir_if_empty(parent);
+    // `~/.config` itself, only when the app recorded creating it and nothing
+    // else is in it. An empty one the person already had stays (#4318).
+    let config_dir = roots.home.join(".config");
+    if config_dir_created && crate::machine::remove_dir_if_empty(&config_dir) {
+        report.removed.push(config_dir.display().to_string());
     }
     state.set(CliInstallView {
         state: "opted_out".to_string(),

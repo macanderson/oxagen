@@ -306,6 +306,9 @@ pub fn run() {
     // `ensure_cli_installed` makes later in this launch reaches the sidecars
     // through `sidecar_env` instead; see `cli_install::export_bin_dir`.
     cli_install::export_bin_dir();
+    // Before any sidecar can create `~/.config`, so Uninstall knows whether
+    // the person had one already. See `cli_install::record_config_dir`.
+    let _ = cli_install::record_config_dir(&machine::Roots::real());
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
