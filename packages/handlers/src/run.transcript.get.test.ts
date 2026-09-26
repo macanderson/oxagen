@@ -36,6 +36,7 @@ import {
   ledgerRun,
   memoryEvents,
   memoryStores,
+  memorySubagentFrames,
   memoryTachoFrames,
   summary,
   tachoRow,
@@ -91,45 +92,11 @@ function harness(
     readRunRollups: stores.readRunRollups,
     readWitnessFor: stores.readWitnessFor,
     tachoFrames: memoryTachoFrames(SESSION_UUID, rows),
-    tachoSubagentFrames: memorySubagentFrames(SESSION_UUID, subagentRows),
+    tachoSubagentFrames: memorySubagentFrames(subagentRows),
     bodies: { getBody, getAssembly: () => Promise.resolve(null) },
     priceBook: () => Promise.resolve([]),
   };
   return { transcript: createRunTranscriptGetHandler(deps), getBody, deps };
-}
-
-/**
- * An in-memory `selectTachoSubagentEvents`: every chain under the root, in
- * (session, seq) order, strictly after the position, at most `limit`.
- */
-function memorySubagentFrames(root: string, rows: TachoFrameRow[]) {
-  const ordered = [...rows].sort((a, b) =>
-    a.sessionUuid === b.sessionUuid
-      ? a.seq - b.seq
-      : (a.sessionUuid ?? "") < (b.sessionUuid ?? "")
-        ? -1
-        : 1,
-  );
-  return (args: {
-    rootSessionUuid: string;
-    after: { sessionUuid: string; seq: number } | null;
-    limit: number;
-  }) =>
-    Promise.resolve(
-      args.rootSessionUuid !== root
-        ? []
-        : ordered
-            .filter((r) => {
-              const after = args.after;
-              if (after === null) return true;
-              const session = r.sessionUuid ?? "";
-              return (
-                session > after.sessionUuid ||
-                (session === after.sessionUuid && r.seq > after.seq)
-              );
-            })
-            .slice(0, args.limit),
-    );
 }
 
 const rows = [

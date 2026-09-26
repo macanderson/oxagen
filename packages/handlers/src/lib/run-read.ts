@@ -291,13 +291,24 @@ export function runChainReads(
   };
 }
 
-/** The one frame at `seq`, or null. */
+/**
+ * The one frame at `seq`, or null. `sessionUuid` names the chain it was
+ * recorded on: omitted, or the run's own session, it is the run's own chain.
+ * Any other session is read as a subagent chain under the run's root, so a
+ * session of another run finds nothing, and neither does any session on a
+ * ledger run, which has one chain (#3823).
+ */
 export async function readFrameAt(
   deps: RunReadDeps,
   run: ResolvedRun,
   seq: string,
+  sessionUuid?: string,
 ): Promise<RunFrame | null> {
+  const chain = sessionUuid?.toLowerCase();
+  if (chain !== undefined && run.source === "ledger") return null;
   if (run.source === "tacho") {
+    if (chain !== undefined && chain !== run.sessionUuid)
+      return readSubagentFrameAt(deps, run.sessionUuid, chain, seq);
     // Bounded at `seq` itself, so a missing frame reads nothing past it.
     const [row] = await deps.tachoFrames({
       sessionUuid: run.sessionUuid,
@@ -311,6 +322,36 @@ export async function readFrameAt(
   const before = (BigInt(seq) - 1n).toString();
   const [frame] = await readFrames(deps, run, before, 1);
   return frame && frame.seq === seq ? frame : null;
+}
+
+/**
+ * The frame at `seq` on one subagent chain under `rootSessionUuid`, or null.
+ * The read names the chain and is fenced by the root, so a chain of another
+ * run answers nothing. Its position is a (session, seq) tuple compared on an
+ * unsigned seq, and nothing lies below seq 0, so the chain's first frame is
+ * read from the chain's start and `throughSeq` stops the read at the frame.
+ */
+async function readSubagentFrameAt(
+  deps: RunReadDeps,
+  rootSessionUuid: string,
+  sessionUuid: string,
+  seq: string,
+): Promise<RunFrame | null> {
+  if (deps.tachoSubagentFrames === undefined) return null;
+  const at = Number(seq);
+  const [row] = await deps.tachoSubagentFrames({
+    rootSessionUuid,
+    sessionUuids: [sessionUuid],
+    after: at === 0 ? null : { sessionUuid, seq: at - 1 },
+    throughSeq: at,
+    limit: 1,
+  });
+  const frame = row ? tachoFrame(row) : undefined;
+  return frame !== undefined &&
+    frame.seq === seq &&
+    frame.chain?.sessionUuid === sessionUuid
+    ? frame
+    : null;
 }
 
 /**

@@ -504,6 +504,52 @@ export function memoryTachoFrames(sessionUuid: string, rows: TachoFrameRow[]) {
 }
 
 /**
+ * An in-memory `selectTachoSubagentEvents` over `rows`, which may hold the
+ * chains of several runs. Like the query, it reads the chains under the root
+ * alone (`root_session_uuid`, never the root's own), only the listed ones
+ * when `sessionUuids` is given, in (session, seq) order, strictly after the
+ * position, at or below `throughSeq` when one is given, at most `limit`.
+ */
+export function memorySubagentFrames(rows: TachoFrameRow[]) {
+  const ordered = [...rows].sort((a, b) =>
+    a.sessionUuid === b.sessionUuid
+      ? a.seq - b.seq
+      : (a.sessionUuid ?? "") < (b.sessionUuid ?? "")
+        ? -1
+        : 1,
+  );
+  return (args: {
+    rootSessionUuid: string;
+    sessionUuids?: readonly string[];
+    after: { sessionUuid: string; seq: number } | null;
+    throughSeq?: number;
+    limit: number;
+  }) =>
+    Promise.resolve(
+      ordered
+        .filter((r) => {
+          const session = r.sessionUuid ?? "";
+          if (r.rootSessionUuid !== args.rootSessionUuid) return false;
+          if (session === args.rootSessionUuid) return false;
+          if (
+            args.sessionUuids !== undefined &&
+            !args.sessionUuids.includes(session)
+          )
+            return false;
+          if (args.throughSeq !== undefined && r.seq > args.throughSeq)
+            return false;
+          const after = args.after;
+          if (after === null) return true;
+          return (
+            session > after.sessionUuid ||
+            (session === after.sessionUuid && r.seq > after.seq)
+          );
+        })
+        .slice(0, args.limit),
+    );
+}
+
+/**
  * An in-memory `readAttemptEventsSince`: strictly after the cursor, ascending,
  * at most `limit`. `log` may grow between reads, which is how a long-poll test
  * lands an event mid-wait.
