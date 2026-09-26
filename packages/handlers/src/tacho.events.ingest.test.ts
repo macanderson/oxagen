@@ -345,7 +345,12 @@ interface FakeDb {
   fileSets: Array<Record<string, unknown>>;
   commands: Array<Record<string, unknown>>;
   controlCommands: Array<Record<string, unknown>>;
-  updates: Array<{ table: string; values: Record<string, unknown> }>;
+  updates: Array<{
+    table: string;
+    values: Record<string, unknown>;
+    /** The WHERE the statement ran with, for a case that pins it. */
+    condition?: unknown;
+  }>;
   /**
    * `tacho.gateway_chains` — the control plane's own record of which of this
    * host's chains its gateway has served, one row each (#3221). Empty by
@@ -968,7 +973,7 @@ function wire(db: FakeDb): void {
           set: (values: Record<string, unknown>) => {
             const run = async (condition?: unknown) => {
               const name = tableName(table);
-              db.updates.push({ table: name, values });
+              db.updates.push({ table: name, values, condition });
               if (name === "control_commands" && values["outcome"] === "sent") {
                 for (const command of db.controlCommands)
                   command["outcome"] = "sent";
@@ -2001,6 +2006,46 @@ describe("ingest_tacho_events", () => {
       "tcm_1",
     ]);
     expect(db.controlCommands[0]?.["outcome"]).toBe("sent");
+  });
+
+  // #2953: a steer held for an agent with no run in flight becomes the
+  // command of the agent's next run, in the transaction that opens the run,
+  // so the control envelope on the same response carries it.
+  it("re-addresses the agent's held commands to a root session it opens, and only then", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    const commandUpdates = () =>
+      db.updates.filter((u) => u.table === "control_commands");
+    const readdressed = commandUpdates().filter(
+      (u) => u.values["targetKind"] === "run",
+    );
+    expect(readdressed).toHaveLength(1);
+    expect(readdressed[0]?.values).toMatchObject({
+      targetId: "tse_fake0000000000000001",
+      hostId: HOST_ID,
+      sessionId: "s1",
+    });
+    expect(boundColumns(readdressed[0]?.condition)).toEqual(
+      expect.arrayContaining([
+        ["orgId", CONTEXT.orgId],
+        ["workspaceId", CONTEXT.workspaceId],
+        ["targetKind", "agent"],
+        ["targetId", "acme.core.cc-laptop"],
+        ["outcome", "queued"],
+      ]),
+    );
+    // The agent's held commands past their expiry are marked first: no
+    // host's poll sweeps a row that names no host.
+    expect(
+      commandUpdates().some((u) => u.values["outcome"] === "expired"),
+    ).toBe(true);
+    // The same batch again reaches the open session and takes nothing.
+    db.updates.length = 0;
+    await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    expect(
+      commandUpdates().filter((u) => u.values["targetKind"] === "run"),
+    ).toEqual([]);
   });
 
   describe("the spend counter (#3825)", () => {

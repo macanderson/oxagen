@@ -495,10 +495,12 @@ function sealCommands(
         // failed on one session is not `applied` for the host.
         const details: string[] = [];
         let changedAny = false;
+        let reached = 0;
         for (const record of deps.registry.live()) {
           // Agent sessions only: the daemon's own chain is here too, and a
           // host-level cancel must not make the daemon signal itself.
           if (sessionRefusal(record) !== undefined) continue;
+          reached += 1;
           const result = applyToSession(record, command, deps);
           events.push(...result.events);
           if (changedSession(result)) changedAny = true;
@@ -509,6 +511,19 @@ function sealCommands(
             status = "failed";
             if (result.detail !== undefined) details.push(result.detail);
           }
+        }
+        // A fan-out that reached no agent session changed nothing, so it is
+        // not `applied`, and the daemon's chain records no command applied
+        // (#2953). The control plane holds a steer for an idle agent's next
+        // run itself, so this is a command that came with no session to act
+        // on.
+        if (reached === 0) {
+          acknowledgements.push({
+            command_id: command.id,
+            status: "failed",
+            detail: "no live agent session on this host",
+          });
+          break;
         }
         const hostEvent = applied(
           deps.hostRecorder(),

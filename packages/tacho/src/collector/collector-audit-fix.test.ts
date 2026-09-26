@@ -221,6 +221,60 @@ describe("command inbox", () => {
     expect(result.applied).toEqual([]);
   });
 
+  // #2953: a host-level command that reached no agent session acknowledged
+  // `applied` against a frame on the daemon's own chain, which claimed a steer
+  // was applied when no agent read it.
+  it("fails a host-level command that reaches no agent session and seals nothing", async () => {
+    const { registry, host, agent, deps } = setup();
+    registry.seal(agent);
+    const before = host.recorder.sealedEvents.length;
+    const result = await applyCommands(
+      [
+        command({
+          id: "hs",
+          command: "steer",
+          payload: { text: "Skip the mobile repo." },
+        }),
+        command({ id: "hp", command: "pause" }),
+      ],
+      deps,
+    );
+    expect(result.acknowledgements).toEqual([
+      {
+        command_id: "hs",
+        status: "failed",
+        detail: "no live agent session on this host",
+      },
+      {
+        command_id: "hp",
+        status: "failed",
+        detail: "no live agent session on this host",
+      },
+    ]);
+    expect(result.events).toEqual([]);
+    expect(result.applied).toEqual([]);
+    expect(host.recorder.sealedEvents.length).toBe(before);
+    expect(host.control.messages).toEqual([]);
+  });
+
+  it("still acknowledges a host-level steer an agent session queued", async () => {
+    const { agent, deps } = setup();
+    const result = await applyCommands(
+      [
+        command({
+          id: "hs",
+          command: "steer",
+          payload: { text: "Skip the mobile repo." },
+        }),
+      ],
+      deps,
+    );
+    expect(result.acknowledgements.map((a) => a.status)).toEqual([
+      "received",
+    ]);
+    expect(agent.control.messages.map((m) => m.id)).toEqual(["hs"]);
+  });
+
   it("never signals the daemon's own pid", async () => {
     const { registry, host, agent, kills, deps } = setup();
     const hostLevel = await applyCommands(

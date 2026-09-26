@@ -110,6 +110,7 @@ import {
   RUN_PROGRESSED_EVENT,
 } from "@oxagen/inngest-functions/events";
 import { recordProofFrames } from "./lib/proof";
+import { readdressNextRunCommands } from "./lib/next-run-commands";
 import { sendPullRequestLinks } from "./lib/run-pull-request-links";
 import {
   type TachoHostRow,
@@ -2301,6 +2302,30 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         first.parent_session_uuid == null
       ) {
         firstOpenedRunId = sessionRow.publicId;
+      }
+      // A steer queued for this agent's next run while it had none in flight
+      // becomes this run's command, in this transaction, so the control
+      // envelope on this response carries it (#2953).
+      if (
+        sessionRow?.publicId &&
+        inserted &&
+        sessionRow.parentSessionUuid == null
+      ) {
+        await readdressNextRunCommands(tx, {
+          scope: ctx,
+          agentKey: host.agentKey,
+          run: {
+            id: sessionRow.id,
+            publicId: sessionRow.publicId,
+            sessionUuid,
+            harnessSessionId: first.session_id,
+            hostId: host.id,
+            runtime: first.agent.runtime,
+            enforcementTier: derivedTier,
+          },
+          hostFeatures: host.bundleFeatures ?? [],
+          now,
+        });
       }
       // Everything below is this batch's events landing on the session row, so
       // it is gated on the same answer. A refused batch belongs to a different

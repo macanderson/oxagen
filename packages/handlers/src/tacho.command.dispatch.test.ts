@@ -33,6 +33,7 @@ import {
   type CommandRowInput,
   type CommandStore,
   createDispatchCommandHandler,
+  type NextRunCommandInput,
   type RecipientSession,
   resolveDeliveryMode,
 } from "./tacho.command.dispatch";
@@ -139,9 +140,20 @@ const STEP_HOST = {
   bundleFeatures: [BUNDLE_FEATURE_STEER_NEXT_STEP],
 };
 
+/** A command held for an agent's next run, as the store keeps it. */
+type NextRunRow = NextRunCommandInput & {
+  publicId: string;
+  outcome: string;
+  outcomeDetail: string | null;
+};
+
 class MemoryStore implements CommandStore {
   rows: Row[] = [];
   cancelled: Array<{ publicId: string; detail: string }> = [];
+  /** Commands held for an idle agent's next run (#2953). */
+  nextRun: NextRunRow[] = [];
+  /** The agent keys an enrolled host in the scope carries. */
+  enrolledAgents = new Set(["acme.core.cc-laptop", "acme.core.idle"]);
   private seq = 0;
   constructor(
     readonly sessions: RecipientSession[],
@@ -200,6 +212,27 @@ class MemoryStore implements CommandStore {
     const publicId = `tcm_${++this.seq}`;
     this.rows.push({ ...row, publicId });
     return { publicId };
+  }
+  async queueForNextRun(row: NextRunCommandInput) {
+    if (!this.enrolledAgents.has(row.agentKey)) return null;
+    const publicId = `tcm_${++this.seq}`;
+    for (const earlier of this.nextRun) {
+      if (
+        earlier.agentKey === row.agentKey &&
+        earlier.command === row.command &&
+        earlier.outcome === "queued"
+      ) {
+        earlier.outcome = "cancelled";
+        earlier.outcomeDetail = `superseded_by:${publicId}`;
+      }
+    }
+    this.nextRun.push({
+      ...row,
+      publicId,
+      outcome: "queued",
+      outcomeDetail: null,
+    });
+    return publicId;
   }
   async supersede(args: {
     runPublicId: string;
@@ -896,6 +929,134 @@ describe("dispatch_command — broadcast", () => {
       ).commandIds,
     ).toEqual([]);
     expect(empty.rows).toEqual([]);
+  });
+});
+
+// #2953: a steer to an agent with no run in flight waits for its next run.
+describe("dispatch_command: a steer for an idle agent's next run", () => {
+  const busy = [session()];
+
+  it("queues one row for the agent's next run, addressed to the agent and carrying no session", async () => {
+    const store = new MemoryStore(busy);
+    const output = await handlerOver(store)(
+      parse({
+        target: { kind: "agent", id: "acme.core.idle" },
+        command: "steer",
+        payload: { text: "Skip the mobile repo.", requestedMode: "interrupt" },
+        reason: "platform release only",
+      }),
+      OPERATOR,
+    );
+    expect(store.rows).toEqual([]);
+    expect(store.nextRun).toHaveLength(1);
+    const [row] = store.nextRun;
+    expect(output.commandIds).toEqual([row?.publicId]);
+    expect(row).toMatchObject({
+      agentKey: "acme.core.idle",
+      command: "steer",
+      payload: { address: "@acme.core.idle", text: "Skip the mobile repo." },
+      requestedMode: "interrupt",
+      reason: "platform release only",
+      issuedByUserId: OPERATOR.userId,
+      outcome: "queued",
+    });
+    // The run is not known yet, so nothing names a session or a mode.
+    expect(row?.payload["session_uuid"]).toBeUndefined();
+    expect(row?.expiresAt.getTime()).toBe(NOW.getTime() + 3_600_000);
+  });
+
+  it("holds a message the same way", async () => {
+    const store = new MemoryStore(busy);
+    const output = await handlerOver(store)(
+      parse({
+        target: { kind: "agent", id: "acme.core.idle" },
+        command: "message",
+        payload: { text: "fyi: deploy at 5" },
+      }),
+      OPERATOR,
+    );
+    expect(output.commandIds).toHaveLength(1);
+    expect(store.nextRun[0]).toMatchObject({
+      command: "message",
+      requestedMode: "next_step",
+    });
+  });
+
+  it("sends a pause, resume or cancel for an idle agent nowhere (negative)", async () => {
+    for (const command of ["pause", "resume", "cancel"] as const) {
+      const store = new MemoryStore(busy);
+      const output = await handlerOver(store)(
+        parse({ target: { kind: "agent", id: "acme.core.idle" }, command }),
+        OPERATOR,
+      );
+      expect(output.commandIds).toEqual([]);
+      expect(store.rows).toEqual([]);
+      expect(store.nextRun).toEqual([]);
+    }
+  });
+
+  it("steers an agent with a run in flight on that run, not its next (negative)", async () => {
+    const store = new MemoryStore(busy);
+    const output = await handlerOver(store)(
+      parse({
+        target: { kind: "agent", id: "acme.core.cc-laptop" },
+        command: "steer",
+        payload: { text: "Skip the mobile repo." },
+      }),
+      OPERATOR,
+    );
+    expect(output.commandIds).toHaveLength(1);
+    expect(store.rows.map((r) => r.session.publicId)).toEqual([RUN]);
+    expect(store.nextRun).toEqual([]);
+  });
+
+  it("queues nothing for an agent no enrolled host carries (negative)", async () => {
+    const store = new MemoryStore(busy);
+    store.enrolledAgents.delete("acme.core.idle");
+    const output = await handlerOver(store)(
+      parse({
+        target: { kind: "agent", id: "acme.core.idle" },
+        command: "steer",
+        payload: { text: "Skip the mobile repo." },
+      }),
+      OPERATOR,
+    );
+    expect(output.commandIds).toEqual([]);
+    expect(store.nextRun).toEqual([]);
+  });
+
+  it("supersedes an earlier steer held for the same agent and leaves its message", async () => {
+    const store = new MemoryStore(busy);
+    const handler = handlerOver(store);
+    const steer = (text: string) =>
+      handler(
+        parse({
+          target: { kind: "agent", id: "acme.core.idle" },
+          command: "steer",
+          payload: { text },
+        }),
+        OPERATOR,
+      );
+    const first = await steer("Use staging.");
+    await handler(
+      parse({
+        target: { kind: "agent", id: "acme.core.idle" },
+        command: "message",
+        payload: { text: "fyi" },
+      }),
+      OPERATOR,
+    );
+    const second = await steer("Use the read replica.");
+    const byId = new Map(store.nextRun.map((row) => [row.publicId, row]));
+    expect(byId.get(first.commandIds[0] ?? "")).toMatchObject({
+      outcome: "cancelled",
+      outcomeDetail: `superseded_by:${second.commandIds[0]}`,
+    });
+    expect(
+      store.nextRun
+        .filter((row) => row.outcome === "queued")
+        .map((row) => row.command),
+    ).toEqual(["message", "steer"]);
   });
 });
 
