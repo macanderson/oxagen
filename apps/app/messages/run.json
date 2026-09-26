@@ -914,7 +914,9 @@
       "repoNotCaptured": "repository and branch not captured",
       "repoOnlyNotCaptured": "repository not captured",
       "repoNotRead": "repository not read",
+      "workNotRead": "work not read",
       "workUnreadWhy": "The read of this run's work failed, so its repository, pull request states, and enrolled checkout are not shown. Reload the page to read them again.",
+      "workUnreadRepoWhy": "The read of this run's work failed, so its pull request states and enrolled checkout are not shown. Reload the page to read them again.",
       "noPullRequest": "no pull request",
       "pullState": {
         "open": "open",

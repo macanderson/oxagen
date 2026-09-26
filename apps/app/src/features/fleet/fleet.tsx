@@ -74,7 +74,14 @@ async function readFleet(
   pullRequests: PullRequestFilter,
 ) {
   const [runs, approvals, agents] = await Promise.all([
-    source.runs.list(ctx, { cursor, limit: pageSize, pullRequests }),
+    // Every page asks for the workspace's live count, since the Live runs
+    // tile sits above each page.
+    source.runs.list(ctx, {
+      cursor,
+      limit: pageSize,
+      pullRequests,
+      countLive: true,
+    }),
     source.approvals.pending(ctx, { runId: null }),
     readAgentRoster(ctx, source),
   ]);

@@ -808,6 +808,35 @@ describe("header", () => {
     expect(screen.getByTestId("run-status")).toHaveTextContent(/^stale$/);
   });
 
+  it("says stale on a live run whose host was revoked, and says why (#4343 review)", async () => {
+    // A revoked host's polls and events are refused, so its run is as
+    // unreachable as an offline one. It pulsed live until the 12-hour close.
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "tacho",
+            commandBlock: "host_revoked",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [], more: false }),
+    });
+    const status = screen.getByTestId("run-status");
+    expect(status).toHaveTextContent(/^stale$/);
+    expect(status.querySelector("[data-pulse]")).toBeNull();
+    const badge = status.querySelector("[data-stale='true']");
+    expect(badge).toHaveAttribute(
+      "title",
+      expect.stringContaining("This run's host was revoked"),
+    );
+    // Negative: not the offline host's reason.
+    expect(badge?.getAttribute("title")).not.toContain("five minutes");
+  });
+
   it("pulses live while the host checks in, and on a run with no host to check in (negative)", async () => {
     for (const commandBlock of [null, "no_host"] as const) {
       await renderRun({
@@ -1050,6 +1079,142 @@ describe("header", () => {
       "mac-studio.local:/Users/mb/src/platform",
     );
     expect(checkout.queryByText("path not captured")).toBeNull();
+  });
+
+  it("names the repository the session's remote matches while the work read is pending or failed (A-05)", async () => {
+    const place = {
+      path: "/Users/mb/src/platform",
+      branch: "fix/tags",
+      repository: {
+        host: "github.com",
+        owner: "acme",
+        name: "platform",
+        url: "https://github.com/acme/platform",
+      },
+    };
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ place }) })),
+      transcript: ok(runTranscript()),
+      work: readError("clickhouse_unavailable", 503),
+    });
+    const failed = within(await screen.findByTestId("run-checkout"));
+    expect(
+      failed.getByRole("link", { name: "acme/platform" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform");
+    // The branch is the session's, on the session's repository.
+    expect(
+      failed.getByRole("link", { name: "fix/tags" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform/tree/fix/tags");
+    // The read still says it failed, and no longer that the repository is unread.
+    const unread = failed.getByTestId("run-work-unread");
+    expect(unread).toHaveTextContent(/^work not read$/);
+    expect(unread.getAttribute("title")).not.toContain("its repository");
+    expect(failed.queryByText("repository not read")).toBeNull();
+    cleanup();
+
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ place }) })),
+      transcript: ok(runTranscript()),
+      work: () => new Promise(() => {}),
+    });
+    const pending = within(screen.getByTestId("run-checkout"));
+    expect(pending.getByRole("link", { name: "acme/platform" })).toBeTruthy();
+    expect(pending.queryByTestId("run-work-unread")).toBeNull();
+  });
+
+  it("links the session's branch into the session's repository when no checkout was enrolled (A-05)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: {
+              path: "/Users/mb/src/platform",
+              branch: "fix/tags",
+              repository: {
+                host: "github.com",
+                owner: "acme",
+                name: "platform",
+                url: "https://github.com/acme/platform",
+              },
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    expect(strip.getByRole("link", { name: "acme/platform" })).toBeTruthy();
+    expect(
+      strip.getByRole("link", { name: "fix/tags" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform/tree/fix/tags");
+    expect(strip.queryByText(/not captured/)).toBeNull();
+  });
+
+  it("never links the session's branch into a pull request's repository (negative, #4343 review)", async () => {
+    // With no checkout enrolled, the repository came from the first pull
+    // request, and the session's branch was linked into it: a session whose
+    // first pull request went to another repository linked a branch that
+    // does not exist there.
+    const docs = {
+      host: "github.com",
+      owner: "acme",
+      name: "docs",
+      url: "https://github.com/acme/docs",
+      connected: true,
+    };
+    const [pr] = runWork().pullRequests;
+    if (pr === undefined) throw new Error("the builder holds a pull request");
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          checkouts: [],
+          pullRequests: [
+            {
+              ...pr,
+              repository: docs,
+              number: 17,
+              url: "https://github.com/acme/docs/pull/17",
+              headRef: "docs/tags",
+              checkoutRefs: [],
+            },
+          ],
+        }),
+      ),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    expect(strip.getByTestId("run-branch")).toHaveTextContent("fix/tags");
+    expect(strip.queryByRole("link", { name: "fix/tags" })).toBeNull();
+    expect(screen.getByTestId("run-checkout").innerHTML).not.toContain(
+      "/tree/fix/tags",
+    );
+  });
+
+  it("names no branch for an enrolled checkout on a detached HEAD, whatever the session's start named (negative, #4343 review)", async () => {
+    const [checkout] = runWork().checkouts;
+    if (checkout === undefined) throw new Error("the builder holds a checkout");
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      work: ok(runWork({ checkouts: [{ ...checkout, branch: null }] })),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    // The checkout is the newer fact: it says the HEAD named no branch.
+    expect(strip.queryByText("fix/tags")).toBeNull();
+    expect(strip.queryByTestId("run-branch")).toBeNull();
   });
 
   it("links a branch that heads no pull request to its tree on the forge", async () => {

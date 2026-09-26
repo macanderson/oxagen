@@ -42,6 +42,7 @@ import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
   canSummarizeRun,
   commandBlockOf,
+  HOST_POLL_WINDOW_MS,
   steerBlockOf,
   IN_APP_AGENT_SURFACES,
   type RunItem,
@@ -86,9 +87,11 @@ import {
   desc,
   eq,
   getTableName,
+  gte,
   inArray,
   isNull,
   lt,
+  ne,
   notInArray,
   or,
   type SQL,
@@ -584,10 +587,17 @@ const tachoColumns = {
     costBasis: sessions.costBasis,
     effort: sessions.effort,
     // Where the session ran, as its start recorded it (the Run header's
-    // checkout strip, while the work read is pending or when it failed).
+    // checkout strip, while the work read is pending or when it failed). The
+    // path is read in `get_run_work`'s order: the worktree, then the project
+    // directory, then the working directory.
     cwd: sessions.cwd,
+    projectDir: sessions.projectDir,
+    worktreePath: sessions.worktreePath,
     gitBranch: sessions.gitBranch,
     worktreeBranch: sessions.worktreeBranch,
+    // The digest of the session's git remote, which `get_run` matches to a
+    // connected repository to name it.
+    gitRemoteDigest: sessions.gitRemoteDigest,
     permissionModeInitial: sessions.permissionModeInitial,
     permissionModeFinal: sessions.permissionModeFinal,
     inputTokens: sessions.inputTokens,
@@ -686,13 +696,21 @@ export function tachoPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
  * How many of the runs `list_runs` lists in the workspace are live, whatever
  * the page, the cursor or the pull-request filter: one count per store, each
  * over the same predicates its page reads (`ledgerListed`, `tachoListed`).
+ *
+ * A wrapped session whose row reads stale is not counted: its host is revoked,
+ * or has not polled within `HOST_POLL_WINDOW_MS` of `now`. That is the rule
+ * `commandBlockOf` applies to the row (`host_revoked`, `host_offline`), so
+ * the count and the rows' lights agree. A session with no host has no poll to
+ * miss and is counted, as its row reads live.
  */
 export function liveCountQueries(
   db: QueryDb,
   scope: RunScope,
   q: Pick<PageQuery, "withoutWitnessRuns">,
+  now: Date,
 ) {
   const count = { count: sql<number>`count(*)::int` };
+  const polledSince = new Date(now.getTime() - HOST_POLL_WINDOW_MS);
   return {
     ledger: db
       .select(count)
@@ -706,24 +724,36 @@ export function liveCountQueries(
     tacho: db
       .select(count)
       .from(sessions)
+      .leftJoin(
+        hosts,
+        and(eq(hosts.id, sessions.hostId), eq(hosts.orgId, sessions.orgId)),
+      )
       .where(
         and(
           ...tachoListed(scope, q),
           inArray(sessions.outcome, [...TACHO_LIVE_OUTCOMES]),
+          or(
+            isNull(hosts.id),
+            and(
+              ne(hosts.status, "revoked"),
+              gte(hosts.lastSeenAt, polledSince),
+            ),
+          ),
         ),
       ),
   };
 }
 
-/** The live runs in a workspace, from both stores. */
+/** The live runs in a workspace, from both stores, as of `now`. */
 export type ReadLiveRunCount = (
   scope: RunScope,
   q: Pick<PageQuery, "withoutWitnessRuns">,
+  now: Date,
 ) => Promise<number>;
 
-export const postgresLiveRunCount: ReadLiveRunCount = (scope, q) =>
+export const postgresLiveRunCount: ReadLiveRunCount = (scope, q, now) =>
   withTenantDb(async (tx) => {
-    const { ledger, tacho } = liveCountQueries(tx, scope, q);
+    const { ledger, tacho } = liveCountQueries(tx, scope, q, now);
     const [[a], [b]] = await Promise.all([ledger, tacho]);
     return Number(a?.count ?? 0) + Number(b?.count ?? 0);
   });
@@ -888,10 +918,14 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   costBasis?: string | null;
   /** The effort level the harness reported in its context frames. */
   effort?: string | null;
-  /** The working directory and git branches the session's start recorded; absent where not selected. */
+  /** The directories and git branches the session's start recorded; absent where not selected. */
   cwd?: string | null;
+  projectDir?: string | null;
+  worktreePath?: string | null;
   gitBranch?: string | null;
   worktreeBranch?: string | null;
+  /** The digest of the session's git remote; absent where not selected. */
+  gitRemoteDigest?: string | null;
   permissionModeInitial?: string | null;
   permissionModeFinal?: string | null;
   /** Token counters ingest folds from the session's counted `llm_call` frames. */
@@ -1368,20 +1402,31 @@ export function reportedTokensOf(
 
 /**
  * Where the session ran, as its start recorded it. A session that ran in a
- * worktree names the worktree's branch, the branch its work went to. Omitted
- * when the reader selected none of the columns, so a caller reads "not known"
- * rather than "not recorded"; null when the session recorded neither.
+ * worktree names the worktree and its branch, the branch its work went to.
+ * The path is read in the order `get_run_work` names a checkout's
+ * (`coalesce(worktree_path, project_dir, cwd)`), so the header shows the same
+ * folder before and after that read answers. Omitted when the reader selected
+ * none of the columns, so a caller reads "not known" rather than "not
+ * recorded"; null when the session recorded neither a path nor a branch.
  */
 export function tachoPlace(
-  session: Pick<TachoSessionColumns, "cwd" | "gitBranch" | "worktreeBranch">,
+  session: Pick<
+    TachoSessionColumns,
+    "cwd" | "projectDir" | "worktreePath" | "gitBranch" | "worktreeBranch"
+  >,
 ): Pick<RunItem, "place"> {
   if (
     session.cwd === undefined &&
+    session.projectDir === undefined &&
+    session.worktreePath === undefined &&
     session.gitBranch === undefined &&
     session.worktreeBranch === undefined
   )
     return {};
-  const path = blankToNull(session.cwd ?? null);
+  const path =
+    blankToNull(session.worktreePath ?? null) ??
+    blankToNull(session.projectDir ?? null) ??
+    blankToNull(session.cwd ?? null);
   const branch =
     blankToNull(session.worktreeBranch ?? null) ??
     blankToNull(session.gitBranch ?? null);
@@ -1699,13 +1744,16 @@ export function createRunListHandler(
       ? deps.readEnrichmentEnabled(scope)
       : Promise.resolve(true);
     // So is the live count, which is the workspace's and not the page's
-    // (Fleet's Live runs tile). A failed count leaves the field out rather
-    // than failing the page, and the tile says it was not counted.
+    // (Fleet's Live runs tile). It reads every root session the workspace
+    // holds, so only a caller that asks for it pays for it. A failed count
+    // leaves the field out rather than failing the page, and the tile says it
+    // was not counted. The rows' lights read the same clock.
+    const now = new Date();
     const liveRead: Promise<number | undefined> =
-      deps.readLiveCount === undefined
+      deps.readLiveCount === undefined || input.countLive !== true
         ? Promise.resolve(undefined)
         : deps
-            .readLiveCount(scope, { withoutWitnessRuns })
+            .readLiveCount(scope, { withoutWitnessRuns }, now)
             .catch((err: unknown) => {
               logger.warn(
                 { err },
@@ -1865,7 +1913,7 @@ export function createRunListHandler(
           item.kind === "ledger"
             ? toLedgerRunItem(enrich(item.row), costs.get(item.id))
             : {
-                ...toTachoRunItem(item.row, costs.get(item.id)),
+                ...toTachoRunItem(item.row, costs.get(item.id), now),
                 ...tachoWorkFields(item.row.session, links, gitDiffs),
               };
         return {

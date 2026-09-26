@@ -1,10 +1,13 @@
 import { schema } from "@oxagen/database";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
-import { runList } from "@oxagen/oxagen/contracts/run.list";
+import {
+  HOST_POLL_WINDOW_MS,
+  runList,
+} from "@oxagen/oxagen/contracts/run.list";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   beforeCursor,
   addCompactedRollup,
@@ -39,6 +42,9 @@ import {
   seal,
   tachoSession,
 } from "./run.test-support";
+
+/** The clock the live count is read against. */
+const NOW = new Date("2026-09-25T12:00:00.000Z");
 
 const RUN_A = "0192d4a8-7c1e-7a00-8000-0000000000a1";
 const RUN_B = "0192d4a8-7c1e-7a00-8000-0000000000a2";
@@ -696,7 +702,12 @@ describe("list_runs queries name the tenant", () => {
   });
 
   it("counts live runs over the same runs the pages list, with no cursor and no page size (A-04)", () => {
-    const counts = liveCountQueries(db, SCOPE, { withoutWitnessRuns: false });
+    const counts = liveCountQueries(
+      db,
+      SCOPE,
+      { withoutWitnessRuns: false },
+      NOW,
+    );
     const ledger = counts.ledger.toSQL();
     expect(ledger.sql).toMatch(
       /^select count\(\*\)::int from "agent"\."agent_runs"/,
@@ -729,11 +740,47 @@ describe("list_runs queries name the tenant", () => {
       expect(query.sql).not.toMatch(/"evidence"\."verdicts"/);
     }
     // An API-key caller's count leaves witness runs out, as its pages do.
-    const hidden = liveCountQueries(db, SCOPE, { withoutWitnessRuns: true });
+    const hidden = liveCountQueries(
+      db,
+      SCOPE,
+      { withoutWitnessRuns: true },
+      NOW,
+    );
     for (const query of [hidden.ledger.toSQL(), hidden.tacho.toSQL()])
       expect(query.sql).toMatch(
         /not exists \(select 1 from "evidence"\."verdicts"/,
       );
+  });
+
+  it("leaves out of the count a session whose row reads stale: its host revoked or quiet past the poll window (#4343 review)", () => {
+    // The tile counted three live runs above three rows that said stale.
+    const tacho = liveCountQueries(
+      db,
+      SCOPE,
+      { withoutWitnessRuns: false },
+      NOW,
+    ).tacho.toSQL();
+    expect(tacho.sql).toContain('left join "tacho"."hosts"');
+    expect(tacho.sql).toMatch(
+      /"tacho"\."hosts"\."id" is null or \("tacho"\."hosts"\."status" <> \$\d+ and "tacho"\."hosts"\."last_seen_at" >= \$\d+\)/,
+    );
+    expect(tacho.params).toContain("revoked");
+    // The same window `commandBlockOf` reads, on the handler's clock.
+    const cutoff = new Date(NOW.getTime() - HOST_POLL_WINDOW_MS);
+    expect(
+      tacho.params.some(
+        (param) =>
+          param instanceof Date && param.getTime() === cutoff.getTime(),
+      ) || tacho.params.includes(cutoff.toISOString()),
+    ).toBe(true);
+    // The ledger records no host, so its count is unchanged.
+    const ledger = liveCountQueries(
+      db,
+      SCOPE,
+      { withoutWitnessRuns: false },
+      NOW,
+    ).ledger.toSQL();
+    expect(ledger.sql).not.toContain('"tacho"."hosts"');
   });
 
   it("counts as live exactly the statuses and outcomes a row reads as live (A-04)", () => {
@@ -1365,18 +1412,37 @@ describe("a run row names who ran it, on what, with which model", () => {
     const asked: unknown[] = [];
     const list = createRunListHandler({
       ...stores,
-      readLiveCount: (scope, q) => {
-        asked.push({ scope, q });
+      readLiveCount: (scope, q, now) => {
+        asked.push({ scope, q, now: now instanceof Date });
         return Promise.resolve(7);
       },
     });
-    const out = await list({ limit: 1 }, ctx());
+    const out = await list({ limit: 1, countLive: true }, ctx());
     expect(runList.output.parse(out)).toEqual(out);
     expect(out.runs).toHaveLength(1);
     expect(out.liveRuns).toBe(7);
-    expect(asked).toEqual([{ scope: SCOPE, q: { withoutWitnessRuns: false } }]);
-    const filtered = await list({ limit: 1, pullRequests: "with" }, ctx());
+    expect(asked).toEqual([
+      { scope: SCOPE, q: { withoutWitnessRuns: false }, now: true },
+    ]);
+    const filtered = await list(
+      { limit: 1, pullRequests: "with", countLive: true },
+      ctx(),
+    );
     expect(filtered.liveRuns).toBe(7);
+  });
+
+  it("counts nothing for a caller that does not ask for the count (negative, #4343 review)", async () => {
+    // The count read every root session on every list_runs call: each page,
+    // each cursor, the API, MCP and agent surfaces, and the Agents page.
+    const stores = memoryStores([], [tachoSession({ publicId: "tse_a" })]);
+    const readLiveCount = vi.fn(() => Promise.resolve(7));
+    const list = createRunListHandler({ ...stores, readLiveCount });
+    const out = await list({ limit: 50 }, ctx());
+    const declined = await list({ limit: 50, countLive: false }, ctx());
+    expect(readLiveCount).not.toHaveBeenCalled();
+    expect(out).not.toHaveProperty("liveRuns");
+    expect(declined).not.toHaveProperty("liveRuns");
+    expect(out.runs).toHaveLength(1);
   });
 
   it("leaves the live count out, and still answers the page, when the count fails (negative)", async () => {
@@ -1385,7 +1451,7 @@ describe("a run row names who ran it, on what, with which model", () => {
       ...stores,
       readLiveCount: () => Promise.reject(new Error("postgres timeout")),
     });
-    const out = await list({ limit: 50 }, ctx());
+    const out = await list({ limit: 50, countLive: true }, ctx());
     expect(out.runs).toHaveLength(1);
     expect(out).not.toHaveProperty("liveRuns");
   });
@@ -1431,9 +1497,51 @@ describe("a run row names who ran it, on what, with which model", () => {
     expect(place("arun_place")).toBeNull();
   });
 
+  it("names the path in get_run_work's order: the worktree, the project, then the working directory (#4343 review)", async () => {
+    // The strip paired the worktree's branch with the working directory, so
+    // before the work read answered it named a folder that read did not.
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_nested",
+          session: {
+            cwd: "/Users/mb/src/platform/packages/api",
+            projectDir: "/Users/mb/src/platform",
+            worktreePath: "/Users/mb/src/platform/.worktrees/tags",
+            gitBranch: "main",
+            worktreeBranch: "fix/tags",
+          },
+        }),
+        tachoSession({
+          publicId: "tse_project",
+          session: {
+            cwd: "/Users/mb/src/platform/packages/api",
+            projectDir: "/Users/mb/src/platform",
+            worktreePath: "",
+            gitBranch: "main",
+          },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    const place = (id: string) => out.runs.find((r) => r.id === id)?.place;
+    expect(place("tse_nested")).toEqual({
+      path: "/Users/mb/src/platform/.worktrees/tags",
+      branch: "fix/tags",
+    });
+    // Negative: a blank worktree path falls through to the project directory.
+    expect(place("tse_project")).toEqual({
+      path: "/Users/mb/src/platform",
+      branch: "main",
+    });
+  });
+
   it("selects the session's place in the page's own statement (A-05)", () => {
     const query = tachoPageQuery(db, SCOPE, page).toSQL();
     expect(query.sql).toContain('"tacho"."sessions"."cwd"');
+    expect(query.sql).toContain('"tacho"."sessions"."project_dir"');
+    expect(query.sql).toContain('"tacho"."sessions"."worktree_path"');
     expect(query.sql).toContain('"tacho"."sessions"."git_branch"');
     expect(query.sql).toContain('"tacho"."sessions"."worktree_branch"');
   });

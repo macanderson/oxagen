@@ -34,6 +34,7 @@ import {
   type RunDiff,
   type RunPullRequest,
   type RunRow,
+  staleReason,
 } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { openApprovals } from "@/features/shell/client";
@@ -1033,7 +1034,7 @@ function RunRowView({
                 status={run.status}
                 outcome={run.outcome}
                 vocabulary="lifecycle"
-                stale={isStale(run)}
+                stale={staleReason(run)}
               />
             )}
           </td>

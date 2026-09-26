@@ -215,6 +215,11 @@ export interface DataSource {
         limit?: number;
         /** Runs with or without pull requests; absent is every run. */
         pullRequests?: PullRequestFilter;
+        /**
+         * Ask for the workspace's live count (`RunPage.liveRuns`). It reads
+         * every root session the workspace holds, so only Fleet's tile asks.
+         */
+        countLive?: boolean;
       },
     ): Promise<Read<RunPage>>;
     get(

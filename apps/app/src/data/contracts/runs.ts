@@ -196,24 +196,45 @@ export function commandBlockOf(run: {
   return run.commandBlock ?? null;
 }
 
+/** Why an open run reads stale: its host went quiet, or it was revoked. */
+export type StaleReason = Extract<
+  CommandBlock,
+  "host_offline" | "host_revoked"
+>;
+
 /**
- * Whether an open run's light reads stale: its host has not checked in within
- * the poll window, five minutes (`HOST_POLL_WINDOW_MS`), which the row answers
- * as `commandBlock: host_offline`. The host polls every few seconds while its
- * daemon runs, so a laptop that went to sleep or a daemon that was killed
- * reads stale within minutes rather than live until Oxagen closes the run
- * after 12 hours with no event.
+ * Why an open run's light reads stale, or null when it reads live.
+ *
+ * - `host_offline`: the host has not checked in within the poll window, five
+ *   minutes (`HOST_POLL_WINDOW_MS`). The host polls every few seconds while
+ *   its daemon runs, so a laptop that went to sleep or a daemon that was
+ *   killed reads stale within minutes rather than live until Oxagen closes
+ *   the run after 12 hours with no event.
+ * - `host_revoked`: the host's enrollment was revoked, so Oxagen refuses its
+ *   polls and its events, and the run is as unreachable as an offline one.
  *
  * A run with no host has no heartbeat to miss. A ledger run, and a wrapped
- * session no host is recorded for, read live until they seal. The reading is
- * as of the page's read: the page does not re-read a row to notice the host
- * going quiet.
+ * session no host is recorded for, read live until they seal. The Run page
+ * reads the row again when its stream says the reading changed; Fleet reads
+ * it when the page loads.
  */
+export function staleReason(run: {
+  status: RunStatus;
+  commandBlock?: CommandBlock | null;
+}): StaleReason | null {
+  if (run.status !== "live") return null;
+  return run.commandBlock === "host_offline" ||
+    run.commandBlock === "host_revoked"
+    ? run.commandBlock
+    : null;
+}
+
+/** Whether an open run's light reads stale (`staleReason`). */
 export function isStale(run: {
   status: RunStatus;
   commandBlock?: CommandBlock | null;
 }): boolean {
-  return run.status === "live" && run.commandBlock === "host_offline";
+  return staleReason(run) !== null;
 }
 
 /** Token totals by kind, as the recorder counted them. */
@@ -292,11 +313,24 @@ export const RunRow = z.object({
    * directory and the git branch. Null for a ledger run, and where the
    * session recorded neither. The Run header's checkout strip shows it while
    * the work read is in flight or after it failed.
+   *
+   * `repository` is the connected repository the session's remote matches,
+   * null when none does. `get_run` answers it; a Fleet row leaves it out,
+   * which reads as not read.
    */
   place: z
     .object({
       path: z.string().min(1).nullable(),
       branch: z.string().min(1).nullable(),
+      repository: z
+        .object({
+          host: z.string(),
+          owner: z.string(),
+          name: z.string(),
+          url: z.url(),
+        })
+        .nullable()
+        .optional(),
     })
     .nullable()
     .optional(),

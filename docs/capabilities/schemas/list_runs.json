@@ -41,6 +41,9 @@
           "with",
           "without"
         ]
+      },
+      "countLive": {
+        "type": "boolean"
       }
     },
     "additionalProperties": false
@@ -606,6 +609,38 @@
                       "anyOf": [
                         {
                           "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "repository": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "host": {
+                              "type": "string"
+                            },
+                            "owner": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string",
+                              "format": "uri"
+                            }
+                          },
+                          "required": [
+                            "host",
+                            "owner",
+                            "name",
+                            "url"
+                          ],
+                          "additionalProperties": false
                         },
                         {
                           "type": "null"

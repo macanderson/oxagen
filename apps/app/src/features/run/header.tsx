@@ -16,7 +16,7 @@ import { Suspense, use } from "react";
 import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import type { RunOutputNode } from "@/data/contracts/run";
 import type { RunSubagent, RunWork } from "@/data/contracts/run-work";
-import { isStale, type RunRow } from "@/data/contracts/runs";
+import { isStale, type RunRow, staleReason } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { parseGitHubUrl } from "@/shared/github-url";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
@@ -289,9 +289,9 @@ function SessionPath({
 
 /**
  * The checkout strip from the row alone, while the work read is in flight
- * (`pending`) or after it failed (`failed`): the branch and the working
- * directory the session recorded, the pull requests the outputs recorded, and
- * the host.
+ * (`pending`) or after it failed (`failed`): the repository, the branch and
+ * the working directory the session recorded, the pull requests the outputs
+ * recorded, and the host.
  *
  * It never says a fact was not captured. The work read is what would say so,
  * and it has not answered. A failed read says it failed instead, so a read
@@ -308,18 +308,33 @@ function WhereFromRow({
 }) {
   const t = useTranslations("run.header");
   const branch = run.place?.branch ?? null;
+  const repository = run.place?.repository ?? null;
   return (
     <WhereRow>
+      {repository === null ? null : (
+        <ForgeChip url={repository.url}>
+          {repository.owner}/{repository.name}
+        </ForgeChip>
+      )}
       {read === "failed" ? (
-        <Chip testId="run-work-unread" title={t("workUnreadWhy")}>
-          <span className="text-dim">{t("repoNotRead")}</span>
+        <Chip
+          testId="run-work-unread"
+          title={t(repository === null ? "workUnreadWhy" : "workUnreadRepoWhy")}
+        >
+          <span className="text-dim">
+            {t(repository === null ? "repoNotRead" : "workNotRead")}
+          </span>
         </Chip>
       ) : null}
       {branch === null ? null : (
-        <Chip code testId="run-branch">
+        <ForgeChip
+          url={repository === null ? null : `${repository.url}/tree/${branch}`}
+          code
+          testId="run-branch"
+        >
           <GitBranch aria-hidden="true" className="size-3 flex-none" />
           {branch}
-        </Chip>
+        </ForgeChip>
       )}
       {(pulls ?? []).map((pull) => (
         <PullChip
@@ -355,16 +370,18 @@ function ForgeChip({
   children,
   code = false,
   title,
+  testId,
 }: {
   url: string | null;
   children: React.ReactNode;
   code?: boolean;
   title?: string;
+  testId?: string;
 }) {
   const target = parseGitHubUrl(url);
   if (target === null)
     return (
-      <Chip code={code} title={title}>
+      <Chip code={code} title={title} testId={testId}>
         {children}
       </Chip>
     );
@@ -372,6 +389,7 @@ function ForgeChip({
     <GitHubLink
       to={target}
       title={title}
+      data-testid={testId}
       className={`${linkChip} ${code ? "font-mono text-[10.5px] font-medium" : ""}`}
     >
       {children}
@@ -473,10 +491,24 @@ function WhereFromWork({
   const work = use(read);
   if (!work.ok) return <WhereFromRow run={run} pulls={pulls} read="failed" />;
   const checkout = latestCheckout(work.value);
-  const repo = checkout?.repository ?? work.value.pullRequests[0]?.repository;
+  // With no enrolled checkout, the session's own record stands in: the
+  // branch its start recorded, and the connected repository its remote
+  // names. An enrolled checkout is the newer fact, so a checkout on a
+  // detached HEAD names no branch even when the session's start named one.
+  const sessionRepo =
+    checkout === null ? (run.place?.repository ?? undefined) : undefined;
+  const repo =
+    checkout?.repository ??
+    sessionRepo ??
+    work.value.pullRequests[0]?.repository;
   const prs = work.value.pullRequests;
-  // With no enrolled checkout, the branch the session recorded stands in.
-  const branch = checkout?.branch ?? run.place?.branch ?? null;
+  const branch =
+    checkout === null ? (run.place?.branch ?? null) : checkout.branch;
+  // The repository that holds `branch`: the checkout's, or with none
+  // enrolled, the one the session's remote names. A pull request's
+  // repository need not hold the session's branch, so the session's branch
+  // is never linked into it.
+  const branchRepo = checkout === null ? sessionRepo : repo;
   // A branch that is a pull request's head links to the pull request, never
   // to `/tree/refs/pull/...`.
   const headPr =
@@ -505,9 +537,12 @@ function WhereFromWork({
         <ForgeChip
           url={
             headPr?.url ??
-            (repo === undefined ? null : `${repo.url}/tree/${branch}`)
+            (branchRepo === undefined
+              ? null
+              : `${branchRepo.url}/tree/${branch}`)
           }
           code
+          testId="run-branch"
         >
           <GitBranch aria-hidden="true" className="size-3 flex-none" />
           {branch}
@@ -759,7 +794,11 @@ function RunStatusWord({ run, parked }: { run: RunRow; parked: boolean }) {
   return (
     <span role="status" data-testid="run-status" className="inline-flex">
       {isStale(run) ? (
-        <StatusBadge status={run.status} outcome={run.outcome} stale />
+        <StatusBadge
+          status={run.status}
+          outcome={run.outcome}
+          stale={staleReason(run)}
+        />
       ) : live && run.ingressPaused === true ? (
         <Badge tone="approval" data-status="paused">
           {t("statusPaused")}

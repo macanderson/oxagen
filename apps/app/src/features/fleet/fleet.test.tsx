@@ -210,9 +210,11 @@ describe("Fleet reads", () => {
       "c1",
     );
     // The page size is the read's own limit (25 until the person picks
-    // another), and every run is listed until a filter is chosen.
+    // another), and every run is listed until a filter is chosen. A later
+    // page asks for the workspace's live count too, since the Live runs tile
+    // sits above every page.
     expect(calls.runs).toEqual([
-      [ctx, { cursor: "c1", limit: 25, pullRequests: "any" }],
+      [ctx, { cursor: "c1", limit: 25, pullRequests: "any", countLive: true }],
     ]);
     expect(calls.approvals).toEqual([[ctx, { runId: null }]]);
     expect(calls.agents).toEqual([[ctx, { cursor: null }]]);
