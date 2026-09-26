@@ -1,6 +1,6 @@
 /**
  * The context windows a run recorded, read from its model-call frames
- * (ADR-193), and the assembler's manifests beside them.
+ * (ADR-200), and the assembler's manifests beside them.
  *
  * The window is the record. The in-app assistant writes it on
  * `model.engine_call_started` as the payload's `window`, and the provider's

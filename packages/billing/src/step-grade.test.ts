@@ -1,5 +1,5 @@
 // step-grade.test.ts — the step grader and the repeat rule it shares with
-// the findings job (#3984, ADR-192).
+// the findings job (#3984, ADR-199).
 import { describe, expect, it } from "vitest";
 import type { ToolCallFrame } from "./cost-rollup";
 import {

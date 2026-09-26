@@ -1,4 +1,4 @@
-// Model fit on the page (pages/run.md, Model fit; ADR-194): the page computes
+// Model fit on the page (pages/run.md, Model fit; ADR-201): the page computes
 // no reading. It draws the one `get_run` stored, and prints the effort the
 // record holds. These tests hold the three helpers the rig strip and the Cost
 // tab's panel share, so the two cannot disagree: the effort as recorded, the

@@ -7,7 +7,7 @@
 // the input the first model call reported, the `steering.manifest` frame the
 // host sealed at the session's start, and the recall frames. `get_run_context`
 // adds each model request's window block by block where the call passed
-// through the gateway, and the assembler's budget and counts (ADR-193). A
+// through the gateway, and the assembler's budget and counts (ADR-200). A
 // block's tokens are its byte share of the provider's total, so nothing is
 // counted here. A context frame's score and citation are still not recorded,
 // so those cells say so.
@@ -467,7 +467,7 @@ function ManifestSpine({
 
 /**
  * The first request's window: its blocks as the composition bar where the
- * record measured them (ADR-193), else its reported total and the split the
+ * record measured them (ADR-200), else its reported total and the split the
  * record does not carry.
  */
 function PromptWindow({
@@ -736,7 +736,7 @@ function WalkWindow({
 
 /**
  * The assembler's figures from the first manifest `get_run_context` read
- * (ADR-193): what it spent of its budget, the candidates it ranked, kept and
+ * (ADR-200): what it spent of its budget, the candidates it ranked, kept and
  * cut, the headroom left and the digest of the text. The assembler has no
  * relevance floor, so that figure stays not recorded.
  */
@@ -935,7 +935,7 @@ function ContextBody({
 
 /**
  * The Context tab. Its one read of its own is `get_run_context`, the windows
- * and the assembler's figures (ADR-193). The manifest's items come from the
+ * and the assembler's figures (ADR-200). The manifest's items come from the
  * transcript: the server read the frame's whole body and states each item's
  * outcome on the entry (`recall`, ADR-182).
  */

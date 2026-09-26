@@ -1,4 +1,4 @@
-// The agent baseline `get_run_cost` answers (#3984, ADR-192): which runs the
+// The agent baseline `get_run_cost` answers (#3984, ADR-199): which runs the
 // window reads, rendered from the query itself, and how the fold turns into
 // the contract's figures. The same read against Postgres is in
 // run-cost-baseline.pg.test.ts.

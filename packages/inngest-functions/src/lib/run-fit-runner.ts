@@ -1,6 +1,6 @@
 // run-fit-runner.ts: the seam between the durable Model fit job
 // (functions/run.fit.ts) and the code that computes the reading (#3893,
-// ADR-194).
+// ADR-201).
 //
 // The reading reads the run the way the Run page does: the `list_runs` row,
 // `get_run`'s effort, and `get_run_transcript`'s figures. All three live in

@@ -327,7 +327,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
 }
 
 /**
- * A ledger call's `outcome` as the status the step grader reads (ADR-192).
+ * A ledger call's `outcome` as the status the step grader reads (ADR-199).
  * `failed` is an error and `denied` a refusal. A `cancelled` call and one
  * `parked` on an approval did not fail, so they read null, as tacho's
  * `cancelled` does, and are never graded as waste.
@@ -699,7 +699,7 @@ export async function upsertRunTotals(
     replayGrade: record.replayGrade,
     breakdown: serializeBreakdown(record.breakdown),
     verdict: record.verdict,
-    // Graded from the frames with the rest of the row (ADR-192), so a rebuild
+    // Graded from the frames with the rest of the row (ADR-199), so a rebuild
     // writes them. They sat in `carried` below while nothing computed them,
     // and a rebuild then left a stale ratio in place for good (#3984).
     productiveRatio:

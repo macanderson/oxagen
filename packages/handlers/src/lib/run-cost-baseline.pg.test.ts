@@ -1,4 +1,4 @@
-// The agent baseline against a real Postgres (#3984, ADR-192): the window
+// The agent baseline against a real Postgres (#3984, ADR-199): the window
 // counts the agent's sealed runs in the 30 days before the run started, and
 // leaves out the run itself, an open run, a run outside the window, and
 // another agent's. Runs wherever DATABASE_URL points at a migrated database

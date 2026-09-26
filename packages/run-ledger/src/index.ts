@@ -311,7 +311,7 @@ export {
 } from "./event-payload-registry";
 
 // The context windows a run recorded on its model-call frames, and the
-// assembler's manifests beside them (ADR-193).
+// assembler's manifests beside them (ADR-200).
 export {
   assemblyOf,
   isContextWindowEvent,

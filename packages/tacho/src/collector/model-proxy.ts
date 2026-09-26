@@ -1380,7 +1380,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     // The body `beforeForward` sent in place of the harness's, when it
     // changed it. It is the request the vendor reads, so the effort is read
     // from it (#3891), and the window counts what it added as steering
-    // (ADR-193).
+    // (ADR-200).
     let injectedJson: Record<string, unknown> | undefined;
     let dropContentEncoding = false;
     let path = route.path;
@@ -1442,7 +1442,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     const requestTooLarge =
       fold !== undefined && fold.storedBytes > TACHO_MAX_BODY_BYTES;
     // What the vendor is about to read, block by block, kept as numbers only
-    // (ADR-193). The attribute rides the envelope, so it survives a
+    // (ADR-200). The attribute rides the envelope, so it survives a
     // `digest_only` workspace that keeps none of these bytes.
     const requestWindow = metered
       ? measureProviderRequest(

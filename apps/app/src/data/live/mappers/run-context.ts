@@ -1,4 +1,4 @@
-// get_run_context → the Run page's context window view (ADR-193, #3894).
+// get_run_context → the Run page's context window view (ADR-200, #3894).
 // Field for field, except the call's id, which the view names `callRef`
 // because an app field ending in `Id` is a public id (INV-11).
 import type { RunContextGetOutput } from "@oxagen/oxagen/contracts/run.context.get";

@@ -544,7 +544,7 @@ describe("the loopback model proxy", () => {
       "oxagen.request_bytes": String(body.length),
       "oxagen.response_bytes": String(reply.length),
       "oxagen.stream": "0",
-      // The window the vendor read (ADR-193): no system and no tools, one
+      // The window the vendor read (ADR-200): no system and no tools, one
       // message, measured as the message's JSON.
       "oxagen.window": `system=0:0;tools=0:0;conversation=${Buffer.byteLength(
         JSON.stringify({ role: "user", content: PROMPT }),

@@ -593,7 +593,7 @@ async function runPreparedTurn(
       ]),
     ],
     // USED_CONTEXT lineage for the windows the run records, projected once
-    // it seals and never on the turn's path (ADR-193).
+    // it seals and never on the turn's path (ADR-200).
     projectContext: projectRunContextWindows,
   });
   hooks.onRun?.({ runId: run.runPublicId });
@@ -661,7 +661,7 @@ async function runPreparedTurn(
         recalledMemory,
       ],
       // What the model-call frames count apart from the conversation
-      // (ADR-193): the steering the system prompt ends with, and the summary
+      // (ADR-200): the steering the system prompt ends with, and the summary
       // at the head of the history when the turn carried one.
       window: {
         steering: steeringSection(steering),

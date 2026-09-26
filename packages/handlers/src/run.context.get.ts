@@ -1,5 +1,5 @@
 // `get_run_context`: each model request's window, block by block, and the
-// steering assembler's manifests (ADR-193; #3894).
+// steering assembler's manifests (ADR-200; #3894).
 //
 // The window is read from the frames that record the model calls, never from
 // Neo4j, whose USED_CONTEXT edges are a best-effort projection no read

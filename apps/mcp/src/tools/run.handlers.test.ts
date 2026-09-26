@@ -1,6 +1,6 @@
 // run.handlers.test.ts — handler invocation tests for the run recorder tools
 // (#2952, ADR-058): get_run_frame_body, get_run_transcript, get_run_turns,
-// get_run_context (ADR-193),
+// get_run_context (ADR-200),
 // get_run_chain, bisect_runs, get_run_export, seal_run (#4073, ADR-169), and
 // get_run_issues (#3970).
 // fork_run, export_run and summarize_run check an org role in the handler and

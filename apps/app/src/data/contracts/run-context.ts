@@ -1,5 +1,5 @@
 // The Run page's context window view model, from `get_run_context`
-// (ADR-193, #3894): each model request's window as five blocks with their
+// (ADR-200, #3894): each model request's window as five blocks with their
 // bytes and their share of the prompt tokens the vendor reported, the model
 // calls recorded with no window, and the steering assembler's manifests.
 //

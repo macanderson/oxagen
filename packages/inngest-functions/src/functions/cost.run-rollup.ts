@@ -12,7 +12,7 @@ import { logger } from "../logger";
  * ingest handler on an `agent_stop`. A run no store has is dropped without a
  * retry; a degraded frame store throws, and Inngest retries. Once the rows
  * land it requests a findings pass over the run's workspace (ADR-062 §4) and
- * the run's Model fit reading (ADR-194).
+ * the run's Model fit reading (ADR-201).
  *
  * Concurrency is per run: two seals of one run in flight would race the same
  * row, and the last write wins either way.
@@ -57,7 +57,7 @@ export const [costRunRollup] = createFunction(
       data: { orgId: run.orgId, workspaceId: run.workspaceId },
     });
     // The Model fit reading reads this row's tokens, so it is asked for once
-    // the row has landed (#3893, ADR-194).
+    // the row has landed (#3893, ADR-201).
     await step.sendEvent("request-fit", {
       name: RUN_FIT_REQUESTED_EVENT,
       data: { orgId: run.orgId, workspaceId: run.workspaceId, runId },

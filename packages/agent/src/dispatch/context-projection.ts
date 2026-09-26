@@ -8,7 +8,7 @@ import {
 
 // ── Graph projection of the context windows one run recorded ────────────────
 //
-// ARCHITECTURE (ADR-193; the same shape as tool-projection.ts): the run's
+// ARCHITECTURE (ADR-200; the same shape as tool-projection.ts): the run's
 // model-call frames in the evidence ledger are the record. Each
 // `model.engine_call_started` frame carries the request's window block by
 // block, and `get_run_context` reads the window from there, never from Neo4j.

@@ -309,7 +309,7 @@ export interface DataSource {
     findings(ctx: WsCtx, runId: string): Promise<Read<RunFindings>>;
     /**
      * `get_run_context`, each model request's window block by block and the
-     * assembler's manifests (ADR-193, #3894). Read by the Governed actions
+     * assembler's manifests (ADR-200, #3894). Read by the Governed actions
      * tab when the open frame is a model request or a manifest, callers
      * features/run/actions-tab.tsx, and by the Context tab,
      * features/run/context-tab.tsx.

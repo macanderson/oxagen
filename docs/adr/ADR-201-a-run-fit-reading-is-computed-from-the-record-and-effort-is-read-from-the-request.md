@@ -1,4 +1,4 @@
-# ADR-194: A run's fit reading is computed from the record and its effort is read from the request
+# ADR-201: A run's fit reading is computed from the record and its effort is read from the request
 
 - **Status:** Accepted
 - **Date:** 2026-09-26
@@ -6,7 +6,8 @@
 - **Related:** issue #3893 (Model fit), issue #3891 (effort and the wall
   split), issue #3971 (rules and taint on a decision), ADR-182 (the server
   folds the transcript), ADR-184 (a runner seam into the durable jobs),
-  ADR-070 (the taint floor), roadmap `mockups/pages/run-cost.md` (Model fit).
+  ADR-070 (the taint floor), ADR-198 (an agent carries no definition file),
+  roadmap `mockups/pages/run-cost.md` (Model fit).
 
 ## Context
 
@@ -16,12 +17,12 @@ setting were the right size for a run. Four things were wrong with it.
 1. **The page computed the reading.** `features/run/fit.ts` read the run row
    and the client's metrics on every render. Nothing stored the reading, so
    nothing could say which figures it read, when, or which seal. A person
-   could not cite it, and a pull request it argued for pointed at nothing.
+   could not cite it, and a move it argued for pointed at nothing.
 2. **The effort was never read.** No producer recorded the effort a model
    request carried. The rig printed a harness-reported `effort high` while
    the Cost tab's effort card said not captured, so the two panels disagreed.
 3. **The move was a stub.** "Move this agent to haiku" was a disabled button.
-   Nothing could open the change the reading argued for.
+   Nothing could make the change the reading argued for.
 4. **A decision named no rule.** The tacho hook recorded the rule that
    decided a call as one joined string (`Bash(git add:*) and Bash(git
    commit:*)`). The transcript dropped it, and the Policy tab printed "not
@@ -80,23 +81,25 @@ The job is not part of `run.enrich`. The reading calls no model, so neither
 the enrichment switch nor the spend cap gates it. `modelTierOf` stays in
 `@oxagen/handlers`, since the runner runs there; nothing needed to move.
 
-### 4. The reading argues for a pull request against two definition keys
+### 4. The card draws the move it argues for as a stub
 
-A card that argues for a move offers it as `commit_agent_definition`, the
-write the agent's Configuration and Source pages make. It changes one
-top-level key of the agent's committed definition, or of the seed an agent
-with no committed definition opens on:
+A card that argues for a move draws it as a disabled button that names the
+move ("Move this agent to haiku", "Set effort to medium"). The line beside it
+says no contract changes an agent's model class, or its effort setting, from
+the Run page yet.
 
-- `model`: the vendor class alias the reading names (`haiku`, `sonnet`,
-  `opus`, `nano`, `mini`, `flash-lite`, `flash`, `pro`).
-- `effort`: the level (`low`, `medium`, `high`).
+This branch first offered the move as a `commit_agent_definition` pull
+request against two top-level keys of the agent's definition file, `model`
+and `effort`. ADR-198 (#4376) removed that write and the definition file
+while this branch was open. An agent is now one operator on one runtime with
+one harness, and its version config carries its budget and containment. No
+write sets its model class or effort. So the move stays a stub, the same
+shape the panel had before this record.
 
-Both are TOML strings on `agent-definition/v0.1`, beside the Oxagen
-`model_tier`, which stays. The branch is `agents/<slug>-fit-model` or
-`agents/<slug>-fit-effort`. The write stays API and app only, as
-`commit_agent_definition` records: an MCP tool for it would let an
-MCP-connected agent open pull requests against agent definitions, its own
-included. `get_run.fit` is on the API and MCP.
+When a write for an agent's model class or effort exists, the card calls it
+and names the class or level the reading gives: the vendor class alias
+(`haiku`, `sonnet`, `opus`, `nano`, `mini`, `flash-lite`, `flash`, `pro`) or
+the level (`low`, `medium`, `high`). `get_run.fit` is on the API and MCP.
 
 ### 5. A run's effort is read from the request ahead of the harness
 
@@ -159,9 +162,8 @@ it into `attrs`, where no reader of a decision looked.
 - The reading can be cited: its rule, its figures, when it was read, and the
   seal it read are on the run. A reseal reads the run again and replaces it.
 - A run sealed before this change has no reading until it seals again.
-- The pull request changes a key nothing in this repository applies to a
-  harness yet. The file records the choice. Applying the keys is a
-  follow-up.
+- The reading changes nothing on its own. The card's move stays a stub
+  until a write sets an agent's model class or effort.
 - The page computes no figure the server did not, so the rig, the badges,
   the cards, and `get_run` answer the same reading.
 - A request body that carries no effort is recorded as such, and the page

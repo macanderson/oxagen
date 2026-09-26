@@ -926,7 +926,7 @@ function decisionView(decision: TranscriptDecision) {
     at: decision.at.toISOString(),
     // The rules the frame names, in evaluation order, and the taint a
     // producer assessed: null for every decision today, because none does
-    // (#3971, ADR-194).
+    // (#3971, ADR-201).
     rules: decision.rules,
     taint: decision.taint,
   };

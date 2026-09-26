@@ -462,7 +462,7 @@ describe("ContextTab", () => {
   });
 });
 
-describe("ContextTab with the window on record (ADR-193)", () => {
+describe("ContextTab with the window on record (ADR-200)", () => {
   /** A first request whose blocks split its 15,368 reported tokens by bytes. */
   const measured = contextWindow({
     seq: "4",

@@ -1,5 +1,5 @@
 /**
- * What `upsertRunTotals` writes on a rebuild (#3984, ADR-192). The productive
+ * What `upsertRunTotals` writes on a rebuild (#3984, ADR-199). The productive
  * ratio sat in the columns a rebuild carries, which the conflict update left
  * out, so a run's first ratio stood for good however its frames changed. The
  * graded columns belong to the rollup now and are in the update.

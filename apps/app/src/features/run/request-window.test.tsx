@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The window a model request carried and the assembler's manifest, as the
-// frame view draws them (ADR-193, #3894). The rules: a block's tokens are its
+// frame view draws them (ADR-200, #3894). The rules: a block's tokens are its
 // byte share of the provider's total, so the parts add up to the prompt
 // tokens; a block the recorder could not tell apart is not drawn; and a
 // figure the record does not carry says not recorded, never a zero.

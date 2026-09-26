@@ -88,7 +88,7 @@ export function useHarness(run: RunRow, agent: Read<AgentDetail> | null) {
 }
 
 /**
- * `fitBadge`: the stored reading's words as state pills (ADR-194), one for
+ * `fitBadge`: the stored reading's words as state pills (ADR-201), one for
  * the model class and one for the effort. None on a live run or a run with no
  * reading, none for a class the reading placed on no ladder, and none for an
  * effort it did not see or whose value is not the one the rig prints.

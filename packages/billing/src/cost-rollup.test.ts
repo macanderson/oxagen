@@ -426,7 +426,7 @@ describe("rollupRun", () => {
   });
 });
 
-describe("the graded steps (#3984, ADR-192)", () => {
+describe("the graded steps (#3984, ADR-199)", () => {
   const read = (input: string, over: Partial<ToolCallFrame> = {}) =>
     tool("Read", {
       inputDigest: input,
@@ -482,7 +482,7 @@ describe("the graded steps (#3984, ADR-192)", () => {
   });
 });
 
-describe("each tool's result cost (#3892, ADR-192)", () => {
+describe("each tool's result cost (#3892, ADR-199)", () => {
   /** 10,000 input tokens at $3 a million: 30,000 micros, so 3 micros a token. */
   const priced = frame({
     tokens: tokens({ input_uncached: 10_000, output: 100 }),
@@ -765,7 +765,7 @@ describe("dailyTotalsFromRuns", () => {
     expect(bash.calls).toBe(2);
     expect(bash.runs).toBe(1);
     // The run row prices Bash's result tokens, but that figure is input the
-    // model rows already count, so the tool group keeps no cost (ADR-192).
+    // model rows already count, so the tool group keeps no cost (ADR-199).
     expect(base.breakdown.tools.find((t) => t.name === "Bash")?.costMicros).toBe(
       1_200n,
     );

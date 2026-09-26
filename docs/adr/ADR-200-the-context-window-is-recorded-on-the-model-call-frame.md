@@ -1,4 +1,4 @@
-# ADR-193: The context window is recorded on the model-call frame
+# ADR-200: The context window is recorded on the model-call frame
 
 - **Status:** Accepted
 - **Date:** 2026-09-26

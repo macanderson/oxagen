@@ -1,4 +1,4 @@
-// The in-app assistant's context window, block by block (ADR-193).
+// The in-app assistant's context window, block by block (ADR-200).
 //
 // `runGovernedTurn` builds the opening transcript from four parts it knows
 // apart: the system prompt, the history, the context the host placed after

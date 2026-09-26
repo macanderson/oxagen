@@ -4,7 +4,7 @@
 //
 // Two areas are recorded. Model output is the output and reasoning classes the
 // rollup counts, at the cost it recorded for them. Tool calls is the tools'
-// result tokens at the run's uncached input rate (#3892, ADR-192): an
+// result tokens at the run's uncached input rate (#3892, ADR-199): an
 // estimate of input the run's cost already counts, labelled estimate, and
 // never money on top of it. The five other input areas (the first prompt, the
 // follow-ups, the context Oxagen injected, the tool definitions and the system

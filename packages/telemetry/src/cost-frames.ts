@@ -81,7 +81,7 @@ export interface ModelCallFrameRow {
 /**
  * One tool call as the rollup reads it, in the shape of billing's
  * `ToolCallFrame`. The rollup grades the call from its status and digests
- * (#3984, ADR-192) and prices its result tokens (#3892). Each member is null
+ * (#3984, ADR-199) and prices its result tokens (#3892). Each member is null
  * where the frame recorded none.
  */
 interface ToolCallFrameRow {
@@ -392,7 +392,7 @@ export async function readModelCallFrames(args: {
  * which the rollup store reads.
  *
  * Each call comes with what the rollup grades it by (its status, its input and
- * output digests, and the classifier's mutating flag, ADR-192) and the result
+ * output digests, and the classifier's mutating flag, ADR-199) and the result
  * tokens the OTel tool span of the same tool use recorded, joined on
  * `tool_use_id` the way {@link readTachoToolCallObservations} joins them.
  * `join_use_nulls` makes a call with no span read null, never 0: a zero would

@@ -1,5 +1,5 @@
 // run-fit.ts: the Model fit reading of one sealed run, computed from the
-// record and stored on the run (#3893, ADR-194).
+// record and stored on the run (#3893, ADR-201).
 //
 // The durable `run.fit` job (@oxagen/inngest-functions) asks for a reading
 // after the cost rollup lands a sealed run's row. It cannot import this

@@ -18,7 +18,7 @@ function requestOf(data: unknown): RunFitRequest | null {
 
 /**
  * `run/fit.requested` → compute the run's Model fit reading from its record
- * and store it on the run with the seal it read (ADR-194).
+ * and store it on the run with the seal it read (ADR-201).
  *
  * The reading calls no model, so it runs outside `run.enrich`: neither the
  * workspace's enrichment switch nor its spend cap gates it. A reseal sends the

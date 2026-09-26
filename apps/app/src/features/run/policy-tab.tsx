@@ -9,7 +9,7 @@
 // hundreds of permission prompts do not bury the few Oxagen made.
 //
 // Rules that fired are the decision's own `rules`, in the order they were
-// evaluated (#3971, ADR-194): a bundle's permission patterns, or the kernel's
+// evaluated (#3971, ADR-201): a bundle's permission patterns, or the kernel's
 // decision rule ids. Each prints in mono. A rule that names a mandate gate
 // links to the mandate's page. A permission pattern and a workspace decision
 // rule, which lives in the workspace's settings, have no page, so they print

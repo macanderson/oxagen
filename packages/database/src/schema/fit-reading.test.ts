@@ -1,5 +1,5 @@
 /**
- * The stored Model fit reading (#3893, ADR-194). `tacho.sessions` and
+ * The stored Model fit reading (#3893, ADR-201). `tacho.sessions` and
  * `agent.agent_runs` each carry the reading and its provenance in four
  * columns: the reading, the rule it was computed under, when it was read,
  * and the seal it read. A reading without its provenance cannot be cited,

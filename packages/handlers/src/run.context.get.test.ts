@@ -1,5 +1,5 @@
 /**
- * Unit tests for the get_run_context handler (ADR-193, #3894).
+ * Unit tests for the get_run_context handler (ADR-200, #3894).
  *
  * The window is read from the frames that recorded the model calls: a ledger
  * run's started frames joined to their completions, and a wrapped session's

@@ -918,7 +918,7 @@ describe("decided calls", () => {
   });
 });
 
-describe("the open frame's window (ADR-193)", () => {
+describe("the open frame's window (ADR-200)", () => {
   it("draws a model request's window: its tools, context, prompt tokens, composition and message stack", async () => {
     const { calls, container } = await renderTab({
       body: "2",

@@ -1158,7 +1158,7 @@ describe("openAssistantRun", () => {
     ]);
   });
 
-  it("records the request's context window on the intention (ADR-193)", async () => {
+  it("records the request's context window on the intention (ADR-200)", async () => {
     // The witness for #3894: before it, the frame said which model was asked
     // and nothing about what the request carried, so no read could draw the
     // window a model call was sent.
@@ -1255,7 +1255,7 @@ describe("openAssistantRun", () => {
   });
 });
 
-describe("the seal projects the run's context windows (ADR-193)", () => {
+describe("the seal projects the run's context windows (ADR-200)", () => {
   async function openRun(
     ledger: ReturnType<typeof fakeStore>,
     projectContext?: ContextProjector,

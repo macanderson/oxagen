@@ -1,4 +1,4 @@
-// The agent baseline `get_run_cost` answers beside a run (#3984, ADR-192):
+// The agent baseline `get_run_cost` answers beside a run (#3984, ADR-199):
 // the agent's own sealed runs in the 30 days before this run started, this
 // run left out, as a median cost and a step-weighted productive ratio.
 //

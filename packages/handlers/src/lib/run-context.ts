@@ -1,5 +1,5 @@
 // run-context.ts: the frames `get_run_context` reads, from the store that
-// recorded them (ADR-193).
+// recorded them (ADR-200).
 //
 // A wrapped session's windows are its `llm_call` rows in `tacho_events`,
 // with the proxy's `oxagen.window` attribute and the usage the vendor

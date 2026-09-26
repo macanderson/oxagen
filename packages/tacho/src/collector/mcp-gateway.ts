@@ -406,7 +406,7 @@ const REFUSAL_RULE_MAX = 512;
 
 /**
  * The rules a control-plane refusal names, in evaluation order (#3971,
- * ADR-194): a `-32002` answer's `error.data.ruleIds`, strings only, at most
+ * ADR-201): a `-32002` answer's `error.data.ruleIds`, strings only, at most
  * 64 of at most 512 characters each. Undefined for any other answer, and for
  * a refusal that names none, such as the gateway's own tool ceiling.
  */

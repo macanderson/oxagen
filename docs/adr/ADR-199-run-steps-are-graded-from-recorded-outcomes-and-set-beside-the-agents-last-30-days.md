@@ -1,4 +1,4 @@
-# ADR-192: Run steps are graded from recorded outcomes and set beside the agent's last 30 days
+# ADR-199: Run steps are graded from recorded outcomes and set beside the agent's last 30 days
 
 - **Status:** Accepted
 - **Date:** 2026-09-26

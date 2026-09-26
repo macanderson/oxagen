@@ -1,6 +1,6 @@
 /**
  * `oxagen run context <run-id>`: the CLI parity surface for `get_run_context`
- * (ADR-193). One row per model request the run recorded a window for, with
+ * (ADR-200). One row per model request the run recorded a window for, with
  * the prompt tokens the vendor reported and each block's share of them, then
  * the model calls recorded with no window and the steering assembler's
  * budget.

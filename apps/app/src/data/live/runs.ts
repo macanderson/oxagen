@@ -142,7 +142,7 @@ export const runs: DataSource["runs"] = {
     return view(ctx.orgId, RunIssues, read.value, "runs.issues");
   },
   // Each model request's window, block by block, and the assembler's
-  // manifests (ADR-193, #3894).
+  // manifests (ADR-200, #3894).
   async context(ctx, runId) {
     const read = await kernelRead(ctx, {
       contract: runContextGet,

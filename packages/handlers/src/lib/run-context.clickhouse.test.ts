@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readTachoModelCalls } from "./run-context";
 
 // The read runs against a real `tacho_events`. CI migrates ClickHouse before
-// the unit job, so the SQL itself is under test there (ADR-193). A machine
+// the unit job, so the SQL itself is under test there (ADR-200). A machine
 // without a reachable ClickHouse skips.
 const url = process.env["CLICKHOUSE_URL"];
 const reachable = url

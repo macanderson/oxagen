@@ -10,7 +10,7 @@
 //
 // Cost so far and Productive ratio set the run beside the agent's own sealed
 // runs in the 30 days before it started (`get_run_cost`'s baseline, #3984,
-// ADR-192): the gap to the agent's median run, and the points between this
+// ADR-199): the gap to the agent's median run, and the points between this
 // run's ratio and the 30-day one. A baseline the agent's history is too thin
 // for reads not recorded, never a guessed figure. Productive ratio's foot
 // names why the steps that did not advance the task made no progress, from

@@ -8,7 +8,7 @@
 // Until then a wrapped run answers `provisional`: the per-model figures
 // ingest has folded so far, so the page shows live spend rather than nothing.
 //
-// Beside the row it answers the agent's baseline (#3984, ADR-192): the median
+// Beside the row it answers the agent's baseline (#3984, ADR-199): the median
 // cost and productive ratio of the agent's sealed runs in the 30 days before
 // this run started. Each tool's result cost is an estimate of input the run's
 // cost already counts, so it always carries the `estimated` basis.

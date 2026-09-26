@@ -1,6 +1,6 @@
 /**
  * step-grade.ts — whether each step of a run moved it forward (#3984,
- * ADR-192). PURE: the rollup (./cost-rollup.ts) grades a run from the frames
+ * ADR-199). PURE: the rollup (./cost-rollup.ts) grades a run from the frames
  * it already read, and the findings job (./findings.ts) shares the rule that
  * says one call repeats another.
  *

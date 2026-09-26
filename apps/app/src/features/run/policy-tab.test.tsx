@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Rules that fired, on the Policy tab (#3971, ADR-194): each decision prints
+// Rules that fired, on the Policy tab (#3971, ADR-201): each decision prints
 // the rules its record names, in the order they were evaluated, and says
 // "none" when it names none. Taint has no producer yet, so a decision's null
 // taint reads not recorded, while a list a producer did assess prints as

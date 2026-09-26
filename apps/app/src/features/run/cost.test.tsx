@@ -330,7 +330,7 @@ describe("CostTab", () => {
     expect(screen.getByTestId("inst-calls")).toHaveTextContent("1 failed");
   });
 
-  // The reading is Oxagen's, stored on the run after the seal (ADR-194); the
+  // The reading is Oxagen's, stored on the run after the seal (ADR-201); the
   // tab draws it and computes nothing. model-fit.test.tsx holds each card.
   it("draws the stored Model fit reading of a sealed run, and the effort the record holds", async () => {
     const run = runRow({

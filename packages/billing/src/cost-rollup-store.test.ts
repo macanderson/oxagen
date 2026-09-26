@@ -290,7 +290,7 @@ describe("what a ledger run's events are read for (#3372)", () => {
     );
   });
 
-  it("grades a ledger call's outcome as a failure only when it failed or was denied (ADR-192)", () => {
+  it("grades a ledger call's outcome as a failure only when it failed or was denied (ADR-199)", () => {
     expect(ledgerToolStatus("completed")).toBe("ok");
     expect(ledgerToolStatus("failed")).toBe("error");
     expect(ledgerToolStatus("denied")).toBe("rejected");

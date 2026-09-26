@@ -586,7 +586,7 @@ describe("validateInlineEventPayload", () => {
     ).toThrow(RunSpecValidationError);
   });
 
-  it("carries the request's context window on the model intention (ADR-193)", () => {
+  it("carries the request's context window on the model intention (ADR-200)", () => {
     const base = {
       engine_seq: 7,
       model_call_id: "req_1",

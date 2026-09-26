@@ -725,7 +725,7 @@ describe("the prepared turn", () => {
       // allowlist would read "no tools" on a run whose job is calling them.
       toolAllowlist: ["list_runs", "set_budget", SEARCH_TOOLS, LOAD_TOOLS],
       // The windows the run records are projected as USED_CONTEXT lineage
-      // once it seals (ADR-193).
+      // once it seals (ADR-200).
       projectContext: projectRunContextWindows,
     });
 

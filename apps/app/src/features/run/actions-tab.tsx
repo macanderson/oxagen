@@ -103,7 +103,7 @@ async function readBody(
 
 /**
  * `get_run_context`, read only when the open frame is a model request or the
- * frame the assembler's manifest was sealed into (ADR-193): the one frame
+ * frame the assembler's manifest was sealed into (ADR-200): the one frame
  * whose panel draws what it holds. Any other frame makes no read.
  */
 function readContext(
@@ -235,7 +235,7 @@ function GovernedActions({
   const approvalFrame =
     open.frame !== null &&
     isApprovalFrame(open.frame.type, open.frame.toolStatus);
-  // A model request's window, or the assembler's manifest (ADR-193).
+  // A model request's window, or the assembler's manifest (ADR-200).
   const kindPanel =
     context === null ? null : drawsWindow(open.frame?.type ?? null) ? (
       <RequestWindow read={context} seq={open.seq} hrefOf={hrefOf} />

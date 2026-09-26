@@ -46,7 +46,7 @@ export const NodeLabels = {
   // subagent_fanouts/subagent_runs row ids.
   SubagentFanout: "SubagentFanout",
   SubagentRun: "SubagentRun",
-  // Context-window lineage (ADR-193): one node per model request a run
+  // Context-window lineage (ADR-200): one node per model request a run
   // recorded a window for, projected best-effort from the run's model-call
   // frames by packages/agent/src/dispatch/context-projection.ts. It carries
   // which blocks the window held and how many items each had, never bytes or
@@ -95,7 +95,7 @@ export const EdgeTypes = {
   // Fleet lineage graph projection. See NodeLabels.SubagentFanout.
   DISPATCHED: "DISPATCHED", // SubagentFanout → SubagentRun (direct child)
   SPAWNED_FANOUT: "SPAWNED_FANOUT", // SubagentRun → SubagentFanout (nested dispatch; recursion spine)
-  // Context-window lineage (ADR-193). A best-effort projection of the
+  // Context-window lineage (ADR-200). A best-effort projection of the
   // windows on a run's model-call frames; get_run_context reads the frames.
   USED_CONTEXT: "USED_CONTEXT", // Execution → ContextManifest (one per measured window)
 } as const;

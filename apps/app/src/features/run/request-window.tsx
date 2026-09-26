@@ -1,5 +1,5 @@
 // What a model request carried, block by block, and what the assembler put in
-// front of the model (ADR-193, #3894). The design of record draws both in the
+// front of the model (ADR-200, #3894). The design of record draws both in the
 // frame dialog (pages/run.md, The frame dialog; the mockup's `fdRequest` and
 // `fdContext`): the `model.request` panel's Tools offered, Context frames,
 // Prompt tokens, Prompt composition and Message stack, and the

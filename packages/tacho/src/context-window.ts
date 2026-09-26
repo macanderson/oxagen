@@ -1,5 +1,5 @@
 /**
- * The context window of one model request, block by block (ADR-193).
+ * The context window of one model request, block by block (ADR-200).
  *
  * A window lists what the request carried in five blocks, each with its
  * bytes and its item count. The bytes are the UTF-8 length of each part's

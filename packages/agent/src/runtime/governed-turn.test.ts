@@ -727,7 +727,7 @@ describe("runGovernedTurn on the engine", () => {
     expect(intents[0]).not.toHaveProperty("outcome");
     expect(intents[0]).not.toHaveProperty("usage");
     // The intention carries the request's window, block by block, measured
-    // on the request the engine asked with (ADR-193). The script's first
+    // on the request the engine asked with (ADR-200). The script's first
     // request has one message and one tool and no system message.
     const scripted = goldenScript()[0] as {
       request: { messages: unknown[]; tools: unknown[] };

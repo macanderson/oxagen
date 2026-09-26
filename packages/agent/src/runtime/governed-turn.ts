@@ -282,7 +282,7 @@ export interface GovernedTurnInput {
   abortSignal?: AbortSignal;
   /**
    * What the window holds besides conversation, so each model-call frame
-   * records the window block by block (ADR-193): the steering text `system`
+   * records the window block by block (ADR-200): the steering text `system`
    * ends with, exactly as it was appended, and how many leading `history`
    * messages the host placed there as context (a history summary). Every
    * `contextMessages` entry is context. Omitted, the whole system prompt is
@@ -345,7 +345,7 @@ export interface TurnLedgerModelIntent {
   request?: unknown;
   /**
    * The request's context window, block by block, measured before the
-   * provider is contacted (ADR-193). Absent when the request carried nothing
+   * provider is contacted (ADR-200). Absent when the request carried nothing
    * to measure.
    */
   window?: ContextWindowPayload;
@@ -624,7 +624,7 @@ export async function runGovernedTurn(
     user: buildTurnUserMessage(input.instruction, input.attachments),
   });
   // The parts of the window that are not conversation, as the engine will
-  // send them back on each completion (ADR-193).
+  // send them back on each completion (ADR-200).
   const windowLayout: ContextWindowLayout = {
     steering: input.window?.steering ?? null,
     context: [

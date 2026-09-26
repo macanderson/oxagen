@@ -1,5 +1,5 @@
 // gateway-frame.ts: the frame body one MCP gateway call seals (#3971,
-// ADR-194). The daemon seals it on whichever chain the call lands on; this
+// ADR-201). The daemon seals it on whichever chain the call lands on; this
 // module only says what the body holds, so the body can be checked against
 // the strict envelope without booting a daemon.
 import { digestText } from "../claude-code/context";

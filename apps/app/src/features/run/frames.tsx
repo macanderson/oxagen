@@ -301,7 +301,7 @@ export function FramePanel({
   approvals: ReactNode;
   /**
    * The panel for the frame's kind that the record fills beyond its facts:
-   * a model request's window, or the assembler's manifest (ADR-193). Absent
+   * a model request's window, or the assembler's manifest (ADR-200). Absent
    * for every other kind.
    */
   kindPanel?: ReactNode;

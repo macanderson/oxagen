@@ -253,7 +253,7 @@ export function assistantSystemPrompt(
  * The text `assistantSystemPrompt` appends for the steering, its heading
  * included, or null when there is none. The run's window counts exactly
  * these characters as steering and the rest of the system prompt as system
- * (ADR-193).
+ * (ADR-200).
  */
 export function steeringSection(
   steering: Pick<AssistantSteering, "text">,

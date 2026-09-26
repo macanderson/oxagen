@@ -1,5 +1,5 @@
 // Whether the model and the effort setting were the right size for this run
-// (pages/run.md, Model fit; ADR-194). Oxagen computes the reading from the
+// (pages/run.md, Model fit; ADR-201). Oxagen computes the reading from the
 // record after the seal and stores it on the run, versioned `run-fit/v1`,
 // with the figures it read and the seal it read. `get_run` answers it as
 // `run.fit`. The page computes nothing: the rig strip's badges and the Cost

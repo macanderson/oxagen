@@ -338,7 +338,7 @@ function resultMeasure(
  * output digest as an earlier call of the run) or an unpaged result.
  *
  * What counts as a repeat is the rollup's rule too (./step-grade.ts,
- * ADR-192): a call this job files as a repeated shell command or a duplicate
+ * ADR-199): a call this job files as a repeated shell command or a duplicate
  * read is a step the run's productive ratio counts as not advancing it.
  */
 function detectToolCalls(

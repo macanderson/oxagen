@@ -63,7 +63,7 @@ Each `byModel` entry:
 
 These are the recorded figures. A reader shows them as they are and does not reprice the token counts with today's price book, because a later rate change would then disagree with the run's recorded cost (#4069).
 
-The rollup grades each step from what its frame recorded (ADR-192). A step is one model call or one tool call, and it counts under one cause at most:
+The rollup grades each step from what its frame recorded (ADR-199). A step is one model call or one tool call, and it counts under one cause at most:
 
 - `failed`: a tool call whose status is `error` or `rejected`. A ledger call's `failed` and `denied` outcomes read the same way. A cancelled call and one parked on an approval did not fail.
 - `repeated`: a tool call with the same tool, input digest and output digest as an earlier call of the run, when it is a shell command or a call the classifier marked read-only. This is the rule the findings job files `repeated_shell_commands` and `duplicate_tool_calls` by. A repeat of a call that writes is not counted, because the write may change what the next call reads.

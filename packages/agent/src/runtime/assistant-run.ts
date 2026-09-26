@@ -226,7 +226,7 @@ export interface OpenAssistantRunArgs extends AssistantRunScope {
   originMessageId: string | null;
   /**
    * Projects the windows the run recorded into Neo4j once it seals, as
-   * USED_CONTEXT lineage (ADR-193). Best-effort: a failure is logged and
+   * USED_CONTEXT lineage (ADR-200). Best-effort: a failure is logged and
    * never fails or slows the seal. The in-app turn passes
    * `projectRunContextWindows`; a caller that passes none projects nothing.
    */
@@ -898,7 +898,7 @@ class Recorder implements AssistantRunRecorder {
     run: { runId: string; publicId: string },
     private readonly attemptId: string,
     actor: { agentId: string; agentVersionId: string },
-    /** The USED_CONTEXT projection run after the seal (ADR-193); absent, none. */
+    /** The USED_CONTEXT projection run after the seal (ADR-200); absent, none. */
     private readonly lineage?: {
       executionRef: string;
       project: ContextProjector;
@@ -1026,7 +1026,7 @@ class Recorder implements AssistantRunRecorder {
         role: record.role,
         provider: record.provider,
         model: record.model,
-        // The request's window, block by block (ADR-193). It is the record
+        // The request's window, block by block (ADR-200). It is the record
         // `get_run_context` reads: bytes and items only, with the tokens
         // divided from the completion's reported total when it is read.
         ...(record.window ? { window: record.window } : {}),
@@ -1225,7 +1225,7 @@ class Recorder implements AssistantRunRecorder {
   }
 
   /**
-   * USED_CONTEXT lineage for the windows this run recorded (ADR-193), read
+   * USED_CONTEXT lineage for the windows this run recorded (ADR-200), read
    * back from the ledger it just sealed. Not awaited: a graph that is slow or
    * down must never hold or fail a seal, and no read depends on the edges.
    */

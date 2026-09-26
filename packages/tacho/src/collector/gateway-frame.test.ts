@@ -1,4 +1,4 @@
-// The frame one MCP gateway call seals (#3971, ADR-194). Every body must
+// The frame one MCP gateway call seals (#3971, ADR-201). Every body must
 // parse against the strict envelope, because the recorder moves a member no
 // body declares into `attrs`, where no reader of a decision looks. A refusal
 // once wrote its reason as `policy_reason`, which no body declares, so the

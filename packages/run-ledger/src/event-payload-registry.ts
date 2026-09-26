@@ -414,7 +414,7 @@ const toolCallCompletedSchema = z
   .strict();
 
 /**
- * The context window of one model request (ADR-193): each block the request
+ * The context window of one model request (ADR-200): each block the request
  * carried, in window order, with the UTF-8 bytes of its parts' JSON and how
  * many parts it held. The five block kinds are the leaf's
  * (`CONTEXT_WINDOW_BLOCKS` in `@oxagen/tacho`), which the model proxy writes
@@ -496,7 +496,7 @@ const modelEngineCallCompletedSchema = z
  * nothing can read it as a completed call because the fields a reader would
  * test do not exist and the event type differs.
  *
- * `window` is the request's context window, block by block (ADR-193). It is
+ * `window` is the request's context window, block by block (ADR-200). It is
  * measured here, before the provider is contacted, so a call that fails or is
  * cancelled still records what it would have sent. A run recorded before the
  * window existed has none.

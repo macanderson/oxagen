@@ -1,6 +1,6 @@
 # get_run_context
 
-What each of one run's model requests carried, block by block, and what the steering assembler put in front of the model (ADR-193; #3894). The Run page draws a model request's window from this read in the Governed actions tab's open frame and in the Context tab's Prompt panel, Prompt window and Retrieval stats.
+What each of one run's model requests carried, block by block, and what the steering assembler put in front of the model (ADR-200; #3894). The Run page draws a model request's window from this read in the Governed actions tab's open frame and in the Context tab's Prompt panel, Prompt window and Retrieval stats.
 
 The window is read from the frames that recorded the model calls, never from Neo4j. An in-app assistant run records each window on its `model.engine_call_started` frame, and the provider's token counts on the matching `model.engine_call_completed`, joined on `model_call_id`. A wrapped session records it on the tacho proxy's `llm_call` frame as the `oxagen.window` attribute, beside the usage the vendor reported. The attribute is part of the envelope, so a workspace that keeps digests only still records its windows.
 

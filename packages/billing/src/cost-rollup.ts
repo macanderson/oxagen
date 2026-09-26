@@ -73,7 +73,7 @@ export interface ModelCallFrame {
 /**
  * One tool call; `name` is null when the frame hides it (an encrypted payload).
  *
- * The members after `name` grade the call (./step-grade.ts, ADR-192) and price
+ * The members after `name` grade the call (./step-grade.ts, ADR-199) and price
  * its result. Each is null where the frame recorded none.
  */
 export interface ToolCallFrame {
@@ -150,7 +150,7 @@ export interface ModelBreakdown {
 }
 
 /**
- * One tool's calls in the run (#3892, ADR-192). A row stored before the
+ * One tool's calls in the run (#3892, ADR-199). A row stored before the
  * result tokens were recorded revives with both figures null. `costMicros` is
  * serialized as a decimal string in the jsonb.
  */
@@ -179,7 +179,7 @@ export interface RunBreakdown {
   models: ModelBreakdown[];
   tools: ToolBreakdown[];
   /**
-   * The unproductive steps by cause (#3984, ADR-192), stored in the jsonb with
+   * The unproductive steps by cause (#3984, ADR-199), stored in the jsonb with
    * no column. Null exactly when the run's steps are not graded: a run with no
    * step, and a row rolled up before grading existed, which revives as null.
    */
@@ -206,7 +206,7 @@ export interface RunTotalsRecord extends RunMeta {
   productiveRatio: number | null;
   /**
    * The steps that advanced the run and the steps that did not (#3984,
-   * ADR-192): null together, and summing to `steps` when set.
+   * ADR-199): null together, and summing to `steps` when set.
    */
   advancedSteps: number | null;
   unproductiveSteps: number | null;
@@ -389,7 +389,7 @@ export interface InputPrice {
  * price: a figure built on it would be a guess priced from a guess.
  *
  * The findings job prices a result the run could have left out with this,
- * and the rollup prices each tool's result tokens with it (ADR-192), so the
+ * and the rollup prices each tool's result tokens with it (ADR-199), so the
  * two agree on what one token of the run cost.
  */
 export function runInputPrice(run: {
@@ -534,7 +534,7 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
       hasUnpriced: g.hasUnpriced,
     }))
     .sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0));
-  // Each tool's result tokens at the run's own input price (ADR-192): the
+  // Each tool's result tokens at the run's own input price (ADR-199): the
   // share of the run's input the tool's results were, never money on top of
   // it. The price reads the rounded per-model input cost, as the findings
   // job's does, so the two price one token alike.
@@ -725,7 +725,7 @@ export function dailyTotalsFromRuns(
       acc.calls += t.calls;
       // No frame prices a tool call (spec §12.3, "with a declared price").
       // The run row's per-tool figure is an estimate of input the run's cost
-      // already counts (ADR-192), so the group's cost stays null: summed
+      // already counts (ADR-199), so the group's cost stays null: summed
       // here, it would count that input a second time beside the model rows.
       addValue(acc, run, null);
     }
