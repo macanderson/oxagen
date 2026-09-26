@@ -251,8 +251,10 @@ async function run() {
 async function ipcChecks() {
   const status = await invokeSidecar("tacho", ["status", "--json"]);
   if (!status.ok) throw new Error(`tacho status: ${status.error}`);
+  // Not enrolled here, so it prints `{"enrolled": false}` and exits 1. The
+  // page's `tachoStatus` reads the document whatever the exit code.
   const report = JSON.parse(status.stdout.join("\n"));
-  if (status.code !== 0 || report.enrolled !== false)
+  if (report.enrolled !== false)
     throw new Error(`tacho status answered ${JSON.stringify(status)}`);
   record("tacho status ran", { code: status.code, report });
 
