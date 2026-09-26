@@ -544,6 +544,11 @@ export const RunRow = z.object({
     .nullable()
     .optional(),
   /**
+   * The person's avatar value, from the same user row as `operatorName`; null
+   * for an agent or service principal and for a person who set none.
+   */
+  operatorAvatarUrl: z.string().min(1).nullable().optional(),
+  /**
    * The operator's workspace role when the run opened, stamped then and never
    * read live. Null when it was not recorded: a run from before the stamp, an
    * operator who is not a person, or a person with no membership here.

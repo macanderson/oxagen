@@ -33,6 +33,7 @@ export function toAgentPage(out: AgentListOutput): z.input<typeof AgentPage> {
       managed: item.managed,
       operatorId: item.operatorId,
       operatorName: item.operatorName,
+      operatorAvatarUrl: item.operatorAvatarUrl,
       principalId: item.principalId,
       credentials: item.credentials,
       hosts: item.hosts,

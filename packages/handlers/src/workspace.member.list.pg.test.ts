@@ -59,9 +59,16 @@ describe.skipIf(!enabled)("list_members against Postgres", () => {
           id: owner,
           email: email("owner"),
           displayName: "Owner",
+          avatarUrl: "https://avatars.example.com/owner.png",
           status: "active",
         },
-        { id: member, email: email("member"), status: "active" },
+        // A blank avatar reads as none rather than failing the contract.
+        {
+          id: member,
+          email: email("member"),
+          avatarUrl: " ",
+          status: "active",
+        },
         { id: outsider, email: email("outsider"), status: "active" },
       ]);
       await tx.insert(schema.organizations).values([
@@ -213,9 +220,15 @@ describe.skipIf(!enabled)("list_members against Postgres", () => {
     expect(listMembers.output.safeParse(out).success).toBe(true);
     if (out.scope !== "org") throw new Error("unreachable");
 
-    expect(out.members.map((m) => [m.email, m.role, m.name])).toEqual([
-      [email("owner"), "owner", "Owner"],
-      [email("member"), "member", null],
+    const rows = out.members.map((m) => [m.email, m.role, m.name, m.avatarUrl]);
+    expect(rows).toEqual([
+      [
+        email("owner"),
+        "owner",
+        "Owner",
+        "https://avatars.example.com/owner.png",
+      ],
+      [email("member"), "member", null, null],
     ]);
     const publicIds = await withSystemDb((tx) =>
       tx

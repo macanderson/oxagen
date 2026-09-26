@@ -46,6 +46,8 @@ export interface AgentIdentityRow {
   operatorPublicId: string | null;
   /** The operator's display name, from the same user row as `operatorPublicId`. */
   operatorName: string | null;
+  /** The operator's stored avatar, from the same user row; may be blank. */
+  operatorAvatarUrl: string | null;
   /** The label set through set_cost_center (ADR-142); null inherits the workspace's. */
   costCenter: string | null;
   /** The runtime the agent runs on now (ADR-198); null when it runs on no named runtime. */
@@ -71,6 +73,7 @@ const identityColumns = {
   principalUpdatedAt: schema.principals.updatedAt,
   operatorPublicId: schema.users.publicId,
   operatorName: schema.users.displayName,
+  operatorAvatarUrl: schema.users.avatarUrl,
   costCenter: schema.agents.costCenter,
   runtimeId: schema.agents.runtimeId,
   toolbeltId: schema.agents.toolbeltId,

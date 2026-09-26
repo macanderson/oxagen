@@ -93,9 +93,10 @@ function Involved({
       >
         {hasOperator ? (
           <Avatar
-            value={null}
+            value={run.operatorAvatarUrl}
             initials={initialsOf(run.operatorName)}
             size={30}
+            testId="run-operator-avatar"
           />
         ) : null}
         {hasOperator ? (
@@ -105,6 +106,7 @@ function Involved({
               id: run.operatorId,
               name: run.operatorName,
               kind: run.operatorKind,
+              avatarUrl: run.operatorAvatarUrl,
             }}
           >
             <span className="flex min-w-0 flex-col leading-tight">

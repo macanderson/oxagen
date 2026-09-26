@@ -508,7 +508,7 @@ describe("ContextTab with the window on record (ADR-200)", () => {
     expect(
       window
         .getAllByTestId("window-part")
-        .map((part) => Number((part.textContent ?? "").replace(/\D/g, "")))
+        .map((part) => Number(part.textContent.replace(/\D/g, "")))
         .reduce((sum, tokens) => sum + tokens, 0),
     ).toBe(15_368);
     await expectNoAxe(container);
