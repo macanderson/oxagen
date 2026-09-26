@@ -74,8 +74,8 @@ after the registered name separately when their contract uses a dotted stem.
 | [record_execution](agent.execution.record.md) | [agent.execution.record.ts](../../packages/oxagen/src/contracts/agent.execution.record.ts) | api, mcp |
 | [register_agent](agent.register.md) | [agent.register.ts](../../packages/oxagen/src/contracts/agent.register.ts) | api, cli |
 | [register_mcp_server](agent.mcp.register.md) | [agent.mcp.register.ts](../../packages/oxagen/src/contracts/agent.mcp.register.ts) | api, mcp |
-| [resolve_approval](agent.approval.resolve.md) | [agent.approval.resolve.ts](../../packages/oxagen/src/contracts/agent.approval.resolve.ts) | api, mcp, agent |
-| [resolve_mcp_consent](agent.mcp_consent.resolve.md) | [agent.mcp_consent.resolve.ts](../../packages/oxagen/src/contracts/agent.mcp_consent.resolve.ts) | api, mcp, agent |
+| [resolve_approval](agent.approval.resolve.md) | [agent.approval.resolve.ts](../../packages/oxagen/src/contracts/agent.approval.resolve.ts) | api, mcp |
+| [resolve_mcp_consent](agent.mcp_consent.resolve.md) | [agent.mcp_consent.resolve.ts](../../packages/oxagen/src/contracts/agent.mcp_consent.resolve.ts) | api, mcp |
 | `resolve_mcp_servers` | [agent.mcp.resolve.ts](../../packages/oxagen/src/contracts/agent.mcp.resolve.ts) | api |
 | [retire_agent](agent.retire.md) | [agent.retire.ts](../../packages/oxagen/src/contracts/agent.retire.ts) | api |
 | [revise_agent_def](revise_agent_def.md) | [agent.definition.revise.ts](../../packages/oxagen/src/contracts/agent.definition.revise.ts) | api, mcp, agent |
@@ -251,7 +251,7 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
-| [list_price_entries](cost.price_entry.list.md) | [cost.price_entry.list.ts](../../packages/oxagen/src/contracts/cost.price_entry.list.ts) | api, mcp |
+| [list_price_entries](cost.price_entry.list.md) | [cost.price_entry.list.ts](../../packages/oxagen/src/contracts/cost.price_entry.list.ts) | api, mcp, cli |
 | [list_unpriced_models](cost.unpriced_model.list.md) | [cost.unpriced_model.list.ts](../../packages/oxagen/src/contracts/cost.unpriced_model.list.ts) | api, mcp |
 | [remove_price_entry](cost.price_entry.remove.md) | [cost.price_entry.remove.ts](../../packages/oxagen/src/contracts/cost.price_entry.remove.ts) | api, mcp, cli |
 | [set_price_entry](cost.price_entry.set.md) | [cost.price_entry.set.ts](../../packages/oxagen/src/contracts/cost.price_entry.set.ts) | api, mcp, cli |
@@ -420,7 +420,7 @@ after the registered name separately when their contract uses a dotted stem.
 | --- | --- | --- |
 | [erase_data](privacy.data.erase.md) | [privacy.data.erase.ts](../../packages/oxagen/src/contracts/privacy.data.erase.ts) | api, mcp, agent |
 | [export_data](privacy.data.export.md) | [privacy.data.export.ts](../../packages/oxagen/src/contracts/privacy.data.export.ts) | api, mcp, agent |
-| [get_export_status](privacy.data.export.status.md) | [privacy.data.export.status.ts](../../packages/oxagen/src/contracts/privacy.data.export.status.ts) | api |
+| [get_export_status](privacy.data.export.status.md) | [privacy.data.export.status.ts](../../packages/oxagen/src/contracts/privacy.data.export.status.ts) | api, mcp |
 
 ## Reference
 
