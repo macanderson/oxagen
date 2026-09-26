@@ -46,6 +46,13 @@ let legacyLabelProps: string[] = [];
 let legacyLabels: string[] = [];
 // When set, the apoc label rename rejects with this error (missing APOC plugin).
 let renameError: Error | null = null;
+// The embedding resize (#4148): the vector indexes SHOW INDEXES reports, and
+// how many nodes still hold a vector of the old size.
+const SHOW_INDEXES = "SHOW INDEXES YIELD name, type, options";
+const STALE_COUNT = "RETURN count(n) AS stale";
+const CLEAR_STALE = "RETURN count(n) AS done";
+let vectorIndexes: { name: string; dimensions: number }[] = [];
+let staleVectors = 0;
 
 function makeRecord(values: Record<string, number>) {
   return { get: (key: string) => values[key] };
@@ -83,6 +90,24 @@ const runFn = vi.fn(async (query: string) => {
   if (query.includes(RENAME_CALL) && renameError) {
     throw renameError;
   }
+  if (query.includes(SHOW_INDEXES)) {
+    return {
+      records: vectorIndexes.map(({ name, dimensions }) => ({
+        get: (key: string) =>
+          key === "name"
+            ? name
+            : { indexConfig: { "vector.dimensions": dimensions } },
+      })),
+    };
+  }
+  if (query.includes(STALE_COUNT)) {
+    return { records: [makeRecord({ stale: staleVectors })] };
+  }
+  if (query.includes(CLEAR_STALE)) {
+    const done = Math.min(staleVectors, 1000);
+    staleVectors -= done;
+    return { records: [makeRecord({ done })] };
+  }
   return { records: [] };
 });
 const closeFn = vi.fn(async () => undefined);
@@ -100,6 +125,7 @@ vi.mock("./org-graph", () => ({
 }));
 
 import {
+  EMBEDDING_DIMENSIONS,
   migrate,
   migrateEveryGraphDatabase,
   migrateOrgGraphDatabases,
@@ -126,8 +152,9 @@ describe("migrate() (@oxagen/ontology)", () => {
 
   it("runs the dup-check then one session.run() per non-empty, non-comment statement", async () => {
     await migrate();
-    // 1 dedupe pre-check + 2 schema statements + 2 PascalCase recase probes.
-    expect(runFn).toHaveBeenCalledTimes(5);
+    // 1 dedupe pre-check + 2 embedding-size probes + 2 schema statements +
+    // 2 PascalCase recase probes.
+    expect(runFn).toHaveBeenCalledTimes(7);
   });
 
   it("passes each Cypher statement as an argument to session.run()", async () => {
@@ -259,6 +286,73 @@ describe("pascalCaseDomainLabels (via migrate behaviour)", () => {
     );
     await expect(migrate()).rejects.toThrow(/APOC/);
     expect(closeFn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("resizeEmbeddingIndexes (via migrate behaviour, #4148)", () => {
+  beforeEach(() => {
+    runFn.mockClear();
+    closeFn.mockClear();
+    dupGroups = 0;
+    mergeError = null;
+    legacyLabelProps = [];
+    legacyLabels = [];
+    renameError = null;
+    vectorIndexes = [];
+    staleVectors = 0;
+  });
+
+  it("targets 1,024 dimensions, the size voyage-4-large returns", () => {
+    expect(EMBEDDING_DIMENSIONS).toBe(1024);
+  });
+
+  it("drops an embedding index of another size and keeps one of the current size", async () => {
+    vectorIndexes = [
+      { name: "memory_embedding_index", dimensions: 1536 },
+      { name: "graph_node_embedding_index", dimensions: 1024 },
+    ];
+    await migrate();
+    const calls = schemaCalls();
+    expect(calls).toContain("DROP INDEX memory_embedding_index IF EXISTS");
+    expect(calls.some((c) => c.includes("DROP INDEX graph_node"))).toBe(false);
+  });
+
+  it("leaves a vector index it does not own alone, whatever its size", async () => {
+    vectorIndexes = [{ name: "customer_vector_index", dimensions: 1536 }];
+    await migrate();
+    expect(schemaCalls().some((c) => c.includes("DROP INDEX"))).toBe(false);
+  });
+
+  it("drops before schema.cypher runs, so the create recreates the index", async () => {
+    vectorIndexes = [{ name: "entity_node_embedding_index", dimensions: 1536 }];
+    await migrate();
+    const calls = schemaCalls();
+    const drop = calls.indexOf("DROP INDEX entity_node_embedding_index IF EXISTS");
+    const create = calls.findIndex((c) => c.includes("CREATE CONSTRAINT a"));
+    expect(drop).toBeGreaterThanOrEqual(0);
+    expect(drop).toBeLessThan(create);
+  });
+
+  it("clears vectors of the old size in batches until none remain", async () => {
+    staleVectors = 2500;
+    await migrate();
+    const clears = schemaCalls().filter((c) => c.includes(CLEAR_STALE));
+    // 1,000 + 1,000 + 500, then one pass that finds nothing.
+    expect(clears).toHaveLength(4);
+    expect(staleVectors).toBe(0);
+  });
+
+  it("clears the model with the vector, so the node reads as never embedded", async () => {
+    staleVectors = 1;
+    await migrate();
+    const clear = schemaCalls().find((c) => c.includes(CLEAR_STALE));
+    expect(clear).toContain("SET n.embedding = null");
+    expect(clear).toContain("REMOVE n.embeddingModel");
+  });
+
+  it("clears nothing when every vector is the current size", async () => {
+    await migrate();
+    expect(schemaCalls().some((c) => c.includes(CLEAR_STALE))).toBe(false);
   });
 });
 

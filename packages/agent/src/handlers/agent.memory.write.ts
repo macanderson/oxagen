@@ -43,6 +43,7 @@ export async function agentMemoryWriteHandler(
       surface: ctx.surface,
       executionStepId: ctx.executionStepId ?? null,
     },
+    inputType: "document",
   });
   const { memoryId, edgesCreated } = await writeMemory({
     nodeRef: input.nodeRef,

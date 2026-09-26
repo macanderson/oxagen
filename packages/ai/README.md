@@ -78,7 +78,8 @@ ADR-043 removed image and video generation, so text is the only tier family.
 
 - `src/stream.ts`: `streamAgentReply()` wraps `streamText`, admits and meters tokens, and emits telemetry. It does no IAM check.
 - `src/generate-object.ts`: `generateObjectFor()`, structured output via a Zod schema, with the same metering as stream.
-- `src/embed.ts`: `embedText()` and `embedMany()`, text embedding via `openai/text-embedding-3-small` on the gateway. Meters embedding tokens.
+- `src/embed.ts`: `embedText()` and `embedMany()`, text embedding with Voyage `voyage-4-large` at 1,024 dimensions on the platform key `VOYAGE_API_KEY`. Every embedding is metered and billed. A failure throws `EmbeddingUnavailableError` (code `embedding_unavailable`), which the API answers with 503.
+- `src/voyage.ts`: the Voyage REST client as an AI SDK embedding model. It sends `input_type`, reports `usage.total_tokens` as usage, and splits a batch under Voyage's 1,000-text and token limits.
 - `src/record-token-usage.ts`: the admission and settlement calls into `@oxagen/billing`.
 - `src/models.ts`: `selectModel()`, the gateway model factory. Reads the tier env vars.
 - `src/funding-source.ts`, `src/select-model-for-org.ts`: who pays for an organisation's calls, and the model on that key (ADR-053).
@@ -117,7 +118,7 @@ This rule is a convention, not a gate: nothing in ESLint or CI fails a build tha
 
 The Vercel AI Gateway (`@ai-sdk/gateway`) is the default path for every call type, and `AI_GATEWAY_API_KEY` is the only credential it needs. One path deliberately leaves it:
 
-- Set `OXAGEN_MODEL_PROVIDER=openrouter` and *language* calls go straight to OpenRouter with `OPENROUTER_API_KEY`. This is an explicit operator opt-out for a deployment that cannot reach the gateway, never an automatic failover, because a silent failover would move spend onto another vendor's bill and skip the metering the gateway exists to provide. Embedding calls stay on the gateway and therefore still fail on such a deployment, visibly.
+- Set `OXAGEN_MODEL_PROVIDER=openrouter` and *language* calls go straight to OpenRouter with `OPENROUTER_API_KEY`. This is an explicit operator opt-out for a deployment that cannot reach the gateway, never an automatic failover, because a silent failover would move spend onto another vendor's bill and skip the metering the gateway exists to provide. Embedding calls never use either provider: they go to Voyage.
 
 An organisation's own key, or the OpenRouter key Oxagen provisioned for it, can also serve its calls. `selectModelForOrg` resolves which one (ADR-053, ADR-131).
 
