@@ -19,6 +19,12 @@ export {
   type CodeIssueReason,
   type CodeStatus,
 } from "./schema/cms";
+// The run-enrichment candidate predicate: the sweep's WHERE and the two
+// partial indexes build it from this one function (#3784).
+export {
+  runEnrichmentCandidate,
+  type RunEnrichmentColumns,
+} from "./schema/run-enrichment";
 export * as relations from "./relations";
 export * from "./types";
 export {
