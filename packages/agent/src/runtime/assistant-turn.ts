@@ -76,6 +76,7 @@ import { toolCallsFromReceipts } from "./assistant-tool-calls";
 import {
   assistantSystemPrompt,
   loadAssistantSteering,
+  steeringSection,
 } from "./assistant-steering";
 import {
   openAssistantRun,
@@ -655,6 +656,14 @@ async function runPreparedTurn(
         pageContextMessage(request.pageContext),
         recalledMemory,
       ],
+      // What the model-call frames count apart from the conversation
+      // (ADR-193): the steering the system prompt ends with, and the summary
+      // at the head of the history when the turn carried one.
+      window: {
+        steering: steeringSection(steering),
+        historyContext:
+          compacted.frame !== null && compacted.frame.text !== null ? 1 : 0,
+      },
       instruction: request.content,
       tools: belt.tools,
       modelTools: belt.modelTools,

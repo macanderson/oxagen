@@ -1087,6 +1087,51 @@ describe("openAssistantRun", () => {
     ]);
   });
 
+  it("records the request's context window on the intention (ADR-193)", async () => {
+    // The witness for #3894: before it, the frame said which model was asked
+    // and nothing about what the request carried, so no read could draw the
+    // window a model call was sent.
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      originMessageId: MESSAGE,
+      surface: "chat",
+      instruction: "hi",
+      maxSteps: 4,
+      toolAllowlist: ["recall_memory"],
+      store: ledger.store,
+    });
+    const window = {
+      blocks: [
+        { kind: "system" as const, bytes: 1204, items: 1 },
+        { kind: "steering" as const, bytes: 310, items: 1 },
+        { kind: "tools" as const, bytes: 9120, items: 14 },
+        { kind: "context" as const, bytes: 412, items: 2 },
+        { kind: "conversation" as const, bytes: 90, items: 1 },
+      ],
+    };
+
+    await recorder.modelCallStarted({
+      seq: 1,
+      requestId: "prov-1-0",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      window,
+    });
+
+    expect(ledger.batches[1]!.events[0]!.payload).toEqual({
+      engine_seq: 1,
+      model_call_id: "prov-1-0",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      window,
+    });
+  });
+
   // seal() reads the chain once and then takes a seq. An append that arrived
   // during that await would chain onto the older value and could take a seq at
   // or past the terminal event's, which the store refuses. No caller reaches it

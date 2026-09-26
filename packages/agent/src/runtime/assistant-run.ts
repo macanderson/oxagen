@@ -940,6 +940,10 @@ class Recorder implements AssistantRunRecorder {
         role: record.role,
         provider: record.provider,
         model: record.model,
+        // The request's window, block by block (ADR-193). It is the record
+        // `get_run_context` reads: bytes and items only, with the tokens
+        // divided from the completion's reported total when it is read.
+        ...(record.window ? { window: record.window } : {}),
       },
       // The request, and so the turn's prompt, rides the write-ahead frame
       // rather than the completion: it is what was asked, and it is already

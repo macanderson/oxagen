@@ -544,6 +544,11 @@ describe("the loopback model proxy", () => {
       "oxagen.request_bytes": String(body.length),
       "oxagen.response_bytes": String(reply.length),
       "oxagen.stream": "0",
+      // The window the vendor read (ADR-193): no system and no tools, one
+      // message, measured as the message's JSON.
+      "oxagen.window": `system=0:0;tools=0:0;conversation=${Buffer.byteLength(
+        JSON.stringify({ role: "user", content: PROMPT }),
+      )}:1`,
     });
   });
 
@@ -1978,9 +1983,16 @@ describe("the loopback model proxy", () => {
     expect(sent.rawHeaders[sent.rawHeaders.indexOf("Content-Length") + 1]).toBe(
       String(sent.body.length),
     );
+    // What the injection added to the system block is the window's steering.
+    const harnessSystem = Buffer.byteLength(JSON.stringify("you are helpful"));
+    const sentSystem = Buffer.byteLength(
+      JSON.stringify({ type: "text", text: "you are helpful" }) +
+        JSON.stringify({ type: "text", text: "STEER: prefer small diffs" }),
+    );
     expect(frames(uuid)[0]!.attrs).toMatchObject({
       "oxagen.request_injected": "1",
       "oxagen.request_digest": sha(sent.body),
+      "oxagen.window": `system=${harnessSystem}:1;steering=${sentSystem - harnessSystem}:1;tools=0:0;conversation=0:0`,
     });
     expect(seenSessions).toEqual(["sess-seam"]);
 
