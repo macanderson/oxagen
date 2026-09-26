@@ -32,6 +32,7 @@ The Spend page's rollup at one level (Mission Control spec §12.7, §12.9; ADR-0
 | `groupBy` | enum | the level as asked |
 | `total` | figure | the period over every run in the workspace (below) |
 | `estimatedRuns` | integer, optional | the period's priced runs that were still open when their row was last rebuilt; their cost is in the figures as a running estimate |
+| `unmeteredRuns` | object, optional | `{ total, byHarness: [{ harness, runs }] }`: the period's wrapped runs whose rollup found no model call, by the harness that ran them, most runs first. `total.runs` counts them and `total.cost` cannot, so the Spend page prints this beside the total. See [Runs with no usage](#runs-with-no-usage) |
 | `rows` | row[] | one per group; largest spend first, groups with no cost after those with one, then by key |
 
 A figure:
@@ -45,7 +46,7 @@ A figure:
 | `accepted` | money or null | spend on runs a human accepted; null until one is recorded |
 | `productiveRatio` | number or null | 0..1, run-weighted; null until the grading lane writes it |
 
-A row adds `key` (an operator's principal public id `prn_…`, the `operatorId` a run of `list_runs` carries and the key `get_spend_drill` takes; an agent key `org_ns.ws_ns.slug`; a model id; a tool name; a task reference; or a cost-center label, with `~none` for spend no cost center claims), `provider` (set on `model` rows) and `tokens` by class (`input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning`).
+A row adds `key` (an operator's principal public id `prn_…`, the `operatorId` a run of `list_runs` carries and the key `get_spend_drill` takes; an agent key `org_ns.ws_ns.slug`; a model id; a tool name; a task reference; or a cost-center label, with `~none` for spend no cost center claims), `provider` (set on `model` rows) and `tokens` by class (`input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning`, `server_tool_request`). `server_tool_request` counts web search requests, which the book prices per request, so it is not a token count. A row rolled up before the class existed reads 0 for it.
 
 ## Basis
 
@@ -54,6 +55,10 @@ A row adds `key` (an operator's principal public id `prn_…`, the `operatorId` 
 ## Attribution
 
 A run is attributed to the operator, agent and task it names; a run that names none is not on that level. The `cost_center` level is the exception: every run is on it exactly once, so its rows sum to the total. A run appears under every model its frames used and every tool it called. Tool rows carry counts and no money: no frame prices a tool call.
+
+## Runs with no usage
+
+A harness whose model calls pass through neither the Oxagen gateway nor the local proxy records tool calls and no usage. Cursor is one, and so are Stella on a provider other than Anthropic and a Stella session with its own Anthropic base URL. The rollup counts such a run and prices none of it. `unmeteredRuns` counts the period's runs whose `cost.run_totals` row holds no model call, grouped by the session's `harness`, so a reader can see what the total leaves out. A run not yet rolled up has no row and is not counted. A ledger run meters every call through the gateway, so it is never counted. The count is read from Postgres, like the rest of this answer.
 
 ## Cost center
 
