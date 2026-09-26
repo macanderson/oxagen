@@ -108,3 +108,84 @@ ALTER TABLE "cost"."run_totals"
 -- not one per event.
 CREATE INDEX IF NOT EXISTS "run_totals_agent_started_idx"
   ON "cost"."run_totals" ("workspace_id", "agent_key", "started_at");
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 5. The stamped operator role stays as it was stamped (#3999, ADR-197).
+--
+-- A ledger run writes operator_role once, in its INSERT. The immutability
+-- trigger already freezes the run's other bindings on a V2 row, so this adds
+-- operator_role to that list: an UPDATE that changes it raises 23514, and a
+-- role changed in the workspace after the run started cannot rewrite the run.
+-- The function body is the one in 20260813100000_run_attempt_foundation_expand
+-- with one condition added. The trigger itself is unchanged and keeps calling
+-- this function.
+CREATE OR REPLACE FUNCTION "agent"."agent_runs_v2_immutability"()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  -- A V1 row may never be re-labelled V2: that would fabricate trusted identity
+  -- for history that never had it (the expand-only rule).
+  IF OLD.spec_version = 1 AND NEW.spec_version IS DISTINCT FROM 1 THEN
+    RAISE EXCEPTION
+      'agent.agent_runs: legacy run % cannot be upgraded to spec_version %',
+      OLD.id, NEW.spec_version
+      USING ERRCODE = '23514';
+  END IF;
+
+  IF OLD.spec_version <> 2 THEN
+    RETURN NEW;
+  END IF;
+
+  -- Tenant scope, spec + spec digest, actor/version/snapshot/repository/
+  -- retention bindings, parent, engine/attempt policy, and the operator's
+  -- stamped workspace role are all frozen. Only
+  -- operational status/result/error/cancellation, the active-attempt and
+  -- latest-checkpoint pointers, counters, and lifecycle timestamps may move.
+  IF NEW.id IS DISTINCT FROM OLD.id
+     OR NEW.public_id IS DISTINCT FROM OLD.public_id
+     OR NEW.org_id IS DISTINCT FROM OLD.org_id
+     OR NEW.workspace_id IS DISTINCT FROM OLD.workspace_id
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at
+     OR NEW.surface IS DISTINCT FROM OLD.surface
+     OR NEW.spec_version IS DISTINCT FROM OLD.spec_version
+     OR NEW.spec IS DISTINCT FROM OLD.spec
+     OR NEW.run_kind IS DISTINCT FROM OLD.run_kind
+     OR NEW.spec_digest IS DISTINCT FROM OLD.spec_digest
+     OR NEW.initiating_principal_id IS DISTINCT FROM OLD.initiating_principal_id
+     OR NEW.agent_principal_id IS DISTINCT FROM OLD.agent_principal_id
+     OR NEW.agent_id IS DISTINCT FROM OLD.agent_id
+     OR NEW.agent_version_id IS DISTINCT FROM OLD.agent_version_id
+     OR NEW.agent_version_checksum IS DISTINCT FROM OLD.agent_version_checksum
+     OR NEW.authorization_snapshot_id IS DISTINCT FROM OLD.authorization_snapshot_id
+     OR NEW.parent_run_id IS DISTINCT FROM OLD.parent_run_id
+     OR NEW.repository_binding_id IS DISTINCT FROM OLD.repository_binding_id
+     OR NEW.repository_provider IS DISTINCT FROM OLD.repository_provider
+     OR NEW.provider_repository_id IS DISTINCT FROM OLD.provider_repository_id
+     OR NEW.repository_connection_id IS DISTINCT FROM OLD.repository_connection_id
+     OR NEW.configured_default_ref IS DISTINCT FROM OLD.configured_default_ref
+     OR NEW.base_commit_sha IS DISTINCT FROM OLD.base_commit_sha
+     OR NEW.base_tree_sha IS DISTINCT FROM OLD.base_tree_sha
+     OR NEW.retention_policy_id IS DISTINCT FROM OLD.retention_policy_id
+     OR NEW.retention_policy_digest IS DISTINCT FROM OLD.retention_policy_digest
+     OR NEW.max_attempts IS DISTINCT FROM OLD.max_attempts
+     OR NEW.operator_role IS DISTINCT FROM OLD.operator_role
+  THEN
+    RAISE EXCEPTION
+      'agent.agent_runs: immutable RunSpecV2 binding changed on run %', OLD.id
+      USING ERRCODE = '23514';
+  END IF;
+
+  -- Counters advance, never rewind: a rewound attempt_count would let a run
+  -- exceed its pinned max_attempts, and a rewound next_run_seq would let two
+  -- events claim one run sequence.
+  IF NEW.attempt_count < OLD.attempt_count OR NEW.next_run_seq < OLD.next_run_seq THEN
+    RAISE EXCEPTION
+      'agent.agent_runs: monotonic counter rewound on run %', OLD.id
+      USING ERRCODE = '23514';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
