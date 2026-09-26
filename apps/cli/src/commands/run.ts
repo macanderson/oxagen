@@ -609,3 +609,129 @@ export async function runPauseAll(
     "Ledger runs are not paused. Each run stops at its next boundary once its host collects the command.",
   );
 }
+
+// ── oxagen run answer ────────────────────────────────────────────────────────
+
+/** Mirrors the `answer_interjection` contract output. */
+export interface RunAnswerResult {
+  interjectionId: string;
+  runId: string;
+  answeredAt: string;
+  commandIds: string[];
+  receiptId: string;
+  path: "link" | "create" | null;
+  repository: { bindingId: string; fullName: string } | null;
+  workspace: { publicId: string; slug: string } | null;
+}
+
+/** The flags `oxagen run answer` takes; exactly one answer form. */
+export interface RunAnswerOptions {
+  text?: string;
+  link?: boolean;
+  create?: string;
+  slug?: string;
+  json?: boolean;
+}
+
+/**
+ * The request body for one answer form, or the reason the flags name none or
+ * more than one. `--text` answers an agent's own question. `--link` and
+ * `--create <name> --slug <slug>` answer a repository question.
+ */
+export function runAnswerBody(
+  interjectionId: string,
+  opts: RunAnswerOptions,
+): { body: Record<string, unknown> } | { error: string } {
+  const text = opts.text?.trim();
+  const forms = [
+    text !== undefined,
+    opts.link === true,
+    opts.create !== undefined,
+  ].filter(Boolean).length;
+  if (forms !== 1)
+    return {
+      error:
+        "Give one answer: --text <answer>, --link, or --create <name> --slug <slug>. Nothing was answered.",
+    };
+  if (opts.slug !== undefined && opts.create === undefined)
+    return {
+      error: "--slug goes with --create. Nothing was answered.",
+    };
+  if (text !== undefined) {
+    if (text === "")
+      return { error: "The answer is empty. Nothing was answered." };
+    return { body: { interjectionId, answer: text } };
+  }
+  if (opts.link === true) return { body: { interjectionId, path: "link" } };
+  const name = opts.create?.trim() ?? "";
+  if (name === "" || opts.slug === undefined)
+    return {
+      error:
+        "--create needs the new workspace's name and --slug <slug>. Nothing was answered.",
+    };
+  return {
+    body: {
+      interjectionId,
+      path: "create",
+      create: { name, slug: opts.slug },
+    },
+  };
+}
+
+/**
+ * `oxagen run answer <interjection-id>`: `answer_interjection`. Answers the
+ * question an agent paused its run to ask, with `--text`, or the question a
+ * host asked when a session started in a repository the workspace has not
+ * bound, with `--link` (bind it to this workspace) or `--create <name>
+ * --slug <slug>` (a new workspace for it, with skills off). Prints the
+ * receipt, what a link or create bound, and the command that carries the
+ * answer to the run.
+ *
+ * The API admits an org Owner or Admin, or a workspace Owner or Member, for
+ * `--text`, and an org Owner or Admin, or the workspace Owner, for `--link`
+ * and `--create`. `oxagen run` does not list questions yet: the app's
+ * approvals drawer and the Run page show them, and `list_interjections`
+ * reads them through the API.
+ */
+export async function runAnswer(
+  interjectionId: string,
+  opts: RunAnswerOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  const request = runAnswerBody(interjectionId, opts);
+  if ("error" in request) {
+    out.error(request.error, "answer");
+    return;
+  }
+  let result: RunAnswerResult;
+  try {
+    result = await apiPostOrThrow<RunAnswerResult>(
+      "agent/interjections/answer",
+      request.body,
+    );
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+  writer.write(
+    `Answered ${result.interjectionId} on ${result.runId}. Receipt ${result.receiptId}.`,
+  );
+  if (result.path === "create" && result.workspace && result.repository)
+    writer.write(
+      `Created the workspace ${result.workspace.slug} (${result.workspace.publicId}) for ${result.repository.fullName}. Its skills are off.`,
+    );
+  else if (result.path === "link" && result.repository)
+    writer.write(
+      `Linked ${result.repository.fullName} to this workspace (binding ${result.repository.bindingId}).`,
+    );
+  writer.write(
+    result.commandIds.length > 0
+      ? `The run's host collects the answer with command ${result.commandIds.join(", ")}.`
+      : "No host can take the answer now, so it is recorded on the question only.",
+  );
+}

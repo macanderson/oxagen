@@ -790,6 +790,38 @@ export function buildProgram(): Command {
       const { runPauseAll } = await import("./commands/run.js");
       await runPauseAll(opts);
     });
+  runCmd
+    .command("answer")
+    .description(
+      "Answer the question a run paused to ask: --text for an agent's own question, --link or --create for a repository the workspace has not bound",
+    )
+    .argument("<interjection-id>", "The question's id (inj_…)")
+    .option("--text <answer>", "A free-text answer to an agent's own question")
+    .option(
+      "--link",
+      "Bind the repository to this workspace. Org Owner or Admin, or workspace Owner",
+    )
+    .option(
+      "--create <name>",
+      "Create a workspace for the repository, with skills off. Needs --slug",
+    )
+    .option("--slug <slug>", "The new workspace's slug, with --create")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        interjectionId: string,
+        opts: {
+          text?: string;
+          link?: boolean;
+          create?: string;
+          slug?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { runAnswer } = await import("./commands/run.js");
+        await runAnswer(interjectionId, opts);
+      },
+    );
 
   // ── verify: check a run export offline ──────────────────────────────────────
 

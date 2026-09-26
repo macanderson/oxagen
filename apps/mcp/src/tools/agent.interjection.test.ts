@@ -1,5 +1,5 @@
 // agent.interjection.test.ts: the list_interjections and answer_interjection
-// tools (#3839). The kernel's `invoke` and the context seam are mocked, as in
+// tools (#3839, #3941). The kernel's `invoke` and the context seam are mocked, as in
 // agent.handlers.test.ts, so each tool runs without a live runtime and each
 // fake output satisfies its contract's output schema.
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -53,6 +53,12 @@ describe("list_interjections tool", () => {
         answeredAt: null,
         answer: null,
         answeredBy: null,
+        kind: "question",
+        raisedSeq: null,
+        body: null,
+        repository: null,
+        path: null,
+        receiptId: null,
       },
     ],
     nextCursor: null,
@@ -99,12 +105,18 @@ describe("answer_interjection tool", () => {
     runId: "tse_0123456789abcdefghjkmn",
     answeredAt: "2026-09-25T09:10:00.000Z",
     commandIds: ["tcm_0123456789abcdefghjkmn"],
+    receiptId: "rcp_0123456789abcdefghjkmn",
+    path: null,
+    repository: null,
+    workspace: null,
   };
 
   it("exports the contract's fields and write metadata", () => {
     expect(Object.keys(answerSchema).sort()).toEqual([
       "answer",
+      "create",
       "interjectionId",
+      "path",
     ]);
     expect(answerMetadata.name).toBe("answer_interjection");
     expect(answerMetadata.annotations?.readOnlyHint).toBe(false);
@@ -113,9 +125,12 @@ describe("answer_interjection tool", () => {
 
   it("invokes answer_interjection on the mcp surface and returns the receipt", async () => {
     mocks.invoke.mockResolvedValue(output);
+    // InferSchema makes every key required, so the optional ones are passed as undefined.
     const args = {
       interjectionId: "inj_0123456789abcdefghjkmn",
       answer: "Cut it from main.",
+      path: undefined,
+      create: undefined,
     };
     await expect(answerTool(args)).resolves.toEqual(output);
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -124,5 +139,44 @@ describe("answer_interjection tool", () => {
       fakeCtx,
       { surface: "mcp" },
     );
+  });
+
+  it("passes a create answer through and returns the workspace it made", async () => {
+    const created = {
+      ...output,
+      path: "create",
+      repository: {
+        bindingId: "rpb_0123456789abcdef012345",
+        fullName: "acme/api",
+      },
+      workspace: { publicId: "ws_0123456789abcdefghjkmn", slug: "api" },
+    };
+    mocks.invoke.mockResolvedValue(created);
+    const args = {
+      interjectionId: "inj_0123456789abcdefghjkmn",
+      answer: undefined,
+      path: "create" as const,
+      create: { name: "API", slug: "api" },
+    };
+    await expect(answerTool(args)).resolves.toEqual(created);
+    expect(mocks.invoke).toHaveBeenCalledWith(
+      "answer_interjection",
+      args,
+      fakeCtx,
+      { surface: "mcp" },
+    );
+  });
+
+  it("refuses an output with no receipt (negative)", async () => {
+    const { receiptId: _receiptId, ...noReceipt } = output;
+    mocks.invoke.mockResolvedValue(noReceipt);
+    await expect(
+      answerTool({
+        interjectionId: "inj_0123456789abcdefghjkmn",
+        answer: "Cut it from main.",
+        path: undefined,
+        create: undefined,
+      }),
+    ).rejects.toThrow();
   });
 });

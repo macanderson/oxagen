@@ -21,8 +21,13 @@ The app reads the open questions for three places: the Fleet page's Waiting on
 a human tile, the Fleet count in the sidebar and on the phone's bar, and the
 first rows of the shell's approvals drawer.
 
-Nothing raises an interjection yet. No runtime writes the table, so the list is
-empty in production until a producer lands.
+An interjection has a kind. A `question` is an agent asking in its own words.
+A `repo_unknown` is a Tacho host holding a session that started in a
+repository no workspace in the organization has bound, while the workspace
+has skills on (#3941). The host seals `control.interject` on the run's chain,
+and the ingest writes the row from that frame, one row per frame. The row
+carries the frame's body, which holds the question, the link and create paths,
+and the timeout.
 
 ## Surface
 
@@ -59,7 +64,13 @@ Each item:
 | `expiresAt`  | RFC 3339         | `expires_at`: when the run stops waiting and carries on without an answer. The writer sets it to `raised_at` plus the skill's interjection timeout (30 minutes, `SKILL_INTERJECTION_TIMEOUT_MS`). |
 | `answeredAt` | RFC 3339 or null | `answered_at`. Null while the question is open. |
 | `answer`     | `string \| null` | The answer a person gave. Null while open. |
-| `answeredBy` | `string \| null` | `auth.users.public_id` (`usr_…`) of the person who answered, through `answered_by_user_id`. Null while open. |
+| `answeredBy` | `string \| null` | `auth.users.public_id` (`usr_…`) of the person who answered, through `answered_by_user_id`. Null while open, and on a `deny` the timeout wrote. |
+| `kind`       | `question \| repo_unknown` | `kind`. Every row written before #3941 is a `question`. |
+| `raisedSeq`  | `string \| null` | `raised_seq` as a decimal string: the `seq` of the `control.interject` frame on the run's own chain. Null on a `question`. |
+| `body`       | object or null   | `body`: the `control.interject` body as the host sealed it (`interjectBodySchema` in `@oxagen/tacho`), snake_case. Null on a `question`, and on a stored body that no longer parses, so one row cannot fail the page. |
+| `repository` | `string \| null` | `repository`: `owner/name`, matched from the body's remote digest against the repositories the workspace's GitHub installation reaches. Null until matched, when nothing matches, and on a `question`. |
+| `path`       | `link \| create \| deny \| null` | `path`: how a `repo_unknown` was settled. `deny` is the timeout's. Null while open and on a `question`. |
+| `receiptId`  | `string \| null` | `receipt_id` (`rcp_…`), shared with the `agent.interjection_answered` event and the host's `control.answer` frame. Null while open, on an answer recorded before receipts, and on a `deny` the host's own timeout recorded until the timeout function adds the receipt. |
 
 ## Semantics
 
