@@ -14,7 +14,7 @@ import type { DataSource } from "@/data/ports";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { repositoryOf } from "./definition-repo";
-import { definitionSeed } from "./definition-seed";
+import { definitionSeed } from "@/shared/agent-definition-seed";
 import { AgentPageFailure } from "./page-states";
 import { SourceEditor } from "./source-editor";
 

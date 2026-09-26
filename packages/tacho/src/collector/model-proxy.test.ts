@@ -59,7 +59,7 @@ import {
   withAnthropicSystemBlock,
   withOpenAiInstructions,
 } from "./model-injection";
-import { createModelProxy } from "./model-proxy";
+import { createModelProxy, requestEffortOf } from "./model-proxy";
 import { createModelProxyListener } from "./model-proxy-listener";
 import {
   resolveModelRoute,
@@ -643,6 +643,32 @@ describe("the loopback model proxy", () => {
     );
     const ttft = frame!.body as { ttft_ms: number; api_duration_ms: number };
     expect(ttft.api_duration_ms).toBeGreaterThanOrEqual(ttft.ttft_ms + 200);
+  });
+
+  it("seals the effort the request asked for, and none when it asked for none (#3891)", async () => {
+    const fake = await vendor(streamingAnthropic(0));
+    const { port, session, frames } = await boot(fake.url);
+    const uuid = await session("sess-effort");
+    const send = (body: Record<string, unknown>) =>
+      call(port, {
+        path: "/anthropic/v1/messages",
+        headers: [
+          "X-Api-Key",
+          FAKE_KEY,
+          "X-Claude-Code-Session-Id",
+          "sess-effort",
+        ],
+        body: JSON.stringify({ model: "claude-sonnet-5", stream: true, ...body }),
+      });
+    await send({ messages: [], output_config: { effort: "high" } });
+    await until(() => frames(uuid).length === 1);
+    await send({ messages: [] });
+    await until(() => frames(uuid).length === 2);
+    const [asked, unasked] = frames(uuid);
+    expect(asked!.body).toMatchObject({ request_effort: "high" });
+    // A request that named no effort seals no member: the reader says the
+    // agent sent none, never a default Oxagen guessed.
+    expect(unasked!.body).not.toHaveProperty("request_effort");
   });
 
   it("stores the second call of a session without the messages the first already holds", async () => {
@@ -3323,6 +3349,32 @@ describe("the wire and the host file", () => {
     expect(modelProxyPortFor({ port: 65535 })).toBe(65534);
     expect(modelProxyPortFor({ port: 47001, model_proxy_port: 5123 })).toBe(
       5123,
+    );
+  });
+});
+
+describe("requestEffortOf (#3891)", () => {
+  it("reads each vendor's own spelling of the effort setting", () => {
+    // Anthropic Messages.
+    expect(requestEffortOf({ output_config: { effort: "max" } })).toBe("max");
+    // OpenAI Responses.
+    expect(requestEffortOf({ reasoning: { effort: "low" } })).toBe("low");
+    // OpenAI Chat Completions.
+    expect(requestEffortOf({ reasoning_effort: "medium" })).toBe("medium");
+  });
+
+  it("reads nothing from a body that names no effort, or names it as something other than a word (negative)", () => {
+    expect(requestEffortOf(undefined)).toBeUndefined();
+    expect(requestEffortOf({ model: "claude-sonnet-5" })).toBeUndefined();
+    expect(requestEffortOf({ output_config: { effort: 3 } })).toBeUndefined();
+    expect(requestEffortOf({ output_config: "high" })).toBeUndefined();
+    expect(requestEffortOf({ reasoning: ["high"] })).toBeUndefined();
+    expect(requestEffortOf({ reasoning_effort: "   " })).toBeUndefined();
+  });
+
+  it("clamps a long value so the frame always seals", () => {
+    expect(requestEffortOf({ reasoning_effort: "x".repeat(600) })).toBe(
+      "x".repeat(32),
     );
   });
 });

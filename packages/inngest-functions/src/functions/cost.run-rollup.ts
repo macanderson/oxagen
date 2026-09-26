@@ -1,6 +1,7 @@
 import { rebuildDailyTotals, rebuildRunTotals, utcDay } from "@oxagen/billing";
 import { NonRetriableError } from "@oxagen/functions";
 import { createFunction } from "../create-function";
+import { RUN_FIT_REQUESTED_EVENT } from "../events";
 import { logger } from "../logger";
 
 /**
@@ -10,7 +11,8 @@ import { logger } from "../logger";
  * Control spec §12.3; ADR-060 §3). The seal writers emit the event: the tacho
  * ingest handler on an `agent_stop`. A run no store has is dropped without a
  * retry; a degraded frame store throws, and Inngest retries. Once the rows
- * land it requests a findings pass over the run's workspace (ADR-062 §4).
+ * land it requests a findings pass over the run's workspace (ADR-062 §4) and
+ * the run's Model fit reading (ADR-194).
  *
  * Concurrency is per run: two seals of one run in flight would race the same
  * row, and the last write wins either way.
@@ -53,6 +55,12 @@ export const [costRunRollup] = createFunction(
     await step.sendEvent("request-findings", {
       name: "cost/findings.requested",
       data: { orgId: run.orgId, workspaceId: run.workspaceId },
+    });
+    // The Model fit reading reads this row's tokens, so it is asked for once
+    // the row has landed (#3893, ADR-194).
+    await step.sendEvent("request-fit", {
+      name: RUN_FIT_REQUESTED_EVENT,
+      data: { orgId: run.orgId, workspaceId: run.workspaceId, runId },
     });
     logger.info(
       { runId, costMicros: run.costMicros, costBasis: run.costBasis },

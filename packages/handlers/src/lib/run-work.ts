@@ -220,34 +220,45 @@ export function prLinkOf(
     return null;
   return { owner, name, number, url: row.url };
 }
+/** Where a run's effort was read (#3891). */
+export type EffortSource = "request" | "harness";
+
 /**
  * The effort and thinking settings a wrapped session last recorded.
  * `effortSource` says where `effort` was read (#3891): `request` from a
  * proxied request body, which wins, or `harness`. It is null exactly when
- * `effort` is, and optional until the Effort and tools lane's
- * `readSessionConfig` reads `request_effort`.
+ * `effort` is.
  */
 export type SessionConfig = {
   effort: string | null;
-  effortSource?: "request" | "harness" | null;
+  effortSource: EffortSource | null;
   thinking: boolean | null;
 };
 
 /**
- * The session's effort and thinking settings. Effort is the latest
- * `effort_level_setting` from a session config frame, falling back to the
- * latest non-empty `effort` any frame carried. Thinking is the latest
- * `always_thinking_enabled`. Each is null when no frame recorded it.
+ * The session's effort and thinking settings.
+ *
+ * Effort is read in this order, and the first one recorded wins:
+ * 1. The latest `request_effort`: the setting a proxied model request's body
+ *    carried, which is what the vendor received (source `request`).
+ * 2. The latest `effort_level_setting` from a session config frame.
+ * 3. The latest non-empty `effort` any frame carried.
+ *
+ * The last two are the harness's own report (source `harness`). Thinking is
+ * the latest `always_thinking_enabled`. Each is null when no frame recorded
+ * it.
  */
 export async function readSessionConfig(
   sessionUuid: string,
 ): Promise<SessionConfig> {
   const result = await chSelect<{
+    requested: string;
     setting: string;
     reported_effort: string;
     thinking: string;
   }>({
     query: `SELECT
+        argMaxIf(request_effort, seq, request_effort != '') AS requested,
         argMaxIf(effort_level_setting, seq, effort_level_setting != '') AS setting,
         argMaxIf(effort, seq, effort != '') AS reported_effort,
         ifNull(toString(argMaxIf(always_thinking_enabled, seq,
@@ -258,8 +269,14 @@ export async function readSessionConfig(
     params: { sessionUuid },
   });
   const row = result.data[0];
+  const requested = row?.requested.trim() ?? "";
+  const reported = row?.setting.trim() || row?.reported_effort.trim() || "";
   return {
-    effort: row?.setting.trim() || row?.reported_effort.trim() || null,
+    ...(requested !== ""
+      ? { effort: requested, effortSource: "request" as const }
+      : reported !== ""
+        ? { effort: reported, effortSource: "harness" as const }
+        : { effort: null, effortSource: null }),
     thinking:
       row?.thinking === "true"
         ? true
@@ -267,6 +284,28 @@ export async function readSessionConfig(
           ? false
           : null,
   };
+}
+
+/**
+ * A run's effort and where it was read, as `get_run` answers it and the Model
+ * fit reading reads it (#3891, #3893). The session's own frames win; the
+ * effort the session row carries (the harness's report ingest folded) stands
+ * in when the frames could not be read or recorded none. One function, so the
+ * Run page's rig and the reading's effort card cannot disagree.
+ */
+export function runEffortOf(
+  config: SessionConfig | null,
+  rowEffort: string | null | undefined,
+): { effort: string | null; effortSource: EffortSource | null } {
+  if (config?.effort != null)
+    return {
+      effort: config.effort,
+      effortSource: config.effortSource ?? "harness",
+    };
+  const reported = rowEffort?.trim() ?? "";
+  return reported === ""
+    ? { effort: null, effortSource: null }
+    : { effort: reported, effortSource: "harness" };
 }
 
 /**

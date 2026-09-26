@@ -20,7 +20,7 @@ import {
   committedDefinition,
   DEFINITION_SOURCE,
 } from "./agents.builders";
-import { definitionSeed } from "./definition-seed";
+import { definitionSeed } from "@/shared/agent-definition-seed";
 
 const { router, commitAgentDefinition, choices } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },

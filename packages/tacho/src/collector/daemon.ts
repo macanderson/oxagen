@@ -127,6 +127,7 @@ import {
   type GatewayCallRecord,
   type GatewayFetch,
 } from "./mcp-gateway";
+import { gatewayFrameBody } from "./gateway-frame";
 import { createGithubProxy } from "./github-proxy";
 import { pushCredentialBasis } from "./push-basis";
 import { issueRunToken } from "./credential-issuer";
@@ -2518,37 +2519,15 @@ async function initializeDaemon(
   }
 
   function recordHostGatewayEvent(call: GatewayCallRecord): void {
+    // The body holds only members the strict envelope declares: a refusal's
+    // reason as a code and a digest, and the rules that refused the call
+    // (#3971, ADR-194).
+    const { kind, body } = gatewayFrameBody(call);
     record(
       [
         hostRecorder.sealCollectorEvent(
-          call.status === "rejected" ? "policy_decision" : "tool_call",
-          {
-            tool_name: call.toolName,
-            tool_source: "mcp",
-            mcp_server_name: "oxagen",
-            mcp_tool_name: call.toolName,
-            tool_status: call.status,
-            tool_duration_ms: call.durationMs,
-            ...(call.inputDigest === undefined
-              ? {}
-              : {
-                  tool_input_digest: call.inputDigest,
-                  tool_input_bytes: call.inputBytes,
-                }),
-            ...(call.outputDigest === undefined
-              ? {}
-              : {
-                  tool_output_digest: call.outputDigest,
-                  tool_output_bytes: call.outputBytes,
-                }),
-            ...(call.status === "rejected"
-              ? {
-                  policy_decision: "deny",
-                  policy_source: "kernel",
-                  policy_reason: call.refusedReason ?? "refused",
-                }
-              : {}),
-          },
+          kind,
+          body,
           {
             attrs: {
               "oxagen.connected_app": call.client,

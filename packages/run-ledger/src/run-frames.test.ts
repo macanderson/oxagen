@@ -198,6 +198,63 @@ describe("run frame projection", () => {
     expect(tachoFrame(tachoRow(13, "oxagen:message")).phase).toBe("single");
   });
 
+  it("reads a call's effort from the proxied request ahead of the harness's report (#3891)", () => {
+    const effort = (over: Partial<Parameters<typeof tachoFrame>[0]>) => {
+      const { identity } = tachoFrame(tachoRow(20, "llm_call", over));
+      return { effort: identity.effort, source: identity.effortSource };
+    };
+    // The request body the vendor received wins over the context column.
+    expect(
+      effort({
+        effort: "medium",
+        body: JSON.stringify({ request_effort: "high" }),
+      }),
+    ).toEqual({ effort: "high", source: "request" });
+    // The harness's report stands where the request named none.
+    expect(effort({ effort: "medium", body: "{}" })).toEqual({
+      effort: "medium",
+      source: "harness",
+    });
+    // Neither recorded: no effort and no source, never a guessed default.
+    expect(effort({ body: JSON.stringify({ request_effort: "  " }) })).toEqual(
+      { effort: undefined, source: undefined },
+    );
+  });
+
+  it("names a decision's rules from the list, falls back to the joined form, and names none otherwise (#3971)", () => {
+    const rules = (body: Record<string, unknown> | null) =>
+      tachoFrame(
+        tachoRow(21, "policy_decision", {
+          policyDecision: "allow",
+          ...(body === null ? {} : { body: JSON.stringify(body) }),
+        }),
+      ).identity.rules;
+    expect(
+      rules({
+        policy_rule: "Bash(git add:*) and Bash(git commit:*)",
+        policy_rules: ["Bash(git add:*)", "Bash(git commit:*)"],
+      }),
+    ).toEqual(["Bash(git add:*)", "Bash(git commit:*)"]);
+    // A row sealed before the list existed: its joined rule is kept whole,
+    // because " and " can sit inside a rule's own pattern.
+    expect(rules({ policy_rule: "Bash(echo a and b)" })).toEqual([
+      "Bash(echo a and b)",
+    ]);
+    // An empty list reads as no list, and blanks inside one are dropped.
+    expect(rules({ policy_rules: ["", "Read"], policy_rule: "Read" })).toEqual(
+      ["Read"],
+    );
+    expect(rules({ policy_rules: [], policy_rule: "Write" })).toEqual([
+      "Write",
+    ]);
+    expect(rules({})).toBeUndefined();
+    expect(rules(null)).toBeUndefined();
+    // No producer assesses taint, so no frame carries it.
+    expect(
+      tachoFrame(tachoRow(22, "policy_decision")).identity.taint,
+    ).toBeUndefined();
+  });
+
   it("names a stage for every wrapped kind and reads the ClickHouse timestamp as UTC", () => {
     expect(tachoStage("llm_call")).toBe("model");
     expect(tachoStage("steering.manifest")).toBe("model");

@@ -6,17 +6,25 @@
 // Outcome cell names who decided from the frame's `policy_source`. The table
 // lists what Oxagen policy and operators decided, operator commands included
 // (#4034). The agent harness's own permission checks sit folded below it, so
-// hundreds of permission prompts do not bury the few Oxagen made. The rules
-// that fired, the taint on the call's inputs and the decision's own latency
-// are not on the transcript today, so each of those cells says so rather than
-// guessing. A list read from a transcript that stopped short says it is a
-// prefix, and a failed read says it failed.
+// hundreds of permission prompts do not bury the few Oxagen made.
+//
+// Rules that fired are the decision's own `rules`, in the order they were
+// evaluated (#3971, ADR-194): a bundle's permission patterns, or the kernel's
+// decision rule ids. Each prints in mono. A rule that names a mandate gate
+// links to the mandate's page. A permission pattern and a workspace decision
+// rule, which lives in the workspace's settings, have no page, so they print
+// without a link.
+//
+// No producer assesses taint yet, so a decision's taint is null and its cell
+// says it is not recorded; an empty list would mean none. The decision's own
+// latency is not on the transcript either. A list read from a transcript that
+// stopped short says it is a prefix, and a failed read says it failed.
 import { useTranslations } from "next-intl";
 import type { RunTranscript, TranscriptEntry } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import { mono } from "@/ui/control-styles";
+import { linkText, mono } from "@/ui/control-styles";
 import { type ListRow, ListTable } from "@/ui/list-table";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
@@ -120,6 +128,70 @@ function Unrecorded() {
   );
 }
 
+/**
+ * A mandate gate cites itself as `mandate:<publicId>:<gate>`
+ * (`packages/rules/src/mandates.ts`). A mandate is a record with a page, so a
+ * rule of that shape links to it.
+ */
+const MANDATE_RULE = /^mandate:(mnd_[0-9A-Za-z]+):/;
+
+/**
+ * The mandate a rule names, or null for every other rule: a bundle's
+ * permission pattern and a workspace decision rule have no page of their own.
+ */
+function ruleMandate(rule: string): string | null {
+  return MANDATE_RULE.exec(rule)?.[1] ?? null;
+}
+
+const listedLine = `${mono} text-foreground [overflow-wrap:anywhere]`;
+
+/**
+ * Words the record holds for a decision, one per line in mono: the rules that
+ * fired, or the taint labels. An empty list prints "none", which the record
+ * says in so many words. With `place`, a rule that names a mandate links to
+ * the mandate's page.
+ */
+function Listed({
+  items,
+  testId,
+  place,
+}: {
+  items: readonly string[];
+  testId: string;
+  place?: Place;
+}) {
+  const t = useTranslations("run.policy");
+  if (items.length === 0)
+    return (
+      <span data-testid={testId} className="text-[12px] text-muted-foreground">
+        {t("none")}
+      </span>
+    );
+  return (
+    <span data-testid={testId} className="flex min-w-0 flex-col gap-0.5">
+      {items.map((item, i) => {
+        // A list can name one rule twice across chains; the position keeps
+        // each line its own key.
+        const key = `${String(i)}:${item}`;
+        const mandate = place === undefined ? null : ruleMandate(item);
+        return mandate === null || place === undefined ? (
+          <span key={key} className={listedLine}>
+            {item}
+          </span>
+        ) : (
+          <SafeLink
+            key={key}
+            to={routes.mandate(place.org, place.ws, mandate)}
+            className={`${mono} ${linkText} [overflow-wrap:anywhere]`}
+          >
+            {item}
+          </SafeLink>
+        );
+      })}
+    </span>
+  );
+}
+
 function row(entry: TranscriptEntry, place: Place): ListRow {
   const decision = entry.decision;
   // The call the decision was made on, as the server states it. A gate frame
@@ -159,8 +231,21 @@ function row(entry: TranscriptEntry, place: Place): ListRow {
           <DecidedBy source={decision.source ?? null} />
         </span>
       ),
-      <Unrecorded key="rules" />,
-      <Unrecorded key="taint" />,
+      decision === null ? (
+        <NoValue key="rules" />
+      ) : (
+        <Listed
+          key="rules"
+          items={decision.rules}
+          testId="policy-rules"
+          place={place}
+        />
+      ),
+      decision === null || decision.taint === null ? (
+        <Unrecorded key="taint" />
+      ) : (
+        <Listed key="taint" items={decision.taint} testId="policy-taint" />
+      ),
       <Unrecorded key="latency" />,
     ],
   };

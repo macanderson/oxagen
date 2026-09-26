@@ -49,6 +49,17 @@ Org Owner, Admin or Member; workspace Owner or Member. Checked by the handler (I
 
 - `POST /api/v1/{org}/{ws}/agents/definition/commit`
 
+The write ships on the API and the app. It has no MCP tool, so an agent connected over MCP cannot open a pull request against an agent definition, its own included.
+
+## Callers in the app
+
+- The agent's Configuration and Source pages commit the file a person edited.
+- The Run page's Model fit panel (#3893, ADR-194). A card that argues for a move offers it as this write: it changes one top-level key of the committed file, or of the seed an agent with no committed definition opens on, and commits it to `agents/<slug>-fit-model` or `agents/<slug>-fit-effort`.
+  - `model` takes the vendor class alias the reading names (`haiku`, `sonnet`, `opus`, `nano`, `mini`, `flash-lite`, `flash`, `pro`).
+  - `effort` takes the level it names (`low`, `medium`, `high`).
+
+  Both are TOML strings. The handler checks neither value. The file records the choice. Nothing in this repository applies either key to a harness yet, so a merged change takes effect once the agent's harness reads it.
+
 ## Errors
 
 | code | meaning |

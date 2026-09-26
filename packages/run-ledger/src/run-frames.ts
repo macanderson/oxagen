@@ -76,15 +76,17 @@ export interface FrameIdentity {
    */
   target?: string | null;
   /**
-   * The reasoning effort the harness ran a model call at (`low`, `medium`,
-   * `high`), as a wrapped session's frame recorded it. Absent where it
-   * recorded none; the ledger records none.
+   * The reasoning effort a model call ran at (`low`, `medium`, `high`), as a
+   * wrapped session's frame recorded it: the proxied request's own setting
+   * where Oxagen read one, else the harness's report. Absent where neither
+   * was recorded; the ledger records none.
    */
   effort?: string;
   /**
    * Where `effort` was read (#3891): `request` when an `llm_call` body
    * carried the proxied request's `request_effort`, which wins over the
-   * row's context effort; `harness` otherwise. Absent where `effort` is.
+   * row's context effort; `harness` otherwise. Present exactly when
+   * `effort` is.
    */
   effortSource?: "request" | "harness";
   /**
@@ -95,8 +97,8 @@ export interface FrameIdentity {
   approvalId?: string;
   /**
    * The rules that matched a policy decision, in evaluation order (#3971):
-   * the body's `policy_rules`, else `[policy_rule]` when that is non-empty.
-   * Absent where the frame names none.
+   * the body's `policy_rules`, else `[policy_rule]` when that is non-empty
+   * (`rulesOf`). Absent where the frame names none, and on every ledger frame.
    */
   rules?: string[];
   /**
@@ -582,6 +584,53 @@ function tachoChainFacts(
 const EFFORT_MAX = 32;
 /** The longest `tool_target` a frame carries into the transcript. */
 const TARGET_MAX = 400;
+/** The most rules one decision names, and the longest each may be: the envelope's bounds. */
+const RULES_MAX = 64;
+const RULE_MAX = 512;
+
+/**
+ * The rules a decision frame names, in evaluation order (#3971): the body's
+ * `policy_rules` list, else its `policy_rule` as a list of one, else none.
+ *
+ * A row sealed before `policy_rules` existed carries only `policy_rule`, and
+ * a compound shell allow wrote that one as its rules joined with " and ". It
+ * is kept whole rather than split, because " and " can sit inside a rule's own
+ * pattern (`Bash(echo a and b)`), and a split would invent rules nobody wrote.
+ */
+function rulesOf(payload: unknown): string[] | undefined {
+  if (typeof payload !== "object" || payload === null) return undefined;
+  const listed = (payload as Record<string, unknown>)["policy_rules"];
+  if (Array.isArray(listed)) {
+    const rules = listed
+      .filter((rule): rule is string => typeof rule === "string" && rule !== "")
+      .slice(0, RULES_MAX)
+      .map((rule) => rule.slice(0, RULE_MAX));
+    if (rules.length > 0) return rules;
+  }
+  const joined = field(payload, "policy_rule");
+  return joined === null || joined === ""
+    ? undefined
+    : [joined.slice(0, RULE_MAX)];
+}
+
+/**
+ * The effort a wrapped frame ran at, and where it was read (#3891). The
+ * proxied request's own `request_effort` wins, because it is what the vendor
+ * received. The row's context `effort` is the harness's report, read only
+ * where the request named none. Neither present reads as no effort.
+ */
+function effortOf(
+  requested: string | null,
+  reported: string | undefined,
+): Pick<FrameIdentity, "effort" | "effortSource"> {
+  const request = requested?.trim() ?? "";
+  if (request !== "")
+    return { effort: request.slice(0, EFFORT_MAX), effortSource: "request" };
+  const harness = reported?.trim() ?? "";
+  return harness === ""
+    ? {}
+    : { effort: harness.slice(0, EFFORT_MAX), effortSource: "harness" };
+}
 
 /** A `tacho_events` row as a run frame. */
 export function tachoFrame(stored: TachoFrameRowLike): RunFrame {
@@ -594,6 +643,7 @@ export function tachoFrame(stored: TachoFrameRowLike): RunFrame {
   const kind = tachoKind(stored, field(payload, "policy_source"));
   const row = kind === stored.kind ? stored : { ...stored, kind };
   const target = field(payload, "tool_target");
+  const rules = rulesOf(payload);
   const digest = blank(row.contentDigest);
   const ref = blank(row.bytesRef);
   const body: FrameBodyColumns =
@@ -698,9 +748,10 @@ export function tachoFrame(stored: TachoFrameRowLike): RunFrame {
       ...(target === null || target === ""
         ? {}
         : { target: target.slice(0, TARGET_MAX) }),
-      ...(row.effort === undefined || row.effort === ""
-        ? {}
-        : { effort: row.effort.slice(0, EFFORT_MAX) }),
+      // No producer assesses taint yet (ADR-070), so a frame sets no `taint`
+      // and the fold reads it as not assessed.
+      ...(rules === undefined ? {} : { rules }),
+      ...effortOf(field(payload, "request_effort"), row.effort),
     },
     timing: {
       ttftMs: row.ttftMs ?? null,

@@ -585,8 +585,7 @@ export interface Evaluation {
   /**
    * The same rules as a list, the source of truth (#3971). A deny or ask
    * names its one rule. An allow names the distinct rule that granted each
-   * shell segment, in segment order. Absent until the Effort and tools lane's
-   * `allowMatch` fills it.
+   * shell segment, in segment order. Present exactly when `rule` is.
    */
   rules?: string[];
   reason_code: string;
@@ -686,19 +685,22 @@ function firstMatch(
 }
 
 /**
- * The allow rule, or rules, that grant this call. A shell line is granted
- * only when every command in it is, but each command may be granted by a
- * different rule, as Claude Code does: `Bash(git add:*)` and `Bash(git
- * commit:*)` together grant `git add . && git commit -m x`.
+ * The allow rule, or rules, that grant this call, in the order they granted
+ * it. A shell line is granted only when every command in it is, but each
+ * command may be granted by a different rule, as Claude Code does:
+ * `Bash(git add:*)` and `Bash(git commit:*)` together grant
+ * `git add . && git commit -m x`. A rule that grants two segments is listed
+ * once, at the first segment it granted.
  */
 function allowMatch(
   rules: readonly string[],
   toolName: string,
   toolInput: Record<string, unknown> | undefined,
   context: MatchContext | undefined,
-): string | undefined {
+): string[] | undefined {
   const single = firstMatch(rules, toolName, toolInput, context, "allow");
-  if (single !== undefined || !isShellTool(toolName)) return single;
+  if (single !== undefined) return [single];
+  if (!isShellTool(toolName)) return undefined;
   const command = toolInput?.["command"];
   if (typeof command !== "string") return undefined;
   const segments = shellSegments(command);
@@ -715,7 +717,7 @@ function allowMatch(
     if (rule === undefined) return undefined;
     if (!used.includes(rule)) used.push(rule);
   }
-  return used.join(" and ");
+  return used;
 }
 
 /** Effects the classifier names as writes; a harness read-only claim cannot undo them. */
@@ -879,6 +881,7 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
       evaluated: "deny",
       source: "bundle",
       rule: denied,
+      rules: [denied],
       reason_code: "rule_deny",
       reason: `Denied by Oxagen policy rule ${denied}.`,
       ...base,
@@ -904,6 +907,7 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
       evaluated: "ask",
       source: "bundle",
       rule: ask,
+      rules: [ask],
       reason_code: "rule_ask",
       reason: `Oxagen policy rule ${ask} requires a permission decision.`,
       ...base,
@@ -919,13 +923,17 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
     input.context,
   );
   if (allowed !== undefined) {
+    // `rule` keeps the joined form that `tacho.session_commands.policy_rule`
+    // and the hook's reason have always carried; `rules` is the list.
+    const rule = allowed.join(" and ");
     return {
       decision: "allow",
       evaluated: "allow",
       source: "bundle",
-      rule: allowed,
+      rule,
+      rules: allowed,
       reason_code: "rule_allow",
-      reason: `Allowed by Oxagen policy rule ${allowed}.`,
+      reason: `Allowed by Oxagen policy rule ${rule}.`,
       ...base,
       stale,
     };

@@ -219,7 +219,7 @@ OTel `tool_decision` and `tool.blocked_on_user` seal as `harness_permission`, no
 |---|---|---|
 | `policy_decision` | LC | `allow` \| `deny` \| `ask` \| `defer` |
 | `policy_rule` | String | the matched Claude Code rule (`Bash(git push*)`) |
-| `policy_rules` | Array(String) | every rule that matched, in evaluation order (#3971); `policy_rule` stays beside it. Empty on a row written before it, and a reader then falls back to `[policy_rule]` |
+| `policy_rules` | Array(String) | every rule that matched, in evaluation order (#3971): the one rule of a hook deny or ask, each shell segment's rule once for a compound allow, and the `data.ruleIds` of a control-plane refusal the MCP gateway sealed; `policy_rule` stays beside it. Empty on a row written before it, and a reader then falls back to `[policy_rule]` |
 | `policy_source` | LC | `bundle` \| `kernel` \| `human` \| `harness` \| `managed_settings` |
 | `policy_reason_code`, `policy_reason_digest` | LC, String | |
 | `capability_id` | String | `claude.<tool>` or the Oxagen capability |

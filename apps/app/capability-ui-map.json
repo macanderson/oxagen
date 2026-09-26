@@ -116,7 +116,18 @@
       "entry": "/[org]/[ws]/agents/[agent]/source \u2014 the rev1 surface that invokes commit_agent_definition (features/agents/actions.ts, features/agents/agent-source.tsx)",
       "proof": "apps/app/src/features/agents/agent-source.test.tsx",
       "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "verifiedBy": "session-20daa43b-cutover",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runs/[run]",
+          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+          "entry": "/[org]/[ws]/runs/[run]?tab=cost \u2014 a Model fit card that argues for a move opens the change as a pull request against the agent's definition file (features/run/fit-change.tsx, features/run/fit-actions.ts)",
+          "testid": "fit-change-model",
+          "proof": "apps/app/src/features/run/model-fit.test.tsx",
+          "verifiedAt": "2026-09-26",
+          "verifiedBy": "batch-a5-effort-and-tools"
+        }
+      ]
     },
     "create_api_key": {
       "route": "/[org]/api-keys",

@@ -333,7 +333,6 @@ export async function Run({
             ? outputs.value.nodes.filter((node) => node.kind === "pr")
             : null
         }
-        metrics={metrics}
         orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
         place={place}

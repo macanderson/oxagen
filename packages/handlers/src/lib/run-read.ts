@@ -54,7 +54,7 @@ import { readWitnessFor } from "./proof";
 /** The most frames one read of either store returns. */
 const FRAME_READ_MAX = 500;
 
-type ResolvedSource =
+export type ResolvedSource =
   | {
       source: "ledger";
       /** `agent_runs.id`. */
@@ -148,7 +148,13 @@ export async function resolveRun(
   return { ...run, witnessFor };
 }
 
-async function resolveSource(
+/**
+ * The run behind a public id in `scope`, with the row `list_runs` builds for
+ * it. `resolveRun` adds the caller's checks on top. The Model fit reading
+ * (lib/run-fit.ts, #3893) reads it here directly, because it runs in a
+ * durable job with a scope and no caller.
+ */
+export async function resolveSource(
   deps: RunReadDeps,
   scope: RunScope,
   publicId: string,

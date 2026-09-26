@@ -45,3 +45,11 @@ export const RUN_PROGRESSED_EVENT = "cost/run.progressed";
  * `{ orgId, workspaceId, runPublicId }`.
  */
 export const RUN_ENRICH_EVENT = "run/enrich";
+
+/**
+ * Asks `run.fit` for a sealed run's Model fit reading (#3893, ADR-194). Sent
+ * by `cost.run-rollup` once the run's `cost.run_totals` row lands, because the
+ * reading reads that row's output and reasoning tokens. Data is
+ * `{ orgId, workspaceId, runId }`, where `runId` is the run's public id.
+ */
+export const RUN_FIT_REQUESTED_EVENT = "run/fit.requested";
