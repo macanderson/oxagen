@@ -1,5 +1,6 @@
 /**
- * A response chunk that arrives after its call settled (#4107).
+ * A response chunk that arrives after its call settled (#4107), and a call
+ * still streaming when its session ends (C-04).
  *
  * A real socket cannot decide when its last chunk lands relative to
  * `settle`, so the upstream here is a fake: `node:http`'s `request` hands
@@ -123,8 +124,10 @@ describe("a response chunk after its call settled", () => {
     const host = registry.ensure("tachod-late-chunk", {
       harness: "claude-code",
     }).record;
-    const uuid = registry.ensure("sess-late", { harness: "claude-code" }).record
-      .recorder.sessionUuid;
+    const session = registry.ensure("sess-late", {
+      harness: "claude-code",
+    }).record;
+    const uuid = session.recorder.sessionUuid;
     const events: TachoEvent[] = [];
     const log: string[] = [];
     const bundle = unsignedBundle({}) as PolicyBundle;
@@ -188,8 +191,48 @@ describe("a response chunk after its call settled", () => {
 
     const frames = () =>
       events.filter((e) => e.session_uuid === uuid && e.kind === "llm_call");
-    return { proxy, uuid, caller, upstream, upstreamReq, frames, log };
+    const hostFrames = () =>
+      events.filter(
+        (e) =>
+          e.session_uuid === host.recorder.sessionUuid && e.kind === "llm_call",
+      );
+    return {
+      proxy,
+      uuid,
+      caller,
+      upstream,
+      upstreamReq,
+      frames,
+      hostFrames,
+      log,
+      registry,
+      session,
+    };
   }
+
+  describe("when its session ends mid-stream", () => {
+    it("is filed on the host's chain, not after the session's agent_stop", async () => {
+      const { upstream, frames, hostFrames, registry, session } = await start();
+      upstream.emit("data", EARLY);
+      // SessionEnd seals the chain while the response is still streaming.
+      registry.seal(session);
+      upstream.end();
+      await until(() => hostFrames().length === 1);
+      expect(frames()).toEqual([]);
+      const [frame] = hostFrames();
+      expect(frame!.attrs["oxagen.correlation"]).toBe("session_closed");
+      expect(frame!.body).toMatchObject({ input_tokens: 1000 });
+    });
+
+    it("is filed on the host's chain while the session's terminal waits for the WAL", async () => {
+      const { upstream, frames, hostFrames, session } = await start();
+      upstream.emit("data", EARLY);
+      session.pendingTerminal = true;
+      upstream.end();
+      await until(() => hostFrames().length === 1);
+      expect(frames()).toEqual([]);
+    });
+  });
 
   it("is ignored once the caller closed, and the frame digests only what came before", async () => {
     const { caller, upstream, upstreamReq, frames } = await start();

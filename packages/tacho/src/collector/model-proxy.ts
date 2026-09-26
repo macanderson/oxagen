@@ -1517,9 +1517,18 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
             ? "too_large"
             : undefined;
       const exchange = exchangeContent(requestContentText, responseContentText);
+      // The session can end while its call is still streaming. Its chain is
+      // then sealed, or its terminal is on the way to the WAL, and a frame
+      // sealed there would follow its `agent_stop`. The call goes to the
+      // host's own chain instead, as one that starts after the session ended
+      // does (`session_closed`, C-04).
+      const closed =
+        record !== undefined &&
+        (record.sealed || record.pendingTerminal === true);
+      const chain = closed ? deps.hostRecorder() : recorder;
       deps.record(
         [
-          recorder.sealCollectorEvent(
+          chain.sealCollectorEvent(
             "llm_call",
             {
               provider: route.provider,
@@ -1587,6 +1596,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
               ...(exchange !== undefined ? { content: exchange } : {}),
               attrs: {
                 ...attrs,
+                ...(closed ? { "oxagen.correlation": "session_closed" } : {}),
                 [TACHO_METERING_ATTR]: TACHO_METERING_OBSERVED,
                 "oxagen.request_digest": requestDigest,
                 "oxagen.request_bytes": String(requestBytes),
@@ -1638,7 +1648,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
             },
           ),
         ],
-        recorder.takeBodies(),
+        chain.takeBodies(),
       );
     };
 
