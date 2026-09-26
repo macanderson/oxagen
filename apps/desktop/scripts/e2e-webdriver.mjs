@@ -162,9 +162,18 @@ process.exit(failed ? 1 : 0);
 
 // ── The run ──────────────────────────────────────────────────────────────────
 async function run() {
+  // `pageLoadStrategy: "none"`: with the default, WebKitWebDriver held
+  // every command until its page-load timeout, five minutes, although the
+  // page had loaded and was calling the stand-in. Each step below waits for
+  // what it needs instead.
   const created = await wd("POST", "/session", {
     capabilities: {
-      alwaysMatch: { browserName: "wry", "tauri:options": { application } },
+      alwaysMatch: {
+        browserName: "wry",
+        pageLoadStrategy: "none",
+        timeouts: { script: 30_000, pageLoad: 30_000, implicit: 0 },
+        "tauri:options": { application },
+      },
     },
   });
   sessionId = created.sessionId;
@@ -303,10 +312,15 @@ function invokeSidecar(sidecar, args) {
 
 // ── WebDriver ───────────────────────────────────────────────────────────────
 async function wd(method, path, body) {
+  // A command that hangs fails in a minute with its name, not after five
+  // with only "fetch failed".
   const res = await fetch(`${DRIVER}${path}`, {
     method,
     headers: { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(90_000),
+  }).catch((error) => {
+    throw new Error(`${method} ${path}: ${error.message}`);
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || json?.value?.error !== undefined)
