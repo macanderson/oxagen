@@ -1715,6 +1715,9 @@ export function TranscriptView({
   const waits = live || (!tail && cursor !== null);
   const isPlaying = playing && paced && (waits || at < total);
   const done = !isPlaying && at >= total && !waits;
+  // A replay that has played every row it will read holds the end, as a live
+  // view does, so a row that a later read of the page adds is drawn.
+  const holdsEnd = tail || !waits;
   const feedRef = useRef<HTMLDivElement>(null);
   // True while the reader is at the feed's foot, so new rows keep it there.
   const followRef = useRef(true);
@@ -2039,14 +2042,14 @@ export function TranscriptView({
     const gap = (next?.elapsedMs ?? previous) - previous;
     const timer = setTimeout(
       () => {
-        setPos(at + 1 >= total && tail ? null : at + 1);
+        setPos(at + 1 >= total && holdsEnd ? null : at + 1);
       },
       paceMs(gap, speed),
     );
     return () => {
       clearTimeout(timer);
     };
-  }, [isPlaying, at, total, visible, speed, tail]);
+  }, [isPlaying, at, total, visible, speed, holdsEnd]);
 
   // Keep the newest row in view while playing or following, unless the
   // reader has scrolled away from the foot.
@@ -2078,7 +2081,8 @@ export function TranscriptView({
   const seek = (next: number) => {
     const clamped = Math.max(0, Math.min(total, next));
     // At the end of a live run, holding the end is following it.
-    setPos(clamped >= total && live && isPlaying ? null : clamped);
+    const follows = (live && isPlaying) || !waits;
+    setPos(clamped >= total && follows ? null : clamped);
   };
   const step = (by: number) => {
     setPlaying(false);
