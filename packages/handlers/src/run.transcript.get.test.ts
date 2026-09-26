@@ -3171,6 +3171,35 @@ describe("readWords beside another read of the same run", () => {
     // The prompt's body, once for each read. The model step has none to open.
     expect(getBody).toHaveBeenCalledTimes(2);
   });
+
+  // A read that tests a key learns the key's state for itself. Were the test
+  // shared, the read that waited on it would learn nothing, and would answer
+  // its kept digests after erasure.
+  it("tests the key in each of two reads at once, so neither answers a kept digest after erasure (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const folds = stepFolds(frames(2, "Erased"));
+    const cache = createWordsCache();
+    const warm = await readWords(deps.bodies, SCOPE, folds, { cache });
+    expect(warm.size).toBe(4);
+    getBody.mockClear();
+    getBody.mockImplementation(() =>
+      Promise.reject(
+        new BodyKeyGoneError("k", {
+          cause: Object.assign(new Error("pending deletion"), {
+            name: "KMSInvalidStateException",
+          }),
+        }),
+      ),
+    );
+    const [one, two] = await Promise.all([
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+    ]);
+    expect(one.size).toBe(0);
+    expect(two.size).toBe(0);
+    // One body for each read: its own test of the key.
+    expect(getBody).toHaveBeenCalledTimes(2);
+  });
 });
 
 // Findings P2-1 and P3-1 of the ADR-182 fourth review. A read that failed set
