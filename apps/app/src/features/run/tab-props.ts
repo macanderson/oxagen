@@ -33,7 +33,7 @@ type RunView = {
   kinds: KindFilter;
   /** `?frames=`, the opaque cursor a later frames page was read from. */
   frames: string | null;
-  /** `?body=`, the seq of the open frame; null when none is open. */
+  /** `?body=`, the open frame's key (`frameKey`); null when none is open. */
   body: string | null;
 };
 

@@ -100,9 +100,14 @@ const CASES: ToolCase[] = [
     handler: runFrameBodyGetTool,
     schema: frameBodySchema,
     metadata: frameBodyMetadata,
-    fields: ["runId", "seq"],
+    fields: ["runId", "seq", "sessionUuid"],
     readOnly: true,
-    args: { runId: LEDGER_ID, seq: "7" },
+    // A subagent's frame, named by its chain and seq (#3823).
+    args: {
+      runId: TACHO_ID,
+      seq: "7",
+      sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d0",
+    },
     validOutput: {
       contentType: "text/plain",
       bytes: "aGVsbG8=",

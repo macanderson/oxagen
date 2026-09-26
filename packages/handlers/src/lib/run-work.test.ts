@@ -7,6 +7,7 @@ import {
   readSessionTitle,
   readWorkContexts,
   readWorkDiffs,
+  readRunPrLinks,
   readWorkPrLinks,
   readWorkSubagents,
   workDigest,
@@ -99,16 +100,19 @@ describe("run work evidence", () => {
   });
 });
 
-// Every ClickHouse read the Run page's work and header come from.
+const SESSION = "0192d4a8-7c1e-7a00-8000-00000000c0de";
+const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+
+// Every ClickHouse read the Run page's work, header and spine come from.
 const READS = {
   readWorkContexts,
   readWorkSubagents,
   readWorkPrLinks,
+  readRunPrLinks: (sessionUuid: string) => readRunPrLinks(sessionUuid, [CHILD]),
   readWorkDiffs,
   readSessionConfig,
   readSessionTitle,
 };
-const SESSION = "0192d4a8-7c1e-7a00-8000-00000000c0de";
 
 async function queryOf(
   read: (sessionUuid: string) => Promise<unknown>,
@@ -152,6 +156,27 @@ describe("run work reads", () => {
     expect(query).toContain(
       "AND if(attrs['pr.url'] != '', attrs['pr.url'], attrs['pr_url']) != ''",
     );
+  });
+  // #3823: a subagent records on a chain of its own, so the spine reads its
+  // PR links too. Each subagent chain is fenced by the run's root, so a chain
+  // of another run named in the list reads nothing.
+  it("reads a PR link on the run's own chain and on each listed subagent chain, fenced by the root", async () => {
+    chSelect.mockClear();
+    await readRunPrLinks(SESSION, [CHILD]);
+    const [call] = chSelect.mock.calls;
+    const { query, params } = call?.[0] as {
+      query: string;
+      params: Record<string, unknown>;
+    };
+    expect(query).toContain("session_uuid IN {sessionUuids:Array(UUID)}");
+    expect(query).toMatch(
+      /\(session_uuid = \{rootSessionUuid:UUID\}\s+OR root_session_uuid = \{rootSessionUuid:UUID\}\)/,
+    );
+    expect(query).toContain("GROUP BY session_uuid, url");
+    expect(params).toMatchObject({
+      rootSessionUuid: SESSION,
+      sessionUuids: [SESSION, CHILD],
+    });
   });
   // ADR-171: a chain break is reported beside the facts, never by hiding the
   // frames past it.

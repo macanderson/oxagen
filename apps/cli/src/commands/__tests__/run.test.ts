@@ -189,6 +189,46 @@ describe("oxagen run chain", () => {
     expect(text).toContain("these are the gaps of a prefix");
   });
 
+  // #3823: each subagent chain numbers its own frames, so its gaps are its own.
+  it("prints one line per subagent chain with its own gaps, and none for a run without them", async () => {
+    const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    post.mockResolvedValue({
+      ...CHAIN,
+      chains: [
+        {
+          sessionUuid: CHILD,
+          parentSessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c0de",
+          subagentId: "agent-1",
+          subagentType: "Explore",
+          frameCount: 3,
+          firstSeq: "0",
+          lastSeq: "3",
+          gaps: {
+            missingSequences: [{ from: "2", to: "2" }],
+            missingFrameCount: 1,
+            missingBodies: 0,
+          },
+          checkpoints: [],
+          finalHash: null,
+          sealedAt: null,
+          complete: false,
+        },
+      ],
+    });
+    const { writer, out } = memoryWriter();
+    await runChain("tse_0a1b2c", {}, writer);
+    const text = out.join("\n");
+    expect(text).toContain("Subagent chains");
+    expect(text).toContain(
+      `  Explore (${CHILD}): 3 frames, 1 missing frames, 0 missing bodies, unsealed, cut short`,
+    );
+
+    post.mockResolvedValue(CHAIN);
+    const plain = memoryWriter();
+    await runChain("tse_0a1b2c", {}, plain.writer);
+    expect(plain.out.join("\n")).not.toContain("Subagent chains");
+  });
+
   it("routes an API failure to stderr and writes nothing to stdout (negative)", async () => {
     post.mockRejectedValue(new Error("404 not_found: run_not_found"));
     const { writer, out, err } = memoryWriter();

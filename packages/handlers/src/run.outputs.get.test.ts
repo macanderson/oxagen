@@ -20,7 +20,7 @@ import {
   type RunOutputQueries,
   type SessionFileRow,
 } from "./lib/run-outputs";
-import { WORK_PR_LINK_CAP } from "./lib/run-work";
+import { type RunPrLinkRow, WORK_PR_LINK_CAP } from "./lib/run-work";
 import {
   createRunOutputsGetHandler,
   type RunOutputsGetDeps,
@@ -79,7 +79,12 @@ const SESSION_ROWS = [
 ];
 
 /** A `session_files` row as stored: keyed on the session's row id. */
-type StoredFile = Omit<SessionFileRow, "ownChain"> & { sessionId: string };
+type StoredFile = Omit<SessionFileRow, "subagentChain"> & { sessionId: string };
+
+/** A PR link as ClickHouse answers it; on the run's own chain unless it says. */
+type StoredLink = Omit<RunPrLinkRow, "session_uuid"> & {
+  session_uuid?: string;
+};
 
 function file(over: Partial<StoredFile> & { path: string }): StoredFile {
   return {
@@ -105,7 +110,7 @@ function harness(opts: {
   files?: StoredFile[];
   events?: ReturnType<typeof event>[];
   approvals?: RunApprovalRow[];
-  links?: Awaited<ReturnType<RunOutputsGetDeps["prLinks"]>>;
+  links?: StoredLink[];
   /** The PR-link read rejects, as a ClickHouse outage would. */
   linksFail?: boolean;
 }) {
@@ -126,10 +131,13 @@ function harness(opts: {
       return Promise.resolve(
         (opts.files ?? [])
           .filter((row) => chains.has(row.sessionId))
-          .map(({ sessionId, ...row }) => ({
-            ...row,
-            ownChain: chains.get(sessionId) === sessionUuid,
-          }))
+          .map(({ sessionId, ...row }) => {
+            const chain = chains.get(sessionId) ?? null;
+            return {
+              ...row,
+              subagentChain: chain === sessionUuid ? null : chain,
+            };
+          })
           .slice(0, limit),
       );
     },
@@ -150,15 +158,46 @@ function harness(opts: {
     readRunRollups: stores.readRunRollups,
     readWitnessFor: stores.readWitnessFor,
     tachoFrames: () => Promise.resolve([]),
+    // The subagent chains Postgres lists under a root.
+    tachoChildSessions: (root) =>
+      Promise.resolve(
+        SESSION_ROWS.filter(
+          (row) => row.root === root && row.sessionUuid !== root,
+        ).map((row) => row.sessionUuid),
+      ),
     outputs,
-    prLinks: (sessionUuid) =>
+    // As the query reads: the root's links and the listed chains' links,
+    // each chain fenced by its root, the root's rows first.
+    prLinks: vi.fn((root: string, chains: readonly string[]) =>
       opts.linksFail === true
         ? Promise.reject(new Error("clickhouse unreachable"))
         : Promise.resolve(
-            sessionUuid === SESSION_UUID ? (opts.links ?? []) : [],
+            (opts.links ?? [])
+              .map((link) => ({
+                ...link,
+                session_uuid: link.session_uuid ?? SESSION_UUID,
+              }))
+              .filter(
+                (link) =>
+                  link.session_uuid === root ||
+                  (chains.includes(link.session_uuid) &&
+                    SESSION_ROWS.some(
+                      (row) =>
+                        row.sessionUuid === link.session_uuid &&
+                        row.root === root,
+                    )),
+              )
+              .sort(
+                (a, b) =>
+                  Number(a.session_uuid !== root) -
+                  Number(b.session_uuid !== root),
+              ),
           ),
+    ),
   };
-  return createRunOutputsGetHandler(deps);
+  return Object.assign(createRunOutputsGetHandler(deps), {
+    prLinks: deps.prLinks,
+  });
 }
 
 describe("get_run_outputs — a wrapped session", () => {
@@ -317,7 +356,7 @@ describe("get_run_outputs — a wrapped session", () => {
     );
   });
 
-  it("reads a subagent's paths after the run's own, with no frame of the run's", async () => {
+  it("reads a subagent's paths after the run's own, each at its own chain's frame (#3823)", async () => {
     const outputs = harness({
       files: [
         file({ path: "src/a.ts", writes: 1, lastSeq: 40 }),
@@ -332,11 +371,14 @@ describe("get_run_outputs — a wrapped session", () => {
 
     const out = await outputs({ runId: TACHO_ID }, ctx());
 
-    expect(out.nodes.map((n) => [n.name, n.seq])).toEqual([
-      ["src/a.ts", "40"],
-      // Frame 3 is the subagent chain's, and the run's frame 3 is another.
-      ["src/b.ts", null],
+    // Frame 3 is the subagent chain's, and the run's frame 3 is another, so
+    // the node names the chain beside the seq. It used to carry no seq, and
+    // the `fr N` chip could not open it.
+    expect(out.nodes.map((n) => [n.name, n.seq, n.sessionUuid])).toEqual([
+      ["src/a.ts", "40", undefined],
+      ["src/b.ts", "3", CHILD_UUID],
     ]);
+    expect(out.nodes[0]).not.toHaveProperty("sessionUuid");
     expect(out.tally.artifacts).toBe(2);
   });
 
@@ -367,7 +409,84 @@ describe("get_run_outputs — a wrapped session", () => {
     expect(out.nodes.map((n) => [n.seq, n.kind, n.name])).toEqual([
       ["10", "file", "src/a.ts"],
       ["20", "pr", "#41"],
-      [null, "file", "src/b.ts"],
+      ["3", "file", "src/b.ts"],
+    ]);
+  });
+
+  it("adds a PR a subagent linked, at its own chain's frame, within that chain (#3823)", async () => {
+    // The PR links were read on the run's own chain only, so a pull request
+    // a subagent opened never reached the spine.
+    const outputs = harness({
+      files: [
+        file({ path: "src/a.ts", writes: 1, lastSeq: 10 }),
+        file({
+          sessionId: CHILD_ROW_ID,
+          path: "src/b.ts",
+          edits: 1,
+          lastSeq: 3,
+        }),
+      ],
+      links: [
+        {
+          url: "https://github.com/acme/app/pull/52",
+          number: "52",
+          repository: "acme/app",
+          first_seq: 5,
+          first_ts: "2026-09-23 10:02:00.000",
+          session_uuid: CHILD_UUID,
+        },
+        {
+          url: "https://github.com/acme/app/pull/51",
+          number: "51",
+          repository: "acme/app",
+          first_seq: 1,
+          first_ts: "2026-09-23 10:01:00.000",
+          session_uuid: CHILD_UUID,
+        },
+      ],
+    });
+
+    const out = await outputs({ runId: TACHO_ID }, ctx());
+
+    expect(outputs.prLinks).toHaveBeenCalledWith(SESSION_UUID, [CHILD_UUID]);
+    expect(
+      out.nodes.map((n) => [n.seq, n.sessionUuid ?? "run", n.kind, n.name]),
+    ).toEqual([
+      ["10", "run", "file", "src/a.ts"],
+      // The subagent's chain, whole and by its own frames: frame 1 of that
+      // chain sorts after the run's frame 10.
+      ["1", CHILD_UUID, "pr", "#51"],
+      ["3", CHILD_UUID, "file", "src/b.ts"],
+      ["5", CHILD_UUID, "pr", "#52"],
+    ]);
+  });
+
+  it("draws a PR the run and a subagent both linked once, at the run's own frame", async () => {
+    const url = "https://github.com/acme/app/pull/41";
+    const outputs = harness({
+      links: [
+        {
+          url,
+          number: "41",
+          repository: "acme/app",
+          first_seq: 2,
+          first_ts: "2026-09-23 10:00:00.000",
+          session_uuid: CHILD_UUID,
+        },
+        {
+          url,
+          number: "41",
+          repository: "acme/app",
+          first_seq: 20,
+          first_ts: "2026-09-23 10:05:00.000",
+        },
+      ],
+    });
+
+    const out = await outputs({ runId: TACHO_ID }, ctx());
+
+    expect(out.nodes.map((n) => [n.seq, n.sessionUuid, n.name])).toEqual([
+      ["20", undefined, "#41"],
     ]);
   });
 
@@ -598,9 +717,9 @@ describe("get_run_outputs — the files query", () => {
       10,
     );
 
-    expect(rows.map((row) => [row.path, row.ownChain])).toEqual([
-      ["src/a.ts", true],
-      ["src/b.ts", false],
+    expect(rows.map((row) => [row.path, row.subagentChain])).toEqual([
+      ["src/a.ts", null],
+      ["src/b.ts", CHILD_UUID],
     ]);
     expect(rows[0]).not.toHaveProperty("chain");
   });

@@ -389,6 +389,32 @@ describe("Linked work", () => {
     expect(within(branch).getByRole("link", { name: "fr 28" })).toBeTruthy();
   });
 
+  it("links an artifact a subagent recorded to its frame on that subagent's chain (#3823)", async () => {
+    const chainRef = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    await renderIssues({
+      outputs: readOk(
+        runOutputs([
+          runOutputNode({
+            seq: "4",
+            chainRef,
+            kind: "change",
+            name: "release/4.11.0-notes",
+            where: "a-intel/platform",
+            state: "created",
+            note: null,
+            stat: null,
+          }),
+        ]),
+      ),
+    });
+    const [branch] = await screen.findAllByTestId("run-linked-artifact");
+    if (branch === undefined) throw new Error("an artifact");
+    expect(within(branch).getByRole("link", { name: "fr 4" })).toHaveAttribute(
+      "href",
+      `/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=${chainRef}%3A4`,
+    );
+  });
+
   it("draws each changed file with its stat, the forge's patch where a pull request carries it, and the captured diffs", async () => {
     await renderIssues();
     const files = region("Files changed");

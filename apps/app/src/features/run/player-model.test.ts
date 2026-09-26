@@ -31,6 +31,8 @@ import { runFrame, runRow, transcriptEntry } from "./run.builders";
 
 const frames = releaseFrames();
 const entries = entriesBySeq(readOk(releaseTranscript()));
+/** A subagent chain's session uuid. */
+const CHAIN = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
 
 describe("kindOf", () => {
   it.each([
@@ -173,18 +175,20 @@ describe("turnBands", () => {
     );
   });
 
-  it("leaves a subagent's entries out, since its seq names a frame of another chain", () => {
+  it("keys a subagent's entry by its chain and seq, so it never stands in for the run's frame of that seq (#3823)", () => {
     const transcript: RunTranscript = {
       ...releaseTranscript(),
       entries: [
         transcriptEntry({
           seq: "3",
           turn: 9,
-          subagent: { chainRef: "sess_b", type: null },
+          subagent: { chainRef: CHAIN, type: null },
         }),
       ],
     };
-    expect(entriesBySeq(readOk(transcript)).size).toBe(0);
+    const map = entriesBySeq(readOk(transcript));
+    expect(map.get("3")).toBeUndefined();
+    expect(map.get(`${CHAIN}:3`)?.turn).toBe(9);
   });
 });
 
@@ -206,6 +210,39 @@ describe("openFrameOf and stepsOf", () => {
     });
     expect(openFrameOf(frames, "../etc")).toMatchObject({ seq: "0", index: 0 });
     expect(openFrameOf([], null)).toBeNull();
+  });
+
+  it("opens a subagent's frame by its chain and seq, which the page of the run's own frames does not hold (#3823)", () => {
+    const open = openFrameOf(frames, `${CHAIN}:3`);
+    expect(open).toEqual({
+      seq: "3",
+      chainRef: CHAIN,
+      index: -1,
+      frame: null,
+      named: true,
+    });
+    if (open === null) throw new Error("no frame");
+    // Its seq counts another chain, so no frame of the page neighbours it.
+    expect(stepsOf(frames, open)).toEqual({
+      first: "0",
+      prev: null,
+      next: null,
+      last: "15",
+    });
+    // A chain spelled in capitals is the same chain.
+    expect(openFrameOf(frames, `${CHAIN.toUpperCase()}:3`)).toMatchObject({
+      chainRef: CHAIN,
+    });
+  });
+
+  it("opens nothing it cannot name: a chain that is not a uuid, or a key with no seq (negative)", () => {
+    for (const body of ["agent-1:3", `${CHAIN}:`, `${CHAIN}:x`, ":3"]) {
+      expect(openFrameOf(frames, body)).toMatchObject({
+        seq: "0",
+        index: 0,
+        named: false,
+      });
+    }
   });
 
   it("steps to the neighbours on the page and ends at its edges", () => {

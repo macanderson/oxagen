@@ -696,7 +696,7 @@ describe("the rows", () => {
     expect(time?.getAttribute("title")).toBe("+7.8 s from the run's start");
   });
 
-  it("marks a subagent's row and links no frame of its chain (negative: the run's own frame still links)", () => {
+  it("marks a subagent's row and links its frame by its chain and seq, not the run's frame of that seq (#3823)", () => {
     const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c1";
     const grep = (seq: number, t: number, body: string): StepSpec => ({
       seq,
@@ -732,11 +732,19 @@ describe("the rows", () => {
       "subagent Explore",
     );
     fireEvent.click(within(sub).getByRole("button", { name: "Show the call" }));
-    expect(within(sub).queryAllByRole("link")).toHaveLength(0);
+    expect(
+      within(sub).getByRole("link", { name: "tool_call · fr 3" }),
+    ).toHaveAttribute(
+      "href",
+      `/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=${CHAIN}%3A3`,
+    );
     fireEvent.click(within(own).getByRole("button", { name: "Show the call" }));
     expect(
       within(own).getByRole("link", { name: "tool_call · fr 4" }),
-    ).toBeTruthy();
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=4",
+    );
   });
 
   it("shows a step's result as its output and its request as the call, never one for the other (#3375)", () => {
@@ -1254,6 +1262,44 @@ describe("paging past the cursor", () => {
     expect(within(release).getByTestId("tx-out")).toHaveTextContent(
       "draft created",
     );
+  });
+
+  /** The chips pressed, each with the count it shows. */
+  const pressedChips = () =>
+    within(screen.getByRole("group", { name: "Filter the transcript" }))
+      .getAllByRole("button", { pressed: true })
+      .map((chip) => chip.textContent);
+
+  it("keeps each chip's whole-run count when the next page carries none (#3823, D6)", async () => {
+    // Only the read from the run's first frame counts the whole run. A page
+    // read from the cursor reads a window of the run and counts nothing.
+    readTranscriptPage.mockResolvedValue(
+      pageOk({ ...tailPage, cursor: null, complete: true, counts: null }),
+    );
+    renderSection({ read: paged });
+    const before = pressedChips();
+    expect(before).toContain("tools6");
+    fireEvent.click(screen.getByTestId("transcript-more"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("transcript-more")).toBeNull();
+    });
+    expect(pressedChips()).toEqual(before);
+    expect(screen.getByTestId("chip-errors")).toHaveTextContent("✗ errors1");
+  });
+
+  it("takes the counts a page carries when it carries some (negative)", async () => {
+    const counts = releaseCounts();
+    const { counts: recounted } = releaseTranscript({
+      counts: { ...counts, kinds: { ...counts.kinds, tools: 7 } },
+    });
+    readTranscriptPage.mockResolvedValue(
+      pageOk({ ...tailPage, cursor: null, complete: true, counts: recounted }),
+    );
+    renderSection({ read: paged });
+    fireEvent.click(screen.getByTestId("transcript-more"));
+    await waitFor(() => {
+      expect(pressedChips()).toContain("tools7");
+    });
   });
 
   it("stops offering more once the page it read carried no cursor", async () => {
@@ -1935,6 +1981,55 @@ describe("a subagent's steps under its Task call", () => {
       );
       expect(prompts).toHaveLength(1);
       expect(prompts[0]).toHaveTextContent("quarantine nothing");
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("draws a subagent call that landed before the cursor inside its Task row on the next live read (#4083)", async () => {
+    const instances = fakeEventSource(1);
+    // The view holds the run through its last Bash call. The subagent's Read
+    // reached the server after that read, and sits before the cursor.
+    const late = steps.find((step) => step.subject === "Read");
+    if (late === undefined) throw new Error("the subagent's Read");
+    const held = stepsOf(
+      steps.filter((step) => step !== late),
+      { cursor: "c1", complete: false },
+    );
+    readTranscriptPage.mockResolvedValueOnce(
+      pageOk(stepsOf([late], { cursor: "c2", complete: false })),
+    );
+    vi.useFakeTimers();
+    try {
+      renderSection({ read: readOk(held), status: "live" });
+      expect(rows()).toHaveLength(5);
+      const [source] = instances;
+      if (source === undefined) throw new Error("no EventSource opened");
+      source.onmessage?.(new MessageEvent("message", { data: "{}" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(750);
+        for (let i = 0; i < 20; i += 1) await Promise.resolve();
+      });
+      expect(readTranscriptPage.mock.calls.map((c) => c[4].after)).toEqual([
+        "c1",
+      ]);
+      // No reload: the tail read drew it under the Task call, after the
+      // subagent's Grep and before the run's next Bash call.
+      const inner = within(
+        screen.getByTestId("transcript-subagent-steps"),
+      ).getAllByTestId("tx-row");
+      expect(inner.map((row) => row.textContent)).toEqual([
+        expect.stringContaining("Grep"),
+        expect.stringContaining("Read"),
+      ]);
+      expect(rows()).toHaveLength(6);
+      expect(
+        rows().flatMap((row) => {
+          const name = row.querySelector('[data-testid="tx-tool-name"]');
+          return name === null ? [] : [name.textContent];
+        }),
+      ).toEqual(["Bash", "Task", "Grep", "Read", "Bash"]);
     } finally {
       vi.useRealTimers();
       vi.unstubAllGlobals();

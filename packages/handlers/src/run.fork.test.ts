@@ -7,6 +7,7 @@
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { runFork } from "@oxagen/oxagen/contracts/run.fork";
 import type { AttemptEventReadRecord, AttemptRecord } from "@oxagen/run-ledger";
+import type { TachoFrameRow } from "@oxagen/telemetry";
 import {
   RunNotWritableError,
   RunStoreStateError,
@@ -31,9 +32,11 @@ import {
   ledgerRun,
   memoryEvents,
   memoryStores,
+  memorySubagentFrames,
   memoryTachoFrames,
   roleTx,
   summary,
+  tachoRow,
   tachoSession,
 } from "./run.test-support";
 
@@ -91,6 +94,8 @@ function harness(over: {
   keyCreator?: string | null;
   attempts?: AttemptRecord[];
   events?: AttemptEventReadRecord[];
+  /** Subagent frames under the wrapped fixture's root (#3823). */
+  children?: TachoFrameRow[];
 }) {
   mocks.withTenantDb.mockImplementation((fn: (tx: unknown) => unknown) =>
     Promise.resolve(
@@ -103,6 +108,7 @@ function harness(over: {
     [ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID })],
     [tachoSession({ publicId: TACHO_ID, session: { replayGrade: "fork" } })],
   );
+  const subagentFrames = vi.fn(memorySubagentFrames(over.children ?? []));
   const createAttempt = vi.fn(
     (input: Parameters<RunForkDeps["attempts"]["createAttempt"]>[0]) =>
       Promise.resolve({
@@ -130,12 +136,13 @@ function harness(over: {
     readRunRollups: stores.readRunRollups,
     readWitnessFor: stores.readWitnessFor,
     tachoFrames: memoryTachoFrames("none", []),
+    tachoSubagentFrames: subagentFrames,
     attempts: {
       listRunAttempts: () => Promise.resolve(over.attempts ?? [attempt()]),
       createAttempt,
     },
   };
-  return { fork: createRunForkHandler(deps), createAttempt };
+  return { fork: createRunForkHandler(deps), createAttempt, subagentFrames };
 }
 
 const conflict = (reason: string) => (e: unknown) =>
@@ -155,6 +162,26 @@ describe("fork_run", () => {
     expect(
       runFork.input.safeParse({ runId: TACHO_ID, fromSeq: "1" }).success,
     ).toBe(true);
+  });
+
+  // #3823: only a wrapped run records subagent chains, and a wrapped run
+  // cannot be forked, so fork_run reads no subagent chain.
+  it("refuses a wrapped run that recorded a subagent chain, reading none of it (negative)", async () => {
+    const ROOT = "0192d4a8-7c1e-7a00-8000-00000000c0de";
+    const { fork, createAttempt, subagentFrames } = harness({
+      children: [
+        tachoRow(0, {
+          sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d0",
+          rootSessionUuid: ROOT,
+          parentSessionUuid: ROOT,
+        }),
+      ],
+    });
+    await expect(
+      fork({ runId: TACHO_ID, fromSeq: "0" }, ctx()),
+    ).rejects.toSatisfy(conflict("fork_requires_ledger_run"));
+    expect(subagentFrames).not.toHaveBeenCalled();
+    expect(createAttempt).not.toHaveBeenCalled();
   });
 
   it("refuses a Viewer and a user with no org role, before any read (negative)", async () => {

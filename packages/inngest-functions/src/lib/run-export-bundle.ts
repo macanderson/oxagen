@@ -2,7 +2,9 @@
 // produces (Mission Control spec §13.4; App. E; ADR-058). Pure: the segments
 // and the attester key come from the caller.
 //
-//   manifest.json     the run, its sealed attempts and their seal figures
+//   manifest.json     the run, its sealed attempts and their seal figures; a
+//                     wrapped run's subagent chain is one more attempt, with
+//                     a `chain` block naming where it sits in the run
 //   frames.ndjson     one JCS envelope per frame, in sequence order
 //   attestation.json  one Ed25519 attestation per sealed attempt (spec §8.3)
 //                     plus the verifying public key and its id
@@ -128,6 +130,7 @@ export function buildRunExportBundle(input: {
       enforcement_tier: segment.enforcementTier,
       completeness_gaps: [...segment.completenessGaps],
       replay_grade: segment.replayGrade,
+      ...(segment.chain === undefined ? {} : { chain: { ...segment.chain } }),
     })),
   };
   const envelopes = input.segments.flatMap((segment) => segment.envelopes);
@@ -160,7 +163,9 @@ export function buildRunExportBundle(input: {
  * RFC 8785 yields for these shapes); each ledger frame's payload and event
  * digest and dense attempt sequence; each wrapped frame's prev_hash link
  * and, where the frame carries its event, the event's hash and the members
- * shown beside it (the rule is `wrappedFrameOf` in @oxagen/tacho);
+ * shown beside it (the rule is `wrappedFrameOf` in @oxagen/tacho), with the
+ * link and the sequence starting over at each attempt, since a subagent
+ * chain is an attempt of its own from genesis at its seq 0;
  * each ledger attempt's stream fold; the RFC 6962 tree over the frame
  * digests; the Ed25519 check with the bundled key, whose id must be the first
  * 16 hex chars of sha256 over the JSON string of the PEM (the platform's

@@ -22,11 +22,15 @@ import type { RunItem } from "@oxagen/oxagen/contracts/run.list";
 import {
   createPostgresRunStore,
   ledgerFrame,
+  listSubagentChains,
   listSubagentSessions,
+  namedSubagentChainRead,
   type RunChainReads,
+  type RunChainWindowReads,
   type RunFrame,
   type RunStore,
   subagentChainRead,
+  type SubagentChainRow,
   tachoFrame,
 } from "@oxagen/run-ledger";
 import { deferredEvidenceArchive } from "@oxagen/run-ledger/evidence-store";
@@ -102,6 +106,16 @@ export type RunReadDeps = {
    * and scans every chain in the workspace.
    */
   tachoChildSessions?: (rootSessionUuid: string) => Promise<string[]>;
+  /**
+   * The subagent chains under a root session with their session rows, from
+   * Postgres (`listSubagentChains`). A reader that answers the chains one by
+   * one reads them here: `get_run`'s chain heads and the chain walk. Absent,
+   * such a reader answers no chains.
+   */
+  tachoChains?: (
+    rootSessionUuid: string,
+    options?: { sessionUuids?: readonly string[]; limit?: number },
+  ) => Promise<SubagentChainRow[]>;
   readEnrichmentEnabled?: typeof readRunEnrichmentEnabled;
 };
 
@@ -239,18 +253,61 @@ export async function readFrames(
 }
 
 /**
- * Every frame of the run up to `cap`. Answers whether the cap cut the read
- * short, so a caller can say so rather than present a prefix as the whole.
- * A wrapped session reads in one bounded query; the ledger reads page by
- * page.
+ * The frames of one subagent chain strictly after `afterSeq`, ascending, at
+ * most `limit`: `readFrames` for a chain other than the run's own (#3823).
+ *
+ * The read names the chain and is fenced by the run's root, so it returns
+ * nothing from a chain of another run. It is bounded above the same way, at
+ * `afterSeq + limit`, and reads past the window only when the window came
+ * back short of a chain that is longer than it. A position is compared on an
+ * unsigned seq and nothing lies below seq 0, so the first page reads from
+ * the chain's start.
+ */
+export async function readChainFrames(
+  deps: RunReadDeps,
+  rootSessionUuid: string,
+  chain: Pick<SubagentChainRow, "sessionUuid" | "seqCount">,
+  afterSeq: string,
+  limit: number,
+): Promise<RunFrame[]> {
+  const read = deps.tachoSubagentFrames;
+  if (read === undefined) return [];
+  const page = (after: number, want: number, throughSeq?: number) =>
+    read({
+      rootSessionUuid,
+      sessionUuids: [chain.sessionUuid],
+      after: after < 0 ? null : { sessionUuid: chain.sessionUuid, seq: after },
+      ...(throughSeq === undefined ? {} : { throughSeq }),
+      limit: want,
+    });
+  const after = Number(afterSeq);
+  const through = after + limit;
+  const rows = await page(after, limit, through);
+  const head = chain.seqCount - 1;
+  const last = rows.at(-1)?.seq;
+  if (rows.length < limit && (through < head || last === through)) {
+    rows.push(...(await page(through, limit - rows.length)));
+  }
+  return rows
+    .map(tachoFrame)
+    .filter((frame) => frame.chain?.sessionUuid === chain.sessionUuid);
+}
+
+/**
+ * Every frame of the run up to `cap`, or with `from` every frame from the
+ * one at that seq on. Answers whether the cap cut the read short, so a
+ * caller can say so rather than present a prefix as the whole. A wrapped
+ * session reads in one bounded query; the ledger reads page by page.
  */
 export async function readAllFrames(
   deps: RunReadDeps,
   run: ResolvedRun,
   cap: number,
+  from?: string,
 ): Promise<{ frames: RunFrame[]; complete: boolean }> {
   const frames: RunFrame[] = [];
-  let after = startCursorSeq(run);
+  let after =
+    from === undefined ? startCursorSeq(run) : (BigInt(from) - 1n).toString();
   const page = run.source === "tacho" ? cap + 1 : FRAME_READ_MAX;
   for (;;) {
     const want = Math.min(page, cap - frames.length + 1);
@@ -291,13 +348,53 @@ export function runChainReads(
   };
 }
 
-/** The one frame at `seq`, or null. */
+/**
+ * How `deps` reads a window of the run (`RunChainWindowReads` in
+ * `@oxagen/run-ledger`): its own chain from a frame on, and for a wrapped
+ * run the subagent chains Postgres lists under it and the ones the window
+ * holds. Null when `deps` reads subagent frames but cannot list the chains,
+ * since a window cannot tell which chains it holds; the caller reads the
+ * whole run.
+ */
+export function runChainWindowReads(
+  deps: RunReadDeps,
+  run: ResolvedRun,
+): RunChainWindowReads | null {
+  const own = (from: string, cap: number) =>
+    readAllFrames(deps, run, cap, from);
+  const none = () => Promise.resolve({ frames: [], complete: true });
+  if (run.source === "ledger" || deps.tachoSubagentFrames === undefined)
+    return { own, chains: null, subagents: none };
+  const listChains = deps.tachoChains;
+  if (listChains === undefined) return null;
+  return {
+    own,
+    chains: () => listChains(run.sessionUuid),
+    subagents: namedSubagentChainRead(
+      deps.tachoSubagentFrames,
+      run.sessionUuid,
+    ),
+  };
+}
+
+/**
+ * The one frame at `seq`, or null. `sessionUuid` names the chain it was
+ * recorded on: omitted, or the run's own session, it is the run's own chain.
+ * Any other session is read as a subagent chain under the run's root, so a
+ * session of another run finds nothing, and neither does any session on a
+ * ledger run, which has one chain (#3823).
+ */
 export async function readFrameAt(
   deps: RunReadDeps,
   run: ResolvedRun,
   seq: string,
+  sessionUuid?: string,
 ): Promise<RunFrame | null> {
+  const chain = sessionUuid?.toLowerCase();
+  if (chain !== undefined && run.source === "ledger") return null;
   if (run.source === "tacho") {
+    if (chain !== undefined && chain !== run.sessionUuid)
+      return readSubagentFrameAt(deps, run.sessionUuid, chain, seq);
     // Bounded at `seq` itself, so a missing frame reads nothing past it.
     const [row] = await deps.tachoFrames({
       sessionUuid: run.sessionUuid,
@@ -311,6 +408,36 @@ export async function readFrameAt(
   const before = (BigInt(seq) - 1n).toString();
   const [frame] = await readFrames(deps, run, before, 1);
   return frame && frame.seq === seq ? frame : null;
+}
+
+/**
+ * The frame at `seq` on one subagent chain under `rootSessionUuid`, or null.
+ * The read names the chain and is fenced by the root, so a chain of another
+ * run answers nothing. Its position is a (session, seq) tuple compared on an
+ * unsigned seq, and nothing lies below seq 0, so the chain's first frame is
+ * read from the chain's start and `throughSeq` stops the read at the frame.
+ */
+async function readSubagentFrameAt(
+  deps: RunReadDeps,
+  rootSessionUuid: string,
+  sessionUuid: string,
+  seq: string,
+): Promise<RunFrame | null> {
+  if (deps.tachoSubagentFrames === undefined) return null;
+  const at = Number(seq);
+  const [row] = await deps.tachoSubagentFrames({
+    rootSessionUuid,
+    sessionUuids: [sessionUuid],
+    after: at === 0 ? null : { sessionUuid, seq: at - 1 },
+    throughSeq: at,
+    limit: 1,
+  });
+  const frame = row ? tachoFrame(row) : undefined;
+  return frame !== undefined &&
+    frame.seq === seq &&
+    frame.chain?.sessionUuid === sessionUuid
+    ? frame
+    : null;
 }
 
 /**
@@ -338,6 +465,8 @@ export function defaultRunReadDeps(): RunReadDeps {
     tachoFrames: selectTachoEvents,
     tachoSubagentFrames: selectTachoSubagentEvents,
     tachoChildSessions: (root) => listSubagentSessions(requireScope(), root),
+    tachoChains: (root, options) =>
+      listSubagentChains(requireScope(), root, options),
     readEnrichmentEnabled: readRunEnrichmentEnabled,
   };
 }

@@ -20,22 +20,32 @@
 // The walk is bounded (`CHAIN_FRAME_CAP`) and says so: gaps found in a prefix
 // are the prefix's, and `complete: false` is what stops a caller presenting
 // them as the run's.
+//
+// A wrapped run's subagents each record on a hash chain of their own, with
+// their own dense `seq` from 0, their own session row and their own
+// checkpoints (#3823). Each is walked on its own and answered in `chains`,
+// with its gaps numbered on its own `seq`, because a gap computed over the
+// spliced frames of several chains would be nonsense. The top-level figures
+// keep describing the run's own chain. The ladder reads every chain: a break
+// or a missing body on a subagent's chain is one the run's record carries.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   CHAIN_FRAME_CAP,
+  CHAIN_SUBAGENTS_MAX,
   type ChainCheckpoint,
+  type ChainSubagent,
   runChainGet,
   type RunChainGetOutput,
 } from "@oxagen/oxagen/contracts/run.chain.get";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
-import type { RunFrame } from "@oxagen/run-ledger";
+import { type RunFrame, tachoFrame } from "@oxagen/run-ledger";
 import {
   explainReplayGrade,
   frameOwesBody,
   isReplayGrade,
 } from "@oxagen/tacho";
 import { TACHO_EVENTS_RETENTION_MONTHS } from "@oxagen/telemetry";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   ledgerAllSealsQuery,
   publishedGaps,
@@ -88,6 +98,40 @@ export function tachoCheckpointQuery(
     .orderBy(asc(checkpoints.seq));
 }
 
+/**
+ * The signed checkpoints of several wrapped sessions in one read, each row
+ * naming its session, in session then sequence order. A run's subagent
+ * chains are read this way, so a run with many subagents costs one query.
+ */
+export function tachoChainCheckpointsQuery(
+  db: Pick<Tx, "select">,
+  scope: RunScope,
+  sessionIds: readonly string[],
+) {
+  return db
+    .select({
+      sessionId: checkpoints.sessionId,
+      seq: checkpoints.seq,
+      chainHead: checkpoints.chainHead,
+      eventCount: checkpoints.eventCount,
+      signedAt: checkpoints.signedAt,
+      deviceKeyFingerprint: checkpoints.deviceKeyFingerprint,
+      platformKeyId: checkpoints.platformKeyId,
+      countersignedAt: checkpoints.countersignedAt,
+      anchorRoot: checkpoints.anchorRoot,
+      anchoredAt: checkpoints.anchoredAt,
+    })
+    .from(checkpoints)
+    .where(
+      and(
+        eq(checkpoints.orgId, scope.orgId),
+        eq(checkpoints.workspaceId, scope.workspaceId),
+        inArray(checkpoints.sessionId, [...sessionIds]),
+      ),
+    )
+    .orderBy(asc(checkpoints.sessionId), asc(checkpoints.seq));
+}
+
 export type CheckpointRow = {
   seq: number;
   chainHead: string;
@@ -100,8 +144,16 @@ export type CheckpointRow = {
   anchoredAt: Date | null;
 };
 
+/** A checkpoint row with the `tacho.sessions.id` of the chain it signed. */
+export type ChainCheckpointRow = CheckpointRow & { sessionId: string };
+
 export type RunChainGetDeps = RunReadDeps & {
   checkpoints: (scope: RunScope, sessionId: string) => Promise<CheckpointRow[]>;
+  /** The checkpoints of a run's subagent chains, by their session row ids. */
+  chainCheckpoints: (
+    scope: RunScope,
+    sessionIds: readonly string[],
+  ) => Promise<ChainCheckpointRow[]>;
   /**
    * Every attempt seal of a ledger run, oldest first — not only the latest,
    * which `readAllFrames` already walks past (finding 8,
@@ -118,6 +170,14 @@ export const postgresChainCheckpoints = async (
   sessionId: string,
 ): Promise<CheckpointRow[]> =>
   withTenantDb((tx) => tachoCheckpointQuery(tx, scope, sessionId));
+
+export const postgresSubagentCheckpoints = async (
+  scope: RunScope,
+  sessionIds: readonly string[],
+): Promise<ChainCheckpointRow[]> =>
+  sessionIds.length === 0
+    ? []
+    : withTenantDb((tx) => tachoChainCheckpointsQuery(tx, scope, sessionIds));
 
 export const postgresChainLedgerSeals = async (
   scope: RunScope,
@@ -315,13 +375,127 @@ function sealsOf(
   ];
 }
 
+// ---- Subagent chains ------------------------------------------------------------------
+
+/** The subagent chains of a wrapped run, walked one by one, and every frame read. */
+interface SubagentWalk {
+  chains: ChainSubagent[];
+  frames: RunFrame[];
+  /** False when a chain was cut short or the run has more chains than listed. */
+  complete: boolean;
+}
+
+/**
+ * Walk each subagent chain of a wrapped run on its own (#3823).
+ *
+ * Postgres lists the chains, up to CHAIN_SUBAGENTS_MAX. Their frames are one
+ * read of CHAIN_FRAME_CAP rows across them, a budget of its own beside the
+ * run's chain, grouped here by chain. The store answers a chain's rows
+ * together, so when the read is cut, every chain before the one the cut fell
+ * in was read whole: the cut chain, and a listed chain with frames that
+ * returned none, are marked incomplete. A chain is bounded from seq 0, unless
+ * its frames may have expired, and to its `seq_count` only when it was read
+ * whole, by the same rules the run's own chain is. Its checkpoints are read
+ * by its session row id in one query.
+ */
+async function walkSubagentChains(
+  deps: RunChainGetDeps,
+  scope: RunScope,
+  rootSessionUuid: string,
+  now: Date,
+): Promise<SubagentWalk | undefined> {
+  const list = deps.tachoChains;
+  const read = deps.tachoSubagentFrames;
+  if (list === undefined || read === undefined) return undefined;
+  const listed = await list(rootSessionUuid, {
+    limit: CHAIN_SUBAGENTS_MAX + 1,
+  });
+  const rows = listed.slice(0, CHAIN_SUBAGENTS_MAX);
+  if (rows.length === 0) return { chains: [], frames: [], complete: true };
+  const [stored, signed] = await Promise.all([
+    read({
+      rootSessionUuid,
+      sessionUuids: rows.map((row) => row.sessionUuid),
+      after: null,
+      limit: CHAIN_FRAME_CAP + 1,
+    }),
+    deps.chainCheckpoints(
+      scope,
+      rows.map((row) => row.sessionId),
+    ),
+  ]);
+  const cut = stored.length > CHAIN_FRAME_CAP;
+  const cutChain = cut ? stored[CHAIN_FRAME_CAP]?.sessionUuid : undefined;
+  const frames = stored.slice(0, CHAIN_FRAME_CAP).map(tachoFrame);
+  const framesOf = new Map<string, RunFrame[]>();
+  for (const frame of frames) {
+    const chain = frame.chain?.sessionUuid;
+    if (chain === undefined) continue;
+    const own = framesOf.get(chain);
+    if (own === undefined) framesOf.set(chain, [frame]);
+    else own.push(frame);
+  }
+  const checkpointsOf = new Map<string, ChainCheckpointRow[]>();
+  for (const row of signed) {
+    const own = checkpointsOf.get(row.sessionId);
+    if (own === undefined) checkpointsOf.set(row.sessionId, [row]);
+    else own.push(row);
+  }
+  const chains = rows.map((row): ChainSubagent => {
+    const own = framesOf.get(row.sessionUuid) ?? [];
+    const complete =
+      !cut ||
+      row.seqCount === 0 ||
+      (own.length > 0 && row.sessionUuid !== cutChain);
+    const sequences = sequenceGaps(own, {
+      start: framesMayHaveExpired(row.createdAt, now) ? null : "0",
+      end: complete && row.seqCount > 0 ? String(row.seqCount - 1) : null,
+    });
+    return {
+      sessionUuid: row.sessionUuid,
+      parentSessionUuid: row.parentSessionUuid,
+      subagentId: row.subagentId,
+      subagentType: row.subagentType,
+      frameCount: own.length,
+      firstSeq: own.at(0)?.seq ?? null,
+      lastSeq: own.at(-1)?.seq ?? null,
+      gaps: {
+        missingSequences: sequences.gaps,
+        missingFrameCount: sequences.missing,
+        missingBodies: missingBodies(own),
+      },
+      checkpoints: (checkpointsOf.get(row.sessionId) ?? []).map(toCheckpoint),
+      finalHash: row.sealedAt === null ? null : row.finalHash,
+      sealedAt: row.sealedAt?.toISOString() ?? null,
+      complete,
+    };
+  });
+  return {
+    chains,
+    frames,
+    complete:
+      listed.length <= CHAIN_SUBAGENTS_MAX &&
+      chains.every((chain) => chain.complete),
+  };
+}
+
 export function createRunChainGetHandler(
   deps: RunChainGetDeps,
 ): CapabilityHandler<typeof runChainGet> {
   return async (input, ctx): Promise<RunChainGetOutput> => {
     const scope = runScope(ctx);
     const run = await resolveRun(deps, ctx, input.runId);
-    const read = await readAllFrames(deps, run, CHAIN_FRAME_CAP);
+    const [read, subagents] = await Promise.all([
+      readAllFrames(deps, run, CHAIN_FRAME_CAP),
+      run.source === "tacho"
+        ? walkSubagentChains(
+            deps,
+            scope,
+            run.sessionUuid,
+            deps.now?.() ?? new Date(),
+          )
+        : Promise.resolve(undefined),
+    ]);
     const rows =
       run.source === "tacho"
         ? await deps.checkpoints(scope, run.row.session.id)
@@ -366,16 +540,26 @@ export function createRunChainGetHandler(
         : publishedTier(run.row.session.enforcementTier);
 
     // The ladder is computed from what this read can see: the gaps the seal
-    // recorded, plus a chain break the walk found that the seal did not name.
+    // recorded, plus a chain break the walk found that the seal did not name,
+    // on the run's own chain or on any subagent's (#3823).
+    const children = subagents?.chains ?? [];
     const observed = new Set<string>(recorded);
-    if (sequences.gaps.length > 0) observed.add("chain_break");
-    if (missingBodies(read.frames) > 0 && !observed.has("digest_only")) {
+    if (
+      sequences.gaps.length > 0 ||
+      children.some((chain) => chain.gaps.missingSequences.length > 0)
+    )
+      observed.add("chain_break");
+    const bodiesMissing =
+      missingBodies(read.frames) +
+      children.reduce((n, chain) => n + chain.gaps.missingBodies, 0);
+    if (bodiesMissing > 0 && !observed.has("digest_only")) {
       observed.add("body_missing");
     }
     const explained = explainReplayGrade({
       gaps: [...observed],
       enforcementTier,
-      retainedBodies: retainedBodies(read.frames),
+      retainedBodies:
+        retainedBodies(read.frames) + retainedBodies(subagents?.frames ?? []),
       harnessReproducible: false,
     });
 
@@ -420,7 +604,8 @@ export function createRunChainGetHandler(
       enforcementTier,
       recordedGrade: isReplayGrade(recordedGrade) ? recordedGrade : null,
       ladder: explained.ladder,
-      complete: read.complete,
+      complete: read.complete && (subagents?.complete ?? true),
+      ...(subagents === undefined ? {} : { chains: subagents.chains }),
     };
   };
 }
@@ -428,5 +613,6 @@ export function createRunChainGetHandler(
 export const runChainGetHandler = createRunChainGetHandler({
   ...defaultRunReadDeps(),
   checkpoints: postgresChainCheckpoints,
+  chainCheckpoints: postgresSubagentCheckpoints,
   ledgerSeals: postgresChainLedgerSeals,
 });

@@ -28,6 +28,7 @@ import { formatCount } from "@/ui/money-format";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
 import { Fact, Facts, Note, NoValue, Panel, PanelBody } from "./parts";
+import { parseFrameKey } from "./frame-link";
 import { FrameLink } from "./policy-tab";
 import { ExportAction } from "./record-actions";
 import { BisectDialog, ForkAction } from "./replay-actions";
@@ -566,13 +567,16 @@ export function ChainSection({
 export async function ChainTab(props: RunTabProps): Promise<ReactNode> {
   const { ctx, source, run, place, view } = props;
   const read = await source.runs.chain(ctx, run.id);
+  // Fork replay starts from a frame of the run's own chain. A subagent's
+  // frame (`<chain>:<seq>`) names no position there, so it starts none.
+  const open = parseFrameKey(view.body);
   return (
     <ChainSection
       read={read}
       run={run}
       place={place}
       orgRole={ctx.orgRole}
-      fromSeq={view.body}
+      fromSeq={open === null || open.chainRef !== undefined ? null : open.seq}
     />
   );
 }

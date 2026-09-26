@@ -58,6 +58,7 @@ import { formatCount, formatDuration, ratioWidth } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
+import { frameHref } from "./frame-link";
 import type { KindFilter } from "./tab-props";
 import { Note } from "./parts";
 import type { ToolDiff, ToolGroup } from "./tool-detail";
@@ -483,8 +484,9 @@ function Clock({ at, elapsedMs }: { at: string; elapsedMs: number }) {
 
 /**
  * A chip that opens one frame on the Governed actions tab. A subagent's frame
- * is on its own chain, which that tab does not read, so a link by seq would
- * open the run's own frame of that number: it reads as a plain chip.
+ * is on its own chain, numbered from 0 like the run's, so the link names the
+ * chain beside the seq and opens that frame, not the run's frame of that
+ * number (#3823).
  */
 function FrameChip({
   frame,
@@ -497,22 +499,8 @@ function FrameChip({
   place: Place;
   className?: string;
 }) {
-  const t = useTranslations("run.transcript");
-  if (frame.chainRef !== null) {
-    return (
-      <span className={className} title={t("subagentFrame")}>
-        {children}
-      </span>
-    );
-  }
   return (
-    <SafeLink
-      to={routes.run(place.org, place.ws, place.runId, {
-        tab: "actions",
-        body: frame.seq,
-      })}
-      className={className}
-    >
+    <SafeLink to={frameHref(place, frame)} className={className}>
       {children}
     </SafeLink>
   );
@@ -1510,8 +1498,10 @@ export function TranscriptView({
   const navigate = useNavigate();
   const place = useMemo(() => ({ org, ws, runId }), [org, ws, runId]);
   const live = run.status === "live";
-  // The run's counts as the latest read left them: every page carries the
-  // whole run's, so the chips follow a live run as its tail is read.
+  // The whole run's counts, from the read that began at the run's first
+  // frame. A later page reads a window of the run and carries none, so each
+  // chip keeps its whole-run count until the page reads the run again
+  // (#3823, D6).
   const [counts, setCounts] = useState<TranscriptCounts | null>(
     transcript.counts,
   );
@@ -1538,10 +1528,11 @@ export function TranscriptView({
 
   // The page read the run again: the seal refreshes it, and so do the run
   // controls. That read is the record as it stands, in the order the server
-  // placed it, so it replaces what this view had paged in. A subagent frame
-  // the tail read could not reach, because it landed before the cursor,
-  // arrives this way once the run seals (#4083). Entries this view read past
-  // the page's own bound stay, and so does the cursor that reached them.
+  // placed it, so it replaces what this view had paged in, and its counts
+  // replace the chips'. A subagent frame that landed before the cursor
+  // reaches the tail read too (#4083), and this read places it the same way.
+  // Entries this view read past the page's own bound stay, and so does the
+  // cursor that reached them.
   const [readFrom, setReadFrom] = useState(first);
   if (readFrom !== first) {
     setReadFrom(first);
@@ -1693,6 +1684,7 @@ export function TranscriptView({
         cursorRef.current = read.value.cursor;
         setCursor(read.value.cursor);
         setComplete(read.value.complete);
+        // Only a read from the run's first frame counts the whole run.
         if (read.value.counts !== null) setCounts(read.value.counts);
         if (pageEntries.length === 0) {
           // Nothing new: stop draining. A mid-read signal still schedules
@@ -1700,7 +1692,8 @@ export function TranscriptView({
           continue;
         }
         // A page can send again an entry the view holds, grown since it was
-        // sent; it replaces its row rather than drawing the step twice.
+        // sent; it replaces its row rather than drawing the step twice. A
+        // subagent's entry that landed before the cursor goes under its call.
         const next: Frames = mergeEntries(heldRef.current, pageEntries);
         heldRef.current = next;
         setEntries(next);

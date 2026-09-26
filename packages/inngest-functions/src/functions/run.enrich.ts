@@ -32,7 +32,7 @@ import {
   ENRICHMENT_RUN_TOTAL_BUDGET_MICROS,
   usdMicros,
 } from "../lib/run-enrichment";
-import { readRunFrames, resolveRunRecord } from "../lib/run-record";
+import { readTranscriptFramesOf, resolveRunRecord } from "../lib/run-record";
 import { logger } from "../logger";
 
 import { RUN_ENRICH_EVENT } from "../events";
@@ -611,7 +611,10 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
         if (!previous) return null;
         const record = await resolveRunRecord(scope, data.runPublicId);
         if (!record) return null;
-        const frames = await readRunFrames(scope, record);
+        // Every chain the run recorded, its subagents' included, as the Run
+        // page folds them: a subagent's work belongs in the run's account
+        // (#3823).
+        const { frames } = await readTranscriptFramesOf(scope, record);
         const transcript = await collectRunText(scope, frames, (s, ref) =>
           evidenceStore().getBody(s, ref),
         );

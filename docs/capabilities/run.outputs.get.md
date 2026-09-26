@@ -36,7 +36,8 @@ One node per thing the run produced. A node carries a kind, a name, where it lan
 
 | Field | Type | Description |
 |---|---|---|
-| `seq` | string or null | the frame that produced it, decimal. Null on a gate and its `would`: the approval record carries no frame sequence, and a position is never invented |
+| `seq` | string or null | the frame that produced it, decimal. On a node a subagent produced, the frame's position on that subagent's chain. Null on a gate and its `would`: the approval record carries no frame sequence, and a position is never invented |
+| `sessionUuid` | string, optional | the subagent chain that produced the node, as its session uuid. Absent on the run's own chain. A subagent chain numbers its frames from 0, so `seq` names a frame only together with this. Pass both to `get_run_frame_body` to read the frame |
 | `kind` | enum | `file`, `media`, `change`, `commit`, `pr`, `gate`, `would`, `read` |
 | `name` | string | a repository-relative path, a commit sha, `#482`, the capability a gate parked, or, on a ledger change, the `rpl_` path locator |
 | `nameIsLocator` | boolean | true when `name` is an opaque locator and not a path. Read it before rendering the name as a file name |
@@ -58,13 +59,15 @@ One node per thing the run produced. A node carries a kind, a name, where it lan
 
 ## Reading a wrapped session
 
-A `tse_…` run reads `tacho.session_files`: one row per path the session touched, with its read, write, edit and delete counters, its diff stat, git's word for what happened to it, and the first and last frame that touched it.
+A `tse_…` run reads `tacho.session_files`: one row per path the session or one of its subagents touched, with its read, write, edit and delete counters, its diff stat, git's word for what happened to it, and the first and last frame that touched it.
+
+Each subagent records on a chain of its own, numbered from 0. A node a subagent produced carries its chain's `sessionUuid` beside its `seq`. The spine lists the run's own chain first, in frame order, then each subagent chain whole, in frame order, in the order the chains started. A subagent chain that only linked a pull request follows the chains that touched files.
 
 A row is a `read` node when its writes, edits and deletes are all zero, and a durable node otherwise. A read never carries a diff stat, however many lines its row counted: a path the run only looked at changed nothing.
 
 The state is git's `observed_status` where a reconciliation recorded one, because that word states a condition. Where it recorded none, the state comes from the counters. It is never a word git did not say.
 
-Each `oxagen:pr_link` frame the harness sealed adds a pull request node. The node names the PR number, sits in the repository the frame's `pr.repository` attribute names, and carries the frame's `pr.url` as its note. A frame sealed before #3944 carries the same facts as `pr_number`, `pr_repository`, and `pr_url`, and the read accepts either spelling. Two frames with the same URL make one node, at the first frame's sequence.
+Each `oxagen:pr_link` frame the harness sealed adds a pull request node. The node names the PR number, sits in the repository the frame's `pr.repository` attribute names, and carries the frame's `pr.url` as its note. A frame sealed before #3944 carries the same facts as `pr_number`, `pr_repository`, and `pr_url`, and the read accepts either spelling. Two frames with the same URL make one node, at the first frame's sequence. The read covers the run's own chain and every subagent chain Postgres lists under it, fenced by the chain's root session. A PR the run and a subagent both linked is one node, at the run's own frame.
 
 ## Reading a ledger run
 

@@ -55,7 +55,6 @@ vi.mock("@oxagen/telemetry", () => ({
 }));
 
 import {
-  readRunFrames,
   readSealedSegments,
   readTranscriptFramesOf,
   resolveRunRecord,
@@ -202,6 +201,8 @@ describe("readSealedSegments", () => {
   });
 
   it("builds a wrapped session's one segment from every row, paging past the first 500", async () => {
+    // Postgres lists no subagent chain under the session.
+    mocks.withTenantDb.mockResolvedValue([]);
     const rows = Array.from({ length: 501 }, (_, i) => tachoRow(i));
     mocks.selectTachoEventRecords.mockImplementation(
       ({ afterSeq, limit }: { afterSeq: number; limit: number }) =>
@@ -281,6 +282,7 @@ describe("readSealedSegments", () => {
       },
     };
     mocks.selectTachoEventRecords.mockResolvedValue([proven, unproven]);
+    mocks.withTenantDb.mockResolvedValue([]);
     const [segment] = await readSealedSegments(SCOPE, {
       source: "tacho",
       sessionUuid: SESSION,
@@ -342,6 +344,7 @@ describe("readSealedSegments", () => {
     mocks.selectTachoEventRecords.mockResolvedValue([
       { frame: { ...tachoRow(0), hash: event.hash, bytesRef: "" }, envelope },
     ]);
+    mocks.withTenantDb.mockResolvedValue([]);
     const [segment] = await readSealedSegments(SCOPE, {
       source: "tacho",
       sessionUuid: SESSION,
@@ -364,6 +367,91 @@ describe("readSealedSegments", () => {
     expect(carried).toEqual(
       wrappedFrameOf(carried?.["event"] as Record<string, JsonValue>, null),
     );
+  });
+
+  // #3823: a subagent records on a hash chain of its own from genesis, so
+  // each chain is attested and verified as an attempt of its own.
+  it("adds one segment per subagent chain, with its own row's seal and a chain block, and leaves out a chain with no frame", async () => {
+    const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    const EMPTY = "0192d4a8-7c1e-7a00-8000-00000000c1d1";
+    const chainRow = (sessionUuid: string) => ({
+      sessionUuid,
+      sessionId: `${sessionUuid.slice(0, 15)}000${sessionUuid.slice(18)}`,
+      parentSessionUuid: SESSION,
+      subagentId: "agent-1",
+      subagentType: "Explore",
+      spawnToolUseId: "toolu_A",
+      seqCount: 2,
+      startedAt: new Date("2026-09-11T09:01:00.000Z"),
+      lastEventAt: new Date("2026-09-11T09:02:00.000Z"),
+      createdAt: new Date("2026-09-11T09:01:00.000Z"),
+      finalHash: null,
+      sealedAt: null,
+      enforcementTier: "observe",
+      completenessGaps: ["tool_bodies", 3],
+      replayGrade: "inspect",
+    });
+    const compiled: string[] = [];
+    const db = drizzle.mock({ schema });
+    mocks.withTenantDb.mockImplementation(
+      (fn: (tx: unknown) => { toSQL(): { sql: string } }) => {
+        compiled.push(fn(db).toSQL().sql);
+        return Promise.resolve([chainRow(CHILD), chainRow(EMPTY)]);
+      },
+    );
+    const bySession: Record<string, TachoFrameRow[]> = {
+      [SESSION]: [tachoRow(0), tachoRow(1)],
+      [CHILD]: [tachoRow(0), tachoRow(1)],
+      [EMPTY]: [],
+    };
+    mocks.selectTachoEventRecords.mockImplementation(
+      ({ sessionUuid, afterSeq }: { sessionUuid: string; afterSeq: number }) =>
+        Promise.resolve(
+          (bySession[sessionUuid] ?? [])
+            .filter((r) => r.seq > afterSeq)
+            .map((frame) => ({ frame, envelope: {} })),
+        ),
+    );
+    const segments = await readSealedSegments(SCOPE, {
+      source: "tacho",
+      sessionUuid: SESSION,
+      enforcementTier: "gateway",
+      completenessGaps: [],
+      replayGrade: "view",
+    });
+    expect(
+      segments.map((s) => [s.attemptPublicId, s.frameCount, s.chain]),
+    ).toEqual([
+      [SESSION, 2, undefined],
+      [
+        CHILD,
+        2,
+        {
+          session_uuid: CHILD,
+          parent_session_uuid: SESSION,
+          subagent_id: "agent-1",
+          subagent_type: "Explore",
+          spawn_tool_use_id: "toolu_A",
+        },
+      ],
+    ]);
+    // The child's seal is its own row's, never the run's.
+    expect(segments[1]).toMatchObject({
+      attemptId: CHILD,
+      enforcementTier: "observe",
+      completenessGaps: ["tool_bodies"],
+      replayGrade: "inspect",
+      merkleRoot: "",
+      archiveSegmentDigest: null,
+    });
+    expect(segments[0]).toMatchObject({
+      enforcementTier: "gateway",
+      replayGrade: "view",
+    });
+    // The chains were listed under the run's root, fenced to the workspace.
+    expect(compiled[0]).toMatch(/"sessions"\."root_session_uuid" = \$\d+/);
+    expect(compiled[0]).toMatch(/"sessions"\."workspace_id" = \$\d+/);
+    expect(scopes).toEqual([SCOPE]);
   });
 });
 
@@ -399,10 +487,15 @@ const WRAPPED = {
   replayGrade: null,
 };
 
-describe("readRunFrames", () => {
+// The run's own chain as the jobs read it, with no subagent chain listed.
+describe("readTranscriptFramesOf: the run's own chain", () => {
+  beforeEach(() => {
+    mocks.withTenantDb.mockResolvedValue([]);
+  });
+
   it("reads a wrapped session's frames in sequence inside the tenant scope", async () => {
     tachoChain([0, 1]);
-    const frames = await readRunFrames(SCOPE, WRAPPED);
+    const { frames } = await readTranscriptFramesOf(SCOPE, WRAPPED);
     expect(frames.map((f) => f.seq)).toEqual(["0", "1"]);
     expect(scopes).toEqual([SCOPE]);
   });
@@ -410,7 +503,7 @@ describe("readRunFrames", () => {
   // #4202: under FINAL an unbounded page scans the rest of the chain.
   it("bounds each windowed page of a wrapped session at afterSeq plus the page size", async () => {
     tachoChain(range(0, 1200));
-    const frames = await readRunFrames(SCOPE, WRAPPED);
+    const { frames } = await readTranscriptFramesOf(SCOPE, WRAPPED);
     expect(frames.map((f) => Number(f.seq))).toEqual(range(0, 1200));
     const calls = mocks.selectTachoEvents.mock.calls.map(
       ([args]) => args as { afterSeq: number; throughSeq?: number },
@@ -429,19 +522,22 @@ describe("readRunFrames", () => {
   it("reads past a recorded break in a wrapped session's chain", async () => {
     const seqs = [...range(0, 299), ...range(800, 1000)];
     tachoChain(seqs);
-    const frames = await readRunFrames(SCOPE, WRAPPED);
+    const { frames } = await readTranscriptFramesOf(SCOPE, WRAPPED);
     expect(frames.map((f) => Number(f.seq))).toEqual(seqs);
   });
 
   it("reads a wrapped session one frame past a full page", async () => {
     tachoChain(range(0, 500));
-    const frames = await readRunFrames(SCOPE, WRAPPED);
+    const { frames } = await readTranscriptFramesOf(SCOPE, WRAPPED);
     expect(frames.map((f) => Number(f.seq))).toEqual(range(0, 500));
   });
 
   it("reads an empty wrapped session as no frames (negative)", async () => {
     tachoChain([]);
-    expect(await readRunFrames(SCOPE, WRAPPED)).toEqual([]);
+    expect(await readTranscriptFramesOf(SCOPE, WRAPPED)).toEqual({
+      frames: [],
+      complete: true,
+    });
   });
 });
 

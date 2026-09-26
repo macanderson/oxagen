@@ -90,6 +90,27 @@ describe("the spine", () => {
     await expectNoAxe(container);
   });
 
+  it("opens a node a subagent produced on its own chain, not the run's frame of that seq (#3823)", () => {
+    const chainRef = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    renderSpine(
+      readOk(
+        runOutputs([
+          runOutputNode({ seq: "3", name: "src/cut.ts" }),
+          runOutputNode({ seq: "3", name: "src/grep.ts", chainRef }),
+        ]),
+      ),
+    );
+    const [own, subagent] = within(
+      screen.getByTestId("run-outputs"),
+    ).getAllByRole("link", { name: "fr 3" });
+    expect(own?.getAttribute("href")).toBe(
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=3",
+    );
+    expect(subagent?.getAttribute("href")).toBe(
+      `/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=${chainRef}%3A3`,
+    );
+  });
+
   it("counts a read, and never draws it as a change", () => {
     renderSpine(
       readOk(

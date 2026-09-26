@@ -132,7 +132,6 @@
       "parkedApproval": "Approval <code>{approval}</code>",
       "gate": "{decision} · fr {seq}",
       "frame": "{type} · fr {seq}",
-      "subagentFrame": "On a subagent's chain, which the Governed actions tab does not read",
       "usage": "usage",
       "tokensIn": "in {count}",
       "tokensCache": "cache {count}",
@@ -170,6 +169,7 @@
     "frames": {
       "title": "Frame {seq}",
       "recorded": "Recorded",
+      "chain": "Subagent chain",
       "stage": "Stage",
       "turn": "Turn",
       "turnValue": "turn {turn}",
@@ -188,6 +188,7 @@
       "retainedAt": "Retained at",
       "redacted": "removed {path}: {reason}",
       "offPage": "This page of frames does not hold frame {seq}. What the transcript and the body read carry is shown.",
+      "chainOffPage": "Frame {seq} is on a subagent's chain, which the frame pages do not list. What the transcript and the body read carry is shown.",
       "previous": "Previous",
       "next": "Next",
       "position": "frame {index} of {shown} shown · {total} in the run",

@@ -34,6 +34,24 @@ describe("get_run_frame_body contract", () => {
     ).toBe(false);
   });
 
+  it("names a subagent's frame by its chain's session uuid, and refuses anything else there (#3823)", () => {
+    const chain = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    expect(
+      runFrameBodyGet.input.parse({
+        runId: "tse_0a1b2c",
+        seq: "0",
+        sessionUuid: chain,
+      }),
+    ).toEqual({ runId: "tse_0a1b2c", seq: "0", sessionUuid: chain });
+    expect(
+      runFrameBodyGet.input.safeParse({
+        runId: "tse_0a1b2c",
+        seq: "0",
+        sessionUuid: "agent-1",
+      }).success,
+    ).toBe(false);
+  });
+
   it("answers bytes or null with the recorded digest either way", () => {
     expect(
       runFrameBodyGet.output.safeParse({

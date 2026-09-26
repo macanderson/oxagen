@@ -98,6 +98,9 @@ export function toRunDetail(
       frames: out.frames.frames.map((frame) => ({
         cursor: frame.cursor,
         seq: frame.seq,
+        ...(frame.sessionUuid === undefined
+          ? {}
+          : { chainRef: frame.sessionUuid }),
         type: frame.type,
         stage: frame.stage,
         observedAt: frame.observedAt,
@@ -140,10 +143,13 @@ function decodeBody(base64: string): { text: string | null; bytes: number } {
 export function toRunFrameBody(
   seq: string,
   out: RunFrameBodyOutput,
+  /** The subagent chain the frame was read from; absent on the run's own. */
+  chainRef?: string,
 ): z.input<typeof RunFrameBody> {
   const decoded = out.bytes === null ? null : decodeBody(out.bytes);
   return {
     seq,
+    ...(chainRef === undefined ? {} : { chainRef }),
     contentType: out.contentType,
     text: decoded === null ? null : decoded.text,
     bytes: decoded === null ? null : decoded.bytes,
@@ -405,6 +411,23 @@ export function toRunTurns(out: RunTurnsOutput): z.input<typeof RunTurns> {
   };
 }
 
+/** One signed checkpoint, on the run's own chain or a subagent's. */
+function toChainCheckpoint(
+  checkpoint: RunChainOutput["checkpoints"][number],
+): z.input<typeof RunChain>["checkpoints"][number] {
+  return {
+    seq: checkpoint.seq,
+    chainHead: checkpoint.chainHead,
+    eventCount: checkpoint.eventCount,
+    signedAt: checkpoint.signedAt,
+    deviceKeyFingerprint: checkpoint.deviceKeyFingerprint,
+    platformKey: checkpoint.platformKeyId,
+    countersignedAt: checkpoint.countersignedAt,
+    anchorRoot: checkpoint.anchorRoot,
+    anchoredAt: checkpoint.anchoredAt,
+  };
+}
+
 export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
   return {
     hashRule: out.hashRule,
@@ -412,17 +435,7 @@ export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
     firstSeq: out.firstSeq,
     lastSeq: out.lastSeq,
     merkleRoot: out.merkleRoot,
-    checkpoints: out.checkpoints.map((checkpoint) => ({
-      seq: checkpoint.seq,
-      chainHead: checkpoint.chainHead,
-      eventCount: checkpoint.eventCount,
-      signedAt: checkpoint.signedAt,
-      deviceKeyFingerprint: checkpoint.deviceKeyFingerprint,
-      platformKey: checkpoint.platformKeyId,
-      countersignedAt: checkpoint.countersignedAt,
-      anchorRoot: checkpoint.anchorRoot,
-      anchoredAt: checkpoint.anchoredAt,
-    })),
+    checkpoints: out.checkpoints.map(toChainCheckpoint),
     gaps: {
       missingSequences: out.gaps.missingSequences.map((gap) => ({
         from: gap.from,
@@ -452,6 +465,33 @@ export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
       reason: rung.reason,
     })),
     complete: out.complete,
+    // Each subagent chain walked on its own (#3823). Its session uuid, its
+    // parent's and the harness's subagent id are references, not public ids.
+    ...(out.chains === undefined
+      ? {}
+      : {
+          chains: out.chains.map((chain) => ({
+            chainRef: chain.sessionUuid,
+            parentChainRef: chain.parentSessionUuid,
+            subagentRef: chain.subagentId,
+            subagentType: chain.subagentType,
+            frameCount: chain.frameCount,
+            firstSeq: chain.firstSeq,
+            lastSeq: chain.lastSeq,
+            gaps: {
+              missingSequences: chain.gaps.missingSequences.map((gap) => ({
+                from: gap.from,
+                to: gap.to,
+              })),
+              missingFrameCount: chain.gaps.missingFrameCount,
+              missingBodies: chain.gaps.missingBodies,
+            },
+            checkpoints: chain.checkpoints.map(toChainCheckpoint),
+            finalHash: chain.finalHash,
+            sealedAt: chain.sealedAt,
+            complete: chain.complete,
+          })),
+        }),
   };
 }
 
@@ -467,6 +507,7 @@ export function toRunOutputs(
     source: out.source,
     nodes: out.nodes.map((node) => ({
       seq: node.seq,
+      ...(node.sessionUuid === undefined ? {} : { chainRef: node.sessionUuid }),
       kind: node.kind,
       name: node.name,
       nameIsLocator: node.nameIsLocator,

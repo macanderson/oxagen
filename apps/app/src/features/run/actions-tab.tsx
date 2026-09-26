@@ -3,8 +3,9 @@
 // the frame list. The tab reads "Player" on a run with no policy decision;
 // the tab strip names it, and this draws the same thing either way.
 //
-// The open frame is `?body=<seq>`, the first frame shown when the URL names
-// none. `GovernedActionsTab` makes the tab's own reads (the open frame's body,
+// The open frame is `?body=<seq>`, or `?body=<chain>:<seq>` for a subagent's
+// frame (#3823), and the first frame shown when the URL names none.
+// `GovernedActionsTab` makes the tab's own reads (the open frame's body,
 // the approvals recorded on the run, and the mandate ledger when a parked call
 // names a mandate) and returns the view; the page calls it as a function, so
 // it calls no hook itself and every component it returns is synchronous.
@@ -20,6 +21,7 @@ import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
+import { frameKey } from "./frame-link";
 import { FrameList, FramePanel, FramesEmpty, FramesPager } from "./frames";
 import { PlayerBar } from "./player-bar";
 import {
@@ -78,7 +80,7 @@ async function readApprovals(
  * The open frame's body, read on demand: when the URL names the frame, and the
  * frame retained bytes or this page does not hold its envelope. The first
  * frame shown opens with no read, and a frame that kept its digest alone has
- * nothing to read.
+ * nothing to read. A subagent's frame is read by its chain and seq.
  */
 async function readBody(
   source: DataSource,
@@ -91,7 +93,10 @@ async function readBody(
   const retained =
     frame === null ||
     (frame.body.digest !== null && frame.body.fidelity === "full");
-  return retained ? source.runs.frameBody(ctx, runId, open.seq) : null;
+  if (!retained) return null;
+  return open.chainRef === undefined
+    ? source.runs.frameBody(ctx, runId, open.seq)
+    : source.runs.frameBody(ctx, runId, open.seq, open.chainRef);
 }
 
 export async function GovernedActionsTab(props: FrameTabProps) {
@@ -141,11 +146,13 @@ function GovernedActions({
   const page = detail.frames;
   const frames = page.frames;
   const cursor = view.frames;
-  const hrefOf = (seq: string): SafePath =>
+  // A frame's key: its seq on the run's own chain, which every frame of the
+  // page is on, and `<chain>:<seq>` on a subagent's.
+  const hrefOf = (key: string): SafePath =>
     routes.run(place.org, place.ws, place.runId, {
       tab: "actions",
       ...(cursor === null ? {} : { frames: cursor }),
-      body: seq,
+      body: key,
     });
   const pager = (
     <FramesPager
@@ -169,14 +176,19 @@ function GovernedActions({
     ...pendingItems,
     ...decidedItems,
   ]);
-  const hereItem = open === null ? undefined : matches.byFrame.get(open.seq);
+  // The open frame's seq on the page's own chain. A subagent's frame shares
+  // its seq with a different frame here, so it matches no approval and marks
+  // no tick or row as open.
+  const openSeq =
+    open === null || open.chainRef !== undefined ? null : open.seq;
+  const hereItem = openSeq === null ? undefined : matches.byFrame.get(openSeq);
   const parkedHere =
     hereItem === undefined || isDecided(hereItem) ? null : hereItem;
   const unmatched = pendingItems.filter(
     (item) => !matches.matched.has(item.id),
   );
   const elsewhere = [...matches.byFrame.entries()].flatMap(([seq, item]) =>
-    seq === open?.seq || isDecided(item) ? [] : [{ item, seq }],
+    seq === openSeq || isDecided(item) ? [] : [{ item, seq }],
   );
   const cards = { mandates, now, org: place.org, ws: place.ws };
   const parkedElsewhere = (
@@ -199,7 +211,7 @@ function GovernedActions({
     );
 
   const entries = entriesBySeq(everything);
-  const entry: TranscriptEntry | undefined = entries.get(open.seq);
+  const entry: TranscriptEntry | undefined = entries.get(frameKey(open));
   const xs = tickPositions(frames);
   const steps = stepsOf(frames, open);
   const target = (seq: string | null) => (seq === null ? null : hrefOf(seq));
@@ -216,7 +228,7 @@ function GovernedActions({
         marks={timelineMarks(frames, xs, entries)}
         entries={entries}
         total={run.frames}
-        openSeq={open.seq}
+        openSeq={openSeq}
         hrefOf={hrefOf}
         live={run.status === "live"}
         pager={pager}
@@ -277,7 +289,7 @@ function GovernedActions({
         <FrameList
           frames={frames}
           entries={entries}
-          openSeq={open.seq}
+          openSeq={openSeq}
           hrefOf={hrefOf}
           state={runStateOf(run)}
         />
