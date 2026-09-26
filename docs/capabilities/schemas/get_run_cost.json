@@ -104,6 +104,10 @@
                   "reasoning": {
                     "type": "integer",
                     "minimum": 0
+                  },
+                  "server_tool_request": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 },
                 "required": [
@@ -112,7 +116,8 @@
                   "cache_write_5m",
                   "cache_write_1h",
                   "output",
-                  "reasoning"
+                  "reasoning",
+                  "server_tool_request"
                 ],
                 "additionalProperties": false
               },
@@ -255,6 +260,10 @@
                         "reasoning": {
                           "type": "integer",
                           "minimum": 0
+                        },
+                        "server_tool_request": {
+                          "type": "integer",
+                          "minimum": 0
                         }
                       },
                       "required": [
@@ -263,7 +272,8 @@
                         "cache_write_5m",
                         "cache_write_1h",
                         "output",
-                        "reasoning"
+                        "reasoning",
+                        "server_tool_request"
                       ],
                       "additionalProperties": false
                     },
@@ -427,6 +437,32 @@
                                 "basis"
                               ],
                               "additionalProperties": false
+                            },
+                            "server_tool_request": {
+                              "type": "object",
+                              "properties": {
+                                "micros": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "basis": {
+                                  "type": "string",
+                                  "enum": [
+                                    "gateway_observed",
+                                    "client_attested",
+                                    "mixed",
+                                    "estimated"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "micros",
+                                "currency",
+                                "basis"
+                              ],
+                              "additionalProperties": false
                             }
                           },
                           "required": [
@@ -435,7 +471,8 @@
                             "cache_write_5m",
                             "cache_write_1h",
                             "output",
-                            "reasoning"
+                            "reasoning",
+                            "server_tool_request"
                           ],
                           "additionalProperties": false
                         },
