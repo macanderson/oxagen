@@ -744,6 +744,17 @@ export function buildProgram(): Command {
       await runTurns(runId, opts);
     });
   runCmd
+    .command("context")
+    .description(
+      "Show what each of a run's model requests carried: the prompt tokens and each block's share of them",
+    )
+    .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--json", "Output JSON")
+    .action(async (runId: string, opts: { json?: boolean }) => {
+      const { runContext } = await import("./commands/run-context.js");
+      await runContext(runId, opts);
+    });
+  runCmd
     .command("export")
     .description(
       "Queue the signed, offline-verifiable evidence bundle for a sealed run — Owner/Admin only",

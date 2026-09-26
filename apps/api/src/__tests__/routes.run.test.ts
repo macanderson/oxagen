@@ -155,6 +155,37 @@ const CASES: RouteCase[] = [
     },
   },
   {
+    path: "/runs/context",
+    contract: "get_run_context",
+    input: { runId: LEDGER_ID },
+    output: {
+      runId: LEDGER_ID,
+      source: "ledger",
+      windows: [
+        {
+          seq: "2",
+          responseSeq: "3",
+          modelCallId: "prov-1-0",
+          provider: "oxagen",
+          model: "anthropic/claude-sonnet-4.6",
+          promptTokens: 1000,
+          bytes: 1000,
+          blocks: [
+            { kind: "system", bytes: 400, items: 1, tokens: 400 },
+            { kind: "conversation", bytes: 600, items: 3, tokens: 600 },
+          ],
+        },
+      ],
+      unmeasured: 0,
+      assemblies: [],
+      complete: true,
+    },
+    refused: {
+      "run id of neither store": { runId: "run_01K5RQ8M4" },
+      "unknown field": { runId: LEDGER_ID, seq: "2" },
+    },
+  },
+  {
     path: "/runs/proof",
     contract: "get_run_proof",
     input: { runId: TACHO_ID },

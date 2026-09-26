@@ -59,6 +59,8 @@ const CONSOLE_CONTRACTS = [
   "list_commands",
   // #3970: the Run page's Issues tab. Reading a recording is a console read.
   "get_run_issues",
+  // #3894: the context window the Run page draws, read from the frames.
+  "get_run_context",
   "authorize_cli",
   "change_member_role",
   "remove_org_member",

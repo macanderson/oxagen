@@ -186,6 +186,7 @@ export function fleetSource(reads: FleetReads) {
       work: refuse,
       outcomesSettings: refuse,
       issues: refuse,
+      context: refuse,
       findings: refuse,
       transcript: refuse,
     },

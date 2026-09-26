@@ -47,6 +47,7 @@
  * update.
  */
 import {
+  CONTEXT_WINDOW_BLOCKS,
   STEERING_MANIFEST_SCHEMA,
   steeringForceSchema,
   steeringItemKindSchema,
@@ -413,6 +414,42 @@ const toolCallCompletedSchema = z
   .strict();
 
 /**
+ * The context window of one model request (ADR-193): each block the request
+ * carried, in window order, with the UTF-8 bytes of its parts' JSON and how
+ * many parts it held. The five block kinds are the leaf's
+ * (`CONTEXT_WINDOW_BLOCKS` in `@oxagen/tacho`), which the model proxy writes
+ * into its `llm_call` frames as well.
+ *
+ * No token is counted here. A reader divides the prompt total the vendor
+ * reported on the completion across the blocks by their bytes, so the blocks
+ * sum to that total by construction and nothing is tokenized locally.
+ */
+export const contextWindowPayloadSchema = z
+  .object({
+    blocks: z
+      .array(
+        z
+          .object({
+            kind: z.enum(CONTEXT_WINDOW_BLOCKS),
+            /** A request is bounded by the proxy's and the engine's caps, far below this. */
+            bytes: z.number().int().min(0).max(1_000_000_000),
+            items: countSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(CONTEXT_WINDOW_BLOCKS.length)
+      .refine(
+        (blocks) =>
+          new Set(blocks.map((block) => block.kind)).size === blocks.length,
+        "each block kind at most once",
+      ),
+  })
+  .strict();
+
+export type ContextWindowPayload = z.output<typeof contextWindowPayloadSchema>;
+
+/**
  * A completion the host answered for the in-app agent's engine (ADR-053 §1;
  * MC spec §4.4). The engine emits the `provider_request` frame with a `seq`,
  * the host answers it through the `@oxagen/ai` chokepoint, and this event is
@@ -458,6 +495,11 @@ const modelEngineCallCompletedSchema = z
  * with no matching `model.engine_call_completed` is a dangling intention, and
  * nothing can read it as a completed call because the fields a reader would
  * test do not exist and the event type differs.
+ *
+ * `window` is the request's context window, block by block (ADR-193). It is
+ * measured here, before the provider is contacted, so a call that fails or is
+ * cancelled still records what it would have sent. A run recorded before the
+ * window existed has none.
  */
 const modelEngineCallStartedSchema = z
   .object({
@@ -467,6 +509,7 @@ const modelEngineCallStartedSchema = z
     provider: shortLabelSchema,
     /** The configured model id, before the provider resolves one. */
     model: shortLabelSchema,
+    window: contextWindowPayloadSchema.optional(),
   })
   .strict();
 

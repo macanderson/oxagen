@@ -101,6 +101,11 @@ import {
 } from "node:zlib";
 import { digestText } from "../claude-code/context";
 import type { SessionRecorder } from "../claude-code/recorder";
+import {
+  CONTEXT_WINDOW_ATTR,
+  encodeWindowAttr,
+  measureProviderRequest,
+} from "../context-window";
 import { digestBytes, jcs } from "../digest";
 import { toProtocolTimestamp } from "../timestamp";
 import type { TachoEvent } from "../envelope";
@@ -1324,6 +1329,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     };
 
     let injected = false;
+    // The body `beforeForward` sent in place of the harness's, when it
+    // changed it. The window counts what it added as steering (ADR-193).
+    let injectedJson: Record<string, unknown> | undefined;
     let dropContentEncoding = false;
     let path = route.path;
     if (deps.beforeForward !== undefined) {
@@ -1349,6 +1357,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         // The changed body is sent as plain JSON, whatever the caller used.
         dropContentEncoding = true;
         injected = true;
+        injectedJson = result.json;
       }
       if (result.path !== path && result.path.startsWith("/"))
         path = result.path;
@@ -1379,6 +1388,16 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         : priors.fold(sessionKey, requestText);
     const requestTooLarge =
       fold !== undefined && fold.storedBytes > TACHO_MAX_BODY_BYTES;
+    // What the vendor is about to read, block by block, kept as numbers only
+    // (ADR-193). The attribute rides the envelope, so it survives a
+    // `digest_only` workspace that keeps none of these bytes.
+    const requestWindow = metered
+      ? measureProviderRequest(
+          route.api,
+          injectedJson ?? json(),
+          injectedJson === undefined ? undefined : json(),
+        )
+      : null;
     // Nothing else of the request is kept past this point but its bytes to send.
     decoded = undefined;
     parsed = undefined;
@@ -1590,6 +1609,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
                 [TACHO_METERING_ATTR]: TACHO_METERING_OBSERVED,
                 "oxagen.request_digest": requestDigest,
                 "oxagen.request_bytes": String(requestBytes),
+                ...(requestWindow !== null
+                  ? { [CONTEXT_WINDOW_ATTR]: encodeWindowAttr(requestWindow) }
+                  : {}),
                 "oxagen.response_digest": `sha256:${responseHash.digest("hex")}`,
                 "oxagen.response_bytes": String(responseBytes),
                 "oxagen.stream": meter?.isStreaming === true ? "1" : "0",

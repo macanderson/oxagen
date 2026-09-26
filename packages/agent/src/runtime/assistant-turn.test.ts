@@ -196,6 +196,7 @@ vi.mock("./plugin-type", async (importOriginal) => {
 });
 
 import { HandlerError, isHandlerError } from "@oxagen/oxagen";
+import { projectRunContextWindows } from "../dispatch/context-projection";
 import {
   AssistantStoppedError,
   AssistantTurnNeedsUserError,
@@ -723,6 +724,9 @@ describe("the prepared turn", () => {
       // materialised capabilities and the belt's two meta-tools. An empty
       // allowlist would read "no tools" on a run whose job is calling them.
       toolAllowlist: ["list_runs", "set_budget", SEARCH_TOOLS, LOAD_TOOLS],
+      // The windows the run records are projected as USED_CONTEXT lineage
+      // once it seals (ADR-193).
+      projectContext: projectRunContextWindows,
     });
 
     // The engine is declared the whole belt plus the meta-tools; the model is

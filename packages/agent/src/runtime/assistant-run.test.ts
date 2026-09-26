@@ -76,6 +76,7 @@ import {
   ASSISTANT_RETENTION_POLICY,
   assistantRunStore,
   AssistantRunNotRecordedError,
+  type ContextProjector,
   HISTORY_SUMMARY_PROVIDER,
   openAssistantRun,
   readAssistantAgentState,
@@ -1087,6 +1088,51 @@ describe("openAssistantRun", () => {
     ]);
   });
 
+  it("records the request's context window on the intention (ADR-193)", async () => {
+    // The witness for #3894: before it, the frame said which model was asked
+    // and nothing about what the request carried, so no read could draw the
+    // window a model call was sent.
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      originMessageId: MESSAGE,
+      surface: "chat",
+      instruction: "hi",
+      maxSteps: 4,
+      toolAllowlist: ["recall_memory"],
+      store: ledger.store,
+    });
+    const window = {
+      blocks: [
+        { kind: "system" as const, bytes: 1204, items: 1 },
+        { kind: "steering" as const, bytes: 310, items: 1 },
+        { kind: "tools" as const, bytes: 9120, items: 14 },
+        { kind: "context" as const, bytes: 412, items: 2 },
+        { kind: "conversation" as const, bytes: 90, items: 1 },
+      ],
+    };
+
+    await recorder.modelCallStarted({
+      seq: 1,
+      requestId: "prov-1-0",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      window,
+    });
+
+    expect(ledger.batches[1]!.events[0]!.payload).toEqual({
+      engine_seq: 1,
+      model_call_id: "prov-1-0",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      window,
+    });
+  });
+
   // seal() reads the chain once and then takes a seq. An append that arrived
   // during that await would chain onto the older value and could take a seq at
   // or past the terminal event's, which the store refuses. No caller reaches it
@@ -1136,6 +1182,74 @@ describe("openAssistantRun", () => {
       }),
     ).rejects.toMatchObject({ reason: "operator_principal_missing" });
     expect(mocks.snapshot).not.toHaveBeenCalled();
+  });
+});
+
+describe("the seal projects the run's context windows (ADR-193)", () => {
+  async function openRun(
+    ledger: ReturnType<typeof fakeStore>,
+    projectContext?: ContextProjector,
+    originMessageId: string | null = MESSAGE,
+  ) {
+    setupRun();
+    return openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      originMessageId,
+      surface: "chat",
+      instruction: "what went into the window?",
+      maxSteps: 4,
+      toolAllowlist: ["recall_memory"],
+      store: ledger.store,
+      ...(projectContext ? { projectContext } : {}),
+    });
+  }
+
+  it("hands the projection the run, the turn's message and a reader of the sealed ledger", async () => {
+    const ledger = fakeStore();
+    const project = vi.fn<ContextProjector>(async () => 1);
+    const recorder = await openRun(ledger, project);
+
+    await recorder.seal({ status: "completed", text: "done" });
+    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(1));
+
+    const [args, readEvents] = project.mock.calls[0] ?? [];
+    expect(args).toEqual({
+      runId: "run-uuid",
+      runPublicId: "arun_0123456789abcdef012345",
+      executionRef: MESSAGE,
+    });
+    // The reader is the store's own, so the projection reads what was sealed.
+    const read = vi.spyOn(ledger.store, "readAttemptEventsSince");
+    await readEvents?.("run-uuid", "0", 500);
+    expect(read).toHaveBeenCalledWith("run-uuid", "0", 500);
+  });
+
+  it("anchors a run no message asked for on its own public id", async () => {
+    const project = vi.fn<ContextProjector>(async () => 0);
+    const recorder = await openRun(fakeStore(), project, null);
+    await recorder.seal({ status: "completed", text: "done" });
+    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(1));
+    expect(project.mock.calls[0]?.[0].executionRef).toBe(
+      "arun_0123456789abcdef012345",
+    );
+  });
+
+  it("seals the run when the projection fails, and projects nothing without one (negative)", async () => {
+    const ledger = fakeStore();
+    const project = vi.fn<ContextProjector>(async () => {
+      throw new Error("neo4j unavailable");
+    });
+    await (await openRun(ledger, project)).seal({
+      status: "completed",
+      text: "done",
+    });
+    expect(ledger.seals).toHaveLength(1);
+    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(1));
+
+    const bare = fakeStore();
+    await (await openRun(bare)).seal({ status: "completed", text: "done" });
+    expect(bare.seals).toHaveLength(1);
   });
 });
 

@@ -60,6 +60,7 @@ import type {
   TranscriptText,
   TranscriptZoom,
 } from "./contracts/run";
+import type { RunContext } from "./contracts/run-context";
 import type { RunIssues } from "./contracts/run-issues";
 import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
 import type { PullRequestFilter, RunPage } from "./contracts/runs";
@@ -274,6 +275,14 @@ export interface DataSource {
      * with the frames it cites, read by the Cost tab (#4001).
      */
     findings(ctx: WsCtx, runId: string): Promise<Read<RunFindings>>;
+    /**
+     * `get_run_context`, each model request's window block by block and the
+     * assembler's manifests (ADR-193, #3894). Read by the Governed actions
+     * tab when the open frame is a model request or a manifest, callers
+     * features/run/actions-tab.tsx, and by the Context tab,
+     * features/run/context-tab.tsx.
+     */
+    context(ctx: WsCtx, runId: string): Promise<Read<RunContext>>;
     outcomesSettings(ctx: WsCtx): Promise<Read<RunOutcomesPolicy>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */

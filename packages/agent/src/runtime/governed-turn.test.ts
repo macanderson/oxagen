@@ -726,6 +726,27 @@ describe("runGovernedTurn on the engine", () => {
     });
     expect(intents[0]).not.toHaveProperty("outcome");
     expect(intents[0]).not.toHaveProperty("usage");
+    // The intention carries the request's window, block by block, measured
+    // on the request the engine asked with (ADR-193). The script's first
+    // request has one message and one tool and no system message.
+    const scripted = goldenScript()[0] as {
+      request: { messages: unknown[]; tools: unknown[] };
+    };
+    const size = (value: unknown) =>
+      Buffer.byteLength(JSON.stringify(value), "utf8");
+    expect(intents[0]?.window).toEqual({
+      blocks: [
+        { kind: "system", bytes: 0, items: 0 },
+        { kind: "steering", bytes: 0, items: 0 },
+        { kind: "tools", bytes: size(scripted.request.tools[0]), items: 1 },
+        { kind: "context", bytes: 0, items: 0 },
+        {
+          kind: "conversation",
+          bytes: size(scripted.request.messages[0]),
+          items: 1,
+        },
+      ],
+    });
   });
 
   it("never contacts the provider when the model-call intention could not be recorded", async () => {

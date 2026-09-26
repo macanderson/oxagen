@@ -288,6 +288,8 @@ export {
   MODEL_CALL_EVENT_TYPES,
   TOOL_CALL_EVENT_TYPES,
   TOOL_ENGINE_CALL_OUTCOMES,
+  contextWindowPayloadSchema,
+  type ContextWindowPayload,
   isForbiddenPayloadKey,
   assertNoForbiddenPayloadFields,
   validateInlineEventPayload,
@@ -305,6 +307,20 @@ export {
   type EventDigestInput,
   type EventStreamEntry,
 } from "./event-payload-registry";
+
+// The context windows a run recorded on its model-call frames, and the
+// assembler's manifests beside them (ADR-193).
+export {
+  assemblyOf,
+  isContextWindowEvent,
+  isLaterLlmCallSighting,
+  ledgerContextWindows,
+  tachoContextWindow,
+  type RecordedAssembly,
+  type RecordedWindow,
+  type RecordedWindowBlock,
+  type TachoModelCallRow,
+} from "./context-windows";
 
 // The one-shot, non-expiring finalization grant minted atomically with every
 // seal, and the durable obligation that guarantees its evidence is submitted.

@@ -86,6 +86,7 @@ function stubSource() {
       work: vi.fn(),
       outcomesSettings: vi.fn(),
       issues: vi.fn(),
+      context: vi.fn(),
       findings: vi.fn(),
     },
     approvals: {

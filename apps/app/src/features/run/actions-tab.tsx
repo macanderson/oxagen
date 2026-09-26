@@ -16,6 +16,7 @@ import type {
 } from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { RunFrameBody, TranscriptEntry } from "@/data/contracts/run";
+import type { RunContext } from "@/data/contracts/run-context";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
@@ -37,6 +38,12 @@ import {
   decisionOf,
 } from "./player-model";
 import { ParkedElsewhere, ParkedHere } from "./parked-calls";
+import {
+  AssembledContext,
+  drawsAssembly,
+  drawsWindow,
+  RequestWindow,
+} from "./request-window";
 import { DecidedApprovals } from "./resolved-approvals";
 import type { FrameTabProps } from "./tab-props";
 import { RunTimeline } from "./timeline";
@@ -94,18 +101,37 @@ async function readBody(
   return retained ? source.runs.frameBody(ctx, runId, open.seq) : null;
 }
 
+/**
+ * `get_run_context`, read only when the open frame is a model request or the
+ * frame the assembler's manifest was sealed into (ADR-193): the one frame
+ * whose panel draws what it holds. Any other frame makes no read.
+ */
+function readContext(
+  source: DataSource,
+  ctx: WsCtx,
+  runId: string,
+  open: OpenFrame | null,
+): Promise<Read<RunContext>> | null {
+  const type = open?.frame?.type ?? null;
+  return drawsWindow(type) || drawsAssembly(type)
+    ? source.runs.context(ctx, runId)
+    : null;
+}
+
 export async function GovernedActionsTab(props: FrameTabProps) {
   const { ctx, source, run, detail, view, now } = props;
   const open = openFrameOf(detail.frames.frames, view.body);
-  const [body, approvals] = await Promise.all([
+  const [body, approvals, context] = await Promise.all([
     readBody(source, ctx, run.id, open),
     readApprovals(source, ctx, run.id, now),
+    readContext(source, ctx, run.id, open),
   ]);
   return (
     <GovernedActions
       props={props}
       open={open}
       body={body}
+      context={context}
       pending={approvals.pending}
       resolved={approvals.resolved}
       mandates={approvals.mandates}
@@ -124,6 +150,7 @@ function GovernedActions({
   props,
   open,
   body,
+  context,
   pending,
   resolved,
   mandates,
@@ -132,6 +159,8 @@ function GovernedActions({
   props: FrameTabProps;
   open: OpenFrame | null;
   body: Read<RunFrameBody> | null;
+  /** `get_run_context`; null when the open frame draws no window or manifest. */
+  context: Read<RunContext> | null;
   pending: Read<ApprovalQueue>;
   resolved: Read<ResolvedApprovals>;
   mandates: ReadonlyMap<string, MandateRow>;
@@ -206,6 +235,13 @@ function GovernedActions({
   const approvalFrame =
     open.frame !== null &&
     isApprovalFrame(open.frame.type, open.frame.toolStatus);
+  // A model request's window, or the assembler's manifest (ADR-193).
+  const kindPanel =
+    context === null ? null : drawsWindow(open.frame?.type ?? null) ? (
+      <RequestWindow read={context} seq={open.seq} hrefOf={hrefOf} />
+    ) : (
+      <AssembledContext read={context} seq={open.seq} />
+    );
 
   return (
     <>
@@ -268,6 +304,7 @@ function GovernedActions({
                 />
               ) : null
             }
+            kindPanel={kindPanel}
             steps={steps}
             hrefOf={hrefOf}
             shown={frames.length}

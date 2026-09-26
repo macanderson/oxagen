@@ -11,6 +11,7 @@ import { runOutcomesSettingsGet } from "@oxagen/oxagen/contracts/run.outcomes.se
 import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
 import { runIssuesGet } from "@oxagen/oxagen/contracts/run.issues.get";
+import { runContextGet } from "@oxagen/oxagen/contracts/run.context.get";
 import { runTurnsGet } from "@oxagen/oxagen/contracts/run.turns.get";
 import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -1343,6 +1344,7 @@ describe("a refused read passes through every run read (negative)", () => {
     ["outcomesSettings", () => runs.outcomesSettings(ctx)],
     ["work", () => runs.work(ctx, "tse_4f0a")],
     ["issues", () => runs.issues(ctx, "tse_4f0a")],
+    ["context", () => runs.context(ctx, "tse_4f0a")],
     ["findings", () => runs.findings(ctx, "tse_4f0a")],
     ["get", () => runs.get(ctx, "tse_4f0a", { framesAfter: null })],
     ["cost", () => runs.cost(ctx, "tse_4f0a")],
@@ -1422,6 +1424,84 @@ describe("runs.issues", () => {
       readOk({ ...issues, issues: [{ ...issues.issues[0], edge: "inferred" }] }),
     );
     expect(await runs.issues(ctx, "tse_4f0a")).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("runs.context", () => {
+  const out = {
+    runId: "tse_4f0a",
+    source: "wrapped",
+    windows: [
+      {
+        seq: "12",
+        responseSeq: "12",
+        modelCallId: "req_12",
+        provider: "anthropic",
+        model: "claude-opus-5",
+        promptTokens: 1000,
+        bytes: 2000,
+        blocks: [
+          { kind: "system", bytes: 200, items: 1, tokens: 100 },
+          { kind: "conversation", bytes: 1800, items: 9, tokens: 900 },
+        ],
+      },
+    ],
+    unmeasured: 2,
+    assemblies: [
+      {
+        seq: "0",
+        budgetTokens: 2000,
+        spentTokens: 1102,
+        included: 14,
+        cut: 24,
+        textDigest: null,
+      },
+    ],
+    complete: true,
+  };
+
+  it("reads get_run_context for the run and names the call by reference, not by id", async () => {
+    kernelRead.mockResolvedValue(readOk(out));
+    const read = await runs.context(ctx, "tse_4f0a");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runContextGet,
+      input: { runId: "tse_4f0a" },
+      page: "run",
+    });
+    expect(read).toEqual(
+      readOk({
+        source: "wrapped",
+        windows: [
+          {
+            seq: "12",
+            responseSeq: "12",
+            callRef: "req_12",
+            provider: "anthropic",
+            model: "claude-opus-5",
+            promptTokens: 1000,
+            bytes: 2000,
+            blocks: out.windows[0]?.blocks,
+          },
+        ],
+        unmeasured: 2,
+        assemblies: out.assemblies,
+        complete: true,
+      }),
+    );
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("answers record_unmappable and reports once for a window the view refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        ...out,
+        windows: [{ ...out.windows[0], blocks: [] }],
+      }),
+    );
+    expect(await runs.context(ctx, "tse_4f0a")).toEqual(
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledTimes(1);

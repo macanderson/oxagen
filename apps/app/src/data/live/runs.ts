@@ -20,10 +20,12 @@ import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { FRAME_LIMIT_DEFAULT, runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
+import { runContextGet } from "@oxagen/oxagen/contracts/run.context.get";
 import { runIssuesGet } from "@oxagen/oxagen/contracts/run.issues.get";
 import { runTurnsGet } from "@oxagen/oxagen/contracts/run.turns.get";
 import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
 import { runOutcomesSettingsGet } from "@oxagen/oxagen/contracts/run.outcomes.settings.get";
+import { RunContext } from "@/data/contracts/run-context";
 import { RunIssues } from "@/data/contracts/run-issues";
 import { RunWork, RunOutcomesPolicy } from "@/data/contracts/run-work";
 import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
@@ -57,6 +59,7 @@ import {
   toRunTranscript,
   toRunTurns,
 } from "./mappers/run";
+import { toRunContext } from "./mappers/run-context";
 import { toRunPage } from "./mappers/runs";
 
 /**
@@ -143,6 +146,22 @@ export const runs: DataSource["runs"] = {
     if (!read.ok) return read;
     // The view is the contract's shape, field for field.
     return view(ctx.orgId, RunIssues, read.value, "runs.issues");
+  },
+  // Each model request's window, block by block, and the assembler's
+  // manifests (ADR-193, #3894).
+  async context(ctx, runId) {
+    const read = await kernelRead(ctx, {
+      contract: runContextGet,
+      input: { runId },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      RunContext,
+      toRunContext(read.value),
+      "runs.context",
+    );
   },
   // The open findings that cite this run, with the frames each cites (#4001).
   async findings(ctx, runId) {
