@@ -3,7 +3,9 @@
 // and the Runs panel, from one `list_runs` read, the pending approvals, the
 // open interjections and the workspace's agents. Approvals and interjections
 // are listed in the shell's drawer; Fleet counts both in one tile and opens
-// the drawer from it.
+// the drawer from it. The Runs panel's search, facets, order and page are
+// values on the URL, and the runs read applies them across the workspace
+// (#3837).
 //
 // A not-loaded state replaces the page body and never the shell. The runs
 // read decides it: a refusal is the access-denied state, a failure is the
@@ -23,6 +25,12 @@ import { canCommandRun } from "@/shared/run-command-roles";
 import { PageHeader } from "@/ui/page-header";
 import { type FleetAgent, FleetBoard } from "./board";
 import { FleetHeaderActions } from "./header-actions";
+import {
+  DEFAULT_LIST_QUERY,
+  type FleetListQuery,
+  isUnfiltered,
+  toRunsListQuery,
+} from "./list-query";
 import { DEFAULT_FLEET_PREFS, type FleetPrefs } from "./prefs";
 import { FleetDenied, FleetEmpty, FleetError, FleetPending } from "./states";
 import { parkedRunIds } from "./view";
@@ -71,12 +79,16 @@ async function readAgentRoster(
 async function readFleet(
   ctx: WsCtx,
   source: DataSource,
-  cursor: string | null,
-  pageSize: number,
-  pullRequests: PullRequestFilter,
+  list: FleetListQuery,
+  at: {
+    cursor: string | null;
+    pageSize: number;
+    pullRequests: PullRequestFilter;
+  },
 ) {
   const [runs, approvals, interjections, agents] = await Promise.all([
-    source.runs.list(ctx, { cursor, limit: pageSize, pullRequests }),
+    // The search, the facets, the order and the page are the read's (#3837).
+    source.runs.list(ctx, toRunsListQuery(list, at)),
     source.approvals.pending(ctx, { runId: null }),
     source.interjections.open(ctx, { runId: null }),
     readAgentRoster(ctx, source),
@@ -92,6 +104,7 @@ export async function Fleet({
   cursor,
   prefs = DEFAULT_FLEET_PREFS,
   pullRequests = "any",
+  list = DEFAULT_LIST_QUERY,
   banners,
 }: {
   ctx: WsCtx;
@@ -102,15 +115,16 @@ export async function Fleet({
   prefs?: FleetPrefs;
   /** Runs with or without pull requests, as the URL asked. */
   pullRequests?: PullRequestFilter;
+  /** The search, facets, order and page the URL asked for (`list-query.ts`). */
+  list?: FleetListQuery;
   /** The onboarding banners the page draws under the header, when the gate has any. */
   banners?: ReactNode;
 }) {
   const { runs, approvals, interjections, agents, now } = await readFleet(
     ctx,
     source,
-    cursor,
-    prefs.pageSize,
-    pullRequests,
+    list,
+    { cursor, pageSize: prefs.pageSize, pullRequests },
   );
   const org = ctx.orgSlug;
   const ws = ctx.wsSlug;
@@ -123,6 +137,7 @@ export async function Fleet({
         return (
           <FleetDenied
             permission={runs.permission}
+            decidedBy={runs.decidedBy ?? null}
             orgName={ctx.orgName}
             viewerName={user?.name || user?.email || ctx.userId}
             wsRole={ctx.wsRole}
@@ -139,17 +154,24 @@ export async function Fleet({
             code={runs.code}
             status={runs.status}
             readAt={now}
+            traceId={runs.traceId ?? null}
+            region={runs.region ?? null}
+            {...(runs.requestId === undefined
+              ? {}
+              : { requestId: runs.requestId })}
             ws={ws}
           />
         );
     }
   }
   // A filtered page with no match is not an empty workspace: the table stays,
-  // with its filter, and says no run matched.
+  // with its filter, and says no run matched. Neither is a later page.
   if (
     runs.value.runs.length === 0 &&
     cursor === null &&
-    pullRequests === "any"
+    pullRequests === "any" &&
+    isUnfiltered(list) &&
+    list.page === 1
   ) {
     return <FleetEmpty workspace={ctx.wsName} org={org} ws={ws} />;
   }

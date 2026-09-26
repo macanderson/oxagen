@@ -155,6 +155,7 @@
         "sealed": "sealed"
       },
       "search": "Search this list",
+      "searchRuns": "Search runs",
       "facetAll": "All · {facet}",
       "facetLabel": "Filter by {facet}",
       "rows": "Runs per page",
@@ -195,7 +196,12 @@
         "rangeMore": "{from}–{to} of {total}+",
         "none": "0 of 0",
         "older": "Older runs",
-        "newest": "Newest runs"
+        "newest": "Newest runs",
+        "rangeEmpty": "0 of {total}",
+        "rangeEmptyMore": "0 of {total}+",
+        "previous": "Previous",
+        "next": "Next",
+        "page": "Page {page}"
       },
       "pause": "Pause",
       "resolve": "Resolve",
@@ -284,7 +290,10 @@
       "body": "The control plane answered <c>{status} {code}</c>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
       "retry": "Try again",
       "incident": "Open an incident",
-      "trace": "trace and region not recorded · {at}"
+      "traceId": "trace {id}",
+      "traceNotRecorded": "trace not recorded",
+      "regionNotRecorded": "region not recorded",
+      "requestId": "request {id}"
     },
     "denied": {
       "title": "You cannot see this workspace",
@@ -295,7 +304,10 @@
       "needed": "Needed",
       "neededValue": "{permission} on {ws}",
       "decidedBy": "Decided by",
-      "decidedByValue": "policy not recorded · deny wins over every allow"
+      "decidedByValue": "policy not recorded · deny wins over every allow",
+      "decidedByIam": "IAM rule <c>{rule}</c> · deny wins over every allow",
+      "decidedByRule": "decision rule <c>{rule}</c>",
+      "bodyRule": "A decision rule on <b>{org}</b> refused this read. Your roles include <c>{permission} on {ws}</c>. A workspace admin can change the rule, and the change lands in the audit record."
     },
     "pending": {
       "title": "Your access request is waiting",
@@ -322,7 +334,9 @@
       "attach": "Attach",
       "raise": "Raise it",
       "cancel": "Cancel",
-      "unbacked": "Oxagen has no record to raise an incident in yet, so this cannot be sent. Report {status} {code} at {at} to whoever runs this deployment."
+      "unbacked": "Oxagen has no record to raise an incident in yet, so this cannot be sent. Report {status} {code} at {at} to whoever runs this deployment.",
+      "traceItem": "trace {id}",
+      "requestItem": "request {id}"
     }
   }
 }

@@ -964,11 +964,20 @@ describe("not-loaded states", () => {
     expect(error).toHaveTextContent(
       "The control plane answered 503 run_index_unavailable. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
     );
-    // A failed read records no trace id or region (#3841); the instant is
-    // the design's UTC form.
+    // This read recorded no trace id or region (#3841), and each part says
+    // so; the instant is the design's UTC form.
     expect(screen.getByTestId("fleet-error-trace").textContent).toMatch(
-      /^trace and region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
+      /^trace not recorded · region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
     );
+    expect(screen.getByTestId("fleet-error-trace-id")).toHaveAttribute(
+      "data-recorded",
+      "false",
+    );
+    expect(screen.getByTestId("fleet-error-region")).toHaveAttribute(
+      "data-recorded",
+      "false",
+    );
+    expect(screen.queryByTestId("fleet-error-request")).toBeNull();
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     // The design's errorState glyph: a circle with an exclamation mark, in
     // the failed tone alone.
@@ -1049,6 +1058,107 @@ describe("not-loaded states", () => {
     expect(
       screen.getByRole("button", { name: "Send the request" }),
     ).toBeDisabled();
+  });
+
+  // #3841: the error line and Decided by read from the record.
+  it("error: prints the trace, the region and the request the seam recorded, and attaches them to an incident", async () => {
+    const { container } = await renderFleet({
+      runs: readError("run_index_unavailable", 503, {
+        traceId: "01K5RSXQ7F2E",
+        region: "us-east-1",
+        requestId: "0192f1c4-0000-7000-8000-00000000c0de",
+      }),
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getByTestId("fleet-error-trace").textContent).toMatch(
+      /^trace 01K5RSXQ7F2E · us-east-1 · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z · request 0192f1c4-0000-7000-8000-00000000c0de$/,
+    );
+    for (const id of ["fleet-error-trace-id", "fleet-error-region"])
+      expect(screen.getByTestId(id)).toHaveAttribute("data-recorded", "true");
+    await expectNoAxe(container);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Open an incident" }));
+    const attach = within(
+      screen.getByRole("dialog", { name: "Open an incident" }),
+    ).getByRole("list", { name: "Attach" });
+    expect(
+      within(attach)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "503 run_index_unavailable",
+      "core-platform",
+      expect.stringMatching(/Z$/),
+      "trace 01K5RSXQ7F2E",
+      "request 0192f1c4-0000-7000-8000-00000000c0de",
+    ]);
+  });
+
+  it("error: says which part was not recorded when only some were", async () => {
+    await renderFleet({
+      runs: readError("run_index_unavailable", 503, {
+        traceId: null,
+        region: "us-east-1",
+      }),
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getByTestId("fleet-error-trace").textContent).toMatch(
+      /^trace not recorded · us-east-1 · /,
+    );
+    expect(screen.getByTestId("fleet-error-trace-id")).toHaveAttribute(
+      "data-recorded",
+      "false",
+    );
+  });
+
+  it("access denied: names the IAM rule that decided", async () => {
+    const { container } = await renderFleet({
+      runs: {
+        ...DENIED,
+        decidedBy: { source: "iam", id: "8:default" },
+        traceId: null,
+        region: null,
+      },
+      approvals: NO_APPROVALS,
+    });
+    const decided = screen.getByTestId("fleet-decided-by");
+    expect(decided).toHaveTextContent(
+      "IAM rule 8:default · deny wins over every allow",
+    );
+    expect(decided).toHaveAttribute("data-recorded", "true");
+    expect(within(decided).getByText("8:default").tagName).toBe("CODE");
+    expect(screen.getByTestId("fleet-denied")).toHaveTextContent(
+      "do not include workspace.read on core-platform",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("access denied: names the decision rule that refused the read, and says a rule refused it", async () => {
+    await renderFleet({
+      runs: {
+        ...DENIED,
+        decidedBy: { source: "decision_rule", id: "rul_no_weekend_reads" },
+      },
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getByTestId("fleet-decided-by")).toHaveTextContent(
+      "decision rule rul_no_weekend_reads",
+    );
+    expect(screen.getByTestId("fleet-denied")).toHaveTextContent(
+      "A decision rule on Acme Robotics refused this read.",
+    );
+  });
+
+  it("access denied: says the rule was not recorded when the record names none", async () => {
+    await renderFleet({
+      runs: { ...DENIED, decidedBy: null },
+      approvals: NO_APPROVALS,
+    });
+    const decided = screen.getByTestId("fleet-decided-by");
+    expect(decided).toHaveTextContent(
+      "policy not recorded · deny wins over every allow",
+    );
+    expect(decided).toHaveAttribute("data-recorded", "false");
   });
 
   it("pending: carries the id of the access request still waiting", async () => {

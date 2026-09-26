@@ -109,5 +109,8 @@ export function toRunPage(out: RunListOutput): z.input<typeof RunPage> {
     runs: out.runs.map(toRunRow),
     nextCursor: out.nextCursor,
     ...(out.warnings === undefined ? {} : { warnings: out.warnings }),
+    // Absent when the read did not count; null past the bound (#3837).
+    ...(out.total === undefined ? {} : { total: out.total }),
+    ...(out.totalBound === undefined ? {} : { totalBound: out.totalBound }),
   };
 }

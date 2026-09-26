@@ -106,6 +106,9 @@ engine_version() {
 # handed 26 of them.
 # `WRITE_MANIFEST_IMAGE` overrides the container image for one service
 # (alpine is the default).
+# `OXAGEN_REGION` is the region a page's error line prints beside the trace
+# id (#3841). Every deployed node runs in us-east-1 (deploy-node-site.sh), so
+# that is the default; the environment can name another.
 write_manifest() {
   local port=$1 memory=$2 health=$3 config=$4
   shift 4
@@ -126,13 +129,14 @@ write_manifest() {
     --arg memory "$memory" \
     --arg health "$health" \
     --arg config "$config" \
+    --arg region "${OXAGEN_REGION:-us-east-1}" \
     '{
        port: $port,
        image: $image,
        command: $command,
        memory: $memory,
        health_path: $health,
-       env: { NEXT_TELEMETRY_DISABLED: "1" }
+       env: { NEXT_TELEMETRY_DISABLED: "1", OXAGEN_REGION: $region }
      }
      + (if $config == "" then {} else { config_prefix: $config } end)' \
     > "$OUT/oxagen-run.json"

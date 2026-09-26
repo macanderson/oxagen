@@ -4,6 +4,8 @@ The runs table on the Fleet page (`apps/app/ARCHITECTURE.md` §1.2). One list ov
 
 The in-app agent's turns are excluded. Each turn is a run of its own (MC spec §14.1), admitted on the `chat` or `api-chat` surface by `openAssistantRun` (`@oxagen/agent`), and the assistant is Oxagen's: the customer talks to it and never owns or manages it, so its runs never appear in the customer's list (Mockups `71bc546`; `apps/app/ARCHITECTURE.md` §1.2). `get_run` still opens one by its id, which is how the flyout's per-turn run link works; `list_recent_runs` reads through this same exclusion.
 
+The status, tier and replay-grade filters, the search, the order and the offset run on the server across both stores, so they reach every run in the workspace and not only the newest page (#3837). A call that sends none of them lists exactly as before: newest first, one keyset page per store, merged. A call that sends any of them reads the run index (`packages/handlers/src/run.list.index.ts`), one `UNION ALL` over both stores that filters, searches and orders in SQL, then reads the page's rows through the same selects and mappers the keyset page uses.
+
 ## Mode
 
 **sync**
@@ -27,6 +29,20 @@ The in-app agent's turns are excluded. Each turn is a run of its own (MC spec §
 | `limit` | integer | no | 1-100, default 50 |
 | `cursor` | string | no | the `nextCursor` of an earlier page; a cursor this capability did not write is `invalid_input` |
 | `pullRequests` | `any`, `with` or `without` | no | absent or `any` lists every run. `with` lists wrapped sessions whose frames name a pull request or whose `pr_open` calls ingest counted. `without` lists wrapped sessions with neither. Both leave out ledger runs, whose receipts name a repository id and no page. A filtered page reads at most five batches of 100 sessions, so it may hold fewer than `limit` runs and still carry a `nextCursor`, which continues after the last session it read |
+| `status` | array of `live`, `sealed`, `halted` | no | 1 to 3 values; only runs in these statuses. A ledger `pending` or `running` run is `live`, `completed` or `failed` is `sealed`, and `cancelled` is `halted`. A session's `running` is `live`, `aborted` is `halted`, and every other outcome is `sealed`. Paused and compacted runs keep their status (ADR-190) |
+| `tier` | array of `contained`, `gateway`, `harness`, `observe` | no | 1 to 4 values; only runs published at these tiers. A ledger run's tier is its latest seal's, and a ledger run with no graded seal reads `harness` |
+| `replayGrade` | array of `inspect`, `view`, `fork`, `retry`, `not_recorded` | no | 1 to 5 values. `not_recorded` matches a run whose `replayGrade` is null, which includes every live run |
+| `query` | string | no | 1 to 200 characters after trimming. A case-insensitive substring matched against the public id, the name, the harness title, the agent key, the operator's name, the model id, the hostname, and a ledger run's goal. `%` and `_` match themselves |
+| `sort` | `{ key, dir }` | no | `key` is `started`, `agent`, `operator`, `status`, `tier`, `replay` or `cost`; `dir` is `asc` or `desc`. Absent means `started` descending. A run with no value for the key sorts last in both directions, and ties fall back to newest first. `status` sorts `live`, `sealed`, `halted`. `tier` and `replay` sort along their ladders, not alphabetically. `cost` sorts by the priced figure in micro-units, falling back to what a wrapped session reported, across currencies. Frames, name, pull requests, lines and tokens cannot be sorted |
+| `offset` | integer | no | 0 to 10,000; rows to skip in the filtered, sorted list. Page N of size L is `offset = (N - 1) * L` |
+
+These inputs refuse each other as `invalid_input`, with the code as the message:
+
+- `cursor_with_offset`: `cursor` and `offset` together. A cursor already says where the page starts.
+- `cursor_with_sort`: `cursor` with any `sort` but `started` descending. A cursor is a position in the newest-first order.
+- `pull_requests_with_offset` and `pull_requests_with_sort`: a `pullRequests` filter of `with` or `without` with an `offset` above 0 or another order. The pull requests are read from the frames a page at a time, so that filter pages newest first by cursor.
+
+`nextCursor` is set only in the newest-first order. In any other order a caller pages by `offset` and reads the page count from `total`.
 
 ## Output
 
@@ -35,6 +51,8 @@ The in-app agent's turns are excluded. Each turn is a run of its own (MC spec §
 | `runs` | object[] | see the row below |
 | `nextCursor` | string or null | null on the last page |
 | `warnings` | array of `pull_requests_unread`, optional | the pull-request frames could not be read. Rows carry no `pullRequests`, and a filtered page decided on the counted `pr_open` calls alone |
+| `total` | integer or null, optional | the runs that match every filter and the search across both stores, whatever the page. Null when more than `totalBound` match. Absent when the read did not count: under a `pullRequests` filter of `with` or `without`, which only the frames in ClickHouse answer, or when the count failed |
+| `totalBound` | integer, optional | 10,000 (`RUN_LIST_TOTAL_BOUND`), present whenever `total` is. A caller shows `10,000+` when `total` is null |
 
 Each row:
 
@@ -72,4 +90,4 @@ Each row:
 
 ## Honesty
 
-A null is what a caller renders as "not recorded". The operator's name is read through the principal's `parent_user_id` and only where the principal's kind is `human`, because a delegated agent principal carries the `parent_user_id` of whoever created it and naming that person would put a name on a run they did not start. `iam.principals.display_name` is deliberately not the source: provisioning falls that column back to the user's email address, and a run row carries a name or nothing. The provider on `model` is the one `providerFromModelId` gives every metered call, so a run page and the meter never disagree about who served the same call. Cost comes from the run's `cost.run_totals` row, which the rollup jobs rebuild from the run's frames while it runs and again after its seal; a run with no row yet, or a row whose frames priced nothing, answers `cost: null`, never `0`, and nothing here reads the tacho session's own `total_cost_micros`. The one ClickHouse read is the pull requests a page's wrapped sessions name. When it fails, the rows stay up without them and the page says `pull_requests_unread`. Every query names `org_id` and `workspace_id` in addition to RLS, so a run from another workspace stays out of the list on a stack that runs with the RLS bypass on.
+A null is what a caller renders as "not recorded". The operator's name is read through the principal's `parent_user_id` and only where the principal's kind is `human`, because a delegated agent principal carries the `parent_user_id` of whoever created it and naming that person would put a name on a run they did not start. `iam.principals.display_name` is deliberately not the source: provisioning falls that column back to the user's email address, and a run row carries a name or nothing. The provider on `model` is the one `providerFromModelId` gives every metered call, so a run page and the meter never disagree about who served the same call. Cost comes from the run's `cost.run_totals` row, which the rollup jobs rebuild from the run's frames while it runs and again after its seal; a run with no row yet, or a row whose frames priced nothing, answers `cost: null`, never `0`, and the row never reads the tacho session's own `total_cost_micros` as its cost. The `cost` sort does fall back to it, as `reportedCost`, because that is the figure the Fleet row shows for a run with no rollup yet. The one ClickHouse read is the pull requests a page's wrapped sessions name. When it fails, the rows stay up without them and the page says `pull_requests_unread`. The total is a bounded count: each store counts at most 10,001 matching rows, so a large workspace costs no more to count than one at the bound, and a sum past the bound reads null rather than a number the count did not reach. Every query names `org_id` and `workspace_id` in addition to RLS, so a run from another workspace stays out of the list on a stack that runs with the RLS bypass on.
