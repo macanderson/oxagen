@@ -951,7 +951,7 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   // (`activeSessionIdsByConversationId`). So the walk would reach a process
   // that many Cursor conversations share: it outlives each of them, and a
   // cancel of one conversation would signal the rest. A Cursor session ends
-  // on Cursor's own `sessionEnd`, or on the daemon's idle bound.
+  // on Cursor's own `sessionEnd`, or after an hour with no hook (ADR-141).
   // Cursor sets its hook timeouts per Cursor event, so its own name is kept
   // for the response budget before the adapter renames it.
   const cursorEvent =

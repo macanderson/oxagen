@@ -169,7 +169,13 @@ export interface DaemonTimers {
   detectorMs: number;
   checkpointMs: number;
   sweepMs: number;
+  /** How long a session with no harness pid may go quiet before the sweep closes it. */
   idleSessionMs: number;
+  /**
+   * The same bound for a Cursor session, which never carries a pid
+   * (ADR-141). It applies when it is the shorter of the two.
+   */
+  cursorIdleSessionMs: number;
   walRetainMs: number;
 }
 
@@ -181,6 +187,10 @@ export const DEFAULT_TIMERS: DaemonTimers = {
   checkpointMs: 60_000,
   sweepMs: 30_000,
   idleSessionMs: 6 * 60 * 60_000,
+  // One hour, four times the longest a Cursor agent's shell tool waits on a
+  // command in the foreground (about fifteen minutes). A quiet session sealed
+  // by this bound reopens on its next hook (ADR-172). ADR-141 records why.
+  cursorIdleSessionMs: 60 * 60_000,
   walRetainMs: 7 * 24 * 60 * 60_000,
 };
 
@@ -3311,7 +3321,10 @@ async function initializeDaemon(
           let failure: { error: unknown } | undefined;
           const candidates = registry.sweepCandidates(
             isProcessAlive,
-            timers.idleSessionMs,
+            (session) =>
+              session.harness === "cursor"
+                ? Math.min(timers.idleSessionMs, timers.cursorIdleSessionMs)
+                : timers.idleSessionMs,
             (session) =>
               pendingSessionEnds.has(session.recorder.sessionUuid) ||
               spoolHolds(session),
