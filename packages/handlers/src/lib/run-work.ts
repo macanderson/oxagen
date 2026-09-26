@@ -32,6 +32,10 @@ export interface WorkDiffRow extends WorkContextRow {
   complete: string;
   limitations: string;
   omitted: string;
+  /** The frame's `content.redactions`, as the JSON text the row holds. */
+  redactions: string;
+  /** How many redactions the recorder made, from the frame's attrs. */
+  redaction_count: number | string;
 }
 export interface WorkSubagentRow {
   id: string;
@@ -346,7 +350,8 @@ export async function readWorkDiffs(
       attrs['diff_head_sha'] AS head, attrs['repository_url'] AS repository, seq, toString(ts) AS observed_at,
       attrs['diff_base_sha'] AS base, content_digest, bytes_ref,
       attrs['diff_complete'] AS complete, attrs['diff_limitations'] AS limitations,
-      attrs['body_omitted'] AS omitted
+      attrs['body_omitted'] AS omitted, redactions,
+      toUInt32OrZero(attrs['oxagen.content_redactions_total']) AS redaction_count
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
         AND session_uuid = {sessionUuid:UUID}
@@ -361,6 +366,128 @@ export function checkoutId(
   row: Pick<WorkContextRow, "path" | "branch" | "remote">,
 ): string {
   return workDigest(JSON.stringify([row.path, row.branch, row.remote]));
+}
+
+/**
+ * A context that names a path and nothing else. The daemon seals a session's
+ * first hook before its first Git read, so that frame carries the `cwd` with
+ * no branch, remote, head, or repository (#3791). A detached HEAD still
+ * records its head and remote, so it is never path-only.
+ */
+function pathOnly(row: WorkContextRow): boolean {
+  return (
+    row.branch === "" &&
+    row.remote === "" &&
+    row.head === "" &&
+    row.repository === ""
+  );
+}
+
+/**
+ * The Git context a path-only frame at `seq` belongs to, among `others`,
+ * every context the read returned but the path-only row the frame is in.
+ * First choice is a Git context at `path` whose recorded span contains the
+ * frame. The read groups a context's frames into one row, so a context the
+ * session left and came back to keeps its early start, and only its span
+ * shows the session was back in it. When several contexts span the frame,
+ * the one that started last wins. A fold into a span that holds the frame
+ * stretches nothing.
+ *
+ * Next is the context that starts next after the frame, when it is a Git
+ * context at `path`: the Git read the daemon ran right after that hook.
+ * Failing that, it is the context that started last before the frame, when
+ * that is a Git context at `path`: the one in effect when the frame was
+ * sealed. When another context starts in between, it separates the frame
+ * from that Git context, and the frame folds into neither.
+ */
+function foldTarget(
+  path: string,
+  seq: number,
+  others: readonly WorkContextRow[],
+): WorkContextRow | undefined {
+  const gitAt = (row: WorkContextRow | undefined) =>
+    row !== undefined && row.path === path && !pathOnly(row) ? row : undefined;
+  let around: WorkContextRow | undefined;
+  let next: WorkContextRow | undefined;
+  let previous: WorkContextRow | undefined;
+  for (const candidate of others) {
+    const start = Number(candidate.first_seq);
+    if (
+      gitAt(candidate) !== undefined &&
+      start <= seq &&
+      seq <= Number(candidate.last_seq) &&
+      (around === undefined || start > Number(around.first_seq))
+    )
+      around = candidate;
+    if (start > seq) {
+      if (next === undefined || start < Number(next.first_seq))
+        next = candidate;
+    } else if (previous === undefined || start > Number(previous.first_seq))
+      previous = candidate;
+  }
+  return around ?? gitAt(next) ?? gitAt(previous);
+}
+
+/**
+ * Fold each path-only context into the Git context recorded at the same path,
+ * so a session's first hook is not a checkout of its own that no repository
+ * or branch can match. The merged row keeps the Git context's branch, remote,
+ * head, and repository, and spans both rows' sequences. Contexts that name a
+ * branch or remote are never merged with each other, so a branch switch or a
+ * second repository stays its own checkout. A path-only row with no Git
+ * context at its path stays too: a directory outside Git is a real location.
+ *
+ * The read groups every path-only frame at a path into one row, which can
+ * cover frames seen at different times: a first hook, and a later one after
+ * the session moved elsewhere. So the row's first and last frames, the two
+ * it knows, each fold on their own (`foldTarget`), and neither stretches a
+ * Git context past the start of another context. A frame that folds into
+ * nothing stays a path-only checkout. Every decision reads the spans the
+ * read returned, never one an earlier fold widened.
+ *
+ * `alias` maps a row that folded whole to the checkout id its first frame
+ * folded into, so a captured diff never points at a checkout the read no
+ * longer returns. A row that stays in part keeps its own id.
+ */
+export function foldProvisionalContexts(rows: readonly WorkContextRow[]): {
+  rows: WorkContextRow[];
+  alias: Map<string, string>;
+} {
+  const alias = new Map<string, string>();
+  // Each Git context's merged copy, by the row the read returned.
+  const merged = new Map<WorkContextRow, WorkContextRow>();
+  for (const row of rows) if (!pathOnly(row)) merged.set(row, { ...row });
+  const folded: WorkContextRow[] = [...merged.values()];
+  for (const row of rows) {
+    if (!pathOnly(row)) continue;
+    const others = rows.filter((other) => other !== row);
+    // Fold the frame at `seq` into its Git context's merged copy, and answer
+    // that copy, or undefined when the frame stays.
+    const place = (seq: number | string): WorkContextRow | undefined => {
+      const target = foldTarget(row.path, Number(seq), others);
+      const copy = target === undefined ? undefined : merged.get(target);
+      if (copy === undefined) return undefined;
+      if (Number(seq) < Number(copy.first_seq)) copy.first_seq = seq;
+      if (Number(seq) > Number(copy.last_seq)) copy.last_seq = seq;
+      return copy;
+    };
+    const first = place(row.first_seq);
+    const last =
+      Number(row.last_seq) === Number(row.first_seq)
+        ? first
+        : place(row.last_seq);
+    if (first !== undefined && last !== undefined) {
+      alias.set(checkoutId(row), checkoutId(first));
+      continue;
+    }
+    folded.push({
+      ...row,
+      first_seq: first === undefined ? row.first_seq : row.last_seq,
+      last_seq: last === undefined ? row.last_seq : row.first_seq,
+    });
+  }
+  folded.sort((a, b) => Number(a.first_seq) - Number(b.first_seq));
+  return { rows: folded, alias };
 }
 export function recordedRepository(url: string): RunRepository | null {
   try {
@@ -417,11 +544,33 @@ export function checkoutOf(
     lastSeq: String(row.last_seq),
   };
 }
+/**
+ * Whether the recorder redacted the frame's bytes before it sealed them. The
+ * collector sets `diff_complete` from the snapshot, before the seal redacts a
+ * credential out of the patch, so the flag alone calls a sanitized patch
+ * exact (#3791). The attr counts every redaction and the column lists at most
+ * the first few, so either one shows it.
+ */
+function redactedOf(
+  row: Pick<WorkDiffRow, "redactions" | "redaction_count">,
+): boolean {
+  if (Number(row.redaction_count) > 0) return true;
+  try {
+    const listed: unknown = JSON.parse(row.redactions);
+    return Array.isArray(listed) && listed.length > 0;
+  } catch {
+    // A frame with no content leaves the column empty. It lists nothing.
+    return false;
+  }
+}
+
 export function capturedDiffOf(row: WorkDiffRow): RunCapturedDiff {
   const digest = nullable(row.content_digest);
   const bodyAvailable = Boolean(row.bytes_ref);
   const limitations = row.limitations.split(",").filter(Boolean);
   if (row.omitted) limitations.push(row.omitted);
+  const redacted = redactedOf(row);
+  if (redacted) limitations.push("content_redacted");
   return {
     checkoutId: checkoutId(row),
     seq: String(row.seq),
@@ -433,7 +582,7 @@ export function capturedDiffOf(row: WorkDiffRow): RunCapturedDiff {
       ? "not_captured"
       : !bodyAvailable
         ? "not_retained"
-        : row.complete === "true"
+        : row.complete === "true" && !redacted
           ? "complete"
           : "partial",
     limitations,

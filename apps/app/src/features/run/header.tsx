@@ -948,7 +948,12 @@ export function RunHeader({
           className="ml-auto flex flex-wrap items-start gap-2"
         >
           {sealed ? (
-            <ReplayActions org={place.org} ws={place.ws} run={run} />
+            <ReplayActions
+              org={place.org}
+              ws={place.ws}
+              run={run}
+              orgRole={orgRole}
+            />
           ) : (
             <RunControls
               org={place.org}

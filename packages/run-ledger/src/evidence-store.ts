@@ -9,7 +9,9 @@
 // object, wrapped by the platform KEK the KmsAdapter seam names), and the
 // reference carries the key id so a later KEK — a per-organisation one, ADR-042
 // — decrypts by routing on the reference alone. Segments and bundles are keyed
-// by the digest of the bytes as stored.
+// by the digest of the bytes as stored. Scratch objects, which a durable job
+// writes, reads back and deletes, are keyed by the job's run id and a name
+// (`evidenceScratchKey`), away from every content-addressed prefix.
 //
 // The plaintext inside a body's envelope is framed as
 // `[u16be length][content type, UTF-8][bytes]`: the content type travels with
@@ -50,6 +52,9 @@ const BUNDLE_CONTENT_TYPE = "application/zip";
 
 /** The longest content type the body frame carries (RFC 6838 names are short). */
 const MAX_CONTENT_TYPE_BYTES = 255;
+
+/** The longest KEK id a scratch object carries; @oxagen/crypto's are short. */
+const MAX_KEY_ID_BYTES = 255;
 
 interface EvidenceScope {
   orgId: string;
@@ -121,6 +126,37 @@ function evidenceBundleKey(
   return `evidence/${scope.orgId}/${scope.workspaceId}/exports/${exportId}/${digestHex}.zip`;
 }
 
+/**
+ * A job id or a scratch object name as one path segment. It starts with a
+ * letter or digit, so neither `.` nor `..` passes, and it holds no slash, so
+ * a name cannot climb out of its job's prefix.
+ */
+const SCRATCH_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+function scratchSegment(what: string, value: string): string {
+  if (!SCRATCH_SEGMENT.test(value)) {
+    throw new TypeError(`not a scratch ${what}: ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+/**
+ * Where one run-enrichment job keeps a scratch object: the transcript chunks
+ * and their manifest, which one step writes and a later step reads (#3784).
+ *
+ * The prefix names the job's Inngest run id, not a digest, so the job's
+ * failure handler can delete every object by name with nothing but that id.
+ * It sits apart from `bodies/`: a body key is content-addressed and shared
+ * with frame bodies, so a delete there could remove evidence.
+ */
+export function evidenceScratchKey(
+  scope: EvidenceScope,
+  jobRunId: string,
+  name: string,
+): string {
+  return `evidence/${scope.orgId}/${scope.workspaceId}/scratch/run-enrich/${scratchSegment("job run id", jobRunId)}/${scratchSegment("name", name)}`;
+}
+
 function digestHexOf(digest: string): string {
   if (!SHA256_DIGEST_PATTERN.test(digest)) {
     throw new TypeError(`not a sha256 digest: ${digest}`);
@@ -166,6 +202,37 @@ export function parseFrameBodyPlaintext(plaintext: Uint8Array): {
   return {
     contentType: decoder.decode(buf.subarray(2, 2 + length)),
     bytes: new Uint8Array(buf.subarray(2 + length)),
+  };
+}
+
+/**
+ * A scratch object is `[u16be key id length][key id, UTF-8][envelope]`. The
+ * envelope does not name its KEK, and a scratch object has no reference to
+ * carry one, so the object carries it for the read.
+ */
+function scratchObject(keyId: string, envelope: Buffer): Buffer {
+  const id = encoder.encode(keyId);
+  if (id.length === 0 || id.length > MAX_KEY_ID_BYTES) {
+    throw new RangeError(`key id length out of range: ${id.length}`);
+  }
+  const header = Buffer.alloc(2);
+  header.writeUInt16BE(id.length, 0);
+  return Buffer.concat([header, id, envelope]);
+}
+
+function parseScratchObject(object: Uint8Array): {
+  keyId: string;
+  envelope: Buffer;
+} {
+  const buf = Buffer.from(object);
+  if (buf.length < 2) throw new RangeError("scratch object too short");
+  const length = buf.readUInt16BE(0);
+  if (length === 0 || 2 + length > buf.length) {
+    throw new RangeError("scratch object key id length out of range");
+  }
+  return {
+    keyId: decoder.decode(buf.subarray(2, 2 + length)),
+    envelope: buf.subarray(2 + length),
   };
 }
 
@@ -305,6 +372,41 @@ export interface EvidenceStore extends RunBodyStore, RunArchiveStore {
     digest: string;
     bytes: Uint8Array;
   }): Promise<{ ref: string }>;
+  /**
+   * Write one scratch object for a run-enrichment job, encrypted like a body,
+   * at `evidenceScratchKey`. A second write of the same name replaces the
+   * first, so a step that runs again rewrites what it wrote.
+   */
+  putScratch(input: {
+    scope: EvidenceScope;
+    /** The Inngest run id of the job that owns the object. */
+    jobRunId: string;
+    /** One path segment, such as `chunk-0` or `manifest`. */
+    name: string;
+    contentType: string;
+    bytes: Uint8Array;
+  }): Promise<void>;
+  /**
+   * The scratch object at `name`'s key. Throws when there is none. The
+   * envelope does not name its key, and every job's scratch is sealed under
+   * the same KEK, so this decrypts any scratch object found there. A caller
+   * checks the bytes against a digest it kept when it wrote them, as the
+   * enrichment job's manifest does.
+   */
+  getScratch(
+    scope: EvidenceScope,
+    jobRunId: string,
+    name: string,
+  ): Promise<{ bytes: Uint8Array; contentType: string }>;
+  /**
+   * Delete a job's named scratch objects. A name with no object is skipped,
+   * so a cleanup that runs twice, or names more than the job wrote, is safe.
+   */
+  deleteScratch(
+    scope: EvidenceScope,
+    jobRunId: string,
+    names: readonly string[],
+  ): Promise<void>;
 }
 
 export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
@@ -438,6 +540,51 @@ export function createEvidenceStore(deps: EvidenceStoreDeps): EvidenceStore {
         access: "private",
       });
       return { ref: key };
+    },
+
+    // Scratch objects skip `once`: a name is not a digest, so a second write
+    // of the same name may carry other bytes and must land.
+    async putScratch(input) {
+      const key = evidenceScratchKey(input.scope, input.jobRunId, input.name);
+      const { adapter, keyId } = deps.writeCrypto();
+      const envelope = await encrypt(
+        frameBodyPlaintext(input.contentType, input.bytes),
+        keyId,
+        { adapter },
+      );
+      const written = await deps.storage.put({
+        key,
+        body: scratchObject(keyId, envelope),
+        contentType: BODY_OBJECT_CONTENT_TYPE,
+        access: "private",
+      });
+      if (written.key !== key) {
+        throw new Error(
+          `evidence scratch landed on an unexpected key: ${written.key}`,
+        );
+      }
+    },
+
+    async getScratch(scope, jobRunId, name) {
+      const object = await deps.storage.get(
+        evidenceScratchKey(scope, jobRunId, name),
+      );
+      const { keyId, envelope } = parseScratchObject(
+        await readAll(object.body),
+      );
+      const { adapter } = deps.readCrypto(keyId);
+      const plaintext = await decrypt(envelope, keyId, { adapter });
+      return parseFrameBodyPlaintext(plaintext);
+    },
+
+    async deleteScratch(scope, jobRunId, names) {
+      // Every key is checked before the first delete, so a bad name deletes
+      // nothing. One at a time: a cleanup is at most a few dozen objects, and
+      // the blob driver limits request rates.
+      const keys = names.map((name) =>
+        evidenceScratchKey(scope, jobRunId, name),
+      );
+      for (const key of keys) await deps.storage.delete(key);
     },
   };
 }

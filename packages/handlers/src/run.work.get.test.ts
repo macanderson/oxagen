@@ -1,7 +1,15 @@
 import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CommandRefFrameRow } from "./lib/run-command-refs";
-import { prLinkOf } from "./lib/run-work";
+import {
+  checkoutId,
+  prLinkOf,
+  WORK_CONTEXT_CAP,
+  workDigest,
+  type WorkContextRow,
+  type WorkDiffRow,
+} from "./lib/run-work";
+import { readWorkPullRequests, type WorkPrDeps } from "./lib/run-work-prs";
 import { readWorkReleases } from "./lib/run-work-releases";
 import { createRunWorkGetHandler, type RunWorkDeps } from "./run.work.get";
 import type { TachoSessionColumns } from "./run.list";
@@ -407,6 +415,153 @@ describe("get_run_work", () => {
       { repositoryId: "R_1", number: 42, headSha: null },
     ]);
     expect(result.warnings).toContain("recorded_repository_not_connected");
+  });
+  // #3791: the daemon seals a session's first hook before its first Git read,
+  // so that frame names the path alone. As a checkout of its own it matched
+  // no repository or branch, and the work read incomplete for good.
+  it("folds the path-only first frame into the Git context at its path, and the work reads complete", async () => {
+    const { handler, deps } = setup({ chainVerified: true });
+    const pathOnly: WorkContextRow = {
+      path: "/work/app",
+      branch: "",
+      head: "",
+      remote: "",
+      repository: "",
+      first_seq: 0,
+      last_seq: 0,
+    };
+    const located: WorkContextRow = {
+      path: "/work/app",
+      branch: "fix/run",
+      head: "b".repeat(40),
+      remote: workDigest("github.com/acme/app"),
+      repository: "https://github.com/acme/app",
+      first_seq: 1,
+      last_seq: 9,
+    };
+    const diff = (context: WorkContextRow, seq: number): WorkDiffRow => ({
+      ...context,
+      seq,
+      observed_at: "2026-09-25 10:00:00.000",
+      base: "c".repeat(40),
+      content_digest: "sha256:diff",
+      bytes_ref: "blob",
+      complete: "true",
+      limitations: "",
+      omitted: "",
+      redactions: "[]",
+      redaction_count: 0,
+    });
+    vi.mocked(deps.contexts).mockResolvedValue([pathOnly, located]);
+    vi.mocked(deps.diffs).mockResolvedValue([
+      diff(located, 9),
+      diff(pathOnly, 0),
+    ]);
+    vi.mocked(deps.repositories).mockResolvedValue([
+      {
+        connectionId: "conn_1",
+        providerRepositoryId: "R_1",
+        host: "github.com",
+        owner: "acme",
+        name: "app",
+        url: "https://github.com/acme/app",
+        connected: true,
+      },
+    ]);
+    // The real PR read over a GitHub that holds no PR for the branch, so
+    // every warning comes from the checkouts the handler passes it.
+    const github: WorkPrDeps = {
+      client: vi.fn().mockResolvedValue({
+        getRepoInfo: vi.fn().mockResolvedValue({ defaultBranch: "main" }),
+        listPullRequests: vi.fn().mockResolvedValue([]),
+      }),
+      now: () => "2026-09-25T10:00:00Z",
+    };
+    vi.mocked(deps.pullRequests).mockImplementation(
+      (scope, checkouts, repositories, _deps, recorded) =>
+        readWorkPullRequests(scope, checkouts, repositories, github, recorded),
+    );
+    const result = await handler({ runId: RUN_ID }, ctx());
+    const merged = checkoutId(located);
+    expect(result.checkouts).toMatchObject([
+      {
+        id: merged,
+        path: "/work/app",
+        branch: "fix/run",
+        firstSeq: "0",
+        lastSeq: "9",
+        repository: { connected: true },
+      },
+    ]);
+    expect(result.warnings).toEqual([]);
+    expect(result.complete).toBe(true);
+    // A diff sealed on the path-only frame names the checkout it folded into.
+    expect(result.diffs.map((d) => d.checkoutId)).toEqual([merged, merged]);
+  });
+  it("keeps a path-only location with no Git context, and still says what it lacks (negative)", async () => {
+    const { handler, deps } = setup({ chainVerified: true });
+    vi.mocked(deps.contexts).mockResolvedValue([
+      {
+        path: "/tmp/scratch",
+        branch: "",
+        head: "",
+        remote: "",
+        repository: "",
+        first_seq: 0,
+        last_seq: 4,
+      },
+    ]);
+    vi.mocked(deps.pullRequests).mockImplementation(
+      (scope, checkouts, repositories, _deps, recorded) =>
+        readWorkPullRequests(
+          scope,
+          checkouts,
+          repositories,
+          { client: vi.fn(), now: () => "2026-09-25T10:00:00Z" },
+          recorded,
+        ),
+    );
+    const result = await handler({ runId: RUN_ID }, ctx());
+    expect(result.checkouts).toMatchObject([{ path: "/tmp/scratch" }]);
+    expect(result.warnings).toEqual(["repository_not_connected"]);
+    expect(result.complete).toBe(false);
+  });
+  // #3791: the fold can leave fewer checkouts than the read returned. A read
+  // that returned one row past its limit may have cut rows the fold never
+  // saw, so the limit is judged on the rows read.
+  it("warns checkout_limit when the read hit its limit, though the fold leaves no more checkouts than the limit (negative)", async () => {
+    const { handler, deps } = setup({ chainVerified: true });
+    const pathOnly: WorkContextRow = {
+      path: "/work/app",
+      branch: "",
+      head: "",
+      remote: "",
+      repository: "",
+      first_seq: 0,
+      last_seq: 0,
+    };
+    const branches = Array.from(
+      { length: WORK_CONTEXT_CAP },
+      (_, n): WorkContextRow => ({
+        path: "/work/app",
+        branch: `fix/${String(n)}`,
+        head: "b".repeat(40),
+        remote: workDigest("github.com/acme/app"),
+        repository: "https://github.com/acme/app",
+        first_seq: n + 1,
+        last_seq: n + 1,
+      }),
+    );
+    vi.mocked(deps.contexts).mockResolvedValue([pathOnly, ...branches]);
+    const result = await handler({ runId: RUN_ID }, ctx());
+    // The path-only row folded into the first branch read after it.
+    expect(result.checkouts).toHaveLength(WORK_CONTEXT_CAP);
+    expect(result.checkouts[0]).toMatchObject({
+      branch: "fix/0",
+      firstSeq: "0",
+    });
+    expect(result.warnings).toContain("checkout_limit");
+    expect(result.complete).toBe(false);
   });
   it("reads a PR link from the frame first and its URL second", () => {
     expect(
