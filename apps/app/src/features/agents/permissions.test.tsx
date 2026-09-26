@@ -2,10 +2,9 @@
 // The Permissions tab drawn on its own (permissions.tsx), for the states the
 // page test in agent.test.tsx does not reach: no role held, a role the
 // catalogue does not list or could not be read, a role that expires, the
-// revoke control for an Owner and Admin and nobody on a retired identity,
-// per-run and per-day ceilings the definition file names or cannot, the
-// highest priced run against the per-run ceiling, and an agent that holds a
-// mandate. Axe runs after every test (INV-26).
+// revoke control for an Owner and Admin and nobody on a retired identity, the
+// agent's own ceilings that no read returns yet (ADR-192), the highest priced
+// run, and an agent that holds a mandate. Axe runs after every test (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -16,7 +15,6 @@ import { IntlProvider } from "@/test/intl";
 import { mandateList, mandateRow } from "@/test/mandate-views";
 import {
   agentDetail,
-  committedDefinition,
   roleCatalog,
   runRow,
   spendBudgets,
@@ -45,18 +43,9 @@ type Role = AgentDetail["roles"][number];
 
 const PLACE = { org: "acme", ws: "core-platform", agent: "release-bot" };
 
-/** A definition file whose `[budget]` table holds what a test hands it. */
-function withBudget(budget: string) {
-  return agentDetail({
-    definition: committedDefinition(
-      `schema = "agent-definition/v0.1"\nslug = "release-bot"\n${budget}\n`,
-    ),
-  });
-}
-
 function renderPermissions(overrides: Partial<Props> = {}) {
   const props: Props = {
-    detail: agentDetail({ definition: committedDefinition() }),
+    detail: agentDetail(),
     toolbelt: readOk(toolbelt()),
     mandates: mandateList([]),
     roles: roleCatalog(),
@@ -205,52 +194,62 @@ describe("Permissions › roles", () => {
   });
 });
 
-describe("Permissions › ceilings from the definition file", () => {
-  it("prints the per-run and per-day ceilings the file names", () => {
-    renderPermissions({
-      detail: withBudget(
-        "[budget]\nper_run_micros = 4000000\nper_day_micros = 20000000",
-      ),
-    });
-    expect(region("Roles")).toHaveTextContent("$4.00 USD");
-    expect(region("Roles")).toHaveTextContent("$20.00 USD");
-    const budgets = region("Budgets");
-    expect(budgets).toHaveTextContent("Per day$20.00");
-    expect(budgets).toHaveTextContent(
-      "kept in the definition file; nothing enforces it yet",
-    );
-    expect(
-      within(budgets).queryByText(
-        "No per-day ceiling is recorded for this agent, and nothing would enforce one yet.",
-      ),
-    ).toBeNull();
-  });
+describe("Permissions › the agent's own ceilings", () => {
+  const LIMITS: AgentDetail["limits"] = {
+    perRun: { micros: "2500000", currency: "USD" },
+    perDay: { micros: "40000000", currency: "USD" },
+    containmentRequired: false,
+    invalid: false,
+  };
 
-  it.each([
-    ["no definition file", null],
-    ["a budget that is not a table", "budget = 5"],
-    ["a budget that is a list", "budget = [1, 2]"],
-    ["a ceiling that is not a number", 'budget = { per_run_micros = "lots" }'],
-    ["a negative ceiling", "budget = { per_run_micros = -1 }"],
-    ["a ceiling that is not whole", "budget = { per_run_micros = 2.5 }"],
-    ["a file the parser refuses", "budget = { per_run_micros = "],
-  ])("says the ceilings are not recorded for %s (negative)", (_, budget) => {
-    renderPermissions({
-      detail:
-        budget === null
-          ? agentDetail({ definition: null })
-          : withBudget(budget),
-    });
+  it("says a ceiling the active version does not set is not recorded (negative)", () => {
+    renderPermissions();
     expect(region("Roles")).toHaveTextContent("Spend ceilingnot recorded");
     expect(perRunMeter()).toHaveTextContent("Per runnot recorded");
     expect(region("Budgets")).toHaveTextContent(
-      "No per-day ceiling is recorded for this agent, and nothing would enforce one yet.",
+      "The agent's active version sets no per-day ceiling.",
+    );
+    expect(
+      within(region("Budgets")).queryByRole("link", { name: "Set budget" }),
+    ).toBeNull();
+  });
+
+  it("shows the per-run and per-day ceilings the active version sets (ADR-192)", () => {
+    renderPermissions({
+      detail: agentDetail({ limits: LIMITS }),
+      runs: [
+        runRow({ cost: { micros: "1250000", currency: "USD", basis: null } }),
+      ],
+    });
+    expect(region("Roles")).toHaveTextContent("$2.50");
+    expect(region("Roles")).toHaveTextContent(
+      "per day, set on the agent's active version",
+    );
+    const meter = perRunMeter();
+    expect(meter).toHaveTextContent("Per run$2.50");
+    // Half the ceiling: the bar is drawn.
+    expect(meter.querySelector(".bg-success, .bg-critical")).not.toBeNull();
+    expect(region("Budgets")).toHaveTextContent(
+      "Signed to a host that enforces a daily ceiling.",
+    );
+    expect(region("Budgets")).toHaveTextContent("$40.00");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("says a config the host cannot read suspends governed actions", () => {
+    renderPermissions({
+      detail: agentDetail({
+        limits: { ...LIMITS, perRun: null, perDay: null, invalid: true },
+      }),
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The agent's version config cannot be read, so its host suspends governed actions until the config is fixed.",
     );
   });
 });
 
 describe("Permissions › budgets", () => {
-  it("measures the highest priced run against the per-run ceiling, in the critical hue past 80%", () => {
+  it("names the highest priced run and its basis, and draws no bar without a ceiling", () => {
     renderPermissions({
       runs: [
         runRow({ id: "arun_1" }),
@@ -262,13 +261,12 @@ describe("Permissions › budgets", () => {
       ],
     });
     const meter = perRunMeter();
-    // The definition's per-run ceiling is $2.50; the highest run is $4.13.
     expect(meter).toHaveTextContent("highest run on the newest page $4.13");
     expect(meter).toHaveTextContent("basis: gateway_observed");
-    expect(meter.querySelector(".bg-critical")).not.toBeNull();
+    expect(meter.querySelector(".bg-success, .bg-critical")).toBeNull();
   });
 
-  it("draws the bar in the calm hue at or under 80%, and says a missing basis is not recorded", () => {
+  it("says a missing basis is not recorded", () => {
     renderPermissions({
       runs: [
         runRow({
@@ -276,25 +274,14 @@ describe("Permissions › budgets", () => {
         }),
       ],
     });
-    const meter = perRunMeter();
-    expect(meter).toHaveTextContent("basis: not recorded");
-    expect(meter.querySelector(".bg-success")).not.toBeNull();
+    expect(perRunMeter()).toHaveTextContent("basis: not recorded");
   });
 
-  it("draws no bar and says no run is priced when none of the runs carries a cost (negative)", () => {
+  it("says no run is priced when none of the runs carries a cost (negative)", () => {
     renderPermissions({ runs: [runRow({ cost: null })] });
-    const meter = perRunMeter();
-    expect(meter).toHaveTextContent(
+    expect(perRunMeter()).toHaveTextContent(
       "no priced run of this agent on the newest page of runs",
     );
-    expect(meter.querySelector(".bg-success, .bg-critical")).toBeNull();
-  });
-
-  it("draws no bar against a ceiling the file does not name, though a run is priced (negative)", () => {
-    renderPermissions({ detail: agentDetail({ definition: null }) });
-    const meter = perRunMeter();
-    expect(meter).toHaveTextContent("highest run on the newest page");
-    expect(meter.querySelector(".bg-success, .bg-critical")).toBeNull();
   });
 
   it("draws no ceilings table when the tab read no budgets (negative)", () => {

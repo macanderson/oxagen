@@ -1,0 +1,87 @@
+{
+  "name": "move_agent",
+  "domain": "agent",
+  "description": "Move an agent to another runtime and keep its principal, roles and runs. Writes a new agent version and revokes its live host enrollments on the old runtime.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "identity"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "runtimeId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "agentId",
+      "runtimeId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string"
+      },
+      "runtime": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug"
+        ],
+        "additionalProperties": false
+      },
+      "version": {
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "revokedHosts": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "agentId",
+      "runtime",
+      "version",
+      "revokedHosts"
+    ],
+    "additionalProperties": false
+  }
+}

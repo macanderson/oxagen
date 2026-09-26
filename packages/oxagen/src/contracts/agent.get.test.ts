@@ -47,6 +47,14 @@ const identity = {
   costCenter: null,
 };
 
+/** An agent whose active version sets no ceiling. */
+const NO_LIMITS = {
+  perRun: null,
+  perDay: null,
+  containmentRequired: false,
+  invalid: false,
+};
+
 describe("get_agent contract", () => {
   it("is a console read on api, mcp, agent and cli, unmetered, Owner/Admin/Member", () => {
     expect(getCapability("get_agent")).toBe(agentGet);
@@ -90,39 +98,93 @@ describe("get_agent contract", () => {
     );
   });
 
-  it("parses an identity with nothing enrolled and no definition", () => {
+  it("parses an identity with nothing enrolled, no runtime and no versions", () => {
     const out = agentGet.output.parse({
       identity,
+      runtime: null,
+      toolbelt: null,
+      versions: [],
+      limits: NO_LIMITS,
       credentials: [],
       roles: [],
       hosts: [],
-      definition: null,
     });
-    expect(out.definition).toBeNull();
+    expect(out.runtime).toBeNull();
     expect(out.identity.firstFrameAt).toBeNull();
   });
 
-  it("parses a committed definition and refuses one whose digest is not sha256 hex", () => {
-    const definition = {
-      version: 2,
-      path: ".oxagen/agents/release-bot.toml",
-      digest: "a".repeat(64),
-      commitSha: "0123abcd",
-      branch: "agents/release-bot",
-      pullRequestUrl: "https://github.com/acme/core/pull/12",
-      source: 'schema = "agent-definition/v0.1"\n',
-      committedAt: "2026-09-14T10:00:00.000Z",
+  it("parses the versions a move and a new toolbelt wrote, and refuses a definition (ADR-192)", () => {
+    const runtime = {
+      id: "rtm_0123abcd",
+      name: "Mac's Laptop",
+      slug: "macs-laptop",
     };
-    const base = { identity, credentials: [], roles: [], hosts: [] };
-    expect(agentGet.output.parse({ ...base, definition }).definition).toEqual(
-      definition,
+    const toolbelt = {
+      id: "tbt_0123abcd",
+      name: "All tools",
+      slug: "all-tools",
+      kind: "all_tools" as const,
+    };
+    const base = {
+      identity,
+      runtime,
+      toolbelt,
+      limits: NO_LIMITS,
+      credentials: [],
+      roles: [],
+      hosts: [],
+    };
+    const versions = [
+      {
+        version: 2,
+        changeKind: "runtime_changed" as const,
+        runtime,
+        toolbelt,
+        createdBy: "usr_0123abcd",
+        createdAt: "2026-09-25T10:00:00.000Z",
+      },
+      {
+        version: 1,
+        changeKind: "registered" as const,
+        runtime: null,
+        toolbelt,
+        createdBy: "usr_0123abcd",
+        createdAt: "2026-09-24T10:00:00.000Z",
+      },
+    ];
+    expect(agentGet.output.parse({ ...base, versions }).versions).toEqual(
+      versions,
     );
+    expect(
+      agentGet.output.safeParse({ ...base, versions, definition: null })
+        .success,
+    ).toBe(false);
+  });
+
+  it("carries the active version's ceilings as integer micros with a currency", () => {
+    const base = {
+      identity,
+      runtime: null,
+      toolbelt: null,
+      versions: [],
+      credentials: [],
+      roles: [],
+      hosts: [],
+    };
+    const limits = {
+      perRun: { micros: "2500000", currency: "USD" },
+      perDay: null,
+      containmentRequired: true,
+      invalid: false,
+    };
+    expect(agentGet.output.parse({ ...base, limits }).limits).toEqual(limits);
     expect(
       agentGet.output.safeParse({
         ...base,
-        definition: { ...definition, digest: "not-hex" },
+        limits: { ...limits, perRun: { micros: "2.5", currency: "USD" } },
       }).success,
     ).toBe(false);
+    expect(agentGet.output.safeParse(base).success).toBe(false);
   });
 
   it("lists a revoked credential with its date and a host with null liveness before its first report", () => {
@@ -157,7 +219,10 @@ describe("get_agent contract", () => {
           revokedAt: null,
         },
       ],
-      definition: null,
+      runtime: null,
+      toolbelt: null,
+      versions: [],
+      limits: NO_LIMITS,
     });
     expect(out.credentials[0]?.revokedAt).not.toBeNull();
     expect(out.hosts[0]?.hooksOk).toBeNull();

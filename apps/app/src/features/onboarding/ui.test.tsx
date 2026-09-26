@@ -9,9 +9,14 @@ import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { NamedRuntimeList } from "@/data/contracts/runtimes";
+import type { ToolbeltList } from "@/data/contracts/toolbelts";
+import { type Read, readError, readOk } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { toolbeltList } from "./onboarding.builders";
+import type { ReservedAgent } from "./ui/register-form";
 
 const {
   router,
@@ -67,21 +72,60 @@ const DENIED = {
   code: "org_role_required",
 } as const;
 
-function renderForm(
-  reserved: {
-    id: string;
-    slug: string;
-    harness: "claude-code" | "codex";
-  } | null = null,
-) {
+/** Mac's laptop runs Claude Code as mac-claude; the build box runs nothing yet. */
+const RUNTIMES: NamedRuntimeList = {
+  runtimes: [
+    {
+      id: "rtm_macslaptop",
+      name: "Mac's laptop",
+      slug: "macs-laptop",
+      createdAt: "2026-09-20T10:00:00.000Z",
+      agents: [
+        {
+          id: "agt_macclaude",
+          name: "Mac Claude",
+          slug: "mac-claude",
+          harness: "claude-code",
+        },
+      ],
+      liveHosts: 1,
+      lastSeenAt: null,
+    },
+    {
+      id: "rtm_buildbox",
+      name: "Build box",
+      slug: "build-box",
+      createdAt: "2026-09-21T10:00:00.000Z",
+      agents: [],
+      liveHosts: 0,
+      lastSeenAt: null,
+    },
+  ],
+};
+
+type FormOptions = {
+  reserved?: ReservedAgent | null;
+  runtimes?: Read<NamedRuntimeList>;
+  toolbelts?: Read<ToolbeltList>;
+  initialRuntime?: string | null;
+};
+
+function renderForm({
+  reserved = null,
+  runtimes = readOk(RUNTIMES),
+  toolbelts = readOk(toolbeltList()),
+  initialRuntime = null,
+}: FormOptions = {}) {
   render(
     <IntlProvider>
       <RegisterAgentForm
         org={ORG}
         ws={WS}
-        workspace="Core platform"
         place={PLACE}
         reserved={reserved}
+        runtimes={runtimes}
+        toolbelts={toolbelts}
+        initialRuntime={initialRuntime}
         wrap={
           reserved === null
             ? null
@@ -92,6 +136,17 @@ function renderForm(
     </IntlProvider>,
   );
 }
+
+const harnessOption = (name: RegExp) =>
+  within(screen.getByRole("radiogroup", { name: "Harness" })).getByRole(
+    "radio",
+    { name },
+  );
+const runtimeOption = (name: RegExp) =>
+  within(screen.getByRole("radiogroup", { name: "Runtime" })).getByRole(
+    "radio",
+    { name },
+  );
 
 function renderWrap(
   harness: "claude-code" | "codex" | "cursor" | "stella" | "custom",
@@ -132,27 +187,14 @@ afterEach(async () => {
 });
 
 describe("the name step", () => {
-  it("draws the four fields in the design's order with the hints verbatim", () => {
+  it("asks for the name, slug, harness, runtime and toolbelt (ADR-192)", () => {
     renderForm();
-    const labels = ["Slug", "Workspace", "Harness", "Model tier"];
-    for (const label of labels)
-      expect(screen.getByLabelText(label)).toBeInTheDocument();
-    expect(screen.getByLabelText("Workspace")).toHaveValue(
-      "Core platform · a-intel/platform",
-    );
-    expect(screen.getByLabelText("Workspace")).toHaveAttribute("readonly");
-    expect(screen.getByText(/Its definition file lands in/)).toHaveTextContent(
-      "Its definition file lands in .oxagen/agents/ in the main repo.",
-    );
+    expect(screen.getByLabelText("Name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Slug")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "The harness calls the model with its own key. The tier is recorded on every frame.",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      within(screen.getByLabelText("Harness"))
-        .getAllByRole("option")
-        .map((o) => o.textContent),
+      within(screen.getByRole("radiogroup", { name: "Harness" }))
+        .getAllByRole("radio")
+        .map((o) => o.getAttribute("data-value")),
     ).toEqual([
       "claude-code",
       "codex",
@@ -162,48 +204,71 @@ describe("the name step", () => {
       "custom",
     ]);
     expect(
-      within(screen.getByLabelText("Model tier"))
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["complex", "light"]);
+      within(screen.getByRole("radiogroup", { name: "Runtime" }))
+        .getAllByRole("radio")
+        .map((o) => o.getAttribute("data-value")),
+    ).toEqual(["rtm_macslaptop", "rtm_buildbox"]);
+    expect(
+      screen.getByRole("radiogroup", { name: "Toolbelt" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Model tier")).toBeNull();
   });
 
-  it("says the model tier is not sent rather than sending it (NotBacked)", () => {
-    renderForm();
-    expect(screen.getByLabelText("Model tier")).toBeDisabled();
-    expect(screen.getByLabelText("Model tier")).toHaveAccessibleDescription(
-      /Oxagen stores no model tier at registration yet/,
-    );
-  });
-
-  it("rewrites the key in the hint and the note on every keystroke", async () => {
+  it("fills the slug from the name, dropping apostrophes, until the slug is edited", async () => {
     const user = userEvent.setup();
     renderForm();
+    await user.type(screen.getByLabelText("Name"), "Mac's Codex");
+    expect(screen.getByLabelText("Slug")).toHaveValue("macs-codex");
     expect(
       screen.getAllByTestId("register-key").map((k) => k.textContent),
-    ).toEqual(["a-intel.core.agent", "a-intel.core.agent"]);
-    await user.type(screen.getByLabelText("Slug"), "Perf Watch");
-    expect(
-      screen.getAllByTestId("register-key").map((k) => k.textContent),
-    ).toEqual(["a-intel.core.perf-watch", "a-intel.core.perf-watch"]);
-    expect(screen.getByTestId("register-note")).toHaveTextContent(
-      "Continue reserves a-intel.core.perf-watch by registering its identity.",
-    );
+    ).toEqual(["a-intel.core.macs-codex", "a-intel.core.macs-codex"]);
+    await user.clear(screen.getByLabelText("Slug"));
+    await user.type(screen.getByLabelText("Slug"), "codex-one");
+    await user.type(screen.getByLabelText("Name"), " again");
+    expect(screen.getByLabelText("Slug")).toHaveValue("codex-one");
   });
 
-  it("refuses a slug the contract would refuse without calling the write (negative)", async () => {
+  it("keeps a runtime already running the chosen harness visible, disabled, with the reason", async () => {
     const user = userEvent.setup();
     renderForm();
-    await user.type(screen.getByLabelText("Slug"), "Perf Watch");
-    await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(registerAgent).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Slug")).toHaveAttribute(
-      "aria-invalid",
+    await user.click(harnessOption(/Claude Code/));
+    const taken = runtimeOption(/Mac's laptop/);
+    expect(taken).toHaveAttribute("aria-disabled", "true");
+    expect(taken).toHaveAccessibleDescription(
+      "Claude Code already runs on Mac's laptop as mac-claude.",
+    );
+    expect(runtimeOption(/Build box/)).not.toHaveAttribute("aria-disabled");
+    await user.click(taken);
+    expect(taken).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("keeps a harness the chosen runtime already runs visible, disabled, with the reason", () => {
+    renderForm({ initialRuntime: "rtm_macslaptop" });
+    expect(runtimeOption(/Mac's laptop/)).toHaveAttribute(
+      "aria-checked",
       "true",
     );
+    const taken = harnessOption(/Claude Code/);
+    expect(taken).toHaveAttribute("aria-disabled", "true");
+    expect(taken).toHaveAccessibleDescription(
+      "Claude Code already runs on Mac's laptop as mac-claude.",
+    );
+    expect(harnessOption(/Codex/)).not.toHaveAttribute("aria-disabled");
   });
 
-  it("reserves the key with the slug in words as the name and opens the wrap step", async () => {
+  it("refuses a registration with no runtime chosen, without calling the write (negative)", async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.type(screen.getByLabelText("Name"), "Perf watch");
+    await user.click(harnessOption(/Codex/));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(registerAgent).not.toHaveBeenCalled();
+    expect(
+      screen.getByText("Choose the runtime this agent runs on."),
+    ).toBeInTheDocument();
+  });
+
+  it("registers the agent on its runtime with the chosen toolbelt and opens the wrap step", async () => {
     const user = userEvent.setup();
     const to = routes.register(ORG, WS, "wrap", { agent: "agt_perfwatch" });
     registerAgent.mockResolvedValue({
@@ -215,38 +280,124 @@ describe("the name step", () => {
       },
     });
     renderForm();
-    await user.type(screen.getByLabelText("Slug"), "perf-watch");
-    await user.selectOptions(screen.getByLabelText("Harness"), "codex");
+    await user.type(screen.getByLabelText("Name"), "Perf watch");
+    await user.click(harnessOption(/Codex/));
+    await user.click(runtimeOption(/Build box/));
+    await user.click(
+      within(screen.getByRole("radiogroup", { name: "Toolbelt" })).getByRole(
+        "radio",
+        { name: /Review belt/ },
+      ),
+    );
     await user.click(screen.getByRole("button", { name: "Continue" }));
     expect(registerAgent).toHaveBeenCalledWith(ORG, WS, {
-      slug: "perf-watch",
       name: "Perf watch",
-      description: "",
+      slug: "perf-watch",
       harness: "codex",
+      runtimeId: "rtm_buildbox",
+      toolbeltId: "tbt_reviewbelt",
     });
     expect(router.push).toHaveBeenCalledWith(to);
   });
 
-  it("names a refusal and stays on the step (negative)", async () => {
+  it("completes the toolbelt step when the workspace has no tools, and links to importing MCP servers", async () => {
+    const user = userEvent.setup();
+    registerAgent.mockResolvedValue({
+      ok: true,
+      value: {
+        agentId: "agt_perfwatch",
+        agentKey: null,
+        to: routes.register(ORG, WS, "wrap", { agent: "agt_perfwatch" }),
+      },
+    });
+    renderForm({ toolbelts: readOk(toolbeltList(0)) });
+    const empty = screen.getByTestId("register-toolbelt-empty");
+    expect(
+      within(empty).getByTestId("register-toolbelt-done"),
+    ).toHaveTextContent("Done");
+    expect(empty).toHaveTextContent(
+      "There is no toolbelt to choose yet because this workspace has no tools.",
+    );
+    expect(screen.getByTestId("register-toolbelt-import")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/tools/providers",
+    );
+    expect(screen.queryByRole("radiogroup", { name: "Toolbelt" })).toBeNull();
+    await user.type(screen.getByLabelText("Name"), "Perf watch");
+    await user.click(harnessOption(/Codex/));
+    await user.click(runtimeOption(/Build box/));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(registerAgent).toHaveBeenCalledWith(
+      ORG,
+      WS,
+      expect.objectContaining({ toolbeltId: "" }),
+    );
+  });
+
+  it("names the runtime read's failure and still offers Add a runtime (negative)", () => {
+    renderForm({ runtimes: readError("runtimes_unavailable", 503) });
+    expect(screen.queryByRole("radiogroup", { name: "Runtime" })).toBeNull();
+    expect(screen.getByTestId("register-add-runtime")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runtimes",
+    );
+  });
+
+  it("says when no runtime is named yet", () => {
+    renderForm({ runtimes: readOk({ runtimes: [] }) });
+    expect(screen.getByTestId("register-runtime-none")).toBeInTheDocument();
+  });
+
+  it("names a taken slug on the Slug field and stays on the step (negative)", async () => {
     const user = userEvent.setup();
     registerAgent.mockResolvedValue({
       ok: false,
       reason: "conflict",
-      code: "slug_taken",
+      code: "agent_slug_taken",
     });
-    renderForm();
-    await user.type(screen.getByLabelText("Slug"), "perf-watch");
+    renderForm({ initialRuntime: "rtm_buildbox" });
+    await user.type(screen.getByLabelText("Name"), "Perf watch");
+    await user.click(harnessOption(/Codex/));
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(screen.getByTestId("register-failure")).toHaveTextContent(
-      "An agent in this workspace already holds that slug. Pick another.",
+    expect(screen.getByLabelText("Slug")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    expect(screen.getByLabelText("Slug")).toHaveAccessibleDescription(
+      /has held this slug/,
     );
     expect(router.push).not.toHaveBeenCalled();
   });
 
-  it("shows a reserved key read-only and moves on without a second write", () => {
-    renderForm({ id: "agt_perfwatch", slug: "perf-watch", harness: "codex" });
-    expect(screen.getByLabelText("Slug")).toHaveAttribute("readonly");
-    expect(screen.getByLabelText("Harness")).toBeDisabled();
+  it("names a refusal it has no field for in the alert and stays on the step (negative)", async () => {
+    const user = userEvent.setup();
+    registerAgent.mockResolvedValue(DENIED);
+    renderForm({ initialRuntime: "rtm_buildbox" });
+    await user.type(screen.getByLabelText("Name"), "Perf watch");
+    await user.click(harnessOption(/Codex/));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByTestId("register-failure")).toHaveTextContent(
+      "This account may not register agents here. An organization owner or admin can.",
+    );
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("shows a reserved agent read-only and moves on without a second write", () => {
+    renderForm({
+      reserved: {
+        id: "agt_perfwatch",
+        name: "Perf watch",
+        slug: "perf-watch",
+        harness: "codex",
+        runtime: { id: "rtm_buildbox", name: "Build box", slug: "build-box" },
+        toolbelt: null,
+      },
+    });
+    const reserved = screen.getByTestId("register-reserved");
+    expect(reserved).toHaveTextContent("perf-watch");
+    expect(reserved).toHaveTextContent("Build box");
+    expect(reserved).toHaveTextContent("All tools");
+    expect(screen.queryByRole("radiogroup")).toBeNull();
     expect(screen.getByRole("link", { name: "Continue" })).toHaveAttribute(
       "href",
       "/acme/core-platform/register/wrap?agent=agt_perfwatch",

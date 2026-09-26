@@ -4,7 +4,9 @@
 // holds, and nothing about what it may do.
 //
 // Four panels, in the design's order: Identity, Credentials, Run credential
-// and Trust relationships. The facts are `get_agent`'s; a fact it does not
+// and Trust relationships. The Identity panel names the runtime the agent runs
+// on, where the model tier the definition file named used to sit (ADR-192).
+// The facts are `get_agent`'s; a fact it does not
 // record says "not recorded" (the purpose lock and the live run tokens are
 // not on the contract), and a write it has no contract for (Change identity,
 // Revoke credential) is a StubAction that says so. The cost center row stays:
@@ -15,7 +17,6 @@ import type { AgentDetail, IncidentPage } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
-import { parseTomlSubset, tomlGet } from "@/shared/toml-subset";
 import { Badge } from "@/ui/badge";
 import { buttonSecondary, mono } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
@@ -29,16 +30,6 @@ import { Facts, Instant, NotRecordedValue, Panel, Sub } from "./parts";
 import { StubAction } from "./stub-action";
 
 type Place = { org: string; ws: string; agent: string };
-
-/** The model tier the definition file names, or null when there is no file or no tier. */
-function modelTierOf(detail: AgentDetail): string | null {
-  const source = detail.definition?.source;
-  if (source === undefined) return null;
-  const parsed = parseTomlSubset(source);
-  if (!parsed.ok) return null;
-  const tier = tomlGet(parsed.doc, "model_tier");
-  return typeof tier === "string" ? tier : null;
-}
 
 /** The credential that is not revoked, newest first; else the newest of any. */
 function runCredentialOf(detail: AgentDetail) {
@@ -62,7 +53,6 @@ function IdentityFacts({
   const t = useTranslations("agents.detail.identity.facts");
   const agents = useTranslations("agents");
   const { identity } = detail;
-  const tier = modelTierOf(detail);
   return (
     <Panel id="agent-identity" title={t("title")} lead={t("lead")}>
       <Facts
@@ -102,15 +92,22 @@ function IdentityFacts({
             ),
           },
           {
-            term: t("modelTier"),
+            term: t("runtime"),
             value: (
               <>
-                {tier === null ? (
-                  <NotRecordedValue />
+                {detail.runtime === null ? (
+                  <span className="text-muted-foreground">
+                    {t("runtimeNone")}
+                  </span>
                 ) : (
-                  <span className={mono}>{tier}</span>
+                  <>
+                    {detail.runtime.name}{" "}
+                    <span className={`${mono} text-xs text-muted-foreground`}>
+                      {detail.runtime.slug}
+                    </span>
+                  </>
                 )}
-                <Sub>{t("modelTierSub")}</Sub>
+                <Sub>{t("runtimeSub")}</Sub>
               </>
             ),
           },

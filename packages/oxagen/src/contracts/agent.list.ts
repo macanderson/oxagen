@@ -22,7 +22,7 @@ import { toolbeltRefSchema } from "./toolbelt.shared";
 
 const instant = z.string().datetime({ offset: true });
 
-/** MC spec §6.2. `custom` is the value the legacy `create_agent_def` path implied. */
+/** MC spec §6.2. `custom` is the value an agent registered before its harness was recorded carries. */
 export const agentHarnessSchema = z.enum([
   "stella",
   "claude-code",

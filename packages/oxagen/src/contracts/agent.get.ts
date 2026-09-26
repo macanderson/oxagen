@@ -20,6 +20,7 @@ import {
 import { agentHarnessSchema, agentIdentityStatusSchema } from "./agent.list";
 import { costCenterLabelSchema } from "./cost_center.shared";
 import { runtimeRefSchema } from "./runtime.shared";
+import { moneySchema } from "./spend.shared";
 import { toolbeltRefSchema } from "./toolbelt.shared";
 
 const instant = z.string().datetime({ offset: true });
@@ -97,6 +98,24 @@ export const agentVersionSchema = z
   .strict();
 export type AgentVersion = z.output<typeof agentVersionSchema>;
 
+/**
+ * The limits the agent's active version sets in its config (ADR-192): the
+ * per-run and per-day spend ceilings the host bundle enforces, and whether the
+ * agent must run under the contained launcher (ADR-152). A ceiling the config
+ * does not name is null. `invalid` is true when the config cannot be read,
+ * which is the state in which the host suspends governed actions; every other
+ * field then names nothing.
+ */
+export const agentLimitsSchema = z
+  .object({
+    perRun: moneySchema.nullable(),
+    perDay: moneySchema.nullable(),
+    containmentRequired: z.boolean(),
+    invalid: z.boolean(),
+  })
+  .strict();
+export type AgentLimits = z.output<typeof agentLimitsSchema>;
+
 export const agentGet = registerCapability({
   name: "get_agent",
   domain: "agent",
@@ -151,6 +170,8 @@ export const agentGet = registerCapability({
       toolbelt: toolbeltRefSchema.nullable(),
       /** Every version, newest first, at most 100. */
       versions: z.array(agentVersionSchema).max(100),
+      /** The limits the active version's config sets. */
+      limits: agentLimitsSchema,
       credentials: z.array(agentCredentialSchema),
       roles: z.array(agentRoleAssignmentSchema),
       hosts: z.array(agentHostSchema),

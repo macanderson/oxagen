@@ -443,7 +443,6 @@ export const CURATED_RENDER_HINTS: Readonly<
   get_research_status: { componentId: "research-swarm-card" },
   start_research_swarm: { componentId: "research-swarm-card" },
   list_conversations: { componentId: "conversation-list-card" },
-  list_agent_defs: { componentId: "agent-definition-list-card" },
   search_web: { componentId: "web-search-card" },
 };
 

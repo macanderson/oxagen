@@ -137,7 +137,7 @@ describe("the gate", () => {
       { step: "run", state: "todo" },
     ]);
     expect(
-      within(rail).getByText("Name the agent").closest("[aria-current]"),
+      within(rail).getByText("Define the agent").closest("[aria-current]"),
     ).toHaveAttribute("aria-current", "step");
     for (const label of ["Wrap the agent", "Wait for the first frame"])
       expect(
@@ -157,7 +157,7 @@ describe("the gate", () => {
       { step: "run", state: "current" },
     ]);
     expect(
-      within(rail).getByRole("link", { name: /Name the agent/ }),
+      within(rail).getByRole("link", { name: /Define the agent/ }),
     ).toHaveAttribute(
       "href",
       "/acme/core-platform/register/name?agent=agt_releasebot",
@@ -228,29 +228,50 @@ describe("the name step", () => {
     await renderStep("name", null);
     expect(screen.getByText("Step 1 of 3")).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { level: 1, name: "Name the agent" }),
+      screen.getByRole("heading", { level: 1, name: "Define the agent" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("The key is reserved now and is immutable."),
+      screen.getByText(/The key is reserved now and is immutable\./),
     ).toBeInTheDocument();
     expect(readRegisterPlace).toHaveBeenCalledWith("acme", "core-platform");
-    expect(screen.getByLabelText("Workspace")).toHaveValue(
-      "Core platform · acme/platform",
-    );
     expect(screen.getAllByTestId("register-key")[0]).toHaveTextContent(
       "acme.core.agent",
     );
   });
 
-  it("says a workspace with no main repository has none", async () => {
-    readRegisterPlace.mockResolvedValue({
-      ok: true,
-      value: { keyPrefix: "acme.core", repository: null },
+  it("offers the named runtimes with the one Add a runtime chose already chosen (ADR-192)", async () => {
+    const { source } = onboardingSource({
+      runtimes: readOk({
+        runtimes: [
+          {
+            id: "rtm_buildbox",
+            name: "Build box",
+            slug: "build-box",
+            createdAt: "2026-09-21T10:00:00.000Z",
+            agents: [],
+            liveHosts: 0,
+            lastSeenAt: null,
+          },
+        ],
+      }),
     });
-    await renderStep("name", null);
-    expect(screen.getByLabelText("Workspace")).toHaveValue(
-      "Core platform · no main repository",
-    );
+    const body = await RegisterAgent({
+      ctx,
+      source,
+      step: "name",
+      agent: null,
+      runtime: "rtm_buildbox",
+    });
+    render(<IntlProvider>{body}</IntlProvider>);
+    expect(
+      within(screen.getByRole("radiogroup", { name: "Runtime" })).getByRole(
+        "radio",
+        { name: /Build box/ },
+      ),
+    ).toHaveAttribute("aria-checked", "true");
+    expect(
+      screen.getByRole("radiogroup", { name: "Toolbelt" }),
+    ).toBeInTheDocument();
   });
 
   it("names a refused workspace read instead of drawing a key it cannot build (negative)", async () => {
@@ -266,13 +287,15 @@ describe("the name step", () => {
     expect(screen.queryByLabelText("Slug")).not.toBeInTheDocument();
   });
 
-  it("reads the identity already reserved and shows its key read-only", async () => {
+  it("reads the agent already reserved and shows it read-only", async () => {
     const calls = await renderStep("name", "agt_releasebot", {
       agent: readOk(agentDetail()),
     });
     expect(calls.agent).toEqual([[ctx, "agt_releasebot"]]);
-    expect(screen.getByLabelText("Slug")).toHaveValue("release-bot");
-    expect(screen.getByLabelText("Slug")).toHaveAttribute("readonly");
+    expect(screen.getByTestId("register-reserved")).toHaveTextContent(
+      "release-bot",
+    );
+    expect(screen.queryByLabelText("Slug")).not.toBeInTheDocument();
   });
 });
 

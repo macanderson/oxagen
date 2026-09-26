@@ -1,7 +1,9 @@
 // Overview (spec pages/agent.md, Overview): what this agent is made of, and
-// the first question the page answers. Four panels, in the design's order:
-// the 30-day token use beside the coaching, then the composition beside the
-// last 30 days, then the definition in git.
+// the first question the page answers. The panels, in the design's order: the
+// 30-day token use beside the coaching, then the composition beside the last
+// 30 days, then the agent's versions (ADR-192), which took the place of the
+// definition in git. The composition names the toolbelt the agent carries and
+// the runtime it runs on.
 //
 // Every figure is this agent's own row of the 30-day rollup (`tokens.ts`).
 // The design's eight token classes split input six ways and nothing records
@@ -9,7 +11,6 @@
 // the rollup does record, output and reasoning, carry their figures. Coaching
 // is derived from that split, so it waits on the same gap and says so rather
 // than claiming there is nothing to change.
-import { GENERATED_AGENT_DIR } from "@oxagen/oxagen/contracts/agent.propose";
 import { useLocale, useTranslations } from "next-intl";
 import type {
   AgentDetail,
@@ -23,7 +24,6 @@ import type { SteeringDeliveries } from "@/data/contracts/steering";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { tamperOf } from "./agent-reads";
-import { repositoryOf } from "./definition-repo";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { buttonSecondary, linkText, mono } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
@@ -47,6 +47,7 @@ import {
   type TokenRollup,
   tokenRollup,
 } from "./tokens";
+import { AgentVersions } from "./versions";
 
 type Place = { org: string; ws: string; agent: string };
 
@@ -355,9 +356,13 @@ function Composition({
             term: t("toolbelt"),
             value: (
               <span className="flex flex-col gap-1">
-                <NotBacked gap="toolbelt_assignments">
-                  {t("toolbeltNotBacked")}
-                </NotBacked>
+                {detail.toolbelt === null ? (
+                  <NotRecordedValue />
+                ) : (
+                  <span data-testid="composition-belt">
+                    {detail.toolbelt.name}
+                  </span>
+                )}
                 <Sub>
                   {toolbelt.ok
                     ? t("toolbeltSub", {
@@ -374,6 +379,11 @@ function Composition({
             term: t("runtime"),
             value: (
               <span className="flex flex-col">
+                {detail.runtime === null ? null : (
+                  <span data-testid="composition-runtime">
+                    {detail.runtime.name}
+                  </span>
+                )}
                 {host === null ? (
                   <span className="text-muted-foreground">
                     {t("runtimeNone")}
@@ -521,110 +531,6 @@ function Last30({
   );
 }
 
-function DefinitionInGit({
-  detail,
-  place,
-}: {
-  detail: AgentDetail;
-  place: Place;
-}) {
-  const t = useTranslations("agents.detail.overview.definition");
-  const { definition, identity } = detail;
-  const repo =
-    definition === null ? null : repositoryOf(definition.pullRequestUrl);
-  return (
-    <Panel
-      id="agent-definition-git"
-      title={t("title")}
-      lead={t("lead")}
-      aside={
-        <SafeLink
-          to={routes.agent(place.org, place.ws, place.agent, {
-            tab: "definition",
-          })}
-          className={buttonSecondary}
-        >
-          {t("open")}
-        </SafeLink>
-      }
-    >
-      <Facts
-        rows={[
-          {
-            term: t("path"),
-            value: (
-              <span className={mono}>
-                {definition?.path ?? `.oxagen/agents/${identity.slug}.toml`}
-              </span>
-            ),
-          },
-          {
-            term: t("repo"),
-            value:
-              definition === null ? (
-                <span className="text-muted-foreground">
-                  {t("uncommitted")}
-                </span>
-              ) : (
-                <span className={mono}>
-                  {repo === null
-                    ? definition.branch
-                    : t("repoAt", { repo, branch: definition.branch })}
-                </span>
-              ),
-          },
-          {
-            term: t("commit"),
-            value:
-              definition === null ? (
-                <NotRecordedValue />
-              ) : (
-                <span className={mono}>{definition.commitSha.slice(0, 7)}</span>
-              ),
-          },
-          {
-            term: "definition_digest",
-            value:
-              definition === null ? (
-                <NotRecordedValue />
-              ) : (
-                <span className={`${mono} break-all`}>
-                  {`sha256:${definition.digest.slice(0, 12)}`}
-                </span>
-              ),
-          },
-          {
-            term: t("generated"),
-            value: SUBAGENT_HARNESSES.has(identity.harness) ? (
-              <span className="flex flex-col">
-                <span className={mono}>
-                  {`${GENERATED_AGENT_DIR}/${identity.slug}.md`}
-                </span>
-                <Sub>{t("generatedSub")}</Sub>
-              </span>
-            ) : (
-              <span className="text-muted-foreground">
-                {t("generatedNone")}
-              </span>
-            ),
-          },
-        ]}
-      />
-    </Panel>
-  );
-}
-
-/**
- * The harnesses that read a generated subagent file (`agent.propose.ts`):
- * Claude Code and Cursor read `.claude/agents/`, and Stella adopts it. Codex
- * documents no subagent file, so it gets none.
- */
-const SUBAGENT_HARNESSES: ReadonlySet<string> = new Set([
-  "claude-code",
-  "cursor",
-  "stella",
-]);
-
 export function Overview({
   detail,
   toolbelt,
@@ -674,7 +580,7 @@ export function Overview({
           place={place}
         />
       </div>
-      <DefinitionInGit detail={detail} place={place} />
+      <AgentVersions versions={detail.versions} />
     </div>
   );
 }

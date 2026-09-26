@@ -1,18 +1,28 @@
 "use client";
-// The Runtimes pages' client islands: the dialogs the page opens and the one
-// write, Unenroll.
+// The Runtimes pages' client islands: the dialogs the page opens and its two
+// writes, Add a runtime and Unenroll.
+//
+// Add a runtime asks for a name and a slug and names the runtime
+// (`create_runtime`, ADR-192). The slug fills from the name by the one rule
+// every name-made slug follows (`slugFromName`: spaces become hyphens, every
+// other special character is dropped) until the person types one of their
+// own. The only way on is registering the runtime's first agent: the dialog
+// lands on the register flow with the runtime chosen.
 //
 // Nothing here enrolls a host or writes a hook (runtimes.md: enrollment is an
-// installer, run on the host itself). Enroll a runtime is a link to the
-// Register an agent flow, whose wrap step shows the command; Show the CLI path
-// links the Oxagen app's installers, which put the CLI on the host's PATH, and
-// prints the command. Three controls the design draws have no capability behind
-// them: Request access, Open an incident and Run a smoke session. Each opens a
-// dialog that says what the product would do and that nothing records it yet,
-// rather than a button that silently does nothing: Request access is #3820,
-// Open an incident #3821, Run a smoke session #3819.
+// installer, run on the host itself). Show the CLI path links the Oxagen app's
+// installers, which put the CLI on the host's PATH, and prints the command.
+// Three controls the design draws have no capability behind them: Request
+// access, Open an incident and Run a smoke session. Each opens a dialog that
+// says what the product would do and that nothing records it yet, rather than
+// a button that silently does nothing: Request access is #3820, Open an
+// incident #3821, Run a smoke session #3819.
+import {
+  RUNTIME_SLUG_MAX,
+  slugFromName,
+} from "@oxagen/oxagen/contracts/runtime.shared";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import { routes } from "@/shared/safe-path";
 import { unanswered } from "@/ui/action-failure";
 import {
@@ -22,16 +32,28 @@ import {
   mono,
 } from "@/ui/control-styles";
 import { DesktopDownloads } from "@/ui/desktop-downloads";
+import { Field } from "@/ui/field";
 import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { unenrollRuntime } from "./actions";
+import { createRuntime, unenrollRuntime } from "./actions";
 
 /** `.btn.danger`: the ink and the border carry the red; the word carries the meaning. */
 const buttonDanger = `${buttonSecondary} border-error/50! text-error-ink! hover:bg-error/10!`;
 
-/** Enroll a runtime: the wrap flow, at its first step. Gold unless the screen already has its gold action. */
-export function EnrollRuntime({
+/** Lowercase letters and digits in groups joined by single hyphens, the runtime slug's one spelling. */
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+type AddFailure = Exclude<
+  Awaited<ReturnType<typeof createRuntime>>,
+  { ok: true }
+>;
+
+/**
+ * Add a runtime: the dialog that names one and moves on to registering its
+ * first agent. Gold unless the screen already has its gold action.
+ */
+export function AddRuntime({
   org,
   ws,
   gold = true,
@@ -40,15 +62,198 @@ export function EnrollRuntime({
   ws: string;
   gold?: boolean;
 }) {
-  const t = useTranslations("runtimes.page");
+  const t = useTranslations("runtimes.add");
+  const page = useTranslations("runtimes.page");
+  const navigate = useNavigate();
+  const baseId = useId();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  // The slug follows the name until the person edits the slug by hand.
+  const [slugEdited, setSlugEdited] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [slugError, setSlugError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  function reset() {
+    setName("");
+    setSlug("");
+    setSlugEdited(false);
+    setNameError(null);
+    setSlugError(null);
+    setFailure(null);
+  }
+
+  function failureText(result: AddFailure): string {
+    switch (result.reason) {
+      case "denied":
+        return t("failure.denied");
+      case "conflict":
+        return t("failure.refused", { code: result.code });
+      case "invalid":
+        return t("failure.invalid");
+      case "not_found":
+        return t("failure.refused", { code: result.code });
+      case "pending_approval":
+        return t("failure.pendingApproval", {
+          accessRequestId: result.accessRequestId,
+        });
+      case "unavailable":
+      case "exhausted":
+        return t("failure.unavailable", { code: result.code });
+    }
+  }
+
+  async function submit() {
+    if (pending) return;
+    const trimmedName = name.trim();
+    const trimmedSlug = slug.trim();
+    const badName = trimmedName === "" ? t("errors.nameRequired") : null;
+    const badSlug =
+      trimmedSlug === "" || !SLUG_PATTERN.test(trimmedSlug)
+        ? t("errors.slugInvalid")
+        : null;
+    setNameError(badName);
+    setSlugError(badSlug);
+    setFailure(null);
+    if (badName !== null || badSlug !== null) return;
+    setPending(true);
+    try {
+      const result = await createRuntime(org, ws, {
+        name: trimmedName,
+        slug: trimmedSlug,
+      });
+      if (result.ok) {
+        setOpen(false);
+        navigate.push(result.value.register);
+        return;
+      }
+      if (
+        result.reason === "conflict" &&
+        result.code === "runtime_slug_taken"
+      ) {
+        setSlugError(t("errors.slugTaken"));
+        return;
+      }
+      if (result.reason === "invalid" && result.field === "slug") {
+        setSlugError(t("errors.slugInvalid"));
+        return;
+      }
+      setFailure(failureText(result));
+    } catch {
+      setFailure(failureText(unanswered("action_failed")));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        data-testid="runtimes-add"
+        data-touch-target=""
+        aria-haspopup="dialog"
+        className={gold ? buttonPrimary : buttonSecondary}
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        {page("add")}
+      </button>
+      <SheetDialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) reset();
+        }}
+        title={t("title")}
+        testId="runtimes-add-dialog"
+      >
+        <form
+          noValidate
+          aria-label={t("title")}
+          className="flex flex-col gap-4 text-sm"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <p className="text-muted-foreground">{t("lead")}</p>
+          {failure === null ? null : (
+            <FormAlert testId="runtimes-add-failure">{failure}</FormAlert>
+          )}
+          <Field
+            id={`${baseId}-name`}
+            name="name"
+            label={t("name")}
+            hint={t("nameHint")}
+            error={nameError ?? undefined}
+            autoComplete="off"
+            maxLength={128}
+            value={name}
+            onChange={(event) => {
+              const next = event.target.value;
+              setName(next);
+              if (!slugEdited) setSlug(slugFromName(next, RUNTIME_SLUG_MAX));
+            }}
+          />
+          <Field
+            id={`${baseId}-slug`}
+            name="slug"
+            label={t("slug")}
+            hint={t("slugHint")}
+            error={slugError ?? undefined}
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={RUNTIME_SLUG_MAX}
+            className={mono}
+            value={slug}
+            onChange={(event) => {
+              setSlugEdited(true);
+              setSlug(event.target.value);
+            }}
+          />
+          <p className="border-l-2 border-gold py-0.5 pl-3 text-[13px] text-foreground">
+            {t("next")}
+          </p>
+          <button
+            type="submit"
+            data-testid="runtimes-add-submit"
+            data-touch-target=""
+            aria-disabled={pending || undefined}
+            className={`${buttonPrimary} w-full`}
+          >
+            {pending ? t("pending") : t("submit")}
+          </button>
+        </form>
+      </SheetDialog>
+    </>
+  );
+}
+
+/** Register an agent on a runtime that has none yet: the register flow with the runtime chosen. */
+export function RegisterOnRuntime({
+  org,
+  ws,
+  runtimeId,
+  runtimeName,
+}: {
+  org: string;
+  ws: string;
+  runtimeId: string;
+  runtimeName: string;
+}) {
+  const t = useTranslations("runtimes.named");
   return (
     <SafeLink
-      to={routes.register(org, ws, "name")}
-      data-testid="runtimes-enroll"
-      data-touch-target=""
-      className={gold ? buttonPrimary : buttonSecondary}
+      to={routes.register(org, ws, "name", { runtime: runtimeId })}
+      data-testid="runtime-register-agent"
+      aria-label={t("registerOn", { runtime: runtimeName })}
+      className={`${linkText} relative z-10`}
     >
-      {t("enroll")}
+      {t("register")}
     </SafeLink>
   );
 }

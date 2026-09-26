@@ -3,7 +3,7 @@
 // page test in agent.test.tsx does not reach: a newest run made on behalf of
 // someone other than the agent's operator, an identity with no operator or
 // description, a run with no replay grade, and a retired identity, which
-// keeps Clone and loses every write that would act on it. Axe runs after
+// loses every write that would act on it. Axe runs after
 // every test (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
@@ -112,7 +112,7 @@ describe("AgentHeader", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers a retired identity Clone and nothing that acts on it (negative)", () => {
+  it("offers a retired identity nothing that acts on it (negative)", () => {
     renderHeader({
       identity: agentDetail({ identity: { status: "retired" } }).identity,
     });

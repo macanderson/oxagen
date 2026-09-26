@@ -29,6 +29,13 @@ const recorded: Item = {
   description: "Cuts releases and opens their pull requests.",
   agentKey: "acme.core.release-bot",
   harness: "claude-code",
+  runtime: { id: "rtm_buildbox", name: "Build box", slug: "build-box" },
+  toolbelt: {
+    id: "tbt_alltools",
+    name: "All tools",
+    slug: "all-tools",
+    kind: "all_tools",
+  },
   principalId: "prn_91",
   operatorId: "usr_marcusbell",
   operatorName: "Marcus Bell",
@@ -62,6 +69,8 @@ const bare: Item = {
   slug: "legacy",
   description: null,
   agentKey: null,
+  runtime: null,
+  toolbelt: null,
   operatorId: null,
   operatorName: null,
   status: "unenrolled",
@@ -110,6 +119,13 @@ describe("toAgentPage", () => {
           description: "Cuts releases and opens their pull requests.",
           agentKey: "acme.core.release-bot",
           harness: "claude-code",
+          runtime: { id: "rtm_buildbox", name: "Build box", slug: "build-box" },
+          toolbelt: {
+            id: "tbt_alltools",
+            name: "All tools",
+            slug: "all-tools",
+            kind: "all_tools",
+          },
           operatorId: "usr_marcusbell",
           operatorName: "Marcus Bell",
           principalId: "prn_91",
@@ -137,6 +153,8 @@ describe("toAgentPage", () => {
           description: null,
           agentKey: null,
           harness: "claude-code",
+          runtime: null,
+          toolbelt: null,
           operatorId: null,
           operatorName: null,
           principalId: "prn_91",
@@ -223,7 +241,15 @@ const detail: ContractOutput<typeof agentGet> = {
       revokedAt: null,
     },
   ],
-  definition: null,
+  runtime: null,
+  toolbelt: null,
+  versions: [],
+  limits: {
+    perRun: { micros: "2500000", currency: "USD" },
+    perDay: null,
+    containmentRequired: true,
+    invalid: false,
+  },
 };
 
 describe("toAgentDetail", () => {
@@ -259,33 +285,59 @@ describe("toAgentDetail", () => {
       bundleVersionServed: null,
       lastSeenAt: null,
     });
-    expect(view.definition).toBeNull();
+    expect(view.runtime).toBeNull();
+    expect(view.versions).toEqual([]);
+    expect(view.limits).toEqual({
+      perRun: { micros: "2500000", currency: "USD" },
+      perDay: null,
+      containmentRequired: true,
+      invalid: false,
+    });
     expect(AgentDetail.safeParse(view).success).toBe(true);
   });
 
-  it("carries a committed definition with its source, commit and pull request", () => {
+  it("carries the runtime, the toolbelt and each version newest first (ADR-192)", () => {
+    const runtime = {
+      id: "rtm_laptop",
+      name: "Mac's laptop",
+      slug: "macs-laptop",
+    };
+    const belt = {
+      id: "tbt_review",
+      name: "Review belt",
+      slug: "review-belt",
+      kind: "custom" as const,
+    };
     const view = toAgentDetail({
       ...detail,
-      definition: {
-        version: 3,
-        path: ".oxagen/agents/release-bot.toml",
-        digest: "a".repeat(64),
-        commitSha: "9c1e2f0",
-        branch: "agents/release-bot",
-        pullRequestUrl: "https://github.com/acme/core/pull/12",
-        source: 'slug = "release-bot"\n',
-        committedAt: "2026-09-03T10:00:00.000Z",
-      },
+      runtime,
+      toolbelt: belt,
+      versions: [
+        {
+          version: 2,
+          changeKind: "toolbelt_changed",
+          runtime,
+          toolbelt: belt,
+          createdBy: "usr_marcusbell",
+          createdAt: "2026-09-04T10:00:00.000Z",
+        },
+        {
+          version: 1,
+          changeKind: "registered",
+          runtime,
+          toolbelt: null,
+          createdBy: null,
+          createdAt: "2026-09-01T10:00:00.000Z",
+        },
+      ],
     });
-    expect(view.definition).toEqual({
-      path: ".oxagen/agents/release-bot.toml",
-      digest: "a".repeat(64),
-      commitSha: "9c1e2f0",
-      branch: "agents/release-bot",
-      pullRequestUrl: "https://github.com/acme/core/pull/12",
-      source: 'slug = "release-bot"\n',
-      committedAt: "2026-09-03T10:00:00.000Z",
-    });
+    expect(view.runtime).toEqual(runtime);
+    expect(view.toolbelt).toEqual(belt);
+    expect(view.versions.map((v) => [v.version, v.changeKind])).toEqual([
+      [2, "toolbelt_changed"],
+      [1, "registered"],
+    ]);
+    expect(AgentDetail.safeParse(view).success).toBe(true);
   });
 });
 

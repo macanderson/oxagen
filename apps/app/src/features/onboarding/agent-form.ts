@@ -1,14 +1,26 @@
-// The register form: the slug that becomes the last segment of the agent key
-// (ADR-024) and the harness that picks the wrap path. The display name is the
-// slug in words and the description is left empty: the design asks for
-// neither, and `register_agent` requires the name, so the form derives it.
+// The register form (ADR-192): an agent is one operator on one runtime with
+// one harness, carrying a toolbelt. The form asks for the agent's name, the
+// slug that becomes the last segment of its key (ADR-024), the harness, the
+// runtime and the toolbelt. The slug is made from the name by the one rule
+// every name-made slug follows (`slugFromName`) and cut to the 18 characters
+// an agent slug may hold, until the person types one of their own.
+//
+// A runtime and harness pair a live agent already holds cannot be registered
+// again. `holderOf` answers which agent holds a pair, so the harness and
+// runtime pickers can keep the taken option visible, disabled, and say why.
+//
 // Issues carry keys under `onboarding.errors.*`. The bounds are
 // `register_agent`'s own, so a form the page accepts is one the contract
 // accepts.
 import type { agentHarnessSchema } from "@oxagen/oxagen/contracts/agent.list";
+import { slugFromName } from "@oxagen/oxagen/contracts/runtime.shared";
 import { z } from "zod";
+import type { NamedRuntime } from "@/data/contracts/runtimes";
 
 const SLUG_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/** The longest new agent slug (ADR-024: 6 + 1 + 6 + 1 + 18 characters of key). */
+export const AGENT_SLUG_MAX = 18;
 
 type ContractHarness = z.infer<typeof agentHarnessSchema>;
 
@@ -29,9 +41,6 @@ export const HARNESSES = [
 /** A harness the agent registry records; the same six members as `register_agent`'s enum. */
 export type Harness = (typeof HARNESSES)[number];
 
-/** The two model tiers the name step offers (register-name spec). */
-export const MODEL_TIERS = ["complex", "light"] as const;
-
 /**
  * The wrap step's tabs. The three the design draws, with Cursor beside Codex
  * CLI (ADR-101). Stella and every SDK-built agent take the SDK tab, as the
@@ -45,6 +54,11 @@ export function wrapTabFor(harness: Harness): WrapTab {
   if (harness === "claude-code" || harness === "codex" || harness === "cursor")
     return harness;
   return "sdk";
+}
+
+/** The agent slug a name suggests: `slugFromName`, cut to 18 characters. */
+export function agentSlugFromName(name: string): string {
+  return slugFromName(name, AGENT_SLUG_MAX);
 }
 
 /**
@@ -67,38 +81,42 @@ export function agentKeyOf(prefix: string, slug: string): string {
   return `${prefix}.${displaySlug(slug)}`;
 }
 
-/** The display name `register_agent` requires, as the slug in words: `perf-watch` is `Perf watch`. */
-export function nameFromSlug(slug: string): string {
-  const words = slug.trim().replace(/-+/g, " ");
-  return words.charAt(0).toUpperCase() + words.slice(1);
+/** The live agent that holds this runtime and harness pair, or null when the pair is free. */
+export function holderOf(
+  runtime: NamedRuntime | undefined,
+  harness: Harness | null,
+): NamedRuntime["agents"][number] | null {
+  if (runtime === undefined || harness === null) return null;
+  return runtime.agents.find((agent) => agent.harness === harness) ?? null;
 }
 
 const AGENT_FORM_ERROR_KEYS = [
   "agentSlugInvalid",
   "agentNameRequired",
   "agentNameTooLong",
-  "agentDescriptionTooLong",
   "agentHarnessInvalid",
+  "agentRuntimeRequired",
 ] as const;
 export type AgentFormErrorKey = (typeof AGENT_FORM_ERROR_KEYS)[number];
 
 export const AgentForm = z.object({
-  slug: z
-    .string()
-    .trim()
-    .min(1, { error: "agentSlugInvalid" })
-    .max(18, { error: "agentSlugInvalid" })
-    .regex(SLUG_PATTERN, { error: "agentSlugInvalid" }),
   name: z
     .string()
     .trim()
     .min(1, { error: "agentNameRequired" })
     .max(128, { error: "agentNameTooLong" }),
-  description: z
+  slug: z
     .string()
     .trim()
-    .max(1024, { error: "agentDescriptionTooLong" }),
+    .min(1, { error: "agentSlugInvalid" })
+    .max(AGENT_SLUG_MAX, { error: "agentSlugInvalid" })
+    .regex(SLUG_PATTERN, { error: "agentSlugInvalid" }),
   harness: z.enum(HARNESSES, { error: "agentHarnessInvalid" }),
+  runtimeId: z
+    .string()
+    .regex(/^rtm_[0-9a-z]+$/, { error: "agentRuntimeRequired" }),
+  /** Empty for the workspace's All tools belt. */
+  toolbeltId: z.union([z.literal(""), z.string().regex(/^tbt_[0-9a-z]+$/)]),
 });
 type AgentFormInput = z.input<typeof AgentForm>;
 export type AgentField = keyof AgentFormInput;

@@ -310,7 +310,7 @@ describe("pull", () => {
     mockPost.mockResolvedValue(
       published([
         { path: ".oxagen/rules/a.md", content: "A" },
-        { path: ".oxagen/agents/b.toml", content: "B" },
+        { path: ".oxagen/notes/b.md", content: "B" },
       ]),
     );
 
@@ -323,9 +323,9 @@ describe("pull", () => {
     expect(body).toEqual({});
     expect(scope).toEqual({ org: "acme", ws: "payments" });
     expect(read(".oxagen/rules/a.md")).toBe("A");
-    expect(read(".oxagen/agents/b.toml")).toBe("B");
+    expect(read(".oxagen/notes/b.md")).toBe("B");
     expect(out).toEqual([
-      "created .oxagen/agents/b.toml",
+      "created .oxagen/notes/b.md",
       "created .oxagen/rules/a.md",
       "Pulled 2 files from acme/steering@0123456 (main).",
     ]);
@@ -336,7 +336,7 @@ describe("pull", () => {
       fullName: "acme/steering",
       files: {
         ".oxagen/rules/a.md": sha256("A"),
-        ".oxagen/agents/b.toml": sha256("B"),
+        ".oxagen/notes/b.md": sha256("B"),
       },
     });
     // The link keeps what it had.

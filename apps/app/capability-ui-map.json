@@ -110,14 +110,6 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
-    "commit_agent_definition": {
-      "route": "/[org]/[ws]/agents/[agent]/source",
-      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/source/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent]/source \u2014 the rev1 surface that invokes commit_agent_definition (features/agents/actions.ts, features/agents/agent-source.tsx)",
-      "proof": "apps/app/src/features/agents/agent-source.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
-    },
     "create_api_key": {
       "route": "/[org]/api-keys",
       "page": "apps/app/src/app/[org]/api-keys/page.tsx",
@@ -338,7 +330,7 @@
     "get_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent] \u2014 the rev1 surface that invokes get_agent (data/live/agents.ts, data/live/mappers/agents.ts, data/live/mappers/mappers.type-test.ts)",
+      "entry": "/[org]/[ws]/agents/[agent] — the agent page: identity, runtime, toolbelt and versions (data/live/agents.ts, data/live/mappers/agents.ts, features/agents/versions.tsx)",
       "proof": "apps/app/src/features/agents/agent.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -1044,14 +1036,6 @@
       "verifiedAt": "2026-09-20",
       "verifiedBy": "skills-console-ci"
     },
-    "propose_agent": {
-      "route": "/[org]/[ws]/agents",
-      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents \u203a New agent, and \u2318K Create \u203a Agent: the agent wizard's pull request step (features/create/agent-wizard.tsx, features/create/actions.ts); Agents \u203a Register an agent opens the same pull request from its dialog (features/agents/register-agent.tsx, features/agents/actions.ts)",
-      "proof": "apps/app/src/features/create/agent-wizard.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-wizard-agent"
-    },
     "propose_configuration_clone": {
       "route": "/[org]/[ws]/steering",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
@@ -1121,10 +1105,10 @@
     "register_agent": {
       "route": "/[org]/[ws]/register/[step]",
       "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
-      "entry": "/[org]/[ws]/register/[step] \u2014 the rev1 surface that invokes register_agent (features/onboarding/actions.ts)",
-      "proof": "apps/app/src/features/onboarding/register.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "entry": "/[org]/[ws]/register/name — Define the agent: its name, slug, harness, runtime and toolbelt, then Continue (features/onboarding/ui/register-form.tsx, features/onboarding/actions.ts)",
+      "proof": "apps/app/src/features/onboarding/ui.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
     },
     "register_mcp_server": {
       "route": "/[org]/[ws]/tools/providers",
@@ -1749,6 +1733,122 @@
       "proof": "apps/app/src/features/organization/sso.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session-scim-provisioning"
+    },
+    "create_runtime": {
+      "route": "/[org]/[ws]/runtimes",
+      "page": "apps/app/src/app/[org]/[ws]/runtimes/page.tsx",
+      "entry": "Runtimes › Add a runtime: name and slug, then on to registering its agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
+      "testid": "runtimes-add",
+      "proof": "apps/app/src/features/runtimes/actions.test.ts",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "list_runtimes": {
+      "route": "/[org]/[ws]/runtimes",
+      "page": "apps/app/src/app/[org]/[ws]/runtimes/page.tsx",
+      "entry": "Runtimes › the Runtimes panel: each named runtime with its agents by harness (data/live/runtimes.ts, features/runtimes/named.tsx)",
+      "testid": "named-runtime",
+      "proof": "apps/app/src/features/runtimes/runtimes.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)",
+      "also": [
+        {
+          "route": "/[org]/[ws]/register/[step]",
+          "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+          "entry": "Define the agent › Runtime: the runtimes to choose from, a runtime already running the harness disabled with its reason (features/onboarding/ui/register-form.tsx)",
+          "testid": "register-runtime",
+          "proof": "apps/app/src/features/onboarding/ui.test.tsx"
+        },
+        {
+          "route": "/[org]/[ws]/agents/[agent]/[tab]",
+          "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/[tab]/page.tsx",
+          "entry": "Agent › Runtime › Runtime placement: the runtimes to move the agent to (features/agents/binding-controls.tsx)",
+          "testid": "agent-runtime",
+          "proof": "apps/app/src/features/agents/agent.test.tsx"
+        }
+      ]
+    },
+    "move_agent": {
+      "route": "/[org]/[ws]/agents/[agent]/[tab]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/[tab]/page.tsx",
+      "entry": "Agent › Runtime › Runtime placement › Move (features/agents/binding-controls.tsx, features/agents/actions.ts)",
+      "testid": "agent-runtime-save",
+      "proof": "apps/app/src/features/agents/actions.test.ts",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "assign_agent_toolbelt": {
+      "route": "/[org]/[ws]/agents/[agent]/[tab]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/[tab]/page.tsx",
+      "entry": "Agent › Toolbelt › Assigned toolbelt › Save (features/agents/binding-controls.tsx, features/agents/actions.ts)",
+      "testid": "agent-belt-save",
+      "proof": "apps/app/src/features/agents/actions.test.ts",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "list_toolbelts": {
+      "route": "/[org]/[ws]/tools/toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Toolbelts: the All tools belt, then the clones (features/tools/toolbelts.tsx)",
+      "proof": "apps/app/src/features/tools/toolbelts.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)",
+      "also": [
+        {
+          "route": "/[org]/[ws]/register/[step]",
+          "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+          "entry": "Define the agent › Toolbelt: the belts to choose from, or the step done with a link to import MCP servers when the workspace has no tools (features/onboarding/ui/register-form.tsx)",
+          "testid": "register-toolbelt",
+          "proof": "apps/app/src/features/onboarding/ui.test.tsx"
+        },
+        {
+          "route": "/[org]/[ws]/agents/[agent]/[tab]",
+          "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/[tab]/page.tsx",
+          "entry": "Agent › Toolbelt › Assigned toolbelt (features/agents/binding-controls.tsx)",
+          "testid": "agent-belt",
+          "proof": "apps/app/src/features/agents/agent.test.tsx"
+        }
+      ]
+    },
+    "get_toolbelt": {
+      "route": "/[org]/[ws]/tools/toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Toolbelts › one belt, its tools grouped by server (features/tools/toolbelts.tsx, features/tools/belt-view.tsx)",
+      "proof": "apps/app/src/features/tools/tools.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "clone_toolbelt": {
+      "route": "/[org]/[ws]/tools/toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Toolbelts › Clone (features/tools/clone-toolbelt.tsx)",
+      "proof": "apps/app/src/features/tools/clone-toolbelt.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "update_toolbelt": {
+      "route": "/[org]/[ws]/tools/toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Toolbelts › a custom belt's server and tool switches (features/tools/belt-view.tsx)",
+      "proof": "apps/app/src/features/tools/belt-view.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "delete_toolbelt": {
+      "route": "/[org]/[ws]/tools/toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Toolbelts › Delete on a custom belt no agent carries (features/tools/belt-view.tsx)",
+      "proof": "apps/app/src/features/tools/belt-view.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "set_tool_state": {
+      "route": "/[org]/[ws]/tools/toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Toolbelts › All tools: each tool's or server's availability and default (features/tools/belt-view.tsx)",
+      "proof": "apps/app/src/features/tools/belt-view.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
     }
   }
 }

@@ -100,75 +100,31 @@ describe("mapMandateToBundlePermissions", () => {
 });
 
 describe("budgetDocFromVersion", () => {
-  const source = (budget: string) =>
-    `schema = "agent-definition/v0.1"\nslug = "review"\nbudget = ${budget}\n[instructions]\nbody = "Review."\n`;
-
-  it("uses the committed source over a stale config budget", () => {
+  // The definition file is gone (ADR-192). Its migration copied each
+  // `[budget]` table into the version's config, which is the one source now.
+  it("reads both ceilings from the version's config", () => {
     expect(
       budgetDocFromVersion({
-        config: { budget: { per_run_micros: 2_500_000 } },
-        definitionSource: source("{ per_run_micros = 9 }"),
-      }),
-    ).toEqual({ perRunMicros: 9 });
-  });
-
-  it("reads legacy config only when the version has no source", () => {
-    expect(
-      budgetDocFromVersion({
-        config: { budget: { per_run_micros: 2_500_000 } },
-        definitionSource: null,
-      }),
-    ).toEqual({ perRunMicros: 2_500_000 });
-  });
-
-  it("keeps a removed source budget from reviving a stale config budget", () => {
-    expect(
-      budgetDocFromVersion({
-        config: { budget: { per_run_micros: 2_500_000 } },
-        definitionSource: 'slug = "review"\n',
-      }),
-    ).toBeUndefined();
-  });
-
-  // No writer puts a budget into `config`: the form commits the TOML and the
-  // commit handler copies the previous config forward. Reading `config` alone
-  // signed `observed` for every agent in the field.
-  it("reads the committed TOML when the config carries no budget", () => {
-    expect(
-      budgetDocFromVersion({
-        config: { graph: {}, agentTools: [] },
-        definitionSource: source(
-          "{ per_run_micros = 2500000, per_day_micros = 20000000 }",
-        ),
+        config: {
+          graph: {},
+          budget: { per_run_micros: 2_500_000, per_day_micros: 20_000_000 },
+        },
       }),
     ).toEqual({ perRunMicros: 2_500_000, perDayMicros: 20_000_000 });
   });
 
-  it("reads a [budget] header table", () => {
-    expect(
-      budgetDocFromVersion({
-        config: {},
-        definitionSource: 'slug = "review"\n[budget]\nper_run_micros = 1\n',
-      }),
-    ).toEqual({ perRunMicros: 1 });
+  it("is no budget when the config names none", () => {
+    expect(budgetDocFromVersion({ config: {} })).toBeUndefined();
+    expect(budgetDocFromVersion({ config: null })).toBeUndefined();
   });
 
-  it("is no budget when neither the config nor the source names one", () => {
-    expect(
-      budgetDocFromVersion({ config: {}, definitionSource: 'slug = "x"\n' }),
-    ).toBeUndefined();
-    expect(
-      budgetDocFromVersion({ config: null, definitionSource: null }),
-    ).toBeUndefined();
-  });
-
-  it("refuses invalid source instead of issuing an observed bundle", () => {
+  it("refuses an invalid budget instead of issuing an observed bundle", () => {
     expect(() =>
-      budgetDocFromVersion({ config: {}, definitionSource: "budget = {" }),
+      budgetDocFromVersion({ config: { budget: { per_run_micros: -1 } } }),
     ).toThrowError(
       expect.objectContaining({
         code: "conflict",
-        reason: "invalid_definition_source",
+        reason: "invalid_agent_config",
       }),
     );
   });

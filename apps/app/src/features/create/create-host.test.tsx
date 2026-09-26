@@ -30,7 +30,7 @@ vi.mock("./clone-actions", () => ({ readCloneDraft, proposeClone }));
 
 // Await real module transformation before asserting UI behavior.
 const { WIZARDS } = await import("./kinds");
-await Promise.all([WIZARDS.skill?.(), WIZARDS.agent?.()]);
+await Promise.all([WIZARDS.skill?.(), WIZARDS.record?.()]);
 
 const { CreateHost } = await import("./create-host");
 
@@ -78,15 +78,15 @@ describe("CreateHost", () => {
     });
     mount();
     act(() => {
-      openClone("agent", "agt_original");
+      openClone("skill", "review");
     });
     await screen.findByTestId("configuration-clone", {}, { timeout: 5000 });
     await waitFor(() => {
       expect(readCloneDraft).toHaveBeenCalledWith(
         "acme",
         "core-platform",
-        "agent",
-        "agt_original",
+        "skill",
+        "review",
       );
     });
     expect(screen.queryByTestId("create-chooser")).toBeNull();
@@ -104,9 +104,10 @@ describe("CreateHost", () => {
     open();
     const dialog = await screen.findByTestId("create-chooser");
     expect(dialog.querySelector('[data-kind="skill"]')).not.toBeNull();
-    // The agent, skill and record wizards are offered. The tool wizard is
-    // not yet, and neither is a kind with no module.
-    expect(dialog.querySelector('[data-kind="agent"]')).not.toBeNull();
+    // The skill and record wizards are offered. An agent is registered on
+    // its runtime, not created here (ADR-192), and the tool wizard is not
+    // offered yet.
+    expect(dialog.querySelector('[data-kind="agent"]')).toBeNull();
     expect(dialog.querySelector('[data-kind="record"]')).not.toBeNull();
     expect(dialog.querySelector('[data-kind="tool"]')).toBeNull();
     expect(

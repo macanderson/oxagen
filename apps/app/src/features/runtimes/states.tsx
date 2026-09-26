@@ -2,7 +2,8 @@
 // mockup's `.state-wrap` (the shared `StateWrap`): an icon, a title, the
 // sentences, the actions. Error, access denied and waiting-for-approval replace
 // the page body, header included, and the shell around it stays. Empty keeps
-// the header, because the header's Enroll a runtime is the way in. The icons are
+// the header, and carries Add a runtime itself, because naming a runtime is the
+// way in (ADR-192). The icons are
 // the mockup's: a framed panel for empty, a circled exclamation for error, a
 // lock for denied.
 import { useTranslations } from "next-intl";
@@ -13,8 +14,8 @@ import { SafeLink } from "@/ui/navigation";
 import { StateWrap, stateCode, stateFacts, stateTrace } from "@/ui/state-wrap";
 import { NotBacked } from "./parts";
 import {
+  AddRuntime,
   CliPath,
-  EnrollRuntime,
   OpenIncident,
   RequestAccess,
   TryAgain,
@@ -31,8 +32,17 @@ function traceStamp(at: number): string {
   return `${new Date(at).toISOString().slice(0, 19).replace("T", " ")}Z`;
 }
 
-/** Empty: no enrollment is recorded in this workspace. */
-export function RuntimesEmpty({ org, ws }: { org: string; ws: string }) {
+/** Empty: no runtime is named and no enrollment is recorded in this workspace. */
+export function RuntimesEmpty({
+  org,
+  ws,
+  canAdd,
+}: {
+  org: string;
+  ws: string;
+  /** Whether the viewer may name a runtime (an org Owner or Admin). */
+  canAdd: boolean;
+}) {
   const t = useTranslations("runtimes.empty");
   return (
     <StateWrap
@@ -41,7 +51,7 @@ export function RuntimesEmpty({ org, ws }: { org: string; ws: string }) {
       testId="runtimes-empty"
       actions={
         <>
-          <EnrollRuntime org={org} ws={ws} />
+          {canAdd ? <AddRuntime org={org} ws={ws} /> : null}
           <CliPath />
         </>
       }

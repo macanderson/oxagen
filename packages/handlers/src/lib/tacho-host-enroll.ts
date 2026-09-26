@@ -6,7 +6,7 @@
 // the claims, writes the host, and assembles the document the collector keeps.
 import type { Tx } from "@oxagen/database";
 import { schema } from "@oxagen/database";
-import { getTableColumns } from "drizzle-orm";
+import { eq, getTableColumns } from "drizzle-orm";
 import { cryptoRandom } from "@oxagen/database/schema";
 import {
   type EnrollmentClaims,
@@ -33,6 +33,7 @@ import {
   unsignedBundle,
 } from "./tacho-host";
 import { hostGatewayColumnReady } from "./tacho-gateway-columns";
+import { findOrCreateHostRuntime } from "./runtimes";
 import {
   readWorkspaceSteering,
   type WorkspaceSteering,
@@ -280,6 +281,29 @@ export async function mintHostEnrollment(
     delete (returning as Partial<typeof hostColumns>).gatewayLastSeenAt;
   }
 
+  // The runtime the enrollment binds (ADR-192). A token enrollment takes its
+  // agent's runtime. An operator enrollment, and an agent registered before
+  // runtimes existed that the backfill left unplaced, take the runtime the
+  // hostname names, created when none does. The agent row is not moved: that
+  // is `move_agent`, which checks the runtime is free for its harness.
+  const [agentRuntime] = args.agent
+    ? await tx
+        .select({ runtimeId: schema.agents.runtimeId })
+        .from(schema.agents)
+        .where(eq(schema.agents.id, args.agent.id))
+        .limit(1)
+    : [];
+  const runtimeId =
+    agentRuntime?.runtimeId ??
+    (
+      await findOrCreateHostRuntime(
+        tx,
+        { orgId: args.orgId, workspaceId: args.workspaceId },
+        facts.hostname,
+        args.userId,
+      )
+    ).id;
+
   const [inserted] = await tx
     .insert(schema.tachoHosts)
     .values({
@@ -290,6 +314,7 @@ export async function mintHostEnrollment(
       agentId: args.agent?.id ?? null,
       agentPrincipalId: args.agent?.principalId ?? null,
       apiKeyId: key.id,
+      runtimeId,
       hostname: facts.hostname,
       hostnameDigest: digestBytes(facts.hostname),
       platform: facts.platform,

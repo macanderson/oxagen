@@ -106,6 +106,12 @@ kill switches decide each call.
   server, and turns a server or a single tool on or off in the belt.
 - A tool that stops being available leaves every belt at resolution time. A
   belt keeps its row, so the tool returns as the belt left it.
+- On a wrapped harness the host bundle enforces the belt: every imported MCP
+  tool the agent's belt leaves out becomes a deny rule
+  (`mcp__<server>__<tool>`) beside the RBAC rules. A server the operator
+  configured on the machine and never imported is not the workspace's to
+  narrow. Stella's in-app assistant runs on no runtime, and no belt narrows
+  its tools. Roles, grants and kill switches still decide each of its calls.
 - An agent registered with no toolbelt named carries the All tools belt.
 
 #3852 proposed a `tools.toolbelt_assignments` table from an agent principal
@@ -148,10 +154,10 @@ drops the six cache columns (`definition_path`, `definition_digest`,
   `tacho enroll` keeps one enrollment per machine (`host.json`) and
   re-enrolls to add a harness. Until tacho holds one enrollment per agent on
   a machine, a second agent on a runtime cannot enroll its host without
-  revoking the first. That change is tracked separately.
+  revoking the first. That change is #4371.
 - No surface edits a per-agent budget or `[containment]` after the Definition
-  tab goes. The values the migration copied stay enforced. Editing them is
-  tracked separately.
+  tab goes. The values the migration copied stay enforced. Editing them waits
+  on a decision about where agent-scope limits live (#4372).
 - Existing agents keep their principals. The backfill places each live agent
   on the runtime of its newest host. Where two live agents with one harness
   shared a hostname, the newer one keeps the runtime and the older one is left

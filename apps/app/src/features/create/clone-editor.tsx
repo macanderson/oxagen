@@ -142,12 +142,10 @@ export function CloneEditor({
           {kind === "skill" ? null : (
             <label>
               {/* A record's name is its label, capped at 36 (ADR-178). */}
-              {kind === "record" ? t("label") : t("name")}
+              {t("label")}
               <input
                 className={inputBase}
-                maxLength={
-                  kind === "record" ? CONTEXT_RECORD_LABEL_MAX : undefined
-                }
+                maxLength={CONTEXT_RECORD_LABEL_MAX}
                 value={draft.name}
                 disabled={pending}
                 onChange={(e) => {

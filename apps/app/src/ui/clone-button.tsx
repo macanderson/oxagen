@@ -13,7 +13,7 @@ export function CloneButton({
   label,
   className = buttonSecondary,
 }: {
-  kind: "agent" | "skill" | "record";
+  kind: "skill" | "record";
   sourceRef: string;
   label?: string;
   className?: string;

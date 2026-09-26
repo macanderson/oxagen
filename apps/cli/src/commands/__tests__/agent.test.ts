@@ -60,11 +60,26 @@ function memoryWriter(): {
   };
 }
 
+const RUNTIME = {
+  id: "rtm_0123456789abcdefghjkmn",
+  name: "Mac's laptop",
+  slug: "macs-laptop",
+};
+const BELT = {
+  id: "tbt_0123456789abcdefghjkmn",
+  name: "All tools",
+  slug: "all-tools",
+  kind: "all_tools" as const,
+};
+
 const REGISTERED: AgentRegisterResult = {
   agentId: "agt_0123456789abcdefghjkmn",
   slug: "release-bot",
   agentKey: "acme.core.release-bot",
   principalId: "prn_0123456789abcdefghjkmn",
+  runtime: RUNTIME,
+  toolbelt: BELT,
+  version: 1,
   credential: {
     id: "aky_0123456789abcdefghjkmn",
     secret: "ox_supersecretvalue",
@@ -131,7 +146,23 @@ const AGENT: AgentGetResult = {
       revokedAt: "2026-09-01T00:00:00.000Z",
     },
   ],
-  definition: null,
+  runtime: RUNTIME,
+  toolbelt: BELT,
+  versions: [
+    {
+      version: 1,
+      changeKind: "registered",
+      runtime: RUNTIME,
+      toolbelt: BELT,
+      createdAt: "2026-09-13T10:00:00.000Z",
+    },
+  ],
+  limits: {
+    perRun: null,
+    perDay: null,
+    containmentRequired: false,
+    invalid: false,
+  },
 };
 
 const postMock = apiPostOrThrow as unknown as Mock;
@@ -150,22 +181,49 @@ describe("oxagen agent register", () => {
     const { writer, out } = memoryWriter();
     await agentRegister(
       {
-        slug: "release-bot",
         name: "Release bot",
         harness: "stella",
+        runtime: RUNTIME.id,
         validityDays: "30",
       },
       writer,
     );
+    // No --slug and no --toolbelt: the server derives the slug and gives the
+    // agent the All tools belt (ADR-192).
     expect(postMock).toHaveBeenCalledWith("agents/register", {
-      slug: "release-bot",
       name: "Release bot",
       harness: "stella",
+      runtimeId: RUNTIME.id,
       validityDays: 30,
     });
-    expect(out.join("\n")).toContain("ox_supersecretvalue");
-    expect(out.join("\n")).toContain("shown once");
+    const text = out.join("\n");
+    expect(text).toContain("ox_supersecretvalue");
+    expect(text).toContain("shown once");
+    expect(text).toContain("Mac's laptop (macs-laptop)");
+    expect(text).not.toContain(".toml");
     expect(process.exitCode).toBeUndefined();
+  });
+
+  it("forwards a typed slug and toolbelt", async () => {
+    postMock.mockResolvedValue(REGISTERED);
+    const { writer } = memoryWriter();
+    await agentRegister(
+      {
+        name: "Release bot",
+        harness: "stella",
+        runtime: RUNTIME.id,
+        slug: "release-bot",
+        toolbelt: BELT.id,
+      },
+      writer,
+    );
+    expect(postMock).toHaveBeenCalledWith("agents/register", {
+      name: "Release bot",
+      harness: "stella",
+      runtimeId: RUNTIME.id,
+      slug: "release-bot",
+      toolbeltId: BELT.id,
+    });
   });
 
   it("--json emits the exact payload", async () => {
@@ -173,9 +231,9 @@ describe("oxagen agent register", () => {
     const { writer, out } = memoryWriter();
     await agentRegister(
       {
-        slug: "release-bot",
         name: "Release bot",
         harness: "stella",
+        runtime: RUNTIME.id,
         json: true,
       },
       writer,
@@ -183,19 +241,15 @@ describe("oxagen agent register", () => {
     expect(out).toEqual([JSON.stringify(REGISTERED)]);
   });
 
+  const BASE = { name: "x", harness: "stella", runtime: RUNTIME.id };
   it.each([
-    ["slug", { slug: "Release Bot", name: "x", harness: "stella" }],
-    ["harness", { slug: "release-bot", name: "x", harness: "langchain" }],
-    [
-      "validity",
-      {
-        slug: "release-bot",
-        name: "x",
-        harness: "stella",
-        validityDays: "400",
-      },
-    ],
-    ["name", { slug: "release-bot", harness: "stella" }],
+    ["slug", { ...BASE, slug: "Release Bot" }],
+    ["harness", { ...BASE, harness: "langchain" }],
+    ["validity", { ...BASE, validityDays: "400" }],
+    ["name", { harness: "stella", runtime: RUNTIME.id }],
+    ["runtime", { name: "x", harness: "stella" }],
+    ["runtime id", { ...BASE, runtime: "macs-laptop" }],
+    ["toolbelt id", { ...BASE, toolbelt: "all-tools" }],
   ])("a bad %s fails fast without a call (exit 2)", async (_what, opts) => {
     const { writer, err } = memoryWriter();
     await agentRegister(opts, writer);
@@ -208,7 +262,7 @@ describe("oxagen agent register", () => {
     postMock.mockRejectedValue(new Error("Forbidden: org role required"));
     const { writer, err, out } = memoryWriter();
     await agentRegister(
-      { slug: "release-bot", name: "x", harness: "stella" },
+      { name: "x", harness: "stella", runtime: RUNTIME.id },
       writer,
     );
     expect(out).toEqual([]);
@@ -229,7 +283,9 @@ describe("oxagen agent status", () => {
     expect(text).toContain("Release bot (release-bot) — enrolled");
     expect(text).toContain("aky_0123456789abcdefghjkmn | ox_abcdefghi");
     expect(text).toContain("tch_live | build-1 | active | observe | ok");
-    expect(text).toContain("Definition: none committed");
+    expect(text).toContain("runtime     Mac's laptop (macs-laptop)");
+    expect(text).toContain("toolbelt    All tools");
+    expect(text).toContain("1 | registered | macs-laptop | all-tools");
     // The secret never appears in a status read: the wire carries the prefix only.
     expect(text).not.toContain("ox_supersecretvalue");
   });

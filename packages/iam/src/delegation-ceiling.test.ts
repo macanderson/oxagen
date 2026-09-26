@@ -148,11 +148,11 @@ describe("findDelegationCeilingViolations", () => {
       ],
     });
     const conferred = [
-      { capabilityId: "delete_agent_def", effect: "allow" as const },
+      { capabilityId: "retire_agent", effect: "allow" as const },
     ];
     await expect(check(owner(true), conferred)).resolves.toEqual([]);
     await expect(check(owner(false), conferred)).resolves.toEqual([
-      "delete_agent_def",
+      "retire_agent",
     ]);
   });
 

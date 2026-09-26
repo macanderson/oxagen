@@ -430,9 +430,8 @@ describe("RetireAgent", () => {
         .getAllByRole("button")
         .map((button) => button.textContent),
     ).toEqual(["Cancel", "Deregister"]);
-    const pr = dialog.querySelector('[data-not-backed][data-gap="#3855"]');
-    expect(pr).not.toBeNull();
-    expect(pr).toHaveTextContent(".oxagen/agents/other.toml");
+    // An agent carries no definition file (ADR-192), so the dialog names none.
+    expect(dialog).not.toHaveTextContent(".oxagen/agents/");
   });
 
   it("keeps Deregister disabled until the person says they understand (negative)", async () => {

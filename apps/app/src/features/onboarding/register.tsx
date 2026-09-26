@@ -1,7 +1,8 @@
 // Register an agent (#2967, ADR-065 decision 1; register-name, register-wrap
-// and register-run specs in the roadmap's mockups/pages): name the agent, wrap
-// it, and wait for the first frame, one step per `[step]` segment over
-// `register_agent`, `create_enrollment_token` and `get_first_frame`.
+// and register-run specs in the roadmap's mockups/pages): define the agent
+// (its name, harness, runtime and toolbelt, ADR-192), wrap it, and wait for
+// the first frame, one step per `[step]` segment over `register_agent`,
+// `create_enrollment_token` and `get_first_frame`.
 //
 // The page is a gate: the brandmark, the signed-in email and Cancel, the
 // three-step rail, the step, and the caption under it. The shell and the rail
@@ -47,7 +48,7 @@ import type { Harness } from "./agent-form";
 import type { OnboardingFailure } from "./failure";
 import { useOnboardingFailure } from "./failure";
 import { StepRail, type RailStep } from "./rail";
-import { type RegisterPlace, readRegisterPlace } from "./register-actions";
+import { readRegisterPlace } from "./register-actions";
 import { type RegisterStep, registerRail, stepNumber } from "./steps";
 import { CancelRegistration } from "./ui/cancel-registration";
 import { CheckAgain, FirstFramePoll, OpenInFleet } from "./ui/first-frame";
@@ -726,24 +727,30 @@ function NameLead() {
 }
 
 /**
- * The name step. It reads the namespaces the key is built from and the main
- * repository; with `?agent=` it reads the identity already reserved and shows
- * its key read-only.
+ * The name step (ADR-192). It reads the namespaces the key is built from, the
+ * runtimes to choose from with the agents already on each, and the
+ * workspace's toolbelts; with `?agent=` it reads the agent already reserved
+ * and shows it read-only, and with `?runtime=` it opens with that runtime
+ * chosen.
  */
 async function nameStep({
   ctx,
   source,
   agent,
+  runtime,
   place,
 }: {
   ctx: WsCtx;
   source: DataSource;
   agent: string | null;
+  runtime: string | null;
   place: Place;
 }): Promise<ReactNode> {
-  const [placeRead, reservedRead] = await Promise.all([
+  const [placeRead, reservedRead, runtimes, toolbelts] = await Promise.all([
     readRegisterPlace(place.org, place.ws),
     agent === null ? Promise.resolve(null) : source.agents.get(ctx, agent),
+    source.runtimes.named(ctx),
+    source.tools.toolbelts(ctx),
   ]);
   if (reservedRead !== null && !reservedRead.ok) {
     if (reservedRead.reason === "error" && reservedRead.status === 404)
@@ -760,15 +767,27 @@ async function nameStep({
       ? null
       : {
           id: reservedRead.value.identity.id,
+          name: reservedRead.value.identity.name,
           slug: reservedRead.value.identity.slug,
           harness: reservedRead.value.identity.harness,
+          runtime: reservedRead.value.runtime,
+          toolbelt: reservedRead.value.toolbelt,
         };
   const body = placeRead.ok ? (
-    <NameForm
-      ctx={ctx}
-      place={place}
-      registerPlace={placeRead.value}
+    <RegisterAgentForm
+      org={place.org}
+      ws={place.ws}
+      place={placeRead.value}
       reserved={reserved}
+      runtimes={runtimes}
+      toolbelts={toolbelts}
+      initialRuntime={runtime}
+      wrap={
+        reserved === null
+          ? null
+          : routes.register(place.org, place.ws, "wrap", { agent: reserved.id })
+      }
+      fleet={routes.fleet(place.org, place.ws)}
     />
   ) : (
     <PlaceFailure failure={placeRead} />
@@ -778,34 +797,6 @@ async function nameStep({
       <StepHeader step="name" lead={<NameLead />} />
       {body}
     </>
-  );
-}
-
-function NameForm({
-  ctx,
-  place,
-  registerPlace,
-  reserved,
-}: {
-  ctx: WsCtx;
-  place: Place;
-  registerPlace: RegisterPlace;
-  reserved: ReservedAgent | null;
-}) {
-  return (
-    <RegisterAgentForm
-      org={place.org}
-      ws={place.ws}
-      workspace={ctx.wsName}
-      place={registerPlace}
-      reserved={reserved}
-      wrap={
-        reserved === null
-          ? null
-          : routes.register(place.org, place.ws, "wrap", { agent: reserved.id })
-      }
-      fleet={routes.fleet(place.org, place.ws)}
-    />
   );
 }
 
@@ -933,12 +924,15 @@ export async function RegisterAgent({
   source,
   step,
   agent,
+  runtime = null,
 }: {
   ctx: WsCtx;
   source: DataSource;
   step: RegisterStep;
   /** `?agent=`, the identity the name step minted; null on the first step. */
   agent: string | null;
+  /** `?runtime=`, the runtime Add a runtime chose for the name step (ADR-192). */
+  runtime?: string | null;
 }) {
   const place = { org: ctx.orgSlug, ws: ctx.wsSlug };
   if (!mayRegister(ctx)) {
@@ -947,7 +941,7 @@ export async function RegisterAgent({
       <Denied ctx={ctx} viewer={user?.name || user?.email || ctx.userId} />
     );
   }
-  if (step === "name") return nameStep({ ctx, source, agent, place });
+  if (step === "name") return nameStep({ ctx, source, agent, runtime, place });
   if (agent === null) {
     return (
       <>

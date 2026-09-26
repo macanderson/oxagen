@@ -27,7 +27,6 @@ const original: ConfigurationSource = {
   name: "review",
   source: body("review"),
   files: [],
-  harness: null,
   repository: { bindingId: "binding" } as ConfigurationSource["repository"],
 };
 const input = () =>
@@ -39,25 +38,21 @@ const input = () =>
     name: "review-cloned",
     source: body("review-cloned"),
     files: [],
-    harness: null,
   });
 function setup() {
   const github = new FakeGitHub();
   const source = vi.fn().mockResolvedValue(original);
   const taken = vi.fn().mockResolvedValue(false);
-  const facts = vi.fn();
   const store = new MemoryStore();
   return {
     github,
     source,
     taken,
-    facts,
     store,
     handler: createConfigurationCloneProposeHandler({
       github,
       source,
       taken,
-      facts,
       store,
     }),
   };
@@ -91,45 +86,11 @@ describe("propose_configuration_clone", () => {
     });
     expect(github.pulls).toHaveLength(1);
   });
-  it("proposes an agent with a new source identity and no credential allocation", async () => {
-    const { handler, source, facts, github, store } = setup();
-    const originalAgent = {
-      ...original,
-      kind: "agent" as const,
-      harness: "claude-code" as const,
-      source:
-        'schema="agent-definition/v0.1"\nslug="review"\nname="Review"\nmodel_tier="complex"\ntools=[]\nside_effects=[]\nbudget={per_run_micros=1}\n[instructions]\nbody="Review changes."',
-    };
-    source.mockResolvedValue(originalAgent);
-    facts.mockResolvedValue({
-      slugTaken: false,
-      agentKey: "acme.core.review-cloned",
-      registry: { tools: [], capabilities: [] },
-      exceeded: [],
-    });
-    const result = await handler(
-      {
-        ...input(),
-        kind: "agent",
-        harness: "claude-code",
-        name: "Review-cloned",
-        sourceDigest: configurationSourceDigest(originalAgent),
-        source: originalAgent.source,
-      },
-      ctx(),
-    );
-    expect(result).toMatchObject({ slug: "review-cloned", proposalId: null });
-    expect(github.branches.map((row) => row.branch)).toEqual([
-      "agents/review-cloned",
-    ]);
+  it("refuses an agent clone: an agent is an identity, not a configuration (ADR-192)", () => {
     expect(
-      await github.readFile(
-        REPO,
-        ".oxagen/agents/review-cloned.toml",
-        "agents/review-cloned",
-      ),
-    ).toContain('slug = "review-cloned"');
-    expect(store.proposals.length).toBe(0);
+      configurationCloneDraftSchema.safeParse({ ...input(), kind: "agent" })
+        .success,
+    ).toBe(false);
   });
   it("creates a distinct record proposal under the existing workflow without publishing it", async () => {
     const { handler, source, store, github } = setup();

@@ -13,10 +13,12 @@
 // its environment. `false` names no count, so the page reads a count only
 // from `true` (#3818).
 import type { agentList } from "@oxagen/oxagen/contracts/agent.list";
+import type { runtimeList } from "@oxagen/oxagen/contracts/runtime.list";
 import type { tachoHostList } from "@oxagen/oxagen/contracts/tacho.host.list";
 import type { z } from "zod";
 import type {
   ModelRoute,
+  NamedRuntimeList,
   RuntimeAgent,
   RuntimeEnrollment,
 } from "@/data/contracts/runtimes";
@@ -75,6 +77,28 @@ export function toRuntimeEnrollment(
     expiresAt: host.expiresAt,
     revokedAt: host.revokedAt,
     agentKey: host.agentKey,
+  };
+}
+
+/** A named runtime with its live agents (`list_runtimes`, ADR-192). */
+export function toNamedRuntimeList(
+  out: ContractOutput<typeof runtimeList>,
+): z.input<typeof NamedRuntimeList> {
+  return {
+    runtimes: out.items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      slug: item.slug,
+      createdAt: item.createdAt,
+      agents: item.agents.map((agent) => ({
+        id: agent.id,
+        name: agent.name,
+        slug: agent.slug,
+        harness: agent.harness,
+      })),
+      liveHosts: item.liveHosts,
+      lastSeenAt: item.lastSeenAt,
+    })),
   };
 }
 

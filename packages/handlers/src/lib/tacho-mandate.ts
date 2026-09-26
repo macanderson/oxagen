@@ -25,10 +25,9 @@
  */
 import type { PolicyBundle } from "@oxagen/tacho";
 import {
-  definitionBudget,
-  definitionContainment,
-  parseAgentDefinitionSource,
-} from "@oxagen/oxagen/agent-definition-source";
+  agentVersionBudget,
+  agentVersionContainment,
+} from "@oxagen/oxagen/agent-version-config";
 
 /** The harness's own three-value permission vocabulary (mcp-config, tacho's rule evaluator). */
 export type HarnessRuleEffect = "allow" | "deny" | "ask";
@@ -128,8 +127,8 @@ export function mapMandateToBundlePermissions(input: {
 }
 
 /**
- * The agent-definition `budget` table an agent's active version config
- * carries. `perRunMicros` is this mandate's session budget (one tacho host
+ * The `budget` table an agent's active version config carries (ADR-192).
+ * `perRunMicros` is this mandate's session budget (one tacho host
  * session is one run of the wrapped harness). `perDayMicros` is the agent's
  * ceiling for one UTC day (ADR-160), signed only to a host that enforces it:
  * see `deriveBundleBudget`.
@@ -140,36 +139,21 @@ export interface AgentBudgetDoc {
 }
 
 /**
- * Read the active version's committed definition when it has one. The editor
- * writes budget changes into TOML, while the commit handler copies the prior
- * config unchanged. A present source therefore owns additions, edits, and
- * removals. Only legacy versions without source fall back to config.
+ * The active version's budget, read from its config. The agent definition
+ * file that once owned these ceilings is gone (ADR-192); the migration that
+ * removed it copied each file's `[budget]` table into `config`.
  */
 export function budgetDocFromVersion(version: {
   config: unknown;
-  definitionSource?: string | null;
 }): AgentBudgetDoc | undefined {
-  return definitionBudget(definitionDoc(version));
+  return agentVersionBudget(version.config);
 }
 
-/**
- * The active version's `[containment]` table (ADR-152), read by the same
- * source-over-config rule as the budget.
- */
+/** The active version's containment requirement (ADR-152), read from its config. */
 export function containmentFromVersion(version: {
   config: unknown;
-  definitionSource?: string | null;
 }): { required: true } | undefined {
-  return definitionContainment(definitionDoc(version));
-}
-
-function definitionDoc(version: {
-  config: unknown;
-  definitionSource?: string | null;
-}): unknown {
-  return version.definitionSource == null
-    ? version.config
-    : parseAgentDefinitionSource(version.definitionSource);
+  return agentVersionContainment(version.config);
 }
 
 function microsToUsd(micros: number): number {
@@ -177,7 +161,7 @@ function microsToUsd(micros: number): number {
 }
 
 /**
- * `budget.mode` is `"enforced"` only when the agent's own definition
+ * `budget.mode` is `"enforced"` only when the agent's active version
  * declares a ceiling the host will enforce; otherwise `"observed"`, with no
  * limit fields at all. No default limit is invented for a mandate that named
  * none: that would be a ceiling nobody set, enforced anyway.

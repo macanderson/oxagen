@@ -1,8 +1,10 @@
 // The runtimes port: `list` walks `list_tacho_hosts` to the end of its cursor
 // under a bound and maps each enrollment, `agents` walks `list_agents` until
-// every key asked for is found. A refusal passes through, an unmappable record
+// every key asked for is found, and `named` reads `list_runtimes` (ADR-192). A
+// refusal passes through, an unmappable record
 // is reported once, and a tier looked up from a harness name is never mapped.
 import { agentList } from "@oxagen/oxagen/contracts/agent.list";
+import { runtimeList } from "@oxagen/oxagen/contracts/runtime.list";
 import { tachoHostList } from "@oxagen/oxagen/contracts/tacho.host.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -312,5 +314,48 @@ describe("runtimes.agents", () => {
     const error = readError("iam_principals_unavailable", 503);
     kernelRead.mockResolvedValueOnce(error);
     await expect(runtimes.agents(ctx, ["acme.core.x"])).resolves.toEqual(error);
+  });
+});
+
+describe("runtimes.named (ADR-192)", () => {
+  const item = {
+    id: "rtm_macslaptop",
+    name: "Mac's laptop",
+    slug: "macs-laptop",
+    createdAt: "2026-09-20T10:00:00.000Z",
+    agents: [
+      {
+        id: "agt_macclaude",
+        name: "Mac Claude",
+        slug: "mac-claude",
+        harness: "claude-code",
+      },
+    ],
+    liveHosts: 1,
+    lastSeenAt: null,
+  };
+
+  it("reads list_runtimes once and maps each runtime with its agents", async () => {
+    kernelRead.mockResolvedValueOnce(readOk({ items: [item] }));
+    const read = await runtimes.named(ctx);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runtimeList,
+      input: {},
+      page: "runtimes",
+    });
+    expect(read).toEqual(readOk({ runtimes: [item] }));
+  });
+
+  it("passes a refusal through and reports a record it cannot map (negative)", async () => {
+    const error = readError("runtimes_unavailable", 503);
+    kernelRead.mockResolvedValueOnce(error);
+    await expect(runtimes.named(ctx)).resolves.toEqual(error);
+    kernelRead.mockResolvedValueOnce(
+      readOk({ items: [{ ...item, id: "not an id" }] }),
+    );
+    await expect(runtimes.named(ctx)).resolves.toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledTimes(1);
   });
 });

@@ -41,8 +41,6 @@ import { toolStateSet } from "./tool.state.set";
 import { agentCredentialRotate } from "./agent.credential.rotate";
 import { agentSuspend } from "./agent.suspend";
 import { agentRetire } from "./agent.retire";
-import { agentDefinitionCommit } from "./agent.definition.commit";
-import { agentPropose } from "./agent.propose";
 import { agentToolbeltGet } from "./agent.toolbelt.get";
 import { tachoIncidentList } from "./tacho.incident.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
@@ -57,20 +55,10 @@ import { approvalRuleSet } from "./approval_rule.set";
 import { approvalRuleDelete } from "./approval_rule.delete";
 import { approvalRuleEnabledSet } from "./approval_rule.enabled.set";
 import { approvalAutoEligibilityGet } from "./approval.auto_eligibility.get";
-import { agentDefinitionCreate } from "./agent.definition.create";
-import { agentDefinitionDelete } from "./agent.definition.delete";
-import { agentDefinitionSuggest } from "./agent.definition.suggest";
-import { agentDefinitionRevise } from "./agent.definition.revise";
-import { agentDefinitionSummarize } from "./agent.definition.summarize";
-import { agentDefinitionUpdate } from "./agent.definition.update";
-import { agentDefinitionPublish } from "./agent.definition.publish";
-import { agentDefinitionGet } from "./agent.definition.get";
-import { agentDefinitionList } from "./agent.definition.list";
 import { agentRoleAssign } from "./agent.role.assign";
 import { agentRoleRevoke } from "./agent.role.revoke";
 import { agentRoleList } from "./agent.role.list";
 import { agentRoleGet } from "./agent.role.get";
-import { agentDeploy } from "./agent.deploy";
 import { agentExecutionList } from "./agent.execution.list";
 import { modelCapabilityList } from "./model.capability.list";
 import { agentExecutionRecord } from "./agent.execution.record";
@@ -694,8 +682,6 @@ export {
   agentCredentialRotate,
   agentSuspend,
   agentRetire,
-  agentDefinitionCommit,
-  agentPropose,
   agentToolbeltGet,
   tachoIncidentList,
   agentApprovalResolve,
@@ -710,20 +696,10 @@ export {
   approvalRuleDelete,
   approvalRuleEnabledSet,
   approvalAutoEligibilityGet,
-  agentDefinitionCreate,
-  agentDefinitionDelete,
-  agentDefinitionSuggest,
-  agentDefinitionRevise,
-  agentDefinitionSummarize,
-  agentDefinitionUpdate,
-  agentDefinitionPublish,
-  agentDefinitionGet,
-  agentDefinitionList,
   agentRoleAssign,
   agentRoleRevoke,
   agentRoleList,
   agentRoleGet,
-  agentDeploy,
   agentExecutionList,
   agentExecutionRecord,
   modelCapabilityList,
@@ -1115,8 +1091,6 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentCredentialRotate,
   agentSuspend,
   agentRetire,
-  agentDefinitionCommit,
-  agentPropose,
   agentToolbeltGet,
   tachoIncidentList,
   agentApprovalResolve,
@@ -1131,20 +1105,10 @@ export const contracts: readonly CapabilityDeclaration[] = [
   approvalRuleDelete,
   approvalRuleEnabledSet,
   approvalAutoEligibilityGet,
-  agentDefinitionCreate,
-  agentDefinitionDelete,
-  agentDefinitionSuggest,
-  agentDefinitionRevise,
-  agentDefinitionSummarize,
-  agentDefinitionUpdate,
-  agentDefinitionPublish,
-  agentDefinitionGet,
-  agentDefinitionList,
   agentRoleAssign,
   agentRoleRevoke,
   agentRoleList,
   agentRoleGet,
-  agentDeploy,
   agentMcpList,
   agentMcpResolve,
   agentMcpRegister,

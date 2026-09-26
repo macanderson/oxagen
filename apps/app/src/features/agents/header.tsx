@@ -20,7 +20,6 @@ import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import { CloneButton } from "@/ui/clone-button";
 import { eyebrow } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { HarnessIcon } from "@/ui/harness-icon";
@@ -157,7 +156,6 @@ export function AgentHeader({
             list={routes.agents(org, ws)}
           />
         ) : null}
-        <CloneButton kind="agent" sourceRef={identity.id} />
         {live ? (
           <AgentKillSwitch
             org={org}

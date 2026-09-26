@@ -13,10 +13,9 @@
 // `tools/scripts/build-env.ts` renders a service's build environment strictly
 // from `services[]` — `if (!meta.services.includes(service)) continue`. The
 // declaration therefore said the app needs none of these while the app is where
-// they are read. It had been wrong longer than the branch that found it:
-// `commit_agent_definition` is invoked from
-// `apps/app/src/features/agents/actions.ts` and hits the same credentials
-// through `resolveGitHubToken`.
+// they are read. It had been wrong longer than the branch that found it: the
+// app's Context PR and skill writes reach the same credentials through
+// `resolveGitHubToken`.
 //
 // The recurrence, and why the required set is now DERIVED. The first version of
 // this test named its services in a literal — `["api", "app"]` — with a comment

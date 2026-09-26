@@ -8,8 +8,12 @@
 // which columns render and never which agents are listed: the search, the
 // facets that are still in view, the sort and the page survive a switch.
 //
-// **A column no store backs says so in every row.** Steering, Toolbelt and
-// Belt have no per-agent record yet (#3296, #3852), and no store records a
+// **Each row names its runtime and its toolbelt** (ADR-192): the Toolbelt
+// column is the belt the agent carries and the Runtime column the runtime it
+// runs on, above the host it enrolled from.
+//
+// **A column no store backs says so in every row.** Steering and the Belt
+// width have no per-agent record yet (#3296), and no store records a
 // runtime's kind (#3816), so each prints the not-recorded words, naming the
 // missing store on hover, rather than a count someone typed. Every header
 // still sorts, as the design's list controls do; a column with nothing
@@ -296,15 +300,25 @@ function useColumns(set: ColumnSet, org: string, ws: string): Column[] {
       {
         key: "toolbelt",
         label: t("list.columns.toolbelt"),
-        sort: notRecorded,
-        render: () => <NotRecordedValue gap="toolbelt" />,
+        sort: (row) => row.toolbelt?.name ?? null,
+        render: (row) =>
+          row.toolbelt === null ? (
+            <NotRecordedValue />
+          ) : (
+            <span data-testid="agent-row-belt">{row.toolbelt.name}</span>
+          ),
       },
       {
         key: "runtime",
         label: t("list.columns.runtime"),
-        sort: (row) => row.host,
+        sort: (row) => row.runtime?.name ?? row.host,
         render: (row) => (
           <span className="block">
+            {row.runtime === null ? null : (
+              <span data-testid="agent-row-runtime" className="block">
+                {row.runtime.name}
+              </span>
+            )}
             <span className={`${mono} block text-[11.5px]`}>
               {row.host ?? t("list.cells.none")}
             </span>
@@ -494,7 +508,7 @@ function RowActions({
       ) : (
         <>
           <SafeLink
-            to={routes.agent(org, ws, row.slug, { tab: "definition" })}
+            to={routes.agent(org, ws, row.slug, { tab: "toolbelt" })}
             className={buttonSecondary}
           >
             {t("edit")}
@@ -695,9 +709,6 @@ export function AgentsTable({
               </button>
             ))}
           </div>
-          <span className={`${mono} text-[11px] text-muted-foreground`}>
-            {t("list.source")} <NotRecordedValue gap="commit" />
-          </span>
         </div>
       </div>
 

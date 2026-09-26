@@ -49,7 +49,6 @@
         "composition": "Each row names the reusable objects this agent holds a reference to.",
         "operations": "Each row is what this agent did and what it cost over the last 30 days."
       },
-      "source": ".oxagen/agents/ @",
       "views": {
         "label": "Columns",
         "composition": "Composition",
@@ -126,32 +125,11 @@
       "footer": "An agent has one principal and runs on one runtime. Its steering, its toolbelts and its tools are workspace objects it refers to, so changing one changes every agent that refers to it.",
       "empty": {
         "title": "No agent registered in {workspace}",
-        "body": "An agent's identity lives in Postgres; its definition is a file in <mono>.oxagen/agents/</mono> in the main repo. Registering one opens a Context PR — nothing is written to Postgres first."
+        "body": "An agent is one harness on one runtime, working for you. Register one to give it a principal, a runtime and a toolbelt."
       },
       "create": {
-        "newAgent": "New agent",
         "register": "Register an agent",
-        "wrap": "Wrap Claude Code"
-      },
-      "register": {
-        "title": "Register an agent",
-        "slug": "Slug",
-        "slugHint": "The agent key becomes <mono>{key}</mono> and is immutable.",
-        "avatar": "Avatar",
-        "avatarHint": "The definition carries no avatar yet, so the agent shows these initials.",
-        "harness": "Harness",
-        "tier": "Model tier",
-        "note": "This does not write Postgres. It opens a Context PR that adds <mono>{path}</mono> and the generated harness file beside it. The agent gets its principal when it registers from where it runs, after the merge.",
-        "cancel": "Cancel",
-        "confirm": "Open the Context PR",
-        "pending": "Opening the Context PR",
-        "done": "Pull request #{number} opened. After it merges, register the agent from where it runs to create its identity.",
-        "open": "Open the pull request",
-        "close": "Close",
-        "invalidSlug": "Use lowercase letters, digits and single hyphens, at most 18 characters.",
-        "design": "Design",
-        "designNote": "Designing an avatar needs an avatar field on the definition, and the definition carries none yet. The agent shows these initials until it does.",
-        "slugHintEnding": "The agent key ends in <mono>.{slug}</mono> and is immutable."
+        "addRuntime": "Add a runtime"
       },
       "states": {
         "loading": "Loading agents",
@@ -184,13 +162,11 @@
       },
       "gaps": {
         "steering": "No store records the steering assembled for each agent yet.",
-        "toolbelt": "No store records toolbelts or their assignments to agents yet.",
         "tokens": "No wrapped session of this agent reported its token usage in the last 30 days. Ledger runs' tokens are not rolled up per agent.",
-        "commit": "The commit of .oxagen/agents/ is not recorded on this read.",
         "organization": "No organization-wide rollup of agents is recorded yet.",
         "tier": "No wrapped session has recorded an enforcement tier for this agent yet, and no per-agent tier rollup exists (#3817).",
         "runtimeKind": "No store records a runtime's kind yet. A host row is one enrollment, not a machine.",
-        "belt": "list_agents does not compute each agent's belt yet (#3852). The agent's own page shows the belt its grants give it.",
+        "belt": "list_agents does not count the tools on each agent's belt yet. The agent's own page shows the belt and the tools its grants give it.",
         "policy": "The read's refusal does not name the policy that decided it yet (#3846).",
         "trace": "A failed read does not carry its trace id or region yet."
       },
@@ -229,7 +205,6 @@
         "label": "Agent sections",
         "identity": "Identity",
         "toolbelt": "Toolbelt",
-        "definition": "Definition in git",
         "overview": "Overview",
         "steering": "Steering",
         "runtime": "Runtime",
@@ -246,8 +221,9 @@
           "kind": "Kind",
           "kindValue": "agent · workspace {workspace} required",
           "harness": "Harness",
-          "modelTier": "Model tier",
-          "modelTierSub": "as the definition file names it",
+          "runtime": "Runtime",
+          "runtimeNone": "none named",
+          "runtimeSub": "the laptop, VM or cloud workspace it runs on. Moving it keeps its principal.",
           "operator": "Operator",
           "operatorSub": "accountable for every run · IAM field initiating_principal",
           "lifecycle": "Lifecycle state",
@@ -539,101 +515,6 @@
         },
         "note": "A tamper incident never raises the tier of the frames it touched. The window it covers stays labeled as what was actually observed, which is why the count here and the count on the Audit page are the same number read from the same record."
       },
-      "definition": {
-        "openEditor": "Open in the source editor",
-        "unset": "not set",
-        "unparsed": "The file does not parse at line {line}: {reason}. Fix the line in the source editor; the form patches nothing until it reads.",
-        "bar": {
-          "dirty": "Unsaved changes",
-          "against": "against {branch} at {commit}. Nothing is written until you commit.",
-          "againstSeed": "against a file that has not been committed. Nothing is written until you commit.",
-          "discard": "Discard",
-          "save": "Save changes",
-          "onBranch": "On branch {branch}",
-          "pending": "Last committed at {commit}. The merge of its pull request is not recorded here, so the running definition is the default branch’s until it merges.",
-          "pullRequest": "Open the pull request"
-        },
-        "identity": {
-          "title": "Identity",
-          "aside": "root table",
-          "schema": "Schema",
-          "slug": "Slug",
-          "slugHint": "Immutable. The agent key {key} is derived from it.",
-          "name": "Name",
-          "description": "Description",
-          "descriptionHint": "One sentence. Shown on the Agents list and in every receipt this agent produces."
-        },
-        "model": {
-          "title": "Model and budget",
-          "tier": "Model tier",
-          "tierHint": "complex routes to the workspace's complex model and light to its light one. The harness makes the call with its own key; Oxagen records what it reports.",
-          "budget": "Per-run budget (USD)",
-          "budgetHint": "Stored as budget = '{' per_run_micros = {micros} '}'. Once a wrapped session's observed spend reaches it, Oxagen's local model proxy refuses the session's next model call.",
-          "budgetDay": "Per-day budget (USD)",
-          "budgetDayHint": "Stored as budget = '{' per_day_micros = {micros} '}'. A day is a UTC calendar day. Once the agent's observed spend that day, on every host enrolled under it, reaches this figure, the model proxy refuses its next call until 00:00 UTC. Empty or 0 sets no daily ceiling. Hosts older than the daily_budget feature do not receive it."
-        },
-        "tools": {
-          "title": "Tools",
-          "aside": "belt = grants ∩ this list − deny_tools",
-          "tools": "tools",
-          "toolsHint": "Pick a tool, or type a pattern such as github__*, which grants every github tool the operator can delegate.",
-          "denyTools": "deny_tools",
-          "denyHint": "Pick a tool, or type a pattern. A deny here wins over any grant, and a version pattern like @* denies every version.",
-          "sideEffects": "Side effects",
-          "read": "May read through the gateway.",
-          "write": "May write through the gateway; every write is a receipt.",
-          "irreversible": "Needs an active mandate. This agent holds {count, plural, =0 {none} one {one} other {#}}.",
-          "irreversibleUnknown": "Needs an active mandate. The mandate ledger did not answer, so none is known to be active."
-        },
-        "instructions": {
-          "title": "Instructions",
-          "aside": "[instructions] body",
-          "label": "Instructions",
-          "hint": "Saved in this definition file only. Saving does not regenerate a harness file from it. Keep credentials and personal data out of it: nothing checks for them before a commit."
-        },
-        "harness": {
-          "title": "Harness",
-          "harness": "Harness",
-          "harnessHint": "Set at registration. Changing it is a new agent.",
-          "color": "Color",
-          "colorHint": "Cosmetic: the label the harness shows on its own screen."
-        },
-        "source": {
-          "title": "Source",
-          "truth": "source of truth",
-          "open": "Open in the source editor",
-          "lead": "Every field on this page is a view of that file. Editing here patches one key in place; editing there changes anything. Both go through the same commit.",
-          "uncommitted": "No definition is committed yet. Saving commits this file to a branch and opens a pull request.",
-          "branch": "Branch",
-          "commit": "At commit",
-          "draft": "draft",
-          "digest": "definition_digest",
-          "pullRequest": "Pull request",
-          "committed": "Committed",
-          "repository": "Repository",
-          "repositoryUnknown": "not recorded"
-        },
-        "changing": {
-          "title": "Changing this agent",
-          "edit": {
-            "title": "1 · Edit here or in the repository",
-            "body": "Either opens a pull request. Nothing is written to Postgres first."
-          },
-          "checks": {
-            "title": "2 · Checks",
-            "body": "Before the pull request opens, Oxagen checks the file's schema, that the slug is this agent's, and that every registered capability it names is one you hold yourself. Tool patterns and MCP tools are not checked here. Your repository's own checks run on the pull request."
-          },
-          "review": {
-            "title": "3 · Review",
-            "body": "A code-owner review is required before the merge."
-          },
-          "merge": {
-            "title": "4 · Merge is the change",
-            "body": "The merged file is the definition of record. The next run on this repository reads it from the default branch."
-          },
-          "note": "Deleting an agent is a pull request that removes the file. The principal is retired, never deleted, so its runs keep their identity."
-        }
-      },
       "budgets": {
         "title": "Ceilings above this agent",
         "lead": "The organization and workspace spend ceilings, set on Spend and enforced across every agent in their scope.",
@@ -662,7 +543,7 @@
         },
         "basis": "Spent is metered from priced model calls over the period named in each row. A run Oxagen did not price is in no figure here.",
         "empty": "No spend ceiling is set for this workspace or its organization.",
-        "agentScope": "Oxagen records no ceiling for one agent. get_spend_budget reads the organization and workspace scopes only, so this agent is bounded by the rows above and by the per-run budget its definition sets. A per-agent ceiling waits on an ADR for the scopes billing.budgets accepts.",
+        "agentScope": "Oxagen records no ceiling for one agent. get_spend_budget reads the organization and workspace scopes only, so this agent is bounded by the rows above and by the per-run budget its version sets. A per-agent ceiling waits on an ADR for the scopes billing.budgets accepts.",
         "link": "Set ceilings on Spend"
       },
       "costCenter": {
@@ -734,7 +615,6 @@
           "steeringNone": "no steering manifest is recorded",
           "steeringNoneSub": "steering is a workspace library; this agent holds a reference, never a copy",
           "toolbelt": "Toolbelt",
-          "toolbeltNotBacked": "Toolbelts are not stored as objects yet, so no assignment can be named here.",
           "toolbeltSub": "{count, plural, one {# tool} other {# tools}} in all, sent as a {mode} belt",
           "toolbeltUnread": "the belt could not be read",
           "runtime": "Runtime",
@@ -768,19 +648,6 @@
             "noFrame": "no frame has arrived yet"
           },
           "note": "Every tool definition on the belt is paid for as input on every call, whether the tool is used or not, which is why the belt width and the token bill are read together."
-        },
-        "definition": {
-          "title": "Definition in git",
-          "lead": "Identity is in Postgres; the definition is a file, and the file is the source of truth.",
-          "open": "Open the file",
-          "path": "Path",
-          "repo": "Repo",
-          "repoAt": "{repo} @ {branch}",
-          "uncommitted": "no definition is committed yet",
-          "commit": "Commit",
-          "generated": "Generated beside it",
-          "generatedSub": "Written when the agent was proposed. A commit from this page writes the definition file alone.",
-          "generatedNone": "none: this harness reads no generated subagent file"
         }
       },
       "steering": {
@@ -973,8 +840,8 @@
           "expires": "expires",
           "resourceScope": "Resource scope",
           "spendCeiling": "Spend ceiling",
-          "perRunSub": "per run, from the definition file",
-          "perDaySub": "per day, kept in the definition file and not enforced",
+          "perRunSub": "per run, set on the agent's active version",
+          "perDaySub": "per day, set on the agent's active version",
           "moveMoney": "Can move money",
           "no": "no",
           "noValue": "no mandate, so a financial call is denied before dispatch",
@@ -984,16 +851,16 @@
         },
         "budgets": {
           "title": "Budgets",
-          "lead": "The per-run budget is the definition file’s. Once a wrapped session’s observed spend reaches it, the local model proxy refuses the session’s next model call on the gateway and contained tiers.",
-          "set": "Set budget",
+          "lead": "The per-run budget is the agent's own, set on its active version. Once a wrapped session’s observed spend reaches it, the local model proxy refuses the session’s next model call on the gateway and contained tiers.",
+          "perDay": "Per day",
+          "perDayNote": "Signed to a host that enforces a daily ceiling. The day is a UTC calendar day.",
+          "invalid": "The agent's version config cannot be read, so its host suspends governed actions until the config is fixed.",
           "perRun": "Per run",
           "perRunNone": "no priced run of this agent on the newest page of runs",
           "highest": "highest run on the newest page",
           "basis": "basis:",
           "basisNone": "not recorded",
-          "perDay": "Per day",
-          "perDayNote": "kept in the definition file; nothing enforces it yet",
-          "perDayNone": "No per-day ceiling is recorded for this agent, and nothing would enforce one yet.",
+          "perDayNone": "The agent's active version sets no per-day ceiling.",
           "mode": "Mode",
           "modeValue": "hard: the proxy refuses the next model call once observed spend reaches the per-run budget",
           "breach": "On a breach",
@@ -1069,6 +936,52 @@
             "unpaged_results": "Unpaged results"
           }
         }
+      },
+      "versions": {
+        "title": "Versions",
+        "lead": "The agent keeps its principal for life. Each change of runtime or toolbelt writes a version.",
+        "none": "No version is recorded for this agent.",
+        "noRuntime": "no runtime",
+        "columns": {
+          "version": "Version",
+          "change": "Change",
+          "runtime": "Runtime",
+          "toolbelt": "Toolbelt",
+          "written": "Written"
+        },
+        "change": {
+          "registered": "Registered",
+          "runtime_changed": "Moved to another runtime",
+          "toolbelt_changed": "Given another toolbelt",
+          "legacy": "Before versions recorded a binding"
+        }
+      },
+      "binding": {
+        "toolbelt": {
+          "title": "Assigned toolbelt",
+          "lead": "The tools this agent is shown. Its roles and mandates still decide what it may do.",
+          "manage": "Manage toolbelts",
+          "current": "It carries {belt}.",
+          "currentNone": "It carries no toolbelt yet.",
+          "needsRole": "An organization owner or admin can change it.",
+          "tools": "{count, plural, one {# active tool} other {# active tools}}",
+          "save": "Save toolbelt",
+          "pending": "Saving",
+          "done": "Saved as version {version}."
+        },
+        "runtime": {
+          "title": "Runtime placement",
+          "lead": "Move the agent to new hardware or a new cloud. Its principal, roles and runs stay.",
+          "current": "It runs on {runtime}.",
+          "currentNone": "It runs on no named runtime.",
+          "needsRole": "An organization owner or admin can move it.",
+          "here": "The agent runs here now.",
+          "taken": "{harness} already runs on {runtime} as {agent}.",
+          "revokes": "Moving revokes the agent's host enrollments on its current runtime. Enroll the new machine from the Runtime tab.",
+          "move": "Move agent",
+          "pending": "Moving",
+          "done": "Moved as version {version}. {hosts, plural, =0 {No host enrollment was revoked.} one {# host enrollment was revoked.} other {# host enrollments were revoked.}}"
+        }
       }
     },
     "actions": {
@@ -1099,7 +1012,6 @@
         "open": "Deregister",
         "title": "Deregister agent",
         "body": "This ends the agent's identity. Its credentials and host enrollments are revoked, and its active mandates end.",
-        "pullRequest": "This dialog does not open the pull request that archives <mono>.oxagen/agents/{slug}.toml</mono> yet. Remove the file in a pull request of your own.",
         "kept": "Kept",
         "keptValue": "every run, frame and receipt. The record is never deleted.",
         "ends": "Ends",
@@ -1142,11 +1054,6 @@
         "agentNotFound": "This agent no longer exists.",
         "agentRetired": "This agent is retired. Nothing was changed.",
         "agentPrincipalMissing": "This agent has no delegated principal. Nothing was changed.",
-        "noRepository": "This workspace has no repository bound. Bind a repository to the workspace, then commit.",
-        "repositoryAmbiguous": "This workspace binds more than one repository, so the commit has no single target. Nothing was committed.",
-        "branchIsDefault": "That branch is the repository's default branch. Choose another branch.",
-        "definitionSchema": "The file's schema line is missing or names another schema. Nothing was committed.",
-        "definitionSlug": "The file's slug does not match this agent's slug. Nothing was committed.",
         "timeZoneUnavailable": "Your time zone could not be read, and the days you picked mean different instants in each zone. No mandate was requested. Try again.",
         "timeZoneUnsupported": "Your saved time zone is not one this server can read, so the days you picked cannot be placed in it. No mandate was requested. Pick a time zone again in your account settings.",
         "refused": "The change was refused: {code}. Nothing was changed.",
@@ -1156,72 +1063,11 @@
         "noToolMatches": "No declared tool with a consequence tag matches those patterns in this workspace, so the mandate would cover nothing.",
         "measureNotDeclared": "A tool version those patterns match declares no such measure, so the limit could not be read from a call. A financial tool whose schema does not expose an amount cannot be given a mandate.",
         "measureUnitMismatch": "A covered tool declares that measure in a different unit. The gate reads a call in the unit the tool declares, so a limit denominated in anything else would be enforced as a figure nobody entered. Name the unit the tool declares.",
-        "measureKindConflict": "Two tools your patterns cover declare that measure differently (one as an amount, one as a count), so there is no single figure to enforce. Narrow the patterns so they cover tools that agree on what the measure counts."
+        "measureKindConflict": "Two tools your patterns cover declare that measure differently (one as an amount, one as a count), so there is no single figure to enforce. Narrow the patterns so they cover tools that agree on what the measure counts.",
+        "runtimeHarnessTaken": "Another agent already runs this harness on that runtime. Nothing was changed.",
+        "sameRuntime": "The agent already runs on that runtime. Nothing was changed.",
+        "sameToolbelt": "The agent already carries that toolbelt. Nothing was changed."
       }
-    },
-    "source": {
-      "facts": "Definition file",
-      "branchAt": "{branch} @ {commit}",
-      "uncommitted": "no committed definition",
-      "truth": "source of truth",
-      "lead": "Every field on the agent form is a view of this file. Saving opens the same commit dialog the form uses; nothing is written to Postgres.",
-      "back": "Back to the form",
-      "discard": "Discard",
-      "save": "Save",
-      "modified": "modified",
-      "unchanged": "unchanged",
-      "identityMismatch": "The source slug must match this registered agent. Restore slug = \"{slug}\" before saving.",
-      "stat": "+{added} −{removed}",
-      "parse": {
-        "error": "The file does not parse at line {line}: {reason}.",
-        "reason": {
-          "unterminated_string": "a string is not closed",
-          "unterminated_array": "an array is not closed",
-          "array_separator": "array items need a comma between them",
-          "inline_table_key": "an inline table entry needs a key",
-          "inline_table_separator": "inline table entries need a comma between them",
-          "missing_value": "a key has no value",
-          "unreadable_value": "a value is not a string, number, boolean, array or table",
-          "expected_key_value": "a line must be key = value, a [table] header or a comment",
-          "text_after_value": "there is text after the value"
-        }
-      },
-      "commit": {
-        "title": "Commit the definition",
-        "cancel": "Cancel",
-        "diffLabel": "The draft against the file it started from",
-        "branch": "Branch",
-        "branchHint": "Created from the default branch when new; a branch with an open pull request gets this commit on it.",
-        "newBranch": "+ New branch",
-        "newBranchName": "New branch name",
-        "summary": "Summary",
-        "summaryHint": "The commit and pull request title.",
-        "description": "A description and Redraft wait on commit_agent_definition carrying a pull request body.",
-        "pullRequestBox": "Open a pull request",
-        "pullRequestHint": "commit_agent_definition always opens one, or reuses the branch’s open one.",
-        "submit": "Commit and open a pull request",
-        "pending": "Committing",
-        "done": "Committed {commit} to {branch}.",
-        "pullRequest": "Pull request {number}: {url}",
-        "invalid": {
-          "branch": "Name a branch: letters, digits, dots, slashes and hyphens, not the default branch and not a refs/ path.",
-          "message": "The message is at most 200 characters.",
-          "source": "The file is empty or larger than 64 KB."
-        }
-      },
-      "eyebrow": "Agent source",
-      "noRepository": "no repository recorded",
-      "find": {
-        "placeholder": "Find  ⌘F",
-        "label": "Find in file",
-        "of": "{index} of {count}"
-      },
-      "position": "Ln {line}, Col {col}",
-      "spaces": "Spaces: 2",
-      "keys": "⌘S save · Tab indent · ⇧Tab outdent · ⌘/ comment · ⌘F find · ⌘Z undo",
-      "format": "TOML",
-      "lineEndings": "LF",
-      "encoding": "UTF-8"
     },
     "mandates": {
       "title": "Mandates held",
@@ -1309,10 +1155,6 @@
       "agent": {
         "denied": "You cannot see this agent",
         "error": "This agent could not be loaded"
-      },
-      "source": {
-        "denied": "You cannot see this agent’s definition",
-        "error": "This file could not be loaded"
       },
       "needed": "{permission} on {workspace}",
       "denied": {

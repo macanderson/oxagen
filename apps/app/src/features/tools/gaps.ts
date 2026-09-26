@@ -5,7 +5,11 @@
 // element to the work that backs it. The page never prints the issue: a
 // roadmap reference is not product copy.
 const TOOLS_GAPS = {
-  /** A named toolbelt and who carries it: `tools.toolbelts`, `tools.toolbelt_assignments`. */
+  /**
+   * The belts holding each tool version and the agents carrying them, per row
+   * of the registry. Toolbelts are stored now (ADR-192) and the Toolbelts tab
+   * reads them, but no read answers belt membership per tool version.
+   */
   toolbelts: 3852,
   /** A provider's system, transport and wire apart from the MCP server row, and editing one. */
   providers: 3917,

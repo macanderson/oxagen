@@ -68,27 +68,24 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
   {
     id: "agent.read",
     group: "Agents",
-    description: "Read agent definitions, their roles and their toolbelts",
+    description: "Read agents, their roles and their toolbelts",
     capabilities: [
-      "list_agent_defs",
-      "get_agent_def",
+      "list_agents",
+      "get_agent",
+      "get_agent_toolbelt",
       "get_agent_role",
       "list_agent_roles",
       "list_agent_tools",
     ],
   },
   {
+    // ADR-192: an agent is registered on a runtime with a harness and a
+    // toolbelt, and a move or a new toolbelt writes a version.
     id: "agent.register",
     group: "Agents",
-    description: "Create, change, publish, deploy and retire agents",
-    capabilities: [
-      "create_agent_def",
-      "update_agent_def",
-      "revise_agent_def",
-      "publish_agent_def",
-      "deploy_agent",
-      "delete_agent_def",
-    ],
+    description:
+      "Register agents, move them to another runtime and change their toolbelts",
+    capabilities: ["register_agent", "move_agent", "assign_agent_toolbelt"],
   },
   {
     id: "agent.roles.assign",
@@ -102,21 +99,27 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     // here: its handler admits an org Owner or Admin whatever the role grants
     // say, so a ticked `runtime.unenroll` would be a grant the write ignores
     // (#3857 moves the handler onto role grants and adds the two writes).
+    // `list_runtimes` names the runtimes those hosts bind to (ADR-192).
+    // `create_runtime` is not a permission, for the unenroll reason above: its
+    // handler admits the contract's roles whatever the grants say.
     id: "runtime.read",
     group: "Agents",
-    description: "Read the hosts agents run on and their enrollments",
-    capabilities: ["list_tacho_hosts"],
+    description:
+      "Read the runtimes agents run on, their hosts and their enrollments",
+    capabilities: ["list_tacho_hosts", "list_runtimes"],
   },
   // ── Tools and policy ─────────────────────────────────────────────────────
   {
     id: "tool.read",
     group: "Tools and policy",
-    description: "Read the tool registry, MCP servers and consents",
+    description: "Read the tool registry, MCP servers, consents and toolbelts",
     capabilities: [
       "list_tool_declarations",
       "list_mcp_servers",
       "list_mcp_consents",
       "search_mcp_registry",
+      "list_toolbelts",
+      "get_toolbelt",
     ],
   },
   {

@@ -7,7 +7,7 @@
 import { schema, withSystemDb } from "@oxagen/database";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
 import type { CapabilityContext } from "@oxagen/oxagen";
-import { inArray } from "drizzle-orm";
+import { and, inArray, isNotNull } from "drizzle-orm";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -140,6 +140,10 @@ export async function seedAgent(
     workspaceId?: string;
     /** A cost-center label as set_cost_center stores it (ADR-142). */
     costCenter?: string | null;
+    /** `agent.runtimes.id` the agent runs on (ADR-192). */
+    runtimeId?: string | null;
+    /** `tools.toolbelts.id` the agent carries (ADR-192). */
+    toolbeltId?: string | null;
   },
 ): Promise<SeededAgent> {
   const workspaceId = over.workspaceId ?? tenant.workspaceId;
@@ -180,6 +184,8 @@ export async function seedAgent(
         deploymentStatus: "inactive",
         principalId: principal?.id ?? null,
         costCenter: over.costCenter ?? null,
+        runtimeId: over.runtimeId ?? null,
+        toolbeltId: over.toolbeltId ?? null,
         deletedAt: over.deletedAt ?? null,
         createdById: tenant.userId,
         updatedById: tenant.userId,
@@ -196,6 +202,69 @@ export async function seedAgent(
           ? `${tenant.orgNamespace}.${tenant.workspaceNamespace}.${over.slug}`
           : null,
     };
+  });
+}
+
+/** A named runtime in the tenant's workspace (ADR-192). */
+export async function seedRuntime(
+  tenant: SeededTenant,
+  over: { name: string; slug: string; workspaceId?: string },
+): Promise<{ id: string; publicId: string; name: string; slug: string }> {
+  // tenancy: test fixture seeding outside any request; the row is scoped to
+  // the seeded tenant's orgId and workspaceId and removed by cleanupTenants.
+  return withSystemDb(async (tx) => {
+    const [row] = await tx
+      .insert(schema.runtimes)
+      .values({
+        orgId: tenant.orgId,
+        workspaceId: over.workspaceId ?? tenant.workspaceId,
+        name: over.name,
+        slug: over.slug,
+        createdById: tenant.userId,
+        updatedById: tenant.userId,
+      })
+      .returning({
+        id: schema.runtimes.id,
+        publicId: schema.runtimes.publicId,
+        name: schema.runtimes.name,
+        slug: schema.runtimes.slug,
+      });
+    return row!;
+  });
+}
+
+/** A toolbelt in the tenant's workspace (ADR-192); `all_tools` by default. */
+export async function seedToolbelt(
+  tenant: SeededTenant,
+  over: {
+    name?: string;
+    slug?: string;
+    kind?: "all_tools" | "custom";
+    workspaceId?: string;
+  } = {},
+): Promise<{ id: string; publicId: string; name: string; slug: string }> {
+  const kind = over.kind ?? "all_tools";
+  // tenancy: test fixture seeding outside any request; the row is scoped to
+  // the seeded tenant's orgId and workspaceId and removed by cleanupTenants.
+  return withSystemDb(async (tx) => {
+    const [row] = await tx
+      .insert(schema.toolbelts)
+      .values({
+        orgId: tenant.orgId,
+        workspaceId: over.workspaceId ?? tenant.workspaceId,
+        name: over.name ?? (kind === "all_tools" ? "All tools" : "Belt"),
+        slug: over.slug ?? (kind === "all_tools" ? "all-tools" : "belt"),
+        kind,
+        createdById: tenant.userId,
+        updatedById: tenant.userId,
+      })
+      .returning({
+        id: schema.toolbelts.id,
+        publicId: schema.toolbelts.publicId,
+        name: schema.toolbelts.name,
+        slug: schema.toolbelts.slug,
+      });
+    return row!;
   });
 }
 
@@ -485,6 +554,23 @@ export async function cleanupTenants(orgIds: readonly string[]): Promise<void> {
       );
     }
     await tx.delete(schema.agents).where(inArray(schema.agents.orgId, ids));
+    // After the agents and their versions, which reference both (ADR-192).
+    await tx.delete(schema.runtimes).where(inArray(schema.runtimes.orgId, ids));
+    await tx
+      .delete(schema.toolbeltTools)
+      .where(inArray(schema.toolbeltTools.orgId, ids));
+    // A clone references the belt it came from, so clones go first.
+    await tx
+      .delete(schema.toolbelts)
+      .where(
+        and(
+          inArray(schema.toolbelts.orgId, ids),
+          isNotNull(schema.toolbelts.clonedFromId),
+        ),
+      );
+    await tx
+      .delete(schema.toolbelts)
+      .where(inArray(schema.toolbelts.orgId, ids));
     await tx
       .delete(schema.principalRoleAssignments)
       .where(inArray(schema.principalRoleAssignments.orgId, ids));

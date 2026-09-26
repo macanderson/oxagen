@@ -2,8 +2,8 @@
 // The Overview tab drawn on its own (overview.tsx), for the states the page
 // test in agent.test.tsx does not reach: a rollup that could not be read, a
 // row with no cost or no input, each health verdict, a composition whose
-// steering, belt, mandates or operator are missing or unreadable, and a
-// definition that is not committed. Every missing figure says "not recorded"
+// steering, belt, mandates or operator are missing or unreadable, and the
+// agent's versions (ADR-192). Every missing figure says "not recorded"
 // rather than drawing a zero. Axe runs after every test (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
@@ -14,7 +14,6 @@ import { IntlProvider } from "@/test/intl";
 import { mandateList, mandateRow } from "@/test/mandate-views";
 import {
   agentDetail,
-  committedDefinition,
   incident,
   incidentPage,
   runRow,
@@ -39,7 +38,7 @@ const PLACE = { org: "acme", ws: "core-platform", agent: "release-bot" };
 function renderOverview(overrides: Partial<Props> = {}) {
   const row = spendRow();
   const props: Props = {
-    detail: agentDetail({ definition: committedDefinition() }),
+    detail: agentDetail(),
     toolbelt: readOk(toolbelt()),
     mandates: mandateList([]),
     incidents: incidentPage([]),
@@ -252,42 +251,80 @@ describe("Overview › composition", () => {
   });
 });
 
-describe("Overview › definition in git", () => {
-  it("names the path the file will take and nothing else when no definition is committed (negative)", () => {
-    renderOverview({ detail: agentDetail({ definition: null }) });
-    const git = region("Definition in git");
-    expect(git).toHaveTextContent("Path.oxagen/agents/release-bot.toml");
-    expect(git).toHaveTextContent("Repono definition is committed yet");
-    expect(git).toHaveTextContent("Commitnot recorded");
-    expect(git).toHaveTextContent("definition_digestnot recorded");
-  });
-
-  it("prints the branch alone when the pull request URL names no GitHub repository", () => {
+describe("Overview › versions (ADR-192)", () => {
+  it("lists each version newest first with its change, runtime, toolbelt and date", () => {
     renderOverview({
       detail: agentDetail({
-        definition: {
-          ...committedDefinition(),
-          pullRequestUrl: "https://git.example.com/acme/core/merge_requests/3",
-        },
+        versions: [
+          {
+            version: 3,
+            changeKind: "runtime_changed",
+            runtime: { id: "rtm_gpubox", name: "GPU box", slug: "gpu-box" },
+            toolbelt: {
+              id: "tbt_reviewbelt",
+              name: "Review belt",
+              slug: "review-belt",
+              kind: "custom",
+            },
+            createdAt: "2026-09-20T10:00:00.000Z",
+          },
+          {
+            version: 2,
+            changeKind: "toolbelt_changed",
+            runtime: {
+              id: "rtm_buildbox",
+              name: "Build box",
+              slug: "build-box",
+            },
+            toolbelt: {
+              id: "tbt_reviewbelt",
+              name: "Review belt",
+              slug: "review-belt",
+              kind: "custom",
+            },
+            createdAt: "2026-09-10T10:00:00.000Z",
+          },
+          {
+            version: 1,
+            changeKind: "legacy",
+            runtime: null,
+            toolbelt: null,
+            createdAt: "2026-09-01T10:00:00.000Z",
+          },
+        ],
       }),
     });
-    const git = region("Definition in git");
-    expect(git).toHaveTextContent("Repoagents/release-bot");
-    expect(git).not.toHaveTextContent("acme/core @");
+    const rows = within(region("Versions")).getAllByTestId("agent-version");
+    expect(rows.map((row) => row.getAttribute("data-change"))).toEqual([
+      "runtime_changed",
+      "toolbelt_changed",
+      "legacy",
+    ]);
+    expect(rows[0]).toHaveTextContent("Moved to another runtime");
+    expect(rows[0]).toHaveTextContent("GPU box");
+    // A version written before ADR-192 recorded no runtime or toolbelt.
+    expect(rows[2]).toHaveTextContent("not recorded");
   });
 
-  it("names the generated subagent file for a harness that reads one, and none for Codex", () => {
+  it("says no version is recorded for an agent with none (negative)", () => {
+    renderOverview({ detail: agentDetail({ versions: [] }) });
+    expect(region("Versions")).toHaveTextContent("No version is recorded");
+    expect(within(region("Versions")).queryByRole("table")).toBeNull();
+  });
+
+  it("names the belt and the runtime in Composition, and not recorded when the agent carries no belt", () => {
     renderOverview();
-    expect(region("Definition in git")).toHaveTextContent("release-bot.md");
+    const composition = region("Composition");
+    expect(
+      within(composition).getByTestId("composition-belt"),
+    ).toHaveTextContent("All tools");
     cleanup();
-    renderOverview({
-      detail: agentDetail({
-        identity: { harness: "codex" },
-        definition: committedDefinition(),
-      }),
-    });
-    expect(region("Definition in git")).toHaveTextContent(
-      "none: this harness reads no generated subagent file",
-    );
+    renderOverview({ detail: agentDetail({ toolbelt: null, runtime: null }) });
+    expect(
+      within(region("Composition")).queryByTestId("composition-runtime"),
+    ).toBeNull();
+    expect(
+      within(region("Composition")).queryByTestId("composition-belt"),
+    ).toBeNull();
   });
 });

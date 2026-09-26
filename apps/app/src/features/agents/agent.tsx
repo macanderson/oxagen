@@ -1,7 +1,9 @@
 // One agent (spec pages/agent.md; ARCHITECTURE.md §1.2 Agents row): the
-// header, the eight tabs, and the one tab the URL names. Composition happens
+// header, the seven tabs, and the one tab the URL names. Composition happens
 // here: the registries on Tools and Steering own the reusable objects, and
-// this page shows what this agent's references resolved to.
+// this page shows what this agent's references resolved to. An agent is one
+// operator on one runtime with one harness (ADR-192): the Toolbelt tab gives
+// it another belt and the Runtime tab moves it, each writing a version.
 //
 // The identity is read first and every other read is keyed by it
 // (`agent-reads.ts`). An identity that cannot be read replaces the page body
@@ -12,7 +14,7 @@
 // The design's empty state, "This agent has never run", stands in for the
 // Overview body of an enrolled agent with no frame yet. The header and the
 // tabs stay, because the writes an operator needs before a first run (the
-// Runtime tab's enroll path, the Definition tab, Suspend) must stay reachable;
+// Runtime tab's enroll path and Move, the Toolbelt tab, Suspend) must stay reachable;
 // the other tabs carry their own empty states.
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
@@ -34,7 +36,7 @@ import {
   tamperOf,
 } from "./agent-reads";
 import { AgentTabs } from "./agent-tabs";
-import { DefinitionSection } from "./definition";
+import { RuntimeMove, ToolbeltChoice } from "./binding-controls";
 import { AgentHeader, operatorNameOf } from "./header";
 import { IdentitySection } from "./identity";
 import { Overview } from "./overview";
@@ -230,21 +232,47 @@ function tabBody({
         />
       );
     case "toolbelt":
-      return <ToolbeltSection read={reads.toolbelt} />;
+      return (
+        <div className="flex flex-col gap-4">
+          {reads.belts === null ? null : (
+            <ToolbeltChoice
+              place={place}
+              current={detail.toolbelt}
+              belts={reads.belts}
+              // assign_agent_toolbelt admits an org Owner or Admin (ADR-192).
+              canChange={mayRebind(ctx) && identity.status !== "retired"}
+            />
+          )}
+          <ToolbeltSection read={reads.toolbelt} />
+        </div>
+      );
     case "runtime":
       return (
-        <RuntimeSection
-          detail={detail}
-          lastRun={lastRun}
-          org={place.org}
-          ws={place.ws}
-          here={routes.agent(place.org, place.ws, place.agent, {
-            tab: "runtime",
-          })}
-          // create_enrollment_token and revoke_host_enrollment admit an org
-          // Owner or Admin only.
-          canManageHosts={ctx.orgRole === "owner" || ctx.orgRole === "admin"}
-        />
+        <div className="flex flex-col gap-4">
+          {reads.runtimes === null ? null : (
+            <RuntimeMove
+              place={place}
+              agentId={identity.id}
+              harness={identity.harness}
+              current={detail.runtime}
+              runtimes={reads.runtimes}
+              // move_agent admits an org Owner or Admin (ADR-192).
+              canMove={mayRebind(ctx) && identity.status !== "retired"}
+            />
+          )}
+          <RuntimeSection
+            detail={detail}
+            lastRun={lastRun}
+            org={place.org}
+            ws={place.ws}
+            here={routes.agent(place.org, place.ws, place.agent, {
+              tab: "runtime",
+            })}
+            // create_enrollment_token and revoke_host_enrollment admit an org
+            // Owner or Admin only.
+            canManageHosts={mayRebind(ctx)}
+          />
+        </div>
       );
     case "permissions":
       return (
@@ -273,18 +301,10 @@ function tabBody({
           place={place}
         />
       );
-    case "definition":
-      return (
-        <DefinitionSection
-          detail={detail}
-          mandates={reads.mandates}
-          org={place.org}
-          ws={place.ws}
-          editor={routes.agentSource(place.org, place.ws, place.agent)}
-          here={routes.agent(place.org, place.ws, place.agent, {
-            tab: "definition",
-          })}
-        />
-      );
   }
+}
+
+/** The org roles that may move an agent, change its toolbelt, or manage its hosts. */
+function mayRebind(ctx: WsCtx): boolean {
+  return ctx.orgRole === "owner" || ctx.orgRole === "admin";
 }

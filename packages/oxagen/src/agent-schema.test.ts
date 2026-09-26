@@ -1,14 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
-  agentDefinitionSchema,
   agentDefinitionConfigSchema,
   agentInstanceSchema,
   agentLogSchema,
   debugOptionsSchema,
   graphAccessSchema,
   graphBudgetSchema,
-  parseAgentDefinition,
-  parseAgentDefinitionConfig,
   agentToolTypeSchema,
   agentLogEntryTypeSchema,
 } from "./agent-schema";
@@ -17,17 +14,6 @@ const graph = {
   ontologyId: "ont_1",
   retrieval: { strategy: "hybrid" as const },
   budget: { maxHops: 3, maxNodes: 50 },
-};
-
-const baseDefinition = {
-  id: "agt_1",
-  name: "Interactive",
-  description: "Answers questions",
-  version: "1",
-  graph,
-  agentTools: [{ type: "function" as const, ref: "recall_memory" }],
-  tenantId: "org_1",
-  workspaceId: "wks_1",
 };
 
 describe("graphAccessSchema", () => {
@@ -49,30 +35,8 @@ describe("graphAccessSchema", () => {
   });
 });
 
-describe("agentDefinitionSchema", () => {
-  it("applies the deploy default", () => {
-    const parsed = agentDefinitionSchema.parse(baseDefinition);
-    expect(parsed.deploymentStatus).toBe("inactive");
-    expect(parsed.graph.mode).toBe("read");
-  });
-
-  it("rejects an empty name", () => {
-    expect(() =>
-      agentDefinitionSchema.parse({ ...baseDefinition, name: "" }),
-    ).toThrow();
-  });
-
-  it("round-trips through parseAgentDefinition", () => {
-    const parsed = parseAgentDefinition({
-      ...baseDefinition,
-      deploymentStatus: "active",
-    });
-    expect(parsed.deploymentStatus).toBe("active");
-  });
-});
-
 describe("agentDefinitionConfigSchema", () => {
-  it("is the version-body subset of the definition", () => {
+  it("is the version body, with no identity field (ADR-192)", () => {
     const config = agentDefinitionConfigSchema.parse({
       graph,
       agentTools: [{ type: "function", ref: "code.read" }],
@@ -80,7 +44,14 @@ describe("agentDefinitionConfigSchema", () => {
     });
     expect(config).not.toHaveProperty("id");
     expect(config.instructions).toBe("Be helpful.");
-    expect(parseAgentDefinitionConfig(config).agentTools).toHaveLength(1);
+    expect(config.agentTools).toHaveLength(1);
+    expect(config.graph.mode).toBe("read");
+    expect(agentDefinitionConfigSchema.keyof().options).toEqual([
+      "graph",
+      "agentTools",
+      "instructions",
+      "budget",
+    ]);
   });
 });
 

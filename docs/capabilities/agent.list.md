@@ -31,11 +31,13 @@ A retired agent is a deleted record. The read leaves it out of `items` unless `i
 | Field | Type | Notes |
 |---|---|---|
 | `items[].id` | `string` | `agt_…`. |
-| `items[].slug` | `string` | The definition file name and the last segment of the agent key. |
+| `items[].slug` | `string` | The last segment of the agent key (ADR-024). |
 | `items[].name` | `string` | |
 | `items[].description` | `string \| null` | What the agent is for, from `agent.agents.description`. |
 | `items[].agentKey` | `string \| null` | `org_ns.ws_ns.slug` (ADR-024); null until the namespaces are backfilled. |
 | `items[].harness` | `"stella" \| "claude-code" \| "codex" \| "cursor" \| "claude-agent-sdk" \| "custom"` | |
+| `items[].runtime` | `object \| null` | `{ id, name, slug }` of the runtime the agent runs on now (ADR-192). Null for an agent that runs on no named runtime, and for one registered before runtimes existed that the backfill could not place. |
+| `items[].toolbelt` | `object \| null` | `{ id, name, slug, kind }` of the toolbelt the agent carries. An agent that names no belt reads as the workspace's All tools belt. |
 | `items[].principalId` | `string \| null` | `prn_…`; null on a row that predates Agent RBAC. |
 | `items[].operatorId` | `string \| null` | `usr_…` of the person the agent acts for. |
 | `items[].operatorName` | `string \| null` | That person's display name (`auth.users.display_name`); null when there is no operator or they set none. |

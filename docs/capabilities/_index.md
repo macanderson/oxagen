@@ -33,28 +33,23 @@ after the registered name separately when their contract uses a dotted stem.
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
 | [assign_agent_role](agent.role.assign.md) | [agent.role.assign.ts](../../packages/oxagen/src/contracts/agent.role.assign.ts) | api, mcp, agent |
+| [assign_agent_toolbelt](agent.toolbelt.assign.md) | [agent.toolbelt.assign.ts](../../packages/oxagen/src/contracts/agent.toolbelt.assign.ts) | api, mcp |
 | [attach_memory_evidence](agent.memory_evidence.attach.md) | [agent.memory_evidence.attach.ts](../../packages/oxagen/src/contracts/agent.memory_evidence.attach.ts) | api, mcp, agent |
 | [authorize_mcp_server](agent.mcp.authorize.complete.md) | [agent.mcp.authorize.complete.ts](../../packages/oxagen/src/contracts/agent.mcp.authorize.complete.ts) | api, mcp |
 | [bind_agent_environment](agent.environment.bind.md) | [agent.environment.bind.ts](../../packages/oxagen/src/contracts/agent.environment.bind.ts) | api, mcp, agent |
 | [cite_memory](agent.memory.cite.md) | [agent.memory.cite.ts](../../packages/oxagen/src/contracts/agent.memory.cite.ts) | api, mcp, agent |
-| [commit_agent_definition](agent.definition.commit.md) | [agent.definition.commit.ts](../../packages/oxagen/src/contracts/agent.definition.commit.ts) | api |
 | [commit_memory_import](agent.memory_import.commit.md) | [agent.memory_import.commit.ts](../../packages/oxagen/src/contracts/agent.memory_import.commit.ts) | api, mcp, agent |
-| [create_agent_def](agent.definition.create.md) | [agent.definition.create.ts](../../packages/oxagen/src/contracts/agent.definition.create.ts) | api, mcp, agent |
 | [debug_execution](agent.debug.trace.md) | [agent.debug.trace.ts](../../packages/oxagen/src/contracts/agent.debug.trace.ts) | api, mcp, agent |
-| [delete_agent_def](agent.definition.delete.md) | [agent.definition.delete.ts](../../packages/oxagen/src/contracts/agent.definition.delete.ts) | api, mcp, agent |
 | [delete_mcp_server](agent.mcp.delete.md) | [agent.mcp.delete.ts](../../packages/oxagen/src/contracts/agent.mcp.delete.ts) | api, mcp |
 | [delete_memory](agent.memory.delete.md) | [agent.memory.delete.ts](../../packages/oxagen/src/contracts/agent.memory.delete.ts) | api, mcp, agent |
 | [demote_memory](agent.memory.demote.md) | [agent.memory.demote.ts](../../packages/oxagen/src/contracts/agent.memory.demote.ts) | api, mcp, agent |
-| [deploy_agent](agent.deploy.md) | [agent.deploy.ts](../../packages/oxagen/src/contracts/agent.deploy.ts) | api, mcp, agent |
 | [dismiss_memory_promotion](agent.memory_promotion.dismiss.md) | [agent.memory_promotion.dismiss.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.dismiss.ts) | api, mcp, agent |
 | [get_agent](agent.get.md) | [agent.get.ts](../../packages/oxagen/src/contracts/agent.get.ts) | api, mcp, agent, cli |
-| [get_agent_def](agent.definition.get.md) | [agent.definition.get.ts](../../packages/oxagen/src/contracts/agent.definition.get.ts) | api, mcp, agent |
 | [get_agent_role](agent.role.get.md) | [agent.role.get.ts](../../packages/oxagen/src/contracts/agent.role.get.ts) | api, mcp, agent |
 | [get_agent_toolbelt](agent.toolbelt.get.md) | [agent.toolbelt.get.ts](../../packages/oxagen/src/contracts/agent.toolbelt.get.ts) | api, mcp |
 | [get_citation_stats](agent.memory_citation.stats.md) | [agent.memory_citation.stats.ts](../../packages/oxagen/src/contracts/agent.memory_citation.stats.ts) | api, mcp, agent |
 | [get_execution_trace](agent.trace.get.md) | [agent.trace.get.ts](../../packages/oxagen/src/contracts/agent.trace.get.ts) | api, mcp, agent |
 | [get_memory_policy](agent.memory_policy.read.md) | [agent.memory_policy.read.ts](../../packages/oxagen/src/contracts/agent.memory_policy.read.ts) | api, mcp, agent |
-| [list_agent_defs](agent.definition.list.md) | [agent.definition.list.ts](../../packages/oxagen/src/contracts/agent.definition.list.ts) | api, mcp, agent |
 | [list_agent_environments](agent.environment.list.md) | [agent.environment.list.ts](../../packages/oxagen/src/contracts/agent.environment.list.ts) | api, mcp, agent |
 | [list_agent_roles](agent.role.list.md) | [agent.role.list.ts](../../packages/oxagen/src/contracts/agent.role.list.ts) | api, mcp, agent |
 | [list_agent_tools](agent.tool.list.md) | [agent.tool.list.ts](../../packages/oxagen/src/contracts/agent.tool.list.ts) | api, mcp, agent |
@@ -66,10 +61,9 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_memories](agent.memory.list.md) | [agent.memory.list.ts](../../packages/oxagen/src/contracts/agent.memory.list.ts) | api, mcp, agent |
 | [list_memory_citations](agent.memory_citation.list.md) | [agent.memory_citation.list.ts](../../packages/oxagen/src/contracts/agent.memory_citation.list.ts) | api, mcp, agent |
 | [list_memory_promotions](agent.memory_promotion.list.md) | [agent.memory_promotion.list.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.list.ts) | api, mcp, agent |
+| [move_agent](agent.move.md) | [agent.move.ts](../../packages/oxagen/src/contracts/agent.move.ts) | api, mcp |
 | [parse_memory_import](agent.memory_import.parse.md) | [agent.memory_import.parse.ts](../../packages/oxagen/src/contracts/agent.memory_import.parse.ts) | api, mcp, agent |
 | [promote_memory](agent.memory.promote.md) | [agent.memory.promote.ts](../../packages/oxagen/src/contracts/agent.memory.promote.ts) | api, mcp, agent |
-| [propose_agent](agent.propose.md) | [agent.propose.ts](../../packages/oxagen/src/contracts/agent.propose.ts) | api |
-| [publish_agent_def](agent.definition.publish.md) | [agent.definition.publish.ts](../../packages/oxagen/src/contracts/agent.definition.publish.ts) | api, mcp, agent |
 | [recall_memory](agent.memory.recall.md) | [agent.memory.recall.ts](../../packages/oxagen/src/contracts/agent.memory.recall.ts) | api, mcp, agent |
 | [record_execution](agent.execution.record.md) | [agent.execution.record.ts](../../packages/oxagen/src/contracts/agent.execution.record.ts) | api, mcp |
 | [register_agent](agent.register.md) | [agent.register.ts](../../packages/oxagen/src/contracts/agent.register.ts) | api, cli |
@@ -78,19 +72,15 @@ after the registered name separately when their contract uses a dotted stem.
 | [resolve_mcp_consent](agent.mcp_consent.resolve.md) | [agent.mcp_consent.resolve.ts](../../packages/oxagen/src/contracts/agent.mcp_consent.resolve.ts) | api, mcp, agent |
 | `resolve_mcp_servers` | [agent.mcp.resolve.ts](../../packages/oxagen/src/contracts/agent.mcp.resolve.ts) | api |
 | [retire_agent](agent.retire.md) | [agent.retire.ts](../../packages/oxagen/src/contracts/agent.retire.ts) | api |
-| [revise_agent_def](revise_agent_def.md) | [agent.definition.revise.ts](../../packages/oxagen/src/contracts/agent.definition.revise.ts) | api, mcp, agent |
 | [revoke_agent_role](agent.role.revoke.md) | [agent.role.revoke.ts](../../packages/oxagen/src/contracts/agent.role.revoke.ts) | api, mcp, agent |
 | [rotate_agent_credential](agent.credential.rotate.md) | [agent.credential.rotate.ts](../../packages/oxagen/src/contracts/agent.credential.rotate.ts) | api |
 | [save_memory](agent.memory.remember.md) | [agent.memory.remember.ts](../../packages/oxagen/src/contracts/agent.memory.remember.ts) | api, mcp, agent |
 | [search_mcp_registry](agent.mcp.registry.search.md) | [agent.mcp.registry.search.ts](../../packages/oxagen/src/contracts/agent.mcp.registry.search.ts) | api, mcp |
 | [set_mcp_enabled](agent.mcp.set_enabled.md) | [agent.mcp.set_enabled.ts](../../packages/oxagen/src/contracts/agent.mcp.set_enabled.ts) | api, mcp |
 | [start_mcp_authorization](agent.mcp.authorize.start.md) | [agent.mcp.authorize.start.ts](../../packages/oxagen/src/contracts/agent.mcp.authorize.start.ts) | api, mcp |
-| [suggest_agent_def](agent.definition.suggest.md) | [agent.definition.suggest.ts](../../packages/oxagen/src/contracts/agent.definition.suggest.ts) | api, mcp, agent |
 | [suggest_promotion_rationales](agent.memory_promotion.rationales.md) | [agent.memory_promotion.rationales.ts](../../packages/oxagen/src/contracts/agent.memory_promotion.rationales.ts) | api, mcp, agent |
-| [summarize_agent_def](agent.definition.summarize.md) | [agent.definition.summarize.ts](../../packages/oxagen/src/contracts/agent.definition.summarize.ts) | api, mcp, agent |
 | [suspend_agent](agent.suspend.md) | [agent.suspend.ts](../../packages/oxagen/src/contracts/agent.suspend.ts) | api |
 | [unbind_agent_environment](agent.environment.unbind.md) | [agent.environment.unbind.ts](../../packages/oxagen/src/contracts/agent.environment.unbind.ts) | api, mcp, agent |
-| [update_agent_def](agent.definition.update.md) | [agent.definition.update.ts](../../packages/oxagen/src/contracts/agent.definition.update.ts) | api, mcp, agent |
 | [update_memory](agent.memory.update.md) | [agent.memory.update.ts](../../packages/oxagen/src/contracts/agent.memory.update.ts) | api, mcp, agent |
 | [update_memory_policy](agent.memory_policy.write.md) | [agent.memory_policy.write.ts](../../packages/oxagen/src/contracts/agent.memory_policy.write.ts) | api, mcp, agent |
 | [write_memory](agent.memory.write.md) | [agent.memory.write.ts](../../packages/oxagen/src/contracts/agent.memory.write.ts) | api, mcp, agent |
@@ -493,6 +483,13 @@ after the registered name separately when their contract uses a dotted stem.
 | [seal_run](run.seal.md) | [run.seal.ts](../../packages/oxagen/src/contracts/run.seal.ts) | api, mcp |
 | [summarize_run](run.summarize.md) | [run.summarize.ts](../../packages/oxagen/src/contracts/run.summarize.ts) | api |
 
+## Runtime
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [create_runtime](runtime.create.md) | [runtime.create.ts](../../packages/oxagen/src/contracts/runtime.create.ts) | api, mcp |
+| [list_runtimes](runtime.list.md) | [runtime.list.ts](../../packages/oxagen/src/contracts/runtime.list.ts) | api, mcp |
+
 ## Schema
 
 | Capability | Contract | Declared surfaces |
@@ -604,6 +601,17 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_tool_versions](tool.version.list.md) | [tool.version.list.ts](../../packages/oxagen/src/contracts/tool.version.list.ts) | api, mcp |
 | [publish_tool_declaration](tool.declaration.publish.md) | [tool.declaration.publish.ts](../../packages/oxagen/src/contracts/tool.declaration.publish.ts) | api |
 | [set_tool_classification](tool.classification.set.md) | [tool.classification.set.ts](../../packages/oxagen/src/contracts/tool.classification.set.ts) | api, mcp |
+| [set_tool_state](tool.state.set.md) | [tool.state.set.ts](../../packages/oxagen/src/contracts/tool.state.set.ts) | api, mcp |
+
+## Toolbelt
+
+| Capability | Contract | Declared surfaces |
+| --- | --- | --- |
+| [clone_toolbelt](toolbelt.clone.md) | [toolbelt.clone.ts](../../packages/oxagen/src/contracts/toolbelt.clone.ts) | api, mcp |
+| [delete_toolbelt](toolbelt.delete.md) | [toolbelt.delete.ts](../../packages/oxagen/src/contracts/toolbelt.delete.ts) | api, mcp |
+| [get_toolbelt](toolbelt.get.md) | [toolbelt.get.ts](../../packages/oxagen/src/contracts/toolbelt.get.ts) | api, mcp |
+| [list_toolbelts](toolbelt.list.md) | [toolbelt.list.ts](../../packages/oxagen/src/contracts/toolbelt.list.ts) | api, mcp |
+| [update_toolbelt](toolbelt.update.md) | [toolbelt.update.ts](../../packages/oxagen/src/contracts/toolbelt.update.ts) | api, mcp |
 
 ## Tools
 

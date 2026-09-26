@@ -12,6 +12,11 @@ describe("slugFromName", () => {
     expect(slugFromName("---")).toBe("");
   });
 
+  it("drops apostrophes and other special characters (ADR-192)", () => {
+    expect(slugFromName("Mac's team")).toBe("macs-team");
+    expect(slugFromName("R&D")).toBe("rd");
+  });
+
   it("cuts at 40 characters with no trailing hyphen", () => {
     const slug = slugFromName(`${"a".repeat(39)} b`);
     expect(slug.length).toBeLessThanOrEqual(40);

@@ -9,7 +9,20 @@ import {
   toMcpServerList,
   toToolVersionPage,
 } from "@/data/live/mappers/tools";
+import {
+  toToolbeltDetail,
+  toToolbeltList,
+} from "@/data/live/mappers/toolbelts";
 import type { DataSource } from "@/data/ports";
+import type { toolbeltGet as toolbeltGetContract } from "@oxagen/oxagen/contracts/toolbelt.get";
+import type { toolbeltList as toolbeltListContract } from "@oxagen/oxagen/contracts/toolbelt.list";
+import {
+  type ToolbeltDetail,
+  ToolbeltDetail as ToolbeltDetailShape,
+  type ToolbeltList,
+  ToolbeltList as ToolbeltListShape,
+} from "@/data/contracts/toolbelts";
+import type { ContractOutput } from "@/server/kernel";
 import type {
   ApprovalRuleSet,
   ConnectionList,
@@ -79,6 +92,8 @@ export function agentPageRow(
     description: null,
     agentKey: null,
     harness: "custom",
+    runtime: null,
+    toolbelt: null,
     operatorId: null,
     operatorName: null,
     principalId: null,
@@ -141,6 +156,147 @@ export function mcpServerList(
   return McpServerListShape.parse(toMcpServerList(mcpServerListOutput(over)));
 }
 
+const ALL_TOOLS_REF = {
+  id: "tbt_alltools",
+  name: "All tools",
+  slug: "all-tools",
+  kind: "all_tools" as const,
+};
+const REVIEW_REF = {
+  id: "tbt_reviewbelt",
+  name: "Review belt",
+  slug: "review-belt",
+  kind: "custom" as const,
+};
+const UPDATED_AT = "2026-09-20T10:00:00.000Z";
+
+/**
+ * `list_toolbelts` as the contract answers it: the All tools belt and one
+ * clone of it, answered clone first so the mapper's ordering is what puts
+ * All tools on top.
+ */
+function toolbeltListOutput(): ContractOutput<typeof toolbeltListContract> {
+  return {
+    items: [
+      {
+        ...REVIEW_REF,
+        description: "What a reviewer needs",
+        clonedFrom: ALL_TOOLS_REF,
+        tools: 2,
+        activeTools: 1,
+        servers: 1,
+        agents: 0,
+        updatedAt: UPDATED_AT,
+      },
+      {
+        ...ALL_TOOLS_REF,
+        description: null,
+        clonedFrom: null,
+        tools: 3,
+        activeTools: 2,
+        servers: 2,
+        agents: 1,
+        updatedAt: UPDATED_AT,
+      },
+    ],
+    availableTools: 3,
+  };
+}
+
+export function toolbeltList(): ToolbeltList {
+  return ToolbeltListShape.parse(toToolbeltList(toolbeltListOutput()));
+}
+
+/**
+ * `get_toolbelt` as the contract answers it. The workspace holds three
+ * groups: GitHub with two tools, Linear with one, and the declared tools with
+ * one an admin made unavailable.
+ *
+ * - `custom` (Review belt): GitHub included with `create_issue` on and
+ *   `delete_repo` off, Linear not in the belt, the declared group included.
+ * - `all_tools`: every group included, each tool active as its default says
+ *   while it is available.
+ */
+function toolbeltGetOutput(
+  kind: "all_tools" | "custom" = "custom",
+  agents: readonly { id: string; name: string; slug: string }[] = [],
+): ContractOutput<typeof toolbeltGetContract> {
+  const derived = kind === "all_tools";
+  const tool = (
+    id: string,
+    name: string,
+    state: {
+      available: boolean;
+      defaultActive: boolean;
+      member: boolean;
+      active: boolean;
+    },
+  ) => ({ id, slug: name, name, description: null, ...state });
+  const ref = derived ? ALL_TOOLS_REF : REVIEW_REF;
+  return {
+    toolbelt: {
+      ...ref,
+      description: derived ? null : "What a reviewer needs",
+      clonedFrom: derived ? null : ALL_TOOLS_REF,
+      updatedAt: UPDATED_AT,
+    },
+    groups: [
+      {
+        server: { id: "mcs_github", name: "github" },
+        included: true,
+        tools: [
+          tool("tol_createissue", "create_issue", {
+            available: true,
+            defaultActive: true,
+            member: true,
+            active: true,
+          }),
+          tool("tol_deleterepo", "delete_repo", {
+            available: true,
+            defaultActive: false,
+            member: true,
+            active: false,
+          }),
+        ],
+      },
+      {
+        server: { id: "mcs_linear", name: "linear" },
+        included: derived,
+        tools: [
+          tool("tol_listissues", "list_issues", {
+            available: true,
+            defaultActive: true,
+            member: derived,
+            active: derived,
+          }),
+        ],
+      },
+      {
+        server: { id: null, name: "Declared tools" },
+        included: true,
+        tools: [
+          tool("tol_summarize", "summarize", {
+            available: false,
+            defaultActive: true,
+            member: true,
+            active: false,
+          }),
+        ],
+      },
+    ],
+    agents: [...agents],
+  };
+}
+
+export function toolbeltDetail(
+  kind: "all_tools" | "custom" = "custom",
+  agents: readonly { id: string; name: string; slug: string }[] = [],
+): ToolbeltDetail {
+  return ToolbeltDetailShape.parse(
+    toToolbeltDetail(toolbeltGetOutput(kind, agents)),
+  );
+}
+
 type ToolsReads = {
   /**
    * The registry. A function answers per query, for a test whose narrowed
@@ -171,6 +327,10 @@ type ToolsReads = {
   connections?: Read<ConnectionList>;
   /** The registry tab's server roster; defaults to the two-row fixture. */
   mcpServers?: Read<McpServerList>;
+  /** The Toolbelts tab's list (ADR-192); defaults to All tools and one clone. */
+  toolbelts?: Read<ToolbeltList>;
+  /** The belt the Toolbelts tab opens; defaults to the clone. */
+  toolbelt?: Read<ToolbeltDetail>;
 };
 
 /**
@@ -191,6 +351,8 @@ export function toolsSource(reads: ToolsReads) {
     members: [],
     connections: [],
     mcpServers: [],
+    toolbelts: [],
+    toolbelt: [],
   };
   const refuse = () => Promise.reject(new Error("not a Tools read"));
   const answer =
@@ -202,7 +364,7 @@ export function toolsSource(reads: ToolsReads) {
         : Promise.resolve(read);
     };
   const source: DataSource = {
-    runtimes: { list: refuse, agents: refuse },
+    runtimes: { list: refuse, agents: refuse, named: refuse },
     conversations: { latest: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
@@ -310,6 +472,8 @@ export function toolsSource(reads: ToolsReads) {
         reads.mcpServers ?? readOk(mcpServerList()),
         "mcpServers",
       ),
+      toolbelts: answer(reads.toolbelts ?? readOk(toolbeltList()), "toolbelts"),
+      toolbelt: answer(reads.toolbelt ?? readOk(toolbeltDetail()), "toolbelt"),
     },
     mandates: {
       list: answer(reads.mandates ?? mandateList([]), "mandates"),

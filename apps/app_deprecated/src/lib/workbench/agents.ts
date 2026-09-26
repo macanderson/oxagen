@@ -1,50 +1,63 @@
 /**
- * workbench/agents.ts — server-side wrappers over the agent.definition.* contracts.
+ * workbench/agents.ts — the deprecated workbench's agent seam, retired by
+ * ADR-192.
  *
- * These are thin, typed calls into the kernel via invoke() with the Workbench
- * scope/IAM already resolved. Read helpers (list/get) are safe to call from
- * RSC; mutations (create/update/publish/deploy) are called from "use server"
- * action files. All use surface:"agent" because the agent.definition.* and
- * agent.tool.list contracts list "agent" in their surfaces.
+ * The capabilities this module wrapped (`list_agent_defs`, `get_agent_def`,
+ * `suggest_agent_def`, `create_agent_def`, `update_agent_def`,
+ * `summarize_agent_def`, `publish_agent_def`, `deploy_agent`) are gone: an
+ * agent is now one operator on one runtime with one harness, carrying a
+ * toolbelt, and it is registered in the rebuilt app (`apps/app`). The reads
+ * answer an empty roster, so the deprecated builder and chat picker render
+ * with no agents, and every write refuses with `AgentDefinitionsRemovedError`.
+ * The exported names and types stay so the deprecated pages keep compiling.
  *
  * Server-only. Never import from a "use client" module.
  */
-import "@oxagen/handlers/register";
-// suggest_agent_def moved into the agent package with the Agent RBAC role
-// work — without this the kernel has no handler bound for it at runtime.
-import "@oxagen/agent/register";
-import { invoke } from "@oxagen/oxagen";
 import type { AgentDefinitionConfig } from "@oxagen/oxagen/agent-schema";
-import type { AgentDefinitionSuggestOutput } from "@oxagen/oxagen/contracts/agent.definition.suggest";
-import type { AgentDefinitionSummarizeOutput } from "@oxagen/oxagen/contracts/agent.definition.summarize";
 import type { WorkbenchCtx } from "./scope";
 
-// A single AI-generated agent configuration, shaped exactly like
-// agent.definition.create input. Re-exported from the contract so the action
-// and the client mapping speak the same type.
-export type AgentSuggestion = AgentDefinitionSuggestOutput["suggestion"];
+/** Every write through this module since ADR-192. */
+export class AgentDefinitionsRemovedError extends Error {
+  readonly code = "agent_definitions_removed";
+  constructor() {
+    super(
+      "Agent definitions were removed (ADR-192). Register an agent on a runtime from the Agents page.",
+    );
+    this.name = "AgentDefinitionsRemovedError";
+  }
+}
 
-/**
- * A single "connect this next" recommendation — an MCP server from the synced
- * registry catalog or a disabled workspace skill the agent should have but that
- * is NOT yet available (so it is never in suggestion.config.agentTools). The
- * caller connects/enables it, then equips it. Contract-derived so the action,
- * the builder, and the panel all speak the same shape.
- */
-export type AgentRecommendation =
-  AgentDefinitionSuggestOutput["recommendations"][number];
+function removed(): never {
+  throw new AgentDefinitionsRemovedError();
+}
 
-/**
- * The suggested ROLE (ceiling) for an AI-drafted definition (Agent RBAC
- * Phase 5b): the narrowest system agent role that can still run what was
- * drafted, plus the provenance line explaining why not something narrower.
- * Optional on the contract — a suggestion produced before this field existed,
- * or by a build that does not emit it, simply omits it and the builder falls
- * back to "Agent Contributor".
- */
-export type AgentSuggestedRole = NonNullable<
-  AgentDefinitionSuggestOutput["suggestedRole"]
->;
+// A single AI-generated agent configuration, in the shape the deprecated
+// builder maps into its form (`suggestion-mapping.ts`).
+export type AgentSuggestion = {
+  slug: string;
+  name: string;
+  description: string;
+  agentType: string;
+  config: {
+    graph: AgentDefinitionConfig["graph"];
+    agentTools: AgentDefinitionConfig["agentTools"];
+    instructions: string;
+  };
+};
+
+/** A "connect this next" recommendation the deprecated builder renders. */
+export type AgentRecommendation = {
+  kind: "mcp_server";
+  ref: string;
+  name: string;
+  reason: string;
+};
+
+/** The suggested role the deprecated builder pre-selects. */
+export type AgentSuggestedRole = {
+  roleName: "Agent Observer" | "Agent Contributor" | "Agent Operator";
+  reason: string;
+};
 
 export type SuggestAgentResult = {
   suggestion: AgentSuggestion;
@@ -53,8 +66,6 @@ export type SuggestAgentResult = {
   recommendations: AgentRecommendation[];
   suggestedRole?: AgentSuggestedRole;
 };
-
-// ── Types mirrored from the agent.definition.* contract outputs ───────────────
 
 export type AgentListRow = {
   agentId: string;
@@ -81,16 +92,10 @@ export type AgentDetail = {
   agentId: string;
   publicId: string;
   slug: string;
-  /**
-   * Globally-unique, immutable, human-readable agent identifier
-   * (org_namespace.workspace_namespace.agent_slug). Null only pre-backfill.
-   */
   agentKey: string | null;
   name: string;
   description: string | null;
-  /** https:// URL or "avatar:v1:<json>" designed-avatar string; null when unset. */
   avatarUrl: string | null;
-  /** LLM-inferred plain-text blurb of what the agent does; null until summarized. */
   summary: string | null;
   agentType: string;
   status: "draft" | "active" | "archived";
@@ -101,50 +106,32 @@ export type AgentDetail = {
   config: AgentDefinitionConfig;
 };
 
-/**
- * The agentType every agent registered through the builder is persisted with.
- * ADR-043 retired the "code" agentType along with the sandbox/coding path —
- * Oxagen governs agents, it does not run them — so the builder no longer offers
- * a type choice and always writes this value. The column stays a free-form
- * string on the contract because managed (platform-seeded) agents carry their
- * own type values.
- */
+/** The agentType the deprecated builder wrote. Kept for its form's default. */
 export const DEFAULT_AGENT_TYPE = "custom";
 
 // ── Reads ─────────────────────────────────────────────────────────────────────
 
+/** No agent definitions exist to list (ADR-192). */
 export async function listAgents(
-  ctx: WorkbenchCtx,
-  status?: "draft" | "active" | "archived",
+  _ctx: WorkbenchCtx,
+  _status?: "draft" | "active" | "archived",
 ): Promise<AgentListRow[]> {
-  const out = (await invoke("list_agent_defs", { status }, ctx, {
-    surface: "agent",
-  })) as { agents: AgentListRow[] };
-  return out.agents;
+  return [];
 }
 
+/** No agent definition exists to read (ADR-192). */
 export async function getAgent(
-  ctx: WorkbenchCtx,
-  agentId: string,
+  _ctx: WorkbenchCtx,
+  _agentId: string,
 ): Promise<AgentDetail> {
-  return (await invoke("get_agent_def", { agentId }, ctx, {
-    surface: "agent",
-  })) as AgentDetail;
+  return removed();
 }
 
-/**
- * AI-assisted setup: turn a plain-language description into a complete draft
- * agent configuration. Nothing is persisted — the caller reviews the suggestion
- * in the builder and saves the draft explicitly. surface:"agent" because
- * agent.definition.suggest lists "agent" in its surfaces.
- */
 export async function suggestAgentDefinition(
-  ctx: WorkbenchCtx,
-  input: { description: string; nameHint?: string; agentTypeHint?: string },
+  _ctx: WorkbenchCtx,
+  _input: { description: string; nameHint?: string; agentTypeHint?: string },
 ): Promise<SuggestAgentResult> {
-  return (await invoke("suggest_agent_def", input, ctx, {
-    surface: "agent",
-  })) as SuggestAgentResult;
+  return removed();
 }
 
 // ── Mutations ─────────────────────────────────────────────────────────────────
@@ -153,124 +140,66 @@ export type CreateAgentInput = {
   slug: string;
   name: string;
   description?: string;
-  /** https:// URL or "avatar:v1:<json>" designed-avatar string. Omit to leave unset. */
   avatarUrl?: string;
   config: AgentDefinitionConfig;
 };
 
 export async function createAgent(
-  ctx: WorkbenchCtx,
-  input: CreateAgentInput,
+  _ctx: WorkbenchCtx,
+  _input: CreateAgentInput,
 ): Promise<{
   agentId: string;
   publicId: string;
   slug: string;
   version: number;
 }> {
-  return (await invoke(
-    "create_agent_def",
-    {
-      slug: input.slug,
-      name: input.name,
-      description: input.description,
-      avatarUrl: input.avatarUrl,
-      agentType: DEFAULT_AGENT_TYPE,
-      config: input.config,
-    },
-    ctx,
-    { surface: "agent" },
-  )) as { agentId: string; publicId: string; slug: string; version: number };
+  return removed();
 }
 
 export type UpdateAgentInput = {
   agentId: string;
   name?: string;
   description?: string;
-  /**
-   * Optional avatar change. Omit = unchanged, a value = set (https:// URL or an
-   * "avatar:v1:<json>" designed-avatar string), null = clear the avatar.
-   */
   avatarUrl?: string | null;
   config: AgentDefinitionConfig;
 };
 
 export async function updateAgent(
-  ctx: WorkbenchCtx,
-  input: UpdateAgentInput,
+  _ctx: WorkbenchCtx,
+  _input: UpdateAgentInput,
 ): Promise<{ agentId: string; version: number; isPublished: boolean }> {
-  return (await invoke("update_agent_def", input, ctx, {
-    surface: "agent",
-  })) as { agentId: string; version: number; isPublished: boolean };
+  return removed();
 }
 
-/**
- * Generate (or refresh) an agent's LLM-inferred summary. Cached against a
- * checksum of the agent's config — a re-call is a no-op unless the config
- * changed or `force` is set. surface:"agent" because agent.definition.summarize
- * lists "agent" in its surfaces.
- */
 export async function summarizeAgent(
-  ctx: WorkbenchCtx,
-  agentId: string,
-  force?: boolean,
-): Promise<AgentDefinitionSummarizeOutput> {
-  return (await invoke("summarize_agent_def", { agentId, force }, ctx, {
-    surface: "agent",
-  })) as AgentDefinitionSummarizeOutput;
+  _ctx: WorkbenchCtx,
+  _agentId: string,
+  _force?: boolean,
+): Promise<{ agentId: string; summary: string; checksum: string }> {
+  return removed();
 }
 
-/**
- * Fill in missing summaries for a page of agents, fail-open. For up to `limit`
- * agents whose `summary` is null, generates one (bounded so a list render never
- * fans out an unbounded number of model calls); a failed generation leaves that
- * row's summary null rather than failing the whole list. Returns the rows with
- * the freshly-generated summaries patched in. This is what the Studio Agents
- * list page calls before rendering.
- */
+/** Returns the rows unchanged: nothing writes an agent summary since ADR-192. */
 export async function ensureAgentSummaries(
-  ctx: WorkbenchCtx,
+  _ctx: WorkbenchCtx,
   agents: AgentListRow[],
-  limit = 3,
+  _limit = 3,
 ): Promise<AgentListRow[]> {
-  const targets = agents.filter((a) => a.summary === null).slice(0, limit);
-  if (targets.length === 0) return agents;
-
-  const patched = new Map<string, string>();
-  await Promise.all(
-    targets.map(async (agent) => {
-      try {
-        const out = await summarizeAgent(ctx, agent.agentId);
-        patched.set(agent.agentId, out.summary);
-      } catch {
-        // fail-open: a missing summary is never fatal to the list render.
-      }
-    }),
-  );
-
-  if (patched.size === 0) return agents;
-  return agents.map((agent) =>
-    patched.has(agent.agentId)
-      ? { ...agent, summary: patched.get(agent.agentId) ?? agent.summary }
-      : agent,
-  );
+  return agents;
 }
 
 export async function publishAgent(
-  ctx: WorkbenchCtx,
-  agentId: string,
-  version?: number,
+  _ctx: WorkbenchCtx,
+  _agentId: string,
+  _version?: number,
 ): Promise<{ agentId: string; version: number; checksum: string }> {
-  return (await invoke("publish_agent_def", { agentId, version }, ctx, {
-    surface: "agent",
-  })) as { agentId: string; version: number; checksum: string };
+  return removed();
 }
 
 export async function deployAgent(
-  ctx: WorkbenchCtx,
-  agentId: string,
-  deploymentStatus: "inactive" | "active",
+  _ctx: WorkbenchCtx,
+  _agentId: string,
+  _deploymentStatus: "inactive" | "active",
 ): Promise<{ agentId: string; deploymentStatus: "inactive" | "active" }> {
-  return (await invoke("deploy_agent", { agentId, deploymentStatus }, ctx, {
-    surface: "agent",
-  })) as { agentId: string; deploymentStatus: "inactive" | "active" };
+  return removed();
 }

@@ -275,15 +275,6 @@
     },
     {
       "domain": "agent",
-      "name": "commit_agent_definition",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
       "name": "commit_memory_import",
       "reads": [],
       "surfaces": [
@@ -313,17 +304,6 @@
         "agent",
         "api",
         "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "create_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
         "mcp"
       ],
       "writes": []
@@ -520,17 +500,6 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "delete_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "approval_rule",
       "name": "delete_approval_rule",
       "reads": [],
@@ -714,17 +683,6 @@
     {
       "domain": "agent",
       "name": "demote_memory",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "deploy_agent",
       "reads": [],
       "surfaces": [
         "agent",
@@ -942,17 +900,6 @@
         "agent",
         "api",
         "cli",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "get_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
         "mcp"
       ],
       "writes": []
@@ -1941,17 +1888,6 @@
     },
     {
       "domain": "agent",
-      "name": "list_agent_defs",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
       "name": "list_agent_environments",
       "reads": [],
       "surfaces": [
@@ -2821,15 +2757,6 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "propose_agent",
-      "reads": [],
-      "surfaces": [
-        "api"
-      ],
-      "writes": []
-    },
-    {
       "domain": "configuration",
       "name": "propose_configuration_clone",
       "reads": [],
@@ -2856,17 +2783,6 @@
       "reads": [],
       "surfaces": [
         "api"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "publish_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
       ],
       "writes": []
     },
@@ -3169,17 +3085,6 @@
       "name": "reveal_secret",
       "reads": [],
       "surfaces": [
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "revise_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
         "api",
         "mcp"
       ],
@@ -3761,17 +3666,6 @@
       "writes": []
     },
     {
-      "domain": "agent",
-      "name": "suggest_agent_def",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
       "domain": "command",
       "name": "suggest_commands",
       "reads": [],
@@ -3795,17 +3689,6 @@
     {
       "domain": "agent",
       "name": "suggest_promotion_rationales",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "summarize_agent_def",
       "reads": [],
       "surfaces": [
         "agent",
@@ -3922,17 +3805,6 @@
     {
       "domain": "secret",
       "name": "unset_secret_value",
-      "reads": [],
-      "surfaces": [
-        "agent",
-        "api",
-        "mcp"
-      ],
-      "writes": []
-    },
-    {
-      "domain": "agent",
-      "name": "update_agent_def",
       "reads": [],
       "surfaces": [
         "agent",
@@ -4246,7 +4118,7 @@
       "writes": []
     }
   ],
-  "contentHash": "7d2ab8e751dfd9653c4b96904fcfe5710815e2806509aef6e179ef57b2f47433",
+  "contentHash": "f5f6f6268bf4eb20d603fedcd4e3f1826756af0ceaaa70bc9a7d41e172843032",
   "domains": [
     {
       "name": "agent",

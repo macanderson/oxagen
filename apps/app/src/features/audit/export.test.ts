@@ -34,7 +34,7 @@ const exportEvents = vi.fn();
 const preferences = vi.fn<DataSource["shell"]["preferences"]>();
 const resolveViewer = vi.fn();
 const source: DataSource = {
-  runtimes: { list: refuse, agents: refuse },
+  runtimes: { list: refuse, agents: refuse, named: refuse },
   conversations: { latest: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
   shell: {
@@ -111,6 +111,8 @@ const source: DataSource = {
     approvalRules: refuse,
     connections: refuse,
     mcpServers: refuse,
+    toolbelts: refuse,
+    toolbelt: refuse,
   },
 };
 const deps: AuditExportDeps = { resolveViewer, dataSource: () => source };

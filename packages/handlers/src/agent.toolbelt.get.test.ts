@@ -87,7 +87,7 @@ describe("beltSchemaFacts", () => {
 
   it("parses through the contract on a belt entry", () => {
     const entry = {
-      name: "list_agent_defs",
+      name: "list_agents",
       kind: "capability" as const,
       server: null,
       category: null,
@@ -130,6 +130,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let tenant: Tenant;
     let granted: import("@oxagen/agent/handlers/_agent-identity.test-support").SeededAgent;
     let suspended: import("@oxagen/agent/handlers/_agent-identity.test-support").SeededAgent;
+    let narrowed: import("@oxagen/agent/handlers/_agent-identity.test-support").SeededAgent;
     const orgIds: string[] = [];
     const userIds: string[] = [];
 
@@ -183,19 +184,59 @@ describe.skipIf(!process.env.DATABASE_URL)(
             name: schema.pluginInstalledPlugins.name,
           });
         const listing = new Map(installs.map((row) => [row.name, row.id]));
-        await tx.insert(schema.mcpServers).values(
-          (["live", "offplugin", "unlisted", "stdio"] as const).map((name) => ({
+        const servers = await tx
+          .insert(schema.mcpServers)
+          .values(
+            (["live", "offplugin", "unlisted", "stdio"] as const).map(
+              (name) => ({
+                orgId: tenant.orgId,
+                workspaceId: tenant.workspaceId,
+                orgListingId: listing.get(name) ?? null,
+                name,
+                transportType: name === "stdio" ? "stdio" : "streamable-http",
+                endpointUrl: `https://${name}.mcp.example.com`,
+                authStrategy: "none",
+                healthStatus: name === "live" ? "unknown" : "healthy",
+                discoveredTools: ["ping"],
+              }),
+            ),
+          )
+          .returning({
+            id: schema.mcpServers.id,
+            name: schema.mcpServers.name,
+          });
+        // "live"'s ping was imported into the registry, so the All tools belt
+        // holds it (ADR-192). "unlisted"'s ping was never imported, so no belt
+        // can hold it.
+        const live = servers.find((s) => s.name === "live")!;
+        await tx.insert(schema.tools).values({
+          orgId: tenant.orgId,
+          workspaceId: tenant.workspaceId,
+          name: "ping",
+          slug: "live-ping",
+          source: "mcp",
+          mcpServerId: live.id,
+        });
+      });
+      // A custom belt that holds nothing: its agent sees no registry tool.
+      const allTools = await support.seedToolbelt(tenant);
+      const empty = await withSystemDb(async (tx) => {
+        const [row] = await tx
+          .insert(schema.toolbelts)
+          .values({
             orgId: tenant.orgId,
             workspaceId: tenant.workspaceId,
-            orgListingId: listing.get(name) ?? null,
-            name,
-            transportType: name === "stdio" ? "stdio" : "streamable-http",
-            endpointUrl: `https://${name}.mcp.example.com`,
-            authStrategy: "none",
-            healthStatus: name === "live" ? "unknown" : "healthy",
-            discoveredTools: ["ping"],
-          })),
-        );
+            name: "Empty",
+            slug: "empty",
+            kind: "custom",
+            clonedFromId: allTools.id,
+          })
+          .returning({ id: schema.toolbelts.id });
+        return row!;
+      });
+      narrowed = await support.seedAgent(tenant, {
+        slug: "narrowed",
+        toolbeltId: empty.id,
       });
       await withSystemDb(async (tx) => {
         const [ownerRole] = await tx
@@ -206,19 +247,21 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .insert(schema.roles)
           .values({ orgId: tenant.orgId, scopeKind: "workspace", name: "Belt" })
           .returning({ id: schema.roles.id });
-        await tx.insert(schema.principalRoleAssignments).values({
-          principalId: granted.principalId!,
-          roleId: agentRole!.id,
-          orgId: tenant.orgId,
-          workspaceId: tenant.workspaceId,
-          assignedBy: tenant.userId,
-        });
+        await tx.insert(schema.principalRoleAssignments).values(
+          [granted, narrowed].map((agent) => ({
+            principalId: agent.principalId!,
+            roleId: agentRole!.id,
+            orgId: tenant.orgId,
+            workspaceId: tenant.workspaceId,
+            assignedBy: tenant.userId,
+          })),
+        );
         await tx.insert(schema.roleGrants).values([
           // Two agent-surface reads: one allowed outright, one held for approval.
           {
             orgId: tenant.orgId,
             roleId: agentRole!.id,
-            capabilityId: "list_agent_defs",
+            capabilityId: "list_agents",
             effect: "allow",
           },
           {
@@ -230,7 +273,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           {
             orgId: tenant.orgId,
             roleId: ownerRole!.id,
-            capabilityId: "list_agent_defs",
+            capabilityId: "list_agents",
             effect: "allow",
           },
           {
@@ -249,6 +292,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .delete(schema.roleGrants)
           .where(eq(schema.roleGrants.orgId, tenant.orgId));
         await tx
+          .delete(schema.tools)
+          .where(inArray(schema.tools.orgId, orgIds));
+        await tx
           .delete(schema.mcpServers)
           .where(inArray(schema.mcpServers.orgId, orgIds));
         await tx
@@ -266,25 +312,25 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.basis.roleGrants).toBeGreaterThanOrEqual(4);
       expect(out.basis.killSwitches).toBe(0);
       const byName = new Map(out.tools.map((t) => [t.name, t]));
-      expect(byName.get("list_agent_defs")).toMatchObject({
+      expect(byName.get("list_agents")).toMatchObject({
         kind: "capability",
         decision: "allow",
         readOnly: true,
       });
-      expect(byName.get("list_agent_defs")!.rule).toMatch(/^(agent|human):/);
+      expect(byName.get("list_agents")!.rule).toMatch(/^(agent|human):/);
       expect(byName.get("list_agent_environments")).toMatchObject({
         decision: "require_approval",
       });
       // A capability carries the schema the model is handed, derived from the
       // contract, with the digest that identifies it.
-      const withSchema = byName.get("list_agent_defs")!;
+      const withSchema = byName.get("list_agents")!;
       expect(withSchema.schemaOrigin).toBe("declared");
       expect(withSchema.schemaDigest).toMatch(/^[0-9a-f]{64}$/);
       expect(withSchema.schemaTruncated).toBe(false);
       expect(withSchema.inputSchema).toMatchObject({ type: "object" });
       // A tool with no grant on the agent side is out of sight, with the
       // deciding step named; every excluded name is off the belt.
-      const cut = out.cannotSee.find((c) => c.name === "delete_agent_def");
+      const cut = out.cannotSee.find((c) => c.name === "revoke_agent_role");
       expect(cut).toBeDefined();
       expect(cut!.rule).toMatch(/^agent:/);
       const names = new Set(out.tools.map((t) => t.name));
@@ -299,8 +345,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it("lists standalone HTTP servers but excludes disabled installs", async () => {
       const out = agentToolbeltGet.output.parse(await belt("granted"));
-      // The server's cached tools/list snapshot holds names only, and these
-      // tools were never imported into the registry, so the entry reports no
+      // The imported tool has no published version, so the entry reports no
       // schema rather than a placeholder.
       expect(out.tools.find((t) => t.name === "live__ping")).toMatchObject({
         kind: "mcp",
@@ -317,6 +362,25 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(listed).not.toContain("offplugin__ping");
       expect(listed).not.toContain("stdio__ping");
       expect(listed).toContain("unlisted__ping");
+    });
+
+    it("the agent's toolbelt narrows the belt and never widens it (ADR-192)", async () => {
+      // A tool a server lists that nobody imported is in no belt.
+      const all = agentToolbeltGet.output.parse(await belt("granted"));
+      expect(
+        all.cannotSee.find((c) => c.name === "unlisted__ping"),
+      ).toMatchObject({ kind: "mcp", rule: "not_in_toolbelt" });
+
+      // An empty custom belt hides the imported tool too, and leaves the
+      // capabilities the registry does not name to the gates.
+      const out = agentToolbeltGet.output.parse(await belt("narrowed"));
+      expect(out.tools.map((t) => t.name)).not.toContain("live__ping");
+      expect(out.cannotSee.find((c) => c.name === "live__ping")).toMatchObject({
+        rule: "not_in_toolbelt",
+      });
+      expect(out.tools.find((t) => t.name === "list_agents")).toMatchObject({
+        decision: "allow",
+      });
     });
 
     it("a forced presentation wins over the size rule", async () => {

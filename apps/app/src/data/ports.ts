@@ -61,7 +61,11 @@ import type {
 } from "./contracts/run";
 import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
 import type { PullRequestFilter, RunPage } from "./contracts/runs";
-import type { RuntimeAgents, RuntimeList } from "./contracts/runtimes";
+import type {
+  NamedRuntimeList,
+  RuntimeAgents,
+  RuntimeList,
+} from "./contracts/runtimes";
 import type {
   AssistantEngine,
   OrgChoice,
@@ -108,6 +112,7 @@ import type {
   McpServerList,
   ToolVersionPage,
 } from "./contracts/tools";
+import type { ToolbeltDetail, ToolbeltList } from "./contracts/toolbelts";
 import type { Read } from "./read";
 
 export interface DataSource {
@@ -303,8 +308,8 @@ export interface DataSource {
    * features/agents/agents.tsx, features/tools/tools.tsx (the grant
    * dialog's agent picker) and features/fleet/fleet.tsx (the steer dialog's
    * agents and the Live runs tile's workspace total); get_agent, the identity with its credentials,
-   * roles, hosts and cached definition, callers features/agents/agent.tsx and
-   * agent-source.tsx; get_agent_toolbelt, the computed belt, and
+   * roles, hosts, runtime, toolbelt and versions (ADR-192), callers
+   * features/agents/agent.tsx and the register flow; get_agent_toolbelt, the computed belt, and
    * list_incidents narrowed to the agent, one cursor page, caller
    * features/agents/agent.tsx.
    */
@@ -590,6 +595,14 @@ export interface DataSource {
     ): Promise<Read<ConnectionList>>;
     /** list_mcp_servers: every registered MCP server in the workspace; no filter, no cursor */
     mcpServers(ctx: WsCtx): Promise<Read<McpServerList>>;
+    /**
+     * list_toolbelts (ADR-192): the All tools belt first, then its clones, and
+     * how many tools the workspace made available. Callers: the Toolbelts tab,
+     * the register flow's toolbelt step and the agent page's toolbelt control.
+     */
+    toolbelts(ctx: WsCtx): Promise<Read<ToolbeltList>>;
+    /** get_toolbelt: one belt's tools grouped by server, for the Toolbelts tab. */
+    toolbelt(ctx: WsCtx, toolbeltId: string): Promise<Read<ToolbeltDetail>>;
   };
   /**
    * The Runtimes page (roadmap mockups/pages/runtimes.md); caller:
@@ -597,10 +610,13 @@ export interface DataSource {
    * end of its cursor under a bound: one row per host enrollment, which is one
    * agent on one machine, because no host row exists. `agents` is
    * `list_agents` walked until every named key is found, for the Agents on
-   * this host table.
+   * this host table. `named` is `list_runtimes` (ADR-192): the runtimes the
+   * workspace named, each with its live agents by harness; callers: the
+   * Runtimes page, the register flow and the agent page's Move control.
    */
   runtimes: {
     list(ctx: WsCtx): Promise<Read<RuntimeList>>;
     agents(ctx: WsCtx, keys: readonly string[]): Promise<Read<RuntimeAgents>>;
+    named(ctx: WsCtx): Promise<Read<NamedRuntimeList>>;
   };
 }

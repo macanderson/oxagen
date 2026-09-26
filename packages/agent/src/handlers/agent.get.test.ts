@@ -8,6 +8,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
   "get_agent against Postgres",
   async () => {
     const { schema, withSystemDb } = await import("@oxagen/database");
+    const { and, eq } = await import("drizzle-orm");
     const { runInTenantScope } = await import("@oxagen/tenancy");
     const { agentGetHandler } = await import("./agent.get");
     const support = await import("./_agent-identity.test-support");
@@ -18,6 +19,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let alpha: import("./_agent-identity.test-support").SeededAgent;
     let bare: import("./_agent-identity.test-support").SeededAgent;
     let hostPublicId = "";
+    let laptop: Awaited<ReturnType<typeof support.seedRuntime>>;
+    let cloud: Awaited<ReturnType<typeof support.seedRuntime>>;
+    let allTools: Awaited<ReturnType<typeof support.seedToolbelt>>;
     const orgIds: string[] = [];
     const userIds: string[] = [];
 
@@ -33,12 +37,23 @@ describe.skipIf(!process.env.DATABASE_URL)(
       userIds.push(tenant.userId, other.userId);
       const now = Date.now();
 
+      laptop = await support.seedRuntime(tenant, {
+        name: "Mac's laptop",
+        slug: "macs-laptop",
+      });
+      cloud = await support.seedRuntime(tenant, {
+        name: "Cloud VM",
+        slug: "cloud-vm",
+      });
+      allTools = await support.seedToolbelt(tenant);
       alpha = await support.seedAgent(tenant, {
         slug: "alpha",
         name: "Alpha",
         harness: "stella",
         status: "active",
         costCenter: "ENG-1001",
+        runtimeId: cloud.id,
+        toolbeltId: allTools.id,
       });
       await support.seedCredential(tenant, alpha, { name: "live" });
       await support.seedCredential(tenant, alpha, {
@@ -75,7 +90,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
             expiresAt: r.name === "Expired" ? new Date(now - DAY_MS) : null,
           })),
         );
-        // Two versions: a legacy config row and a committed definition.
+        // Three versions: a legacy row, the registration on the laptop, and
+        // the move to the cloud VM (ADR-192).
         await tx.insert(schema.agentVersions).values([
           {
             agentId: alpha.id,
@@ -87,18 +103,39 @@ describe.skipIf(!process.env.DATABASE_URL)(
           {
             agentId: alpha.id,
             version: 2,
-            isPublished: false,
-            config: { legacy: true },
+            config: {},
             createdById: tenant.userId,
-            definitionPath: ".oxagen/agents/alpha.toml",
-            definitionDigest: "a".repeat(64),
-            definitionSource:
-              'schema = "agent-definition/v0.1"\nslug = "alpha"\n',
-            commitSha: "abc123",
-            branch: "agents/alpha",
-            pullRequestUrl: "https://github.com/acme/core/pull/7",
+            changeKind: "registered",
+            runtimeId: laptop.id,
+            toolbeltId: allTools.id,
+          },
+          {
+            agentId: alpha.id,
+            version: 3,
+            // The limits the migration copied out of the definition file.
+            config: {
+              budget: { per_run_micros: 2_500_000, per_day_micros: 40_000_000 },
+              containment: { required: true },
+            },
+            createdById: tenant.userId,
+            changeKind: "runtime_changed",
+            runtimeId: cloud.id,
+            toolbeltId: allTools.id,
           },
         ]);
+        const [active] = await tx
+          .select({ id: schema.agentVersions.id })
+          .from(schema.agentVersions)
+          .where(
+            and(
+              eq(schema.agentVersions.agentId, alpha.id),
+              eq(schema.agentVersions.version, 3),
+            ),
+          );
+        await tx
+          .update(schema.agents)
+          .set({ activeVersionId: active!.id })
+          .where(eq(schema.agents.id, alpha.id));
       });
       bare = await support.seedAgent(tenant, {
         slug: "bare",
@@ -113,7 +150,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await support.cleanupUsers(userIds);
     });
 
-    it("reads the identity with its credentials, live roles, hosts and the committed definition", async () => {
+    it("reads the identity with its credentials, live roles, hosts, binding and versions", async () => {
       const out = agentGet.output.parse(await get(tenant, "alpha"));
       expect(out.identity).toMatchObject({
         id: alpha.publicId,
@@ -140,12 +177,34 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.roles[0]!.scopeKind).toBe("workspace");
       expect(out.hosts.map((h) => h.hostEnrollmentId)).toEqual([hostPublicId]);
       expect(out.hosts[0]!.hooksOk).toBeNull();
-      expect(out.definition).toMatchObject({
-        version: 2,
-        path: ".oxagen/agents/alpha.toml",
-        commitSha: "abc123",
-        branch: "agents/alpha",
-        pullRequestUrl: "https://github.com/acme/core/pull/7",
+      expect(out.runtime).toEqual({
+        id: cloud.publicId,
+        name: "Cloud VM",
+        slug: "cloud-vm",
+      });
+      expect(out.toolbelt).toEqual({
+        id: allTools.publicId,
+        name: "All tools",
+        slug: "all-tools",
+        kind: "all_tools",
+      });
+      // Newest first. The move kept the principal and wrote a version; the
+      // legacy row names no binding rather than borrowing the current one.
+      expect(
+        out.versions.map((v) => [v.version, v.changeKind, v.runtime?.slug]),
+      ).toEqual([
+        [3, "runtime_changed", "cloud-vm"],
+        [2, "registered", "macs-laptop"],
+        [1, "legacy", undefined],
+      ]);
+      expect(out.versions[2]!.toolbelt).toBeNull();
+      expect(out.versions[0]!.createdBy).toBe(tenant.userPublicId);
+      // The ceilings the host bundle enforces, read from the active version.
+      expect(out.limits).toEqual({
+        perRun: { micros: "2500000", currency: "USD" },
+        perDay: { micros: "40000000", currency: "USD" },
+        containmentRequired: true,
+        invalid: false,
       });
     });
 
@@ -154,7 +213,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.identity.slug).toBe("alpha");
     });
 
-    it("an agent with no principal and no commit reads with nulls, not zeros or a fabricated definition", async () => {
+    it("an agent with no principal, runtime or version reads with nulls, not zeros or a borrowed binding", async () => {
       const out = agentGet.output.parse(await get(tenant, "bare"));
       expect(out.identity.id).toBe(bare.publicId);
       expect(out.identity.principalId).toBeNull();
@@ -163,7 +222,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.identity.firstFrameAt).toBeNull();
       expect(out.identity.costCenter).toBeNull();
       expect(out.roles).toEqual([]);
-      expect(out.definition).toBeNull();
+      expect(out.runtime).toBeNull();
+      expect(out.versions).toEqual([]);
+      // No belt named on the row: the workspace's All tools belt.
+      expect(out.toolbelt?.kind).toBe("all_tools");
+      // No active version: no ceiling to report.
+      expect(out.limits).toEqual({
+        perRun: null,
+        perDay: null,
+        containmentRequired: false,
+        invalid: false,
+      });
     });
 
     it("another org's agent of the same slug is not found from this workspace", async () => {

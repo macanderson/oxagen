@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // The Identity tab drawn on its own (identity.tsx), for the states the page
 // test in agent.test.tsx does not reach: an identity with no key, principal,
-// operator or first frame; a model tier the definition does not name or
-// cannot be parsed for; a run credential that is revoked, never expires or
+// operator or first frame; the runtime the agent runs on, or none (ADR-192);
+// a run credential that is revoked, never expires or
 // was used; no credential at all; every host revoked; and a tamper figure
 // that is zero or could not be read. Axe runs after every test (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
@@ -12,13 +12,7 @@ import type { AgentDetail } from "@/data/contracts/agents";
 import { readError } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
-import {
-  agentDetail,
-  committedDefinition,
-  incident,
-  incidentPage,
-  runRow,
-} from "./agents.builders";
+import { agentDetail, incident, incidentPage, runRow } from "./agents.builders";
 
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
@@ -59,7 +53,7 @@ function credential(overrides: Partial<Credential> = {}): Credential {
 
 function renderIdentity(overrides: Partial<Props> = {}) {
   const props: Props = {
-    detail: agentDetail({ definition: committedDefinition() }),
+    detail: agentDetail(),
     now: NOW,
     lastRun: runRow(),
     operatorName: "Marcus Bell",
@@ -85,7 +79,7 @@ afterEach(async () => {
 });
 
 describe("Identity › facts", () => {
-  it("says not recorded for a missing key, principal, operator and tier, and no frame yet (negative)", () => {
+  it("says not recorded for a missing key, principal and operator, no runtime, and no frame yet (negative)", () => {
     renderIdentity({
       detail: agentDetail({
         identity: {
@@ -94,13 +88,14 @@ describe("Identity › facts", () => {
           operatorId: null,
           firstFrameAt: null,
         },
+        runtime: null,
       }),
       operatorName: null,
     });
     const facts = region("Identity");
     expect(facts).toHaveTextContent("Agent keynot recorded");
     expect(facts).toHaveTextContent("Principalnot recorded");
-    expect(facts).toHaveTextContent("Model tiernot recorded");
+    expect(facts).toHaveTextContent("Runtimenone named");
     expect(facts).toHaveTextContent("Operatornot recorded");
     expect(facts).toHaveTextContent("First frameno frame yet");
     expect(region("Trust relationships")).toHaveTextContent(
@@ -116,15 +111,9 @@ describe("Identity › facts", () => {
     );
   });
 
-  it.each([
-    ["a file that names no tier", 'schema = "agent-definition/v0.1"\n'],
-    ["a tier that is not a string", "model_tier = 3\n"],
-    ["a file the parser refuses", "model_tier = [unterminated\n"],
-  ])("says the model tier is not recorded for %s (negative)", (_, source) => {
-    renderIdentity({
-      detail: agentDetail({ definition: committedDefinition(source) }),
-    });
-    expect(region("Identity")).toHaveTextContent("Model tiernot recorded");
+  it("names the runtime the agent runs on (ADR-192)", () => {
+    renderIdentity();
+    expect(region("Identity")).toHaveTextContent("RuntimeBuild box build-box");
   });
 
   it("prints the cost center the identity is charged to, and offers the write when the viewer may make it", () => {

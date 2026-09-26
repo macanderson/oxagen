@@ -39,11 +39,6 @@ vi.mock("../../middleware/distributed-rate-limit", () => ({
 }));
 
 import { agentCredentialRotate } from "@oxagen/oxagen/contracts/agent.credential.rotate";
-import { agentDefinitionCommit } from "@oxagen/oxagen/contracts/agent.definition.commit";
-import { agentDefinitionDelete } from "@oxagen/oxagen/contracts/agent.definition.delete";
-import { agentDefinitionRevise } from "@oxagen/oxagen/contracts/agent.definition.revise";
-import { agentDefinitionSuggest } from "@oxagen/oxagen/contracts/agent.definition.suggest";
-import { agentDefinitionSummarize } from "@oxagen/oxagen/contracts/agent.definition.summarize";
 import { agentEnvironmentBind } from "@oxagen/oxagen/contracts/agent.environment.bind";
 import { agentGet } from "@oxagen/oxagen/contracts/agent.get";
 import { agentList } from "@oxagen/oxagen/contracts/agent.list";
@@ -63,6 +58,16 @@ import { agentMemoryPromotionDismiss } from "@oxagen/oxagen/contracts/agent.memo
 import { agentMemoryPromotionCandidates } from "@oxagen/oxagen/contracts/agent.memory_promotion.list";
 import { agentMemoryPromotionRationales } from "@oxagen/oxagen/contracts/agent.memory_promotion.rationales";
 import { agentRegister } from "@oxagen/oxagen/contracts/agent.register";
+import { agentMove } from "@oxagen/oxagen/contracts/agent.move";
+import { agentToolbeltAssign } from "@oxagen/oxagen/contracts/agent.toolbelt.assign";
+import { runtimeCreate } from "@oxagen/oxagen/contracts/runtime.create";
+import { runtimeList } from "@oxagen/oxagen/contracts/runtime.list";
+import { toolbeltList } from "@oxagen/oxagen/contracts/toolbelt.list";
+import { toolbeltGet } from "@oxagen/oxagen/contracts/toolbelt.get";
+import { toolbeltClone } from "@oxagen/oxagen/contracts/toolbelt.clone";
+import { toolbeltUpdate } from "@oxagen/oxagen/contracts/toolbelt.update";
+import { toolbeltDelete } from "@oxagen/oxagen/contracts/toolbelt.delete";
+import { toolStateSet } from "@oxagen/oxagen/contracts/tool.state.set";
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
@@ -98,7 +103,6 @@ import { contextProposalList } from "@oxagen/oxagen/contracts/context.proposal.l
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { skillPropose } from "@oxagen/oxagen/contracts/skill.propose";
-import { agentPropose } from "@oxagen/oxagen/contracts/agent.propose";
 import { contextPrGet } from "@oxagen/oxagen/contracts/context.pr.get";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import { conversationAttachmentAdd } from "@oxagen/oxagen/contracts/conversation.attachment.add";
@@ -164,11 +168,6 @@ import { tachoSessionGet } from "@oxagen/oxagen/contracts/tacho.session.get";
 import { tachoSessionList } from "@oxagen/oxagen/contracts/tacho.session.list";
 
 import { agentCredentialRotateRoute } from "./agent.credential.rotate";
-import { agentDefinitionCommitRoute } from "./agent.definition.commit";
-import { agentDefinitionDeleteRoute } from "./agent.definition.delete";
-import { agentDefinitionReviseRoute } from "./agent.definition.revise";
-import { agentDefinitionSuggestRoute } from "./agent.definition.suggest";
-import { agentDefinitionSummarizeRoute } from "./agent.definition.summarize";
 import { agentEnvironmentBindRoute } from "./agent.environment.bind";
 import { agentGetRoute } from "./agent.get";
 import { agentListRoute } from "./agent.list";
@@ -193,6 +192,16 @@ import { agentRoleAssignRoute } from "./agent.role.assign";
 import { agentRoleRevokeRoute } from "./agent.role.revoke";
 import { agentSuspendRoute } from "./agent.suspend";
 import { agentToolbeltGetRoute } from "./agent.toolbelt.get";
+import { agentMoveRoute } from "./agent.move";
+import { agentToolbeltAssignRoute } from "./agent.toolbelt.assign";
+import { runtimeCreateRoute } from "./runtime.create";
+import { runtimeListRoute } from "./runtime.list";
+import { toolbeltListRoute } from "./toolbelt.list";
+import { toolbeltGetRoute } from "./toolbelt.get";
+import { toolbeltCloneRoute } from "./toolbelt.clone";
+import { toolbeltUpdateRoute } from "./toolbelt.update";
+import { toolbeltDeleteRoute } from "./toolbelt.delete";
+import { toolStateSetRoute } from "./tool.state.set";
 import { apiKeyListRoute } from "./api.key.list";
 import { billingBudgetGetRoute } from "./billing.budget.get";
 import { billingAutoTopupSetRoute } from "./billing.auto_topup.set";
@@ -223,7 +232,6 @@ import { contextProposalListRoute } from "./context.proposal.list";
 import { contextProposalDismissRoute } from "./context.proposal.dismiss";
 import { contextPrOpenRoute } from "./context.pr.open";
 import { skillProposeRoute } from "./skill.propose";
-import { agentProposeRoute } from "./agent.propose";
 import { contextPrGetRoute } from "./context.pr.get";
 import { contextPrMergeRoute } from "./context.pr.merge";
 import { conversationAttachmentAddRoute } from "./conversation.attachment.add";
@@ -483,19 +491,6 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
-    file: "agent.propose",
-    route: agentProposeRoute as unknown as Hono<never>,
-    method: "POST",
-    capability: agentPropose.name,
-    body: {
-      slug: "perf-watch",
-      harness: "cursor",
-      source: 'schema = "agent-definition/v0.1"\n',
-    },
-    invalidBody: { slug: "Perf Watch", harness: "cursor", source: "x" },
-    status: 200,
-  },
-  {
     file: "context.pr.get",
     route: contextPrGetRoute as unknown as Hono<never>,
     method: "POST",
@@ -538,19 +533,116 @@ const ROUTES: ThinRoute[] = [
     route: agentRegisterRoute as unknown as Hono<never>,
     method: "POST",
     capability: agentRegister.name,
-    body: { slug: "release-bot", name: "Release bot", harness: "stella" },
-    expectedInput: {
-      slug: "release-bot",
+    body: {
       name: "Release bot",
       harness: "stella",
+      runtimeId: "rtm_0123456789abcdefghjkmn",
+    },
+    expectedInput: {
+      name: "Release bot",
+      harness: "stella",
+      runtimeId: "rtm_0123456789abcdefghjkmn",
       validityDays: 180,
     },
-    // The slug regex refuses an upper-case slug.
-    invalidBody: {
-      slug: "Release-Bot",
-      name: "Release bot",
-      harness: "stella",
+    // An agent runs on a runtime (ADR-192): a body without one is refused.
+    invalidBody: { name: "Release bot", harness: "stella" },
+    status: 200,
+  },
+  {
+    file: "agent.move",
+    route: agentMoveRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentMove.name,
+    body: { agentId: "agt_1", runtimeId: "rtm_0123456789abcdefghjkmn" },
+    invalidBody: { agentId: "agt_1", runtimeId: "cloud-vm" },
+    status: 200,
+  },
+  {
+    file: "agent.toolbelt.assign",
+    route: agentToolbeltAssignRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: agentToolbeltAssign.name,
+    body: { agentId: "agt_1", toolbeltId: "tbt_0123456789abcdefghjkmn" },
+    invalidBody: { agentId: "agt_1" },
+    status: 200,
+  },
+  {
+    file: "runtime.create",
+    route: runtimeCreateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: runtimeCreate.name,
+    body: { name: "Mac's laptop" },
+    invalidBody: { name: "Mac's laptop", slug: "Macs-Laptop" },
+    status: 200,
+  },
+  {
+    file: "runtime.list",
+    route: runtimeListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: runtimeList.name,
+    body: {},
+    invalidBody: { limit: 5 },
+    status: 200,
+  },
+  {
+    file: "toolbelt.list",
+    route: toolbeltListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolbeltList.name,
+    body: {},
+    invalidBody: { kind: "custom" },
+    status: 200,
+  },
+  {
+    file: "toolbelt.get",
+    route: toolbeltGetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolbeltGet.name,
+    body: { toolbeltId: "tbt_0123456789abcdefghjkmn" },
+    invalidBody: { toolbeltId: "all-tools" },
+    status: 200,
+  },
+  {
+    file: "toolbelt.clone",
+    route: toolbeltCloneRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolbeltClone.name,
+    body: { toolbeltId: "tbt_0123456789abcdefghjkmn", name: "Read only" },
+    invalidBody: { toolbeltId: "tbt_0123456789abcdefghjkmn" },
+    status: 200,
+  },
+  {
+    file: "toolbelt.update",
+    route: toolbeltUpdateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolbeltUpdate.name,
+    body: {
+      toolbeltId: "tbt_0123456789abcdefghjkmn",
+      changes: [{ op: "remove_server", serverId: null }],
     },
+    invalidBody: {
+      toolbeltId: "tbt_0123456789abcdefghjkmn",
+      changes: [{ op: "rename_server", serverId: null }],
+    },
+    status: 200,
+  },
+  {
+    file: "toolbelt.delete",
+    route: toolbeltDeleteRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolbeltDelete.name,
+    body: { toolbeltId: "tbt_0123456789abcdefghjkmn" },
+    invalidBody: {},
+    status: 200,
+  },
+  {
+    file: "tool.state.set",
+    route: toolStateSetRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: toolStateSet.name,
+    body: { serverId: null, available: false },
+    // Neither a tool list nor a server: the contract refuses it.
+    invalidBody: { available: false },
     status: 200,
   },
   {
@@ -582,24 +674,6 @@ const ROUTES: ThinRoute[] = [
     status: 200,
   },
   {
-    file: "agent.definition.commit",
-    route: agentDefinitionCommitRoute as unknown as Hono<never>,
-    method: "POST",
-    capability: agentDefinitionCommit.name,
-    body: {
-      agentId: "agt_1",
-      branch: "agents/release-bot",
-      source: 'schema = "agent-definition/v0.1"\nslug = "release-bot"\n',
-    },
-    // `..` is not a git branch name.
-    invalidBody: {
-      agentId: "agt_1",
-      branch: "agents/../main",
-      source: 'schema = "agent-definition/v0.1"\n',
-    },
-    status: 200,
-  },
-  {
     file: "agent.toolbelt.get",
     route: agentToolbeltGetRoute as unknown as Hono<never>,
     method: "POST",
@@ -615,42 +689,6 @@ const ROUTES: ThinRoute[] = [
     capability: tachoIncidentList.name,
     body: { open: true, limit: 20 },
     invalidBody: { open: "yes" },
-    status: 200,
-  },
-  {
-    file: "agent.definition.delete",
-    route: agentDefinitionDeleteRoute as unknown as Hono<never>,
-    method: "POST",
-    capability: agentDefinitionDelete.name,
-    body: { agentId: "agt_1" },
-    invalidBody: {},
-    status: 200,
-  },
-  {
-    file: "agent.definition.revise",
-    route: agentDefinitionReviseRoute as unknown as Hono<never>,
-    method: "POST",
-    capability: agentDefinitionRevise.name,
-    body: { agentId: "agt_1", prompt: "give it billing read access" },
-    invalidBody: { agentId: "agt_1", prompt: "short" },
-    status: 200,
-  },
-  {
-    file: "agent.definition.suggest",
-    route: agentDefinitionSuggestRoute as unknown as Hono<never>,
-    method: "POST",
-    capability: agentDefinitionSuggest.name,
-    body: { description: "audits the fleet nightly for budget breaches" },
-    invalidBody: { description: "too short" },
-    status: 200,
-  },
-  {
-    file: "agent.definition.summarize",
-    route: agentDefinitionSummarizeRoute as unknown as Hono<never>,
-    method: "POST",
-    capability: agentDefinitionSummarize.name,
-    body: { agentId: "agt_1", force: true },
-    invalidBody: { agentId: 7 },
     status: 200,
   },
   {

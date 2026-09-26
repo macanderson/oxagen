@@ -45,7 +45,7 @@ import { OutcomePanel } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { AgentsTable } from "./agents-table";
-import { RegisterAnAgent, WrapClaudeCode } from "./create-actions";
+import { AddRuntimeLink, RegisterAgentLink } from "./create-actions";
 import { AgentKeyPrefix } from "./key-prefix";
 import { keyPrefixOf } from "./key-prefix-of";
 import { NotRecordedValue, Tile } from "./parts";
@@ -199,8 +199,8 @@ function Empty({
       title={t("title", { workspace })}
       actions={
         <>
-          <WrapClaudeCode org={org} ws={ws} />
-          <RegisterAnAgent org={org} ws={ws} />
+          <RegisterAgentLink org={org} ws={ws} />
+          <AddRuntimeLink org={org} ws={ws} />
         </>
       }
     >

@@ -69,11 +69,14 @@ export type RegisteredAgent = {
 };
 
 /**
- * Mints the identity, its delegated principal and its long-lived credential.
- * The definition file is committed separately, so registration writes none.
- * The credential's secret stays on the server: the register gate shows none
- * on the name step, and the SDK path issues its own with
- * `rotate_agent_credential` when the operator asks for it.
+ * Mints the agent (ADR-192): one operator on one runtime with one harness,
+ * carrying a toolbelt, with its delegated principal, its first version and its
+ * long-lived credential. An empty toolbelt is the workspace's All tools belt.
+ * A runtime and harness pair a live agent holds comes back `conflict` with
+ * code `runtime_harness_taken`, a slug the workspace has ever used with
+ * `agent_slug_taken`. The credential's secret stays on the server: the
+ * register gate shows none on the name step, and the SDK path issues its own
+ * with `rotate_agent_credential` when the operator asks for it.
  */
 export async function registerAgent(
   org: string,
@@ -91,12 +94,13 @@ export async function registerAgent(
       field: issue?.path.map(String).join(".") ?? "",
     };
   }
-  const { slug, name, description, harness } = parsed.data;
+  const { slug, name, harness, runtimeId, toolbeltId } = parsed.data;
   const result = await kernelWrite(ctx, agentRegister, {
-    slug,
     name,
+    slug,
     harness,
-    ...(description === "" ? {} : { description }),
+    runtimeId,
+    ...(toolbeltId === "" ? {} : { toolbeltId }),
   });
   return result.ok
     ? {

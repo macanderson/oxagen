@@ -39,7 +39,7 @@ describe("AgentStreamEvent variants", () => {
       {
         type: "approval-required",
         approvalId: "a1",
-        capability: "delete_agent_def",
+        capability: "retire_agent",
         riskLevel: "high",
         inputPreview: {},
       },

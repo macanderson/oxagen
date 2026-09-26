@@ -1,7 +1,9 @@
-// The Runtimes write (runtimes.md, Permissions: `runtime.unenroll`): Unenroll
-// resolves the viewer the URL names and revokes the one enrollment the page
-// shows through `revoke_tacho_enrollment`, sending no reason it did not ask
-// for. A refusal comes back unchanged, so the dialog can name it.
+// The Runtimes writes. Add a runtime names one through `create_runtime`
+// (ADR-192) and answers the register flow with that runtime chosen. Unenroll
+// (runtimes.md, Permissions: `runtime.unenroll`) resolves the viewer the URL
+// names and revokes the one enrollment the page shows through
+// `revoke_tacho_enrollment`, sending no reason it did not ask for. A refusal
+// comes back unchanged, so the dialog can name it.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const kernelWrite = vi.fn<(...args: unknown[]) => unknown>();
@@ -16,9 +18,70 @@ vi.mock("@/server/viewer", () => ({
 const { tachoEnrollmentRevoke } = await import(
   "@oxagen/oxagen/contracts/tacho.enrollment.revoke"
 );
-const { unenrollRuntime } = await import("./actions");
+const { runtimeCreate } = await import(
+  "@oxagen/oxagen/contracts/runtime.create"
+);
+const { createRuntime, unenrollRuntime } = await import("./actions");
 
-const ctx = { marker: "viewer" };
+const ctx = { marker: "viewer", orgSlug: "acme", wsSlug: "core-platform" };
+
+describe("createRuntime", () => {
+  it("names the runtime and answers the register flow with it chosen", async () => {
+    kernelWrite.mockResolvedValue({
+      ok: true,
+      value: {
+        runtime: {
+          id: "rtm_macslaptop",
+          name: "Mac's laptop",
+          slug: "macs-laptop",
+        },
+      },
+    });
+    const result = await createRuntime("acme", "core-platform", {
+      name: "  Mac's laptop ",
+      slug: "macs-laptop",
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(kernelWrite).toHaveBeenCalledWith(ctx, runtimeCreate, {
+      name: "Mac's laptop",
+      slug: "macs-laptop",
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        id: "rtm_macslaptop",
+        name: "Mac's laptop",
+        slug: "macs-laptop",
+        register: "/acme/core-platform/register/name?runtime=rtm_macslaptop",
+      },
+    });
+  });
+
+  it("leaves an empty slug for the handler to derive", async () => {
+    kernelWrite.mockResolvedValue({
+      ok: true,
+      value: { runtime: { id: "rtm_gpu", name: "GPU box", slug: "gpu-box" } },
+    });
+    await createRuntime("acme", "core-platform", {
+      name: "GPU box",
+      slug: " ",
+    });
+    expect(kernelWrite).toHaveBeenCalledWith(ctx, runtimeCreate, {
+      name: "GPU box",
+    });
+  });
+
+  it("returns a taken slug as the conflict the handler named", async () => {
+    const taken = { ok: false, reason: "conflict", code: "runtime_slug_taken" };
+    kernelWrite.mockResolvedValue(taken);
+    await expect(
+      createRuntime("acme", "core-platform", {
+        name: "GPU box",
+        slug: "gpu-box",
+      }),
+    ).resolves.toEqual(taken);
+  });
+});
 
 beforeEach(() => {
   kernelWrite.mockReset();

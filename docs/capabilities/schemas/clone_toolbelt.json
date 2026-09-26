@@ -1,0 +1,90 @@
+{
+  "name": "clone_toolbelt",
+  "domain": "toolbelt",
+  "description": "Copy a toolbelt into a new belt you can edit: every tool the source holds, each active as it is in the source. The slug is derived from the name unless one is given.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "tools"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "toolbeltId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "slug": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40
+      },
+      "description": {
+        "type": "string",
+        "maxLength": 1024
+      }
+    },
+    "required": [
+      "toolbeltId",
+      "name"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "toolbelt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "all_tools",
+              "custom"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "kind"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "toolbelt"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -15,6 +15,7 @@
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { tachoEnrollmentCreate } from "@oxagen/oxagen/contracts/tacho.enrollment.create";
+import { slugFromName } from "@oxagen/oxagen/contracts/runtime.shared";
 import { schema, withTenantDb } from "@oxagen/database";
 import { cryptoRandom } from "@oxagen/database/schema";
 import { emitSecurityEvent } from "@oxagen/database/security";
@@ -40,15 +41,13 @@ function denied(message: string): CapabilityError {
   );
 }
 
-/** `cc-<hostname slug>`, capped at ADR-024's 18-character agent slug. */
+/**
+ * `cc-<hostname slug>`, capped at ADR-024's 18-character agent slug. The
+ * hostname slug follows the one rule every name-made slug follows
+ * (`slugFromName`, ADR-192), after a trailing `.local` is dropped.
+ */
 export function agentSlugFor(hostname: string): string {
-  const slug = hostname
-    .toLowerCase()
-    .replace(/\.local$/, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 15)
-    .replace(/-+$/, "");
+  const slug = slugFromName(hostname.replace(/\.local$/i, ""), 15);
   return `cc-${slug.length > 0 ? slug : "host"}`;
 }
 

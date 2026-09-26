@@ -28,6 +28,8 @@ export function toAgentPage(out: AgentListOutput): z.input<typeof AgentPage> {
       description: item.description,
       agentKey: item.agentKey,
       harness: item.harness,
+      runtime: item.runtime,
+      toolbelt: item.toolbelt,
       operatorId: item.operatorId,
       operatorName: item.operatorName,
       principalId: item.principalId,
@@ -119,18 +121,21 @@ export function toAgentDetail(
       expiresAt: host.expiresAt,
       revokedAt: host.revokedAt,
     })),
-    definition:
-      out.definition === null
-        ? null
-        : {
-            path: out.definition.path,
-            digest: out.definition.digest,
-            commitSha: out.definition.commitSha,
-            branch: out.definition.branch,
-            pullRequestUrl: out.definition.pullRequestUrl,
-            source: out.definition.source,
-            committedAt: out.definition.committedAt,
-          },
+    runtime: out.runtime,
+    toolbelt: out.toolbelt,
+    versions: out.versions.map((version) => ({
+      version: version.version,
+      changeKind: version.changeKind,
+      runtime: version.runtime,
+      toolbelt: version.toolbelt,
+      createdAt: version.createdAt,
+    })),
+    limits: {
+      perRun: out.limits.perRun,
+      perDay: out.limits.perDay,
+      containmentRequired: out.limits.containmentRequired,
+      invalid: out.limits.invalid,
+    },
   };
 }
 

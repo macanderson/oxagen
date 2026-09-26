@@ -40,6 +40,7 @@ import { and, asc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
+import { agentBeltDenyPatterns } from "./toolbelts";
 import {
   hostModelBaseUrlsColumnReady,
   hostReadColumns,
@@ -389,11 +390,12 @@ function modelPrices(host: TachoHostRow): {
 
 /** The tool-RBAC-and-budget half of a host's mandate, resolved for the wire. */
 export interface HostMandate {
-  invalidDefinition?: true;
+  /** The active version's config holds a budget or containment it cannot read. */
+  invalidAgentConfig?: true;
   permissions: PolicyBundle["permissions"];
   budget: PolicyBundle["budget"];
   models?: PolicyBundle["models"];
-  /** The active definition requires the contained tier (ADR-152). */
+  /** The active version's config requires the contained tier (ADR-152). */
   containment?: { required: true };
 }
 
@@ -434,13 +436,12 @@ function steeringManifest(
 }
 
 /**
- * The agent-definition `budget` and `containment` tables off the host's
- * agent's ACTIVE version definition source, with config as a fallback for
- * legacy versions. It is undefined when the host names no agent or has no
- * active version, and each table is undefined when the definition declares
- * none.
+ * The `budget` and `containment` tables off the config of the host's agent's
+ * ACTIVE version (ADR-192). It is undefined when the host names no agent or
+ * has no active version, and each table is undefined when the config
+ * declares none.
  */
-async function readAgentDefinition(
+async function readAgentVersionLimits(
   tx: TachoTx,
   agentId: string | null,
 ): Promise<
@@ -458,8 +459,8 @@ async function readAgentDefinition(
   if (!agent?.activeVersionId) return undefined;
   const version = (await tx.query.agentVersions.findFirst({
     where: eq(schema.agentVersions.id, agent.activeVersionId),
-    columns: { config: true, definitionSource: true },
-  })) as { config: unknown; definitionSource: string | null } | undefined;
+    columns: { config: true },
+  })) as { config: unknown } | undefined;
   return version === undefined
     ? undefined
     : {
@@ -481,7 +482,7 @@ async function readAgentDefinition(
  * `register_agent` runs), the workspace's decision rules still apply either
  * way (they govern the workspace, not one agent's own grants), and the
  * budget stays `observed` when the host names no agent, the agent has no
- * published version, or its active definition carries no budget table.
+ * published version, or its active version's config carries no budget table.
  */
 export async function resolveHostMandate(
   tx: TachoTx,
@@ -510,15 +511,25 @@ export async function resolveHostMandate(
         return scope.mcp?.ruleSets.flat() ?? [];
       })()
     : [];
+  // The agent's toolbelt (ADR-192): every imported MCP tool the belt leaves
+  // out is denied on the host, beside the RBAC rules. A belt narrows what the
+  // agent can reach and never allows anything, so it contributes deny rules
+  // only. A host enrolled with no agent carries no belt.
+  const beltDenies = host.agentId
+    ? await agentBeltDenyPatterns(tx as unknown as Tx, ctx, host.agentId)
+    : [];
   const ruleSet = await loadRuleSetIn(tx as unknown as Tx, ctx.workspaceId);
   const permissions = mapMandateToBundlePermissions({
-    mcpRules,
+    mcpRules: [
+      ...mcpRules,
+      ...beltDenies.map((pattern) => ({ pattern, effect: "deny" as const })),
+    ],
     externalToolRules: ruleSet?.rules ?? [],
   });
   const models = await workspaceModels(tx, ctx, host);
   try {
-    const definition = await readAgentDefinition(tx, host.agentId);
-    const budget = deriveBundleBudget(definition?.budget, {
+    const limits = await readAgentVersionLimits(tx, host.agentId);
+    const budget = deriveBundleBudget(limits?.budget, {
       enforcesDaily:
         host.bundleFeatures?.includes(BUNDLE_FEATURE_DAILY_BUDGET) === true,
     });
@@ -526,26 +537,19 @@ export async function resolveHostMandate(
       permissions,
       budget,
       ...models,
-      ...(definition?.containment
-        ? { containment: definition.containment }
-        : {}),
+      ...(limits?.containment ? { containment: limits.containment } : {}),
     };
   } catch (error) {
-    if (
-      !isHandlerError(error) ||
-      !["invalid_definition_source", "invalid_definition_budget"].includes(
-        error.reason,
-      )
-    )
+    if (!isHandlerError(error) || error.reason !== "invalid_agent_config")
       throw error;
     logger.warn(
       { host: host.publicId, agentId: host.agentId, reason: error.reason },
-      "Invalid active definition suspends governed actions while evidence intake continues",
+      "Invalid active agent config suspends governed actions while evidence intake continues",
     );
     return {
       permissions,
       budget: { mode: "observed" },
-      invalidDefinition: true,
+      invalidAgentConfig: true,
       ...models,
     };
   }
@@ -603,7 +607,7 @@ export function unsignedBundle(
         : ("unreadable" as const)
       : undefined;
   const status = tachoHostStatusSchema.parse(
-    (mandate.invalidDefinition || containment === "unreadable") &&
+    (mandate.invalidAgentConfig || containment === "unreadable") &&
       host.status === "active"
       ? "suspended"
       : host.status,

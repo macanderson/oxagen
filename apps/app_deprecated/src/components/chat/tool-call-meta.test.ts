@@ -29,8 +29,8 @@ import {
 } from "./tool-call-meta";
 
 describe("toolCallMeta — curated map", () => {
-  it("maps list_agent_defs to 'List agents' with Bot (not the derived label)", () => {
-    const meta = toolCallMeta("list_agent_defs");
+  it("maps list_agents to 'List agents' with Bot (not the derived label)", () => {
+    const meta = toolCallMeta("list_agents");
     expect(meta.label).toBe("List agents");
     expect(meta.Icon).toBe(Bot);
   });

@@ -74,6 +74,8 @@ export type ToolsView = {
   names: ToolNameStyle;
   /** The `nextCursor` of an earlier page of the tab's own list. */
   cursor: string | null;
+  /** Only on the Toolbelts tab: the `tbt_…` id of the belt open below the list (ADR-192). */
+  belt: string | null;
 };
 
 /** The workspace a link on the page points into. */
@@ -85,6 +87,8 @@ const CATEGORY = /^[a-z][a-z0-9_]{1,63}$/;
 const PROVIDER = /^mcs_[A-Za-z0-9]{1,64}$/;
 /** A cursor is opaque; only its shape is checked before it goes back to the kernel. */
 const CURSOR = /^[\w.:=+/-]{1,512}$/;
+/** A toolbelt is named by its public id, `tbt_` and the id's body (`toolbeltIdSchema`). */
+const BELT = /^tbt_[0-9a-z]{1,64}$/;
 
 type Params = Readonly<Record<string, string | string[] | undefined>>;
 
@@ -93,6 +97,7 @@ export function parseToolsView(tab: ToolsTab, params: Params): ToolsView {
   const rawProvider = firstParam(params.provider);
   const rawNames = firstParam(params.names);
   const rawCursor = firstParam(params.cursor);
+  const rawBelt = firstParam(params.belt);
   return {
     tab,
     category:
@@ -106,12 +111,16 @@ export function parseToolsView(tab: ToolsTab, params: Params): ToolsView {
     names: TOOL_NAME_STYLES.find((n) => n === rawNames) ?? "labels",
     cursor:
       rawCursor !== undefined && CURSOR.test(rawCursor) ? rawCursor : null,
+    belt:
+      tab === "toolbelts" && rawBelt !== undefined && BELT.test(rawBelt)
+        ? rawBelt
+        : null,
   };
 }
 
 /**
  * The route for a view; the defaults (Tools, every category, every provider,
- * labels, page one) are left off.
+ * labels, page one, no belt open) are left off.
  */
 export function toolsLink(
   at: ToolsAt,
@@ -121,6 +130,7 @@ export function toolsLink(
     provider?: string | null;
     names?: ToolNameStyle;
     cursor?: string | null;
+    belt?: string | null;
   },
 ): SafePath {
   return routes.tools(at.org, at.ws, {
@@ -129,6 +139,7 @@ export function toolsLink(
     provider: to.provider ?? undefined,
     names: to.names === "api" ? "api" : undefined,
     cursor: to.cursor ?? undefined,
+    belt: to.tab === "toolbelts" ? (to.belt ?? undefined) : undefined,
   });
 }
 

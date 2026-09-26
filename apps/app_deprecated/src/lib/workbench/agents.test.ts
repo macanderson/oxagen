@@ -1,32 +1,25 @@
 /**
- * agents.test.ts — unit tests for the workbench/agents.ts kernel wrappers.
+ * agents.test.ts — the deprecated workbench's agent seam after ADR-192.
  *
- * Mock seam: @oxagen/oxagen → invoke. Every export here is a thin, typed
- * pass-through to invoke() with a fixed capability name — verify the correct
- * capability + args + ctx + surface are used and the (mocked) output is
- * returned as-is.
+ * The capabilities it wrapped are gone. Reads answer an empty roster and
+ * every write refuses with `AgentDefinitionsRemovedError`, without calling
+ * the kernel.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-
-vi.mock("@oxagen/handlers/register", () => ({}));
-vi.mock("@oxagen/oxagen", () => ({
-  invoke: vi.fn(),
-}));
-
-import { invoke } from "@oxagen/oxagen";
+import { describe, it, expect } from "vitest";
 import {
-  listAgents,
-  getAgent,
-  suggestAgentDefinition,
+  AgentDefinitionsRemovedError,
   createAgent,
-  updateAgent,
-  publishAgent,
   deployAgent,
-  DEFAULT_AGENT_TYPE,
+  ensureAgentSummaries,
+  getAgent,
+  listAgents,
+  publishAgent,
+  suggestAgentDefinition,
+  summarizeAgent,
+  updateAgent,
+  type AgentListRow,
 } from "./agents";
 import type { WorkbenchCtx } from "./scope";
-
-const mockInvoke = vi.mocked(invoke);
 
 const ctx: WorkbenchCtx = {
   orgId: "org-1",
@@ -38,124 +31,39 @@ const ctx: WorkbenchCtx = {
   messageId: null,
 };
 
-describe("workbench/agents.ts kernel wrappers", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+const config = {
+  graph: {
+    ontologyId: "ont_1",
+    mode: "read" as const,
+    retrieval: { strategy: "hybrid" as const },
+    budget: { maxHops: 1, maxNodes: 1 },
+  },
+  agentTools: [],
+};
+
+describe("workbench/agents.ts after ADR-192", () => {
+  it("lists no agents", async () => {
+    await expect(listAgents(ctx)).resolves.toEqual([]);
+    await expect(listAgents(ctx, "active")).resolves.toEqual([]);
   });
 
-  it("listAgents calls list_agent_defs and unwraps { agents }", async () => {
-    const agents = [{ agentId: "a1" }];
-    mockInvoke.mockResolvedValue({ agents });
-
-    const result = await listAgents(ctx, "active");
-
-    expect(mockInvoke).toHaveBeenCalledWith(
-      "list_agent_defs",
-      { status: "active" },
-      ctx,
-      { surface: "agent" },
-    );
-    expect(result).toBe(agents);
+  it("returns the rows it was given unchanged when asked for summaries", async () => {
+    const rows = [{ agentId: "agt_1", summary: null }] as AgentListRow[];
+    await expect(ensureAgentSummaries(ctx, rows)).resolves.toBe(rows);
   });
 
-  it("getAgent calls get_agent_def with the agentId", async () => {
-    const detail = { agentId: "a1", name: "Agent One" };
-    mockInvoke.mockResolvedValue(detail);
-
-    const result = await getAgent(ctx, "a1");
-
-    expect(mockInvoke).toHaveBeenCalledWith(
-      "get_agent_def",
-      { agentId: "a1" },
-      ctx,
-      { surface: "agent" },
-    );
-    expect(result).toBe(detail);
-  });
-
-  it("suggestAgentDefinition passes the input through unchanged", async () => {
-    const input = { description: "A research agent", nameHint: "Researcher" };
-    const suggestion = {
-      suggestion: {},
-      rationale: "r",
-      warnings: [],
-      recommendations: [],
-    };
-    mockInvoke.mockResolvedValue(suggestion);
-
-    const result = await suggestAgentDefinition(ctx, input);
-
-    expect(mockInvoke).toHaveBeenCalledWith("suggest_agent_def", input, ctx, {
-      surface: "agent",
-    });
-    expect(result).toBe(suggestion);
-  });
-
-  it("createAgent always persists DEFAULT_AGENT_TYPE (ADR-043 retired the code type)", async () => {
-    const created = { agentId: "a1", publicId: "pub", slug: "s", version: 1 };
-    mockInvoke.mockResolvedValue(created);
-
-    const result = await createAgent(ctx, {
-      slug: "s",
-      name: "Agent",
-      config: {} as never,
-    });
-
-    expect(mockInvoke).toHaveBeenCalledWith(
-      "create_agent_def",
-      {
-        slug: "s",
-        name: "Agent",
-        description: undefined,
-        agentType: DEFAULT_AGENT_TYPE,
-        config: {},
-      },
-      ctx,
-      { surface: "agent" },
-    );
-    expect(result).toBe(created);
-  });
-
-  it("updateAgent forwards the whole input object", async () => {
-    const updated = { agentId: "a1", version: 2, isPublished: false };
-    mockInvoke.mockResolvedValue(updated);
-    const input = { agentId: "a1", name: "New name", config: {} as never };
-
-    const result = await updateAgent(ctx, input);
-
-    expect(mockInvoke).toHaveBeenCalledWith("update_agent_def", input, ctx, {
-      surface: "agent",
-    });
-    expect(result).toBe(updated);
-  });
-
-  it("publishAgent calls publish_agent_def with agentId + optional version", async () => {
-    const published = { agentId: "a1", version: 3, checksum: "abc" };
-    mockInvoke.mockResolvedValue(published);
-
-    const result = await publishAgent(ctx, "a1", 3);
-
-    expect(mockInvoke).toHaveBeenCalledWith(
-      "publish_agent_def",
-      { agentId: "a1", version: 3 },
-      ctx,
-      { surface: "agent" },
-    );
-    expect(result).toBe(published);
-  });
-
-  it("deployAgent calls deploy_agent with agentId + deploymentStatus", async () => {
-    const deployed = { agentId: "a1", deploymentStatus: "active" as const };
-    mockInvoke.mockResolvedValue(deployed);
-
-    const result = await deployAgent(ctx, "a1", "active");
-
-    expect(mockInvoke).toHaveBeenCalledWith(
-      "deploy_agent",
-      { agentId: "a1", deploymentStatus: "active" },
-      ctx,
-      { surface: "agent" },
-    );
-    expect(result).toBe(deployed);
+  it.each([
+    ["getAgent", () => getAgent(ctx, "agt_1")],
+    [
+      "suggestAgentDefinition",
+      () => suggestAgentDefinition(ctx, { description: "audits budgets" }),
+    ],
+    ["createAgent", () => createAgent(ctx, { slug: "a", name: "A", config })],
+    ["updateAgent", () => updateAgent(ctx, { agentId: "agt_1", config })],
+    ["summarizeAgent", () => summarizeAgent(ctx, "agt_1")],
+    ["publishAgent", () => publishAgent(ctx, "agt_1")],
+    ["deployAgent", () => deployAgent(ctx, "agt_1", "active")],
+  ])("%s refuses with AgentDefinitionsRemovedError", async (_name, call) => {
+    await expect(call()).rejects.toBeInstanceOf(AgentDefinitionsRemovedError);
   });
 });

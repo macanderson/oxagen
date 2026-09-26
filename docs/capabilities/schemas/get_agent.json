@@ -330,6 +330,70 @@
         },
         "maxItems": 100
       },
+      "limits": {
+        "type": "object",
+        "properties": {
+          "perRun": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "micros": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "micros",
+                  "currency"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "perDay": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "micros": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "micros",
+                  "currency"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "containmentRequired": {
+            "type": "boolean"
+          },
+          "invalid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "perRun",
+          "perDay",
+          "containmentRequired",
+          "invalid"
+        ],
+        "additionalProperties": false
+      },
       "credentials": {
         "type": "array",
         "items": {
@@ -560,6 +624,7 @@
       "runtime",
       "toolbelt",
       "versions",
+      "limits",
       "credentials",
       "roles",
       "hosts"

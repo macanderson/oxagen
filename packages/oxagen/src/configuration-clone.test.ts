@@ -1,22 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { WRAPPED_HARNESSES } from "@oxagen/tacho";
 import {
   configurationCloneDraftSchema,
   configurationCloneName,
+  configurationKindSchema,
 } from "./configuration-clone";
 
-describe("clone harness", () => {
-  it("accepts every wrapped harness and the two connected shapes", () => {
-    // A harness added to WRAPPED_HARNESSES (ADR-101) is one a clone can
-    // carry without a second list to update.
-    const options =
-      configurationCloneDraftSchema.shape.harness.unwrap().options;
-    expect(options).toEqual([
-      ...WRAPPED_HARNESSES,
-      "claude-agent-sdk",
-      "custom",
-    ]);
-    expect(options).toContain("cursor");
+describe("clone kinds", () => {
+  it("clones skills and records, never an agent (ADR-192)", () => {
+    expect(configurationKindSchema.options).toEqual(["skill", "record"]);
+    expect(
+      configurationCloneDraftSchema.safeParse({
+        kind: "agent",
+        sourceId: "review",
+        sourceDigest: `sha256:${"a".repeat(64)}`,
+        slug: "review-cloned",
+        name: "Review-cloned",
+        source: "x",
+        files: [],
+      }).success,
+    ).toBe(false);
   });
 });
 

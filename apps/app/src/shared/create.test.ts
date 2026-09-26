@@ -94,21 +94,20 @@ describe("context description prefill", () => {
 });
 
 describe("clone requests", () => {
-  it.each(["agent", "skill", "record"])(
-    "routes the %s source to the editor",
-    (kind) => {
-      expect(
-        createRequestOf(
-          new CustomEvent(CREATE_EVENT, {
-            detail: { kind, cloneSourceRef: "existing" },
-          }),
-        ),
-      ).toEqual({ kind, cloneSourceRef: "existing" });
-    },
-  );
+  it.each(["skill", "record"])("routes the %s source to the editor", (kind) => {
+    expect(
+      createRequestOf(
+        new CustomEvent(CREATE_EVENT, {
+          detail: { kind, cloneSourceRef: "existing" },
+        }),
+      ),
+    ).toEqual({ kind, cloneSourceRef: "existing" });
+  });
   it.each([
     { kind: "tool", cloneSourceRef: "existing" },
-    { kind: "agent", cloneSourceRef: "" },
+    // An agent is not cloned (ADR-192).
+    { kind: "agent", cloneSourceRef: "existing" },
+    { kind: "skill", cloneSourceRef: "" },
     { kind: "skill", cloneSourceRef: "x".repeat(201) },
     {
       kind: "record",

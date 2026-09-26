@@ -68,7 +68,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
 import { toolsSearchHandler } from "./tools.search";
 import { SEARCH_KIND_ROLES } from "./search-kind-roles";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
-import { agentDefinitionList } from "@oxagen/oxagen/contracts/agent.definition.list";
+import { agentList } from "@oxagen/oxagen/contracts/agent.list";
 
 /** The `allow` roles of a contract's grant map, as search-kind-roles reads them. */
 function allowed(
@@ -321,7 +321,7 @@ describe("search_tools", () => {
   });
 
   it("answers a workspace Viewer no runs and no agents, and reads neither table", async () => {
-    // `list_runs` does not grant workspace Viewer and `list_agent_defs` does
+    // `list_runs` does not grant workspace Viewer and `list_agents` does
     // not grant it either, but `search_tools` does — so before the per-kind
     // gate a Viewer could read run ids and goals, and agent names and slugs,
     // straight out of the tables the authoritative capabilities refuse them.
@@ -337,15 +337,13 @@ describe("search_tools", () => {
     expect(out.rows.map((r) => r.kind)).toContain("tool");
   });
 
-  it("answers an org Member no agents, because list_agent_defs is Owner/Admin only", async () => {
-    // A second bypass on the same route: `list_agent_defs` grants org Owner
-    // and Admin only, while `search_tools` grants org Member.
+  it("answers an org Member agents and runs, because list_agents and list_runs grant it", async () => {
+    // `list_agents` is the authoritative agent listing (ADR-192) and grants
+    // org Member, as `list_runs` does, so search reads both tables.
     mocks.resolveActorOrgRoles.mockResolvedValue(["Member"]);
     mocks.resolveActorWorkspaceRoles.mockResolvedValue([]);
-    const out = await toolsSearchHandler({ query: "" }, CTX);
-    expect(out.rows.map((r) => r.kind)).not.toContain("agent");
-    expect(captured.find((c) => c.table === schema.agents)).toBeUndefined();
-    // `list_runs` grants org Member, so runs stay.
+    await toolsSearchHandler({ query: "" }, CTX);
+    expect(captured.find((c) => c.table === schema.agents)).toBeDefined();
     expect(captured.find((c) => c.table === schema.agentRuns)).toBeDefined();
   });
 
@@ -377,8 +375,8 @@ describe("search_tools", () => {
       workspace: allowed(runList.defaultRoles.workspace),
     });
     expect(SEARCH_KIND_ROLES.agent).toEqual({
-      org: allowed(agentDefinitionList.defaultRoles.org),
-      workspace: allowed(agentDefinitionList.defaultRoles.workspace),
+      org: allowed(agentList.defaultRoles.org),
+      workspace: allowed(agentList.defaultRoles.workspace),
     });
     // `tool` has no source capability: the belt is the registry filtered by
     // entitlement, gated by search_tools' own roles.

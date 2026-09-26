@@ -3,9 +3,10 @@
 //
 // Every server in the workspace appears once. A group the belt holds no tool
 // from reads `included: false`, so a clone's editor can add it back. On the
-// All tools belt every group is included, a tool an owner or admin has not
-// made available reads `available: false`, and `active` is the tool's
-// workspace default.
+// All tools belt every group with an imported tool is included (a server
+// whose tools were never imported holds nothing), a tool an owner or admin
+// has not made available reads `available: false`, and `active` is the
+// tool's workspace default.
 //
 // A console read is outside the metering surface (ADR-052 exclusion 2,
 // INV-28): `noBillingGate: true`, `mutates: false`.

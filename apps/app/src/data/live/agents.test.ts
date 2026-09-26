@@ -42,6 +42,8 @@ const item = {
   description: null,
   agentKey: null,
   harness: "stella",
+  runtime: null,
+  toolbelt: null,
   principalId: null,
   operatorId: null,
   operatorName: null,
@@ -94,7 +96,15 @@ const getOut = {
   credentials: [],
   roles: [],
   hosts: [],
-  definition: null,
+  runtime: null,
+  toolbelt: null,
+  versions: [],
+  limits: {
+    perRun: null,
+    perDay: null,
+    containmentRequired: false,
+    invalid: false,
+  },
 };
 const beltOut = {
   agentId: "agt_releasebot",

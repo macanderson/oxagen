@@ -1,5 +1,5 @@
-// The not-loaded states of the agent page and of its source editor (spec
-// pages/agent.md and pages/agent-source.md, States). Each replaces the page
+// The not-loaded states of the agent page (spec pages/agent.md, States).
+// Each replaces the page
 // body and never the shell, so a reader who cannot see this agent keeps the
 // sidebar, the breadcrumbs and the search, and can leave.
 //
@@ -32,8 +32,11 @@ import { StubAction } from "./stub-action";
 
 type Failure = Exclude<Read<unknown>, { ok: true }>;
 
-/** Which page the state stands in for: the agent, or its definition file. */
-export type StateSubject = "agent" | "source";
+/**
+ * Which page the state stands in for. The agent page is the one left: its
+ * definition file and the editor that opened it went with ADR-192.
+ */
+export type StateSubject = "agent";
 
 export type Viewer = {
   orgSlug: string;
