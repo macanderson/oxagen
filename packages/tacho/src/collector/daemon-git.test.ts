@@ -903,6 +903,44 @@ describe("the daemon's git seam", () => {
     release();
   });
 
+  it("seals an ended session while a long tick holds the driver", async () => {
+    // A new install ships its whole backlog inside one tick, and on one
+    // laptop that tick ran for two minutes and forty-one seconds. The tick
+    // starts the git lane only at its end, so a parked SessionEnd waited that
+    // long for its final read, and `tacho verify` gave up after fifteen
+    // seconds. The driver now starts that read while the tick is still
+    // running. Shipping never answers here, so the tick never reaches its end.
+    let shipping = false;
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+      undefined,
+      undefined,
+      { shipMs: 10 },
+      undefined,
+      { stopDrainMs: 50 },
+    );
+    handle.shipper.drain = () => {
+      shipping = true;
+      return new Promise(() => undefined);
+    };
+    await handle.api.handleHook(hook("SessionStart"));
+    const holding = Date.now() + 2_000;
+    while (!shipping && Date.now() < holding)
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(shipping).toBe(true);
+
+    await handle.api.handleHook(hook("SessionEnd"));
+    const sealing = Date.now() + 2_000;
+    while (
+      handle.registry.get(SESSION)?.sealed !== true &&
+      Date.now() < sealing
+    )
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+    expect(frames(handle).map((event) => event.kind)).toContain("agent_stop");
+  });
+
   it("seals the host chain and returns inside its budget while a worktree read is stuck", async () => {
     // The process gives `stop` five seconds (`STOP_GRACE_MS`) and then exits.
     // Waiting out a read that will not answer ran past that every time, so

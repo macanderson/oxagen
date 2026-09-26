@@ -2762,6 +2762,56 @@ describe("export and verify", () => {
       "SessionEnd never arrived",
     );
   });
+
+  it("verify waits longer once SessionEnd has arrived", async () => {
+    // tachod reports `ending` while the chain waits for its final worktree
+    // read. A daemon shipping its first backlog took minutes to get there, and
+    // verify used to fail at the timeout saying SessionEnd never arrived.
+    const signer = bundleSigner();
+    const ending = {
+      session_id: "sess-verify",
+      session_uuid: "u",
+      sealed: false,
+      ending: true,
+      seq: 2,
+    };
+    // Each clock read moves eight seconds, so a 10 s timeout ends after the
+    // first poll unless the grace extends it.
+    function sessionsThen(answers: unknown[]) {
+      let clock = 0;
+      const d = deps({ now: () => (clock += 8_000) });
+      d.service.running = true;
+      const getter = d.daemonGet;
+      let polls = 0;
+      d.daemonGet = async (path) => {
+        if (path !== "/sessions") return getter(path);
+        polls += 1;
+        // The first listing is the one taken before the turn.
+        if (polls === 1) return { sessions: [] };
+        return { sessions: [answers[Math.min(polls - 2, answers.length - 1)]] };
+      };
+      writeHostFile(
+        d.paths.hostFile,
+        testHostFile(signer, signer.sign(unsignedBundle())),
+      );
+      return { d, polls: () => polls - 1 };
+    }
+
+    const sealsLate = sessionsThen([ending, { ...ending, sealed: true }]);
+    expect(await verify({ timeoutMs: 10_000 }, sealsLate.d)).toMatchObject({
+      ok: true,
+      sessionId: "sess-verify",
+    });
+
+    // The grace applies once: 10 s plus 30 s at eight seconds a read is four
+    // polls, and then verify names the read it was still waiting for.
+    const neverSeals = sessionsThen([ending]);
+    const result = await verify({ timeoutMs: 10_000 }, neverSeals.d);
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain("final worktree read");
+    expect(result.detail).not.toContain("never arrived");
+    expect(neverSeals.polls()).toBe(4);
+  });
 });
 
 describe("defaultCliDeps", () => {

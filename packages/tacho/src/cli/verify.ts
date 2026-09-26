@@ -39,6 +39,17 @@ const DEFAULT_TIMEOUT_MS: Record<WrappedHarness, number> = {
   stella: 45_000,
 };
 
+/**
+ * How much longer to wait once tachod reports that SessionEnd arrived. The
+ * chain seals when that session's final worktree read lands, and a daemon busy
+ * with its first backlog can take longer than the timeout to get there.
+ */
+const ENDING_GRACE_MS = 30_000;
+
+/** Said when SessionEnd arrived but the chain had not sealed in time. */
+const ENDING_DETAIL =
+  "SessionEnd arrived, but tachod had not finished the session's final worktree read. The chain seals once that read lands. Run `tacho verify` again in a minute";
+
 /** Name the final evidence that verification is still waiting for. */
 const UNSEALED_DETAIL: Record<WrappedHarness, string> = {
   "claude-code":
@@ -108,6 +119,11 @@ interface DaemonSession {
   seq: number;
   /** Absent from a daemon older than the harness label on `/sessions`. */
   harness?: string;
+  /**
+   * SessionEnd arrived and the chain waits only for its final worktree read.
+   * Absent from a daemon older than this field.
+   */
+  ending?: boolean;
 }
 
 function factsFor(harness: TachoHarness, deps: CliDeps) {
@@ -209,8 +225,9 @@ export async function verify(
       // Fall through: a chain the daemon did not hold before this turn.
     }
   }
-  const deadline =
+  let deadline =
     deps.now() + (options.timeoutMs ?? DEFAULT_TIMEOUT_MS[harness]);
+  let graced = false;
   let found: DaemonSession | undefined;
   while (deps.now() < deadline) {
     const listing = (await deps.daemonGet("/sessions")) as
@@ -229,6 +246,10 @@ export async function verify(
             )
             .sort((a, b) => b.seq - a.seq)[0];
     if (found?.sealed === true) break;
+    if (found?.ending === true && !graced) {
+      graced = true;
+      deadline += ENDING_GRACE_MS;
+    }
     await deps.sleep(500);
   }
   if (found === undefined) {
@@ -244,7 +265,7 @@ export async function verify(
       sessionId: found.session_id,
       sessionUuid: found.session_uuid,
       seq: found.seq,
-      detail: UNSEALED_DETAIL[harness],
+      detail: found.ending === true ? ENDING_DETAIL : UNSEALED_DETAIL[harness],
     };
   }
   deps.out(
