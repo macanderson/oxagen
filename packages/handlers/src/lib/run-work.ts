@@ -51,9 +51,12 @@ export interface WorkPrLinkRow {
   first_seq: number | string;
   first_ts: string;
 }
-/** A PR link on one chain of a run: the run's own, or a subagent's. */
+/** A PR a run linked: on its own chain, or a subagent's. */
 export interface RunPrLinkRow extends WorkPrLinkRow {
-  /** The chain that linked it. `first_seq` counts this chain's frames. */
+  /**
+   * The chain whose frame the row points at: the run's own when it linked
+   * the PR. `first_seq` counts this chain's frames.
+   */
   session_uuid: string;
 }
 export const WORK_CONTEXT_CAP = 200;
@@ -198,30 +201,41 @@ export async function readWorkPrLinks(
   return result.data;
 }
 /**
- * The pull requests a run's chains linked, one row per chain and URL: the
- * run's own chain, and each listed subagent chain under it, with the run's
- * own rows first. A subagent chain is read only under `root_session_uuid`,
- * so a chain of another run reads nothing. Each row's `first_seq` counts
- * its own chain's frames (#3823). The list names the chains, which puts
- * `session_uuid` in the primary key's range.
+ * The pull requests a run's chains linked, one row per URL: the run's own
+ * chain, and each listed subagent chain under it. A subagent chain is read
+ * only under `root_session_uuid`, so a chain of another run reads nothing.
+ * A URL linked on several chains is one row, at its first frame on the
+ * run's own chain when that chain linked it, and otherwise at its first
+ * frame on the subagent chain whose id sorts first. Grouping by URL keeps
+ * the limit a count of pull requests, so a PR the run and a subagent both
+ * linked takes one place under `WORK_PR_LINK_CAP`, not two. Each row's
+ * `first_seq` counts its own chain's frames (#3823). The list names the
+ * chains, which puts `session_uuid` in the primary key's range. The rows are
+ * ordered with the run's own chain first, then by chain and frame.
  */
 export async function readRunPrLinks(
   rootSessionUuid: string,
   subagentChains: readonly string[],
 ): Promise<RunPrLinkRow[]> {
-  const result = await chSelect<RunPrLinkRow>({
-    query: `SELECT session_uuid, ${prAttr("url")} AS url,
-      argMin(${prAttr("number")}, seq) AS number,
+  // The first frame of each URL: the run's own chain ranks ahead of every
+  // subagent chain, then the chain, then the frame. `chain` is the alias,
+  // because an alias named `session_uuid` would shadow the column it reads.
+  const first = "(session_uuid != {rootSessionUuid:UUID}, session_uuid, seq)";
+  const result = await chSelect<WorkPrLinkRow & { chain: string }>({
+    query: `SELECT ${prAttr("url")} AS url,
+      argMin(session_uuid, ${first}) AS chain,
+      argMin(${prAttr("number")}, ${first}) AS number,
       argMaxIf(${prAttr("repository")}, seq, ${prAttr("repository")} != '') AS repository,
-      min(seq) AS first_seq, toString(argMin(ts, seq)) AS first_ts
+      argMin(seq, ${first}) AS first_seq,
+      toString(argMin(ts, ${first})) AS first_ts
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
         AND session_uuid IN {sessionUuids:Array(UUID)}
         AND (session_uuid = {rootSessionUuid:UUID}
           OR root_session_uuid = {rootSessionUuid:UUID})
         AND kind = 'oxagen:pr_link' AND ${prAttr("url")} != ''
-      GROUP BY session_uuid, url
-      ORDER BY session_uuid != {rootSessionUuid:UUID}, session_uuid, first_seq
+      GROUP BY url
+      ORDER BY chain != {rootSessionUuid:UUID}, chain, first_seq
       LIMIT {limit:UInt32}`,
     params: {
       rootSessionUuid,
@@ -229,7 +243,10 @@ export async function readRunPrLinks(
       limit: WORK_PR_LINK_CAP + 1,
     },
   });
-  return result.data;
+  return result.data.map(({ chain, ...row }) => ({
+    ...row,
+    session_uuid: chain,
+  }));
 }
 /**
  * A linked PR as `owner`, `name` and `number`. The frame's repository attr

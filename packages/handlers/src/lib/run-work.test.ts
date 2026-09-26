@@ -15,6 +15,7 @@ import {
   workDigest,
   type WorkContextRow,
   type WorkDiffRow,
+  WORK_PR_LINK_CAP,
 } from "./run-work";
 
 const chSelect = vi.hoisted(() => vi.fn());
@@ -453,11 +454,60 @@ describe("run work reads", () => {
     expect(query).toMatch(
       /\(session_uuid = \{rootSessionUuid:UUID\}\s+OR root_session_uuid = \{rootSessionUuid:UUID\}\)/,
     );
-    expect(query).toContain("GROUP BY session_uuid, url");
+    expect(query).toContain("GROUP BY url");
     expect(params).toMatchObject({
       rootSessionUuid: SESSION,
       sessionUuids: [SESSION, CHILD],
     });
+  });
+  // The read grouped by chain and URL, so a PR the run and a subagent both
+  // linked took two of the 51 rows the limit allows: 30 shared PRs filled
+  // the cap, and a PR only another subagent linked never reached the spine.
+  // One row per URL keeps the limit a count of pull requests.
+  it("reads one row per PR across the run's chains, at the run's own frame first", async () => {
+    chSelect.mockClear();
+    chSelect.mockResolvedValueOnce({
+      data: [
+        {
+          url: "https://github.com/acme/app/pull/41",
+          chain: SESSION,
+          number: "41",
+          repository: "acme/app",
+          first_seq: 10,
+          first_ts: "2026-09-24 10:00:10.000",
+        },
+        {
+          url: "https://github.com/acme/app/pull/43",
+          chain: CHILD,
+          number: "43",
+          repository: "acme/app",
+          first_seq: 2,
+          first_ts: "2026-09-24 10:01:02.000",
+        },
+      ],
+    });
+    const rows = await readRunPrLinks(SESSION, [CHILD]);
+    const [call] = chSelect.mock.calls;
+    const { query, params } = call?.[0] as {
+      query: string;
+      params: Record<string, unknown>;
+    };
+    expect(query).toMatch(/GROUP BY url\s+ORDER BY/);
+    expect(query).not.toMatch(/GROUP BY session_uuid/);
+    // The chain, number, first frame and time all come from one frame: the
+    // run's own chain ranks ahead of any subagent chain.
+    const first =
+      "(session_uuid != {rootSessionUuid:UUID}, session_uuid, seq)";
+    for (const column of ["session_uuid", "seq"]) {
+      expect(query).toContain(`argMin(${column}, ${first})`);
+    }
+    expect(query).toContain(`toString(argMin(ts, ${first})) AS first_ts`);
+    expect(params["limit"]).toBe(WORK_PR_LINK_CAP + 1);
+    expect(rows.map((row) => [row.session_uuid, row.url])).toEqual([
+      [SESSION, "https://github.com/acme/app/pull/41"],
+      [CHILD, "https://github.com/acme/app/pull/43"],
+    ]);
+    expect(rows[0]).not.toHaveProperty("chain");
   });
   // #3791: a captured diff reads the redactions the seal recorded, so a
   // sanitized patch is not called exact.

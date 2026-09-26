@@ -167,7 +167,8 @@ function harness(opts: {
       ),
     outputs,
     // As the query reads: the root's links and the listed chains' links,
-    // each chain fenced by its root, the root's rows first.
+    // each chain fenced by its root, one row per URL at the root's frame
+    // when the root linked it, the root's rows first.
     prLinks: vi.fn((root: string, chains: readonly string[]) =>
       opts.linksFail === true
         ? Promise.reject(new Error("clickhouse unreachable"))
@@ -191,7 +192,12 @@ function harness(opts: {
                 (a, b) =>
                   Number(a.session_uuid !== root) -
                   Number(b.session_uuid !== root),
-              ),
+              )
+              .filter(
+                (link, i, all) =>
+                  all.findIndex((other) => other.url === link.url) === i,
+              )
+              .slice(0, WORK_PR_LINK_CAP + 1),
           ),
     ),
   };
@@ -488,6 +494,37 @@ describe("get_run_outputs — a wrapped session", () => {
     expect(out.nodes.map((n) => [n.seq, n.sessionUuid, n.name])).toEqual([
       ["20", undefined, "#41"],
     ]);
+  });
+
+  it("counts a PR the run and a subagent both linked once against the cap", async () => {
+    // The read grouped by chain and URL, so 30 PRs the run and a subagent
+    // both linked filled 51 rows: the spine said it was cut, and a PR only
+    // the subagent linked past them never appeared.
+    const pr = (n: number, sessionUuid?: string) => ({
+      url: `https://github.com/acme/app/pull/${n}`,
+      number: String(n),
+      repository: "acme/app",
+      first_seq: n,
+      first_ts: "2026-09-23 10:00:00.000",
+      ...(sessionUuid === undefined ? {} : { session_uuid: sessionUuid }),
+    });
+    const shared = Array.from({ length: 30 }, (_, i) => i + 1);
+    const outputs = harness({
+      links: [
+        ...shared.map((n) => pr(n)),
+        ...shared.map((n) => pr(n, CHILD_UUID)),
+        pr(99, CHILD_UUID),
+      ],
+    });
+
+    const out = await outputs({ runId: TACHO_ID }, ctx());
+
+    const pulls = out.nodes.filter((n) => n.kind === "pr");
+    expect(pulls).toHaveLength(31);
+    expect(pulls.filter((n) => n.sessionUuid === CHILD_UUID)).toEqual([
+      expect.objectContaining({ name: "#99" }),
+    ]);
+    expect(out.complete).toBe(true);
   });
 
   it("says a spine cut at its cap is a prefix", async () => {

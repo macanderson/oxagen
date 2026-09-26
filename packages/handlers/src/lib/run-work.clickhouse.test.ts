@@ -163,6 +163,25 @@ const CHAIN_FRAMES = [
   chainLink(foreign, otherRoot, 0, FOREIGN_PR),
 ];
 
+// A run whose own chain and first subagent both linked the same 30 PRs, and
+// whose second subagent linked one more. The subagent ids are sorted, so the
+// chain that re-linked the 30 reads ahead of the one that linked the 31st.
+const busy = randomUUID();
+const [relinker, latecomer] = [randomUUID(), randomUUID()].sort() as [
+  string,
+  string,
+];
+const SHARED_PRS = Array.from(
+  { length: 30 },
+  (_, i) => `https://github.com/acme/app/pull/${100 + i}`,
+);
+const LATE_PR = "https://github.com/acme/app/pull/200";
+const BUSY_FRAMES = [
+  ...SHARED_PRS.map((pr, i) => chainLink(busy, busy, i, pr)),
+  ...SHARED_PRS.map((pr, i) => chainLink(relinker, busy, i, pr)),
+  chainLink(latecomer, busy, 0, LATE_PR),
+];
+
 // A gateway session whose proxied request carried its own effort, which wins
 // over the harness's setting (#3891).
 const proxied = randomUUID();
@@ -183,7 +202,7 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
     await clickhouse().insert({
       table: "tacho_events",
       format: "JSONEachRow",
-      values: [...FRAMES, ...CHAIN_FRAMES, ...PROXIED_FRAMES],
+      values: [...FRAMES, ...CHAIN_FRAMES, ...BUSY_FRAMES, ...PROXIED_FRAMES],
     });
   });
   afterAll(async () => {
@@ -266,14 +285,35 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
 
   it("reads the PR links of the run's own chain, then each subagent chain under it, and none of another run's", async () => {
     const links = await read(() => readRunPrLinks(session, [child, foreign]));
+    // The subagent's link to the run's own PR is the same PR, read once at
+    // the run's frame.
     expect(
       links.map((row) => [row.session_uuid, row.url, String(row.first_seq)]),
     ).toEqual([
       [session, PR, "10"],
       [session, DOTTED_PR, "16"],
       [child, CHILD_PR, "2"],
-      [child, PR, "3"],
     ]);
+  });
+
+  it("counts a PR linked on two chains once against the limit", async () => {
+    // Grouped by chain and URL, the run's 30 PRs and the subagent's 30
+    // re-links filled the 51 rows the limit allows, and the 31st PR, which
+    // only the second subagent linked, was never read.
+    const links = await read(() =>
+      readRunPrLinks(busy, [relinker, latecomer]),
+    );
+    expect(links).toHaveLength(31);
+    expect(
+      links.slice(0, 30).every((row) => row.session_uuid === busy),
+    ).toBe(true);
+    expect(
+      links.slice(0, 30).map((row) => [row.url, String(row.first_seq)]),
+    ).toEqual(SHARED_PRS.map((pr, i) => [pr, String(i)]));
+    expect(links.at(-1)).toMatchObject({
+      session_uuid: latecomer,
+      url: LATE_PR,
+    });
   });
 
   it("reads a proxied request's effort ahead of the harness's setting (#3891)", async () => {

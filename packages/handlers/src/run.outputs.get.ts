@@ -135,13 +135,12 @@ async function wrappedNodes(
       }),
   ]);
   const pulls: RunOutputNode[] = [];
-  const linked = new Set<string>();
+  // The read answers one row per URL, at the run's own frame when the run
+  // linked it, so a PR the run and a subagent both linked is one node and
+  // takes one place under the cap.
   for (const row of (links ?? []).slice(0, WORK_PR_LINK_CAP)) {
     const link = prLinkOf(row);
-    // The run's own chain reads first, so a PR the run and a subagent both
-    // linked is one node, at the run's frame.
-    if (link === null || linked.has(link.url)) continue;
-    linked.add(link.url);
+    if (link === null) continue;
     pulls.push({
       seq: String(row.first_seq),
       ...(row.session_uuid === sessionUuid
