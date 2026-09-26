@@ -794,6 +794,20 @@ describe("list_runs queries name the tenant", () => {
     expect(query.params).toContain(SCOPE.workspaceId);
   });
 
+  // #4224. A ledger run's goal can run to kilobytes and the page shows at
+  // most 256 characters of it. The select cuts it at 257, one past the cap,
+  // which is enough for `runLabel` to draw the same label.
+  it("cuts a ledger run's goal in the select, one past the label cap", () => {
+    for (const query of [
+      ledgerPageQuery(db, SCOPE, page).toSQL(),
+      ledgerIdentityQuery(db, SCOPE, RUN).toSQL(),
+    ]) {
+      expect(query.sql).toMatch(
+        /left\((?:"agent"\."agent_runs"\.)?"spec"->>'goal', 257\)/,
+      );
+    }
+  });
+
   it("counts live runs over the same runs the pages list, with no cursor and no page size (A-04)", () => {
     const counts = liveCountQueries(
       db,

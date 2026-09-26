@@ -42,6 +42,7 @@ import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
   HOST_POLL_WINDOW_MS,
   IN_APP_AGENT_SURFACES,
+  RUN_LABEL_MAX,
   type RunItem,
   runList,
   type RunListOutput,
@@ -264,7 +265,9 @@ const ledgerColumns = {
     operatorPublicId: schema.principals.publicId,
     operatorKind: schema.principals.kind,
     operatorUserName: schema.users.displayName,
-    goal: sql<string | null>`${runs.spec}->>'goal'`,
+    // One character past the label cap is enough for `runLabel` to cut the
+    // same label, so a goal of several kilobytes never leaves Postgres whole.
+    goal: sql<string | null>`left(${runs.spec}->>'goal', ${sql.raw(String(RUN_LABEL_MAX + 1))})`,
   },
 };
 
