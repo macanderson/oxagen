@@ -162,6 +162,24 @@ describe("parseGitLabWebhookEvent", () => {
     });
   });
 
+  it("carries the draft flag when the payload reports one", () => {
+    const body = hook();
+    body.object_attributes.draft = true;
+    expect(parseGitLabWebhookEvent(body)).toMatchObject({ draft: true });
+    const older = hook();
+    older.object_attributes.work_in_progress = false;
+    expect(parseGitLabWebhookEvent(older)).toMatchObject({ draft: false });
+  });
+
+  it("leaves the draft flag out when the payload says nothing (negative)", () => {
+    expect(parseGitLabWebhookEvent(MERGE_REQUEST_HOOK)).not.toHaveProperty(
+      "draft",
+    );
+    const body = hook();
+    body.object_attributes.draft = "yes";
+    expect(parseGitLabWebhookEvent(body)).not.toHaveProperty("draft");
+  });
+
   it.each([
     [null],
     [undefined],

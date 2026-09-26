@@ -34,6 +34,12 @@ export interface GitLabMergeRequestEvent {
   lastCommitSha: string | null;
   updatedAt: string;
   mergeCommitSha: string | null;
+  /**
+   * Whether the merge request is a draft, as `draft` (or, on an older
+   * GitLab, `work_in_progress`) reports it. Absent when the payload says
+   * neither.
+   */
+  draft?: boolean;
 }
 
 export interface GitLabOtherEvent {
@@ -112,6 +118,12 @@ export function parseGitLabWebhookEvent(
     return null;
   }
   const lastCommit = isObject(attrs.last_commit) ? attrs.last_commit : null;
+  const draft =
+    typeof attrs.draft === "boolean"
+      ? attrs.draft
+      : typeof attrs.work_in_progress === "boolean"
+        ? attrs.work_in_progress
+        : null;
   return {
     kind: "merge_request",
     projectId,
@@ -124,5 +136,6 @@ export function parseGitLabWebhookEvent(
     lastCommitSha: str(lastCommit?.id),
     updatedAt,
     mergeCommitSha: str(attrs.merge_commit_sha),
+    ...(draft === null ? {} : { draft }),
   };
 }
