@@ -11,7 +11,9 @@ describe("answer_interjection contract", () => {
     expect(agentInterjectionAnswer.noBillingGate).toBe(true);
     expect(agentInterjectionAnswer.scoped).toBe(true);
     expect(agentInterjectionAnswer.surfaces).toEqual(["api", "mcp", "cli"]);
-    expect(agentInterjectionAnswer.layers).not.toContain("app");
+    // The Run page answers a repository question (#3941), bound in
+    // apps/app/capability-ui-map.json.
+    expect(agentInterjectionAnswer.layers).toContain("app");
   });
 
   it("accepts a public id or a row uuid, and trims the answer", () => {

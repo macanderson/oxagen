@@ -20,6 +20,9 @@ table, `agent.interjections`, beside `agent.approval_requests`.
 The app reads the open questions for three places: the Fleet page's Waiting on
 a human tile, the Fleet count in the sidebar and on the phone's bar, and the
 first rows of the shell's approvals drawer.
+The Run page also reads one run's questions, answered or not, when the
+run's recording carries `control.interject`. It draws the question, its two
+paths, its window, and its answer with the receipt (#3941).
 
 An interjection has a kind. A `question` is an agent asking in its own words.
 A `repo_unknown` is a Tacho host holding a session that started in a

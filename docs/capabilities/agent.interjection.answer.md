@@ -39,6 +39,7 @@ run goes on with no skills. The timeout writes that answer, never a person.
 - API: `POST /v1/:org_slug/:workspace_slug/agent/interjections/answer`
 - MCP: `answer_interjection`
 - CLI: `oxagen run answer <interjection-id> (--text <answer> | --link | --create <name> --slug <slug>)`
+- App: the Run page at `/{org}/{ws}/runs/{run}`, for a run whose host held the loop on a repository question. The page shows both paths, sends `link` or `create` through the kernel seam, and shows the receipt (`apps/app/src/features/run/interjection-answer.tsx`). A `question` has no answer form in the app yet.
 - Authentication: session or API key
 
 ## Input
