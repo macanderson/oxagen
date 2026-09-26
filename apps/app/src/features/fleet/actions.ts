@@ -29,13 +29,17 @@
 // The same `dispatch_command` contract the run's own header calls, with the
 // same run target, and only the three commands that carry no prompt content.
 // A steer stays on the run page: the contract requires `payload` on it, and
-// the text and its delivery mode need the room that dialog gives them.
+// the text and its delivery mode need the room that dialog gives them. A
+// ledger run's row sends its pause the same way: the handler fences the run's
+// evidence ingress (#3637).
 //
 // Steer the fleet sends one `steer` per selected agent, addressed to the
 // agent (`target.kind: "agent"`), so the control plane fans it out to every
-// live run of that agent and answers one command id per run it reached. The
-// delivery mode is the turn boundary: the design's Interrupt is not offered
-// yet, so nothing here asks for one.
+// live run of that agent and answers one command id per run it reached, or
+// holds one for the next run of an agent with none in flight (#2953). The
+// delivery mode is the turn boundary, or `interrupt` when the dialog's
+// Interrupt is on. `interrupt` is a ceiling: each run's connection point
+// carries the strongest mode it can at or below it.
 //
 // Export on a sealed row queues the same `export_run` the Run page's Export
 // queues. The handler admits an org Owner or Admin (`assertOrgRole`), so a
@@ -241,7 +245,14 @@ export async function dispatchRunCommand(
 /** The most agents one steer addresses; `list_agents` answers at most this many a page. */
 const STEER_AGENTS_MAX = 100;
 
-/** What a steer across the fleet reached: one command id per run in flight. */
+/** The delivery modes Steer the fleet offers: the boundary, or Interrupt. */
+const FLEET_STEER_MODES = ["turn_boundary", "interrupt"] as const;
+export type FleetSteerMode = (typeof FLEET_STEER_MODES)[number];
+
+/**
+ * What a steer across the fleet queued: one command id per run in flight,
+ * and one per idle agent for its next run.
+ */
 export type FleetSteer = {
   commandIds: string[];
   /** The agents the control plane refused a steer for, with its code. */
@@ -249,11 +260,14 @@ export type FleetSteer = {
 };
 
 /**
- * Steer every selected agent's live runs at their next turn boundary.
+ * Steer every selected agent's live runs, at their next turn boundary or with
+ * `interrupt` as the ceiling, and hold the steer for the next run of an agent
+ * with none in flight.
  *
  * The text is checked here as well as in the dialog: it is required and has
  * the contract's length limit, and an agent list that is empty or longer than
- * a workspace could hold is refused before the kernel runs.
+ * a workspace could hold is refused before the kernel runs. A mode the dialog
+ * does not offer is refused too, since a server action is an endpoint.
  *
  * Each agent is its own `dispatch_command`, so one refusal does not cost the
  * others their steer. When every agent was refused the first refusal is the
@@ -263,11 +277,20 @@ export type FleetSteer = {
 export async function steerFleet(
   org: string,
   ws: string,
-  input: { agentKeys: string[]; text: string },
+  input: { agentKeys: string[]; text: string; requestedMode?: string },
 ): Promise<ActionResult<FleetSteer>> {
   const text = input.text.trim();
   if (text === "" || text.length > STEER_TEXT_MAX) {
     return { ok: false, reason: "invalid", code: "steer_text", field: "text" };
+  }
+  const requestedMode = input.requestedMode ?? "turn_boundary";
+  if (!isFleetSteerMode(requestedMode)) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "delivery_mode",
+      field: "requestedMode",
+    };
   }
   const keys = [...new Set(input.agentKeys)];
   if (keys.length === 0 || keys.length > STEER_AGENTS_MAX) {
@@ -285,7 +308,7 @@ export async function steerFleet(
       result: await kernelWrite(ctx, tachoCommandDispatch, {
         target: { kind: "agent", id: agentKey },
         command: "steer",
-        payload: { text, requestedMode: "turn_boundary" },
+        payload: { text, requestedMode },
       }),
     })),
   );
@@ -308,6 +331,10 @@ export async function steerFleet(
     return first.result;
   }
   return { ok: true, value: { commandIds, refused } };
+}
+
+function isFleetSteerMode(mode: string): mode is FleetSteerMode {
+  return (FLEET_STEER_MODES as readonly string[]).includes(mode);
 }
 
 /**
