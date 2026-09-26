@@ -38,6 +38,7 @@ import {
   tachoSession,
 } from "./run.test-support";
 import { createWordsCache } from "./lib/transcript-words-cache";
+import { decodeFrameCursor, encodeFrameCursor } from "./run.get";
 
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const SESSION_UUID = "0192d4a8-7c1e-7a00-8000-00000000c0de";
@@ -712,6 +713,7 @@ describe("get_run_transcript", () => {
       entries: [],
       cursor: null,
       complete: true,
+      frameCursor: null,
       counts: {
         kinds: {
           prompt: 0,
@@ -1384,6 +1386,35 @@ describe("get_run_transcript and subagent chains", () => {
     expect(out.entries.map((e) => e.turn)).toEqual(Array(9).fill(1));
     // Negative: the run's own frames name no subagent.
     expect(out.entries[0]?.subagent).toBeUndefined();
+  });
+
+  it("answers the frame cursor of the run's own last frame, so the stream opens past what the read held (A-06)", async () => {
+    // The Run stream reads the run's own chain. Opened with no cursor it
+    // sent every frame from the first, 200 to a read, before it reached
+    // anything new. The transcript names the last frame it folded instead.
+    const { transcript } = harness(root, undefined, children);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(out.frameCursor).toBe(encodeFrameCursor("4"));
+  });
+
+  it("passes over a subagent's frames spliced in after the run's last frame (negative)", async () => {
+    // The root recorded up to the spawn, and the subagent's chain is spliced
+    // in after it, so the read's last frame is the subagent's seq 3. That seq
+    // names no frame on the run's own chain, and a stream opened there would
+    // skip the root's frames 3 and 4 when they land.
+    const { transcript } = harness(root.slice(0, 3), undefined, children);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(out.entries.at(-1)?.subagent?.sessionUuid).toBe(CHILD);
+    expect(out.frameCursor).toBe(encodeFrameCursor("2"));
+    expect(decodeFrameCursor(out.frameCursor ?? "")).toBe("2");
+  });
+
+  it("answers no frame cursor for a run that recorded no frame (negative)", async () => {
+    const { transcript } = harness([]);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    expect(out.entries).toEqual([]);
+    expect(out.frameCursor).toBeNull();
   });
 
   it("steps: the parent's Task call pairs with its result across the subagent's steps", async () => {

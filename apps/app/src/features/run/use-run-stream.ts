@@ -64,17 +64,27 @@ export type StreamState =
  * Follow one run's frames. `onFrames` fires at most once per COALESCE_MS,
  * after at least one frame has arrived.
  *
+ * The stream opens after `after`, the last frame the reader already holds.
+ * Opened with none, the route sends every frame from the run's first, 200 to
+ * a read, and each batch is a signal to read a tail the reader already has.
+ *
  * The route closes an idle stream with `event: done` and a cursor to resume
  * from; this reopens at that cursor, so a quiet run costs one reconnect every
  * few minutes rather than a connection held open past the platform's ceiling.
  */
 export function useRunStream({
   url,
+  after = null,
   enabled,
   onFrames,
 }: {
   /** The stream route, without a cursor; the hook appends `?after=` when it resumes. */
   url: string;
+  /**
+   * The frame cursor of the last frame the reader holds (a transcript's
+   * `frameCursor`). Null opens the stream at the run's first frame.
+   */
+  after?: string | null;
   enabled: boolean;
   onFrames: () => void;
 }): StreamState {
@@ -85,6 +95,11 @@ export function useRunStream({
   // not tear the stream down and build it again.
   const latest = useRef(onFrames);
   latest.current = onFrames;
+  // Read once, when the stream first opens. Once open, the stream keeps its
+  // own place, and a re-read of the page that moves the reader's cursor must
+  // not tear the connection down to open it again.
+  const openAfter = useRef(after);
+  openAfter.current = after;
 
   const deniedUrl = useRef<string | null>(null);
 
@@ -227,7 +242,7 @@ export function useRunStream({
     }
 
     setState("connecting");
-    open(null);
+    open(openAfter.current);
     return () => {
       stopped = true;
       if (timer !== null) clearTimeout(timer);

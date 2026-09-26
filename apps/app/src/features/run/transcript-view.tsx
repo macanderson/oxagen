@@ -1490,9 +1490,13 @@ export function TranscriptView({
 }: {
   /**
    * `cursor` is set when entries lie past this read: more can be paged in.
-   * `counts` is the whole run's, counted by the server.
+   * `counts` is the whole run's, counted by the server. `frameCursor` is
+   * where the live stream opens.
    */
-  transcript: Pick<RunTranscript, "complete" | "cursor" | "counts">;
+  transcript: Pick<
+    RunTranscript,
+    "complete" | "cursor" | "counts" | "frameCursor"
+  >;
   /** The whole-run transcript's entries at `steps`, at least one. */
   entries: Frames;
   run: TranscriptRun;
@@ -1765,10 +1769,13 @@ export function TranscriptView({
   // A live run reads its tail when the stream says a frame landed. The
   // stream stays open while the viewer is paused: the run keeps recording,
   // and the count beside the transport says how far behind the viewer is.
+  // It opens after the last frame the transcript folded, so it signals only
+  // frames the page has not read.
   const stream = useRunStream({
     url: `/api/v1/${encodeURIComponent(org)}/${encodeURIComponent(
       ws,
     )}/runs/${encodeURIComponent(runId)}/stream`,
+    after: transcript.frameCursor ?? null,
     enabled: live,
     onFrames: () => {
       void loadMore();

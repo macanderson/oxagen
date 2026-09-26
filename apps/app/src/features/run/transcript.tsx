@@ -80,7 +80,12 @@ export function TranscriptSection({
           {t("empty")}
         </p>
         {run.status === "live" ? (
-          <LiveEmptyFollow org={org} ws={ws} runId={runId} />
+          <LiveEmptyFollow
+            org={org}
+            ws={ws}
+            runId={runId}
+            after={read.value.frameCursor ?? null}
+          />
         ) : null}
       </Panel>
     );

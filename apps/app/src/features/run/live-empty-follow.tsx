@@ -11,16 +11,21 @@ import { useRunStream } from "./use-run-stream";
  * this, an empty filter (or a run with no frames yet) renders a static panel
  * and never mounts the player that opens EventSource, so later matching
  * frames never appear. A frame landing re-reads the page so the first
- * matching entry can mount the full player.
+ * matching entry can mount the full player. The stream opens after `after`,
+ * the last frame the page's read folded, so frames the chips hid are not
+ * sent again.
  */
 export function LiveEmptyFollow({
   org,
   ws,
   runId,
+  after = null,
 }: {
   org: string;
   ws: string;
   runId: string;
+  /** The transcript's `frameCursor`; null opens at the run's first frame. */
+  after?: string | null;
 }) {
   const navigate = useNavigate();
   const t = useTranslations("run.transcript");
@@ -28,6 +33,7 @@ export function LiveEmptyFollow({
     url: `/api/v1/${encodeURIComponent(org)}/${encodeURIComponent(
       ws,
     )}/runs/${encodeURIComponent(runId)}/stream`,
+    after,
     enabled: true,
     onFrames: () => {
       navigate.refresh();

@@ -862,6 +862,13 @@ export const runTranscriptGet = registerCapability({
        * it as the whole.
        */
       complete: z.boolean(),
+      /**
+       * The `get_run` frame cursor of the last frame on the run's own chain
+       * that this read folded; null when it folded none. A reader that follows
+       * the run opens its stream after this frame, so the stream sends only
+       * the frames this read did not hold rather than the whole run again.
+       */
+      frameCursor: z.string().nullable().optional(),
       /** The run's entries counted at this zoom, whatever the chips. */
       counts: transcriptCountsSchema.optional(),
       /** The run's figures, whatever the zoom, chips or query. */

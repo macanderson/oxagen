@@ -116,6 +116,58 @@ describe("useRunStream", () => {
     expect(latest().init?.withCredentials).toBe(true);
   });
 
+  it("opens after the last frame the reader holds, so the route does not send the run again (A-06)", () => {
+    // Opened bare, the route sends every frame from the run's first, 200 to
+    // a read: an 8,000-frame run took 40 reads before anything new arrived,
+    // and each batch told the page to read a tail it already had.
+    renderHook(() =>
+      useRunStream({
+        url: URL_UNDER_TEST,
+        after: "ZjozOTk5",
+        enabled: true,
+        onFrames: vi.fn(),
+      }),
+    );
+    expect(opened).toHaveLength(1);
+    expect(latest().url).toBe(`${URL_UNDER_TEST}?after=ZjozOTk5`);
+  });
+
+  it("keeps the stream open when the reader's cursor moves (negative)", () => {
+    // The stream keeps its own place once open. A page re-read that moves the
+    // transcript's cursor must not close the connection and open another.
+    const { rerender } = renderHook(
+      ({ after }: { after: string }) =>
+        useRunStream({
+          url: URL_UNDER_TEST,
+          after,
+          enabled: true,
+          onFrames: vi.fn(),
+        }),
+      { initialProps: { after: "ZjozOTk5" } },
+    );
+    rerender({ after: "Zjo0MDEw" });
+    expect(opened).toHaveLength(1);
+    expect(opened[0]?.closed).toBe(false);
+  });
+
+  it("retries from the reader's cursor when the route failed before it wrote a frame", () => {
+    renderHook(() =>
+      useRunStream({
+        url: URL_UNDER_TEST,
+        after: "ZjozOTk5",
+        enabled: true,
+        onFrames: vi.fn(),
+      }),
+    );
+    act(() => {
+      latest().open();
+      latest().serverError({ code: "stream_unavailable", cursor: null });
+      vi.advanceTimersByTime(1000);
+    });
+    expect(opened).toHaveLength(2);
+    expect(latest().url).toBe(`${URL_UNDER_TEST}?after=ZjozOTk5`);
+  });
+
   it("reports connecting until the route answers, then open", () => {
     const { result } = follow();
     expect(result.current).toBe("connecting");
