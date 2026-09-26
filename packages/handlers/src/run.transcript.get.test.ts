@@ -2990,3 +2990,235 @@ describe("get_run_transcript and a body that cannot be read", () => {
     );
   });
 });
+
+// #3942: the thinking and seal chips select the right entries through the
+// handler, and every chip's count is the whole run's. Each read here starts
+// at the run's first frame, the only read that carries counts (D6 of the live
+// Run page batch), so none of these asserts a count on a cursor page.
+describe("get_run_transcript thinking and seal chips (#3942)", () => {
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c2d0";
+  const blank = { toolName: "", toolStatus: "", toolUseId: "" };
+  const at = (second: number) =>
+    `2026-09-11 09:00:${String(second).padStart(2, "0")}.000`;
+  const model = {
+    kind: "llm_call",
+    ...blank,
+    model: "claude-opus-5",
+    provider: "anthropic",
+  };
+  const root = [
+    tachoRow(0, {
+      kind: "turn_start",
+      ...blank,
+      turnSeq: 1,
+      ...stored("Tighten the retry test."),
+    }),
+    tachoRow(1, {
+      kind: "tool_requested",
+      toolName: "Task",
+      toolStatus: "",
+      toolUseId: "toolu_think",
+      turnSeq: 1,
+    }),
+    tachoRow(2, {
+      kind: "subagent_start",
+      ...blank,
+      toolUseId: "toolu_think",
+      turnSeq: 1,
+    }),
+    tachoRow(3, {
+      kind: "tool_call",
+      toolName: "Task",
+      toolUseId: "toolu_think",
+      turnSeq: 1,
+      ts: at(30),
+    }),
+    // Claude Code's transcript reports the tokens a call spent reasoning.
+    tachoRow(4, {
+      ...model,
+      source: "transcript",
+      turnSeq: 1,
+      ts: at(41),
+      body: JSON.stringify({ thinking_tokens: 12, output_tokens: 40 }),
+      ...stored("Thought it through, then tightened the test."),
+    }),
+    // A call that answered without reasoning (negative).
+    tachoRow(5, {
+      ...model,
+      source: "transcript",
+      turnSeq: 1,
+      ts: at(42),
+      body: JSON.stringify({ thinking_tokens: 0, output_tokens: 8 }),
+      ...stored("Done."),
+    }),
+    // OTel's record carries thinking tokens too, but only the transcript's
+    // split counts (`countsLlmCallSplit`), so this call answers usage and
+    // not thinking (negative).
+    tachoRow(6, {
+      ...model,
+      source: "otel_log",
+      turnSeq: 1,
+      ts: at(43),
+      body: JSON.stringify({ thinking_tokens: 12, output_tokens: 40 }),
+    }),
+    // The chain's own integrity frames, read on the Chain tab (negative).
+    tachoRow(7, { kind: "checkpoint", ...blank, ts: at(44) }),
+    tachoRow(8, { kind: "telemetry_gap", ...blank, ts: at(45) }),
+    // The run's own stop.
+    tachoRow(9, { kind: "agent_stop", ...blank, ts: at(46) }),
+  ];
+  const child = (seq: number, over: Partial<TachoFrameRow>): TachoFrameRow =>
+    tachoRow(seq, {
+      sessionUuid: CHILD,
+      rootSessionUuid: SESSION_UUID,
+      parentSessionUuid: SESSION_UUID,
+      subagentId: "agent-2",
+      subagentType: "Explore",
+      spawnToolUseId: "toolu_think",
+      ts: at(10 + seq),
+      ...over,
+    });
+  const children = [
+    child(0, { kind: "turn_start", ...blank, turnSeq: 1 }),
+    // A subagent that reasoned is thinking of the run's too.
+    child(1, {
+      ...model,
+      source: "transcript",
+      body: JSON.stringify({ thinking_tokens: 5, output_tokens: 20 }),
+      ...stored("Found the flaky test."),
+    }),
+    // A subagent stopping is the subagent's, not the run's (negative).
+    child(2, { kind: "agent_stop", ...blank }),
+  ];
+  const keysOf = (out: { entries: readonly { key?: string }[] }) =>
+    out.entries.map((e) => e.key ?? "").sort();
+
+  it("steps: thinking keeps the model calls that reasoned, on any chain, and nothing else", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const out = await transcript(
+      input({ zoom: "steps", kinds: ["thinking"] }),
+      ctx(),
+    );
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(keysOf(out)).toEqual(["4", `${CHILD}:1`].sort());
+    for (const entry of out.entries) {
+      expect(entry.kinds).toContain("thinking");
+      expect(entry.node).toBe("model");
+    }
+    // The call that reasoned carries its reply, so the chip draws its words.
+    expect(out.entries.find((e) => e.key === "4")?.response?.text).toBe(
+      "Thought it through, then tightened the test.",
+    );
+    // Negative: the call that did not reason, and the OTel record whose
+    // thinking tokens are not counted, answer other chips.
+    const all = await transcript(input({ zoom: "steps" }), ctx());
+    const kindsOf = (key: string) =>
+      all.entries.find((e) => e.key === key)?.kinds ?? [];
+    expect(kindsOf("5")).toEqual(expect.arrayContaining(["responses"]));
+    expect(kindsOf("5")).not.toContain("thinking");
+    expect(kindsOf("6")).toContain("usage");
+    expect(kindsOf("6")).not.toContain("thinking");
+  });
+
+  it("steps: seal keeps the run's own stop and nothing else", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const out = await transcript(
+      input({ zoom: "steps", kinds: ["seal"] }),
+      ctx(),
+    );
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(out.entries.map((e) => [e.key, e.node, e.quiet])).toEqual([
+      ["9", "seal", false],
+    ]);
+    expect(out.entries[0]?.subagent).toBeUndefined();
+    // Negative: the subagent's stop, the checkpoint and the gap answer no
+    // seal on the unfiltered read either.
+    const all = await transcript(input({ zoom: "steps" }), ctx());
+    expect(
+      all.entries.filter((e) => e.kinds.includes("seal")).map((e) => e.key),
+    ).toEqual(["9"]);
+  });
+
+  it("everything: the two chips select the same frames, and the chain's own frames answer no chip", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const thinking = await transcript(
+      input({ zoom: "everything", kinds: ["thinking"] }),
+      ctx(),
+    );
+    expect(keysOf(thinking)).toEqual(["4", `${CHILD}:1`].sort());
+    const seal = await transcript(
+      input({ zoom: "everything", kinds: ["seal"] }),
+      ctx(),
+    );
+    expect(seal.entries.map((e) => [e.key, e.type])).toEqual([
+      ["9", "agent_stop"],
+    ]);
+    const all = await transcript(input({ zoom: "everything" }), ctx());
+    for (const type of ["checkpoint", "telemetry_gap"]) {
+      expect(all.entries.find((e) => e.type === type)?.kinds).toEqual([]);
+    }
+    expect(all.counts?.kinds).toMatchObject({ thinking: 2, seal: 1 });
+  });
+
+  it("counts both chips over the whole run, whatever the chips, the query or the page size", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const all = await transcript(input({ zoom: "steps" }), ctx());
+    expect(all.counts?.kinds.thinking).toBe(2);
+    expect(all.counts?.kinds.seal).toBe(1);
+    // Every read below starts at the run's first frame, so each carries the
+    // whole run's counts, however little of it the page holds.
+    for (const over of [
+      { kinds: ["thinking"] },
+      { kinds: ["seal"] },
+      { kinds: ["tools"] },
+      { query: "tightened" },
+      { limit: 1 },
+    ]) {
+      const out = await transcript(input({ zoom: "steps", ...over }), ctx());
+      expect(out.counts).toEqual(all.counts);
+    }
+  });
+
+  it("ledger run: seal keeps the event that closes the attempt and nothing else", async () => {
+    const events = [
+      event(1),
+      event(2, {
+        eventType: "terminal.attempt_terminated",
+        stage: "terminal",
+        payload: { terminal_status: "completed" },
+      }),
+    ];
+    const stores = memoryStores(
+      [ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID })],
+      [],
+    );
+    const transcript = createRunTranscriptGetHandler({
+      queries: stores.queries,
+      store: {
+        getRunByPublicId: (id) =>
+          Promise.resolve(id === LEDGER_ID ? summary() : null),
+        readAttemptEventsSince: memoryEvents(events),
+      },
+      readRunRollups: stores.readRunRollups,
+      readWitnessFor: stores.readWitnessFor,
+      tachoFrames: memoryTachoFrames(SESSION_UUID, []),
+      bodies: {
+        getBody: () => Promise.reject(new Error("no bodies in this test")),
+        getAssembly: () => Promise.resolve(null),
+      },
+      priceBook: () => Promise.resolve([]),
+    });
+    const out = await transcript(
+      runTranscriptGet.input.parse({
+        runId: LEDGER_ID,
+        zoom: "steps",
+        kinds: ["seal"],
+      }),
+      ctx(),
+    );
+    expect(out.entries.map((e) => [e.key, e.node])).toEqual([["2", "seal"]]);
+    expect(out.counts?.kinds.seal).toBe(1);
+    // Negative: the tool call answers tools, not seal.
+    expect(out.counts?.kinds.tools).toBe(1);
+  });
+});
