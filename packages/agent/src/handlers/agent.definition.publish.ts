@@ -1,14 +1,19 @@
 import { definitionBudget } from "@oxagen/oxagen/agent-definition-source";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { withTenantDb, schema } from "@oxagen/database";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { computeConfigChecksum } from "@oxagen/oxagen/interactive-agent";
 import type {
   AgentDefinitionPublishInput,
   AgentDefinitionPublishOutput,
 } from "@oxagen/oxagen/contracts/agent.definition.publish";
 import type { CapabilityContext } from "../types";
-import { resolveAgent, assertAgentMutable } from "./_agent-definition";
+import {
+  resolveAgent,
+  assertAgentMutable,
+  assertAgentNotRetired,
+  agentRetiredError,
+} from "./_agent-definition";
 
 export type { AgentDefinitionPublishInput, AgentDefinitionPublishOutput };
 
@@ -16,6 +21,9 @@ export type { AgentDefinitionPublishInput, AgentDefinitionPublishOutput };
  * Publish a version: mark it isPublished, stamp a deterministic checksum over
  * its config, and point the agent's activeVersionId at it. Publishing the same
  * version twice is rejected — a published version is immutable.
+ *
+ * Publishing sets the agent's `status` to `active`. The handler refuses a
+ * retired agent before any write, so a publish cannot bring one back.
  */
 export async function agentDefinitionPublishHandler(
   input: AgentDefinitionPublishInput,
@@ -32,6 +40,7 @@ export async function agentDefinitionPublishHandler(
       throw new Error(`Agent "${input.agentId}" not found in this workspace`);
     }
     assertAgentMutable(agent);
+    assertAgentNotRetired(agent);
 
     // Resolve target version: explicit number, else latest.
     const targetVersion =
@@ -92,7 +101,7 @@ export async function agentDefinitionPublishHandler(
       .set({ isPublished: true, checksum })
       .where(eq(schema.agentVersions.id, version.id));
 
-    await tx
+    const [activated] = await tx
       .update(schema.agents)
       .set({
         activeVersionId: version.id,
@@ -103,8 +112,14 @@ export async function agentDefinitionPublishHandler(
         and(
           eq(schema.agents.id, agent.id),
           eq(schema.agents.workspaceId, ctx.workspaceId),
+          ne(schema.agents.status, "archived"),
         ),
-      );
+      )
+      .returning({ id: schema.agents.id });
+    // A `retire_agent` that commits after the guard above read the row leaves
+    // it archived, so the update matches nothing. Throwing rolls back the
+    // version write too.
+    if (!activated) throw agentRetiredError(agent.slug);
 
     return {
       agentId: agent.publicId,

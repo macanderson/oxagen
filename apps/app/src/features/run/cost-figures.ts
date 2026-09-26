@@ -81,6 +81,20 @@ export function classPrices(
   };
 }
 
+/**
+ * The share of input tokens the run wrote to the cache:
+ * (cache_write_5m + cache_write_1h) ÷ (input_uncached + cache_read +
+ * cache_write_5m + cache_write_1h). The cache hit rate leaves writes out of
+ * its denominator, so a run that rebuilt its cache again and again can still
+ * read a high hit rate. This share is where the rebuild shows. Null with no
+ * input token.
+ */
+export function cacheRebuildShare(tokens: TokenFigures | null): number | null {
+  if (tokens === null || tokens.input === 0) return null;
+  const { byClass } = tokens;
+  return (byClass.cache_write_5m + byClass.cache_write_1h) / tokens.input;
+}
+
 /** A class's cost as a share of the total; null when either has no recorded cost. */
 export function classShare(
   priced: PricedClasses | null,

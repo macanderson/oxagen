@@ -19,7 +19,7 @@ Mint the single-use enrollment token a machine presents to `enroll_host` to beco
 
 | Field | Type | Required | Constraint |
 |---|---|---|---|
-| `agentId` | string | yes | `agt_…`, a live agent in this workspace |
+| `agentId` | string | yes | `agt_…`, an agent in this workspace that is neither deleted nor retired |
 | `ttlMinutes` | integer | no | 1-60, default 30 |
 
 ## Output
@@ -35,7 +35,7 @@ Mint the single-use enrollment token a machine presents to `enroll_host` to beco
 
 ## Refusals
 
-`forbidden: no_principal` / `org_role_required`; `not_found: agent_not_found`.
+`forbidden: no_principal` / `org_role_required`; `not_found: agent_not_found`; `conflict: agent_retired` (the agent is retired, so no machine can enroll as it, and the handler writes no token).
 
 ## Honesty
 

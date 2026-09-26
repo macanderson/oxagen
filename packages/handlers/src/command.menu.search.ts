@@ -25,7 +25,7 @@ import type {
   SearchableKind,
 } from "@oxagen/oxagen/contracts/command.menu.search";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, eq, ilike, isNull, ne, or } from "drizzle-orm";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { logger } from "./logger";
 
@@ -105,6 +105,8 @@ async function searchAgents(
           eq(schema.agents.orgId, orgId),
           eq(schema.agents.workspaceId, workspaceId),
           isNull(schema.agents.deletedAt),
+          // Treat a retired agent as a deleted record, so the menu never offers it.
+          ne(schema.agents.status, "archived"),
           query.trim()
             ? or(
                 ilike(schema.agents.name, `%${query}%`),

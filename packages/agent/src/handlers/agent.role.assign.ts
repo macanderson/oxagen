@@ -10,6 +10,7 @@
 //      non-enterprise org, so the handler checks (INV-29).
 // Then, in one tenant-scoped transaction (guards and the write are atomic):
 //   3. Resolve the agent (workspace-scoped) and its delegated principal.
+//      Refuse a retired agent with `agent_retired`.
 //   4. Resolve the role by NAME (seeding is decoupled — spec §3.2).
 //   5. Assignability gate: system agent roles only among system roles.
 //   6. No tier gate (ADR-069). Custom roles were enterprise-only here, via the
@@ -52,6 +53,7 @@ import {
   resolveAgentForRoles,
   resolveRoleByName,
 } from "./_agent-role";
+import { assertAgentNotRetired } from "./_agent-definition";
 
 export type { AgentRoleAssignInput, AgentRoleAssignOutput };
 
@@ -83,6 +85,9 @@ export async function agentRoleAssignHandler(
       input.agentId,
       ctx.workspaceId,
     );
+    // A retired agent takes no new role. `revoke_agent_role` still removes
+    // one from it.
+    assertAgentNotRetired(agent);
     if (!agent.principalId) throw new AgentPrincipalMissingError(input.agentId);
     const principalId = agent.principalId;
 

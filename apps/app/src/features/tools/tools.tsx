@@ -74,10 +74,12 @@ function canGrantMandates(ctx: WsCtx): boolean {
 }
 
 /**
- * What the grant dialog's picker offers, from one page of `list_agents`. A
- * retired identity is left out and remembered, so its requested drafts are
- * offered no Grant: retirement suspends the principal, and a mandate granted
- * after it can never be drawn. A read with a next page is marked partial.
+ * What the grant dialog's picker offers, from one page of `list_agents`. The
+ * read leaves retired identities out (#4332), and `grant_mandate` refuses one
+ * with `agent_retired`. A retired row that still arrives is left out and
+ * remembered, so its requested drafts are offered no Grant: retirement
+ * suspends the principal, and a mandate granted after it can never be drawn.
+ * A read with a next page is marked partial.
  */
 function grantableAgents(read: Read<AgentPage>): LedgerGrant {
   if (!read.ok) return { agents: { ok: false }, retired: new Set() };

@@ -90,11 +90,21 @@ async function worktreeFingerprint(
   return JSON.stringify([records, stats]);
 }
 
-/** Snapshot bytes describe the observed tree, including changes present before the run. */
+/**
+ * Snapshot bytes describe the observed tree against `baseline`.
+ *
+ * `paths`, when given, are the repo-relative paths the reconciliation beside
+ * this snapshot reports, and the patch covers those and nothing else. Without
+ * it the patch held every difference from the baseline, so after a pull it
+ * carried every upstream file the reconciliation had left out (ADR-188).
+ * Without `paths`, as for a session measured the old way, the patch still
+ * includes changes present before the run.
+ */
 export async function readWorktreeSnapshot(
   exec: ExecAsync,
   cwd: string,
   baseline?: string,
+  paths?: readonly string[],
 ): Promise<WorktreeSnapshot | undefined> {
   let directory = cwd;
   const read = async (
@@ -154,8 +164,10 @@ export async function readWorktreeSnapshot(
     patch += bytes.subarray(0, remaining).toString("utf8");
     remaining = Math.max(0, remaining - bytes.length);
   };
+  const reported = paths === undefined ? undefined : new Set(paths);
   // Disable external diff programs and textconv from repository configuration.
-  if (base)
+  if (!base) limitations.push("baseline_not_recorded");
+  else if (reported === undefined || reported.size > 0)
     append(
       await read([
         "diff",
@@ -166,14 +178,17 @@ export async function readWorktreeSnapshot(
         "--dst-prefix=b/",
         base,
         "--",
+        // `:(literal)`, so a path holding `*` or `?` names itself.
+        ...[...(reported ?? [])].map((path) => `:(literal)${path}`),
       ]),
     );
-  else limitations.push("baseline_not_recorded");
-  const paths = untracked?.split("\0").filter(Boolean) ?? [];
+  const untrackedPaths = (untracked?.split("\0").filter(Boolean) ?? []).filter(
+    (path) => reported === undefined || reported.has(path),
+  );
   if (untracked === undefined) limitations.push("untracked_read_failed");
-  if (paths.length > WORKTREE_UNTRACKED_MAX)
+  if (untrackedPaths.length > WORKTREE_UNTRACKED_MAX)
     limitations.push("untracked_file_limit");
-  for (const path of paths.slice(0, WORKTREE_UNTRACKED_MAX)) {
+  for (const path of untrackedPaths.slice(0, WORKTREE_UNTRACKED_MAX)) {
     if (remaining === 0) {
       limitations.push("untracked_content_omitted");
       break;
