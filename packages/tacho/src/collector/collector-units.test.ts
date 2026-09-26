@@ -1055,6 +1055,43 @@ describe("shipper", () => {
       expect(wal.stats().unshipped).toBe(0);
     });
 
+    // An accepted batch for the session used to clear its entry. Bisection
+    // ships the frames between two refused frames as an accepted half, so
+    // the second refused frame started a new hour's wait.
+    it("keeps when a session was first parked across an accepted frame between two refused ones", async () => {
+      const paths = scratchPaths();
+      const wal = new Wal(paths.wal);
+      const early = distinctSession("refused-around-one");
+      wal.append(early);
+      const refused = new Set(
+        [early[2], early[4]].map((e) => (e as TachoEvent).event_id_idem),
+      );
+      const accepted: string[] = [];
+      const client = {
+        ingest: async (batch: TachoEvent[]) => {
+          if (batch.some((e) => refused.has(e.event_id_idem)))
+            throw new ControlError(
+              409,
+              '{"code":"conflict","reason":"root_session_unrecorded"}',
+            );
+          accepted.push(...batch.map((e) => e.event_id_idem));
+          return okResponse(batch);
+        },
+      };
+      let clock =
+        Date.parse((early[4] as TachoEvent).ts) + PARKED_EVENT_MAX_AGE_MS;
+      const { s } = shipper(wal, client, paths.quarantine, () => clock);
+      await s.drain();
+      const giveUpAt = clock + PARKED_SESSION_MIN_WAIT_MS;
+      while (clock < giveUpAt) {
+        clock += 10 * 60_000;
+        await s.drain();
+      }
+      expect(accepted).toContain((early[3] as TachoEvent).event_id_idem);
+      expect(quarantined(paths.quarantine)).toHaveLength(2);
+      expect(wal.stats().unshipped).toBe(0);
+    });
+
     it("keeps parking an event younger than the age bound (negative)", async () => {
       const t = refusedAtThird("root_session_unrecorded");
       let clock = Date.parse(t.refused.ts) + 60_000;

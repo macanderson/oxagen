@@ -288,13 +288,18 @@ export class Shipper {
    */
   private readonly foreignSessions = new Set<string>();
   /**
-   * Sessions left out of batches until a time, with the wait that set it and
-   * when the session was first parked: a subagent chain whose root has not
-   * landed. In memory only; a restart finds each one again with one refusal.
+   * Sessions left out of batches until a time, with the wait that set it,
+   * when the session was first parked, and the event the control plane
+   * refused: a subagent chain whose root has not landed. An entry clears only
+   * when a batch holding that event is accepted. Frames of the session that
+   * ship around it, such as the accepted half of a bisection, leave it, so
+   * the session's next refused frame does not start a new hour's wait. After
+   * a quarantine the entry names no event and stays for the life of the
+   * process. In memory only; a restart finds each one again with one refusal.
    */
   private readonly parkedSessions = new Map<
     string,
-    { until: number; waitMs: number; since: number }
+    { until: number; waitMs: number; since: number; eventId?: string }
   >();
   /** Events quarantined since the last batch the control plane accepted. */
   private consecutiveQuarantines = 0;
@@ -742,8 +747,10 @@ export class Shipper {
       this.markShipped(batch);
       this.succeed();
       this.consecutiveQuarantines = 0;
-      for (const session of new Set(batch.map((e) => e.session_uuid)))
-        this.parkedSessions.delete(session);
+      const accepted = new Set(batch.map((e) => e.event_id_idem));
+      for (const [session, parked] of this.parkedSessions)
+        if (parked.eventId !== undefined && accepted.has(parked.eventId))
+          this.parkedSessions.delete(session);
       if (response.chain_breaks.length > 0)
         this.options.onChainBreak?.(response.chain_breaks);
       if (
@@ -844,8 +851,7 @@ export class Shipper {
           // is not going to. The event goes to quarantine with its body, and
           // the session's later frames ship behind it. The session keeps
           // when it was first parked, so its next refused frame past the age
-          // bound goes to quarantine without another hour's wait. An
-          // accepted batch for the session clears the entry.
+          // bound goes to quarantine without another hour's wait.
           this.parkedSessions.set(session, {
             until: now,
             waitMs: previous?.waitMs ?? PARKED_SESSION_MIN_MS,
@@ -866,6 +872,7 @@ export class Shipper {
           until: now + waitMs,
           waitMs,
           since,
+          eventId: head.event_id_idem,
         });
         this.options.log(
           `session ${session} waits ${String(Math.round(waitMs / 1000))}s before it is sent again (${String(error.status)}); other sessions keep shipping`,
