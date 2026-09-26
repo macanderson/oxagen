@@ -32,7 +32,7 @@ to, add or drop a wrapper, and unenroll. Spec: `docs/specs/oxagen-desktop/spec.h
 | Sidecar bridge (`run_sidecar`) | boundary | `apps/desktop/src/bridge.ts`, `apps/desktop/src-tauri/src/sidecar.rs` | Every panel action. The Rust shell runs only the commands on its allowlist, with an environment it sets. `src-tauri/sidecar-calls.json` lists one of each argv `commands.ts` builds, and both test suites read it. `externalBin` in `src-tauri/tauri.conf.json` lists `binaries/tacho` and `binaries/oxagen` |
 | Panel-to-argv mapping and the `Harness` union | boundary | `apps/desktop/src/commands.ts` | `apps/desktop/src/app.tsx`. The union must track `WRAPPED_HARNESSES` in `packages/tacho/src/wire.ts` plus `claude-desktop` (ADR-101) |
 | Opener and updater permissions | boundary | `apps/desktop/src-tauri/capabilities/default.json` | Tauri, at runtime. The page holds no shell permission |
-| Close guard | boundary | `apps/desktop/src-tauri/src/activity.rs` | A close or a Quit while a sidecar or a write runs hides the window, and the app exits when the work ends |
+| Close guard | boundary | `apps/desktop/src-tauri/src/activity.rs` | A close or a Quit while a command that writes files runs hides the window, and the app exits when the work ends. A second Quit exits at once. Sign-in and a first run hold nothing. On macOS the Dock's Quit and a logout skip it |
 | User-scoped API calls (`USER_ROUTES`) | boundary | `apps/desktop/src-tauri/src/lib.rs` | The Workspace panel. Served by `apps/api/src/app.ts` |
 | Release feed (`latest.json`) | boundary | `apps/desktop/src-tauri/tauri.conf.json` (`plugins.updater.endpoints`) | `apps/desktop/src/updater.ts` |
 

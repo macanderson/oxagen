@@ -171,40 +171,78 @@ describe("the window", () => {
     expect(bridge.connectRun).toHaveBeenCalledTimes(2);
   });
 
-  // Audit D-11: the Rust shell holds a close while the page is busy.
-  it("tells the Rust shell when an action starts and when it ends", async () => {
-    let finish: (result: ConnectResult) => void = () => undefined;
-    bridge.connectRun.mockImplementation(
+  /** The window as an older copy of this app left it: Re-apply is offered. */
+  const olderSetup: DesktopState = {
+    ...machine,
+    host: {
+      ...host,
+      wrapper_version: "2.1.0",
+      hook_command: `${machine.bin_dir}/tacho hook`,
+    },
+  };
+
+  // Audit D-11: the Rust shell holds a close while the page changes the
+  // machine.
+  it("tells the Rust shell when an action that changes the machine starts and ends", async () => {
+    let finish: (result: { code: number }) => void = () => undefined;
+    bridge.runSidecar.mockImplementation(
       () =>
-        new Promise<ConnectResult>((resolve) => {
-          finish = resolve;
+        new Promise((resolve) => {
+          finish = (result) => resolve({ ...result, stdout: "", stderr: "" });
         }),
     );
-    const button = await renderEnrolled();
+    bridge.readState.mockResolvedValue(olderSetup);
+    render(<App />);
+    const button = await screen.findByRole("button", { name: "Re-apply" });
     expect(bridge.reportBusy).toHaveBeenLastCalledWith(false);
     await act(async () => {
       button.click();
     });
     expect(bridge.reportBusy).toHaveBeenLastCalledWith(true);
     await act(async () => {
-      finish({ ok: true, seq: 6, detail: "chained" });
+      finish({ code: 0 });
     });
     expect(bridge.reportBusy).toHaveBeenLastCalledWith(false);
+  });
+
+  // Audit D-11 review: a first run and a sign-in held a close too, so a Quit
+  // hid the window and the app ran on for as long as they waited.
+  it("holds no close while a first run waits", async () => {
+    bridge.connectRun.mockImplementation(() => new Promise(() => undefined));
+    const button = await renderEnrolled();
+    await act(async () => {
+      button.click();
+    });
+    expect(bridge.connectRun).toHaveBeenCalledTimes(1);
+    expect(bridge.reportBusy).not.toHaveBeenCalledWith(true);
+  });
+
+  it("holds no close while a sign-in waits for the browser", async () => {
+    bridge.runSidecar.mockImplementation(() => new Promise(() => undefined));
+    bridge.readState.mockResolvedValue({
+      ...machine,
+      config: { ...machine.config, logged_in: false },
+      host: null,
+      daemon: null,
+    });
+    render(<App />);
+    const button = await screen.findByRole("button", { name: "Sign in" });
+    await act(async () => {
+      button.click();
+    });
+    expect(bridge.runSidecar).toHaveBeenCalledWith(
+      "oxagen",
+      ["login", "--browser"],
+      expect.any(Function),
+    );
+    expect(bridge.reportBusy).not.toHaveBeenCalledWith(true);
   });
 
   // #4318 item 6: Re-apply wrote its argv inline, a bare `tacho enroll`
   // that no builder made, so the fixture the Rust allowlist is tested
   // against never held it, and the allowlist refused the button's call.
   it("re-applies the tools with a call the Rust allowlist's fixture holds", async () => {
-    bridge.readState.mockResolvedValue({
-      ...machine,
-      // Set up by an older copy of this app, so the window offers Re-apply.
-      host: {
-        ...host,
-        wrapper_version: "2.1.0",
-        hook_command: `${machine.bin_dir}/tacho hook`,
-      },
-    });
+    bridge.readState.mockResolvedValue(olderSetup);
     render(<App />);
     const button = await screen.findByRole("button", { name: "Re-apply" });
     await act(async () => {
@@ -316,5 +354,73 @@ describe("the setup wizard's agent step", () => {
     expect(
       screen.getByText("the editor · /Applications/Cursor.app"),
     ).toBeTruthy();
+  });
+
+  // #3367 review: a Cursor registered without its command line went on to
+  // `tacho verify`, which failed with "cursor-agent is not on PATH".
+  it("leaves a Cursor with no command line out of the first run", async () => {
+    await scanWith({
+      enrolled: false,
+      harnesses: [
+        {
+          harness: "claude-code",
+          label: "Claude Code",
+          installed: true,
+          path: "/usr/local/bin/claude",
+          foundVia: "cli",
+          enrolled: false,
+        },
+        {
+          harness: "cursor",
+          label: "Cursor",
+          installed: false,
+          enrolled: false,
+          coverableWhenAbsent: note,
+        },
+      ],
+    });
+    await act(async () => {
+      checkbox("cursor").click();
+    });
+    // The enroll succeeds, and the next read finds the host it wrote.
+    bridge.runSidecar.mockImplementation(async () => {
+      bridge.readState.mockResolvedValue({
+        ...machine,
+        host: { ...host, harnesses: ["claude-code", "cursor"] },
+      });
+      return { code: 0, stdout: "", stderr: "" };
+    });
+    await act(async () => {
+      screen
+        .getByRole("button", {
+          name: "Yes, register Claude Code and Cursor with Oxagen",
+        })
+        .click();
+    });
+    expect(bridge.runSidecar).toHaveBeenCalledWith(
+      "tacho",
+      expect.arrayContaining(["enroll", "--harness", "claude-code,cursor"]),
+      expect.any(Function),
+    );
+    const next = await screen.findByRole("button", { name: "Continue" });
+    await act(async () => {
+      next.click();
+    });
+    await screen.findByText("reports when you use the editor");
+    expect(document.getElementById("run-cursor")).toBeNull();
+    expect(
+      (document.getElementById("run-claude-code") as HTMLInputElement).checked,
+    ).toBe(true);
+    bridge.connectRun.mockResolvedValue({ ok: true, seq: 6, detail: "" });
+    await act(async () => {
+      screen
+        .getByRole("button", { name: "Yes, run the connect prompt" })
+        .click();
+    });
+    expect(bridge.connectRun).toHaveBeenCalledTimes(1);
+    expect(bridge.connectRun).toHaveBeenCalledWith(
+      "claude-code",
+      expect.any(Function),
+    );
   });
 });

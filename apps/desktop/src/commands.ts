@@ -107,6 +107,45 @@ export function verifiable(harnesses: readonly Harness[]): Harness[] {
   return harnesses.filter(isWrapped);
 }
 
+/**
+ * Whether the scan found this wrapped agent without a command line to prompt.
+ * `tacho verify` runs the agent's CLI headless, so a Cursor found only as the
+ * editor, or registered although the scan did not find it (`registrable`),
+ * has nothing to drive: verify fails with "cursor-agent is not on PATH". Its
+ * hooks file still records every session the editor runs, so it reports the
+ * first time the person uses it. False with no scan to read, after a
+ * relaunch: a failed first run then says what is missing.
+ */
+export function withoutCommandLine(
+  harness: Harness,
+  detected: ReadonlyArray<{ harness: string; foundVia?: "cli" | "app" }> | null,
+): boolean {
+  const row = detected?.find((d) => d.harness === harness);
+  return isWrapped(harness) && row !== undefined && row.foundVia !== "cli";
+}
+
+/**
+ * The agents a first run can drive: the wrapped ones (`verifiable`) that the
+ * last scan found as a command line.
+ */
+export function drivable(
+  harnesses: readonly Harness[],
+  detected: ReadonlyArray<{ harness: string; foundVia?: "cli" | "app" }> | null,
+): Harness[] {
+  return verifiable(harnesses).filter((h) => !withoutCommandLine(h, detected));
+}
+
+/**
+ * Whether the page's busy state holds a close or a Quit until the action
+ * ends (see `reportBusy`). An action that changes the machine does. Signing
+ * in and a first run do not: `oxagen login` writes one file with a rename and
+ * `tacho verify` writes none, so stopping either leaves nothing half written,
+ * and a sign-in can wait five minutes for the browser.
+ */
+export function busyHoldsClose(busy: string | null): boolean {
+  return busy !== null && !["signin", "signup", "connect"].includes(busy);
+}
+
 /** Whether a harness is connected through the local MCP gateway. */
 export function isConnected(harness: Harness): boolean {
   return HARNESS_TIER[harness] === "gateway";

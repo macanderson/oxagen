@@ -296,6 +296,89 @@ fn log_tail(lines: usize) -> String {
     machine::tail_lines(&tacho_root().join("tachod.log"), lines, 256 * 1024)
 }
 
+/// The tray's items and the macOS app menu's Quit, in one handler. Tauri
+/// hands every menu event to every global listener, so a second handler for
+/// `quit` would ask for the exit twice, and the second ask exits at once
+/// (see `activity::State::request_exit`).
+fn on_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
+    match event.id.as_ref() {
+        "open" => {
+            // The person is back: a close that was waiting for work to end no
+            // longer quits the app.
+            app.state::<Activity>().cancel_exit();
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }
+        // `app.exit` raises `RunEvent::ExitRequested`, which the close guard
+        // holds while work runs.
+        "quit" => app.exit(0),
+        _ => {}
+    }
+}
+
+/// The macOS app menu: Tauri's default one, with a Quit of the app's own.
+/// The default menu's Quit sends `terminate:`, which tao turns into an exit
+/// with no `ExitRequested` first, so Cmd+Q stopped a running `tacho` between
+/// two writes (audit D-11). This Quit has the id the tray's Quit has.
+#[cfg(target_os = "macos")]
+fn macos_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
+    use tauri::menu::{AboutMetadata, PredefinedMenuItem, Submenu};
+    let name = app.package_info().name.clone();
+    let about = AboutMetadata {
+        name: Some(name.clone()),
+        version: Some(app.package_info().version.to_string()),
+        copyright: app.config().bundle.copyright.clone(),
+        ..Default::default()
+    };
+    let quit = MenuItem::with_id(app, "quit", format!("Quit {name}"), true, Some("CmdOrCtrl+Q"))?;
+    let app_menu = Submenu::with_items(
+        app,
+        &name,
+        true,
+        &[
+            &PredefinedMenuItem::about(app, None, Some(about))?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::services(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::hide(app, None)?,
+            &PredefinedMenuItem::hide_others(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &quit,
+        ],
+    )?;
+    // Cut, copy and paste in the page's fields need the Edit menu's items.
+    let edit = Submenu::with_items(
+        app,
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(app, None)?,
+            &PredefinedMenuItem::redo(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::cut(app, None)?,
+            &PredefinedMenuItem::copy(app, None)?,
+            &PredefinedMenuItem::paste(app, None)?,
+            &PredefinedMenuItem::select_all(app, None)?,
+        ],
+    )?;
+    // Close Window asks the window to close, which the close guard sees.
+    let window = Submenu::with_items(
+        app,
+        "Window",
+        true,
+        &[
+            &PredefinedMenuItem::minimize(app, None)?,
+            &PredefinedMenuItem::maximize(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::close_window(app, None)?,
+        ],
+    )?;
+    Menu::with_items(app, &[&app_menu, &edit, &window])
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Before any sidecar is spawned, and before any thread exists: a durable
@@ -307,7 +390,11 @@ pub fn run() {
     // Before any sidecar can create `~/.config`, so Uninstall knows whether
     // the person had one already. See `cli_install::record_config_dir`.
     let _ = cli_install::record_config_dir(&machine::Roots::real());
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(macos_menu);
+    builder
+        .on_menu_event(on_menu_event)
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -319,24 +406,11 @@ pub fn run() {
             let open = MenuItem::with_id(app, "open", "Open Oxagen", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Oxagen", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &quit])?;
+            // Its events go to `on_menu_event`.
             let mut tray = TrayIconBuilder::new()
                 .menu(&menu)
                 .show_menu_on_left_click(true)
-                .tooltip("Oxagen")
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "open" => {
-                        // The person is back: a close that was waiting for
-                        // work to end no longer quits the app.
-                        app.state::<Activity>().cancel_exit();
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.unminimize();
-                            let _ = window.set_focus();
-                        }
-                    }
-                    "quit" => app.exit(0),
-                    _ => {}
-                });
+                .tooltip("Oxagen");
             if let Some(icon) = app.default_window_icon() {
                 tray = tray.icon(icon.clone());
             }
@@ -380,8 +454,8 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building the Oxagen desktop app")
         .run(|app, event| {
-            // The tray's Quit, and the last window closing, while work runs:
-            // the same as a close.
+            // The tray's Quit, the macOS app menu's Quit and Cmd+Q, and the
+            // last window closing, while work runs: the same as a close.
             if let RunEvent::ExitRequested { api, .. } = &event {
                 if app.state::<Activity>().request_exit() == ExitDecision::WhenIdle {
                     api.prevent_exit();

@@ -85,10 +85,12 @@ import {
   reassignArgs,
   registrable,
   isConnected,
+  busyHoldsClose,
+  drivable,
+  withoutCommandLine,
   type SessionView,
   sessionLanded,
   unenrollArgs,
-  verifiable,
   wizardStep,
   workspaceUrl,
 } from "./commands";
@@ -270,9 +272,10 @@ export function App() {
   // rewriting, and its transient failure replaced the action's own error.
   const busyRef = useRef(false);
   // The Rust shell holds a close or a Quit until the running action ends, so
-  // closing the window never stops `tacho` between two file writes.
+  // closing the window never stops `tacho` between two file writes. A sign-in
+  // or a first run holds nothing: see `busyHoldsClose`.
   useEffect(() => {
-    void reportBusy(busy !== null);
+    void reportBusy(busyHoldsClose(busy));
   }, [busy]);
   // Set by a tick that wants `tacho status`, cleared by the read that asks
   // it. A tick that joins a plain read already out leaves it set, so the
@@ -666,8 +669,9 @@ export function App() {
           ok: true,
           detail: `Registered ${joinLabels(chosen)} with Oxagen.`,
         });
-        // Only the wrapped ones: `tacho verify` cannot drive a connected app.
-        setRunPicks(verifiable(chosen));
+        // Only the ones `tacho verify` can drive: never a connected app, and
+        // never a Cursor the scan found without its command line.
+        setRunPicks(drivable(chosen, detected?.harnesses ?? null));
       },
       (result) => {
         const lines = result.stderr.trim().split("\n").filter(Boolean);
@@ -682,9 +686,12 @@ export function App() {
   };
 
   async function runConnect(only?: Harness[]) {
-    // `verifiable` again at the call site, not only where runPicks is set: a
+    // `drivable` again at the call site, not only where runPicks is set: a
     // connected app must never reach `tacho verify`, whichever path asked.
-    const picks = verifiable(only ?? runPicks ?? hostHarnesses);
+    const picks = drivable(
+      only ?? runPicks ?? hostHarnesses,
+      detected?.harnesses ?? null,
+    );
     if (picks.length === 0) return;
     // The same guard as `act`: a second click that lands before React has
     // disabled the button must not start a second verify loop beside the
@@ -1120,7 +1127,10 @@ export function App() {
   const stepClass = (n: number) =>
     `step ${step === n ? "active" : step > n ? "done" : "todo"}`;
   const stepMark = (n: number) => (step > n ? "✓" : String(n));
-  const runList = verifiable(runPicks ?? hostHarnesses);
+  const runList = drivable(
+    runPicks ?? hostHarnesses,
+    detected?.harnesses ?? null,
+  );
 
   // ── First run: the wizard ────────────────────────────────────────────────
   const wizard = (
@@ -1433,16 +1443,18 @@ export function App() {
                 <p className="sub">
                   {runList.length > 0
                     ? `Oxagen sends each wrapped agent one small prompt ("reply OK") and confirms the run was recorded and sealed. That is your first data in the workspace.`
-                    : `Nothing here to drive: every app you registered is a connected app, which Oxagen governs through its own MCP gateway rather than through a hook. There is no headless prompt to send one. It reports the first time you use it. Open the workspace and watch it arrive.`}
+                    : `Nothing here to drive. A first run sends one prompt through an agent's command line, and no agent you registered has one here. A connected app reports through Oxagen's MCP gateway, and the Cursor editor through ~/.cursor/hooks.json. Each reports the first time you use it. Open the workspace and watch it arrive.`}
                 </p>
                 <div className="agents">
                   {hostHarnesses.map((h) => (
                     <div key={h} className="agent">
-                      {isConnected(h) ? (
-                        // Registered, so it shows; not verifiable, so it gets
+                      {isConnected(h) ||
+                      withoutCommandLine(h, detected?.harnesses ?? null) ? (
+                        // Registered, so it shows; not drivable, so it gets
                         // no checkbox. `tacho verify` returns ok:false for a
-                        // connected app by design — offering it as a target
-                        // reported a failure for something that cannot succeed.
+                        // connected app by design, and for a Cursor with no
+                        // command line: offering either as a target reported
+                        // a failure for something that cannot succeed.
                         <span className="name">{labelOf(h)}</span>
                       ) : (
                         <label className="check">
@@ -1465,13 +1477,15 @@ export function App() {
                       <span className="meta">
                         {isConnected(h)
                           ? "connected · reports when you use it"
-                          : runs[h]
-                            ? runs[h].ok
-                              ? `recorded · ${runs[h].seq ?? "?"} events sealed`
-                              : `failed · ${runs[h].detail}`
-                            : busy === "connect"
-                              ? "running…"
-                              : "ready"}
+                          : withoutCommandLine(h, detected?.harnesses ?? null)
+                            ? "reports when you use the editor"
+                            : runs[h]
+                              ? runs[h].ok
+                                ? `recorded · ${runs[h].seq ?? "?"} events sealed`
+                                : `failed · ${runs[h].detail}`
+                              : busy === "connect"
+                                ? "running…"
+                                : "ready"}
                       </span>
                     </div>
                   ))}

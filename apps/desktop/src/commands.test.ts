@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   addHarnessArgs,
   ago,
+  busyHoldsClose,
+  drivable,
+  withoutCommandLine,
   collectorText,
   deregisterNeedsSession,
   HARNESS_TIER,
@@ -674,5 +677,68 @@ describe("step 3's rows", () => {
         { harness: "cursor", installed: false },
       ]),
     ).toEqual(["claude-code"]);
+  });
+});
+
+// #3367 review: registering a Cursor the scan found only as the editor, or
+// not at all, handed it to `tacho verify`, which runs `cursor-agent -p` and
+// failed with "cursor-agent is not on PATH". That failure was the first thing
+// the person saw after registering it.
+describe("step 5's first run", () => {
+  const scan = [
+    { harness: "claude-code", foundVia: "cli" as const },
+    { harness: "codex", foundVia: "cli" as const },
+    { harness: "cursor" },
+    { harness: "claude-desktop", foundVia: "app" as const },
+  ];
+
+  it("drives only the agents the scan found as a command line", () => {
+    expect(drivable(["claude-code", "cursor", "claude-desktop"], scan)).toEqual(
+      ["claude-code"],
+    );
+    expect(withoutCommandLine("cursor", scan)).toBe(true);
+    const editor = [{ harness: "cursor", foundVia: "app" as const }];
+    expect(drivable(["cursor"], editor)).toEqual([]);
+    expect(withoutCommandLine("cursor", editor)).toBe(true);
+    const cli = [{ harness: "cursor", foundVia: "cli" as const }];
+    expect(drivable(["cursor"], cli)).toEqual(["cursor"]);
+    expect(withoutCommandLine("cursor", cli)).toBe(false);
+  });
+
+  it("keeps every wrapped agent when there is no scan to read", () => {
+    // A relaunch lands on step 5 with no scan. A failed run then says what
+    // is missing.
+    expect(drivable(["claude-code", "cursor", "claude-desktop"], null)).toEqual(
+      ["claude-code", "cursor"],
+    );
+    expect(withoutCommandLine("cursor", null)).toBe(false);
+    // A connected app is never "without a command line": it has its own row.
+    expect(withoutCommandLine("claude-desktop", scan)).toBe(false);
+  });
+});
+
+// Audit D-11 review: the page reported busy for every action, so a Quit
+// during a sign-in hid the window and left the app running for up to the
+// five minutes `oxagen login` waits for the browser.
+describe("which busy state holds a close", () => {
+  it("holds a close while an action changes the machine", () => {
+    for (const busy of [
+      "enroll",
+      "reapply",
+      "apply",
+      "add",
+      "deregister",
+      "uninstall",
+      "signout",
+      "cli",
+      "cli-remove",
+      "update",
+    ])
+      expect(busyHoldsClose(busy), busy).toBe(true);
+  });
+
+  it("holds none while a sign-in or a first run waits, or while idle", () => {
+    for (const busy of ["signin", "signup", "connect", null])
+      expect(busyHoldsClose(busy), String(busy)).toBe(false);
   });
 });

@@ -59,8 +59,8 @@ impl Flag {
 
 /// One command the app runs: the sidecar, the subcommand words, the flags
 /// it may carry in any order, each at most once, the flags it must carry,
-/// and whether it changes the machine. Only a command that does holds a
-/// close until it ends (see `activity`): stopping a read changes nothing.
+/// and whether stopping it partway could leave a file half written. Only a
+/// command that could holds a close until it ends (see `activity`).
 struct Allowed {
     sidecar: Sidecar,
     command: &'static [&'static str],
@@ -119,13 +119,15 @@ const ALLOWED: &[Allowed] = &[
         required: &["--json"],
         writes: false,
     },
-    // `tacho verify --harness <h> --json`, a first run.
+    // `tacho verify --harness <h> --json`, a first run. It drives one
+    // headless turn and reads the daemon's answer, and writes no file of its
+    // own, so it holds no close. It can take four minutes.
     Allowed {
         sidecar: Sidecar::Tacho,
         command: &["verify"],
         flags: &[Flag::Value("--harness", is_harness), Flag::Switch("--json")],
         required: &["--harness", "--json"],
-        writes: true,
+        writes: false,
     },
     // `tacho enroll`: the wizard's register step, which names the harnesses,
     // and Re-apply, which sends it bare. On an enrolled host a bare enroll
@@ -153,13 +155,15 @@ const ALLOWED: &[Allowed] = &[
         required: &[],
         writes: true,
     },
-    // `oxagen login --browser`, Sign in and Create an account.
+    // `oxagen login --browser`, Sign in and Create an account. It waits up
+    // to five minutes for the browser, and its one write, `config.json`, is a
+    // temp file and a rename, so it holds no close.
     Allowed {
         sidecar: Sidecar::Oxagen,
         command: &["login"],
         flags: &[Flag::Switch("--browser"), Flag::Switch("--signup")],
         required: &["--browser"],
-        writes: true,
+        writes: false,
     },
     // `oxagen logout`, Sign out.
     Allowed {
@@ -412,19 +416,25 @@ mod tests {
         .is_ok());
     }
 
-    /// A read holds no close: stopping `tacho status` or a scan changes
-    /// nothing on the machine. Everything else is a write.
+    /// Only a command that could leave a file half written holds a close.
+    /// A read changes nothing. A sign-in writes `config.json` with a rename
+    /// and a first run writes nothing, and both can wait minutes: holding
+    /// them kept the app running for up to five minutes after a Quit.
     #[test]
-    fn only_the_two_reads_leave_a_close_alone() {
+    fn only_a_command_that_writes_files_holds_a_close() {
         assert_eq!(call(Sidecar::Tacho, &["status", "--json"]), Ok(false));
         assert_eq!(call(Sidecar::Tacho, &["detect", "--json"]), Ok(false));
         assert_eq!(
             call(Sidecar::Tacho, &["verify", "--harness", "codex", "--json"]),
-            Ok(true)
+            Ok(false)
         );
+        assert_eq!(call(Sidecar::Oxagen, &["login", "--browser"]), Ok(false));
+        assert_eq!(call(Sidecar::Oxagen, &["login", "--browser", "--signup"]), Ok(false));
         assert_eq!(call(Sidecar::Tacho, &["enroll", "--harness", "codex"]), Ok(true));
+        assert_eq!(call(Sidecar::Tacho, &["enroll"]), Ok(true));
+        assert_eq!(call(Sidecar::Tacho, &["reassign", "--workspace", "core"]), Ok(true));
         assert_eq!(call(Sidecar::Tacho, &["unenroll", "--purge"]), Ok(true));
-        assert_eq!(call(Sidecar::Oxagen, &["login", "--browser"]), Ok(true));
+        assert_eq!(call(Sidecar::Oxagen, &["logout"]), Ok(true));
     }
 
     #[test]

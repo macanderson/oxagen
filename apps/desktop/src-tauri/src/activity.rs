@@ -5,7 +5,14 @@
 //! and the shell plugin killed a running `tacho` with it: an `enroll` stopped
 //! between writing one agent's hooks and the next, an `unenroll` between the
 //! hooks and the service (audit D-11). Now a close or a Quit while work runs
-//! hides the window instead, and the app exits once the work ends.
+//! hides the window instead, and the app exits once the work ends. A second
+//! Quit while that exit waits goes through at once, so a hung sidecar never
+//! leaves an app that only Force Quit can stop.
+//!
+//! The paths that reach this guard: the window's close button, the tray's
+//! Quit, and on macOS the app menu's Quit and Cmd+Q (see `lib::macos_menu`).
+//! The Dock's Quit and a logout on macOS do not: they send `terminate:`,
+//! which tao turns into an exit with no request first.
 //!
 //! Work in progress is either kind:
 //! - a sidecar command that changes the machine, which `sidecar::run_sidecar`
@@ -40,13 +47,16 @@ impl State {
         self.jobs > 0 || self.page_busy
     }
 
-    /// A close or a Quit. While busy, the exit waits.
+    /// A close or a Quit. While busy, the first one waits for the work to
+    /// end. A second one while it waits exits now: the person asked twice,
+    /// and a sidecar that never ends, or a page that died while busy, must
+    /// not keep the app running with no window.
     pub fn request_exit(&mut self) -> ExitDecision {
-        if self.busy() {
+        if !self.busy() || self.exit_when_idle {
+            ExitDecision::Now
+        } else {
             self.exit_when_idle = true;
             ExitDecision::WhenIdle
-        } else {
-            ExitDecision::Now
         }
     }
 
@@ -186,6 +196,30 @@ mod tests {
         assert_eq!(state.request_exit(), ExitDecision::WhenIdle);
         state.cancel_exit();
         assert!(!state.end());
+    }
+
+    /// The review of D-11: a Quit during a hung `enroll` hid the window, and
+    /// every later Quit hid it again, so only Force Quit stopped the app.
+    #[test]
+    fn a_second_quit_while_the_first_waits_exits_now() {
+        let mut state = State::default();
+        state.begin();
+        assert_eq!(state.request_exit(), ExitDecision::WhenIdle);
+        assert_eq!(state.request_exit(), ExitDecision::Now);
+        // The same when the page's busy state is what holds it.
+        let mut state = State::default();
+        state.set_page_busy(true);
+        assert_eq!(state.request_exit(), ExitDecision::WhenIdle);
+        assert_eq!(state.request_exit(), ExitDecision::Now);
+    }
+
+    #[test]
+    fn showing_the_window_makes_the_next_quit_a_first_one_again() {
+        let mut state = State::default();
+        state.begin();
+        assert_eq!(state.request_exit(), ExitDecision::WhenIdle);
+        state.cancel_exit();
+        assert_eq!(state.request_exit(), ExitDecision::WhenIdle);
     }
 
     #[test]
