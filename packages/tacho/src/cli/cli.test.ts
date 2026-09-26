@@ -107,6 +107,12 @@ function fakeService(): ServiceManager & {
   uninstalled: number;
   running: boolean;
 } {
+  // `installed` keeps the last spec so a test can read what was installed.
+  // `present` is what the OS reports: launchd's uninstall removes the plist,
+  // so status says not installed after it (`host/service.test.ts`). A fake
+  // that kept saying installed hid every path that restarts a removed
+  // service, such as `restartForRemaining`.
+  let present = false;
   const manager = {
     kind: "launchd" as const,
     unitPath: "/fake/sh.oxagen.tachod.plist",
@@ -116,14 +122,16 @@ function fakeService(): ServiceManager & {
     install(spec: ServiceSpec) {
       manager.installed = spec;
       manager.running = true;
+      present = true;
     },
     uninstall() {
       manager.uninstalled += 1;
       manager.running = false;
+      present = false;
     },
     status() {
       return {
-        installed: manager.installed !== undefined,
+        installed: present,
         running: manager.running,
       };
     },
@@ -1876,8 +1884,10 @@ describe("harnesses and reassign", () => {
       d,
     );
     expect(refused.ok).toBe(false);
+    // Both ways forward, and neither is "revoke this host": a token that
+    // names codex alone enrolls it beside this agent (ADR-202).
     expect(d.errors.join("\n")).toContain(
-      "Adding a harness to an enrolled host needs the CLI's session",
+      "Adding a harness to an enrolled host needs the CLI's session: this token names codex beside a harness acme.core.cc-laptop already hooks. To add codex to acme.core.cc-laptop, run `oxagen login` and enroll again without the token. To enroll a separate agent, run the token again with only `--harness codex`. A token enrolls one more agent with one harness.",
     );
     // Nothing was revoked or minted, and the live enrollment is untouched.
     expect(d.requests).toEqual([]);
@@ -4416,6 +4426,14 @@ describe("two agents on one machine (ADR-202)", () => {
   it("unenrolls every agent with --all", async () => {
     const { d } = await twoAgents();
     d.requests.length = 0;
+    const both = await unenroll(
+      { token: "tok", harness: "codex", all: true },
+      d,
+    );
+    expect(both.ok).toBe(false);
+    expect(d.errors.at(-1)).toBe("error: pass --harness or --all, not both");
+    expect(d.requests).toEqual([]);
+
     const result = await unenroll({ token: "tok", all: true }, d);
     expect(result.ok, d.errors.join("\n")).toBe(true);
     expect(revoked(d)).toEqual([OTHER_ENROLLMENT, TEST_ENROLLMENT]);
@@ -4426,6 +4444,64 @@ describe("two agents on one machine (ADR-202)", () => {
     );
     expect(claudeSettings(d)?.env?.TACHO_ENROLLMENT).toBeUndefined();
     expect(d.service.running).toBe(false);
+  });
+
+  it("says how to put the service back when it cannot start again for the agent that stays", async () => {
+    const { d } = await twoAgents();
+    const install = d.service.install;
+    d.service.install = () => {
+      throw new Error("launchctl missing");
+    };
+    const result = await unenroll({ token: "tok", harness: "codex" }, d);
+    const warning =
+      "the service could not be started again, so acme.core.cc-laptop has no collector or model proxy: launchctl missing. Run `tacho enroll --harness claude-code` to install it again";
+    expect(result.ok).toBe(false);
+    expect(result.warnings).toContain(warning);
+    expect(d.errors).toContain(`warning: ${warning}`);
+    expect(d.service.running).toBe(false);
+
+    // The command it names re-applies the first agent and mints nothing.
+    d.service.install = install;
+    d.requests.length = 0;
+    const again = await enroll({ harnesses: ["claude-code"] }, d);
+    expect(again.ok, d.errors.join("\n")).toBe(true);
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(d.paths.hostFile)?.host_enrollment_id).toBe(
+      TEST_ENROLLMENT,
+    );
+    expect(d.service.running).toBe(true);
+  });
+
+  it("warns before a reassign unlinks a token-enrolled agent", async () => {
+    const { d } = await twoAgents();
+    // What the terminal held when the revoke went out.
+    let beforeRevoke: string[] | undefined;
+    const controlPlane = d.fetch;
+    d.fetch = async (url, init) => {
+      if (url.endsWith("/tacho/enrollments/revoke"))
+        beforeRevoke = [...d.errors];
+      return controlPlane(url, init);
+    };
+    await reassign(
+      { token: "tok", org: "acme", workspace: "edge", harnesses: ["codex"] },
+      d,
+    );
+    const warning =
+      "acme.core.codex-agent was enrolled with a one-time token from the Agents page. A reassign enrolls it again with your CLI session, which links the new enrollment to no agent, so its sessions stop reaching that agent's page (#4410). To keep the link, run `tacho unenroll --harness codex`, register the agent in acme/edge, and run the command its page shows.";
+    expect(beforeRevoke).toContain(`warning: ${warning}`);
+
+    // The operator's own enrollment at the root has no agent to lose.
+    d.errors.length = 0;
+    await reassign(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "edge",
+        harnesses: ["claude-code"],
+      },
+      d,
+    );
+    expect(d.errors.join("\n")).not.toContain("one-time token");
   });
 
   it("refuses a reassign that names neither agent", async () => {

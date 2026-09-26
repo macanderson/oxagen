@@ -346,11 +346,6 @@ export function buildTachoProgram(): Command {
     .option("--all", "Unenroll every agent on this machine")
     .action(async (opts: Record<string, unknown>) => {
       const harness = opts["harness"] as TachoHarness | undefined;
-      if (harness !== undefined && opts["all"] === true) {
-        deps.err("error: pass --harness or --all, not both");
-        process.exitCode = 1;
-        return;
-      }
       const result = await unenroll(
         {
           token: tokenOption(opts, deps.err),

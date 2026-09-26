@@ -827,8 +827,16 @@ async function enrollSteps(
       // Adding a harness revokes the live enrollment first, which takes the
       // CLI's session; a one-time token cannot revoke.
       if (credentials === undefined) {
+        // The token reached here because it also names a harness this agent
+        // holds. It enrolls a second agent only when it names one new
+        // harness alone (`enrollTarget`, ADR-202), so say that, not "revoke
+        // this host": that advice predates slots and removed the agent.
+        const own =
+          added.length === 1
+            ? `only \`--harness ${added.join("")}\``
+            : `one --harness from ${added.join(", ")}`;
         deps.err(
-          "Adding a harness to an enrolled host needs the CLI's session: run `oxagen login` and enroll again. A one-time token enrolls an agent that has no live host, so to use one here, revoke this host first (`oxagen login`, then `tacho unenroll`, or revoke it from the fleet page) and enroll with a new token.",
+          `Adding a harness to an enrolled host needs the CLI's session: this token names ${added.join(", ")} beside a harness ${existing.agent_key} already hooks. To add ${added.join(", ")} to ${existing.agent_key}, run \`oxagen login\` and enroll again without the token. To enroll a separate agent, run the token again with ${own}. A token enrolls one more agent with one harness.`,
         );
         return { ok: false, warnings };
       }

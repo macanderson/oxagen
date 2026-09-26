@@ -509,6 +509,18 @@ export async function unenroll(
   options: UnenrollOptions,
   deps: CliDeps,
 ): Promise<UnenrollResult> {
+  // Here rather than in one CLI's option parsing, so `tacho unenroll` and
+  // `oxagen agent unenroll` refuse the pair alike.
+  if (options.harness !== undefined && options.all === true) {
+    const refusal = "pass --harness or --all, not both";
+    deps.err(`error: ${refusal}`);
+    return {
+      ok: false,
+      settingsChanged: false,
+      revoked: false,
+      warnings: [refusal],
+    };
+  }
   const lock = acquireInstallLock(deps.paths.root, deps.now);
   if ("heldBy" in lock) {
     const warning = `another tacho enroll, unenroll or reassign is running on this machine (pid ${lock.heldBy}); wait for it to finish and run this again`;
@@ -654,7 +666,12 @@ export function restartForRemaining(
     );
     return undefined;
   } catch (error) {
-    const warning = `the service could not be started again, so ${agents} ${remaining.length === 1 ? "has" : "have"} no collector or model proxy: ${error instanceof Error ? error.message : String(error)}. Run \`tacho enroll\` for one of them to install it again`;
+    // Name the harnesses: a bare `tacho enroll` means claude-code, and when
+    // no remaining agent hooks it, that enroll adds it to the root's
+    // enrollment by revoking and minting it again. Naming one agent's own
+    // harnesses re-applies that agent's slot, which installs the service.
+    const [first] = remaining;
+    const warning = `the service could not be started again, so ${agents} ${remaining.length === 1 ? "has" : "have"} no collector or model proxy: ${error instanceof Error ? error.message : String(error)}. Run \`tacho enroll --harness ${first?.host.harnesses.join(",") ?? ""}\` to install it again`;
     deps.err(`warning: ${warning}`);
     return warning;
   }

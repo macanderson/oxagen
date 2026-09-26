@@ -205,7 +205,7 @@ describe("reassignTarget", () => {
       refused: `--harness names the harnesses of more than one agent: ${BOTH}. Reassign one agent at a time.`,
     });
     expect(reassignTarget(root, ["cursor"])).toEqual({
-      refused: `No enrollment on this machine hooks cursor. It holds ${BOTH}. Run \`tacho enroll --harness cursor\` to enroll another agent.`,
+      refused: `No enrollment on this machine hooks cursor. It holds ${BOTH}. Pass --harness with a harness one of them hooks. To enroll another agent, register it on the Agents page and run the command the page shows.`,
     });
   });
 });

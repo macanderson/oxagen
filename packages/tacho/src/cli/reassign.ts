@@ -115,7 +115,7 @@ export function reassignTarget(
   return {
     refused:
       matching.length === 0
-        ? `No enrollment on this machine hooks ${harnesses.join(", ")}. It holds ${listed}. Run \`tacho enroll --harness ${harnesses.join(",")}\` to enroll another agent.`
+        ? `No enrollment on this machine hooks ${harnesses.join(", ")}. It holds ${listed}. Pass --harness with a harness one of them hooks. To enroll another agent, register it on the Agents page and run the command the page shows.`
         : `--harness names the harnesses of more than one agent: ${matching.map(describeSlot).join("; ")}. Reassign one agent at a time.`,
   };
 }
@@ -215,6 +215,15 @@ async function reassignLocked(
       `Cannot reassign, so nothing was changed; this host still reports to ${from.org}/${from.workspace}:\n${refusals.map((refusal) => `  ${refusal}`).join("\n")}`,
     );
     return { ok: false, from, warnings };
+  }
+
+  // Only a one-time token opens a slot beside the root (`enrollTarget`), and
+  // that token linked the enrollment to its agent. The enroll below uses the
+  // CLI's session, which links none, so the agent loses its sessions (#4410).
+  if (deps.rootPaths !== undefined) {
+    const unlinked = `${host.agent_key} was enrolled with a one-time token from the Agents page. A reassign enrolls it again with your CLI session, which links the new enrollment to no agent, so its sessions stop reaching that agent's page (#4410). To keep the link, run \`tacho unenroll --harness ${host.harnesses[0] ?? ""}\`, register the agent in ${org}/${workspace}, and run the command its page shows.`;
+    deps.err(`warning: ${unlinked}`);
+    warnings.push(unlinked);
   }
 
   // The control plane is always asked, a marked host.json included: the
