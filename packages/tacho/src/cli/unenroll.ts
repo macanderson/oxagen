@@ -670,6 +670,14 @@ async function unenrollLocked(
   ]) {
     if (existsSync(path)) unlinkSync(path);
   }
+  // The copies of files that held uncommitted edits when a session started.
+  // Only the daemon removes them, when it forgets a session, and daemon.json
+  // went above, so no daemon would ever remove these. They hold a person's
+  // worktree content, so they go whether or not the record is purged.
+  rmSync(deps.paths.preSessionCopies, { recursive: true, force: true });
+  deps.out(
+    `      pre-session copies removed from ${deps.paths.preSessionCopies}`,
+  );
   // A harness file that could not be cleaned still needs the enrollment id
   // and the displaced values to be cleaned later, so host.json outlives it.
   if (

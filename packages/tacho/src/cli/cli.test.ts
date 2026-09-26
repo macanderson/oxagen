@@ -1572,6 +1572,22 @@ describe("enroll → status → unenroll", () => {
       (await unenroll({ token: "t" }, failing)).warnings.join("\n"),
     ).toContain("service removal failed");
   });
+
+  it("removes the pre-session copies without --purge, since no daemon is left to", async () => {
+    const d = deps();
+    const signer = bundleSigner();
+    writeHostFile(
+      d.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    const session = join(d.paths.preSessionCopies, "session-uuid");
+    mkdirSync(session, { recursive: true });
+    writeFileSync(join(session, "0".repeat(32)), "a person's edit\n");
+    const removed = await unenroll({ token: "t" }, d);
+    expect(removed.ok).toBe(true);
+    expect(existsSync(d.paths.preSessionCopies)).toBe(false);
+    expect(d.lines.join("\n")).toContain("pre-session copies removed");
+  });
 });
 
 describe("harnesses and reassign", () => {
@@ -2311,7 +2327,9 @@ describe("session scope (ADR-179)", () => {
     const d = mintingDeps();
     await enroll(WHERE_CORE, d);
     expect((await enroll({ ...WHERE_CORE, force: true }, d)).ok).toBe(true);
-    expect(d.lines.join("\n")).toContain(`previous enrollment ${FIRST} revoked`);
+    expect(d.lines.join("\n")).toContain(
+      `previous enrollment ${FIRST} revoked`,
+    );
     expect(readHostFile(d.paths.hostFile)).toMatchObject({
       host_enrollment_id: SECOND,
       session_scope: FIRST,
