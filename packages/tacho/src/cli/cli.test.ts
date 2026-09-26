@@ -1542,12 +1542,15 @@ describe("enroll → status → unenroll", () => {
     // A deferred session end that never reached the WAL holds run content,
     // so the purge takes it with the WAL.
     writeSensitiveFileAtomic(d.paths.pendingEnds, "[]");
-    // The hook-id journal belongs to the daemon state and goes with it.
+    // The hook-id journal and the sealed-state file belong to the daemon
+    // state and go with it.
     writeSensitiveFileAtomic(d.paths.hookIdJournal, "");
+    writeSensitiveFileAtomic(d.paths.daemonSealedState, "{}");
     const second = await unenroll({ token: "t", purge: true }, d);
     expect(second.revoked).toBe(true);
     expect(existsSync(d.paths.pendingEnds)).toBe(false);
     expect(existsSync(d.paths.hookIdJournal)).toBe(false);
+    expect(existsSync(d.paths.daemonSealedState)).toBe(false);
     expect(d.lines.join("\n")).toContain("pending session ends");
     expect(d.requests.map((r) => r.url)).toEqual([
       "https://api.example.test/v1/acme/core/tacho/enrollments/revoke",
@@ -2311,7 +2314,9 @@ describe("session scope (ADR-179)", () => {
     const d = mintingDeps();
     await enroll(WHERE_CORE, d);
     expect((await enroll({ ...WHERE_CORE, force: true }, d)).ok).toBe(true);
-    expect(d.lines.join("\n")).toContain(`previous enrollment ${FIRST} revoked`);
+    expect(d.lines.join("\n")).toContain(
+      `previous enrollment ${FIRST} revoked`,
+    );
     expect(readHostFile(d.paths.hostFile)).toMatchObject({
       host_enrollment_id: SECOND,
       session_scope: FIRST,

@@ -337,12 +337,34 @@ export interface RegistryState {
   agents?: AgentRosterEntry[];
   /** Absent in files written before forgotten chains kept a tombstone. */
   tombstones?: ChainTombstone[];
-  /**
-   * The acknowledgement of every command this host answered, oldest first,
-   * as the daemon's `HandledCommands` holds them. The daemon writes it beside
-   * the registry's own state. Absent in files written before it was kept.
-   */
-  handled?: CommandAcknowledgement[];
+}
+
+/** The schema of the sealed-state file (`TachoPaths.daemonSealedState`). */
+export const SEALED_STATE_SCHEMA = "tacho.daemon-sealed-state.v1";
+
+/**
+ * The sealed-state file: the released sessions `daemon.json` leaves out
+ * (`SessionRegistry.coldState`), and the acknowledgement of every command
+ * this host answered, oldest first, as the daemon's `HandledCommands` holds
+ * them. Both change far less often than the ticks that write
+ * `daemon.json`, so they are written only when they change.
+ */
+export interface SealedState {
+  schema: typeof SEALED_STATE_SCHEMA;
+  sessions: PersistedSession[];
+  handled: unknown[];
+}
+
+export function parseSealedState(value: unknown): SealedState | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const candidate = value as Partial<SealedState>;
+  if (candidate.schema !== SEALED_STATE_SCHEMA) return undefined;
+  if (!Array.isArray(candidate.sessions)) return undefined;
+  return {
+    schema: SEALED_STATE_SCHEMA,
+    sessions: candidate.sessions,
+    handled: Array.isArray(candidate.handled) ? candidate.handled : [],
+  };
 }
 
 /**
@@ -467,8 +489,16 @@ export class SessionRegistry {
   private readonly expiredOnSeal: CommandAcknowledgement[] = [];
   /** The pid each record's start time was last read for, read or not. */
   private readonly startReadFor = new WeakMap<SessionRecord, number>();
-  /** Sealed records `releaseSealedState` has already emptied. */
-  private readonly released = new WeakSet<SessionRecord>();
+  /**
+   * Sealed records `releaseSealedState` has emptied, with their state as the
+   * sealed-state file holds it. A record leaves this map when anything
+   * touches it (`frozenStamp`), and goes back once it is released again.
+   */
+  private readonly frozen = new Map<SessionRecord, FrozenSession>();
+  /** The frozen set changed since the sealed-state file was last written. */
+  private coldDirty = false;
+  /** The frozen states the sealed-state file held when it was last written. */
+  private coldEntries = new Set<FrozenSession>();
 
   constructor(options: RegistryOptions) {
     this.options = options;
@@ -830,7 +860,7 @@ export class SessionRegistry {
   private reopen(record: SessionRecord): void {
     record.sealed = false;
     delete record.closedIdle;
-    this.released.delete(record);
+    this.thaw(record);
     // `SessionRecorder` has no reopen of its own. A rollback to a mark taken
     // this instant undoes nothing, and it sets the one flag it is handed.
     record.recorder.rollbackChain({
@@ -956,17 +986,98 @@ export class SessionRegistry {
    */
   releaseSealedState(retainMs: number = SEALED_STATE_RETAIN_MS): number {
     const cutoff = this.options.now() - retainMs;
+    this.thawTouched();
     let released = 0;
-    for (const record of this.sessions.values()) {
+    for (const [key, record] of this.sessions) {
       if (!record.sealed || record.pendingTerminal === true) continue;
-      if (this.released.has(record)) continue;
+      if (this.frozen.has(record)) continue;
       if (Date.parse(record.lastSeenAt) >= cutoff) continue;
       record.recorder.releaseSealedState();
       record.toolUseIds = {};
-      this.released.add(record);
+      this.freeze(key, record);
       released += 1;
     }
     return released;
+  }
+
+  /**
+   * The state `daemon.json` holds: every session but the released ones the
+   * sealed-state file already holds (`coldState`), with the roster and the
+   * tombstones. The daemon writes it on every tick that changed anything, so
+   * what it costs grows with the sessions running and the hour after they
+   * seal, and not with the week of sealed sessions a host keeps. A session
+   * released since the sealed-state file was last written stays here until
+   * that file holds it, so no write order can lose it.
+   */
+  hotState(): RegistryState {
+    this.thawTouched();
+    return {
+      schema: "tacho.daemon-state.v1",
+      sessions: this.list()
+        .filter((record) => {
+          const frozen = this.frozen.get(record);
+          return frozen === undefined || !this.coldEntries.has(frozen);
+        })
+        .map((record) => this.persisted(record)),
+      agents: [...this.roster.values()].map((entry) => ({ ...entry })),
+      ...(this.tombstones.size > 0
+        ? { tombstones: [...this.tombstones.values()].map(copyTombstone) }
+        : {}),
+    };
+  }
+
+  /**
+   * The released sessions for the sealed-state file, as a JSON array, when
+   * that file must be written again: a session was released, touched, or
+   * forgotten since the last write, or `force`. Undefined when the file
+   * already holds them. Each session is serialized once, when it is
+   * released. The caller writes the file after `daemon.json`, and calls
+   * `written` once the write landed.
+   */
+  coldState(force = false): { json: string; written: () => void } | undefined {
+    this.thawTouched();
+    if (!this.coldDirty && !force) return undefined;
+    const entries = new Set(this.frozen.values());
+    return {
+      json: `[${[...entries].map((entry) => entry.json).join(",")}]`,
+      written: () => {
+        this.coldEntries = entries;
+        this.coldDirty = false;
+      },
+    };
+  }
+
+  private freeze(key: string, record: SessionRecord): FrozenSession {
+    const entry: FrozenSession = {
+      key,
+      stamp: frozenStamp(record),
+      json: JSON.stringify(this.persisted(record)),
+    };
+    this.frozen.set(record, entry);
+    this.coldDirty = true;
+    return entry;
+  }
+
+  private thaw(record: SessionRecord): void {
+    if (this.frozen.delete(record)) this.coldDirty = true;
+  }
+
+  /**
+   * Take back into `daemon.json` every released record that changed since it
+   * was frozen, or that the registry no longer holds under its key (it was
+   * forgotten, or a restore replaced it). A late frame, a resume, or a hook
+   * id pruned away all change the stamp.
+   */
+  private thawTouched(): void {
+    for (const [record, entry] of this.frozen) {
+      if (
+        this.sessions.get(entry.key) !== record ||
+        frozenStamp(record) !== entry.stamp
+      ) {
+        this.frozen.delete(record);
+        this.coldDirty = true;
+      }
+    }
   }
 
   /**
@@ -1107,34 +1218,11 @@ export class SessionRegistry {
     return out;
   }
 
+  /** Every session, the roster, and the tombstones. */
   state(): RegistryState {
     return {
       schema: "tacho.daemon-state.v1",
-      sessions: this.list().map((record) => ({
-        harnessSessionId: record.harnessSessionId,
-        recorder: record.recorder.state(),
-        control: {
-          paused: record.control.paused,
-          cancelled: record.control.cancelled,
-          messages: [...record.control.messages],
-          ...(record.control.pauseEffect !== undefined
-            ? { pauseEffect: record.control.pauseEffect }
-            : {}),
-          ...(record.control.resumeOwed !== undefined
-            ? { resumeOwed: record.control.resumeOwed }
-            : {}),
-        },
-        startedAt: record.startedAt,
-        lastSeenAt: record.lastSeenAt,
-        sealed: record.sealed,
-        lastCheckpointSeq: record.lastCheckpointSeq,
-        ambient: record.ambient,
-        ...(Object.keys(record.toolUseIds).length > 0
-          ? { toolUseIds: { ...record.toolUseIds } }
-          : {}),
-        ...(record.hookIds.size > 0 ? { hookIds: [...record.hookIds] } : {}),
-        ...optionalFacts(record),
-      })),
+      sessions: this.list().map((record) => this.persisted(record)),
       agents: [...this.roster.values()].map((entry) => ({ ...entry })),
       ...(this.tombstones.size > 0
         ? { tombstones: [...this.tombstones.values()].map(copyTombstone) }
@@ -1142,9 +1230,44 @@ export class SessionRegistry {
     };
   }
 
-  restore(state: RegistryState): void {
+  private persisted(record: SessionRecord): PersistedSession {
+    return {
+      harnessSessionId: record.harnessSessionId,
+      recorder: record.recorder.state(),
+      control: {
+        paused: record.control.paused,
+        cancelled: record.control.cancelled,
+        messages: [...record.control.messages],
+        ...(record.control.pauseEffect !== undefined
+          ? { pauseEffect: record.control.pauseEffect }
+          : {}),
+        ...(record.control.resumeOwed !== undefined
+          ? { resumeOwed: record.control.resumeOwed }
+          : {}),
+      },
+      startedAt: record.startedAt,
+      lastSeenAt: record.lastSeenAt,
+      sealed: record.sealed,
+      lastCheckpointSeq: record.lastCheckpointSeq,
+      ambient: record.ambient,
+      ...(Object.keys(record.toolUseIds).length > 0
+        ? { toolUseIds: { ...record.toolUseIds } }
+        : {}),
+      ...(record.hookIds.size > 0 ? { hookIds: [...record.hookIds] } : {}),
+      ...optionalFacts(record),
+    };
+  }
+
+  /**
+   * Take back a state file's sessions, roster, and tombstones. `sealedFile`
+   * marks sessions read from the sealed-state file: each is released
+   * already, and that file holds it as it is.
+   */
+  restore(state: RegistryState, options: { sealedFile?: boolean } = {}): void {
+    let coldDirty = this.coldDirty;
     for (const persisted of state.sessions) {
-      this.sessions.set(this.key(persisted.harnessSessionId, persisted), {
+      const key = this.key(persisted.harnessSessionId, persisted);
+      this.sessions.set(key, {
         harnessSessionId: persisted.harnessSessionId,
         recorder: new SessionRecorder({
           context: contextForHarness(
@@ -1189,7 +1312,17 @@ export class SessionRegistry {
         hookIds: restoredHookIds(persisted),
         ...optionalFacts(persisted),
       });
+      if (options.sealedFile !== true) continue;
+      const record = this.sessions.get(key) as SessionRecord;
+      // Only a sealed session belongs there. Anything else stays in
+      // `daemon.json`, and the next write of the sealed-state file drops it.
+      if (!record.sealed) {
+        coldDirty = true;
+        continue;
+      }
+      this.coldEntries.add(this.freeze(key, record));
     }
+    if (options.sealedFile === true) this.coldDirty = coldDirty;
     for (const entry of state.agents ?? []) {
       this.roster.set(entry.key, { ...entry });
     }
@@ -1362,6 +1495,41 @@ function reopens(record: SessionRecord, facts: SessionFacts): boolean {
   if (!record.sealed || record.pendingTerminal === true) return false;
   if (facts.lastHookEvent === undefined) return false;
   return facts.lastHookEvent === "SessionStart" || record.closedIdle === true;
+}
+
+/** A released session as the sealed-state file holds it. */
+interface FrozenSession {
+  /** Its key in the registry's map. */
+  key: string;
+  /** `frozenStamp` when it was frozen. */
+  stamp: string;
+  /** Its `PersistedSession`, serialized once. */
+  json: string;
+}
+
+/**
+ * What moves when anything touches a record: a frame sealed on its chain
+ * moves the cursor or opens a subagent chain, a hook or OTel record moves
+ * `lastSeenAt`, and a resume clears `sealed`. A released record whose stamp
+ * moved is serialized again rather than kept as it was frozen.
+ */
+function frozenStamp(record: SessionRecord): string {
+  const cursor = record.recorder.chainCursor;
+  return [
+    cursor.seq,
+    cursor.prevHash,
+    record.recorder.openChildren.size,
+    record.lastSeenAt,
+    record.sealed ? 1 : 0,
+    record.pendingTerminal === true ? 1 : 0,
+    record.pid ?? "",
+    record.pidInstance ?? "",
+    record.control.messages.length,
+    record.hookIds.size,
+    Object.keys(record.toolUseIds).length,
+    record.transcriptPath ?? "",
+    record.cwd ?? "",
+  ].join("|");
 }
 
 function copyTombstone(tombstone: ChainTombstone): ChainTombstone {

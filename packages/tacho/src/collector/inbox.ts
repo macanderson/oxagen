@@ -62,16 +62,23 @@ export const HANDLED_COMMANDS_KEPT = 1024;
  * kill round a second time. A command found here is not applied again: its
  * first acknowledgement is queued once more instead.
  *
- * The daemon writes it to `daemon.json` beside the registry (`list` and
- * `restore`), in the same write that lands before the acknowledgements
- * leave. Held in memory alone, a restart forgot it, and a steer the agent
- * had already read was queued and read a second time when the lost
- * acknowledgement brought it back.
+ * The daemon writes it to the sealed-state file beside the released
+ * sessions (`list` and `restore`), in the state write that lands before the
+ * acknowledgements leave, and only when `generation` moved. Held in memory
+ * alone, a restart forgot it, and a steer the agent had already read was
+ * queued and read a second time when the lost acknowledgement brought it
+ * back.
  */
 export class HandledCommands {
   private readonly acks = new Map<string, CommandAcknowledgement>();
+  private changes = 0;
 
   constructor(private readonly limit = HANDLED_COMMANDS_KEPT) {}
+
+  /** Moves on every change, so a writer knows when the file is behind. */
+  get generation(): number {
+    return this.changes;
+  }
 
   get(commandId: string): CommandAcknowledgement | undefined {
     const ack = this.acks.get(commandId);
@@ -79,6 +86,7 @@ export class HandledCommands {
   }
 
   remember(ack: CommandAcknowledgement): void {
+    this.changes += 1;
     this.acks.delete(ack.command_id);
     this.acks.set(ack.command_id, { ...ack });
     for (const id of this.acks.keys()) {

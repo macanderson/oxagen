@@ -35,6 +35,11 @@ export interface TachoPaths {
   /** Recorder state the daemon persists so a restart continues each chain. */
   daemonState: string;
   /**
+   * The sealed sessions `daemonState` leaves out once they are released, and
+   * the commands the daemon answered. Written only when either changes.
+   */
+  daemonSealedState: string;
+  /**
    * Sealed terminal batches the daemon has not yet landed in the WAL. A batch
    * waits here for the moment between sealing and the WAL append, so the file
    * can hold a run's content and has to be purged with the WAL (ADR-139).
@@ -142,6 +147,7 @@ export function tachoPaths(
     spool: join(root, "spool"),
     quarantine: join(root, "quarantine"),
     daemonState: join(root, "daemon.json"),
+    daemonSealedState: join(root, "daemon-sealed.json"),
     pendingEnds: join(root, "pending-session-ends.json"),
     hookIdJournal: join(root, "hook-ids.jsonl"),
     transcriptTailState: join(root, "transcript-tail.json"),

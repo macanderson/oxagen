@@ -543,7 +543,11 @@ describe("a long-running registry", () => {
   /** What one released sealed session may cost in `daemon.json`. */
   const RELEASED_SESSION_BYTES = 2_048;
 
-  it("keeps a sealed session's call ledgers for an hour, then holds a bounded state for it", async () => {
+  /**
+   * A week of sessions: 280 sealed more than an hour ago, 20 sealed in the
+   * last ten minutes, and one still running, each with full ledgers.
+   */
+  async function week() {
     const { registry, hook, now } = harness();
     await hook(registry, "SessionStart", { source: "startup" });
     await hook(registry, "UserPromptSubmit", { prompt: "one" });
@@ -614,6 +618,11 @@ describe("a long-running registry", () => {
       now,
     });
     long.restore({ schema: "tacho.daemon-state.v1", sessions });
+    return { long, now, ledgerBytes, turnReply };
+  }
+
+  it("keeps a sealed session's call ledgers for an hour, then holds a bounded state for it", async () => {
+    const { long, ledgerBytes, turnReply } = await week();
     const before = JSON.stringify(long.state()).length;
     expect(before).toBeGreaterThan(300 * ledgerBytes);
 
@@ -645,6 +654,74 @@ describe("a long-running registry", () => {
     expect(kept("sess-0")?.recorder.turnReply).toBeUndefined();
     expect(kept("sess-0")?.toolUseIds).toBeUndefined();
     expect(kept("sess-290")?.recorder.turnReply).toEqual(turnReply);
+  });
+
+  it("writes a released session to the sealed-state file once, and daemon.json holds only the rest", async () => {
+    const { long, now } = await week();
+    const RELEASED_SESSION_BYTES = 2_048;
+    long.releaseSealedState();
+    const ids = (state: RegistryState) =>
+      state.sessions.map((s) => s.harnessSessionId);
+    // Released since the sealed-state file was written: still in
+    // daemon.json, so a crash before that file lands loses nothing.
+    expect(ids(long.hotState())).toHaveLength(301);
+    const cold = long.coldState();
+    expect(cold).toBeDefined();
+    const coldSessions = JSON.parse(cold!.json) as RegistryState["sessions"];
+    expect(coldSessions).toHaveLength(280);
+    expect(cold!.json.length).toBeLessThan(280 * RELEASED_SESSION_BYTES);
+    cold!.written();
+
+    // From here each tick writes the 21 recent or running sessions, and
+    // the week of sealed ones costs daemon.json nothing.
+    const hot = long.hotState();
+    expect(ids(hot)).toHaveLength(21);
+    const oneRecent = JSON.stringify(
+      hot.sessions.find((s) => s.harnessSessionId === "sess-290"),
+    ).length;
+    expect(JSON.stringify(hot).length).toBeLessThan(21 * oneRecent + 4_096);
+    // Nothing moved, so the sealed-state file is not written again.
+    expect(long.coldState()).toBeUndefined();
+    long.ensure("sess-300", { lastHookEvent: "UserPromptSubmit" });
+    expect(long.coldState()).toBeUndefined();
+
+    // A late record touches a released session: it goes back to
+    // daemon.json, and the sealed-state file is written without it.
+    long.ensure("sess-7", { ambient: true });
+    expect(ids(long.hotState())).toContain("sess-7");
+    const rewritten = long.coldState();
+    expect(
+      (JSON.parse(rewritten!.json) as RegistryState["sessions"]).map(
+        (s) => s.harnessSessionId,
+      ),
+    ).not.toContain("sess-7");
+    rewritten!.written();
+
+    // Both files read back into the registry that wrote them.
+    const restored = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now,
+    });
+    restored.restore(
+      {
+        schema: "tacho.daemon-state.v1",
+        sessions: JSON.parse(rewritten!.json),
+      },
+      { sealedFile: true },
+    );
+    restored.restore(JSON.parse(JSON.stringify(long.hotState())));
+    const byId = (state: RegistryState) =>
+      JSON.parse(
+        JSON.stringify(
+          [...state.sessions].sort((a, b) =>
+            a.harnessSessionId.localeCompare(b.harnessSessionId),
+          ),
+        ),
+      );
+    expect(byId(restored.state())).toEqual(byId(long.state()));
+    expect(restored.coldState()).toBeUndefined();
+    expect(ids(restored.hotState())).toHaveLength(22);
   });
 
   it("releases a resumed session again once it seals and goes quiet", async () => {

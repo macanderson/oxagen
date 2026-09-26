@@ -148,7 +148,9 @@ import {
   HOOK_ID_REPLAY_WINDOW_MS,
   isInternalSession,
   parseRegistryState,
+  parseSealedState,
   pruneHookIds,
+  SEALED_STATE_SCHEMA,
   sessionMapKey,
   type SessionRecord,
   type RegistryState,
@@ -641,6 +643,20 @@ async function initializeDaemon(
   const priorStateWrittenAt = existsSync(paths.daemonState)
     ? statSync(paths.daemonState).mtimeMs
     : undefined;
+  // The released sessions first: `daemon.json` holds a session a release
+  // or a resume moved since the sealed-state file was written, and its copy
+  // replaces the older one.
+  const sealedState = parseSealedState(
+    readJsonFileIfExists(paths.daemonSealedState),
+  );
+  if (sealedState !== undefined) {
+    for (const session of sealedState.sessions)
+      reconcileRestoredCursor(session.recorder, wal, log);
+    registry.restore(
+      { schema: "tacho.daemon-state.v1", sessions: sealedState.sessions },
+      { sealedFile: true },
+    );
+  }
   const persisted = parseRegistryState(readJsonFileIfExists(paths.daemonState));
   if (persisted !== undefined) {
     for (const session of persisted.sessions)
@@ -777,10 +793,12 @@ async function initializeDaemon(
   // acknowledgement lands. Every delivery goes through this daemon's record
   // of the commands it already answered, so a steer is queued once and a kill
   // signalled once however often it arrives. `persistState` writes it into
-  // `daemon.json`, so a redelivery after a restart is answered from it too.
+  // the sealed-state file, so a redelivery after a restart is answered from
+  // it too.
   const handledCommands = new HandledCommands();
-  if (Array.isArray(persisted?.handled))
-    handledCommands.restore(persisted.handled);
+  handledCommands.restore(sealedState?.handled ?? []);
+  /** The `handledCommands.generation` the sealed-state file holds. */
+  let handledWritten = handledCommands.generation;
   const applyCommands: typeof applyDeliveredCommands = (commands, deps) =>
     applyDeliveredCommands(commands, { ...deps, handled: handledCommands });
   const serial = new Serial();
@@ -830,7 +848,16 @@ async function initializeDaemon(
     onRateLimit: (hint) => rateLimitSink.notify?.(hint),
   });
 
-  function persistState(): void {
+  /**
+   * Write the registry's state: `daemon.json` on every call, and the
+   * sealed-state file when the released sessions or the answered commands
+   * changed, or when `sealedFile` asks for it. `daemon.json` goes first. A
+   * session released since the last write stays in it until the sealed-state
+   * file holds it, and a session taken back from that file is in it before
+   * that file drops it, so a crash between the two writes loses neither
+   * (C-02).
+   */
+  function persistState(options: { sealedFile?: boolean } = {}): void {
     // Commit the WAL bytes this cursor answers for before the cursor itself
     // lands durably. `state.json` is read back at the next startup as a claim
     // about where each session's chain stood; writing that claim before the
@@ -840,11 +867,22 @@ async function initializeDaemon(
     // it. One flush per call, covering everything appended since the last
     // one: a group commit, not an fsync per event.
     wal.flush();
-    const state: RegistryState = {
-      ...registry.state(),
-      handled: handledCommands.list(),
-    };
-    writeSensitiveFileAtomic(paths.daemonState, JSON.stringify(state));
+    writeSensitiveFileAtomic(
+      paths.daemonState,
+      JSON.stringify(registry.hotState()),
+    );
+    const generation = handledCommands.generation;
+    const cold = registry.coldState(
+      options.sealedFile === true || generation !== handledWritten,
+    );
+    if (cold !== undefined) {
+      writeSensitiveFileAtomic(
+        paths.daemonSealedState,
+        `{"schema":${JSON.stringify(SEALED_STATE_SCHEMA)},"handled":${JSON.stringify(handledCommands.list())},"sessions":${cold.json}}`,
+      );
+      cold.written();
+      handledWritten = generation;
+    }
     // The state file now holds every ledger entry the journal did. A crash
     // between the write and this removal restores those entries twice,
     // which is harmless: remembering a key the ledger holds is a no-op.
@@ -1304,7 +1342,7 @@ async function initializeDaemon(
     // already gone from memory, so the retry finds nothing to withdraw, and
     // it clears the debt once this returns.
     persistPendingEnds();
-    persistState();
+    persistState({ sealedFile: true });
     if (withdrawn > 0)
       log(
         `mandate narrowed: withdrew ${withdrawn} queued prompt(s) from ${paths.daemonState}`,
