@@ -2541,11 +2541,22 @@ async function initializeDaemon(
                   tool_output_digest: call.outputDigest,
                   tool_output_bytes: call.outputBytes,
                 }),
+            // The refusal's reason rides the declared members: a code, and a
+            // digest of the message. An undeclared `policy_reason` was moved
+            // off the body into `attrs` by the recorder, where no reader
+            // looked. The rules that refused it are the control plane's
+            // `data.ruleIds`, in evaluation order (#3971, ADR-194).
             ...(call.status === "rejected"
               ? {
                   policy_decision: "deny",
                   policy_source: "kernel",
-                  policy_reason: call.refusedReason ?? "refused",
+                  policy_reason_code: "mcp_refused",
+                  policy_reason_digest: digestText(
+                    call.refusedReason ?? "refused",
+                  ),
+                  ...(call.ruleIds === undefined || call.ruleIds.length === 0
+                    ? {}
+                    : { policy_rules: call.ruleIds }),
                 }
               : {}),
           },

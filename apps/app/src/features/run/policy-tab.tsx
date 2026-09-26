@@ -6,11 +6,17 @@
 // Outcome cell names who decided from the frame's `policy_source`. The table
 // lists what Oxagen policy and operators decided, operator commands included
 // (#4034). The agent harness's own permission checks sit folded below it, so
-// hundreds of permission prompts do not bury the few Oxagen made. The rules
-// that fired, the taint on the call's inputs and the decision's own latency
-// are not on the transcript today, so each of those cells says so rather than
-// guessing. A list read from a transcript that stopped short says it is a
-// prefix, and a failed read says it failed.
+// hundreds of permission prompts do not bury the few Oxagen made.
+//
+// Rules that fired are the decision's own `rules`, in the order they were
+// evaluated (#3971, ADR-194): a bundle's permission patterns, or the kernel's
+// decision rule ids. Each prints in mono. A decision rule lives in the
+// workspace's settings, not as a record with a page, so no rule links
+// anywhere. No producer assesses taint yet, so a decision's taint is null and
+// its cell says it is not recorded; an empty list would mean none. The
+// decision's own latency is not on the transcript either. A list read from a
+// transcript that stopped short says it is a prefix, and a failed read says
+// it failed.
 import { useTranslations } from "next-intl";
 import type { RunTranscript, TranscriptEntry } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
@@ -120,6 +126,41 @@ function Unrecorded() {
   );
 }
 
+/**
+ * Words the record holds for a decision, one per line in mono: the rules that
+ * fired, or the taint labels. An empty list prints "none", which the record
+ * says in so many words.
+ */
+function Listed({
+  items,
+  testId,
+}: {
+  items: readonly string[];
+  testId: string;
+}) {
+  const t = useTranslations("run.policy");
+  if (items.length === 0)
+    return (
+      <span data-testid={testId} className="text-[12px] text-muted-foreground">
+        {t("none")}
+      </span>
+    );
+  return (
+    <span data-testid={testId} className="flex min-w-0 flex-col gap-0.5">
+      {items.map((item, i) => (
+        <span
+          // A list can name one rule twice across chains; the position keeps
+          // each line its own key.
+          key={`${String(i)}:${item}`}
+          className={`${mono} text-foreground [overflow-wrap:anywhere]`}
+        >
+          {item}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function row(entry: TranscriptEntry, place: Place): ListRow {
   const decision = entry.decision;
   // The call the decision was made on, as the server states it. A gate frame
@@ -159,8 +200,16 @@ function row(entry: TranscriptEntry, place: Place): ListRow {
           <DecidedBy source={decision.source ?? null} />
         </span>
       ),
-      <Unrecorded key="rules" />,
-      <Unrecorded key="taint" />,
+      decision === null ? (
+        <NoValue key="rules" />
+      ) : (
+        <Listed key="rules" items={decision.rules} testId="policy-rules" />
+      ),
+      decision === null || decision.taint === null ? (
+        <Unrecorded key="taint" />
+      ) : (
+        <Listed key="taint" items={decision.taint} testId="policy-taint" />
+      ),
       <Unrecorded key="latency" />,
     ],
   };

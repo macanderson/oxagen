@@ -1157,7 +1157,8 @@
       "unrecorded": "The transcript does not carry this for a decision yet.",
       "empty": "No policy decision was recorded on this run.",
       "cut": "The transcript read stopped short, so later decisions are missing here.",
-      "note": "Each row is a decision on this run's record, by Oxagen policy or an operator, linked to its frame. The agent harness's own permission checks are folded below. The rules that fired, the taint on the call's inputs and the decision's latency are not on the transcript yet.",
+      "note": "Each row is a decision on this run's record, by Oxagen policy or an operator, linked to its frame. The agent harness's own permission checks are folded below. Rules are listed in the order they were evaluated. The taint on the call's inputs and the decision's latency are not on the transcript yet.",
+      "none": "none",
       "decidedBy": "decided by {who}",
       "by": {
         "oxagen": "Oxagen policy",
