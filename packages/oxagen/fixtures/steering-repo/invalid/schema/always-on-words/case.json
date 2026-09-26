@@ -1,0 +1,16 @@
+{
+  "check": "schema",
+  "rule": "always-on-words",
+  "severity": "warning",
+  "description": "An always-on body passes 120 words.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/platform/a-intel.platform.review-checklist.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/platform/a-intel.platform.review-checklist.md"
+    }
+  ]
+}

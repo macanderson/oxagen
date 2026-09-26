@@ -25,6 +25,7 @@ import {
   publishedSteeringGet,
   type PublishedSteeringGetOutput,
 } from "@oxagen/oxagen/contracts/context.steering.published.get";
+import { WORKSPACE_LINK_PATH } from "@oxagen/oxagen/steering-repo/paths";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 import {
@@ -42,7 +43,7 @@ import { OXAGEN_DIR } from "./repository.tree.get";
 type Scope = { orgId: string; workspaceId: string };
 
 /** A machine's link to its workspace. Gitignored, and never published. */
-export const WORKSPACE_JSON_PATH = ".oxagen/workspace.json";
+export const WORKSPACE_JSON_PATH = WORKSPACE_LINK_PATH;
 
 /** How many file reads one pull keeps in flight against GitHub. */
 export const FILE_READ_CONCURRENCY = 8;

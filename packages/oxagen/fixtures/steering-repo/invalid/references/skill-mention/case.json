@@ -1,0 +1,17 @@
+{
+  "check": "references",
+  "rule": "mention-resolves",
+  "severity": "error",
+  "description": "An @skill: mention names a skill that does not exist.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/billing/a-intel.billing.missing-skill.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/billing/a-intel.billing.missing-skill.md",
+      "line": 16
+    }
+  ]
+}

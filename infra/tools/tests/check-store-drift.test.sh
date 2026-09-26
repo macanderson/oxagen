@@ -127,6 +127,71 @@ fi
 neo4j_declared_names "$WORK/nope.cypher" >/dev/null 2>&1
 expect_code 2 "$?" "cypher: an unreadable schema file is 'unknown', not 'nothing declared'"
 
+# --- neo4j_declared_vector_sizes -------------------------------------------
+#
+# A resize keeps the index name, so the name check read a schema.cypher that
+# moved every vector index from 1,536 to 1,024 dimensions as current (#4148).
+
+cat > "$WORK/vectors.cypher" <<'CYPHER'
+// CREATE VECTOR INDEX ghost_vectors IF NOT EXISTS FOR (n:Ghost) ON (n.embedding)
+// OPTIONS { indexConfig: { `vector.dimensions`: 64, `vector.similarity_function`: 'cosine' } };
+CREATE VECTOR INDEX memory_embedding_index IF NOT EXISTS
+FOR (n:AgentMemory) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1024, `vector.similarity_function`: 'cosine' } };
+DROP INDEX engram_memory_embedding_index IF EXISTS;
+CREATE INDEX execution_org IF NOT EXISTS FOR (n:Execution) ON (n.orgId);
+CREATE VECTOR INDEX graph_node_embedding_index IF NOT EXISTS
+FOR (n:GraphNode) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1024, `vector.similarity_function`: 'cosine' } };
+CYPHER
+
+SIZES=$(neo4j_declared_vector_sizes "$WORK/vectors.cypher")
+contains "$SIZES" "memory_embedding_index 1024" "vector sizes: reads a multi-line vector index with its size"
+contains "$SIZES" "graph_node_embedding_index 1024" "vector sizes: reads every vector index"
+case "$SIZES" in
+  *ghost_vectors*) fail "vector sizes: a commented-out index must not count" ;;
+  *) pass ;;
+esac
+case "$SIZES" in
+  *execution_org*|*engram*) fail "vector sizes: only CREATE VECTOR INDEX statements count" ;;
+  *) pass ;;
+esac
+if [[ $(printf '%s\n' "$SIZES" | grep -c .) -eq 2 ]]; then pass; else
+  fail "vector sizes: expected exactly 2 pairs, got: $(printf '%s' "$SIZES" | tr '\n' ' ')"
+fi
+
+# An index of the old size reads as missing, so the gate applies the schema.
+printf 'graph_node_embedding_index 1024\nmemory_embedding_index 1536\n' > "$WORK/vec-present.txt"
+printf '%s\n' "$SIZES" > "$WORK/vec-declared.txt"
+MISSING=$(missing_from "$WORK/vec-declared.txt" "$WORK/vec-present.txt")
+contains "$MISSING" "memory_embedding_index 1024" "vector sizes: an index of the old size reads as behind"
+case "$MISSING" in
+  *graph_node_embedding_index*) fail "vector sizes: an index of the current size must not read as behind" ;;
+  *) pass ;;
+esac
+
+neo4j_declared_vector_sizes "$WORK/nope.cypher" >/dev/null 2>&1
+expect_code 2 "$?" "vector sizes: an unreadable schema file is 'unknown', not 'nothing declared'"
+
+# Each database is compared on its own, so a pooled database that is current
+# cannot hide an organisation database at the old size.
+printf 'memory_embedding_index 1024\n' > "$WORK/one-index.txt"
+DECLARED=$( { prefix_lines neo4j "$WORK/one-index.txt"; prefix_lines org-acme "$WORK/one-index.txt"; } )
+contains "$DECLARED" "neo4j memory_embedding_index 1024" "vector sizes: declares the pooled database's indexes"
+contains "$DECLARED" "org-acme memory_embedding_index 1024" "vector sizes: declares each organisation database's indexes"
+printf '%s\n' "$DECLARED" > "$WORK/db-declared.txt"
+printf 'neo4j memory_embedding_index 1024\norg-acme memory_embedding_index 1536\n' > "$WORK/db-present.txt"
+DB_MISSING=$(missing_from "$WORK/db-declared.txt" "$WORK/db-present.txt")
+contains "$DB_MISSING" "org-acme memory_embedding_index 1024" "vector sizes: an organisation database at the old size reads as behind"
+case "$DB_MISSING" in
+  *"neo4j memory_embedding_index"*) fail "vector sizes: a current pooled database must not read as behind" ;;
+  *) pass ;;
+esac
+: > "$WORK/empty.txt"
+if [[ -z $(prefix_lines neo4j "$WORK/empty.txt") ]]; then pass; else
+  fail "vector sizes: an empty result must prefix to nothing"
+fi
+
 # --- the real declarations this ships against ------------------------------
 #
 # The fixtures above prove the parsing; these prove it is pointed at something.
@@ -139,6 +204,8 @@ if [[ -f $REAL_CYPHER ]]; then
   n=$(printf '%s\n' "$REAL" | grep -c .)
   if [[ $n -gt 20 ]]; then pass; else fail "the real schema.cypher parsed to only $n names"; fi
   contains "$REAL" "tenant_public_id" "the real schema.cypher yields a constraint known to be in it"
+  REAL_SIZES=$(neo4j_declared_vector_sizes "$REAL_CYPHER")
+  contains "$REAL_SIZES" "graph_node_embedding_index 1024" "the real schema.cypher yields the universal vector index at 1,024 dimensions"
 else
   fail "packages/ontology/src/schema.cypher is gone — the Neo4j half of this check has no input"
 fi

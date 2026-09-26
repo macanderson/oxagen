@@ -2591,6 +2591,7 @@ type Messages = {
         noBasis: string;
         unbased: string;
         unpriced: string;
+        noUsage: string;
         estimated: string;
         notRecorded: string;
         mixed: string;
@@ -2707,6 +2708,7 @@ type Messages = {
       };
       parked: string;
       notRecorded: string;
+      noUsage: string;
       basisNotRecorded: string;
       estimate: string;
       source: {
@@ -2726,6 +2728,7 @@ type Messages = {
         none: string;
         older: string;
         newest: string;
+        first: string;
         rangeEmpty: string;
         rangeEmptyMore: string;
         previous: string;
@@ -5727,6 +5730,7 @@ type Messages = {
       emptySearch: string;
       emptyErrors: string;
       cut: string;
+      cutLive: string;
       more: string;
       readingMore: string;
       loadedMore: string;
@@ -6044,6 +6048,7 @@ type Messages = {
         incomplete: string;
         recorded: string;
         entries: string;
+        searchRequests: string;
       };
       composition: {
         title: string;
@@ -7773,6 +7778,7 @@ type Messages = {
   spend: {
     notRecorded: string;
     basisNotRecorded: string;
+    unmetered: string;
     basis: {
       gateway_observed: string;
       client_attested: string;
@@ -8095,6 +8101,8 @@ type Messages = {
         noCost: string;
         estimated: string;
         setRate: string;
+        windowTokens: string;
+        windowRequests: string;
       };
       book: {
         title: string;
@@ -8331,6 +8339,8 @@ type Messages = {
       cacheHitNote: string;
       cacheWritten: string;
       cacheWrittenNote: string;
+      searches: string;
+      searchesNote: string;
       cacheWriteShare: string;
       effectiveInput: string;
       unmapped: string;

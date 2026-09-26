@@ -69,7 +69,7 @@ function CostSections({
       })
     : turns;
   const ledger = summed.ok ? summed.value.ledger : null;
-  const prices = classPrices(metrics.priced, metrics.tokens);
+  const prices = classPrices(metrics.priced, metrics.tokens, metrics.searches);
   const rollup = cost.ok ? cost.value.rollup : null;
   const retries = rollup?.retries ?? null;
   // A rollup built while the run was open covers the calls recorded so far

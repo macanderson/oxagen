@@ -847,6 +847,82 @@ describe("which runs the sweep queues", () => {
       },
       true,
     ],
+    // #4113: an unchanged failed or partial run backs off. Each retry waits
+    // at least as long as the run had gone unchanged before the last attempt.
+    [
+      "failed half an hour ago, six hours after its last change",
+      {
+        observedAt: minutesAgo(31),
+        revision: "r",
+        error: "model_refused",
+        changed: false,
+        digest: null,
+        unchangedForMin: 360,
+      },
+      false,
+    ],
+    [
+      "failed seven hours ago, six hours after its last change",
+      {
+        observedAt: minutesAgo(420),
+        revision: "r",
+        error: "model_refused",
+        changed: false,
+        digest: null,
+        unchangedForMin: 360,
+      },
+      true,
+    ],
+    [
+      "failed half an hour ago, six hours after its last change, then got new frames",
+      {
+        observedAt: minutesAgo(31),
+        revision: "r",
+        error: "model_refused",
+        changed: true,
+        digest: null,
+        unchangedForMin: 360,
+      },
+      true,
+    ],
+    [
+      "partial and six minutes old, two hours after its last change",
+      {
+        observedAt: minutesAgo(6),
+        revision: "r",
+        error: null,
+        changed: false,
+        digest: "partial:d",
+        unchangedForMin: 120,
+      },
+      false,
+    ],
+    [
+      "partial and three hours old, two hours after its last change",
+      {
+        observedAt: minutesAgo(180),
+        revision: "r",
+        error: null,
+        changed: false,
+        digest: "partial:d",
+        unchangedForMin: 120,
+      },
+      true,
+    ],
+    [
+      // A write between the job's snapshot and its read leaves a revision
+      // newer than the observation, so the gap is below zero.
+      "partial and six minutes old, with a revision newer than its observation",
+      {
+        observedAt: minutesAgo(6),
+        revision: "r",
+        error: null,
+        changed: false,
+        digest: "partial:d",
+        unchangedForMin: -1,
+      },
+      true,
+    ],
     [
       "live and never observed",
       {
@@ -1067,6 +1143,8 @@ function evaluateDue(
     live?: boolean;
     named?: boolean;
     spentMicros?: number;
+    /** How long the run had gone unchanged when last observed. Unset is 0. */
+    unchangedForMin?: number;
   },
 ): boolean {
   const col = (name: string) => `"tacho"."sessions"."${name}"`;
@@ -1135,6 +1213,21 @@ function evaluateDue(
             row.digest.startsWith(
               String(params[Number(i) - 1]).replace(/%$/u, ""),
             ),
+        ),
+    )
+    // The retry backoff: the time since the last attempt is longer than the
+    // run had gone unchanged before it.
+    .replace(
+      new RegExp(
+        `${escapeRegExp(col("summary_observed_at"))} - coalesce\\(${escapeRegExp(col("summary_observed_revision"))}, ${escapeRegExp(col("updated_at"))}\\) < \\$(\\d+)::timestamptz - ${escapeRegExp(col("summary_observed_at"))}`,
+        "gu",
+      ),
+      (_m, i: string) =>
+        JSON.stringify(
+          row.observedAt !== null &&
+            (row.unchangedForMin ?? 0) * 60_000 <
+              new Date(params[Number(i) - 1] as string).getTime() -
+                row.observedAt.getTime(),
         ),
     )
     .replace(

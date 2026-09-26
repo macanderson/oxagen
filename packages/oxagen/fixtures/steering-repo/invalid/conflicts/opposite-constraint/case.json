@@ -1,0 +1,20 @@
+{
+  "check": "conflicts",
+  "rule": "opposite-constraint",
+  "severity": "error",
+  "description": "An active constraint forbids the statement this one requires.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/platform/a-intel.platform.push-to-main.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/platform/a-intel.platform.push-to-main.md",
+      "field": "effect"
+    },
+    {
+      "path": "steering/platform/a-intel.platform.no-push-to-main.md"
+    }
+  ]
+}

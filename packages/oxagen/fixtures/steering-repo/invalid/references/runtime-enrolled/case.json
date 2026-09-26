@@ -1,0 +1,18 @@
+{
+  "check": "references",
+  "rule": "runtime-enrolled",
+  "severity": "error",
+  "description": "An agent file names a runtime no one enrolled. context.json lists the enrolled runtimes.",
+  "refused_by_reader": false,
+  "changed": [
+    "agents/a-intel.core.release-bot.toml"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "agents/a-intel.core.release-bot.toml",
+      "line": 6,
+      "field": "runtime"
+    }
+  ]
+}

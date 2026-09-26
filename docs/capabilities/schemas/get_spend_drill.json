@@ -353,6 +353,40 @@
           ],
           "additionalProperties": false
         }
+      },
+      "unmeteredRuns": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "byHarness": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "harness": {
+                  "type": "string"
+                },
+                "runs": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "harness",
+                "runs"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "total",
+          "byHarness"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [

@@ -13,6 +13,7 @@ const costByClass = {
   cache_write_1h: usd("0"),
   output: usd("32163"),
   reasoning: usd("0"),
+  server_tool_request: usd("0"),
 };
 
 const tokens = {
@@ -22,6 +23,7 @@ const tokens = {
   cache_write_1h: 0,
   output: 412,
   reasoning: 0,
+  server_tool_request: 0,
 };
 
 describe("get_run_cost contract", () => {
@@ -152,9 +154,9 @@ describe("get_run_cost contract", () => {
     expect(
       ok({ ...model, cost: null, costByClass: null, hasUnpriced: true }),
     ).toBe(true);
-    // Every class carries money and a basis, and all six are required.
-    const { reasoning: _dropped, ...fiveClasses } = costByClass;
-    expect(ok({ ...model, costByClass: fiveClasses })).toBe(false);
+    // Every class carries money and a basis, and every class is required.
+    const { reasoning: _dropped, ...withoutReasoning } = costByClass;
+    expect(ok({ ...model, costByClass: withoutReasoning })).toBe(false);
     expect(
       ok({
         ...model,

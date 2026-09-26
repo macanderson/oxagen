@@ -332,6 +332,27 @@ describe("Workspaces", () => {
     ).toBeInTheDocument();
     expect(copyId(ORG_ID)).toHaveTextContent(ORG_ID);
   });
+
+  it("leads each row with the workspace's avatar, or two mono letters when none is set", async () => {
+    const [core, ...rest] = list.workspaces;
+    if (core === undefined) throw new Error("no workspace");
+    await renderTab({
+      ...list,
+      workspaces: [
+        { ...core, avatarUrl: "https://example.test/core.png" },
+        ...rest,
+      ],
+    });
+    const set = row(core.id).querySelector('[data-testid="workspace-avatar"]');
+    expect(set).toHaveAttribute("data-avatar", "image");
+    expect(set).toHaveAttribute("src", "https://example.test/core.png");
+    const unset = row("wrk_1b2c3d4e5f6g7h8j9k0m1n").querySelector(
+      '[data-testid="workspace-avatar"]',
+    );
+    expect(unset).toHaveAttribute("data-avatar", "initials");
+    expect(unset).toHaveAttribute("data-font", "mono");
+    expect(unset).toHaveTextContent(/^fi$/);
+  });
 });
 
 describe("Workspaces › public ids", () => {

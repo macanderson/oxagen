@@ -1,0 +1,2 @@
+{"tool":"create_refund","arguments":{"charge_id":"ch_3Q","amount":1200},"request":{"method":"POST","path":"/refunds","body":{"charge_id":"ch_3Q","amount":1200}},"response":{"status":200,"body":{"id":"re_1","amount":1200,"status":"pending"}},"result":{"id":"re_1","amount":1200,"status":"pending"}}
+{"tool":"get_refund","arguments":{"refund_id":"re_1"},"request":{"method":"GET","path":"/refunds/re_1"},"response":{"status":200,"body":{"id":"re_1","amount":1200,"status":"succeeded"}},"result":{"id":"re_1","amount":1200,"status":"succeeded"}}

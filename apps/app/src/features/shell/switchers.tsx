@@ -13,17 +13,28 @@
 // so each dialog says so once. Each tile prints only what the read returned:
 // `acme` where the mock has `a-intel · Team`, `acme/core-platform` where it
 // has `a-intel/platform · main` (#3861).
+//
+// Each tile and each dialog row draws the avatar set on the Organization page.
+// An organization or workspace with none keeps the mock's letter tile: the
+// first letter on gold for an organization, two mono letters for a workspace.
+// A refused or failed read has no avatar to draw, so the tile falls back too.
 import { ChevronsUpDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useId, useState } from "react";
 import type { ShellData } from "./shell-data";
 import type { Read } from "@/data/read";
 import { routes, type SafePath } from "@/shared/safe-path";
+import { Avatar } from "@/ui/avatar";
 import { buttonSecondary } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
 
-type Choice = { slug: string; name: string; href: SafePath };
+type Choice = {
+  slug: string;
+  name: string;
+  avatarUrl: string | null;
+  href: SafePath;
+};
 
 /** The issue that owns the switchers' missing meta, carried as a data attribute only. */
 const META_GAP = "#3861";
@@ -38,18 +49,34 @@ function matchesChoice(choice: Choice, query: string): boolean {
 const tileClass =
   "mb-[7px] flex w-full items-center gap-[9px] rounded-[10px] border border-border bg-card px-2.5 py-2 text-left text-card-foreground transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-ring";
 
-function Tile({ text, mono }: { text: string; mono?: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={
-        mono
-          ? "grid size-6 flex-none place-items-center rounded-md border border-rule bg-hl font-mono text-[11px] text-foreground"
-          : "grid size-6 flex-none place-items-center rounded-md bg-gold text-[11px] font-bold text-on-gold"
-      }
-    >
-      {text}
-    </span>
+/** An organization's or a workspace's avatar, or its letter tile when none is set. */
+function ChoiceAvatar({
+  kind,
+  choice,
+  testId,
+}: {
+  kind: "org" | "ws";
+  choice: { slug: string; name: string; avatarUrl: string | null };
+  testId?: string;
+}) {
+  return kind === "org" ? (
+    <Avatar
+      value={choice.avatarUrl}
+      initials={choice.name.slice(0, 1).toLocaleUpperCase()}
+      size={24}
+      shape="agent"
+      fallbackTone="gold"
+      testId={testId}
+    />
+  ) : (
+    <Avatar
+      value={choice.avatarUrl}
+      initials={choice.slug.slice(0, 2)}
+      size={24}
+      shape="agent"
+      fallbackFont="mono"
+      testId={testId}
+    />
   );
 }
 
@@ -135,11 +162,7 @@ export function SwitcherDialog({
                         isCurrent ? "bg-hl" : ""
                       }`}
                     >
-                      {kind === "org" ? (
-                        <Tile
-                          text={choice.name.slice(0, 1).toLocaleUpperCase()}
-                        />
-                      ) : null}
+                      <ChoiceAvatar kind={kind} choice={choice} />
                       <span className="min-w-0 flex-1">
                         <b className="block truncate text-sm font-semibold">
                           {choice.name}
@@ -281,6 +304,11 @@ export function OrgSwitcher({ data }: { data: ShellData }) {
   const t = useTranslations("shell.switcher");
   const { org } = data;
   const choices = orgChoices(data);
+  // The page's organization is always one of the viewer's, so its avatar is
+  // the listed one; a read that did not list leaves the letter tile.
+  const avatarUrl = choices.ok
+    ? (choices.value.find((o) => o.slug === org.slug)?.avatarUrl ?? null)
+    : null;
   return (
     <Switcher
       title={t("org")}
@@ -289,7 +317,11 @@ export function OrgSwitcher({ data }: { data: ShellData }) {
       current={org.slug}
       choices={choices}
     >
-      <Tile text={org.name.slice(0, 1).toLocaleUpperCase()} />
+      <ChoiceAvatar
+        kind="org"
+        choice={{ slug: org.slug, name: org.name, avatarUrl }}
+        testId="org-switcher-avatar"
+      />
       <span className="min-w-0 flex-1">
         <b className="block truncate text-[13px] font-semibold">{org.name}</b>
         <span className="block truncate font-mono text-[11px] text-muted-foreground">
@@ -311,9 +343,10 @@ export function WorkspaceSwitcher({
   const t = useTranslations("shell.switcher");
   if (ws === null) return null;
   const choices = workspaceChoices(data);
-  const name = choices.ok
-    ? (choices.value.find((w) => w.slug === ws)?.name ?? ws)
-    : ws;
+  const listed = choices.ok
+    ? choices.value.find((w) => w.slug === ws)
+    : undefined;
+  const name = listed?.name ?? ws;
   return (
     <Switcher
       title={t("ws")}
@@ -323,7 +356,11 @@ export function WorkspaceSwitcher({
       createHref={routes.organization(data.org.slug, "workspaces")}
       choices={choices}
     >
-      <Tile text={ws.slice(0, 2)} mono />
+      <ChoiceAvatar
+        kind="ws"
+        choice={{ slug: ws, name, avatarUrl: listed?.avatarUrl ?? null }}
+        testId="workspace-switcher-avatar"
+      />
       <span className="min-w-0 flex-1">
         <b className="block truncate text-[13px] font-semibold">{name}</b>
         <span className="block truncate font-mono text-[11px] text-muted-foreground">

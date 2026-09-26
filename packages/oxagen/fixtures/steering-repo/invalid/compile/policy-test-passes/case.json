@@ -1,0 +1,17 @@
+{
+  "check": "compile",
+  "rule": "policy-test-passes",
+  "severity": "error",
+  "description": "A policy test expects allow for a refund the policy parks.",
+  "refused_by_reader": false,
+  "changed": [
+    "policy/money.tests.jsonl"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "policy/money.tests.jsonl",
+      "line": 2
+    }
+  ]
+}

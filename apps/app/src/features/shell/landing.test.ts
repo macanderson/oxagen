@@ -124,8 +124,8 @@ const source = {
   },
 };
 
-const acme = { slug: "acme", name: "Acme Robotics" };
-const globex = { slug: "globex", name: "Globex" };
+const acme = { slug: "acme", name: "Acme Robotics", avatarUrl: null };
+const globex = { slug: "globex", name: "Globex", avatarUrl: null };
 
 beforeEach(() => {
   requireUser.mockReset();
@@ -146,8 +146,8 @@ describe("the / landing", () => {
     orgs.mockResolvedValue(readOk([acme]));
     workspaces.mockResolvedValue(
       readOk([
-        { slug: "core-platform", name: "Core platform" },
-        { slug: "finops", name: "FinOps" },
+        { slug: "core-platform", name: "Core platform", avatarUrl: null },
+        { slug: "finops", name: "FinOps", avatarUrl: null },
       ]),
     );
     expect(await landsOn()).toBe("/acme/core-platform");
@@ -157,7 +157,9 @@ describe("the / landing", () => {
 
   it("opens the first organization list_orgs returns, the one joined first, and reads no other", async () => {
     orgs.mockResolvedValue(readOk([globex, acme]));
-    workspaces.mockResolvedValue(readOk([{ slug: "ops", name: "Ops" }]));
+    workspaces.mockResolvedValue(
+      readOk([{ slug: "ops", name: "Ops", avatarUrl: null }]),
+    );
     expect(await landsOn()).toBe("/globex/ops");
     expect(workspaces).toHaveBeenCalledTimes(1);
   });

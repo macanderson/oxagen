@@ -1,0 +1,18 @@
+{
+  "check": "schema",
+  "rule": "file-named-for-lineage",
+  "severity": "error",
+  "description": "The file name is not the record's lineage plus .md.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/platform/a-intel.platform.wrong-name.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/platform/a-intel.platform.wrong-name.md",
+      "line": 3,
+      "field": "lineage"
+    }
+  ]
+}

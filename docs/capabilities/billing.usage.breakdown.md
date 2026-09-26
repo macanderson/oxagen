@@ -40,7 +40,7 @@ additive (the `@oxagen/ai` gateway reports `inputTokens` as the inclusive total)
 | ------------------- | -------------------------- | ------------------------------------------------------------ |
 | `range`             | `{ start, end }`           | Echoes the requested window.                                 |
 | `totals`            | measures                   | Sum across the window (derived from `byModel`).              |
-| `cacheSavingsMicros`| integer (micro-USD)        | Cache savings NET of the write premium: cache reads priced at the `input_uncached` rate less the `cache_read` rate, minus each cache write's premium over `input_uncached`. Priced from the price book (`cost.price_entries`), with each price-boundary bucket at the rates in force when its calls ran, through the same helper the run rollup uses (#4069). Covers the gateway's `token_usage` calls, the same population as the other figures here. A bucket the book cannot price adds nothing rather than a guessed rate. Positive = caching netted money; can go negative. Powers the dashboard "cache savings" figure. |
+| `cacheSavingsMicros`| integer (micro-USD)        | Cache savings NET of the write premium: cache reads priced at the `input_uncached` rate less the `cache_read` rate, minus each cache write's premium over `input_uncached`. Priced from the price book (`cost.price_entries`), with each price-boundary bucket at the rates in force when its calls ran, through the same helper the run rollup uses (#4069). The price read loads only the rows that could price the models in `byModel` over the window (#4202). Covers the gateway's `token_usage` calls, the same population as the other figures here. A bucket the book cannot price adds nothing rather than a guessed rate. Positive = caching netted money; can go negative. Powers the dashboard "cache savings" figure. |
 | `series`            | array of `{ day, …measures }` | One point per UTC calendar day, chronological.            |
 | `byModel`           | array of `{ key, provider, …measures }` | Grouped by model; `provider` is the provider slug. |
 | `bySurface`         | array of `{ key, provider: "", …measures }` | Grouped by surface (`api`/`mcp`/`app`/`agent`/…). |
@@ -53,7 +53,10 @@ Breakdown rows are ordered by cost descending, then executions descending.
 
 ## Side effects
 
-- Postgres: none.
+- Postgres: read-only select of `cost.price_entries` inside the caller's tenant
+  scope: the list rows and this organization's own rows that could price a
+  model in `byModel` over the window. A long model list is read 5,000 model ids
+  per select.
 - ClickHouse: read-only aggregate (`GROUP BY`) over `token_usage`, filtered by
   `org_id` (always) and `workspace_id` (when supplied).
 - Neo4j: none.

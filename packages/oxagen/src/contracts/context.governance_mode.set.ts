@@ -58,6 +58,7 @@
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { LEGACY_GOVERNANCE_PATH } from "../steering-repo/paths";
 import { governanceModeSchema } from "./context.steering.shared";
 import { workspaceSettingsWrite } from "./workspace.settings.write";
 
@@ -65,7 +66,7 @@ import { workspaceSettingsWrite } from "./workspace.settings.write";
 export const GOVERNANCE_BRANCH = "oxagen/governance";
 
 /** `.oxagen/rules/governance.toml`, the file this capability writes. */
-export const GOVERNANCE_FILE = ".oxagen/rules/governance.toml";
+export const GOVERNANCE_FILE = LEGACY_GOVERNANCE_PATH;
 
 export const contextGovernanceModeSet = registerCapability({
   name: "set_governance_mode",

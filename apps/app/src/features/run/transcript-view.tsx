@@ -31,7 +31,9 @@
 // entries the contract derives from them, so a frame landing is the signal to
 // read the tail rather than something to render. A run longer than one read
 // is paged rather than truncated: entries are appended, never replaced, and a
-// cursor this capability did not write is refused and said so.
+// cursor this capability did not write is refused and said so. A live run
+// past the read's frame cap cannot be followed past it, and the footer says
+// so while the stream is open.
 import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
@@ -1897,6 +1899,14 @@ export function TranscriptView({
   // The resume point of what is drawn: the search's matches while a search
   // is in force, else the run's.
   const drawnCursor = searching ? found.cursor : cursor;
+  // Following a live run: the stream reads the tail as frames land, so the
+  // footer offers no page to read.
+  const following =
+    live && (stream === "connecting" || stream === "open") && !searching;
+  // A live run past the read's frame cap. Every tail read folds the same
+  // first frames, so the view holds a prefix that no longer grows, and the
+  // footer says so rather than showing it as the live head (#3375).
+  const frozen = following && !complete;
 
   const footer =
     stream === "denied"
@@ -1905,18 +1915,20 @@ export function TranscriptView({
         ? t("followLost")
         : stream === "sealed"
           ? t("followSealed")
-          : live && stream !== "off" && !searching
-            ? null
-            : drawnCursor !== null
-              ? t("loadedMore", {
-                  count: formatCount(
-                    searching ? found.entries.length : entries.length,
-                    locale,
-                  ),
-                })
-              : !complete
-                ? t("cut", { count: formatCount(entries.length, locale) })
-                : null;
+          : frozen
+            ? t("cutLive", { count: formatCount(entries.length, locale) })
+            : following
+              ? null
+              : drawnCursor !== null
+                ? t("loadedMore", {
+                    count: formatCount(
+                      searching ? found.entries.length : entries.length,
+                      locale,
+                    ),
+                  })
+                : !complete
+                  ? t("cut", { count: formatCount(entries.length, locale) })
+                  : null;
 
   // One drawn row, with the subagent rows under it drawn inside it.
   const drawRow = ({ row, index, children }: Drawn): ReactNode => (
@@ -2159,7 +2171,10 @@ export function TranscriptView({
             {footer === null ? null : (
               <span data-testid="transcript-count">{footer}</span>
             )}
-            {drawnCursor === null ? null : (
+            {/* While following, the stream reads the tail. The control
+                shows only to retry a page that failed. */}
+            {drawnCursor === null ||
+            (frozen && pageFailure === null) ? null : (
               <button
                 type="button"
                 data-testid="transcript-more"

@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/governance/v1.json",
+  "title": "Governance",
+  "description": "steering/governance.toml: the governance mode, the always-on budget, the ledger, memory settings, and reviewer groups.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "governance/v1"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "solo",
+        "team",
+        "regulated"
+      ]
+    },
+    "steering": {
+      "type": "object",
+      "properties": {
+        "always_on_tokens": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            {
+              "const": "off"
+            }
+          ],
+          "description": "The always-on budget per code repository, or off. Unset inherits Oxagen's default, which only warns."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ledger": {
+      "type": "object",
+      "properties": {
+        "rotate": {
+          "type": "string",
+          "enum": [
+            "day",
+            "week",
+            "month",
+            "year"
+          ]
+        },
+        "max_lines": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "A new file starts here even mid-period."
+        }
+      },
+      "additionalProperties": false
+    },
+    "memory": {
+      "type": "object",
+      "properties": {
+        "recall_unreviewed": {
+          "type": "string",
+          "enum": [
+            "same-agent",
+            "off"
+          ]
+        },
+        "batch_size": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Memories per memory PR."
+        },
+        "retire_after_days": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        "auto_merge": {
+          "type": "boolean",
+          "description": "Allowed in solo mode only."
+        }
+      },
+      "additionalProperties": false
+    },
+    "reviewers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          },
+          "group": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 40,
+            "pattern": "^[a-z0-9-]+$"
+          }
+        },
+        "required": [
+          "paths",
+          "group"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Route the folders a pull request changes to a reviewer group."
+    }
+  },
+  "required": [
+    "schema",
+    "mode"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "not": {
+          "properties": {
+            "mode": {
+              "const": "solo"
+            }
+          },
+          "required": [
+            "mode"
+          ]
+        }
+      },
+      "then": {
+        "properties": {
+          "memory": {
+            "properties": {
+              "auto_merge": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

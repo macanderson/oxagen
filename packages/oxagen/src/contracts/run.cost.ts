@@ -18,7 +18,7 @@ import { runPublicIdSchema } from "./run.list";
 import { costSchema, ratioSchema, tokenCountsSchema } from "./spend.shared";
 
 /**
- * A model's recorded cost split by the six token classes the rollup prices,
+ * A model's recorded cost split by the token classes the rollup prices,
  * each priced from the price book at its frame's instant and rounded once.
  * A class no entry priced is a zero figure; an estimated frame's reported
  * figure, which has no split, sits under `output`.
@@ -31,6 +31,8 @@ export const runCostByClassSchema = z
     cache_write_1h: costSchema,
     output: costSchema,
     reasoning: costSchema,
+    /** Provider-side tool requests, such as web searches. */
+    server_tool_request: costSchema,
   })
   .strict();
 

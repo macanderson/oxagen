@@ -50,6 +50,7 @@ import {
   type RunReadDeps,
   startCursorSeq,
 } from "./lib/run-read";
+import { runLabel } from "./lib/run-item";
 
 /** How often the long poll re-reads the store. */
 export const POLL_INTERVAL_MS = 500;
@@ -295,7 +296,9 @@ export function createRunGetHandler(
     return {
       run: {
         ...run.item,
-        ...(title === null ? {} : { name: title }),
+        // ClickHouse holds the harness title as the frame carried it, with no
+        // bound, so it is cut like every other run name (#4224).
+        ...(title === null ? {} : { name: runLabel(title) }),
         ...(config === null
           ? {}
           : {

@@ -310,6 +310,14 @@ export const RUN_SORT_KEYS = [
  */
 export const RUN_LIST_TOTAL_BOUND = 10_000;
 
+/**
+ * The most UTF-16 code units a run's `name` or `taskRef` carries. A harness
+ * title and a ledger run's goal have no cap where they are written (a goal
+ * may run to 8,192 characters), so the reads cut a longer one on a
+ * code-point boundary and end it with an ellipsis (#4224).
+ */
+export const RUN_LABEL_MAX = 256;
+
 export const runItemSchema = z
   .object({
     id: runPublicIdSchema,
@@ -369,12 +377,13 @@ export const runItemSchema = z
     costIsEstimate: z.boolean().optional(),
     reportedCost: runCostSchema.nullable().optional(),
     /**
-     * The goal a ledger run was admitted for. Null for a wrapped session: no
-     * dispatch record names its task, and a task is never inferred from a
-     * branch name or model output. The issues a session's pull requests close
-     * are read by `get_run_work`.
+     * The goal a ledger run was admitted for, cut to `RUN_LABEL_MAX` with an
+     * ellipsis. The run's spec keeps the whole goal. Null for a wrapped
+     * session: no dispatch record names its task, and a task is never
+     * inferred from a branch name or model output. The issues a session's
+     * pull requests close are read by `get_run_work`.
      */
-    taskRef: z.string().nullable(),
+    taskRef: z.string().max(RUN_LABEL_MAX).nullable(),
     /** RFC 3339. */
     startedAt: z.string().datetime(),
     /**
@@ -541,8 +550,15 @@ export const runItemSchema = z
      * `model_refused` or `credit_refused:<code>`. Absent once an account exists.
      */
     enrichmentError: z.string().optional(),
-    /** The generated name; null until `summarize_run` wrote one. */
-    name: z.string().nullable(),
+    /**
+     * What the run is called, cut to `RUN_LABEL_MAX` with an ellipsis. A
+     * wrapped session reads the title its harness gave it first, then the
+     * name Oxagen wrote (the model's, or the fallback from the first
+     * prompt), then the title ingest derived. A ledger run reads the name
+     * Oxagen wrote. With automatic accounts turned off, only the harness
+     * title is read. Null when there is none.
+     */
+    name: z.string().max(RUN_LABEL_MAX).nullable(),
     summary: runSummarySchema.nullable(),
     /**
      * The pull requests the run's frames name, earliest first. Absent when
