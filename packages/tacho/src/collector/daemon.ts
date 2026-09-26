@@ -16,6 +16,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { z } from "zod";
+import { quarantineHookPayload } from "../claude-code/hook-client";
 import { hookInputSchema } from "../claude-code/hooks";
 import { homedir, hostname as osHostname } from "node:os";
 import { dirname, join } from "node:path";
@@ -2889,11 +2890,37 @@ async function initializeDaemon(
         now,
         log,
       }),
-    handleHook: (envelope) =>
-      serial.run(async () => {
+    handleHook: (envelope) => {
+      // A payload with no session id or no event name cannot be filed on a
+      // session. Claude Code's http hooks post here directly, so a refusal
+      // left only a log line and the event was gone (H-07). It is kept in
+      // quarantine, the way `tacho-hook` keeps a payload it cannot read, and
+      // still refused.
+      const readable = hookInputSchema.safeParse(envelope.payload);
+      if (!readable.success) {
+        const at = now();
+        quarantineHookPayload(paths.quarantine, {
+          hookId: envelope.hook_id ?? ulid(at),
+          receivedAt: toProtocolTimestamp(at),
+          reason: `payload is not a hook: ${readable.error.issues
+            .map(
+              (issue) =>
+                `${issue.path.join(".") || "payload"}: ${issue.message}`,
+            )
+            .join("; ")}`,
+          rawText: JSON.stringify(envelope.payload) ?? String(envelope.payload),
+          label:
+            envelope.agent !== undefined
+              ? { agent: envelope.agent }
+              : { harness: envelope.harness ?? "claude-code" },
+        });
+        return Promise.reject(readable.error);
+      }
+      return serial.run(async () => {
         await drainSpool();
         return handleHookInner(envelope);
-      }),
+      });
+    },
     handleOtlp: (signal, payload) =>
       serial.run(async () => {
         lastOtlpAt = now();

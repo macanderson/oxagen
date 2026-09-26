@@ -685,11 +685,37 @@ function quarantineUnreadablePayload(
   rawText: string,
   label: Record<string, string>,
 ): void {
+  quarantineHookPayload(deps.paths.quarantine, {
+    hookId,
+    receivedAt,
+    reason,
+    rawText,
+    label,
+  });
+}
+
+/**
+ * Keep one hook payload that cannot become an event in `quarantine/`, where
+ * `tacho status` counts it and the daemon's sweep ages it out. `tacho-hook`
+ * calls it for stdin it cannot read, and the daemon for an http hook body it
+ * cannot file on a session. Best-effort and silent on its own failure.
+ */
+export function quarantineHookPayload(
+  quarantineDir: string,
+  record: {
+    hookId: string;
+    receivedAt: string;
+    reason: string;
+    rawText: string;
+    label: Record<string, string>;
+  },
+): void {
+  const { hookId, receivedAt, reason, rawText, label } = record;
   try {
-    ensureDir(deps.paths.quarantine);
+    ensureDir(quarantineDir);
     const truncated = rawText.length > MAX_QUARANTINED_PAYLOAD_BYTES;
     writeSensitiveFileAtomic(
-      join(deps.paths.quarantine, `${hookId}.hook-payload.json`),
+      join(quarantineDir, `${hookId}.hook-payload.json`),
       JSON.stringify({
         schema: "tacho.quarantined-hook-payload.v1",
         received_at: receivedAt,
