@@ -5,10 +5,10 @@
 // `run.fit`. The page computes nothing: the rig strip's badges and the Cost
 // tab's Model fit panel both draw `run.fit`, so they cannot disagree.
 //
-// The reading is generated, not the record. It argues for a change to the
-// agent definition and changes nothing on its own, and a sealed run keeps the
-// model it ran on. It names a capability class one rung up or down the
-// vendor's own family, never a model id.
+// The reading is generated, not the record. It argues for a move of the
+// agent's model class or effort and changes nothing on its own, and a sealed
+// run keeps the model it ran on. It names a capability class one rung up or
+// down the vendor's own family, never a model id.
 //
 // The effort value itself is the record's (`run.effort`, with where it was
 // read), which the rig and the effort card print from one helper here, so the

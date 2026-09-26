@@ -9,11 +9,11 @@
  * turns and steps. It is never keyed on reasoning share for the model, which
  * is a fixed fraction of output per model family and so describes the model,
  * not the run. It names a capability class one rung up or down the vendor's
- * own family, never a model id: which id serves a class is the agent
- * definition's choice.
+ * own family, never a model id: which id serves a class is the agent's
+ * choice, not the reading's.
  *
- * It is generated, not the record. It argues for a change to the agent
- * definition and changes nothing on its own.
+ * It is generated, not the record. It argues for a move of the agent's model
+ * class or effort and changes nothing on its own (ADR-201).
  */
 import { z } from "zod";
 

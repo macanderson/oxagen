@@ -60,7 +60,10 @@ function MoveStub({
       >
         {label}
       </button>
-      <span id={whyId} className="min-w-0 text-[11.5px] text-muted-foreground">
+      <span
+        id={whyId}
+        className="min-w-0 text-[11.5px] text-muted-foreground"
+      >
         {why}
       </span>
     </div>

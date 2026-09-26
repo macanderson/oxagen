@@ -738,8 +738,8 @@ export async function upsertRunTotals(
 }
 
 async function readCarried(runId: string) {
-  // tenancy: the scheduled rollup job reads outside a tenant scope; the row
-  // is found by the run's globally unique public id.
+  // tenancy: the scheduled rollup job reads outside a tenant scope, so this
+  // is a global read of one row, filtered by the run's globally unique id.
   const rows = await withSystemDb((tx) =>
     tx
       .select({ accepted: totals.accepted })
