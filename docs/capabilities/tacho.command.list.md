@@ -14,6 +14,7 @@ Each command names its run, the person who issued it, and, for a `steer` or a `m
 
 - API: `POST /v1/:org_slug/:workspace_slug/commands/list`
 - MCP: `list_commands`
+- App: the Run page's Delivery report, and the inspector of an open command frame on the Governed actions tab
 - Authentication: session (org Owner, Admin, or Member; workspace Owner or Member)
 - Capability name: `list_commands`
 - Not billed (`noBillingGate: true`): a console read is never a governed action (ADR-052 exclusion 2). IAM default-deny; medium sensitivity.

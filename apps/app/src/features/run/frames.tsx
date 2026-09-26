@@ -287,6 +287,7 @@ export function FramePanel({
   tier,
   body,
   approvals,
+  control = null,
   steps,
   hrefOf,
   shown,
@@ -299,6 +300,8 @@ export function FramePanel({
   body: Read<RunFrameBody> | null;
   /** The parked call or the decision this frame records, when it is an approval frame. */
   approvals: ReactNode;
+  /** The operator's command this frame records, when it is a command frame (#2953). */
+  control?: ReactNode;
   steps: Steps;
   hrefOf: HrefOf;
   shown: number;
@@ -360,6 +363,7 @@ export function FramePanel({
           </p>
         )}
         {approvals}
+        {control}
         <FrameFacts frame={frame} entry={entry} />
         {frame === null || (body !== null && body.ok) ? null : (
           // The body read lists its own redactions; without it, the envelope's.
