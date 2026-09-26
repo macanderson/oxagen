@@ -7,6 +7,7 @@
  */
 import {
   appendFileSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -14,16 +15,43 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { TachoEvent } from "../envelope";
 import type { FrameBody } from "../evidence/frame-body";
 import { sessionMapKey } from "./registry";
 import {
   completeLines,
+  subagentDirOf,
+  subagentIdOf,
   type TailedSession,
   TranscriptTailer,
 } from "./transcript-tailer";
+
+const HOOK_FIXTURES = join(
+  __dirname,
+  "..",
+  "..",
+  "fixtures",
+  "claude-code",
+  "hooks",
+);
+
+/** A captured hook payload's stdin. */
+function hookFixture(name: string): Record<string, string> {
+  return (
+    JSON.parse(readFileSync(join(HOOK_FIXTURES, name), "utf8")) as {
+      stdin: Record<string, string>;
+    }
+  ).stdin;
+}
+
+/** Where Claude Code puts subagent `id`'s transcript for the session at `path`. */
+function subagentPath(path: string, id: string): string {
+  const dir = subagentDirOf(path) as string;
+  mkdirSync(dir, { recursive: true });
+  return join(dir, `agent-${id}.jsonl`);
+}
 
 /** A recorder that only remembers the lines it was handed. */
 function fakeSession(
@@ -370,6 +398,132 @@ describe("TranscriptTailer", () => {
     expect(
       await instance.ingestSubagentTranscript("nope", "a1", agentPath),
     ).toBeUndefined();
+  });
+
+  it("finds a subagent transcript where Claude Code writes it, under the id its hooks send", () => {
+    // Captured from Claude Code 2.1.263: the listing and the hook must key the
+    // same cursor, or a subagent is read twice.
+    const start = hookFixture("13-SubagentStart.json");
+    const stop = hookFixture("20-SubagentStop.json");
+    const transcript = stop["agent_transcript_path"] as string;
+    expect(subagentDirOf(start["transcript_path"] as string)).toBe(
+      dirname(transcript),
+    );
+    expect(subagentIdOf(transcript)).toBe(start["agent_id"]);
+    expect(subagentIdOf("agent-aebd5e72360a0fb91.meta.json")).toBeUndefined();
+    expect(subagentIdOf("workflows")).toBeUndefined();
+    expect(subagentDirOf("/no/extension")).toBeUndefined();
+  });
+
+  it("tails a subagent transcript across ticks before its SubagentStop", async () => {
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    writeFileSync(path, "");
+    const agentPath = subagentPath(path, "a1");
+    writeFileSync(`${agentPath.slice(0, -".jsonl".length)}.meta.json`, "{}");
+    writeFileSync(agentPath, "sub-1\n");
+    const session = fakeSession("s1", path);
+    const { instance } = tailer([session]);
+    await instance.tick();
+    expect(session.lines).toEqual([{ line: "sub-1", subagentId: "a1" }]);
+    appendFileSync(agentPath, "sub-2\npartial");
+    await instance.tick();
+    expect(session.lines.map((l) => l.line)).toEqual(["sub-1", "sub-2"]);
+
+    // SubagentStop feeds only what the ticks had not, then retires the cursor.
+    appendFileSync(agentPath, "\nsub-3\n");
+    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(
+      2,
+    );
+    expect(session.lines.map((l) => l.line)).toEqual([
+      "sub-1",
+      "sub-2",
+      "partial",
+      "sub-3",
+    ]);
+    expect(session.lines.every((l) => l.subagentId === "a1")).toBe(true);
+    appendFileSync(agentPath, "after-stop\n");
+    await instance.tick();
+    expect(await instance.ingestSubagentTranscript("s1", "a1", agentPath)).toBe(
+      0,
+    );
+    expect(session.lines).toHaveLength(4);
+  });
+
+  it("records a subagent whose SubagentStop never came, and drains it at SessionEnd", async () => {
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    writeFileSync(path, "parent-1\n");
+    const agentPath = subagentPath(path, "lost");
+    writeFileSync(agentPath, "lost-1\n");
+    const session = fakeSession("s1", path);
+    const { instance } = tailer([session]);
+    await instance.tick();
+    appendFileSync(agentPath, "lost-2\n");
+    // SessionEnd drains the session before its chain closes, subagents too.
+    await instance.drain("s1");
+    expect(session.lines.filter((l) => l.subagentId === "lost")).toEqual([
+      { line: "lost-1", subagentId: "lost" },
+      { line: "lost-2", subagentId: "lost" },
+    ]);
+    expect(session.lines.filter((l) => l.subagentId === undefined)).toEqual([
+      { line: "parent-1" },
+    ]);
+  });
+
+  it("reads a subagent transcript past 64 MiB to its last line", async () => {
+    // It was read whole on SubagentStop, capped at 64 MiB, and a longer one
+    // lost its tail.
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    writeFileSync(path, "");
+    const agentPath = subagentPath(path, "big");
+    const line = Buffer.alloc(1024 * 1024, 0x78);
+    line[line.length - 1] = 0x0a;
+    for (let i = 0; i < 65; i += 1) appendFileSync(agentPath, line);
+    appendFileSync(agentPath, "last\n");
+    let fed = 0;
+    let last: string | undefined;
+    const session = fakeSession("s1", path);
+    session.recorder.ingestTranscriptLine = (text) => {
+      fed += 1;
+      last = text.slice(0, 16);
+      return [];
+    };
+    const { instance } = tailer([session]);
+    expect(
+      await instance.ingestSubagentTranscript("s1", "big", agentPath),
+    ).toBe(66);
+    expect(fed).toBe(66);
+    expect(last).toBe("last");
+  });
+
+  it("keeps a subagent cursor across a restart, and never re-reads one an older build finished", async () => {
+    const dir = scratch();
+    const path = join(dir, "s.jsonl");
+    writeFileSync(path, "");
+    const statePath = join(dir, "state", "transcript-tail.json");
+    const live = subagentPath(path, "live");
+    const done = subagentPath(path, "done");
+    writeFileSync(live, "live-1\n");
+    writeFileSync(done, "done-1\n");
+    // A state an older build wrote: `done` was read whole on its SubagentStop.
+    mkdirSync(dirname(statePath), { recursive: true });
+    writeFileSync(
+      statePath,
+      JSON.stringify({
+        schema: "tacho.transcript-tail.v1",
+        cursors: { [cursorId("s1")]: { path, offset: 0, subagents: ["done"] } },
+      }),
+    );
+    const session = fakeSession("s1", path);
+    await tailer([session], { statePath }).instance.tick();
+    expect(session.lines).toEqual([{ line: "live-1", subagentId: "live" }]);
+
+    appendFileSync(live, "live-2\n");
+    const again = fakeSession("s1", path);
+    await tailer([again], { statePath }).instance.tick();
+    expect(again.lines).toEqual([{ line: "live-2", subagentId: "live" }]);
   });
 
   it("keeps tailing a sealed session while it still grows, and drains it only once idle", async () => {

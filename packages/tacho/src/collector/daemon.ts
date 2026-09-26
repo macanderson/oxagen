@@ -1500,8 +1500,10 @@ async function initializeDaemon(
   // --- transcript tailer -------------------------------------------------
   // The detector above only stats a transcript's mtime. The tailer reads it:
   // every session that reported a `transcript_path` has its file tailed on
-  // the tick, and a subagent's finished transcript is fed once when its
-  // SubagentStop arrives. See transcript-tailer.ts for why this exists.
+  // the tick, and so has each subagent transcript in that session's
+  // `subagents/` directory. A SubagentStop feeds what the tick has not read
+  // yet and retires that subagent's cursor. See transcript-tailer.ts for why
+  // this exists.
   const transcriptTailer = new TranscriptTailer({
     sessions: () => registry.list(),
     session: (id) => registry.get(id),
@@ -1512,9 +1514,10 @@ async function initializeDaemon(
 
   /**
    * What the tailer does before a hook is sealed: a `Stop` or `SessionEnd`
-   * drains the session's transcript so the turn's model calls sit on the
-   * chain before the frame that closes it, and a `SubagentStop` feeds the
-   * subagent's transcript to the child chain before that chain is finalized.
+   * drains the session's transcript and its subagents' so the turn's model
+   * calls sit on the chain before the frame that closes it, and a
+   * `SubagentStop` feeds the rest of the subagent's transcript to the child
+   * chain before that chain is finalized.
    */
   async function tailBeforeHook(payload: unknown): Promise<void> {
     if (payload === null || typeof payload !== "object") return;
