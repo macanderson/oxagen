@@ -846,18 +846,30 @@ export function enforcementTierOf(
   return host.mode === "enforce" ? "harness" : "observe";
 }
 
+/** The person a session is attributed to: their principal and their user. */
+interface SessionInitiator {
+  principalId: string;
+  userId: string;
+}
+
 /**
  * The human principal behind the host's enrollment: the row IAM resolves for
  * the host's API key (its creator, `packages/iam/src/fetch-authz.ts`) and the
  * operator the Run header prints (spec section 5.2: the human at the keyboard
  * is the `initiating_principal`). A host row with no recorded enroller, or an
  * enroller with no principal in this organization, attributes to nobody.
+ *
+ * Both ids come from this lookup, and the lookup names the caller's
+ * organization. The user is written only when their principal here resolves,
+ * so a person who belongs to another organization is never attributed. The
+ * principals a batch names (`agent.initiating_principal_id`,
+ * `agent.agent_principal_id`) are never read: the producer chooses them.
  */
-async function enrollingPrincipalId(
+async function enrollingPrincipal(
   tx: Tx,
   ctx: Scope,
   host: TachoHostRow,
-): Promise<string | null> {
+): Promise<SessionInitiator | null> {
   if (!host.createdById) return null;
   const principal = await tx.query.principals.findFirst({
     where: and(
@@ -867,14 +879,39 @@ async function enrollingPrincipalId(
     ),
     columns: { id: true },
   });
-  return principal?.id ?? null;
+  return principal
+    ? { principalId: principal.id, userId: host.createdById }
+    : null;
+}
+
+/**
+ * The cost basis the batch's counted model calls reported
+ * (`llm_call` `cost_basis`, data-model section 2.7), or null when none did.
+ * The last one wins, as `lastRecordedContext` reads the run facts.
+ *
+ * `observed` is never taken from a body. Only a frame that carries all three
+ * marks of `isObservedModelCall` makes a session observed, and a body member
+ * is something any producer can set. A session marked observed stops counting
+ * its self-reported usage, so a claimed `observed` would hide real spend.
+ */
+export function reportedCostBasis(
+  counted: readonly TachoEvent[],
+): string | null {
+  let basis: string | null = null;
+  for (const event of counted) {
+    if (event.kind !== "llm_call") continue;
+    const reported = str((event.body as Body)["cost_basis"]);
+    if (reported === null || reported === TACHO_METERING_OBSERVED) continue;
+    basis = reported;
+  }
+  return basis;
 }
 
 /** The insert values for a session row seen for the first time. */
 function genesisRow(
   host: TachoHostRow,
   ctx: Scope,
-  initiatingPrincipalId: string | null,
+  initiator: SessionInitiator | null,
   events: TachoEvent[],
   now: Date,
   // Whether `tacho.sessions.gateway_observed_at` exists yet. Naming a column
@@ -923,7 +960,11 @@ function genesisRow(
     // for an operator-enrolled host.
     agentId: host.agentId,
     agentPrincipalId: host.agentPrincipalId,
-    initiatingPrincipalId,
+    // The host's enroller, as `enrollingPrincipal` resolved them in this
+    // organization. The batch's own `agent` block names principals too, and
+    // neither is read (#2951).
+    initiatingPrincipalId: initiator?.principalId ?? null,
+    initiatingUserId: initiator?.userId ?? null,
     rootSessionUuid: first.root_session_uuid,
     parentSessionUuid: first.parent_session_uuid ?? null,
     subagentId: subagent?.subagent_id ?? null,
@@ -1573,7 +1614,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     let firstOpenedRunId: string | null = null;
     // Resolved on the first genesis row of the batch; every session a host
     // opens has the same operator, and a batch of continuations never asks.
-    let initiatingPrincipalId: string | null | undefined;
+    let initiator: SessionInitiator | null | undefined;
     // Asked once for the whole batch rather than per session: the answer is
     // per-process and cached, and a batch cannot straddle a migration it holds
     // a transaction across.
@@ -1767,6 +1808,19 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         existing?.costBasis === TACHO_METERING_OBSERVED,
       );
       const firstObserved = fresh.find(isObservedModelCall);
+      // The session's cost basis, when this batch changes it (#2951). An
+      // observed call makes it `observed`, and `observed` is never replaced:
+      // it is what stops the session counting its self-reported usage too.
+      // Otherwise the basis the batch's counted calls reported is carried to
+      // the row, and a batch that reported none leaves the row as it was.
+      const reportedBasis = reportedCostBasis(counted);
+      const costBasisPatch: { costBasis?: string } =
+        firstObserved !== undefined
+          ? { costBasis: TACHO_METERING_OBSERVED }
+          : reportedBasis !== null &&
+              existing?.costBasis !== TACHO_METERING_OBSERVED
+            ? { costBasis: reportedBasis }
+            : {};
       const delta = emptyDelta();
       for (const event of counted) foldDelta(delta, event);
       const contentFrames = countContentFrames(fresh);
@@ -2039,9 +2093,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
                 : {}),
             }
           : {}),
-        ...(firstObserved !== undefined
-          ? { costBasis: TACHO_METERING_OBSERVED }
-          : {}),
+        ...costBasisPatch,
         updatedAt: now,
         ...reopen,
         ...terminalColumns,
@@ -2149,12 +2201,12 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           .returning({ id: schema.tachoSessions.id });
         accepted = written.length > 0;
       } else {
-        if (initiatingPrincipalId === undefined)
-          initiatingPrincipalId = await enrollingPrincipalId(tx, ctx, host);
+        if (initiator === undefined)
+          initiator = await enrollingPrincipal(tx, ctx, host);
         const row = genesisRow(
           host,
           ctx,
-          initiatingPrincipalId,
+          initiator,
           events,
           now,
           sessionGatewayColumn,
@@ -2168,9 +2220,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
             ...row,
             ...(machineSnapshot === undefined ? {} : { machineSnapshot }),
             ...terminalColumns,
-            ...(firstObserved !== undefined
-              ? { costBasis: TACHO_METERING_OBSERVED }
-              : {}),
+            ...costBasisPatch,
             chainVerified: ok,
             chainBreakAtSeq: ok ? null : breakSeq,
             lastHash: last.hash,

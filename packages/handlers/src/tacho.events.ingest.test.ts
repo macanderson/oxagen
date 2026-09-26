@@ -105,6 +105,7 @@ import {
   isBillableToolCall,
   isObservedModelCall,
   lastRecordedContext,
+  reportedCostBasis,
   tachoEventsIngestHandler,
   tachoToolCallEntries,
   usageCountedEvents,
@@ -170,7 +171,14 @@ function unsealed(
   } as UnsealedTachoEvent;
 }
 
-function session(): TachoEvent[] {
+/**
+ * One ordinary wrapped session, sealed. `agent` adds members to every frame's
+ * `agent` block before the seal, so a batch can name principals of its own
+ * and still verify (#2951).
+ */
+function session(
+  agent: Partial<UnsealedTachoEvent["agent"]> = {},
+): TachoEvent[] {
   let cursor: ChainCursor = GENESIS_CURSOR;
   const out: TachoEvent[] = [];
   for (const draft of [
@@ -229,7 +237,10 @@ function session(): TachoEvent[] {
       duration_ms: 900,
     }),
   ]) {
-    const sealed = sealEvent(draft, cursor);
+    const sealed = sealEvent(
+      { ...draft, agent: { ...draft.agent, ...agent } } as UnsealedTachoEvent,
+      cursor,
+    );
     cursor = sealed.next;
     out.push(sealed.event);
   }
@@ -690,9 +701,15 @@ function wire(db: FakeDb): void {
             findMany: async () => db.hosts,
           },
           principals: {
-            findFirst: async () => {
-              db.principalLookups();
-              return db.principals[0];
+            // The WHERE is evaluated against the fixture's rows, so a lookup
+            // that lost its organization fence would find a principal another
+            // organization holds (#2951). Recorded so a case can pin it.
+            findFirst: async (args?: { where?: unknown }) => {
+              db.principalLookups(args);
+              const bound = boundColumns(args?.where);
+              return db.principals.find((row) =>
+                bound.every(([column, value]) => row[column] === value),
+              );
             },
           },
           tachoSessions: {
@@ -1215,6 +1232,9 @@ describe("ingest_tacho_events", () => {
       toolsAvailable: ["Read"],
       chainVerified: true,
       initiatingPrincipalId: ENROLLER_PRINCIPAL_ID,
+      // The person behind that principal (#2951). Nothing wrote this column
+      // before, though data-model.md section 2.2 named it as the person.
+      initiatingUserId: ENROLLER_USER_ID,
     });
     expect(db.principalLookups).toHaveBeenCalledOnce();
     expect(db.models[0]).toMatchObject({
@@ -1907,6 +1927,7 @@ describe("ingest_tacho_events", () => {
     );
     expect(orphan.sessions.get(SESSION)).toMatchObject({
       initiatingPrincipalId: null,
+      initiatingUserId: null,
     });
     expect(orphan.principalLookups).not.toHaveBeenCalled();
 
@@ -1923,6 +1944,7 @@ describe("ingest_tacho_events", () => {
     );
     expect(unprovisioned.sessions.get(SESSION)).toMatchObject({
       initiatingPrincipalId: null,
+      initiatingUserId: null,
     });
     expect(unprovisioned.principalLookups).toHaveBeenCalledOnce();
   });
@@ -1957,8 +1979,79 @@ describe("ingest_tacho_events", () => {
     expect(db.principalLookups).not.toHaveBeenCalled();
     const sessionUpdates = db.updates.filter((u) => u.table === "sessions");
     expect(sessionUpdates.length).toBeGreaterThan(0);
-    for (const update of sessionUpdates)
+    for (const update of sessionUpdates) {
       expect(update.values).not.toHaveProperty("initiatingPrincipalId");
+      expect(update.values).not.toHaveProperty("initiatingUserId");
+    }
+  });
+
+  describe("the principals a batch names (#2951)", () => {
+    const FOREIGN_ORG = "00000000-0000-0000-0000-0000000000ff";
+    const FOREIGN_HUMAN = "66666666-6666-4666-8666-666666666666";
+    const FOREIGN_AGENT = "77777777-7777-4777-8777-777777777777";
+    const HOST_AGENT_ID = "44444444-4444-4444-8444-444444444444";
+    const HOST_AGENT_PRINCIPAL = "55555555-5555-4555-8555-555555555555";
+    /** The enroller's principal in another organization. */
+    const foreignHuman = {
+      id: FOREIGN_HUMAN,
+      orgId: FOREIGN_ORG,
+      parentUserId: ENROLLER_USER_ID,
+      kind: "human",
+    };
+
+    it("attributes the session to the host's records in this organization, never to the batch's", async () => {
+      const db = fakeDb();
+      Object.assign(db.hosts[0] as Record<string, unknown>, {
+        agentId: HOST_AGENT_ID,
+        agentPrincipalId: HOST_AGENT_PRINCIPAL,
+      });
+      // Listed first, so a lookup without its organization fence finds it.
+      db.principals.unshift(foreignHuman);
+      wire(db);
+      const events = session({
+        initiating_principal_id: FOREIGN_HUMAN,
+        agent_principal_id: FOREIGN_AGENT,
+      });
+      const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
+      expect(output.accepted).toBe(events.length);
+      expect(output.chain_breaks).toEqual([]);
+
+      const row = db.sessions.get(SESSION) as Record<string, unknown>;
+      expect(row).toMatchObject({
+        agentId: HOST_AGENT_ID,
+        agentPrincipalId: HOST_AGENT_PRINCIPAL,
+        initiatingPrincipalId: ENROLLER_PRINCIPAL_ID,
+        initiatingUserId: ENROLLER_USER_ID,
+      });
+      expect(Object.values(row)).not.toContain(FOREIGN_HUMAN);
+      expect(Object.values(row)).not.toContain(FOREIGN_AGENT);
+      // The lookup names this organization, the enroller, and a person.
+      const [lookup] = db.principalLookups.mock.calls[0] as [
+        { where?: unknown },
+      ];
+      expect(boundColumns(lookup.where)).toEqual([
+        ["orgId", CONTEXT.orgId],
+        ["parentUserId", ENROLLER_USER_ID],
+        ["kind", "human"],
+      ]);
+    });
+
+    it("attributes nobody when the enroller is a person only in another organization (negative)", async () => {
+      const db = fakeDb();
+      db.principals = [foreignHuman];
+      wire(db);
+      await tachoEventsIngestHandler(
+        batch(session({ initiating_principal_id: FOREIGN_HUMAN })),
+        CONTEXT,
+      );
+      const row = db.sessions.get(SESSION) as Record<string, unknown>;
+      expect(row).toMatchObject({
+        initiatingPrincipalId: null,
+        initiatingUserId: null,
+      });
+      expect(Object.values(row)).not.toContain(FOREIGN_HUMAN);
+      expect(Object.values(row)).not.toContain(ENROLLER_USER_ID);
+    });
   });
 
   it("denies a batch that names another host, a missing key, or a revoked host, and writes none of its bodies", async () => {
@@ -2843,6 +2936,10 @@ describe("ingest_tacho_events", () => {
       expect(Object.keys(session)).toEqual(
         expect.arrayContaining(["orgId", "workspaceId", "hostId"]),
       );
+      expect(session).toMatchObject({
+        initiatingPrincipalId: ENROLLER_PRINCIPAL_ID,
+        initiatingUserId: ENROLLER_USER_ID,
+      });
     });
 
     it("queries no column this PR adds, so a deploy before its migration is safe", async () => {
@@ -5315,6 +5412,119 @@ describe("observed metering from the model proxy", () => {
     expect(
       dialect.sqlToQuery(update?.values["numModelCalls"] as SQL).params,
     ).toEqual([0]);
+  });
+
+  describe("the batch's own cost basis (#2951)", () => {
+    /** A self-reported model call that names its cost basis, or none. */
+    const reported = (basis?: string) =>
+      unsealed(
+        "llm_call",
+        {
+          model: "claude-sonnet-5",
+          input_tokens: 10,
+          output_tokens: 5,
+          cost_usd_micros: 100,
+          ...(basis === undefined ? {} : { cost_basis: basis }),
+        },
+        "otel_log",
+      );
+    /** The fake's row, advanced to the head `events[0..n)` left it at. */
+    function recordedThrough(db: FakeDb, events: TachoEvent[], n: number) {
+      const row = db.sessions.get(SESSION) as Record<string, unknown>;
+      Object.assign(row, {
+        seqCount: n,
+        lastHash: (events[n - 1] as TachoEvent).hash,
+        chainVerified: true,
+      });
+      db.updates.length = 0;
+      return row;
+    }
+
+    it("reads the last basis the counted model calls reported", () => {
+      expect(
+        reportedCostBasis(
+          chain([start(), reported("list"), reported(), reported("unknown")]),
+        ),
+      ).toBe("unknown");
+      expect(reportedCostBasis(chain([start(), reported()]))).toBeNull();
+      // Only a model call reports the basis of its cost.
+      expect(
+        reportedCostBasis(
+          chain([unsealed("error", { cost_basis: "list" }, "otel_log")]),
+        ),
+      ).toBeNull();
+    });
+
+    it("never reads observed off a body, which only the proxy's frame may set (negative)", () => {
+      expect(
+        reportedCostBasis(chain([reported("list"), reported("observed")])),
+      ).toBe("list");
+      expect(reportedCostBasis(chain([reported("observed")]))).toBeNull();
+    });
+
+    it("records the basis a self-reported session reports, and keeps it through a batch that reports none", async () => {
+      const db = fakeDb();
+      wire(db);
+      const events = chain([
+        start(),
+        reported("list"),
+        unsealed("turn_start", {}),
+      ]);
+      await tachoEventsIngestHandler(batch(events.slice(0, 2)), CONTEXT);
+      const row = recordedThrough(db, events, 2);
+      expect(row["costBasis"]).toBe("list");
+
+      await tachoEventsIngestHandler(batch(events.slice(2)), CONTEXT);
+      const update = db.updates.find((u) => u.table === "sessions");
+      expect(update).toBeDefined();
+      expect(update?.values).not.toHaveProperty("costBasis");
+      expect(row["costBasis"]).toBe("list");
+    });
+
+    it("takes the basis a later batch reports", async () => {
+      const db = fakeDb();
+      wire(db);
+      const events = chain([start(), reported("list"), reported("unknown")]);
+      await tachoEventsIngestHandler(batch(events.slice(0, 2)), CONTEXT);
+      const row = recordedThrough(db, events, 2);
+
+      await tachoEventsIngestHandler(batch(events.slice(2)), CONTEXT);
+      const update = db.updates.find((u) => u.table === "sessions");
+      expect(update?.values["costBasis"]).toBe("unknown");
+      expect(row["costBasis"]).toBe("unknown");
+    });
+
+    it("keeps an observed session observed whatever a later batch reports (negative)", async () => {
+      const db = fakeDb();
+      wire(db);
+      const events = chain([start(), observedCall(), reported("list")]);
+      await tachoEventsIngestHandler(batch(events.slice(0, 2)), CONTEXT);
+      const row = recordedThrough(db, events, 2);
+      expect(row["costBasis"]).toBe("observed");
+
+      await tachoEventsIngestHandler(batch(events.slice(2)), CONTEXT);
+      const update = db.updates.find((u) => u.table === "sessions");
+      expect(update).toBeDefined();
+      expect(update?.values).not.toHaveProperty("costBasis");
+      expect(row["costBasis"]).toBe("observed");
+    });
+
+    it("does not mark a session observed on a body that claims it, so its later usage still counts (negative)", async () => {
+      const db = fakeDb();
+      wire(db);
+      const events = chain([start(), reported("observed"), selfReported()]);
+      await tachoEventsIngestHandler(batch(events.slice(0, 2)), CONTEXT);
+      const row = recordedThrough(db, events, 2);
+      expect(row["costBasis"]).toBeUndefined();
+
+      await tachoEventsIngestHandler(batch(events.slice(2)), CONTEXT);
+      const update = db.updates.find((u) => u.table === "sessions");
+      expect(
+        new PgDialect().sqlToQuery(update?.values["numModelCalls"] as SQL)
+          .params,
+      ).toEqual([1]);
+      expect(update?.values).not.toHaveProperty("costBasis");
+    });
   });
 
   describe("the harness's total at the seal (#3944, S-07)", () => {
