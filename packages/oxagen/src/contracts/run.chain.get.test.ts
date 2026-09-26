@@ -83,6 +83,8 @@ describe("get_run_chain contract", () => {
       eventStreamDigest: `sha256:${"e".repeat(64)}`,
       merkleRoot: `sha256:${"f".repeat(64)}`,
       archiveSegmentRef: null,
+      archiveSegmentDigest: null,
+      attestation: null,
     };
     const retried = runChainGet.output.safeParse({
       ...output,
@@ -93,6 +95,55 @@ describe("get_run_chain contract", () => {
     expect(runChainGet.output.safeParse({ ...output, seal }).success).toBe(
       false,
     );
+  });
+
+  it("carries a seal's attestation with the fields it signs, and its segment digest (#4000)", () => {
+    const seal = {
+      sealedAt: "2026-09-11T10:05:00.000Z",
+      terminalStatus: "completed",
+      eventCount: 3,
+      finalRunSeq: "3",
+      finalEventDigest: `sha256:${"d".repeat(64)}`,
+      eventStreamDigest: `sha256:${"e".repeat(64)}`,
+      merkleRoot: `sha256:${"f".repeat(64)}`,
+      archiveSegmentRef: "segments/arun_0a1b2c/1.ndjson.zst",
+      archiveSegmentDigest: `sha256:${"c".repeat(64)}`,
+      attestation: {
+        alg: "ed25519",
+        keyId: "ak:7f3a",
+        sig: "c2lnbmF0dXJl",
+        signsOver: [
+          "run_id",
+          "attempt_id",
+          "frame_count",
+          "merkle_root",
+          "archive_segment_digest",
+          "enforcement_tier",
+          "completeness_gaps",
+          "replay_grade",
+        ],
+      },
+    };
+    const ok = (s: Record<string, unknown>) =>
+      runChainGet.output.safeParse({ ...output, seals: [s] }).success;
+    expect(ok(seal)).toBe(true);
+    // A digest that is not sha256, a field the payload does not carry, and an
+    // attestation that signs nothing are refused (negative).
+    expect(ok({ ...seal, archiveSegmentDigest: "md5:abc" })).toBe(false);
+    expect(
+      ok({
+        ...seal,
+        attestation: { ...seal.attestation, signsOver: ["run_id", "cost"] },
+      }),
+    ).toBe(false);
+    expect(
+      ok({ ...seal, attestation: { ...seal.attestation, signsOver: [] } }),
+    ).toBe(false);
+    expect(
+      ok({ ...seal, attestation: { ...seal.attestation, alg: "rsa" } }),
+    ).toBe(false);
+    const { attestation: _unread, ...unattested } = seal;
+    expect(ok(unattested)).toBe(false);
   });
 
   it("carries a signed checkpoint with its countersignature and anchor, both nullable", () => {

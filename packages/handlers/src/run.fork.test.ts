@@ -81,6 +81,9 @@ function attempt(over: Partial<AttemptRecord> = {}): AttemptRecord {
       // A gateway-observed recording is the only one that reaches `fork`
       // (spec §8.4); a submitted one is `harness` and caps at `view`.
       enforcementTier: "gateway",
+      archiveSegmentDigest: DIGEST,
+      attestationKeyId: null,
+      attestationSig: null,
     },
     ...over,
   };

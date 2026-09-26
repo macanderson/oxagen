@@ -125,6 +125,32 @@ export const runSubagentSchema = z
   })
   .strict();
 
+/** The most releases one answer carries. */
+export const RUN_RELEASE_MAX = 20;
+
+/**
+ * A release the session created, from the command frame that created it
+ * (#3890), with its state as GitHub reads it now.
+ */
+export const runReleaseSchema = z
+  .object({
+    repository: runRepositorySchema,
+    tag: z.string().min(1),
+    /** The release title GitHub records; null when it has none or was not read. */
+    name: z.string().nullable(),
+    url: z.string().url().nullable(),
+    /**
+     * Null when GitHub has no release with that tag (`release_not_found`) or
+     * it could not be read (`release_read_failed`).
+     */
+    state: z.enum(["draft", "prerelease", "published"]).nullable(),
+    /** The command frame that created the release. */
+    frameSeq: z.string().regex(/^\d+$/),
+    /** RFC 3339: when that frame was recorded; null when it recorded no time. */
+    observedAt: z.string().datetime().nullable(),
+  })
+  .strict();
+
 export const runWorkGet = registerCapability({
   name: "get_run_work",
   domain: "run",
@@ -152,7 +178,14 @@ export const runWorkGet = registerCapability({
       pullRequests: z.array(runWorkPrSchema),
       /** The subagents the session started; empty for a ledger run. */
       subagents: z.array(runSubagentSchema),
+      /** The releases the session created; empty for a ledger run (#3890). */
+      releases: z.array(runReleaseSchema).max(RUN_RELEASE_MAX),
       complete: z.boolean(),
+      /**
+       * Machine-readable notes on what the read could not do. A release adds
+       * `release_not_found` when GitHub has no release with the recorded tag,
+       * and `release_read_failed` when GitHub could not be read.
+       */
       warnings: z.array(z.string()),
     })
     .strict(),
@@ -163,4 +196,5 @@ export type RunCheckout = z.output<typeof runCheckoutSchema>;
 export type RunCapturedDiff = z.output<typeof runCapturedDiffSchema>;
 export type RunWorkPr = z.output<typeof runWorkPrSchema>;
 export type RunSubagent = z.output<typeof runSubagentSchema>;
+export type RunRelease = z.output<typeof runReleaseSchema>;
 export type RunWorkGetOutput = z.output<typeof runWorkGet.output>;

@@ -138,9 +138,10 @@ describe("get_spend_drill", () => {
         breakdown: {
           models: pricedRun(900n).breakdown.models,
           tools: [
-            { name: "Read", calls: 3 },
-            { name: "Bash", calls: 5 },
+            { name: "Read", calls: 3, resultTokens: null, costMicros: null },
+            { name: "Bash", calls: 5, resultTokens: 800, costMicros: 2_400n },
           ],
+          steps: null,
         },
       }),
       pricedRun(100n, { startedAt: new Date("2026-09-14T03:00:00Z") }),

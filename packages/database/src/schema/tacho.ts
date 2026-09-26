@@ -350,6 +350,11 @@ export const tachoSessions = tachoSchema.table(
     agentPrincipalId: uuid("agent_principal_id"),
     initiatingPrincipalId: uuid("initiating_principal_id"),
     initiatingUserId: uuid("initiating_user_id"),
+    // The operator's workspace role when the session opened, lowercased
+    // (#3999). Written once, by the genesis row, and never updated, so a
+    // later role change does not rewrite the record. Null on a session
+    // recorded before the column and for an operator with no membership.
+    operatorRole: text("operator_role"),
     rootSessionUuid: uuid("root_session_uuid").notNull(),
     parentSessionUuid: uuid("parent_session_uuid"),
     subagentId: text("subagent_id"),
@@ -673,6 +678,18 @@ export const tachoSessions = tachoSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // The Model fit reading (#3893), computed from the record after the seal:
+    // the reading without its provenance, the rule version, when it was
+    // read, and the seal it read. The four are set together. A reading whose
+    // `fit_sealed_at` is not the session's `sealed_at` read an earlier seal
+    // and is not answered.
+    fitReading: jsonb("fit_reading"),
+    fitMethod: text("fit_method"),
+    fitReadAt: timestamp("fit_read_at", { withTimezone: true, mode: "date" }),
+    fitSealedAt: timestamp("fit_sealed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
   },
   (t) => ({
     sessionUuidUniq: uniqueIndex("tacho_sessions_session_uuid_uniq").on(
@@ -696,6 +713,14 @@ export const tachoSessions = tachoSchema.table(
     summaryCheck: check(
       "tacho_sessions_summary_check",
       sql`(${t.summary} IS NULL) = (${t.summaryGeneratedAt} IS NULL) AND (${t.summary} IS NULL) = (${t.summaryModel} IS NULL)`,
+    ),
+    fitCheck: check(
+      "tacho_sessions_fit_check",
+      sql`(${t.fitReading} IS NULL) = (${t.fitMethod} IS NULL) AND (${t.fitReading} IS NULL) = (${t.fitReadAt} IS NULL) AND (${t.fitReading} IS NULL) = (${t.fitSealedAt} IS NULL)`,
+    ),
+    operatorRoleCheck: check(
+      "tacho_sessions_operator_role_check",
+      sql`${t.operatorRole} IS NULL OR ${t.operatorRole} IN ('owner', 'admin', 'member', 'billing', 'compliance', 'viewer')`,
     ),
     outcomeCheck: check(
       "tacho_sessions_outcome_check",

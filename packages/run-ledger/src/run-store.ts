@@ -65,10 +65,12 @@ import { withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
 import {
   buildArchiveSegment,
   readArchiveSegment,
+  type AttesterKey,
   type Redaction,
 } from "@oxagen/tacho";
 import type { PlatformSurface } from "./surface";
 import { writeAssembly } from "./assembly-write";
+import { signSealAttestation } from "./attester";
 import {
   type AttemptEventBodyInput,
   archiveFrameOf,
@@ -432,6 +434,12 @@ export interface RunStoreOptions {
   bodies?: RunBodyStore;
   /** Where the seal's archive segment goes. Required to seal an attempt. */
   archive?: RunArchiveStore;
+  /**
+   * The attester key that signs a seal (#4000), resolved at seal time the way
+   * `archive` is. A null answer, or no resolver, seals with null attestation
+   * columns. `deferredAttester` in ./attester.ts is the process-wide one.
+   */
+  attester?: () => AttesterKey | null;
 }
 
 // ── Read projections ─────────────────────────────────────────────────────────
@@ -507,6 +515,16 @@ export interface AttemptSealRecord {
    * which is what the seal was graded under.
    */
   enforcementTier: string | null;
+  /**
+   * sha256 over the archive segment's bytes as stored, and the attester's key
+   * id and base64 Ed25519 signature over the seal's figures (#4000, ADR-195).
+   * The digest is null on a seal written before it was recorded. The key id
+   * and signature are null together on such a seal and on one written with
+   * no attester key.
+   */
+  archiveSegmentDigest: string | null;
+  attestationKeyId: string | null;
+  attestationSig: string | null;
 }
 
 // ── The store surface ────────────────────────────────────────────────────────
@@ -816,6 +834,9 @@ export interface AttemptRow {
   tool_calls: number | string | null;
   turns: number | string | null;
   enforcement_tier: string | null;
+  archive_segment_digest: string | null;
+  attestation_key_id: string | null;
+  attestation_sig: string | null;
 }
 
 const intOrNull = (v: number | string | null | undefined): number | null =>
@@ -876,6 +897,9 @@ export function mapAttemptRow(row: AttemptRow): AttemptRecord {
             toolCalls: intOrNull(row.tool_calls),
             turns: intOrNull(row.turns),
             enforcementTier: row.enforcement_tier ?? null,
+            archiveSegmentDigest: row.archive_segment_digest ?? null,
+            attestationKeyId: row.attestation_key_id ?? null,
+            attestationSig: row.attestation_sig ?? null,
           }
         : null,
   };
@@ -1187,6 +1211,11 @@ export interface LockedAttemptRow {
   attempt_id: string;
   attempt_public_id: string;
   run_id: string;
+  /**
+   * The run's public id (`arun_…`), the `run_id` a seal's attestation signs
+   * (#4000), and the one `export_run` signs.
+   */
+  run_public_id: string;
   org_id: string;
   workspace_id: string;
   attempt_number: number | string;
@@ -1265,6 +1294,14 @@ export function runStatusForTerminal(
  * join IS the verification: it turns "the caller says this uuid is that public
  * id" into "the database agrees", which `assertRunRowMatchesSpec` then checks
  * against the spec.
+ *
+ * `operator_role` is stamped here, once (#3999, ADR-197): the initiating
+ * person's role in the run's workspace as `workspace_users` holds it at
+ * insert, lowercased. A principal that is not a person, or a person with no
+ * membership in the workspace, stamps null. Nothing updates the column, so a
+ * role changed after the run opened does not rewrite what the record says.
+ * It is a scalar subselect in the statement rather than a read before it, so
+ * every caller of `createRun` stamps it and none can pass a different value.
  */
 export function buildCreateRunSql(
   publicId: string,
@@ -1286,6 +1323,7 @@ export function buildCreateRunSql(
         repository_connection_id, configured_default_ref,
         base_commit_sha, base_tree_sha,
         retention_policy_id, retention_policy_digest, max_attempts,
+        operator_role,
         origin_message_id
       )
       VALUES (
@@ -1315,6 +1353,16 @@ export function buildCreateRunSql(
         ${input.retentionPolicyRowId}::uuid,
         ${spec.context_policy.retention_policy_digest},
         ${spec.engine_policy.max_attempts},
+        (
+          SELECT lower(wu.role)
+          FROM workspace.workspace_users wu
+          JOIN iam.principals p ON p.parent_user_id = wu.user_id
+          WHERE p.id = ${spec.actor_binding.initiating_principal_id}::uuid
+            AND p.org_id = ${input.orgId}::uuid
+            AND p.kind = 'human'
+            AND wu.workspace_id = ${input.workspaceId}::uuid
+          LIMIT 1
+        ),
         ${input.originMessageId ?? null}::uuid
       )
       RETURNING *
@@ -1439,6 +1487,7 @@ export function buildLockAttemptForWriteSql(attemptId: string): SQL {
       a.id            AS attempt_id,
       a.public_id     AS attempt_public_id,
       a.run_id,
+      r.public_id     AS run_public_id,
       a.org_id,
       a.workspace_id,
       a.attempt_number,
@@ -1588,6 +1637,10 @@ export interface InsertSealInput {
   turns: number | null;
   /** Where the attempt's model calls were observed from (spec §8.4). */
   enforcementTier: string;
+  /** Written once with the row and never updated (ADR-195). */
+  archiveSegmentDigest: string;
+  attestationKeyId: string | null;
+  attestationSig: string | null;
 }
 
 /**
@@ -1604,7 +1657,8 @@ export function buildInsertAttemptSealSql(input: InsertSealInput): SQL {
       event_count, final_run_seq, final_attempt_seq, final_event_digest,
       event_stream_digest, sealer_kind, sealer_worker_id,
       replay_grade, completeness_gaps, merkle_root, archive_segment_ref,
-      model_calls, tool_calls, turns, enforcement_tier
+      model_calls, tool_calls, turns, enforcement_tier,
+      archive_segment_digest, attestation_key_id, attestation_sig
     )
     VALUES (
       ${input.orgId}::uuid,
@@ -1627,7 +1681,10 @@ export function buildInsertAttemptSealSql(input: InsertSealInput): SQL {
       ${input.modelCalls},
       ${input.toolCalls},
       ${input.turns},
-      ${input.enforcementTier}
+      ${input.enforcementTier},
+      ${input.archiveSegmentDigest},
+      ${input.attestationKeyId},
+      ${input.attestationSig}
     )
     RETURNING id
   `;
@@ -1713,7 +1770,8 @@ export function buildListRunAttemptsSql(runId: string): SQL {
       s.final_run_seq::text AS final_run_seq, s.final_attempt_seq,
       s.final_event_digest, s.event_stream_digest, s.sealed_at,
       s.replay_grade, s.completeness_gaps, s.merkle_root, s.archive_segment_ref,
-      s.model_calls, s.tool_calls, s.turns, s.enforcement_tier
+      s.model_calls, s.tool_calls, s.turns, s.enforcement_tier,
+      s.archive_segment_digest, s.attestation_key_id, s.attestation_sig
     FROM agent.agent_run_attempts a
     LEFT JOIN agent.agent_run_attempt_seals s ON s.attempt_id = a.id
     WHERE a.run_id = ${runId}::uuid
@@ -2178,6 +2236,8 @@ interface SealTransactionInput {
   /** Every durable row of the attempt, terminal event included. */
   rows: readonly AttemptEventStateRow[];
   archive: RunArchiveStore | undefined;
+  /** Resolved here, at seal time; absent or null seals unsigned. */
+  attester: (() => AttesterKey | null) | undefined;
 }
 
 /**
@@ -2225,6 +2285,19 @@ async function sealAttemptInTx(
     digest: segment.segmentDigest,
     bytes: segment.bytes,
   });
+  // The attestation signs the figures this seal writes, in the words the
+  // export signs them (ADR-195). With no key the seal still commits: the
+  // segment digest is written and the signature reads "not recorded".
+  const attestation = signSealAttestation(input.attester?.() ?? null, {
+    runPublicId: attempt.run_public_id,
+    attemptPublicId: attempt.attempt_public_id,
+    frameCount: segment.frameCount,
+    merkleRoot: segment.merkleRoot,
+    archiveSegmentDigest: segment.segmentDigest,
+    enforcementTier,
+    completenessGaps,
+    replayGrade,
+  });
 
   const sealRows = (await tx.execute(
     buildInsertAttemptSealSql({
@@ -2248,6 +2321,7 @@ async function sealAttemptInTx(
       toolCalls: rollup.toolCalls,
       turns: rollup.turns,
       enforcementTier,
+      ...attestation,
     }),
   )) as unknown as Array<{ id: string }>;
   const seal = sealRows[0];
@@ -2363,6 +2437,7 @@ export function createPostgresRunStore(
   const securityEvents = options.securityEvents ?? CONSOLE_SECURITY_EVENT_SINK;
   const bodies = options.bodies;
   const archive = options.archive;
+  const attester = options.attester;
   return {
     async createRun(input) {
       const publicId = generateRunPublicId();
@@ -2656,6 +2731,7 @@ export function createPostgresRunStore(
           sealerId: input.sealerId,
           rows: sealedRows,
           archive,
+          attester,
         });
 
         await tx.execute(
@@ -2704,6 +2780,7 @@ export function createPostgresRunStore(
           sealerId: input.sealerId,
           rows,
           archive,
+          attester,
         });
         return { runId: input.runId, seal };
       });

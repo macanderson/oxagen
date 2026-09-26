@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The Policy tab (mockup `pRun`, the policy branch) and `entriesOf`, which the
-// tab strip counts with: one row per decision frame, Frame, Call and Outcome
-// from the record, and the rules, taint and latency the transcript does not
+// tab strip counts with: one row per decision frame, Frame, Call, Outcome and
+// Rules from the record, and the taint and latency the transcript does not
 // carry said to be not recorded rather than guessed. A frame on a subagent's
 // chain is named and not linked, a list read short says it is a prefix, and a
 // failed read says it failed.
@@ -48,6 +48,8 @@ const policyEntry = (seq: string, chainRef?: string) =>
       decision: "deny",
       type: "policy_decision",
       harness: false,
+      rules: [],
+      taint: null,
       at: AT,
     },
     ...(chainRef === undefined
@@ -94,13 +96,14 @@ describe("PolicyDecisions", () => {
     await expectNoAxe(container);
   });
 
-  it("says the rules, taint and latency are not recorded rather than drawing a guess (negative)", () => {
+  it("says a decision that named no rule fired none, and that taint and latency are not recorded (negative)", () => {
     renderPolicy(readOk(evidenceTranscript()));
     const [row] = screen.getAllByTestId("run-policy-decision");
     if (row === undefined) throw new Error("a row");
     const cells = within(row).getAllByRole("cell");
+    // The rules are the record's own list (#3971); taint has no producer.
     expect(cells.slice(3).map((cell) => cell.textContent)).toEqual([
-      "not recorded",
+      "none",
       "not recorded",
       "not recorded",
     ]);
@@ -210,6 +213,8 @@ describe("PolicyDecisions", () => {
                   decision: word,
                   type: "policy_decision",
                   harness: false,
+                  rules: [],
+                  taint: null,
                   at: AT,
                 },
               }),
@@ -275,6 +280,8 @@ describe("PolicyDecisions by who decided", () => {
         type: source === "human" ? "command" : "policy_decision",
         at: AT,
         harness,
+        rules: [],
+        taint: null,
         ...(source === null ? {} : { source }),
       },
     });

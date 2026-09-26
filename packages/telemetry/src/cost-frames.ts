@@ -86,9 +86,41 @@ export interface ModelCallFrameRow {
   basis: CostFrameBasis;
 }
 
+/**
+ * One tool call as the rollup reads it, in the shape of billing's
+ * `ToolCallFrame`. The rollup grades the call from its status and digests
+ * (#3984, ADR-199) and prices its result tokens (#3892). Each member is null
+ * where the frame recorded none.
+ */
 interface ToolCallFrameRow {
   /** Null when the frame names no tool. */
   name: string | null;
+  /**
+   * `tool_status` when it is `ok`, `error` or `rejected`. A `cancelled` call
+   * and a frame that recorded no status read null: neither says the call
+   * failed.
+   */
+  status: "ok" | "error" | "rejected" | null;
+  /** Null when the hook recorded no digest. */
+  inputDigest: string | null;
+  outputDigest: string | null;
+  /** The classifier's flag; null when it said nothing. */
+  isMutating: boolean | null;
+  /** The tool-result tokens the OTel span of the same tool use recorded. */
+  resultTokens: number | null;
+}
+
+/** The `tool_status` values a rollup grades on; `cancelled` is left out on purpose. */
+const GRADED_TOOL_STATUSES: ReadonlySet<string> = new Set([
+  "ok",
+  "error",
+  "rejected",
+]);
+
+function toolFrameStatus(status: string): ToolCallFrameRow["status"] {
+  return GRADED_TOOL_STATUSES.has(status)
+    ? (status as ToolCallFrameRow["status"])
+    : null;
 }
 
 /**
@@ -452,6 +484,13 @@ export async function readModelCallFrames(args: {
  * hook source is the one that carries a tool call once (the ingest handler's
  * `numToolCalls` rule); a ledger run's tool calls are its
  * `tool.call_completed` events in Postgres, which the rollup store reads.
+ *
+ * Each call comes with what the rollup grades it by (its status, its input and
+ * output digests, and the classifier's mutating flag, ADR-199) and the result
+ * tokens the OTel tool span of the same tool use recorded, joined on
+ * `tool_use_id` the way {@link readTachoToolCallObservations} joins them.
+ * `join_use_nulls` makes a call with no span read null, never 0: a zero would
+ * price the call's result at nothing rather than leave it unrecorded.
  */
 export async function readTachoToolCallFrames(args: {
   orgId: string;
@@ -463,15 +502,39 @@ export async function readTachoToolCallFrames(args: {
   const ch = clickhouse();
   const result = await ch.query({
     query: `
-      SELECT tool_name AS name
-      FROM tacho_events FINAL
-      WHERE org_id = {orgId:UUID}
-        AND workspace_id = {workspaceId:UUID}
-        AND root_session_uuid = {rootSessionUuid:UUID}
-        AND ${RUN_SESSIONS}
-        AND kind = 'tool_call'
-        AND source = 'hook'
-      ORDER BY ts, seq
+      SELECT
+        h.tool_name                                                    AS name,
+        h.tool_status                                                  AS status,
+        h.tool_input_digest                                            AS input_digest,
+        h.tool_output_digest                                           AS output_digest,
+        h.tool_is_mutating                                             AS is_mutating,
+        r.result_tokens                                                AS result_tokens
+      FROM (
+        SELECT ts, seq, tool_name, tool_status, tool_input_digest,
+               tool_output_digest, tool_is_mutating, tool_use_id
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
+          AND root_session_uuid = {rootSessionUuid:UUID}
+          AND ${RUN_SESSIONS}
+          AND kind = 'tool_call'
+          AND source = 'hook'
+      ) AS h
+      LEFT JOIN (
+        SELECT tool_use_id, max(tool_result_tokens) AS result_tokens
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
+          AND root_session_uuid = {rootSessionUuid:UUID}
+          AND ${RUN_SESSIONS}
+          AND kind = 'tool_call'
+          AND source = 'otel_span'
+          AND tool_use_id != ''
+          AND tool_result_tokens IS NOT NULL
+        GROUP BY tool_use_id
+      ) AS r ON r.tool_use_id = h.tool_use_id
+      ORDER BY h.ts, h.seq
+      SETTINGS join_use_nulls = 1
     `,
     query_params: {
       orgId: args.orgId,
@@ -481,13 +544,34 @@ export async function readTachoToolCallFrames(args: {
     },
     format: "JSONEachRow",
   });
-  const rows = (await result.json()) as { name: string }[];
-  return rows.map((r) => ({ name: r.name === "" ? null : r.name }));
+  type Row = {
+    name: string;
+    status: string;
+    input_digest: string;
+    output_digest: string;
+    is_mutating: boolean | null;
+    result_tokens: string | number | null;
+  };
+  const rows = (await result.json()) as Row[];
+  return rows.map((r) => ({
+    name: r.name === "" ? null : r.name,
+    status: toolFrameStatus(r.status),
+    inputDigest: r.input_digest === "" ? null : r.input_digest,
+    outputDigest: r.output_digest === "" ? null : r.output_digest,
+    isMutating: r.is_mutating,
+    resultTokens: r.result_tokens === null ? null : Number(r.result_tokens),
+  }));
 }
 
 /** One hook-recorded tool call of a wrapped run, as the findings job reads it. */
 export interface ToolCallObservationRow {
   rootSessionUuid: string;
+  /**
+   * The chain the call was recorded on, so a finding can cite a subagent's
+   * frame (#4001): `seq` counts on this chain, not the root's. Equal to
+   * `rootSessionUuid` for a call on the root's own chain.
+   */
+  sessionUuid: string;
   /** RFC 3339. */
   at: string;
   seq: number;
@@ -525,6 +609,7 @@ export async function readTachoToolCallObservations(args: {
     query: `
       SELECT
         toString(h.root_session_uuid)                                  AS root_session_uuid,
+        toString(h.session_uuid)                                       AS session_uuid,
         formatDateTime(h.ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')           AS at,
         h.seq                                                          AS seq,
         h.tool_name                                                    AS tool,
@@ -533,8 +618,9 @@ export async function readTachoToolCallObservations(args: {
         h.tool_is_mutating                                             AS is_mutating,
         r.result_tokens                                                AS result_tokens
       FROM (
-        SELECT root_session_uuid, ts, seq, tool_name, tool_input_digest,
-               tool_output_digest, tool_is_mutating, tool_use_id
+        SELECT root_session_uuid, session_uuid, ts, seq, tool_name,
+               tool_input_digest, tool_output_digest, tool_is_mutating,
+               tool_use_id
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -575,6 +661,7 @@ export async function readTachoToolCallObservations(args: {
   });
   type Row = {
     root_session_uuid: string;
+    session_uuid: string;
     at: string;
     seq: string | number;
     tool: string;
@@ -586,6 +673,7 @@ export async function readTachoToolCallObservations(args: {
   const rows = (await result.json()) as Row[];
   return rows.map((r) => ({
     rootSessionUuid: r.root_session_uuid,
+    sessionUuid: r.session_uuid,
     at: r.at,
     seq: Number(r.seq),
     tool: r.tool,

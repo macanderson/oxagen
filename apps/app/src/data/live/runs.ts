@@ -14,14 +14,19 @@
 // for `FRAME_PAGE` frames by name, because the mapper needs the size it asked
 // for to tell a full page from the end of the recording.
 import "server-only";
+import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { FRAME_LIMIT_DEFAULT, runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
+import { runContextGet } from "@oxagen/oxagen/contracts/run.context.get";
+import { runIssuesGet } from "@oxagen/oxagen/contracts/run.issues.get";
 import { runTurnsGet } from "@oxagen/oxagen/contracts/run.turns.get";
 import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
 import { runOutcomesSettingsGet } from "@oxagen/oxagen/contracts/run.outcomes.settings.get";
+import { RunContext } from "@/data/contracts/run-context";
+import { RunIssues } from "@/data/contracts/run-issues";
 import { RunWork, RunOutcomesPolicy } from "@/data/contracts/run-work";
 import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import {
@@ -34,6 +39,7 @@ import {
   RunChain,
   RunCost,
   RunDetail,
+  RunFindings,
   RunFrameBody,
   RunOutputs,
   RunTranscript,
@@ -47,11 +53,13 @@ import {
   toRunChain,
   toRunCost,
   toRunDetail,
+  toRunFindings,
   toRunFrameBody,
   toRunOutputs,
   toRunTranscript,
   toRunTurns,
 } from "./mappers/run";
+import { toRunContext } from "./mappers/run-context";
 import { toRunListInput } from "./mappers/run-list-input";
 import { toRunPage } from "./mappers/runs";
 
@@ -121,6 +129,47 @@ export const runs: DataSource["runs"] = {
         })),
       },
       "runs.work",
+    );
+  },
+  async issues(ctx, runId) {
+    const read = await kernelRead(ctx, {
+      contract: runIssuesGet,
+      input: { runId },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    // The view is the contract's shape, field for field.
+    return view(ctx.orgId, RunIssues, read.value, "runs.issues");
+  },
+  // Each model request's window, block by block, and the assembler's
+  // manifests (ADR-200, #3894).
+  async context(ctx, runId) {
+    const read = await kernelRead(ctx, {
+      contract: runContextGet,
+      input: { runId },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      RunContext,
+      toRunContext(read.value),
+      "runs.context",
+    );
+  },
+  // The open findings that cite this run, with the frames each cites (#4001).
+  async findings(ctx, runId) {
+    const read = await kernelRead(ctx, {
+      contract: findingList,
+      input: { status: "open", runId },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      RunFindings,
+      toRunFindings(read.value),
+      "runs.findings",
     );
   },
   async list(ctx, q) {

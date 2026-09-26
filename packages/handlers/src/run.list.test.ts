@@ -1676,6 +1676,83 @@ describe("a run row names who ran it, on what, with which model", () => {
     expect(byId["arun_op"]?.operatorAttribution).toBe("initiator");
   });
 
+  // #3999: the operator's workspace role is the value stamped when the run
+  // opened (ADR-197), read back as stamped.
+  describe("the operator's role", () => {
+    const stampedLedger = (publicId: string, runId: string, role: string) => {
+      const base = ledgerRun({ publicId, runId });
+      return { ...base, run: { ...base.run, operatorRole: role } };
+    };
+
+    it("answers the stamped role on a wrapped session and a ledger run", async () => {
+      const { list } = handlerOver(
+        [stampedLedger("arun_role", RUN_A, "member")],
+        [
+          tachoSession({
+            publicId: "tse_role",
+            session: { operatorRole: "admin" },
+          }),
+        ],
+      );
+      const byId = Object.fromEntries(
+        (await list({ limit: 50 }, ctx())).runs.map((r) => [r.id, r]),
+      );
+      expect(byId["tse_role"]?.operatorRole).toBe("admin");
+      expect(byId["arun_role"]?.operatorRole).toBe("member");
+    });
+
+    it("answers null for a run recorded before the stamp", async () => {
+      // The fixtures carry no `operatorRole`, as a row from before the column
+      // reads: not recorded, never today's role.
+      const { list } = handlerOver(
+        [ledgerRun({ publicId: "arun_old", runId: RUN_A })],
+        [tachoSession({ publicId: "tse_old" })],
+      );
+      for (const run of (await list({ limit: 50 }, ctx())).runs)
+        expect(run.operatorRole).toBeNull();
+    });
+
+    it("answers null for an operator who is not a person, whatever the column holds", async () => {
+      const { list } = handlerOver(
+        [],
+        [
+          tachoSession({
+            publicId: "tse_agent",
+            operatorKind: "agent",
+            session: { operatorRole: "owner" },
+          }),
+        ],
+      );
+      expect((await list({ limit: 50 }, ctx())).runs[0]?.operatorRole).toBeNull();
+    });
+
+    it("reads a value outside the six roles as not recorded", async () => {
+      const { list } = handlerOver(
+        [],
+        [
+          tachoSession({
+            publicId: "tse_odd",
+            session: { operatorRole: "superuser" },
+          }),
+        ],
+      );
+      expect((await list({ limit: 50 }, ctx())).runs[0]?.operatorRole).toBeNull();
+    });
+
+    it("never joins the membership table, so a later role change cannot reach the row", () => {
+      // The stamp wins over a role changed after the run opened because the
+      // read has no other source: both queries select the stamped column and
+      // neither names `workspace_users`.
+      for (const query of [
+        tachoPageQuery(db, SCOPE, page).toSQL(),
+        ledgerPageQuery(db, SCOPE, page).toSQL(),
+      ]) {
+        expect(query.sql).toMatch(/"operator_role"/);
+        expect(query.sql).not.toContain("workspace_users");
+      }
+    });
+  });
+
   // #4024: `sealed_at` is when the server received the stop; the wall clock
   // ends at the stop event's own timestamp.
   it("reports a wrapped session's end from the stop event, not the seal receipt", async () => {

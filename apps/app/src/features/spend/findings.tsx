@@ -16,7 +16,7 @@ import type {
   SpendReport,
 } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
-import { routes } from "@/shared/safe-path";
+import { routes, type SafePath } from "@/shared/safe-path";
 import { eyebrow, linkText, mono, panel } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
@@ -273,18 +273,22 @@ export function FindingsSection({
 /**
  * One finding's evidence as a dialog over the list: the arithmetic the job
  * wrote, the calls the counterfactual covers, and the cited runs. Closing it
- * returns to the list. A read that did not answer says so inside the dialog.
+ * returns to the page it opened over: the Findings list, or the Run page's
+ * Cost tab when a waterfall pin opened it (#4001). A read that did not answer
+ * says so inside the dialog.
  */
 export function FindingEvidence({
   evidence,
   at,
+  close = routes.spend(at.org, at.ws, { tab: "findings" }),
 }: {
   evidence: Read<SpendFindingEvidence>;
   at: SpendAt;
+  /** Where closing the dialog goes; the Findings list when omitted. */
+  close?: SafePath;
 }) {
   const t = useTranslations("spend");
   const locale = useLocale();
-  const close = routes.spend(at.org, at.ws, { tab: "findings" });
   if (!evidence.ok) {
     return (
       <EvidenceDialog title={t("findings.evidence.title")} close={close}>

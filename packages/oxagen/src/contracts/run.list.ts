@@ -27,6 +27,7 @@ import {
 import { z } from "zod";
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import { registerCapability } from "../registry";
+import { runEffortSourceSchema, runFitSchema } from "../run-fit";
 import { costSchema, ratioSchema, tokenCountsSchema } from "./spend.shared";
 
 /**
@@ -117,6 +118,20 @@ export const runSummarySchema = z
  * person whose name the record does not hold.
  */
 export const operatorKindSchema = z.enum(["human", "agent", "service"]);
+
+/**
+ * The workspace roles an operator can hold (`workspace.workspace_users.role`,
+ * lowercased), in the words a run records them (#3999).
+ */
+export const RUN_OPERATOR_ROLES = [
+  "owner",
+  "admin",
+  "member",
+  "billing",
+  "compliance",
+  "viewer",
+] as const;
+export const runOperatorRoleSchema = z.enum(RUN_OPERATOR_ROLES);
 
 /**
  * The model the run was served by, as its recorded id and what that id
@@ -352,6 +367,13 @@ export const runItemSchema = z
      * as the person at the keyboard. Null when no operator was recorded.
      */
     operatorAttribution: z.enum(["initiator", "host_enroller"]).nullable(),
+    /**
+     * The operator's workspace role when the run opened, stamped then and
+     * never read live (#3999). Null for a run recorded before the role was
+     * stamped, for an operator who is not a person, and for a person with no
+     * membership in the run's workspace.
+     */
+    operatorRole: runOperatorRoleSchema.nullable(),
     status: runStatusSchema,
     outcome: runOutcomeSchema,
     /**
@@ -475,11 +497,24 @@ export const runItemSchema = z
      */
     effort: z.string().nullable().optional(),
     /**
+     * Where `effort` was read (#3891): `request` from a proxied model
+     * request's body, `harness` from the harness's own report. A request
+     * value wins over the harness's. Null exactly when `effort` is.
+     * `get_run` answers it; `list_runs` leaves it out.
+     */
+    effortSource: runEffortSourceSchema.nullable().optional(),
+    /**
      * Whether the session had always-on thinking enabled, from the latest
      * session config frame. Null when no frame recorded it, and for every
      * ledger run. `get_run` answers it; `list_runs` leaves it out.
      */
     thinking: z.boolean().nullable().optional(),
+    /**
+     * The Model fit reading for the sealed run (#3893). Null for a live run,
+     * for a run whose stored reading read an earlier seal, and for a run with
+     * no reading yet. `get_run` answers it; `list_runs` leaves it out.
+     */
+    fit: runFitSchema.nullable().optional(),
     /**
      * The permission mode the session ended in, falling back to the one it
      * started in. Null when none was recorded, and for every ledger run.

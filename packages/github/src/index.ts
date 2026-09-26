@@ -4,6 +4,8 @@ export type {
   GitHubPullRequest,
   GitHubClosingIssue,
   GitHubClosingIssues,
+  GitHubIssueStates,
+  GitHubRelease,
   GitHubPrComment,
   GitHubPrComments,
   GitHubCheckRun,

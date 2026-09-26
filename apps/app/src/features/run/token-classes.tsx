@@ -236,9 +236,12 @@ function TokenClasses({
 function PromptComposition({
   metrics,
   prices,
+  graded,
 }: {
   metrics: RunMetrics;
   prices: ClassPrices;
+  /** The rollup's advanced steps over its steps; null until it grades the run (#3984). */
+  graded: { advanced: number; steps: number } | null;
 }) {
   const t = useTranslations("run.cost.composition");
   const tCost = useTranslations("run.cost");
@@ -310,7 +313,13 @@ function PromptComposition({
           )}
         </Fact>
         <Fact label={t("productive")}>
-          {productiveRatio === null ? (
+          {graded !== null ? (
+            t("productiveSteps", {
+              advanced: formatCount(graded.advanced, locale),
+              steps: graded.steps,
+              total: formatCount(graded.steps, locale),
+            })
+          ) : productiveRatio === null ? (
             <NoValue />
           ) : (
             t("productiveValue", {
@@ -332,10 +341,20 @@ export function TokenClassesAndComposition({
   prices: ClassPrices;
   cost: Read<RunCost>;
 }) {
+  const rollup = cost.ok ? cost.value.rollup : null;
+  const advanced = rollup?.advancedSteps ?? null;
   return (
     <div className={pair}>
       <TokenClasses metrics={metrics} prices={prices} cost={cost} />
-      <PromptComposition metrics={metrics} prices={prices} />
+      <PromptComposition
+        metrics={metrics}
+        prices={prices}
+        graded={
+          rollup === null || advanced === null
+            ? null
+            : { advanced, steps: rollup.steps }
+        }
+      />
     </div>
   );
 }

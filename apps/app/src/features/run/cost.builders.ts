@@ -325,7 +325,7 @@ export function costTurns(
       tokens: { inputUncached, cacheRead },
     });
   }
-  return { turns: rows, complete: true };
+  return { turns: rows, complete: true, chains: [] };
 }
 
 /**
