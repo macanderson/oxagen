@@ -19,7 +19,11 @@
 import { digestText } from "../claude-code/context";
 import type { SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent } from "../envelope";
-import type { CommandAcknowledgement, DeliveredCommand } from "../wire";
+import {
+  type CommandAcknowledgement,
+  commandAcknowledgementSchema,
+  type DeliveredCommand,
+} from "../wire";
 import {
   isInternalSession,
   type SessionRecord,
@@ -50,8 +54,13 @@ export const HANDLED_COMMANDS_KEPT = 1024;
  * plane delivers a `sent` command again until an acknowledgement for it
  * lands, so an acknowledgement lost on the way back brings the same steer or
  * kill round a second time. A command found here is not applied again: its
- * first acknowledgement is queued once more instead. Held in memory, so a
- * restart forgets it.
+ * first acknowledgement is queued once more instead.
+ *
+ * The daemon writes it to `daemon.json` beside the registry (`list` and
+ * `restore`), in the same write that lands before the acknowledgements
+ * leave. Held in memory alone, a restart forgot it, and a steer the agent
+ * had already read was queued and read a second time when the lost
+ * acknowledgement brought it back.
  */
 export class HandledCommands {
   private readonly acks = new Map<string, CommandAcknowledgement>();
@@ -69,6 +78,23 @@ export class HandledCommands {
     for (const id of this.acks.keys()) {
       if (this.acks.size <= this.limit) break;
       this.acks.delete(id);
+    }
+  }
+
+  /** Every remembered acknowledgement, oldest first, for the state file. */
+  list(): CommandAcknowledgement[] {
+    return [...this.acks.values()].map((ack) => ({ ...ack }));
+  }
+
+  /**
+   * Take back the acknowledgements a state file held, oldest first. An entry
+   * that is not an acknowledgement is skipped: the file is on the operator's
+   * machine, and a bad entry must not stop the daemon from starting.
+   */
+  restore(entries: readonly unknown[]): void {
+    for (const entry of entries) {
+      const parsed = commandAcknowledgementSchema.safeParse(entry);
+      if (parsed.success) this.remember(parsed.data);
     }
   }
 }
@@ -236,6 +262,11 @@ function applyToSession(
           status: "failed",
           detail: `${command.command} payload has no text`,
         };
+      // Queued once. The ledger answers a redelivery before it gets here, but
+      // a ledger past its bound no longer holds an old command, and the
+      // queue itself still does until a boundary takes it.
+      if (record.control.messages.some((queued) => queued.id === command.id))
+        return { events, status: "received" };
       record.control.messages.push({
         id: command.id,
         text,

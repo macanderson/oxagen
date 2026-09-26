@@ -327,6 +327,12 @@ export interface RegistryState {
   agents?: AgentRosterEntry[];
   /** Absent in files written before forgotten chains kept a tombstone. */
   tombstones?: ChainTombstone[];
+  /**
+   * The acknowledgement of every command this host answered, oldest first,
+   * as the daemon's `HandledCommands` holds them. The daemon writes it beside
+   * the registry's own state. Absent in files written before it was kept.
+   */
+  handled?: CommandAcknowledgement[];
 }
 
 /**

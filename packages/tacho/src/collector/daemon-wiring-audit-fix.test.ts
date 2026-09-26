@@ -656,6 +656,46 @@ describe("the daemon's audit wiring", () => {
     );
   });
 
+  it("answers a steer redelivered after a restart from disk and does not queue it again", async () => {
+    // The `received` acknowledgement never reached the control plane, so it
+    // sends the row again, this time to a daemon that restarted after the
+    // boundary delivered the steer. A ledger held only in memory forgot the
+    // command, and the agent read the steer twice.
+    const first = await boot();
+    await first.handle.api.handleHook(hook("SessionStart", { cwd: CWD }));
+    const sessionUuid =
+      first.handle.registry.get(SESSION)!.recorder.sessionUuid;
+    const steer = command({
+      id: "cmd_steer",
+      command: "steer",
+      session_uuid: sessionUuid,
+      payload: { text: "Stop after this file." },
+    });
+    first.plane.queue(steer);
+    await first.handle.tick();
+    const delivered = await first.handle.api.handleHook(
+      hook("UserPromptSubmit", { prompt: "go on" }),
+    );
+    expect(delivered).toMatchObject({
+      hookSpecificOutput: { additionalContext: "Stop after this file." },
+    });
+    await first.handle.stop();
+
+    const second = await boot({ paths: first.paths });
+    second.plane.queue({ ...steer });
+    await second.handle.tick();
+    expect(second.handle.registry.get(SESSION)!.control.messages).toEqual([]);
+    expect(
+      second.plane.acks.filter((a) => a.command_id === "cmd_steer"),
+    ).toEqual([
+      {
+        command_id: "cmd_steer",
+        status: "received",
+        session_uuid: sessionUuid,
+      },
+    ]);
+  });
+
   it("keeps a queued steer when the mandate narrows but still keeps prompts", async () => {
     const text = "Stop after this file.";
     const { handle, plane, signer, paths } = await boot({
@@ -923,6 +963,38 @@ describe("command redelivery in the inbox", () => {
     expect(result.acknowledgements.map((a) => a.status)).toEqual([
       "received",
       "received",
+    ]);
+  });
+
+  it("queues a steer once when the ledger no longer holds it", async () => {
+    // A ledger past its bound, or one a crash lost, still finds the steer
+    // waiting on the queue.
+    const { agent, deps } = setup();
+    const steer = command({
+      id: "cmd_queued",
+      command: "steer",
+      session_uuid: agent.recorder.sessionUuid,
+      payload: { text: "Once." },
+    });
+    await applyCommands([steer], deps);
+    await applyCommands([steer], { ...deps, handled: new HandledCommands() });
+    expect(agent.control.messages.map((m) => m.id)).toEqual(["cmd_queued"]);
+  });
+
+  it("carries its acknowledgements through the state file", () => {
+    const handled = new HandledCommands();
+    handled.remember({ command_id: "a", status: "received" });
+    handled.remember({ command_id: "b", status: "applied", applied_at_seq: 3 });
+    const restored = new HandledCommands();
+    restored.restore([
+      ...JSON.parse(JSON.stringify(handled.list())),
+      { command_id: "", status: "applied" },
+      { command_id: "c", status: "done" },
+      "junk",
+    ]);
+    expect(restored.list()).toEqual([
+      { command_id: "a", status: "received" },
+      { command_id: "b", status: "applied", applied_at_seq: 3 },
     ]);
   });
 

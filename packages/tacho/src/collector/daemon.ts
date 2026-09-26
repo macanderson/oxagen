@@ -691,9 +691,11 @@ async function initializeDaemon(
   // The control plane delivers a `sent` command again until its
   // acknowledgement lands. Every delivery goes through this daemon's record
   // of the commands it already answered, so a steer is queued once and a kill
-  // signalled once however often it arrives. In memory only: `daemon.json` is
-  // the registry's state and has no place for it.
+  // signalled once however often it arrives. `persistState` writes it into
+  // `daemon.json`, so a redelivery after a restart is answered from it too.
   const handledCommands = new HandledCommands();
+  if (Array.isArray(persisted?.handled))
+    handledCommands.restore(persisted.handled);
   const applyCommands: typeof applyDeliveredCommands = (commands, deps) =>
     applyDeliveredCommands(commands, { ...deps, handled: handledCommands });
   const serial = new Serial();
@@ -753,10 +755,11 @@ async function initializeDaemon(
     // it. One flush per call, covering everything appended since the last
     // one: a group commit, not an fsync per event.
     wal.flush();
-    writeSensitiveFileAtomic(
-      paths.daemonState,
-      JSON.stringify(registry.state()),
-    );
+    const state: RegistryState = {
+      ...registry.state(),
+      handled: handledCommands.list(),
+    };
+    writeSensitiveFileAtomic(paths.daemonState, JSON.stringify(state));
     // The state file now holds every ledger entry the journal did. A crash
     // between the write and this removal restores those entries twice,
     // which is harmless: remembering a key the ledger holds is a no-op.
