@@ -55,6 +55,12 @@ export interface TachoPaths {
    * removed when the daemon forgets the session.
    */
   preSessionCopies: string;
+  /**
+   * The Stella identity cache: one file per Stella process, holding its pid
+   * and start time, so most Stella hooks run no `ps` (`resolveStellaIdentity`).
+   * A cache only, so `tacho unenroll` removes it.
+   */
+  stellaIdentity: string;
   /** The daemon's pid file. */
   pid: string;
   /** Daemon stdout/stderr when run as a service. */
@@ -153,6 +159,7 @@ export function tachoPaths(
     hookIdJournal: join(root, "hook-ids.jsonl"),
     transcriptTailState: join(root, "transcript-tail.json"),
     preSessionCopies: join(root, "pre-session"),
+    stellaIdentity: join(root, "stella-identity"),
     pid: join(root, "tachod.pid"),
     log: join(root, "tachod.log"),
     claudeSettings: join(claudeConfigDir, "settings.json"),

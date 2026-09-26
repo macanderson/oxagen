@@ -1544,10 +1544,15 @@ describe("enroll → status → unenroll", () => {
     writeSensitiveFileAtomic(d.paths.pendingEnds, "[]");
     // The hook-id journal belongs to the daemon state and goes with it.
     writeSensitiveFileAtomic(d.paths.hookIdJournal, "");
+    // A Stella hook left its identity cache behind.
+    writeSensitiveFileAtomic(join(d.paths.stellaIdentity, "4242.json"), "{}");
     const second = await unenroll({ token: "t", purge: true }, d);
     expect(second.revoked).toBe(true);
     expect(existsSync(d.paths.pendingEnds)).toBe(false);
     expect(existsSync(d.paths.hookIdJournal)).toBe(false);
+    expect(existsSync(d.paths.stellaIdentity)).toBe(false);
+    // Nothing is left, so the machine looks like one that was never enrolled.
+    expect(existsSync(d.paths.root)).toBe(false);
     expect(d.lines.join("\n")).toContain("pending session ends");
     expect(d.requests.map((r) => r.url)).toEqual([
       "https://api.example.test/v1/acme/core/tacho/enrollments/revoke",
