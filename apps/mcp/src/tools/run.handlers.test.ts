@@ -102,6 +102,7 @@ const LEDGER_ROW = {
   operatorKind: null,
   operatorName: null,
   operatorAttribution: null,
+  operatorRole: null,
   status: "sealed",
   outcome: "completed",
   turns: 2,
