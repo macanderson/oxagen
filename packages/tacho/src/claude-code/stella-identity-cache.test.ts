@@ -21,6 +21,7 @@ import {
   type ProcessInfo,
   resolveStellaIdentity,
   STELLA_IDENTITY_FRESH_MS,
+  STELLA_PS_BUDGET_MS,
 } from "./stella-adapter";
 
 /** A `ps` double that counts its calls and can be told to fail. */
@@ -61,12 +62,14 @@ describe("resolveStellaIdentity", () => {
     ctx: ReturnType<typeof setup>,
     now: number,
     parentPid = 4242,
+    event?: string,
   ) =>
     resolveStellaIdentity({
       parentPid,
       platform: "darwin",
       cacheDir: ctx.cacheDir,
       now,
+      ...(event !== undefined ? { event } : {}),
       lookup: ctx.ps.lookup,
       startInstance: ctx.ps.startInstance,
       isAlive: () => true,
@@ -157,6 +160,98 @@ describe("resolveStellaIdentity", () => {
     expect(existsSync(join(ctx.cacheDir, "5555.json"))).toBe(false);
   });
 
+  it("reads the start time on a SessionStart even when the entry is fresh", () => {
+    const ctx = setup();
+    resolve(ctx, T0);
+    // Stella exited and a new Stella got the same pid inside the minute.
+    ctx.tree[4242].start = "ffff00001111";
+    ctx.ps.calls.lookup = 0;
+    ctx.ps.calls.startInstance = 0;
+    expect(resolve(ctx, T0 + 5_000, 4242, "SessionStart")).toEqual({
+      pid: 4242,
+      instance: "ffff00001111",
+    });
+    expect(ctx.ps.calls.startInstance).toBeGreaterThanOrEqual(1);
+    // The same start time costs one read and keeps the entry.
+    ctx.ps.calls.lookup = 0;
+    ctx.ps.calls.startInstance = 0;
+    expect(resolve(ctx, T0 + 6_000, 4242, "SessionStart")).toEqual({
+      pid: 4242,
+      instance: "ffff00001111",
+    });
+    expect(ctx.ps.calls).toEqual({ lookup: 0, startInstance: 1 });
+  });
+
+  it("does not trust the entry on a SessionStart whose start-time read fails", () => {
+    const ctx = setup();
+    resolve(ctx, T0);
+    // Stella exited and a new Stella got the same pid inside the minute.
+    ctx.tree[4242].start = "ffff00001111";
+    ctx.ps.failing.startInstance = true;
+    // The bare pid form starts a new chain; the cached instance would have
+    // reopened the old run's chain as a resume.
+    expect(resolve(ctx, T0 + 5_000, 4242, "SessionStart")).toEqual({
+      pid: 4242,
+    });
+    // The entry is gone, so the next hook looks the process up again
+    // instead of returning to the old run's chain.
+    expect(existsSync(join(ctx.cacheDir, "4242.json"))).toBe(false);
+    ctx.ps.failing.startInstance = false;
+    ctx.ps.calls.lookup = 0;
+    expect(resolve(ctx, T0 + 6_000)).toEqual({
+      pid: 4242,
+      instance: "ffff00001111",
+    });
+    expect(ctx.ps.calls.lookup).toBe(1);
+  });
+
+  it("drops the entry on a SessionStart with a new start time, even when the lookup then fails", () => {
+    const ctx = setup();
+    resolve(ctx, T0);
+    ctx.tree[4242].start = "ffff00001111";
+    ctx.ps.failing.lookup = true;
+    expect(resolve(ctx, T0 + 5_000, 4242, "SessionStart")).toEqual({
+      pid: 4242,
+      instance: "ffff00001111",
+    });
+    expect(existsSync(join(ctx.cacheDir, "4242.json"))).toBe(false);
+    // The next hook inside the minute does not get the old instance back.
+    ctx.ps.failing.lookup = false;
+    ctx.ps.calls.lookup = 0;
+    expect(resolve(ctx, T0 + 6_000)).toEqual({
+      pid: 4242,
+      instance: "ffff00001111",
+    });
+    expect(ctx.ps.calls.lookup).toBe(1);
+  });
+
+  it("gives every ps call only what is left of one shared budget", () => {
+    const ctx = setup();
+    let clock = 0;
+    const timeouts: number[] = [];
+    const identity = resolveStellaIdentity({
+      parentPid: 4242,
+      platform: "darwin",
+      cacheDir: ctx.cacheDir,
+      now: T0,
+      clock: () => clock,
+      lookup: (pid, timeoutMs) => {
+        timeouts.push(timeoutMs ?? Number.POSITIVE_INFINITY);
+        // A slow ps uses the whole budget.
+        clock += STELLA_PS_BUDGET_MS;
+        return ctx.ps.lookup(pid);
+      },
+      startInstance: (pid, timeoutMs) => {
+        timeouts.push(timeoutMs ?? Number.POSITIVE_INFINITY);
+        return ctx.ps.startInstance(pid);
+      },
+      isAlive: () => true,
+    });
+    // The lookup got the whole budget, and the start-time read was skipped.
+    expect(timeouts).toEqual([STELLA_PS_BUDGET_MS]);
+    expect(identity).toEqual({ pid: 4242 });
+  });
+
   it("removes the entries of Stella processes that have exited", () => {
     const ctx = setup();
     resolve(ctx, T0);
@@ -238,6 +333,59 @@ describe("runTachoHook for Stella", () => {
         session: `stella-${process.ppid}-eeee99990000`,
         pid: String(process.ppid),
       });
+  });
+
+  it("passes Stella's event name, so a SessionStart checks a fresh entry", async () => {
+    const paths = enrolledPaths();
+    const tree = {
+      [process.ppid]: { ppid: 1, comm: "stella", start: "eeee99990000" },
+    };
+    const ps = fakePs(tree);
+    const sessions: string[] = [];
+    const hook = (stdin: string) =>
+      runTachoHook({
+        paths,
+        env: {},
+        stdin,
+        harness: "stella",
+        platform: "linux",
+        now: () => T0,
+        stellaPs: { lookup: ps.lookup, startInstance: ps.startInstance },
+        post: async (options: Parameters<typeof postUnix>[0]) => {
+          sessions.push(
+            (JSON.parse(options.body) as { payload: { session_id: string } })
+              .payload.session_id,
+          );
+          return { status: 200, body: "{}" };
+        },
+      });
+    await hook(STOP);
+    // A new Stella got the same pid inside the minute.
+    tree[process.ppid] = { ppid: 1, comm: "stella", start: "ffff00001111" };
+    await hook(JSON.stringify({ event: "SessionStart", cwd: "/repo" }));
+    expect(sessions).toEqual([
+      `stella-${process.ppid}-eeee99990000`,
+      `stella-${process.ppid}-ffff00001111`,
+    ]);
+  });
+
+  it("keeps the cache under TACHO_HOME at the path unenroll removes", async () => {
+    const paths = enrolledPaths();
+    const ps = fakePs({
+      [process.ppid]: { ppid: 1, comm: "stella", start: "eeee99990000" },
+    });
+    await runTachoHook({
+      paths,
+      env: {},
+      stdin: STOP,
+      harness: "stella",
+      platform: "linux",
+      stellaPs: { lookup: ps.lookup, startInstance: ps.startInstance },
+      post: async () => ({ status: 200, body: "{}" }),
+    });
+    expect(existsSync(join(paths.stellaIdentity, `${process.ppid}.json`))).toBe(
+      true,
+    );
   });
 
   it("runs no ps on a machine that is not enrolled", async () => {

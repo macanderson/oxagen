@@ -670,6 +670,10 @@ async function unenrollLocked(
   ]) {
     if (existsSync(path)) unlinkSync(path);
   }
+  // The Stella identity cache holds pids and start times and nothing else. A
+  // later enrollment rebuilds it, so it goes whether or not `--purge` was
+  // given, and an emptied root can then be removed.
+  rmSync(deps.paths.stellaIdentity, { recursive: true, force: true });
   // A harness file that could not be cleaned still needs the enrollment id
   // and the displaced values to be cleaned later, so host.json outlives it.
   if (

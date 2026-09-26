@@ -110,6 +110,14 @@ export interface StellaIdentity {
 }
 
 /**
+ * The most time all the `ps` calls behind one Stella identity may take
+ * together. Each call's timeout is what is left of it, so a hung `ps` costs
+ * this long at most, not two seconds a call. A Stella telemetry hook has five
+ * seconds in all, and stdin, the daemon and the spool write need the rest.
+ */
+export const STELLA_PS_BUDGET_MS = 1_000;
+
+/**
  * How long a cached identity is used with no `ps` call at all. A hook past
  * this reads the parent's start time once to confirm the pid still names the
  * same process. A reused pid needs the old process to exit and the system to
@@ -156,6 +164,15 @@ function writeCachedIdentity(cacheDir: string, entry: CachedIdentity): void {
   }
 }
 
+/** Best-effort: an entry that is left behind is checked again on the next hook. */
+function dropCachedIdentity(cacheDir: string, pid: number): void {
+  try {
+    rmSync(cachePath(cacheDir, pid), { force: true });
+  } catch {
+    // The next hook past the fresh window reads the start time again.
+  }
+}
+
 /** Remove the entries of Stella processes that have exited. */
 function pruneCachedIdentities(
   cacheDir: string,
@@ -191,10 +208,23 @@ export interface StellaIdentityOptions {
   /** Where identities are cached, one file per Stella pid. */
   cacheDir: string;
   now: number;
+  /**
+   * Stella's name for the event, when the payload carries one. A
+   * `SessionStart` always reads the start time before it trusts the cache.
+   */
+  event?: string;
   lookup?: PsLookup;
-  startInstance?: (pid: number) => string | undefined;
+  startInstance?: StartInstanceLookup;
   isAlive?: (pid: number) => boolean;
+  /** The clock `STELLA_PS_BUDGET_MS` is measured on. */
+  clock?: () => number;
 }
+
+/** Reads a process's instance token, within `timeoutMs` when it is given. */
+export type StartInstanceLookup = (
+  pid: number,
+  timeoutMs?: number,
+) => string | undefined;
 
 /**
  * The Stella process this hook belongs to, from a cache under `TACHO_HOME`
@@ -214,12 +244,18 @@ export interface StellaIdentityOptions {
  * - A later hook reads the parent's start time once. A match refreshes the
  *   entry. A different start time means the pid was reused, and the hook
  *   looks the process up afresh.
- * - A `ps` failure with an entry on hand keeps the cached identity: the
- *   parent is alive, since it ran this hook, and its chain is the one to
+ * - A `SessionStart` always reads the start time. A new Stella can get the
+ *   pid of one that exited inside the minute, and trusting the entry would
+ *   file the new run on the old run's chain as a resume. An entry that read
+ *   does not confirm, because it failed or found another start time, is
+ *   removed, so the hooks after it do not return to the old chain either.
+ * - Any other `ps` failure with an entry on hand keeps the cached identity:
+ *   the parent is alive, since it ran this hook, and its chain is the one to
  *   continue.
  * - With no entry, the hook does what it did before the cache: two `ps`
- *   calls, and the parent pid and the bare form when they fail. That is the
- *   first hook of a run, so there is no earlier chain to split from.
+ *   calls, and the parent pid and the bare form when they fail.
+ *
+ * All the `ps` calls share `STELLA_PS_BUDGET_MS`.
  *
  * Only a parent that is Stella itself is cached. When bash forks the hook
  * instead of exec'ing it, the parent is a new shell on every hook, so an
@@ -231,24 +267,46 @@ export function resolveStellaIdentity(
 ): StellaIdentity {
   const { parentPid, platform, cacheDir, now } = options;
   if (platform === "win32") return { pid: parentPid };
-  const lookup = options.lookup ?? psLookup;
-  const startInstance = options.startInstance ?? psStartInstance;
+  const clock = options.clock ?? Date.now;
+  const deadline = clock() + STELLA_PS_BUDGET_MS;
+  // Read before each call: a timeout of 0 would mean no timeout to `spawnSync`.
+  const left = (): number | undefined => {
+    const ms = deadline - clock();
+    return ms > 0 ? ms : undefined;
+  };
+  const lookup = (pid: number): ProcessInfo | undefined => {
+    const ms = left();
+    return ms === undefined ? undefined : (options.lookup ?? psLookup)(pid, ms);
+  };
+  const startInstance = (pid: number): string | undefined => {
+    const ms = left();
+    return ms === undefined
+      ? undefined
+      : (options.startInstance ?? psStartInstance)(pid, ms);
+  };
+  const starting = options.event === "SessionStart";
   const cached = readCachedIdentity(cacheDir, parentPid);
   let parentInstance: string | undefined;
   if (cached !== undefined) {
     const identity = { pid: cached.pid, instance: cached.instance };
     const age = now - cached.confirmed_at;
-    if (age >= 0 && age < STELLA_IDENTITY_FRESH_MS) return identity;
+    if (!starting && age >= 0 && age < STELLA_IDENTITY_FRESH_MS)
+      return identity;
     parentInstance = startInstance(parentPid);
-    if (parentInstance === undefined) return identity;
+    if (parentInstance === undefined && !starting) return identity;
     if (parentInstance === cached.instance) {
       writeCachedIdentity(cacheDir, { ...cached, confirmed_at: now });
       return identity;
     }
+    if (starting) dropCachedIdentity(cacheDir, parentPid);
   }
   const parent = lookup(parentPid);
-  if (parent !== undefined && isShellWithParent(parent))
-    return { pid: parent.ppid, instance: startInstance(parent.ppid) };
+  if (parent !== undefined && isShellWithParent(parent)) {
+    const instance = startInstance(parent.ppid);
+    return instance === undefined
+      ? { pid: parent.ppid }
+      : { pid: parent.ppid, instance };
+  }
   const instance = parentInstance ?? startInstance(parentPid);
   if (parent !== undefined && instance !== undefined) {
     writeCachedIdentity(cacheDir, {
@@ -293,11 +351,14 @@ export function startInstanceToken(lstart: string): string | undefined {
  * as `psLookup`. Undefined when `ps` cannot answer, and the caller then falls
  * back to the bare pid form.
  */
-export function psStartInstance(pid: number): string | undefined {
+export function psStartInstance(
+  pid: number,
+  timeoutMs = 2_000,
+): string | undefined {
   const result = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
-    timeout: 2_000,
+    timeout: timeoutMs,
   });
   if (result.status !== 0 || typeof result.stdout !== "string")
     return undefined;

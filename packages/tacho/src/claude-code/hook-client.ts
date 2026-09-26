@@ -950,11 +950,18 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       // Unenrolled: nothing is posted or spooled, so the id is never read.
       identity = { pid: process.ppid };
     } else {
+      const stellaEvent =
+        typeof raw === "object" &&
+        raw !== null &&
+        typeof (raw as Record<string, unknown>)["event"] === "string"
+          ? ((raw as Record<string, unknown>)["event"] as string)
+          : undefined;
       identity = resolveStellaIdentity({
         parentPid: process.ppid,
         platform,
-        cacheDir: join(deps.paths.root, "stella-identity"),
+        cacheDir: deps.paths.stellaIdentity,
         now: now(),
+        ...(stellaEvent !== undefined ? { event: stellaEvent } : {}),
         ...(deps.stellaPs?.lookup !== undefined
           ? { lookup: deps.stellaPs.lookup }
           : {}),
