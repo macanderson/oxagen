@@ -11,7 +11,7 @@ import {
   renameSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   type Agent,
@@ -277,17 +277,19 @@ describe("agentPathsForEnrollment", () => {
     );
   });
 
-  it("routes an entry with no id by its harness, and an unknown id to some agent", () => {
+  it("routes an entry with no id by its harness, and an unknown id to the first directory by name", () => {
     const { claude, codex } = twoAgents();
     expect(agentPathsForEnrollment(claude, undefined, "codex")).toEqual(codex);
     expect(agentPathsForEnrollment(claude, undefined, "claude-code")).toEqual(
       claude,
     );
-    expect(
-      [claude.dir, codex.dir].includes(
-        agentPathsForEnrollment(claude, "tch_unknown", "codex").dir,
-      ),
-    ).toBe(true);
+    // Sorted, so the answer does not depend on the filesystem's readdir order.
+    const [first] = [claude, codex].sort((a, b) =>
+      basename(a.dir) < basename(b.dir) ? -1 : 1,
+    );
+    expect(agentPathsForEnrollment(claude, "tch_unknown", "codex").dir).toBe(
+      first?.dir,
+    );
   });
 
   it("gives paths with no host.json on a machine with no agent", () => {
