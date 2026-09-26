@@ -69,12 +69,6 @@ import {
   tryParseAnswerBody,
 } from "./stella-adapter";
 
-/** The `--harness <name>` flag on the hook command; unknown names default to Claude Code. */
-/**
- * What Cursor shows when a hook payload cannot be read. It names the cause
- * and the repair rather than saying only that something was denied, because
- * the person seeing it did nothing wrong and can act on it.
- */
 /**
  * Refuse a Cursor hook whose payload could not be parsed, in the shape the
  * event it names actually reads.
@@ -110,6 +104,11 @@ function cursorRefusal(raw: unknown, message: string): string {
   })}\n`;
 }
 
+/**
+ * What Cursor shows when a hook payload cannot be read. It names the cause
+ * and the repair rather than saying only that something was denied, because
+ * the person seeing it did nothing wrong and can act on it.
+ */
 const CURSOR_UNREADABLE_PAYLOAD =
   "Oxagen could not read this hook payload, so it cannot say what this agent is permitted to do. Run `tacho status` and check that the wrapper matches this version of Cursor.";
 
@@ -137,6 +136,7 @@ function readHostRouting(
   }
 }
 
+/** The `--harness <name>` flag on the hook command; unknown names default to Claude Code. */
 export function harnessFromArgv(argv: readonly string[]): TachoHarness {
   const index = argv.indexOf("--harness");
   const value = index >= 0 ? argv[index + 1] : undefined;
