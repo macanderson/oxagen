@@ -10,6 +10,8 @@ A page reads a bounded range of the run's frames rather than the run from the cu
 
 A body the store cannot return reads as `text: null` on its half; the rest of the page is still answered.
 
+A compacted ledger attempt is read from its archive segment (spec §13.3, ADR-058). Frame compaction deletes a sealed attempt's hot rows once its segment holds them, and the ledger store then restores the attempt's frames from the segment the seal wrote. The segment holds the frames the seal committed to, so the transcript folds the same entries, counts and pages as it did from the hot rows. `get_run` and `list_runs` answer `compacted: true` for such a run, and the Transcript tab says it is read from the archive.
+
 ## Mode
 
 **sync**

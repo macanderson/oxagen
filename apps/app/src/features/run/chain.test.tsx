@@ -281,16 +281,19 @@ describe("ChainSection", () => {
     ).toBeTruthy();
   });
 
-  it("draws the seal's recorded fields and says the signature is not in the read, never a guessed key", () => {
+  it("draws the seal's recorded fields and says an unsigned seal carries no signature, never a guessed key (negative)", () => {
     renderChain(readOk(runChain()));
     const seal = panel("Seal and attestation");
     expect(seal.getByText("sealed")).toBeTruthy();
-    expect(seal.getByText("Signature").nextElementSibling).toHaveTextContent(
-      "not recorded",
-    );
-    expect(seal.getByText("Signs over").nextElementSibling).toHaveTextContent(
-      "not recorded",
-    );
+    for (const label of ["Signature", "Signs over"]) {
+      const value = seal.getByText(label).nextElementSibling;
+      expect(value).toHaveTextContent("not recorded");
+      expect(value?.querySelector("[title]")).toHaveAttribute(
+        "title",
+        "The seal was written with no attester key, or before seals were signed.",
+      );
+    }
+    expect(screen.queryByTestId("chain-signature")).toBeNull();
     expect(seal.getByText(`sha256:${"c".repeat(64)}`)).toBeTruthy();
     expect(
       seal.getByText("Archive segment").nextElementSibling,
@@ -298,6 +301,115 @@ describe("ChainSection", () => {
     expect(seal.getByText("completed")).toBeTruthy();
     expect(seal.getByText("431 frames")).toBeTruthy();
     expect(seal.getByText("harness")).toBeTruthy();
+  });
+
+  describe("the seal's attestation (ADR-195)", () => {
+    const SIGNED = {
+      alg: "ed25519" as const,
+      keyRef: "3f9a0c21d4e8b765",
+      sig: "c2lnbmVkIGF0IHNlYWwgdGltZQ==",
+      signsOver: [
+        "run_id",
+        "attempt_id",
+        "frame_count",
+        "merkle_root",
+        "archive_segment_digest",
+        "enforcement_tier",
+        "completeness_gaps",
+        "replay_grade",
+      ],
+    };
+
+    function signedChain() {
+      const [seal] = runChain().seals;
+      if (seal === undefined) throw new Error("fixture has a seal");
+      return runChain({
+        seals: [
+          {
+            ...seal,
+            archiveSegmentRef: "evidence/o/w/segments/a/f.ndjson.zst",
+            archiveSegmentDigest: `sha256:${"9".repeat(64)}`,
+            attestation: SIGNED,
+          },
+        ],
+      });
+    }
+
+    it("names the key and the signature the seal wrote, and the fields it signs", async () => {
+      const { container } = renderChain(readOk(signedChain()));
+      const seal = panel("Seal and attestation");
+      expect(screen.getByTestId("chain-signature")).toHaveTextContent(
+        "ed25519 key 3f9a0c21d4e8b765",
+      );
+      expect(seal.getByText("Signature").nextElementSibling).toHaveTextContent(
+        SIGNED.sig,
+      );
+      expect(seal.getByText("Signs over").nextElementSibling).toHaveTextContent(
+        "run_id, attempt_id, frame_count, merkle_root, archive_segment_digest, enforcement_tier, completeness_gaps, replay_grade",
+      );
+      expect(seal.queryByText("not recorded", { exact: false })).toBeNull();
+      await expectNoAxe(container);
+    });
+
+    it("draws each attempt's own signature when a run was retried: the first unsigned, the second signed", () => {
+      const [seal] = runChain().seals;
+      if (seal === undefined) throw new Error("fixture has a seal");
+      renderChain(
+        readOk(
+          runChain({
+            seals: [
+              seal,
+              {
+                ...seal,
+                sealedAt: "2026-09-15T08:58:00.000Z",
+                attestation: SIGNED,
+              },
+            ],
+          }),
+        ),
+      );
+      const [first, second] = screen.getAllByTestId("chain-attempt");
+      if (first === undefined || second === undefined)
+        throw new Error("two attempts");
+      expect(
+        within(first).getByText("Signature").nextElementSibling,
+      ).toHaveTextContent("not recorded");
+      expect(within(second).getByTestId("chain-signature")).toHaveTextContent(
+        "ed25519 key 3f9a0c21d4e8b765",
+      );
+    });
+  });
+
+  describe("a compacted run (ADR-058, #4000)", () => {
+    it("says the run is read from its archive segment, above the four panels", async () => {
+      const { container } = renderChain(readOk(runChain()), {
+        run: runRow({ id: "arun_5f0c", source: "ledger", compacted: true }),
+      });
+      const note = screen.getByTestId("chain-compacted");
+      expect(note).toHaveTextContent(
+        "Compacted. This run is read from its archive segment.",
+      );
+      expect(note.querySelector("b")).toHaveTextContent("Compacted.");
+      expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(4);
+      await expectNoAxe(container);
+    });
+
+    it("draws no note on a run whose frames are still in the log, or a wrapped session (negative)", () => {
+      renderChain(readOk(runChain()), {
+        run: runRow({ id: "arun_5f0c", source: "ledger", compacted: false }),
+      });
+      expect(screen.queryByTestId("chain-compacted")).toBeNull();
+      cleanup();
+      renderChain(readOk(runChain()));
+      expect(screen.queryByTestId("chain-compacted")).toBeNull();
+    });
+
+    it("draws no note over a chain it could not read (negative)", () => {
+      renderChain(readError("frame_store_unreachable", 502), {
+        run: runRow({ id: "arun_5f0c", source: "ledger", compacted: true }),
+      });
+      expect(screen.queryByTestId("chain-compacted")).toBeNull();
+    });
   });
 
   it("says a live run has no seal yet and draws no seal facts (negative)", () => {

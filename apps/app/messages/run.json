@@ -165,7 +165,8 @@
       "pageFailed": "The next page could not be read. Everything above is still the record.",
       "followDenied": "Access to this run was refused. Ask a workspace Owner or organization Admin to restore access.",
       "followLost": "The connection to the live head dropped. The run kept recording. Read more to catch up.",
-      "followSealed": "The run sealed while you were following it. This is the whole recording."
+      "followSealed": "The run sealed while you were following it. This is the whole recording.",
+      "compacted": "<b>Compacted.</b> This transcript is read from the archive."
     },
     "frames": {
       "title": "Frame {seq}",
@@ -707,6 +708,7 @@
     },
     "chain": {
       "title": "Chain and seal",
+      "compacted": "<b>Compacted.</b> This run is read from its archive segment.",
       "hash": {
         "title": "Hash chain",
         "clean": "no gaps",
@@ -746,7 +748,8 @@
         "unsealed": "The seal is written when the run ends, for every terminal outcome. Until then the chain is verifiable frame by frame, but there is no Merkle root and no attestation.",
         "signature": "Signature",
         "signsOver": "Signs over",
-        "notInRead": "The chain read does not carry the seal's signature yet.",
+        "signatureValue": "{alg} key {keyRef}",
+        "unsigned": "The seal was written with no attester key, or before seals were signed.",
         "merkleRoot": "Merkle root",
         "tier": "Enforcement tier",
         "archive": "Archive segment",
