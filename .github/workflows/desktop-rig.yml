@@ -1,6 +1,6 @@
 # The install and uninstall rig for the desktop app and Tacho.
 #
-# Two halves, both against a scratch HOME, never the runner's own home
+# Three parts, all against a scratch HOME, never the runner's own home
 # directory:
 #   - packages/tacho/src/cli/install-rig.test.ts: enroll, enroll again,
 #     unenroll, unenroll again, the tree compared byte for byte, plus the
@@ -8,6 +8,9 @@
 #     settings file, an offline revoke, the process dying at each step). It
 #     drives a fake launchctl, systemctl and schtasks, and builds POSIX paths
 #     for every platform branch, so it runs on the Linux and macOS legs only.
+#   - packages/tacho/src/cli/install-rig-real.test.ts: the same round trip
+#     with launchctl, systemctl, schtasks, tasklist and taskkill run for real,
+#     on every leg (#4317). The unit or task starts a stub daemon.
 #   - apps/desktop/src-tauri (cargo test): Link into PATH and Uninstall over
 #     injected roots, the same comparison. On the Windows leg it also runs
 #     the user PATH scripts against the runner's real HKCU\Environment and
@@ -87,3 +90,44 @@ jobs:
       - name: Desktop rig (link and uninstall against a snapshot)
         working-directory: apps/desktop/src-tauri
         run: cargo test --lib
+
+      # systemctl --user needs a user manager, which a runner starts only with
+      # lingering on. The manager reads units from the real home, so the rig's
+      # home, a fixed path here, gets the runner's unit directory linked to it.
+      - name: A systemd user manager for the real service manager run
+        if: runner.os == 'Linux'
+        run: |
+          sudo loginctl enable-linger "$USER"
+          runtime="/run/user/$(id -u)"
+          echo "XDG_RUNTIME_DIR=$runtime" >> "$GITHUB_ENV"
+          for _ in $(seq 1 30); do
+            XDG_RUNTIME_DIR="$runtime" systemctl --user show-environment >/dev/null 2>&1 && break
+            sleep 1
+          done
+          XDG_RUNTIME_DIR="$runtime" systemctl --user show-environment >/dev/null
+          if [ -e "$HOME/.config/systemd/user" ]; then
+            echo "::error::$HOME/.config/systemd/user already exists; the run would write into it"
+            exit 1
+          fi
+          home="$RUNNER_TEMP/rig-home"
+          mkdir -p "$HOME/.config/systemd"
+          ln -s "$home/.config/systemd/user" "$HOME/.config/systemd/user"
+          echo "TACHO_RIG_HOME=$home" >> "$GITHUB_ENV"
+
+      # The same round trip on the runner's real launchd, systemd or Task
+      # Scheduler, plus an install killed after the unit or task is written
+      # (#4317). A hosted runner has no tachod of its own, so a real bootout
+      # stops nothing but the rig's.
+      - name: Tacho rig against the real service manager
+        env:
+          TACHO_RIG_REAL_SERVICES: "1"
+          TACHO_RIG_EVIDENCE: ${{ runner.temp }}/rig-evidence
+        run: pnpm --filter @oxagen/tacho exec vitest run src/cli/install-rig-real.test.ts
+
+      - name: Keep the snapshots and service manager calls
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rig-real-services-${{ matrix.os }}
+          path: ${{ runner.temp }}/rig-evidence
+          if-no-files-found: ignore
