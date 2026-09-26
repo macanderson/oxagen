@@ -50,7 +50,8 @@ export const toolbeltListHandler: CapabilityHandler<
             .where(inArray(schema.toolbeltTools.toolbeltId, customIds));
     const membersByBelt = new Map<string, Map<string, boolean>>();
     for (const row of memberRows) {
-      const members = membersByBelt.get(row.toolbeltId) ?? new Map();
+      const members =
+        membersByBelt.get(row.toolbeltId) ?? new Map<string, boolean>();
       members.set(row.toolId, row.active);
       membersByBelt.set(row.toolbeltId, members);
     }
@@ -88,7 +89,7 @@ export const toolbeltListHandler: CapabilityHandler<
         const held = beltToolStates(
           belt,
           tools,
-          membersByBelt.get(belt.id) ?? new Map(),
+          membersByBelt.get(belt.id) ?? new Map<string, boolean>(),
         ).filter((s) => s.member && s.tool.available);
         const source =
           belt.clonedFromId === null
