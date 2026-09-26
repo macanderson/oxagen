@@ -204,8 +204,12 @@ such a collector needs no data migration.
   from that agent's mandate. Before its revoke, a reassign of a sub slot
   prints a warning that names the agent key and says how to keep the link:
   unenroll that agent, register it in the target workspace, and run the
-  command its page shows. #4410 tracks carrying the agent link through a
-  reassign.
+  command its page shows. When such a reassign fails after its revoke, the
+  error sends the operator to the Agents page too, because only a one-time
+  token opens a slot. A failed reassign of the root names the root's harness
+  list in its `tacho enroll --force` command, so the enroll lands in the root
+  and not in a slot that another agent holds. #4410 tracks carrying the agent
+  link through a reassign.
 
 ## Alternatives considered
 

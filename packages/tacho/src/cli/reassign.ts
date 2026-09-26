@@ -300,10 +300,20 @@ async function reassignLocked(
     // host.json now carries the old enrollment marked retired: `tacho
     // status` says so, and `enroll` takes the fresh path rather than
     // re-applying the revoked enrollment's hooks. `--force` is named so the
-    // recovery is the same command whatever state host.json is in.
+    // recovery is the same command whatever state host.json is in, and
+    // `--harness` so it lands in this agent's slot: without it the enroll
+    // takes Claude Code, and on a machine where another agent hooks Claude
+    // Code, `--force` would revoke that agent instead.
+    //
+    // A sub slot has no such command. Only a one-time token opens a slot
+    // beside the root (`enrollTarget`), so an enroll through the CLI session
+    // would go to the root and re-enroll the first agent rather than bring
+    // this one back.
     const apiUrl = options.apiUrl ?? host.api_url;
     deps.err(
-      `Reassign failed after revoking the old enrollment; this host is now unenrolled (host.json kept, marked retired). Run \`tacho enroll --force --org ${org} --workspace ${workspace} --api-url ${apiUrl}\` once the cause is fixed.`,
+      deps.rootPaths !== undefined
+        ? `Reassign failed after revoking the old enrollment; ${host.agent_key} is now unenrolled (host.json kept, marked retired). Only a one-time token enrolls a second agent on this machine, so once the cause is fixed, register the agent in ${org}/${workspace} on the Agents page and run the command its page shows.`
+        : `Reassign failed after revoking the old enrollment; this host is now unenrolled (host.json kept, marked retired). Run \`tacho enroll --force --org ${org} --workspace ${workspace} --api-url ${apiUrl} --harness ${harnesses.join(",")}\` once the cause is fixed.`,
     );
     return { ok: false, from, warnings };
   }

@@ -2041,7 +2041,7 @@ describe("harnesses and reassign", () => {
       "Reassign failed after revoking the old enrollment",
     );
     expect(refusing.errors.at(-1)).toContain(
-      "tacho enroll --force --org acme --workspace edge --api-url https://api.test",
+      "tacho enroll --force --org acme --workspace edge --api-url https://api.test --harness claude-code`",
     );
     const left = readHostFile(refusing.paths.hostFile);
     expect(left?.host_enrollment_id).toBe(TEST_ENROLLMENT);
@@ -4502,6 +4502,41 @@ describe("two agents on one machine (ADR-202)", () => {
       d,
     );
     expect(d.errors.join("\n")).not.toContain("one-time token");
+  });
+
+  it("sends a token-enrolled agent whose reassign failed back to the Agents page", async () => {
+    const { d, codex } = await twoAgents();
+    const controlPlane = d.fetch;
+    d.fetch = async (url, init) => {
+      if (url.endsWith("/tacho/enrollments"))
+        return { ok: false, status: 403, text: async () => "workspace closed" };
+      return controlPlane(url, init);
+    };
+    d.requests.length = 0;
+    d.lines.length = 0;
+    const failed = await reassign(
+      { token: "tok", org: "acme", workspace: "edge", harnesses: ["codex"] },
+      d,
+    );
+    expect(failed.ok).toBe(false);
+    // Only a token opens a slot, so an enroll command would re-enroll the
+    // first agent at the root. The advice names the Agents page instead.
+    expect(d.errors).toContain(
+      "Reassign failed after revoking the old enrollment; acme.core.codex-agent is now unenrolled (host.json kept, marked retired). Only a one-time token enrolls a second agent on this machine, so once the cause is fixed, register the agent in acme/edge on the Agents page and run the command its page shows.",
+    );
+    expect(d.errors.join("\n")).not.toContain("tacho enroll --force");
+    expect(revoked(d)).toEqual([OTHER_ENROLLMENT]);
+    expect(readHostFile(codex.hostFile)?.revoked_at).not.toBeNull();
+
+    // The first agent keeps its enrollment and gets the service back.
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: TEST_ENROLLMENT,
+      revoked_at: null,
+    });
+    expect(d.lines).toContain(
+      `Starting the ${d.serviceManager.kind} service again for acme.core.cc-laptop`,
+    );
+    expect(d.service.running).toBe(true);
   });
 
   it("refuses a reassign that names neither agent", async () => {
