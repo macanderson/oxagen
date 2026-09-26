@@ -524,7 +524,21 @@ export class Wal {
       throw error;
     }
     if (events.some((event) => event.kind === "agent_stop")) {
-      this.persistCursor();
+      // The events and bodies are on disk now, so a failed cursor write is
+      // reported rather than thrown. Thrown, it made the caller roll its
+      // chain back behind a stop the WAL already held, and the seq guard
+      // above refused that stop every time it was sealed again: the sweep
+      // never closed the session, and a checkpoint that took it in failed on
+      // every tick. The seal is kept in memory for the next cursor write,
+      // and a restart finds it again from the last event (`sealedAt`).
+      try {
+        this.persistCursor();
+      } catch (error) {
+        console.warn("WAL cursor write failed after the events landed", {
+          path: this.cursorPath,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }
 

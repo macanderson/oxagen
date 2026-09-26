@@ -21,8 +21,8 @@ ADR-185 recorded that a failed WAL body write throws, and that the daemon's writ
 
 ## Decision
 
-1. **A call to `Wal.append` is all or nothing.** It records the size of every event and body file it will touch before it writes. When any write throws, each file goes back to that size, a file the call created is removed, and each session's `lastSeq` and `cursor.sealed` entry go back to what they held. A body for an event already on disk, which `appendRecovered` writes, is cut back with the rest, and the retry writes it again.
-2. **Every caller's rollback is now correct as written.** The checkpoint and `rollbackEveryChain` roll back every chain they marked, and the WAL now holds nothing past those marks. The checkpoint's comment, "a write that throws leaves none of them on disk", is now true.
+1. **A call to `Wal.append` is all or nothing.** It records the size of every event and body file it will touch before it writes. When any write throws, each file goes back to that size, a file the call created is removed, and each session's `lastSeq` and `cursor.sealed` entry go back to what they held. A body for an event already on disk, which `appendRecovered` writes, is cut back with the rest, and the retry writes it again. Once every event and body has landed, the call no longer throws. The `cursor.json` write that follows an `agent_stop` is reported with `console.warn` when it fails, and the seal stays in memory for the next cursor write. After a restart, `compact` finds the seal again from the session's last event (`sealedAt`).
+2. **Every caller's rollback is now correct as written.** The checkpoint and `rollbackEveryChain` roll back every chain they marked, and the WAL now holds nothing past those marks. The checkpoint's comment, "a write that throws leaves none of them on disk", is now true. A cursor write that failed after the events landed used to throw too, so the sweep rolled its chain back behind a stop the WAL already held. The seq guard then refused that stop each time the sweep sealed it again, and the session stayed open until the daemon restarted.
 3. **The model proxy rolls back.** `settle` takes a chain mark before `settleMetered` seals the call's frame and rolls back when the write throws. The refusal path does the same around its `policy_decision` frame and still answers the call 502. When the call frame's write fails, `settle` also forgets the request the proxy remembered as the session's next prior, so the next call stores its request whole rather than pointing at a body that never landed.
 4. **Reads that ADR-185 Decision 6 lists moved to the tail.** `head`, `compact`, `lastSeqOf`, and `appendRecovered` read back from the end of the event file (`eventsBackward`), because the file is in seq order and the whole-file read stalled the daemon (C-05). They skip and report a line that does not parse, as `read` does.
 
@@ -39,9 +39,15 @@ Each of ADR-185's four limits is gone:
 
 A failed cut-back is reported through the body failure sink and left for startup repair. The caller still gets the write's own error.
 
+## Limits
+
+- `appendRecovered` writes the cursor again after `append` returns, and that write can still throw with the events on disk. The daemon calls it only to flush a journaled SessionEnd terminal, and the journal keeps the terminal until a flush succeeds. The retry finds the events already durable, writes nothing twice (ADR-139), and writes the cursor again.
+- A terminal flush builds its body indexes with awaited reads (#4299), so the event loop keeps answering `/status` and the model proxy. The build still runs inside the daemon's serial queue, so hooks wait behind it. A hook that waits past its deadline is spooled.
+
 ## Evidence
 
 - `packages/tacho/src/host/wal.test.ts`, "a write across several sessions" (three cases)
+- `packages/tacho/src/host/wal.test.ts`, "keeps a stop whose cursor write failed, and compacts its session after a restart"
 - `packages/tacho/src/collector/daemon-checkpoint.test.ts`, "lands for both sessions on the next tick after the second session's file refused the write"
 - `packages/tacho/src/collector/model-proxy.test.ts`, "gives a call's seq to the next call when its frame never reached the WAL, with no gap and no fold against the lost body" and "gives a refusal's seq to the next frame when its frame never reached the WAL"
 - `packages/tacho/src/collector/daemon-bodies.test.ts`, "answers a hook 500 when its body cannot be written, and lands the replay at the same seq with one body"

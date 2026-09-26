@@ -517,6 +517,42 @@ describe("Wal", () => {
     ]);
   });
 
+  it("keeps a stop whose cursor write failed, and compacts its session after a restart", () => {
+    // `append` threw when the cursor write after an `agent_stop` failed,
+    // with the stop already on disk. The sweep rolled its chain back behind
+    // that stop, sealed it again at the same seq on every pass, and the seq
+    // guard refused it each time, so the session never closed.
+    const paths = scratchPaths();
+    const session = minimalSession();
+    const uuid = session[0]!.session_uuid;
+    const stop = session.at(-1)!;
+    const wal = new Wal(paths.wal);
+    wal.append(session.slice(0, -1));
+    vi.mocked(renameSync).mockImplementationOnce(() => {
+      throw Object.assign(new Error("ENOSPC"), { code: "ENOSPC" });
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      expect(() => wal.append([stop])).not.toThrow();
+      expect(warn).toHaveBeenCalledWith(
+        "WAL cursor write failed after the events landed",
+        expect.objectContaining({ error: "ENOSPC" }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+    expect(existsSync(join(paths.wal, "cursor.json"))).toBe(false);
+    expect(wal.read(uuid)).toEqual(session);
+    // The stop took its seq, so the chain moves on from it.
+    expect(() => wal.append([stop])).toThrow(/is not after the last written/);
+
+    const restarted = new Wal(paths.wal);
+    restarted.markShipped(uuid, stop.seq);
+    expect(restarted.compact(Date.now() + 10 * 86_400_000, 86_400_000)).toEqual(
+      [uuid],
+    );
+  });
+
   it("files bodies beside their events and answers them per batch", () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);
