@@ -1,4 +1,5 @@
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
+import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
 import {
   registerHandler,
@@ -50,6 +51,23 @@ registerHandlersOnce("@oxagen/handlers", () => {
       headSha: out.headSha,
       retryAfterSeconds: out.retryAfterSeconds,
     };
+  });
+  // The pull request backfill (ADR-189) lives in @oxagen/inngest-functions
+  // for the same reason. It writes in the event's own tenant scope, and is
+  // loaded on its first run.
+  setPullRequestBackfillRunner(async (request) => {
+    const [{ runInTenantScope }, backfill] = await Promise.all([
+      import("@oxagen/tenancy"),
+      import("./lib/run-pull-request-backfill"),
+    ]);
+    return runInTenantScope(
+      { orgId: request.orgId, workspaceId: request.workspaceId },
+      () =>
+        backfill.backfillRunPullRequest(
+          backfill.pullRequestBackfillDeps,
+          request,
+        ),
+    );
   });
   registerHandler("get_run_issue_providers", () =>
     import("./run.issue.providers.get").then(
