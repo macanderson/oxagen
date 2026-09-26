@@ -9,28 +9,43 @@
 // here filters, orders or pages the rows one read returned.
 //
 // Nothing here invents a figure. A row whose cost was not recorded is left out
-// of the sum and counted, so the tile can say how many it left out. Tokens are
-// not on `list_runs` yet, so there is no token sum to take and the tile says
-// so rather than printing a zero.
+// of the sum and counted, so the tile can say how many it left out. Tokens
+// work the same way (`tokens.ts`): a row with no count is left out of the
+// Tokens shown sum and counted, never added as a zero.
 import type { ApprovalItem } from "@/data/contracts/approvals";
 import { type Cost, type Money, sumMoney } from "@/data/contracts/money";
 import type { RunPullRequest, RunRow } from "@/data/contracts/runs";
 
 /**
- * The state a row reads as. `parked` is a live run with a call parked on a
- * pending approval: the approval record names the run (`list_approvals`
- * carries its `run_id`), so the word comes from two records and not from a
- * guess. `paused` and `compacted` are in the design's vocabulary and not in
- * the run record's, so no row reads as either.
+ * The state a row reads as. Each word beyond the run's lifecycle status comes
+ * from a record, never a guess (ADR-190):
+ *
+ * - `paused`: a live run whose last applied command paused it
+ *   (`ingressPaused`). It wins over parked, as on the Run page: a paused run
+ *   takes no step whatever its calls are waiting on.
+ * - `parked`: a live run with a call parked on a pending approval. The
+ *   approval record names the run (`list_approvals` carries its `run_id`).
+ * - `compacted`: a sealed run whose recording frame compaction moved to its
+ *   archive segment (`compacted`).
  */
-export type RowState = "live" | "parked" | "sealed" | "halted";
+export type RowState =
+  | "live"
+  | "parked"
+  | "paused"
+  | "sealed"
+  | "compacted"
+  | "halted";
 
 /**
  * The state a row's badge names.
  * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function rowState(run: RunRow, parked: ReadonlySet<string>): RowState {
-  if (run.status === "live") return parked.has(run.id) ? "parked" : "live";
+  if (run.status === "live") {
+    if (run.ingressPaused === true) return "paused";
+    return parked.has(run.id) ? "parked" : "live";
+  }
+  if (run.status === "sealed" && run.compacted === true) return "compacted";
   return run.status;
 }
 
@@ -46,14 +61,15 @@ export const RUN_CHIPS = ["all", "live", "parked", "sealed"] as const;
 export type RunChip = (typeof RUN_CHIPS)[number];
 
 /**
- * Which states a chip lists: `live` is live and parked, `parked` is parked
- * (and paused, which the record does not carry), `sealed` is sealed (and
- * compacted, likewise). `all` lists every row, halted ones included.
+ * Which states a chip lists: `live` is every open run (live, parked and
+ * paused), `parked` is the open runs waiting on a person (parked and paused),
+ * and `sealed` is sealed and compacted. `all` lists every row, halted ones
+ * included.
  */
 const CHIP_STATES: Record<Exclude<RunChip, "all">, readonly RowState[]> = {
-  live: ["live", "parked"],
-  parked: ["parked"],
-  sealed: ["sealed"],
+  live: ["live", "parked", "paused"],
+  parked: ["parked", "paused"],
+  sealed: ["sealed", "compacted"],
 };
 
 export function chipRows<T extends { state: RowState }>(

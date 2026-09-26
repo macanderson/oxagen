@@ -157,16 +157,17 @@ describe("tokens (#3834)", () => {
     );
   });
 
-  it("sorts on tokens, with rows that recorded none last", async () => {
+  // list_runs orders the rows on the server (#3837) and has no tokens sort
+  // key, so the header is drawn disabled and keeps the read's order.
+  it("draws the Tokens header without a sort, and says why", async () => {
     await renderFleet(priced);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const sort = screen.getByRole("button", { name: "Sort by Tokens" });
-    expect(sort).toBeEnabled();
-    await user.click(sort);
-    expect(sort.closest("th")).toHaveAttribute("aria-sort", "ascending");
-    expect(ids()).toEqual(["arun_small", "arun_big", "arun_none"]);
-    await user.click(sort);
-    expect(ids()).toEqual(["arun_big", "arun_small", "arun_none"]);
+    expect(sort).toBeDisabled();
+    expect(sort).toHaveAttribute(
+      "title",
+      "Runs are ordered on the server, which cannot order them by tokens yet.",
+    );
+    expect(sort.closest("th")).toHaveAttribute("aria-sort", "none");
   });
 });
 
@@ -228,13 +229,19 @@ describe("paused and compacted rows (#3835)", () => {
     expect(ids()).toEqual(["arun_sealed", "arun_compacted"]);
   });
 
-  it("offers paused and compacted in the Status facet", async () => {
+  // The Status facet filters on the server (#3837), which holds the run's
+  // lifecycle status only. Paused and compacted are facts beside it (ADR-190),
+  // so the parked and sealed chips find them, not the facet.
+  it("offers the record's statuses in the Status facet, not paused or compacted", async () => {
     await renderFleet(runs);
-    expect(
-      within(screen.getByTestId("facet-status"))
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["All · Status", "compacted", "live", "paused", "sealed"]);
+    const options = within(screen.getByTestId("facet-status"))
+      .getAllByRole("option")
+      .map((o) => o.textContent);
+    expect(options).not.toContain("paused");
+    expect(options).not.toContain("compacted");
+    expect(options).toEqual(
+      expect.arrayContaining(["live", "sealed", "halted"]),
+    );
   });
 
   it("does not count a paused run in Live runs, as it is waiting on a person (negative)", async () => {

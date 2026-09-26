@@ -642,10 +642,10 @@ describe("the Runs panel", () => {
     );
   });
 
-  it("draws the Tokens sort where the design has it, and it sorts (#3834)", async () => {
+  it("draws the Tokens sort where the design has it, disabled while the server cannot order by tokens (#3834, #3837)", async () => {
     await loaded();
     const sort = screen.getByRole("button", { name: "Sort by Tokens" });
-    expect(sort).toBeEnabled();
+    expect(sort).toBeDisabled();
     expect(sort.closest("th")).toHaveAttribute("aria-sort", "none");
   });
 

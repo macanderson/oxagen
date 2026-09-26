@@ -80,6 +80,7 @@ import {
   readRunPullRequests,
   runDiffOf,
 } from "./lib/run-list-work";
+import { compactedProbe } from "./lib/run-list-status";
 import { logger } from "./logger";
 import {
   countRuns,
@@ -417,11 +418,7 @@ export function ledgerCompactedRollupQuery(
         eq(seals.orgId, scope.orgId),
         eq(seals.workspaceId, scope.workspaceId),
         inArray(seals.runId, [...runIds]),
-        sql`${seals.archiveSegmentRef} is not null`,
-        // `event_record_version = 2` changes no answer (only a V2 row has an
-        // attempt id) but lets the partial `(attempt_id, attempt_seq)` index
-        // answer the probe instead of a scan of the event log.
-        sql`not exists (select 1 from ${events} where ${events.attemptId} = ${seals.attemptId} and ${events.eventRecordVersion} = 2)`,
+        compactedProbe(),
       ),
     )
     .groupBy(seals.runId);
@@ -469,6 +466,8 @@ const chainSealColumns = {
   terminalStatus: seals.terminalStatus,
   finalEventDigest: seals.finalEventDigest,
   eventStreamDigest: seals.eventStreamDigest,
+  // Whether compaction moved this attempt's frames to its archive (ADR-190).
+  compacted: compactedProbe(),
 };
 
 /**
@@ -848,6 +847,8 @@ export const postgresReadRunRollups: ReadRunRollups = async (scope, runIds) => {
         costBasis: schema.runTotals.costBasis,
         verdict: schema.runTotals.verdict,
         sealedAt: schema.runTotals.sealedAt,
+        tokens: schema.runTotals.tokens,
+        cacheHitRate: schema.runTotals.cacheHitRate,
       })
       .from(schema.runTotals)
       .where(
@@ -875,6 +876,9 @@ export const postgresReadRunRollups: ReadRunRollups = async (scope, runIds) => {
       cost,
       verdict: recordedVerdict(r.verdict),
       sealedAt: r.sealedAt,
+      tokens: r.tokens,
+      // `numeric` reaches here as a string.
+      cacheHitRate: r.cacheHitRate === null ? null : Number(r.cacheHitRate),
     });
   }
   return out;

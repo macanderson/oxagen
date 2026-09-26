@@ -162,7 +162,7 @@
       "facetLabel": "Filter by {facet}",
       "rows": "Runs per page",
       "sortBy": "Sort by {column}",
-      "tokensUnsorted": "Runs carry no token figure yet, so there is nothing to sort.",
+      "tokensUnsorted": "Runs are ordered on the server, which cannot order them by tokens yet.",
       "columns": {
         "run": "Run",
         "summary": "Summary",

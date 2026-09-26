@@ -64,11 +64,17 @@ import { formatCount } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { StatusBadge } from "@/ui/status-badge";
 import { cell, headCell, numericCell } from "@/ui/table";
 import { ToastStack, useToasts } from "@/ui/toast";
 import { dispatchRunCommand, exportFleetRun } from "./actions";
-import { DiffCell, PullRequestsCell, SummaryCell } from "./run-cells";
+import {
+  DiffCell,
+  PullRequestsCell,
+  RowStatusBadge,
+  SummaryCell,
+  TokensCell,
+  TokensTile,
+} from "./run-cells";
 import {
   DEFAULT_FLEET_PREFS,
   FIXED_COLUMN,
@@ -189,26 +195,7 @@ function Tiles({
         }
         note={<span data-testid="spend-basis">{spendNote}</span>}
       />
-      {/* list_runs carries no token figures yet, so there is no sum to take:
-          the tile says so rather than printing a zero (fleet.md, G3; #3834). */}
-      <Tile
-        term={t("tokens.title")}
-        value={
-          <span
-            data-testid="tokens-not-recorded"
-            data-recorded="false"
-            data-gap="G3"
-            className="text-base font-medium text-muted-foreground"
-          >
-            {t("tokens.notRecorded")}
-          </span>
-        }
-        note={
-          <span data-recorded="false" data-gap="G3">
-            {t("tokens.noCache")}
-          </span>
-        }
-      />
+      <TokensTile listed={listed} />
     </section>
   );
 }
@@ -421,8 +408,16 @@ function RunRowView({
   const notRecorded = (
     <span className="text-muted-foreground">{t("notRecorded")}</span>
   );
+  // A paused run is resumed on its Run page, and an export refuses an open
+  // run, so its row links there.
   const action =
-    state === "live" ? "pause" : state === "parked" ? "resolve" : "export";
+    state === "live"
+      ? "pause"
+      : state === "parked"
+        ? "resolve"
+        : state === "paused"
+          ? "open"
+          : "export";
 
   function cellOf(column: FleetColumn): ReactNode {
     switch (column) {
@@ -494,17 +489,7 @@ function RunRowView({
       case "status":
         return (
           <td key={column} className={cell}>
-            {state === "parked" ? (
-              <Badge tone="approval" data-status="parked">
-                {t("parked")}
-              </Badge>
-            ) : (
-              <StatusBadge
-                status={run.status}
-                outcome={run.outcome}
-                vocabulary="lifecycle"
-              />
-            )}
+            <RowStatusBadge run={run} state={state} />
           </td>
         );
       case "pullRequests":
@@ -538,15 +523,7 @@ function RunRowView({
       case "tokens":
         return (
           <td key={column} className={numericCell}>
-            {/* Tokens are not on list_runs yet (G3, #3834); the cell says so. */}
-            <span
-              data-testid="row-tokens"
-              data-recorded="false"
-              data-gap="G3"
-              className="text-muted-foreground"
-            >
-              {t("notRecorded")}
-            </span>
+            <TokensCell run={run} />
           </td>
         );
       case "cost":
@@ -612,15 +589,15 @@ function RunRowView({
           event.stopPropagation();
         }}
       >
-        {action === "resolve" ? (
+        {action === "resolve" || action === "open" ? (
           <SafeLink
             to={to}
-            data-testid="row-resolve"
+            data-testid={`row-${action}`}
             data-touch-target=""
-            aria-label={t("rowAction", { action: t("resolve"), run: run.id })}
+            aria-label={t("rowAction", { action: t(action), run: run.id })}
             className={`${buttonSecondary} px-2.5 py-1 text-xs`}
           >
-            {t("resolve")}
+            {t(action)}
           </SafeLink>
         ) : (
           <button
@@ -1009,11 +986,10 @@ export function FleetBoard({
                         {label}
                       </th>
                     );
-                  // The design's Tokens header sorts. list_runs carries no
-                  // token figure yet (G3, #3834), so every cell reads "not
-                  // recorded" and there is no order to put them in. The
-                  // control is drawn where the design has it, disabled, and
-                  // its hover says why.
+                  // The design's Tokens header sorts. list_runs orders on the
+                  // server (#3837), and its sort keys do not include tokens,
+                  // so the control is drawn where the design has it,
+                  // disabled, and its hover says why.
                   if (sortKey === undefined)
                     return (
                       <th
