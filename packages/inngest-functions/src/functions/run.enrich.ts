@@ -189,13 +189,22 @@ export function sweepCandidates(
 /**
  * The runs a sweep queues. A run is due when it was never observed, when its
  * row changed after the revision the last read saw, or when its last read
- * found bodies missing and five minutes have passed. The revision comparison
+ * found bodies missing and its retry wait has passed. The revision comparison
  * is exact, so a write that commits after the read is caught even when its
  * transaction timestamp predates the read.
  *
  * A run whose last attempt failed is due when its row changed after the
- * failure, or when thirty minutes have passed, so a refusing gateway is asked
+ * failure, or when its retry wait has passed, so a refusing gateway is asked
  * again once it may have recovered and is not asked on every sweep.
+ *
+ * The retry wait backs off (#4113). It is at least five minutes after
+ * missing bodies and thirty after a failure. It is also at least as long as
+ * the run had gone unchanged before the last attempt, measured from the
+ * revision that attempt read. On a run that does not change, each wait is
+ * therefore about twice the one before it. Such a run is read fewer than 20
+ * times in its first year, where it used to be read every five or thirty
+ * minutes for as long as it existed. The wait depends on `now`, so an index
+ * over due runs must leave it out of its predicate.
  *
  * A run that is live, or that changed after its last enrichment, is held to
  * `LIVE_ENRICHMENT_INTERVAL_MS` besides: it is due only while it has no name
@@ -205,8 +214,8 @@ export function sweepCandidates(
  * was read and summarized again from its start at every sweep. A seal moves
  * `updated_at`, so the finished run is always summarized, at most one
  * interval after its last account. An ended run that did not change is due
- * for its own reasons: missing bodies after five minutes, a failure after
- * thirty. The first read names a run for its first prompt, so a run whose
+ * for its own reasons: missing bodies or a failure, once its retry wait has
+ * passed. The first read names a run for its first prompt, so a run whose
  * model call failed waits the interval too.
  *
  * A run whose accounts have cost `ENRICHMENT_RUN_TOTAL_BUDGET_USD` is never
@@ -218,6 +227,10 @@ export function dueForEnrichment(
 ) {
   const changed = sql`${table.updatedAt} IS DISTINCT FROM ${table.summaryObservedRevision}`;
   const unchanged = sql`${table.updatedAt} IS NOT DISTINCT FROM ${table.summaryObservedRevision}`;
+  // The time since the last attempt is longer than the run had gone
+  // unchanged before it. `now` is bound as text: postgres.js refuses a Date
+  // inside a raw fragment.
+  const backedOff = sql`${table.summaryObservedAt} - coalesce(${table.summaryObservedRevision}, ${table.updatedAt}) < ${now.toISOString()}::timestamptz - ${table.summaryObservedAt}`;
   return and(
     or(
       isNull(table.summaryObservedAt),
@@ -229,6 +242,7 @@ export function dueForEnrichment(
           and(
             like(table.summaryInputDigest, "partial:%"),
             lt(table.summaryObservedAt, new Date(now.getTime() - 5 * 60_000)),
+            backedOff,
           ),
         ),
       ),
@@ -236,9 +250,12 @@ export function dueForEnrichment(
         isNotNull(table.summaryError),
         or(
           changed,
-          lt(
-            table.summaryObservedAt,
-            new Date(now.getTime() - FAILED_RETRY_MS),
+          and(
+            lt(
+              table.summaryObservedAt,
+              new Date(now.getTime() - FAILED_RETRY_MS),
+            ),
+            backedOff,
           ),
         ),
       ),

@@ -694,7 +694,7 @@ describe("CostTab", () => {
     );
     const tile = screen.getByTestId("inst-cost");
     expect(screen.getByTestId("inst-cost-value")).toHaveTextContent("$1.22");
-    expect(tile).toHaveTextContent("agent reported, provisional");
+    expect(tile).toHaveTextContent("provisional figure the agent reported");
     // Dearest first, each with its calls.
     expect(screen.getByTestId("inst-cost-provisional")).toHaveTextContent(
       "claude-opus-5 $1.20 over 12 calls, claude-haiku-5 $0.02 over 1 call",
@@ -702,7 +702,7 @@ describe("CostTab", () => {
     // The stat row prints the same figure under the same label.
     const stat = screen.getByTestId("run-stat-cost");
     expect(stat).toHaveTextContent("$1.22");
-    expect(stat).toHaveTextContent("agent reported, provisional");
+    expect(stat).toHaveTextContent("provisional figure the agent reported");
   });
 
   it("marks a provisional sum as a floor when a model reported no cost (negative)", async () => {
@@ -739,7 +739,7 @@ describe("CostTab", () => {
     );
     expect(screen.getByTestId("inst-cost-value")).toHaveTextContent("$1.20+");
     expect(screen.getByTestId("inst-cost-provisional")).toHaveTextContent(
-      "local-llama over 4 calls, cost not reported",
+      "local-llama over 4 calls with no cost reported",
     );
     expect(screen.getByTestId("run-stat-cost")).toHaveTextContent("$1.20+");
   });

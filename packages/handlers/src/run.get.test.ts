@@ -652,6 +652,18 @@ describe("get_run witnessFor (ADR-064)", () => {
     expect(plain.run.name).not.toBe("Fix the billing proration");
   });
 
+  // #4224: a harness puts no bound on its title, and the ClickHouse read
+  // returned it whole, past what the contract allows.
+  it("cuts a long harness title to the display cap on a code-point boundary", async () => {
+    const long = `${"a".repeat(254)}😀${"a".repeat(44)}`;
+    const out = await harness({ sessionTitle: long }).get(
+      input({ runId: TACHO_ID }),
+      ctx(),
+    );
+    expect(out.run.name).toBe(`${"a".repeat(254)}…`);
+    expect(runGet.output.parse(out)).toEqual(out);
+  });
+
   it("still answers the run when its title cannot be read", async () => {
     const { get } = harness({ titleFails: true });
     const out = await get(input({ runId: TACHO_ID }), ctx());
