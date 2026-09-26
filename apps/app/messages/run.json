@@ -835,6 +835,7 @@
       "forkNeedsLedger": "Forking replays an attempt from the evidence ledger. This run was recorded by a wrapped agent, which has no attempt to branch from.",
       "forkNoGrade": "This run's seal recorded no replay grade, so Oxagen cannot say the recording is complete enough to fork.",
       "forkNeedsGrade": "This recording is graded {grade}. Forking needs a recording graded fork, because every body before the branch point has to be there.",
+      "forkNeedsRole": "Forking needs an organization Owner, Admin or Member role. A workspace role does not grant it.",
       "fork": {
         "open": "Fork replay",
         "title": "Fork {run}",

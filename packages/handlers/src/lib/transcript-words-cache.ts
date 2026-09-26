@@ -29,6 +29,14 @@
 //
 // Eviction is least recently used, bounded by entries: a `Map` keeps
 // insertion order, and a hit is moved to the end.
+//
+// Two reads of one run often arrive together: the Run page reads `steps` and
+// `everything` at once. When neither finds a body here, both would open it.
+// So a read of a body is shared while it is in flight (`share`): a second
+// read of the same body waits on the first instead of opening it again. The
+// transcript's read keeps what the body says with `set` before its shared
+// promise settles, so a read that asks after it settles finds the digest
+// here. The shared promise is dropped when it settles.
 import type { RunFrame, TranscriptWords } from "@oxagen/run-ledger";
 
 /**
@@ -51,8 +59,9 @@ export interface WordsCacheLimits {
 /**
  * 16,384 bodies. An entry holds its key and one digest, a few hundred bytes,
  * so the cache stays under 10 MB. A long run's whole-run read asks for at
- * most 2,000 halves (`TRANSCRIPT_WORDS_HALF_MAX`), so eight such runs fit at
- * once. A failed read is remembered for a minute.
+ * most 2,000 halves on each chain (`TRANSCRIPT_WORDS_HALF_MAX`). A subagent
+ * chain adds a handful, so about eight such runs fit at once. A failed read
+ * is remembered for a minute.
  */
 export const WORDS_CACHE_LIMITS: WordsCacheLimits = {
   maxEntries: 16_384,
@@ -76,6 +85,13 @@ export interface WordsCache {
   fail(scope: Scope, frame: RunFrame): void;
   /** Bodies kept, a failure included until it expires. */
   size(): number;
+  /**
+   * `read`, run at most once at a time for the frame's body. While one read
+   * of the body is in flight, a second caller is handed its promise and
+   * opens nothing. Once it settles, the next caller runs `read` again. A
+   * frame with no kept body is read every time.
+   */
+  share<T>(scope: Scope, frame: RunFrame, read: () => Promise<T>): Promise<T>;
 }
 
 function keyOf(scope: Scope, frame: RunFrame): string | null {
@@ -104,6 +120,10 @@ export function createWordsCache(
     kept.set(key, { words, until });
   };
 
+  // Keyed like `kept`. Every caller that shares a read of one body reads it
+  // into the same type, so a promise held here is the type its caller names.
+  const inFlight = new Map<string, Promise<unknown>>();
+
   return {
     get(scope, frame) {
       const key = keyOf(scope, frame);
@@ -125,6 +145,15 @@ export function createWordsCache(
     },
     size() {
       return kept.size;
+    },
+    share<T>(scope: Scope, frame: RunFrame, read: () => Promise<T>) {
+      const key = keyOf(scope, frame);
+      if (key === null) return read();
+      const pending = inFlight.get(key);
+      if (pending !== undefined) return pending as Promise<T>;
+      const started = read().finally(() => inFlight.delete(key));
+      inFlight.set(key, started);
+      return started;
     },
   };
 }

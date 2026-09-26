@@ -7,6 +7,10 @@
 // the way it fails is a page offering a button whose only outcome is
 // `org_role_required`. So it is written once, here, where both may read it.
 //
+// The other run writes keep their rules here for the same reason: `seal_run`
+// (`canSealRun`) and `fork_run` (`canForkRun`), whose Fork button the header
+// and the Chain tab both draw.
+//
 // The roles arrive as strings. A rule that classifies a role value needs no
 // edge to the viewer seam, and this layer has none (ARCHITECTURE.md §2); the
 // callers pass `ctx.orgRole` and `ctx.wsRole`, which the compiler types.
@@ -26,4 +30,21 @@ export function canCommandRun(orgRole: string, wsRole: string): boolean {
  */
 export function canSealRun(orgRole: string, wsRole: string): boolean {
   return COMMANDING_ORG_ROLES.has(orgRole) || wsRole === "owner";
+}
+
+const FORKING_ORG_ROLES: ReadonlySet<string> = new Set([
+  "owner",
+  "admin",
+  "member",
+]);
+
+/**
+ * Whether this viewer may fork a run (`fork_run`): an organization Owner,
+ * Admin or Member. The handler checks the organization role alone
+ * (`FORK_ROLES` in packages/handlers/src/run.fork.ts), so a workspace Owner
+ * whose organization role is Viewer can read the run and still cannot fork
+ * it.
+ */
+export function canForkRun(orgRole: string): boolean {
+  return FORKING_ORG_ROLES.has(orgRole);
 }

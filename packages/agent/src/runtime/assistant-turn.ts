@@ -462,7 +462,8 @@ async function runPreparedTurn(
   //
   // `runIdRef` is filled in once `openAssistantRun` opens the run below.
   // Every materialized tool's `execute` closure reads it at call time, so a
-  // parked approval attaches to this turn's run (finding 9).
+  // parked approval attaches to this turn's run (finding 9). The budget
+  // pause's approval reads it the same way, when the pause fires.
   const runIdRef: { current: string | null } = { current: null };
 
   const [materialised, promptConfig, recalledMemory] = await inScope(() =>
@@ -540,6 +541,11 @@ async function runPreparedTurn(
         createApprovalRequest({
           ...scope,
           messageId,
+          // The run this turn opened, read when the pause fires: the engine
+          // runs only after `runIdRef` is set below, so the Run page's
+          // Policy tab lists the pause with the run's other approvals
+          // (#3370, the added finding 9).
+          runId: runIdRef.current,
           capabilityName: BUDGET_CONTINUE_CAPABILITY,
           inputPreview,
           riskLevel: "low",
