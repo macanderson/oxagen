@@ -2595,6 +2595,30 @@ map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)
         }
         let _restore = Restore(read());
 
+        /// Every value read before and after each edit, as `kind|value`.
+        /// Written where desktop-rig.yml uploads it, on a failure too, so the
+        /// run keeps a record of the before and after values (#4318).
+        struct Record(std::cell::RefCell<Vec<serde_json::Value>>);
+        impl Drop for Record {
+            fn drop(&mut self) {
+                let Some(dir) = std::env::var_os("DESKTOP_RIG_EVIDENCE") else {
+                    return;
+                };
+                let _ = std::fs::create_dir_all(&dir);
+                let text = serde_json::to_string_pretty(&*self.0.borrow()).unwrap_or_default();
+                let _ = std::fs::write(std::path::Path::new(&dir).join("windows-user-path.json"), text + "\n");
+            }
+        }
+        let record = Record(Default::default());
+        let step = |start: &str, edit: &str, before: &str, after: &str| {
+            record.0.borrow_mut().push(serde_json::json!({
+                "start": start,
+                "edit": edit,
+                "before": before,
+                "after": after,
+            }));
+        };
+
         let dir = r"C:\oxagen-rig-4318\Oxagen\bin";
         // (starting value, after add, after remove)
         let cases: [(Option<&str>, String, Option<&str>); 4] = [
@@ -2613,29 +2637,46 @@ map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)
         ];
         for (start, added, removed) in cases {
             set(start);
+            let label = format!("{start:?}");
+            let before = read();
             add_to_user_path_windows(dir).unwrap();
-            assert_eq!(read(), added, "add to {start:?}");
+            let after_add = read();
+            step(&label, "add", &before, &after_add);
+            assert_eq!(after_add, added, "add to {start:?}");
             // A second add changes nothing.
             add_to_user_path_windows(dir).unwrap();
-            assert_eq!(read(), added, "second add to {start:?}");
+            let after_second = read();
+            step(&label, "add again", &after_add, &after_second);
+            assert_eq!(after_second, added, "second add to {start:?}");
             remove_from_user_path_windows(dir).unwrap();
+            let after_remove = read();
+            step(&label, "remove", &after_second, &after_remove);
             let want = removed.map_or("ABSENT".to_string(), |v| format!("ExpandString|{v}"));
-            assert_eq!(read(), want, "remove from {start:?}");
+            assert_eq!(after_remove, want, "remove from {start:?}");
         }
 
         // Oxagen's directory as the only entry: the value goes, not ''.
         set(Some(dir));
+        let before = read();
         remove_from_user_path_windows(dir).unwrap();
-        assert_eq!(read(), "ABSENT");
+        let after = read();
+        step("only Oxagen's entry", "remove", &before, &after);
+        assert_eq!(after, "ABSENT");
         // In the middle, with a trailing `;`: only its own entry goes.
         let middle = format!(r"C:\a;{dir};C:\b;");
         set(Some(middle.as_str()));
+        let before = read();
         remove_from_user_path_windows(dir).unwrap();
-        assert_eq!(read(), r"ExpandString|C:\a;C:\b;");
+        let after = read();
+        step("Oxagen's entry in the middle", "remove", &before, &after);
+        assert_eq!(after, r"ExpandString|C:\a;C:\b;");
         // Not there: the value is not rewritten, so a plain REG_SZ stays one.
         ps(WRITE_SZ, Some(r"C:\a;;"));
+        let before = read();
         remove_from_user_path_windows(dir).unwrap();
-        assert_eq!(read(), r"String|C:\a;;");
+        let after = read();
+        step("a REG_SZ without Oxagen's entry", "remove", &before, &after);
+        assert_eq!(after, r"String|C:\a;;");
     }
 
     #[test]

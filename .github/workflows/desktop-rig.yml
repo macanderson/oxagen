@@ -87,8 +87,13 @@ jobs:
         working-directory: apps/desktop/src-tauri
         run: cargo clippy --all-targets -- -D warnings
 
+      # On Windows the PATH test writes each registry value it read before
+      # and after an edit to windows-user-path.json, which the upload below
+      # keeps (#4318).
       - name: Desktop rig (link and uninstall against a snapshot)
         working-directory: apps/desktop/src-tauri
+        env:
+          DESKTOP_RIG_EVIDENCE: ${{ runner.temp }}/rig-evidence
         run: cargo test --lib
 
       # systemctl --user needs a user manager, which a runner starts only with
