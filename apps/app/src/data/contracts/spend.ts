@@ -78,12 +78,25 @@ const SpendRow = SpendFigure.extend({
   operator: OperatorFacts.nullable(),
 });
 
+/**
+ * The runs a total counts and cannot price, because no frame reported what
+ * they spent, by the harness that ran them (#3304). A harness whose model
+ * calls pass through neither the gateway nor the local proxy records none.
+ */
+const UnmeteredRuns = z.object({
+  total: Count,
+  byHarness: z.array(z.object({ harness: z.string().min(1), runs: Count })),
+});
+export type UnmeteredRuns = z.infer<typeof UnmeteredRuns>;
+
 /** `get_spend` at one level: the period total and its groups, largest spend first. */
 export const SpendReport = z.object({
   period: DayRange,
   total: SpendFigure,
   /** Runs still open whose cost is in these figures as a running estimate. */
   estimatedRuns: z.number().int().nonnegative().optional(),
+  /** Runs in `total.runs` whose cost `total.cost` leaves out. */
+  unmeteredRuns: UnmeteredRuns.optional(),
   rows: z.array(SpendRow),
 });
 export type SpendReport = z.infer<typeof SpendReport>;
@@ -117,6 +130,8 @@ export const SpendDrill = z.object({
   tools: z.array(
     z.object({ name: z.string().min(1), calls: Count, runs: Count }),
   ),
+  /** The key's runs whose cost the total leaves out; absent on a tool drill. */
+  unmeteredRuns: UnmeteredRuns.optional(),
 });
 export type SpendDrill = z.infer<typeof SpendDrill>;
 
@@ -328,6 +343,21 @@ export const PriceBook = z.object({
 export type PriceBook = z.infer<typeof PriceBook>;
 
 /**
+ * One class a model ran with no price covering it: how many calls used it,
+ * how much of it they used, and the span of those calls. A rate added after
+ * `from` leaves these calls unpriced, which is what the Pricing tab explains.
+ */
+const MissingClassWindow = z.object({
+  tokenClass: PriceTokenClass,
+  calls: Count,
+  /** Tokens of the class, or requests for `server_tool_request`. */
+  units: Count,
+  from: Instant,
+  to: Instant,
+});
+export type MissingClassWindow = z.infer<typeof MissingClassWindow>;
+
+/**
  * `list_unpriced_models`: the models the organization has run that the book
  * cannot price. A fully unpriced model's runs carry no cost at all; a partly
  * priced one's are recorded `estimated`. Neither is free, and neither is a zero.
@@ -347,6 +377,8 @@ export const UnpricedModels = z.object({
       firstSeen: Instant,
       lastSeen: Instant,
       missingClasses: z.array(PriceTokenClass),
+      /** One entry per missing class, in the contract's order. */
+      missingClassWindows: z.array(MissingClassWindow),
       fullyUnpriced: z.boolean(),
     }),
   ),

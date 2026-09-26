@@ -108,6 +108,7 @@ describe("tile figures", () => {
       bases: [],
       unbased: 0,
       unpriced: 1,
+      noUsage: [],
       estimated: 0,
       mixedCurrency: false,
     });
@@ -176,6 +177,77 @@ describe("tile figures", () => {
     expect(spend.bases).toEqual(["client_attested", "gateway_observed"]);
     expect(spend.estimated).toBe(1);
     expect(spend.unpriced).toBe(1);
+  });
+
+  // #3304. A Codex or Cursor run whose model calls bypass the gateway and
+  // the local proxy is rolled up with no model call and reports no usage.
+  // The tile counted it with every other row that has no cost, so nothing
+  // said which harness left the total short.
+  it("counts the rolled-up wrapped runs that reported no usage by harness, apart from the unpriced ones", () => {
+    const none = {
+    inputUncached: 0,
+    cacheRead: 0,
+    cacheWrite5m: 0,
+    cacheWrite1h: 0,
+    output: 0,
+    reasoning: 0,
+  };
+    const harness = (name: string) => ({ name, version: null, runtime: name });
+    const spend = spendShown(
+      listRuns(
+        [
+          runRow({
+            id: "tse_codex_a",
+            source: "tacho",
+            status: "sealed",
+            cost: null,
+            tokens: none,
+            harness: harness("codex"),
+          }),
+          runRow({
+            id: "tse_codex_b",
+            source: "tacho",
+            status: "sealed",
+            cost: null,
+            tokens: none,
+            harness: harness("codex"),
+          }),
+          runRow({
+            id: "tse_cursor",
+            source: "tacho",
+            status: "sealed",
+            cost: null,
+            tokens: none,
+            harness: harness("cursor"),
+          }),
+          // Not rolled up yet: it may still report usage, so it is unpriced.
+          runRow({
+            id: "tse_fresh",
+            source: "tacho",
+            status: "live",
+            cost: null,
+            harness: harness("codex"),
+          }),
+          // Tokens with no price is an unpriced model, not missing usage.
+          runRow({
+            id: "tse_unpriced",
+            source: "tacho",
+            status: "sealed",
+            cost: null,
+            tokens: { ...none, inputUncached: 10 },
+            harness: harness("claude-code"),
+          }),
+          runRow({ id: "arun_done", cost: usd("2000000") }),
+        ],
+        new Set(),
+      ),
+    );
+    expect(spend.noUsage).toEqual([
+      { harness: "codex", runs: 2 },
+      { harness: "cursor", runs: 1 },
+    ]);
+    expect(spend.unpriced).toBe(2);
+    expect(spend.total).toMatchObject({ micros: "2000000" });
   });
 
   it("shows the rollup's figure over the agent's report (negative)", () => {
