@@ -240,15 +240,18 @@ export function costTranscript(
       cumulativeCost: running === null ? null : usd(String(running)),
     });
   });
-  // The same frames as a wrapped session's rows, counted by the server.
+  // The same frames as a wrapped session's rows, counted by the server. A
+  // prompt keeps its words, as a recorded one does: the server counts a
+  // prompt only when it kept a half to show.
+  const kept = "0".repeat(64);
   const frames = ordered.map((event, index) =>
     tachoFrame({
       seq: index,
       ts: new Date(NOW - startSecondsAgo * 1000 + event.t).toISOString(),
       kind: event.type,
       hash: "",
-      contentDigest: "",
-      bytesRef: "",
+      contentDigest: event.type === "turn_start" ? `sha256:${kept}` : "",
+      bytesRef: event.type === "turn_start" ? `evb:v1:k:${kept}` : "",
       redactions: "",
       toolName: event.tool ?? "",
       toolStatus: event.status ?? "",
