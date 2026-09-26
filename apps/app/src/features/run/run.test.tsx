@@ -91,6 +91,7 @@ vi.mock("./actions", () => ({
   exportRun: vi.fn(),
   readRunExport: vi.fn(),
   sealRun: vi.fn(),
+  answerInterjection: vi.fn(),
 }));
 vi.mock("next-intl/server", async () => {
   const { translator } = await import("@/test/intl");
