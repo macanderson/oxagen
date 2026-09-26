@@ -7,8 +7,11 @@ import {
 import { digestBytes } from "@oxagen/tacho";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import {
+  type RunFrame,
+  spliceSubagentChains,
   stepFolds,
   tachoFrame as tachoFrameOf,
+  type TranscriptFold,
   wordsDigest,
 } from "@oxagen/run-ledger";
 import {
@@ -43,7 +46,11 @@ import {
   tachoRow,
   tachoSession,
 } from "./run.test-support";
-import { createWordsCache } from "./lib/transcript-words-cache";
+import {
+  createWordsCache,
+  UNREADABLE,
+  type WordsCache,
+} from "./lib/transcript-words-cache";
 import { decodeFrameCursor, encodeFrameCursor } from "./run.get";
 
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
@@ -3057,6 +3064,120 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
     );
     expect(fresh.counts).toEqual(first?.counts);
   });
+
+  // #4334: the bound was counted over the run's frames in the order read,
+  // and a subagent chain is spliced in where it was spawned. A chain that
+  // landed after an earlier read took the slots of the run's own last
+  // settled halves, and those entries turned back to what the fold said.
+  it("keeps what a read settled when a subagent chain lands late, ahead of the bound (negative)", async () => {
+    // 1,001 turns of a prompt and a reply on the run's own chain: 2,002 word
+    // halves, two past the 2,000 a chain settles. Turn 999's prompt is
+    // blank, and its halves are the last two inside the bound.
+    const turns = 1_001;
+    const task = "toolu_late_task";
+    const rows: TachoFrameRow[] = [];
+    let seq = 0;
+    for (let n = 0; n < turns; n += 1) {
+      rows.push(
+        tachoRow(seq++, {
+          kind: "turn_start",
+          ...blank,
+          turnSeq: n + 1,
+          ...stored(n === 999 ? "  \n" : `Late ask ${String(n)}.`),
+        }),
+      );
+      if (n === 0) {
+        // The first turn spawns a subagent.
+        rows.push(
+          tachoRow(seq++, {
+            kind: "tool_requested",
+            toolName: "Task",
+            toolUseId: task,
+            turnSeq: 1,
+          }),
+          tachoRow(seq++, {
+            kind: "subagent_start",
+            ...blank,
+            toolUseId: task,
+            turnSeq: 1,
+          }),
+          tachoRow(seq++, {
+            kind: "tool_call",
+            toolName: "Task",
+            toolUseId: task,
+            turnSeq: 1,
+          }),
+        );
+      }
+      rows.push(
+        tachoRow(seq++, {
+          kind: "turn_end",
+          ...blank,
+          turnSeq: n + 1,
+          ...stored(`Late answer ${String(n)}.`),
+        }),
+      );
+    }
+    // The subagent's chain, which arrives after the first read. Its two
+    // replies are blank, so they draw no row and count nowhere once read.
+    const child = (n: number, text: string): TachoFrameRow =>
+      tachoRow(n, {
+        kind: "turn_end",
+        ...blank,
+        sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d1",
+        rootSessionUuid: SESSION_UUID,
+        parentSessionUuid: SESSION_UUID,
+        subagentId: "agent-late",
+        subagentType: "Explore",
+        spawnToolUseId: task,
+        ...stored(text),
+      });
+    const early = await harness(rows).transcript(
+      input({ zoom: "steps" }),
+      ctx(),
+    );
+    const late = await harness(rows, undefined, [
+      child(0, " \t"),
+      child(1, "\n\n"),
+    ]).transcript(input({ zoom: "steps" }), ctx());
+    // The chain landed: its entries are in the run.
+    expect(late.entries.some((e) => e.subagent !== undefined)).toBe(true);
+    // Turn 999's blank prompt is settled both times, so no count moves.
+    expect(early.counts?.kinds?.prompt).toBe(turns - 1);
+    expect(late.counts).toEqual(early.counts);
+    expect(early.figures?.prompts).toBe(turns - 1);
+    expect(late.figures?.prompts).toBe(early.figures?.prompts);
+  });
+
+  // #4334: at `turns` and `everything` only the prompts were read, so the
+  // bound reached 2,000 prompts there and fewer at `steps`.
+  it("counts the operator's prompts the same at every zoom on a run past the bound (negative)", async () => {
+    // 1,001 turns of a prompt and a reply. The last prompt is blank, and at
+    // `steps` it falls past the 2,000 halves a chain settles, so it counts.
+    const turns = 1_001;
+    const rows = Array.from({ length: turns }, (_, n) => [
+      tachoRow(n * 2, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: n + 1,
+        ...stored(n === turns - 1 ? "  \n" : `Ask ${String(n)}.`),
+      }),
+      tachoRow(n * 2 + 1, {
+        kind: "turn_end",
+        ...blank,
+        turnSeq: n + 1,
+        ...stored(`Answer ${String(n)}.`),
+      }),
+    ]).flat();
+    for (const zoom of ["steps", "turns", "everything"] as const) {
+      // A process that has read nothing, so no zoom leans on another's read.
+      const out = await harness(rows).transcript(input({ zoom }), ctx());
+      expect({ zoom, prompts: out.figures?.prompts }).toEqual({
+        zoom,
+        prompts: turns,
+      });
+    }
+  });
 });
 
 // Finding P3-1 of the ADR-182 third review: a body that could not be read
@@ -3164,6 +3285,388 @@ describe("readWords remembers a body it cannot read for good", () => {
     await readWords(bodies, SCOPE, folds, { cache });
     await readWords(bodies, SCOPE, folds, { cache });
     expect(getBody).toHaveBeenCalledTimes(2);
+  });
+});
+
+// #4334: the Run page reads `steps` and `everything` at once. On a cold words
+// cache, both reads opened every body they shared.
+describe("readWords beside another read of the same run", () => {
+  const blank = { toolName: "", toolStatus: "", toolUseId: "" };
+  /** `turns` turns of a prompt and a streamed model step, each body its own. */
+  const frames = (turns: number, tag: string): RunFrame[] =>
+    Array.from({ length: turns }, (_, n) => [
+      tachoRow(n * 2, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: n + 1,
+        ...stored(`${tag} ask ${String(n)}.`),
+      }),
+      tachoRow(n * 2 + 1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        turnSeq: n + 1,
+        ...stored(
+          modelStream([`${tag} said ${String(n)}.`]),
+          "text/event-stream",
+        ),
+      }),
+    ])
+      .flat()
+      .map((row) => tachoFrameOf(row));
+  const refsOf = (folds: readonly TranscriptFold[]) =>
+    folds.map((fold) =>
+      fold.node === "prompt"
+        ? fold.request?.body.bodyRef
+        : fold.response?.body.bodyRef,
+    );
+
+  it("opens each body once when two reads of the same halves meet a cold cache (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const folds = stepFolds(frames(12, "Same"));
+    const cache = createWordsCache();
+    const [one, two] = await Promise.all([
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+    ]);
+    expect([...two.entries()]).toEqual([...one.entries()]);
+    expect(one.size).toBe(24);
+    const opened = getBody.mock.calls.map(([, ref]) => ref);
+    expect(opened.sort()).toEqual(refsOf(folds).sort());
+  });
+
+  it("opens each body once when a prompts-only read runs beside a read of every half (negative)", async () => {
+    // The prompts-only read runs ahead, and has read a prompt by the time
+    // the other reaches it. The other finds its words in the cache rather
+    // than opening the body again.
+    const { deps, getBody } = harness([]);
+    const folds = stepFolds(frames(12, "Beside"));
+    const cache = createWordsCache();
+    const [prompts, every] = await Promise.all([
+      readWords(deps.bodies, SCOPE, folds, {
+        cache,
+        only: (fold) => fold.node === "prompt",
+      }),
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+    ]);
+    expect(prompts.size).toBe(12);
+    expect(every.size).toBe(24);
+    for (const [fold, words] of prompts) expect(every.get(fold)).toBe(words);
+    const opened = getBody.mock.calls.map(([, ref]) => ref);
+    expect(opened.sort()).toEqual(refsOf(folds).sort());
+  });
+
+  it("reads the halves the bound holds when asked for fewer, and counts the rest in their places", async () => {
+    const { deps, getBody } = harness([]);
+    // A prompt, its model step, then a second prompt: with room for two,
+    // the second prompt is past the bound whatever `only` asks for.
+    const folds = stepFolds(frames(2, "Only")).slice(0, 3);
+    const answer = await readWords(deps.bodies, SCOPE, folds, {
+      halfMax: 2,
+      only: (fold) => fold.node === "prompt",
+    });
+    expect(folds.map((fold) => answer.has(fold))).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    expect(getBody).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives each chain its own bound, so a subagent chain spliced in ahead takes no slot from the run's own chain (negative)", async () => {
+    const { deps } = harness([]);
+    const root = [
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Find the flaky test."),
+      }),
+      tachoRow(1, {
+        kind: "tool_requested",
+        toolName: "Task",
+        toolUseId: "toolu_bound",
+        turnSeq: 1,
+      }),
+      tachoRow(2, {
+        kind: "subagent_start",
+        ...blank,
+        toolUseId: "toolu_bound",
+        turnSeq: 1,
+      }),
+      tachoRow(3, {
+        kind: "tool_call",
+        toolName: "Task",
+        toolUseId: "toolu_bound",
+        turnSeq: 1,
+      }),
+      tachoRow(4, {
+        kind: "turn_end",
+        ...blank,
+        turnSeq: 1,
+        ...stored("It was the clock."),
+      }),
+    ].map((row) => tachoFrameOf(row));
+    const child = tachoFrameOf(
+      tachoRow(0, {
+        kind: "turn_end",
+        ...blank,
+        sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d2",
+        rootSessionUuid: SESSION_UUID,
+        parentSessionUuid: SESSION_UUID,
+        subagentId: "agent-bound",
+        subagentType: "Explore",
+        spawnToolUseId: "toolu_bound",
+        ...stored("The test reads the wall clock."),
+      }),
+    );
+    // The keys of the prompts and replies a read with room for two halves a
+    // chain settles.
+    const settled = async (frames: RunFrame[]) => {
+      const folds = stepFolds(frames).filter(
+        (fold) => fold.node === "prompt" || fold.node === "reply",
+      );
+      const words = await readWords(deps.bodies, SCOPE, folds, {
+        halfMax: 2,
+      });
+      return folds
+        .filter((fold) => words.has(fold))
+        .map((fold) => fold.key);
+    };
+    const before = await settled(root);
+    expect(before).toEqual(["0", "4"]);
+    // The child's reply is spliced in after the spawn, ahead of the run's
+    // reply, and settles within its own chain's bound.
+    const after = await settled(spliceSubagentChains(root, [child]));
+    expect(after).toEqual([
+      "0",
+      "0192d4a8-7c1e-7a00-8000-00000000c1d2:0",
+      "4",
+    ]);
+  });
+
+  // `markWords` asks for the model step before a reply after the reply
+  // itself. The bound takes halves in the run's order, so where it falls
+  // between the two, the earlier model step keeps its place (#4334).
+  it("takes the halves in the run's order when the bound falls between a model step and its reply", async () => {
+    const { deps, getBody } = harness([]);
+    const frames = [
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Ship it."),
+      }),
+      tachoRow(1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        turnSeq: 1,
+        ...stored(modelStream(["Shipped it."]), "text/event-stream"),
+      }),
+      tachoRow(2, {
+        kind: "turn_end",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Shipped it, and tagged v2."),
+      }),
+    ].map((row) => tachoFrameOf(row));
+    const [prompt, model, reply] = stepFolds(frames);
+    if (!prompt || !model || !reply) throw new Error("no folds");
+    expect([prompt.node, model.node, reply.node]).toEqual([
+      "prompt",
+      "model",
+      "reply",
+    ]);
+    const asked = [prompt, reply, model];
+    const answer = await readWords(deps.bodies, SCOPE, asked, { halfMax: 2 });
+    expect([prompt, model, reply].map((fold) => answer.has(fold))).toEqual([
+      true,
+      true,
+      false,
+    ]);
+    expect(getBody).toHaveBeenCalledTimes(2);
+  });
+
+  // `only` narrows the answer as well as the reads. A half with no kept body
+  // that `only` leaves out is not answered as showing no words, so a
+  // prompts-only read leaves the fold's own word on every other entry.
+  it("leaves a half with no kept body out of the answer when `only` leaves it out (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const frames = [
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Ship it."),
+      }),
+      // A model step the recorder kept no body for.
+      tachoRow(1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        turnSeq: 1,
+      }),
+    ].map((row) => tachoFrameOf(row));
+    const [prompt, model] = stepFolds(frames);
+    if (!prompt || !model) throw new Error("no folds");
+    expect([prompt.node, model.node]).toEqual(["prompt", "model"]);
+    expect(model.response?.body.bodyRef ?? null).toBeNull();
+    const prompts = await readWords(deps.bodies, SCOPE, [prompt, model], {
+      only: (fold) => fold.node === "prompt",
+    });
+    expect(prompts.has(prompt)).toBe(true);
+    expect(prompts.has(model)).toBe(false);
+    // Asked for every half, the same half answers as showing no words.
+    const every = await readWords(deps.bodies, SCOPE, [prompt, model]);
+    expect(every.has(model)).toBe(true);
+    expect(every.get(model)).toBeNull();
+    // The prompt's body, once for each read. The model step has none to open.
+    expect(getBody).toHaveBeenCalledTimes(2);
+  });
+
+  // A read that tests a key learns the key's state for itself. Were the test
+  // shared, the read that waited on it would learn nothing, and would answer
+  // its kept digests after erasure.
+  it("tests the key in each of two reads at once, so neither answers a kept digest after erasure (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const folds = stepFolds(frames(2, "Erased"));
+    const cache = createWordsCache();
+    const warm = await readWords(deps.bodies, SCOPE, folds, { cache });
+    expect(warm.size).toBe(4);
+    getBody.mockClear();
+    getBody.mockImplementation(() =>
+      Promise.reject(
+        new BodyKeyGoneError("k", {
+          cause: Object.assign(new Error("pending deletion"), {
+            name: "KMSInvalidStateException",
+          }),
+        }),
+      ),
+    );
+    const [one, two] = await Promise.all([
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+    ]);
+    expect(one.size).toBe(0);
+    expect(two.size).toBe(0);
+    // One body for each read: its own test of the key.
+    expect(getBody).toHaveBeenCalledTimes(2);
+  });
+
+  /** A store whose KEK erasure has destroyed: KMS refuses the key itself. */
+  const erasedKey = () =>
+    Promise.reject(
+      new BodyKeyGoneError("k", {
+        cause: Object.assign(new Error("pending deletion"), {
+          name: "KMSInvalidStateException",
+        }),
+      }),
+    );
+
+  // Review round 1 on #4382: a read that waited on another's read of a body
+  // learned nothing about the body's key, since the shared read wrote what
+  // it learned into the other read's keys. So after erasure the read that
+  // waited answered the digests it kept under that key.
+  it("learns an erased key from the read it waits on, so neither of two reads at once answers a kept digest (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const folds = stepFolds(frames(2, "Joined"));
+    const prompts = folds.filter((fold) => fold.node === "prompt");
+    const cache = createWordsCache();
+    // Only the prompts are kept. Each full read below then holds the prompts
+    // as kept digests and misses the model steps, all under one key.
+    const warm = await readWords(deps.bodies, SCOPE, folds, {
+      cache,
+      only: (fold) => fold.node === "prompt",
+    });
+    expect(warm.size).toBe(2);
+    getBody.mockClear();
+    getBody.mockImplementation(erasedKey);
+    const [one, two] = await Promise.all([
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+    ]);
+    for (const answer of [one, two]) {
+      expect(prompts.filter((fold) => answer.has(fold))).toEqual([]);
+      expect(answer.size).toBe(0);
+    }
+    // Each model step's body is opened once, by the read that got there
+    // first. The other read waits on those reads and learns the key there.
+    expect(getBody).toHaveBeenCalledTimes(2);
+  });
+
+  // Review round 1 on #4382: a read that found a body it missed already
+  // failed by another read took that as the key's test, and learned nothing
+  // about the key from it.
+  it("tests the key itself when a body it missed was failed by another read meanwhile (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const [prompt, model] = stepFolds(frames(1, "Beaten"));
+    if (!prompt || !model) throw new Error("no folds");
+    const modelRef = model.response?.body.bodyRef;
+    const kept = createWordsCache();
+    await readWords(deps.bodies, SCOPE, [prompt], { cache: kept });
+    // The model step's body misses when the read looks first, and reads as
+    // failed by the time the read would open it.
+    let asked = 0;
+    const cache: WordsCache = {
+      ...kept,
+      get: (scope, frame) => {
+        if (frame.body.bodyRef !== modelRef) return kept.get(scope, frame);
+        asked += 1;
+        return asked === 1 ? undefined : UNREADABLE;
+      },
+    };
+    getBody.mockClear();
+    getBody.mockImplementation(erasedKey);
+    const words = await readWords(deps.bodies, SCOPE, [prompt, model], {
+      cache,
+    });
+    expect(words.has(prompt)).toBe(false);
+    expect(words.has(model)).toBe(false);
+    // The prompt's body, read again to learn the key.
+    expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([
+      prompt.request?.body.bodyRef,
+    ]);
+  });
+
+  // Review round 2 on #4382: no test covered the case where the only body a
+  // read opens under a key fails before KMS answers. That read learns
+  // nothing about the key, and a kept digest leans on it, so the test of the
+  // key must still run once the reads are done.
+  it("tests the key after the reads when the only body it read under the key failed before KMS answered (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const [prompt, model] = stepFolds(frames(1, "Unanswered"));
+    if (!prompt || !model) throw new Error("no folds");
+    const promptRef = prompt.request?.body.bodyRef;
+    const modelRef = model.response?.body.bodyRef;
+    const cache = createWordsCache();
+    // Only the prompt is kept. The read below then holds the prompt as a
+    // kept digest and opens the model step's body, the one body it reads
+    // under the key.
+    await readWords(deps.bodies, SCOPE, [prompt], { cache });
+    getBody.mockClear();
+    // The store drops the model step's read before KMS is asked, and KMS
+    // refuses the key for any body that reaches it.
+    getBody.mockImplementation((_scope: unknown, ref: string) =>
+      ref === modelRef
+        ? Promise.reject(new Error("socket hang up"))
+        : erasedKey(),
+    );
+    const words = await readWords(deps.bodies, SCOPE, [prompt, model], {
+      cache,
+    });
+    expect(words.has(model)).toBe(false);
+    // The retest found the key gone, so the kept digest does not answer.
+    expect(words.has(prompt)).toBe(false);
+    // The model step's body, then the prompt's, read again once the reads
+    // were done to learn the key.
+    expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([
+      modelRef,
+      promptRef,
+    ]);
   });
 });
 

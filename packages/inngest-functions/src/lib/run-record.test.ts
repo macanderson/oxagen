@@ -7,6 +7,7 @@
 import { schema } from "@oxagen/database";
 import {
   buildArchiveSegment,
+  type ChainCursor,
   flattenEvent,
   GENESIS_CURSOR,
   hashEvent,
@@ -27,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   selectTachoEvents: vi.fn(),
   selectTachoEventRecords: vi.fn(),
   selectTachoSubagentEvents: vi.fn(),
+  unflattenEventReading: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -49,6 +51,13 @@ vi.mock("@oxagen/run-ledger", async (importOriginal) => ({
 vi.mock("@oxagen/run-ledger/evidence-store", () => ({
   evidenceStore: () => ({ getSegment: mocks.getSegment }),
 }));
+// The real function, wrapped so a test can read what the export passed it.
+vi.mock("@oxagen/tacho", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/tacho")>()),
+  unflattenEventReading: mocks.unflattenEventReading,
+}));
+const { unflattenEventReading: realUnflattenEventReading } =
+  await vi.importActual<typeof import("@oxagen/tacho")>("@oxagen/tacho");
 vi.mock("@oxagen/telemetry", () => ({
   selectTachoEvents: mocks.selectTachoEvents,
   selectTachoEventRecords: mocks.selectTachoEventRecords,
@@ -56,10 +65,10 @@ vi.mock("@oxagen/telemetry", () => ({
 }));
 
 import {
-  readRunFrames,
   readSealedSegments,
   readTranscriptFramesOf,
   resolveRunRecord,
+  runFramePages,
 } from "./run-record";
 
 const SCOPE = {
@@ -103,6 +112,7 @@ beforeEach(() => {
       return fn();
     },
   );
+  mocks.unflattenEventReading.mockImplementation(realUnflattenEventReading);
 });
 
 describe("resolveRunRecord", () => {
@@ -436,6 +446,135 @@ describe("readSealedSegments", () => {
       wrappedFrameOf(carried?.["event"] as Record<string, JsonValue>, null),
     );
   });
+
+  // #3814: each row used to search every reading it leaves open, although
+  // the rows of one session mostly share one.
+  it("tries the reading that rebuilt a row first on the session's next row", async () => {
+    // Both events sent an empty `host` group and a whole-second ts, so a row
+    // rebuilds them only with those two readings flipped.
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events = [
+      { tool_name: "Read", tool_status: "ok" },
+      { tool_name: "Bash", tool_status: "ok" },
+    ].map((body) => {
+      const sealed = sealEvent(
+        {
+          v: "tacho/1.0",
+          event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+          session_id: "sess-1",
+          session_uuid: SESSION,
+          root_session_uuid: SESSION,
+          ts: "2026-09-11T09:00:00Z",
+          fidelity: "sdk",
+          source: "hook",
+          agent: {
+            agent_key: "acme.core.cc-laptop",
+            fleet_id: "wrk_1",
+            runtime: "claude-code",
+            harness: "claude-code",
+            wrapper_version: "2.1.1",
+          },
+          turn: { turn_seq: 1 },
+          host: {},
+          kind: "tool_call",
+          body,
+        } as UnsealedTachoEvent,
+        cursor,
+      );
+      cursor = sealed.next;
+      return sealed.event;
+    });
+    const records: TachoEventRecord[] = events.map((event, seq) => {
+      const { bytes_ref: _serverOwned, ...flat } = flattenEvent(event);
+      return {
+        frame: { ...tachoRow(seq), hash: event.hash },
+        envelope: { ...flat, ts: "2026-09-11 09:00:00.000" },
+      };
+    });
+    mocks.selectTachoEventRecords.mockResolvedValue(records);
+    const [segment] = await readSealedSegments(SCOPE, {
+      source: "tacho",
+      sessionUuid: SESSION,
+      enforcementTier: "harness",
+      completenessGaps: [],
+      replayGrade: null,
+    });
+    expect(
+      (segment?.envelopes ?? []).map(
+        (frame) => (frame as Record<string, unknown>)["event"],
+      ),
+    ).toEqual(events);
+    const calls = mocks.unflattenEventReading.mock.calls;
+    const results = mocks.unflattenEventReading.mock.results.map(
+      (result) => result.value as { reading: unknown; tried: number },
+    );
+    expect(calls).toHaveLength(2);
+    // The first row has nothing to carry and searches.
+    expect(calls[0]?.[1]).toEqual({ first: null });
+    expect(results[0]?.reading).toEqual(["group:host", "ts:whole_second"]);
+    expect(results[0]?.tried).toBeGreaterThan(1);
+    // The second row is handed that reading and matches on it at once.
+    expect(calls[1]?.[1]).toEqual({ first: results[0]?.reading });
+    expect(results[1]?.tried).toBe(1);
+  });
+
+  it("keeps carrying the last reading that matched past a row no reading rebuilds (negative)", async () => {
+    const event = sealEvent(
+      {
+        v: "tacho/1.0",
+        event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        session_id: "sess-1",
+        session_uuid: SESSION,
+        root_session_uuid: SESSION,
+        ts: "2026-09-11T09:00:00Z",
+        fidelity: "sdk",
+        source: "hook",
+        agent: {
+          agent_key: "acme.core.cc-laptop",
+          fleet_id: "wrk_1",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+        },
+        turn: { turn_seq: 1 },
+        kind: "tool_call",
+        body: { tool_name: "Read", tool_status: "ok" },
+      } as UnsealedTachoEvent,
+      GENESIS_CURSOR,
+    ).event;
+    const { bytes_ref: _serverOwned, ...flat } = flattenEvent(event);
+    const envelope = { ...flat, ts: "2026-09-11 09:00:00.000" };
+    const matching: TachoEventRecord = {
+      frame: { ...tachoRow(0), hash: event.hash },
+      envelope,
+    };
+    // The row says Write where the sealed event said Read.
+    const unproven: TachoEventRecord = {
+      frame: tachoRow(1),
+      envelope: { ...envelope, body: JSON.stringify({ tool_name: "Write" }) },
+    };
+    mocks.selectTachoEventRecords.mockResolvedValue([
+      matching,
+      unproven,
+      matching,
+    ]);
+    await readSealedSegments(SCOPE, {
+      source: "tacho",
+      sessionUuid: SESSION,
+      enforcementTier: "harness",
+      completenessGaps: [],
+      replayGrade: null,
+    });
+    const calls = mocks.unflattenEventReading.mock.calls;
+    const first = (
+      mocks.unflattenEventReading.mock.results[0]?.value as {
+        reading: unknown;
+      }
+    ).reading;
+    expect(first).toEqual(["ts:whole_second"]);
+    expect(calls[1]?.[1]).toEqual({ first });
+    expect(calls[2]?.[1]).toEqual({ first });
+  });
 });
 
 /**
@@ -470,19 +609,46 @@ const WRAPPED = {
   replayGrade: null,
 };
 
-describe("readRunFrames", () => {
-  it("reads a wrapped session's frames in sequence inside the tenant scope", async () => {
-    tachoChain([0, 1]);
-    const frames = await readRunFrames(SCOPE, WRAPPED);
-    expect(frames.map((f) => f.seq)).toEqual(["0", "1"]);
-    expect(scopes).toEqual([SCOPE]);
+// #3784: the enrichment job read every frame of a run into one array before
+// it read any text. It now pulls pages and stops at its ceiling.
+describe("runFramePages", () => {
+  /** Every page a reader pulls to the end, as frame seqs. */
+  async function pagesOf(record: Parameters<typeof runFramePages>[1]) {
+    const pages: number[][] = [];
+    for await (const page of runFramePages(SCOPE, record))
+      pages.push(page.map((frame) => Number(frame.seq)));
+    return pages;
+  }
+
+  it("reads a wrapped session a page at a time, each inside the tenant scope", async () => {
+    tachoChain(range(0, 1200));
+    const pages = await pagesOf(WRAPPED);
+    expect(pages.map((page) => page.length)).toEqual([500, 500, 201]);
+    expect(pages.flat()).toEqual(range(0, 1200));
+    expect(scopes.length).toBeGreaterThan(0);
+    expect(scopes.every((scope) => scope === SCOPE)).toBe(true);
+  });
+
+  it("reads no further page once the reader stops", async () => {
+    tachoChain(range(0, 1200));
+    const pages = runFramePages(SCOPE, WRAPPED);
+    const first = await pages.next();
+    expect(first.done).toBe(false);
+    expect(first.value).toHaveLength(500);
+    await pages.return(undefined);
+    expect(mocks.selectTachoEvents).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads past a recorded break in a wrapped session's chain", async () => {
+    const seqs = [...range(0, 299), ...range(800, 1000)];
+    tachoChain(seqs);
+    expect((await pagesOf(WRAPPED)).flat()).toEqual(seqs);
   });
 
   // #4202: under FINAL an unbounded page scans the rest of the chain.
   it("bounds each windowed page of a wrapped session at afterSeq plus the page size", async () => {
     tachoChain(range(0, 1200));
-    const frames = await readRunFrames(SCOPE, WRAPPED);
-    expect(frames.map((f) => Number(f.seq))).toEqual(range(0, 1200));
+    expect((await pagesOf(WRAPPED)).flat()).toEqual(range(0, 1200));
     const calls = mocks.selectTachoEvents.mock.calls.map(
       ([args]) => args as { afterSeq: number; throughSeq?: number },
     );
@@ -497,22 +663,49 @@ describe("readRunFrames", () => {
     ]);
   });
 
-  it("reads past a recorded break in a wrapped session's chain", async () => {
-    const seqs = [...range(0, 299), ...range(800, 1000)];
-    tachoChain(seqs);
-    const frames = await readRunFrames(SCOPE, WRAPPED);
-    expect(frames.map((f) => Number(f.seq))).toEqual(seqs);
-  });
-
   it("reads a wrapped session one frame past a full page", async () => {
     tachoChain(range(0, 500));
-    const frames = await readRunFrames(SCOPE, WRAPPED);
-    expect(frames.map((f) => Number(f.seq))).toEqual(range(0, 500));
+    expect((await pagesOf(WRAPPED)).flat()).toEqual(range(0, 500));
   });
 
-  it("reads an empty wrapped session as no frames (negative)", async () => {
+  it("reads a ledger run's events a page at a time from each page's last run_seq", async () => {
+    const event = (runSeq: number) => ({
+      runSeq: String(runSeq),
+      eventType: "admission.run_admitted",
+      stage: "admission",
+      observedAt: "2026-09-25T12:00:00.000Z",
+      eventDigest: `sha256:${String(runSeq).padStart(64, "0")}`,
+      payload: {},
+      body: {
+        bodyRef: null,
+        bodyDigest: null,
+        bodyBytes: null,
+        redactions: null,
+        fidelity: "digest_only",
+      },
+    });
+    const events = range(1, 503).map(event);
+    const readAttemptEventsSince = vi.fn(
+      (_runId: string, after: string, limit: number) =>
+        Promise.resolve(
+          events
+            .filter((e) => Number(e.runSeq) > Number(after))
+            .slice(0, limit),
+        ),
+    );
+    mocks.createPostgresRunStore.mockReturnValue({ readAttemptEventsSince });
+    const pages = await pagesOf({ source: "ledger", runId: "r1", attempts: [] });
+    expect(pages.map((page) => page.length)).toEqual([500, 3]);
+    expect(pages.flat()).toEqual(range(1, 503));
+    expect(readAttemptEventsSince.mock.calls).toEqual([
+      ["r1", "0", 500],
+      ["r1", "500", 500],
+    ]);
+  });
+
+  it("yields no page for a run with no frames (negative)", async () => {
     tachoChain([]);
-    expect(await readRunFrames(SCOPE, WRAPPED)).toEqual([]);
+    expect(await pagesOf(WRAPPED)).toEqual([]);
   });
 });
 

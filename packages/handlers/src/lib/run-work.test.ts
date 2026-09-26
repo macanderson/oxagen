@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   capturedDiffOf,
   checkoutOf,
+  foldProvisionalContexts,
   readSessionConfig,
   readSessionTitle,
   readWorkContexts,
@@ -79,6 +80,8 @@ describe("run work evidence", () => {
       complete: "true",
       limitations: "",
       omitted: "",
+      redactions: "",
+      redaction_count: 0,
     };
     expect(capturedDiffOf(diff).completeness).toBe("not_captured");
     expect(
@@ -96,6 +99,283 @@ describe("run work evidence", () => {
       completeness: "partial",
       limitations: ["patch_size_limit"],
       seq: "9",
+    });
+  });
+});
+
+// #3791: the collector sets `diff_complete` from the snapshot, and the seal
+// then redacts any credential out of the patch. The flag alone called a
+// sanitized patch exact.
+describe("a patch the recorder redacted", () => {
+  const retained: WorkDiffRow = {
+    ...context,
+    seq: 9,
+    observed_at: "2026-09-23",
+    base: "b".repeat(40),
+    content_digest: "sha256:test",
+    bytes_ref: "body",
+    complete: "true",
+    limitations: "",
+    omitted: "",
+    redactions: "[]",
+    redaction_count: 0,
+  };
+  const oneRedaction = JSON.stringify([
+    {
+      path: "bytes:10-50",
+      reason: "github_token",
+      original_digest: `sha256:${"c".repeat(64)}`,
+    },
+  ]);
+
+  it("reads partial and names content_redacted when the recorder counted redactions", () => {
+    expect(
+      capturedDiffOf({
+        ...retained,
+        redactions: oneRedaction,
+        redaction_count: "2",
+      }),
+    ).toMatchObject({
+      completeness: "partial",
+      limitations: ["content_redacted"],
+    });
+  });
+
+  it("reads partial from the redaction list alone, for a frame with no count", () => {
+    expect(
+      capturedDiffOf({
+        ...retained,
+        redactions: oneRedaction,
+        redaction_count: 0,
+      }),
+    ).toMatchObject({
+      completeness: "partial",
+      limitations: ["content_redacted"],
+    });
+  });
+
+  it("keeps the collector's limitations beside the redaction", () => {
+    expect(
+      capturedDiffOf({
+        ...retained,
+        complete: "false",
+        limitations: "patch_size_limit",
+        redaction_count: 1,
+      }).limitations,
+    ).toEqual(["patch_size_limit", "content_redacted"]);
+  });
+
+  it("keeps not_retained ahead of partial when the redacted bytes were withheld", () => {
+    expect(
+      capturedDiffOf({ ...retained, bytes_ref: "", redaction_count: 1 }),
+    ).toMatchObject({
+      completeness: "not_retained",
+      limitations: ["content_redacted"],
+    });
+  });
+
+  it("reads a patch with no redaction complete (negative)", () => {
+    for (const redactions of ["[]", ""])
+      expect(
+        capturedDiffOf({ ...retained, redactions, redaction_count: 0 }),
+      ).toMatchObject({ completeness: "complete", limitations: [] });
+    expect(
+      capturedDiffOf({ ...retained, redactions: "[]", redaction_count: "0" })
+        .completeness,
+    ).toBe("complete");
+  });
+});
+
+// #3791: the daemon seals a session's first hook before its first Git read,
+// so that frame names the path alone. Grouped on its own, it was a second
+// checkout that no repository or branch could match.
+describe("foldProvisionalContexts", () => {
+  const pathOnly: WorkContextRow = {
+    path: "/work/project",
+    branch: "",
+    head: "",
+    remote: "",
+    repository: "",
+    first_seq: 1,
+    last_seq: 1,
+  };
+  const located: WorkContextRow = { ...context, first_seq: 2, last_seq: 9 };
+
+  it("folds a path-only row into the Git context read after it at the same path", () => {
+    const { rows, alias } = foldProvisionalContexts([pathOnly, located]);
+    expect(rows).toEqual([{ ...located, first_seq: 1, last_seq: 9 }]);
+    expect(alias).toEqual(
+      new Map([[checkoutOf(pathOnly, []).id, checkoutOf(located, []).id]]),
+    );
+  });
+
+  it("keeps each branch at the path its own checkout, and folds the path-only row into the first (negative)", () => {
+    const second: WorkContextRow = {
+      ...context,
+      branch: "fix/two",
+      head: "d".repeat(40),
+      first_seq: 10,
+      last_seq: 20,
+    };
+    const { rows, alias } = foldProvisionalContexts([
+      pathOnly,
+      located,
+      second,
+    ]);
+    expect(rows.map(({ branch, first_seq }) => [branch, first_seq])).toEqual([
+      ["fix/one", 1],
+      ["fix/two", 10],
+    ]);
+    expect(alias.get(checkoutOf(pathOnly, []).id)).toBe(
+      checkoutOf(located, []).id,
+    );
+  });
+
+  it("keeps two repositories at the same path apart (negative)", () => {
+    const other: WorkContextRow = {
+      ...context,
+      remote: workDigest("github.com/acme/other"),
+      first_seq: 10,
+      last_seq: 20,
+    };
+    const { rows, alias } = foldProvisionalContexts([located, other]);
+    expect(rows).toEqual([located, other]);
+    expect(alias.size).toBe(0);
+  });
+
+  it("folds a path-only row seen after every Git read into the latest context before it", () => {
+    const second: WorkContextRow = {
+      ...context,
+      branch: "fix/two",
+      first_seq: 10,
+      last_seq: 20,
+    };
+    const late: WorkContextRow = { ...pathOnly, first_seq: 30, last_seq: 31 };
+    const { rows, alias } = foldProvisionalContexts([located, second, late]);
+    expect(rows).toEqual([located, { ...second, last_seq: 31 }]);
+    expect(alias.get(checkoutOf(late, []).id)).toBe(checkoutOf(second, []).id);
+  });
+
+  // Review round 3 on #4382: the fold read only when each context started.
+  // A session on fix/one visited fix/two and came back, so fix/one's row
+  // spans 2 to 40 with its early start. A path-only frame at 30 folded into
+  // fix/two, the context that started last before it, and stretched fix/two
+  // over the frames fix/one holds.
+  describe("a Git context the session came back to", () => {
+    const back: WorkContextRow = { ...context, first_seq: 2, last_seq: 40 };
+    const frame: WorkContextRow = { ...pathOnly, first_seq: 30, last_seq: 30 };
+
+    it("folds a frame into the Git context whose span holds it, and stretches nothing (negative)", () => {
+      const visit: WorkContextRow = {
+        ...context,
+        branch: "fix/two",
+        head: "d".repeat(40),
+        first_seq: 13,
+        last_seq: 20,
+      };
+      const { rows, alias } = foldProvisionalContexts([back, visit, frame]);
+      expect(rows).toEqual([back, visit]);
+      expect(alias.get(checkoutOf(frame, []).id)).toBe(checkoutOf(back, []).id);
+    });
+
+    it("folds a frame two Git contexts span into the one that started last", () => {
+      const visit: WorkContextRow = {
+        ...context,
+        branch: "fix/two",
+        head: "d".repeat(40),
+        first_seq: 13,
+        last_seq: 35,
+      };
+      const { rows, alias } = foldProvisionalContexts([back, visit, frame]);
+      expect(rows).toEqual([back, visit]);
+      expect(alias.get(checkoutOf(frame, []).id)).toBe(
+        checkoutOf(visit, []).id,
+      );
+    });
+  });
+
+  it("keeps a path-only row with no Git context at its path (negative)", () => {
+    const elsewhere: WorkContextRow = { ...pathOnly, path: "/tmp/scratch" };
+    const { rows, alias } = foldProvisionalContexts([elsewhere, located]);
+    expect(rows).toEqual([elsewhere, located]);
+    expect(alias.size).toBe(0);
+  });
+
+  it("does not fold a detached HEAD, which records its head (negative)", () => {
+    const detached: WorkContextRow = { ...pathOnly, head: "e".repeat(40) };
+    const { rows, alias } = foldProvisionalContexts([detached, located]);
+    expect(rows).toEqual([detached, located]);
+    expect(alias.size).toBe(0);
+  });
+
+  // Review round 1 on #4382: the read groups every path-only frame at a path
+  // into one row. That row folded whole into the Git context after its first
+  // frame, so a path-only frame seen later stretched that context over a
+  // later branch's checkout.
+  describe("a path-only row seen at two times", () => {
+    const early: WorkContextRow = { ...located, last_seq: 10 };
+    const elsewhere: WorkContextRow = {
+      ...context,
+      path: "/work/other",
+      remote: workDigest("github.com/acme/other"),
+      first_seq: 11,
+      last_seq: 29,
+    };
+
+    it("folds each end into its own neighbour, so no folded span overlaps a later branch (negative)", () => {
+      const second: WorkContextRow = {
+        ...context,
+        branch: "fix/two",
+        head: "d".repeat(40),
+        first_seq: 13,
+        last_seq: 20,
+      };
+      const twice: WorkContextRow = { ...pathOnly, first_seq: 1, last_seq: 25 };
+      const { rows, alias } = foldProvisionalContexts([twice, early, second]);
+      // fix/one keeps 1 to 10, and fix/two takes the frame seen at 25.
+      expect(rows).toEqual([
+        { ...early, first_seq: 1 },
+        { ...second, last_seq: 25 },
+      ]);
+      expect(alias.get(checkoutOf(twice, []).id)).toBe(
+        checkoutOf(early, []).id,
+      );
+    });
+
+    it("keeps a path-only frame that another checkout separates from the Git context before it (negative)", () => {
+      const late: WorkContextRow = { ...pathOnly, first_seq: 30, last_seq: 30 };
+      const { rows, alias } = foldProvisionalContexts([
+        early,
+        elsewhere,
+        late,
+      ]);
+      expect(rows).toEqual([early, elsewhere, late]);
+      expect(alias.size).toBe(0);
+    });
+
+    it("folds the first frame and keeps the later one when another checkout separates them (negative)", () => {
+      const twice: WorkContextRow = { ...pathOnly, first_seq: 1, last_seq: 30 };
+      const { rows, alias } = foldProvisionalContexts([
+        twice,
+        early,
+        elsewhere,
+      ]);
+      expect(rows).toEqual([
+        { ...early, first_seq: 1 },
+        elsewhere,
+        { ...pathOnly, first_seq: 30, last_seq: 30 },
+      ]);
+      // The row stays in part, so a diff on it keeps its own checkout.
+      expect(alias.size).toBe(0);
+    });
+
+    it("folds a frame into the Git context after it only when no other context starts first (negative)", () => {
+      const hook: WorkContextRow = { ...pathOnly, first_seq: 10, last_seq: 10 };
+      const later: WorkContextRow = { ...located, first_seq: 30, last_seq: 40 };
+      const between: WorkContextRow = { ...elsewhere, first_seq: 20 };
+      const { rows, alias } = foldProvisionalContexts([hook, between, later]);
+      expect(rows).toEqual([hook, between, later]);
+      expect(alias.size).toBe(0);
     });
   });
 });
@@ -152,6 +432,15 @@ describe("run work reads", () => {
     );
     expect(query).toContain(
       "AND if(attrs['pr.url'] != '', attrs['pr.url'], attrs['pr_url']) != ''",
+    );
+  });
+  // #3791: a captured diff reads the redactions the seal recorded, so a
+  // sanitized patch is not called exact.
+  it("reads a captured diff's redaction list and count", async () => {
+    const query = await queryOf(readWorkDiffs);
+    expect(query).toMatch(/\bomitted, redactions,/);
+    expect(query).toContain(
+      "toUInt32OrZero(attrs['oxagen.content_redactions_total']) AS redaction_count",
     );
   });
   // ADR-171: a chain break is reported beside the facts, never by hiding the
