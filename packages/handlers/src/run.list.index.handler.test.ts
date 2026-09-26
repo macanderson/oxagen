@@ -73,7 +73,9 @@ function list(runIndex: RunIndexDeps | undefined) {
   return createRunListHandler({ ...stores, runIndex });
 }
 
-const parse = (over: Partial<RunListInput>) => runList.input.parse(over);
+// Fleet asks for the total; every case here does too unless it says not.
+const parse = (over: Partial<RunListInput>) =>
+  runList.input.parse({ count: true, ...over });
 
 const ALL: RunIndexEntry[] = [
   { source: "tacho", publicId: "tse_c" },
@@ -90,6 +92,15 @@ describe("list_runs with the run index", () => {
     expect(counts).toHaveLength(1);
     expect(out.total).toBe(279);
     expect(out.totalBound).toBe(RUN_LIST_TOTAL_BOUND);
+  });
+
+  it("reads no count and answers no total when the caller does not ask", async () => {
+    const { deps, counts } = fakeIndex(ALL, 279);
+    const out = await list(deps)(runList.input.parse({ limit: 10 }), ctx());
+    expect(out.runs).toHaveLength(3);
+    expect(counts).toHaveLength(0);
+    expect(out).not.toHaveProperty("total");
+    expect(out).not.toHaveProperty("totalBound");
   });
 
   it("reads null past the bound", async () => {

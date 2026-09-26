@@ -35,6 +35,7 @@ The status, tier and replay-grade filters, the search, the order and the offset 
 | `query` | string | no | 1 to 200 characters after trimming. A case-insensitive substring matched against the public id, the name, the harness title, the agent key, the operator's name, the model id, the hostname, and a ledger run's goal. `%` and `_` match themselves |
 | `sort` | `{ key, dir }` | no | `key` is `started`, `agent`, `operator`, `status`, `tier`, `replay` or `cost`; `dir` is `asc` or `desc`. Absent means `started` descending. A run with no value for the key sorts last in both directions, and ties fall back to newest first. `status` sorts `live`, `sealed`, `halted`. `tier` and `replay` sort along their ladders, not alphabetically. `cost` sorts by the priced figure in micro-units, falling back to what a wrapped session reported, across currencies. Frames, name, pull requests, lines and tokens cannot be sorted |
 | `offset` | integer | no | 0 to 10,000; rows to skip in the filtered, sorted list. Page N of size L is `offset = (N - 1) * L` |
+| `count` | boolean | no | Answer `total` and `totalBound`. The count reads every matching row in both stores up to the bound, so a caller that draws no pager leaves it off. Fleet sets it |
 
 These inputs refuse each other as `invalid_input`, with the code as the message:
 
@@ -51,7 +52,7 @@ These inputs refuse each other as `invalid_input`, with the code as the message:
 | `runs` | object[] | see the row below |
 | `nextCursor` | string or null | null on the last page |
 | `warnings` | array of `pull_requests_unread`, optional | the pull-request frames could not be read. Rows carry no `pullRequests`, and a filtered page decided on the counted `pr_open` calls alone |
-| `total` | integer or null, optional | the runs that match every filter and the search across both stores, whatever the page. Null when more than `totalBound` match. Absent when the read did not count: under a `pullRequests` filter of `with` or `without`, which only the frames in ClickHouse answer, or when the count failed |
+| `total` | integer or null, optional | the runs that match every filter and the search across both stores, whatever the page. Null when more than `totalBound` match. Absent when the read did not count: the caller left `count` off, a `pullRequests` filter of `with` or `without` (only the frames in ClickHouse answer those), or the count failed |
 | `totalBound` | integer, optional | 10,000 (`RUN_LIST_TOTAL_BOUND`), present whenever `total` is. A caller shows `10,000+` when `total` is null |
 
 Each row:

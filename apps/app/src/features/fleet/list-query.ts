@@ -158,6 +158,8 @@ export function toRunsListQuery(
       ? {}
       : { sort: { key: served.sort, dir: served.dir } }),
     ...(page > 1 ? { offset: (page - 1) * at.pageSize } : {}),
+    // The pager prints "from–to of total", so Fleet is the caller that counts.
+    count: true,
   };
 }
 

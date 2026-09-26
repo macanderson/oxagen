@@ -992,9 +992,10 @@ export function createRunListHandler(
 
     // The total counts every run the filters and the search let through,
     // whatever the page. It depends on nothing a page returns, so it is read
-    // beside the pages.
+    // beside the pages. Only a caller that asks pays for it: a count reads
+    // every matching row up to the bound in both stores.
     const counted =
-      runIndex === undefined
+      runIndex === undefined || input.count !== true
         ? Promise.resolve<Pick<RunListOutput, "total" | "totalBound">>({})
         : countRuns(
             runIndex.index,

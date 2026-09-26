@@ -235,6 +235,8 @@ export interface DataSource {
         sort?: { key: RunSortKey; dir: "asc" | "desc" };
         /** Rows to skip in the filtered, sorted list. Never sent with a cursor. */
         offset?: number;
+        /** Answer the page's `total`. Only a caller that draws a pager asks. */
+        count?: boolean;
       },
     ): Promise<Read<RunPage>>;
     get(

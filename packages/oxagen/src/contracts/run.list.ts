@@ -669,6 +669,12 @@ export const runList = registerCapability({
        * `offset` sent with a `cursor` as `invalid_input` (`cursor_with_offset`).
        */
       offset: z.number().int().min(0).max(RUN_LIST_TOTAL_BOUND).optional(),
+      /**
+       * Answer `total` and `totalBound`. Counting reads every matching row in
+       * both stores up to the bound, so a caller that prints no pager (a
+       * picker, the agents page) leaves it off and pays for the page alone.
+       */
+      count: z.boolean().optional(),
     })
     .strict(),
   output: z
@@ -684,9 +690,9 @@ export const runList = registerCapability({
       /**
        * The runs that match every filter and the search across both stores,
        * whatever the page. Null when more than `totalBound` match. Absent when
-       * the read did not count: a `pullRequests` filter of `with` or
-       * `without`, which only the ClickHouse frames answer, or a count that
-       * failed.
+       * the read did not count: the caller did not ask (`count`), a
+       * `pullRequests` filter of `with` or `without`, which only the
+       * ClickHouse frames answer, or a count that failed.
        */
       total: z.number().int().nonnegative().nullable().optional(),
       /** `RUN_LIST_TOTAL_BOUND`, present whenever `total` is. */

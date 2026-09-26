@@ -101,11 +101,12 @@ describe("the facet vocabularies", () => {
 describe("toRunsListQuery", () => {
   const at = { cursor: null, pullRequests: "any" as const, pageSize: 25 };
 
-  it("sends a default list exactly as the page sent it before", () => {
+  it("sends a default list as the page sent it before, and asks for the total", () => {
     expect(toRunsListQuery(DEFAULT_LIST_QUERY, at)).toEqual({
       cursor: null,
       limit: 25,
       pullRequests: "any",
+      count: true,
     });
   });
 
@@ -133,6 +134,7 @@ describe("toRunsListQuery", () => {
       query: "deploy",
       sort: { key: "operator", dir: "desc" },
       offset: 50,
+      count: true,
     });
   });
 
@@ -159,6 +161,7 @@ describe("toRunsListQuery", () => {
       limit: 25,
       pullRequests: "with",
       status: ["sealed"],
+      count: true,
     });
   });
 

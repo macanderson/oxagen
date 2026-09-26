@@ -82,6 +82,16 @@ describe("runs.list with the list controls", () => {
     ).toEqual({ limit: 100 });
   });
 
+  it("asks for the total only when the caller does", () => {
+    expect(toRunListInput({ cursor: null, count: true })).toEqual({
+      limit: 100,
+      count: true,
+    });
+    expect(toRunListInput({ cursor: null, count: false })).toEqual({
+      limit: 100,
+    });
+  });
+
   it("keeps an oldest-first order, which is not the default", () => {
     expect(
       toRunListInput({ cursor: null, sort: { key: "started", dir: "asc" } }),
