@@ -1,0 +1,71 @@
+{
+  "name": "answer_interjection",
+  "domain": "agent",
+  "description": "Answer the question an agent paused to ask. The answer is recorded on the question, and a wrapped run whose host can take it receives the answer as a message.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "approval"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "interjectionId": {
+        "type": "string",
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      },
+      "answer": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      }
+    },
+    "required": [
+      "interjectionId",
+      "answer"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "interjectionId": {
+        "type": "string"
+      },
+      "runId": {
+        "type": "string"
+      },
+      "answeredAt": {
+        "type": "string"
+      },
+      "commandIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "interjectionId",
+      "runId",
+      "answeredAt",
+      "commandIds"
+    ],
+    "additionalProperties": false
+  }
+}

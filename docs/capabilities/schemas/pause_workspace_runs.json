@@ -1,0 +1,98 @@
+{
+  "name": "pause_workspace_runs",
+  "domain": "control",
+  "description": "Queue a pause for every live wrapped run in the workspace that its host can reach, as one governed decision with one audit event, and answer which runs took it and which were skipped and why.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent",
+    "cli"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "high",
+    "category": "control"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "reason": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      }
+    },
+    "required": [
+      "reason"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "queued": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "commandIds": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "skipped": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string"
+            },
+            "agentKey": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "run_sealed",
+                "no_host",
+                "host_revoked",
+                "host_offline"
+              ]
+            },
+            "commandId": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "runId",
+            "agentKey",
+            "reason",
+            "commandId"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "queued",
+      "commandIds",
+      "skipped"
+    ],
+    "additionalProperties": false
+  }
+}
