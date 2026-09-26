@@ -16,6 +16,7 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { COST_CENTER_LABEL_PATTERN } from "./cost";
 import { agentSchema } from "./_schemas";
+import { runEnrichmentCandidate } from "./run-enrichment";
 import {
   appendOnlyAuditMixin,
   auditMixin,
@@ -717,6 +718,14 @@ export const agentRuns = agentSchema.table(
     parentRunIdx: index("agent_runs_parent_run_idx")
       .on(t.parentRunId)
       .where(sql`parent_run_id IS NOT NULL`),
+    // The run-enrichment sweep's candidates (#3784): V2 runs the sweep may
+    // find due. A run that was enriched and has not changed since leaves the
+    // index, so the sweep stops reading every run the workspace ever
+    // recorded. The sweep's WHERE carries the same predicate, with the
+    // literal 2 rather than a bind parameter.
+    enrichmentCandidateIdx: index("agent_runs_enrichment_candidate_idx")
+      .on(t.orgId, t.workspaceId)
+      .where(sql`${t.specVersion} = 2 AND ${runEnrichmentCandidate(t)}`),
     // `external` is the post-ADR-043 addition: a `client_attested` submission
     // from an engine Oxagen did not host has no interactive surface of origin.
     // The other four are kept because historical rows carry them.

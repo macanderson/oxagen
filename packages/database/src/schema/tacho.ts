@@ -36,6 +36,7 @@ import {
   orgScopeMixin,
 } from "./_mixins";
 import { tachoSchema } from "./_schemas";
+import { runEnrichmentCandidate } from "./run-enrichment";
 
 const ts = (name: string) =>
   timestamp(name, { withTimezone: true, mode: "date" });
@@ -741,6 +742,15 @@ export const tachoSessions = tachoSchema.table(
     openLastEventIdx: index("tacho_sessions_open_last_event_idx")
       .on(t.lastEventAt)
       .where(sql`${t.sealedAt} IS NULL`),
+    // The run-enrichment sweep's candidates (#3784): root sessions the sweep
+    // may find due. A session that was enriched and has not changed since
+    // leaves the index, so the sweep stops reading every session the
+    // workspace ever recorded. The sweep's WHERE carries the same predicate.
+    enrichmentCandidateIdx: index("tacho_sessions_enrichment_candidate_idx")
+      .on(t.orgId, t.workspaceId)
+      .where(
+        sql`${t.parentSessionUuid} IS NULL AND ${runEnrichmentCandidate(t)}`,
+      ),
     hashCheck: check(
       "tacho_sessions_hash_check",
       sql`(${t.lastHash} IS NULL OR ${t.lastHash} ~ '^sha256:[0-9a-f]{64}$') AND (${t.finalHash} IS NULL OR ${t.finalHash} ~ '^sha256:[0-9a-f]{64}$')`,

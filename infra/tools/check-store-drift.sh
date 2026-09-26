@@ -604,6 +604,20 @@ neo_cypher() {
 #
 # The size is returned under the column name `name` so neo_result_names reads
 # it the way it reads every other result here.
+#
+# Both queries are written so the answer always has a row. cypher-shell's plain
+# format prints the `name` header only above a first row, so a query that
+# matches nothing prints nothing at all, and neo_result_names rightly reads an
+# empty file as unknown. The first version filtered in Cypher: `WHERE name
+# STARTS WITH 'org-'` on a production graph with no organisation databases
+# printed nothing and exited 0, and the migration gate on 3069a18 refused to
+# apply the resize it was written to apply. So the filters run here instead:
+# SHOW DATABASES always lists `system`, the database it is sent to, and every
+# database carries the two token lookup indexes Neo4j creates with it. The
+# index query returns a blank for each index that is not a vector index, and
+# neo_result_names drops blanks. A database whose lookup indexes were dropped
+# and that holds no vector index still reads unknown, which is the safe way to
+# be wrong.
 neo_cypher_on() {
   # stdin from /dev/null, so cypher-shell cannot read the database list the
   # loop below feeds through stdin.
@@ -619,9 +633,9 @@ check_neo4j_vector_sizes() {
   require_declarations "Neo4j vector sizes" "$WORK/neo-vec-schema.txt" || return
 
   local pooled=${NEO4J_DATABASE:-neo4j}
-  if ! neo_cypher_on system "SHOW DATABASES YIELD name WHERE name STARTS WITH 'org-' RETURN DISTINCT name" \
+  if ! neo_cypher_on system "SHOW DATABASES YIELD name RETURN DISTINCT name" \
        > "$WORK/neo-dbs.txt" 2>"$WORK/neo-dbs-err.txt" ||
-     ! neo_result_names "$WORK/neo-dbs.txt" > "$WORK/neo-org-dbs.txt"; then
+     ! neo_result_names "$WORK/neo-dbs.txt" > "$WORK/neo-db-names.txt"; then
     echo "::error::The Neo4j databases could not be listed. Vector index sizes are unknown, which is not the same as current."
     cat "$WORK/neo-dbs.txt" "$WORK/neo-dbs-err.txt" 2>/dev/null |
       sed '/^$/d' | sed 's/^/::error::  /' | head -5
@@ -633,12 +647,12 @@ check_neo4j_vector_sizes() {
   : > "$WORK/neo-vec-present.txt"
   # A plain read loop rather than mapfile, which Bash 3.2 (stock macOS) lacks.
   echo "$pooled" > "$WORK/neo-all-dbs.txt"
-  grep -E '^org-[a-z0-9]{2,6}$' "$WORK/neo-org-dbs.txt" >> "$WORK/neo-all-dbs.txt" || true
+  grep -E '^org-[a-z0-9]{2,6}$' "$WORK/neo-db-names.txt" >> "$WORK/neo-all-dbs.txt" || true
   local db
   while IFS= read -r db; do
     [[ -n $db ]] || continue
     prefix_lines "$db" "$WORK/neo-vec-schema.txt" >> "$WORK/neo-vec-declared.txt"
-    if neo_cypher_on "$db" "SHOW INDEXES YIELD name, type, options WHERE type = 'VECTOR' RETURN name + ' ' + toString(options.indexConfig['vector.dimensions']) AS name" \
+    if neo_cypher_on "$db" "SHOW INDEXES YIELD name, type, options RETURN CASE WHEN type = 'VECTOR' THEN name + ' ' + toString(options.indexConfig['vector.dimensions']) ELSE '' END AS name" \
          > "$WORK/neo-vec.txt" 2>"$WORK/neo-vec-err.txt" &&
        neo_result_names "$WORK/neo-vec.txt" > "$WORK/neo-vec-db.txt"; then
       prefix_lines "$db" "$WORK/neo-vec-db.txt" >> "$WORK/neo-vec-present.txt"

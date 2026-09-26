@@ -840,6 +840,44 @@ describe("the prepared turn", () => {
     expect(events).toHaveLength(2);
   });
 
+  // #3370, the finding 9 added on 2026-09-19: the budget pause wrote its
+  // approval with no run, so `run_public_id` stayed null and the Run page's
+  // Policy tab never listed the approval the run was stopped on.
+  it("writes a budget pause's approval against the run the turn opened (negative)", async () => {
+    mocks.createApprovalRequest.mockResolvedValueOnce({
+      approvalId: "appr_budget",
+      approvalPublicId: "apr_budget",
+    });
+    mocks.waitForApproval.mockResolvedValueOnce({
+      approvalId: "appr_budget",
+      resolution: "approved",
+      note: null,
+    });
+    let continued: unknown;
+    // The guard pauses while the engine runs, which is after the run opened.
+    mocks.runGovernedTurn.mockImplementationOnce(async () => {
+      const [, , handlers] = mocks.createTurnBudgetGuard.mock.calls[0]!;
+      continued = await handlers.onPause({
+        costUsd: 1.2,
+        limitUsd: 1,
+        mode: "prompt",
+      });
+      return fakeTurn({});
+    });
+    await runTurn(request);
+    expect(continued).toBe(true);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    // The internal `agent_runs` id, which `resolveRunPublicId` reads back to
+    // the public one. The public `arun_…` id would record null.
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capabilityName: "budget.turn.continue",
+        messageId: "msg-user",
+        runId: "run-uuid",
+      }),
+    );
+  });
+
   it("names a parked card by the approval's public id, not its row uuid", async () => {
     mocks.materializeTools.mockImplementationOnce(
       async (

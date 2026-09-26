@@ -472,7 +472,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [export_run](run.export.md) | [run.export.ts](../../packages/oxagen/src/contracts/run.export.ts) | api |
 | [fork_run](run.fork.md) | [run.fork.ts](../../packages/oxagen/src/contracts/run.fork.ts) | api |
 | [get_run](run.get.md) | [run.get.ts](../../packages/oxagen/src/contracts/run.get.ts) | api, mcp, agent |
-| [get_run_chain](run.chain.get.md) | [run.chain.get.ts](../../packages/oxagen/src/contracts/run.chain.get.ts) | api, mcp |
+| [get_run_chain](run.chain.get.md) | [run.chain.get.ts](../../packages/oxagen/src/contracts/run.chain.get.ts) | api, mcp, cli |
 | [get_run_context](run.context.get.md) | [run.context.get.ts](../../packages/oxagen/src/contracts/run.context.get.ts) | api, mcp, cli |
 | [get_run_cost](run.cost.md) | [run.cost.ts](../../packages/oxagen/src/contracts/run.cost.ts) | api, mcp, agent |
 | [get_run_export](run.export.get.md) | [run.export.get.ts](../../packages/oxagen/src/contracts/run.export.get.ts) | api, mcp, cli |

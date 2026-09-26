@@ -145,6 +145,10 @@ export function normalizeInstant(value: string): string {
  *
  * The export and both verifiers build the frame with this rule, so a member
  * edited beside the event no longer matches what the event says.
+ *
+ * The top-level `body` repeats `event.body` on purpose. Format 3 keeps it so
+ * every wrapped frame has one shape, and the zip stores the copy for a few
+ * bytes. docs/capabilities/run.export.md records the decision (#3814).
  */
 export function wrappedFrameOf(
   event: Record<string, JsonValue | undefined>,

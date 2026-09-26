@@ -1,4 +1,3 @@
-import { runEnrichmentEnabled } from "@oxagen/oxagen/run-enrichment";
 // audit-exempt: workspace-profile field edit (name/slug/description) — no fitting security-event type exists in the taxonomy (no workspace.settings_updated); covered by the kernel capability.invoke_* audit. Do not invent a type.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
@@ -218,22 +217,11 @@ export const workspaceSettingsWriteHandler: CapabilityHandler<
           throw err;
         }
 
-        if (
-          input.runEnrichmentEnabled === true &&
-          !runEnrichmentEnabled(existing.settings)
-        ) {
-          for (const runs of [schema.tachoSessions, schema.agentRuns]) {
-            await tx
-              .update(runs)
-              .set({ summaryObservedAt: null })
-              .where(
-                and(
-                  eq(runs.orgId, ctx.orgId),
-                  eq(runs.workspaceId, workspaceId),
-                ),
-              );
-          }
-        }
+        // Turning run enrichment back on writes no run row (#3784). A run
+        // the workspace recorded while it was off was never summarized, or
+        // changed after its last account, so the sweep already finds it due.
+        // Resetting every run here held row locks across the workspace's
+        // whole history inside this request.
         return tx.query.workspaces.findFirst({
           where: eq(schema.workspaces.id, workspaceId),
           columns: {

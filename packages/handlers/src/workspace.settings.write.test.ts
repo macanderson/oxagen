@@ -417,6 +417,27 @@ describe("workspace.settings.write handler", () => {
     expect(out.slug).toBe("research");
   });
 
+  // #3784: turning run enrichment back on reset every run the workspace ever
+  // recorded, inside this request, holding a lock on each row.
+  it("writes only the workspace row when run enrichment is turned back on", async () => {
+    const { schema } = await import("@oxagen/database");
+    const off = { ...EXISTING, settings: { runEnrichmentEnabled: false } };
+    mocks.findFirst.mockResolvedValueOnce(off).mockResolvedValueOnce({
+      ...off,
+      settings: { runEnrichmentEnabled: true },
+    });
+    const out = await workspaceSettingsWriteHandler(
+      { runEnrichmentEnabled: true },
+      CTX,
+    );
+    expect(out.runEnrichmentEnabled).toBe(true);
+    expect(mocks.update.mock.calls).toEqual([[schema.workspaces]]);
+    expect(mocks.set).toHaveBeenCalledTimes(1);
+    expect(mocks.set.mock.calls[0]?.[0]).not.toHaveProperty(
+      "summaryObservedAt",
+    );
+  });
+
   it("maps a unique-violation on slug to conflict / slug_taken", async () => {
     mocks.findFirst.mockResolvedValueOnce(EXISTING);
     mocks.where.mockRejectedValueOnce({ code: "23505" });
