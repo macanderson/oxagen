@@ -18,7 +18,12 @@ import {
 } from "../evidence/frame-body";
 import { redactText } from "../evidence/redaction";
 import { contextFactsFromEnv, digestText, hostFactsFromEnv } from "./context";
-import { classifyTool, type EffectKind, pullRequestAttrs } from "./tools";
+import {
+  classifyTool,
+  type EffectKind,
+  issueAttrs,
+  pullRequestAttrs,
+} from "./tools";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -644,18 +649,26 @@ export function normalizeHook(
             );
       if (effectFrame !== undefined) {
         // The pull request a `pr_open` call opened is named only in its
-        // response, which the frame keeps as a digest.
+        // response, which the frame keeps as a digest. So is the issue a
+        // GitHub MCP call acted on, and the one `gh issue create` made
+        // (#3970), which get_run_issues reads from these attrs.
+        const issue = issueAttrs(
+          input.tool_name ?? "",
+          input.tool_input,
+          input.tool_response,
+        );
+        const named = {
+          ...(facts["effect_kind"] === "pr_open"
+            ? pullRequestAttrs(input.tool_response)
+            : {}),
+          ...issue,
+        };
         drafts.push(
           draft(
             effectFrame,
             { ...facts, tool_status: "ok" },
-            facts["effect_kind"] === "pr_open"
-              ? {
-                  attrs: {
-                    ...base.attrs,
-                    ...pullRequestAttrs(input.tool_response),
-                  },
-                }
+            facts["effect_kind"] === "pr_open" || Object.keys(issue).length > 0
+              ? { attrs: { ...base.attrs, ...named } }
               : {},
           ),
         );
