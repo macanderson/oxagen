@@ -877,6 +877,9 @@ describe("the Runs panel", () => {
     expect(dialog).toHaveTextContent("refuses further appends");
     // The wrapped copy names a control frame the ledger never writes.
     expect(dialog).not.toHaveTextContent("control.pause");
+    // Both commands, Cancel in the danger style. The dialog renders outside
+    // the container, so the check runs over the whole document.
+    await expectNoAxe(document.body);
     await user.type(within(dialog).getByLabelText("Reason"), "Key leaked");
     await user.click(
       within(dialog).getByRole("button", { name: "Cancel evidence ingress" }),
@@ -906,9 +909,9 @@ describe("the Runs panel", () => {
     const user = userEvent.setup();
     await user.click(screen.getByTestId("row-pause"));
     const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
-    expect(
-      within(dialog).queryByRole("button", { name: "Resume evidence ingress" }),
-    ).toBeNull();
+    expect(dialog).toHaveTextContent(
+      "Pause refuses new evidence batches at the next ingest boundary.",
+    );
     await user.click(
       within(dialog).getByRole("button", { name: "Pause evidence ingress" }),
     );
@@ -919,9 +922,95 @@ describe("the Runs panel", () => {
       "pause",
       "",
     );
+    const applied = await within(dialog).findByTestId("ledger-applied");
+    expect(applied).toHaveTextContent("Evidence ingress is paused.");
+    expect(applied).toHaveAttribute("role", "status");
+    await expectNoAxe(document.body);
+  });
+
+  // Review round 1 on #4382: an answer that came after its dialog closed was
+  // drawn in the dialog, which stayed mounted. The next ledger row's Pause
+  // then opened on "Evidence ingress is paused." for a run it had not paused,
+  // with no buttons, and the run that paused read live until a refresh.
+  it("draws no answer that arrives after its dialog closed, and reads the page again (negative)", async () => {
+    let settle: (value: unknown) => void = () => undefined;
+    dispatchRunCommand.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    await loaded({
+      runs: runPage([
+        runRow({ id: "arun_first", source: "ledger" }),
+        runRow({ id: "arun_second", source: "ledger" }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    const user = userEvent.setup();
+    await user.click(within(row("arun_first")).getByTestId("row-pause"));
+    const first = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await user.click(
+      within(first).getByRole("button", { name: "Pause evidence ingress" }),
+    );
     expect(
-      await within(dialog).findByTestId("ledger-applied"),
-    ).toHaveTextContent("Evidence ingress is paused.");
+      await within(first).findByRole("button", { name: "Queueing" }),
+    ).toBeDisabled();
+    await user.click(within(first).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("pause-dialog")).toBeNull();
+    });
+    settle({ ok: true, value: { commandIds: ["tcm_7"] } });
+    // The page is read again, so the run that paused shows it.
+    await waitFor(() => {
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
+    await user.click(within(row("arun_second")).getByTestId("row-pause"));
+    const second = screen.getByRole("dialog", { name: "Evidence ingress" });
+    expect(second).toHaveTextContent("arun_second");
+    expect(within(second).queryByTestId("ledger-applied")).toBeNull();
+    for (const name of ["Pause evidence ingress", "Cancel evidence ingress"])
+      expect(within(second).getByRole("button", { name })).toBeEnabled();
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+  });
+
+  // Review round 1 on #4382: a wrapped run's pause queued after its dialog
+  // closed closed whichever dialog was open by then.
+  it("leaves another run's dialog open when a pause queued after its own dialog closed is answered (negative)", async () => {
+    let settle: (value: unknown) => void = () => undefined;
+    dispatchRunCommand.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    await loaded({
+      runs: runPage([
+        runRow({ id: "tse_first", source: "tacho" }),
+        runRow({ id: "tse_second", source: "tacho" }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    const user = userEvent.setup();
+    await user.click(within(row("tse_first")).getByTestId("row-pause"));
+    await user.click(
+      screen.getByRole("button", { name: "Pause at the next boundary" }),
+    );
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+    const first = screen.getByRole("dialog", { name: "Pause this run" });
+    await user.click(within(first).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("pause-dialog")).toBeNull();
+    });
+    await user.click(within(row("tse_second")).getByTestId("row-pause"));
+    settle({ ok: true, value: { commandIds: ["tcm_8"] } });
+    expect(
+      await screen.findByText(
+        "Pause queued for tse_first. It takes effect at the next boundary.",
+      ),
+    ).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole("dialog", { name: "Pause this run" }),
+    ).toHaveTextContent("tse_second");
   });
 
   // A paused row reads paused and links to its Run page, which offers Resume
@@ -957,6 +1046,7 @@ describe("the Runs panel", () => {
       expect(screen.getByRole("button", { name })).toBeDisabled();
     expect(screen.getByLabelText("Reason")).toBeDisabled();
     expect(dispatchRunCommand).not.toHaveBeenCalled();
+    await expectNoAxe(document.body);
   });
 
   it("says a viewer cannot command a ledger run, and sends nothing (negative)", async () => {

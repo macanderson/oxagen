@@ -21,8 +21,10 @@ import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
   type SyntheticEvent,
+  useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react";
@@ -673,19 +675,22 @@ function pauseRefusal(run: RunRow, canCommand: boolean): PauseRefusal | null {
 /** The `run.commands` copy of each command a ledger run's dialog sends. */
 const LEDGER_COPY = {
   pause: "ledgerPause",
-  resume: "ledgerResume",
   cancel: "ledgerCancel",
 } as const;
 type LedgerCommand = keyof typeof LEDGER_COPY;
 
 /**
  * The dialog a live row's Pause opens. A wrapped run takes a pause through
- * its host, and the toast says it was queued. A ledger run offers what its
- * Run page offers: Pause or Resume of its evidence ingress, whichever its
- * fence allows, and Cancel. A paused row reads `paused` and links to its Run
- * page instead (`rowState`), so from Fleet the slot offers Pause. The ledger
- * applies each command at once, so the dialog says what changed and re-reads
- * the page when it closes.
+ * its host, and the toast says it was queued. A ledger run offers Pause of
+ * its evidence ingress, and Cancel. A ledger row whose ingress is paused
+ * reads `paused` and links to its Run page, where Resume is (`rowState`), so
+ * this dialog never opens on one. The ledger applies each command at once,
+ * so the dialog says what changed and re-reads the page when it closes.
+ *
+ * The board mounts one dialog per run it opens on (`key`), so nothing one
+ * run's dialog showed carries into the next. An answer that arrives after
+ * its dialog closed is not drawn: the page is read again instead, so the
+ * row shows what the command changed.
  */
 function PauseDialog({
   run,
@@ -698,6 +703,11 @@ function PauseDialog({
   run: RunRow | null;
   canCommand: boolean;
   onClose: () => void;
+  /**
+   * A wrapped run's pause was queued for its host. The board says so and
+   * reads the page again. It does not close the dialog, which may by then
+   * show another run.
+   */
   onQueued: (run: RunRow) => void;
 } & Place) {
   const t = useTranslations("fleet.pause");
@@ -713,12 +723,20 @@ function PauseDialog({
   const [pending, startTransition] = useTransition();
   const refusal = run === null ? null : pauseRefusal(run, canCommand);
   const ledger = run?.source === "ledger";
-  // Pause and Resume share one slot, as on the Run page (#4112).
-  const halt: LedgerCommand =
-    ledger && run.ingressPaused === true ? "resume" : "pause";
+  // The run this dialog shows while it is open, and null once it has closed,
+  // so a command's answer can tell whether its dialog is still there.
+  const showing = useRef<string | null>(null);
+  const runId = run?.id ?? null;
+  useEffect(() => {
+    showing.current = runId;
+    return () => {
+      showing.current = null;
+    };
+  }, [runId]);
 
   function close() {
     const changed = applied !== null;
+    showing.current = null;
     setReason("");
     setFailure(null);
     setApplied(null);
@@ -739,14 +757,21 @@ function PauseDialog({
           sent,
           reason,
         );
+        const open = showing.current === run.id;
         if (!result.ok) setFailure(failureText(result));
         else if (result.value.commandIds.length === 0)
           setFailure(command("noRecipient"));
-        else if (ledger) {
+        else if (!open) {
+          // The dialog closed before the answer came. Read the page again,
+          // so the row shows what the command changed.
+          if (ledger) navigate.refresh();
+          else onQueued(run);
+        } else if (ledger) {
           setReason("");
           setApplied(command(`${LEDGER_COPY[sent]}.applied`));
         } else {
           setReason("");
+          onClose();
           onQueued(run);
         }
       } catch {
@@ -757,7 +782,7 @@ function PauseDialog({
 
   function submit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
-    send(halt);
+    send("pause");
   }
 
   const blocked = refusal !== null || pending;
@@ -785,9 +810,9 @@ function PauseDialog({
           disabled={blocked}
           className={buttonPrimary}
         >
-          {pending && sending === halt
-            ? command(`${halt}.pending`)
-            : command(`${LEDGER_COPY[halt]}.confirm`)}
+          {pending && sending === "pause"
+            ? command("pause.pending")
+            : command("ledgerPause.confirm")}
         </button>
       </>
     ) : null
@@ -837,7 +862,7 @@ function PauseDialog({
           {ledger ? (
             <>
               <p className="text-[12.5px] text-muted-foreground">
-                {command(`${LEDGER_COPY[halt]}.body`)}
+                {command("ledgerPause.body")}
               </p>
               <p className="text-[12.5px] text-muted-foreground">
                 {command("ledgerCancel.body")}
@@ -1231,7 +1256,10 @@ export function FleetBoard({
       />
       {/* The design confirms an export or a queued pause with a toast. */}
       <ToastStack toasts={toasts} testId="runs-toasts" />
+      {/* One dialog per run it opens on, so nothing one run's dialog showed
+          carries into the next. */}
       <PauseDialog
+        key={pausing?.id ?? "none"}
         run={pausing}
         canCommand={canCommand}
         org={org}
@@ -1240,7 +1268,6 @@ export function FleetBoard({
           setPausing(null);
         }}
         onQueued={(run) => {
-          setPausing(null);
           toast(pauseT("queued", { run: run.id }), "approval");
           navigate.refresh();
         }}
