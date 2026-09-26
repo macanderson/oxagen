@@ -502,6 +502,17 @@ describe("oxagen run transcript", () => {
     ]);
   });
 
+  it("marks the match count from a read that stopped short as a floor too", async () => {
+    post.mockResolvedValue({
+      ...TRANSCRIPT,
+      complete: false,
+      search: { query: "retry", matched: 2, unsearched: 0 },
+    });
+    const { writer, out } = memoryWriter();
+    await runTranscript("tse_0a1b2c", { query: "retry" }, writer);
+    expect(out[2]).toBe('Search "retry": 2+ matched');
+  });
+
   it("prints no counts for a page read from a cursor, which carries none (negative)", async () => {
     post.mockResolvedValue({ ...TRANSCRIPT_PAGE, cursor: "c3" });
     const { writer, out } = memoryWriter();

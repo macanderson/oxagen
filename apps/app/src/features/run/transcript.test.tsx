@@ -1040,6 +1040,24 @@ describe("the search", () => {
     });
   });
 
+  // A read that stopped short of the run's end counted and searched only the
+  // part it read. The chips print their counts as floors, and the search line
+  // printed exact ones. The footer counted the run's entries under the
+  // matches drawn (#3942).
+  it("marks the search's counts as floors on a read that stopped short, and counts the matches drawn (negative)", async () => {
+    readTranscriptPage.mockResolvedValue(found("changelog", [8, 9]));
+    renderSection({ read: readOk(releaseTranscript({ complete: false })) });
+    search("changelog");
+    await waitFor(() => {
+      expect(screen.getByTestId("tx-matches")).toHaveTextContent(
+        "2+ of 13+ entries",
+      );
+    });
+    expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+      /^2 entries\. The run has more frames than one read carries/,
+    );
+  });
+
   it("says nothing matches rather than showing an empty feed (negative)", async () => {
     readTranscriptPage.mockResolvedValue(found("no such words", []));
     renderSection();

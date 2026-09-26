@@ -1897,6 +1897,12 @@ export function TranscriptView({
   // The resume point of what is drawn: the search's matches while a search
   // is in force, else the run's.
   const drawnCursor = searching ? found.cursor : cursor;
+  // A read that stopped short of the run's end counted and searched only the
+  // part it read, so its counts print as floors (`12+`), as the chips do.
+  const countOf = (n: number): string =>
+    complete
+      ? formatCount(n, locale)
+      : t("countFloor", { count: formatCount(n, locale) });
 
   const footer =
     stream === "denied"
@@ -1915,7 +1921,14 @@ export function TranscriptView({
                   ),
                 })
               : !complete
-                ? t("cut", { count: formatCount(entries.length, locale) })
+                ? t("cut", {
+                    // While a search is in force the rows are its matches,
+                    // so the line counts those, not the run's entries.
+                    count: formatCount(
+                      searching ? found.entries.length : entries.length,
+                      locale,
+                    ),
+                  })
                 : null;
 
   // One drawn row, with the subagent rows under it drawn inside it.
@@ -1979,14 +1992,10 @@ export function TranscriptView({
               : !searching
                 ? t("searching")
                 : t("matches", {
-                    shown: formatCount(
+                    shown: countOf(
                       found.search?.matched ?? found.entries.length,
-                      locale,
                     ),
-                    total: formatCount(
-                      counts?.entries ?? entries.length,
-                      locale,
-                    ),
+                    total: countOf(counts?.entries ?? entries.length),
                   })}
           </span>
         )}

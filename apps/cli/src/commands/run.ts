@@ -544,15 +544,16 @@ function writeColumns(rows: string[][], writer: CommandWriter): void {
  *
  * `--kinds` keeps the entries that answer any of the chips named, and
  * `--query` keeps the entries that hold the words in their label, tool,
- * target or kept bodies. The server checks both; the CLI refuses a chip
+ * target or kept bodies. The server checks both. The CLI refuses a chip
  * name, a zoom, a body length or a page size the contract does not take
  * before it sends anything.
  *
- * Pretty mode prints the page's entries with their turn, key, row, name and
- * outcome, then the count per chip over the whole run, which only a read
- * from the run's start carries. An entry with nothing to show (`quiet`) is
- * left out, as the Run page leaves it out, and `--json` lists it. A count
- * from a read that stopped short of the run's end prints as a floor (`12+`).
+ * Pretty mode prints the count per chip over the whole run, which only a
+ * read from the run's start carries, then what a query found, then the
+ * page's entries with their turn, key, row, name and outcome. An entry with
+ * nothing to show (`quiet`) is left out, as the Run page leaves it out, and
+ * `--json` lists it. A count or a match count from a read that stopped short
+ * of the run's end prints as a floor (`12+`).
  */
 export async function runTranscript(
   runId: string,
@@ -645,7 +646,9 @@ export async function runTranscript(
     writer.write(`Counts: ${chipCounts.join(", ")}`);
   }
   if (search !== undefined) {
-    writer.write(`Search "${search.query}": ${search.matched} matched`);
+    // The search reads the same frames the counts do, so a read that stopped
+    // short of the run's end found a floor too.
+    writer.write(`Search "${search.query}": ${count(search.matched)} matched`);
     if (search.unsearched > 0) {
       writer.write(
         `The search is partial: it could not look inside ${countOf(search.unsearched, "kept body", "kept bodies")}.`,
