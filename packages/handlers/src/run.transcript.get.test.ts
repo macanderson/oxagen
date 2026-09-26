@@ -7,8 +7,11 @@ import {
 import { digestBytes } from "@oxagen/tacho";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import {
+  type RunFrame,
+  spliceSubagentChains,
   stepFolds,
   tachoFrame as tachoFrameOf,
+  type TranscriptFold,
   wordsDigest,
 } from "@oxagen/run-ledger";
 import { StorageNotFoundError } from "@oxagen/storage";
@@ -2664,6 +2667,120 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
     );
     expect(fresh.counts).toEqual(first?.counts);
   });
+
+  // #4334: the bound was counted over the run's frames in the order read,
+  // and a subagent chain is spliced in where it was spawned. A chain that
+  // landed after an earlier read took the slots of the run's own last
+  // settled halves, and those entries turned back to what the fold said.
+  it("keeps what a read settled when a subagent chain lands late, ahead of the bound (negative)", async () => {
+    // 1,001 turns of a prompt and a reply on the run's own chain: 2,002 word
+    // halves, two past the 2,000 a chain settles. Turn 999's prompt is
+    // blank, and its halves are the last two inside the bound.
+    const turns = 1_001;
+    const task = "toolu_late_task";
+    const rows: TachoFrameRow[] = [];
+    let seq = 0;
+    for (let n = 0; n < turns; n += 1) {
+      rows.push(
+        tachoRow(seq++, {
+          kind: "turn_start",
+          ...blank,
+          turnSeq: n + 1,
+          ...stored(n === 999 ? "  \n" : `Late ask ${String(n)}.`),
+        }),
+      );
+      if (n === 0) {
+        // The first turn spawns a subagent.
+        rows.push(
+          tachoRow(seq++, {
+            kind: "tool_requested",
+            toolName: "Task",
+            toolUseId: task,
+            turnSeq: 1,
+          }),
+          tachoRow(seq++, {
+            kind: "subagent_start",
+            ...blank,
+            toolUseId: task,
+            turnSeq: 1,
+          }),
+          tachoRow(seq++, {
+            kind: "tool_call",
+            toolName: "Task",
+            toolUseId: task,
+            turnSeq: 1,
+          }),
+        );
+      }
+      rows.push(
+        tachoRow(seq++, {
+          kind: "turn_end",
+          ...blank,
+          turnSeq: n + 1,
+          ...stored(`Late answer ${String(n)}.`),
+        }),
+      );
+    }
+    // The subagent's chain, which arrives after the first read. Its two
+    // replies are blank, so they draw no row and count nowhere once read.
+    const child = (n: number, text: string): TachoFrameRow =>
+      tachoRow(n, {
+        kind: "turn_end",
+        ...blank,
+        sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d1",
+        rootSessionUuid: SESSION_UUID,
+        parentSessionUuid: SESSION_UUID,
+        subagentId: "agent-late",
+        subagentType: "Explore",
+        spawnToolUseId: task,
+        ...stored(text),
+      });
+    const early = await harness(rows).transcript(
+      input({ zoom: "steps" }),
+      ctx(),
+    );
+    const late = await harness(rows, undefined, [
+      child(0, " \t"),
+      child(1, "\n\n"),
+    ]).transcript(input({ zoom: "steps" }), ctx());
+    // The chain landed: its entries are in the run.
+    expect(late.entries.some((e) => e.subagent !== undefined)).toBe(true);
+    // Turn 999's blank prompt is settled both times, so no count moves.
+    expect(early.counts?.kinds?.prompt).toBe(turns - 1);
+    expect(late.counts).toEqual(early.counts);
+    expect(early.figures?.prompts).toBe(turns - 1);
+    expect(late.figures?.prompts).toBe(early.figures?.prompts);
+  });
+
+  // #4334: at `turns` and `everything` only the prompts were read, so the
+  // bound reached 2,000 prompts there and fewer at `steps`.
+  it("counts the operator's prompts the same at every zoom on a run past the bound (negative)", async () => {
+    // 1,001 turns of a prompt and a reply. The last prompt is blank, and at
+    // `steps` it falls past the 2,000 halves a chain settles, so it counts.
+    const turns = 1_001;
+    const rows = Array.from({ length: turns }, (_, n) => [
+      tachoRow(n * 2, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: n + 1,
+        ...stored(n === turns - 1 ? "  \n" : `Ask ${String(n)}.`),
+      }),
+      tachoRow(n * 2 + 1, {
+        kind: "turn_end",
+        ...blank,
+        turnSeq: n + 1,
+        ...stored(`Answer ${String(n)}.`),
+      }),
+    ]).flat();
+    for (const zoom of ["steps", "turns", "everything"] as const) {
+      // A process that has read nothing, so no zoom leans on another's read.
+      const out = await harness(rows).transcript(input({ zoom }), ctx());
+      expect({ zoom, prompts: out.figures?.prompts }).toEqual({
+        zoom,
+        prompts: turns,
+      });
+    }
+  });
 });
 
 // Finding P3-1 of the ADR-182 third review: a body that could not be read
@@ -2737,5 +2854,164 @@ describe("readWords remembers a body it cannot read for good", () => {
     await readWords(bodies, SCOPE, folds, { cache });
     await readWords(bodies, SCOPE, folds, { cache });
     expect(getBody).toHaveBeenCalledTimes(2);
+  });
+});
+
+// #4334: the Run page reads `steps` and `everything` at once. On a cold words
+// cache, both reads opened every body they shared.
+describe("readWords beside another read of the same run", () => {
+  const blank = { toolName: "", toolStatus: "", toolUseId: "" };
+  /** `turns` turns of a prompt and a streamed model step, each body its own. */
+  const frames = (turns: number, tag: string): RunFrame[] =>
+    Array.from({ length: turns }, (_, n) => [
+      tachoRow(n * 2, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: n + 1,
+        ...stored(`${tag} ask ${String(n)}.`),
+      }),
+      tachoRow(n * 2 + 1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        turnSeq: n + 1,
+        ...stored(
+          modelStream([`${tag} said ${String(n)}.`]),
+          "text/event-stream",
+        ),
+      }),
+    ])
+      .flat()
+      .map((row) => tachoFrameOf(row));
+  const refsOf = (folds: readonly TranscriptFold[]) =>
+    folds.map((fold) =>
+      fold.node === "prompt"
+        ? fold.request?.body.bodyRef
+        : fold.response?.body.bodyRef,
+    );
+
+  it("opens each body once when two reads of the same halves meet a cold cache (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const folds = stepFolds(frames(12, "Same"));
+    const cache = createWordsCache();
+    const [one, two] = await Promise.all([
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+    ]);
+    expect([...two.entries()]).toEqual([...one.entries()]);
+    expect(one.size).toBe(24);
+    const opened = getBody.mock.calls.map(([, ref]) => ref);
+    expect(opened.sort()).toEqual(refsOf(folds).sort());
+  });
+
+  it("opens each body once when a prompts-only read runs beside a read of every half (negative)", async () => {
+    // The prompts-only read runs ahead, and has read a prompt by the time
+    // the other reaches it. The other finds its words in the cache rather
+    // than opening the body again.
+    const { deps, getBody } = harness([]);
+    const folds = stepFolds(frames(12, "Beside"));
+    const cache = createWordsCache();
+    const [prompts, every] = await Promise.all([
+      readWords(deps.bodies, SCOPE, folds, {
+        cache,
+        only: (fold) => fold.node === "prompt",
+      }),
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+    ]);
+    expect(prompts.size).toBe(12);
+    expect(every.size).toBe(24);
+    for (const [fold, words] of prompts) expect(every.get(fold)).toBe(words);
+    const opened = getBody.mock.calls.map(([, ref]) => ref);
+    expect(opened.sort()).toEqual(refsOf(folds).sort());
+  });
+
+  it("reads the halves the bound holds when asked for fewer, and counts the rest in their places", async () => {
+    const { deps, getBody } = harness([]);
+    // A prompt, its model step, then a second prompt: with room for two,
+    // the second prompt is past the bound whatever `only` asks for.
+    const folds = stepFolds(frames(2, "Only")).slice(0, 3);
+    const answer = await readWords(deps.bodies, SCOPE, folds, {
+      halfMax: 2,
+      only: (fold) => fold.node === "prompt",
+    });
+    expect(folds.map((fold) => answer.has(fold))).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    expect(getBody).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives each chain its own bound, so a subagent chain spliced in ahead takes no slot from the run's own chain (negative)", async () => {
+    const { deps } = harness([]);
+    const root = [
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Find the flaky test."),
+      }),
+      tachoRow(1, {
+        kind: "tool_requested",
+        toolName: "Task",
+        toolUseId: "toolu_bound",
+        turnSeq: 1,
+      }),
+      tachoRow(2, {
+        kind: "subagent_start",
+        ...blank,
+        toolUseId: "toolu_bound",
+        turnSeq: 1,
+      }),
+      tachoRow(3, {
+        kind: "tool_call",
+        toolName: "Task",
+        toolUseId: "toolu_bound",
+        turnSeq: 1,
+      }),
+      tachoRow(4, {
+        kind: "turn_end",
+        ...blank,
+        turnSeq: 1,
+        ...stored("It was the clock."),
+      }),
+    ].map((row) => tachoFrameOf(row));
+    const child = tachoFrameOf(
+      tachoRow(0, {
+        kind: "turn_end",
+        ...blank,
+        sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d2",
+        rootSessionUuid: SESSION_UUID,
+        parentSessionUuid: SESSION_UUID,
+        subagentId: "agent-bound",
+        subagentType: "Explore",
+        spawnToolUseId: "toolu_bound",
+        ...stored("The test reads the wall clock."),
+      }),
+    );
+    // The keys of the prompts and replies a read with room for two halves a
+    // chain settles.
+    const settled = async (frames: RunFrame[]) => {
+      const folds = stepFolds(frames).filter(
+        (fold) => fold.node === "prompt" || fold.node === "reply",
+      );
+      const words = await readWords(deps.bodies, SCOPE, folds, {
+        halfMax: 2,
+      });
+      return folds
+        .filter((fold) => words.has(fold))
+        .map((fold) => fold.key);
+    };
+    const before = await settled(root);
+    expect(before).toEqual(["0", "4"]);
+    // The child's reply is spliced in after the spawn, ahead of the run's
+    // reply, and settles within its own chain's bound.
+    const after = await settled(spliceSubagentChains(root, [child]));
+    expect(after).toEqual([
+      "0",
+      "0192d4a8-7c1e-7a00-8000-00000000c1d2:0",
+      "4",
+    ]);
   });
 });

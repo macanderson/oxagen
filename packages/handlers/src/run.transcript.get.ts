@@ -141,9 +141,15 @@ const RECALL_BODY_MAX = 1_048_576;
 /** Bodies read at once. */
 const BODY_CONCURRENCY = 8;
 /**
- * The most halves one read reads for their words (`readWords`): about three
- * per turn, the prompt, the reply and the model step before the reply. An
- * entry past it keeps what the fold said about it.
+ * The most halves of one chain a read reads for their words (`readWords`):
+ * about three per turn, the prompt, the reply and the model step before the
+ * reply. An entry past it keeps what the fold said about it.
+ *
+ * The bound is per chain, so a subagent chain spliced in late cannot take a
+ * slot another chain's entry already held (#4334). A read can therefore read
+ * more than 2,000 halves when a run has subagents, but no more than the
+ * frames it folds (`TRANSCRIPT_FRAME_CAP`). A subagent chain adds a handful:
+ * its replies and the model step before each.
  */
 export const TRANSCRIPT_WORDS_HALF_MAX = 2_000;
 
@@ -504,9 +510,22 @@ async function half(
  * text block of its reply, or the reply's text where the recorder assembled
  * none.
  *
- * At most `halfMax` halves are settled: the first ones in the order given,
- * whether `cache` holds them or not. So which entries a read settles does not
- * depend on what earlier reads left in the cache, and every page of a run,
+ * The halves are taken in the run's order (each fold's opening position),
+ * and counted per chain: the run's own chain, and each subagent chain on its
+ * own. A chain only grows at its end, so a frame that lands later, on this
+ * chain or any other, never takes the place of a half a chain already
+ * settled. A subagent chain spliced in ahead of them does not move the bound
+ * on the run's own chain (#4334).
+ *
+ * `only` narrows what is read, not the bound: a half it leaves out still
+ * takes its place on its chain, and is left out of the answer. So a read
+ * that asks for the prompts alone settles the prompts a read of every half
+ * settles, and no others.
+ *
+ * At most `halfMax` halves of each chain are settled: the first ones in that
+ * order, whether `cache` holds them or not. So which entries a read settles
+ * does not depend on what earlier reads left in the cache, and every page of
+ * a run,
  * and every read of a live one, settles the same ones. An entry past the
  * bound is left out of the answer, so `markWords` leaves it as the fold said.
  * A half with no kept body shows no words, costs no read and does not count.
@@ -515,30 +534,44 @@ async function half(
  * body the store says is gone, or that no longer hashes, is kept as showing
  * no words for the cache's failure TTL. A read that failed any other way is
  * not kept, and is tried again on the next read.
+ *
+ * Two reads of one run often run at once (the Run page reads `steps` and
+ * `everything` together). Each asks `cache` again just before it opens a
+ * body, since the other may have read it by then, and a body the other is
+ * reading at that moment is waited on (`WordsCache.share`), not opened
+ * twice.
  */
 export async function readWords(
   bodies: Pick<EvidenceStore, "getBody" | "getAssembly">,
   scope: RunScope,
   needed: readonly TranscriptFold[],
-  options: { halfMax?: number; cache?: WordsCache | null } = {},
+  options: {
+    halfMax?: number;
+    cache?: WordsCache | null;
+    only?: (fold: TranscriptFold) => boolean;
+  } = {},
 ): Promise<Map<TranscriptFold, TranscriptWords>> {
   const halfMax = options.halfMax ?? TRANSCRIPT_WORDS_HALF_MAX;
   const cache = options.cache ?? null;
+  const only = options.only ?? (() => true);
   const words = new Map<TranscriptFold, TranscriptWords>();
   const reads: { fold: TranscriptFold; frame: RunFrame }[] = [];
-  let settled = 0;
-  for (const fold of needed) {
+  const settled = new Map<string, number>();
+  for (const fold of inRunOrder(needed)) {
     const frame = wordsHalf(fold);
     if (
       frame === null ||
       frame.body.bodyRef === null ||
       frame.body.bodyDigest === null
     ) {
-      words.set(fold, null);
+      if (only(fold)) words.set(fold, null);
       continue;
     }
-    if (settled >= halfMax) continue;
-    settled += 1;
+    const chain = frame.chain?.sessionUuid ?? "";
+    const taken = settled.get(chain) ?? 0;
+    if (taken >= halfMax) continue;
+    settled.set(chain, taken + 1);
+    if (!only(fold)) continue;
     const kept = cache?.get(scope, frame);
     if (kept !== undefined) words.set(fold, wordsOf(fold, kept));
     else reads.push({ fold, frame });
@@ -547,18 +580,38 @@ export async function readWords(
     reads,
     BODY_CONCURRENCY,
     async ({ fold, frame }): Promise<TranscriptWords> => {
-      const body = await readBody(bodies, scope, frame);
-      if (body.state === "gone") cache?.fail(scope, frame);
-      if (body.state === "not_text")
-        cache?.set(scope, frame, { stream: false, words: null });
-      if (body.state !== "read") return null;
-      const read = bodyWords(body);
-      cache?.set(scope, frame, read);
-      return wordsOf(fold, read);
+      // A read running beside this one may have read the body by now.
+      const landed = cache?.get(scope, frame);
+      if (landed !== undefined) return wordsOf(fold, landed);
+      // What the body says, kept before the shared read settles, so a read
+      // that asks once it has settled finds it in `cache`.
+      const load = async (): Promise<BodyWords | null> => {
+        const body = await readBody(bodies, scope, frame);
+        if (body.state === "gone") cache?.fail(scope, frame);
+        if (body.state === "not_text")
+          cache?.set(scope, frame, { stream: false, words: null });
+        if (body.state !== "read") return null;
+        const says = bodyWords(body);
+        cache?.set(scope, frame, says);
+        return says;
+      };
+      const says =
+        cache === null ? await load() : await cache.share(scope, frame, load);
+      return says === null ? null : wordsOf(fold, says);
     },
   );
   reads.forEach(({ fold }, i) => words.set(fold, said[i] ?? null));
   return words;
+}
+
+/**
+ * `folds` by the position each opens at in the run as read. `markWords` asks
+ * for the model step before a reply after the reply itself, so its order is
+ * not quite the run's. `sort` is stable, so folds that open together keep
+ * their order.
+ */
+function inRunOrder(folds: readonly TranscriptFold[]): TranscriptFold[] {
+  return [...folds].sort((a, b) => a.span.open - b.span.open);
 }
 
 /**
@@ -698,6 +751,9 @@ export function pagePriceSlice(
   return { orgId, models: [...models], from: new Date(from), to: new Date(to) };
 }
 
+/** A prompt, the one entry `figures` needs the words of at every zoom. */
+const isPrompt = (fold: TranscriptFold): boolean => fold.node === "prompt";
+
 /** A decision as the contract carries it. */
 function decisionView(decision: TranscriptDecision) {
   return {
@@ -767,8 +823,8 @@ export function createRunTranscriptGetHandler(
     // counts, so an entry that draws no row counts nowhere. The words cache
     // answers every body an earlier read read, so a later page or a live
     // tail read reads only the bodies that are new. Which entries are
-    // settled does not depend on the cache: the first 2,000 word halves are,
-    // on every page (`readWords`).
+    // settled does not depend on the cache: the first 2,000 word halves of
+    // each chain are, on every page (`readWords`).
     //
     // `turns` is a group, and nothing in it is settled this way. At
     // `everything`, one entry per frame, the entries' words are not read
@@ -781,13 +837,16 @@ export function createRunTranscriptGetHandler(
     // The figures are counted over `steps` at every zoom, and count a prompt
     // as the prompt chip counts it at `steps`. So at the other two zooms the
     // `steps` prompts' words are read: one body per prompt, which the cache
-    // already holds once the run has been read at `steps`. The figures then
-    // do not move with the zoom.
-    await markWords(
-      input.zoom === "steps"
-        ? all
-        : steps.filter((step) => step.node === "prompt"),
-      (needed) => readWords(deps.bodies, scope, needed, { cache: words }),
+    // already holds once the run has been read at `steps`. The bound is
+    // counted over every half `steps` would read, and only the prompts
+    // inside it are read (`only`), so the prompts settled here are the ones
+    // `steps` settles on a run past the bound. The figures then do not move
+    // with the zoom (#4334).
+    await markWords(steps, (needed) =>
+      readWords(deps.bodies, scope, needed, {
+        cache: words,
+        ...(input.zoom === "steps" ? {} : { only: isPrompt }),
+      }),
     );
     // Counted over every entry at the zoom, whatever the chips or query, so
     // a chip's count and the rows it shows agree. The frames' own policy and
