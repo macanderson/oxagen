@@ -542,7 +542,10 @@ export async function unenroll(
     const results: UnenrollResult[] = [];
     // With no agent on the machine, one unenroll in the paths the command
     // started with clears whatever an enrollment lost part way left behind.
-    if (target.length === 0) results.push(await unenrollLocked(options, deps));
+    if (target.length === 0) {
+      if (deps.paths.dir !== deps.paths.tachoDir) dirs.push(deps.paths.dir);
+      results.push(await unenrollLocked(options, deps));
+    }
     for (const agent of target) {
       if (many) deps.out(`Unenrolling ${describeAgent(agent)}`);
       if (!agent.legacy) dirs.push(agent.paths.dir);

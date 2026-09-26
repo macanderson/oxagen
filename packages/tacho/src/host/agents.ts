@@ -116,6 +116,16 @@ export function agentIsLive(agent: Agent): agent is Agent & { host: HostFile } {
   );
 }
 
+/**
+ * An agent `tachod` runs a collector for: one not retired on this machine.
+ * An agent revoked on the fleet page still runs until a command retires it
+ * here, so its ports stay taken. An agent whose `host.json` does not read
+ * runs too, so its collector fails and the log says why.
+ */
+export function agentServes(agent: Agent): boolean {
+  return agent.host === undefined || agent.host.revoked_at === null;
+}
+
 /** The live agent that hooks `harness`, if one does. */
 export function agentHolding(
   home: TachoHome,
@@ -163,13 +173,19 @@ export function describeAgent(agent: Agent): string {
 }
 
 /**
- * The ports every live agent other than the one in `exceptDir` listens on:
- * its collector and its model proxy. A new agent's ports must avoid them.
+ * The ports every agent `tachod` serves, other than the one in `exceptDir`,
+ * listens on: its collector and its model proxy (`agentServes`). A new
+ * agent's ports must avoid them.
  */
 export function portsInUse(home: TachoHome, exceptDir?: string): Set<number> {
   const ports = new Set<number>();
   for (const agent of listAgents(home)) {
-    if (!agentIsLive(agent) || agent.paths.dir === exceptDir) continue;
+    if (
+      agent.host === undefined ||
+      !agentServes(agent) ||
+      agent.paths.dir === exceptDir
+    )
+      continue;
     ports.add(agent.host.port);
     ports.add(modelProxyPortFor(agent.host));
   }

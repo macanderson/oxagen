@@ -9,7 +9,11 @@
  * one pid file and one log.
  */
 import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import { listAgents, migrateLegacyLayout } from "../host/agents";
+import {
+  agentServes,
+  listAgents,
+  migrateLegacyLayout,
+} from "../host/agents";
 import type { TachoHome, TachoPaths } from "../host/paths";
 import { tachoHome } from "../host/paths";
 import { formatDaemonPid, parseDaemonPid } from "../host/process-scan";
@@ -154,9 +158,7 @@ export interface DaemonAgent {
 
 /**
  * The agents this process serves (ADR-202): every agent that has not been
- * retired on this machine. An agent whose `host.json` does not read is
- * among them, so its collector fails and the log says why. When every agent
- * is retired, the first one runs as a lone enrollment always has: its
+ * retired on this machine (`agentServes`). When every agent is retired, the first one runs as a lone enrollment always has: its
  * revoke may still be pending. Beside a live agent, a retired one waits for
  * its revoke without a collector, since it would otherwise run on a key its
  * unenroll gave up, on ports it no longer holds. None when the machine holds
@@ -168,9 +170,7 @@ export interface DaemonAgent {
  */
 export function daemonAgents(home: TachoHome): DaemonAgent[] {
   const agents = listAgents(home);
-  const running = agents.filter(
-    (agent) => agent.host === undefined || agent.host.revoked_at === null,
-  );
+  const running = agents.filter(agentServes);
   const serving = running.length > 0 ? running : agents.slice(0, 1);
   const watcher =
     serving.find(
