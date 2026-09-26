@@ -2818,6 +2818,9 @@ type Messages = {
       confirm: string;
       pending: string;
       cancel: string;
+      ledgerCancelWarning: string;
+      ledgerCancelConfirm: string;
+      ledgerCancelBack: string;
       queued: string;
     };
     empty: {

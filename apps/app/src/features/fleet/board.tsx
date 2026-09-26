@@ -687,10 +687,17 @@ type LedgerCommand = keyof typeof LEDGER_COPY;
  * this dialog never opens on one. The ledger applies each command at once,
  * so the dialog says what changed and re-reads the page when it closes.
  *
+ * A cancel revokes the run's evidence ingress for good, so it takes two
+ * clicks: "Cancel evidence ingress" shows what cannot be undone, with Back,
+ * and only the second button sends the command.
+ *
  * The board mounts one dialog per run it opens on (`key`), so nothing one
- * run's dialog showed carries into the next. An answer that arrives after
- * its dialog closed is not drawn: the page is read again instead, so the
- * row shows what the command changed.
+ * run's dialog showed carries into the next, and closing it unmounts it. So
+ * the dialog cannot close while a command is in flight: Close, the header
+ * close, Escape, and a click outside all wait for the answer. A failure then
+ * lands in the dialog that sent the command, and a second click on the row
+ * cannot send the command again. An answer that arrives after the board
+ * itself went away is not drawn.
  */
 function PauseDialog({
   run,
@@ -705,8 +712,8 @@ function PauseDialog({
   onClose: () => void;
   /**
    * A wrapped run's pause was queued for its host. The board says so and
-   * reads the page again. It does not close the dialog, which may by then
-   * show another run.
+   * reads the page again. The dialog closes itself first, since it cannot
+   * close while the pause is in flight.
    */
   onQueued: (run: RunRow) => void;
 } & Place) {
@@ -719,12 +726,16 @@ function PauseDialog({
   const [reason, setReason] = useState("");
   const [failure, setFailure] = useState<string | null>(null);
   const [applied, setApplied] = useState<string | null>(null);
-  const [sending, setSending] = useState<LedgerCommand | null>(null);
+  // A ledger cancel's second step: the first click shows what it cannot
+  // undo, and only the next one sends it.
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [pending, startTransition] = useTransition();
+  const warningId = useId();
+  const backRef = useRef<HTMLButtonElement>(null);
   const refusal = run === null ? null : pauseRefusal(run, canCommand);
   const ledger = run?.source === "ledger";
-  // The run this dialog shows while it is open, and null once it has closed,
-  // so a command's answer can tell whether its dialog is still there.
+  // The run this dialog shows while it is mounted, and null once it has
+  // gone, so a command's answer can tell whether its dialog is still there.
   const showingRef = useRef<string | null>(null);
   const runId = run?.id ?? null;
   useEffect(() => {
@@ -733,6 +744,11 @@ function PauseDialog({
       showingRef.current = null;
     };
   }, [runId]);
+  // The confirm step replaces the button that opened it, so focus moves to
+  // Back rather than falling to the page behind the dialog.
+  useEffect(() => {
+    if (confirmingCancel) backRef.current?.focus();
+  }, [confirmingCancel]);
 
   function close() {
     const changed = applied !== null;
@@ -740,6 +756,7 @@ function PauseDialog({
     setReason("");
     setFailure(null);
     setApplied(null);
+    setConfirmingCancel(false);
     onClose();
     if (changed) navigate.refresh();
   }
@@ -747,7 +764,6 @@ function PauseDialog({
   function send(sent: LedgerCommand) {
     if (run === null || refusal !== null || pending) return;
     setFailure(null);
-    setSending(sent);
     startTransition(async () => {
       try {
         const result = await dispatchRunCommand(
@@ -762,8 +778,9 @@ function PauseDialog({
         else if (result.value.commandIds.length === 0)
           setFailure(command("noRecipient"));
         else if (!open) {
-          // The dialog closed before the answer came. Read the page again,
-          // so the row shows what the command changed.
+          // The dialog cannot close while a command is in flight, so this is
+          // a board that went away before the answer came. Read the page
+          // again, so the row shows what the command changed.
           if (ledger) navigate.refresh();
           else onQueued(run);
         } else if (ledger) {
@@ -786,36 +803,68 @@ function PauseDialog({
   }
 
   const blocked = refusal !== null || pending;
+  // Each step's buttons are keyed apart, so the first click's button is not
+  // reused as the one that sends the cancel: a double click lands on Back.
   const actions = ledger ? (
-    applied === null ? (
+    applied !== null ? null : confirmingCancel ? (
       <>
         <button
+          key="cancel-back"
+          ref={backRef}
           type="button"
           data-touch-target=""
-          data-testid="pause-cancel-run"
+          data-testid="pause-cancel-back"
+          disabled={pending}
+          onClick={() => {
+            setConfirmingCancel(false);
+          }}
+          className={buttonSecondary}
+        >
+          {t("ledgerCancelBack")}
+        </button>
+        <button
+          key="cancel-confirm"
+          type="button"
+          data-touch-target=""
+          data-testid="pause-cancel-confirm"
+          aria-describedby={warningId}
           disabled={blocked}
           onClick={() => {
             send("cancel");
           }}
           className={buttonDanger}
         >
-          {pending && sending === "cancel"
-            ? command("cancel.pending")
-            : command("ledgerCancel.confirm")}
+          {pending ? command("cancel.pending") : t("ledgerCancelConfirm")}
+        </button>
+      </>
+    ) : (
+      <>
+        <button
+          key="cancel-run"
+          type="button"
+          data-touch-target=""
+          data-testid="pause-cancel-run"
+          disabled={blocked}
+          onClick={() => {
+            setFailure(null);
+            setConfirmingCancel(true);
+          }}
+          className={buttonDanger}
+        >
+          {command("ledgerCancel.confirm")}
         </button>
         <button
+          key="pause-run"
           type="submit"
           form={formId}
           data-touch-target=""
           disabled={blocked}
           className={buttonPrimary}
         >
-          {pending && sending === "pause"
-            ? command("pause.pending")
-            : command("ledgerPause.confirm")}
+          {pending ? command("pause.pending") : command("ledgerPause.confirm")}
         </button>
       </>
-    ) : null
+    )
   ) : (
     <button
       type="submit"
@@ -839,6 +888,8 @@ function PauseDialog({
       // the name Close.
       closeLabel={ledger ? undefined : t("cancel")}
       headerClose={!ledger}
+      // Closing unmounts the dialog (`key`), so it waits for the answer.
+      dismissible={!pending}
       testId="pause-dialog"
       footerNote={
         ledger
@@ -859,6 +910,16 @@ function PauseDialog({
         </p>
       ) : (
         <form id={formId} onSubmit={submit} className="flex flex-col gap-3">
+          {confirmingCancel ? (
+            <p
+              id={warningId}
+              role="alert"
+              data-testid="pause-cancel-warning"
+              className="rounded-lg border border-border bg-hl px-3 py-2 text-xs font-medium"
+            >
+              {t("ledgerCancelWarning")}
+            </p>
+          ) : null}
           {ledger ? (
             <>
               <p className="text-[12.5px] text-muted-foreground">

@@ -154,6 +154,24 @@ const PARKED = approvalItem({ id: "apr_parked", runId: "arun_parked" });
 const ledgerRuns = (over: Parameters<typeof runRow>[0] = {}) =>
   runPage([runRow({ id: "arun_ledger", source: "ledger", ...over })]);
 
+/**
+ * Cancel a ledger run's evidence ingress from its open dialog. A cancel
+ * cannot be undone, so it takes two clicks: the first shows the confirm.
+ */
+async function cancelIngress(
+  user: ReturnType<typeof userEvent.setup>,
+  dialog: HTMLElement,
+) {
+  await user.click(
+    within(dialog).getByRole("button", { name: "Cancel evidence ingress" }),
+  );
+  await user.click(
+    within(dialog).getByRole("button", {
+      name: "Revoke evidence ingress for good",
+    }),
+  );
+}
+
 /** One `list_agents` page with its cursor, for the roster's walk. */
 function pageValue(
   keys: string[],
@@ -881,9 +899,7 @@ describe("the Runs panel", () => {
     // the container, so the check runs over the whole document.
     await expectNoAxe(document.body);
     await user.type(within(dialog).getByLabelText("Reason"), "Key leaked");
-    await user.click(
-      within(dialog).getByRole("button", { name: "Cancel evidence ingress" }),
-    );
+    await cancelIngress(user, dialog);
     expect(dispatchRunCommand).toHaveBeenCalledWith(
       "acme",
       "core-platform",
@@ -928,17 +944,14 @@ describe("the Runs panel", () => {
     await expectNoAxe(document.body);
   });
 
-  // Review round 1 on #4382: an answer that came after its dialog closed was
-  // drawn in the dialog, which stayed mounted. The next ledger row's Pause
-  // then opened on "Evidence ingress is paused." for a run it had not paused,
-  // with no buttons, and the run that paused read live until a refresh.
-  it("draws no answer that arrives after its dialog closed, and reads the page again (negative)", async () => {
-    let settle: (value: unknown) => void = () => undefined;
-    dispatchRunCommand.mockReturnValue(
-      new Promise((resolve) => {
-        settle = resolve;
-      }),
-    );
+  // Review round 1 on #4382: the dialog stayed mounted between rows, so the
+  // next ledger row's Pause opened on "Evidence ingress is paused." for a run
+  // it had not paused, with no buttons. Each row now opens a dialog of its own.
+  it("opens the next row's dialog with nothing the last one showed (negative)", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_7"] },
+    });
     await loaded({
       runs: runPage([
         runRow({ id: "arun_first", source: "ledger" }),
@@ -953,17 +966,14 @@ describe("the Runs panel", () => {
       within(first).getByRole("button", { name: "Pause evidence ingress" }),
     );
     expect(
-      await within(first).findByRole("button", { name: "Queueing" }),
-    ).toBeDisabled();
+      await within(first).findByTestId("ledger-applied"),
+    ).toHaveTextContent("Evidence ingress is paused.");
     await user.click(within(first).getByRole("button", { name: "Close" }));
     await waitFor(() => {
       expect(screen.queryByTestId("pause-dialog")).toBeNull();
     });
-    settle({ ok: true, value: { commandIds: ["tcm_7"] } });
     // The page is read again, so the run that paused shows it.
-    await waitFor(() => {
-      expect(refresh).toHaveBeenCalledTimes(1);
-    });
+    expect(refresh).toHaveBeenCalledTimes(1);
     await user.click(within(row("arun_second")).getByTestId("row-pause"));
     const second = screen.getByRole("dialog", { name: "Evidence ingress" });
     expect(second).toHaveTextContent("arun_second");
@@ -973,9 +983,49 @@ describe("the Runs panel", () => {
     expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
   });
 
-  // Review round 1 on #4382: a wrapped run's pause queued after its dialog
-  // closed closed whichever dialog was open by then.
-  it("leaves another run's dialog open when a pause queued after its own dialog closed is answered (negative)", async () => {
+  // Review round 2 on #4382: the board mounts one dialog per run (`key`), so
+  // closing it while a command was in flight unmounted it. A refusal that
+  // came back then went nowhere, and reopening the row let a second command
+  // go. The dialog now waits for the answer, and the answer lands in it.
+  it("holds a ledger dialog open while its command is in flight, and shows the refusal it comes back with (negative)", async () => {
+    let settle: (value: unknown) => void = () => undefined;
+    dispatchRunCommand.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await cancelIngress(user, dialog);
+    expect(
+      await within(dialog).findByRole("button", { name: "Cancelling" }),
+    ).toBeDisabled();
+    // Both close buttons wait for the answer, and so does Escape.
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: "Close Evidence ingress" }),
+    ).toBeDisabled();
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog", { name: "Evidence ingress" })).toBe(
+      dialog,
+    );
+    settle({ ok: false, reason: "denied", code: "run_sealed" });
+    expect(
+      await within(dialog).findByTestId("pause-failure"),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByTestId("ledger-applied")).toBeNull();
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+    // With the answer in, the dialog closes again.
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("pause-dialog")).toBeNull();
+    });
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("holds a wrapped run's pause dialog open while the pause is in flight, and shows the refusal in it (negative)", async () => {
     let settle: (value: unknown) => void = () => undefined;
     dispatchRunCommand.mockReturnValue(
       new Promise((resolve) => {
@@ -983,34 +1033,113 @@ describe("the Runs panel", () => {
       }),
     );
     await loaded({
-      runs: runPage([
-        runRow({ id: "tse_first", source: "tacho" }),
-        runRow({ id: "tse_second", source: "tacho" }),
-      ]),
+      runs: runPage([runRow({ id: "tse_first", source: "tacho" })]),
       approvals: NO_APPROVALS,
     });
     const user = userEvent.setup();
     await user.click(within(row("tse_first")).getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Pause this run" });
     await user.click(
-      screen.getByRole("button", { name: "Pause at the next boundary" }),
+      within(dialog).getByRole("button", {
+        name: "Pause at the next boundary",
+      }),
     );
+    expect(
+      await within(dialog).findByRole("button", { name: "Queueing" }),
+    ).toBeDisabled();
+    // The footer's Cancel and the header's Close wait for the answer, and so
+    // does Escape.
+    expect(
+      within(dialog).getByRole("button", { name: "Cancel" }),
+    ).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog", { name: "Pause this run" })).toBe(dialog);
+    settle({ ok: false, reason: "denied", code: "host_offline" });
+    expect(
+      await within(dialog).findByTestId("pause-failure"),
+    ).toBeInTheDocument();
     expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
-    const first = screen.getByRole("dialog", { name: "Pause this run" });
-    await user.click(within(first).getByRole("button", { name: "Cancel" }));
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  // Review round 2 on #4382: closing unmounts the dialog (`key`), so nothing
+  // checked that focus still goes back to the row that opened it.
+  it("gives focus back to the row's Pause button when the dialog closes", async () => {
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    const pause = screen.getByTestId("row-pause");
+    await user.click(pause);
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    // The dialog takes focus once it has opened.
+    await waitFor(() => {
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
     await waitFor(() => {
       expect(screen.queryByTestId("pause-dialog")).toBeNull();
     });
-    await user.click(within(row("tse_second")).getByTestId("row-pause"));
-    settle({ ok: true, value: { commandIds: ["tcm_8"] } });
+    await waitFor(() => {
+      expect(pause).toHaveFocus();
+    });
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
+  });
+
+  // Review round 1 on #4382: an irreversible Cancel sat one click behind a
+  // row button labelled Pause. A cancel now takes a second, confirming click.
+  it("asks for a second click before it cancels a ledger run's ingress, and sends nothing on the first (negative)", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_9"] },
+    });
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Cancel evidence ingress" }),
+    );
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
+    const warning =
+      "Cancel cannot be undone. The run then cannot append more frames or receive a fresh run credential.";
     expect(
-      await screen.findByText(
-        "Pause queued for tse_first. It takes effect at the next boundary.",
-      ),
-    ).toBeInTheDocument();
-    expect(refresh).toHaveBeenCalledTimes(1);
+      within(dialog).getByTestId("pause-cancel-warning"),
+    ).toHaveTextContent(warning);
+    // The confirm names what cannot be undone, and focus waits on the way
+    // back.
+    const back = within(dialog).getByRole("button", { name: "Back" });
+    await waitFor(() => {
+      expect(back).toHaveFocus();
+    });
     expect(
-      screen.getByRole("dialog", { name: "Pause this run" }),
-    ).toHaveTextContent("tse_second");
+      within(dialog).getByRole("button", {
+        name: "Revoke evidence ingress for good",
+      }),
+    ).toHaveAccessibleDescription(warning);
+    expect(
+      within(dialog).queryByRole("button", { name: "Pause evidence ingress" }),
+    ).toBeNull();
+    await expectNoAxe(document.body);
+    // Back returns to both commands, and still sends nothing.
+    await user.click(back);
+    expect(within(dialog).queryByTestId("pause-cancel-warning")).toBeNull();
+    expect(
+      within(dialog).getByRole("button", { name: "Pause evidence ingress" }),
+    ).toBeEnabled();
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
+    // The confirming click is the one that sends the cancel.
+    await cancelIngress(user, dialog);
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+    expect(dispatchRunCommand).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_ledger",
+      "cancel",
+      "",
+    );
+    expect(
+      await within(dialog).findByTestId("ledger-applied"),
+    ).toHaveTextContent("Further appends are refused");
   });
 
   // A paused row reads paused and links to its Run page, which offers Resume
@@ -1075,11 +1204,17 @@ describe("the Runs panel", () => {
     await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
     const user = userEvent.setup();
     await user.click(screen.getByTestId("row-pause"));
-    await user.click(
-      screen.getByRole("button", { name: "Cancel evidence ingress" }),
-    );
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await cancelIngress(user, dialog);
     expect(await screen.findByTestId("pause-failure")).toBeInTheDocument();
     expect(screen.queryByTestId("ledger-applied")).toBeNull();
+    // The confirm step stays, so the person can send it again or go back.
+    expect(
+      within(dialog).getByRole("button", {
+        name: "Revoke evidence ingress for good",
+      }),
+    ).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Back" })).toBeEnabled();
   });
 
   it("says a ledger command no live run took, claims no change, and re-reads nothing on close (negative)", async () => {
@@ -1111,15 +1246,16 @@ describe("the Runs panel", () => {
     await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
     const user = userEvent.setup();
     await user.click(screen.getByTestId("row-pause"));
-    await user.click(
-      screen.getByRole("button", { name: "Cancel evidence ingress" }),
+    await cancelIngress(
+      user,
+      screen.getByRole("dialog", { name: "Evidence ingress" }),
     );
     expect(await screen.findByTestId("pause-failure")).toBeInTheDocument();
     expect(screen.queryByTestId("ledger-applied")).toBeNull();
     expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
   });
 
-  it("names the cancel in flight on its own button and holds both commands until the ledger answers", async () => {
+  it("names the cancel in flight on its own button and holds the way back until the ledger answers", async () => {
     let settle: (value: unknown) => void = () => undefined;
     dispatchRunCommand.mockReturnValue(
       new Promise((resolve) => {
@@ -1130,16 +1266,12 @@ describe("the Runs panel", () => {
     const user = userEvent.setup();
     await user.click(screen.getByTestId("row-pause"));
     const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
-    await user.click(
-      within(dialog).getByRole("button", { name: "Cancel evidence ingress" }),
-    );
+    await cancelIngress(user, dialog);
     expect(
       await within(dialog).findByRole("button", { name: "Cancelling" }),
     ).toBeDisabled();
-    // The command not sent keeps its own name, and waits too.
-    expect(
-      within(dialog).getByRole("button", { name: "Pause evidence ingress" }),
-    ).toBeDisabled();
+    // Back waits too, so the confirm step cannot change under the answer.
+    expect(within(dialog).getByRole("button", { name: "Back" })).toBeDisabled();
     settle({ ok: true, value: { commandIds: ["tcm_5"] } });
     expect(
       await within(dialog).findByTestId("ledger-applied"),

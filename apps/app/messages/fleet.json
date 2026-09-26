@@ -292,6 +292,9 @@
       "confirm": "Pause at the next boundary",
       "pending": "Queueing",
       "cancel": "Cancel",
+      "ledgerCancelWarning": "Cancel cannot be undone. The run then cannot append more frames or receive a fresh run credential.",
+      "ledgerCancelConfirm": "Revoke evidence ingress for good",
+      "ledgerCancelBack": "Back",
       "queued": "Pause queued for {run}. It takes effect at the next boundary."
     },
     "empty": {
