@@ -7,6 +7,7 @@
 import { EventEmitter } from "node:events";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -124,6 +125,8 @@ describe("tachod.pid", () => {
 
   it("is written at start and removed when SIGTERM stops the daemon", async () => {
     const home = scratch();
+    // One agent to serve: tachod refuses to start on a machine with none.
+    mkdirSync(join(home, "agents", "a1b2c3d4"), { recursive: true });
     const events = [
       "SIGTERM",
       "SIGINT",

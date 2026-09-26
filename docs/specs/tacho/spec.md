@@ -273,6 +273,8 @@ A machine holds one enrollment per agent (ADR-202). An agent is one operator on 
 
 **Enroll.** `enrollTarget` (`packages/tacho/src/cli/enroll.ts`) picks the agent:
 
+An enroll that names no harness, on a machine that holds one agent, acts on that agent whatever it hooks, as it did when a machine held one enrollment. The desktop app's Re-apply runs `tacho enroll` with no flags. Otherwise an enroll that names no harness names `claude-code`, and the rules below apply.
+
 1. Harnesses held by two different live agents are refused, because one enroll cannot cover two agents.
 2. Harnesses a live agent already hooks stay with that agent: a re-apply, or with `--force` a replacement of that agent's enrollment alone. An enroll that names one of its harnesses and a new one adds the new one to it.
 3. Otherwise the most recent retired agent that hooked one of the harnesses is enrolled again in its own directory, with its device key and ports.

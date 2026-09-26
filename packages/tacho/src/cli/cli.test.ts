@@ -1888,7 +1888,7 @@ describe("harnesses and reassign", () => {
     // Both ways forward, and neither is "revoke this host": a token that
     // names codex alone enrolls it beside this agent (ADR-202).
     expect(d.errors.join("\n")).toContain(
-      "Adding a harness to an enrolled host needs the CLI's session: this token names codex beside a harness acme.core.cc-laptop already hooks. To add codex to acme.core.cc-laptop, run `oxagen login` and enroll again without the token. To enroll a separate agent, run the token again with only `--harness codex`. A token enrolls one more agent with one harness.",
+      "Adding a harness to an enrolled agent needs the CLI's session: this token names codex beside a harness acme.core.cc-laptop already hooks. To add codex to acme.core.cc-laptop, run `oxagen login` and enroll again without the token. To enroll the token's agent separately, run the token again with only `--harness codex`.",
     );
     // Nothing was revoked or minted, and the live enrollment is untouched.
     expect(d.requests).toEqual([]);

@@ -79,6 +79,9 @@ model call for a harness therefore has one enrollment to go to.
 
 `enrollTarget` (`cli/enroll.ts`) decides which agent an enroll acts on:
 
+- An enroll that names no harness, on a machine that holds one agent, acts
+  on that agent whatever it hooks. The desktop app's Re-apply runs
+  `tacho enroll` with no flags. With more agents, it names `claude-code`.
 - Harnesses a live agent already hooks stay with that agent. The enroll
   re-applies it, or with `--force` replaces that agent's enrollment alone.
   An enroll that names one of the agent's harnesses and a new one adds the

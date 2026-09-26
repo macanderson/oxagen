@@ -503,6 +503,11 @@ async function portClearOfAgents(deps: CliDeps): Promise<number> {
  * that hooked one of them, which keeps that agent's device key, port and
  * local token, and otherwise gets a new directory.
  *
+ * An enroll that names no harness on a machine that holds one agent goes to
+ * that agent, whatever it hooks, as it did before agents had directories:
+ * the desktop app's Re-apply runs a bare `tacho enroll`. With more agents
+ * than one, the harness defaults to claude-code like a first enroll.
+ *
  * `fresh` is true when the directory does not exist yet, so a failed enroll
  * can take it away again.
  */
@@ -511,6 +516,12 @@ export function enrollTarget(
   paths: TachoPaths,
   mint?: () => string,
 ): { paths: TachoPaths; fresh: boolean } | { refusal: string } {
+  if (options.harnesses === undefined) {
+    const present = listAgents(paths);
+    const [only] = present;
+    if (present.length === 1 && only !== undefined)
+      return { paths: only.paths, fresh: false };
+  }
   const harnesses: string[] = options.harnesses ?? ["claude-code"];
   const holders = new Map<string, Agent>();
   for (const harness of harnesses) {

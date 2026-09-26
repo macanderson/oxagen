@@ -115,6 +115,25 @@ describe("enrollTarget", () => {
     });
   });
 
+  it("re-applies a machine's one agent when the enroll names no harness, whatever it hooks", () => {
+    const stella = oneAgent({ harnesses: ["stella"] });
+    expect(enrollTarget({}, stella, () => "unused00")).toEqual({
+      paths: stella,
+      fresh: false,
+    });
+    const retired = oneAgent({ harnesses: ["codex"], ...RETIRED });
+    expect(enrollTarget({}, retired, () => "unused00")).toEqual({
+      paths: retired,
+      fresh: false,
+    });
+    // With two, the harness defaults to claude-code: a new agent for it.
+    addCodex(stella);
+    expect(enrollTarget({}, stella, () => "c1c1c1c1")).toEqual({
+      paths: agentPaths(stella, "c1c1c1c1"),
+      fresh: true,
+    });
+  });
+
   it("reuses the directory of a retired agent that hooked the harness, with its device key and ports", () => {
     const claude = oneAgent();
     const codex = addCodex(claude, RETIRED);
