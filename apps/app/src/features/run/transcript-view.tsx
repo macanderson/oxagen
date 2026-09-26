@@ -1896,6 +1896,12 @@ export function TranscriptView({
     complete
       ? formatCount(n, locale)
       : t("countFloor", { count: formatCount(n, locale) });
+  // Following a live run: the stream reads the tail as frames land, so the
+  // footer offers no page to read. Each tail read reads a window from the
+  // cursor, so a live run past the read's frame cap is followed past it
+  // (#3823), and the footer needs no line for a prefix that stopped growing.
+  const following =
+    live && (stream === "connecting" || stream === "open") && !searching;
 
   const footer =
     stream === "denied"
@@ -1904,7 +1910,7 @@ export function TranscriptView({
         ? t("followLost")
         : stream === "sealed"
           ? t("followSealed")
-          : live && stream !== "off" && !searching
+          : following
             ? null
             : drawnCursor !== null
               ? t("loadedMore", {

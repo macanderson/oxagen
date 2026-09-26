@@ -6,6 +6,7 @@ import type {
   RunChain,
   RunCost,
   RunDetail,
+  RunFindings,
   RunFrame,
   RunFrameBody,
   RunOutputNode,
@@ -27,9 +28,15 @@ import type {
   InterjectionQueue,
 } from "@/data/contracts/interjections";
 import type { MandateList } from "@/data/contracts/mandates";
+import type {
+  ContextAssembly,
+  ContextWindow,
+  RunContext,
+} from "@/data/contracts/run-context";
+import type { RunIssues } from "@/data/contracts/run-issues";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { CommandReport, RunRow } from "@/data/contracts/runs";
-import type { PriceBook } from "@/data/contracts/spend";
+import type { PriceBook, SpendFindingEvidence } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import { countsAsError, frameFolds, tachoFrame } from "@oxagen/run-ledger";
 import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
@@ -87,6 +94,8 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
     enforcementTier: "harness",
     completenessGaps: [],
     canSummarize: true,
+    effortSource: null,
+    fit: null,
     startedAt: at(-3600),
     sealedAt: at(-300),
     ...overrides,
@@ -129,6 +138,8 @@ export function runChain(overrides: Partial<RunChain> = {}): RunChain {
         eventStreamDigest: `sha256:${"f".repeat(64)}`,
         merkleRoot: `sha256:${"c".repeat(64)}`,
         archiveSegmentRef: null,
+        archiveSegmentDigest: null,
+        attestation: null,
       },
     ],
     enforcementTier: "harness",
@@ -486,6 +497,8 @@ export function mockupTranscript(
               decision: spec.decision,
               type: spec.type,
               harness: false,
+              rules: [],
+              taint: null,
               at: at(-3600 + spec.seq * 2),
             },
       cost:
@@ -617,6 +630,60 @@ export function runTranscript(
 }
 
 /**
+ * One measured window of `get_run_context`: an in-app request whose five
+ * blocks split the 12,000 prompt tokens its completion reported by their
+ * bytes, so they sum to it.
+ */
+export function contextWindow(
+  overrides: Partial<ContextWindow> = {},
+): ContextWindow {
+  return {
+    seq: "4",
+    responseSeq: "5",
+    callRef: "prov-1-0",
+    provider: "anthropic",
+    model: "claude-opus-5",
+    promptTokens: 12_000,
+    bytes: 24_000,
+    blocks: [
+      { kind: "system", bytes: 2400, items: 1, tokens: 1200 },
+      { kind: "steering", bytes: 1200, items: 1, tokens: 600 },
+      { kind: "tools", bytes: 9600, items: 14, tokens: 4800 },
+      { kind: "context", bytes: 2400, items: 2, tokens: 1200 },
+      { kind: "conversation", bytes: 8400, items: 5, tokens: 4200 },
+    ],
+    ...overrides,
+  };
+}
+
+/** The assembler's manifest as `get_run_context` summarises it. */
+export function contextAssembly(
+  overrides: Partial<ContextAssembly> = {},
+): ContextAssembly {
+  return {
+    seq: "3",
+    budgetTokens: 2000,
+    spentTokens: 600,
+    included: 4,
+    cut: 5,
+    textDigest: `sha256:${"b".repeat(64)}`,
+    ...overrides,
+  };
+}
+
+/** `get_run_context` for a run that recorded no window, or what a test names. */
+export function runContext(overrides: Partial<RunContext> = {}): RunContext {
+  return {
+    source: "ledger",
+    windows: [],
+    unmeasured: 0,
+    assemblies: [],
+    complete: true,
+    ...overrides,
+  };
+}
+
+/**
  * `get_run_turns` for a two-turn run: the first priced, with a cache hit, and
  * the second with nothing priced and no input reported.
  */
@@ -652,6 +719,7 @@ export function runTurns(overrides: Partial<RunTurns> = {}): RunTurns {
       },
     ],
     complete: true,
+    chains: [],
     ...overrides,
   };
 }
@@ -675,6 +743,10 @@ export function runCost(overrides: Partial<RunCost> = {}): RunCost {
       toolCalls: 42,
       retries: 2,
       productiveRatio: 0.71,
+      // Rolled up before the steps were graded.
+      advancedSteps: null,
+      unproductiveSteps: null,
+      unproductiveCauses: null,
       byModel: [
         {
           model: "claude-opus-5",
@@ -706,7 +778,9 @@ export function runCost(overrides: Partial<RunCost> = {}): RunCost {
           hasUnpriced: false,
         },
       ],
-      byTool: [{ name: "create_release", calls: 3 }],
+      byTool: [
+        { name: "create_release", calls: 3, resultTokens: null, cost: null },
+      ],
       priceEntryIds: ["prc_01k4qj9e"],
       rolledUpAt: at(-240),
     },
@@ -771,6 +845,12 @@ type RunReads = {
    */
   work?: Read<RunWork> | (() => Promise<Read<RunWork>>);
   /**
+   * `get_run_issues`, started with the page and awaited by the Issues tab
+   * and its count in the tab strip (#3970). A test that says nothing about it
+   * gets a run that names no issue.
+   */
+  issues?: Read<RunIssues>;
+  /**
    * The spine above the tabs, read with the page and not with a tab. A test
    * that says nothing about it gets a run that produced nothing, so a test
    * about the header or a tab is not also a test about the spine. A function
@@ -806,6 +886,22 @@ type RunReads = {
    * nothing about it gets the two turns `runTurns` builds.
    */
   turns?: Read<RunTurns>;
+  /**
+   * `list_findings` for the run, only read when the Cost tab is open (#4001).
+   * A test that says nothing about it gets a run no finding cites.
+   */
+  findings?: Read<RunFindings>;
+  /**
+   * `get_run_context`, read by the Context tab and by the Governed actions
+   * tab when a model request or a manifest is open (#3894). A test that says
+   * nothing about it gets a run that recorded no window.
+   */
+  context?: Read<RunContext>;
+  /**
+   * `get_finding_evidence`, only read when the Cost tab opens a finding's
+   * evidence (`?finding=`); refused when absent.
+   */
+  findingEvidence?: Read<SpendFindingEvidence>;
   /**
    * Read with the page for the Governed actions count, and drawn on that
    * tab. A test that says nothing about them gets an empty queue.
@@ -857,6 +953,9 @@ export function runSource(reads: RunReads) {
     chain: unknown[][];
     commands: unknown[][];
     turns: unknown[][];
+    findings: unknown[][];
+    context: unknown[][];
+    findingEvidence: unknown[][];
     mandates: unknown[][];
     outputs: unknown[][];
     agent: unknown[][];
@@ -873,6 +972,9 @@ export function runSource(reads: RunReads) {
     chain: [],
     commands: [],
     turns: [],
+    findings: [],
+    context: [],
+    findingEvidence: [],
     mandates: [],
     outputs: [],
     agent: [],
@@ -892,7 +994,7 @@ export function runSource(reads: RunReads) {
     };
   };
   const source: DataSource = {
-    runtimes: { list: refuse, agents: refuse },
+    runtimes: { list: refuse, agents: refuse, named: refuse },
     conversations: { latest: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
@@ -945,6 +1047,13 @@ export function runSource(reads: RunReads) {
       },
       chain: answer("chain", reads.chain),
       commands: answer("commands", reads.commands),
+      issues: (_ctx, runId) =>
+        Promise.resolve(
+          reads.issues ??
+            readOk({ runId, issues: [], complete: true, warnings: [] }),
+        ),
+      findings: answer("findings", reads.findings ?? readOk({ findings: [] })),
+      context: answer("context", reads.context ?? readOk(runContext())),
       turns: answer("turns", reads.turns ?? readOk(runTurns())),
       outputs: (...args: unknown[]) => {
         calls.outputs.push(args);
@@ -990,7 +1099,7 @@ export function runSource(reads: RunReads) {
       gatewayPolicy: refuse,
       budgets: refuse,
       findings: refuse,
-      findingEvidence: refuse,
+      findingEvidence: answer("findingEvidence", reads.findingEvidence),
       priceBook: (...args: unknown[]) => {
         calls.priceBook.push(args);
         return reads.priceBook === undefined
@@ -1037,6 +1146,8 @@ export function runSource(reads: RunReads) {
       approvalRules: refuse,
       connections: refuse,
       mcpServers: refuse,
+      toolbelts: refuse,
+      toolbelt: refuse,
     },
   };
   return { source, calls };
@@ -1131,6 +1242,8 @@ export function runRoster(
         agentKey: "acme.core.release-bot",
         harness: "claude-code",
         managed: false,
+        runtime: null,
+        toolbelt: null,
         operatorId: "usr_marcusbell",
         operatorName: "Marcus Bell",
         principalId: "prn_91",

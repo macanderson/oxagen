@@ -179,12 +179,35 @@
       },
       "complete": {
         "type": "boolean"
+      },
+      "chains": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "sessionUuid": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "turn": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "sessionUuid",
+            "turn"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 10000
       }
     },
     "required": [
       "runId",
       "turns",
-      "complete"
+      "complete",
+      "chains"
     ],
     "additionalProperties": false
   }

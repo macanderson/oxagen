@@ -1,0 +1,37 @@
+{
+  "check": "settings",
+  "rule": "force-push-allowed",
+  "severity": "error",
+  "description": "The protected branch main allows force pushes.",
+  "refused_by_reader": false,
+  "changed": [],
+  "removed": [],
+  "expect": [
+    {
+      "path": "protected_branches.main.allow_force_push"
+    }
+  ],
+  "actual_settings": {
+    "provider": "gitlab",
+    "settings": {
+      "visibility": "private",
+      "default_branch": "main",
+      "protected_branches": {
+        "main": {
+          "push_access": "no_one",
+          "merge_access": "oxagen-steering",
+          "allow_force_push": true
+        }
+      },
+      "merge_requests": {
+        "squash_option": "always",
+        "only_allow_merge_if_pipeline_succeeds": true,
+        "remove_source_branch_after_merge": true,
+        "required_status": "Oxagen steering"
+      },
+      "ci_cd": {
+        "builds_access_level": "disabled"
+      }
+    }
+  }
+}

@@ -56,7 +56,7 @@ afterEach(async () => {
 /** A DataSource whose every read is a bare mock; ShellChrome reads it only through shellSource. */
 function stubSource() {
   return {
-    runtimes: { list: vi.fn(), agents: vi.fn() },
+    runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
     conversations: { latest: vi.fn() },
     pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
     shell: {
@@ -86,6 +86,9 @@ function stubSource() {
       outputs: vi.fn(),
       work: vi.fn(),
       outcomesSettings: vi.fn(),
+      issues: vi.fn(),
+      context: vi.fn(),
+      findings: vi.fn(),
     },
     approvals: {
       pending: vi.fn(),
@@ -149,6 +152,8 @@ function stubSource() {
       approvalRules: vi.fn(),
       connections: vi.fn(),
       mcpServers: vi.fn(),
+      toolbelts: vi.fn(),
+      toolbelt: vi.fn(),
     },
   };
 }

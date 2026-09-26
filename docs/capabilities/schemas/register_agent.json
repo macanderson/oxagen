@@ -1,7 +1,7 @@
 {
   "name": "register_agent",
   "domain": "agent",
-  "description": "Register an agent identity in this workspace: its principal, default role and a long-lived credential shown once. The definition is committed to the repository separately.",
+  "description": "Register an agent in this workspace: one operator on one runtime with one harness, carrying a toolbelt. Mints its principal, default role, first version and a long-lived credential shown once.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -23,15 +23,15 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
-      "slug": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 18
-      },
       "name": {
         "type": "string",
         "minLength": 1,
         "maxLength": 128
+      },
+      "slug": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 18
       },
       "description": {
         "type": "string",
@@ -48,6 +48,12 @@
           "custom"
         ]
       },
+      "runtimeId": {
+        "type": "string"
+      },
+      "toolbeltId": {
+        "type": "string"
+      },
       "validityDays": {
         "type": "integer",
         "minimum": 1,
@@ -56,9 +62,9 @@
       }
     },
     "required": [
-      "slug",
       "name",
-      "harness"
+      "harness",
+      "runtimeId"
     ],
     "additionalProperties": false
   },
@@ -85,6 +91,62 @@
       },
       "principalId": {
         "type": "string"
+      },
+      "runtime": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug"
+        ],
+        "additionalProperties": false
+      },
+      "toolbelt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "all_tools",
+              "custom"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "version": {
+        "type": "integer",
+        "exclusiveMinimum": 0
       },
       "credential": {
         "type": "object",
@@ -113,6 +175,9 @@
       "slug",
       "agentKey",
       "principalId",
+      "runtime",
+      "toolbelt",
+      "version",
       "credential"
     ],
     "additionalProperties": false

@@ -64,6 +64,7 @@ describe("loadPriceOverrides", () => {
         cacheWrite5mPer1M: 3,
         cacheWrite1hPer1M: 4.8,
         reasoningPer1M: 12,
+        serverToolRequestPer1M: 10_000,
         source: "operator_override",
       },
     ]);
@@ -230,6 +231,25 @@ describe("parsePriceOverrides defaults", () => {
       "m-1": { inputPer1M: 1, outputPer1M: 12, reasoningPer1M: 20 },
     })[0]!;
     expect(stated.reasoningPer1M).toBe(20);
+  });
+
+  it("prices Anthropic web searches at the published rate unless the operator priced them", () => {
+    const derived = parsePriceOverrides({
+      "anthropic/m-1": { inputPer1M: 1, outputPer1M: 12 },
+      "openai/m-2": { inputPer1M: 1, outputPer1M: 12 },
+    });
+    expect(derived.map((p) => p.serverToolRequestPer1M)).toEqual([
+      10_000,
+      null,
+    ]);
+    const stated = parsePriceOverrides({
+      "anthropic/m-1": {
+        inputPer1M: 1,
+        outputPer1M: 12,
+        serverToolRequestPer1M: 8_000,
+      },
+    })[0]!;
+    expect(stated.serverToolRequestPer1M).toBe(8_000);
   });
 
   it("uses Anthropic one-hour policy and honors an explicitly stated rate", () => {

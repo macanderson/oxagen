@@ -14,6 +14,7 @@
 // building job. A deployment with no attester key fails at once: an
 // unsigned export is not the bundle the capability promises.
 import { schema, withTenantDb } from "@oxagen/database";
+import { ATTESTER_KEY_ENV } from "@oxagen/run-ledger/attester-key";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { attesterKeyFromPem } from "@oxagen/tacho";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -26,8 +27,8 @@ import { buildRunExportBundle } from "../lib/run-export-bundle";
 
 export const RUN_EXPORT_EVENT = "evidence/run-export.build";
 
-/** The same Ed25519 key that signs policy bundles attests exports today. */
-export const ATTESTER_KEY_ENV = "TACHO_BUNDLE_SIGNING_PRIVATE_KEY";
+/** The same Ed25519 key that signs policy bundles and seals attests exports. */
+export { ATTESTER_KEY_ENV };
 
 interface RunExportEventData {
   exportId: string;

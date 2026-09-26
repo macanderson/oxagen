@@ -9,20 +9,16 @@
  * not an execution target.
  *
  * Agent addressing mirrors the rest of the platform: the `<agent>` argument is
- * an agent's public id (`agt_…`) or a slug / agent-key, resolved to its public
- * id via the agent-definition list (its `agentId` field IS the public id — see
- * agent.definition.list handler). That public id is exactly what the app passes
- * as `agentId` when it binds, so a CLI-created binding is the same row.
+ * an agent's public id (`agt_…`), its slug, or its agent key, resolved to the
+ * public id through `get_agent`. An agent key ends in the slug (ADR-024), so
+ * its last segment is what `get_agent` reads. That public id is exactly what
+ * the app passes as `agentId` when it binds, so a CLI-created binding is the
+ * same row.
  *
  * Output discipline (ADR-023 §4, via createOutput): stdout carries only the
  * result; progress/warnings go to stderr; every failure is a uniform `✗ …`.
  */
-import {
-  apiGetOrThrow,
-  apiPostOrThrow,
-  ApiError,
-  printTable,
-} from "../lib/api.js";
+import { apiPostOrThrow, ApiError, printTable } from "../lib/api.js";
 import { createOutput } from "../lib/output.js";
 import { stdoutWriter, type CommandWriter } from "../lib/capture-writer.js";
 
@@ -31,10 +27,9 @@ interface EnvSummary {
   slug: string;
 }
 
-interface AgentDefSummary {
-  agentId: string; // public id (agt_…), per agent.definition.list
-  slug: string;
-  agentKey: string | null;
+/** The part of `get_agent`'s answer the handle resolution reads. */
+interface AgentIdentitySummary {
+  identity: { id: string };
 }
 
 interface AgentEnvironmentBinding {
@@ -50,21 +45,22 @@ interface AgentEnvironmentBinding {
 
 async function resolveAgentId(handle: string): Promise<string> {
   if (handle.startsWith("agt_")) return handle;
-  const { agents } = await apiGetOrThrow<{ agents: AgentDefSummary[] }>(
-    "agent/definitions",
-  );
-  const lower = handle.toLowerCase();
-  const match = agents.find(
-    (a) =>
-      a.agentId === handle ||
-      a.slug.toLowerCase() === lower ||
-      (a.agentKey !== null && a.agentKey.toLowerCase() === lower),
-  );
-  if (!match)
-    throw new ApiError(
-      `No agent matching '${handle}' (by public id, slug, or agent key).`,
+  const slug = (handle.split(".").pop() ?? handle).toLowerCase();
+  try {
+    const { identity } = await apiPostOrThrow<AgentIdentitySummary>(
+      "agents/get",
+      { agentId: slug },
     );
-  return match.agentId;
+    return identity.id;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      throw new ApiError(
+        `No agent matching '${handle}' (by public id, slug, or agent key).`,
+        404,
+      );
+    }
+    throw err;
+  }
 }
 
 async function resolveEnvironmentId(slugOrId: string): Promise<string> {

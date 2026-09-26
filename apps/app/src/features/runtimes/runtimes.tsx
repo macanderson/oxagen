@@ -1,6 +1,10 @@
 // The Runtimes page (roadmap mockups/pages/runtimes.md, mockup `pRuntimes()`):
 // the hosts agents run on, and what each host's seam earns.
 //
+// The runtimes the workspace named (`list_runtimes`, ADR-198) come first, each
+// with its agents by harness. Add a runtime names one and goes straight on to
+// registering its first agent.
+//
 // What the record carries today is an enrollment per agent
 // (`list_tacho_hosts`): one agent key on one machine. The page lists those rows
 // rather than grouping them by hostname into a host the record does not hold.
@@ -17,8 +21,13 @@
 // workspace with no enrollment keeps the header and shows the empty state.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import type { RuntimeEnrollment, RuntimeList } from "@/data/contracts/runtimes";
+import type {
+  NamedRuntimeList,
+  RuntimeEnrollment,
+  RuntimeList,
+} from "@/data/contracts/runtimes";
 import type { DataSource } from "@/data/ports";
+import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { mono, panelBody, statStrip } from "@/ui/control-styles";
@@ -26,7 +35,8 @@ import { type ListRow, ListTable } from "@/ui/list-table";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { PageHeader } from "@/ui/page-header";
-import { EnrollRuntime } from "./controls";
+import { AddRuntime } from "./controls";
+import { NamedRuntimes } from "./named";
 import {
   HarnessNames,
   HealthBadge,
@@ -43,16 +53,22 @@ import {
 } from "./parts";
 import { RuntimesEmpty, RuntimesFailure } from "./states";
 
-/** The page header: the workspace as the eyebrow, the h1, the one sentence, and Enroll a runtime. */
+/**
+ * The page header: the workspace as the eyebrow, the h1, the one sentence,
+ * and Add a runtime for an org Owner or Admin, the roles `create_runtime` and
+ * `register_agent` admit (INV-29).
+ */
 export function RuntimesHeader({
   org,
   ws,
   wsName,
+  canAdd,
   gold = true,
 }: {
   org: string;
   ws: string;
   wsName: string;
+  canAdd: boolean;
   /** False where the body already carries the screen's one gold action. */
   gold?: boolean;
 }) {
@@ -62,9 +78,14 @@ export function RuntimesHeader({
       eyebrow={t("runtimes.page.eyebrow", { workspace: wsName })}
       title={t("pages.runtimes")}
       description={t("runtimes.page.description")}
-      actions={<EnrollRuntime org={org} ws={ws} gold={gold} />}
+      actions={canAdd ? <AddRuntime org={org} ws={ws} gold={gold} /> : null}
     />
   );
+}
+
+/** The org roles that may name a runtime and register its agents. */
+export function mayAddRuntime(ctx: WsCtx): boolean {
+  return ctx.orgRole === "owner" || ctx.orgRole === "admin";
 }
 
 /**
@@ -277,27 +298,37 @@ function Ladder() {
 /** The loaded list, below its header. */
 function RuntimesLoaded({
   list,
+  named,
   org,
   ws,
   now,
+  canAdd,
 }: {
   list: RuntimeList;
+  named: Read<NamedRuntimeList>;
   org: string;
   ws: string;
   now: number;
+  canAdd: boolean;
 }) {
   return (
     <>
       <StatStrip list={list} now={now} />
-      <EnrolledHosts list={list} org={org} ws={ws} now={now} />
+      <NamedRuntimes read={named} org={org} ws={ws} canRegister={canAdd} />
+      {list.enrollments.length === 0 ? null : (
+        <EnrolledHosts list={list} org={org} ws={ws} now={now} />
+      )}
       <Ladder />
     </>
   );
 }
 
 async function readRuntimes(ctx: WsCtx, source: DataSource) {
-  const read = await source.runtimes.list(ctx);
-  return { read, now: Date.now() };
+  const [read, named] = await Promise.all([
+    source.runtimes.list(ctx),
+    source.runtimes.named(ctx),
+  ]);
+  return { read, named, now: Date.now() };
 }
 
 export async function Runtimes({
@@ -314,7 +345,8 @@ export async function Runtimes({
   /** The signed-in person's name or email, for the access-denied state. */
   viewerName: string;
 }) {
-  const { read, now } = await readRuntimes(ctx, source);
+  const { read, named, now } = await readRuntimes(ctx, source);
+  const canAdd = mayAddRuntime(ctx);
   if (!read.ok)
     return (
       <RuntimesFailure
@@ -328,17 +360,33 @@ export async function Runtimes({
         readAt={now}
       />
     );
-  if (read.value.enrollments.length === 0)
+  // Empty only when nothing is named and nothing is enrolled: a named runtime
+  // with no host yet is listed, with its Register an agent action.
+  const nothingNamed = named.ok && named.value.runtimes.length === 0;
+  if (read.value.enrollments.length === 0 && nothingNamed)
     return (
       <>
-        <RuntimesHeader org={org} ws={ws} wsName={ctx.wsName} gold={false} />
-        <RuntimesEmpty org={org} ws={ws} />
+        <RuntimesHeader
+          org={org}
+          ws={ws}
+          wsName={ctx.wsName}
+          canAdd={canAdd}
+          gold={false}
+        />
+        <RuntimesEmpty org={org} ws={ws} canAdd={canAdd} />
       </>
     );
   return (
     <>
-      <RuntimesHeader org={org} ws={ws} wsName={ctx.wsName} />
-      <RuntimesLoaded list={read.value} org={org} ws={ws} now={now} />
+      <RuntimesHeader org={org} ws={ws} wsName={ctx.wsName} canAdd={canAdd} />
+      <RuntimesLoaded
+        list={read.value}
+        named={named}
+        org={org}
+        ws={ws}
+        now={now}
+        canAdd={canAdd}
+      />
     </>
   );
 }

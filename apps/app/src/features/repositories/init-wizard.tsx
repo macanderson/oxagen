@@ -95,7 +95,6 @@ const FILE_NOTE = [
   "governanceToml",
   "rules",
   "proposals",
-  "agents",
   "gitignore",
 ] as const;
 

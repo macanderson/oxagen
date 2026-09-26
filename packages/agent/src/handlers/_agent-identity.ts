@@ -48,6 +48,10 @@ export interface AgentIdentityRow {
   operatorName: string | null;
   /** The label set through set_cost_center (ADR-142); null inherits the workspace's. */
   costCenter: string | null;
+  /** The runtime the agent runs on now (ADR-198); null when it runs on no named runtime. */
+  runtimeId: string | null;
+  /** The toolbelt the agent carries now; null reads as the workspace's All tools belt. */
+  toolbeltId: string | null;
 }
 
 const identityColumns = {
@@ -68,6 +72,8 @@ const identityColumns = {
   operatorPublicId: schema.users.publicId,
   operatorName: schema.users.displayName,
   costCenter: schema.agents.costCenter,
+  runtimeId: schema.agents.runtimeId,
+  toolbeltId: schema.agents.toolbeltId,
 } as const;
 
 function identitySelect(tx: Tx) {
@@ -578,4 +584,135 @@ export async function newestTamperIncident(
     .orderBy(desc(schema.tachoIncidents.detectedAt))
     .limit(1);
   return row ?? null;
+}
+
+/** A runtime as a record names it (ADR-198). */
+export interface RuntimeRefRow {
+  id: string;
+  publicId: string;
+  name: string;
+  slug: string;
+}
+
+/** A toolbelt as a record names it (ADR-198). */
+export interface ToolbeltRefRow {
+  id: string;
+  publicId: string;
+  name: string;
+  slug: string;
+  kind: "all_tools" | "custom";
+}
+
+/**
+ * The runtimes and toolbelts a set of rows names, by internal id, plus the
+ * workspace's All tools belt, which a null `toolbelt_id` reads as. A soft-
+ * deleted runtime or belt still resolves: an agent version that named one
+ * keeps naming it. This read writes nothing, so a workspace no toolbelt path
+ * has touched yet answers `allTools: null`.
+ */
+export async function bindingRefs(
+  tx: Tx,
+  scope: { orgId: string; workspaceId: string },
+  ids: {
+    runtimeIds: readonly (string | null)[];
+    toolbeltIds: readonly (string | null)[];
+  },
+): Promise<{
+  runtimes: Map<string, RuntimeRefRow>;
+  toolbelts: Map<string, ToolbeltRefRow>;
+  allTools: ToolbeltRefRow | null;
+}> {
+  const runtimeIds = [
+    ...new Set(ids.runtimeIds.filter((id): id is string => id !== null)),
+  ];
+  const toolbeltIds = [
+    ...new Set(ids.toolbeltIds.filter((id): id is string => id !== null)),
+  ];
+  const runtimes = new Map<string, RuntimeRefRow>();
+  if (runtimeIds.length > 0) {
+    const rows = await tx
+      .select({
+        id: schema.runtimes.id,
+        publicId: schema.runtimes.publicId,
+        name: schema.runtimes.name,
+        slug: schema.runtimes.slug,
+      })
+      .from(schema.runtimes)
+      .where(
+        and(
+          eq(schema.runtimes.orgId, scope.orgId),
+          eq(schema.runtimes.workspaceId, scope.workspaceId),
+          inArray(schema.runtimes.id, runtimeIds),
+        ),
+      );
+    for (const row of rows) runtimes.set(row.id, row);
+  }
+  const t = schema.toolbelts;
+  const beltColumns = {
+    id: t.id,
+    publicId: t.publicId,
+    name: t.name,
+    slug: t.slug,
+    kind: t.kind,
+  };
+  const toolbelts = new Map<string, ToolbeltRefRow>();
+  if (toolbeltIds.length > 0) {
+    const rows = await tx
+      .select(beltColumns)
+      .from(t)
+      .where(
+        and(
+          eq(t.orgId, scope.orgId),
+          eq(t.workspaceId, scope.workspaceId),
+          inArray(t.id, toolbeltIds),
+        ),
+      );
+    for (const row of rows) toolbelts.set(row.id, toToolbeltRef(row));
+  }
+  const [allToolsRow] = await tx
+    .select(beltColumns)
+    .from(t)
+    .where(
+      and(
+        eq(t.orgId, scope.orgId),
+        eq(t.workspaceId, scope.workspaceId),
+        eq(t.kind, "all_tools"),
+        isNull(t.deletedAt),
+      ),
+    )
+    .limit(1);
+  return {
+    runtimes,
+    toolbelts,
+    allTools: allToolsRow ? toToolbeltRef(allToolsRow) : null,
+  };
+}
+
+function toToolbeltRef(row: {
+  id: string;
+  publicId: string;
+  name: string;
+  slug: string;
+  kind: string;
+}): ToolbeltRefRow {
+  return { ...row, kind: row.kind === "all_tools" ? "all_tools" : "custom" };
+}
+
+/** The contract shape of a runtime reference. */
+export function runtimeRef(
+  row: RuntimeRefRow | undefined,
+): { id: string; name: string; slug: string } | null {
+  return row ? { id: row.publicId, name: row.name, slug: row.slug } : null;
+}
+
+/** The contract shape of a toolbelt reference. */
+export function toolbeltRef(row: ToolbeltRefRow | null | undefined): {
+  id: string;
+  name: string;
+  slug: string;
+  kind: "all_tools" | "custom";
+} | null {
+  return row
+    ? { id: row.publicId, name: row.name, slug: row.slug, kind: row.kind }
+    : null;
 }

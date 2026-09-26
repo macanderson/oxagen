@@ -1,8 +1,8 @@
 // How far one text has moved from another, in lines.
 //
 // `diffStat` answers the count alone — the lines a unified diff would mark
-// added and removed — for the agent definition editor, which shows a draft's
-// distance from the committed file and nothing more. It keeps two rows of the
+// added and removed — for the record proposal dialog, which shows a draft's
+// distance from the published record and nothing more. It keeps two rows of the
 // table rather than the whole of it, because that is all a count needs.
 //
 // `buildDiff` answers the diff itself, for the transcript, which has to draw

@@ -139,6 +139,32 @@ describe("get_run_transcript contract", () => {
     ).toBe(true);
   });
 
+  it("names the rules that fired and the taint assessed, and reads an older decision as naming none (#3971)", () => {
+    const decision = {
+      seq: "4",
+      decision: "deny",
+      type: "policy_decision",
+      at: "2026-09-11T10:00:04.000Z",
+      harness: false,
+    };
+    const older = transcriptEntrySchema.parse({ ...entry, decision });
+    expect(older.decision).toMatchObject({ rules: [], taint: null });
+    const named = transcriptEntrySchema.parse({
+      ...entry,
+      decision: { ...decision, rules: ["Bash(git push*)"], taint: [] },
+    });
+    expect(named.decision).toMatchObject({
+      rules: ["Bash(git push*)"],
+      taint: [],
+    });
+    expect(
+      transcriptEntrySchema.safeParse({
+        ...entry,
+        decision: { ...decision, rules: [""] },
+      }).success,
+    ).toBe(false);
+  });
+
   it("bounds one page and says when the transcript was cut", () => {
     expect(
       runTranscriptGet.output.safeParse({

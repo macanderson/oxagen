@@ -1,0 +1,36 @@
+{
+  "schema": "reflection/v1",
+  "run": "run_01K5QK7D",
+  "agent": "a-intel.core.release-bot",
+  "outcome": "completed",
+  "summary": "Released 4.2.0 after the first CI run failed on a stale dependency cache.",
+  "grades": {
+    "work": 3,
+    "tools": {
+      "billing__create_refund@3": 2
+    }
+  },
+  "lessons": [
+    {
+      "statement": "The CI cache key hashes pnpm-lock.yaml. Update the lockfile with any dependency change, or CI restores a stale cache and typecheck fails.",
+      "kind": "memory",
+      "repos": [
+        "github.com/a-intel/platform"
+      ],
+      "applies_to": [
+        ".github/workflows/**",
+        "pnpm-lock.yaml"
+      ],
+      "evidence": [
+        "frame:run_01K5QK7D/88",
+        "frame:run_01K5QK7D/131"
+      ]
+    }
+  ],
+  "tool_feedback": [
+    {
+      "tool": "billing__create_refund@3",
+      "problem": "The description does not say the amount is in cents. The first call sent 120.00."
+    }
+  ]
+}

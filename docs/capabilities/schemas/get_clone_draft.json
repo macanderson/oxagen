@@ -22,7 +22,6 @@
       "kind": {
         "type": "string",
         "enum": [
-          "agent",
           "skill",
           "record"
         ]
@@ -46,7 +45,6 @@
       "kind": {
         "type": "string",
         "enum": [
-          "agent",
           "skill",
           "record"
         ]
@@ -95,24 +93,6 @@
           "additionalProperties": false
         },
         "maxItems": 16
-      },
-      "harness": {
-        "anyOf": [
-          {
-            "type": "string",
-            "enum": [
-              "claude-code",
-              "codex",
-              "cursor",
-              "stella",
-              "claude-agent-sdk",
-              "custom"
-            ]
-          },
-          {
-            "type": "null"
-          }
-        ]
       }
     },
     "required": [
@@ -122,8 +102,7 @@
       "slug",
       "name",
       "source",
-      "files",
-      "harness"
+      "files"
     ],
     "additionalProperties": false
   }

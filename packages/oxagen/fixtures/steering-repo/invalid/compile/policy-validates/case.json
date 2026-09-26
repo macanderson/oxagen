@@ -1,0 +1,17 @@
+{
+  "check": "compile",
+  "rule": "policy-validates",
+  "severity": "error",
+  "description": "A Cedar policy names an action policy/schema.cedarschema does not declare.",
+  "refused_by_reader": false,
+  "changed": [
+    "policy/unknown-action.cedar"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "policy/unknown-action.cedar",
+      "line": 3
+    }
+  ]
+}

@@ -69,14 +69,25 @@ describe("parseToolsTab", () => {
 });
 
 describe("parseToolsView", () => {
-  it("defaults to labels, with no category, no provider, and no cursor", () => {
+  it("defaults to labels, with no category, no provider, no cursor and no belt", () => {
     expect(parseToolsView("tools", {})).toEqual({
       tab: "tools",
       category: null,
       provider: null,
       names: "labels",
       cursor: null,
+      belt: null,
     });
+  });
+
+  it("reads a belt only on the Toolbelts tab, and only as a toolbelt's public id", () => {
+    expect(parseToolsView("toolbelts", { belt: "tbt_01k5s1" }).belt).toBe(
+      "tbt_01k5s1",
+    );
+    for (const belt of ["mcs_01k5s1", "tbt_", "tbt_01K5S1", "tbt_1/x"]) {
+      expect(parseToolsView("toolbelts", { belt }).belt).toBeNull();
+    }
+    expect(parseToolsView("tools", { belt: "tbt_01k5s1" }).belt).toBeNull();
   });
 
   it("reads a consequence tag only on the Tools tab, and only in the contract's shape", () => {
@@ -189,7 +200,20 @@ describe("toolsLink", () => {
       provider: null,
       names: "labels",
       cursor: "c9",
+      belt: null,
     });
+  });
+
+  it("puts an open belt in the query on the Toolbelts tab alone, and round-trips it", () => {
+    const link = toolsLink(at, { tab: "toolbelts", belt: "tbt_01k5s1" });
+    expect(link).toBe("/acme/core-platform/tools/toolbelts?belt=tbt_01k5s1");
+    expect(toolsLink(at, { tab: "tools", belt: "tbt_01k5s1" })).toBe(
+      "/acme/core-platform/tools",
+    );
+    const url = new URL(link, "https://mission-control.invalid");
+    expect(
+      parseToolsView("toolbelts", Object.fromEntries(url.searchParams)).belt,
+    ).toBe("tbt_01k5s1");
   });
 });
 

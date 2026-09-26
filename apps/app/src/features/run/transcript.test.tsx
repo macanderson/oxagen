@@ -1453,10 +1453,30 @@ describe("following a live run", () => {
     fakeEventSource(1);
     try {
       renderSection({
+        read: readOk(mockupTranscript({ cursor: "ZjoxMQ", complete: true })),
+        status: "live",
+      });
+      expect(screen.queryByTestId("transcript-count")).toBeNull();
+      expect(readout()).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("follows a live run past the read's frame cap, with no line saying the view stops there (#3823, negative)", () => {
+    // Batch A1 (#3375) said such a view stopped at the cap, because every
+    // tail read folded the same first frames. A tail read now reads a window
+    // from the cursor, so the view keeps following the run past the cap.
+    fakeEventSource(1);
+    try {
+      renderSection({
         read: readOk(mockupTranscript({ cursor: "ZjoxMQ", complete: false })),
         status: "live",
       });
       expect(screen.queryByTestId("transcript-count")).toBeNull();
+      expect(
+        screen.getByRole("region", { name: "Transcript" }),
+      ).not.toHaveTextContent("this view stops here");
       expect(readout()).toBeInTheDocument();
     } finally {
       vi.unstubAllGlobals();
@@ -1692,6 +1712,43 @@ describe("a call the in-app assistant parked", () => {
     );
     expect(call).not.toHaveTextContent("Held at Oxagen until someone answers.");
     expect(within(call).queryByTestId("tx-parked-approval")).toBeNull();
+  });
+});
+
+describe("a compacted run (ADR-058, #4000)", () => {
+  it("says the transcript is read from the archive, above the same rows a hot run draws", async () => {
+    const { container } = renderSection({ run: { compacted: true } });
+    const note = screen.getByTestId("transcript-compacted");
+    expect(note).toHaveTextContent(
+      "Compacted. This transcript is read from the archive.",
+    );
+    expect(note.querySelector("b")).toHaveTextContent("Compacted.");
+    const compactedRows = kinds();
+    expect(compactedRows.length).toBeGreaterThan(0);
+    await expectNoAxe(container);
+    cleanup();
+    renderSection({ run: { compacted: false } });
+    expect(kinds()).toEqual(compactedRows);
+  });
+
+  it("draws no note on a run whose frames are still in the log, or a wrapped session (negative)", () => {
+    renderSection({ run: { compacted: false } });
+    expect(screen.queryByTestId("transcript-compacted")).toBeNull();
+    cleanup();
+    // A wrapped session's row carries no `compacted` at all.
+    renderSection();
+    expect(screen.queryByTestId("transcript-compacted")).toBeNull();
+  });
+
+  it("names a refused read without claiming the archive was read (negative)", () => {
+    renderSection({
+      read: readError("frame_store_unreachable", 502),
+      run: { compacted: true },
+    });
+    expect(screen.queryByTestId("transcript-compacted")).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "Transcript" }),
+    ).toHaveTextContent(/could not be loaded|frame_store_unreachable/);
   });
 });
 

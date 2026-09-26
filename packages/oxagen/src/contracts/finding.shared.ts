@@ -84,6 +84,52 @@ export const findingEvidenceSchema = z
   .strict();
 export type FindingEvidence = z.output<typeof findingEvidenceSchema>;
 
+/** The most cited frames one finding carries for one run (#4001). */
+export const FINDING_FRAMES_PER_RUN = 50;
+
+/**
+ * One tool call a finding cites, by its frame. `sessionUuid` names the
+ * subagent chain the frame was recorded on and is absent on the run's own
+ * chain, as on a transcript body.
+ */
+export const findingCitedFrameSchema = z
+  .object({
+    seq: z.string().regex(/^\d{1,19}$/),
+    sessionUuid: z.string().uuid().optional(),
+  })
+  .strict();
+
+/**
+ * What a finding cites in one run, answered when a read asks for the findings
+ * of that run (#4001).
+ */
+export const findingRunCitationSchema = z
+  .object({
+    runId: runPublicIdSchema,
+    /**
+     * True for a finding that cites the run as a whole
+     * (`cache_writes_never_read`). It pins no turn, and `frames` is empty.
+     */
+    runLevel: z.boolean(),
+    /**
+     * The cited frames, seqs ascending, at most `FINDING_FRAMES_PER_RUN`.
+     * Null when the finding was written before frames were cited.
+     */
+    frames: z
+      .array(findingCitedFrameSchema)
+      .max(FINDING_FRAMES_PER_RUN)
+      .nullable(),
+    /**
+     * Every call the finding cites in the run, including any past the cap.
+     * On a finding written before frames were cited, the calls its evidence
+     * counted in the run. Null when that evidence did not itemise the run,
+     * which it does for the ten runs with the largest saving.
+     */
+    framesTotal: z.number().int().nonnegative().nullable(),
+  })
+  .strict();
+export type FindingRunCitation = z.output<typeof findingRunCitationSchema>;
+
 /** The finding a decision is taken on. */
 export const findingDecisionInputSchema = z
   .object({ findingId: findingPublicIdSchema })

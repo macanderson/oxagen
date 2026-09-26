@@ -1,9 +1,9 @@
 // The sentence a refused agent write shows. The kernel classified the refusal
 // and put the handler's HandlerError reason in `code` (§3.2). Each reason the
-// bound handlers (rotate, suspend, retire, commit, request a mandate) throw
-// has its own sentence; any other code is printed as recorded, with no cause
-// attached to it. The reading is the kit's (`@/ui/action-failure`); only the
-// vocabulary is this lane's.
+// bound handlers (rotate, suspend, retire, move, assign a toolbelt, request a
+// mandate) throw has its own sentence; any other code is printed as recorded,
+// with no cause attached to it. The reading is the kit's
+// (`@/ui/action-failure`); only the vocabulary is this lane's.
 import { useTranslations } from "next-intl";
 import type { ActionResult } from "@/server/kernel";
 import { readFailure, unanswered } from "@/ui/action-failure";
@@ -18,11 +18,10 @@ const WORDS = {
     agent_not_found: "agentNotFound",
     agent_retired: "agentRetired",
     agent_principal_missing: "agentPrincipalMissing",
-    no_repository: "noRepository",
-    repository_ambiguous: "repositoryAmbiguous",
-    branch_is_default: "branchIsDefault",
-    definition_schema: "definitionSchema",
-    definition_slug: "definitionSlug",
+    // move_agent and assign_agent_toolbelt (ADR-198).
+    runtime_harness_taken: "runtimeHarnessTaken",
+    same_runtime: "sameRuntime",
+    same_toolbelt: "sameToolbelt",
     agent_has_no_principal: "agentPrincipalMissing",
     no_tool_matches: "noToolMatches",
     measure_not_declared: "measureNotDeclared",

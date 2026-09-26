@@ -18,7 +18,13 @@ import {
 } from "../evidence/frame-body";
 import { redactText } from "../evidence/redaction";
 import { contextFactsFromEnv, digestText, hostFactsFromEnv } from "./context";
-import { classifyTool, type EffectKind, pullRequestAttrs } from "./tools";
+import {
+  classifyTool,
+  type EffectKind,
+  issueAttrs,
+  pullRequestAttrs,
+  releaseAttrs,
+} from "./tools";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -644,18 +650,29 @@ export function normalizeHook(
             );
       if (effectFrame !== undefined) {
         // The pull request a `pr_open` call opened is named only in its
-        // response, which the frame keeps as a digest.
+        // response, which the frame keeps as a digest. So is the issue a
+        // GitHub MCP call acted on, and the one `gh issue create` made
+        // (#3970), which get_run_issues reads from these attrs.
+        // The release a GitHub MCP call created is named only in its input,
+        // which the frame keeps as a digest too (#3890).
+        const tool = input.tool_name ?? "";
+        const issued = {
+          ...issueAttrs(tool, input.tool_input, input.tool_response),
+          ...releaseAttrs(tool, input.tool_input),
+        };
+        const named = {
+          ...(facts["effect_kind"] === "pr_open"
+            ? pullRequestAttrs(input.tool_response)
+            : {}),
+          ...issued,
+        };
         drafts.push(
           draft(
             effectFrame,
             { ...facts, tool_status: "ok" },
-            facts["effect_kind"] === "pr_open"
-              ? {
-                  attrs: {
-                    ...base.attrs,
-                    ...pullRequestAttrs(input.tool_response),
-                  },
-                }
+            facts["effect_kind"] === "pr_open" ||
+              Object.keys(issued).length > 0
+              ? { attrs: { ...base.attrs, ...named } }
               : {},
           ),
         );

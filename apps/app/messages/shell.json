@@ -77,7 +77,6 @@
       "empty": "Nothing matches “{query}”.",
       "create": {
         "any": "Create anything",
-        "agent": "New agent",
         "tool": "New tool",
         "skill": "Add a skill",
         "record": "Write a context record"

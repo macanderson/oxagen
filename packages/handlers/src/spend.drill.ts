@@ -9,11 +9,13 @@ import {
   spendDrill,
   type SpendDrillOutput,
 } from "@oxagen/oxagen/contracts/spend.drill";
+import type { UnmeteredRuns } from "@oxagen/oxagen/contracts/spend.shared";
 import { divideHalfEven, type RunTotalsRecord, utcDay } from "@oxagen/billing";
 import {
   daysBetween,
   money,
   readRunTotals,
+  readUnmeteredRuns,
   runFigure,
   type RunFilter,
   type SpendScope,
@@ -25,6 +27,11 @@ export type SpendDrillDeps = {
     scope: SpendScope,
     q: { from: string; to: string; filter: RunFilter },
   ) => Promise<RunTotalsRecord[]>;
+  /** The key's wrapped runs that recorded no usage, by harness (#3304). */
+  readUnmeteredRuns: (
+    scope: SpendScope,
+    q: { from: string; to: string; filter: RunFilter },
+  ) => Promise<UnmeteredRuns>;
   now: () => Date;
 };
 
@@ -51,11 +58,15 @@ export function createSpendDrillHandler(
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const period = trailingWindow(input.days, deps.now());
     const filter: RunFilter = { kind: input.kind, key: input.key };
-    const [runs, everyRun] = await Promise.all([
+    const isTool = input.kind === "tool";
+    // A tool drill carries no money, so no total of its leaves a cost out.
+    const [runs, everyRun, unmeteredRuns] = await Promise.all([
       deps.readRunTotals(scope, { ...period, filter }),
       deps.readRunTotals(scope, { ...period, filter: { kind: "all" } }),
+      isTool
+        ? Promise.resolve(null)
+        : deps.readUnmeteredRuns(scope, { ...period, filter }),
     ]);
-    const isTool = input.kind === "tool";
 
     // A tool drill counts the tool's calls and carries no money.
     const figureOf = (run: RunTotalsRecord) =>
@@ -124,11 +135,13 @@ export function createSpendDrillHandler(
       averages,
       share,
       byTool,
+      ...(unmeteredRuns === null ? {} : { unmeteredRuns }),
     };
   };
 }
 
 export const spendDrillHandler = createSpendDrillHandler({
   readRunTotals,
+  readUnmeteredRuns,
   now: () => new Date(),
 });

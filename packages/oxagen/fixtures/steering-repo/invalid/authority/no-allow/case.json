@@ -1,0 +1,18 @@
+{
+  "check": "authority",
+  "rule": "no-allow",
+  "severity": "error",
+  "description": "A constraint's effect is allow. A record can never grant authority. The schema check refuses it too.",
+  "refused_by_reader": true,
+  "changed": [
+    "steering/platform/a-intel.platform.eu-data.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/platform/a-intel.platform.eu-data.md",
+      "line": 6,
+      "field": "effect"
+    }
+  ]
+}

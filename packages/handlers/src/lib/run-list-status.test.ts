@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   createRunListHandler,
   ledgerAllSealsQuery,
+  ledgerCompactedRollupQuery,
   ledgerSealQuery,
 } from "../run.list";
 import {
@@ -49,9 +50,30 @@ describe("compactedProbe", () => {
       .select({ compacted: compactedProbe() })
       .from(schema.agentRunAttemptSeals)
       .toSQL();
-    expect(sql).toMatch(/"archive_segment_ref" is not null and not exists/);
+    expect(sql).toMatch(
+      /"archive_segment_ref" is not null and "agent"\."agent_run_attempt_seals"\."event_count" > 0 and not exists/,
+    );
     expect(sql).toMatch(
       /"agent_run_events"\."attempt_id" = "agent"\."agent_run_attempt_seals"\."attempt_id" and "agent"\."agent_run_events"\."event_record_version" = 2\)/,
+    );
+  });
+
+  it("never reads a silent attempt sealed with no frames as compacted (ADR-180, #4000, negative)", () => {
+    // The idle close seals an attempt that recorded nothing, with a segment
+    // of no frames and no hot rows. Only the frame count tells it apart
+    // from an attempt whose frames compaction moved.
+    const { sql } = db
+      .select({ compacted: compactedProbe() })
+      .from(schema.agentRunAttemptSeals)
+      .toSQL();
+    expect(sql).toContain(
+      '"agent"."agent_run_attempt_seals"."event_count" > 0',
+    );
+    // The compacted rollup counts by the same probe, so it never adds a
+    // silent attempt's zero counts as a compacted one.
+    const rollup = ledgerCompactedRollupQuery(db, SCOPE, [RUN_A]).toSQL();
+    expect(rollup.sql).toContain(
+      '"agent"."agent_run_attempt_seals"."event_count" > 0',
     );
   });
 
@@ -62,7 +84,7 @@ describe("compactedProbe", () => {
       ledgerAllSealsQuery(db, SCOPE, RUN_A).toSQL(),
     ]) {
       expect(q.sql).toMatch(
-        /\("agent"\."agent_run_attempt_seals"\."archive_segment_ref" is not null and not exists \(select 1 from "agent"\."agent_run_events"/,
+        /\("agent"\."agent_run_attempt_seals"\."archive_segment_ref" is not null and "agent"\."agent_run_attempt_seals"\."event_count" > 0 and not exists \(select 1 from "agent"\."agent_run_events"/,
       );
       // A one-table select writes columns bare. A bare `attempt_id` in the
       // subquery would compare the event with itself and never read

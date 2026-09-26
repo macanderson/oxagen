@@ -85,6 +85,8 @@ export function createUnpricedModelListHandler(
           tokenClass: w.tokenClass,
           unpricedFrom: w.unpricedFrom.toISOString(),
           unpricedTo: w.unpricedTo.toISOString(),
+          calls: w.calls,
+          units: w.units,
         })),
         fullyUnpriced: m.fullyUnpriced,
       })),

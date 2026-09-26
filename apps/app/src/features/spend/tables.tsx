@@ -30,7 +30,12 @@ import { SafeLink } from "@/ui/navigation";
 import { OperatorName } from "@/ui/operator";
 import { cell, numericCell, Table } from "@/ui/table";
 import { BudgetDialog } from "./budget-dialog";
-import { BasisLabel, CostFigure, NotRecordedValue } from "./figures";
+import {
+  BasisLabel,
+  CostFigure,
+  NotRecordedValue,
+  UnmeteredNote,
+} from "./figures";
 import { NotBacked } from "./not-backed";
 import {
   cacheHitRate,
@@ -417,6 +422,11 @@ export function ModelTable({ month, at }: { month: SpendReport; at: SpendAt }) {
             <span className="text-[11.5px] font-normal text-muted-foreground">
               {t("groups.model.totalNote")}
             </span>
+            <UnmeteredNote
+              unmetered={month.unmeteredRuns}
+              className="block text-[11.5px] font-normal text-muted-foreground"
+              testId="spend-model-unmetered"
+            />
           </th>
           <td className={`${numericCell} font-semibold`}>
             {month.total.cost === null ? (

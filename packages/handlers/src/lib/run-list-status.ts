@@ -10,8 +10,14 @@
 // sealed attempt's hot frames into its archive segment and deletes them from
 // the event log (ADR-058). An archive reference alone is not the signal,
 // because every graded seal carries one. The attempt is compacted when its
-// seal has an archive reference and no V2 frame of the attempt is left in
-// the log, the same test `ledgerCompactedRollupQuery` counts frames by.
+// seal has an archive reference, counted at least one frame, and no V2 frame
+// of the attempt is left in the log, the same test
+// `ledgerCompactedRollupQuery` counts frames by.
+//
+// The frame count matters because of the idle close (ADR-180). It seals an
+// attempt that recorded nothing, with `event_count` 0 and a segment of no
+// frames. That attempt has no hot rows because it never had any, so without
+// the count it would read compacted the moment it sealed (#4000).
 //
 // A wrapped session has no such record. Its store never compacts a
 // recording, and `tacho.sessions.num_compactions` counts the harness's
@@ -40,7 +46,7 @@ const seals = schema.agentRunAttemptSeals;
 export function compactedProbe(): SQL<boolean> {
   const seal = (column: AnyPgColumn) => qualified(seals, column);
   const event = (column: AnyPgColumn) => qualified(events, column);
-  return sql<boolean>`(${seal(seals.archiveSegmentRef)} is not null and not exists (select 1 from ${events} where ${event(events.attemptId)} = ${seal(seals.attemptId)} and ${event(events.eventRecordVersion)} = 2))`;
+  return sql<boolean>`(${seal(seals.archiveSegmentRef)} is not null and ${seal(seals.eventCount)} > 0 and not exists (select 1 from ${events} where ${event(events.attemptId)} = ${seal(seals.attemptId)} and ${event(events.eventRecordVersion)} = 2))`;
 }
 
 /**

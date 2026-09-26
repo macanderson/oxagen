@@ -1,20 +1,31 @@
 // The runtimes port on the kernel (ARCHITECTURE.md §3.3): the workspace's host
-// enrollments (`list_tacho_hosts`) and the identities they name
-// (`list_agents`), both noBillingGate reads, each mapped into its view model.
+// enrollments (`list_tacho_hosts`), the identities they name (`list_agents`),
+// and the runtimes the workspace named (`list_runtimes`, ADR-198), each a
+// noBillingGate read mapped into its view model.
 //
-// Both reads walk their cursor to the end under a bound. The Runtimes page
+// The first two walk their cursor to the end under a bound. The Runtimes page
 // counts what it lists, and one page read as the whole workspace would be a
 // figure that reads as a fact; `more` says when the bound stopped the walk.
+// `list_runtimes` answers every runtime in one read.
 import "server-only";
 import { agentList } from "@oxagen/oxagen/contracts/agent.list";
+import { runtimeList } from "@oxagen/oxagen/contracts/runtime.list";
 import { tachoHostList } from "@oxagen/oxagen/contracts/tacho.host.list";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
-import { RuntimeAgents, RuntimeList } from "@/data/contracts/runtimes";
+import {
+  NamedRuntimeList,
+  RuntimeAgents,
+  RuntimeList,
+} from "@/data/contracts/runtimes";
 import { type ContractOutput, kernelRead } from "@/server/kernel";
-import { toRuntimeAgent, toRuntimeEnrollment } from "./mappers/runtimes";
+import {
+  toNamedRuntimeList,
+  toRuntimeAgent,
+  toRuntimeEnrollment,
+} from "./mappers/runtimes";
 
 /** 200 enrollments a page, five pages: a thousand enrollments before the page says it stopped. */
 const HOST_PAGE = 200;
@@ -96,5 +107,19 @@ export const runtimes: DataSource["runtimes"] = {
       if (cursor === null) break;
     }
     return view(ctx.orgId, RuntimeAgents, { agents }, "runtimes.agents");
+  },
+  async named(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: runtimeList,
+      input: {},
+      page: "runtimes",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      NamedRuntimeList,
+      toNamedRuntimeList(read.value),
+      "runtimes.named",
+    );
   },
 };

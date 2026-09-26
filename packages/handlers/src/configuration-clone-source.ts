@@ -1,7 +1,6 @@
 import { schema, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import type { ConfigurationKind } from "@oxagen/oxagen/configuration-clone";
-import { agentDefinitionPath } from "@oxagen/oxagen/contracts/agent.propose";
 import {
   skillFilePathSchema,
   skillPath,
@@ -26,19 +25,11 @@ export type ConfigurationSource = {
   name: string;
   source: string;
   files: Array<{ path: string; content: string }>;
-  harness:
-    | "stella"
-    | "claude-code"
-    | "codex"
-    | "cursor"
-    | "claude-agent-sdk"
-    | "custom"
-    | null;
   repository: SkillRepository;
   constraintEffect?: "require" | "forbid";
 };
 export function configurationSourceDigest(source: ConfigurationSource) {
-  return `sha256:${sha256Hex(canonicalJson({ id: source.id, slug: source.slug, name: source.name, repositoryBindingId: source.repository.bindingId, source: source.source, files: source.files, harness: source.harness, constraintEffect: source.constraintEffect ?? null }))}`;
+  return `sha256:${sha256Hex(canonicalJson({ id: source.id, slug: source.slug, name: source.name, repositoryBindingId: source.repository.bindingId, source: source.source, files: source.files, constraintEffect: source.constraintEffect ?? null }))}`;
 }
 export async function readConfigurationSource(
   scope: SkillScope,
@@ -48,39 +39,6 @@ export async function readConfigurationSource(
   const repository = await resolveSkillRepository(scope);
   let slug = sourceId;
   let name = sourceId;
-  let harness: ConfigurationSource["harness"] = null;
-  if (kind === "agent") {
-    const [agent] = await withTenantDb((tx) =>
-      tx
-        .select({
-          id: schema.agents.publicId,
-          slug: schema.agents.slug,
-          name: schema.agents.name,
-          harness: schema.agents.harness,
-        })
-        .from(schema.agents)
-        .where(
-          and(
-            eq(schema.agents.orgId, scope.orgId),
-            eq(schema.agents.workspaceId, scope.workspaceId),
-            or(
-              eq(schema.agents.publicId, sourceId),
-              eq(schema.agents.slug, sourceId),
-            ),
-          ),
-        )
-        .limit(1),
-    );
-    if (!agent)
-      throw new HandlerError({
-        code: "not_found",
-        reason: "clone_source_missing",
-        message: "The source agent was not found in this workspace",
-      });
-    slug = agent.slug;
-    name = agent.name;
-    harness = agent.harness as ConfigurationSource["harness"];
-  }
   let constraintEffect: ConfigurationSource["constraintEffect"];
   if (kind === "record") {
     const [record] = await withTenantDb((tx) =>
@@ -189,7 +147,6 @@ export async function readConfigurationSource(
     name,
     source,
     files,
-    harness,
     repository,
     ...(constraintEffect ? { constraintEffect } : {}),
   };
@@ -197,17 +154,12 @@ export async function readConfigurationSource(
 
 /** The repository file a configuration of `kind` publishes to. */
 export function configurationFilePath(kind: ConfigurationKind, slug: string) {
-  return kind === "agent"
-    ? agentDefinitionPath(slug)
-    : kind === "skill"
-      ? skillPath(slug)
-      : recordFilePath(slug);
+  return kind === "skill" ? skillPath(slug) : recordFilePath(slug);
 }
 
 /** The proposal branch a configuration of `kind` is proposed on. */
 export function configurationBranchName(kind: ConfigurationKind, slug: string) {
-  const prefix =
-    kind === "agent" ? "agents" : kind === "skill" ? "skills" : "context";
+  const prefix = kind === "skill" ? "skills" : "context";
   return `${prefix}/${slug}`;
 }
 
@@ -233,21 +185,6 @@ export async function readTakenConfigurationNames(
   const slugs = new Set<string>();
   const names = new Set<string>();
   await withTenantDb(async (tx) => {
-    if (kind === "agent") {
-      const rows = await tx
-        .select({ slug: schema.agents.slug, name: schema.agents.name })
-        .from(schema.agents)
-        .where(
-          and(
-            eq(schema.agents.orgId, scope.orgId),
-            eq(schema.agents.workspaceId, scope.workspaceId),
-          ),
-        );
-      for (const row of rows) {
-        slugs.add(row.slug);
-        names.add(row.name);
-      }
-    }
     // A record's label may repeat (ADR-178), so only its slug is taken.
     if (kind === "record") {
       const records = await tx
@@ -293,22 +230,9 @@ export async function configurationNameTaken(
   scope: SkillScope,
   original: ConfigurationSource,
   slug: string,
-  name: string,
 ) {
   const { kind, repository } = original;
   const rows = await withTenantDb(async (tx) => {
-    if (kind === "agent")
-      return tx
-        .select({ id: schema.agents.id })
-        .from(schema.agents)
-        .where(
-          and(
-            eq(schema.agents.orgId, scope.orgId),
-            eq(schema.agents.workspaceId, scope.workspaceId),
-            or(eq(schema.agents.slug, slug), eq(schema.agents.name, name)),
-          ),
-        )
-        .limit(1);
     if (kind === "record") {
       const records = await tx
         .select({ id: schema.contextRecords.id })

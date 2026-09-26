@@ -46,10 +46,10 @@ export { isManagedAgentType };
 /**
  * Refuse a write that would put a retired agent back to work. `retire_agent`
  * archives the row (`status: "archived"`), and Oxagen treats a retired agent
- * as a deleted record: it takes no new version, publish, deploy, or role.
+ * as a deleted record: it takes no new version and no role.
  * The refusal matches `assertNotRetired` in `@oxagen/handlers`, which this
  * package cannot import. `resolveAgent` still returns an archived row, so a
- * read such as `get_agent_def` keeps working. Call this on write paths only.
+ * read such as `get_agent` keeps working. Call this on write paths only.
  */
 export function assertAgentNotRetired(agent: {
   slug: string;

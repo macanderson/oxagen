@@ -301,6 +301,17 @@ export interface TranscriptWindowFrom {
  * miss a frame whose receipt time is earlier than the read. The cursor's
  * receipt therefore trails the read by this margin, and an entry with a
  * frame received inside it is sent again on the next read.
+ *
+ * The margin does not cover every insert. `insertTachoEvents` stamps the
+ * receipt before it awaits the ClickHouse insert, and the ClickHouse client
+ * sets no request timeout, so its 30-second default applies: a batch can
+ * become readable up to about 30 seconds after its stamp. A subagent frame
+ * that lands more than this margin after its stamp, in an entry that no
+ * later frame touches, reaches a reader only when the page loads again. A
+ * wider margin would close that gap but resends every entry inside it, with
+ * its bodies, on every live read, and pushes the window's start back by the
+ * same amount. Batch A1 (#4384) closed it with a digest of the frames
+ * received in the last minute, which this cursor does not carry.
  */
 export const RECEIPT_SETTLE_MS = 10_000;
 
@@ -1211,6 +1222,11 @@ function decisionView(decision: TranscriptDecision) {
     source: decision.source,
     harness: decision.harness,
     at: decision.at.toISOString(),
+    // The rules the frame names, in evaluation order, and the taint a
+    // producer assessed: null for every decision today, because none does
+    // (#3971, ADR-201).
+    rules: decision.rules,
+    taint: decision.taint,
   };
 }
 

@@ -37,12 +37,6 @@ vi.mock("./actions", () => ({
   readAgentRoleNames: vi.fn(() => new Promise(() => {})),
   assignAgentRole: vi.fn(),
   revokeAgentRole: vi.fn(),
-  registerAgent: vi.fn(),
-}));
-// The wizard's folder is its own lane; the header needs only its two lists.
-vi.mock("@/features/create", () => ({
-  AGENT_HARNESSES: ["claude-code", "codex", "cursor", "stella"],
-  MODEL_TIERS: ["complex", "light"],
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -349,9 +343,8 @@ describe("Agents, loaded", () => {
         "Each row names the reusable objects this agent holds a reference to.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText(/^\.oxagen\/agents\/ @/)).toHaveTextContent(
-      ".oxagen/agents/ @ not recorded",
-    );
+    // An agent carries no definition file (ADR-198), so no source line names one.
+    expect(screen.queryByText(/\.oxagen\/agents\//)).toBeNull();
     expect(headers()).toEqual(COMPOSITION);
     expect(
       screen.getByText(
@@ -367,9 +360,10 @@ describe("Agents, loaded", () => {
       "Cuts releases and opens their pull requests.",
       "MBMarcus Bell",
       "not recorded",
-      "not recorded",
-      // The host over "<kind> · <tier>": no store records the kind.
-      "build-01not recorded · gateway",
+      // The belt the agent carries (ADR-198).
+      "All tools",
+      // The runtime over the host over "<kind> · <tier>": no store records the kind.
+      "Build boxbuild-01not recorded · gateway",
       "prn_91",
       "healthyenrolled, and its latest wrapped session recorded the gateway tier",
       "42runs 30d",
@@ -384,10 +378,6 @@ describe("Agents, loaded", () => {
       [
         "steering",
         "No store records the steering assembled for each agent yet.",
-      ],
-      [
-        "toolbelt",
-        "No store records toolbelts or their assignments to agents yet.",
       ],
       [
         "runtimeKind",
@@ -445,8 +435,9 @@ describe("Agents, loaded", () => {
     );
     const pending = rows()[1];
     if (pending === undefined) throw new Error("no row");
-    // No host, so no runtime kind: the line under the dash is the tier alone.
-    expect(cellsOf(pending)[5]).toBe("—not recorded");
+    // No host, so no runtime kind: the cell names the runtime the agent is
+    // bound to (ADR-198), and the line under the dash is the tier alone.
+    expect(cellsOf(pending)[5]).toBe("Build box—not recorded");
     expect(
       pending.querySelector('[data-gap="runtimeKind"]'),
     ).not.toBeInTheDocument();
@@ -485,7 +476,7 @@ describe("Agents, loaded", () => {
     });
     const [row] = rows();
     if (row === undefined) throw new Error("no row");
-    expect(cellsOf(row)[5]).toBe("—gateway");
+    expect(cellsOf(row)[5]).toBe("Build box—gateway");
     expect(
       row.querySelector('[data-gap="runtimeKind"]'),
     ).not.toBeInTheDocument();
@@ -558,7 +549,7 @@ describe("Agents, loaded", () => {
     ]);
     expect(first.querySelector('[data-gap="belt"]')).toHaveAttribute(
       "title",
-      "list_agents does not compute each agent's belt yet (#3852). The agent's own page shows the belt its grants give it.",
+      "list_agents does not count the tools on each agent's belt yet. The agent's own page shows the belt and the tools its grants give it.",
     );
     expect(cellsOf(second).slice(4, 11)).toEqual([
       "not recorded",
@@ -571,12 +562,12 @@ describe("Agents, loaded", () => {
     ]);
   });
 
-  it("links Edit to the definition tab, opens the role dialog from Roles, and draws Deregister as the danger action", async () => {
+  it("links Edit to the toolbelt tab, opens the role dialog from Roles, and draws Deregister as the danger action", async () => {
     await renderAgents({ list: agentPage([agentRow()]) });
     const row = only(rows());
     expect(within(row).getByRole("link", { name: "Edit" })).toHaveAttribute(
       "href",
-      "/acme/core-platform/agents/release-bot/definition",
+      "/acme/core-platform/agents/release-bot/toolbelt",
     );
     expect(
       within(row).getByRole("button", { name: "Deregister" }).className,
@@ -877,18 +868,26 @@ describe("Agents, deregistered", () => {
 });
 
 describe("Agents header actions", () => {
-  it("draws New agent, Register an agent and Wrap Claude Code in order, with Wrap the one gold action", () => {
-    render(
+  it("draws Add a runtime and Register an agent, with Register the one gold action into the register flow (ADR-198)", async () => {
+    const { container } = render(
       <IntlProvider>
         <AgentsCreate org="acme" ws="core-platform" />
       </IntlProvider>,
     );
     expect(
       [...document.querySelectorAll("button, a")].map((el) => el.textContent),
-    ).toEqual(["New agent", "Register an agent", "Wrap Claude Code"]);
-    const wrap = screen.getByRole("link", { name: "Wrap Claude Code" });
-    expect(wrap).toHaveAttribute("href", "/acme/core-platform/register/name");
-    expect(wrap.className).toBe(buttonPrimary);
+    ).toEqual(["Add a runtime", "Register an agent"]);
+    const register = screen.getByRole("link", { name: "Register an agent" });
+    expect(register).toHaveAttribute(
+      "href",
+      "/acme/core-platform/register/name",
+    );
+    expect(register.className).toBe(buttonPrimary);
+    expect(screen.getByRole("link", { name: "Add a runtime" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runtimes",
+    );
+    await expectNoAxe(container);
     expect(
       [...document.querySelectorAll("button, a")].filter(
         (el) => el.className === buttonPrimary,
@@ -907,11 +906,11 @@ describe("Agents, not loaded", () => {
       }),
     ).toBeInTheDocument();
     expect(empty).toHaveTextContent(
-      "An agent's identity lives in Postgres; its definition is a file in .oxagen/agents/ in the main repo. Registering one opens a Context PR — nothing is written to Postgres first.",
+      "An agent is one harness on one runtime, working for you. Register one to give it a principal, a runtime and a toolbelt.",
     );
     expect(
       [...empty.querySelectorAll("button, a")].map((el) => el.textContent),
-    ).toEqual(["Wrap Claude Code", "Register an agent"]);
+    ).toEqual(["Register an agent", "Add a runtime"]);
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
   });

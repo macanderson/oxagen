@@ -238,6 +238,8 @@ describe("an operator's command on a wrapped run", () => {
                   source: "human",
                   harness: false,
                   at: instant(9),
+                  rules: [],
+                  taint: null,
                 },
         }),
       ],

@@ -51,6 +51,7 @@ import type {
   RunChain,
   RunCost,
   RunDetail,
+  RunFindings,
   RunFrameBody,
   RunOutputs,
   RunTranscript,
@@ -59,6 +60,8 @@ import type {
   TranscriptText,
   TranscriptZoom,
 } from "./contracts/run";
+import type { RunContext } from "./contracts/run-context";
+import type { RunIssues } from "./contracts/run-issues";
 import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
 import type { InterjectionQueue } from "./contracts/interjections";
 import type {
@@ -70,7 +73,11 @@ import type {
   RunSortKey,
   RunStatus,
 } from "./contracts/runs";
-import type { RuntimeAgents, RuntimeList } from "./contracts/runtimes";
+import type {
+  NamedRuntimeList,
+  RuntimeAgents,
+  RuntimeList,
+} from "./contracts/runtimes";
 import type {
   AssistantEngine,
   OrgChoice,
@@ -117,6 +124,7 @@ import type {
   McpServerList,
   ToolVersionPage,
 } from "./contracts/tools";
+import type { ToolbeltDetail, ToolbeltList } from "./contracts/toolbelts";
 import type { Read } from "./read";
 
 export interface DataSource {
@@ -298,6 +306,24 @@ export interface DataSource {
      */
     outputs(ctx: WsCtx, runId: string): Promise<Read<RunOutputs>>;
     work(ctx: WsCtx, runId: string): Promise<Read<RunWork>>;
+    /**
+     * `get_run_issues`, the issues the run worked on with their state as the
+     * forge reads it now, read by the Issues tab (#3970).
+     */
+    issues(ctx: WsCtx, runId: string): Promise<Read<RunIssues>>;
+    /**
+     * `list_findings` narrowed to the run: each open finding that cites it,
+     * with the frames it cites, read by the Cost tab (#4001).
+     */
+    findings(ctx: WsCtx, runId: string): Promise<Read<RunFindings>>;
+    /**
+     * `get_run_context`, each model request's window block by block and the
+     * assembler's manifests (ADR-200, #3894). Read by the Governed actions
+     * tab when the open frame is a model request or a manifest, callers
+     * features/run/actions-tab.tsx, and by the Context tab,
+     * features/run/context-tab.tsx.
+     */
+    context(ctx: WsCtx, runId: string): Promise<Read<RunContext>>;
     outcomesSettings(ctx: WsCtx): Promise<Read<RunOutcomesPolicy>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
@@ -359,8 +385,8 @@ export interface DataSource {
    * features/agents/agents.tsx, features/tools/tools.tsx (the grant
    * dialog's agent picker) and features/fleet/fleet.tsx (the steer dialog's
    * agents and the Live runs tile's workspace total); get_agent, the identity with its credentials,
-   * roles, hosts and cached definition, callers features/agents/agent.tsx and
-   * agent-source.tsx; get_agent_toolbelt, the computed belt, and
+   * roles, hosts, runtime, toolbelt and versions (ADR-198), callers
+   * features/agents/agent.tsx and the register flow; get_agent_toolbelt, the computed belt, and
    * list_incidents narrowed to the agent, one cursor page, caller
    * features/agents/agent.tsx.
    */
@@ -646,6 +672,14 @@ export interface DataSource {
     ): Promise<Read<ConnectionList>>;
     /** list_mcp_servers: every registered MCP server in the workspace; no filter, no cursor */
     mcpServers(ctx: WsCtx): Promise<Read<McpServerList>>;
+    /**
+     * list_toolbelts (ADR-198): the All tools belt first, then its clones, and
+     * how many tools the workspace made available. Callers: the Toolbelts tab,
+     * the register flow's toolbelt step and the agent page's toolbelt control.
+     */
+    toolbelts(ctx: WsCtx): Promise<Read<ToolbeltList>>;
+    /** get_toolbelt: one belt's tools grouped by server, for the Toolbelts tab. */
+    toolbelt(ctx: WsCtx, toolbeltId: string): Promise<Read<ToolbeltDetail>>;
   };
   /**
    * The Runtimes page (roadmap mockups/pages/runtimes.md); caller:
@@ -653,10 +687,13 @@ export interface DataSource {
    * end of its cursor under a bound: one row per host enrollment, which is one
    * agent on one machine, because no host row exists. `agents` is
    * `list_agents` walked until every named key is found, for the Agents on
-   * this host table.
+   * this host table. `named` is `list_runtimes` (ADR-198): the runtimes the
+   * workspace named, each with its live agents by harness; callers: the
+   * Runtimes page, the register flow and the agent page's Move control.
    */
   runtimes: {
     list(ctx: WsCtx): Promise<Read<RuntimeList>>;
     agents(ctx: WsCtx, keys: readonly string[]): Promise<Read<RuntimeAgents>>;
+    named(ctx: WsCtx): Promise<Read<NamedRuntimeList>>;
   };
 }

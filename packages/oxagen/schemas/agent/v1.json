@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/agent/v1.json",
+  "title": "Agent",
+  "description": "One file per agent in agents/: its operator, runtime, and harness. Cedar reads it as the principal.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "agent/v1"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$",
+      "description": "The agent's name and the file's name: agents/<name>.toml."
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "operator": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "description": "An Oxagen member or team."
+    },
+    "runtime": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "A runtime enrolled in Oxagen."
+    },
+    "harness": {
+      "type": "string",
+      "enum": [
+        "stella",
+        "claude-code",
+        "codex",
+        "cursor",
+        "claude-agent-sdk",
+        "custom"
+      ],
+      "description": "The harness, or the framework adapter, the agent runs in."
+    }
+  },
+  "required": [
+    "schema",
+    "name",
+    "label",
+    "operator",
+    "runtime",
+    "harness"
+  ],
+  "additionalProperties": false
+}

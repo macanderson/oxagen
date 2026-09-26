@@ -1,0 +1,18 @@
+{
+  "check": "budget",
+  "rule": "tool-definitions",
+  "severity": "warning",
+  "description": "Direct-mode tool definitions pass [tools] definition_budget. The check warns and never fails.",
+  "refused_by_reader": false,
+  "changed": [
+    "workspace.toml"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "workspace.toml",
+      "line": 19,
+      "field": "tools.definition_budget"
+    }
+  ]
+}

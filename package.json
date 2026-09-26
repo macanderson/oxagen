@@ -9,7 +9,7 @@
   },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "prepare": "lefthook install && node tools/scripts/ensure-harness-bridges.mjs",
+    "prepare": "node tools/scripts/install-git-hooks.mjs && node tools/scripts/ensure-harness-bridges.mjs",
     "dev": "tsx tools/scripts/dev.ts",
     "cli:dev": "tsx tools/scripts/cli-dev.ts",
     "cli:install": "tsx tools/scripts/cli-dev.ts --once",

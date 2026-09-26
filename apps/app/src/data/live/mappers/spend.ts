@@ -49,6 +49,7 @@ export function toSpendReport(
     period: out.period,
     total: toFigure(out.total),
     estimatedRuns: out.estimatedRuns,
+    unmeteredRuns: out.unmeteredRuns,
     rows: out.rows.map((row) => ({
       ...toFigure(row),
       key: row.key,
@@ -101,6 +102,7 @@ export function toSpendDrill(
       calls: tool.calls,
       runs: tool.runs,
     })),
+    unmeteredRuns: out.unmeteredRuns,
   };
 }
 
@@ -277,6 +279,13 @@ export function toUnpricedModels(
       firstSeen: model.firstSeen,
       lastSeen: model.lastSeen,
       missingClasses: model.missingClasses,
+      missingClassWindows: model.missingClassWindows.map((window) => ({
+        tokenClass: window.tokenClass,
+        calls: window.calls,
+        units: window.units,
+        from: window.unpricedFrom,
+        to: window.unpricedTo,
+      })),
       fullyUnpriced: model.fullyUnpriced,
     })),
   };

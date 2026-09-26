@@ -18,7 +18,7 @@ Oxagen holds the connection through a **GitHub App**. You choose which repositor
 | Issues and comments | Issues | Read-only |
 | Workflow and check metadata | Actions + Checks | Read-only |
 
-This ingestion flow reads provider metadata. Definition-commit capabilities separately write agent and control definitions to the workspace repository. It does not upload source text, symbols, chunks, code embeddings, imports, or uncommitted state into the workspace graph.
+This ingestion flow reads provider metadata. Proposal capabilities separately write steering records and skills to the workspace repository. It does not upload source text, symbols, chunks, code embeddings, imports, or uncommitted state into the workspace graph.
 
 ## Before you start
 
@@ -31,7 +31,7 @@ Run `oxagen init` in your project and follow its repository connection prompts. 
 
 Workspace connection routes are under `/v1/{orgSlug}/{workspaceSlug}/`. `GET connections/github/status` returns the authorization status. The GitHub callback at `/oauth/github/callback` validates the signed state before storing the authorization. Use the installation and repository endpoints to choose a repository, then `create_connection` and `set_connection_mappings` to configure ingestion.
 
-Review the GitHub App permissions when authorizing. Repository ingestion and the definition-commit capabilities are different paths. Do not assume the entire GitHub App is read-only.
+Review the GitHub App permissions when authorizing. Repository ingestion and the proposal capabilities are different paths. Do not assume the entire GitHub App is read-only.
 
 ## What happens during the initial sync
 

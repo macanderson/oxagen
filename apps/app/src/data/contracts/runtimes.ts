@@ -104,3 +104,42 @@ export const RuntimeAgents = z.object({
   agents: z.array(RuntimeAgent),
 });
 export type RuntimeAgents = z.infer<typeof RuntimeAgents>;
+
+const Harness = z.enum([
+  "stella",
+  "claude-code",
+  "codex",
+  "cursor",
+  "claude-agent-sdk",
+  "custom",
+]);
+
+/**
+ * A runtime the workspace named (`list_runtimes`, ADR-198): a laptop, a VM or
+ * a cloud workspace, with the live agents on it, one per harness. The register
+ * form reads `agents` to disable a runtime and harness pair already taken.
+ */
+export const NamedRuntime = z.object({
+  /** `rtm_…`. */
+  id: PublicId,
+  name: z.string().min(1),
+  slug: z.string().min(1),
+  createdAt: Instant,
+  agents: z.array(
+    z.object({
+      id: PublicId,
+      name: z.string().min(1),
+      slug: z.string().min(1),
+      harness: Harness,
+    }),
+  ),
+  /** Host enrollments bound to the runtime that are not revoked. */
+  liveHosts: Count,
+  lastSeenAt: Instant.nullable(),
+});
+export type NamedRuntime = z.infer<typeof NamedRuntime>;
+
+export const NamedRuntimeList = z.object({
+  runtimes: z.array(NamedRuntime),
+});
+export type NamedRuntimeList = z.infer<typeof NamedRuntimeList>;

@@ -22,6 +22,7 @@ import type {
   SpendReport,
 } from "@/data/contracts/spend";
 import { readOk } from "@/data/read";
+import { routes } from "@/shared/safe-path";
 import { IntlProvider } from "@/test/intl";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
@@ -230,6 +231,37 @@ describe("Finding evidence", () => {
     await waitFor(() => {
       // Findings is the default tab, so the list is the bare Spend path.
       expect(nav.replace).toHaveBeenCalledWith("/acme/core-platform/spend");
+    });
+  });
+
+  it("returns to the page it opened over when that page names where (#4001)", async () => {
+    const user = userEvent.setup();
+    const finding = NINE[2];
+    if (finding === undefined) throw new Error("fixture");
+    render(
+      <IntlProvider>
+        <FindingEvidence
+          evidence={readOk({
+            finding,
+            calls: 2,
+            coveredCalls: 2,
+            measuredTokens: 100,
+            counterfactualTokens: 40,
+            measured: { micros: "3000000", currency: "USD" },
+            counterfactual: { micros: "1000000", currency: "USD" },
+            runs: [],
+          })}
+          at={AT}
+          close={routes.run(AT.org, AT.ws, "tse_7k2m9q", { tab: "cost" })}
+        />
+      </IntlProvider>,
+    );
+    const dialog = screen.getByTestId("spend-evidence-dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(nav.replace).toHaveBeenCalledWith(
+        "/acme/core-platform/runs/tse_7k2m9q?tab=cost",
+      );
     });
   });
 });

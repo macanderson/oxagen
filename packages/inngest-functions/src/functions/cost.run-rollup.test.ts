@@ -75,6 +75,11 @@ describe("cost.run-rollup", () => {
       name: "cost/findings.requested",
       data: { orgId: "org-1", workspaceId: "ws-1" },
     });
+    // The fit reading reads the row's tokens, so it is asked for after it.
+    expect(sendEvent).toHaveBeenLastCalledWith("request-fit", {
+      name: "run/fit.requested",
+      data: { orgId: "org-1", workspaceId: "ws-1", runId: "tse_abc" },
+    });
   });
 
   it("drops a run no store has without touching the daily groups", async () => {

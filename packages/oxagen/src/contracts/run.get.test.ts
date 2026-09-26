@@ -68,6 +68,7 @@ describe("get_run contract", () => {
       operatorKind: "human",
       operatorName: "Marcus Bell",
       operatorAttribution: "initiator",
+      operatorRole: "member",
       status: "live",
       outcome: "running",
       turns: null,

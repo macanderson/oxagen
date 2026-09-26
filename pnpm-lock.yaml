@@ -742,6 +742,9 @@ importers:
       '@oxagen/billing':
         specifier: workspace:*
         version: link:../../packages/billing
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../../packages/oxagen
       '@oxagen/steering-freshness':
         specifier: workspace:*
         version: link:../../packages/steering-freshness

@@ -8,13 +8,7 @@
 //
 // The host reads the workspace's main repository each time it opens, because
 // every wizard ends on a pull request against it. It writes nothing itself.
-import {
-  Compass,
-  Fingerprint,
-  GraduationCap,
-  type LucideIcon,
-  Wrench,
-} from "lucide-react";
+import { Compass, GraduationCap, type LucideIcon, Wrench } from "lucide-react";
 import { useTranslations } from "next-intl";
 import {
   lazy,
@@ -49,7 +43,6 @@ const CloneEditor = lazy(() =>
 );
 
 const KIND_ICONS: Record<CreateKind, LucideIcon> = {
-  agent: Fingerprint,
   tool: Wrench,
   skill: GraduationCap,
   record: Compass,
@@ -411,10 +404,7 @@ export function CreateHost({
   const close = (next: boolean) => {
     if (!next) setOpen(null);
   };
-  if (
-    open.cloneSourceRef &&
-    (open.kind === "agent" || open.kind === "skill" || open.kind === "record")
-  )
+  if (open.cloneSourceRef && (open.kind === "skill" || open.kind === "record"))
     return (
       <Suspense fallback={<p role="status">{cloneText("loading")}</p>}>
         <CloneEditor

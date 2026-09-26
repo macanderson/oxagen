@@ -105,7 +105,7 @@ const members = vi.fn<DataSource["org"]["members"]>();
 const workspaces = vi.fn<DataSource["org"]["workspaces"]>();
 const refuse = () => Promise.reject(new Error("not an Audit read"));
 const source: DataSource = {
-  runtimes: { list: refuse, agents: refuse },
+  runtimes: { list: refuse, agents: refuse, named: refuse },
   conversations: { latest: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
   shell: {
@@ -127,6 +127,9 @@ const source: DataSource = {
     outputs: refuse,
     work: refuse,
     outcomesSettings: refuse,
+    issues: refuse,
+    context: refuse,
+    findings: refuse,
   },
   approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
   interjections: { open: refuse, forRun: refuse },
@@ -189,6 +192,8 @@ const source: DataSource = {
     approvalRules: refuse,
     connections: refuse,
     mcpServers: refuse,
+    toolbelts: refuse,
+    toolbelt: refuse,
   },
 };
 

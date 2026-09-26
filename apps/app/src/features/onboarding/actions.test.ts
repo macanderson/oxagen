@@ -61,10 +61,11 @@ const TENANT = {
 };
 
 const agentForm = {
-  slug: "release-bot",
   name: "Release bot",
-  description: "",
+  slug: "release-bot",
   harness: "claude-code",
+  runtimeId: "rtm_buildbox",
+  toolbeltId: "",
 };
 
 const form = {
@@ -192,6 +193,14 @@ describe("registerAgent", () => {
     slug: "release-bot",
     agentKey: "acme.core.release-bot",
     principalId: "prn_91",
+    runtime: { id: "rtm_buildbox", name: "Build box", slug: "build-box" },
+    toolbelt: {
+      id: "tbt_alltools",
+      name: "All tools",
+      slug: "all-tools",
+      kind: "all_tools",
+    },
+    version: 1,
     credential: {
       id: "aky_1",
       secret: "oxa_ag_s3cr3t",
@@ -199,7 +208,7 @@ describe("registerAgent", () => {
     },
   };
 
-  it("mints the identity for the workspace viewer, keeps the secret on the server and names the wrap step", async () => {
+  it("mints the agent on its runtime for the workspace viewer, keeps the secret on the server and names the wrap step", async () => {
     invoke.mockResolvedValue(registered);
     const result = await registerAgent("acme", "core-platform", agentForm);
     expect(JSON.stringify(result)).not.toContain("oxa_ag_s3cr3t");
@@ -212,11 +221,59 @@ describe("registerAgent", () => {
       },
     });
     expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    // No toolbelt named: the handler gives the agent the All tools belt.
     expect(invoke).toHaveBeenCalledWith(
       "register_agent",
-      { slug: "release-bot", name: "Release bot", harness: "claude-code" },
+      {
+        name: "Release bot",
+        slug: "release-bot",
+        harness: "claude-code",
+        runtimeId: "rtm_buildbox",
+      },
       expect.objectContaining(TENANT),
     );
+  });
+
+  it("sends the toolbelt the form chose", async () => {
+    invoke.mockResolvedValue(registered);
+    await registerAgent("acme", "core-platform", {
+      ...agentForm,
+      toolbeltId: "tbt_reviewbelt",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "register_agent",
+      expect.objectContaining({ toolbeltId: "tbt_reviewbelt" }),
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses a registration with no runtime, before minting an identity (negative)", async () => {
+    expect(
+      await registerAgent("acme", "core-platform", {
+        ...agentForm,
+        runtimeId: "",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "agentRuntimeRequired",
+      field: "runtimeId",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns a taken runtime and harness pair as the conflict the handler named (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({
+        code: "conflict",
+        reason: "runtime_harness_taken",
+      }),
+    );
+    expect(await registerAgent("acme", "core-platform", agentForm)).toEqual({
+      ok: false,
+      reason: "conflict",
+      code: "runtime_harness_taken",
+    });
   });
 
   it.each(["claude-agent-sdk", "custom"])(
@@ -249,19 +306,6 @@ describe("registerAgent", () => {
       field: "harness",
     });
     expect(invoke).not.toHaveBeenCalled();
-  });
-
-  it("sends a description only when one was written", async () => {
-    invoke.mockResolvedValue(registered);
-    await registerAgent("acme", "core-platform", {
-      ...agentForm,
-      description: " Cuts releases. ",
-    });
-    expect(invoke).toHaveBeenCalledWith(
-      "register_agent",
-      expect.objectContaining({ description: "Cuts releases." }),
-      expect.objectContaining(TENANT),
-    );
   });
 
   it("refuses a slug the contract would refuse, before the kernel runs (negative)", async () => {

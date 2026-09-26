@@ -125,7 +125,7 @@ const findingEvidence = vi.fn<DataSource["spend"]["findingEvidence"]>();
 const priceBook = vi.fn<DataSource["spend"]["priceBook"]>();
 const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
 const source: DataSource = {
-  runtimes: { list: vi.fn(), agents: vi.fn() },
+  runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
   conversations: { latest: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: {
@@ -155,6 +155,9 @@ const source: DataSource = {
     outputs: vi.fn(),
     work: vi.fn(),
     outcomesSettings: vi.fn(),
+    issues: vi.fn(),
+    context: vi.fn(),
+    findings: vi.fn(),
   },
   approvals: { pending: vi.fn(), resolved: vi.fn(), resolvedSince: vi.fn() },
   interjections: { open: vi.fn(), forRun: vi.fn() },
@@ -214,6 +217,8 @@ const source: DataSource = {
     approvalRules: vi.fn(),
     connections: vi.fn(),
     mcpServers: vi.fn(),
+    toolbelts: vi.fn(),
+    toolbelt: vi.fn(),
   },
 };
 
@@ -452,6 +457,55 @@ describe("Spend › open runs (#3980)", () => {
     await renderSpend();
     expect(tile("Spend")).not.toHaveTextContent("estimate");
     expect(screen.queryByTestId("spend-estimate")).toBeNull();
+  });
+});
+
+describe("Spend › runs with no usage (#3304)", () => {
+  /** The month by model, with runs the total counts and cannot price. */
+  function unmetered(unmeteredRuns: SpendReport["unmeteredRuns"]) {
+    const month = monthByModel();
+    if (!month.ok) throw new Error("monthByModel must answer");
+    byGroup.mockImplementation((_ctx, groupBy) =>
+      Promise.resolve(
+        groupBy === "model"
+          ? readOk({ ...month.value, unmeteredRuns })
+          : report([]),
+      ),
+    );
+  }
+
+  it("says how many runs reported no usage, and on which harness, beside the total that leaves them out", async () => {
+    loaded();
+    unmetered({
+      total: 3,
+      byHarness: [
+        { harness: "codex", runs: 2 },
+        { harness: "cursor", runs: 1 },
+      ],
+    });
+    await renderSpend();
+    expect(screen.getByTestId("spend-unmetered")).toHaveTextContent(
+      "3 runs reported no usage and are not in this total: codex 2, cursor 1",
+    );
+    expect(tile("Spend")).toContainElement(
+      screen.getByTestId("spend-unmetered"),
+    );
+  });
+
+  it("says it again on the By model total row, which prints the same total", async () => {
+    loaded();
+    unmetered({ total: 1, byHarness: [{ harness: "cursor", runs: 1 }] });
+    await renderSpend(["model"]);
+    expect(screen.getByTestId("spend-model-unmetered")).toHaveTextContent(
+      "1 run reported no usage and is not in this total: cursor 1",
+    );
+  });
+
+  it("says nothing when every run in the month reported usage (negative)", async () => {
+    loaded();
+    unmetered({ total: 0, byHarness: [] });
+    await renderSpend();
+    expect(screen.queryByTestId("spend-unmetered")).toBeNull();
   });
 });
 

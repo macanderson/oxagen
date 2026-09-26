@@ -191,7 +191,39 @@ describe("compound shell lines", () => {
     ).toMatchObject({
       decision: "allow",
       rule: "Bash(git add:*) and Bash(git commit:*)",
+      rules: ["Bash(git add:*)", "Bash(git commit:*)"],
     });
+  });
+
+  it("lists each segment's rule once, in segment order (#3971)", () => {
+    // The list is the source of truth the Policy tab prints; the joined
+    // `rule` stays for `tacho.session_commands.policy_rule`.
+    const allowed = evaluate(
+      { allow: ["Bash(git commit:*)", "Bash(git add:*)"] },
+      "Bash",
+      { command: "git add a && git commit -m x && git add b" },
+    );
+    expect(allowed.rules).toEqual(["Bash(git add:*)", "Bash(git commit:*)"]);
+    expect(allowed.rule).toBe("Bash(git add:*) and Bash(git commit:*)");
+    // One rule that covers the whole line is the one rule listed.
+    expect(
+      evaluate({ allow: ["Bash"] }, "Bash", { command: "ls && pwd" }).rules,
+    ).toEqual(["Bash"]);
+    // A deny and an ask each name the one rule that decided.
+    expect(
+      evaluate({ deny: ["Bash(rm -rf:*)"], allow: ["Bash"] }, "Bash", {
+        command: "true && rm -rf /",
+      }).rules,
+    ).toEqual(["Bash(rm -rf:*)"]);
+    expect(
+      evaluate({ ask: ["Bash(git push:*)"] }, "Bash", {
+        command: "git add . && git push",
+      }).rules,
+    ).toEqual(["Bash(git push:*)"]);
+    // No rule decided: neither form is set.
+    const none = evaluate({ allow: [] }, "Bash", { command: "make" });
+    expect(none.rule).toBeUndefined();
+    expect(none.rules).toBeUndefined();
   });
 
   it("matches a rule stored with surrounding whitespace", () => {

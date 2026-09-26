@@ -4,11 +4,13 @@ One run read as a transcript at one of three zoom levels (Mission Control spec ย
 
 A wrapped run's subagents record on chains of their own. The transcript reads every chain under the run's root session and places each subagent chain directly after the `subagent_start` that spawned it. An entry from a subagent chain carries `subagent`, and its body halves and decisions carry `sessionUuid`, because a subagent chain numbers its frames from 0 like the run's. `get_run_frame_body` reads the run's own chain only.
 
-The cursor is opaque. A reader passes it back as `after` unchanged, and a read from it sends each entry the reader lacks or holds in an older state (see Cursor).
+The cursor is opaque, and it is at most 256 characters. A reader passes it back as `after` unchanged, and a read from it sends each entry the reader lacks or holds in an older state (see Cursor).
 
 A page reads a bounded range of the run's frames rather than the run from the cursor to its end, and a subagent chain is read by its `session_uuid` from the list Postgres keeps, so a read's cost does not grow with the workspace. A whole-run reader pages at the largest `limit` the contract allows. The Cost tab's per-turn ledger is `get_run_turns`, which counts every frame of the run in one grouped read rather than paging this one (#4067).
 
 A body the store cannot return reads as `text: null` on its half; the rest of the page is still answered.
+
+A compacted ledger attempt is read from its archive segment (spec ยง13.3, ADR-058). Frame compaction deletes a sealed attempt's hot rows once its segment holds them, and the ledger store then restores the attempt's frames from the segment the seal wrote. The segment holds the frames the seal committed to, so the transcript folds the same entries, counts and pages as it did from the hot rows. `get_run` and `list_runs` answer `compacted: true` for such a run, and the Transcript tab says it is read from the archive.
 
 ## Mode
 
@@ -96,7 +98,7 @@ The Run page's transcript mockup (`mockups/pages/run-transcript.md`) draws the s
 | `entries[].callId` | string or null | the call the opening frame belongs to (`tool_call_id`, `model_call_id`, or a wrapped `toolUseId`); null when the producer recorded none. A client reads steps at the `steps` zoom rather than pairing `everything` entries on this value (ADR-182) |
 | `entries[].kinds` | string[] | the chips this entry answers to |
 | `entries[].target` | string or null | what Oxagen's gate recorded the call acting on (`tool_target`: a command, a path, a pattern), cut at 400 characters; absent when the gate recorded none |
-| `entries[].effort` | string or null | the reasoning effort the model call ran at (`low`, `medium`, `high`), as the harness recorded it on `tacho_events.effort`; null when none was recorded |
+| `entries[].effort` | string or null | the reasoning effort the model call ran at (`low`, `medium`, `high`): the `request_effort` a proxied request body carried where Oxagen read one, else the harness's report on `tacho_events.effort` (#3891); null when neither was recorded |
 | `entries[].subagent` | object or absent | on an entry from a subagent chain: `{ sessionUuid, id, type }`, plus `spawnCallId`, the `tool_use_id` of the Task or Agent call that spawned it, and `parentSessionUuid`, the chain that spawned this one. A client nests the entry by `parentKey` |
 | `entries[].request` | object or null | what went out; null when the recording has only the terminal receipt |
 | `entries[].response` | object or null | what came back; null when only a write-ahead intention was recorded |
@@ -107,7 +109,7 @@ The Run page's transcript mockup (`mockups/pages/run-transcript.md`) draws the s
 | `entries[].{request,response}.text` | string or null | the body as UTF-8, cut at the zoom's cap (see below); null when no body was retained, the body is not text, the frame carried no content, the stored bytes do not hash to the recorded digest, or the half carries an `assembly` instead |
 | `entries[].{request,response}.truncated` | boolean | true when `text` was cut |
 | `entries[].{request,response}.assembly` | object or null | a recorded model stream folded into the message it was; null for every other half |
-| `entries[].decision` | object or null | `{ seq, decision, type, source, harness, at }`, the decision folded into the entry. An operator command records the command as `decision`. `source` is who decided, in the envelope's `policy_source` words: `bundle` or `kernel` for Oxagen policy, `human` for an operator, `harness` or `managed_settings` for the agent's own harness; null when the frame names none. `harness` is true when the source is the agent's harness checking itself and false otherwise, including when the source is unrecorded. A reader sorts decisions on `harness`, not on its own list of source words. An operator command is its own entry at `steps`, and at `turns` it is never the turn's decision, because it is about the run and not about any one call |
+| `entries[].decision` | object or null | `{ seq, decision, type, source, harness, at, rules, taint }`, the decision folded into the entry. `rules` lists the rule ids or permission patterns that matched, in evaluation order, and is empty when the frame names none. A frame sealed before `policy_rules` existed names its joined `policy_rule` as a list of one, kept whole. `taint` is null when no producer assessed taint, and an empty list when one assessed the inputs as untainted (#3971). Both default, so an older answer still parses. An operator command records the command as `decision`. `source` is who decided, in the envelope's `policy_source` words: `bundle` or `kernel` for Oxagen policy, `human` for an operator, `harness` or `managed_settings` for the agent's own harness; null when the frame names none. `harness` is true when the source is the agent's harness checking itself and false otherwise, including when the source is unrecorded. A reader sorts decisions on `harness`, not on its own list of source words. An operator command is its own entry at `steps`, and at `turns` it is never the turn's decision, because it is about the run and not about any one call |
 | `entries[].frames` | integer | frames folded, the opening frame included |
 | `entries[].turn` | integer or null | the turn the opening frame belongs to, 1-based, the same at every zoom and under every chip filter. A recording with `turn_start` frames counts them, and a frame before the first one is in no turn (null). A recording without them starts a new turn wherever the turn index changes, and every frame is in one. The ledger writes the index only on `model.call_completed`, so the context and model frames recorded just before that call belong to its turn, while the tool frames after the previous call stay in the previous turn. A client groups `everything` entries into turns by this value |
 | `entries[].cost` | `{ micros, currency, basis }` or null | the folded frames' cost records summed; null when none carried one. Ledger frames carry no cost record; spend is metered per run |
@@ -184,6 +186,8 @@ A subagent chain numbers its frames from 0, so a frame it records after a read c
 
 Ingest moves the chain's session row in Postgres before it inserts the batch into ClickHouse, so a read can miss a frame whose receipt time is earlier than the read. The receipt therefore trails the read by a settle margin of **10** seconds (`RECEIPT_SETTLE_MS` in the handler). An entry with a frame received inside the margin is sent again on the next read, and the reader replaces the copy it holds.
 
+The margin does not cover every insert. Ingest stamps the receipt time before it waits on the ClickHouse insert, and that insert can take up to the client's 30-second default timeout. A subagent frame that becomes readable more than 10 seconds after its stamp, in an entry no later frame touches, reaches the reader only when the page loads again.
+
 ### The window (#3823)
 
 A read from a cursor reads a window of the run, not the run again from its first frame. The window starts at the latest frame on the run's own chain that opens a turn, at or before the last entry the reader was sent. So an entry still open there, one the page had no room for, and on a live run a call still waiting on its result all lie inside it. The window holds every subagent chain spawned inside it, each read whole. When the frame cap cut a read short and no such turn lies ahead of the last window, the next window starts at a turn that leaves a waiting call behind, or else at a step boundary inside a turn. So a long run's reader pages past the 10 000th frame.
@@ -212,7 +216,7 @@ Label, subject and target are on the entry. The halves are in the evidence store
 
 A `quiet` entry is not searched: it draws no row, so it can neither match nor count as unsearched, and it spends none of the bound.
 
-A read with a `query` is not windowed. It reads the run from its first frame up to the 10 000-frame cap, on every page, so a search reaches entries past the page a reader loaded. A read from a cursor searches only the entries it and the pages after it can still send: those past the cursor, and those before it that grew since they were sent. The pages before it searched the rest, so paging through a search reads each body once rather than once per page.
+A read with a `query` is not windowed. It reads the run from its first frame up to the 10 000-frame cap, on every page, so a search reaches entries past the page a reader loaded. A read from a cursor searches only the entries it and the pages after it can still send: those past the cursor, and those before it that grew since they were sent or hold a frame received after the cursor's receipt. The pages before it searched the rest, so paging through a search reads each body once rather than once per page.
 
 `search` says what the query found over the entries the read searched: the whole run on a first page, and from the cursor on after it, never only the page:
 

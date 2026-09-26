@@ -88,12 +88,6 @@ describe("buildCommands", () => {
     expect(inGroup("create")).toEqual([
       { id: "create", label: "create:any", group: "create", create: null },
       {
-        id: "create:agent",
-        label: "create:agent",
-        group: "create",
-        create: "agent",
-      },
-      {
         id: "create:skill",
         label: "create:skill",
         group: "create",

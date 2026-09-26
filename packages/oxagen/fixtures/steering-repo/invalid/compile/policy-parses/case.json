@@ -1,0 +1,17 @@
+{
+  "check": "compile",
+  "rule": "policy-parses",
+  "severity": "error",
+  "description": "A Cedar policy does not parse.",
+  "refused_by_reader": false,
+  "changed": [
+    "policy/broken.cedar"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "policy/broken.cedar",
+      "line": 4
+    }
+  ]
+}

@@ -1,10 +1,9 @@
 // Syntax tokens for the languages a transcript shows: the shell commands an
 // agent ran, and the JSON a tool was handed or returned.
 //
-// It shares its token kinds with `toml-highlight.ts`, because the house has
-// exactly one set of code colours (`--code-*` in `apps/app/src/app/globals.css`)
-// and a transcript that invented a seventh would be the only surface in the
-// product with a colour nothing else uses. A scanner here colours; it never
+// Its token kinds are the house's one set of code colours (`--code-*` in
+// `apps/app/src/app/globals.css`), and a transcript that invented a seventh
+// would be the only surface in the product with a colour nothing else uses. A scanner here colours; it never
 // judges, never throws and never drops a character: every byte of the source
 // lands in exactly one token, in order, and text it cannot read is a `text`
 // token. Pure and edge-safe, so a malformed command still paints.

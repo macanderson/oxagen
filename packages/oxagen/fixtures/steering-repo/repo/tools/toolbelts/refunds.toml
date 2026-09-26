@@ -1,0 +1,9 @@
+#:schema https://oxagen.sh/schemas/toolbelt/v1.json
+schema = "toolbelt/v1"
+name = "refunds"
+label = "Refunds"
+description = "Look up charges and refund them."
+tools = [
+  "stripe__list_charges",
+  "billing__*",                 # every imported tool of the billing server
+]

@@ -18,27 +18,9 @@ const source = (
   name: "Review",
   source: text,
   files: [],
-  harness: "claude-code",
   repository: {} as ConfigurationSource["repository"],
 });
 describe("configuration clone source projection", () => {
-  it("copies agent configuration and harness settings without identity-bound fields", () => {
-    const original = source(
-      "agent",
-      'schema="agent-definition/v0.1"\nslug="review"\nname="Review"\ntools=["read_file"]\nprincipal_id="old"\ncredential="secret"\n[harness.claude-code]\ncolor="gold"',
-    );
-    const parsed = parse(
-      clonedConfigurationText(original, "review-cloned", "Review-cloned"),
-    );
-    expect(parsed).toEqual({
-      schema: "agent-definition/v0.1",
-      slug: "review-cloned",
-      name: "Review-cloned",
-      tools: ["read_file"],
-      harness: { "claude-code": { color: "gold" } },
-    });
-    expect(original.source).toContain('principal_id="old"');
-  });
   it("updates only the skill name while retaining quoted version and instructions", () => {
     const original = source(
       "skill",
@@ -89,13 +71,6 @@ describe("configuration clone source projection", () => {
   it("refuses source identity mismatches", () => {
     expect(() =>
       clonedConfigurationText(
-        source("agent", 'slug="other"'),
-        "review-cloned",
-        "Review-cloned",
-      ),
-    ).toThrow();
-    expect(() =>
-      clonedConfigurationText(
         source(
           "skill",
           '---\nname: other\nversion: "1.0.0"\nscope: workspace\n---\nBody',
@@ -104,44 +79,36 @@ describe("configuration clone source projection", () => {
         "Review-cloned",
       ),
     ).toThrow();
+    expect(() =>
+      clonedConfigurationText(
+        source("record", 'schema="context-record/v0.1"\nrecord=[]'),
+        "review-cloned",
+        "Review-cloned",
+      ),
+    ).toThrow();
   });
 });
 
 describe("clone editor identity", () => {
-  it.each(["agent", "record"] as const)(
-    "uses explicit %s identity while retaining edited configuration",
-    (kind) => {
-      const text = applyCloneIdentity({
-        kind,
-        sourceId: "original",
-        sourceDigest: "a".repeat(64),
-        slug: "chosen-clone",
-        name: "Chosen clone",
-        files: [],
-        harness: null,
-        source:
-          kind === "agent"
-            ? 'slug="stale"\nname="Stale"\ninstructions="Edited instructions"'
-            : 'lineageId="stale"\ntitle="Stale"\nstatement="Edited claim"',
-      });
-      expect(parse(text)).toEqual(
-        kind === "agent"
-          ? {
-              slug: "chosen-clone",
-              name: "Chosen clone",
-              instructions: "Edited instructions",
-            }
-          : {
-              // A record's name is its label (ADR-178). A title the editor
-              // left in the source stays, since it names nothing.
-              lineageId: "chosen-clone",
-              title: "Stale",
-              label: "Chosen clone",
-              statement: "Edited claim",
-            },
-      );
-    },
-  );
+  it("uses the explicit record identity while retaining edited configuration", () => {
+    const text = applyCloneIdentity({
+      kind: "record",
+      sourceId: "original",
+      sourceDigest: "a".repeat(64),
+      slug: "chosen-clone",
+      name: "Chosen clone",
+      files: [],
+      source: 'lineageId="stale"\ntitle="Stale"\nstatement="Edited claim"',
+    });
+    expect(parse(text)).toEqual({
+      // A record's name is its label (ADR-178). A title the editor left in
+      // the source stays, since it names nothing.
+      lineageId: "chosen-clone",
+      title: "Stale",
+      label: "Chosen clone",
+      statement: "Edited claim",
+    });
+  });
   it("uses the chosen skill slug and retains edited instructions", () => {
     const text = applyCloneIdentity({
       kind: "skill",
@@ -150,7 +117,6 @@ describe("clone editor identity", () => {
       slug: "chosen-clone",
       name: "chosen-clone",
       files: [],
-      harness: null,
       source:
         '---\nname: stale\nversion: "1.0.0"\nscope: workspace\n---\nEdited instructions',
     });

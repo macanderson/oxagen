@@ -99,6 +99,8 @@ const NEO4J_DOMAIN_OVERRIDES: Record<string, string> = {
   Playbook: "workflow",
   PlaybookVersion: "workflow",
   Execution: "agent",
+  // One model request's context window, joined to its :Execution (ADR-200).
+  ContextManifest: "agent",
   Fanout: "agent",
   Document: "content",
   Conversation: "chat",

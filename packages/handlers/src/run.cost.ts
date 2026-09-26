@@ -7,9 +7,15 @@
 // the row at all.
 // Until then a wrapped run answers `provisional`: the per-model figures
 // ingest has folded so far, so the page shows live spend rather than nothing.
+//
+// Beside the row it answers the agent's baseline (#3984, ADR-199): the median
+// cost and productive ratio of the agent's sealed runs in the 30 days before
+// this run started. Each tool's result cost is an estimate of input the run's
+// cost already counts, so it always carries the `estimated` basis.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import {
   runCostGet,
+  type RunCostBaseline,
   type RunCostByClass,
   type RunCostGetOutput,
   type RunCostProvisional,
@@ -21,6 +27,7 @@ import {
 } from "@oxagen/oxagen/contracts/spend.shared";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, asc, eq, isNull } from "drizzle-orm";
+import { type BaselineRun, readRunCostBaseline } from "./lib/run-cost-baseline";
 import { cost, readRunTotalsByIds, type SpendScope } from "./spend.shared";
 
 export type RunCostDeps = {
@@ -33,6 +40,11 @@ export type RunCostDeps = {
     scope: SpendScope,
     runId: string,
   ) => Promise<RunCostProvisional | null>;
+  /** The agent's baseline for a run that has a row; null when it has none. */
+  readBaseline: (
+    scope: SpendScope,
+    run: BaselineRun,
+  ) => Promise<RunCostBaseline | null>;
 };
 
 const sessions = schema.tachoSessions;
@@ -146,6 +158,7 @@ export function costByClassOf(
     cache_write_1h: figure(byClass.cache_write_1h),
     output: figure(byClass.output),
     reasoning: figure(byClass.reasoning),
+    server_tool_request: figure(byClass.server_tool_request),
   };
 }
 
@@ -158,15 +171,30 @@ export function createRunCostHandler(
       input.runId,
     );
     if (!row) {
+      // With no row there is no agent key or start to read a baseline for.
       const provisional = deps.readProvisional
         ? await deps.readProvisional(scope, input.runId)
         : null;
       return provisional === null
-        ? { runId: input.runId, rollup: null }
-        : { runId: input.runId, rollup: null, provisional };
+        ? { runId: input.runId, rollup: null, baseline: null }
+        : { runId: input.runId, rollup: null, provisional, baseline: null };
     }
+    const baseline = await deps.readBaseline(scope, {
+      runId: row.runId,
+      agentKey: row.agentKey,
+      startedAt: row.startedAt,
+      currency: row.currency,
+    });
+    // The three grade fields travel together: a row rolled up before the
+    // steps were graded answers null for all of them until its next rollup.
+    const causes = row.breakdown.steps;
+    const graded =
+      row.advancedSteps !== null &&
+      row.unproductiveSteps !== null &&
+      causes !== null;
     return {
       runId: input.runId,
+      baseline,
       rollup: {
         cost: cost(row.costMicros, row.currency, row.costBasis),
         tokens: row.tokens,
@@ -177,6 +205,9 @@ export function createRunCostHandler(
         toolCalls: row.toolCalls,
         retries: row.retries,
         productiveRatio: row.productiveRatio,
+        advancedSteps: graded ? row.advancedSteps : null,
+        unproductiveSteps: graded ? row.unproductiveSteps : null,
+        unproductiveCauses: graded ? causes : null,
         byModel: row.breakdown.models.map((m) => ({
           model: m.model,
           provider: m.provider,
@@ -189,7 +220,15 @@ export function createRunCostHandler(
           cacheSaving: cost(m.cacheSavingMicros, row.currency, m.basis),
           hasUnpriced: m.hasUnpriced,
         })),
-        byTool: row.breakdown.tools,
+        // A row rolled up before result tokens were recorded carries neither
+        // figure (#3892). The cost is the result tokens at the run's input
+        // rate: an estimate whatever basis the run's own figure has.
+        byTool: row.breakdown.tools.map((t) => ({
+          name: t.name,
+          calls: t.calls,
+          resultTokens: t.resultTokens,
+          cost: cost(t.costMicros, row.currency, "estimated"),
+        })),
         priceEntryIds: row.priceEntryIds,
         rolledUpAt: row.rolledUpAt.toISOString(),
         isEstimate: row.sealedAt === null,
@@ -201,4 +240,5 @@ export function createRunCostHandler(
 export const runCostHandler = createRunCostHandler({
   readRunTotalsByIds,
   readProvisional: readProvisionalCost,
+  readBaseline: readRunCostBaseline,
 });

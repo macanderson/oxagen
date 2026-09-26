@@ -11,7 +11,12 @@
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { findingSchema, findingStatusSchema } from "./finding.shared";
+import {
+  findingRunCitationSchema,
+  findingSchema,
+  findingStatusSchema,
+} from "./finding.shared";
+import { runPublicIdSchema } from "./run.list";
 import { costSchema, ratioSchema } from "./spend.shared";
 
 /** A window shorter than this many days annualises as if it were this long. */
@@ -24,10 +29,10 @@ export const findingList = registerCapability({
   name: "list_findings",
   domain: "spend",
   description:
-    "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised.",
+    "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised. Given a run, it lists only the findings that cite that run, each with the frames it cites there.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  surfaces: ["api", "mcp", "cli"],
+  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
@@ -37,7 +42,16 @@ export const findingList = registerCapability({
     org: { Owner: "allow", Admin: "allow", Billing: "allow", Member: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
-  input: z.object({ status: findingStatusSchema.default("open") }).strict(),
+  input: z
+    .object({
+      status: findingStatusSchema.default("open"),
+      /**
+       * Lists only the findings that cite this run (`cited_runs @> [runId]`),
+       * and the totals cover those findings (#4001).
+       */
+      runId: runPublicIdSchema.optional(),
+    })
+    .strict(),
   output: z
     .object({
       status: findingStatusSchema,
@@ -63,7 +77,14 @@ export const findingList = registerCapability({
           operators: z.number().int().nonnegative(),
         })
         .strict(),
-      findings: z.array(findingSchema).max(FINDINGS_LIST_MAX),
+      findings: z
+        .array(
+          findingSchema.extend({
+            /** What the finding cites in `input.runId`; present exactly when the read names a run. */
+            citation: findingRunCitationSchema.optional(),
+          }),
+        )
+        .max(FINDINGS_LIST_MAX),
     })
     .strict(),
 });

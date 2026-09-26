@@ -10,9 +10,9 @@
 
 ## Intent
 
-One agent identity in one read (MC spec §6.2, App. E; #2956): the identity, every long-lived credential it has held, the roles on its principal, the hosts enrolled under its agent key, and the definition of record the last `commit_agent_definition` cached. The read behind the Agents detail page's identity, definition and enrollment tabs and the CLI's `oxagen agent status`.
+One agent in one read (ADR-198; MC spec §6.2, App. E; #2956): the identity, the runtime it runs on and the toolbelt it carries, its versions, every long-lived credential it has held, the roles on its principal, and the hosts enrolled under its agent key. The read behind the Agents detail page and the CLI's `oxagen agent status`.
 
-The identity lives in Postgres and the definition in git (ADR-057 decision 1): `definition` is the newest `agent.agent_versions` row that carries a commit — path, digest, commit, branch, pull request and the file text as committed — or `null` when the agent has no committed definition. No secret leaves this read: a credential shows its prefix and dates, a host its device-key fingerprint; the contract test refuses any output field named like a secret, a hash or a key.
+An agent is one operator on one runtime with one harness. The principal, the operator and the harness never change; `versions` records each runtime and toolbelt the agent has had, newest first. No secret leaves this read: a credential shows its prefix and dates, a host its device-key fingerprint. The contract test refuses any output field named like a secret, a hash or a key.
 
 ## Input
 
@@ -28,7 +28,10 @@ The identity lives in Postgres and the definition in git (ADR-057 decision 1): `
 | `credentials[]` | object | `id` (`aky_…`), `name`, `prefix`, `createdAt`, `expiresAt`, `lastUsedAt`, `revokedAt` — revoked credentials stay listed with their date. Newest first. |
 | `roles[]` | object | `id` (`rol_…`), `name`, `scopeKind`, `isSystemDefault`, `assignedAt`, `expiresAt` — the live, unexpired assignments on the agent's principal. |
 | `hosts[]` | object | `hostEnrollmentId` (`tch_…`), `hostname`, `platform`, `status`, `mode`, `harnesses`, `deviceKeyFingerprint`, `collectorVersion`, `hooksOk`, `bundleVersionServed`, `lastSeenAt`, `expiresAt`, `revokedAt`. Newest first, revoked hosts included. |
-| `definition` | object \| null | `version`, `path`, `digest` (sha256 hex), `commitSha`, `branch`, `pullRequestUrl`, `source`, `committedAt`. |
+| `runtime` | object \| null | `id` (`rtm_…`), `name`, `slug`. Null for an agent that runs on no named runtime, such as stella's in-app assistant. |
+| `toolbelt` | object \| null | `id` (`tbt_…`), `name`, `slug`, `kind`. An agent that names no belt reads as the workspace's All tools belt; null only before any toolbelt path has touched the workspace. |
+| `versions[]` | object | `version`, `changeKind` (`registered`, `runtime_changed`, `toolbelt_changed`, `legacy`), `runtime`, `toolbelt`, `createdBy` (`usr_…`), `createdAt`. Newest first, at most 100. A `legacy` version, written before ADR-198, names no runtime or toolbelt. |
+| `limits` | object | The ceilings the active version's config sets, read the way the host bundle reads them: `perRun` and `perDay` (`{ micros, currency }`, null when unset), `containmentRequired`, and `invalid`, true when the config cannot be read and the host suspends governed actions. |
 
 ## Roles
 

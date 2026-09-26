@@ -1,7 +1,7 @@
 {
   "name": "get_agent",
   "domain": "agent",
-  "description": "Read one agent identity: principal, harness, operator and status; its long-lived credentials; the roles on its principal; the hosts enrolled under it; and the definition of record the last commit cached.",
+  "description": "Read one agent: principal, harness, operator and status; the runtime it runs on and the toolbelt it carries; its versions; its long-lived credentials; the roles on its principal; and the hosts enrolled under it.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -155,6 +155,246 @@
           "registeredAt",
           "firstFrameAt",
           "costCenter"
+        ],
+        "additionalProperties": false
+      },
+      "runtime": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "slug": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "slug"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "toolbelt": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "slug": {
+                "type": "string",
+                "minLength": 1
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "all_tools",
+                  "custom"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "slug",
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "versions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "integer",
+              "exclusiveMinimum": 0
+            },
+            "changeKind": {
+              "type": "string",
+              "enum": [
+                "registered",
+                "runtime_changed",
+                "toolbelt_changed",
+                "legacy"
+              ]
+            },
+            "runtime": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "slug": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "toolbelt": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "slug": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "all_tools",
+                        "custom"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug",
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdBy": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "createdAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "version",
+            "changeKind",
+            "runtime",
+            "toolbelt",
+            "createdBy",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 100
+      },
+      "limits": {
+        "type": "object",
+        "properties": {
+          "perRun": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "micros": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "micros",
+                  "currency"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "perDay": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "micros": {
+                    "type": "string"
+                  },
+                  "currency": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "micros",
+                  "currency"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "containmentRequired": {
+            "type": "boolean"
+          },
+          "invalid": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "perRun",
+          "perDay",
+          "containmentRequired",
+          "invalid"
         ],
         "additionalProperties": false
       },
@@ -381,66 +621,17 @@
           ],
           "additionalProperties": false
         }
-      },
-      "definition": {
-        "anyOf": [
-          {
-            "type": "object",
-            "properties": {
-              "version": {
-                "type": "integer",
-                "exclusiveMinimum": 0
-              },
-              "path": {
-                "type": "string",
-                "minLength": 1
-              },
-              "digest": {
-                "type": "string"
-              },
-              "commitSha": {
-                "type": "string",
-                "minLength": 1
-              },
-              "branch": {
-                "type": "string",
-                "minLength": 1
-              },
-              "pullRequestUrl": {
-                "type": "string",
-                "format": "uri"
-              },
-              "source": {
-                "type": "string"
-              },
-              "committedAt": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "version",
-              "path",
-              "digest",
-              "commitSha",
-              "branch",
-              "pullRequestUrl",
-              "source",
-              "committedAt"
-            ],
-            "additionalProperties": false
-          },
-          {
-            "type": "null"
-          }
-        ]
       }
     },
     "required": [
       "identity",
+      "runtime",
+      "toolbelt",
+      "versions",
+      "limits",
       "credentials",
       "roles",
-      "hosts",
-      "definition"
+      "hosts"
     ],
     "additionalProperties": false
   }

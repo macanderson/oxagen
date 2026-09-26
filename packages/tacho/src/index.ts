@@ -10,3 +10,4 @@ export * from "./wire";
 export * from "./evidence/index";
 export * from "./claude-code/llm-call-dedupe";
 export * from "./session-title";
+export * from "./context-window";

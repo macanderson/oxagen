@@ -5,6 +5,8 @@ import { approvalRuleList } from "@oxagen/oxagen/contracts/approval_rule.list";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
+import { toolbeltGet } from "@oxagen/oxagen/contracts/toolbelt.get";
+import { toolbeltList } from "@oxagen/oxagen/contracts/toolbelt.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KILL_SWITCH_BOARD_LIMIT } from "@/data/contracts/tools";
 import {
@@ -304,5 +306,116 @@ describe("tools.approvalRules", () => {
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("tools.toolbelts and tools.toolbelt (ADR-198)", () => {
+  const ref = {
+    id: "tbt_alltools",
+    name: "All tools",
+    slug: "all-tools",
+    kind: "all_tools",
+  };
+  const clone = {
+    ...ref,
+    id: "tbt_reviewbelt",
+    name: "Review belt",
+    slug: "review-belt",
+    kind: "custom",
+  };
+  const summary = {
+    description: null,
+    clonedFrom: null,
+    tools: 3,
+    activeTools: 2,
+    servers: 1,
+    agents: 1,
+    updatedAt: "2026-09-20T10:00:00.000Z",
+  };
+
+  it("reads list_toolbelts and puts the All tools belt first", async () => {
+    kernelRead.mockResolvedValueOnce(
+      readOk({
+        items: [
+          { ...clone, ...summary, clonedFrom: ref },
+          { ...ref, ...summary },
+        ],
+        availableTools: 3,
+      }),
+    );
+    const read = await tools.toolbelts(ctx);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: toolbeltList,
+      input: {},
+      page: "tools",
+    });
+    expect(read.ok && read.value.belts.map((belt) => belt.id)).toEqual([
+      "tbt_alltools",
+      "tbt_reviewbelt",
+    ]);
+    expect(read.ok && read.value.availableTools).toBe(3);
+  });
+
+  it("reads get_toolbelt and maps each server group", async () => {
+    kernelRead.mockResolvedValueOnce(
+      readOk({
+        toolbelt: {
+          ...clone,
+          description: null,
+          clonedFrom: ref,
+          updatedAt: "2026-09-20T10:00:00.000Z",
+        },
+        groups: [
+          {
+            server: { id: null, name: "Declared tools" },
+            included: true,
+            tools: [
+              {
+                id: "tol_readfile",
+                slug: "read-file",
+                name: "Read file",
+                description: null,
+                available: true,
+                defaultActive: true,
+                active: false,
+                member: true,
+              },
+            ],
+          },
+        ],
+        agents: [],
+      }),
+    );
+    const read = await tools.toolbelt(ctx, "tbt_reviewbelt");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: toolbeltGet,
+      input: { toolbeltId: "tbt_reviewbelt" },
+      page: "tools",
+    });
+    expect(read.ok && read.value.groups[0]).toEqual({
+      serverId: null,
+      serverName: "Declared tools",
+      included: true,
+      tools: [
+        {
+          id: "tol_readfile",
+          slug: "read-file",
+          name: "Read file",
+          description: null,
+          available: true,
+          defaultActive: true,
+          active: false,
+          member: true,
+        },
+      ],
+    });
+  });
+
+  it("passes a refusal through (negative)", async () => {
+    const error = readError("toolbelts_unavailable", 503);
+    kernelRead.mockResolvedValueOnce(error);
+    await expect(tools.toolbelts(ctx)).resolves.toEqual(error);
+    kernelRead.mockResolvedValueOnce(error);
+    await expect(tools.toolbelt(ctx, "tbt_x")).resolves.toEqual(error);
   });
 });

@@ -8,6 +8,34 @@ export interface GitHubClosingIssue {
   state: "open" | "closed";
 }
 
+/**
+ * Issue states read by number, as `getIssues` returns them (#3970). A number
+ * GitHub resolves to a pull request is reported with `isPullRequest: true`,
+ * and a number it does not resolve is in `missing`.
+ */
+export interface GitHubIssueStates {
+  issues: Array<{
+    number: number;
+    title: string;
+    state: "open" | "closed";
+    stateReason: "completed" | "not_planned" | "reopened" | "duplicate" | null;
+    url: string;
+    isPullRequest: boolean;
+  }>;
+  missing: number[];
+}
+
+/** One release, as `listReleases` returns it (#3890). */
+export interface GitHubRelease {
+  tagName: string;
+  name: string | null;
+  htmlUrl: string;
+  draft: boolean;
+  prerelease: boolean;
+  /** Null for a draft, which is never published. */
+  publishedAt: string | null;
+}
+
 export interface GitHubClosingIssues {
   issues: GitHubClosingIssue[];
   complete: boolean;
@@ -365,6 +393,22 @@ export interface GitHubClient {
     repo: string;
     number: number;
   }): Promise<GitHubClosingIssues>;
+
+  /**
+   * The state of each issue by number, in one GraphQL call that aliases
+   * `issueOrPullRequest(number:)` for at most 50 numbers (#3970).
+   */
+  getIssues(args: {
+    owner: string;
+    repo: string;
+    numbers: readonly number[];
+  }): Promise<GitHubIssueStates>;
+
+  /**
+   * The repository's first 100 releases, drafts included for a token with
+   * push access (`GET /repos/{owner}/{repo}/releases`, #3890).
+   */
+  listReleases(args: { owner: string; repo: string }): Promise<GitHubRelease[]>;
 
   /**
    * List a PR's issue (conversation) comments and inline review comments.

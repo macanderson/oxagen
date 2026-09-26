@@ -1,0 +1,7 @@
+#:schema https://oxagen.sh/schemas/workspace/v1.json
+schema = "workspace/v1"
+organization = "a-intel"
+workspace = "core-platform"
+
+[[repositories]]
+url = "github.com/a-intel/platform"

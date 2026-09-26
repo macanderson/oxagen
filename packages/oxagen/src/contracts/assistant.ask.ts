@@ -49,14 +49,16 @@ import { conversationPublicIdSchema } from "./conversation.list";
  * The label is the name the page drew for its record. 256 holds these
  * sources whole: a runtime's hostname (253, the DNS limit
  * `create_tacho_enrollment` enforces), a steering record's title (200), an
- * agent's name (128), and a run's generated name or derived title (80). Three
- * sources run longer: a mandate's purpose (2,000), which the Mandate page
- * uses because a mandate has no name, and the title a harness gives its own
- * session and a ledger run's task reference, which have no cap where they are
- * written. Past 256 characters a label is prose rather than a name. The app
- * cuts a longer label to this length before it sends one, and the contract
- * refuses a longer one from any other caller, because the turn puts the label
- * in a line the model reads as system context.
+ * agent's name (128), a run's generated name or derived title (80), and a
+ * run's name and task reference as `list_runs` and `get_run` return them
+ * (`RUN_LABEL_MAX`, 256). The run reads cut a harness title and a ledger
+ * run's goal to that cap, since neither has one where it is written. One
+ * source runs longer: a mandate's purpose (2,000), which the Mandate page
+ * uses because a mandate has no name. Past 256 characters a label is prose
+ * rather than a name. The app cuts a longer label to this length before it
+ * sends one, and the contract refuses a longer one from any other caller,
+ * because the turn puts the label in a line the model reads as system
+ * context.
  */
 export const ASSISTANT_ENTITY_LABEL_MAX = 256;
 

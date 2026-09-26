@@ -11,8 +11,8 @@
 // operator's id and not a name, and an id is a key, not a label.
 //
 // No action here is gold. The one gold action of the workspace is Wrap Claude
-// Code on the Agents page. Clone and Kill switch are not in the design; they
-// stay because they are the only place either write is reachable from.
+// Code on the Agents page. Kill switch is not in the design; it stays because
+// it is the only place that write is reachable from.
 import { useTranslations } from "next-intl";
 import type { AgentDetail, AgentStatus } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
@@ -20,7 +20,6 @@ import type { WsCtx } from "@/server/viewer";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { Badge, type BadgeTone } from "@/ui/badge";
-import { CloneButton } from "@/ui/clone-button";
 import { eyebrow } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { HarnessIcon } from "@/ui/harness-icon";
@@ -165,7 +164,6 @@ export function AgentHeader({
             list={routes.agents(org, ws)}
           />
         ) : null}
-        <CloneButton kind="agent" sourceRef={identity.id} />
         {live ? (
           <AgentKillSwitch
             org={org}

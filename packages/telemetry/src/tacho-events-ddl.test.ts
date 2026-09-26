@@ -158,6 +158,29 @@ describe("tacho_events DDL", () => {
     }
   });
 
+  it("carries the request effort and the deciding rules, forward as well as generated (#3891, #3971)", () => {
+    // The same two halves as the worktree columns above: 0027 for a cluster
+    // bootstrapped today, 0035 for every cluster that applied 0027 before
+    // the members existed.
+    const ddl = tachoEventsMigration();
+    expect(ddl).toContain("request_effort String");
+    expect(ddl).toContain("policy_rules Array(String)");
+    const forward = readFileSync(
+      join(
+        here,
+        "migrations",
+        "0035_tacho_events_request_effort_policy_rules.sql",
+      ),
+      "utf8",
+    );
+    expect(forward).toContain(
+      "ADD COLUMN IF NOT EXISTS request_effort String AFTER workspace_host_paths",
+    );
+    expect(forward).toContain(
+      "ADD COLUMN IF NOT EXISTS policy_rules Array(String) AFTER policy_rule",
+    );
+  });
+
   it("expires rows thirteen months after the control plane received them (#3944)", () => {
     // The hot window ADR-058 sets for a run's frame rows. The clock is
     // received_at, the server's, never ts, which the producer chooses. The

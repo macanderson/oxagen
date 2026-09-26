@@ -54,7 +54,7 @@ describe("agent.role.get handler", () => {
       ], // assignment select
       [
         { capability: "recall_memory", effect: "allow" },
-        { capability: "create_agent_def", effect: "deny" },
+        { capability: "register_agent", effect: "deny" },
       ], // role grants
     );
     const out = await agentRoleGetHandler(INPUT, CTX);
@@ -67,7 +67,7 @@ describe("agent.role.get handler", () => {
     });
     expect(out.grants).toEqual([
       { capability: "recall_memory", effect: "allow" },
-      { capability: "create_agent_def", effect: "deny" },
+      { capability: "register_agent", effect: "deny" },
     ]);
   });
 

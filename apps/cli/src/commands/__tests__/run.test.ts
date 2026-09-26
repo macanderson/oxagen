@@ -115,7 +115,11 @@ const CHAIN = {
     recorded: ["chain_break"],
   },
   seals: [
-    { sealedAt: "2026-09-11T09:05:00.000Z", terminalStatus: "completed" },
+    {
+      sealedAt: "2026-09-11T09:05:00.000Z",
+      terminalStatus: "completed",
+      attestation: null,
+    },
   ],
   enforcementTier: "observe",
   recordedGrade: "inspect",
@@ -227,6 +231,53 @@ describe("oxagen run chain", () => {
     const plain = memoryWriter();
     await runChain("tse_0a1b2c", {}, plain.writer);
     expect(plain.out.join("\n")).not.toContain("Subagent chains");
+  });
+
+  it("prints the key and the fields a signed seal signs over (ADR-195)", async () => {
+    const attestation = {
+      alg: "ed25519",
+      keyId: "3f9a0c21d4e8b765",
+      sig: "c2lnbmVkIGF0IHNlYWwgdGltZQ==",
+      signsOver: ["run_id", "attempt_id", "frame_count", "merkle_root"],
+    };
+    post.mockResolvedValue({
+      ...CHAIN,
+      seals: [{ ...CHAIN.seals[0], attestation }],
+    });
+    const { writer, out } = memoryWriter();
+    await runChain("arun_5f0c", {}, writer);
+    expect(out).toContain(
+      "Attestation: ed25519 key 3f9a0c21d4e8b765 over run_id, attempt_id, frame_count, merkle_root",
+    );
+  });
+
+  it("says an unsigned seal's attestation is not recorded, one line per attempt of a retried run (negative)", async () => {
+    post.mockResolvedValue({
+      ...CHAIN,
+      seals: [
+        { ...CHAIN.seals[0], attestation: null },
+        {
+          ...CHAIN.seals[0],
+          attestation: {
+            alg: "ed25519",
+            keyId: "3f9a0c21d4e8b765",
+            sig: "c2ln",
+            signsOver: ["run_id"],
+          },
+        },
+      ],
+    });
+    const { writer, out } = memoryWriter();
+    await runChain("arun_5f0c", {}, writer);
+    expect(out).toContain("Attempt 1 attestation: not recorded");
+    expect(out).toContain(
+      "Attempt 2 attestation: ed25519 key 3f9a0c21d4e8b765 over run_id",
+    );
+    // One seal prints one unnumbered line.
+    post.mockResolvedValue(CHAIN);
+    const single = memoryWriter();
+    await runChain("tse_0a1b2c", {}, single.writer);
+    expect(single.out).toContain("Attestation: not recorded");
   });
 
   it("routes an API failure to stderr and writes nothing to stdout (negative)", async () => {

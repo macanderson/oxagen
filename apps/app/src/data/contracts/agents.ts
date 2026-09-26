@@ -4,15 +4,19 @@
 // `list_incidents`. A field is nullable exactly where the contract may not have
 // recorded it (§3.4). The contract fields no store records today (model tier,
 // belt size, proven runs) have no view field.
+//
+// An agent is one operator on one runtime with one harness (ADR-198): each row
+// names the runtime it runs on and the toolbelt it carries, and the detail adds
+// the versions each change of either wrote.
 import { z } from "zod";
 import { PublicId } from "./common";
-import { Cost } from "./money";
+import { Cost, Money } from "./money";
 import { EnforcementTier } from "./runs";
 
 const Instant = z.iso.datetime({ offset: true });
 const Count = z.number().int().nonnegative();
 
-const AgentHarness = z.enum([
+export const AgentHarness = z.enum([
   "stella",
   "claude-code",
   "codex",
@@ -20,6 +24,24 @@ const AgentHarness = z.enum([
   "claude-agent-sdk",
   "custom",
 ]);
+export type AgentHarness = z.infer<typeof AgentHarness>;
+
+/** A runtime as a record names it (`rtm_…`, ADR-198). */
+export const RuntimeRef = z.object({
+  id: PublicId,
+  name: z.string().min(1),
+  slug: z.string().min(1),
+});
+export type RuntimeRef = z.infer<typeof RuntimeRef>;
+
+/** A toolbelt as a record names it (`tbt_…`, ADR-198). */
+export const ToolbeltRef = z.object({
+  id: PublicId,
+  name: z.string().min(1),
+  slug: z.string().min(1),
+  kind: z.enum(["all_tools", "custom"]),
+});
+export type ToolbeltRef = z.infer<typeof ToolbeltRef>;
 
 /** Derived on the read: retired (archived), suspended (principal), enrolled (a live credential or host), unenrolled. */
 export const AgentStatus = z.enum([
@@ -39,6 +61,10 @@ const AgentRow = z.object({
   /** `org_ns.ws_ns.slug` (ADR-024). */
   agentKey: z.string().min(1).nullable(),
   harness: AgentHarness,
+  /** The runtime the agent runs on; null when it runs on no named runtime. */
+  runtime: RuntimeRef.nullable(),
+  /** The toolbelt the agent carries; null only before the workspace has one. */
+  toolbelt: ToolbeltRef.nullable(),
   /**
    * The built-in assistant stella acts as (`qa-chat`). Oxagen owns it, so
    * the page offers no action on it: deregistering it stopped stella (#4350).
@@ -166,18 +192,36 @@ export const AgentDetail = z.object({
       revokedAt: Instant.nullable(),
     }),
   ),
-  /** The commit the last `commit_agent_definition` cached; null before the first. */
-  definition: z
-    .object({
-      path: z.string().min(1),
-      digest: z.string().min(1),
-      commitSha: z.string().min(1),
-      branch: z.string().min(1),
-      pullRequestUrl: z.url(),
-      source: z.string(),
-      committedAt: Instant,
-    })
-    .nullable(),
+  /** The runtime the agent runs on now; null when it runs on no named runtime. */
+  runtime: RuntimeRef.nullable(),
+  /** The toolbelt the agent carries now. */
+  toolbelt: ToolbeltRef.nullable(),
+  /** Every version, newest first: what the agent was bound to from each one on. */
+  versions: z.array(
+    z.object({
+      version: z.number().int().positive(),
+      changeKind: z.enum([
+        "registered",
+        "runtime_changed",
+        "toolbelt_changed",
+        "legacy",
+      ]),
+      runtime: RuntimeRef.nullable(),
+      toolbelt: ToolbeltRef.nullable(),
+      createdAt: Instant,
+    }),
+  ),
+  /**
+   * The ceilings the active version's config sets, which the host bundle
+   * enforces (ADR-198). A ceiling the config does not name is null; `invalid`
+   * means the config cannot be read and the host suspends governed actions.
+   */
+  limits: z.object({
+    perRun: Money.nullable(),
+    perDay: Money.nullable(),
+    containmentRequired: z.boolean(),
+    invalid: z.boolean(),
+  }),
 });
 export type AgentDetail = z.infer<typeof AgentDetail>;
 

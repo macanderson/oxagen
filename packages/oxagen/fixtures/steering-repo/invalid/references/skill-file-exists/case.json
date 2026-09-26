@@ -1,0 +1,17 @@
+{
+  "check": "references",
+  "rule": "skill-file-exists",
+  "severity": "error",
+  "description": "A SKILL.md mentions @template.sql, and the file is gone.",
+  "refused_by_reader": false,
+  "changed": [],
+  "removed": [
+    "steering/skills/a-intel.platform.write-migration/template.sql"
+  ],
+  "expect": [
+    {
+      "path": "steering/skills/a-intel.platform.write-migration/SKILL.md",
+      "line": 26
+    }
+  ]
+}

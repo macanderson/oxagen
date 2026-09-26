@@ -7,8 +7,9 @@
 // the registry's first page, with a plus when a later page exists, because the
 // read carries no total. Providers counts the roster. Kill switches counts the
 // switches denying right now, the one count that waits on a person. Toolbelts
-// and Policy carry none: no store holds a toolbelt or a policy version yet, and
-// a zero would say none exists.
+// carries none because the belts are read on their own tab only, not on every
+// tab's load. Policy carries none: no store holds a policy version yet, and a
+// zero would say none exists.
 import { useLocale, useTranslations } from "next-intl";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";

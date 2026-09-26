@@ -1,0 +1,14 @@
+#:schema https://oxagen.sh/schemas/mcp-tools/v1.json
+schema = "mcp-tools/v1"
+
+[tools.list_charges]
+risk = "low"
+side_effect = "read"
+egress = "third_party"
+
+[tools.create_refund]
+description = "Refund part or all of a captured charge. The amount is in cents."
+risk = "high"
+side_effect = "irreversible"
+egress = "third_party"
+impacts = ["moves_money"]

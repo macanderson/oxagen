@@ -75,6 +75,38 @@ export const WORKSPACE_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const WORKSPACE_SLUG_MIN = 2;
 export const WORKSPACE_SLUG_MAX = 40;
 
+/**
+ * The one way a slug is made from a name, for every slug Oxagen derives:
+ * organizations, workspaces, runtimes, agents and toolbelts (ADR-198).
+ *
+ * - Letters are lowercased, and an accented letter keeps its base letter
+ *   ("é" becomes "e").
+ * - A space or a hyphen separates words, and each run of them becomes one
+ *   hyphen.
+ * - Every other character is dropped, apostrophes included, so
+ *   "Mac's Laptop" becomes `macs-laptop` and "R&D box" becomes `rd-box`.
+ * - Edge hyphens are trimmed and the result is cut to `max` characters
+ *   without leaving a trailing hyphen.
+ *
+ * The result holds `WORKSPACE_SLUG_PATTERN`, or is empty when the name has no
+ * letter or digit. A contract refuses an empty or reserved slug, and the form
+ * names the refusal on the field.
+ */
+export function slugFromName(
+  name: string,
+  max: number = WORKSPACE_SLUG_MAX,
+): string {
+  return name
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/[\s-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, max)
+    .replace(/-+$/, "");
+}
+
 /** The shape every contract field that accepts a workspace slug is built from. */
 export const workspaceSlug = z
   .string()

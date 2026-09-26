@@ -21,6 +21,7 @@ import {
   classesOf,
   perRun,
   reasoningShare,
+  searchRequestsOf,
   sumClasses,
   TOKEN_CLASSES,
   totalOf,
@@ -65,6 +66,7 @@ export function TokensSection({
   const locale = useLocale();
   const classes = sumClasses(month.rows);
   const total = totalOf(classes);
+  const searches = searchRequestsOf(month.rows);
   return (
     <>
       <div className="grid gap-3.5 lg:grid-cols-2">
@@ -90,6 +92,12 @@ export function TokensSection({
               <dd className="text-foreground">
                 <Ratio value={cacheWriteShare(classes)} />{" "}
                 {t("cacheWrittenNote")}
+              </dd>
+              <dt>{t("searches")}</dt>
+              <dd className="text-foreground" data-testid="spend-searches">
+                {t("searchesNote", {
+                  count: searches,
+                })}
               </dd>
               <dt>{t("cacheWriteShare")}</dt>
               <dd>

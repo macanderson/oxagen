@@ -32,6 +32,10 @@
  */
 import { createHash } from "node:crypto";
 import {
+  LEGACY_OXAGEN_DIR,
+  WORKSPACE_LINK_PATH,
+} from "@oxagen/oxagen/steering-repo/paths";
+import {
   lstatSync,
   mkdirSync,
   readFileSync,
@@ -110,8 +114,8 @@ export type LocalReader = (path: string) => string | Buffer | null;
 
 // ── Paths ────────────────────────────────────────────────────────────────────
 
-const OXAGEN_DIR = ".oxagen";
-const LINK_PATH = `${OXAGEN_DIR}/workspace.json`;
+const OXAGEN_DIR = LEGACY_OXAGEN_DIR;
+const LINK_PATH = WORKSPACE_LINK_PATH;
 
 /**
  * The canonical project-relative form of a published path, or the reason it

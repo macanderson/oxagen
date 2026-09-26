@@ -197,7 +197,7 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
                     started.recorder.sealCollectorEvent("policy_decision", {
                       policy_decision: "allow",
                       policy_source: "bundle",
-                      policy_reason: "contained_github_route",
+                      policy_reason_code: "contained_github_route",
                       tool_name: `${method} ${path.split("?")[0] ?? ""}`.slice(
                         0,
                         256,
@@ -209,7 +209,7 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
                     started.recorder.sealCollectorEvent("policy_decision", {
                       policy_decision: "deny",
                       policy_source: "bundle",
-                      policy_reason: "contained_gateway_route",
+                      policy_reason_code: "contained_gateway_route",
                       tool_name: path.split("?")[0]?.slice(0, 256) ?? "unknown",
                     }),
                   ]),
@@ -255,7 +255,7 @@ export function createContainedRunner(options: ContainedRunnerOptions) {
                   {
                     policy_decision: "allow",
                     policy_source: "kernel",
-                    policy_reason: "contained_launch_registered",
+                    policy_reason_code: "contained_launch_registered",
                   },
                   {
                     attrs: {

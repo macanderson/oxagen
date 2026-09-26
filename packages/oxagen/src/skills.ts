@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LEGACY_SKILLS_DIR } from "./steering-repo/paths";
 
 export const skillPinSchema = z
   .object({
@@ -23,7 +24,7 @@ export const skillConfigSchema = z
               .string()
               .max(48)
               .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/),
-            path: z.literal(".oxagen/skills"),
+            path: z.literal(LEGACY_SKILLS_DIR),
             skills: z.array(skillPinSchema).max(1000).default([]),
           })
           .strict(),

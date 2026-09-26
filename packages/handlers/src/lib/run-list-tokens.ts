@@ -18,7 +18,7 @@ export type RollupTokenColumns = {
 };
 
 /**
- * The stored counts as the contract's six classes. A class the row left out
+ * The stored counts as the contract's classes. A class the row left out
  * is zero, as the rollup writes it (`ZERO_TOKENS`). Null when the jsonb is
  * not an object of non-negative integer counts, so a broken row reads as not
  * recorded rather than as a figure nobody measured. A class the contract

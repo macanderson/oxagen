@@ -35,6 +35,7 @@ import {
   RatioFigure,
   Tile,
   TileStrip,
+  UnmeteredNote,
 } from "./figures";
 import { GAP_ISSUE, NotBacked, NotBackedPanel } from "./not-backed";
 import { findingsOn, savingOf, sumCost } from "./rollup";
@@ -259,6 +260,11 @@ export function DrillSection({
               to: drill.period.to,
             })}
           </p>
+          <UnmeteredNote
+            unmetered={drill.unmeteredRuns}
+            className="block text-[13px] text-muted-foreground"
+            testId="spend-drill-unmetered"
+          />
         </div>
         <div className="flex flex-wrap gap-2">
           {drill.kind === "agent" ? (

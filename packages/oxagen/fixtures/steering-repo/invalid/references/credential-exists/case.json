@@ -1,0 +1,18 @@
+{
+  "check": "references",
+  "rule": "credential-exists",
+  "severity": "error",
+  "description": "A server names a credential the vault does not hold. context.json lists the credentials.",
+  "refused_by_reader": false,
+  "changed": [
+    "tools/servers/stripe/server.toml"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "tools/servers/stripe/server.toml",
+      "line": 18,
+      "field": "environments.test.credential"
+    }
+  ]
+}

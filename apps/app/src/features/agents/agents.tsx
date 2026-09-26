@@ -45,9 +45,7 @@ import { OutcomePanel } from "@/ui/form-feedback";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { AgentsTable } from "./agents-table";
-import { RegisterAnAgent, WrapClaudeCode } from "./create-actions";
-import { AgentKeyPrefix } from "./key-prefix";
-import { keyPrefixOf } from "./key-prefix-of";
+import { AddRuntimeLink, RegisterAgentLink } from "./create-actions";
 import { NotRecordedValue, Tile } from "./parts";
 import { OpenIncident, RequestAccess, TryAgain } from "./state-actions";
 
@@ -199,8 +197,8 @@ function Empty({
       title={t("title", { workspace })}
       actions={
         <>
-          <WrapClaudeCode org={org} ws={ws} />
-          <RegisterAnAgent org={org} ws={ws} />
+          <RegisterAgentLink org={org} ws={ws} />
+          <AddRuntimeLink org={org} ws={ws} />
         </>
       }
     >
@@ -424,7 +422,7 @@ export async function Agents({
   if (page.agents.length === 0 && cursor === null)
     return <Empty workspace={ctx.wsName} {...place} retired={retired} />;
   return (
-    <AgentKeyPrefix value={keyPrefixOf(page.agents.map((a) => a.agentKey))}>
+    <>
       {header}
       <div className="flex flex-col gap-4">
         <Tiles page={page} workspace={ctx.wsName} />
@@ -451,7 +449,7 @@ export async function Agents({
           retired={retired}
         />
       </div>
-    </AgentKeyPrefix>
+    </>
   );
 }
 

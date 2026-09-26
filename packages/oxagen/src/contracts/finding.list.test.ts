@@ -56,6 +56,62 @@ describe("list_findings contract", () => {
     ).toBe(false);
   });
 
+  it("narrows to one run and carries what each finding cites there (#4001)", () => {
+    expect(findingList.surfaces).toEqual(["api", "mcp", "cli"]);
+    expect(findingList.input.parse({ runId: "tse_4q8r1t6v" })).toEqual({
+      status: "open",
+      runId: "tse_4q8r1t6v",
+    });
+    expect(findingList.input.safeParse({ runId: "run_1" }).success).toBe(
+      false,
+    );
+    const cited = {
+      ...finding,
+      citation: {
+        runId: "tse_4q8r1t6v",
+        runLevel: false,
+        frames: [
+          { seq: "12" },
+          { seq: "40", sessionUuid: "3f6c0b1e-9a3d-4c2b-8e57-0d1f2a3b4c5d" },
+        ],
+        framesTotal: 2,
+      },
+    };
+    const out = {
+      status: "open",
+      window: finding.window,
+      saving: finding.saving,
+      spend: null,
+      share: null,
+      annualised: finding.saving,
+      counts: { findings: 1, high: 1, medium: 0, operators: 0 },
+      findings: [cited],
+    };
+    expect(findingList.output.parse(out)).toEqual(out);
+    // A run-level finding pins no frame, and an older row names none (null).
+    for (const citation of [
+      { ...cited.citation, runLevel: true, frames: [] },
+      { ...cited.citation, frames: null, framesTotal: 0 },
+    ])
+      expect(
+        findingList.output.safeParse({
+          ...out,
+          findings: [{ ...finding, citation }],
+        }).success,
+      ).toBe(true);
+    // A seq that is not a sequence, and more frames than the cap (negative).
+    for (const frames of [
+      [{ seq: "tse_1" }],
+      Array.from({ length: 51 }, (_, i) => ({ seq: String(i) })),
+    ])
+      expect(
+        findingList.output.safeParse({
+          ...out,
+          findings: [{ ...finding, citation: { ...cited.citation, frames } }],
+        }).success,
+      ).toBe(false);
+  });
+
   it("refuses a finding that cites no run", () => {
     expect(
       findingList.output.safeParse({

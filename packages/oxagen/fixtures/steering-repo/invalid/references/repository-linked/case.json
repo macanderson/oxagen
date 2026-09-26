@@ -1,0 +1,18 @@
+{
+  "check": "references",
+  "rule": "repository-linked",
+  "severity": "error",
+  "description": "repos names a repository workspace.toml does not link.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/platform/a-intel.platform.mobile-rule.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/platform/a-intel.platform.mobile-rule.md",
+      "line": 10,
+      "field": "repos.0"
+    }
+  ]
+}

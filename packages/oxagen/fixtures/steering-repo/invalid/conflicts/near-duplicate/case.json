@@ -1,0 +1,19 @@
+{
+  "check": "conflicts",
+  "rule": "near-duplicate",
+  "severity": "error",
+  "description": "A new record says what an active one already says.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/brand/a-intel.brand.sentence-case.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/brand/a-intel.brand.sentence-case.md"
+    },
+    {
+      "path": "steering/platform/a-intel.platform.headings-sentence-case.md"
+    }
+  ]
+}

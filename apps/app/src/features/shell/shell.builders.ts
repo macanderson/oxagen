@@ -28,8 +28,10 @@ const SHELL_ORG = {
 } as const;
 
 const SHELL_CONTEXT = readOk({
-  orgs: [SHELL_ORG],
-  workspaces: [{ slug: "core-platform", name: "Core platform" }],
+  orgs: [{ ...SHELL_ORG, avatarUrl: null }],
+  workspaces: [
+    { slug: "core-platform", name: "Core platform", avatarUrl: null },
+  ],
 });
 
 /** The shell data the layout's viewer yields, with any field overridden. */

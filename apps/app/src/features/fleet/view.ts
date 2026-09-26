@@ -113,6 +113,38 @@ export function shownCost(run: RunRow): ShownCost | null {
 }
 
 /**
+ * Whether a sealed wrapped run's rollup found no model call and its agent
+ * reported no usage either (#3304). Its harness's model calls passed through
+ * neither the gateway nor the local proxy, so no total can carry its cost. A
+ * run with no rollup row yet is not one of these: it may simply not have been
+ * rolled up, so it reads as no cost recorded. Neither is an open run: the
+ * rollup writes a row on a run's first batch, before its first model call
+ * can land, so every new run briefly holds no usage.
+ */
+export function reportedNoUsage(run: RunRow): boolean {
+  if (run.source !== "tacho" || run.status === "live") return false;
+  if (shownCost(run) !== null) return false;
+  const rolled = run.tokens ?? null;
+  if (rolled === null) return false;
+  const counted =
+    rolled.inputUncached +
+    rolled.cacheRead +
+    rolled.cacheWrite5m +
+    rolled.cacheWrite1h +
+    rolled.output +
+    rolled.reasoning;
+  const reported = run.reportedTokens ?? null;
+  const reportedCount =
+    reported === null
+      ? 0
+      : reported.input +
+        reported.output +
+        reported.cacheRead +
+        reported.cacheWrite;
+  return counted === 0 && reportedCount === 0;
+}
+
+/**
  * Spend shown: the sum of the cost the rows listed show, the bases read off
  * those rows in the order they first appear, and how many rows had no cost
  * to add. `total` is null when no row carried a cost, or when the costs
@@ -123,8 +155,16 @@ export type SpendShown = {
   bases: string[];
   /** Rows whose cost was recorded with no basis. */
   unbased: number;
-  /** Rows with no cost recorded, left out of `total`. */
+  /**
+   * Rows with no cost recorded, left out of `total`, apart from the rows
+   * counted in {@link SpendShown.noUsage}.
+   */
   unpriced: number;
+  /**
+   * Rows that reported no usage at all, by the harness that ran them, most
+   * first ({@link reportedNoUsage}). Also left out of `total`.
+   */
+  noUsage: { harness: string; runs: number }[];
   /**
    * Priced rows whose cost is a running estimate or the agent's report,
    * counted in `total`.
@@ -147,11 +187,26 @@ export function spendShown(rows: readonly ListedRun[]): SpendShown {
     else if (!bases.includes(cost.basis)) bases.push(cost.basis);
   }
   const total = sumMoney(costs);
+  const byHarness = new Map<string, number>();
+  for (const { run } of rows) {
+    if (!reportedNoUsage(run)) continue;
+    const harness = run.harness?.name ?? "unknown";
+    byHarness.set(harness, (byHarness.get(harness) ?? 0) + 1);
+  }
+  const noUsage = [...byHarness.entries()]
+    .map(([harness, runs]) => ({ harness, runs }))
+    .sort(
+      (a, b) =>
+        b.runs - a.runs ||
+        (a.harness < b.harness ? -1 : a.harness > b.harness ? 1 : 0),
+    );
+  const unreported = noUsage.reduce((sum, row) => sum + row.runs, 0);
   return {
     total,
     bases,
     unbased,
-    unpriced: rows.length - costs.length,
+    unpriced: rows.length - costs.length - unreported,
+    noUsage,
     estimated: shown.filter((cost) => cost.estimate).length,
     mixedCurrency: costs.length > 0 && total === null,
   };

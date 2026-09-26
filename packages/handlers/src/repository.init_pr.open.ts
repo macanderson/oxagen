@@ -18,7 +18,7 @@
 //   5. The production branch must not be `oxagen/init` itself, must exist,
 //      and must carry no `.oxagen/` yet.
 //   6. `oxagen/init` is created from the production branch (an existing
-//      branch is reused), the six files are pushed to it one commit each,
+//      branch is reused), the five files are pushed to it one commit each,
 //      and one pull request is opened back into the production branch.
 //
 // Nothing is written to the production branch and nothing is merged: the
@@ -31,6 +31,10 @@ import {
   repositoryInitPrOpen,
   type RepositoryInitPrOpenOutput,
 } from "@oxagen/oxagen/contracts/repository.init_pr.open";
+import {
+  LEGACY_KEEP_FILES,
+  WORKSPACE_LINK_PATH,
+} from "@oxagen/oxagen/steering-repo/paths";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { parse } from "smol-toml";
 import { findSecretsAndPii } from "./context.steering.checks";
@@ -52,13 +56,11 @@ import {
 import { OXAGEN_DIR, WORKSPACE_TOML_PATH } from "./repository.tree.get";
 
 /** The lines `.gitignore` must carry so the machine-local link is never committed. */
-export const GITIGNORE_LINES = [".oxagen/workspace.json", ".stella/private/"];
+export const GITIGNORE_LINES = [WORKSPACE_LINK_PATH, ".stella/private/"];
 
-const KEEP_FILES = [
-  ".oxagen/rules/.gitkeep",
-  ".oxagen/proposals/.gitkeep",
-  ".oxagen/agents/.gitkeep",
-];
+// No `.oxagen/agents/`: an agent is an identity on a runtime, not a file in
+// the repository (ADR-198).
+const KEEP_FILES = LEGACY_KEEP_FILES;
 
 /**
  * `.gitignore` with every line in {@link GITIGNORE_LINES} present, or null

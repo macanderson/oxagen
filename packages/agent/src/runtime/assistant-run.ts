@@ -36,6 +36,7 @@ import { digestJcs } from "@oxagen/run-evidence";
 import {
   canonicalJson,
   createPostgresRunStore,
+  deferredAttester,
   digestOfCanonicalJson,
   parseRunSpecV2,
   RETENTION_CONTENT_CLASSES,
@@ -55,6 +56,10 @@ import { STELLA_SERVE_PINNED_VERSION } from "@oxagen/stella-engine-client";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import pino from "pino";
+import type {
+  ProjectRunContextArgs,
+  ReadRunEvents,
+} from "../dispatch/context-projection";
 import type { AssistantSteeringFrame } from "./assistant-steering";
 import {
   GOAL_VERDICT_EVENT_TYPE,
@@ -219,10 +224,23 @@ export interface OpenAssistantRunArgs extends AssistantRunScope {
    * belongs to the turn that parked the call and is priced on that turn.
    */
   originMessageId: string | null;
+  /**
+   * Projects the windows the run recorded into Neo4j once it seals, as
+   * USED_CONTEXT lineage (ADR-200). Best-effort: a failure is logged and
+   * never fails or slows the seal. The in-app turn passes
+   * `projectRunContextWindows`; a caller that passes none projects nothing.
+   */
+  projectContext?: ContextProjector;
   /** Test seams. Production leaves both unset. */
   store?: RunStore;
   now?: () => Date;
 }
+
+/** What the seal hands the context projection: the run, and a reader of its events. */
+export type ContextProjector = (
+  args: ProjectRunContextArgs,
+  readEvents: ReadRunEvents,
+) => Promise<unknown>;
 
 /**
  * One reverse request as the recorder saw it, kept in arrival order so the
@@ -679,6 +697,14 @@ export async function openAssistantRun(
         agentId: identity.agentId,
         agentVersionId: identity.agentVersionId,
       },
+      args.projectContext === undefined
+        ? undefined
+        : {
+            // The turn's message is the :Execution the recall's citations
+            // hang on; a run no message asked for anchors on itself.
+            executionRef: args.originMessageId ?? run.publicId,
+            project: args.projectContext,
+          },
     );
     try {
       await recorder.append({
@@ -757,6 +783,9 @@ export function assistantRunStore(): RunStore {
   return createPostgresRunStore({
     archive: deferredEvidenceArchive,
     bodies: deferredEvidenceBodies,
+    // The assistant seals its own attempts, so its seals are signed when a
+    // key is configured (ADR-195).
+    attester: deferredAttester,
   });
 }
 
@@ -869,6 +898,11 @@ class Recorder implements AssistantRunRecorder {
     run: { runId: string; publicId: string },
     private readonly attemptId: string,
     actor: { agentId: string; agentVersionId: string },
+    /** The USED_CONTEXT projection run after the seal (ADR-200); absent, none. */
+    private readonly lineage?: {
+      executionRef: string;
+      project: ContextProjector;
+    },
   ) {
     this.runId = run.runId;
     this.runPublicId = run.publicId;
@@ -992,6 +1026,10 @@ class Recorder implements AssistantRunRecorder {
         role: record.role,
         provider: record.provider,
         model: record.model,
+        // The request's window, block by block (ADR-200). It is the record
+        // `get_run_context` reads: bytes and items only, with the tokens
+        // divided from the completion's reported total when it is read.
+        ...(record.window ? { window: record.window } : {}),
       },
       // The request, and so the turn's prompt, rides the write-ahead frame
       // rather than the completion: it is what was asked, and it is already
@@ -1182,6 +1220,34 @@ class Recorder implements AssistantRunRecorder {
         orgId: this.scope.orgId,
         workspaceId: this.scope.workspaceId,
       },
+    });
+    this.projectContext();
+  }
+
+  /**
+   * USED_CONTEXT lineage for the windows this run recorded (ADR-200), read
+   * back from the ledger it just sealed. Not awaited: a graph that is slow or
+   * down must never hold or fail a seal, and no read depends on the edges.
+   */
+  private projectContext(): void {
+    const lineage = this.lineage;
+    if (lineage === undefined) return;
+    const readEvents: ReadRunEvents = (runId, afterRunSeq, limit) =>
+      this.store.readAttemptEventsSince(runId, afterRunSeq, limit);
+    void this.inScope(() =>
+      lineage.project(
+        {
+          runId: this.runId,
+          runPublicId: this.runPublicId,
+          executionRef: lineage.executionRef,
+        },
+        readEvents,
+      ),
+    ).catch((err: unknown) => {
+      logger.warn(
+        { err, runId: this.runPublicId },
+        "context projection failed; the run's frames are still the record",
+      );
     });
   }
 }

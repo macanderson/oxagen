@@ -3,10 +3,11 @@
  *
  * Strategy: stub @oxagen/telemetry's `readUsageBreakdown` and
  * `readObservedModels` so no live ClickHouse is required, and the price-book
- * read so no Postgres is. Assert the tenant boundary (ctx.orgId, never the
- * input), the threading of input.workspaceId, date coercion, the echoed
- * range/output, and that the cache saving is priced from the book per
- * price-boundary bucket (#4069).
+ * slice read so no Postgres is. Assert the tenant boundary (ctx.orgId, never
+ * the input), the threading of input.workspaceId, date coercion, the echoed
+ * range/output, that the cache saving is priced from the book per
+ * price-boundary bucket (#4069), and that the book holds only the rows for
+ * the window's models (#4202).
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
@@ -21,7 +22,7 @@ import type { PriceEntry } from "@oxagen/billing";
 const mocks = vi.hoisted(() => ({
   readUsageBreakdown: vi.fn(),
   readObservedModels: vi.fn(),
-  loadPriceBookInTenantScope: vi.fn(),
+  loadPriceBookSliceInTenantScope: vi.fn(),
 }));
 
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
@@ -37,7 +38,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/billing")>();
   return {
     ...real,
-    loadPriceBookInTenantScope: mocks.loadPriceBookInTenantScope,
+    loadPriceBookSliceInTenantScope: mocks.loadPriceBookSliceInTenantScope,
   };
 });
 
@@ -242,7 +243,7 @@ const INPUT = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.readUsageBreakdown.mockResolvedValue(BREAKDOWN);
-  mocks.loadPriceBookInTenantScope.mockResolvedValue(BOOK);
+  mocks.loadPriceBookSliceInTenantScope.mockResolvedValue(BOOK);
   mocks.readObservedModels.mockResolvedValue(OBSERVED);
 });
 
@@ -285,9 +286,6 @@ describe("billingUsageBreakdownHandler (@oxagen/handlers)", () => {
       { ...INPUT, workspaceId: wsId },
       TEST_CTX,
     );
-    expect(mocks.loadPriceBookInTenantScope).toHaveBeenCalledWith({
-      orgId: TEST_CTX.orgId,
-    });
     const arg = mocks.readObservedModels.mock.calls[0]![0];
     expect(arg).toMatchObject({
       orgId: TEST_CTX.orgId,
@@ -302,6 +300,39 @@ describe("billingUsageBreakdownHandler (@oxagen/handlers)", () => {
     expect(arg.boundariesFor(["unrelated-model"])).toEqual([]);
   });
 
+  // #4202. The saving loaded the whole price book on every usage page: every
+  // list row's full history, 28,246 rows in production on 2026-09-24. It now
+  // reads only the rows for the models the breakdown names, over the window.
+  it("loads only the price rows for the models the window ran", async () => {
+    await billingUsageBreakdownHandler(INPUT, TEST_CTX);
+
+    expect(mocks.loadPriceBookSliceInTenantScope).toHaveBeenCalledTimes(1);
+    expect(mocks.loadPriceBookSliceInTenantScope).toHaveBeenCalledWith({
+      orgId: TEST_CTX.orgId,
+      models: ["claude-sonnet-5"],
+      from: new Date(INPUT.start),
+      // The breakdown's end is exclusive; the slice's span is not.
+      to: new Date(Date.parse(INPUT.end) - 1),
+    });
+  });
+
+  it("asks for no price rows for a window with no named model", async () => {
+    // The empty model id groups calls no price entry could price.
+    mocks.readUsageBreakdown.mockResolvedValueOnce({
+      ...BREAKDOWN,
+      byModel: [{ ...BREAKDOWN.byModel[0]!, key: "" }],
+    });
+    mocks.loadPriceBookSliceInTenantScope.mockResolvedValueOnce([]);
+    mocks.readObservedModels.mockResolvedValueOnce([]);
+
+    const out = await billingUsageBreakdownHandler(INPUT, TEST_CTX);
+
+    expect(mocks.loadPriceBookSliceInTenantScope).toHaveBeenCalledWith(
+      expect.objectContaining({ models: [] }),
+    );
+    expect(out.cacheSavingsMicros).toBe(0);
+  });
+
   it("reports zero cache savings when no tokens were cached", async () => {
     mocks.readObservedModels.mockResolvedValueOnce([
       { ...OBSERVED[0], classes: [OBSERVED[0]!.classes[3]] },
@@ -311,7 +342,7 @@ describe("billingUsageBreakdownHandler (@oxagen/handlers)", () => {
   });
 
   it("leaves out a bucket the book cannot price rather than guessing a rate", async () => {
-    mocks.loadPriceBookInTenantScope.mockResolvedValueOnce(
+    mocks.loadPriceBookSliceInTenantScope.mockResolvedValueOnce(
       BOOK.filter((e) => e.tokenClass !== "cache_write_5m"),
     );
     // 7.2 + 16.8 in reads; the writes have no price, so no premium is netted.
@@ -320,7 +351,7 @@ describe("billingUsageBreakdownHandler (@oxagen/handlers)", () => {
   });
 
   it("propagates a price-book read failure (no silent zeros)", async () => {
-    mocks.loadPriceBookInTenantScope.mockRejectedValueOnce(
+    mocks.loadPriceBookSliceInTenantScope.mockRejectedValueOnce(
       new Error("postgres down"),
     );
     await expect(billingUsageBreakdownHandler(INPUT, TEST_CTX)).rejects.toThrow(
@@ -359,7 +390,7 @@ describe("billingUsageBreakdownHandler role gate", () => {
       billingUsageBreakdownHandler(INPUT, TEST_CTX),
     ).rejects.toMatchObject({ code: "forbidden", reason: "org_role_required" });
     expect(mocks.readUsageBreakdown).not.toHaveBeenCalled();
-    expect(mocks.loadPriceBookInTenantScope).not.toHaveBeenCalled();
+    expect(mocks.loadPriceBookSliceInTenantScope).not.toHaveBeenCalled();
   });
 
   it("allows an org Billing member", async () => {

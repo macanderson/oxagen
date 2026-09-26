@@ -84,6 +84,15 @@ vi.mock("@oxagen/iam/fetch-agent-authz", async (importOriginal) => {
   return { ...original, fetchAgentRunAuthzIn: mocks.fetchAgentRunAuthzIn };
 });
 
+// The toolbelt half of the mandate (ADR-198) reads the workspace's tools and
+// belts, which this file's fake does not carry. It denies nothing here; the
+// rule is covered in `lib/toolbelts.test.ts` and its reach onto the bundle in
+// `lib/tacho-host-bundle.test.ts`.
+vi.mock("./lib/toolbelts", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./lib/toolbelts")>();
+  return { ...original, agentBeltDenyPatterns: async () => [] };
+});
+
 // The recorders are mocked. The ledger helpers stay real, so the keys these
 // tests read are the keys production writes.
 vi.mock("@oxagen/billing", async (importOriginal) => {
@@ -349,7 +358,8 @@ function forgedGatewaySession(
 }
 
 interface FakeDb {
-  activeDefinition?: string;
+  /** The config of the agent's active version (ADR-198), when it has one. */
+  activeConfig?: unknown;
   /** The registered agent's public id, for the ledger's agent attribution. */
   agentPublicId?: string;
   /** Every `agents` lookup's arguments, so a test can pin the predicate. */
@@ -357,6 +367,14 @@ interface FakeDb {
   hosts: Array<Record<string, unknown>>;
   principals: Array<Record<string, unknown>>;
   principalLookups: ReturnType<typeof vi.fn>;
+  /**
+   * `workspace.workspace_users`, the enroller's membership the genesis row
+   * stamps its role from (#3999). The enroller is a workspace `Owner` by
+   * default, in IAM's capitalized casing.
+   */
+  memberships: Array<{ workspaceId: string; userId: string; role: string }>;
+  /** Every membership lookup, so a test can pin that a later batch asks none. */
+  membershipLookups: ReturnType<typeof vi.fn>;
   sessions: Map<string, Record<string, unknown>>;
   models: Array<Record<string, unknown>>;
   files: Array<Record<string, unknown>>;
@@ -489,6 +507,14 @@ function fakeDb(): FakeDb {
       },
     ],
     principalLookups: vi.fn(),
+    memberships: [
+      {
+        workspaceId: CONTEXT.workspaceId ?? "",
+        userId: ENROLLER_USER_ID,
+        role: "Owner",
+      },
+    ],
+    membershipLookups: vi.fn(),
     sessions: new Map(),
     models: [],
     files: [],
@@ -720,6 +746,17 @@ function wire(db: FakeDb): void {
               );
             },
           },
+          workspaceUsers: {
+            findFirst: async () => {
+              db.membershipLookups();
+              const row = db.memberships.find(
+                (m) =>
+                  m.workspaceId === CONTEXT.workspaceId &&
+                  m.userId === ENROLLER_USER_ID,
+              );
+              return row ? { role: row.role } : undefined;
+            },
+          },
           tachoSessions: {
             findFirst: async (args: { where?: unknown }) => {
               if (db.hideSessionFromRead) return undefined;
@@ -794,7 +831,7 @@ function wire(db: FakeDb): void {
           agents: {
             findFirst: async (args: unknown) => {
               db.agentLookups?.(args);
-              if (db.activeDefinition !== undefined)
+              if (db.activeConfig !== undefined)
                 return {
                   activeVersionId: "version-active",
                   publicId: db.agentPublicId,
@@ -806,9 +843,9 @@ function wire(db: FakeDb): void {
           },
           agentVersions: {
             findFirst: async () =>
-              db.activeDefinition === undefined
+              db.activeConfig === undefined
                 ? undefined
-                : { config: {}, definitionSource: db.activeDefinition },
+                : { config: db.activeConfig },
           },
           workspaces: { findFirst: async () => db.workspace },
         },
@@ -1125,12 +1162,12 @@ describe("ingest_tacho_events", () => {
     });
   });
 
-  it.each(["[budget", "budget = { per_run_micros = nan }"])(
-    "accepts evidence while an invalid active definition suspends actions: %s",
-    async (source) => {
+  it.each([{ budget: "none" }, { budget: { per_run_micros: Number.NaN } }])(
+    "accepts evidence while an invalid active config suspends actions: %j",
+    async (config) => {
       const db = fakeDb();
       db.hosts[0]!["agentId"] = "agent-budget";
-      db.activeDefinition = source;
+      db.activeConfig = config;
       wire(db);
       const events = session();
       const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
@@ -1139,7 +1176,7 @@ describe("ingest_tacho_events", () => {
       expect(db.sessions.size).toBe(1);
       expect(mocks.insertTachoEvents).toHaveBeenCalled();
       expect(db.hosts[0]!["status"]).toBe("active");
-      db.activeDefinition = "budget = { per_run_micros = 2000000 }";
+      db.activeConfig = { budget: { per_run_micros: 2_000_000 } };
       const repaired = await tachoEventsIngestHandler(batch(events), CONTEXT);
       expect(repaired.control.host_status).toBe("active");
     },
@@ -1149,7 +1186,7 @@ describe("ingest_tacho_events", () => {
     const db = fakeDb();
     db.hosts[0]!["agentId"] = "agent-daily";
     db.hosts[0]!["bundleFeatures"] = ["daily_budget"];
-    db.activeDefinition = "budget = { per_day_micros = 20000000 }";
+    db.activeConfig = { budget: { per_day_micros: 20_000_000 } };
     wire(db);
     mocks.selectAgentDaySpend.mockReset();
     mocks.selectAgentDaySpend.mockResolvedValue(
@@ -2060,6 +2097,107 @@ describe("ingest_tacho_events", () => {
       });
       expect(Object.values(row)).not.toContain(FOREIGN_HUMAN);
       expect(Object.values(row)).not.toContain(ENROLLER_USER_ID);
+    });
+  });
+
+  // #3999: the operator's workspace role is stamped once, when the session
+  // opens, and never read again (ADR-197).
+  describe("operator role stamp", () => {
+    it("stamps a new session with the enroller's workspace role, lowercased", async () => {
+      const db = fakeDb();
+      wire(db);
+      await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: session(),
+        },
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        initiatingPrincipalId: ENROLLER_PRINCIPAL_ID,
+        initiatingUserId: ENROLLER_USER_ID,
+        operatorRole: "owner",
+      });
+      expect(db.membershipLookups).toHaveBeenCalledOnce();
+    });
+
+    it("stamps null for an enroller with no membership in the session's workspace", async () => {
+      const db = fakeDb();
+      db.memberships = [];
+      wire(db);
+      await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: session(),
+        },
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        initiatingPrincipalId: ENROLLER_PRINCIPAL_ID,
+        operatorRole: null,
+      });
+    });
+
+    it("stamps null, and reads no membership, when nobody is attributed", async () => {
+      const db = fakeDb();
+      db.principals = [];
+      wire(db);
+      await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: session(),
+        },
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        initiatingPrincipalId: null,
+        initiatingUserId: null,
+        operatorRole: null,
+      });
+      expect(db.membershipLookups).not.toHaveBeenCalled();
+    });
+
+    it("keeps the first role when the membership changes before a later batch", async () => {
+      const db = fakeDb();
+      const events = session();
+      wire(db);
+      await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: events.slice(0, 3),
+        },
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)).toMatchObject({ operatorRole: "owner" });
+
+      // The enroller is demoted between the two batches.
+      db.memberships = [
+        {
+          workspaceId: CONTEXT.workspaceId ?? "",
+          userId: ENROLLER_USER_ID,
+          role: "viewer",
+        },
+      ];
+      db.membershipLookups.mockClear();
+      await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: events.slice(3),
+        },
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        operatorRole: "owner",
+        outcome: "completed",
+      });
+      expect(db.membershipLookups).not.toHaveBeenCalled();
+      for (const update of db.updates.filter((u) => u.table === "sessions"))
+        expect(update.values).not.toHaveProperty("operatorRole");
     });
   });
 

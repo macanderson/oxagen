@@ -11,6 +11,10 @@
 // once and re-proven minutes later covers minutes of runs, and scaling those
 // to a year would multiply its saving by the tens of thousands. Every figure
 // comes from the job's rows or the rollup, never from a guess.
+//
+// Given a run (#4001), it lists only the findings that cite that run, the
+// totals cover those, and each finding answers what it cites there: the
+// frames the Run page pins it to, or the run as a whole.
 import { type CostBasis, divideHalfEven, foldBasis } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandler } from "@oxagen/oxagen";
@@ -21,10 +25,11 @@ import {
 } from "@oxagen/oxagen/contracts/finding.list";
 import { and, eq, gte, isNotNull, lt, sql } from "drizzle-orm";
 import {
+  citationOf,
+  type FindingFilter,
   findingScope,
   type FindingRow,
   type FindingScope,
-  type FindingStatus,
   operatorKeysOf,
   readFindingRows,
   toFinding,
@@ -45,7 +50,7 @@ type PricedSpend = { micros: bigint; currency: string; basis: CostBasis };
 type FindingListDeps = {
   readFindings: (
     scope: FindingScope,
-    status: FindingStatus,
+    filter: FindingFilter,
   ) => Promise<FindingRow[]>;
   /** The priced spend of runs that started in [start, end); null when nothing was priced. */
   readPricedSpend: (
@@ -98,14 +103,25 @@ export function createFindingListHandler(
 ): CapabilityHandler<typeof findingList> {
   return async (input, ctx): Promise<FindingListOutput> => {
     const scope = findingScope(ctx);
-    const rows = await deps.readFindings(scope, input.status);
+    const { runId } = input;
+    const rows = await deps.readFindings(
+      scope,
+      runId === undefined
+        ? { status: input.status }
+        : { status: input.status, runId },
+    );
     const counts = {
       findings: rows.length,
       high: rows.filter((r) => r.confidence === "high").length,
       medium: rows.filter((r) => r.confidence === "medium").length,
       operators: new Set(rows.flatMap((r) => operatorKeysOf(r))).size,
     };
-    const findings = rows.map(toFinding);
+    // A citation answers exactly when the read names a run.
+    const findings = rows.map((row) =>
+      runId === undefined
+        ? toFinding(row)
+        : { ...toFinding(row), citation: citationOf(row, runId) },
+    );
     if (rows.length === 0)
       return {
         status: input.status,

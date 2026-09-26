@@ -182,10 +182,8 @@ export function Instant({ at }: { at: string }) {
 /** The backend gaps a list cell can name when it prints not recorded. */
 type ListGap =
   | "steering"
-  | "toolbelt"
   | "belt"
   | "tokens"
-  | "commit"
   | "organization"
   | "tier"
   | "runtimeKind";

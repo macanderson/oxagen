@@ -26,8 +26,7 @@ export function createConfigurationCloneGetHandler(
       { org: ["Owner", "Admin"] },
     );
     const original = await deps.source(ctx, input.kind, input.sourceId);
-    const maximum =
-      input.kind === "agent" ? 18 : input.kind === "skill" ? 48 : 200;
+    const maximum = input.kind === "skill" ? 48 : 200;
     // The workspace's names and the production tree are read once, and
     // the one GitHub call per candidate (its proposal branch) is made only
     // for a candidate the local reads did not rule out. The old loop asked
@@ -61,7 +60,6 @@ export function createConfigurationCloneGetHandler(
           candidate.name,
         ),
         files: original.files,
-        harness: original.harness,
       };
     }
     throw new HandlerError({

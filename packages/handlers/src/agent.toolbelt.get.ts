@@ -16,6 +16,16 @@
 // published, because a server's cached `tools/list` snapshot holds names and
 // no schemas; a server whose tools were never imported reports none rather
 // than a placeholder.
+//
+// The agent's toolbelt narrows the result before any gate decides (ADR-198):
+// a registry tool the belt does not show is in `cannotSee` with rule
+// `not_in_toolbelt`, and an MCP tool nobody imported is in no belt. The belt
+// never widens a gate's answer. On a wrapped harness the belt is enforced by
+// the host bundle: every imported MCP tool the belt leaves out is a deny rule
+// (`agentBeltDenyPatterns`, `resolveHostMandate` in lib/tacho-host.ts).
+// `materializeTools` does not apply a belt: its one agent caller is stella's
+// in-app assistant, which runs on no named runtime and carries no belt of its
+// own.
 import {
   agentKeysFor,
   resolveAgentIdentity,
@@ -57,6 +67,7 @@ import { registryCapabilityId } from "@oxagen/agent/runtime/tool-registry-facts"
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { canonicalJson, sha256Hex } from "./registry-digest";
+import { agentBeltGovernance } from "./lib/toolbelts";
 import { logger } from "./logger";
 
 /** The audit correlation id of a belt that no run carries. */
@@ -216,7 +227,9 @@ export const agentToolbeltGetHandler: CapabilityHandler<
       });
     }
     const agentKey = (await agentKeysFor(tx, scope, [row])).get(row.id) ?? null;
-    return { row, agentKey };
+    // The agent's toolbelt (ADR-198): which registry tools it is shown.
+    const belt = await agentBeltGovernance(tx, scope, row, ctx.userId ?? null);
+    return { row, agentKey, belt };
   });
   if (!identity.row.principalId) {
     throw new HandlerError({
@@ -326,10 +339,30 @@ export const agentToolbeltGetHandler: CapabilityHandler<
 
   const tools: BeltTool[] = [];
   const cannotSee: BeltExclusion[] = [];
+  // The belt narrows before any gate decides, and never widens (ADR-198).
+  // An MCP tool is shown only when the agent's belt shows it: a tool a server
+  // lists but nobody imported is in no belt. A capability is narrowed only
+  // when the workspace registry names it; one it does not name is decided by
+  // the gates alone.
+  const { governed, active } = identity.belt;
+  const outsideBelt = (kind: BeltTool["kind"], registryId: string): boolean =>
+    kind === "mcp"
+      ? !active.has(registryId)
+      : governed.has(registryId) && !active.has(registryId);
   const place = (
     tool: Omit<BeltTool, "decision" | "rule" | "riskLevel" | "readOnly">,
     decision: BeltDecision,
+    registryId: string,
   ) => {
+    if (outsideBelt(tool.kind, registryId)) {
+      cannotSee.push({
+        name: tool.name,
+        kind: tool.kind,
+        server: tool.server,
+        rule: "not_in_toolbelt",
+      });
+      return;
+    }
     if (decision.outcome === "deny") {
       cannotSee.push({
         name: tool.name,
@@ -367,6 +400,8 @@ export const agentToolbeltGetHandler: CapabilityHandler<
         emergencyDenies,
         entitledPluginIds: entitled,
       }),
+      // A declared tool is governed under its slug, the capability name.
+      cap.name,
     );
   }
 
@@ -405,20 +440,19 @@ export const agentToolbeltGetHandler: CapabilityHandler<
         toolName,
         "agent",
       );
+      const registryId = registryCapabilityId({
+        source: "mcp",
+        slug: "",
+        name: toolName,
+        mcpServerId: server.id,
+      });
       place(
         {
           name: `${server.name}__${toolName}`,
           kind: "mcp",
           server: server.publicId,
           category: "external",
-          ...(importedSchemas.get(
-            registryCapabilityId({
-              source: "mcp",
-              slug: "",
-              name: toolName,
-              mcpServerId: server.id,
-            }),
-          ) ?? NO_SCHEMA),
+          ...(importedSchemas.get(registryId) ?? NO_SCHEMA),
         },
         decideMcpToolForBelt(server.name, toolName, {
           mcpScope,
@@ -428,6 +462,7 @@ export const agentToolbeltGetHandler: CapabilityHandler<
               : { status: consent.status === "granted" ? "granted" : "denied" },
           decide: (s, t) => decideMcpToolEffect(mcpScope, s, t),
         }),
+        registryId,
       );
     }
   }

@@ -142,6 +142,22 @@ describe("classPrices", () => {
     expect(prices.cacheWriteShare).toBe(0);
   });
 
+  // #3721. Web searches bill per request, and what they cost is part of what
+  // the run spent: the total row adds it, and the input and output areas,
+  // which are token figures, do not.
+  it("adds the run's web searches to the total and to nothing else", () => {
+    const prices = classPrices(priced(), TOKENS, {
+      requests: 3,
+      cost: money("30000"),
+    });
+    expect(prices.total?.micros).toBe("1874097");
+    expect(prices.input?.micros).toBe("926322");
+    expect(prices.output?.micros).toBe("917775");
+    expect(
+      classPrices(priced(), TOKENS, { requests: 3, cost: null }).total,
+    ).toBeNull();
+  });
+
   it("answers a class's share of the priced total", () => {
     const prices = classPrices(priced(), TOKENS);
     expect(classShare(priced(), "output", prices.total)).toBeCloseTo(

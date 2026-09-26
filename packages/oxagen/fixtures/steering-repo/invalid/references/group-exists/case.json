@@ -1,0 +1,18 @@
+{
+  "check": "references",
+  "rule": "group-exists",
+  "severity": "error",
+  "description": "A reviewer group does not exist in Oxagen. context.json lists the groups.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/governance.toml"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/governance.toml",
+      "line": 20,
+      "field": "reviewers.0.group"
+    }
+  ]
+}

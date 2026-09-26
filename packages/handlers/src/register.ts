@@ -1,5 +1,6 @@
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
+import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
 import {
@@ -52,6 +53,19 @@ registerHandlersOnce("@oxagen/handlers", () => {
       headSha: out.headSha,
       retryAfterSeconds: out.retryAfterSeconds,
     };
+  });
+  // The durable Model fit reading (#3893, ADR-201) reads the run the way the
+  // Run page does, through this package, which @oxagen/inngest-functions
+  // cannot import. The reader is installed here and loaded on the first run.
+  setRunFitRunner(async (scope, runPublicId) => {
+    const [{ runInTenantScope }, fit] = await Promise.all([
+      import("@oxagen/tenancy"),
+      import("./lib/run-fit"),
+    ]);
+    const out = await runInTenantScope(scope, () =>
+      fit.writeRunFitReading(fit.defaultRunFitDeps(), scope, runPublicId),
+    );
+    return out.outcome;
   });
   // The pull request backfill (ADR-192) lives in @oxagen/inngest-functions
   // for the same reason, and is loaded on its first run.
@@ -117,24 +131,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
     import("./org.member_invite.resend").then(
       (m) => m.handler as CapabilityHandlerFn,
     ),
-  );
-  registerHandler(
-    "suggest_agent_def",
-    async () =>
-      (await import("./agent.definition.suggest"))
-        .agentDefinitionSuggestHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "revise_agent_def",
-    async () =>
-      (await import("./agent.definition.revise"))
-        .agentDefinitionReviseHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "summarize_agent_def",
-    async () =>
-      (await import("./agent.definition.summarize"))
-        .agentDefinitionSummarizeHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_memory_policy",
@@ -1336,16 +1332,72 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .agentRetireHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "commit_agent_definition",
-    async () =>
-      (await import("./agent.definition.commit"))
-        .agentDefinitionCommitHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "get_agent_toolbelt",
     async () =>
       (await import("./agent.toolbelt.get"))
         .agentToolbeltGetHandler as CapabilityHandlerFn,
+  );
+  // ADR-198 (#4369): an agent is one operator on one runtime with one
+  // harness. Runtimes, toolbelts, tool state, and the two writes that make a
+  // new agent version.
+  registerHandler(
+    "move_agent",
+    async () =>
+      (await import("./agent.move")).agentMoveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "assign_agent_toolbelt",
+    async () =>
+      (await import("./agent.toolbelt.assign"))
+        .agentToolbeltAssignHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "create_runtime",
+    async () =>
+      (await import("./runtime.create"))
+        .runtimeCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_runtimes",
+    async () =>
+      (await import("./runtime.list"))
+        .runtimeListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_toolbelts",
+    async () =>
+      (await import("./toolbelt.list"))
+        .toolbeltListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_toolbelt",
+    async () =>
+      (await import("./toolbelt.get"))
+        .toolbeltGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "clone_toolbelt",
+    async () =>
+      (await import("./toolbelt.clone"))
+        .toolbeltCloneHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "update_toolbelt",
+    async () =>
+      (await import("./toolbelt.update"))
+        .toolbeltUpdateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "delete_toolbelt",
+    async () =>
+      (await import("./toolbelt.delete"))
+        .toolbeltDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_tool_state",
+    async () =>
+      (await import("./tool.state.set"))
+        .toolStateSetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "list_incidents",
@@ -1458,9 +1510,22 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .runTurnsGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_run_context",
+    async () =>
+      (await import("./run.context.get"))
+        .runContextGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_run_work",
     async () =>
       (await import("./run.work.get")).runWorkGetHandler as CapabilityHandlerFn,
+  );
+  // The Run page's Issues tab (#3970, ADR-197).
+  registerHandler(
+    "get_run_issues",
+    async () =>
+      (await import("./run.issues.get"))
+        .runIssuesGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_run_outputs",
@@ -1546,12 +1611,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "list_skills",
     async () =>
       (await import("./skill.list")).skillListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "propose_agent",
-    async () =>
-      (await import("./agent.propose"))
-        .proposeAgentHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "propose_skill",

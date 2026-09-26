@@ -271,6 +271,63 @@
                   "type": "null"
                 }
               ]
+            },
+            "archiveSegmentDigest": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "attestation": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "alg": {
+                      "const": "ed25519"
+                    },
+                    "keyId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sig": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "signsOver": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "run_id",
+                          "attempt_id",
+                          "frame_count",
+                          "merkle_root",
+                          "archive_segment_digest",
+                          "enforcement_tier",
+                          "completeness_gaps",
+                          "replay_grade"
+                        ]
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "alg",
+                    "keyId",
+                    "sig",
+                    "signsOver"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -281,7 +338,9 @@
             "finalEventDigest",
             "eventStreamDigest",
             "merkleRoot",
-            "archiveSegmentRef"
+            "archiveSegmentRef",
+            "archiveSegmentDigest",
+            "attestation"
           ],
           "additionalProperties": false
         }

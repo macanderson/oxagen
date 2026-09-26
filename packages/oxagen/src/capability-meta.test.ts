@@ -199,8 +199,8 @@ describe("getRenderHint / curated tables", () => {
       componentId: "web-search-card",
     });
     expect(getRenderHint("get_node")?.componentId).toBe("graph-node-card");
-    expect(getRenderHint("list_agent_defs")).toEqual({
-      componentId: "agent-definition-list-card",
+    expect(getRenderHint("list_conversations")).toEqual({
+      componentId: "conversation-list-card",
     });
   });
   it("returns undefined for an uncurated capability with no declared render", () => {

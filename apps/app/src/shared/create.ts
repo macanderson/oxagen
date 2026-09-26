@@ -9,16 +9,17 @@
 // The kinds are the things an operator creates in Oxagen: each is a file in the
 // workspace's main repository, and each wizard ends on a pull request. A kind
 // is offered (in the chooser and in ⌘K) once the host carries its wizard; the
-// order here is the chooser's order.
+// order here is the chooser's order. An agent is not one of them: it is an
+// identity on a runtime, registered through the register flow (ADR-198).
 
 /** Every kind the wizard shell is built to host. */
-export type CreateKind = "agent" | "tool" | "skill" | "record";
+export type CreateKind = "tool" | "skill" | "record";
 
 /**
  * The kinds offered today, in the chooser's order. The tool wizard is left
  * out on purpose until its importer and manifest steps are built.
  */
-export const CREATE_KINDS: readonly CreateKind[] = ["agent", "skill", "record"];
+export const CREATE_KINDS: readonly CreateKind[] = ["skill", "record"];
 
 export const CREATE_EVENT = "oxagen:create";
 
@@ -44,10 +45,7 @@ export function openCreate(
 }
 
 /** Open a manual clone draft from a published source in this workspace. */
-export function openClone(
-  kind: "agent" | "skill" | "record",
-  sourceRef: string,
-): void {
+export function openClone(kind: "skill" | "record", sourceRef: string): void {
   window.dispatchEvent(
     new CustomEvent<CreateRequest>(CREATE_EVENT, {
       detail: { kind, cloneSourceRef: sourceRef },
@@ -64,7 +62,7 @@ export function createRequestOf(event: Event): CreateRequest | null {
   const kind: unknown = detail.kind;
   if ("cloneSourceRef" in detail) {
     if (
-      (kind !== "agent" && kind !== "skill" && kind !== "record") ||
+      (kind !== "skill" && kind !== "record") ||
       typeof detail.cloneSourceRef !== "string" ||
       !detail.cloneSourceRef.trim() ||
       detail.cloneSourceRef.length > 200 ||

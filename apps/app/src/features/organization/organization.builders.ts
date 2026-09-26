@@ -201,7 +201,7 @@ export function orgSource(reads: OrgReads): {
         : Promise.resolve(read);
     };
   const source: DataSource = {
-    runtimes: { list: refuse, agents: refuse },
+    runtimes: { list: refuse, agents: refuse, named: refuse },
     conversations: { latest: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
@@ -231,6 +231,9 @@ export function orgSource(reads: OrgReads): {
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,
+      issues: refuse,
+      context: refuse,
+      findings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
     interjections: { open: refuse, forRun: refuse },
@@ -299,6 +302,8 @@ export function orgSource(reads: OrgReads): {
       approvalRules: refuse,
       connections: refuse,
       mcpServers: refuse,
+      toolbelts: refuse,
+      toolbelt: refuse,
     },
   };
   return { source, calls };

@@ -1,0 +1,17 @@
+{
+  "check": "schema",
+  "rule": "repos-required",
+  "severity": "error",
+  "description": "A repository record names no repository in repos.",
+  "refused_by_reader": true,
+  "changed": [
+    "steering/platform/a-intel.platform.lint-before-push.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/platform/a-intel.platform.lint-before-push.md",
+      "field": "repos"
+    }
+  ]
+}

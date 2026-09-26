@@ -1,0 +1,119 @@
+openapi: 3.1.0
+info:
+  title: a-intel billing
+  version: 2.4.0
+servers:
+  - url: https://billing.internal.a-intel.com/v2
+paths:
+  /customers/{customer_id}/charges:
+    get:
+      operationId: listCharges
+      summary: List one customer's charges, newest first.
+      parameters:
+        - { name: customer_id, in: path, required: true, schema: { type: string } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: A page of charges.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: "#/components/schemas/Charge" } }
+                  next_cursor: { type: [string, "null"] }
+  /charges/{charge_id}:
+    get:
+      operationId: getCharge
+      summary: Read one charge.
+      parameters:
+        - { name: charge_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The charge.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Charge" }
+  /refunds:
+    post:
+      operationId: createRefund
+      summary: Refund part or all of a captured charge.
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
+        - { name: X-Request-Source, in: header, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [charge_id]
+              properties:
+                charge_id: { type: string }
+                amount: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: The refund.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Refund" }
+  /refunds/{refund_id}:
+    get:
+      operationId: getRefund
+      summary: Read one refund.
+      parameters:
+        - { name: refund_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The refund.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Refund" }
+  /charges/{charge_id}/refunds:
+    get:
+      operationId: listRefunds
+      summary: List the refunds of one charge.
+      parameters:
+        - { name: charge_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The refunds.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Refund" } }
+  /refunds/{refund_id}/cancel:
+    post:
+      operationId: cancelRefund
+      summary: Cancel a pending refund.
+      parameters:
+        - { name: refund_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The canceled refund.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Refund" }
+components:
+  securitySchemes:
+    oauth:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://login.a-intel.com/oauth/authorize
+          tokenUrl: https://login.a-intel.com/oauth/token
+          scopes: { billing: Read and write billing }
+  schemas:
+    Charge:
+      type: object
+      properties:
+        id: { type: string }
+        amount: { type: integer }
+        status: { type: string, enum: [pending, succeeded, failed] }
+    Refund:
+      type: object
+      properties:
+        id: { type: string }
+        amount: { type: integer }
+        status: { type: string, enum: [pending, succeeded, failed, canceled] }
+security:
+  - oauth: [billing]

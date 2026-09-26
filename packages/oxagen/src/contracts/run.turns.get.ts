@@ -104,6 +104,23 @@ export const runTurnsGet = registerCapability({
        * whole run.
        */
       complete: z.boolean(),
+      /**
+       * The turn each subagent chain's frames count toward, the one its
+       * parent spawned it in (#4001). A chain spawned before the first turn is
+       * absent, and a ledger run answers an empty list. A reader places a
+       * frame cited on a subagent chain with this, and a frame on the run's
+       * own chain at the last turn whose `seq` is at or below it.
+       */
+      chains: z
+        .array(
+          z
+            .object({
+              sessionUuid: z.string().uuid(),
+              turn: z.number().int().positive(),
+            })
+            .strict(),
+        )
+        .max(RUN_TURNS_MAX),
     })
     .strict(),
 });

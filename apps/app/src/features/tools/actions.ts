@@ -22,6 +22,10 @@ import { connectionCreate } from "@oxagen/oxagen/contracts/connection.create";
 import { connectionGet } from "@oxagen/oxagen/contracts/connection.get";
 import { toolClassificationSet } from "@oxagen/oxagen/contracts/tool.classification.set";
 import { toolImport } from "@oxagen/oxagen/contracts/tool.import";
+import { toolStateSet } from "@oxagen/oxagen/contracts/tool.state.set";
+import { toolbeltClone } from "@oxagen/oxagen/contracts/toolbelt.clone";
+import { toolbeltDelete } from "@oxagen/oxagen/contracts/toolbelt.delete";
+import { toolbeltUpdate } from "@oxagen/oxagen/contracts/toolbelt.update";
 import type {
   ApprovalRuleHours,
   KillSwitchKind,
@@ -647,5 +651,128 @@ export async function removeProvider(
   });
   return result.ok
     ? { ok: true, value: { deleted: result.value.deleted } }
+    : result;
+}
+
+// ── Toolbelts (ADR-198) ──────────────────────────────────────────────────────
+// A toolbelt narrows what an agent is shown and never widens a grant. The four
+// writes below each assert the contract's roles in the handler (an org Owner
+// or Admin, or the workspace Owner), so there is no second gate here. The
+// contract refuses a malformed slug or id before the handler runs, and the
+// refusal names the field.
+
+/** A belt as the clone dialog names it. */
+export type ToolbeltRefView = { id: string; name: string; slug: string };
+
+/**
+ * Copies a belt into a new custom belt: every tool the source holds, each
+ * active as it is in the source. The slug is the one the dialog shows, which
+ * fills from the name until the person types their own; an empty slug lets
+ * the handler derive it.
+ */
+export async function cloneToolbelt(
+  org: string,
+  ws: string,
+  draft: {
+    toolbeltId: string;
+    name: string;
+    slug: string;
+    description: string;
+  },
+): Promise<ActionResult<ToolbeltRefView>> {
+  const ctx = await requireViewer(org, ws);
+  const slug = draft.slug.trim();
+  const description = draft.description.trim();
+  const result = await kernelWrite(ctx, toolbeltClone, {
+    toolbeltId: draft.toolbeltId.trim(),
+    name: draft.name.trim(),
+    ...(slug === "" ? {} : { slug }),
+    ...(description === "" ? {} : { description }),
+  });
+  if (!result.ok) return result;
+  const { toolbelt } = result.value;
+  return {
+    ok: true,
+    value: { id: toolbelt.id, name: toolbelt.name, slug: toolbelt.slug },
+  };
+}
+
+/**
+ * One edit to a custom belt's tools, as `update_toolbelt` applies it. A server
+ * is its `mcs_…` id, or null for the workspace's declared and built-in tools.
+ */
+export type ToolbeltChangeDraft =
+  | { op: "remove_server"; serverId: string | null }
+  | { op: "add_server"; serverId: string | null; active: boolean }
+  | { op: "set_server_active"; serverId: string | null; active: boolean }
+  | { op: "set_tool_active"; toolId: string; active: boolean };
+
+/**
+ * Applies edits to a custom belt's tools, in order and in one transaction.
+ * The All tools belt refuses every edit (`all_tools_is_derived`): its members
+ * follow the workspace's tool settings, which `setToolState` changes.
+ */
+export async function updateToolbelt(
+  org: string,
+  ws: string,
+  toolbeltId: string,
+  changes: readonly ToolbeltChangeDraft[],
+): Promise<ActionResult<{ id: string }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, toolbeltUpdate, {
+    toolbeltId: toolbeltId.trim(),
+    changes: [...changes],
+  });
+  return result.ok
+    ? { ok: true, value: { id: result.value.toolbelt.id } }
+    : result;
+}
+
+/**
+ * Deletes a custom belt no live agent carries. A belt an agent still carries
+ * is refused with `toolbelt_in_use`, and the All tools belt with
+ * `all_tools_is_derived`.
+ */
+export async function deleteToolbelt(
+  org: string,
+  ws: string,
+  toolbeltId: string,
+): Promise<ActionResult<{ id: string }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, toolbeltDelete, {
+    toolbeltId: toolbeltId.trim(),
+  });
+  return result.ok
+    ? { ok: true, value: { id: result.value.toolbeltId } }
+    : result;
+}
+
+/**
+ * Sets whether tools are available to toolbelts, and whether each starts
+ * active in the All tools belt, for a list of tools or every tool one server
+ * contributed (`serverId`, null for the declared and built-in tools).
+ */
+export async function setToolState(
+  org: string,
+  ws: string,
+  draft: (
+    | { toolIds: readonly string[]; serverId?: never }
+    | { serverId: string | null; toolIds?: never }
+  ) & { available?: boolean; defaultActive?: boolean },
+): Promise<ActionResult<{ updated: number }>> {
+  const ctx = await requireViewer(org, ws);
+  const target =
+    draft.toolIds === undefined
+      ? { serverId: draft.serverId ?? null }
+      : { toolIds: [...draft.toolIds] };
+  const result = await kernelWrite(ctx, toolStateSet, {
+    ...target,
+    ...(draft.available === undefined ? {} : { available: draft.available }),
+    ...(draft.defaultActive === undefined
+      ? {}
+      : { defaultActive: draft.defaultActive }),
+  });
+  return result.ok
+    ? { ok: true, value: { updated: result.value.updated } }
     : result;
 }

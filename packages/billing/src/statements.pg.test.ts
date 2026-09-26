@@ -313,6 +313,7 @@ describe.skipIf(!enabled)("billing statement against Postgres", () => {
           cache_write_1h: 0,
           output: 30,
           reasoning: 5,
+          server_tool_request: 0,
         },
         rolledUpAt: new Date("2026-09-06T00:00:00Z"),
       });

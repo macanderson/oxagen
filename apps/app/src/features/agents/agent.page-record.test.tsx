@@ -15,7 +15,6 @@ import { mandateList } from "@/test/mandate-views";
 import {
   agentDetail,
   agentsSource,
-  committedDefinition,
   incident,
   incidentPage,
   roleCatalog,
@@ -52,7 +51,8 @@ vi.mock("./actions", () => ({
   setAgentCostCenter: vi.fn(),
   revokeHostEnrollment: vi.fn(),
   issueAgentEnrollmentToken: vi.fn(),
-  commitAgentDefinition: vi.fn(),
+  moveAgent: vi.fn(),
+  assignAgentToolbelt: vi.fn(),
   requestMandate: vi.fn(),
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
@@ -100,7 +100,7 @@ type Reads = Parameters<typeof agentsSource>[0];
 
 async function renderAgent(agent: string, reads: Reads = {}) {
   const { source } = agentsSource({
-    get: readOk(agentDetail({ definition: committedDefinition() })),
+    get: readOk(agentDetail()),
     toolbelt: readOk(toolbelt()),
     mandates: mandateList([]),
     incidents: incidentPage([incident()]),

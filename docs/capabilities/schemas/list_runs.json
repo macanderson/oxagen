@@ -217,6 +217,24 @@
                 }
               ]
             },
+            "operatorRole": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "owner",
+                    "admin",
+                    "member",
+                    "billing",
+                    "compliance",
+                    "viewer"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "status": {
               "type": "string",
               "enum": [
@@ -327,7 +345,8 @@
             "taskRef": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 256
                 },
                 {
                   "type": "null"
@@ -515,10 +534,247 @@
                 }
               ]
             },
+            "effortSource": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "request",
+                    "harness"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "thinking": {
               "anyOf": [
                 {
                   "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "fit": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "read": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "prompts": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "turns": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "steps": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "failed": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "outputTokens": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "reasoningTokens": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "prompts",
+                            "turns",
+                            "steps",
+                            "failed",
+                            "outputTokens",
+                            "reasoningTokens"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "model": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "verdict": {
+                                  "const": "fit"
+                                },
+                                "tier": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "verdict",
+                                "tier"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "verdict": {
+                                  "type": "string",
+                                  "enum": [
+                                    "over",
+                                    "under"
+                                  ]
+                                },
+                                "tier": {
+                                  "type": "string"
+                                },
+                                "suggest": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "verdict",
+                                "tier",
+                                "suggest"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "effort": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "verdict": {
+                              "const": "fit"
+                            },
+                            "effort": {
+                              "type": "string",
+                              "maxLength": 32
+                            },
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "request",
+                                "harness"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "verdict",
+                            "effort",
+                            "source"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "verdict": {
+                              "type": "string",
+                              "enum": [
+                                "over",
+                                "under"
+                              ]
+                            },
+                            "effort": {
+                              "type": "string",
+                              "maxLength": 32
+                            },
+                            "source": {
+                              "type": "string",
+                              "enum": [
+                                "request",
+                                "harness"
+                              ]
+                            },
+                            "suggest": {
+                              "type": "string",
+                              "maxLength": 32
+                            }
+                          },
+                          "required": [
+                            "verdict",
+                            "effort",
+                            "source",
+                            "suggest"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "verdict": {
+                              "const": "unseen"
+                            },
+                            "why": {
+                              "type": "string",
+                              "enum": [
+                                "not_proxied",
+                                "not_sent"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "verdict",
+                            "why"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    },
+                    "method": {
+                      "const": "run-fit/v1"
+                    },
+                    "readAt": {
+                      "type": "string"
+                    },
+                    "sealedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "read",
+                    "model",
+                    "effort",
+                    "method",
+                    "readAt",
+                    "sealedAt"
+                  ],
+                  "additionalProperties": false
                 },
                 {
                   "type": "null"
@@ -794,7 +1050,8 @@
             "name": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 256
                 },
                 {
                   "type": "null"
@@ -961,6 +1218,10 @@
                     "reasoning": {
                       "type": "integer",
                       "minimum": 0
+                    },
+                    "server_tool_request": {
+                      "type": "integer",
+                      "minimum": 0
                     }
                   },
                   "required": [
@@ -969,7 +1230,8 @@
                     "cache_write_5m",
                     "cache_write_1h",
                     "output",
-                    "reasoning"
+                    "reasoning",
+                    "server_tool_request"
                   ],
                   "additionalProperties": false
                 },
@@ -1002,6 +1264,7 @@
             "operatorKind",
             "operatorName",
             "operatorAttribution",
+            "operatorRole",
             "status",
             "outcome",
             "turns",

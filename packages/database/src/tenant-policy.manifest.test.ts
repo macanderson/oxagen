@@ -257,7 +257,9 @@ describe("tenant policy manifest", () => {
     // 127 adds agent.context_sync_state (the repository sync, ADR-184).
     // 129 adds agent.interjections (#3839) and tacho.run_pull_requests
     // (#4129), 2026-09-25.
-    expect(POLICY_MANIFEST.length).toBe(129);
+    // 132 adds agent.runtimes, tools.toolbelts and tools.toolbelt_tools
+    // (ADR-198, 2026-09-26).
+    expect(POLICY_MANIFEST.length).toBe(132);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

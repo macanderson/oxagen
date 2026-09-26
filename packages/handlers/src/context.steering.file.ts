@@ -16,9 +16,10 @@ import type {
   RecordForce,
   RecordKind,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
+import { LEGACY_RULES_DIR } from "@oxagen/oxagen/steering-repo/paths";
 
 export const RECORD_SCHEMA_TAG = "context-record/v0.1";
-export const RULES_DIR = ".oxagen/rules";
+export const RULES_DIR = LEGACY_RULES_DIR;
 
 interface RecordFileInput {
   lineageId: string;

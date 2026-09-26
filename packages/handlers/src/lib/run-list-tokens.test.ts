@@ -48,6 +48,7 @@ const COUNTS = {
   cache_write_1h: 0,
   output: 900,
   reasoning: 100,
+  server_tool_request: 0,
 };
 
 describe("rollupTokenFields", () => {
@@ -93,6 +94,7 @@ describe("rollupTokenFields", () => {
       cache_write_1h: 0,
       output: 2,
       reasoning: 0,
+      server_tool_request: 0,
     });
   });
 

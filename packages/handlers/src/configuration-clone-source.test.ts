@@ -1,6 +1,3 @@
-import { schema, withSystemDb } from "@oxagen/database";
-import { runInTenantScope } from "@oxagen/tenancy";
-import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 const deps = vi.hoisted(() => ({ resolveSkillRepository: vi.fn() }));
 vi.mock("./skill-config.repository", () => deps);
@@ -63,45 +60,3 @@ describe("published clone source", () => {
     expect(getFileContent).not.toHaveBeenCalled();
   });
 });
-
-it.skipIf(!process.env.DATABASE_URL)(
-  "does not clone an agent from another workspace",
-  async () => {
-    const orgId = crypto.randomUUID();
-    const workspaceId = crypto.randomUUID();
-    let id: string | undefined;
-    const getBranch = vi.fn();
-    deps.resolveSkillRepository.mockResolvedValue({ github: { getBranch } });
-    try {
-      const [agent] = await withSystemDb((tx) =>
-        tx
-          .insert(schema.agents)
-          .values({
-            orgId,
-            workspaceId: crypto.randomUUID(),
-            slug: "cross-ws-clone",
-            name: "Other workspace",
-            agentType: "custom",
-            harness: "claude-code",
-          })
-          .returning(),
-      );
-      id = agent!.id;
-      await expect(
-        runInTenantScope({ orgId, workspaceId }, () =>
-          readConfigurationSource(
-            { orgId, workspaceId },
-            "agent",
-            agent!.publicId,
-          ),
-        ),
-      ).rejects.toMatchObject({ reason: "clone_source_missing" });
-      expect(getBranch).not.toHaveBeenCalled();
-    } finally {
-      if (id)
-        await withSystemDb((tx) =>
-          tx.delete(schema.agents).where(eq(schema.agents.id, id!)),
-        );
-    }
-  },
-);

@@ -45,7 +45,7 @@ const openInterjections = vi.fn<DataSource["interjections"]["open"]>();
 const resolvedSince = vi.fn<DataSource["approvals"]["resolvedSince"]>();
 const mandatesList = vi.fn();
 const source = {
-  runtimes: { list: vi.fn(), agents: vi.fn() },
+  runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
   conversations: { latest: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: { context, preferences, counts, notifications, assistantEngine },
@@ -69,6 +69,9 @@ const source = {
     outputs: vi.fn(),
     work: vi.fn(),
     outcomesSettings: vi.fn(),
+    issues: vi.fn(),
+    context: vi.fn(),
+    findings: vi.fn(),
   },
   approvals: { pending, resolved: vi.fn(), resolvedSince },
   interjections: { open: openInterjections, forRun: vi.fn() },
@@ -128,11 +131,15 @@ const source = {
     approvalRules: vi.fn(),
     connections: vi.fn(),
     mcpServers: vi.fn(),
+    toolbelts: vi.fn(),
+    toolbelt: vi.fn(),
   },
 };
 const listed = readOk({
-  orgs: [{ slug: "acme", name: "Acme Robotics" }],
-  workspaces: [{ slug: "core-platform", name: "Core platform" }],
+  orgs: [{ slug: "acme", name: "Acme Robotics", avatarUrl: null }],
+  workspaces: [
+    { slug: "core-platform", name: "Core platform", avatarUrl: null },
+  ],
 });
 
 const emptyQueue = readOk({ items: [], more: false });
@@ -399,10 +406,11 @@ describe("shellSource across the organization's workspaces", () => {
     const many = Array.from({ length: WORKSPACE_BOUND + 3 }, (_, i) => ({
       slug: `ws-${String(i)}`,
       name: `Workspace ${String(i)}`,
+      avatarUrl: null,
     }));
     context.mockResolvedValue(
       readOk({
-        orgs: [{ slug: "acme", name: "Acme Robotics" }],
+        orgs: [{ slug: "acme", name: "Acme Robotics", avatarUrl: null }],
         workspaces: many,
       }),
     );

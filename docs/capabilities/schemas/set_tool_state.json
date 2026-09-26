@@ -1,0 +1,69 @@
+{
+  "name": "set_tool_state",
+  "domain": "tool",
+  "description": "Make tools available to toolbelts or take them out of every belt, and set whether each starts active in the All tools belt. Target a list of tools or every tool from one server.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "tools"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "toolIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "maxItems": 200
+      },
+      "serverId": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "available": {
+        "type": "boolean"
+      },
+      "defaultActive": {
+        "type": "boolean"
+      }
+    },
+    "additionalProperties": false,
+    "x-server-validated": true,
+    "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "updated": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "updated"
+    ],
+    "additionalProperties": false
+  }
+}

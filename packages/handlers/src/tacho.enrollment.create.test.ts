@@ -89,12 +89,33 @@ function happyDb(clash = false): void {
           tachoSessionPolicy: { findFirst: async () => undefined },
         },
         // The steering read: a workspace with an empty ledger and no records,
-        // so the first bundle carries no `context.system`.
+        // so the first bundle carries no `context.system`. The runtime reads
+        // (ADR-198) go on to `.orderBy()` / `.limit()` and find no runtime,
+        // so the operator path creates the one the hostname names.
         select: () => ({
-          from: () => ({
-            where: async () => [{ ledger: 0, steering: 0 }],
-            leftJoin: () => ({ where: async () => [] }),
-          }),
+          from: () => {
+            const chain: {
+              where: () => typeof chain;
+              orderBy: () => typeof chain;
+              limit: () => Promise<unknown[]>;
+              leftJoin: () => { where: () => Promise<unknown[]> };
+              then: (
+                resolve: (rows: unknown[]) => unknown,
+                reject?: (err: unknown) => unknown,
+              ) => Promise<unknown>;
+            } = {
+              where: () => chain,
+              orderBy: () => chain,
+              limit: async () => [],
+              leftJoin: () => ({ where: async () => [] }),
+              then: (resolve, reject) =>
+                Promise.resolve([{ ledger: 0, steering: 0 }]).then(
+                  resolve,
+                  reject,
+                ),
+            };
+            return chain;
+          },
         }),
         insert: (table: unknown) => ({
           values: (values: Record<string, unknown>) => ({
@@ -106,7 +127,9 @@ function happyDb(clash = false): void {
               inserted.push({ table: name, values });
               return name === "api_keys"
                 ? [{ id: "key-uuid", publicId: "aky_pub" }]
-                : [{ ...values, id: "host-uuid", bundleVersionServed: null }];
+                : name === "runtimes"
+                  ? [{ ...values, id: "runtime-uuid", publicId: "rtm_pub" }]
+                  : [{ ...values, id: "host-uuid", bundleVersionServed: null }];
             },
           }),
         }),
@@ -178,6 +201,14 @@ describe("create_tacho_enrollment", () => {
       claudeVersionAtEnroll: "2.1.263",
     });
     expect(host?.values["hostnameDigest"]).toMatch(/^sha256:/);
+    // No agent names a runtime, so the host binds the one its hostname names,
+    // created with the slug rule every runtime slug follows (ADR-198).
+    const runtime = inserted.find((row) => row.table === "runtimes");
+    expect(runtime?.values).toMatchObject({
+      name: "Mac-Studio.local",
+      slug: "mac-studio",
+    });
+    expect(host?.values["runtimeId"]).toBe("runtime-uuid");
     expect(mocks.emitSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "api_key.created",
@@ -279,6 +310,8 @@ describe("create_tacho_enrollment", () => {
       "cc-a-very-long-hos",
     );
     expect(agentSlugFor("!!!")).toBe("cc-host");
+    // An apostrophe is dropped, not turned into a hyphen (ADR-198).
+    expect(agentSlugFor("Mac's MacBook")).toBe("cc-macs-macbook");
     expect(deviceKeyFingerprint(INPUT.devicePublicKey)).toMatch(
       /^sha256:[0-9a-f]{64}$/,
     );

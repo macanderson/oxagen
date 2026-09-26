@@ -1,0 +1,16 @@
+{
+  "check": "owned",
+  "rule": "oxagen-writes",
+  "severity": "error",
+  "description": "A person edited policy/schema.cedarschema, which only Oxagen writes.",
+  "refused_by_reader": false,
+  "changed": [
+    "policy/schema.cedarschema"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "policy/schema.cedarschema"
+    }
+  ]
+}

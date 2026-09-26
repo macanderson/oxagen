@@ -269,7 +269,7 @@ describe("breadcrumbs", () => {
     });
   });
 
-  it("agent detail and source", () => {
+  it("agent detail and one of its tabs", () => {
     const agent = breadcrumbs(
       "/acme/core-platform/agents/acme.core.triage",
       names,
@@ -279,11 +279,8 @@ describe("breadcrumbs", () => {
       { kind: "id", text: "acme.core.triage", href: null },
     ]);
     expect(
-      breadcrumbs("/acme/core-platform/agents/a/source", names).slice(3),
-    ).toEqual([
-      { kind: "id", text: "a", href: "/acme/core-platform/agents/a" },
-      { kind: "id", text: "source", href: null },
-    ]);
+      breadcrumbs("/acme/core-platform/agents/a/toolbelt", names).slice(3),
+    ).toEqual([{ kind: "id", text: "a", href: null }]);
   });
 
   it("runtimes and one host, the host under the list as a run sits under Fleet", () => {

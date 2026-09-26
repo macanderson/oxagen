@@ -1,7 +1,8 @@
 // Organization › Workspaces (pages/organization.md): every workspace of the
 // organization, the archived ones beside the live ones, with Open, Edit, Edit
 // avatar, and Archive, and Create a workspace in the panel. The frame reads the list once
-// (`list_workspaces {includeArchived:true}`).
+// (`list_workspaces {includeArchived:true}`). Each row leads with the
+// workspace's avatar, drawn as the sidebar's switcher draws it.
 //
 // `list_workspaces` records a workspace's name, slug, namespace and archival.
 // Main repo, Production branch and Linked repos come from `list_repositories`
@@ -32,6 +33,7 @@ import type {
 } from "@/data/contracts/org";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
+import { Avatar } from "@/ui/avatar";
 import { Badge } from "@/ui/badge";
 import {
   buttonSecondary,
@@ -161,21 +163,31 @@ function factCells(
 function WorkspaceCell({ workspace }: { workspace: Workspace }) {
   const t = useTranslations("organization.workspaces");
   return (
-    <>
-      <div className="font-semibold text-foreground">{workspace.name}</div>
-      <div className={`${mono} text-[11px] text-dim`}>{workspace.slug}</div>
-      {workspace.archivedAt === null ? null : (
-        <Badge tone="quiet" data-status="archived">
-          {t("archived")}
-        </Badge>
-      )}
+    <div className="flex items-start gap-2.5">
+      <Avatar
+        value={workspace.avatarUrl}
+        initials={workspace.slug.slice(0, 2)}
+        size={28}
+        shape="agent"
+        fallbackFont="mono"
+        testId="workspace-avatar"
+      />
       <div className="min-w-0">
-        <CopyId
-          value={workspace.id}
-          label={t("copyWorkspaceId", { name: workspace.name })}
-        />
+        <div className="font-semibold text-foreground">{workspace.name}</div>
+        <div className={`${mono} text-[11px] text-dim`}>{workspace.slug}</div>
+        {workspace.archivedAt === null ? null : (
+          <Badge tone="quiet" data-status="archived">
+            {t("archived")}
+          </Badge>
+        )}
+        <div className="min-w-0">
+          <CopyId
+            value={workspace.id}
+            label={t("copyWorkspaceId", { name: workspace.name })}
+          />
+        </div>
       </div>
-    </>
+    </div>
   );
 }
 

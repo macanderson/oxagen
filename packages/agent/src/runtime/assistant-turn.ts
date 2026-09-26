@@ -71,11 +71,13 @@ import pino from "pino";
 import { buildChatSystemPrompt } from "../system-prompt";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { ASSISTANT_MESSAGE_STOPPED } from "./assistant-message-status";
+import { projectRunContextWindows } from "../dispatch/context-projection";
 import { recallWorkspaceMemoryMessage } from "./assistant-recall";
 import { toolCallsFromReceipts } from "./assistant-tool-calls";
 import {
   assistantSystemPrompt,
   loadAssistantSteering,
+  steeringSection,
 } from "./assistant-steering";
 import {
   openAssistantRun,
@@ -590,6 +592,9 @@ async function runPreparedTurn(
         LOAD_TOOLS,
       ]),
     ],
+    // USED_CONTEXT lineage for the windows the run records, projected once
+    // it seals and never on the turn's path (ADR-200).
+    projectContext: projectRunContextWindows,
   });
   hooks.onRun?.({ runId: run.runPublicId });
   // Every materialized tool's `execute` closure reads this at call time
@@ -655,6 +660,14 @@ async function runPreparedTurn(
         pageContextMessage(request.pageContext),
         recalledMemory,
       ],
+      // What the model-call frames count apart from the conversation
+      // (ADR-200): the steering the system prompt ends with, and the summary
+      // at the head of the history when the turn carried one.
+      window: {
+        steering: steeringSection(steering),
+        historyContext:
+          compacted.frame !== null && compacted.frame.text !== null ? 1 : 0,
+      },
       instruction: request.content,
       tools: belt.tools,
       modelTools: belt.modelTools,

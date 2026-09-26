@@ -297,6 +297,7 @@ export function FramePanel({
   body,
   approvals,
   control = null,
+  kindPanel,
   steps,
   hrefOf,
   shown,
@@ -311,6 +312,12 @@ export function FramePanel({
   approvals: ReactNode;
   /** The operator's command this frame records, when it is a command frame (#2953). */
   control?: ReactNode;
+  /**
+   * The panel for the frame's kind that the record fills beyond its facts:
+   * a model request's window, or the assembler's manifest (ADR-200). Absent
+   * for every other kind.
+   */
+  kindPanel?: ReactNode;
   steps: Steps;
   hrefOf: HrefOf;
   shown: number;
@@ -375,6 +382,7 @@ export function FramePanel({
         )}
         {approvals}
         {control}
+        {kindPanel}
         <FrameFacts frame={frame} entry={entry} chainRef={open.chainRef} />
         {frame === null || (body !== null && body.ok) ? null : (
           // The body read lists its own redactions; without it, the envelope's.

@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/workspace/v1.json",
+  "title": "Workspace",
+  "description": "workspace.toml at the root of a steering repo: linked code repositories, the budget, code checks, tools, and embeddings.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "workspace/v1"
+    },
+    "organization": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 40,
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "workspace": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 40,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "not": {
+        "enum": [
+          "access",
+          "account",
+          "api-keys",
+          "audit",
+          "billing",
+          "dashboard",
+          "developer",
+          "governance",
+          "members",
+          "model-funding",
+          "new-workspace",
+          "register",
+          "roles",
+          "security",
+          "settings",
+          "sso",
+          "workspaces"
+        ]
+      }
+    },
+    "repositories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+(?:\\.[a-z0-9-]+)+(?:\\/(?!\\.\\.?(?:\\/|$))[a-z0-9_.-]+){2,}$"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "uniqueItems": true,
+      "description": "The linked code repositories. Linking one is a steering PR that adds it here."
+    },
+    "budget": {
+      "type": "object",
+      "properties": {
+        "per_month_micros": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The workspace's monthly spend limit, in millionths of a dollar."
+        }
+      },
+      "additionalProperties": false
+    },
+    "code_checks": {
+      "type": "object",
+      "properties": {
+        "block_merge": {
+          "type": "boolean",
+          "description": "true: a finding fails the Oxagen check on a code repository."
+        }
+      },
+      "additionalProperties": false
+    },
+    "tools": {
+      "type": "object",
+      "properties": {
+        "definition_budget": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Warn past this many tokens of direct-mode tool definitions. 20,000 when unset."
+        }
+      },
+      "additionalProperties": false
+    },
+    "embeddings": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": [
+            "oxagen",
+            "custom",
+            "keyword"
+          ]
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "An endpoint that takes Voyage's request shape: model and input."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "credential": {
+          "type": "string",
+          "pattern": "^oxagen:credential\\/[a-z0-9][a-z0-9-]{0,62}$"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "provider": {
+                "const": "custom"
+              }
+            },
+            "required": [
+              "provider"
+            ]
+          },
+          "then": {
+            "required": [
+              "url",
+              "model"
+            ]
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "properties": {
+                "provider": {
+                  "const": "custom"
+                }
+              },
+              "required": [
+                "provider"
+              ]
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "url"
+                  ]
+                },
+                {
+                  "required": [
+                    "model"
+                  ]
+                },
+                {
+                  "required": [
+                    "credential"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema",
+    "organization",
+    "workspace"
+  ],
+  "additionalProperties": false
+}

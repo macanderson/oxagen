@@ -28,6 +28,7 @@ import {
   readWords,
   type RunTranscriptGetDeps,
   toolResultsOf,
+  unsentFolds,
   withToolUseFacts,
 } from "./run.transcript.get";
 import {
@@ -377,6 +378,21 @@ describe("get_run_transcript", () => {
     ]);
   });
 
+  it("carries a proxied request's effort ahead of the harness's report on the same frame (#3891)", async () => {
+    const { transcript } = harness([
+      tachoRow(0, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        effort: "medium",
+        body: JSON.stringify({ request_effort: "low" }),
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(out.entries.map((entry) => entry.effort)).toEqual(["low"]);
+  });
+
   it("steps: a second response of the same kind opens a new step, it does not join the first", async () => {
     const { transcript } = harness([
       tachoRow(0, {
@@ -510,6 +526,33 @@ describe("get_run_transcript", () => {
       ["managed_settings", true],
       ["harness", true],
       [null, false],
+    ]);
+  });
+
+  it("names the rules each decision fired, in order, and says no producer assessed taint (#3971)", async () => {
+    const decided = (seq: number, body: Record<string, unknown>) =>
+      tachoRow(seq, {
+        kind: "policy_decision",
+        toolName: "",
+        toolStatus: "",
+        policyDecision: "allow",
+        body: JSON.stringify({ policy_source: "bundle", ...body }),
+      });
+    const { transcript } = harness([
+      decided(0, {
+        policy_rule: "Bash(git add:*) and Bash(git commit:*)",
+        policy_rules: ["Bash(git add:*)", "Bash(git commit:*)"],
+      }),
+      // A decision no rule made names none.
+      decided(1, {}),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(
+      out.entries.map((e) => [e.decision?.rules, e.decision?.taint]),
+    ).toEqual([
+      [["Bash(git add:*)", "Bash(git commit:*)"], null],
+      [[], null],
     ]);
   });
 
@@ -1076,6 +1119,63 @@ describe("planTranscriptPage", () => {
         received: { after: 1000, sent: 0 },
       });
     });
+
+    // Batch A1 (#4384) answered more late entries than one page holds by
+    // rewinding the page to the first of them. This planner answers it with
+    // the receipt's `sent` count instead, which "stops inside a batch that
+    // shares one receipt time" covers. The two cases below are A1's, on
+    // this planner.
+    it("sends an entry that grew and was received late once, and a late entry past the cursor once, as a new one", () => {
+      const grew = [at(0, 5, 500), at(1, 1, 100)];
+      const cursor = { through: 1, high: 1, received: { after: 200, sent: 0 } };
+      expect(planTranscriptPage(grew, cursor, 5, 1000)).toEqual({
+        indexes: [0],
+        through: 1,
+        high: 5,
+        received: { after: 1000, sent: 0 },
+      });
+      const past = [at(0, 0, 100), at(1, 1, 100), at(2, 2, 500)];
+      expect(planTranscriptPage(past, cursor, 5, 1000)).toEqual({
+        indexes: [2],
+        through: 2,
+        high: 2,
+        received: { after: 1000, sent: 0 },
+      });
+    });
+
+    it("sends grown entries before a late one, so the page cannot pass their ends (negative)", () => {
+      // f0 and f1 grew to 10 and 11, f3 is late, and f4 opens at 12. A page
+      // that sent f3 and f4 first would raise `high` to 12, past both grown
+      // entries, and no later read would send them.
+      const folds = [
+        at(0, 10, 100),
+        at(1, 11, 100),
+        at(2, 2, 100),
+        at(3, 3, 500),
+        at(12, 12, 100),
+      ];
+      const cursor = { through: 3, high: 3, received: { after: 200, sent: 0 } };
+      const first = planTranscriptPage(folds, cursor, 2, 1000);
+      expect(first).toEqual({
+        indexes: [0, 1],
+        through: 3,
+        high: 11,
+        received: { after: 499, sent: 0 },
+      });
+      const second = planTranscriptPage(folds, first, 2, 1000);
+      expect(second).toEqual({
+        indexes: [3, 4],
+        through: 4,
+        high: 12,
+        received: { after: 1000, sent: 0 },
+      });
+      expect(planTranscriptPage(folds, second, 2, 1000)).toEqual({
+        indexes: [],
+        through: 4,
+        high: 12,
+        received: { after: 1000, sent: 0 },
+      });
+    });
   });
 });
 
@@ -1613,13 +1713,52 @@ describe("get_run_transcript and subagent chains", () => {
         encodeTranscriptCursor({ through: "not-a-uuid:2", high: "2" }),
       ),
     ).toBeNull();
-    // The longest cursor, two subagent keys at the largest seq, fits the
-    // contract's 256-character bound.
+    // The longest cursor, two subagent keys at the largest seq and a receipt
+    // at the largest time and count, fits the contract's 256-character bound.
     const longest = encodeTranscriptCursor({
       through: `${CHILD}:${"9".repeat(19)}`,
       high: `${CHILD}:${"9".repeat(19)}`,
+      received: { after: 999_999_999_999_999, sent: 999_999_999_999_999 },
     });
     expect(longest.length).toBeLessThanOrEqual(256);
+    expect(input({ zoom: "steps", after: longest }).after).toBe(longest);
+    expect(decodeTranscriptCursor(longest)?.received).toEqual({
+      after: 999_999_999_999_999,
+      sent: 999_999_999_999_999,
+    });
+  });
+
+  it("reads a cursor with a receipt, and still reads the two forms written before it (#4083)", () => {
+    const received = { after: 1_789_117_265_000, sent: 0 };
+    expect(
+      decodeTranscriptCursor(
+        encodeTranscriptCursor({ through: `${CHILD}:2`, high: "4", received }),
+      ),
+    ).toEqual({ through: `${CHILD}:2`, high: "4", received });
+    // A cursor written before the receipt carries none, and reads as the
+    // positions alone.
+    const twoPart = Buffer.from("t:7,9", "utf8").toString("base64url");
+    expect(decodeTranscriptCursor(twoPart)).toEqual({
+      through: "7",
+      high: "9",
+    });
+    expect(decodeTranscriptCursor(twoPart)).not.toHaveProperty("received");
+    const onePart = Buffer.from("t:7", "utf8").toString("base64url");
+    expect(decodeTranscriptCursor(onePart)).not.toHaveProperty("received");
+    // Negative: a receipt this handler did not write is refused, not read as
+    // no receipt.
+    for (const text of [
+      "t:7,9,1789117265000",
+      "t:7,9,1789117265000,0123456789ab,1",
+      "t:7,9,soon,0123456789ab",
+      "t:7,9,1789117265000,0123456789AB",
+      "t:7,9,1789117265000,0123",
+      `t:7,9,${"9".repeat(16)},0123456789ab`,
+    ]) {
+      expect(
+        decodeTranscriptCursor(Buffer.from(text, "utf8").toString("base64url")),
+      ).toBeNull();
+    }
   });
 
   it("resumes a cursor whose frame is no longer shown before the next frame of its chain", () => {
@@ -1744,6 +1883,11 @@ describe("the transcript cursor's receipt and window (#4083, #3823)", () => {
 });
 
 describe("get_run_transcript and a late subagent frame (#4083)", () => {
+  // Batch A1 (#4384) tested these cases against its `seen` receipt. Its
+  // idle-read case is the four-read case below, which sends the frame again
+  // while it is inside the settle margin (`RECEIPT_SETTLE_MS`). Its
+  // unreadable-frame case is the settle-margin case, and its paging case is
+  // the planner's "stops inside a batch that shares one receipt time".
   const A = "0192d4a8-7c1e-7a00-8000-00000000a0a0";
   const B = "0192d4a8-7c1e-7a00-8000-00000000b0b0";
   const bare = { toolName: "", toolStatus: "" };
@@ -1956,6 +2100,37 @@ describe("get_run_transcript and a late subagent frame (#4083)", () => {
       ctx(),
     );
     expect(missed.entries).toEqual([]);
+  });
+
+  it("reads a cursor written before the receipt, and answers one that carries it", async () => {
+    const { root, children } = twoSubagents();
+    let clock = NOW;
+    const { transcript } = harness(root, live, children, { now: () => clock });
+    const first = await transcript(input({ zoom: "everything" }), ctx());
+    const decoded = decodeTranscriptCursor(first.cursor as string);
+    const legacy = encodeTranscriptCursor({
+      through: decoded?.through as string,
+      high: decoded?.high as string,
+    });
+    children.push(
+      onA(1, {
+        kind: "llm_call",
+        ...bare,
+        costUsdMicros: 300,
+        receivedAt: receipt(NOW + 1_000),
+      }),
+    );
+    clock = NOW + 5_000;
+    const second = await transcript(
+      input({ zoom: "everything", after: legacy }),
+      ctx(),
+    );
+    // With no receipt, the read sends what the positions say, and the
+    // cursor it answers carries the receipt from then on.
+    expect(second.entries).toEqual([]);
+    expect(decodeTranscriptCursor(second.cursor as string)?.received).toEqual(
+      { after: NOW - 5_000, sent: 0 },
+    );
   });
 
   it("reads the whole run when a subagent that began before the window records a frame", async () => {
@@ -2190,6 +2365,30 @@ describe("get_run_transcript reads a window from the cursor (#3823, D6)", () => 
     // Counts ride only the first read.
     expect(second.counts).toBeUndefined();
   }, 30_000);
+});
+
+
+describe("unsentFolds", () => {
+  it("keeps a fold at or before the cursor that holds a frame received after the receipt (#4083)", () => {
+    const fold = (open: number, received: number | null) => ({
+      span: { open, end: open },
+      received,
+    });
+    const folds = [fold(0, 100), fold(1, 500), fold(2, null), fold(3, 100)];
+    const cursor = { throughAt: 2, highAt: 2 };
+    const opens = (kept: readonly { span: { open: number } }[]) =>
+      kept.map((f) => f.span.open);
+    expect(opens(unsentFolds(folds, cursor))).toEqual([3]);
+    expect(
+      opens(
+        unsentFolds(folds, { ...cursor, receivedAfter: 200 }, (f) => f.received),
+      ),
+    ).toEqual([1, 3]);
+    // Negative: without a receipt on the cursor, a receipt time alone sends
+    // nothing again.
+    expect(opens(unsentFolds(folds, cursor, (f) => f.received))).toEqual([3]);
+    expect(unsentFolds(folds, null)).toBe(folds);
+  });
 });
 
 describe("get_run_transcript and one model call seen twice", () => {

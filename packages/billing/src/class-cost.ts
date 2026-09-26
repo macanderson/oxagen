@@ -18,7 +18,10 @@
  */
 import type { PriceEntry } from "./price-book";
 
-/** The token classes a model-call frame carries (spec §12.6). */
+/**
+ * The token classes a model-call frame carries (spec §12.6). The
+ * `server_tool_request` class counts requests, not tokens.
+ */
 export const FRAME_TOKEN_CLASSES = [
   "input_uncached",
   "cache_read",
@@ -26,6 +29,7 @@ export const FRAME_TOKEN_CLASSES = [
   "cache_write_1h",
   "output",
   "reasoning",
+  "server_tool_request",
 ] as const;
 export type FrameTokenClass = (typeof FRAME_TOKEN_CLASSES)[number];
 
@@ -78,6 +82,7 @@ const zeroByClass = (): Record<FrameTokenClass, bigint> => ({
   cache_write_1h: 0n,
   output: 0n,
   reasoning: 0n,
+  server_tool_request: 0n,
 });
 
 const unitsOf = (tokens: ClassTokens, c: FrameTokenClass): number =>

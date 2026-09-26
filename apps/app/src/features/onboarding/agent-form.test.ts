@@ -1,12 +1,23 @@
 import { describe, expect, it } from "vitest";
+import type { NamedRuntime } from "@/data/contracts/runtimes";
 import {
   AgentForm,
+  agentFieldErrors,
   agentKeyOf,
+  agentSlugFromName,
   HARNESSES,
-  nameFromSlug,
+  holderOf,
   WRAP_TABS,
   wrapTabFor,
 } from "./agent-form";
+
+const VALID = {
+  name: "Mac's Claude",
+  slug: "macs-claude",
+  harness: "claude-code",
+  runtimeId: "rtm_macslaptop",
+  toolbeltId: "",
+};
 
 describe("the harness list", () => {
   it("offers every harness register_agent accepts, the four wrapped ones first", () => {
@@ -21,14 +32,71 @@ describe("the harness list", () => {
   });
 
   it("refuses a harness the contract does not know (negative)", () => {
-    const parsed = AgentForm.safeParse({
-      slug: "perf-watch",
-      name: "Perf watch",
-      description: "",
-      harness: "codex-cli",
-    });
+    const parsed = AgentForm.safeParse({ ...VALID, harness: "codex-cli" });
     expect(parsed.success).toBe(false);
     expect(parsed.error?.issues[0]?.message).toBe("agentHarnessInvalid");
+  });
+});
+
+describe("AgentForm", () => {
+  it("takes a name, a slug, a harness, a runtime and the All tools belt", () => {
+    expect(AgentForm.safeParse(VALID).success).toBe(true);
+    expect(
+      AgentForm.safeParse({ ...VALID, toolbeltId: "tbt_reviewbelt" }).success,
+    ).toBe(true);
+  });
+
+  it("refuses a registration with no runtime chosen (negative)", () => {
+    const parsed = AgentForm.safeParse({ ...VALID, runtimeId: "" });
+    expect(parsed.success).toBe(false);
+    expect(agentFieldErrors(parsed.error?.issues ?? [])).toEqual({
+      runtimeId: "agentRuntimeRequired",
+    });
+  });
+
+  it("refuses a slug over 18 characters (negative)", () => {
+    const parsed = AgentForm.safeParse({ ...VALID, slug: "a".repeat(19) });
+    expect(agentFieldErrors(parsed.error?.issues ?? [])).toEqual({
+      slug: "agentSlugInvalid",
+    });
+  });
+});
+
+describe("agentSlugFromName", () => {
+  it("drops apostrophes and special characters and cuts to 18 characters", () => {
+    expect(agentSlugFromName("Mac's Claude")).toBe("macs-claude");
+    expect(agentSlugFromName("R&D review bot for the platform")).toBe(
+      "rd-review-bot-for",
+    );
+  });
+});
+
+describe("holderOf", () => {
+  const runtime: NamedRuntime = {
+    id: "rtm_macslaptop",
+    name: "Mac's laptop",
+    slug: "macs-laptop",
+    createdAt: "2026-09-20T10:00:00.000Z",
+    agents: [
+      {
+        id: "agt_macclaude",
+        name: "Mac Claude",
+        slug: "mac-claude",
+        harness: "claude-code",
+      },
+    ],
+    liveHosts: 1,
+    lastSeenAt: null,
+  };
+
+  it("names the agent that already runs the harness on the runtime", () => {
+    expect(holderOf(runtime, "claude-code")?.slug).toBe("mac-claude");
+  });
+
+  it("answers null for a free pair, or when either side is not chosen", () => {
+    expect(holderOf(runtime, "codex")).toBeNull();
+    expect(holderOf(runtime, null)).toBeNull();
+    expect(holderOf(undefined, "claude-code")).toBeNull();
   });
 });
 
@@ -63,12 +131,5 @@ describe("agentKeyOf", () => {
 
   it("reads `agent` while the slug is empty", () => {
     expect(agentKeyOf("a-intel.core", "   ")).toBe("a-intel.core.agent");
-  });
-});
-
-describe("nameFromSlug", () => {
-  it("writes the slug in words for the display name register_agent requires", () => {
-    expect(nameFromSlug("perf-watch")).toBe("Perf watch");
-    expect(nameFromSlug("release-bot-2")).toBe("Release bot 2");
   });
 });

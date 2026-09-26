@@ -52,6 +52,8 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
     enforcementTier: "harness",
     completenessGaps: [],
     canSummarize: false,
+    effortSource: null,
+    fit: null,
     startedAt: at(-3600),
     sealedAt: null,
     ...overrides,
@@ -153,6 +155,8 @@ export function agentPage(
       agentKey,
       harness: "claude-code",
       managed: false,
+      runtime: null,
+      toolbelt: null,
       operatorId: null,
       operatorName: null,
       principalId: null,
@@ -210,7 +214,7 @@ export function fleetSource(reads: FleetReads) {
   };
   const refuse = () => Promise.reject(new Error("not a Fleet read"));
   const source: DataSource = {
-    runtimes: { list: refuse, agents: refuse },
+    runtimes: { list: refuse, agents: refuse, named: refuse },
     conversations: { latest: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
@@ -234,6 +238,9 @@ export function fleetSource(reads: FleetReads) {
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,
+      issues: refuse,
+      context: refuse,
+      findings: refuse,
       transcript: refuse,
     },
     approvals: {
@@ -328,6 +335,8 @@ export function fleetSource(reads: FleetReads) {
       approvalRules: refuse,
       connections: refuse,
       mcpServers: refuse,
+      toolbelts: refuse,
+      toolbelt: refuse,
     },
   };
   return { source, calls };
