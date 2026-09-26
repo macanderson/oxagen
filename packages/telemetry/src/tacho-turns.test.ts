@@ -20,6 +20,8 @@ import {
   selectTachoTurnFacts,
   selectTachoTurnGroups,
   type UnkeyedToolPairing,
+  RULE3_GATE_LETTER,
+  RULE3_OTHER_LETTER,
   unkeyedToolPattern,
 } from "./tacho-turns";
 
@@ -294,7 +296,7 @@ describe("selectTachoTurnGroups", () => {
       toolRequests: ["tool_requested", "tool.engine_call_started"],
       toolReceipts: ["tool_call", "tool.engine_call_completed"],
       gates: ["policy_decision", "approval_request"],
-      pattern: "Ag*a|Bg*b",
+      pattern: "A-*a|B-*b",
     });
     expect(query).toContain("arraySort(f -> f.1");
     expect(query).toContain("{pattern:String}) AS unkeyed_tools");
@@ -316,10 +318,40 @@ describe("selectTachoTurnGroups", () => {
         closes: [["tool_requested", "tool_call"]],
         gates: [],
       }),
-    ).toBe("Ag*a");
+    ).toBe("A-*a");
     expect(() => unkeyedToolPattern({ closes: [], gates: [] })).toThrow(
       /between 1 and 26/,
     );
+  });
+
+  // #4354 review. Gates and other frames were `g` and `x`, which are also
+  // the 7th and 24th receipts. With seven spellings or more, a lone request
+  // followed by a gate or another frame read as a request and its receipt.
+  it("reads a gate or another frame as neither a request nor a receipt, at every number of spellings", () => {
+    for (let n = 1; n <= 26; n += 1) {
+      const closes = Array.from(
+        { length: n },
+        (_, k) => [`request_${k}`, `receipt_${k}`] as const,
+      );
+      const pattern = new RegExp(
+        `^(?:${unkeyedToolPattern({ closes, gates: [] })})$`,
+      );
+      for (let k = 0; k < n; k += 1) {
+        const request = String.fromCharCode(65 + k);
+        const receipt = request.toLowerCase();
+        const gate = RULE3_GATE_LETTER;
+        expect(pattern.test(`${request}${receipt}`)).toBe(true);
+        expect(pattern.test(`${request}${gate}${gate}${receipt}`)).toBe(true);
+        expect(pattern.test(`${request}${gate}`)).toBe(false);
+        expect(pattern.test(`${request}${RULE3_OTHER_LETTER}`)).toBe(false);
+        expect(pattern.test(`${request}${RULE3_OTHER_LETTER}${receipt}`)).toBe(
+          false,
+        );
+      }
+    }
+    expect(RULE3_GATE_LETTER).not.toMatch(/[A-Za-z]/);
+    expect(RULE3_OTHER_LETTER).not.toMatch(/[A-Za-z]/);
+    expect(RULE3_GATE_LETTER).not.toBe(RULE3_OTHER_LETTER);
   });
 
   it("reads a spawn that recorded no tool call or agent id as null", async () => {

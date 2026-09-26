@@ -9,7 +9,12 @@ import {
   UNKEYED_TOOL_PAIRING,
   withoutLateReports,
 } from "@oxagen/run-ledger";
-import { type TachoTurnGroup, unkeyedToolPattern } from "@oxagen/telemetry";
+import {
+  RULE3_GATE_LETTER,
+  RULE3_OTHER_LETTER,
+  type TachoTurnGroup,
+  unkeyedToolPattern,
+} from "@oxagen/telemetry";
 import { describe, expect, it } from "vitest";
 import { event, tachoRow } from "../run.test-support";
 import {
@@ -679,14 +684,16 @@ describe("the query's rule 3 against the fold", () => {
 
   /** The query's letter for a frame, from the fold's vocabulary. */
   function letter(kind: string, keyed: boolean): string {
-    if (keyed) return "x";
+    if (keyed) return RULE3_OTHER_LETTER;
     const request = UNKEYED_TOOL_PAIRING.closes.findIndex(([r]) => r === kind);
     if (request >= 0) return String.fromCharCode(65 + request);
     const receipt = UNKEYED_TOOL_PAIRING.closes.findIndex(
       ([, c]) => c === kind,
     );
     if (receipt >= 0) return String.fromCharCode(97 + receipt);
-    return UNKEYED_TOOL_PAIRING.gates.includes(kind) ? "g" : "x";
+    return UNKEYED_TOOL_PAIRING.gates.includes(kind)
+      ? RULE3_GATE_LETTER
+      : RULE3_OTHER_LETTER;
   }
 
   /** A small seeded generator, so a failure names the turn that made it. */

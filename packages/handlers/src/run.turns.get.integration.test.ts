@@ -68,8 +68,10 @@ const CHILD_LOOSE = randomUUID();
 const NESTED = randomUUID();
 const INDEXED = randomUUID();
 const INDEXED_EARLY = randomUUID();
+const SPLIT = randomUUID();
 const RUN_ID = "tse_turnsintegration0000001";
 const INDEXED_ID = "tse_turnsintegration0000002";
+const SPLIT_ID = "tse_turnsintegration0000003";
 
 const BASE = Date.parse("2026-09-11T09:00:00.000Z");
 /** ClickHouse DateTime64 text, `at` seconds after the run began. */
@@ -99,12 +101,15 @@ function row(
     cacheRead?: number;
     requestId?: string;
     bytesRef?: string;
+    policySource?: string;
   } = {},
 ): Row {
   const body: Record<string, unknown> = {};
   if (over.input !== undefined) body["input_tokens"] = over.input;
   if (over.cacheRead !== undefined) body["cache_read_tokens"] = over.cacheRead;
   if (over.requestId !== undefined) body["request_id"] = over.requestId;
+  if (over.policySource !== undefined)
+    body["policy_source"] = over.policySource;
   const root = over.root ?? ROOT;
   return {
     org_id: SCOPE.orgId,
@@ -227,9 +232,9 @@ const ROWS: Row[] = [
   // Turn 4 (#4308): unkeyed tool frames whose halves are not adjacent. The
   // fold pairs a request only with the receipt right after it, with nothing
   // but gates between, so a model call between them makes two calls, and so
-  // does Claude Code's own permission check. A gate between them does not,
-  // and nor does a later sighting of a model call, which the fold hides
-  // before it pairs.
+  // does Claude Code's own permission check, in its own kind and in the
+  // legacy OTel spelling. A gate between them does not, and nor does a later
+  // sighting of a model call, which the fold hides before it pairs.
   row(ROOT, 25, 70, "turn_start"),
   row(ROOT, 26, 71, "tool_requested"),
   row(ROOT, 27, 72, "llm_call", { source: "otel_log", requestId: "req_5" }),
@@ -247,6 +252,12 @@ const ROWS: Row[] = [
     requestId: "req_5",
   }),
   row(ROOT, 37, 82, "tool_call"),
+  row(ROOT, 38, 83, "tool_requested"),
+  row(ROOT, 39, 84, "policy_decision", {
+    source: "otel_log",
+    policySource: "harness",
+  }),
+  row(ROOT, 40, 85, "tool_call"),
   // Subagent A, spawned by tu_task in turn 1.
   row(CHILD_A, 0, 7, "turn_start", {
     subagentId: "agent_a",
@@ -356,6 +367,30 @@ const INDEXED_ROWS: Row[] = [
   }),
 ];
 
+/**
+ * A run whose one reply was written as two transcript blocks, the second
+ * between an unkeyed tool request and its receipt, with no proxy sighting.
+ * The fold keeps the further block as a model step of its own and a frame
+ * that parts the request from its receipt. The query leaves it out of both.
+ * ADR-191 names the case, and #4351 carries the decision it needs.
+ */
+const SPLIT_ROWS: Row[] = [
+  row(SPLIT, 0, 0, "turn_start", { root: SPLIT }),
+  row(SPLIT, 1, 1, "llm_call", {
+    root: SPLIT,
+    source: "transcript",
+    requestId: "req_split",
+  }),
+  row(SPLIT, 2, 2, "tool_requested", { root: SPLIT }),
+  row(SPLIT, 3, 3, "llm_call", {
+    root: SPLIT,
+    source: "transcript",
+    attrs: { [DUP]: "transcript" },
+    requestId: "req_split",
+  }),
+  row(SPLIT, 4, 4, "tool_call", { root: SPLIT }),
+];
+
 const CHILDREN: Record<string, string[]> = {
   [ROOT]: [CHILD_A, CHILD_B, CHILD_LOOSE, NESTED],
   [INDEXED]: [INDEXED_EARLY],
@@ -384,6 +419,15 @@ async function harness() {
           sessionUuid: INDEXED,
           seqCount: INDEXED_ROWS.filter((r) => r["session_uuid"] === INDEXED)
             .length,
+        },
+      }),
+      tachoSession({
+        scope: SCOPE,
+        publicId: SPLIT_ID,
+        session: {
+          id: "0192d4a8-7c1e-7000-8000-00000000c0e0",
+          sessionUuid: SPLIT,
+          seqCount: SPLIT_ROWS.length,
         },
       }),
     ],
@@ -426,7 +470,7 @@ describe.skipIf(!chUp)("get_run_turns against ClickHouse", () => {
     await clickhouse().insert({
       table: "tacho_events",
       format: "JSONEachRow",
-      values: [...ROWS, ...INDEXED_ROWS],
+      values: [...ROWS, ...INDEXED_ROWS, ...SPLIT_ROWS],
     });
   }, 120_000);
 
@@ -468,9 +512,10 @@ describe.skipIf(!chUp)("get_run_turns against ClickHouse", () => {
       [2, 7, 2, 3, "3"],
       [3, 4, 2, 0, "37"],
       // Two calls around the model call, two around the harness check, one
-      // through the gate, and one around the hidden sighting. The query on
-      // main paired by count and answered 4.
-      [4, 13, 1, 6, null],
+      // through the gate, one around the hidden sighting, and two around the
+      // harness check in its legacy OTel spelling. The query on main paired
+      // by count and answered 5.
+      [4, 16, 1, 8, null],
     ]);
     expect(out.turns[0]?.cumulativeCost?.micros).toBe("135");
     expect(out.turns[0]?.tokens).toEqual({ inputUncached: 18, cacheRead: 105 });
@@ -497,5 +542,24 @@ describe.skipIf(!chUp)("get_run_turns against ClickHouse", () => {
       [3, "5", "2026-09-11T09:00:05.000Z", 1],
     ]);
     expect(out.turns[0]?.cost?.micros).toBe("14");
+  });
+
+  // Where the query does not yet answer as the fold does. A reply's further
+  // transcript block is its own model step in the fold, and it parts an
+  // unkeyed request from its receipt, so the fold draws two model steps and
+  // two tool calls. The query leaves the block out and answers one of each.
+  // ADR-191 names the case and #4351 carries the decision. When #4351 lands,
+  // this becomes an equality like the tests above.
+  it("differs from the fold on a reply split into blocks around an unkeyed tool call (#4351)", async () => {
+    const { turns } = await harness();
+    const { ctx } = await import("./run.test-support");
+    const out = await runInTenantScope(SCOPE, () =>
+      turns(runTurnsGet.input.parse({ runId: SPLIT_ID }), ctx(SCOPE)),
+    );
+    const expected = await runInTenantScope(SCOPE, () => reference(SPLIT_ID));
+    const counts = (list: typeof out.turns) =>
+      list.map((t) => [t.frames, t.modelSteps, t.toolSteps]);
+    expect(counts(expected.turns)).toEqual([[5, 2, 2]]);
+    expect(counts(out.turns)).toEqual([[5, 1, 1]]);
   });
 });

@@ -133,9 +133,18 @@ export interface UnkeyedToolPairing {
 }
 
 /**
+ * A gate's letter, and every other frame's, in the rule 3 pattern. Neither is
+ * a letter of the alphabet, so neither can be read as a request or a receipt
+ * whatever the number of spellings, and neither means anything to a regular
+ * expression outside a bracket.
+ */
+export const RULE3_GATE_LETTER = "-";
+export const RULE3_OTHER_LETTER = "_";
+
+/**
  * The pattern an unkeyed tool call makes in a chain's frames, one letter per
  * frame: the kth request spelling is the kth capital, its receipt the same
- * lowercase letter, a gate `g`, and anything else `x`. `Ag*a` is a request,
+ * lowercase letter, a gate `-`, and anything else `_`. `A-*a` is a request,
  * any gates, and its receipt.
  */
 export function unkeyedToolPattern(pairing: UnkeyedToolPairing): string {
@@ -147,7 +156,7 @@ export function unkeyedToolPattern(pairing: UnkeyedToolPairing): string {
   return pairing.closes
     .map((_, k) => {
       const letter = String.fromCharCode(65 + k);
-      return `${letter}g*${letter.toLowerCase()}`;
+      return `${letter}${RULE3_GATE_LETTER}*${letter.toLowerCase()}`;
     })
     .join("|");
 }
@@ -247,13 +256,13 @@ const GATE = `has({gates:Array(String)}, kind)
 
 /** Each frame's letter in the rule 3 pattern (`unkeyedToolPattern`). */
 const LETTER = `multiIf(
-  tool_use_id != '', 'x',
+  tool_use_id != '', '${RULE3_OTHER_LETTER}',
   indexOf({toolRequests:Array(String)}, kind) > 0,
     char(64 + indexOf({toolRequests:Array(String)}, kind)),
   indexOf({toolReceipts:Array(String)}, kind) > 0,
     char(96 + indexOf({toolReceipts:Array(String)}, kind)),
-  ${GATE}, 'g',
-  'x')`;
+  ${GATE}, '${RULE3_GATE_LETTER}',
+  '${RULE3_OTHER_LETTER}')`;
 
 /**
  * Every frame of a wrapped run, counted per chain and turn.

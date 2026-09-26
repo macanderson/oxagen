@@ -37,9 +37,11 @@ at seal and a backfill for every row written before it.
    fold's rules.** Keyed tool calls stay one per call id per chain and turn.
    An unkeyed tool call is rule 3 read from each chain's frames in seq order:
    the query writes one letter per frame, a request as the capital of its
-   spelling, its receipt as the lowercase letter, a gate as `g`, and anything
-   else as `x`, and counts the matches of `Ag*a`. Requests and receipts that
-   match nothing are a call each.
+   spelling, its receipt as the lowercase letter, a gate as `-`, and anything
+   else as `_`, and counts the matches of `A-*a`. Requests and receipts that
+   match nothing are a call each. A gate and any other frame are written
+   outside `a` to `z`, so neither reads as a receipt at any number of
+   spellings up to 26.
 2. **The vocabulary has one home.** `UNKEYED_TOOL_PAIRING` in
    `@oxagen/run-ledger` holds rule 3's request and receipt spellings and its
    gates, derived from the tables the fold itself reads (`TOOL_CLOSE`,
@@ -52,8 +54,8 @@ at seal and a backfill for every row written before it.
 4. **One test holds the two together.** `run.turns.get.integration.test.ts`
    answers a wrapped run through the query and through the fold over the same
    frames, and asserts they agree, with unkeyed tool calls adjacent, apart
-   around a model call, apart around a harness check, through a gate, and
-   around a hidden sighting.
+   around a model call, apart around a harness check in its own kind and in
+   its legacy OTel spelling, through a gate, and around a hidden sighting.
 5. **No step key at ingest.** `tacho_events` gains no column for this.
 
 ## Consequences
@@ -61,11 +63,20 @@ at seal and a backfill for every row written before it.
 - The Cost tab and the Transcript tab count the same unkeyed tool calls.
 - The query no longer counts `model.request` and `model.response`. They are
   not kinds of the `tacho/1.0` envelope, so no wrapped frame carries them.
-- The query reads a chain's frames in seq order, and the fold reads them in
-  the order the transcript splices them. They differ only when a subagent
-  chain that no spawn frame names began between an unkeyed request and its
-  receipt, and when a later sighting with a richer body replaces the first
-  one between them. Both are named here rather than modelled.
+- The query and the fold still differ on these frames between an unkeyed
+  request and its receipt. Each is named here rather than modelled.
+  - A subagent chain that no spawn frame names began between them. The query
+    reads a chain's frames in seq order, and the fold reads them in the order
+    the transcript splices them.
+  - A later sighting with a richer body replaces the first one between them.
+  - A later sighting whose first sighting is not among the run's frames sits
+    between them. The fold keeps it, as the only copy of the call, and the
+    query leaves it out.
+  - A transcript reply's further block sits between them. The fold keeps the
+    block when the reply's first block stays, so the request and the receipt
+    are two calls, and the query leaves it out and pairs them.
+    `run.turns.get.integration.test.ts` holds this difference, and #4351
+    decides it with the model step half below.
 - A transcript reply in two content blocks is two model steps in the fold
   and one model call in the query. That is a separate decision about what a
   step is, and #4351 carries it.
