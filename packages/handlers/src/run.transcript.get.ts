@@ -346,6 +346,8 @@ const CHAIN_KEY =
 const COUNT = /^\d{1,15}$/;
 /** A cost in micros, which a credit can make negative. */
 const MICROS = /^-?\d{1,15}$/;
+/** The digest a `seen` receipt carries: 12 hex digits of a SHA-256. */
+const SEEN_WINDOW = /^[0-9a-f]{12}$/;
 
 function decodeKey(key: string): string | null {
   if (key === TACHO_START) return key;
@@ -390,16 +392,35 @@ function decodeFrom(
  * its page held (`t:<key>`), and reads as both halves. One issued before the
  * receipt and the window names two frames (`t:<through>,<high>`) and carries
  * neither.
+ *
+ * A cursor from the `seen` receipt that came before this one
+ * (`t:<through>,<high>,<at>,<window>`, #4384) names the latest receipt time
+ * its read held. It reads as a receipt the settle margin before that time,
+ * so the next read sends again every entry with a frame received near it,
+ * and the reader replaces its copies. Its digest of those frames is checked
+ * for form and then set aside. It names no window, so the next read reads the
+ * whole run.
  */
 export function decodeTranscriptCursor(raw: string): TranscriptCursor | null {
   const text = Buffer.from(raw, "base64url").toString("utf8");
   if (!text.startsWith("t:")) return null;
   const parts = text.slice(2).split(",");
-  if (parts.length !== 1 && parts.length !== 2 && parts.length !== 8)
-    return null;
+  if (![1, 2, 4, 8].includes(parts.length)) return null;
   const through = decodeKey(parts[0] as string);
   const high = parts.length === 1 ? through : decodeKey(parts[1] as string);
   if (through === null || high === null) return null;
+  if (parts.length === 4) {
+    const at = parts[2] as string;
+    if (!COUNT.test(at) || !SEEN_WINDOW.test(parts[3] as string)) return null;
+    return {
+      through,
+      high,
+      received: {
+        after: Math.max(0, Number(at) - RECEIPT_SETTLE_MS),
+        sent: 0,
+      },
+    };
+  }
   if (parts.length !== 8) return { through, high };
   const [after, sent, seq, turn, cost, observed] = parts.slice(2) as [
     string,

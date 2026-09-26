@@ -166,7 +166,7 @@ The cursor is opaque to a reader, which does not parse it. The server writes fou
 | `received` | on a wrapped run, how far the reader stands in the order the server received the frames: a receipt time, and how many entries received just after it the reader was already sent. A ledger run has one chain and carries none |
 | `from` | where the next read's window of the run starts: a frame on the run's own chain, and the run's turn and cumulative cost at that frame. Absent when the next read reads the run from its first frame |
 
-A frame is `<seq>` on the run's own chain and `<session uuid>:<seq>` on a subagent's. A cursor written in an older form, one frame or two, is still accepted. A cursor longer than the contract's 256 characters leaves out `from`, and the next read reads the whole run.
+A frame is `<seq>` on the run's own chain and `<session uuid>:<seq>` on a subagent's. A cursor written in an older form is still accepted: one frame, two frames, or two frames with the `seen` receipt that came before this one (#4384). A `seen` receipt reads as a receipt the settle margin before its time, so the next read sends again the entries received near it, and it names no window, so that read reads the whole run. A cursor longer than the contract's 256 characters leaves out `from`, and the next read reads the whole run.
 
 ### What a read from the cursor sends
 

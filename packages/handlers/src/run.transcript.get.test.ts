@@ -1683,8 +1683,31 @@ describe("the transcript cursor's receipt and window (#4083, #3823)", () => {
     "t:1,2,,,,3,,",
     "t:1,2,,,4,1,1.5,0",
     "t:1,2,,,4,-1,,0",
+    "t:7,9,soon,0123456789ab",
+    "t:7,9,1789117265000,0123456789AB",
+    "t:7,9,1789117265000,0123",
+    `t:7,9,${"9".repeat(16)},0123456789ab`,
   ])("refuses the malformed cursor %s (negative)", (text) => {
     expect(decodeTranscriptCursor(raw(text))).toBeNull();
+  });
+
+  it("reads a cursor from the seen receipt as a receipt the settle margin earlier (#4384)", () => {
+    // A Run page open across the deploy holds a cursor the seen receipt
+    // wrote: two frames, the latest receipt time its read held, and a digest.
+    const seen = decodeTranscriptCursor(
+      raw(`t:7,${CHILD}:3,1789117265000,0123456789ab`),
+    );
+    expect(seen).toEqual({
+      through: "7",
+      high: `${CHILD}:3`,
+      received: { after: 1_789_117_265_000 - RECEIPT_SETTLE_MS, sent: 0 },
+    });
+    // It names no window, so the next read reads the whole run.
+    expect(seen).not.toHaveProperty("from");
+    // A receipt time inside the margin reads as the epoch.
+    expect(
+      decodeTranscriptCursor(raw("t:7,9,5000,0123456789ab"))?.received,
+    ).toEqual({ after: 0, sent: 0 });
   });
 
   it("leaves out a window start the contract's cap cannot carry, and keeps the receipt", () => {

@@ -99,7 +99,9 @@ started in.
     sent again, after the grown entries and before the new ones. The receipt
     trails the read by a settle margin of 10 seconds (`RECEIPT_SETTLE_MS`),
     because ingest commits the session row in Postgres before it inserts the
-    frame into ClickHouse. The one-frame and two-frame cursors still decode.
+    frame into ClickHouse. The one-frame and two-frame cursors still decode,
+    and so does the four-part `seen` cursor #4384 wrote, as a receipt the
+    settle margin before its time.
 11. **A read from a transcript cursor reads a window of the run (#3823).**
     The cursor names the frame on the run's own chain that opens the latest
     turn the reader was sent, with the run's turn and cumulative cost there.
