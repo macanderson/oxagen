@@ -793,7 +793,7 @@ export const tachoSessionFiles = tachoSchema.table(
 
 // ── run_pull_requests ────────────────────────────────────────────────────────
 // One row per pull request (or GitLab merge request) a root session's record
-// names, with the state a forge last reported for it (#4129, ADR-189). Forge
+// names, with the state a forge last reported for it (#4129, ADR-192). Forge
 // webhooks keep the state current, and one read when the link lands fills it
 // before the first delivery. The link itself stays in the session's frames:
 // this row holds only what the frames cannot, the state.

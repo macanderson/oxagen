@@ -2546,7 +2546,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
   }
 
   // Each pull request link the batch records gets its row and one read of
-  // its state (ADR-189). Best-effort, once per root session and URL.
+  // its state (ADR-192). Best-effort, once per root session and URL.
   await sendPullRequestLinks(
     (events) => eventClient.send(events),
     ctx,

@@ -324,7 +324,7 @@ describe("list_runs tokens, cache hit rate and compaction (#3834, #3835)", () =>
     ).toBe(false);
   });
 
-  it("keeps paused and compacted out of the status (ADR-190, negative)", () => {
+  it("keeps paused and compacted out of the status (ADR-193, negative)", () => {
     expect(runItemSchema.safeParse({ ...item, status: "paused" }).success).toBe(
       false,
     );

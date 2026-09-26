@@ -1,4 +1,4 @@
-// The paused and compacted row states in view.ts (#3835, ADR-190). These
+// The paused and compacted row states in view.ts (#3835, ADR-193). These
 // cases read the view.ts wiring in the run-rows lane's handoff. The tokens
 // sort is proved on the whole page in row-facts.test.tsx.
 import { describe, expect, it } from "vitest";

@@ -1,4 +1,4 @@
-// Whether a ledger run's recording was compacted (#3835, ADR-190).
+// Whether a ledger run's recording was compacted (#3835, ADR-193).
 //
 // Compacted is a fact beside a run's status, never a status of its own. The
 // lifecycle word stays `live`, `sealed` or `halted`, because about thirty

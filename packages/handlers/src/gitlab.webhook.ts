@@ -93,7 +93,7 @@ export interface GitLabWebhookDeps {
   requestSync?(scope: WebhookScope, reason: string): Promise<void>;
   /**
    * Store the state a merge request delivery reports on the workspace's run
-   * rows that name the merge request (ADR-189). Answers the rows written.
+   * rows that name the merge request (ADR-192). Answers the rows written.
    * Absent, nothing is stored.
    */
   recordPullRequestState?(
@@ -253,7 +253,7 @@ export async function handleGitLabWebhook(
 
     return await deps.runInScope(scope, async () => {
       // Every run row that names this merge request shows its state, whether
-      // or not a proposal is behind it (ADR-189).
+      // or not a proposal is behind it (ADR-192).
       await recordMergeRequestState(deps, scope, connection, event);
       // Any merge can change the production branch, whether or not Oxagen
       // opened the merge request. The payload's word is enough to ask: the

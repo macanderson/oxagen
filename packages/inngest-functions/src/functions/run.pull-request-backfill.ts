@@ -15,7 +15,7 @@ const eventSchema = z.object({
 });
 
 /**
- * One recorded pull request link (ADR-189): store its row, then read its
+ * One recorded pull request link (ADR-192): store its row, then read its
  * state once from the forge. Forge webhooks keep the state current from
  * there. The delivery that opened the pull request usually lands before the
  * frame that names it, finds no row, and writes nothing, so without this

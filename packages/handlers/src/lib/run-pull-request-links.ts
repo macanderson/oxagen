@@ -1,5 +1,5 @@
 // The pull request links an ingest batch lands, as backfill requests
-// (#4129, ADR-189).
+// (#4129, ADR-192).
 //
 // A link is the same thing `list_runs` reads from the frames: the `pr.url`
 // attr any frame carries, or a pr_link frame's `pr_url` from before #3944.

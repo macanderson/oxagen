@@ -1,7 +1,7 @@
 // audit-exempt: a webhook receiver with no person behind it; the only write is the pull request state a forge reported, onto the rows that name that pull request, which no person authors.
 //
 // github.pull-request.webhook.ts: what a GitHub App `pull_request` delivery
-// does to the stored state of the pull requests runs name (#4129, ADR-189).
+// does to the stored state of the pull requests runs name (#4129, ADR-192).
 //
 // The route verified the delivery's HMAC against the App that sent it, so the
 // payload is GitHub's word. It carries the repository, the number, the state,

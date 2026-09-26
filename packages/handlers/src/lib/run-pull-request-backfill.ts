@@ -1,5 +1,5 @@
 // The one read that fills a pull request's state when a run first records
-// its link (#4129, ADR-189).
+// its link (#4129, ADR-192).
 //
 // Forge webhooks keep a stored state current, but the delivery that opened a
 // pull request usually arrives before the harness writes the frame that

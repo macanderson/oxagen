@@ -52,7 +52,7 @@ registerHandlersOnce("@oxagen/handlers", () => {
       retryAfterSeconds: out.retryAfterSeconds,
     };
   });
-  // The pull request backfill (ADR-189) lives in @oxagen/inngest-functions
+  // The pull request backfill (ADR-192) lives in @oxagen/inngest-functions
   // for the same reason, and is loaded on its first run.
   setPullRequestBackfillRunner(async (request) =>
     (await import("./lib/run-pull-request-backfill")).runPullRequestBackfill(

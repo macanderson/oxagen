@@ -1,4 +1,4 @@
-# ADR-189: Pull request state is stored per run and kept current by forge webhooks
+# ADR-192: Pull request state is stored per run and kept current by forge webhooks
 
 - **Status:** Accepted
 - **Date:** 2026-09-25

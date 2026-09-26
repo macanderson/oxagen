@@ -180,12 +180,10 @@ describe("the sweep and the spool", () => {
     const paths = scratchPaths();
     const handle = await withEndedSession(paths);
     spool(paths, "01-other", prompt(OTHER, "a"));
-    // A hook the schema refuses: it can never replay.
-    spool(
-      paths,
-      "02-ended",
-      payload(ENDED, "PostToolUse", { duration_ms: "slow" }),
-    );
+    // A hook with no event name: the schema refuses it, so it can never
+    // replay. A mistyped member no longer does, since the schema reads it
+    // as absent (H-07).
+    spool(paths, "02-ended", { session_id: ENDED, cwd: CWD });
     refuseTurns(handle);
 
     await handle.tick();

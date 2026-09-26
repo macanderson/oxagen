@@ -1,4 +1,4 @@
-// The state of the pull requests a run's record names (#4129, ADR-189).
+// The state of the pull requests a run's record names (#4129, ADR-192).
 //
 // A run's frames record a pull request's URL and nothing more. The state
 // (open, draft, merged, closed) lives on the forge, and a list page cannot

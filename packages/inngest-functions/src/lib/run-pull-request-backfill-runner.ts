@@ -1,6 +1,6 @@
 // run-pull-request-backfill-runner.ts: the seam between the durable backfill
 // (functions/run.pull-request-backfill.ts) and the code that performs it
-// (ADR-189).
+// (ADR-192).
 //
 // The backfill writes `tacho.run_pull_requests` and reads GitHub and GitLab
 // through `@oxagen/handlers`, and `@oxagen/handlers` depends on this package,

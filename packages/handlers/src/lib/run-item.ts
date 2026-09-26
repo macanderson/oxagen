@@ -110,7 +110,7 @@ export type LedgerSeal = {
   eventStreamDigest: string;
   /**
    * Whether frame compaction moved the attempt's frames to its archive
-   * segment (`compactedProbe`, ADR-190). Absent when the read did not ask.
+   * segment (`compactedProbe`, ADR-193). Absent when the read did not ask.
    */
   compacted?: boolean;
 };

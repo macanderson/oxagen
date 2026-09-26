@@ -13,7 +13,7 @@
  * - entity.received event shape (sourceRecordType + unwrapped record)
  * - push / pull_request → steering sync request (ADR-184); its failure never
  *   changes the response
- * - pull_request → the pull request's state is stored (ADR-189) once per
+ * - pull_request → the pull request's state is stored (ADR-192) once per
  *   delivery with an installation; its failure never changes the response
  */
 
@@ -106,7 +106,7 @@ vi.mock("@oxagen/handlers/context.steering.sync.request", () => ({
   requestSteeringSync: mocks.requestSteeringSync,
 }));
 
-// Storing the pull request's state (ADR-189) has its own suite; here it is a
+// Storing the pull request's state (ADR-192) has its own suite; here it is a
 // seam, so these tests assert when the route calls it and that its failure
 // never reaches GitHub.
 vi.mock("@oxagen/handlers/github.pull-request.webhook", () => ({
@@ -780,7 +780,7 @@ describe("github app webhook – steering sync request (ADR-184)", () => {
   });
 });
 
-describe("github app webhook – pull request state (ADR-189)", () => {
+describe("github app webhook – pull request state (ADR-192)", () => {
   const PR_BODY = {
     action: "closed",
     installation: { id: 555 },

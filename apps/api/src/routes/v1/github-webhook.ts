@@ -31,7 +31,7 @@
  *      (ADR-184). The sync reads the branch itself.
  *   2c. `pull_request` → store the state the delivery reports on every run
  *      row that names the pull request, in the workspaces connected to this
- *      installation (ADR-189).
+ *      installation (ADR-192).
  *   3. Resolve connected GitHub connection(s) for this installation + repo.
  *   4. Ask the connector to extract ingestable (sourceRecordType, record) pairs.
  *   5. Fan out one `ingestion/entity.received` per (connection × record). The
@@ -290,7 +290,7 @@ githubAppWebhookRoute.post("/", async (c) => {
     }
   }
 
-  // ── Pull request state (ADR-189) ────────────────────────────────────────
+  // ── Pull request state (ADR-192) ────────────────────────────────────────
   // Fleet and the Run page show each pull request a run names with the state
   // GitHub last reported. The handler writes only workspaces connected to
   // this installation, and a failure never fails the delivery: the next

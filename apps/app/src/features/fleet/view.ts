@@ -18,7 +18,7 @@ import type { RunPullRequest, RunRow } from "@/data/contracts/runs";
 
 /**
  * The state a row reads as. Each word beyond the run's lifecycle status comes
- * from a record, never a guess (ADR-190):
+ * from a record, never a guess (ADR-193):
  *
  * - `paused`: a live run whose last applied command paused it
  *   (`ingressPaused`). It wins over parked, as on the Run page: a paused run

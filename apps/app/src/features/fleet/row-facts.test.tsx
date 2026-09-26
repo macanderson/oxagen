@@ -230,7 +230,7 @@ describe("paused and compacted rows (#3835)", () => {
   });
 
   // The Status facet filters on the server (#3837), which holds the run's
-  // lifecycle status only. Paused and compacted are facts beside it (ADR-190),
+  // lifecycle status only. Paused and compacted are facts beside it (ADR-193),
   // so the parked and sealed chips find them, not the facet.
   it("offers the record's statuses in the Status facet, not paused or compacted", async () => {
     await renderFleet(runs);

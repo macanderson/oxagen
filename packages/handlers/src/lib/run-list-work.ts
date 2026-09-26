@@ -15,7 +15,7 @@
 //                  the uncommitted change git reported per path
 //                  (`tacho.session_files`, root and subagent chains).
 //   State          `tacho.run_pull_requests`: the state a forge last reported
-//                  for each link (ADR-189), read beside the frames. A link
+//                  for each link (ADR-192), read beside the frames. A link
 //                  with no row reads `state: null`.
 import { schema, withTenantDb } from "@oxagen/database";
 import type {

@@ -48,7 +48,7 @@ export const RUN_ENRICH_EVENT = "run/enrich";
 
 /**
  * Asks `run.pull-request-backfill` to store a row for one pull request link
- * a run recorded, and to read its state once from the forge (ADR-189). Sent
+ * a run recorded, and to read its state once from the forge (ADR-192). Sent
  * by the tacho ingest handler for each root session and URL a batch's
  * `oxagen:pr_link` or `pr.url` frames name, with an id that holds for that
  * pair, so a re-sent batch asks once. Data is

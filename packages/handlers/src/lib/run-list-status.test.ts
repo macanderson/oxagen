@@ -1,4 +1,4 @@
-// #3835: paused and compacted are facts beside a run's status (ADR-190).
+// #3835: paused and compacted are facts beside a run's status (ADR-193).
 import { schema } from "@oxagen/database";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { describe, expect, it } from "vitest";

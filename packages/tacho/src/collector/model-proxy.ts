@@ -1204,43 +1204,51 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     if (refusal !== undefined) {
       refused += 1;
       const view = deps.policy();
-      deps.record([
-        recorder.sealCollectorEvent(
-          "policy_decision",
-          {
-            policy_decision: "deny",
-            policy_source: refusal.source,
-            policy_reason_code: refusal.code,
-            policy_reason_digest: digestText(refusal.message),
-            bundle_version: view.bundle.version,
-            bundle_mode: view.bundle.mode,
-          },
-          {
-            fidelity: "proxy",
-            attrs: {
-              ...attrs,
-              "oxagen.refused": "model_call",
-              "oxagen.provider": route.provider,
-              "oxagen.request_digest": digestBytes(body),
-              // The model the refusal was about, when the proxy could read
-              // one. A `model_not_permitted` frame that does not name the
-              // model leaves the operator guessing which entry to add.
-              ...(askedModel !== undefined
-                ? { "oxagen.model": askedModel.slice(0, 512) }
-                : {}),
-              ...(modelAmbiguous ? { "oxagen.model_ambiguous": "true" } : {}),
-              ...(record !== undefined
-                ? {
-                    "oxagen.session_spend_usd_micros": String(
-                      spendFor(sessionKey),
-                    ),
-                  }
-                : {}),
-              ...("attrs" in refusal ? refusal.attrs : {}),
+      // A write that fails takes the frame's seq back with it, for the reason
+      // `settle` gives. The caller answers this call 502.
+      const mark = recorder.markChain();
+      try {
+        deps.record([
+          recorder.sealCollectorEvent(
+            "policy_decision",
+            {
+              policy_decision: "deny",
+              policy_source: refusal.source,
+              policy_reason_code: refusal.code,
+              policy_reason_digest: digestText(refusal.message),
+              bundle_version: view.bundle.version,
+              bundle_mode: view.bundle.mode,
             },
-          },
-        ),
-      ]);
+            {
+              fidelity: "proxy",
+              attrs: {
+                ...attrs,
+                "oxagen.refused": "model_call",
+                "oxagen.provider": route.provider,
+                "oxagen.request_digest": digestBytes(body),
+                // The model the refusal was about, when the proxy could read
+                // one. A `model_not_permitted` frame that does not name the
+                // model leaves the operator guessing which entry to add.
+                ...(askedModel !== undefined
+                  ? { "oxagen.model": askedModel.slice(0, 512) }
+                  : {}),
+                ...(modelAmbiguous ? { "oxagen.model_ambiguous": "true" } : {}),
+                ...(record !== undefined
+                  ? {
+                      "oxagen.session_spend_usd_micros": String(
+                        spendFor(sessionKey),
+                      ),
+                    }
+                  : {}),
+                ...("attrs" in refusal ? refusal.attrs : {}),
+              },
+            },
+          ),
+        ]);
+      } catch (error) {
+        recorder.rollbackChain(mark);
+        throw error;
+      }
       deps.log(
         `model proxy: refused ${route.provider} ${route.api} (${refusal.code})`,
       );
@@ -1414,6 +1422,13 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       settled = true;
       set.delete(entry);
       if (set.size === 0) inFlight.delete(sessionKey);
+      // Taken before the seal, so a write that fails takes the frame's seq
+      // back with it. Left advanced, the recorder stood one seq past a WAL
+      // tail that never held the frame. The next frame then sealed a gap,
+      // and the control plane refuses a chain from its first gap on (#4311).
+      // `settleMetered` is synchronous, so no other writer seals between
+      // the mark and the rollback.
+      const mark = recorder.markChain();
       try {
         settleMetered(errorClass);
       } catch (error) {
@@ -1422,8 +1437,19 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         // with nothing above it to catch a throw, and Node treats an
         // uncaught exception thrown from a listener as fatal, which would
         // take the whole daemon down mid-call over one frame. The response
-        // already sent, or already decided, is unaffected; only this call's
-        // own frame is lost, and that is logged rather than silent.
+        // already sent, or already decided, is unaffected. Only this call's
+        // own frame is lost, with its body, and that is logged rather than
+        // silent.
+        // The next call folds against this one's request unless it is
+        // forgotten, and would ship pointing at a body that never landed.
+        if (fold !== undefined) priors.forget(sessionKey);
+        try {
+          recorder.rollbackChain(mark);
+        } catch (rollbackError) {
+          deps.log(
+            `model proxy: rolling the chain back after a failed frame failed too: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+          );
+        }
         deps.log(
           `model proxy: sealing the call's frame failed, the response the caller already has is unaffected: ${error instanceof Error ? error.message : String(error)}`,
         );

@@ -466,7 +466,7 @@ const chainSealColumns = {
   terminalStatus: seals.terminalStatus,
   finalEventDigest: seals.finalEventDigest,
   eventStreamDigest: seals.eventStreamDigest,
-  // Whether compaction moved this attempt's frames to its archive (ADR-190).
+  // Whether compaction moved this attempt's frames to its archive (ADR-193).
   compacted: compactedProbe(),
 };
 

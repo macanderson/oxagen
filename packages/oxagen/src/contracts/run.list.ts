@@ -50,7 +50,7 @@ export const runSourceSchema = z.enum(["ledger", "tacho"]);
  * `aborted`).
  *
  * Paused and compacted are facts beside the status, not statuses of their
- * own (ADR-190). A paused open run reads `live` with `ingressPaused: true`,
+ * own (ADR-193). A paused open run reads `live` with `ingressPaused: true`,
  * and a compacted ended run reads `sealed` with `compacted: true`. Every
  * open-run gate reads `live`, so a paused run stays open to all of them.
  */
@@ -252,7 +252,7 @@ export const runPullRequestSchema = z
     repository: z.string().max(512).nullable(),
     /**
      * The state read from `tacho.run_pull_requests`, which forge webhooks and
-     * one read when the link landed keep current (ADR-189). Null when no row
+     * one read when the link landed keep current (ADR-192). Null when no row
      * exists or no forge has reported the pull request, and a caller then
      * renders "status unknown", never a guessed "open".
      */

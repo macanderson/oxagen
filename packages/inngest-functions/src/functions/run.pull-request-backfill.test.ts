@@ -1,4 +1,4 @@
-// The durable pull request backfill (ADR-189): one runner call per recorded
+// The durable pull request backfill (ADR-192): one runner call per recorded
 // link, inside one step. The runner is the seam `@oxagen/handlers` installs
 // at boot, so these tests install a fake one and assert what it receives.
 import { beforeEach, describe, expect, it, vi } from "vitest";

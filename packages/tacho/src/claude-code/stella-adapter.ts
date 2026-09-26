@@ -36,7 +36,11 @@
  * PreToolUse denies every tool call while the block holds.
  */
 import { spawnSync } from "node:child_process";
+import { readdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
 import { digestJcs, type JsonValue } from "../digest";
+import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
 import { digestText } from "./context";
 
 /** What `ps` says about one process. */
@@ -90,8 +94,261 @@ export function stellaHarnessPid(
   if (platform === "win32") return parentPid;
   const parent = lookup(parentPid);
   if (parent === undefined) return parentPid;
+  return isShellWithParent(parent) ? parent.ppid : parentPid;
+}
+
+function isShellWithParent(parent: ProcessInfo): boolean {
   const name = (parent.comm.split("/").pop() ?? "").replace(/^-/, "");
-  return SHELLS.has(name) && parent.ppid > 1 ? parent.ppid : parentPid;
+  return SHELLS.has(name) && parent.ppid > 1;
+}
+
+/** The Stella process a hook belongs to: its pid and its instance token. */
+export interface StellaIdentity {
+  pid: number;
+  /** Undefined when `ps` could not read a start time; the id is then the bare pid form. */
+  instance?: string;
+}
+
+/**
+ * The time the `ps` calls behind one Stella identity share. Each call's
+ * timeout is what is left of it, but never less than `STELLA_PS_FLOOR_MS`.
+ * One identity makes at most three calls, so a hung `ps` costs 1.5 s at
+ * most, where it cost two seconds a call before. A Stella telemetry hook has
+ * five seconds in all, and the hook takes the time spent here off its wait
+ * for the daemon.
+ */
+export const STELLA_PS_BUDGET_MS = 1_000;
+
+/**
+ * The least time any one `ps` call gets. Without it a slow parent lookup
+ * left the start-time read a few milliseconds, `spawnSync` killed it, and a
+ * run's first hook took the bare pid form while the next took the full one:
+ * the chain split that the cache exists to prevent.
+ */
+export const STELLA_PS_FLOOR_MS = 250;
+
+/**
+ * How long a cached identity is used with no `ps` call at all. A hook past
+ * this reads the parent's start time once to confirm the pid still names the
+ * same process. A reused pid needs the old process to exit and the system to
+ * hand out every other pid first, which takes far longer than a minute.
+ */
+export const STELLA_IDENTITY_FRESH_MS = 60_000;
+
+/**
+ * How long after its last check the hook keeps a cached identity when the
+ * start-time read fails. Inside it, the hook takes the failure as transient
+ * and the run keeps its chain. Past it, the hook looks the process up as if
+ * nothing were cached, because another process may hold the pid by then. A
+ * Stella run checks its entry on every hook past the fresh window, so a live
+ * run whose hooks come less than five minutes apart stays inside it.
+ */
+export const STELLA_IDENTITY_TRUST_MS = 5 * 60_000;
+
+const identityCacheSchema = z.object({
+  schema: z.literal("tacho.stella-identity.v1"),
+  pid: z.number().int().positive(),
+  instance: z.string().min(1),
+  confirmed_at: z.number(),
+});
+
+type CachedIdentity = z.infer<typeof identityCacheSchema>;
+
+function cachePath(cacheDir: string, pid: number): string {
+  return join(cacheDir, `${pid}.json`);
+}
+
+function readCachedIdentity(
+  cacheDir: string,
+  pid: number,
+): CachedIdentity | undefined {
+  try {
+    const parsed = identityCacheSchema.safeParse(
+      readJsonFileIfExists(cachePath(cacheDir, pid)),
+    );
+    return parsed.success && parsed.data.pid === pid ? parsed.data : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Best-effort: a cache that cannot be written costs a `ps` next time, nothing more. */
+function writeCachedIdentity(cacheDir: string, entry: CachedIdentity): void {
+  try {
+    writeSensitiveFileAtomic(
+      cachePath(cacheDir, entry.pid),
+      JSON.stringify(entry),
+    );
+  } catch {
+    // The identity is already resolved; only the next hook's shortcut is lost.
+  }
+}
+
+/** Best-effort: an entry that is left behind is checked again on the next hook. */
+function dropCachedIdentity(cacheDir: string, pid: number): void {
+  try {
+    rmSync(cachePath(cacheDir, pid), { force: true });
+  } catch {
+    // The next hook past the fresh window reads the start time again.
+  }
+}
+
+/** Remove the entries of Stella processes that have exited. */
+function pruneCachedIdentities(
+  cacheDir: string,
+  keep: number,
+  isAlive: (pid: number) => boolean,
+): void {
+  try {
+    for (const name of readdirSync(cacheDir)) {
+      const match = /^(\d+)\.json$/.exec(name);
+      if (match === null) continue;
+      const pid = Number(match[1]);
+      if (pid !== keep && !isAlive(pid))
+        rmSync(join(cacheDir, name), { force: true });
+    }
+  } catch {
+    // Pruning is housekeeping; a failure leaves a few small files behind.
+  }
+}
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+export interface StellaIdentityOptions {
+  /** This hook's parent pid: Stella itself when bash exec'd the hook. */
+  parentPid: number;
+  platform: NodeJS.Platform;
+  /** Where identities are cached, one file per Stella pid. */
+  cacheDir: string;
+  now: number;
+  /**
+   * Stella's name for the event, when the payload carries one. A
+   * `SessionStart` always reads the start time before it trusts the cache.
+   */
+  event?: string;
+  lookup?: PsLookup;
+  startInstance?: StartInstanceLookup;
+  isAlive?: (pid: number) => boolean;
+  /** The clock `STELLA_PS_BUDGET_MS` is measured on. */
+  clock?: () => number;
+}
+
+/** Reads a process's instance token, within `timeoutMs` when it is given. */
+export type StartInstanceLookup = (
+  pid: number,
+  timeoutMs?: number,
+) => string | undefined;
+
+/**
+ * The Stella process this hook belongs to, from a cache under `TACHO_HOME`
+ * where it can be, and from `ps` where it cannot (H-14).
+ *
+ * Without the cache every Stella hook ran `ps` twice, once for the parent
+ * and once for its start time. A transient failure of either one changed the
+ * session id: a failed parent lookup named the forking shell, and a failed
+ * start time dropped the id to the bare pid form. Either way the hook landed
+ * on a new chain, and a shell pid sent as `TACHO_HARNESS_PID` let the sweep
+ * seal that chain as soon as the shell exited.
+ *
+ * The cache is keyed by the parent pid and holds that process's start time.
+ *
+ * - A hook within `STELLA_IDENTITY_FRESH_MS` of the entry's last check
+ *   runs no `ps`.
+ * - A later hook reads the parent's start time once. A match refreshes the
+ *   entry. A different start time means the pid was reused, and the hook
+ *   looks the process up afresh.
+ * - A `SessionStart` always reads the start time. A new Stella can get the
+ *   pid of one that exited inside the minute, and trusting the entry would
+ *   file the new run on the old run's chain as a resume. An entry that read
+ *   does not confirm, because it failed or found another start time, is
+ *   removed, so the hooks after it do not return to the old chain either.
+ * - Any other failed start-time read keeps the cached identity when the
+ *   entry was checked within `STELLA_IDENTITY_TRUST_MS`: the parent is
+ *   alive, since it ran this hook, and its chain is the one to continue. An
+ *   older entry is looked up afresh, as below.
+ * - With no entry, the hook does what it did before the cache: two `ps`
+ *   calls, and the parent pid and the bare form when they fail.
+ *
+ * All the `ps` calls share `STELLA_PS_BUDGET_MS`, and each gets at least
+ * `STELLA_PS_FLOOR_MS`.
+ *
+ * The cache cannot tell a reused pid from its Stella without `ps`. Suppose
+ * Stella exits and its pid goes to another process that runs a hook, such as
+ * a shell forked for another Stella. Inside the fresh window the cache files
+ * that hook on the old run's chain and sends the old pid as the harness pid.
+ * Past the fresh window the start-time read catches it, unless that read
+ * fails inside the trust window. A reused pid needs the system to hand out
+ * every other pid first, so both cases need pid reuse within minutes.
+ * Entries for exited Stellas stay until the next new entry prunes them.
+ *
+ * Only a parent that is Stella itself is cached. When bash forks the hook
+ * instead of exec'ing it, the parent is a new shell on every hook, so an
+ * entry keyed by it would never be read again. That case keeps two `ps`
+ * calls per hook. Windows has no `ps`, and there the parent is the harness.
+ */
+export function resolveStellaIdentity(
+  options: StellaIdentityOptions,
+): StellaIdentity {
+  const { parentPid, platform, cacheDir, now } = options;
+  if (platform === "win32") return { pid: parentPid };
+  const clock = options.clock ?? Date.now;
+  const deadline = clock() + STELLA_PS_BUDGET_MS;
+  // Read before each call. The floor also keeps the timeout above 0, which
+  // `spawnSync` would read as no timeout at all.
+  const left = (): number => Math.max(STELLA_PS_FLOOR_MS, deadline - clock());
+  const lookup = (pid: number): ProcessInfo | undefined =>
+    (options.lookup ?? psLookup)(pid, left());
+  const startInstance = (pid: number): string | undefined =>
+    (options.startInstance ?? psStartInstance)(pid, left());
+  const starting = options.event === "SessionStart";
+  const cached = readCachedIdentity(cacheDir, parentPid);
+  let parentInstance: string | undefined;
+  if (cached !== undefined) {
+    const identity = { pid: cached.pid, instance: cached.instance };
+    const age = now - cached.confirmed_at;
+    if (!starting && age >= 0 && age < STELLA_IDENTITY_FRESH_MS)
+      return identity;
+    parentInstance = startInstance(parentPid);
+    if (
+      parentInstance === undefined &&
+      !starting &&
+      age >= 0 &&
+      age < STELLA_IDENTITY_TRUST_MS
+    )
+      return identity;
+    if (parentInstance === cached.instance) {
+      writeCachedIdentity(cacheDir, { ...cached, confirmed_at: now });
+      return identity;
+    }
+    if (starting) dropCachedIdentity(cacheDir, parentPid);
+  }
+  const parent = lookup(parentPid);
+  if (parent !== undefined && isShellWithParent(parent)) {
+    const instance = startInstance(parent.ppid);
+    return instance === undefined
+      ? { pid: parent.ppid }
+      : { pid: parent.ppid, instance };
+  }
+  const instance = parentInstance ?? startInstance(parentPid);
+  if (parent !== undefined && instance !== undefined) {
+    writeCachedIdentity(cacheDir, {
+      schema: "tacho.stella-identity.v1",
+      pid: parentPid,
+      instance,
+      confirmed_at: now,
+    });
+    pruneCachedIdentities(cacheDir, parentPid, options.isAlive ?? processAlive);
+  }
+  return instance === undefined
+    ? { pid: parentPid }
+    : { pid: parentPid, instance };
 }
 
 /**
@@ -123,11 +380,14 @@ export function startInstanceToken(lstart: string): string | undefined {
  * as `psLookup`. Undefined when `ps` cannot answer, and the caller then falls
  * back to the bare pid form.
  */
-export function psStartInstance(pid: number): string | undefined {
+export function psStartInstance(
+  pid: number,
+  timeoutMs = 2_000,
+): string | undefined {
   const result = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
-    timeout: 2_000,
+    timeout: timeoutMs,
   });
   if (result.status !== 0 || typeof result.stdout !== "string")
     return undefined;

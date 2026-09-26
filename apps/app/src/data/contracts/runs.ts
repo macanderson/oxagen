@@ -8,7 +8,7 @@ import { Cost } from "./money";
 /**
  * `live`: open. `sealed`: ended with a sealed record. `halted`: an operator or
  * policy stopped it. Paused and compacted are facts beside the status
- * (`ingressPaused`, `compacted`), never statuses of their own (ADR-190).
+ * (`ingressPaused`, `compacted`), never statuses of their own (ADR-193).
  */
 export const RunStatus = z.enum(["live", "sealed", "halted"]);
 export type RunStatus = z.infer<typeof RunStatus>;
@@ -219,7 +219,7 @@ export type RunTokenCounts = z.infer<typeof RunTokenCounts>;
 /**
  * A pull request (or GitLab merge request) the run's frames name. The URL is
  * as recorded; the page links it only when it parses as a PullRequestUrl.
- * `state` is stored and kept current by forge webhooks (ADR-189). It is null
+ * `state` is stored and kept current by forge webhooks (ADR-192). It is null
  * when no forge has reported it, and the page then says "status unknown"
  * rather than guessing "open".
  */

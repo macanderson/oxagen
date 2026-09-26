@@ -1,5 +1,5 @@
 // The GitLab webhook stores each merge request's state on the run rows that
-// name it (#4129, ADR-189): for every merge request delivery, whether or not
+// name it (#4129, ADR-192): for every merge request delivery, whether or not
 // a steering proposal is behind it, under newer-wins, and never failing the
 // delivery.
 import { describe, expect, it, vi } from "vitest";

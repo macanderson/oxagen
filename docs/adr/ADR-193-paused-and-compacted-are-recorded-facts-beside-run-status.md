@@ -1,4 +1,4 @@
-# ADR-190: Paused and compacted are recorded facts beside run status
+# ADR-193: Paused and compacted are recorded facts beside run status
 
 - **Status:** Accepted
 - **Date:** 2026-09-25

@@ -52,6 +52,17 @@ export type CodexHookEventName = (typeof CODEX_HOOK_EVENTS)[number];
 const TELEMETRY_TIMEOUT_S = 5;
 
 /**
+ * How long Codex waits for one hook, in seconds: Claude Code's budget for an
+ * enforcement event, and five seconds for every telemetry event.
+ * `tacho-hook` reads the same number to fit its own wait under it.
+ */
+export function codexHookTimeoutS(event: CodexHookEventName): number {
+  return Object.hasOwn(COMMAND_HOOK_TIMEOUTS_S, event)
+    ? COMMAND_HOOK_TIMEOUTS_S[event as keyof typeof COMMAND_HOOK_TIMEOUTS_S]
+    : TELEMETRY_TIMEOUT_S;
+}
+
+/**
  * Codex's `additionalContextLimit` for the handlers that answer with text
  * (verified 2026-09-23 against learn.chatgpt.com/docs/hooks, "Large hook
  * output"). Codex spills `additionalContext` past about 2,500 tokens to a
@@ -87,16 +98,8 @@ export function codexHookEntries(
   config: HookInstallConfig,
 ): Record<CodexHookEventName, HookGroup[]> {
   const out = {} as Record<CodexHookEventName, HookGroup[]>;
-  for (const event of COMMAND_HOOK_EVENTS) {
-    const entry = commandHookEntry(
-      config,
-      COMMAND_HOOK_TIMEOUTS_S[event],
-      "codex",
-    );
-    out[event] = [{ hooks: [withContextLimit(event, entry)] }];
-  }
-  for (const event of CODEX_TELEMETRY_EVENTS) {
-    const entry = commandHookEntry(config, TELEMETRY_TIMEOUT_S, "codex");
+  for (const event of CODEX_HOOK_EVENTS) {
+    const entry = commandHookEntry(config, codexHookTimeoutS(event), "codex");
     out[event] = [{ hooks: [withContextLimit(event, entry)] }];
   }
   return out;

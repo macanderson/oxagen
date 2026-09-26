@@ -64,7 +64,7 @@ const PR_STATE_TONE: Record<NonNullable<RunPullRequest["state"]>, BadgeTone> = {
 /**
  * One pull request: a link that opens it on GitHub or GitLab in a new tab
  * when the URL names a page Oxagen recognises, else its label alone, and its
- * state. The state is the one a forge last reported (ADR-189), with when
+ * state. The state is the one a forge last reported (ADR-192), with when
  * Oxagen read it on hover. With none reported it reads "status unknown" and
  * says on hover where the live state is.
  */
@@ -310,14 +310,14 @@ export function TokensTile({ listed }: { listed: readonly ListedRun[] }) {
 
 /**
  * The status words a row can read as: every `RowState`, and paused and
- * compacted, the two facts beside a run's status (ADR-190).
+ * compacted, the two facts beside a run's status (ADR-193).
  * @internal Exported for its component test.
  */
 export type RowWord = RowState | "paused" | "compacted";
 
 /**
  * A row's status word. Parked, paused and compacted are facts beside the
- * run's lifecycle status (ADR-190), so each draws its own word here, and
+ * run's lifecycle status (ADR-193), so each draws its own word here, and
  * paused and compacted say on hover what the word means. Every other state
  * is the lifecycle word `StatusBadge` draws.
  */
