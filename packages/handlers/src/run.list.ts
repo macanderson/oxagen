@@ -72,6 +72,7 @@ import {
   type RunRollup,
   type TachoSessionColumns,
   type TachoSessionRow,
+  runLabel,
   toLedgerRunItem,
   toTachoRunItem,
 } from "./lib/run-item";
@@ -1334,7 +1335,7 @@ export function createRunListHandler(
                 // not the title the harness gave the session.
                 name:
                   item.kind === "tacho"
-                    ? (item.row.session.harnessTitle ?? null)
+                    ? runLabel(item.row.session.harnessTitle)
                     : null,
                 summary: null,
                 canSummarize: false,

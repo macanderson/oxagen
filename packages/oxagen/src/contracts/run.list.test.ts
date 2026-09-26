@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canSummarizeRun,
+  RUN_LABEL_MAX,
   RUN_LIST_TOTAL_BOUND,
   RUN_REPLAY_FILTERS,
   runItemSchema,
@@ -171,6 +172,24 @@ describe("list_runs contract", () => {
     expect(
       runItemSchema.safeParse({ ...item, summary: { text: "x" } }).success,
     ).toBe(false);
+  });
+
+  // #4224: a harness title and a ledger run's goal have no bound where they
+  // are written, and the reads cut both to the display cap.
+  it("holds the name and the task reference to the display cap (negative)", () => {
+    expect(RUN_LABEL_MAX).toBe(256);
+    const within = "x".repeat(RUN_LABEL_MAX);
+    const over = "x".repeat(RUN_LABEL_MAX + 1);
+    expect(
+      runItemSchema.safeParse({ ...item, name: within, taskRef: within })
+        .success,
+    ).toBe(true);
+    expect(runItemSchema.safeParse({ ...item, name: over }).success).toBe(
+      false,
+    );
+    expect(runItemSchema.safeParse({ ...item, taskRef: over }).success).toBe(
+      false,
+    );
   });
 
   it("refuses an id neither store mints and a status outside the three", () => {
