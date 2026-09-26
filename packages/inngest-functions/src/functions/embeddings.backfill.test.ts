@@ -101,10 +101,9 @@ vi.mock("@oxagen/tenancy", () => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  // The org-wide seam is mocked as the SAME function as the tenant
-  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
-  // a suite that counts seam calls must see one identity, not two.
-  const dbMock = {
+  // Bound once and aliased, so withOrgDb and withTenantDb are one function
+  // and neither falls through to the real, scope-checking seam (ADR-086).
+  const __dbMock = {
     ...real,
     withSystemDb: (fn: (tx: unknown) => unknown) =>
       fn({
@@ -127,7 +126,7 @@ vi.mock("@oxagen/database", async (importOriginal) => {
         }),
       }),
   };
-  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+  return { ...__dbMock, withOrgDb: __dbMock.withTenantDb };
 });
 
 vi.mock("@oxagen/ai", () => ({
