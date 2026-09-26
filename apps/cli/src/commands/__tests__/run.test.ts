@@ -541,6 +541,37 @@ describe("oxagen run transcript", () => {
     expect(cells(out[7]).at(-1)).toBe("label, subject");
   });
 
+  it("names an entry by its seq and kind when the answer carries no key or row, and counts each entry left out", async () => {
+    post.mockResolvedValue({
+      ...TRANSCRIPT_PAGE,
+      entries: [
+        entry({
+          seq: "3",
+          endSeq: "3",
+          key: undefined,
+          node: undefined,
+          kind: "tool_call",
+          type: "tool_call",
+          label: "Read ok",
+          tool: "Read",
+          outcome: "ok",
+          matches: [],
+        }),
+        entry({ seq: "6", endSeq: "6", key: "6", quiet: true }),
+        entry({ seq: "7", endSeq: "7", key: "7", quiet: true }),
+      ],
+      search: { query: "read", matched: 1, unsearched: 0 },
+    });
+    const { writer, out } = memoryWriter();
+    await runTranscript("tse_0a1b2c", { query: "read" }, writer);
+    expect(out[0]).toBe("tse_0a1b2c at steps: 1 entry on this page");
+    expect(out[1]).toBe('Search "read": 1 matched');
+    expect(cells(out[4])).toEqual(["1", "3", "tool_call", "Read", "ok", "-"]);
+    expect(out[5]).toBe(
+      "2 entries with nothing to show are left out. --json lists them.",
+    );
+  });
+
   it("says a search that found nothing found nothing, and claims no partial search it did not make (negative)", async () => {
     post.mockResolvedValue({
       ...TRANSCRIPT,
