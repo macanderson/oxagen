@@ -27,7 +27,7 @@ import {
 import { z } from "zod";
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import { registerCapability } from "../registry";
-import { costSchema } from "./spend.shared";
+import { costSchema, ratioSchema, tokenCountsSchema } from "./spend.shared";
 
 /**
  * The surfaces an in-app agent turn is admitted on (`agent_runs.surface`;
@@ -48,6 +48,11 @@ export const runSourceSchema = z.enum(["ledger", "tacho"]);
  * `live`: the run is open. `sealed`: it ended and its record is sealed.
  * `halted`: an operator or policy stopped it (a ledger `cancelled`, a tacho
  * `aborted`).
+ *
+ * Paused and compacted are facts beside the status, not statuses of their
+ * own (ADR-190). A paused open run reads `live` with `ingressPaused: true`,
+ * and a compacted ended run reads `sealed` with `compacted: true`. Every
+ * open-run gate reads `live`, so a paused run stays open to all of them.
  */
 export const runStatusSchema = z.enum(["live", "sealed", "halted"]);
 
@@ -246,12 +251,17 @@ export const runPullRequestSchema = z
     /** `owner/name` as the frame recorded it; null when it recorded none. */
     repository: z.string().max(512).nullable(),
     /**
-     * The state a store recorded for the pull request. `list_runs` reads no
-     * forge, and no store records a pull request's state yet, so this is null
-     * today: a caller renders "status unknown", never a guessed "open".
-     * `get_run_work` reads the live state from GitHub for one run.
+     * The state read from `tacho.run_pull_requests`, which forge webhooks and
+     * one read when the link landed keep current (ADR-189). Null when no row
+     * exists or no forge has reported the pull request, and a caller then
+     * renders "status unknown", never a guessed "open".
      */
     state: z.enum(["open", "draft", "merged", "closed"]).nullable(),
+    /**
+     * RFC 3339; when Oxagen last read `state` from the forge. Null when it
+     * never has. Absent when the read did not look.
+     */
+    stateSeenAt: z.string().datetime().nullable().optional(),
   })
   .strict();
 
@@ -271,6 +281,34 @@ export const runDiffSchema = z
 
 /** Which runs a page lists by their pull requests. */
 export const RUN_PULL_REQUEST_FILTERS = ["any", "with", "without"] as const;
+
+/**
+ * The replay grades a page can filter on, plus `not_recorded` for a run whose
+ * seal recorded no grade (`replayGrade: null`).
+ */
+export const RUN_REPLAY_FILTERS = [...REPLAY_GRADES, "not_recorded"] as const;
+
+/**
+ * The columns `list_runs` can order across both stores. Frames, name, pull
+ * requests, lines changed and tokens are not here: no single SQL order covers
+ * them in both stores, so a page cannot sort on them.
+ */
+export const RUN_SORT_KEYS = [
+  "started",
+  "agent",
+  "operator",
+  "status",
+  "tier",
+  "replay",
+  "cost",
+] as const;
+
+/**
+ * The most runs `list_runs` counts for `total`, and the largest `offset` it
+ * accepts. Past it, `total` reads null and a caller shows the bound with a
+ * plus sign.
+ */
+export const RUN_LIST_TOTAL_BOUND = 10_000;
 
 export const runItemSchema = z
   .object({
@@ -492,6 +530,29 @@ export const runItemSchema = z
     pullRequestsOpened: z.number().int().nonnegative().optional(),
     /** Lines added and removed; null when neither the harness nor git reported any. */
     diff: runDiffSchema.nullable().optional(),
+    /**
+     * The run's token counts by class, from its `cost.run_totals` row. Null
+     * when the run has no rollup row. The column is NOT NULL, so an unpriced
+     * row still carries counts. Never zero-filled for a missing row. Absent
+     * when the read did not look.
+     */
+    tokens: tokenCountsSchema.nullable().optional(),
+    /**
+     * `cost.run_totals.cache_hit_rate`: cache reads over uncached input plus
+     * cache reads, weighted by spend over the run's frames, from 0 to 1. Null
+     * when there is no row or the row holds none. Never 0 in place of a
+     * missing figure.
+     */
+    cacheHitRate: ratioSchema.nullable().optional(),
+    /**
+     * True when the run has ended and frame compaction removed its latest
+     * sealed attempt's hot frames, so the run is read from its archive segment
+     * (ADR-058). False for a ledger run that has not been compacted. Absent for
+     * a wrapped session, whose store records no recording compaction.
+     * `tacho.sessions.num_compactions` counts context compactions and is never
+     * read for this.
+     */
+    compacted: z.boolean().optional(),
   })
   .strict();
 
@@ -546,8 +607,8 @@ export const runList = registerCapability({
   description:
     "List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, the model, the machine, status, counts and metered cost each row recorded. The in-app agent's own turns are not listed.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  surfaces: ["api", "mcp", "agent", "cli"],
+  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
@@ -572,6 +633,42 @@ export const runList = registerCapability({
        * the read looks through a bounded number of runs per page.
        */
       pullRequests: z.enum(RUN_PULL_REQUEST_FILTERS).optional(),
+      /*
+       * The filters, search, sort and offset below are optional with no
+       * default, so a call that sends none lists exactly as a call before
+       * them did (#3837).
+       */
+      /** Only runs in these statuses. Absent lists every status. */
+      status: z.array(runStatusSchema).min(1).max(3).optional(),
+      /**
+       * Only runs published at these tiers. A ledger run with no graded seal
+       * reads `harness`.
+       */
+      tier: z.array(z.enum(GRADE_ENFORCEMENT_TIERS)).min(1).max(4).optional(),
+      /** Only runs with these grades; `not_recorded` matches a null grade. */
+      replayGrade: z.array(z.enum(RUN_REPLAY_FILTERS)).min(1).max(5).optional(),
+      /**
+       * A case-insensitive substring matched against the public id, the name,
+       * the harness title, the agent key, the operator's name, the model id,
+       * the hostname, and a ledger run's goal.
+       */
+      query: z.string().trim().min(1).max(200).optional(),
+      /**
+       * The order of the list. Absent means `started` descending. Nulls sort
+       * last in both directions.
+       */
+      sort: z
+        .object({
+          key: z.enum(RUN_SORT_KEYS),
+          dir: z.enum(["asc", "desc"]),
+        })
+        .strict()
+        .optional(),
+      /**
+       * Rows to skip in the filtered, sorted list. The handler refuses an
+       * `offset` sent with a `cursor` as `invalid_input` (`cursor_with_offset`).
+       */
+      offset: z.number().int().min(0).max(RUN_LIST_TOTAL_BOUND).optional(),
     })
     .strict(),
   output: z
@@ -584,6 +681,16 @@ export const runList = registerCapability({
        * counted `pr_open` calls alone.
        */
       warnings: z.array(z.enum(["pull_requests_unread"])).optional(),
+      /**
+       * The runs that match every filter and the search across both stores,
+       * whatever the page. Null when more than `totalBound` match. Absent when
+       * the read did not count: a `pullRequests` filter of `with` or
+       * `without`, which only the ClickHouse frames answer, or a count that
+       * failed.
+       */
+      total: z.number().int().nonnegative().nullable().optional(),
+      /** `RUN_LIST_TOTAL_BOUND`, present whenever `total` is. */
+      totalBound: z.number().int().positive().optional(),
     })
     .strict(),
 });
@@ -594,3 +701,5 @@ export type RunItem = z.output<typeof runItemSchema>;
 export type RunPullRequest = z.output<typeof runPullRequestSchema>;
 export type RunDiff = z.output<typeof runDiffSchema>;
 export type RunPullRequestFilter = (typeof RUN_PULL_REQUEST_FILTERS)[number];
+export type RunSortKey = (typeof RUN_SORT_KEYS)[number];
+export type RunReplayFilter = (typeof RUN_REPLAY_FILTERS)[number];

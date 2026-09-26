@@ -261,6 +261,10 @@ export const SECURITY_EVENT_TYPES = [
   // removal transaction (packages/database/src/member-lifecycle.ts) for each
   // host the removed person enrolled.
   "tacho.host_revoked",
+  // One row per decision to pause every live wrapped run in a workspace,
+  // carrying how many runs took the pause and which were skipped and why.
+  // Emitted by packages/handlers/src/tacho.workspace_runs.pause.ts (#3862).
+  "tacho.workspace_runs_paused",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -292,6 +296,9 @@ export const RESERVED_SECURITY_EVENT_TYPES = [
   "agent_run.forged_decision_reference",
   "agent_run.stale_deny_generation",
   "agent_run.finalization_grant_misuse",
+  // The pause_workspace_runs handler that writes it lands after its contract
+  // (#3862). Remove this entry in the change that adds the emitter.
+  "tacho.workspace_runs_paused",
 ] as const satisfies readonly SecurityEventType[];
 
 export type ReservedSecurityEventType =
@@ -553,7 +560,24 @@ export interface PasswordChangeDetail {
   sessionsRevoked: boolean;
 }
 
+/**
+ * Evidence recorded on `tacho.workspace_runs_paused`: the reason the person
+ * gave, how many runs took the pause, the queued command ids, and each live
+ * run no host could reach with why. The skip reasons are spelled out because
+ * this leaf package cannot import `CommandBlock` from @oxagen/oxagen.
+ */
+export interface WorkspaceRunsPausedDetail {
+  reason: string;
+  queued: number;
+  commandIds: readonly string[];
+  skipped: readonly {
+    runId: string;
+    reason: "run_sealed" | "no_host" | "host_revoked" | "host_offline";
+  }[];
+}
+
 export type SecurityEventDetail =
+  | WorkspaceRunsPausedDetail
   | PasswordChangeDetail
   | ScimTokenDetail
   | ScimUserDetail

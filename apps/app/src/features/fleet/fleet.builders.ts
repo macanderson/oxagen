@@ -195,6 +195,10 @@ export function fleetSource(reads: FleetReads) {
       resolved: refuse,
       resolvedSince: refuse,
     },
+    // No question is open until the interjections lane wires the read (#3839).
+    interjections: {
+      open: () => Promise.resolve(readOk({ items: [], more: false })),
+    },
     agents: {
       list: (...args) => {
         calls.agents.push(args);

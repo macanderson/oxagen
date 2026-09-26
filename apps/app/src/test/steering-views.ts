@@ -372,6 +372,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+    interjections: { open: refuse },
     agents: {
       list: () => Promise.resolve(reads.agents),
       get: refuse,

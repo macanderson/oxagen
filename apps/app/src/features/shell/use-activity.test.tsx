@@ -180,7 +180,12 @@ describe("useShellCounts", () => {
         shellData({
           counts: {
             slug: "core-platform",
-            read: readOk({ approvals: 0, proposals: 5, incidents: 0 }),
+            read: readOk({
+              approvals: 0,
+              interjections: null,
+              proposals: 5,
+              incidents: 0,
+            }),
           },
         }),
       ),
@@ -211,7 +216,12 @@ describe("useShellCounts", () => {
         shellData({
           counts: {
             slug: "finops",
-            read: readOk({ approvals: 0, proposals: 5, incidents: 2 }),
+            read: readOk({
+              approvals: 0,
+              interjections: null,
+              proposals: 5,
+              incidents: 2,
+            }),
           },
         }),
       ),
@@ -228,7 +238,12 @@ describe("useShellCounts", () => {
       feed: orgFeed,
       counts: {
         slug: "core-platform",
-        read: readOk({ approvals: 0, proposals: 1, incidents: 1 }),
+        read: readOk({
+          approvals: 0,
+          interjections: null,
+          proposals: 1,
+          incidents: 1,
+        }),
       },
     });
     const { result } = renderHook(() => useShellCounts(data));
@@ -238,7 +253,12 @@ describe("useShellCounts", () => {
         <WorkspaceActivitySync
           activity={{
             slug: "core-platform",
-            counts: readOk({ approvals: 0, proposals: 4, incidents: 2 }),
+            counts: readOk({
+              approvals: 0,
+              interjections: null,
+              proposals: 4,
+              incidents: 2,
+            }),
             feed: wsFeed,
           }}
         />,

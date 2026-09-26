@@ -91,6 +91,7 @@ function stubSource() {
       resolved: vi.fn(),
       resolvedSince: vi.fn(),
     },
+    interjections: { open: vi.fn() },
     agents: {
       list: vi.fn(),
       get: vi.fn(),

@@ -74,6 +74,9 @@ export const shellNavCountsGetHandler: CapabilityHandler<
   );
   return {
     approvals: first(approvals),
+    // Placeholder until the interjections read lands (#3839): null renders
+    // "not recorded", never a zero.
+    interjections: null,
     proposals: first(proposals),
     incidents: first(incidents),
   };

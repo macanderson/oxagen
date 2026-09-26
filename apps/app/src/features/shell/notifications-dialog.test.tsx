@@ -304,7 +304,12 @@ describe("the open workspace's own reads", () => {
         <WorkspaceActivitySync
           activity={{
             slug: "core-platform",
-            counts: readOk({ approvals: 0, proposals: 4, incidents: 2 }),
+            counts: readOk({
+              approvals: 0,
+              interjections: null,
+              proposals: 4,
+              incidents: 2,
+            }),
             feed: readOk({ items: [], unread: 7 }),
           }}
         />,
@@ -325,7 +330,12 @@ describe("the open workspace's own reads", () => {
   it.each([
     [
       "answered no figure",
-      readOk({ approvals: 0, proposals: null, incidents: null }),
+      readOk({
+        approvals: 0,
+        interjections: null,
+        proposals: null,
+        incidents: null,
+      }),
     ],
     ["failed", readError("control_plane_unavailable", 503)],
   ])(
@@ -365,7 +375,12 @@ describe("the open workspace's own reads", () => {
         <WorkspaceActivitySync
           activity={{
             slug: "finops",
-            counts: readOk({ approvals: 0, proposals: 4, incidents: 2 }),
+            counts: readOk({
+              approvals: 0,
+              interjections: null,
+              proposals: 4,
+              incidents: 2,
+            }),
             feed: readOk({ items: [], unread: 7 }),
           }}
         />,
@@ -387,7 +402,12 @@ describe("the counts on an organization page", () => {
       shellData({
         counts: {
           slug: "core-platform",
-          read: readOk({ approvals: 0, proposals: 10, incidents: 3 }),
+          read: readOk({
+            approvals: 0,
+            interjections: null,
+            proposals: 10,
+            incidents: 3,
+          }),
         },
       }),
     );
@@ -422,7 +442,12 @@ describe("the counts on an organization page", () => {
       shellData({
         counts: {
           slug: "finops",
-          read: readOk({ approvals: 0, proposals: 10, incidents: 3 }),
+          read: readOk({
+            approvals: 0,
+            interjections: null,
+            proposals: 10,
+            incidents: 3,
+          }),
         },
       }),
     );
@@ -498,7 +523,12 @@ describe("the sidebar's counts and foot", () => {
       shellData({
         counts: {
           slug: "core-platform",
-          read: readOk({ approvals: 0, proposals: 2, incidents: 1 }),
+          read: readOk({
+            approvals: 0,
+            interjections: null,
+            proposals: 2,
+            incidents: 1,
+          }),
         },
       }),
     );

@@ -65,6 +65,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },
   { table: "agent.approval_requests", policyClass: "standard" },
+  { table: "agent.interjections", policyClass: "standard" },
   // Durable agent-engine v2 run rows + append-only event log (Phase 2a;
   // docs/specs/agent-engine-v2). Both carry orgScopeMixin (org_id +
   // workspace_id NOT NULL) + tenant_isolation RLS added in the Phase 2a
@@ -347,6 +348,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "tacho.sessions", policyClass: "standard" },
   { table: "tacho.session_models", policyClass: "standard" },
   { table: "tacho.session_files", policyClass: "standard" },
+  { table: "tacho.run_pull_requests", policyClass: "standard" },
   { table: "tacho.session_commands", policyClass: "standard" },
   { table: "tacho.control_commands", policyClass: "standard" },
   { table: "tacho.incidents", policyClass: "standard" },

@@ -70,6 +70,7 @@ describe("get_nav_counts", () => {
     });
     await expect(out).resolves.toEqual({
       approvals: 3,
+      interjections: null,
       proposals: 2,
       incidents: 1,
     });
@@ -122,6 +123,7 @@ describe("get_nav_counts", () => {
     });
     await expect(out).resolves.toEqual({
       approvals: 0,
+      interjections: null,
       proposals: 0,
       incidents: 0,
     });
@@ -131,6 +133,7 @@ describe("get_nav_counts", () => {
     const { out } = run({ [PROPOSALS]: [{ n: 4 }] });
     await expect(out).resolves.toEqual({
       approvals: null,
+      interjections: null,
       proposals: 4,
       incidents: null,
     });

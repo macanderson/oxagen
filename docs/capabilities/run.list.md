@@ -10,7 +10,7 @@ The in-app agent's turns are excluded. Each turn is a run of its own (MC spec §
 
 ## Surface
 
-**Surfaces:** api, mcp, agent
+**Surfaces:** api, mcp, agent, cli
 
 - API: `POST /v1/:org_slug/:workspace_slug/runs`
 - MCP: `list_runs`

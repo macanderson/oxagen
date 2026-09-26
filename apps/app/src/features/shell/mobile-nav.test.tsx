@@ -305,7 +305,12 @@ describe("thumb bar", () => {
       shellData({
         counts: {
           slug: "core-platform",
-          read: readOk({ approvals: 0, proposals: 10, incidents: 3 }),
+          read: readOk({
+            approvals: 0,
+            interjections: null,
+            proposals: 10,
+            incidents: 3,
+          }),
         },
       }),
     );

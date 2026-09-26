@@ -933,6 +933,7 @@ export function runSource(reads: RunReads) {
       ),
       resolvedSince: refuse,
     },
+    interjections: { open: refuse },
     agents: {
       list: () =>
         reads.roster === undefined ? refuse() : Promise.resolve(reads.roster),

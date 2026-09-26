@@ -467,6 +467,16 @@ export interface KernelIAMCheckResult {
    * written.
    */
   decision?: AuthorizationDecisionRef | null;
+  /**
+   * The IAM step that decided the outcome, as the resolver's rule id
+   * (`ResolveResult.trace.decidedBy.rule`): `1:workspace_deny`,
+   * `2:org_enforced_deny`, `5:workspace_require_approval`, `6:org_grant`,
+   * `7:role_grant`, `8:default`, `tier_gate`, `agent_ceiling:<outcome>`, or
+   * `machine_key_scope` for a machine-key denial (#3841). Never the step's
+   * description, which embeds internal role ids. Null when the check ran on a
+   * path that records no rule. Absent when the runtime does not report it.
+   */
+  decidedBy?: string | null;
 }
 
 export type KernelIAMCheckFn = (args: {
@@ -729,6 +739,12 @@ export class CapabilityError extends Error {
      * allowed one.
      */
     readonly decision?: AuthorizationDecisionRef,
+    /**
+     * The IAM rule id that decided an `authz_denied` or `pending_approval`
+     * refusal (`KernelIAMCheckResult.decidedBy`), so a page can name the rule
+     * that refused it (#3841). Never set on any other code.
+     */
+    readonly decidedBy?: string,
   ) {
     super(message);
     this.name = "CapabilityError";

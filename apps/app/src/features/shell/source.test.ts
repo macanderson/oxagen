@@ -69,6 +69,7 @@ const source = {
     outcomesSettings: vi.fn(),
   },
   approvals: { pending, resolved: vi.fn(), resolvedSince },
+  interjections: { open: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),
@@ -156,7 +157,7 @@ beforeEach(() => {
   notifications.mockResolvedValue(feed);
   counts.mockReset();
   counts.mockResolvedValue(
-    readOk({ approvals: 0, proposals: 4, incidents: 1 }),
+    readOk({ approvals: 0, interjections: null, proposals: 4, incidents: 1 }),
   );
   pending.mockReset();
   pending.mockResolvedValue(emptyQueue);
@@ -221,7 +222,12 @@ describe("shellSource", () => {
       feed,
       counts: {
         slug: "core-platform",
-        read: readOk({ approvals: 0, proposals: 4, incidents: 1 }),
+        read: readOk({
+          approvals: 0,
+          interjections: null,
+          proposals: 4,
+          incidents: 1,
+        }),
       },
     });
     expect(context).toHaveBeenCalledWith(ctx);
@@ -327,7 +333,12 @@ describe("shellSource across the organization's workspaces", () => {
     expect(counts).toHaveBeenCalledWith({ org: "acme", ws: "core-platform" });
     expect(data.counts).toEqual({
       slug: "core-platform",
-      read: readOk({ approvals: 0, proposals: 4, incidents: 1 }),
+      read: readOk({
+        approvals: 0,
+        interjections: null,
+        proposals: 4,
+        incidents: 1,
+      }),
     });
   });
 
