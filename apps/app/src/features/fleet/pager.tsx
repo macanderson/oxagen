@@ -6,9 +6,10 @@
 // page an offset can reach.
 //
 // A read that did not count (a pull-request filter, which only the frames
-// answer, or a count that failed) has no total to page against, so the pager
-// falls back to the cursor: how many rows this read returned, and a link to
-// older runs when more follow.
+// answer, or a count that failed) has no total to page against, and a page
+// read by cursor has no position in one, so the pager falls back to the
+// cursor: how many rows this read returned, and a link to older runs when
+// more follow.
 import { useLocale, useTranslations } from "next-intl";
 import type { PullRequestFilter } from "@/data/contracts/runs";
 import { routes } from "@/shared/safe-path";
@@ -89,11 +90,14 @@ export function RunsPager({
     routes.fleet(org, ws, listQueryToRoute({ ...list, page }, pullRequests));
   const { from, to } = pageRange(list, pageSize, rows);
 
-  if (total === undefined) {
-    // No count: how many rows this read returned, and the cursor to the next.
-    // A cursor page has no position in a counted list, so the range names
-    // neither a start nor a total: a later page read "1–12 of 12" before, a
-    // figure nothing counted.
+  // A page read by cursor has no position in the counted list, even when a
+  // count came back with it: the cursor page after page 3 is not rows 1 to 10,
+  // and page buttons would jump from the wrong base (#4386 review). So a
+  // cursor page draws the cursor links, as a read with no count does.
+  if (total === undefined || cursor !== null) {
+    // No position: how many rows this read returned, and the cursor to the
+    // next. The range names neither a start nor a total: a later page read
+    // "1–12 of 12" before, a figure nothing counted.
     const range = t("shown", { n: rows });
     // Both links open page 1 of the same list, so the search and the facets
     // stay. The read sends a cursor only on page 1 (`toRunsListQuery`), so an

@@ -212,6 +212,32 @@ describe("RunsPager", () => {
     );
   });
 
+  // #4386 review: after Older runs, the page is a cursor page. If the count
+  // came back on that read, the counted pager labelled page-4 rows "1–10 of
+  // 279" and its buttons paged from the wrong base.
+  it("keeps the cursor links on a cursor page even when the read counted (negative)", () => {
+    renderPager({
+      rows: 10,
+      total: 279,
+      totalBound: 10_000,
+      cursor: "c9",
+      nextCursor: "c10",
+      list: list(),
+    });
+    const range = screen.getByTestId("pager-range");
+    expect(range).toHaveTextContent("10 runs on this page");
+    expect(range).not.toHaveTextContent("of 279");
+    expect(screen.queryByTestId("pager-pages")).toBeNull();
+    expect(screen.getByRole("link", { name: "Newest runs" })).toHaveAttribute(
+      "href",
+      "/acme/core",
+    );
+    expect(screen.getByRole("link", { name: "Older runs" })).toHaveAttribute(
+      "href",
+      "/acme/core?cursor=c10",
+    );
+  });
+
   it("draws no Newest runs link on the newest page itself", () => {
     renderPager({ rows: 10, cursor: null, nextCursor: "c9", list: list() });
     expect(screen.queryByRole("link", { name: "Newest runs" })).toBeNull();
