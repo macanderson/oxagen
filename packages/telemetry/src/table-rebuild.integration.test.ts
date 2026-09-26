@@ -148,6 +148,35 @@ async function dropAll(name: string) {
 
 const quiet = { log: () => {} };
 
+/** Rows in one receive month, generated on the server. */
+async function bulkTable(rows: number): Promise<string> {
+  const { clickhouseRebuildStore, engineWithKey } = await import(
+    "./table-rebuild"
+  );
+  const ch = await client();
+  const name = `rebuild_bulk_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+  const live = (await clickhouseRebuildStore(ch).shapes(["tacho_events"])).get(
+    "tacho_events",
+  );
+  if (live === undefined) throw new Error("tacho_events is missing");
+  await ch.command({
+    query: `CREATE TABLE ${name} AS tacho_events ENGINE = ${engineWithKey(live, OLD_KEY, "tacho_events")}`,
+  });
+  const org = randomUUID();
+  await ch.command({
+    query: `INSERT INTO ${name}
+              (org_id, workspace_id, session_uuid, root_session_uuid, seq, ts,
+               received_at, kind, event_id_idem)
+            SELECT {org:UUID}, {org:UUID}, {org:UUID}, {org:UUID}, number,
+                   toDateTime64('2026-09-03 10:00:00', 3, 'UTC'),
+                   toDateTime64('2026-09-03 10:00:00', 3, 'UTC'),
+                   'agent_start', toString(number)
+            FROM numbers({rows:UInt64})`,
+    query_params: { org, rows },
+  });
+  return name;
+}
+
 describe.skipIf(!chUp)("REBUILD TABLE against ClickHouse (#4297)", () => {
   it("moves a table to the receive month, one partition per month, with its TTL, settings and indexes", async () => {
     const { clickhouseRebuildStore, rebuildPartitionKey } = await import(
@@ -161,7 +190,7 @@ describe.skipIf(!chUp)("REBUILD TABLE against ClickHouse (#4297)", () => {
       await expect(
         rebuildPartitionKey(
           store,
-          { table: name, partitionBy: NEW_KEY },
+          { table: name, partitionBy: NEW_KEY, column: "received_at" },
           quiet,
         ),
       ).resolves.toBe("rebuilt");
@@ -186,7 +215,7 @@ describe.skipIf(!chUp)("REBUILD TABLE against ClickHouse (#4297)", () => {
       await expect(
         rebuildPartitionKey(
           store,
-          { table: name, partitionBy: NEW_KEY },
+          { table: name, partitionBy: NEW_KEY, column: "received_at" },
           quiet,
         ),
       ).resolves.toBe("current");
@@ -242,7 +271,7 @@ describe.skipIf(!chUp)("REBUILD TABLE against ClickHouse (#4297)", () => {
       await expect(
         rebuildPartitionKey(
           store,
-          { table: name, partitionBy: NEW_KEY },
+          { table: name, partitionBy: NEW_KEY, column: "received_at" },
           quiet,
         ),
       ).resolves.toBe("rebuilt");
@@ -250,6 +279,53 @@ describe.skipIf(!chUp)("REBUILD TABLE against ClickHouse (#4297)", () => {
       expect(await activePartitions(name)).toEqual(["202608", "202609"]);
       expect(await shapeOf(shadow)).toBeUndefined();
     } finally {
+      await dropAll(name);
+    }
+  }, 120_000);
+
+  // #4354 review. An INSERT ... SELECT sends no body, so each progress line
+  // the server sends is one more response header, and Node accepts 16 KiB of
+  // them unless told otherwise. At the rebuild's 10-second interval that is
+  // about 12 minutes of copying. Here the server sends a line per block, so a
+  // copy of a few seconds sends more than 16 KiB of them.
+  it("copies a month whose progress headers pass Node's default limit", async () => {
+    const {
+      clickhouseRebuildStore,
+      engineWithKey,
+      REBUILD_CLIENT_OPTIONS,
+      shadowTableName,
+    } = await import("./table-rebuild");
+    const { createClient } = await import("@clickhouse/client");
+    const rows = 300_000;
+    const name = await bulkTable(rows);
+    const shadow = shadowTableName(name);
+    const rebuild = createClient({
+      ...REBUILD_CLIENT_OPTIONS,
+      url: process.env.CLICKHOUSE_URL,
+      username: process.env.CLICKHOUSE_USERNAME,
+      password: process.env.CLICKHOUSE_PASSWORD,
+      database: process.env.CLICKHOUSE_DATABASE,
+      clickhouse_settings: {
+        send_progress_in_http_headers: 1,
+        http_headers_progress_interval_ms: "1",
+      },
+    });
+    try {
+      const store = clickhouseRebuildStore(rebuild);
+      const live = (await store.shapes([name])).get(name);
+      if (live === undefined) throw new Error(`${name} is missing`);
+      await store.createShadow(
+        name,
+        shadow,
+        engineWithKey(live, NEW_KEY, name),
+      );
+      await store.copyPartition(name, shadow, NEW_KEY, "202609");
+      const [copied] = await read<{ n: string }>(
+        `SELECT count() AS n FROM ${shadow}`,
+      );
+      expect(Number(copied?.n)).toBe(rows);
+    } finally {
+      await rebuild.close();
       await dropAll(name);
     }
   }, 120_000);
@@ -291,7 +367,7 @@ describe.skipIf(!chUp)("REBUILD TABLE against ClickHouse (#4297)", () => {
       await expect(
         rebuildPartitionKey(
           stopping,
-          { table: name, partitionBy: NEW_KEY },
+          { table: name, partitionBy: NEW_KEY, column: "received_at" },
           quiet,
         ),
       ).rejects.toThrow("stopped after the swap");
@@ -301,7 +377,7 @@ describe.skipIf(!chUp)("REBUILD TABLE against ClickHouse (#4297)", () => {
       await expect(
         rebuildPartitionKey(
           store,
-          { table: name, partitionBy: NEW_KEY },
+          { table: name, partitionBy: NEW_KEY, column: "received_at" },
           quiet,
         ),
       ).resolves.toBe("resumed");

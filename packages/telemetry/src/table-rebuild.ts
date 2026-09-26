@@ -29,17 +29,24 @@
  *    the shadow already holds in full is skipped. One it holds in part is
  *    dropped and copied again. Then swap the two tables.
  * 3. The live table has the new key and the shadow holds the old rows: the
- *    swap happened. Copy again whatever the swap could have left behind, then
- *    drop the shadow.
+ *    swap happened. Wait for inserts that began before this run, copy again
+ *    whatever the swap could have left behind, then drop the shadow.
  *
  * Writes keep arriving during the copy. The key is a month of a time the
  * control plane stamps (`received_at`), so a write lands in the partition for
- * the moment it arrives, and only the latest one or two partitions can receive
- * rows after they were copied. After the swap those two are copied again from
- * the old table. The table is a `ReplacingMergeTree`, and every reader uses
- * `FINAL`, so a row copied twice reads once.
+ * the moment it arrives. Only the months from the copy's start onward can
+ * receive rows after they were copied, and the months ahead of it too, which
+ * an app node whose clock runs ahead writes into. After the swap every one of
+ * those months is copied again from the old table, along with any older month
+ * the new table holds fewer rows of. The table is a `ReplacingMergeTree`, and
+ * every reader uses `FINAL`, so a row copied twice reads once.
  */
-import type { ClickHouseClient, ClickHouseSettings } from "@clickhouse/client";
+import { randomUUID } from "node:crypto";
+import type {
+  ClickHouseClient,
+  ClickHouseClientConfigOptions,
+  ClickHouseSettings,
+} from "@clickhouse/client";
 
 const NAME = "[A-Za-z_][A-Za-z0-9_]*";
 const DIRECTIVE = new RegExp(
@@ -52,6 +59,8 @@ export interface RebuildDirective {
   table: string;
   /** The new partition key, as the directive spells it. */
   partitionBy: string;
+  /** The column the new key reads. */
+  column: string;
 }
 
 /** Raised for a statement that starts like a rebuild directive and is not one. */
@@ -82,7 +91,7 @@ export function parseRebuildDirective(
     );
   }
   const [, table = "", column = ""] = match;
-  return { table, partitionBy: `toYYYYMM(${column})` };
+  return { table, partitionBy: `toYYYYMM(${column})`, column };
 }
 
 /** The shadow table a rebuild of `table` copies into. */
@@ -122,6 +131,30 @@ export const REBUILD_QUERY_SETTINGS: ClickHouseSettings = {
   min_insert_block_size_bytes: String(4 * 1024 * 1024),
 };
 
+/**
+ * The client options a rebuild runs under (`migrate.ts` adds the connection).
+ *
+ * The shared client gives up on a request after 30 seconds, and a copy of a
+ * large partition can take longer. This waits up to 30 minutes per statement,
+ * the time `migration-gate` allows the whole job, and asks the server for a
+ * progress header every 10 seconds so the SSM tunnel carries bytes while a
+ * copy runs.
+ *
+ * An `INSERT ... SELECT` sends no body, so each progress line is one more
+ * response header. Node accepts 16 KiB of headers by default, about 75 of
+ * those lines, and a copy longer than 12 minutes would fail with
+ * `HPE_HEADER_OVERFLOW` while the server carried on writing. The 1 MiB bound
+ * holds 30 minutes of them many times over.
+ */
+export const REBUILD_CLIENT_OPTIONS = {
+  request_timeout: 30 * 60_000,
+  max_response_headers_size: 1024 * 1024,
+  clickhouse_settings: {
+    send_progress_in_http_headers: 1,
+    http_headers_progress_interval_ms: "10000",
+  },
+} satisfies ClickHouseClientConfigOptions;
+
 /** A table as `system.tables` describes it. */
 export interface TableShape {
   partitionKey: string;
@@ -147,7 +180,23 @@ export interface RebuildStore {
   createShadow(table: string, shadow: string, engine: string): Promise<void>;
   /** Drop one partition of `table` by its id. */
   dropPartition(table: string, id: string): Promise<void>;
-  /** Append the rows of `from` whose `partitionBy` value is `partition` to `to`. */
+  /**
+   * The month, as `toYYYYMM` text, of the server's clock one day ago: the
+   * earliest month a write from now on can land in, allowing an app node's
+   * clock a day behind.
+   */
+  monthBeforeNow(): Promise<string>;
+  /**
+   * The month, as `toYYYYMM` text, one day before the latest value of
+   * `column` in `table` that is not ahead of the server's clock. The old
+   * table stops taking writes at the swap, so this is a month no later than
+   * the copy's start. A table with no such row answers a month before any.
+   */
+  lastWriteMonth(table: string, column: string): Promise<string>;
+  /**
+   * Append the rows of `from` whose `partitionBy` value is `partition` to
+   * `to`. A copy that fails is stopped on the server before this rejects.
+   */
   copyPartition(
     from: string,
     to: string,
@@ -247,27 +296,29 @@ async function copyMissing(
 }
 
 /**
- * After the swap: copy from the old table what the new one may lack. The
- * latest two partitions are copied again whatever their counts, because they
- * are the ones writes reached during the copy and the new table has taken
- * writes of its own since. Any older partition is copied again only when the
- * new table holds fewer of its rows than the old one.
+ * After the swap: copy from the old table what the new one may lack. Every
+ * partition from `from` on is copied again whatever its count: writes reached
+ * those months during the copy, and the new table has taken writes of its own
+ * since, so a count cannot show what it lacks. That includes months ahead of
+ * the server's, which an app node whose clock runs ahead writes into. Any
+ * older partition is copied again only when the new table holds fewer of its
+ * rows than the old one.
  */
 async function copyTail(
   store: RebuildStore,
   old: string,
   live: string,
   partitionBy: string,
+  from: string,
   log: (entry: Record<string, unknown>) => void,
 ): Promise<void> {
   const before = await store.partitionRows(old, partitionBy);
   const now = await store.partitionRows(live, partitionBy);
   const ordered = [...before.keys()].sort((a, b) => a.localeCompare(b));
-  const latest = new Set(ordered.slice(-2));
   for (const partition of ordered) {
     const rows = before.get(partition)?.rows ?? 0;
     const held = now.get(partition)?.rows ?? 0;
-    if (!latest.has(partition) && held >= rows) continue;
+    if (partition.localeCompare(from) < 0 && held >= rows) continue;
     await store.copyPartition(old, live, partitionBy, partition);
     log({
       msg: "ClickHouse rebuild: copied a partition again after the swap",
@@ -319,7 +370,7 @@ export async function rebuildPartitionKey(
       ((ms: number) => new Promise<void>((r) => setTimeout(r, ms))),
     now: options.now ?? (() => Date.now()),
   };
-  const { table, partitionBy } = directive;
+  const { table, partitionBy, column } = directive;
   const shadow = shadowTableName(table);
   const shapes = await store.shapes([table, shadow]);
   const live = shapes.get(table);
@@ -337,10 +388,16 @@ export async function rebuildPartitionKey(
         `${table} already partitions by ${partitionBy}, and ${shadow} does too. No step of the rebuild leaves both, so it stops rather than drop either. Read both tables and drop the one that is not the live data.`,
       );
     }
-    // The swap happened and the run stopped before it finished. Enough time
-    // has passed that no insert from before the swap is still running.
+    // The swap happened and the run stopped before it finished, perhaps a
+    // moment ago. An insert that began before the swap may still be writing
+    // to the old table, and it named the live table, as every insert since
+    // has, so waiting for every insert older than this run covers it. This
+    // run did not see the copy start, so the months to copy again are read
+    // from the old table's last write.
     log({ msg: "ClickHouse rebuild: resuming after the swap", table, shadow });
-    await copyTail(store, shadow, table, partitionBy, log);
+    await settle(store, table, timing.now(), timing);
+    const from = await store.lastWriteMonth(shadow, column);
+    await copyTail(store, shadow, table, partitionBy, from, log);
     await store.drop(shadow);
     return "resumed";
   }
@@ -361,6 +418,9 @@ export async function rebuildPartitionKey(
       `${shadow} exists with the engine "${spare.engineFull}", not "${wanted}". The rebuild did not create it that way, so it stops rather than copy into it or drop it. Drop ${shadow} if it holds nothing you need, and run again.`,
     );
   }
+  // Read before the first copy: the months from here on are the ones writes
+  // can reach after they were copied.
+  const from = await store.monthBeforeNow();
   if (spare === undefined) await store.createShadow(table, shadow, wanted);
   const copied = await copyMissing(store, table, shadow, partitionBy, log);
   await store.exchange(table, shadow);
@@ -372,7 +432,7 @@ export async function rebuildPartitionKey(
     copied,
   });
   await settle(store, table, swappedAt, timing);
-  await copyTail(store, shadow, table, partitionBy, log);
+  await copyTail(store, shadow, table, partitionBy, from, log);
   await store.drop(shadow);
   return "rebuilt";
 }
@@ -445,13 +505,47 @@ export function clickhouseRebuildStore(ch: ClickHouseClient): RebuildStore {
         query_params: { id },
       });
     },
+    async monthBeforeNow() {
+      const [row] = await rows<{ month: string }>(
+        ch,
+        "SELECT toString(toYYYYMM(now() - INTERVAL 1 DAY)) AS month",
+      );
+      return row?.month ?? "";
+    },
+    async lastWriteMonth(table, column) {
+      const [row] = await rows<{ month: string }>(
+        ch,
+        `SELECT toString(toYYYYMM(
+                  maxIf(${quoted(column)}, ${quoted(column)} <= now()) - INTERVAL 1 DAY
+                )) AS month
+         FROM ${quoted(table)}`,
+      );
+      return row?.month ?? "";
+    },
     async copyPartition(from, to, partitionBy, partition) {
-      await ch.command({
-        query: `INSERT INTO ${quoted(to)} SELECT * FROM ${quoted(from)}
-                WHERE toString(${partitionBy}) = {partition:String}`,
-        query_params: { partition },
-        clickhouse_settings: REBUILD_QUERY_SETTINGS,
-      });
+      const queryId = `oxagen-rebuild-${randomUUID()}`;
+      try {
+        await ch.command({
+          query: `INSERT INTO ${quoted(to)} SELECT * FROM ${quoted(from)}
+                  WHERE toString(${partitionBy}) = {partition:String}`,
+          query_params: { partition },
+          query_id: queryId,
+          clickhouse_settings: REBUILD_QUERY_SETTINGS,
+        });
+      } catch (err) {
+        // The server keeps running a write the client stopped waiting for.
+        // Left running, it would go on writing into the partition the next
+        // run drops and copies again, and hold memory on the shared node.
+        // The copy's own error is the one to report, so a failed stop is
+        // not raised over it.
+        await ch
+          .command({
+            query: "KILL QUERY WHERE query_id = {id:String} SYNC",
+            query_params: { id: queryId },
+          })
+          .catch(() => {});
+        throw err;
+      }
     },
     async exchange(a, b) {
       await ch.command({

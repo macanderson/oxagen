@@ -137,7 +137,15 @@ If you see it, the store had lost a table and has just got it back.
   `REBUILD TABLE <table> PARTITION BY toYYYYMM(<column>)` directive (0034 does).
   Only `migrate.ts` can apply it: it rebuilds the table one partition at a
   time and finishes a rebuild an earlier run stopped (`table-rebuild.ts`).
-  Sent by hand, the directive fails as a syntax error.
+  Sent by hand, the directive fails as a syntax error. The rebuild swaps
+  tables with `EXCHANGE TABLES`, which needs an `Atomic` database. On any
+  other engine (a ClickHouse Cloud `Replicated` database, for one) the run
+  stops at the directive by design, and every later migration waits behind
+  it until the table is rebuilt by hand. `migrate.ts` creates the database
+  with no engine clause, which a self-hosted server such as the app node's
+  makes `Atomic`. No runner migrates an organization's own data plane yet
+  (ADR-042 defers per-plane runners), so a plane meets the directive on its
+  first run.
 - **Neo4j:** a named `CREATE CONSTRAINT` / `CREATE INDEX` in
   `packages/ontology/src/schema.cypher`. Name it — an unnamed index gets an
   auto-generated name the check can never match, so it would be invisible.

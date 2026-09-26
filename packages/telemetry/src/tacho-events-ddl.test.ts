@@ -217,6 +217,7 @@ describe("tacho_events DDL", () => {
     expect(parseRebuildDirective(statements[0] ?? "")).toEqual({
       table: "tacho_events",
       partitionBy: TACHO_EVENTS_PARTITION_KEY,
+      column: "received_at",
     });
   });
 

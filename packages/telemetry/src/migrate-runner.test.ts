@@ -219,13 +219,16 @@ describe("migrate() — a REBUILD TABLE directive", () => {
     expect(rebuildMock).toHaveBeenCalledWith(rebuildStore, {
       table: "t",
       partitionBy: "toYYYYMM(received_at)",
+      column: "received_at",
     });
     // The second client is the rebuild's: bound to the database, with a wait
-    // long enough for a partition copy and progress headers on the tunnel.
+    // long enough for a partition copy, progress headers on the tunnel, and
+    // room for 30 minutes of them (#4354 review).
     expect(createClientMock).toHaveBeenCalledTimes(2);
     expect(createClientMock.mock.calls[1]![0]).toMatchObject({
       database: "telemetry",
       request_timeout: 30 * 60_000,
+      max_response_headers_size: 1024 * 1024,
       clickhouse_settings: { send_progress_in_http_headers: 1 },
     });
     expect(bootstrapCloseMock).toHaveBeenCalledTimes(2);

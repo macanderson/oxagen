@@ -23,9 +23,11 @@
 --    copy's parts compact and its merges vertical, so merges during the copy
 --    stay out of the 1.5 GiB cap too.
 -- 3. Swap the two tables with EXCHANGE TABLES, wait for inserts that began
---    before the swap, and copy the latest two months again from the old
---    table, since writes reached them during the copy. A row copied twice
---    reads once: the engine is ReplacingMergeTree and every reader uses FINAL.
+--    before the swap, and copy again from the old table every month from the
+--    copy's start on, months ahead of the server's clock included, since
+--    writes reached them during the copy. An older month is copied again when
+--    the new table holds fewer of its rows. A row copied twice reads once:
+--    the engine is ReplacingMergeTree and every reader uses FINAL.
 -- 4. Drop the old table.
 --
 -- Each run reads where the rebuild stands from system.tables and carries on,

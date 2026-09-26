@@ -37,7 +37,11 @@ const OLD_KEY = "toYYYYMM(ts)";
 const NEW_KEY = "toYYYYMM(received_at)";
 const ENGINE = (key: string) =>
   `ReplacingMergeTree(received_at) PARTITION BY ${key} ORDER BY (org_id, seq) TTL toDateTime(received_at) + toIntervalMonth(13) SETTINGS index_granularity = 8192, min_bytes_for_wide_part = 67108864`;
-const DIRECTIVE = { table: "events", partitionBy: NEW_KEY };
+const DIRECTIVE = {
+  table: "events",
+  partitionBy: NEW_KEY,
+  column: "received_at",
+};
 const SHADOW = shadowTableName("events");
 
 /** Where a run stops: before the nth statement takes effect, or just after. */
@@ -56,6 +60,11 @@ class MemoryStore implements RebuildStore {
   /** How many settle polls report an insert still running. */
   running = 0;
   written = 0;
+  /**
+   * The server's month a day ago. Months here have no days, so the store
+   * reads a month as the month a day before it.
+   */
+  month = "202609";
 
   constructor(rows: Row[]) {
     this.tables.set("events", {
@@ -159,6 +168,16 @@ class MemoryStore implements RebuildStore {
     this.running -= 1;
     return 1;
   }
+  async monthBeforeNow() {
+    return this.month;
+  }
+  async lastWriteMonth(table: string) {
+    const months = this.table(table)
+      .rows.map((r) => r.rec)
+      .filter((rec) => rec <= this.month)
+      .sort();
+    return months.at(-1) ?? "000000";
+  }
 }
 
 const quiet = { log: () => {}, sleep: async () => {} };
@@ -202,10 +221,11 @@ describe("parseRebuildDirective", () => {
     ).toEqual({
       table: "tacho_events",
       partitionBy: "toYYYYMM(received_at)",
+      column: "received_at",
     });
     expect(
       parseRebuildDirective("rebuild table t partition by toYYYYMM(c)"),
-    ).toEqual({ table: "t", partitionBy: "toYYYYMM(c)" });
+    ).toEqual({ table: "t", partitionBy: "toYYYYMM(c)", column: "c" });
   });
 
   it("leaves every other statement to the server", () => {
@@ -287,8 +307,8 @@ describe("rebuildPartitionKey", () => {
       `copy events ${SHADOW} 202608`,
       `copy events ${SHADOW} 202609`,
       `exchange events ${SHADOW}`,
-      // The latest two months again, because writes reached them.
-      `copy ${SHADOW} events 202608`,
+      // The months from the copy's start again, because writes reached them.
+      // August's count in the new table shows it whole.
       `copy ${SHADOW} events 202609`,
       `drop ${SHADOW}`,
     ]);
@@ -331,6 +351,8 @@ describe("rebuildPartitionKey", () => {
 
   it("copies rows that reached a month after it was copied, across a month boundary", async () => {
     const store = new MemoryStore(seed());
+    // The copy starts in August.
+    store.month = "202608";
     const expected = seed().map((r) => r.id);
     store.between = (statement) => {
       // The copy crosses midnight on the first: late writes to August, then
@@ -392,6 +414,78 @@ describe("rebuildPartitionKey", () => {
       "resumed",
     );
     expectRebuilt(store, ["a", "b", "c", "d", "e", "f"]);
+  });
+
+  // #4354 review. An app node whose clock runs ahead writes into months that
+  // have not begun. Sorted as text, those are the latest partitions, so a
+  // rule that copied the latest two again skipped the current month, and the
+  // new table's count of it (the copy plus its own writes since the swap)
+  // passed the old table's, which hid the rows the old table took after the
+  // month was copied.
+  it("copies every month from the copy's start again, past months an app node's clock ran ahead into", async () => {
+    const rows = seed().concat(
+      { id: "f", ts: "202609", rec: "203001" },
+      { id: "g", ts: "202609", rec: "203002" },
+    );
+    const store = new MemoryStore(rows);
+    const expected = rows.map((r) => r.id);
+    store.between = (statement) => {
+      if (statement === `copy events ${SHADOW} 202609`)
+        expected.push(store.write("202609").id);
+      if (statement.startsWith("exchange"))
+        expected.push(store.write("202609").id, store.write("202609").id);
+    };
+    await rebuildPartitionKey(store, DIRECTIVE, quiet);
+    expectRebuilt(store, expected);
+    expect(store.statements).toContain(`copy ${SHADOW} events 202609`);
+  });
+
+  it("reads the months to copy again from the old table's last write on a resume", async () => {
+    const store = new MemoryStore(seed());
+    // Stopped after the swap in September, resumed in November.
+    store.stop = { at: 4, after: true };
+    await expect(rebuildPartitionKey(store, DIRECTIVE, quiet)).rejects.toThrow(
+      /stopped after exchange/,
+    );
+    store.stop = null;
+    const late = store.write("202609", SHADOW);
+    store.write("202609");
+    store.write("202609");
+    store.month = "202611";
+    store.statements = [];
+    await expect(rebuildPartitionKey(store, DIRECTIVE, quiet)).resolves.toBe(
+      "resumed",
+    );
+    expect(store.statements).toEqual([
+      `copy ${SHADOW} events 202609`,
+      `drop ${SHADOW}`,
+    ]);
+    expect(liveIds(store)).toContain(late.id);
+  });
+
+  // #4354 review. A run that resumes after the swap may start a moment after
+  // the run that swapped stopped, while an insert that began before the swap
+  // is still writing to the old table. The resume has to wait for it before
+  // it copies the old table's months again and drops the old table.
+  it("waits, on a resume, for inserts that began before the swap", async () => {
+    const store = new MemoryStore(seed());
+    store.stop = { at: 4, after: true };
+    await expect(rebuildPartitionKey(store, DIRECTIVE, quiet)).rejects.toThrow(
+      /stopped after exchange/,
+    );
+    store.stop = null;
+    store.running = 2;
+    const landed: string[] = [];
+    const sleep = vi.fn(async () => {
+      // The old insert lands in the old table while the resume waits.
+      if (landed.length === 0) landed.push(store.write("202609", SHADOW).id);
+    });
+    await expect(
+      rebuildPartitionKey(store, DIRECTIVE, { log: () => {}, sleep }),
+    ).resolves.toBe("resumed");
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(store.running).toBe(0);
+    expectRebuilt(store, [...seed().map((r) => r.id), ...landed]);
   });
 
   it("waits for inserts that began before the swap", async () => {
@@ -503,7 +597,11 @@ describe("rebuildPartitionKey", () => {
     await expect(
       rebuildPartitionKey(
         store,
-        { table: "events", partitionBy: "toYYYYMM( received_at )" },
+        {
+          table: "events",
+          partitionBy: "toYYYYMM( received_at )",
+          column: "received_at",
+        },
         quiet,
       ),
     ).resolves.toBe("current");
@@ -579,6 +677,62 @@ describe("clickhouseRebuildStore", () => {
       query_params: { partition: "202609" },
       clickhouse_settings: REBUILD_QUERY_SETTINGS,
     });
+    expect(String(statements[2]?.["query_id"])).toMatch(
+      /^oxagen-rebuild-[0-9a-f-]{36}$/,
+    );
+  });
+
+  // #4354 review. The server keeps running an INSERT ... SELECT whose client
+  // gave up. Left running, a failed copy writes on into the partition the
+  // next run drops and copies again.
+  it("stops a failed copy on the server and reports the copy's own error", async () => {
+    const { ch, command } = client([]);
+    command.mockImplementation(async (params: unknown) => {
+      const { query } = params as { query: string };
+      if (query.startsWith("INSERT")) throw new Error("HPE_HEADER_OVERFLOW");
+      if (query.startsWith("KILL")) throw new Error("not allowed");
+      return {};
+    });
+    await expect(
+      clickhouseRebuildStore(ch).copyPartition(
+        "t",
+        "t_rebuild",
+        NEW_KEY,
+        "202609",
+      ),
+    ).rejects.toThrow("HPE_HEADER_OVERFLOW");
+    const [copy, kill] = sent(command);
+    expect(kill).toEqual({
+      query: "KILL QUERY WHERE query_id = {id:String} SYNC",
+      query_params: { id: copy?.["query_id"] },
+    });
+  });
+
+  it("reads the months a rebuild copies again", async () => {
+    const now = client([{ month: "202609" }]);
+    await expect(clickhouseRebuildStore(now.ch).monthBeforeNow()).resolves.toBe(
+      "202609",
+    );
+    expect(String(sent(now.query)[0]?.["query"])).toBe(
+      "SELECT toString(toYYYYMM(now() - INTERVAL 1 DAY)) AS month",
+    );
+    const last = client([{ month: "202608" }]);
+    await expect(
+      clickhouseRebuildStore(last.ch).lastWriteMonth(
+        "t_rebuild",
+        "received_at",
+      ),
+    ).resolves.toBe("202608");
+    expect(String(sent(last.query)[0]?.["query"]).replace(/\s+/g, " ")).toBe(
+      "SELECT toString(toYYYYMM( maxIf(`received_at`, `received_at` <= now()) - INTERVAL 1 DAY )) AS month FROM `t_rebuild`",
+    );
+    const none = client([]);
+    await expect(
+      clickhouseRebuildStore(none.ch).monthBeforeNow(),
+    ).resolves.toBe("");
+    await expect(
+      clickhouseRebuildStore(none.ch).lastWriteMonth("t", "received_at"),
+    ).resolves.toBe("");
   });
 
   it("counts inserts still running from before the swap", async () => {

@@ -9,6 +9,7 @@ import { isDirectRunEntry } from "./is-direct-run";
 import {
   clickhouseRebuildStore,
   parseRebuildDirective,
+  REBUILD_CLIENT_OPTIONS,
   rebuildPartitionKey,
 } from "./table-rebuild";
 
@@ -74,11 +75,10 @@ async function ensureDatabase(): Promise<void> {
  * The shared client gives up on a request after 30 seconds, and a copy of a
  * large partition can take longer. The server keeps running a write the client
  * gave up on, so the migration would fail while the copy carried on unseen.
- * This client waits up to 30 minutes per statement, the time `migration-gate`
- * allows the whole job, and asks the server for a progress header every 10
- * seconds so the SSM tunnel carries bytes while a copy runs. It skips the
- * shared client's circuit breaker, as the bootstrap client above does: a
- * migration should fail on the error itself.
+ * `REBUILD_CLIENT_OPTIONS` holds the wait, the progress headers that keep the
+ * SSM tunnel busy, and room for them. This client skips the shared client's
+ * circuit breaker, as the bootstrap client above does: a migration should
+ * fail on the error itself.
  */
 function rebuildClient(): ClickHouseClient {
   const env = requireEnv([
@@ -88,15 +88,11 @@ function rebuildClient(): ClickHouseClient {
     "CLICKHOUSE_DATABASE",
   ] as const);
   return createClient({
+    ...REBUILD_CLIENT_OPTIONS,
     url: env.CLICKHOUSE_URL,
     username: env.CLICKHOUSE_USERNAME,
     password: env.CLICKHOUSE_PASSWORD,
     database: env.CLICKHOUSE_DATABASE,
-    request_timeout: 30 * 60_000,
-    clickhouse_settings: {
-      send_progress_in_http_headers: 1,
-      http_headers_progress_interval_ms: "10000",
-    },
   });
 }
 
