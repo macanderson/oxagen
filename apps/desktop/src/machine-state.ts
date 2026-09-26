@@ -24,21 +24,48 @@ export function isRetired(
   return host != null && typeof host.revoked_at === "string";
 }
 
+/**
+ * An enrollment `tacho unenroll` retired while its revoke could not reach
+ * Oxagen. The fleet page still lists it as active.
+ */
+export interface PendingRevoke {
+  agent_key: string;
+  host_enrollment_id: string;
+}
+
 /** What the Rust shell's `remove_local_data` reports. */
 export interface RemovalReport {
   removed: string[];
   /** Still on the machine, each with why. */
   left: string[];
+  /**
+   * The revoke a retired `host.json` still owed when the uninstall removed
+   * it. Nothing on the machine can finish it now. Absent on a Rust shell
+   * that predates the field.
+   */
+  pending_revoke?: PendingRevoke | null;
+}
+
+/**
+ * The one step left when an uninstall removed a retired enrollment whose
+ * revoke never reached Oxagen: the fleet page, since nothing on the machine
+ * can finish it any more.
+ */
+export function pendingRevokeText(agentKey: string): string {
+  return `The revoke for ${agentKey} did not reach Oxagen, so the fleet page still lists this machine as active. Revoke it there.`;
 }
 
 /** The notice after an uninstall: what happened, never "everything is gone" on faith. */
 export function describeRemoval(report: RemovalReport, hint: string): string {
+  const revoke = report.pending_revoke
+    ? ` ${pendingRevokeText(report.pending_revoke.agent_key)}`
+    : "";
   if (report.removed.length === 0 && report.left.length === 0)
-    return `Nothing of Oxagen's was left on this machine. ${hint}`;
+    return `Nothing of Oxagen's was left on this machine.${revoke} ${hint}`;
   const count = report.removed.length;
   const removed = `Removed ${count} item${count === 1 ? "" : "s"} from this machine.`;
-  if (report.left.length === 0) return `${removed} ${hint}`;
-  return `${removed} Still on this machine: ${report.left.join(". ")}. ${hint}`;
+  if (report.left.length === 0) return `${removed}${revoke} ${hint}`;
+  return `${removed} Still on this machine: ${report.left.join(". ")}.${revoke} ${hint}`;
 }
 
 /**

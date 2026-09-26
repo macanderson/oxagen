@@ -14,6 +14,11 @@
 //! `decide_path_precedence`, `is_oxagen_managed_path`, `upsert_path_block`,
 //! `remove_path_block`, `profile_path_for`, `fish_file_is_ours`,
 //! `detect_shell_kind`, `path_var_contains`, `auto_link_cli_enabled`.
+//!
+//! The shell profile and symlink helpers are pure and tested on every OS,
+//! and only the Unix build calls them, so a Windows build reads them as
+//! unused.
+#![cfg_attr(windows, allow(dead_code))]
 
 use crate::machine::Roots;
 use serde::Serialize;
@@ -185,17 +190,16 @@ impl InstallEnv {
 /// Called first thing in `run()`, before any thread exists. Changing the
 /// environment once other threads run is unsound on Unix (a concurrent
 /// `getenv` in WebKit or the async runtime can read freed memory), so a copy
-/// made later in the launch is not exported here: the webview asks
-/// `sidecar_env` for it and passes it to each sidecar it spawns.
+/// made later in the launch is not exported here: `sidecar::run_sidecar`
+/// adds `sidecar_env` to each sidecar it spawns.
 pub fn export_bin_dir() {
     for (key, value) in sidecar_env() {
         std::env::set_var(key, value);
     }
 }
 
-/// What a sidecar needs in its environment on top of the app's own, asked
-/// for each spawn (the `sidecar_env` command) so a copy made during this
-/// launch is used at once.
+/// What a sidecar needs in its environment on top of the app's own, read
+/// for each spawn so a copy made during this launch is used at once.
 pub fn sidecar_env() -> std::collections::BTreeMap<String, String> {
     sidecar_env_for(sidecar_dir_is_transient(), bin_dir().as_deref())
 }
@@ -249,12 +253,43 @@ fn read_json_object(path: &Path) -> Map<String, Value> {
         .unwrap_or_default()
 }
 
-fn write_json_object(path: &Path, obj: &Map<String, Value>) -> Result<(), String> {
+/// `desktop.json`'s key for "this app created `~/.config`".
+const CONFIG_DIR_CREATED: &str = "configDirCreated";
+
+/// Write `desktop.json`. When `~/.config` is not there yet, this write is what
+/// creates it, and the file records that under `configDirCreated`, so
+/// Uninstall removes an empty `~/.config` only when Oxagen made it.
+fn write_desktop_config(roots: &Roots, config: &Map<String, Value>) -> Result<(), String> {
+    let mut config = config.clone();
+    if !roots.home.join(".config").exists() {
+        config.insert(CONFIG_DIR_CREATED.to_string(), Value::Bool(true));
+    }
+    let path = roots.desktop_config_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let text = serde_json::to_string_pretty(&Value::Object(obj.clone())).unwrap_or_else(|_| "{}".to_string());
-    crate::machine::write_atomic(path, &text)
+    let text = serde_json::to_string_pretty(&Value::Object(config)).unwrap_or_else(|_| "{}".to_string());
+    crate::machine::write_atomic(&path, &text)
+}
+
+/// Run at launch, before any sidecar can write under `~/.config/oxagen`.
+/// `oxagen login` and `tacho enroll` create `~/.config` when it is missing and
+/// record nothing, so Uninstall could not tell a `~/.config` Oxagen made from
+/// an empty one the person already had, and removed both (#4318). When it is
+/// missing, the app writes `desktop.json` first, and that write records it.
+pub fn record_config_dir(roots: &Roots) -> Result<(), String> {
+    if roots.home.join(".config").exists() {
+        return Ok(());
+    }
+    write_desktop_config(roots, &read_json_object(&roots.desktop_config_path()))
+}
+
+/// Whether `desktop.json` says this app created `~/.config`.
+fn config_dir_created(roots: &Roots) -> bool {
+    read_json_object(&roots.desktop_config_path())
+        .get(CONFIG_DIR_CREATED)
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 /// Pure: whether automatic linking is enabled, given an explicit setting and,
@@ -356,9 +391,8 @@ pub fn set_auto_link_cli(mut config: Map<String, Value>, enabled: bool) -> Map<S
 }
 
 pub(crate) fn write_auto_link_cli(roots: &Roots, enabled: bool) -> Result<(), String> {
-    let path = roots.desktop_config_path();
-    let config = set_auto_link_cli(read_json_object(&path), enabled);
-    write_json_object(&path, &config)
+    let config = set_auto_link_cli(read_json_object(&roots.desktop_config_path()), enabled);
+    write_desktop_config(roots, &config)
 }
 
 /// The persisted `autoLinkCli` preference.
@@ -545,22 +579,34 @@ pub fn windows_shim_content(target: &Path) -> String {
     format!("@\"{}\" %*\r\n", target.display())
 }
 
-/// Whether a `.cmd` shim's content is one we wrote: the `@"` form
-/// `windows_shim_content` produces.
+/// Whether the `.cmd` shim for `name` is one Oxagen wrote. Every release has
+/// written one shape, `windows_shim_content`'s `@"<dir>\<name>.exe" %*` and a
+/// CRLF, so that shape is the only one that counts: a quoted path to
+/// `<name>.exe` with no quote or line break in it, nothing before it and
+/// nothing after it. A test checked only the `@"` prefix, so a hand-written
+/// shim that starts the same way and does more was replaced on install and
+/// deleted on uninstall.
 #[allow(dead_code)]
-pub fn shim_is_ours(text: &str) -> bool {
-    text.starts_with("@\"")
+pub fn shim_is_ours(text: &str, name: &str) -> bool {
+    let Some(target) = text.strip_prefix("@\"").and_then(|rest| rest.strip_suffix("\" %*\r\n")) else {
+        return false;
+    };
+    if target.contains(['"', '\r', '\n']) {
+        return false;
+    }
+    let file = target.rsplit(['\\', '/']).next().unwrap_or_default();
+    file.eq_ignore_ascii_case(&format!("{name}.exe"))
 }
 
 /// Decide what to do with a would-be `.cmd` shim given its current content:
 /// rewrite only when it was written by us, so a hand-written shim or another
 /// vendor's `oxagen.cmd` is left alone.
 #[allow(dead_code)]
-pub fn decide_shim_action(existing: Option<&str>, desired: &str) -> ShimAction {
+pub fn decide_shim_action(existing: Option<&str>, desired: &str, name: &str) -> ShimAction {
     match existing {
         None => ShimAction::Create,
         Some(text) if text == desired => ShimAction::AlreadyCorrect,
-        Some(text) if shim_is_ours(text) => ShimAction::Replace,
+        Some(text) if shim_is_ours(text, name) => ShimAction::Replace,
         Some(_) => ShimAction::Skip,
     }
 }
@@ -875,7 +921,7 @@ fn link_one(dir: &Path, name: &str, target: &Path, _durable: &Path) -> LinkOutco
     let shim = dir.join(format!("{name}.cmd"));
     let desired = windows_shim_content(target);
     let existing = fs::read_to_string(&shim).ok();
-    match decide_shim_action(existing.as_deref(), &desired) {
+    match decide_shim_action(existing.as_deref(), &desired, name) {
         ShimAction::AlreadyCorrect => LinkOutcome::AlreadyCorrect,
         ShimAction::Skip => LinkOutcome::Skipped(format!(
             "{name}: {} was not written by Oxagen, left alone",
@@ -951,8 +997,12 @@ fn staging_name(file: &str) -> String {
 /// registry directly tells no one, so setting and clearing a throwaway user
 /// variable afterward broadcasts `WM_SETTINGCHANGE` the way the .NET call
 /// does, and a new terminal sees the change without a sign-out.
+///
+/// The directory is appended after a `;` and nothing else changes: the
+/// value keeps a trailing `;` and any empty entries it had, so removing the
+/// directory again gives back the value it held before, byte for byte.
 #[allow(dead_code)]
-const ADD_TO_USER_PATH_PS: &str = "$d=$env:OXAGEN_BIN; $k=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment'); $p=$k.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); if($null -eq $p){ $p='' }; $p=$p.TrimEnd(';'); if(($p -split ';') -notcontains $d){ if($p.Length -gt 0){ $p=$p+';'+$d } else { $p=$d }; $k.SetValue('Path',$p,[Microsoft.Win32.RegistryValueKind]::ExpandString); [Environment]::SetEnvironmentVariable('OXAGEN_PATH_CHANGED','1','User'); [Environment]::SetEnvironmentVariable('OXAGEN_PATH_CHANGED',$null,'User') }; $k.Close()";
+const ADD_TO_USER_PATH_PS: &str = "$d=$env:OXAGEN_BIN; $k=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment'); $p=$k.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); if($null -eq $p){ $p='' }; if(($p -split ';') -notcontains $d){ if($p.Length -gt 0){ $p=$p+';'+$d } else { $p=$d }; $k.SetValue('Path',$p,[Microsoft.Win32.RegistryValueKind]::ExpandString); [Environment]::SetEnvironmentVariable('OXAGEN_PATH_CHANGED','1','User'); [Environment]::SetEnvironmentVariable('OXAGEN_PATH_CHANGED',$null,'User') }; $k.Close()";
 
 /// Run one of the two user-PATH scripts with the directory in
 /// `$env:OXAGEN_BIN`. `CREATE_NO_WINDOW`: the app has no console, so
@@ -991,8 +1041,13 @@ fn add_to_user_path_windows(_dir: &str) -> Result<(), String> {
 /// behind, pointing at a directory with nothing in it. Same out-of-band
 /// `$env:OXAGEN_BIN`, the same `$null` guard, and the same unexpanded read,
 /// `REG_EXPAND_SZ` write and broadcast.
+///
+/// Only the directory's own entries go. Every other entry stays byte for
+/// byte, empty ones and a trailing `;` included, and the value is written
+/// only when an entry was dropped. When nothing else is left, the value is
+/// deleted: it used to be written back as an empty string (#4318).
 #[allow(dead_code)]
-const REMOVE_FROM_USER_PATH_PS: &str = "$d=$env:OXAGEN_BIN; $k=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment'); $p=$k.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); if($null -ne $p){ $e=@(($p -split ';') | Where-Object { $_ -ne '' -and $_ -ne $d }); $n=($e -join ';'); if($n -ne $p.TrimEnd(';')){ $k.SetValue('Path',$n,[Microsoft.Win32.RegistryValueKind]::ExpandString); [Environment]::SetEnvironmentVariable('OXAGEN_PATH_CHANGED','1','User'); [Environment]::SetEnvironmentVariable('OXAGEN_PATH_CHANGED',$null,'User') } }; $k.Close()";
+const REMOVE_FROM_USER_PATH_PS: &str = "$d=$env:OXAGEN_BIN; $k=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment'); $p=$k.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); if($null -ne $p){ $all=@($p -split ';'); $e=@($all | Where-Object { $_ -ne $d }); if($e.Count -ne $all.Count){ $n=($e -join ';'); if($n -eq ''){ $k.DeleteValue('Path') } else { $k.SetValue('Path',$n,[Microsoft.Win32.RegistryValueKind]::ExpandString) }; [Environment]::SetEnvironmentVariable('OXAGEN_PATH_CHANGED','1','User'); [Environment]::SetEnvironmentVariable('OXAGEN_PATH_CHANGED',$null,'User') } }; $k.Close()";
 
 #[cfg(windows)]
 fn remove_from_user_path_windows(dir: &str) -> Result<(), String> {
@@ -1001,9 +1056,25 @@ fn remove_from_user_path_windows(dir: &str) -> Result<(), String> {
 
 /// Wait up to `timeout` for `child`, killing it if it outlives the deadline.
 /// Returns the collected stdout on a clean, zero-status exit.
+///
+/// stdout is read on its own thread while the child runs. Read only after
+/// the exit, a login profile that printed more than a pipe holds (64 KiB)
+/// blocked on its write, never exited, and the probe waited out the whole
+/// timeout on every launch (#4318). The read after the exit is bounded by
+/// what is left of the timeout too, because a background process the profile
+/// started can hold the pipe open after the shell is gone.
 #[cfg(not(windows))]
 fn wait_with_timeout(mut child: std::process::Child, timeout: Duration) -> Option<Vec<u8>> {
+    use std::io::Read;
     let start = std::time::Instant::now();
+    let (sender, received) = std::sync::mpsc::channel();
+    if let Some(mut stdout) = child.stdout.take() {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = stdout.read_to_end(&mut buf);
+            let _ = sender.send(buf);
+        });
+    }
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
@@ -1021,10 +1092,7 @@ fn wait_with_timeout(mut child: std::process::Child, timeout: Duration) -> Optio
     if !status.success() {
         return None;
     }
-    use std::io::Read;
-    let mut buf = Vec::new();
-    child.stdout.take()?.read_to_end(&mut buf).ok()?;
-    Some(buf)
+    received.recv_timeout(timeout.saturating_sub(start.elapsed())).ok()
 }
 
 const PATH_BEGIN: &str = "__OXAGEN_PATH_BEGIN__";
@@ -1129,7 +1197,7 @@ fn record_created(roots: &Roots, paths: &[PathBuf]) -> Result<(), String> {
         "created".to_string(),
         Value::Array(created.into_iter().map(Value::String).collect()),
     );
-    write_json_object(&path, &config)
+    write_desktop_config(roots, &config)
 }
 
 /// Create `dir` and every missing parent, returning the ones that were made,
@@ -1262,10 +1330,9 @@ fn remove_created(roots: &Roots) -> Vec<String> {
             removed.push(item.clone());
         }
     }
-    let config_path = roots.desktop_config_path();
-    let mut config = read_json_object(&config_path);
+    let mut config = read_json_object(&roots.desktop_config_path());
     if config.remove("created").is_some() {
-        let _ = write_json_object(&config_path, &config);
+        let _ = write_desktop_config(roots, &config);
     }
     removed
 }
@@ -1548,7 +1615,8 @@ pub(crate) fn link_cli_in(env: &InstallEnv, state: &CliInstallState) -> Result<C
 /// shell, then copy 240 MB of sidecars, and a synchronous command freezes
 /// the window for all of it.
 #[tauri::command(async)]
-pub fn install_cli(state: tauri::State<CliInstallState>) -> Result<InstallResult, String> {
+pub fn install_cli(app: tauri::AppHandle, state: tauri::State<CliInstallState>) -> Result<InstallResult, String> {
+    let _job = crate::activity::Job::start(&app);
     let view = link_cli_in(&InstallEnv::real(), &state)?;
     if view.state == "failed" {
         return Err(view.note);
@@ -1608,7 +1676,7 @@ fn unlink_plan(env: &InstallEnv) -> Vec<(&'static str, PathBuf, UnlinkAction)> {
             .map(|name| {
                 let shim = dir.join(format!("{name}.cmd"));
                 let action = match fs::read_to_string(&shim) {
-                    Ok(text) if shim_is_ours(&text) => UnlinkAction::Remove,
+                    Ok(text) if shim_is_ours(&text, name) => UnlinkAction::Remove,
                     Ok(_) => UnlinkAction::Keep,
                     Err(_) => UnlinkAction::Absent,
                 };
@@ -1680,7 +1748,8 @@ pub(crate) fn unlink_cli_in(env: &InstallEnv) -> UnlinkOutcome {
 /// that we refused to overwrite is also one we refuse to delete. `async` for
 /// the same reason as `install_cli`.
 #[tauri::command(async)]
-pub fn uninstall_cli(state: tauri::State<CliInstallState>) -> Result<Vec<String>, String> {
+pub fn uninstall_cli(app: tauri::AppHandle, state: tauri::State<CliInstallState>) -> Result<Vec<String>, String> {
+    let _job = crate::activity::Job::start(&app);
     let _guard = install_guard();
     let env = InstallEnv::real();
     let outcome = unlink_cli_in(&env);
@@ -1706,6 +1775,10 @@ pub struct RemovalReport {
     pub removed: Vec<String>,
     /// Still on the machine, each with why.
     pub left: Vec<String>,
+    /// The revoke a retired `host.json` still owed when Uninstall removed it.
+    /// Nothing on the machine can finish it after that, so the report names
+    /// the agent key for the person to revoke on the fleet page (audit D-06).
+    pub pending_revoke: Option<crate::machine::PendingRevoke>,
 }
 
 /// Everything the app itself put on this machine, after `tacho unenroll` has
@@ -1723,7 +1796,13 @@ pub(crate) fn remove_everything_in(env: &InstallEnv, state: &CliInstallState) ->
     if crate::machine::enrollment(roots) == Enrollment::Live {
         return Err("this machine is still enrolled; unenroll first".into());
     }
-    let mut report = RemovalReport::default();
+    let mut report = RemovalReport {
+        // Read now: `host.json` goes with the Tacho root below.
+        pending_revoke: crate::machine::pending_revoke(roots),
+        ..RemovalReport::default()
+    };
+    // Read now as well: `desktop.json` goes with `~/.config/oxagen`.
+    let config_dir_created = config_dir_created(roots);
     // The durable copy: two ~120 MB binaries that nothing removed. Only when
     // the app is not running from it (it never is: the app runs its bundled
     // sidecars), and only the two files we copied plus the directories made
@@ -1753,10 +1832,11 @@ pub(crate) fn remove_everything_in(env: &InstallEnv, state: &CliInstallState) ->
             }
         }
     }
-    // `~/.config` itself, when creating `~/.config/oxagen` is the only reason
-    // it exists.
-    if let Some(parent) = roots.oxagen_dir().parent() {
-        crate::machine::remove_dir_if_empty(parent);
+    // `~/.config` itself, only when the app recorded creating it and nothing
+    // else is in it. An empty one the person already had stays (#4318).
+    let config_dir = roots.home.join(".config");
+    if config_dir_created && crate::machine::remove_dir_if_empty(&config_dir) {
+        report.removed.push(config_dir.display().to_string());
     }
     state.set(CliInstallView {
         state: "opted_out".to_string(),
@@ -1950,15 +2030,65 @@ mod tests {
     #[test]
     fn shim_action_covers_every_branch() {
         let desired = windows_shim_content(Path::new(r"C:\Program Files\Oxagen\oxagen.exe"));
-        assert_eq!(decide_shim_action(None, &desired), ShimAction::Create);
+        assert_eq!(decide_shim_action(None, &desired, "oxagen"), ShimAction::Create);
         assert_eq!(
-            decide_shim_action(Some(desired.as_str()), &desired),
+            decide_shim_action(Some(desired.as_str()), &desired, "oxagen"),
             ShimAction::AlreadyCorrect
         );
         let stale = windows_shim_content(Path::new(r"C:\Users\dev\AppData\Local\Oxagen\bin\oxagen.exe"));
-        assert_eq!(decide_shim_action(Some(stale.as_str()), &desired), ShimAction::Replace);
         assert_eq!(
-            decide_shim_action(Some("@echo off\r\nsomething-else.exe %*\r\n"), &desired),
+            decide_shim_action(Some(stale.as_str()), &desired, "oxagen"),
+            ShimAction::Replace
+        );
+        assert_eq!(
+            decide_shim_action(Some("@echo off\r\nsomething-else.exe %*\r\n"), &desired, "oxagen"),
+            ShimAction::Skip
+        );
+    }
+
+    /// #4318: only the one shape every release wrote is Oxagen's. A `.cmd`
+    /// someone wrote by hand that also starts with `@"` is left alone.
+    #[test]
+    fn only_the_released_shim_shape_is_ours() {
+        // The shape `windows_shim_content` has written since #3081, the only
+        // released format: the durable copy and a bundled sidecar directory.
+        for target in [
+            r"C:\Users\dev\AppData\Local\oxagen\bin\oxagen.exe",
+            r"C:\Program Files\Oxagen\oxagen.exe",
+        ] {
+            assert!(
+                shim_is_ours(&windows_shim_content(Path::new(target)), "oxagen"),
+                "{target}"
+            );
+        }
+        assert!(shim_is_ours(
+            &windows_shim_content(Path::new(r"C:\Program Files\Oxagen\tacho.exe")),
+            "tacho"
+        ));
+        // Hand-written shims that start with `@"`.
+        for text in [
+            "@\"C:\\tools\\oxagen.exe\" --profile work %*\r\n",
+            "@\"C:\\tools\\oxagen.exe\" %*\r\necho done\r\n",
+            "@\"C:\\tools\\my-wrapper.exe\" %*\r\n",
+            "@\"C:\\tools\\oxagen.exe\" %*\n",
+            "@\"C:\\tools\\oxagen.exe\"\" %*\r\n",
+            "@\"\" %*\r\n",
+        ] {
+            assert!(!shim_is_ours(text, "oxagen"), "{text:?}");
+        }
+        // The tacho shim is not the oxagen shim.
+        assert!(!shim_is_ours(
+            &windows_shim_content(Path::new(r"C:\Program Files\Oxagen\tacho.exe")),
+            "oxagen"
+        ));
+        // Install leaves a hand-written one alone rather than replacing it.
+        let desired = windows_shim_content(Path::new(r"C:\Program Files\Oxagen\oxagen.exe"));
+        assert_eq!(
+            decide_shim_action(
+                Some("@\"C:\\tools\\oxagen.exe\" --profile work %*\r\n"),
+                &desired,
+                "oxagen"
+            ),
             ShimAction::Skip
         );
     }
@@ -2386,15 +2516,167 @@ map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)
 
     #[test]
     fn the_path_script_survives_an_account_with_no_user_path() {
-        // `GetEnvironmentVariable('Path','User')` is null on an account that
-        // has never had one, and `$null.TrimEnd(';')` throws: the shims get
-        // written and nothing puts their directory on PATH. The script has to
-        // normalize null first, and must not leave a leading separator.
+        // `GetValue('Path', ...)` is null on an account that has never had
+        // one, and a method call on it throws: the shims get written and
+        // nothing puts their directory on PATH. The script has to normalize
+        // null first, and must not leave a leading separator.
         assert!(ADD_TO_USER_PATH_PS.contains("if($null -eq $p){ $p='' }"));
         let normalize = ADD_TO_USER_PATH_PS.find("$null -eq $p").expect("null check");
-        let trim = ADD_TO_USER_PATH_PS.find(".TrimEnd(';')").expect("trim");
-        assert!(normalize < trim, "null must be normalized before TrimEnd");
+        let split = ADD_TO_USER_PATH_PS.find("($p -split ';')").expect("split");
+        assert!(normalize < split, "null must be normalized before the value is used");
         assert!(ADD_TO_USER_PATH_PS.contains("if($p.Length -gt 0){ $p=$p+';'+$d } else { $p=$d }"));
+    }
+
+    /// #4318: neither script trims the value or drops its empty entries, and
+    /// removing the last entry deletes the value instead of writing `''`.
+    #[test]
+    fn the_path_scripts_keep_every_other_entry_as_it_was() {
+        for script in [ADD_TO_USER_PATH_PS, REMOVE_FROM_USER_PATH_PS] {
+            assert!(!script.contains("TrimEnd"), "{script}");
+            assert!(!script.contains("$_ -ne ''"), "{script}");
+        }
+        assert!(REMOVE_FROM_USER_PATH_PS.contains("if($n -eq ''){ $k.DeleteValue('Path') }"));
+        // The value is written only when an entry was dropped.
+        assert!(REMOVE_FROM_USER_PATH_PS.contains("if($e.Count -ne $all.Count)"));
+    }
+
+    /// #4318: both scripts against this runner's real `HKCU\Environment`.
+    /// Each case writes a starting value, adds and removes a scratch
+    /// directory, and reads the value back. The account's own value goes
+    /// back afterward, whatever happens. The Windows leg of desktop-rig.yml
+    /// runs it.
+    #[cfg(windows)]
+    #[test]
+    fn the_user_path_scripts_round_trip_the_real_registry_value() {
+        use std::process::Command;
+        fn ps(script: &str, value: Option<&str>) -> String {
+            let mut command = Command::new("powershell");
+            command.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+            if let Some(value) = value {
+                command.env("OXAGEN_RIG_VALUE", value);
+            }
+            let out = command.output().expect("powershell runs");
+            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+            String::from_utf8_lossy(&out.stdout)
+                .trim_end_matches(['\r', '\n'])
+                .to_string()
+        }
+        const READ: &str = "$k=[Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment'); $v=$k.GetValue('Path',$null,[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); if($null -eq $v){ [Console]::Out.Write('ABSENT') } else { [Console]::Out.Write([string]$k.GetValueKind('Path') + '|' + $v) }";
+        const WRITE: &str = "$k=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment'); $k.SetValue('Path',$env:OXAGEN_RIG_VALUE,[Microsoft.Win32.RegistryValueKind]::ExpandString); $k.Close()";
+        const WRITE_SZ: &str = "$k=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment'); $k.SetValue('Path',$env:OXAGEN_RIG_VALUE,[Microsoft.Win32.RegistryValueKind]::String); $k.Close()";
+        const DELETE: &str = "$k=[Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment'); $k.DeleteValue('Path',$false); $k.Close()";
+        let read = || ps(READ, None);
+        let set = |value: Option<&str>| match value {
+            Some(value) => {
+                ps(WRITE, Some(value));
+            }
+            None => {
+                ps(DELETE, None);
+            }
+        };
+
+        /// Puts the account's own value back when the test ends, even on a
+        /// failed assertion.
+        struct Restore(String);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                match self.0.split_once('|') {
+                    None => {
+                        ps(DELETE, None);
+                    }
+                    Some(("String", value)) => {
+                        ps(WRITE_SZ, Some(value));
+                    }
+                    Some((_, value)) => {
+                        ps(WRITE, Some(value));
+                    }
+                }
+            }
+        }
+        let _restore = Restore(read());
+
+        /// Every value read before and after each edit, as `kind|value`.
+        /// Written where desktop-rig.yml uploads it, on a failure too, so the
+        /// run keeps a record of the before and after values (#4318).
+        struct Record(std::cell::RefCell<Vec<serde_json::Value>>);
+        impl Drop for Record {
+            fn drop(&mut self) {
+                let Some(dir) = std::env::var_os("DESKTOP_RIG_EVIDENCE") else {
+                    return;
+                };
+                let _ = std::fs::create_dir_all(&dir);
+                let text = serde_json::to_string_pretty(&*self.0.borrow()).unwrap_or_default();
+                let _ = std::fs::write(std::path::Path::new(&dir).join("windows-user-path.json"), text + "\n");
+            }
+        }
+        let record = Record(Default::default());
+        let step = |start: &str, edit: &str, before: &str, after: &str| {
+            record.0.borrow_mut().push(serde_json::json!({
+                "start": start,
+                "edit": edit,
+                "before": before,
+                "after": after,
+            }));
+        };
+
+        let dir = r"C:\oxagen-rig-4318\Oxagen\bin";
+        // (starting value, after add, after remove)
+        let cases: [(Option<&str>, String, Option<&str>); 4] = [
+            (None, format!("ExpandString|{dir}"), None),
+            (
+                Some(r"C:\a;;%USERPROFILE%\b;"),
+                format!(r"ExpandString|C:\a;;%USERPROFILE%\b;;{dir}"),
+                Some(r"C:\a;;%USERPROFILE%\b;"),
+            ),
+            (
+                Some(r"%USERPROFILE%\bin"),
+                format!(r"ExpandString|%USERPROFILE%\bin;{dir}"),
+                Some(r"%USERPROFILE%\bin"),
+            ),
+            (Some(r";C:\a"), format!(r"ExpandString|;C:\a;{dir}"), Some(r";C:\a")),
+        ];
+        for (start, added, removed) in cases {
+            set(start);
+            let label = format!("{start:?}");
+            let before = read();
+            add_to_user_path_windows(dir).unwrap();
+            let after_add = read();
+            step(&label, "add", &before, &after_add);
+            assert_eq!(after_add, added, "add to {start:?}");
+            // A second add changes nothing.
+            add_to_user_path_windows(dir).unwrap();
+            let after_second = read();
+            step(&label, "add again", &after_add, &after_second);
+            assert_eq!(after_second, added, "second add to {start:?}");
+            remove_from_user_path_windows(dir).unwrap();
+            let after_remove = read();
+            step(&label, "remove", &after_second, &after_remove);
+            let want = removed.map_or("ABSENT".to_string(), |v| format!("ExpandString|{v}"));
+            assert_eq!(after_remove, want, "remove from {start:?}");
+        }
+
+        // Oxagen's directory as the only entry: the value goes, not ''.
+        set(Some(dir));
+        let before = read();
+        remove_from_user_path_windows(dir).unwrap();
+        let after = read();
+        step("only Oxagen's entry", "remove", &before, &after);
+        assert_eq!(after, "ABSENT");
+        // In the middle, with a trailing `;`: only its own entry goes.
+        let middle = format!(r"C:\a;{dir};C:\b;");
+        set(Some(middle.as_str()));
+        let before = read();
+        remove_from_user_path_windows(dir).unwrap();
+        let after = read();
+        step("Oxagen's entry in the middle", "remove", &before, &after);
+        assert_eq!(after, r"ExpandString|C:\a;C:\b;");
+        // Not there: the value is not rewritten, so a plain REG_SZ stays one.
+        ps(WRITE_SZ, Some(r"C:\a;;"));
+        let before = read();
+        remove_from_user_path_windows(dir).unwrap();
+        let after = read();
+        step("a REG_SZ without Oxagen's entry", "remove", &before, &after);
+        assert_eq!(after, r"String|C:\a;;");
     }
 
     #[test]
@@ -2545,6 +2827,35 @@ map auto_home on /System/Volumes/Data/home (autofs, automounted, nobrowse)
     }
 
     // ---- the login-shell PATH probe ----
+
+    /// #4318: a login profile that prints 128 KiB, twice what a pipe holds,
+    /// used to block on its write until the 5 s timeout killed it, and the
+    /// probe fell back to the process PATH. It now answers at once.
+    #[cfg(not(windows))]
+    #[test]
+    fn a_login_profile_that_prints_128_kib_does_not_stall_the_path_probe() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = unique_temp_dir("chatty-profile");
+        let shell = dir.join("chatty-sh");
+        // Called as `<shell> -lc <command>`: print 128 KiB the way a noisy
+        // profile does, then run the command without a login profile.
+        fs::write(
+            &shell,
+            "#!/bin/sh\nhead -c 131072 /dev/zero | tr '\\0' x\nexec /bin/sh -c \"$2\"\n",
+        )
+        .unwrap();
+        fs::set_permissions(&shell, fs::Permissions::from_mode(0o755)).unwrap();
+        // A few tries, for the "text file busy" race described in
+        // `a_profile_banner_is_not_read_as_path`. Each try is timed on its own.
+        let answer = (0..5).find_map(|_| {
+            let start = std::time::Instant::now();
+            login_shell_path(&shell.display().to_string()).map(|path| (path, start.elapsed()))
+        });
+        let (path, elapsed) = answer.expect("the probe read no PATH back");
+        assert!(!path.is_empty());
+        assert!(elapsed < Duration::from_secs(3), "the probe took {elapsed:?}");
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn the_login_path_is_read_between_the_sentinels() {

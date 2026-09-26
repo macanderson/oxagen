@@ -2,12 +2,19 @@
  * The app's only two ways to touch the machine: the Rust commands in
  * src-tauri/src/lib.rs (reads, the two user-scoped API calls, PATH install)
  * and the bundled `tacho` / `oxagen` sidecars for every action that changes
- * state. Nothing here keeps state of its own.
+ * state. The page starts a sidecar through the Rust shell's `run_sidecar`,
+ * which runs only the commands on its allowlist (src-tauri/src/sidecar.rs).
+ * Nothing here keeps state of its own.
  */
 import type { InstallResult, RemovalReport } from "./machine-state";
-import { invoke } from "@tauri-apps/api/core";
-import { Command } from "@tauri-apps/plugin-shell";
-import type { CliInstallReport, Harness } from "./commands";
+import { Channel, invoke } from "@tauri-apps/api/core";
+import {
+  type CliInstallReport,
+  detectArgs,
+  type Harness,
+  statusArgs,
+  verifyArgs,
+} from "./commands";
 import { parseTachoStatus, type TachoStatus } from "./tacho-status";
 
 export interface CliConfigView {
@@ -175,19 +182,16 @@ export const removeLocalData = () => invoke<RemovalReport>("remove_local_data");
 export const logTail = (lines = 120) => invoke<string>("log_tail", { lines });
 
 /**
- * What a sidecar needs in its environment on top of the app's own:
- * `TACHO_BIN_DIR` at the durable copy of the tools while the app runs from a
- * directory that is gone after this launch (a mounted .dmg, an AppImage, App
- * Translocation), so the hooks and service an enroll writes point at a binary
- * that lasts. Asked before each run, so a copy made during this launch is used
- * at once. A Rust shell that predates the command answers nothing, and the
- * sidecar then inherits the app's environment as before.
+ * Tell the Rust shell whether an action is running. While one is, closing
+ * the window or choosing Quit hides the window, and the app exits once the
+ * action ends, rather than killing `tacho` between two file writes. A shell
+ * that predates the command answers with an error, which changes nothing.
  */
-export async function sidecarEnv(): Promise<Record<string, string>> {
+export async function reportBusy(busy: boolean): Promise<void> {
   try {
-    return (await invoke<Record<string, string>>("sidecar_env")) ?? {};
+    await invoke("set_busy", { busy });
   } catch {
-    return {};
+    // An older shell: closing mid-action behaves as it always did.
   }
 }
 
@@ -264,66 +268,77 @@ export interface RunResult {
 
 export type Sidecar = "tacho" | "oxagen";
 
+/** What `run_sidecar` streams back: one line at a time, then the exit. */
+export type SidecarEvent =
+  | { event: "stdout"; data: string }
+  | { event: "stderr"; data: string }
+  | { event: "error"; data: string }
+  | { event: "terminated"; data: { code: number | null } };
+
 /**
  * Run a sidecar to completion, streaming lines to `onLine` as they arrive so
- * a six-step `enroll` reads as progress rather than a spinner.
+ * a six-step `enroll` reads as progress rather than a spinner. The Rust shell
+ * refuses any argv that is not on its allowlist and sets the environment
+ * itself (`TACHO_BIN_DIR` when the app runs from a disk image), so nothing
+ * here can widen what the sidecar is started with.
  */
 export async function runSidecar(
   name: Sidecar,
   args: string[],
   onLine?: (line: string, stream: "stdout" | "stderr") => void,
-  options: { timeoutMs?: number; env?: Record<string, string> } = {},
+  options: { timeoutMs?: number } = {},
 ): Promise<RunResult> {
-  // Extra variables only: an empty or absent `env` inherits the app's
-  // environment, and Tauri clears it only for an explicit null.
-  const env =
-    options.env !== undefined && Object.keys(options.env).length > 0
-      ? { env: options.env }
-      : undefined;
-  const command = Command.sidecar(`binaries/${name}`, args, env);
   let stdout = "";
   let stderr = "";
-  command.stdout.on("data", (line: string) => {
-    stdout += `${line}\n`;
-    onLine?.(line, "stdout");
-  });
-  command.stderr.on("data", (line: string) => {
-    stderr += `${line}\n`;
-    onLine?.(line, "stderr");
-  });
   return new Promise((resolve, reject) => {
     // A read-only probe (detect, status) gets a deadline: if the child never
-    // reports close, the UI must fail with a message rather than wait.
+    // reports its exit, the UI must fail with a message rather than wait.
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let settled = false;
     const settle =
       <T>(fn: (v: T) => void) =>
       (v: T) => {
+        if (settled) return;
+        settled = true;
         if (timer !== undefined) clearTimeout(timer);
         fn(v);
       };
     const done = settle(resolve);
     const fail = settle(reject);
-    command.on("close", (payload: { code: number | null }) =>
-      done({ code: payload.code, stdout, stderr }),
-    );
-    command.on("error", (error: unknown) =>
-      fail(error instanceof Error ? error : new Error(String(error))),
-    );
-    command
-      .spawn()
-      .then((child) => {
-        if (options.timeoutMs !== undefined) {
-          timer = setTimeout(() => {
-            void Promise.resolve(child?.kill?.()).catch(() => undefined);
-            fail(
-              new Error(
-                `${name} ${args.join(" ")} did not finish within ${Math.round(options.timeoutMs! / 1000)}s`,
-              ),
-            );
-          }, options.timeoutMs);
-        }
+    const channel = new Channel<SidecarEvent>();
+    channel.onmessage = (message) => {
+      switch (message.event) {
+        case "stdout":
+          stdout += `${message.data}\n`;
+          onLine?.(message.data, "stdout");
+          break;
+        case "stderr":
+          stderr += `${message.data}\n`;
+          onLine?.(message.data, "stderr");
+          break;
+        case "error":
+          fail(new Error(message.data));
+          break;
+        case "terminated":
+          done({ code: message.data.code, stdout, stderr });
+          break;
+      }
+    };
+    invoke<number>("run_sidecar", { sidecar: name, args, onEvent: channel })
+      .then((id) => {
+        if (options.timeoutMs === undefined || settled) return;
+        timer = setTimeout(() => {
+          void invoke("kill_sidecar", { id }).catch(() => undefined);
+          fail(
+            new Error(
+              `${name} ${args.join(" ")} did not finish within ${Math.round(options.timeoutMs! / 1000)}s`,
+            ),
+          );
+        }, options.timeoutMs);
       })
-      .catch(fail);
+      .catch((error: unknown) =>
+        fail(error instanceof Error ? error : new Error(String(error))),
+      );
   });
 }
 
@@ -338,7 +353,7 @@ export type { TachoStatus } from "./tacho-status";
  * Null is reserved for a clean run that printed nothing.
  */
 export async function tachoStatus(): Promise<TachoStatus | null> {
-  const result = await runSidecar("tacho", ["status", "--json"], undefined, {
+  const result = await runSidecar("tacho", statusArgs(), undefined, {
     timeoutMs: 20_000,
   });
   const status = parseTachoStatus(result.stdout);
@@ -359,6 +374,20 @@ export interface DetectedHarness {
   path?: string;
   version?: string;
   enrolled: boolean;
+  /**
+   * Which probe found it: `cli` for an executable on PATH, `app` for an
+   * application on disk (the Cursor editor). Absent when neither did, and on
+   * a tacho that predates the field.
+   */
+  foundVia?: "cli" | "app";
+  /**
+   * Why registering this agent covers the machine whether or not the scan
+   * found it. Cursor's hooks file governs the editor and the CLI alike, and
+   * the scan cannot see a Linux editor installed as an AppImage (ADR-141).
+   */
+  coverableWhenAbsent?: string;
+  /** Set when this platform has no build of the app (Claude Desktop on Linux). */
+  unavailableReason?: string;
 }
 export interface DetectReport {
   enrolled: boolean;
@@ -378,7 +407,7 @@ export const DETECT_TIMEOUT_MS = 150_000;
  * installed beside the error that said the scan had not worked.
  */
 export async function detectHarnesses(): Promise<DetectReport> {
-  const result = await runSidecar("tacho", ["detect", "--json"], undefined, {
+  const result = await runSidecar("tacho", detectArgs(), undefined, {
     timeoutMs: DETECT_TIMEOUT_MS,
   });
   const report = parseDetect(result.stdout);
@@ -445,11 +474,8 @@ export async function connectRun(
   harness: Harness,
   onLine?: (line: string, stream: "stdout" | "stderr") => void,
 ): Promise<ConnectResult> {
-  const result = await runSidecar(
-    "tacho",
-    ["verify", "--harness", harness, "--json"],
-    onLine,
-    { timeoutMs: CONNECT_TIMEOUT_MS },
-  );
+  const result = await runSidecar("tacho", verifyArgs(harness), onLine, {
+    timeoutMs: CONNECT_TIMEOUT_MS,
+  });
   return parseConnect(result);
 }

@@ -33,11 +33,13 @@ import { readStellaHooksFile, stellaHookPresence } from "../host/stella-writer";
 import { TEST_ENROLLMENT } from "../host/test-support";
 import type { TachoHarness } from "../wire";
 import { enroll } from "./enroll";
+import { loadOrCreateRunTokenKey, mintRunToken } from "../host/run-token";
 import {
   buildRig,
   diffTrees,
   EMPTY_DIFF,
   type KillPoint,
+  type Rig,
   RIG_DAEMON_PID,
   RIG_GATEWAY_PORT,
   RigKill,
@@ -482,6 +484,111 @@ describe("install rig: the gateway's model base URLs", () => {
     ).toBe(false);
     expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
     expect(diffTrees(before, snapshotTree(seed.home))).toEqual(EMPTY_DIFF);
+  });
+
+  // #4318 item 8: a harness brokered before a managed file appeared kept its
+  // run token after the next enroll, and every call to the managed URL was
+  // refused until the operator ran `tacho enroll --credentials passthrough`.
+  it("give the key back to a harness a managed file overrides after it was brokered, and keep the routed one brokered", async () => {
+    const seed = seedHome();
+    const settingsPath = join(seed.home, ".claude", "settings.json");
+    const own = JSON.parse(readFileSync(settingsPath, "utf8")) as {
+      env: Record<string, string>;
+    };
+    own.env["ANTHROPIC_API_KEY"] = "sk-ant-api03-FAKE-RIG-OVERRIDE-0001";
+    writeFileSync(settingsPath, `${JSON.stringify(own, null, 4)}\n`);
+    const codexKey = "sk-proj-FAKE-RIG-OVERRIDE-0002";
+    const authPath = join(seed.home, ".codex", "auth.json");
+    writeFileSync(
+      authPath,
+      `${JSON.stringify({ OPENAI_API_KEY: codexKey }, null, 2)}\n`,
+    );
+    const before = snapshotTree(seed.home);
+    // Codex's run token comes from tachod. The rig has no daemon, so this
+    // stands in for its `/credential/issue`, minting with the host's own key.
+    const rig: Rig = buildRig(seed, {
+      overrides: {
+        daemonPost: async (path, body) => {
+          if (path !== "/credential/issue") return undefined;
+          const host = readHostFile(rig.deps.paths.hostFile);
+          if (host === undefined) return undefined;
+          const { key } = loadOrCreateRunTokenKey(rig.deps.paths.runTokenKey);
+          const input = body as {
+            harness: "claude-code" | "codex";
+            placement?: "static";
+          };
+          const minted = mintRunToken({
+            key,
+            host: host.host_enrollment_id,
+            harness: input.harness,
+            provider: input.harness === "codex" ? "openai" : "anthropic",
+            placement: input.placement ?? "helper",
+            now: rig.deps.now(),
+            notAfter: Date.parse(host.expires_at),
+          });
+          return {
+            status: 200,
+            body: JSON.stringify({
+              token: minted.token,
+              token_id: minted.claims.tid,
+            }),
+          };
+        },
+      },
+    });
+    const brokered = async (harness: string) =>
+      (await status({ json: true }, rig.deps)).modelCredentials?.find(
+        (c) => c.harness === harness,
+      )?.brokered;
+
+    // Both brokered: the keys are in custody and the files hold run tokens.
+    expect(
+      (await enroll({ harnesses: ["claude-code", "codex"] }, rig.deps)).ok,
+    ).toBe(true);
+    expect(await brokered("claude-code")).toBe(true);
+    expect(await brokered("codex")).toBe(true);
+
+    // A managed file now points Claude Code at another base URL.
+    const managed = rigManagedSettings(seed.home).claude;
+    mkdirSync(dirname(managed), { recursive: true });
+    writeFileSync(
+      managed,
+      `${JSON.stringify({ env: { ANTHROPIC_BASE_URL: "https://llm.corp.example" } })}\n`,
+    );
+    const again = await enroll(
+      { harnesses: ["claude-code", "codex"] },
+      rig.deps,
+    );
+    expect(again.ok).toBe(true);
+    expect(again.warnings.join("\n")).toContain(
+      `${managed} also sets env.ANTHROPIC_BASE_URL`,
+    );
+
+    // Claude Code holds its own key again. Codex stays brokered.
+    const settings = rig.deps.readSettings() as {
+      apiKeyHelper?: string;
+      env: Record<string, string>;
+    };
+    expect(settings.apiKeyHelper).toBeUndefined();
+    expect(settings.env["ANTHROPIC_API_KEY"]).toBe(
+      "sk-ant-api03-FAKE-RIG-OVERRIDE-0001",
+    );
+    expect(await brokered("claude-code")).toBe(false);
+    expect(await brokered("codex")).toBe(true);
+    const auth = JSON.parse(readFileSync(authPath, "utf8")) as {
+      OPENAI_API_KEY?: string;
+    };
+    expect(auth.OPENAI_API_KEY).not.toBe(codexKey);
+    expect(rig.lines.join("\n")).toContain(
+      `credential given back to ${settingsPath}`,
+    );
+
+    // Unenroll gives Codex its key back too, and the home is as seeded but
+    // for the managed file this test wrote.
+    expect((await unenroll({ purge: true }, rig.deps)).ok).toBe(true);
+    expect(diffTrees(before, snapshotTree(seed.home), ["managed"])).toEqual(
+      EMPTY_DIFF,
+    );
   });
 
   it("are restored before the daemon is stopped", async () => {
