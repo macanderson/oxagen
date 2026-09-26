@@ -1022,6 +1022,39 @@ describe("shipper", () => {
       expect(t.wal.stats().unshipped).toBe(0);
     });
 
+    // The parked entry used to be dropped at the quarantine, so the session's
+    // next refused frame started a new hour's wait.
+    it("quarantines the session's next refused event past the age bound without another hour's wait", async () => {
+      const paths = scratchPaths();
+      const wal = new Wal(paths.wal);
+      const early = distinctSession("refused-twice");
+      wal.append(early);
+      const refused = new Set(
+        [early[2], early[3]].map((e) => (e as TachoEvent).event_id_idem),
+      );
+      const client = {
+        ingest: async (batch: TachoEvent[]) => {
+          if (batch.some((e) => refused.has(e.event_id_idem)))
+            throw new ControlError(
+              409,
+              '{"code":"conflict","reason":"root_session_unrecorded"}',
+            );
+          return okResponse(batch);
+        },
+      };
+      let clock =
+        Date.parse((early[3] as TachoEvent).ts) + PARKED_EVENT_MAX_AGE_MS;
+      const { s } = shipper(wal, client, paths.quarantine, () => clock);
+      await s.drain();
+      const giveUpAt = clock + PARKED_SESSION_MIN_WAIT_MS;
+      while (clock < giveUpAt) {
+        clock += 10 * 60_000;
+        await s.drain();
+      }
+      expect(quarantined(paths.quarantine)).toHaveLength(2);
+      expect(wal.stats().unshipped).toBe(0);
+    });
+
     it("keeps parking an event younger than the age bound (negative)", async () => {
       const t = refusedAtThird("root_session_unrecorded");
       let clock = Date.parse(t.refused.ts) + 60_000;

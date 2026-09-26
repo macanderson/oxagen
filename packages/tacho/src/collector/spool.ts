@@ -842,8 +842,15 @@ export class Shipper {
         ) {
           // Waited past both bounds: a refusal that has not cleared by now
           // is not going to. The event goes to quarantine with its body, and
-          // the session's later frames ship behind it.
-          this.parkedSessions.delete(session);
+          // the session's later frames ship behind it. The session keeps
+          // when it was first parked, so its next refused frame past the age
+          // bound goes to quarantine without another hour's wait. An
+          // accepted batch for the session clears the entry.
+          this.parkedSessions.set(session, {
+            until: now,
+            waitMs: previous?.waitMs ?? PARKED_SESSION_MIN_MS,
+            since,
+          });
           this.quarantine(
             head,
             `refused for ${String(Math.round(age / 3_600_000))} hours: ${error.body.slice(0, 256)}`,
