@@ -16,7 +16,7 @@
 // A reader that composed these itself would fold different frames from the
 // Run page the day one of the three changed.
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
-import { and, eq, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import {
   type RunFrame,
   spliceSubagentChains,
@@ -209,4 +209,97 @@ export async function listSubagentSessions(
     subagentSessionsQuery(tx, scope, rootSessionUuid),
   );
   return rows.map((r) => r.sessionUuid);
+}
+
+/**
+ * One subagent chain under a root session, as its `tacho.sessions` row
+ * records it: its place in the run, its length and its seal (#3823). Every
+ * reader that answers a run's chains one by one reads them here: the chain
+ * heads on `get_run`, the chain walk on `get_run_chain` and the export.
+ */
+export interface SubagentChainRow {
+  sessionUuid: string;
+  /** `tacho.sessions.id`, the key a chain's checkpoints are stored under. */
+  sessionId: string;
+  parentSessionUuid: string | null;
+  subagentId: string | null;
+  subagentType: string | null;
+  spawnToolUseId: string | null;
+  /**
+   * The chain's next free seq, as ingest stores it (`last.seq + 1`). Ingest
+   * moves it before the frame reaches ClickHouse, so it can name a frame no
+   * read returns yet.
+   */
+  seqCount: number;
+  startedAt: Date;
+  lastEventAt: Date;
+  /** The row's birth on the server's clock, which the frames' TTL counts from. */
+  createdAt: Date;
+  finalHash: string | null;
+  sealedAt: Date | null;
+  enforcementTier: string;
+  /** As stored: a jsonb list of gap kinds. */
+  completenessGaps: unknown;
+  replayGrade: string | null;
+}
+
+/**
+ * The subagent chains under a root session, fenced to the workspace, in the
+ * order they started. `sessionUuids` narrows the list to those chains, so a
+ * reader can ask whether one chain belongs to the run. `limit` caps the list;
+ * a caller that asks for one more than it shows can tell a cut list.
+ */
+export function subagentChainsQuery(
+  db: Pick<Tx, "select">,
+  scope: { orgId: string; workspaceId: string },
+  rootSessionUuid: string,
+  options: { sessionUuids?: readonly string[]; limit?: number } = {},
+) {
+  const sessions = schema.tachoSessions;
+  const query = db
+    .select({
+      sessionUuid: sessions.sessionUuid,
+      sessionId: sessions.id,
+      parentSessionUuid: sessions.parentSessionUuid,
+      subagentId: sessions.subagentId,
+      subagentType: sessions.subagentType,
+      spawnToolUseId: sessions.spawnToolUseId,
+      seqCount: sessions.seqCount,
+      startedAt: sessions.startedAt,
+      lastEventAt: sessions.lastEventAt,
+      createdAt: sessions.createdAt,
+      finalHash: sessions.finalHash,
+      sealedAt: sessions.sealedAt,
+      enforcementTier: sessions.enforcementTier,
+      completenessGaps: sessions.completenessGaps,
+      replayGrade: sessions.replayGrade,
+    })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.orgId, scope.orgId),
+        eq(sessions.workspaceId, scope.workspaceId),
+        eq(sessions.rootSessionUuid, rootSessionUuid),
+        ne(sessions.sessionUuid, rootSessionUuid),
+        options.sessionUuids === undefined
+          ? undefined
+          : inArray(sessions.sessionUuid, [...options.sessionUuids]),
+      ),
+    )
+    .orderBy(asc(sessions.startedAt), asc(sessions.id))
+    .$dynamic();
+  return options.limit === undefined ? query : query.limit(options.limit);
+}
+
+/** `subagentChainsQuery` run inside the caller's tenant scope. */
+export async function listSubagentChains(
+  scope: { orgId: string; workspaceId: string },
+  rootSessionUuid: string,
+  options: { sessionUuids?: readonly string[]; limit?: number } = {},
+): Promise<SubagentChainRow[]> {
+  if (options.sessionUuids !== undefined && options.sessionUuids.length === 0)
+    return [];
+  return withTenantDb((tx) =>
+    subagentChainsQuery(tx, scope, rootSessionUuid, options),
+  );
 }

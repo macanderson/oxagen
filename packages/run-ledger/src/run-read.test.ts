@@ -24,11 +24,13 @@ import {
 } from "./run-frames";
 import {
   type FrameRead,
+  listSubagentChains,
   listSubagentSessions,
   readRunChains,
   readTranscriptFrames,
   type RunChainReads,
   subagentChainRead,
+  subagentChainsQuery,
   subagentSessionsQuery,
   withoutLateReports,
 } from "./run-read";
@@ -322,6 +324,76 @@ describe("listSubagentSessions", () => {
 
   it("builds the same fenced query from any select seam", () => {
     const { sql } = subagentSessionsQuery(db, SCOPE, ROOT).toSQL();
+    expect(sql).toContain('from "tacho"."sessions"');
+  });
+});
+
+// #3823: every reader that answers a run's chains one by one lists them here.
+describe("listSubagentChains", () => {
+  const db = drizzle(() => Promise.resolve({ rows: [] }), { schema });
+
+  function compiling(rows: unknown[]) {
+    const compiled: Array<{ sql: string; params: unknown[] }> = [];
+    mocks.withTenantDb.mockImplementation(
+      (
+        fn: (tx: unknown) => { toSQL(): { sql: string; params: unknown[] } },
+      ) => {
+        compiled.push(fn(db).toSQL());
+        return Promise.resolve(rows);
+      },
+    );
+    return compiled;
+  }
+
+  it("lists the chains under the root in the workspace, in the order they started, with their rows", async () => {
+    const row = {
+      sessionUuid: CHILD,
+      sessionId: "0192d4a8-7c1e-7000-8000-00000000c1d0",
+      parentSessionUuid: ROOT,
+      subagentId: "agent-1",
+      subagentType: "Explore",
+      spawnToolUseId: "toolu_A",
+      seqCount: 3,
+    };
+    const compiled = compiling([row]);
+    expect(await listSubagentChains(SCOPE, ROOT)).toEqual([row]);
+    const [query] = compiled;
+    expect(query?.sql).toMatch(/"sessions"\."org_id" = \$\d+/);
+    expect(query?.sql).toMatch(/"sessions"\."workspace_id" = \$\d+/);
+    expect(query?.sql).toMatch(/"sessions"\."root_session_uuid" = \$\d+/);
+    expect(query?.sql).toMatch(/"sessions"\."session_uuid" <> \$\d+/);
+    expect(query?.sql).toMatch(
+      /order by "sessions"\."started_at" asc, "sessions"\."id" asc/,
+    );
+    // Unnarrowed and uncapped: every chain the root holds.
+    expect(query?.sql).not.toMatch(/ in \(/);
+    expect(query?.sql).not.toMatch(/ limit /);
+    expect(query?.params).toEqual([SCOPE.orgId, SCOPE.workspaceId, ROOT, ROOT]);
+  });
+
+  it("narrows to the chains asked for and caps the list", async () => {
+    const compiled = compiling([]);
+    await listSubagentChains(SCOPE, ROOT, {
+      sessionUuids: [CHILD],
+      limit: 201,
+    });
+    const [query] = compiled;
+    expect(query?.sql).toMatch(/"sessions"\."session_uuid" in \(\$\d+\)/);
+    expect(query?.sql).toMatch(/ limit \$\d+/);
+    expect(query?.params).toEqual(
+      expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId, ROOT, CHILD, 201]),
+    );
+  });
+
+  it("reads nothing for an empty list of chains (negative)", async () => {
+    expect(await listSubagentChains(SCOPE, ROOT, { sessionUuids: [] })).toEqual(
+      [],
+    );
+    expect(mocks.withTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("builds the same fenced query from any select seam", () => {
+    const { sql } = subagentChainsQuery(db, SCOPE, ROOT).toSQL();
     expect(sql).toContain('from "tacho"."sessions"');
   });
 });

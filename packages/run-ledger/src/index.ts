@@ -121,15 +121,18 @@ export {
 // run's steps: the Run page and the summary job (ADR-182).
 export {
   TRANSCRIPT_FRAME_CAP,
+  listSubagentChains,
   listSubagentSessions,
   readRunChains,
   readTranscriptFrames,
   subagentChainRead,
+  subagentChainsQuery,
   subagentSessionsQuery,
   withoutLateReports,
   type FrameRead,
   type RunChainReads,
   type SubagentChainPosition,
+  type SubagentChainRow,
   type SubagentRowRead,
 } from "./run-read";
 // The one transcript fold: steps, turns as steps grouped by turn, and every
