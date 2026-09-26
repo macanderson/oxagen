@@ -68,7 +68,10 @@
       "tokens": {
         "title": "Tokens shown",
         "notRecorded": "not recorded",
-        "noCache": "no cache figure recorded"
+        "noCache": "no cache figure recorded",
+        "servedFromCache": "{ratio} served from cache",
+        "reported": "{count, plural, one {# row counted by its agent} other {# rows counted by their agents}}",
+        "unrecorded": "{count, plural, one {# row not recorded} other {# rows not recorded}}"
       }
     },
     "approvals": {
@@ -232,7 +235,7 @@
         "more": "+{count} more",
         "unnamed": "Pull request",
         "stateUnknown": "status unknown",
-        "stateUnknownHint": "Oxagen does not record pull request status yet. Open the run to read it from GitHub.",
+        "stateUnknownHint": "No forge has reported this pull request's status to Oxagen. Open the run to read it from GitHub.",
         "state": {
           "open": "open",
           "draft": "draft",
@@ -240,7 +243,8 @@
           "closed": "closed"
         },
         "openOnGitHub": "Open {pr} on GitHub",
-        "openOnGitLab": "Open {pr} on GitLab"
+        "openOnGitLab": "Open {pr} on GitLab",
+        "stateSeen": "Status as of {when}"
       },
       "diff": {
         "none": "not recorded",
@@ -250,6 +254,16 @@
           "harness_reported": "Lines added and removed, as the harness reported at the end of the session.",
           "git_observed": "Uncommitted lines git reported at the last check. Committed work is not counted."
         }
+      },
+      "paused": "paused",
+      "pausedHint": "An operator paused this run. Open it to resume.",
+      "compacted": "compacted",
+      "compactedHint": "This run's frames were moved to its archive segment. The record is unchanged.",
+      "open": "Open",
+      "tokens": {
+        "cached": "{ratio} cached",
+        "reported": "reported",
+        "reportedHint": "The agent's own count. Oxagen has not rolled this run up yet."
       }
     },
     "pause": {
