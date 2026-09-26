@@ -251,6 +251,7 @@ describe("rollupRun", () => {
       cache_write_1h: 0n,
       output: 1500n,
       reasoning: 0n,
+      server_tool_request: 0n,
     });
     expect(sonnet.costMicros).toBe(8250n);
   });

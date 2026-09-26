@@ -113,6 +113,7 @@ export function addTokens(into: TokenCounts, from: TokenCounts): TokenCounts {
     cache_write_1h: into.cache_write_1h + from.cache_write_1h,
     output: into.output + from.output,
     reasoning: into.reasoning + from.reasoning,
+    server_tool_request: into.server_tool_request + from.server_tool_request,
   };
 }
 
@@ -182,7 +183,9 @@ export async function readDailyTotals(
     acceptedMicros: r.acceptedMicros,
     productiveRatio:
       r.productiveRatio === null ? null : Number(r.productiveRatio),
-    tokens: r.tokens as TokenCounts,
+    // A row rolled up before `server_tool_request` existed has no key for it.
+    // The rollup counted none then, so it reads as 0.
+    tokens: { ...ZERO_TOKENS, ...(r.tokens as Partial<TokenCounts>) },
   }));
 }
 

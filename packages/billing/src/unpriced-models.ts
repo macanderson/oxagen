@@ -67,6 +67,10 @@ export interface MissingClassWindow {
   /** RFC 3339 equivalents kept as `Date`: the earliest and latest unpriced call. */
   unpricedFrom: Date;
   unpricedTo: Date;
+  /** Calls in the unpriced buckets of this class. */
+  calls: number;
+  /** Tokens in the unpriced buckets, or requests for server_tool_request. */
+  units: number;
 }
 
 /** A model the book cannot fully price, and exactly which classes are missing. */
@@ -180,12 +184,16 @@ export function findUnpricedModels(args: {
           tokenClass: usage.tokenClass,
           unpricedFrom: usage.firstSeen,
           unpricedTo: usage.lastSeen,
+          calls: usage.calls,
+          units: usage.tokens,
         });
       } else {
         if (usage.firstSeen < existing.unpricedFrom)
           existing.unpricedFrom = usage.firstSeen;
         if (usage.lastSeen > existing.unpricedTo)
           existing.unpricedTo = usage.lastSeen;
+        existing.calls += usage.calls;
+        existing.units += usage.tokens;
       }
     }
     if (windowsByClass.size === 0) continue;

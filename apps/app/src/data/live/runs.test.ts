@@ -500,6 +500,7 @@ describe("runs.cost", () => {
     cache_write_1h: 0,
     output: 5,
     reasoning: 2,
+    server_tool_request: 0,
   };
 
   it("maps the rollup's snake_case token classes into the view's own spelling", async () => {
@@ -591,6 +592,7 @@ describe("runs.cost", () => {
                 cache_write_1h: cost("0"),
                 output: cost("600"),
                 reasoning: cost("200"),
+                server_tool_request: cost("0"),
               },
               cacheSaving: cost("810"),
               hasUnpriced: false,
@@ -651,6 +653,7 @@ describe("runs.cost", () => {
                 cache_write_1h: cost("0"),
                 output: cost("600"),
                 reasoning: cost("200"),
+                server_tool_request: cost("0"),
               },
               // Rolled up before the rollup recorded savings (#4069).
               cacheSaving: null,

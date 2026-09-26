@@ -42,6 +42,11 @@ const tokens = {
   output: 300,
   reasoning: 0,
 };
+/**
+ * The same counts as `get_spend` answers them. The page's view leaves out
+ * `server_tool_request`.
+ */
+const wireTokens = { ...tokens, server_tool_request: 0 };
 const priced = {
   micros: "12345678",
   currency: "USD",
@@ -69,7 +74,7 @@ describe("toSpendReport", () => {
           key: "claude-sonnet-5",
           provider: "anthropic",
           operator: null,
-          tokens,
+          tokens: wireTokens,
         },
         {
           ...figure,
@@ -78,7 +83,7 @@ describe("toSpendReport", () => {
           key: "unpriced-model",
           provider: null,
           operator: null,
-          tokens,
+          tokens: wireTokens,
         },
       ],
     });
@@ -108,14 +113,14 @@ describe("toFleetSpend", () => {
           key: "claude-sonnet-5",
           provider: "anthropic",
           operator: null,
-          tokens,
+          tokens: wireTokens,
         },
         {
           ...figure,
           key: "claude-haiku-5",
           provider: "anthropic",
           operator: null,
-          tokens: { ...tokens, input_uncached: 800, cache_read: 1200 },
+          tokens: { ...wireTokens, input_uncached: 800, cache_read: 1200 },
         },
       ],
     });
@@ -480,11 +485,15 @@ describe("toUnpricedModels", () => {
               tokenClass: "input_uncached",
               unpricedFrom: "2026-08-20T00:00:00.000Z",
               unpricedTo: "2026-09-15T00:00:00.000Z",
+              calls: 0,
+              units: 0,
             },
             {
               tokenClass: "output",
               unpricedFrom: "2026-08-20T00:00:00.000Z",
               unpricedTo: "2026-09-15T00:00:00.000Z",
+              calls: 0,
+              units: 0,
             },
           ],
           fullyUnpriced: true,

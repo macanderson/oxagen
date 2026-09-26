@@ -173,6 +173,7 @@ describe("an in-app assistant run (#4167)", () => {
                   cache_write_1h: 0,
                   output: 100,
                   reasoning: 0,
+                  server_tool_request: 0,
                 },
                 reportedCostMicros: 4500n,
                 basis: "gateway_observed",
@@ -311,6 +312,7 @@ describe("the breakdown jsonb (#4069)", () => {
     cache_write_1h: 0n,
     output: 1_500n,
     reasoning: 0n,
+    server_tool_request: 0n,
   };
   const breakdown: RunTotalsRecord["breakdown"] = {
     models: [
@@ -325,6 +327,7 @@ describe("the breakdown jsonb (#4069)", () => {
           cache_write_1h: 0,
           output: 100,
           reasoning: 0,
+          server_tool_request: 0,
         },
         costMicros: 4_800n,
         costByClass: byClass,
@@ -343,6 +346,7 @@ describe("the breakdown jsonb (#4069)", () => {
           cache_write_1h: 0,
           output: 0,
           reasoning: 0,
+          server_tool_request: 0,
         },
         costMicros: null,
         costByClass: {
@@ -380,5 +384,22 @@ describe("the breakdown jsonb (#4069)", () => {
     // Everything else the legacy row carried reads as before.
     expect(revived.models[0]!.costByClass).toEqual(byClass);
     expect(revived.models[0]!.costMicros).toBe(4_800n);
+  });
+
+  it("reads a row rolled up before server_tool_request existed as zero requests and zero cost (#3721)", () => {
+    const stored = throughJsonb(serializeBreakdown(breakdown));
+    for (const m of stored.models) {
+      delete m.tokens.server_tool_request;
+      delete m.costByClass.server_tool_request;
+    }
+    const revived = reviveBreakdown(stored);
+    expect(revived.models.map((m) => m.tokens.server_tool_request)).toEqual([
+      0, 0,
+    ]);
+    expect(
+      revived.models.map((m) => m.costByClass.server_tool_request),
+    ).toEqual([0n, 0n]);
+    // The legacy row reads back whole, as the rollup would write it now.
+    expect(revived).toEqual(breakdown);
   });
 });

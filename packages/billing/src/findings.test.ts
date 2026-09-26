@@ -75,6 +75,7 @@ function run(
             cache_write_1h: 0n,
             output: 0n,
             reasoning: 0n,
+            server_tool_request: 0n,
           },
           cacheSavingMicros: 0n,
           basis: "gateway_observed",

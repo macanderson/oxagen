@@ -304,6 +304,7 @@ describe("list_runs tokens, cache hit rate and compaction (#3834, #3835)", () =>
     cache_write_1h: 0,
     output: 900,
     reasoning: 0,
+    server_tool_request: 0,
   };
 
   it("carries the rollup's token counts and cache hit rate, or null for a run with no rollup row", () => {

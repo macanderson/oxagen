@@ -73,6 +73,11 @@ export interface ModelCallFrameRow {
   cacheWrite1h: number;
   output: number;
   reasoning: number;
+  /**
+   * Provider-side tool requests the call made (`web_search_requests`). A
+   * ledger frame has no such column, so it is 0 there.
+   */
+  serverToolRequests: number;
   /** The micro-USD the frame's own record carries; null when it carries none. */
   reportedCostMicros: string | null;
   basis: CostFrameBasis;
@@ -253,6 +258,7 @@ export async function readModelCallFrames(args: {
       cacheWrite1h: 0,
       output: Number(r.output),
       reasoning: 0,
+      serverToolRequests: 0,
       reportedCostMicros: r.cost_micros,
       basis: "gateway_observed",
     }));
@@ -347,6 +353,7 @@ export async function readModelCallFrames(args: {
     cacheWrite1h: Number(r.cache_write_1h),
     output: Number(r.output),
     reasoning: Number(r.reasoning),
+    serverToolRequests: 0,
     reportedCostMicros: r.cost_micros,
     basis: "client_attested",
   }));

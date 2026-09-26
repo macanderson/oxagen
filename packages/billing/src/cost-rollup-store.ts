@@ -49,6 +49,7 @@ import {
   type RunTotalsRecord,
   type TokenCounts,
   type ToolCallFrame,
+  ZERO_TOKENS,
 } from "./cost-rollup";
 import {
   loadPriceBookSlice,
@@ -365,6 +366,7 @@ function toFrame(row: ModelCallFrameRow): ModelCallFrame {
       cache_write_1h: row.cacheWrite1h,
       output: row.output,
       reasoning: row.reasoning,
+      server_tool_request: row.serverToolRequests,
     },
     reportedCostMicros:
       row.reportedCostMicros === null ? null : BigInt(row.reportedCostMicros),
@@ -431,7 +433,9 @@ export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
     steps: row.steps,
     modelCalls: row.modelCalls,
     toolCalls: row.toolCalls,
-    tokens: row.tokens as TokenCounts,
+    // A row rolled up before `server_tool_request` existed has no key for it.
+    // The rollup counted none then, so it reads as 0.
+    tokens: { ...ZERO_TOKENS, ...(row.tokens as Partial<TokenCounts>) },
     costMicros: row.costMicros,
     currency: row.currency,
     costBasis: row.costBasis as CostBasis | null,
@@ -446,6 +450,12 @@ export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
 }
 
 type ModelBreakdown = RunTotalsRecord["breakdown"]["models"][number];
+
+/** Every class at 0n. A stored split is revived over it. */
+const ZERO_COST_BY_CLASS = Object.fromEntries(
+  Object.keys(ZERO_TOKENS).map((c) => [c, 0n]),
+) as ModelBreakdown["costByClass"];
+
 type ModelBreakdownJson = Omit<
   ModelBreakdown,
   "costMicros" | "costByClass" | "cacheSavingMicros" | "hasUnpriced"
@@ -470,10 +480,17 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
   return {
     models: raw.models.map((m) => ({
       ...m,
+      // A row rolled up before `server_tool_request` existed has no key for
+      // it in either record. The rollup counted and priced none then, so both
+      // read as 0.
+      tokens: { ...ZERO_TOKENS, ...m.tokens },
       costMicros: m.costMicros === null ? null : BigInt(m.costMicros),
-      costByClass: Object.fromEntries(
-        Object.entries(m.costByClass).map(([k, v]) => [k, BigInt(v)]),
-      ) as ModelBreakdown["costByClass"],
+      costByClass: {
+        ...ZERO_COST_BY_CLASS,
+        ...Object.fromEntries(
+          Object.entries(m.costByClass).map(([k, v]) => [k, BigInt(v)]),
+        ),
+      } as ModelBreakdown["costByClass"],
       // A row rolled up before the saving was recorded carries no key. Its
       // saving was never priced, so it reads as not recorded, never as 0,
       // until the run's next rollup writes one.

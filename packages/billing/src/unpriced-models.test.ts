@@ -146,6 +146,8 @@ describe("findUnpricedModels", () => {
         tokenClass,
         unpricedFrom: new Date("2026-09-10T00:00:00.000Z"),
         unpricedTo: new Date("2026-09-13T00:00:00.000Z"),
+        calls: 1,
+        units: 500,
       })),
     );
   });
@@ -231,6 +233,8 @@ describe("findUnpricedModels", () => {
         tokenClass: "server_tool_request",
         unpricedFrom: new Date("2026-09-10T00:00:00.000Z"),
         unpricedTo: new Date("2026-09-13T00:00:00.000Z"),
+        calls: 2,
+        units: 7,
       },
     ]);
 
@@ -493,6 +497,9 @@ describe("findUnpricedModels", () => {
         tokenClass: "output",
         unpricedFrom: new Date("2026-09-08T00:00:00.000Z"),
         unpricedTo: new Date("2026-09-08T00:00:00.000Z"),
+        // Only the lapse bucket counts. The two priced buckets add nothing.
+        calls: 1,
+        units: 500,
       },
     ]);
     // ...but the model is not blank-cost: two of its three buckets priced.
