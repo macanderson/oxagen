@@ -88,6 +88,7 @@ const run = {
   cost: null,
   model: wireModel,
   machine,
+  harness: null,
   taskRef: null,
   name: null,
   summary: null,
@@ -760,6 +761,9 @@ describe("runs.cost", () => {
           toolCalls: 3,
           retries: 0,
           productiveRatio: 1,
+          advancedSteps: null,
+          unproductiveSteps: null,
+          unproductiveCauses: null,
           byModel: [
             {
               model: "claude-opus-5",
@@ -821,6 +825,9 @@ describe("runs.cost", () => {
           toolCalls: 3,
           retries: 0,
           productiveRatio: 1,
+          advancedSteps: null,
+          unproductiveSteps: null,
+          unproductiveCauses: null,
           byModel: [
             {
               model: "gpt-5",

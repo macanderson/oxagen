@@ -1659,7 +1659,8 @@
       "domain": "run",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],

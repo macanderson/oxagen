@@ -1,5 +1,5 @@
 import { type RunFrame, tachoFrame, wordsDigest } from "@oxagen/run-ledger";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { tachoRow } from "../run.test-support";
 import { createWordsCache, UNREADABLE } from "./transcript-words-cache";
 
@@ -103,5 +103,113 @@ describe("createWordsCache", () => {
     at = 1_000_000;
     expect(cache.get(A, frame(1))).toEqual({ stream: true, last: null });
     expect(cache.size()).toBe(1);
+  });
+});
+
+// #4334: the Run page reads `steps` and `everything` at once, and on a cold
+// cache both opened every body they shared.
+describe("WordsCache.share", () => {
+  /** A read that stays in flight until `settle` is called. */
+  function held<T>() {
+    let settle: (value: T) => void = () => undefined;
+    let refuse: (err: Error) => void = () => undefined;
+    const promise = new Promise<T>((resolve, reject) => {
+      settle = resolve;
+      refuse = reject;
+    });
+    return { promise, settle, refuse };
+  }
+
+  it("runs one read of a body while it is in flight, and hands every caller its answer", async () => {
+    const cache = createWordsCache();
+    const pending = held<string>();
+    const read = vi.fn(() => pending.promise);
+    const first = cache.share(A, frame(1), read);
+    const second = cache.share(A, frame(1), read);
+    pending.settle("opened once");
+    await expect(first).resolves.toBe("opened once");
+    await expect(second).resolves.toBe("opened once");
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads again once the shared read has settled, holding nothing from it (negative)", async () => {
+    const cache = createWordsCache();
+    const read = vi.fn(() => Promise.resolve("read"));
+    await cache.share(A, frame(1), read);
+    await cache.share(A, frame(1), read);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(cache.size()).toBe(0);
+  });
+
+  it("hands a failed read to every caller waiting on it, then lets the next caller try again", async () => {
+    const cache = createWordsCache();
+    const pending = held<string>();
+    const read = vi.fn(() => pending.promise);
+    const first = cache.share(A, frame(1), read);
+    const second = cache.share(A, frame(1), read);
+    pending.refuse(new Error("timeout"));
+    await expect(first).rejects.toThrow("timeout");
+    await expect(second).rejects.toThrow("timeout");
+    const retry = vi.fn(() => Promise.resolve("read"));
+    await expect(cache.share(A, frame(1), retry)).resolves.toBe("read");
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it("never shares one tenant's read with another tenant, or one body's with another (negative)", async () => {
+    const cache = createWordsCache();
+    const pending = held<string>();
+    const read = vi.fn(() => pending.promise);
+    const shared = [
+      cache.share(A, frame(1), read),
+      cache.share(B, frame(1), read),
+      cache.share(A, frame(2), read),
+    ];
+    pending.settle("each its own");
+    await Promise.all(shared);
+    expect(read).toHaveBeenCalledTimes(3);
+  });
+
+  // Review round 1 on #4382: a read that hung held every later reader of the
+  // body in the process for as long as it hung.
+  it("starts a read of its own rather than join one in flight for 15 seconds", async () => {
+    vi.useFakeTimers({ now: 0 });
+    try {
+      const cache = createWordsCache();
+      const stuck = held<string>();
+      const first = cache.share(A, frame(1), () => stuck.promise);
+      vi.advanceTimersByTime(14_999);
+      const join = vi.fn(() => Promise.resolve("never read"));
+      const joined = cache.share(A, frame(1), join);
+      expect(join).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      const fresh = held<string>();
+      const own = vi.fn(() => fresh.promise);
+      const late = cache.share(A, frame(1), own);
+      expect(own).toHaveBeenCalledTimes(1);
+      // The stuck read settles after the fresh one replaced it, and leaves
+      // the fresh one to be joined.
+      stuck.settle("stuck");
+      await expect(first).resolves.toBe("stuck");
+      await expect(joined).resolves.toBe("stuck");
+      const next = vi.fn(() => Promise.resolve("never read"));
+      const third = cache.share(A, frame(1), next);
+      expect(next).not.toHaveBeenCalled();
+      fresh.settle("fresh");
+      await expect(late).resolves.toBe("fresh");
+      await expect(third).resolves.toBe("fresh");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reads a frame with no kept body every time, since nothing names it (negative)", async () => {
+    const cache = createWordsCache();
+    const pending = held<string>();
+    const read = vi.fn(() => pending.promise);
+    const bare = frame(1, { bytesRef: "", contentDigest: "" });
+    const both = [cache.share(A, bare, read), cache.share(A, bare, read)];
+    pending.settle("unnamed");
+    await Promise.all(both);
+    expect(read).toHaveBeenCalledTimes(2);
   });
 });

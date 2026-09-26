@@ -2814,6 +2814,7 @@ type Messages = {
     };
     pause: {
       title: string;
+      ledgerTitle: string;
       body: string;
       run: string;
       position: string;
@@ -2829,6 +2830,9 @@ type Messages = {
       confirm: string;
       pending: string;
       cancel: string;
+      ledgerCancelWarning: string;
+      ledgerCancelConfirm: string;
+      ledgerCancelBack: string;
       queued: string;
       ledgerApplied: string;
     };
@@ -6638,6 +6642,7 @@ type Messages = {
       forkNeedsLedger: string;
       forkNoGrade: string;
       forkNeedsGrade: string;
+      forkNeedsRole: string;
       fork: {
         open: string;
         title: string;

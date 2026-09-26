@@ -3,10 +3,15 @@
 // workspace Owner or Member; `seal_run` admits the org's and the workspace
 // Owner only (ADR-169); a path answer to a repository question admits the
 // same pair `link_repository` and `create_workspace` do (#3941).
+//
+// `fork_run` holds to its handler's check (`FORK_ROLES` in
+// packages/handlers/src/run.fork.ts): an organization Owner, Admin or Member,
+// whatever the workspace role.
 import { describe, expect, it } from "vitest";
 import {
   canAnswerRepositoryQuestion,
   canCommandRun,
+  canForkRun,
   canSealRun,
 } from "./run-command-roles";
 
@@ -79,5 +84,31 @@ describe("canAnswerRepositoryQuestion", () => {
   it("refuses a role value neither membership can hold (negative)", () => {
     expect(canAnswerRepositoryQuestion("Owner", "Owner")).toBe(false);
     expect(canAnswerRepositoryQuestion("", "")).toBe(false);
+  });
+});
+
+describe("canForkRun", () => {
+  it("admits an organization Owner, Admin or Member", () => {
+    expect(canForkRun("owner")).toBe(true);
+    expect(canForkRun("admin")).toBe(true);
+    expect(canForkRun("member")).toBe(true);
+  });
+
+  it("refuses every other organization role, which is what fork_run would do (negative)", () => {
+    for (const orgRole of ["billing", "compliance", "viewer"]) {
+      expect(canForkRun(orgRole)).toBe(false);
+    }
+  });
+
+  it("refuses an organization Viewer who owns the workspace, because the handler reads no workspace role (negative)", () => {
+    // The Viewer can command the run through the workspace role, and still
+    // cannot fork it.
+    expect(canCommandRun("viewer", "owner")).toBe(true);
+    expect(canForkRun("viewer")).toBe(false);
+  });
+
+  it("refuses a role value the membership cannot hold (negative)", () => {
+    expect(canForkRun("Owner")).toBe(false);
+    expect(canForkRun("")).toBe(false);
   });
 });

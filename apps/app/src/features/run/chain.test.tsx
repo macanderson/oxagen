@@ -537,6 +537,20 @@ describe("ChainSection", () => {
     );
   });
 
+  it("draws the fork disabled for an organization Viewer on a run that could be forked, with the role as the reason (negative)", async () => {
+    // fork_run checks the organization role alone, so the Viewer's workspace
+    // role cannot let the call through, and the button says so.
+    const { container } = renderChain(readOk(runChain()), {
+      run: runRow({ source: "ledger", replayGrade: "fork" }),
+      orgRole: "viewer",
+    });
+    expect(screen.getByTestId("chain-fork")).toBeDisabled();
+    expect(screen.getByTestId("chain-fork-refused")).toHaveTextContent(
+      "Forking needs an organization Owner, Admin or Member role.",
+    );
+    await expectNoAxe(container);
+  });
+
   it("offers no bisect on a live run (negative)", () => {
     renderChain(readOk(runChain({ seals: [] })), {
       run: runRow({ status: "live", sealedAt: null }),
