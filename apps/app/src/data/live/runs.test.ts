@@ -132,6 +132,7 @@ describe("runs.list", () => {
             model: viewModel,
             harness: null,
             machine,
+            place: null,
             taskRef: null,
             name: null,
             summary: null,
