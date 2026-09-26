@@ -7,7 +7,13 @@
  */
 import { join } from "node:path";
 import { ensureDir, writeSensitiveFileAtomic } from "./fs";
-import { existsSync, readFileSync, unlinkSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  rmdirSync,
+  unlinkSync,
+} from "node:fs";
 import { randomBytes } from "node:crypto";
 import {
   isDaemonImage,
@@ -373,9 +379,20 @@ function stopByPidFile(options: ServiceManagerOptions): void {
     );
 }
 
+/**
+ * The line a unit carries when its `systemctl enable` is what creates
+ * `default.target.wants`. `disable` removes the link and leaves the directory,
+ * so an uninstall that did not remove it left an empty directory the home
+ * never had (#4317). The unit is the record because uninstall already reads
+ * it before it deletes it.
+ */
+export const CREATED_WANTS_MARK =
+  "# Tacho created default.target.wants for this unit's link.";
+
 function systemdManager(options: ServiceManagerOptions): ServiceManager {
   const dir = join(options.home, ".config", "systemd", "user");
   const unitPath = join(dir, "tachod.service");
+  const wants = join(dir, "default.target.wants");
   return {
     kind: "systemd",
     unitPath,
@@ -388,8 +405,21 @@ function systemdManager(options: ServiceManagerOptions): ServiceManager {
         throw new Error(
           `no systemd user manager is available (${probe.stderr.trim().split("\n")[0] ?? ""})`,
         );
+      // A reinstall keeps what the first install recorded: the directory
+      // exists by then because of that install's own enable.
+      const previous = existsSync(unitPath)
+        ? readFileSync(unitPath, "utf8")
+        : undefined;
+      const createsWants =
+        previous === undefined
+          ? !existsSync(wants)
+          : previous.includes(CREATED_WANTS_MARK);
       ensureDir(dir, 0o755);
-      writeSensitiveFileAtomic(unitPath, renderSystemdUnit(spec), 0o644);
+      writeSensitiveFileAtomic(
+        unitPath,
+        `${renderSystemdUnit(spec)}${createsWants ? `${CREATED_WANTS_MARK}\n` : ""}`,
+        0o644,
+      );
       const reload = options.exec("systemctl", ["--user", "daemon-reload"]);
       if (reload.status !== 0) {
         throw new Error(
@@ -458,6 +488,15 @@ function systemdManager(options: ServiceManagerOptions): ServiceManager {
       } catch (error) {
         if (unit !== undefined) writeSensitiveFileAtomic(unitPath, unit, 0o644);
         throw error;
+      }
+      // Another unit's link keeps the directory. So does a failed removal:
+      // an empty directory is not worth failing the uninstall over.
+      if (unit?.includes(CREATED_WANTS_MARK) === true) {
+        try {
+          if (readdirSync(wants).length === 0) rmdirSync(wants);
+        } catch {
+          // Already gone, or not ours to remove.
+        }
       }
     },
     status: () => {

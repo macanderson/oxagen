@@ -163,15 +163,6 @@ async function until(
   throw new Error(`${what} after ${seconds} s`);
 }
 
-/**
- * What a real service manager may leave that the fakes do not, and why:
- * `systemctl --user enable` creates `default.target.wants` for its link, and
- * `disable` removes the link but not the directory.
- */
-const REAL_ALLOW: Partial<Record<RigPlatform, string[]>> = {
-  linux: [".config/systemd/user/default.target.wants"],
-};
-
 /** Where the service manager's own record of the run goes, for the upload. */
 function record(name: string, data: unknown): void {
   const dir = process.env["TACHO_RIG_EVIDENCE"];
@@ -233,7 +224,7 @@ describe.skipIf(!REAL || platform === undefined)(
         execs: rig.execs,
         warnings: installed.warnings,
       });
-      expect(diffTrees(before, after, REAL_ALLOW[on])).toEqual(EMPTY_DIFF);
+      expect(diffTrees(before, after)).toEqual(EMPTY_DIFF);
     }, 180_000);
 
     it("uninstalls an install killed after the unit or task was written", async () => {
@@ -264,7 +255,7 @@ describe.skipIf(!REAL || platform === undefined)(
       await until(() => !serviceHeld(on), 30, "the service is still held");
       const after = snapshotTree(seed.home);
       record("killed", { killAt, before, after, execs: clean.execs });
-      expect(diffTrees(before, after, REAL_ALLOW[on])).toEqual(EMPTY_DIFF);
+      expect(diffTrees(before, after)).toEqual(EMPTY_DIFF);
     }, 180_000);
   },
 );

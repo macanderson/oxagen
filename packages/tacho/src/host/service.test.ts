@@ -1,9 +1,17 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  CREATED_WANTS_MARK,
   type Exec,
   type ExecResult,
   renderLaunchdPlist,
@@ -333,6 +341,83 @@ describe("service managers", () => {
       }).exec,
     });
     expect(() => failingEnable.install(SPEC)).toThrow(/enable failed: denied/);
+  });
+
+  // #4317: the real systemd rig found `default.target.wants` left behind.
+  // `enable` creates it for its link, and `disable` removes only the link.
+  describe("default.target.wants", () => {
+    /** A systemd whose enable and disable touch the directory as the real one does. */
+    function systemd(home: string) {
+      const dir = join(home, ".config", "systemd", "user");
+      const wants = join(dir, "default.target.wants");
+      let active = false;
+      const manager = serviceManagerFor({
+        platform: "linux",
+        home,
+        exec: (_command, args) => {
+          if (args.includes("enable")) {
+            mkdirSync(wants, { recursive: true });
+            writeFileSync(join(wants, "tachod.service"), "link");
+            active = true;
+          }
+          if (args.includes("disable")) {
+            if (existsSync(join(wants, "tachod.service")))
+              unlinkSync(join(wants, "tachod.service"));
+            active = false;
+          }
+          if (args.includes("is-active"))
+            return active
+              ? { status: 0, stdout: "active\n", stderr: "" }
+              : { status: 3, stdout: "inactive\n", stderr: "" };
+          return { status: 0, stdout: "", stderr: "" };
+        },
+      });
+      return { manager, wants };
+    }
+
+    it("goes with the unit when its enable created it", () => {
+      const { manager, wants } = systemd(
+        mkdtempSync(join(tmpdir(), "tacho-svc-")),
+      );
+      manager.install(SPEC);
+      expect(readFileSync(manager.unitPath, "utf8")).toContain(
+        CREATED_WANTS_MARK,
+      );
+      // A re-enroll finds the directory there and still owns it.
+      manager.install(SPEC);
+      expect(readFileSync(manager.unitPath, "utf8")).toContain(
+        CREATED_WANTS_MARK,
+      );
+      manager.uninstall();
+      expect(existsSync(manager.unitPath)).toBe(false);
+      expect(existsSync(wants)).toBe(false);
+    });
+
+    it("stays when the home had it, empty or holding another unit's link", () => {
+      for (const others of [[], ["other.service"]]) {
+        const { manager, wants } = systemd(
+          mkdtempSync(join(tmpdir(), "tacho-svc-")),
+        );
+        mkdirSync(wants, { recursive: true });
+        for (const name of others) writeFileSync(join(wants, name), "link");
+        manager.install(SPEC);
+        expect(readFileSync(manager.unitPath, "utf8")).not.toContain(
+          CREATED_WANTS_MARK,
+        );
+        manager.uninstall();
+        expect(readdirSync(wants)).toEqual(others);
+      }
+    });
+
+    it("stays while another unit enabled since holds a link in it", () => {
+      const { manager, wants } = systemd(
+        mkdtempSync(join(tmpdir(), "tacho-svc-")),
+      );
+      manager.install(SPEC);
+      writeFileSync(join(wants, "later.service"), "link");
+      manager.uninstall();
+      expect(readdirSync(wants)).toEqual(["later.service"]);
+    });
   });
 
   it("retains an existing unit when disable fails even if runtime state is unknown", () => {
