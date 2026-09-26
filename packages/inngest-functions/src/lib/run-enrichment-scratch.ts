@@ -12,7 +12,14 @@
 // manifest to know what to delete. A read step that runs again after a
 // failure keeps the larger of the two counts, so a first attempt that wrote
 // more chunks than the second leaves none behind.
+//
+// The manifest also records the sha256 of each chunk it names, and a read
+// checks the chunk against it. A scratch envelope names no path, and every
+// job's scratch is sealed under the same KEK, so any scratch object at a
+// chunk's key would decrypt. A chunk whose bytes do not match is a failed
+// read, like a chunk that is not there.
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
+import { digestBytes } from "@oxagen/tacho";
 import { z } from "zod";
 import {
   ENRICHMENT_CHUNK_CHARS,
@@ -36,7 +43,16 @@ export function enrichmentChunkName(index: number): string {
   return `chunk-${index}`;
 }
 
-const manifestSchema = z.object({ chunks: z.number().int().min(0) });
+const manifestSchema = z.object({
+  /** How many chunk names the job may have written, over every attempt. */
+  chunks: z.number().int().min(0),
+  /**
+   * The `digestBytes` of each chunk the latest write kept, by index. A
+   * chunk with no digest here is one no read can check, so none reads it.
+   */
+  digests: z.array(z.string()).default([]),
+});
+type Manifest = z.infer<typeof manifestSchema>;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
@@ -49,6 +65,33 @@ function isNotFound(error: unknown): boolean {
 }
 
 /**
+ * The job's manifest: null when it wrote none, and "unreadable" when its
+ * bytes do not parse as one. A storage failure other than a missing object
+ * is thrown.
+ */
+async function readManifest(
+  scope: RunScope,
+  jobRunId: string,
+): Promise<Manifest | "unreadable" | null> {
+  let bytes: Uint8Array;
+  try {
+    ({ bytes } = await evidenceStore().getScratch(
+      scope,
+      jobRunId,
+      ENRICHMENT_SCRATCH_MANIFEST,
+    ));
+  } catch (error) {
+    if (isNotFound(error)) return null;
+    throw error;
+  }
+  try {
+    return manifestSchema.parse(JSON.parse(decoder.decode(bytes)));
+  } catch {
+    return "unreadable";
+  }
+}
+
+/**
  * How many chunks the job's manifest says it may have written: 0 when it
  * wrote no manifest, and the most a job writes when the manifest is
  * unreadable. A storage failure other than a missing object is thrown, so
@@ -58,28 +101,17 @@ export async function enrichmentScratchCount(
   scope: RunScope,
   jobRunId: string,
 ): Promise<number> {
-  let bytes: Uint8Array;
-  try {
-    ({ bytes } = await evidenceStore().getScratch(
-      scope,
-      jobRunId,
-      ENRICHMENT_SCRATCH_MANIFEST,
-    ));
-  } catch (error) {
-    if (isNotFound(error)) return 0;
-    throw error;
-  }
-  try {
-    return manifestSchema.parse(JSON.parse(decoder.decode(bytes))).chunks;
-  } catch {
-    return ENRICHMENT_MAX_CHUNKS;
-  }
+  const manifest = await readManifest(scope, jobRunId);
+  if (manifest === null) return 0;
+  return manifest === "unreadable" ? ENRICHMENT_MAX_CHUNKS : manifest.chunks;
 }
 
 /**
  * Keep a job's transcript chunks for its later steps, and answer how many
  * chunks its manifest now names. The manifest is written first, so a job
- * that fails part way still names every chunk it wrote.
+ * that fails part way still names every chunk it wrote. It is written again
+ * on every attempt that keeps chunks, because a retry can keep other text
+ * under the same names, and it records each chunk's digest.
  */
 export async function keepEnrichmentChunks(
   scope: RunScope,
@@ -89,39 +121,61 @@ export async function keepEnrichmentChunks(
   const store = evidenceStore();
   const prior = await enrichmentScratchCount(scope, jobRunId);
   const named = Math.max(prior, chunks.length);
-  if (named === 0) return 0;
-  if (named !== prior) {
-    await store.putScratch({
-      scope,
-      jobRunId,
-      name: ENRICHMENT_SCRATCH_MANIFEST,
-      contentType: "application/json",
-      bytes: encoder.encode(JSON.stringify({ chunks: named })),
-    });
-  }
-  for (const [index, text] of chunks.entries()) {
+  if (chunks.length === 0) return named;
+  const bodies = chunks.map((text) => encoder.encode(text));
+  const manifest: Manifest = {
+    chunks: named,
+    digests: bodies.map((bytes) => digestBytes(bytes)),
+  };
+  await store.putScratch({
+    scope,
+    jobRunId,
+    name: ENRICHMENT_SCRATCH_MANIFEST,
+    contentType: "application/json",
+    bytes: encoder.encode(JSON.stringify(manifest)),
+  });
+  for (const [index, bytes] of bodies.entries()) {
     await store.putScratch({
       scope,
       jobRunId,
       name: enrichmentChunkName(index),
       contentType: "text/plain",
-      bytes: encoder.encode(text),
+      bytes,
     });
   }
   return named;
 }
 
-/** One chunk a job kept, as text. Throws when the chunk is gone. */
+/**
+ * One chunk a job kept, as text, once its bytes match the digest the
+ * manifest recorded for it. Throws when the chunk is gone, when the manifest
+ * records no digest for it, or when its bytes do not match. Each is a failed
+ * read: the step fails and is retried, and the job's failure handler deletes
+ * its chunks if the retries fail too.
+ */
 export async function readEnrichmentChunk(
   scope: RunScope,
   jobRunId: string,
   index: number,
 ): Promise<string> {
+  const manifest = await readManifest(scope, jobRunId);
+  const digest =
+    manifest === null || manifest === "unreadable"
+      ? undefined
+      : manifest.digests.at(index);
+  if (digest === undefined)
+    throw new Error(
+      `Enrichment chunk ${String(index)} of job ${jobRunId} has no digest in its manifest to check it against`,
+    );
   const { bytes } = await evidenceStore().getScratch(
     scope,
     jobRunId,
     enrichmentChunkName(index),
   );
+  if (digestBytes(bytes) !== digest)
+    throw new Error(
+      `Enrichment chunk ${String(index)} of job ${jobRunId} does not match the digest its manifest recorded`,
+    );
   return decoder.decode(bytes);
 }
 

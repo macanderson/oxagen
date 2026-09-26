@@ -386,7 +386,13 @@ export interface EvidenceStore extends RunBodyStore, RunArchiveStore {
     contentType: string;
     bytes: Uint8Array;
   }): Promise<void>;
-  /** The scratch object a job wrote under `name`. Throws when there is none. */
+  /**
+   * The scratch object at `name`'s key. Throws when there is none. The
+   * envelope does not name its key, and every job's scratch is sealed under
+   * the same KEK, so this decrypts any scratch object found there. A caller
+   * checks the bytes against a digest it kept when it wrote them, as the
+   * enrichment job's manifest does.
+   */
   getScratch(
     scope: EvidenceScope,
     jobRunId: string,
