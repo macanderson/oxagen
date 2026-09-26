@@ -82,7 +82,7 @@ export function createRunTurnsGetHandler(
           : [{ sessionUuid: f.sessionUuid, seq: f.firstObservedSeq }],
       ),
       // The fold's rule 3, so the query pairs unkeyed tool halves as the
-      // transcript does (#4308, ADR-190).
+      // transcript does (#4308, ADR-191).
       pairing: UNKEYED_TOOL_PAIRING,
     });
     return {

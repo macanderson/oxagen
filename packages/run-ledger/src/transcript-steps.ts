@@ -207,7 +207,7 @@ const TOOL_GATE: ReadonlySet<string> = new Set(
 );
 /**
  * Rule 3's vocabulary, for the grouped SQL behind a wrapped run's per-turn
- * ledger (`selectTachoTurnGroups`, ADR-190). That query cannot call this
+ * ledger (`selectTachoTurnGroups`, ADR-191). That query cannot call this
  * fold, so it counts an unkeyed tool call by the same rule, spelled for the
  * store: a request pairs with the receipt of its own spelling when nothing
  * but these gates sits between them on its chain. It builds that rule from

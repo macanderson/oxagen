@@ -32,7 +32,7 @@
  *   when nothing but gates sits between them, and any other request or
  *   receipt is a call of its own. The caller passes the fold's vocabulary for
  *   that rule (`UNKEYED_TOOL_PAIRING` in @oxagen/run-ledger), so the two read
- *   the same kinds (ADR-190). A later sighting of a model call is left out of
+ *   the same kinds (ADR-191). A later sighting of a model call is left out of
  *   that reading, as the fold hides it before it pairs.
  *
  * Both reads go through `chSelect`, so each is fenced to the caller's

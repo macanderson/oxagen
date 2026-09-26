@@ -1,4 +1,4 @@
-# ADR-190: A wrapped run's turn steps are counted by the fold's rules in SQL
+# ADR-191: A wrapped run's turn steps are counted by the fold's rules in SQL
 
 - **Status:** Accepted
 - **Date:** 2026-09-25

@@ -660,7 +660,7 @@ describe("tachoTurns", () => {
   });
 });
 
-// #4308, ADR-190. `selectTachoTurnGroups` counts an unkeyed tool call by the
+// #4308, ADR-191. `selectTachoTurnGroups` counts an unkeyed tool call by the
 // fold's rule 3, spelled for the store: one letter per frame of a chain in seq
 // order, then the matches of `unkeyedToolPattern`. This spells the same rule
 // here and holds it to the fold over many generated turns. The query's SQL is

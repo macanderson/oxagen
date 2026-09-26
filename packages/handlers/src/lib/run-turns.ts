@@ -12,7 +12,7 @@
 // serve that read: a wrapped run can pass 250,000 frames and the fold reads at
 // most 10,000 (#4067). So the SQL counts steps by the fold's rules, spelled
 // for the store, and reads the fold's own vocabulary for the one rule that
-// depends on frame order, rule 3 (`UNKEYED_TOOL_PAIRING`, ADR-190).
+// depends on frame order, rule 3 (`UNKEYED_TOOL_PAIRING`, ADR-191).
 // `framesTurns` over a wrapped run's spliced frames is the reference the
 // ClickHouse path is tested against (`run.turns.get.integration.test.ts`),
 // including the unkeyed tool calls whose halves are not adjacent (#4308).

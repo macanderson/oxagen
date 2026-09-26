@@ -4,7 +4,7 @@
 // proxy's late-report rule applied), with steps counted by the transcript's
 // own step fold (`framesTurns`, ADR-182). The SQL counts steps by the fold's
 // rules spelled for the store, reading the fold's rule 3 vocabulary
-// (ADR-190), so this is what keeps the two answering alike. A mocked client
+// (ADR-191), so this is what keeps the two answering alike. A mocked client
 // accepts any SQL, so only a live server can tell a query that counts right
 // from one that does not.
 //
