@@ -42,6 +42,7 @@ The token is the credential: the call carries no session and no API key, so the 
 | `conflict` | `token_used` | the token was presented before, including by a concurrent presentation that won the row lock (counted on the row) |
 | `conflict` | `token_expired` | past `expiresAt` (counted on the row) |
 | `conflict` | `agent_retired` | the token's agent was deleted or retired after the token was issued. The transaction rolls back and leaves the token unused |
+| `forbidden` | `agent_managed_read_only` | the token names the built-in assistant stella acts as, which runs on no host (#4350). The transaction rolls back and leaves the token unused |
 | `conflict` | `agent_has_host` | a live host is already enrolled as that agent key; a revoked host gives its key up, so revoke it and present a new token |
 
 ## Honesty

@@ -15,6 +15,10 @@ import {
   type AgentCredentialScope,
 } from "@oxagen/oxagen/agent-credential";
 import {
+  isManagedAgentType,
+  MANAGED_AGENT_READONLY_CODE,
+} from "@oxagen/oxagen/interactive-agent";
+import {
   resolveAgentIdentity,
   type AgentIdentityRow,
 } from "@oxagen/agent/handlers/_agent-identity";
@@ -50,6 +54,28 @@ export function assertNotRetired(
       code: "conflict",
       reason: "agent_retired",
       message: `Agent "${row.slug}" is retired`,
+    });
+  }
+}
+
+/**
+ * The workspace's built-in assistant (`qa-chat`) is Oxagen's, and stella acts
+ * as it on every turn. Retiring or suspending it suspends the
+ * `oxagen.assistant` principal, which the run ceiling then refuses, so stella
+ * stops answering in the workspace (#4350). A credential or a host for it
+ * would let something outside Oxagen act as that principal. So every identity
+ * write refuses it, the way the definition writes refuse it through
+ * `assertAgentMutable`. The kill switch on the agent is the way to stop
+ * stella, and the assistant turn honors it.
+ */
+export function assertNotManaged(
+  row: Pick<AgentIdentityRow, "slug" | "agentType">,
+): void {
+  if (isManagedAgentType(row.agentType)) {
+    throw new HandlerError({
+      code: "forbidden",
+      reason: MANAGED_AGENT_READONLY_CODE,
+      message: `Agent "${row.slug}" is managed by Oxagen and cannot be changed. Use the kill switch to stop it.`,
     });
   }
 }

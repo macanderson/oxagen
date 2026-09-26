@@ -147,6 +147,8 @@ type Messages = {
         wrappedOnly: string;
         spendBasis: string;
         deregistered: string;
+        managed: string;
+        managedTitle: string;
       };
       health: {
         tamper: string;
@@ -273,6 +275,8 @@ type Messages = {
         label: string;
         eyebrow: string;
         tierNotRecorded: string;
+        managed: string;
+        managedTitle: string;
         fromRun: string;
         replay: string;
         replayNotRecorded: string;

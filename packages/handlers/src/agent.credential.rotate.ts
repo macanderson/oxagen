@@ -2,7 +2,8 @@
 // (MC spec §6.2, #2956). Role gate: org Owner or Admin (INV-29), for the
 // signed-in user or the creator of the API key (resolveActingUserId). The old
 // keys are soft-deleted and the new one minted in one transaction; a
-// retired agent is refused with `conflict`.
+// retired agent is refused with `conflict`, and the built-in assistant with
+// `forbidden`, since a credential for it would act as stella's principal.
 import { withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
@@ -10,6 +11,7 @@ import type { CapabilityHandler } from "@oxagen/oxagen";
 import { agentCredentialRotate } from "@oxagen/oxagen/contracts/agent.credential.rotate";
 import { AGENT_IDENTITY_ROLES } from "./agent.register";
 import {
+  assertNotManaged,
   assertNotRetired,
   mintAgentCredential,
   requireAgentIdentity,
@@ -32,6 +34,7 @@ export const agentCredentialRotateHandler: CapabilityHandler<
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
   const result = await withTenantDb(async (tx) => {
     const agent = await requireAgentIdentity(tx, input.agentId, scope);
+    assertNotManaged(agent);
     assertNotRetired(agent);
     const revoked = await revokeAgentCredentials(tx, {
       ...scope,

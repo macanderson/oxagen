@@ -36,6 +36,7 @@ A retired agent is a deleted record. The read leaves it out of `items` unless `i
 | `items[].description` | `string \| null` | What the agent is for, from `agent.agents.description`. |
 | `items[].agentKey` | `string \| null` | `org_ns.ws_ns.slug` (ADR-024); null until the namespaces are backfilled. |
 | `items[].harness` | `"stella" \| "claude-code" \| "codex" \| "cursor" \| "claude-agent-sdk" \| "custom"` | |
+| `items[].managed` | `boolean` | True for the built-in assistant stella acts as (`qa-chat`). Oxagen manages it, so no identity or definition write accepts it, and its kill switch is how a person stops it (#4350). |
 | `items[].principalId` | `string \| null` | `prn_…`; null on a row that predates Agent RBAC. |
 | `items[].operatorId` | `string \| null` | `usr_…` of the person the agent acts for. |
 | `items[].operatorName` | `string \| null` | That person's display name (`auth.users.display_name`); null when there is no operator or they set none. |
