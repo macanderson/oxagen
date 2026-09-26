@@ -85,9 +85,7 @@ export function createRunTurnsGetHandler(
     });
     return {
       runId: input.runId,
-      // Placeholder until the Context and cost lane answers the turn each
-      // subagent chain counts toward (#4001, `placeChains`).
-      chains: [],
+      // The turns, and the turn each subagent chain counts toward (#4001).
       ...tachoTurns({
         rootSessionUuid: run.sessionUuid,
         starts: kept,

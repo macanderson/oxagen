@@ -308,6 +308,8 @@
         "perTurn": "<cost></cost> per turn",
         "dearest": "turn {turn} was the dearest",
         "median": "this agent's median run is not recorded",
+        "medianDelta": "<delta></delta> vs this agent's median run <median></median>",
+        "medianOnly": "this agent's median run is <median></median>",
         "provisional": "agent reported, provisional",
         "provisionalModel": "<model></model> <cost></cost> over {calls, plural, one {# call} other {# calls}}",
         "provisionalModelUnpriced": "<model></model> over {calls, plural, one {# call} other {# calls}}, cost not reported",
@@ -382,9 +384,20 @@
         "ratio": "Productive ratio",
         "advancedTask": "steps that advanced the task",
         "thirtyDay": "this agent's 30-day ratio is not recorded",
+        "thirtyDayDelta": "<delta></delta> vs 30-day <ratio></ratio>",
+        "thirtyDayOnly": "this agent's 30-day ratio is <ratio></ratio>",
+        "points": "{sign}{count, plural, one {# pt} other {# pts}}",
         "ratioChart": "Steps that advanced the task",
         "advanced": "advanced",
         "didNot": "did not",
+        "stepCount": "{count, plural, one {# step} other {# steps}}",
+        "unproductive": "<n></n> {count, plural, one {step} other {steps}} did not advance the task: {causes}.",
+        "causes": {
+          "failed": "{count} failed",
+          "repeated": "{count} repeated an earlier call",
+          "retried": "{count} retried"
+        },
+        "allAdvanced": "Every step the rollup graded advanced the task.",
         "retries": "The rollup recorded <n></n> {count, plural, one {retry} other {retries}}."
       },
       "families": {
@@ -416,13 +429,16 @@
         },
         "outputTitle": "{reasoning} of it reasoning",
         "tok": "{count} tok",
-        "dearest": "Dearest tools",
+        "dearest": "Most expensive tools",
         "calls": "{count, plural, one {# call} other {# calls}}",
         "byCalls": "What each tool cost is not recorded, so the tools are listed by calls.",
+        "byCost": "Each tool's cost is an estimate: its result tokens at the run's input rate. It is part of the run's cost, not added to it.",
+        "resultsTitle": "The tools' result tokens at the run's input rate, an estimate inside the run's cost",
         "noTools": "This run called no tool.",
         "toolsNotRead": "The transcript was not read, so the tools are not listed.",
         "unnamedTool": "A tool the record did not name",
         "note": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>, and how a request splits between them is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
+        "noteWithResults": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>. Tool calls is the tools' result tokens at the run's input rate, an estimate. How the rest of a request splits between the other five is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
         "noteNotRolledUp": "The rollup has not counted this run's tokens yet, so no area is priced."
       },
       "calls": {
@@ -500,7 +516,8 @@
           "estimated": "estimated where nothing counted it"
         },
         "productive": "Productive ratio",
-        "productiveValue": "{ratio} of steps advanced the task"
+        "productiveValue": "{ratio} of steps advanced the task",
+        "productiveSteps": "{advanced} of {total} {steps, plural, one {step} other {steps}} advanced the task"
       }
     },
     "commands": {
@@ -809,8 +826,12 @@
       "total": "total",
       "turnCost": "turn cost",
       "soFar": "cost so far",
-      "caption": "Bar height is the turn's cost on the left scale. The dashed line is cost accumulating to {total}. Finding pins are not recorded yet.",
-      "captionCut": "Bar height is the turn's cost on the left scale. The dashed line is cost accumulating to {total} over the first {count, plural, one {# turn} other {# turns}}, not the whole run. Finding pins are not recorded yet.",
+      "caption": "Bar height is the turn's cost on the left scale. The dashed line is cost accumulating to {total}. A diamond marks a turn an open finding cites.",
+      "captionCut": "Bar height is the turn's cost on the left scale. The dashed line is cost accumulating to {total} over the first {count, plural, one {# turn} other {# turns}}, not the whole run. A diamond marks a turn an open finding cites.",
+      "finding": "finding",
+      "findingsSection": "Findings",
+      "pinTitle": "{finding}: {saving} to save. Open its evidence.",
+      "pinChartTitle": "Turn {turn}: {findings}",
       "totalCut": "first {count, plural, one {# turn} other {# turns}}",
       "partial": "partial",
       "tableLabel": "Cost by turn",

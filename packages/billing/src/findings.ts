@@ -26,10 +26,17 @@ import type {
   FindingKind,
   FindingLevel,
 } from "@oxagen/database/schema";
-import { divideHalfEven, foldBasis, type RunTotalsRecord } from "./cost-rollup";
+import { FINDING_FRAMES_PER_RUN } from "@oxagen/oxagen/contracts/finding.shared";
+import {
+  foldBasis,
+  priceInputTokens,
+  runInputPrice,
+  type RunTotalsRecord,
+} from "./cost-rollup";
+import { RepeatedCalls, repeatKindOf, SHELL_TOOL } from "./step-grade";
 
 /** The most cited frames a finding stores per run; the contract's own cap (#4001). */
-export { FINDING_FRAMES_PER_RUN } from "@oxagen/oxagen/contracts/finding.shared";
+export { FINDING_FRAMES_PER_RUN };
 
 /** The trailing window one pass reads. */
 export const FINDINGS_WINDOW_DAYS = 30;
@@ -48,8 +55,6 @@ export const FINDINGS_PER_KIND = 10;
 /** Runs itemised in a finding's evidence, largest saving first. */
 export const EVIDENCE_RUNS = 10;
 
-const SHELL_TOOL = "Bash";
-
 /** One tool call of a wrapped run, as the hook recorded it. */
 export interface ToolCallObservation {
   /** The run's public id (`tse_…`). */
@@ -66,10 +71,10 @@ export interface ToolCallObservation {
   resultTokens: number | null;
   /**
    * The subagent chain the call was recorded on; null when it is on the run's
-   * own chain (#4001). Optional until the Context and cost lane's reader
-   * fills it; absent reads as null.
+   * own chain (#4001). `seq` is a position on this chain, so a cited frame
+   * names the two together.
    */
-  sessionUuid?: string | null;
+  sessionUuid: string | null;
 }
 
 /** One cited call, by its frame: `sessionUuid` is absent on the run's own chain. */
@@ -145,26 +150,11 @@ export function findingFingerprint(
   return `${kind}|${level}|${subject}`;
 }
 
-/** What a run paid for one input token, as a ratio; null when nothing priced its input. */
-export function runInputPrice(
-  run: RunTotalsRecord,
-): { micros: bigint; tokens: bigint } | null {
-  if (run.costBasis === null || run.costBasis === "estimated") return null;
-  let micros = 0n;
-  let tokens = 0n;
-  for (const m of run.breakdown.models) {
-    micros += m.costByClass.input_uncached;
-    tokens += BigInt(m.tokens.input_uncached);
-  }
-  if (tokens === 0n || micros === 0n) return null;
-  return { micros, tokens };
-}
-
-function priceTokens(
-  price: { micros: bigint; tokens: bigint },
-  tokens: number,
-): bigint {
-  return divideHalfEven(BigInt(tokens) * price.micros, price.tokens);
+/** A call's frame: its position on the chain it was recorded on. */
+interface CallFrame {
+  seq: number;
+  /** Null on the run's own chain. */
+  sessionUuid: string | null;
 }
 
 interface RunAcc {
@@ -174,6 +164,8 @@ interface RunAcc {
   counterfactualTokens: number;
   measuredMicros: bigint;
   counterfactualMicros: bigint;
+  /** The frames of the calls cited in this run; empty for a finding that cites whole runs. */
+  frames: CallFrame[];
 }
 
 interface Group {
@@ -210,6 +202,8 @@ class Groups {
     windowStart: Date,
     run: RunTotalsRecord,
     measure: Measure,
+    /** The cited call's frame; null when the finding cites the run as a whole. */
+    frame: CallFrame | null,
   ): void {
     const fingerprint = findingFingerprint(key.kind, key.level, key.subject);
     let group = this.groups.get(fingerprint);
@@ -239,11 +233,15 @@ class Groups {
         counterfactualTokens: 0,
         measuredMicros: 0n,
         counterfactualMicros: 0n,
+        frames: [],
       };
       group.runs.set(run.runId, acc);
     }
     group.calls += 1;
     acc.calls += 1;
+    // Every cited call is pinned, covered or not: the Run page draws the
+    // call the finding names, whatever the counterfactual could price.
+    if (frame !== null) acc.frames.push(frame);
     if (measure.micros === null || run.costBasis === null) return;
     group.covered += 1;
     group.basis = foldBasis(group.basis, run.costBasis);
@@ -294,14 +292,21 @@ function detectCacheWritesNeverRead(input: DetectInput, groups: Groups): void {
     for (const m of run.breakdown.models)
       measured += m.costByClass.cache_write_5m + m.costByClass.cache_write_1h;
     const price = runInputPrice(run);
-    groups.add(key, input.window.start, run, {
-      measuredTokens: wrote,
-      counterfactualTokens: wrote,
-      micros:
-        price === null || measured === 0n
-          ? null
-          : { measured, counterfactual: priceTokens(price, wrote) },
-    });
+    groups.add(
+      key,
+      input.window.start,
+      run,
+      {
+        measuredTokens: wrote,
+        counterfactualTokens: wrote,
+        micros:
+          price === null || measured === 0n
+            ? null
+            : { measured, counterfactual: priceInputTokens(price, wrote) },
+      },
+      // The finding is about the run's cache use as a whole, not a call.
+      null,
+    );
   }
 }
 
@@ -321,8 +326,8 @@ function resultMeasure(
       price === null
         ? null
         : {
-            measured: priceTokens(price, resultTokens),
-            counterfactual: priceTokens(price, counterfactual),
+            measured: priceInputTokens(price, resultTokens),
+            counterfactual: priceInputTokens(price, counterfactual),
           },
   };
 }
@@ -331,6 +336,10 @@ function resultMeasure(
  * The tool-call detectors, over every call in time order. A call is claimed
  * by the first of: a repeat inside its run (same tool, input digest and
  * output digest as an earlier call of the run) or an unpaged result.
+ *
+ * What counts as a repeat is the rollup's rule too (./step-grade.ts,
+ * ADR-192): a call this job files as a repeated shell command or a duplicate
+ * read is a step the run's productive ratio counts as not advancing it.
  */
 function detectToolCalls(
   input: DetectInput,
@@ -349,25 +358,30 @@ function detectToolCalls(
             : 1
           : a.seq - b.seq,
     );
-  const seenInRun = new Map<string, Set<string>>();
+  const seen = new RepeatedCalls();
   const windowStart = input.toolWindowStart;
 
   for (const call of calls) {
     const run = runs.get(call.runId)!;
-    const runKey = `${call.runId}\u0000${call.tool}\u0000${call.inputDigest}`;
-    const seen = seenInRun.get(runKey);
-    const hasOutput = call.outputDigest !== "";
+    const frame = { seq: call.seq, sessionUuid: call.sessionUuid };
+    const repeated = seen.repeats(
+      call.runId,
+      call.tool,
+      call.inputDigest,
+      call.outputDigest,
+    );
 
     let claimed = false;
-    if (hasOutput && seen?.has(call.outputDigest)) {
+    if (repeated) {
+      const repeat = repeatKindOf(call);
       const key =
-        call.tool === SHELL_TOOL
+        repeat === "shell"
           ? {
               kind: "repeated_shell_commands" as const,
               level: "tool" as const,
               subject: SHELL_TOOL,
             }
-          : call.isMutating === false && run.agentKey !== null
+          : repeat === "read" && run.agentKey !== null
             ? {
                 kind: "duplicate_tool_calls" as const,
                 level: "agent" as const,
@@ -387,6 +401,7 @@ function detectToolCalls(
             windowStart,
             run,
             resultMeasure(run, call.resultTokens, () => 0),
+            frame,
           );
       }
     }
@@ -409,12 +424,8 @@ function detectToolCalls(
           windowStart,
           run,
           resultMeasure(run, call.resultTokens, () => PAGE_TOKENS),
+          frame,
         );
-    }
-
-    if (hasOutput) {
-      if (seen) seen.add(call.outputDigest);
-      else seenInRun.set(runKey, new Set([call.outputDigest]));
     }
   }
 }
@@ -456,6 +467,36 @@ function prose(
 }
 
 // ── Assembly ──────────────────────────────────────────────────────────────────
+
+/**
+ * One run's cited frames as stored: seqs ascending (a subagent chain's after
+ * the run's own at the same seq), at most FINDING_FRAMES_PER_RUN, with the
+ * total counting every cited call.
+ */
+function citedFrames(frames: readonly CallFrame[]): {
+  seqs: FindingCitedFrame[];
+  total: number;
+} {
+  const ordered = [...frames].sort((a, b) =>
+    a.seq !== b.seq
+      ? a.seq - b.seq
+      : (a.sessionUuid ?? "") < (b.sessionUuid ?? "")
+        ? -1
+        : (a.sessionUuid ?? "") > (b.sessionUuid ?? "")
+          ? 1
+          : 0,
+  );
+  return {
+    seqs: ordered
+      .slice(0, FINDING_FRAMES_PER_RUN)
+      .map((f) =>
+        f.sessionUuid === null
+          ? { seq: String(f.seq) }
+          : { seq: String(f.seq), sessionUuid: f.sessionUuid },
+      ),
+    total: frames.length,
+  };
+}
 
 function toDraft(group: Group, windowEnd: Date): FindingDraft | null {
   if (group.calls === 0 || group.basis === null) return null;
@@ -504,6 +545,12 @@ function toDraft(group: Group, windowEnd: Date): FindingDraft | null {
       counterfactualMicros: a.counterfactualMicros.toString(),
     })),
   };
+  // A finding over whole runs pins no frame; the tool-call detectors cite one
+  // per call, in every run they cite, not only the ten itemised above.
+  if (group.kind !== "cache_writes_never_read")
+    evidence.frames = Object.fromEntries(
+      accs.map((a) => [a.run.runId, citedFrames(a.frames)]),
+    );
   return {
     kind: group.kind,
     level: group.level,

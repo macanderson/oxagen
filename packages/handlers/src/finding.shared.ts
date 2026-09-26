@@ -12,14 +12,18 @@ import { schema, withTenantDb } from "@oxagen/database";
 import type {
   Finding,
   FindingEvidence,
+  FindingRunCitation,
 } from "@oxagen/oxagen/contracts/finding.shared";
 import { FINDINGS_LIST_MAX } from "@oxagen/oxagen/contracts/finding.list";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
-import { and, desc, eq } from "drizzle-orm";
+import { and, arrayContains, desc, eq } from "drizzle-orm";
 
 export type FindingScope = { orgId: string; workspaceId: string };
 export type FindingRow = typeof schema.findings.$inferSelect;
 export type FindingStatus = Finding["status"];
+
+/** Which findings a list reads: one status, and optionally only those citing one run. */
+export type FindingFilter = { status: FindingStatus; runId?: string };
 
 const findings = schema.findings;
 
@@ -85,10 +89,44 @@ export function operatorKeysOf(row: FindingRow): readonly string[] {
   return (row.citedFrames as StoredEvidence).operatorKeys;
 }
 
-/** A workspace's findings in one status: open by saving, decided by most recent decision. */
+/**
+ * What a finding cites in one run (#4001). A finding about a run's cache use
+ * cites the run as a whole and pins no turn. A tool-call finding answers the
+ * frames the findings job stored for the run, or null frames on a row written
+ * before frames were stored; its total then falls back to the run's cited
+ * calls, which the evidence always carried.
+ */
+export function citationOf(row: FindingRow, runId: string): FindingRunCitation {
+  if (row.kind === "cache_writes_never_read")
+    return { runId, runLevel: true, frames: [], framesTotal: 0 };
+  const evidence = row.citedFrames as StoredEvidence;
+  const cited = evidence.frames?.[runId];
+  if (cited === undefined)
+    return {
+      runId,
+      runLevel: false,
+      frames: null,
+      framesTotal: evidence.runs.find((r) => r.runId === runId)?.calls ?? 0,
+    };
+  return {
+    runId,
+    runLevel: false,
+    frames: cited.seqs.map((f) =>
+      f.sessionUuid === undefined
+        ? { seq: f.seq }
+        : { seq: f.seq, sessionUuid: f.sessionUuid },
+    ),
+    framesTotal: cited.total,
+  };
+}
+
+/**
+ * A workspace's findings in one status: open by saving, decided by most
+ * recent decision. With a run, only the findings whose cited runs hold it.
+ */
 export async function readFindingRows(
   scope: FindingScope,
-  status: FindingStatus,
+  filter: FindingFilter,
 ): Promise<FindingRow[]> {
   return withTenantDb((tx) =>
     tx
@@ -98,11 +136,14 @@ export async function readFindingRows(
         and(
           eq(findings.orgId, scope.orgId),
           eq(findings.workspaceId, scope.workspaceId),
-          eq(findings.status, status),
+          eq(findings.status, filter.status),
+          filter.runId === undefined
+            ? undefined
+            : arrayContains(findings.citedRuns, [filter.runId]),
         ),
       )
       .orderBy(
-        status === "open"
+        filter.status === "open"
           ? desc(findings.estimatedSavingMicros)
           : desc(findings.decidedAt),
       )

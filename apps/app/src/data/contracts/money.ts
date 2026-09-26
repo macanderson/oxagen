@@ -107,6 +107,28 @@ export function sumMoney(values: readonly Money[]): Money | null {
 }
 
 /**
+ * How far `a` is from `b`: the sign of `a - b` and the size of the gap, exact
+ * at any magnitude, or null when the two carry different currencies. A run's
+ * cost set against its agent's median prints the sign and the gap apart
+ * ("+$1.24"), so a negative amount never reaches the formatter.
+ */
+export function differenceOfMicros(
+  a: Money,
+  b: Money,
+): { sign: -1 | 0 | 1; gap: Money } | null {
+  if (a.currency !== b.currency) return null;
+  const diff = toBigInt(a.micros) - toBigInt(b.micros);
+  const zero = BigInt(0);
+  return {
+    sign: diff > zero ? 1 : diff < zero ? -1 : 0,
+    gap: {
+      micros: (diff < zero ? -diff : diff).toString(),
+      currency: a.currency,
+    },
+  };
+}
+
+/**
  * `value` divided by a whole `count` (spend per call, per run, per day),
  * truncated toward zero at the micro, or null when there is nothing to divide
  * by. The division is BigInt, so the average stays exact at any magnitude.

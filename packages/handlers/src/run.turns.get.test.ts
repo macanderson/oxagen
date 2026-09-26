@@ -150,6 +150,33 @@ describe("get_run_turns on a wrapped run", () => {
     expect(out.turns[1]?.cumulativeCost?.micros).toBe("250");
   });
 
+  it("answers the turn a subagent chain was spawned in (#4001)", async () => {
+    const h = harness({
+      children: [CHILD],
+      facts: [facts(), facts({ sessionUuid: CHILD, turnStarts: [0] })],
+      groups: [
+        group(),
+        group({
+          turnKey: 40,
+          firstSeq: 40,
+          firstAt: "2026-09-11 09:05:00.000",
+          spawns: [{ seq: 41, toolUseId: "tu_task", subagentId: null }],
+        }),
+        group({
+          sessionUuid: CHILD,
+          turnKey: null,
+          firstSeq: 0,
+          firstAt: "2026-09-11 09:05:02.000",
+          parentSessionUuid: ROOT,
+          spawnToolUseId: "tu_task",
+        }),
+      ],
+    });
+    const out = await h.turns(input(TACHO_ID), ctx());
+    expect(out.chains).toEqual([{ sessionUuid: CHILD, turn: 2 }]);
+    expect(runTurnsGet.output.parse(out)).toEqual(out);
+  });
+
   it("names each chain the proxy observed, and from which frame", async () => {
     const h = harness({
       children: [CHILD],
@@ -264,6 +291,8 @@ describe("get_run_turns on a ledger run", () => {
     expect(out).toMatchObject({
       runId: LEDGER_ID,
       complete: true,
+      // A ledger run records no subagent chains.
+      chains: [],
       turns: [
         {
           turn: 1,

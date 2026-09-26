@@ -6,6 +6,7 @@ import type {
   RunChain,
   RunCost,
   RunDetail,
+  RunFindings,
   RunFrame,
   RunFrameBody,
   RunOutputNode,
@@ -25,7 +26,7 @@ import type {
 import type { MandateList } from "@/data/contracts/mandates";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
-import type { PriceBook } from "@/data/contracts/spend";
+import type { PriceBook, SpendFindingEvidence } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
 import { frameFolds, tachoFrame } from "@oxagen/run-ledger";
 import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
@@ -803,6 +804,16 @@ type RunReads = {
    */
   turns?: Read<RunTurns>;
   /**
+   * `list_findings` for the run, only read when the Cost tab is open (#4001).
+   * A test that says nothing about it gets a run no finding cites.
+   */
+  findings?: Read<RunFindings>;
+  /**
+   * `get_finding_evidence`, only read when the Cost tab opens a finding's
+   * evidence (`?finding=`); refused when absent.
+   */
+  findingEvidence?: Read<SpendFindingEvidence>;
+  /**
    * Read with the page for the Governed actions count, and drawn on that
    * tab. A test that says nothing about them gets an empty queue.
    */
@@ -846,6 +857,8 @@ export function runSource(reads: RunReads) {
     resolvedApprovals: unknown[][];
     chain: unknown[][];
     turns: unknown[][];
+    findings: unknown[][];
+    findingEvidence: unknown[][];
     mandates: unknown[][];
     outputs: unknown[][];
     agent: unknown[][];
@@ -860,6 +873,8 @@ export function runSource(reads: RunReads) {
     resolvedApprovals: [],
     chain: [],
     turns: [],
+    findings: [],
+    findingEvidence: [],
     mandates: [],
     outputs: [],
     agent: [],
@@ -931,7 +946,7 @@ export function runSource(reads: RunReads) {
       // No Run tab reads these yet; the Repository and issues lane and the
       // Context and cost lane add their reads (#3970, #4001).
       issues: refuse,
-      findings: refuse,
+      findings: answer("findings", reads.findings ?? readOk({ findings: [] })),
       turns: answer("turns", reads.turns ?? readOk(runTurns())),
       outputs: (...args: unknown[]) => {
         calls.outputs.push(args);
@@ -973,7 +988,7 @@ export function runSource(reads: RunReads) {
       gatewayPolicy: refuse,
       budgets: refuse,
       findings: refuse,
-      findingEvidence: refuse,
+      findingEvidence: answer("findingEvidence", reads.findingEvidence),
       priceBook: (...args: unknown[]) => {
         calls.priceBook.push(args);
         return reads.priceBook === undefined

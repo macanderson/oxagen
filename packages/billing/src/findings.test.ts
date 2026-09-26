@@ -1,16 +1,23 @@
 import { FINDING_KINDS } from "@oxagen/database/schema";
 import { FINDINGS_LIST_MAX } from "@oxagen/oxagen/contracts/finding.list";
-import { findingEvidenceSchema } from "@oxagen/oxagen/contracts/finding.shared";
+import {
+  findingEvidenceSchema,
+  findingRunCitationSchema,
+} from "@oxagen/oxagen/contracts/finding.shared";
 import { describe, expect, it } from "vitest";
-import { ZERO_TOKENS, type RunTotalsRecord } from "./cost-rollup";
+import {
+  runInputPrice,
+  ZERO_TOKENS,
+  type RunTotalsRecord,
+} from "./cost-rollup";
 import {
   detectFindings,
   EVIDENCE_RUNS,
+  FINDING_FRAMES_PER_RUN,
   FINDINGS_PER_KIND,
   findingFingerprint,
   MIN_SAVING_MICROS,
   PAGE_TOKENS,
-  runInputPrice,
   UNPAGED_RESULT_TOKENS,
   type DetectInput,
   type ToolCallObservation,
@@ -82,10 +89,13 @@ function run(
         },
       ],
       tools: [],
+      steps: null,
     },
     verdict: null,
     accepted: null,
     productiveRatio: null,
+    advancedSteps: null,
+    unproductiveSteps: null,
     ...rest,
   };
 }
@@ -102,6 +112,7 @@ function call(
     outputDigest: "out-1",
     isMutating: false,
     resultTokens: 5_000,
+    sessionUuid: null,
     ...over,
     at: new Date(r.startedAt.getTime() + over.at * 1_000),
   };
@@ -406,6 +417,114 @@ describe("detectFindings", () => {
     expect(findings[1]!.windowStart).toEqual(toolWindowStart);
     expect(findings[1]!.citedRuns).toHaveLength(12);
     expect(findings[1]!.evidence.runs).toHaveLength(10);
+  });
+});
+
+describe("the frames a finding cites (#4001)", () => {
+  const SUBAGENT = "00000000-0000-4000-8000-0000000000bb";
+  const bash = (r: RunTotalsRecord, at: number, sessionUuid?: string) =>
+    call(r, {
+      at,
+      tool: "Bash",
+      isMutating: true,
+      sessionUuid: sessionUuid ?? null,
+    });
+
+  it("records each cited call of one run by its seq, across the run's turns", () => {
+    const r = run();
+    const [finding] = detect({
+      runs: [r],
+      // The first call did the work; the repeats in two later turns are cited.
+      toolCalls: [bash(r, 1), bash(r, 40), bash(r, 5)],
+    });
+    expect(finding?.evidence.frames).toEqual({
+      [r.runId]: { seqs: [{ seq: "5" }, { seq: "40" }], total: 2 },
+    });
+  });
+
+  it("names the subagent chain a cited call was recorded on", () => {
+    const r = run();
+    const [finding] = detect({
+      runs: [r],
+      toolCalls: [bash(r, 1), bash(r, 2, SUBAGENT)],
+    });
+    expect(finding?.evidence.frames?.[r.runId]?.seqs).toEqual([
+      { seq: "2", sessionUuid: SUBAGENT },
+    ]);
+  });
+
+  it("stores no frames for a finding about a run's cache, which cites no call", () => {
+    const r = run({
+      cacheWriteMicros: 40_000n,
+      tokens: { ...ZERO_TOKENS, input_uncached: 3_000, cache_write_5m: 8_000 },
+    });
+    const [finding] = detect({ runs: [r] });
+    expect(finding?.kind).toBe("cache_writes_never_read");
+    expect(finding?.evidence.frames).toBeUndefined();
+  });
+
+  it("caps the frames per run and counts every cited call in the total", () => {
+    const r = run();
+    const toolCalls = Array.from(
+      { length: FINDING_FRAMES_PER_RUN + 10 },
+      (_, i) => bash(r, i + 1),
+    );
+    const [finding] = detect({ runs: [r], toolCalls });
+    const cited = finding?.evidence.frames?.[r.runId];
+    expect(cited?.seqs).toHaveLength(FINDING_FRAMES_PER_RUN);
+    expect(cited?.seqs[0]).toEqual({ seq: "2" });
+    expect(cited?.total).toBe(FINDING_FRAMES_PER_RUN + 9);
+    // What the store holds parses as the contract's citation.
+    expect(
+      findingRunCitationSchema.safeParse({
+        runId: r.runId,
+        runLevel: false,
+        frames: cited?.seqs,
+        framesTotal: cited?.total,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("cites frames in every cited run, past the ten the evidence itemises", () => {
+    const runs = Array.from({ length: EVIDENCE_RUNS + 2 }, () => run());
+    const [finding] = detect({
+      runs,
+      toolCalls: runs.flatMap((r) => [bash(r, 1), bash(r, 2)]),
+    });
+    expect(finding?.evidence.runs).toHaveLength(EVIDENCE_RUNS);
+    expect(Object.keys(finding?.evidence.frames ?? {}).sort()).toEqual(
+      runs.map((r) => r.runId).sort(),
+    );
+  });
+
+  it("pins a cited call the counterfactual could not price", () => {
+    const r = run();
+    const [finding] = detect({
+      runs: [r],
+      toolCalls: [
+        bash(r, 1),
+        bash(r, 2),
+        bash(r, 3),
+        { ...bash(r, 4), resultTokens: null },
+      ],
+    });
+    expect(finding?.evidence.coveredCalls).toBe(2);
+    expect(finding?.evidence.frames?.[r.runId]?.total).toBe(3);
+  });
+
+  it("leaves a read-only repeat on a run with no agent unclaimed, so a large one is still unpaged", () => {
+    const r = run({ agentKey: null });
+    const big = UNPAGED_RESULT_TOKENS + 1_000;
+    const findings = detect({
+      runs: [r],
+      toolCalls: [
+        call(r, { at: 1, resultTokens: big }),
+        call(r, { at: 2, resultTokens: big }),
+      ],
+    });
+    expect(findings.map((f) => [f.kind, f.evidence.calls])).toEqual([
+      ["unpaged_results", 2],
+    ]);
   });
 });
 

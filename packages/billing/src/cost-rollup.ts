@@ -37,6 +37,7 @@ import {
   type PriceBook,
   type PriceTokenClass,
 } from "./price-book";
+import { gradeSteps } from "./step-grade";
 
 export type { CostBasis, SpendGroupKind } from "@oxagen/database/schema";
 export { UNASSIGNED_COST_CENTER_KEY } from "@oxagen/database/schema";
@@ -72,19 +73,19 @@ export interface ModelCallFrame {
 /**
  * One tool call; `name` is null when the frame hides it (an encrypted payload).
  *
- * The members after `name` grade the call and price its result (#3984). They
- * are optional until the Context and cost lane's frame readers fill them;
- * that lane makes them required when it does. Each is null where the frame
- * recorded none.
+ * The members after `name` grade the call (./step-grade.ts, ADR-192) and price
+ * its result. Each is null where the frame recorded none.
  */
 export interface ToolCallFrame {
   name: string | null;
-  status?: "ok" | "error" | "rejected" | null;
-  inputDigest?: string | null;
-  outputDigest?: string | null;
-  isMutating?: boolean | null;
+  /** Null for a call that was cancelled, or whose frame recorded no status. */
+  status: "ok" | "error" | "rejected" | null;
+  inputDigest: string | null;
+  outputDigest: string | null;
+  /** The classifier's flag; null when it said nothing. */
+  isMutating: boolean | null;
   /** The tool-result tokens the OTel tool span recorded for the call. */
-  resultTokens?: number | null;
+  resultTokens: number | null;
 }
 
 /** What the run's own record says, independent of its frames. */
@@ -149,21 +150,22 @@ export interface ModelBreakdown {
 }
 
 /**
- * One tool's calls in the run. `resultTokens` and `costMicros` are optional
- * until the Context and cost lane's rollup writes them (#3892); a row stored
- * before them revives with neither, which a reader treats as null.
- * `costMicros` is serialized as a decimal string in the jsonb.
+ * One tool's calls in the run (#3892, ADR-192). A row stored before the
+ * result tokens were recorded revives with both figures null. `costMicros` is
+ * serialized as a decimal string in the jsonb.
  */
 export interface ToolBreakdown {
   name: string;
   calls: number;
-  /** The tool-result tokens its calls' spans recorded; null when none did. */
-  resultTokens?: number | null;
+  /** The tool-result tokens its calls' spans recorded, summed; null when none did. */
+  resultTokens: number | null;
   /**
-   * `resultTokens` priced at the run's uncached input rate. Null when
-   * `resultTokens` is null or the run has no input price.
+   * `resultTokens` priced at the run's uncached input rate
+   * ({@link runInputPrice}). It estimates input the run's own cost already
+   * counts, and never adds to it. Null when `resultTokens` is null or the run
+   * has no input price.
    */
-  costMicros?: bigint | null;
+  costMicros: bigint | null;
 }
 
 /** Why the unproductive steps made no progress; the three sum to `unproductiveSteps`. */
@@ -177,11 +179,11 @@ export interface RunBreakdown {
   models: ModelBreakdown[];
   tools: ToolBreakdown[];
   /**
-   * The unproductive steps by cause (#3984), stored in the jsonb with no
-   * column. Null exactly when the run's steps are not graded. Optional until
-   * the Context and cost lane's rollup writes it; absent reads as null.
+   * The unproductive steps by cause (#3984, ADR-192), stored in the jsonb with
+   * no column. Null exactly when the run's steps are not graded: a run with no
+   * step, and a row rolled up before grading existed, which revives as null.
    */
-  steps?: StepCauses | null;
+  steps: StepCauses | null;
 }
 
 /** The `cost.run_totals` row, as the store writes it. */
@@ -196,18 +198,18 @@ export interface RunTotalsRecord extends RunMeta {
   priceEntryIds: string[];
   cacheHitRate: number | null;
   breakdown: RunBreakdown;
-  /** Proof and value columns other lanes write; the rollup carries what it read. */
+  /** The witness verdict (ADR-064), rebuilt with the row. */
   verdict: string | null;
+  /** A person's acceptance: a column another lane writes, which the rollup carries. */
   accepted: boolean | null;
+  /** `advancedSteps / steps`; null exactly when the steps are not graded. */
   productiveRatio: number | null;
   /**
-   * The steps that advanced the run and the steps that did not (#3984),
-   * null together, and summing to `steps` when set. Optional until the
-   * Context and cost lane's rollup grades the steps and computes
-   * `productiveRatio` from them; absent reads as null.
+   * The steps that advanced the run and the steps that did not (#3984,
+   * ADR-192): null together, and summing to `steps` when set.
    */
-  advancedSteps?: number | null;
-  unproductiveSteps?: number | null;
+  advancedSteps: number | null;
+  unproductiveSteps: number | null;
 }
 
 const MILLION = 1_000_000n;
@@ -371,6 +373,43 @@ export function cacheHitRate(
   return reads / inputs;
 }
 
+// ── Input price ───────────────────────────────────────────────────────────────
+
+/** What a run paid for its input: the uncached input the rollup priced, over the tokens it carried. */
+export interface InputPrice {
+  micros: bigint;
+  tokens: bigint;
+}
+
+/**
+ * What a run paid for one uncached input token, as a ratio; null when nothing
+ * priced its input. A run whose cost is `estimated`, or has none, has no
+ * price: a figure built on it would be a guess priced from a guess.
+ *
+ * The findings job prices a result the run could have left out with this,
+ * and the rollup prices each tool's result tokens with it (ADR-192), so the
+ * two agree on what one token of the run cost.
+ */
+export function runInputPrice(run: {
+  costBasis: CostBasis | null;
+  breakdown: Pick<RunBreakdown, "models">;
+}): InputPrice | null {
+  if (run.costBasis === null || run.costBasis === "estimated") return null;
+  let micros = 0n;
+  let tokens = 0n;
+  for (const m of run.breakdown.models) {
+    micros += m.costByClass.input_uncached;
+    tokens += BigInt(m.tokens.input_uncached);
+  }
+  if (tokens === 0n || micros === 0n) return null;
+  return { micros, tokens };
+}
+
+/** `tokens` at a run's input price, rounded half to even to whole micros. */
+export function priceInputTokens(price: InputPrice, tokens: number): bigint {
+  return divideHalfEven(BigInt(tokens) * price.micros, price.tokens);
+}
+
 // ── Run rollup ────────────────────────────────────────────────────────────────
 
 interface RollupInput {
@@ -378,8 +417,12 @@ interface RollupInput {
   modelCalls: readonly ModelCallFrame[];
   toolCalls: readonly ToolCallFrame[];
   book: PriceBook;
-  /** Columns other lanes own, carried through from the existing row. */
-  carried?: Pick<RunTotalsRecord, "verdict" | "accepted" | "productiveRatio">;
+  /**
+   * The verdict the store read, and the acceptance another lane owns, carried
+   * through from the existing row. The productive ratio is not carried: the
+   * rollup computes it from the steps it grades.
+   */
+  carried?: Pick<RunTotalsRecord, "verdict" | "accepted">;
 }
 
 /** Rebuild one run's row from its frames. */
@@ -446,56 +489,87 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
     group.basis = foldBasis(group.basis, p.basis);
   }
 
-  const byTool = new Map<string, number>();
+  const byTool = new Map<
+    string,
+    { calls: number; resultTokens: number | null }
+  >();
   for (const call of input.toolCalls) {
     if (call.name === null) continue;
-    byTool.set(call.name, (byTool.get(call.name) ?? 0) + 1);
+    const tool = byTool.get(call.name) ?? { calls: 0, resultTokens: null };
+    tool.calls += 1;
+    // A call whose span recorded nothing adds nothing, and a tool none of
+    // whose calls recorded any stays null rather than 0.
+    if (call.resultTokens !== null)
+      tool.resultTokens = (tool.resultTokens ?? 0) + call.resultTokens;
+    byTool.set(call.name, tool);
   }
 
   const modelCalls = input.modelCalls.length;
   const toolCalls = input.toolCalls.length;
+  const steps = modelCalls + toolCalls;
+  const grade = gradeSteps({
+    modelCalls,
+    toolCalls: input.toolCalls,
+    retries: meta.retries,
+  });
+  const costBasis = scaledTotal === null ? null : basis;
+  const models: ModelBreakdown[] = [...byModel.entries()]
+    .map(([model, g]) => ({
+      model,
+      provider: g.provider,
+      calls: g.calls,
+      tokens: g.tokens,
+      costMicros: g.scaled === null ? null : divideHalfEven(g.scaled, MILLION),
+      costByClass: Object.fromEntries(
+        TOKEN_CLASSES.map((c) => [
+          c,
+          divideHalfEven(g.scaledByClass[c], MILLION),
+        ]),
+      ) as Record<TokenClass, bigint>,
+      cacheSavingMicros:
+        g.cacheSaving === null ? null : divideHalfEven(g.cacheSaving, MILLION),
+      basis: g.scaled === null ? null : g.basis,
+      hasUnpriced: g.hasUnpriced,
+    }))
+    .sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0));
+  // Each tool's result tokens at the run's own input price (ADR-192): the
+  // share of the run's input the tool's results were, never money on top of
+  // it. The price reads the rounded per-model input cost, as the findings
+  // job's does, so the two price one token alike.
+  const price = runInputPrice({ costBasis, breakdown: { models } });
+  const tools: ToolBreakdown[] = [...byTool.entries()]
+    .map(([name, tool]) => ({
+      name,
+      calls: tool.calls,
+      resultTokens: tool.resultTokens,
+      costMicros:
+        tool.resultTokens === null || price === null
+          ? null
+          : priceInputTokens(price, tool.resultTokens),
+    }))
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   return {
     ...meta,
-    steps: modelCalls + toolCalls,
+    steps,
     modelCalls,
     toolCalls,
     tokens,
     costMicros:
       scaledTotal === null ? null : divideHalfEven(scaledTotal, MILLION),
     currency: USD,
-    costBasis: scaledTotal === null ? null : basis,
+    costBasis,
     priceEntryIds: [...priceEntryIds].sort(),
     cacheHitRate: cacheHitRate(priced),
     breakdown: {
-      models: [...byModel.entries()]
-        .map(([model, g]) => ({
-          model,
-          provider: g.provider,
-          calls: g.calls,
-          tokens: g.tokens,
-          costMicros:
-            g.scaled === null ? null : divideHalfEven(g.scaled, MILLION),
-          costByClass: Object.fromEntries(
-            TOKEN_CLASSES.map((c) => [
-              c,
-              divideHalfEven(g.scaledByClass[c], MILLION),
-            ]),
-          ) as Record<TokenClass, bigint>,
-          cacheSavingMicros:
-            g.cacheSaving === null
-              ? null
-              : divideHalfEven(g.cacheSaving, MILLION),
-          basis: g.scaled === null ? null : g.basis,
-          hasUnpriced: g.hasUnpriced,
-        }))
-        .sort((a, b) => (a.model < b.model ? -1 : a.model > b.model ? 1 : 0)),
-      tools: [...byTool.entries()]
-        .map(([name, calls]) => ({ name, calls }))
-        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+      models,
+      tools,
+      steps: grade === null ? null : grade.causes,
     },
     verdict: input.carried?.verdict ?? null,
     accepted: input.carried?.accepted ?? null,
-    productiveRatio: input.carried?.productiveRatio ?? null,
+    productiveRatio: grade === null ? null : grade.advanced / steps,
+    advancedSteps: grade === null ? null : grade.advanced,
+    unproductiveSteps: grade === null ? null : grade.unproductive,
   };
 }
 
@@ -647,8 +721,10 @@ export function dailyTotalsFromRuns(
       const acc = get({ ...base, groupKind: "tool", groupKey: t.name }, null);
       acc.runs += 1;
       acc.calls += t.calls;
-      // No frame prices a tool call today (spec §12.3, "with a declared
-      // price"); the group's cost stays null rather than a share of the run.
+      // No frame prices a tool call (spec §12.3, "with a declared price").
+      // The run row's per-tool figure is an estimate of input the run's cost
+      // already counts (ADR-192), so the group's cost stays null: summed
+      // here, it would count that input a second time beside the model rows.
       addValue(acc, run, null);
     }
   }
