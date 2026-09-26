@@ -109,6 +109,14 @@ const FRAMES = [
   }),
 ];
 
+// A gateway session whose proxied request carried its own effort, which wins
+// over the harness's setting (#3891).
+const proxied = randomUUID();
+const PROXIED_FRAMES = [
+  frame(0, true, { kind: "session_config", effort_level_setting: "max" }),
+  frame(1, true, { kind: "llm_call", request_effort: "low" }),
+].map((row) => ({ ...row, session_uuid: proxied, root_session_uuid: proxied }));
+
 const read = <T>(fn: () => Promise<T>) => runInTenantScope(scope, fn);
 
 describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
@@ -121,7 +129,7 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
     await clickhouse().insert({
       table: "tacho_events",
       format: "JSONEachRow",
-      values: FRAMES,
+      values: [...FRAMES, ...PROXIED_FRAMES],
     });
   });
   afterAll(async () => {
@@ -192,7 +200,16 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
     );
     await expect(read(() => readSessionConfig(session))).resolves.toEqual({
       effort: "max",
+      effortSource: "harness",
       thinking: true,
+    });
+  });
+
+  it("reads a proxied request's effort ahead of the harness's setting (#3891)", async () => {
+    await expect(read(() => readSessionConfig(proxied))).resolves.toEqual({
+      effort: "low",
+      effortSource: "request",
+      thinking: null,
     });
   });
 });

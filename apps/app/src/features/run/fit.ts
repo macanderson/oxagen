@@ -62,6 +62,37 @@ export type RunFit = {
   effort: EffortFit;
 };
 
+/**
+ * The effort setting as the record holds it (#3891): the value and where it
+ * was read, or why none was. The rig strip and the Cost tab's effort card
+ * both read this, so the two cannot disagree.
+ *
+ * `request` is the setting a model request body carried, which Oxagen reads
+ * where it proxied the call. `harness` is the harness's own report. With
+ * neither, the reason is `not_sent` where Oxagen proxied the calls (the
+ * gateway and contained tiers) and the request carried none, and
+ * `not_proxied` elsewhere, where Oxagen never saw the request body.
+ */
+export type RunEffort =
+  | { seen: true; value: string; source: "request" | "harness" }
+  | { seen: false; why: "not_proxied" | "not_sent" };
+
+export function runEffort(run: RunRow): RunEffort {
+  if (run.effort !== null && run.effort !== "")
+    return {
+      seen: true,
+      value: run.effort,
+      source: run.effortSource ?? "harness",
+    };
+  return {
+    seen: false,
+    why:
+      run.enforcementTier === "gateway" || run.enforcementTier === "contained"
+        ? "not_sent"
+        : "not_proxied",
+  };
+}
+
 function rungOf(tier: string | null) {
   if (tier === null) return null;
   for (const ladder of LADDERS) {

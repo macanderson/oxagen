@@ -32,7 +32,7 @@ import { GitHubLink, PullRequestLink } from "@/ui/navigation";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { CopyPath } from "./copy-text";
-import { runFit, type RunFit } from "./fit";
+import { runEffort, runFit, type RunFit } from "./fit";
 import type { RunMetrics } from "./metrics";
 import { ExportAction } from "./record-actions";
 import { ReplayActions } from "./replay-actions";
@@ -117,6 +117,7 @@ function Rig({
   const t = useTranslations("run.header");
   const harness = useHarness(run, agent);
   const model = run.model;
+  const effort = runEffort(run);
   return (
     <div
       data-testid="run-rig"
@@ -154,14 +155,16 @@ function Rig({
       >
         {model === null ? t("modelNotRecorded") : model.slug}
       </Chip>
-      {run.effort == null ? (
-        <Chip testId="run-effort" title={t(`effortWhy.${fit.effort.why}`)}>
-          {t("effort")}{" "}
-          <span className="font-normal text-dim">{t("notCaptured")}</span>
+      {/* The value only where the record holds it, titled with where it was
+          read; otherwise not captured, titled with why (#3891). */}
+      {effort.seen ? (
+        <Chip testId="run-effort" title={t(`effortSource.${effort.source}`)}>
+          {t("effort")} {t("effortValue", { value: effort.value })}
         </Chip>
       ) : (
-        <Chip testId="run-effort">
-          {t("effort")} {t("effortValue", { value: run.effort })}
+        <Chip testId="run-effort" title={t(`effortWhy.${effort.why}`)}>
+          {t("effort")}{" "}
+          <span className="font-normal text-dim">{t("notCaptured")}</span>
         </Chip>
       )}
       {run.thinking == null ? null : (

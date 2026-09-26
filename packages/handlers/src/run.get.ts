@@ -24,7 +24,11 @@ import {
 } from "@oxagen/oxagen/contracts/run.get";
 import type { RunFrame } from "@oxagen/run-ledger";
 import { invalidCursor, microsString } from "./run.list";
-import { readSessionConfig, readSessionTitle } from "./lib/run-work";
+import {
+  readSessionConfig,
+  readSessionTitle,
+  runEffortOf,
+} from "./lib/run-work";
 import { logger } from "./logger";
 import {
   defaultRunReadDeps,
@@ -200,12 +204,10 @@ export function createRunGetHandler(
       run: {
         ...run.item,
         ...(title === null ? {} : { name: title }),
-        ...(config === null
-          ? {}
-          : {
-              effort: config.effort ?? run.item.effort ?? null,
-              thinking: config.thinking,
-            }),
+        // The request's own effort ahead of the harness's report, and where
+        // it was read (#3891). The fit reading reads it the same way.
+        ...runEffortOf(config, run.item.effort),
+        ...(config === null ? {} : { thinking: config.thinking }),
       },
       frames: {
         frames: frames.map(toFrame),

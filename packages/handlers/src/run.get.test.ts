@@ -11,6 +11,7 @@ import {
   POLL_INTERVAL_MS,
   type RunGetDeps,
 } from "./run.get";
+import type { SessionConfig } from "./lib/run-work";
 import { encodeRunCursor } from "./run.list";
 import {
   ctx,
@@ -47,7 +48,7 @@ type Over = {
   /** The title read rejects, as a ClickHouse outage would. */
   titleFails?: boolean;
   /** The effort and thinking the session's frames recorded; none by default. */
-  sessionConfig?: { effort: string | null; thinking: boolean | null };
+  sessionConfig?: SessionConfig;
   /** The settings read rejects, as a ClickHouse outage would. */
   configFails?: boolean;
   /** The frame read rejects, as ClickHouse over its memory cap does. */
@@ -105,7 +106,7 @@ function harness(over: Over = {}) {
         : Promise.resolve(
             sessionUuid === SESSION_UUID && over.sessionConfig
               ? over.sessionConfig
-              : { effort: null, thinking: null },
+              : { effort: null, effortSource: null, thinking: null },
           ),
     now: () => clock,
     sleep: (ms) => {
@@ -516,7 +517,11 @@ describe("get_run", () => {
       readWitnessFor: async () => null,
       tachoFrames,
       sessionTitle: async () => null,
-      sessionConfig: async () => ({ effort: null, thinking: null }),
+      sessionConfig: async () => ({
+        effort: null,
+        effortSource: null,
+        thinking: null,
+      }),
       now: () => 0,
       sleep: () => Promise.resolve(),
     });
@@ -645,29 +650,66 @@ describe("get_run witnessFor (ADR-064)", () => {
     expect(out.run.name).toBe(plain.run.name);
   });
 
-  it("answers the effort and thinking the session's frames recorded", async () => {
+  it("answers the effort and thinking the session's frames recorded, and where the effort was read", async () => {
     const { get } = harness({
-      sessionConfig: { effort: "high", thinking: true },
+      sessionConfig: { effort: "high", effortSource: "harness", thinking: true },
     });
     const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(runGet.output.parse(out)).toEqual(out);
     expect(out.run.effort).toBe("high");
+    expect(out.run.effortSource).toBe("harness");
     expect(out.run.thinking).toBe(true);
   });
 
-  it("keeps the session row's effort when no frame recorded one", async () => {
-    const plain = await harness().get(input({ runId: TACHO_ID }), ctx());
+  it("answers a gateway run's effort from the proxied request (#3891)", async () => {
     const { get } = harness({
-      sessionConfig: { effort: null, thinking: false },
+      tacho: [
+        tachoSession({
+          publicId: TACHO_ID,
+          session: { enforcementTier: "gateway", effort: "medium" },
+        }),
+      ],
+      sessionConfig: { effort: "low", effortSource: "request", thinking: null },
     });
     const out = await get(input({ runId: TACHO_ID }), ctx());
-    expect(out.run.effort).toBe(plain.run.effort ?? null);
-    expect(out.run.thinking).toBe(false);
+    // The request's own setting outranks the harness's report on the row.
+    expect(out.run).toMatchObject({ effort: "low", effortSource: "request" });
   });
 
-  it("still answers the run when its effort settings cannot be read", async () => {
-    const { get } = harness({ configFails: true });
+  it("keeps the session row's effort, as the harness's report, when no frame recorded one", async () => {
+    const { get } = harness({
+      tacho: [
+        tachoSession({ publicId: TACHO_ID, session: { effort: "medium" } }),
+      ],
+      sessionConfig: { effort: null, effortSource: null, thinking: false },
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run).toMatchObject({
+      effort: "medium",
+      effortSource: "harness",
+      thinking: false,
+    });
+  });
+
+  it("answers no effort and no source for an observe run that recorded none, and for a ledger run (negative)", async () => {
+    const observed = await harness().get(input({ runId: TACHO_ID }), ctx());
+    expect(observed.run.enforcementTier).toBe("observe");
+    expect(observed.run).toMatchObject({ effort: null, effortSource: null });
+    const ledger = await harness().get(input(), ctx());
+    expect(ledger.run).toMatchObject({ effort: null, effortSource: null });
+    expect(runGet.output.parse(ledger)).toEqual(ledger);
+  });
+
+  it("still answers the run when its effort settings cannot be read, on the row's effort", async () => {
+    const { get } = harness({
+      tacho: [
+        tachoSession({ publicId: TACHO_ID, session: { effort: "high" } }),
+      ],
+      configFails: true,
+    });
     const out = await get(input({ runId: TACHO_ID }), ctx());
     expect(out.run.thinking).toBeUndefined();
+    expect(out.run).toMatchObject({ effort: "high", effortSource: "harness" });
   });
 
   // ClickHouse refuses a read under its server-wide memory cap whichever query

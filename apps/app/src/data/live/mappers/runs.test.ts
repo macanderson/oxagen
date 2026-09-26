@@ -115,6 +115,7 @@ describe("toRunPage", () => {
           reportedCost: null,
           reportedTokens: null,
           effort: null,
+          effortSource: null,
           thinking: null,
           permissionMode: null,
           model: null,
@@ -255,6 +256,21 @@ describe("toRunPage", () => {
     expect(
       toRunPage({ runs: [older], nextCursor: null }).runs[0]?.costIsEstimate,
     ).toBe(true);
+  });
+
+  it("carries the effort get_run answers and where it was read (#3891)", () => {
+    const page = toRunPage({
+      runs: [
+        { ...unpricedSession, effort: "high", effortSource: "request" },
+        { ...unpricedSession, effort: "medium", effortSource: "harness" },
+      ],
+      nextCursor: null,
+    });
+    expect(RunPage.parse(page).runs.map((run) => run.effortSource)).toEqual([
+      "request",
+      "harness",
+    ]);
+    expect(page.runs[0]).toMatchObject({ effort: "high" });
   });
 
   it("maps an empty page to an empty page", () => {

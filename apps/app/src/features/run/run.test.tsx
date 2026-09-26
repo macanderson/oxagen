@@ -19,6 +19,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RunTranscript, TranscriptZoom } from "@/data/contracts/run";
+import type { RunRow } from "@/data/contracts/runs";
 import type { PriceBook } from "@/data/contracts/spend";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -451,6 +452,42 @@ describe("header", () => {
     expect(screen.getByTestId("run-effort")).toHaveTextContent(
       "effort not captured",
     );
+    await expectNoAxe(container);
+  });
+
+  it.each<[string, Partial<RunRow>, string, string]>([
+    [
+      "a proxied request's effort, titled with the request",
+      { effort: "low", effortSource: "request", enforcementTier: "gateway" },
+      "effort low",
+      "Read from the model request Oxagen proxied.",
+    ],
+    [
+      "the harness's reported effort, titled with the harness",
+      { effort: "high", effortSource: "harness" },
+      "effort high",
+      "Reported by the harness.",
+    ],
+    [
+      "not captured on an observe run, because Oxagen never read the request",
+      { effort: null, effortSource: null, enforcementTier: "observe" },
+      "effort not captured",
+      "The model call did not go through Oxagen, so the request body was never read.",
+    ],
+    [
+      "not captured on a gateway run whose request carried none",
+      { effort: null, effortSource: null, enforcementTier: "gateway" },
+      "effort not captured",
+      "The call went through Oxagen and its request carried no effort setting, so the model used its own default.",
+    ],
+  ])("prints %s (#3891)", async (_case, row, text, title) => {
+    const { container } = await renderRun({
+      detail: ok(runDetail({ run: runRow(row) })),
+      transcript: ok(runTranscript()),
+    });
+    const chip = screen.getByTestId("run-effort");
+    expect(chip).toHaveTextContent(text);
+    expect(chip).toHaveAttribute("title", title);
     await expectNoAxe(container);
   });
 

@@ -94,7 +94,7 @@ The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `
 | `entries[].callId` | string or null | the call the opening frame belongs to (`tool_call_id`, `model_call_id`, or a wrapped `toolUseId`); null when the producer recorded none. A client reads steps at the `steps` zoom rather than pairing `everything` entries on this value (ADR-182) |
 | `entries[].kinds` | string[] | the chips this entry answers to |
 | `entries[].target` | string or null | what Oxagen's gate recorded the call acting on (`tool_target`: a command, a path, a pattern), cut at 400 characters; absent when the gate recorded none |
-| `entries[].effort` | string or null | the reasoning effort the model call ran at (`low`, `medium`, `high`), as the harness recorded it on `tacho_events.effort`; null when none was recorded |
+| `entries[].effort` | string or null | the reasoning effort the model call ran at (`low`, `medium`, `high`): the `request_effort` a proxied request body carried where Oxagen read one, else the harness's report on `tacho_events.effort` (#3891); null when neither was recorded |
 | `entries[].subagent` | object or absent | on an entry from a subagent chain: `{ sessionUuid, id, type }`, plus `spawnCallId`, the `tool_use_id` of the Task or Agent call that spawned it, and `parentSessionUuid`, the chain that spawned this one. A client nests the entry by `parentKey` |
 | `entries[].request` | object or null | what went out; null when the recording has only the terminal receipt |
 | `entries[].response` | object or null | what came back; null when only a write-ahead intention was recorded |

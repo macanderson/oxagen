@@ -549,6 +549,46 @@ function modelOf(
   };
 }
 
+/** The longest effort word a frame carries: the run contract's `effort` bound. */
+const REQUEST_EFFORT_MAX = 32;
+
+/**
+ * The reasoning effort a model request body asks for, as sent (#3891), or
+ * undefined when it names none.
+ *
+ * Each vendor spells the setting in its own place, and the proxy reads the
+ * one each request shape carries (packages/ai/src/provider-posture.ts):
+ * - Anthropic Messages: `output_config.effort`.
+ * - OpenAI Responses: `reasoning.effort`.
+ * - OpenAI Chat Completions: `reasoning_effort`.
+ *
+ * A value that is not a non-blank string is ignored rather than guessed at,
+ * and a long one is clamped so the frame always seals. The word is kept as
+ * the vendor received it: Oxagen records the setting, it does not map one
+ * vendor's ladder onto another's.
+ *
+ * @internal Exported for its unit test.
+ */
+export function requestEffortOf(
+  json: Record<string, unknown> | undefined,
+): string | undefined {
+  if (json === undefined) return undefined;
+  const member = (value: unknown, key: string): unknown =>
+    typeof value === "object" && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)[key]
+      : undefined;
+  for (const candidate of [
+    member(json["output_config"], "effort"),
+    member(json["reasoning"], "effort"),
+    json["reasoning_effort"],
+  ]) {
+    if (typeof candidate !== "string") continue;
+    const effort = candidate.trim();
+    if (effort !== "") return effort.slice(0, REQUEST_EFFORT_MAX);
+  }
+  return undefined;
+}
+
 /**
  * The session id inside an Anthropic `metadata.user_id`. Current Claude Code
  * sends a JSON string with a `session_id` member. Older builds sent
@@ -1326,6 +1366,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     let injected = false;
     let dropContentEncoding = false;
     let path = route.path;
+    // The body the vendor reads, parsed: the injected one when `beforeForward`
+    // changed it, since that is the request that was made.
+    let sentJson: Record<string, unknown> | undefined;
     if (deps.beforeForward !== undefined) {
       const original = json();
       const offered: ForwardRequest = {
@@ -1349,6 +1392,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         // The changed body is sent as plain JSON, whatever the caller used.
         dropContentEncoding = true;
         injected = true;
+        sentJson = result.json;
       }
       if (result.path !== path && result.path.startsWith("/"))
         path = result.path;
@@ -1359,6 +1403,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     // even before the read moved above `refusalFor` — the two sites always
     // agreed, and now they cannot drift apart.
     const requestModel = askedModel;
+    // The effort setting the request carried (#3891), read now: the parsed
+    // body is released below and the frame seals after the response.
+    const requestEffort = requestEffortOf(injected ? sentJson : json());
     // The request half of the exchange, decoded: the bytes the vendor is about
     // to read, not the gzip or zstd the harness wrapped them in, and the
     // injected body when `beforeForward` changed one, because the request that
@@ -1559,6 +1606,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
                 : {}),
               ...(usage.stopReason !== undefined
                 ? { stop_reason: usage.stopReason }
+                : {}),
+              ...(requestEffort !== undefined
+                ? { request_effort: requestEffort }
                 : {}),
               ...(firstByteAt !== undefined
                 ? { ttft_ms: Math.max(0, firstByteAt - startedAt) }

@@ -297,7 +297,7 @@
         "fileFallback": "the agent definition",
         "effortWhy": {
           "not_proxied": "Oxagen did not capture the effort setting for this run. The model call did not go through Oxagen, so the request body was never read. Oxagen reads it only where it proxies the call, at the gateway and contained tiers.",
-          "not_sent": "Oxagen did not capture the effort setting for this run. The call went through Oxagen, and no contract records the setting from the request body yet, so none is shown."
+          "not_sent": "This agent sent no effort setting, so the model used its own default. The call went through Oxagen, and its request body carried none."
         },
         "read": "Read from this run only: {prompts, plural, one {# prompt} other {# prompts}} · {turns, plural, one {# turn} other {# turns}} · {steps, plural, one {# step} other {# steps}} · {failed, plural, =0 {no tool call failed} one {# tool call failed} other {# tool calls failed}}. A reading is an argument. It changes nothing until somebody merges the change to <file></file>, and every run the agent has sealed keeps the model it ran on.",
         "readNone": "There is no reading for this run. A reading argues for a change to <file></file> and changes nothing until somebody merges it."
@@ -955,7 +955,11 @@
       "permissionMode": "mode {value}",
       "effortWhy": {
         "not_proxied": "The model call did not go through Oxagen, so the request body was never read.",
-        "not_sent": "Oxagen records no effort setting from the request body yet, so none is shown."
+        "not_sent": "The call went through Oxagen and its request carried no effort setting, so the model used its own default."
+      },
+      "effortSource": {
+        "request": "Read from the model request Oxagen proxied.",
+        "harness": "Reported by the harness."
       },
       "pathNotEnrolled": "{machine} has no checkout of this repository enrolled, so Oxagen holds no path for it.",
       "pathRecorded": "Oxagen recorded this checkout on {machine}. Click to copy the path.",

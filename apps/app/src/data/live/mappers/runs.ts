@@ -55,6 +55,9 @@ export function toRunRow(
             tier: run.model.tier,
           },
     effort: run.effort ?? null,
+    // get_run answers where the effort was read (#3891); list_runs leaves it
+    // out, and a row with no source says nothing about one.
+    effortSource: run.effortSource ?? null,
     thinking: run.thinking ?? null,
     permissionMode: run.permissionMode ?? null,
     reportedTokens: run.reportedTokens ?? null,
