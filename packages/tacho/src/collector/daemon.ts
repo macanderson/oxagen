@@ -111,6 +111,7 @@ import {
 } from "../wire";
 import { Detector } from "./detector";
 import { createGitLane } from "./git-lane";
+import { removeCopiesOutside } from "./session-changes";
 import { exportSession, type ExportFormat } from "./exporters";
 import {
   handleHookEvent,
@@ -2023,6 +2024,7 @@ async function initializeDaemon(
       persistPendingEnds();
     },
     record,
+    preSessionCopies: paths.preSessionCopies,
   });
   const requestGitRead = gitReads.requestGitRead;
   for (const id of pendingSessionEnds.keys())
@@ -3610,6 +3612,7 @@ async function initializeDaemon(
     // Read before the queue is taken: `ps` is a process spawn.
     const started =
       now() - lastSweep >= timers.sweepMs ? await sweepStarts() : undefined;
+    let swept = false;
     await stage("spool, transcripts, sweep, checkpoint", () =>
       serial.run(async () => {
         const t = now();
@@ -3651,6 +3654,7 @@ async function initializeDaemon(
           // needs is dropped an hour after it went quiet, so `daemon.json`
           // stays bounded however many sessions that week held (C-02).
           if (registry.releaseSealedState() > 0) stateDirty = true;
+          swept = true;
           if (failure !== undefined) throw failure.error;
         }
         if (t - lastCheckpoint >= timers.checkpointMs) {
@@ -3660,6 +3664,16 @@ async function initializeDaemon(
         if (stateDirty) persistState();
       }),
     );
+    // A forgotten session reconciles no more, so its pre-session copies go.
+    // So do any a crash left behind. A sealed session keeps its copies until
+    // then, because a `SessionStart` resume reopens it and it reconciles
+    // again. Off the hook queue, since removing files is not a hook's work.
+    if (swept)
+      await stage("pre-session copies", () =>
+        removeCopiesOutside(paths.preSessionCopies, () =>
+          registry.list().map((session) => session.recorder.sessionUuid),
+        ),
+      );
     // Refresh before draining, so a batch carrying bodies leaves under the
     // mandate the control plane holds now rather than the one cached before
     // an outage.
