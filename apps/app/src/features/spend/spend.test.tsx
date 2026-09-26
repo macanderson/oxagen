@@ -486,6 +486,15 @@ describe("Spend › runs with no usage (#3304)", () => {
     );
   });
 
+  it("says it again on the By model total row, which prints the same total", async () => {
+    loaded();
+    unmetered({ total: 1, byHarness: [{ harness: "cursor", runs: 1 }] });
+    await renderSpend(["model"]);
+    expect(screen.getByTestId("spend-model-unmetered")).toHaveTextContent(
+      "1 run reported no usage and is not in this total: cursor 1",
+    );
+  });
+
   it("says nothing when every run in the month reported usage (negative)", async () => {
     loaded();
     unmetered({ total: 0, byHarness: [] });
