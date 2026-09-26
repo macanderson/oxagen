@@ -49,6 +49,7 @@ import {
   decisionOf,
   markOf,
   type OpenFrame,
+  presentedType,
   type RunState,
   type Steps,
 } from "./player-model";
@@ -307,7 +308,9 @@ export function FramePanel({
   const locale = useLocale();
   const format = useFormatter();
   const { frame } = open;
-  const type = frame?.type ?? entry?.type ?? null;
+  const recorded = frame?.type ?? entry?.type ?? null;
+  // An operator's command reads as `control.<command>` (ADR-056).
+  const type = recorded === null ? null : presentedType(recorded, entry);
   const at = frame?.observedAt ?? entry?.at ?? null;
   const summary = frame?.summary ?? entry?.label ?? null;
   return (
@@ -461,7 +464,9 @@ export function FrameList({
                     aria-hidden="true"
                     className={`size-1.5 flex-none rounded-full ${mark === null ? "bg-transparent" : MARK_HUE[mark]}`}
                   />
-                  <span className="min-w-0 truncate">{frame.type}</span>
+                  <span className="min-w-0 truncate">
+                    {presentedType(frame.type, entries.get(frame.seq))}
+                  </span>
                   {frame.cost === null ? null : (
                     <span
                       className={costChip}
