@@ -134,6 +134,10 @@ export function seal(
     terminalStatus: "completed",
     finalEventDigest: `sha256:${"e".repeat(64)}`,
     eventStreamDigest: `sha256:${"d".repeat(64)}`,
+    // An unsigned seal by default: a deployment with no attester key.
+    archiveSegmentDigest: `sha256:${"9".repeat(64)}`,
+    attestationKeyId: null,
+    attestationSig: null,
     ...over,
   };
 }
