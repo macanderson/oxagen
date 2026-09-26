@@ -34,6 +34,7 @@
 |---|---|---|---|
 | `withTenantDb(fn)` | boundary | `packages/database/src/tenant.ts` | Scoped handlers. Sets the org, workspace, and bypass settings the RLS policies read, on the organisation's data plane |
 | `withOrgDb(fn)` | boundary | `packages/database/src/tenant.ts` | Organisation-wide reads with RLS still on (ADR-074) |
+| `{ plane: "shared" }` on `withTenantDb` and `withOrgDb` | boundary | `packages/database/src/tenant.ts` | The billing seams in `packages/billing/src/internal/platform-db.ts`, which open billing tables on the shared plane with the same settings (#4338). The root ESLint config refuses the option in any other file |
 | `withSystemDb(fn)` | boundary | `packages/database/src/tenant.ts` | Identity resolution, webhooks, cron, and bootstrap. Always the shared plane. `pnpm check:system-db` (part of `pnpm check:contracts`) fails on an unjustified call |
 | Raw `db()` ban | boundary | `eslint.tenancy-seams.mjs` | Both ESLint configs. `packages/auth/src/auth.ts` is the one authorised consumer outside this package |
 | `bootstrapDataPlaneResolver()` calls `setDataPlaneResolver` | injection | `packages/database/src/data-plane-resolver.ts` | `apps/app/instrumentation.ts`, `apps/api/src/bootstrap.ts`, and `apps/mcp/src/middleware.ts` |

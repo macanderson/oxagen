@@ -1,18 +1,29 @@
 /**
- * Usage from an organisation on its own database is delivered (#4315).
+ * Usage from an organisation on its own database is delivered (#4315), and
+ * the turn credit gate sees what it spent (#4338).
  *
  * ADR-134 settles a dedicated-plane organisation's model usage on the shared
  * plane, and `deliverUsageOutbox` reads the shared plane only. Two
  * organisations run the same admit, finalize, and deliver sequence:
  *
  *   1. One on the shared plane.
- *   2. One bound to a dedicated plane. That plane is an empty database with
- *      no billing schema, so a write that lands there fails.
+ *   2. One bound to a dedicated plane.
  *
  * One delivery pass must deliver both, and the dedicated organisation's
  * admission, debit, and spend counter must sit on the shared plane. Against
- * the code before #4315, `admitUsage` opened its transaction on the empty
+ * the code before #4315, `admitUsage` opened its transaction on the dedicated
  * database and failed with `relation "billing.usage_outbox" does not exist`.
+ *
+ * A third organisation, also on the dedicated plane, holds one credit. The
+ * gate must admit a turn on it, and refuse the next once settled usage has
+ * spent it. Before #4338 the gate read the organisation's own database while
+ * the debit landed on the shared one, so the two never agreed.
+ *
+ * The dedicated plane is an empty database with no schema, on purpose. Any
+ * billing read or write that reaches it fails with `relation ... does not
+ * exist`, so a billing path that still opens the organisation's own database
+ * fails here loudly. A migrated plane would answer that read with no rows,
+ * and the mistake would show only as a wrong number.
  *
  * CI: rls-integration job (`TENANT_RLS_ENFORCEMENT_ENABLED=true`).
  */
@@ -31,6 +42,12 @@ import {
 } from "@oxagen/tenancy";
 import type { TokenUsageRow } from "@oxagen/telemetry";
 import { CREDIT_REASONS } from "../src/constants";
+import { effectiveBalance, owedCredits } from "../src/credits";
+import {
+  assertCanStartTurn,
+  assistantSpendThisMonth,
+  InsufficientCreditsError,
+} from "../src/metering";
 
 const mocks = vi.hoisted(() => ({
   insert: vi.fn(async (_id: string, _row: TokenUsageRow) => undefined),
@@ -49,8 +66,18 @@ import {
 
 const SHARED_ORG = "00000000-0000-0000-4315-000000000001";
 const DEDICATED_ORG = "00000000-0000-0000-4315-000000000002";
+/** On the dedicated plane, with a balance smaller than one usage costs. */
+const GATE_ORG = "00000000-0000-0000-4315-000000000003";
 const WORKSPACE = "00000000-0000-0000-4315-000000000010";
-const ORGS = [SHARED_ORG, DEDICATED_ORG];
+const ORGS = [SHARED_ORG, DEDICATED_ORG, GATE_ORG];
+const DEDICATED_ORGS = new Set([DEDICATED_ORG, GATE_ORG]);
+
+/** Credits each organisation starts with, granted on the shared plane. */
+const BALANCE: Record<string, bigint> = {
+  [SHARED_ORG]: 100_000n,
+  [DEDICATED_ORG]: 100_000n,
+  [GATE_ORG]: 1n,
+};
 
 /** An empty database that stands in for a customer's dedicated plane. */
 const DEDICATED_DATABASE = "usage_outbox_dedicated_witness";
@@ -133,14 +160,15 @@ beforeAll(async () => {
       })),
     );
     for (const orgId of ORGS) {
+      const cents = BALANCE[orgId]!;
       await tx
         .insert(schema.creditBalances)
-        .values({ orgId, balanceCents: 100_000n });
+        .values({ orgId, balanceCents: cents });
       await tx.insert(schema.creditLots).values({
         orgId,
         source: "free_grant",
-        originalCents: 100_000n,
-        remainingCents: 100_000n,
+        originalCents: cents,
+        remainingCents: cents,
         grantedAt: new Date(),
         expiresAt: null,
       });
@@ -152,7 +180,7 @@ beforeAll(async () => {
   await admin.unsafe(`CREATE DATABASE ${DEDICATED_DATABASE}`);
   const url = new URL(process.env["DATABASE_URL"]!);
   setDataPlaneResolver(async (orgId, kind) =>
-    orgId === DEDICATED_ORG && kind === "postgres"
+    DEDICATED_ORGS.has(orgId) && kind === "postgres"
       ? {
           orgId,
           kind,
@@ -175,7 +203,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   clearDataPlaneResolver();
-  evictDedicatedPlanePools(DEDICATED_ORG, "test finished");
+  for (const orgId of DEDICATED_ORGS)
+    evictDedicatedPlanePools(orgId, "test finished");
   try {
     await cleanup();
     await admin.unsafe(
@@ -261,5 +290,35 @@ describe("usage outbox across a shared and a dedicated plane", () => {
     );
     expect(entry?.usageComplete).toBe(true);
     expect(entry?.finalizedAt).not.toBeNull();
+  });
+});
+
+describe("the turn credit gate for an organisation on a dedicated plane", () => {
+  const inGateScope = <T>(fn: () => Promise<T>) =>
+    runInTenantScope({ orgId: GATE_ORG, workspaceId: WORKSPACE }, fn);
+
+  it("admits a turn on the balance, then refuses once settled usage spends it", async () => {
+    // The credit was granted on the shared plane. Before #4338 the gate read
+    // the organisation's own database for it, which here has no billing
+    // tables at all.
+    await expect(
+      inGateScope(() => assertCanStartTurn(GATE_ORG)),
+    ).resolves.toBeUndefined();
+
+    // One usage costs more than the one credit the organisation holds. The
+    // lot is drained and the rest is kept as a debt.
+    await recordUsage(GATE_ORG);
+
+    await expect(
+      inGateScope(() => assertCanStartTurn(GATE_ORG)),
+    ).rejects.toBeInstanceOf(InsufficientCreditsError);
+    await expect(inGateScope(() => effectiveBalance(GATE_ORG))).resolves.toBe(
+      0n,
+    );
+    expect(await inGateScope(() => owedCredits(GATE_ORG))).toBeGreaterThan(0n);
+    // The monthly assistant spend cap counts the debit that settled.
+    await expect(
+      inGateScope(() => assistantSpendThisMonth(GATE_ORG)),
+    ).resolves.toBe(BALANCE[GATE_ORG]);
   });
 });

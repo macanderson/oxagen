@@ -159,6 +159,9 @@ const dbHolder: { instance: ReturnType<typeof makeDb> | null } = {
   instance: null,
 };
 
+/** The plane each tenant transaction asked for, in order (#4338). */
+const tenantPlanes = vi.hoisted(() => [] as Array<string | undefined>);
+
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
   // The org-wide seam is mocked as the SAME function as the tenant
@@ -167,7 +170,13 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   const dbMock = {
     ...real,
     db: () => dbHolder.instance,
-    withTenantDb: async (fn: (tx: unknown) => unknown) => fn(dbHolder.instance),
+    withTenantDb: async (
+      fn: (tx: unknown) => unknown,
+      opts?: { plane?: string },
+    ) => {
+      tenantPlanes.push(opts?.plane);
+      return fn(dbHolder.instance);
+    },
     withSystemDb: async (fn: (tx: unknown) => unknown) => fn(dbHolder.instance),
   };
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
@@ -286,6 +295,7 @@ describe("isLowBalance", () => {
 describe("maybeAutoReload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    tenantPlanes.length = 0;
     chargeOffSessionMock.mockResolvedValue({
       paymentIntentId: "pi_test_001",
       status: "succeeded",
@@ -328,6 +338,12 @@ describe("maybeAutoReload", () => {
       expect(query.params).toContain("grant_auto_reload");
       expect(query.params.map(String)).toContain("2000");
       expect(chargeOffSessionMock).toHaveBeenCalledTimes(1);
+      // The customer read, the episode claim, the ledger lookup, and (when the
+      // grant exists) the episode close all open on the shared plane, where
+      // the grant and the credit gate's reads live (#4338).
+      expect(tenantPlanes).toEqual(
+        Array.from({ length: exists ? 4 : 3 }, () => "shared"),
+      );
     },
   );
 
@@ -448,6 +464,8 @@ describe("maybeAutoReload", () => {
     // The episode is finished: the reload is stamped and the key released.
     expect(state.lastAutoReloadAt).toBeInstanceOf(Date);
     expect(state.episodeKey).toBeNull();
+    // The customer read, the episode claim, and the episode close.
+    expect(tenantPlanes).toEqual(["shared", "shared", "shared"]);
   });
 
   it("charges the settings customer, not a stale id left on a subscription row", async () => {

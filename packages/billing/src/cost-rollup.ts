@@ -299,9 +299,11 @@ export function priceFrame(
  * it were zero).
  *
  * Cache writes are not in the denominator, so a run that rebuilt its cache
- * can still read a high rate. The record keeps the write counts by class,
- * and the Run page's Cost tab prints the share of input written to the
- * cache beside this rate (`cacheRebuildShare`, A-08).
+ * can still read a high rate. The record keeps the write counts by class.
+ * The Run page's Cost tab prints the share of input written to the cache
+ * beside this rate (`cacheRebuildShare`), and so does the Spend page's
+ * token class panel (`cacheWriteShare`, A-08). The Run stat row and the
+ * Fleet tile keep one line each, so they carry the rate alone.
  */
 export function cacheHitRate(
   frames: readonly { tokens: TokenCounts; scaled: bigint }[],
