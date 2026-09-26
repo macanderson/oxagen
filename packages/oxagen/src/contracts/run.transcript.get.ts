@@ -659,8 +659,9 @@ export const transcriptEntrySchema = z
 const entryCount = z.number().int().nonnegative();
 
 /**
- * One count for every chip. The server counts each chip on every read, so
- * none is optional: a reader never has to guess a missing count as zero.
+ * One count for every chip. A read that carries counts (one from the run's
+ * first frame) counts each chip, so none is optional: a reader never has to
+ * guess a missing count as zero.
  */
 const transcriptKindCountsSchema = z
   .object(
