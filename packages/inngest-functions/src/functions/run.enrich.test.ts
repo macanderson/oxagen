@@ -351,8 +351,9 @@ it("uses root Tacho and V2 ledger predicates for enrichment eligibility", async 
     dialect.sqlToQuery(readableEnrichmentRun(schema.tachoSessions)).sql,
   ).toContain('"parent_session_uuid" is null');
   const ledger = dialect.sqlToQuery(readableEnrichmentRun(schema.agentRuns));
-  expect(ledger.sql).toContain('"spec_version" =');
-  expect(ledger.params).toEqual([2]);
+  // The literal 2 the partial index names, not a bind parameter (#3784).
+  expect(ledger.sql).toBe('"agent"."agent_runs"."spec_version" = 2');
+  expect(ledger.params).toEqual([]);
 });
 
 it("rejects an ineligible queued run before replaying an older durable read step", async () => {

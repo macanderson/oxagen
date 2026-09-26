@@ -1,4 +1,9 @@
-import { schema, withTenantDb, withSystemDb } from "@oxagen/database";
+import {
+  runEnrichmentCandidate,
+  schema,
+  withTenantDb,
+  withSystemDb,
+} from "@oxagen/database";
 import { runEnrichmentEnabled } from "@oxagen/oxagen/run-enrichment";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { runInTenantScope } from "@oxagen/tenancy";
@@ -141,6 +146,14 @@ export function enrichmentPriority(
 /**
  * The runs a sweep queues from one table: the first `SWEEP_RUNS_PER_ORG` of
  * each organization, in `enrichmentPriority` order.
+ *
+ * `runEnrichmentCandidate` adds nothing `dueForEnrichment` does not already
+ * require. It is here so Postgres can read the candidates from the table's
+ * partial index (`tacho_sessions_enrichment_candidate_idx`,
+ * `agent_runs_enrichment_candidate_idx`) rather than every run the
+ * workspace recorded (#3784). The planner uses a partial index only when the
+ * query's WHERE proves the index's predicate, so this and
+ * `readableEnrichmentRun` render the index's literals and bind nothing.
  */
 export function sweepCandidates(
   tx: Parameters<Parameters<typeof withSystemDb>[0]>[0],
@@ -167,6 +180,7 @@ export function sweepCandidates(
         readableEnrichmentRun(table),
         enrichableWorkspace(),
         dueForEnrichment(table, now),
+        runEnrichmentCandidate(table),
       ),
     )
     .as("ranked");
@@ -273,13 +287,18 @@ export function sweepWindow(at: Date): number {
   return Math.floor(at.getTime() / SWEEP_EVENT_TTL_MS);
 }
 
-/** Match the root-session and V2 predicates used by get_run. */
+/**
+ * Match the root-session and V2 predicates used by get_run. The version is
+ * the literal 2, not a bind parameter, because the sweep's partial index on
+ * `agent.agent_runs` is declared `WHERE spec_version = 2`, and a `$1` in the
+ * query does not prove it once Postgres plans the query generically.
+ */
 export function readableEnrichmentRun(
   table: typeof schema.tachoSessions | typeof schema.agentRuns,
 ) {
   return table === schema.tachoSessions
     ? isNull(schema.tachoSessions.parentSessionUuid)
-    : eq(schema.agentRuns.specVersion, 2);
+    : sql`${schema.agentRuns.specVersion} = 2`;
 }
 
 type EnrichEvent = z.infer<typeof eventSchema>;

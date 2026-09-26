@@ -41,3 +41,7 @@ Each model call reports its tokens and their price, and one job spends at most `
 - `conflict` (409), by `reason`: `run_not_sealed` (the record is not yet complete); `digest_only` (the seal recorded a `digest_only` gap: there are no bodies for a model to read, and a summary written from receipts alone would be the placeholder the interface forbids); `enrichment_disabled` (the workspace turned run enrichment off, so no summary is written for it).
 
 The action now dispatches `run/enrich`, the same Stella path used by the automatic five-minute sweep. It reads all retained frames in chronological chunks instead of a sixty-step prefix. A repeated request with the same input digest does not spend credits again. The workspace's `runEnrichmentEnabled` setting also gates manual requests; disabling it leaves evidence intact and suppresses generated display text. The action's sealed-run and retained-body admission checks remain in place.
+
+## Work per run
+
+The five-minute sweep reads its candidates from two partial indexes, `tacho_sessions_enrichment_candidate_idx` and `agent_runs_enrichment_candidate_idx` (#3784). A run leaves its index once it has an account and has not changed since, so a pass reads the runs that may be due rather than the workspace's whole history. A run whose attempts keep failing stays in the index and is read again every 30 minutes. So does a run whose bodies stay unavailable, every 5 minutes.
