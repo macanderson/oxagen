@@ -570,10 +570,16 @@ describe("a long-running registry", () => {
       ),
     };
     const ledgerBytes = JSON.stringify({ llmCalls, toolCalls }).length;
-    const subagent = {
-      state: { ...template.recorder, children: {} },
+    const subagent = (open: boolean) => ({
+      state: { ...template.recorder, llmCalls, toolCalls, children: {} },
       type: "general-purpose",
-      open: false,
+      open,
+    });
+    // A session the sweep or the idle bound sealed keeps the open turn's
+    // reply, and a subagent the sweep finalized stays marked open.
+    const turnReply = {
+      content_type: "text/plain",
+      bytes_base64: Buffer.alloc(48 * 1024, "r").toString("base64"),
     };
     const session = (i: number, sealedAgoMs: number, sealed = true) => ({
       ...template,
@@ -583,7 +589,11 @@ describe("a long-running registry", () => {
         sessionUuid: `11111111-0000-4000-8000-${String(i).padStart(12, "0")}`,
         llmCalls,
         toolCalls,
-        children: { [`agent-a${i}`]: subagent, [`agent-b${i}`]: subagent },
+        turnReply,
+        children: {
+          [`agent-a${i}`]: subagent(true),
+          [`agent-b${i}`]: subagent(false),
+        },
       },
       toolUseIds: { [`derived-${i}`]: `stella_${i}` },
       sealed,
@@ -632,7 +642,9 @@ describe("a long-running registry", () => {
     expect(kept("sess-0")?.recorder.llmCalls?.keys).toEqual([]);
     expect(kept("sess-0")?.recorder.toolCalls?.calls).toEqual([]);
     expect(kept("sess-0")?.recorder.children).toEqual({});
+    expect(kept("sess-0")?.recorder.turnReply).toBeUndefined();
     expect(kept("sess-0")?.toolUseIds).toBeUndefined();
+    expect(kept("sess-290")?.recorder.turnReply).toEqual(turnReply);
   });
 
   it("releases a resumed session again once it seals and goes quiet", async () => {
