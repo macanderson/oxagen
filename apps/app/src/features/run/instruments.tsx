@@ -22,7 +22,12 @@ import {
   formatRatio,
   ratioWidth,
 } from "@/ui/money-format";
-import { type ClassPrices, type Ledger, perTurn } from "./cost-figures";
+import {
+  cacheRebuildShare,
+  type ClassPrices,
+  type Ledger,
+  perTurn,
+} from "./cost-figures";
 import {
   type Family,
   type ProvisionalModel,
@@ -490,6 +495,7 @@ function TokensTile({
   }
   const { byClass } = tokens;
   const writes = byClass.cache_write_5m + byClass.cache_write_1h;
+  const rebuilt = cacheRebuildShare(tokens);
   const rate = prices.inputRate;
   return (
     <Tile
@@ -574,7 +580,16 @@ function TokensTile({
                       <b>{formatMoney(rate, { locale, precision: "cents" })}</b>
                     ),
                   }),
-            writes: writes === 0 ? t("nothingWritten") : null,
+            // The hit rate leaves cache writes out, so a rebuilt cache shows
+            // here as the share of input written to it (A-08).
+            writes:
+              writes === 0
+                ? t("nothingWritten")
+                : rebuilt === null
+                  ? null
+                  : t.rich("written", {
+                      share: () => <b>{formatRatio(rebuilt, locale)}</b>,
+                    }),
           }}
         />
       }
