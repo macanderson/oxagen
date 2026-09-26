@@ -1176,6 +1176,18 @@ const ROUTES: ThinRoute[] = [
     jsonGuard: true,
     status: 200,
   },
+  // The same report for the commands one broadcast queued (#2953). An empty
+  // id list is refused by the contract before the handler sees it.
+  {
+    file: "tacho.command.list",
+    route: tachoCommandListRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: tachoCommandList.name,
+    body: { commandIds: ["tcm_1", "tcm_2"] },
+    expectedInput: { commandIds: ["tcm_1", "tcm_2"], limit: 50 },
+    invalidBody: { commandIds: [] },
+    status: 200,
+  },
   // The shell (#2968): the in-app agent's turn and engine probe, the command
   // menu's search, belt definitions and recent runs, the sidebar counts, the
   // account preferences.
