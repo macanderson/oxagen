@@ -595,6 +595,14 @@ export const runList = registerCapability({
       runs: z.array(runItemSchema).max(100),
       nextCursor: z.string().nullable(),
       /**
+       * How many runs in the workspace are live, whatever the page, the
+       * cursor or the pull-request filter: the ledger runs still running and
+       * the root wrapped sessions still open that `list_runs` would list. A
+       * live run whose host went quiet is counted, as its status is still
+       * live. Absent when the count could not be read.
+       */
+      liveRuns: z.number().int().nonnegative().optional(),
+      /**
        * `pull_requests_unread`: the pull-request frames could not be read, so
        * rows carry no `pullRequests` and a filtered page decided on the
        * counted `pr_open` calls alone.

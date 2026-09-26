@@ -190,6 +190,7 @@ export async function Fleet({
         }
         approvals={approvals}
         agentTotal={agents.ok ? agents.value.totals.identities : null}
+        liveRuns={runs.value.liveRuns ?? null}
         now={now}
         canCommand={canCommand}
       />

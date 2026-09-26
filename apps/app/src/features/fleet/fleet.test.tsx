@@ -157,9 +157,15 @@ async function renderFleet(
   return { container, calls };
 }
 
+/**
+ * The workspace's live runs as `list_runs` counts them: more than the two
+ * open runs on the page, since the tile counts the workspace.
+ */
+const WORKSPACE_LIVE = 5;
+
 const loaded = (over: Partial<Parameters<typeof fleetSource>[0]> = {}) =>
   renderFleet({
-    runs: runPage(RUNS),
+    runs: runPage(RUNS, null, WORKSPACE_LIVE),
     approvals: approvalQueue([PARKED]),
     agents: agentPage(["acme.core.release-bot", "acme.core.docs"], 64),
     ...over,
@@ -333,9 +339,9 @@ describe("summary tiles", () => {
       "Spend shown",
       "Tokens shown",
     ]);
-    // One live run: the other open run has a call parked, so it is waiting.
+    // The workspace's count, not the page's two open rows (A-04).
     expect(tile("Live runs")).toHaveTextContent(
-      "Live runs1of 64 agents in this workspace",
+      "Live runs5of 64 agents in this workspace",
     );
     // 4.13 + 0.61 + 2.87; the halted run recorded no cost.
     expect(tile("Spend shown")).toHaveTextContent("$7.61");
@@ -447,6 +453,14 @@ describe("summary tiles", () => {
     );
   });
 
+  it("says the live runs were not counted when the read carried no count, never the page's figure (negative)", async () => {
+    await loaded({ runs: runPage(RUNS) });
+    expect(tile("Live runs")).toHaveTextContent(
+      "Live runsnot countedof 64 agents in this workspace",
+    );
+    expect(screen.getByTestId("live-not-counted")).toBeTruthy();
+  });
+
   it("names what the waiting and live tiles could not read, never a zero (negative)", async () => {
     await loaded({
       approvals: DENIED,
@@ -460,7 +474,7 @@ describe("summary tiles", () => {
     );
   });
 
-  it("changes Spend shown and Live runs with the filter chips", async () => {
+  it("changes Spend shown with the filter chips, and keeps Live runs on the workspace's count (A-04)", async () => {
     await loaded();
     const user = userEvent.setup();
     await user.click(screen.getByTestId("chip-sealed"));
@@ -472,7 +486,8 @@ describe("summary tiles", () => {
     expect(screen.getByTestId("spend-basis")).toHaveTextContent(
       "gateway_observed · USD",
     );
-    expect(tile("Live runs")).toHaveTextContent("Live runs0");
+    // The tile says "in this workspace", so no chip and no page changes it.
+    expect(tile("Live runs")).toHaveTextContent("Live runs5");
     expect(rows()).toHaveLength(1);
     await user.click(screen.getByTestId("chip-parked"));
     expect(rows().map((r) => r.dataset.state)).toEqual(["parked"]);

@@ -2877,6 +2877,7 @@ type Messages = {
       label: string;
       live: {
         title: string;
+        notCounted: string;
         basis: string;
         basisUnread: string;
       };

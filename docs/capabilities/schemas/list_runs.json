@@ -846,6 +846,10 @@
           }
         ]
       },
+      "liveRuns": {
+        "type": "integer",
+        "minimum": 0
+      },
       "warnings": {
         "type": "array",
         "items": {

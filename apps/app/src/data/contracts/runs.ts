@@ -376,6 +376,11 @@ export const RunPage = z.object({
   runs: z.array(RunRow),
   /** Opaque; the next page's cursor, null on the last page. */
   nextCursor: z.string().nullable(),
+  /**
+   * How many runs in the workspace are live, whatever the page, the cursor
+   * or the filter. Absent when the read could not count them.
+   */
+  liveRuns: z.number().int().nonnegative().optional(),
   /** `pull_requests_unread`: the page's pull requests could not be read. */
   warnings: z.array(z.enum(["pull_requests_unread"])).optional(),
 });

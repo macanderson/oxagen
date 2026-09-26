@@ -25,6 +25,9 @@ import {
   tachoRunStatus,
   costIsEstimate,
   recordedSealSource,
+  LEDGER_LIVE_STATUSES,
+  liveCountQueries,
+  TACHO_LIVE_OUTCOMES,
 } from "./run.list";
 import {
   ctx,
@@ -692,6 +695,65 @@ describe("list_runs queries name the tenant", () => {
     expect(query.params).toContain(SCOPE.workspaceId);
   });
 
+  it("counts live runs over the same runs the pages list, with no cursor and no page size (A-04)", () => {
+    const counts = liveCountQueries(db, SCOPE, { withoutWitnessRuns: false });
+    const ledger = counts.ledger.toSQL();
+    expect(ledger.sql).toMatch(
+      /^select count\(\*\)::int from "agent"\."agent_runs"/,
+    );
+    expect(ledger.sql).toContain('"agent"."agent_runs"."spec_version" = $');
+    expect(ledger.sql).toContain('"agent"."agent_runs"."surface" not in');
+    expect(ledger.sql).toContain('"agent"."agent_runs"."status" in');
+    expect(ledger.params).toEqual(
+      expect.arrayContaining([
+        SCOPE.orgId,
+        SCOPE.workspaceId,
+        "pending",
+        "running",
+      ]),
+    );
+    const tacho = counts.tacho.toSQL();
+    expect(tacho.sql).toMatch(
+      /^select count\(\*\)::int from "tacho"\."sessions"/,
+    );
+    expect(tacho.sql).toContain(
+      '"tacho"."sessions"."parent_session_uuid" is null',
+    );
+    expect(tacho.sql).toContain('"tacho"."sessions"."outcome" in');
+    expect(tacho.params).toEqual(
+      expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId, "running"]),
+    );
+    // Negative: a count is the workspace's, so no cursor, order or limit.
+    for (const query of [ledger, tacho]) {
+      expect(query.sql).not.toMatch(/\border by\b|\blimit\b/);
+      expect(query.sql).not.toMatch(/"evidence"\."verdicts"/);
+    }
+    // An API-key caller's count leaves witness runs out, as its pages do.
+    const hidden = liveCountQueries(db, SCOPE, { withoutWitnessRuns: true });
+    for (const query of [hidden.ledger.toSQL(), hidden.tacho.toSQL()])
+      expect(query.sql).toMatch(
+        /not exists \(select 1 from "evidence"\."verdicts"/,
+      );
+  });
+
+  it("counts as live exactly the statuses and outcomes a row reads as live (A-04)", () => {
+    expect([...LEDGER_LIVE_STATUSES].sort()).toEqual(["pending", "running"]);
+    for (const status of [
+      "pending",
+      "running",
+      "completed",
+      "failed",
+      "cancelled",
+    ])
+      expect(LEDGER_LIVE_STATUSES.includes(status)).toBe(
+        ledgerRunStatus(status) === "live",
+      );
+    for (const outcome of schema.TACHO_SESSION_OUTCOMES)
+      expect(TACHO_LIVE_OUTCOMES.includes(outcome)).toBe(
+        tachoRunStatus(outcome) === "live",
+      );
+  });
+
   it("leaves witness runs out of both pages only when the page asks", () => {
     const hidden = { ...page, withoutWitnessRuns: true };
     for (const query of [
@@ -1282,6 +1344,50 @@ describe("a run row names who ran it, on what, with which model", () => {
         nodeVersion: "v24.4.0",
       },
     });
+  });
+
+  it("answers the workspace's live runs, not the page's, whatever the filter (A-04)", async () => {
+    // Fleet's Live runs tile counted the live rows of one page after the
+    // state chip, under a label that claims the workspace.
+    const stores = memoryStores(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_a",
+          session: { outcome: "running", sealedAt: null },
+        }),
+        tachoSession({
+          publicId: "tse_b",
+          session: { outcome: "running", sealedAt: null },
+        }),
+      ],
+    );
+    const asked: unknown[] = [];
+    const list = createRunListHandler({
+      ...stores,
+      readLiveCount: (scope, q) => {
+        asked.push({ scope, q });
+        return Promise.resolve(7);
+      },
+    });
+    const out = await list({ limit: 1 }, ctx());
+    expect(runList.output.parse(out)).toEqual(out);
+    expect(out.runs).toHaveLength(1);
+    expect(out.liveRuns).toBe(7);
+    expect(asked).toEqual([{ scope: SCOPE, q: { withoutWitnessRuns: false } }]);
+    const filtered = await list({ limit: 1, pullRequests: "with" }, ctx());
+    expect(filtered.liveRuns).toBe(7);
+  });
+
+  it("leaves the live count out, and still answers the page, when the count fails (negative)", async () => {
+    const stores = memoryStores([], [tachoSession({ publicId: "tse_a" })]);
+    const list = createRunListHandler({
+      ...stores,
+      readLiveCount: () => Promise.reject(new Error("postgres timeout")),
+    });
+    const out = await list({ limit: 50 }, ctx());
+    expect(out.runs).toHaveLength(1);
+    expect(out).not.toHaveProperty("liveRuns");
   });
 
   it("says where a wrapped session ran, as its start recorded it, and nothing for a ledger run (A-05)", async () => {

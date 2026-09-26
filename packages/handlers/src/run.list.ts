@@ -200,7 +200,7 @@ export type PageQuery = {
  * with `search_tools`; this only decides whether this page applies it.
  */
 function hideWitnessRuns(
-  q: PageQuery,
+  q: Pick<PageQuery, "withoutWitnessRuns">,
   run: {
     orgId: typeof runs.orgId | typeof sessions.orgId;
     workspaceId: typeof runs.workspaceId | typeof sessions.workspaceId;
@@ -277,16 +277,31 @@ function ledgerRunsSelect(db: QueryDb) {
 }
 
 /** V2 ledger runs in the workspace, newest first, the in-app agent's excluded. */
+/**
+ * The ledger runs `list_runs` lists in a workspace, whatever the cursor: V2
+ * runs, not the in-app agent's own turns, and no witness run when the caller
+ * holds an API key. The page and the live count both read it, so the count
+ * counts exactly the runs the pages list.
+ */
+function ledgerListed(
+  scope: RunScope,
+  q: Pick<PageQuery, "withoutWitnessRuns">,
+): (SQL | undefined)[] {
+  return [
+    eq(runs.orgId, scope.orgId),
+    eq(runs.workspaceId, scope.workspaceId),
+    eq(runs.specVersion, 2),
+    notInArray(runs.surface, [...IN_APP_AGENT_SURFACES]),
+    hideWitnessRuns(q, runs),
+  ];
+}
+
 export function ledgerPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
   return ledgerRunsSelect(db)
     .where(
       and(
-        eq(runs.orgId, scope.orgId),
-        eq(runs.workspaceId, scope.workspaceId),
-        eq(runs.specVersion, 2),
-        notInArray(runs.surface, [...IN_APP_AGENT_SURFACES]),
+        ...ledgerListed(scope, q),
         beforeCursor(ledgerStartedAt, runs.publicId, q.cursor),
-        hideWitnessRuns(q, runs),
       ),
     )
     .orderBy(desc(ms(ledgerStartedAt)), desc(byteOrder(runs.publicId)))
@@ -637,21 +652,81 @@ function tachoSessionsSelect(db: QueryDb) {
     );
 }
 
+/**
+ * The wrapped sessions `list_runs` lists in a workspace, whatever the cursor:
+ * root sessions only, and no witness run when the caller holds an API key.
+ * The page and the live count both read it.
+ */
+function tachoListed(
+  scope: RunScope,
+  q: Pick<PageQuery, "withoutWitnessRuns">,
+): (SQL | undefined)[] {
+  return [
+    eq(sessions.orgId, scope.orgId),
+    eq(sessions.workspaceId, scope.workspaceId),
+    isNull(sessions.parentSessionUuid),
+    hideWitnessRuns(q, sessions),
+  ];
+}
+
 /** Root wrapped-agent sessions in the workspace, newest first. */
 export function tachoPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
   return tachoSessionsSelect(db)
     .where(
       and(
-        eq(sessions.orgId, scope.orgId),
-        eq(sessions.workspaceId, scope.workspaceId),
-        isNull(sessions.parentSessionUuid),
+        ...tachoListed(scope, q),
         beforeCursor(sql`${sessions.startedAt}`, sessions.publicId, q.cursor),
-        hideWitnessRuns(q, sessions),
       ),
     )
     .orderBy(desc(ms(sessions.startedAt)), desc(byteOrder(sessions.publicId)))
     .limit(q.limit + 1);
 }
+
+/**
+ * How many of the runs `list_runs` lists in the workspace are live, whatever
+ * the page, the cursor or the pull-request filter: one count per store, each
+ * over the same predicates its page reads (`ledgerListed`, `tachoListed`).
+ */
+export function liveCountQueries(
+  db: QueryDb,
+  scope: RunScope,
+  q: Pick<PageQuery, "withoutWitnessRuns">,
+) {
+  const count = { count: sql<number>`count(*)::int` };
+  return {
+    ledger: db
+      .select(count)
+      .from(runs)
+      .where(
+        and(
+          ...ledgerListed(scope, q),
+          inArray(runs.status, [...LEDGER_LIVE_STATUSES]),
+        ),
+      ),
+    tacho: db
+      .select(count)
+      .from(sessions)
+      .where(
+        and(
+          ...tachoListed(scope, q),
+          inArray(sessions.outcome, [...TACHO_LIVE_OUTCOMES]),
+        ),
+      ),
+  };
+}
+
+/** The live runs in a workspace, from both stores. */
+export type ReadLiveRunCount = (
+  scope: RunScope,
+  q: Pick<PageQuery, "withoutWitnessRuns">,
+) => Promise<number>;
+
+export const postgresLiveRunCount: ReadLiveRunCount = (scope, q) =>
+  withTenantDb(async (tx) => {
+    const { ledger, tacho } = liveCountQueries(tx, scope, q);
+    const [[a], [b]] = await Promise.all([ledger, tacho]);
+    return Number(a?.count ?? 0) + Number(b?.count ?? 0);
+  });
 
 /** One root session by public id, only in the scope's workspace. */
 export function tachoSessionQuery(
@@ -892,6 +967,17 @@ const LEDGER_RUN_STATUS: Readonly<Record<string, RunItem["status"]>> = {
   failed: "sealed",
   cancelled: "halted",
 };
+
+/**
+ * The ledger statuses `ledgerRunStatus` reads as live, from its own table, so
+ * the count and the rows cannot disagree on which runs are open.
+ */
+export const LEDGER_LIVE_STATUSES: readonly string[] = Object.keys(
+  LEDGER_RUN_STATUS,
+).filter((status) => LEDGER_RUN_STATUS[status] === "live");
+
+/** The session outcomes `tachoRunStatus` reads as live. */
+export const TACHO_LIVE_OUTCOMES: readonly string[] = ["running"];
 
 /**
  * `pending` (admitted, no attempt yet) and `running` are both open runs. Every
@@ -1576,6 +1662,8 @@ export type RunListDeps = {
   readPullRequests?: ReadRunPullRequests;
   /** Git's uncommitted change per wrapped session; absent reads none. */
   readGitDiffs?: ReadRunGitDiffs;
+  /** The workspace's live runs, whatever the page; absent leaves `liveRuns` out. */
+  readLiveCount?: ReadLiveRunCount;
 };
 
 type FleetItem =
@@ -1610,6 +1698,21 @@ export function createRunListHandler(
     const enabledRead = deps.readEnrichmentEnabled
       ? deps.readEnrichmentEnabled(scope)
       : Promise.resolve(true);
+    // So is the live count, which is the workspace's and not the page's
+    // (Fleet's Live runs tile). A failed count leaves the field out rather
+    // than failing the page, and the tile says it was not counted.
+    const liveRead: Promise<number | undefined> =
+      deps.readLiveCount === undefined
+        ? Promise.resolve(undefined)
+        : deps
+            .readLiveCount(scope, { withoutWitnessRuns })
+            .catch((err: unknown) => {
+              logger.warn(
+                { err },
+                "list_runs: the workspace's live runs could not be counted; the page carries no count",
+              );
+              return undefined;
+            });
 
     // One merged newest-first page. A filtered page reads wrapped sessions
     // only: a ledger run's pull requests are receipts this read cannot see,
@@ -1732,7 +1835,7 @@ export function createRunListHandler(
         : [],
     );
     const noGit = new Map<string, LineCounts>();
-    const [enabled, enrich, costs, gitDiffs] = await Promise.all([
+    const [enabled, enrich, costs, gitDiffs, liveRuns] = await Promise.all([
       enabledRead,
       ledgerEnrichment(
         deps,
@@ -1754,6 +1857,7 @@ export function createRunListHandler(
             );
             return noGit;
           }),
+      liveRead,
     ]);
     return {
       runs: items.map((item) => {
@@ -1783,6 +1887,7 @@ export function createRunListHandler(
         };
       }),
       nextCursor,
+      ...(liveRuns === undefined ? {} : { liveRuns }),
       ...(linksUnread ? { warnings: ["pull_requests_unread" as const] } : {}),
     };
   };
@@ -1810,4 +1915,5 @@ export const runListHandler = createRunListHandler({
   readEnrichmentEnabled: readRunEnrichmentEnabled,
   readPullRequests: readRunPullRequests,
   readGitDiffs: postgresRunGitDiffs,
+  readLiveCount: postgresLiveRunCount,
 });

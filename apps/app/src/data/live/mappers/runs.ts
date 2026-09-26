@@ -109,6 +109,7 @@ export function toRunPage(out: RunListOutput): z.input<typeof RunPage> {
   return {
     runs: out.runs.map(toRunRow),
     nextCursor: out.nextCursor,
+    ...(out.liveRuns === undefined ? {} : { liveRuns: out.liveRuns }),
     ...(out.warnings === undefined ? {} : { warnings: out.warnings }),
   };
 }

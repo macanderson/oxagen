@@ -33,6 +33,7 @@ The in-app agent's turns are excluded. Each turn is a run of its own (MC spec §
 |---|---|---|
 | `runs` | object[] | see the row below |
 | `nextCursor` | string or null | null on the last page |
+| `liveRuns` | integer, optional | how many runs in the workspace are live, whatever the page, the cursor, or the filter: ledger runs still `pending` or `running`, and root wrapped sessions still `running`, counted over the same runs the pages list. A live run whose host stopped checking in is counted, since its status is still live. Absent when the count could not be read, and the page still answers |
 | `warnings` | array of `pull_requests_unread`, optional | the pull-request frames could not be read. Rows carry no `pullRequests`, and a filtered page decided on the counted `pr_open` calls alone |
 
 Each row:
