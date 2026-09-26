@@ -493,7 +493,6 @@ describe("readTranscriptFramesOf: the run's own chain", () => {
     mocks.withTenantDb.mockResolvedValue([]);
   });
 
-
   it("reads a wrapped session's frames in sequence inside the tenant scope", async () => {
     tachoChain([0, 1]);
     const { frames } = await readTranscriptFramesOf(SCOPE, WRAPPED);
