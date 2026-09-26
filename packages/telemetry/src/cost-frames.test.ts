@@ -562,11 +562,13 @@ describe("readTachoToolCallFrames", () => {
 
 describe("readTachoToolCallObservations", () => {
   const WS = "00000000-0000-4000-8000-000000000002";
+  const SUBAGENT = "00000000-0000-4000-8000-0000000000bb";
 
   it("reads a workspace's hook tool calls newest first over the window and joins the span's result tokens", async () => {
     answer([
       {
         root_session_uuid: RUN,
+        session_uuid: RUN,
         at: "2026-09-14T10:00:02.000Z",
         seq: "7",
         tool: "Bash",
@@ -577,6 +579,7 @@ describe("readTachoToolCallObservations", () => {
       },
       {
         root_session_uuid: RUN,
+        session_uuid: SUBAGENT,
         at: "2026-09-14T10:00:01.000Z",
         seq: "6",
         tool: "Read",
@@ -607,9 +610,13 @@ describe("readTachoToolCallObservations", () => {
     expect(query).toContain("workspace_id = {workspaceId:UUID}");
     expect(query).toContain("ORDER BY ts DESC, seq DESC");
     expect(query).toContain("ON r.tool_use_id = h.tool_use_id");
+    // The chain a call was recorded on, which its seq counts on (#4001).
+    expect(selectedColumns(query)).toContain("session_uuid");
+    expect(query).toContain("toString(h.session_uuid)");
     expect(rows).toEqual([
       {
         rootSessionUuid: RUN,
+        sessionUuid: RUN,
         at: "2026-09-14T10:00:02.000Z",
         seq: 7,
         tool: "Bash",
@@ -620,6 +627,7 @@ describe("readTachoToolCallObservations", () => {
       },
       {
         rootSessionUuid: RUN,
+        sessionUuid: SUBAGENT,
         at: "2026-09-14T10:00:01.000Z",
         seq: 6,
         tool: "Read",

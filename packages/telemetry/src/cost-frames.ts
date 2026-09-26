@@ -454,11 +454,11 @@ export async function readTachoToolCallFrames(args: {
 export interface ToolCallObservationRow {
   rootSessionUuid: string;
   /**
-   * The chain the call was recorded on (`toString(h.session_uuid)`), so a
-   * finding can cite a subagent's frame (#4001). Optional until the Context
-   * and cost lane's reader selects it.
+   * The chain the call was recorded on, so a finding can cite a subagent's
+   * frame (#4001): `seq` counts on this chain, not the root's. Equal to
+   * `rootSessionUuid` for a call on the root's own chain.
    */
-  sessionUuid?: string;
+  sessionUuid: string;
   /** RFC 3339. */
   at: string;
   seq: number;
@@ -496,6 +496,7 @@ export async function readTachoToolCallObservations(args: {
     query: `
       SELECT
         toString(h.root_session_uuid)                                  AS root_session_uuid,
+        toString(h.session_uuid)                                       AS session_uuid,
         formatDateTime(h.ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC')           AS at,
         h.seq                                                          AS seq,
         h.tool_name                                                    AS tool,
@@ -504,8 +505,9 @@ export async function readTachoToolCallObservations(args: {
         h.tool_is_mutating                                             AS is_mutating,
         r.result_tokens                                                AS result_tokens
       FROM (
-        SELECT root_session_uuid, ts, seq, tool_name, tool_input_digest,
-               tool_output_digest, tool_is_mutating, tool_use_id
+        SELECT root_session_uuid, session_uuid, ts, seq, tool_name,
+               tool_input_digest, tool_output_digest, tool_is_mutating,
+               tool_use_id
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -544,6 +546,7 @@ export async function readTachoToolCallObservations(args: {
   });
   type Row = {
     root_session_uuid: string;
+    session_uuid: string;
     at: string;
     seq: string | number;
     tool: string;
@@ -555,6 +558,7 @@ export async function readTachoToolCallObservations(args: {
   const rows = (await result.json()) as Row[];
   return rows.map((r) => ({
     rootSessionUuid: r.root_session_uuid,
+    sessionUuid: r.session_uuid,
     at: r.at,
     seq: Number(r.seq),
     tool: r.tool,
