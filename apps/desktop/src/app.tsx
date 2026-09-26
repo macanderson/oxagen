@@ -55,12 +55,16 @@ import {
   logTail,
   type OrgItem,
   readState,
+  readUpdatePolicy,
   removeLocalData,
   reportBusy,
+  restartTachoService,
   runSidecar,
+  setAutoUpdate,
   type TachoStatus,
   tachoStatus,
   uninstallCli,
+  type UpdatePolicy,
   type WorkspaceItem,
 } from "./bridge";
 import {
@@ -100,7 +104,14 @@ import {
   type UpdateOffer,
   type UpdateWatch,
 } from "./update-watch";
-import { checkForUpdate, describeCheck, installUpdate } from "./updater";
+import {
+  checkForUpdate,
+  describeCheck,
+  describeRestart,
+  installInBackground,
+  installUpdate,
+  restartApp,
+} from "./updater";
 
 const WRAP_AGENT_URL = "https://docs.oxagen.sh/docs/cli/wrap-an-agent";
 const DESKTOP_GUIDE_URL = "https://docs.oxagen.sh/docs/cli/desktop";
@@ -193,39 +204,113 @@ export function App() {
   // every control for as long as the feed took to answer.
   const [checking, setChecking] = useState(false);
   // What the update watch found on its own. The prompt asks, and only the
-  // Install click downloads and relaunches.
+  // Install click downloads and relaunches. A Mac that passes the gates in
+  // update.rs installs in the background instead (ADR-202).
   const [updatePrompt, setUpdatePrompt] = useState<UpdateOffer | null>(null);
+  // `update_policy`, for the Updates panel. The watch's offer reads it again
+  // each time, since the folder's permissions can change while the app runs.
+  const [updatePolicy, setUpdatePolicy] = useState<UpdatePolicy | null>(null);
+  useEffect(() => {
+    void readUpdatePolicy().then(setUpdatePolicy);
+  }, []);
+  // The version an automatic install is working on, and the version it put
+  // on disk, which runs after a restart.
+  const [autoInstalling, setAutoInstalling] = useState<string | null>(null);
+  const [installedVersion, setInstalledVersion] = useState<string | null>(
+    null,
+  );
+  // The automatic install holds a close or a Quit only while the bundle swap
+  // and the collector restart run. The busy effect below reports this and
+  // `busy` together, so neither report undoes the other.
+  const installHoldRef = useRef(false);
+  const busyHoldRef = useRef(false);
   // The watch reads these between renders: it holds off the feed while an
-  // install runs or a check the person started is out. doCheckUpdate and
-  // doInstallUpdate set and clear them where they start and end, because
-  // this effect runs one commit later, and a background check that resolved
-  // in between would replace the install's caption. The effect keeps them in
-  // step with the state.
+  // install runs or a check the person started is out. doCheckUpdate,
+  // doInstallUpdate, and the automatic install set and clear them where they
+  // start and end, because this effect runs one commit later, and a
+  // background check that resolved in between would replace the install's
+  // caption. The effect keeps them in step with the state.
   const updateGateRef = useRef({ installing: false, checking: false });
   useEffect(() => {
-    updateGateRef.current = { installing: busy === "update", checking };
-  }, [busy, checking]);
+    updateGateRef.current = {
+      installing: busy === "update" || autoInstalling !== null,
+      checking,
+    };
+  }, [busy, checking, autoInstalling]);
   const watchRef = useRef<UpdateWatch | null>(null);
   // The watch starts once the running version is known: at launch, then
   // hourly, and on a focus 15 minutes or more after the last check.
   const appVersion = state?.app_version ?? null;
   useEffect(() => {
     if (appVersion === null) return;
+    const prompt = (offer: UpdateOffer) => {
+      setUpdate({
+        caption: describeCheck({
+          available: true,
+          version: offer.version,
+          currentVersion: offer.currentVersion,
+        }),
+        offered: offer.update,
+      });
+      setUpdatePrompt(offer);
+    };
+    // ADR-202 §2 and §3: download, install under the hold, restart the
+    // collector, then offer Restart. A failure writes to the Activity log
+    // and falls back to the prompt for the same version.
+    const installAutomatically = async (offer: UpdateOffer) => {
+      updateGateRef.current.installing = true;
+      setAutoInstalling(offer.version);
+      setUpdate({ caption: `installing v${offer.version}…`, offered: null });
+      const lines: LogLine[] = [
+        { text: `$ update to v${offer.version} (automatic)`, err: false },
+      ];
+      try {
+        await installInBackground(
+          offer.update,
+          async (holding) => {
+            installHoldRef.current = holding;
+            await reportBusy(holding || busyHoldRef.current);
+          },
+          async () => {
+            const restart = await restartTachoService();
+            // A restart that worked is not worth a line in someone else's
+            // Activity log. One that failed is.
+            if (!restart.ok) {
+              const text = describeRestart(restart);
+              if (text !== null) {
+                setLog((prev) => [...prev, { text, err: true }]);
+              }
+            }
+          },
+          (text) => lines.push({ text, err: false }),
+        );
+        watchRef.current?.handled(offer.version);
+        setInstalledVersion(offer.version);
+        setUpdate({ caption: `v${offer.version} installed`, offered: null });
+      } catch (e) {
+        const text = e instanceof Error ? e.message : String(e);
+        setLog((prev) => [...prev, ...lines, { text, err: true }]);
+        prompt(offer);
+      } finally {
+        updateGateRef.current.installing = false;
+        setAutoInstalling(null);
+      }
+    };
     const watch = startUpdateWatch({
       currentVersion: appVersion,
       check: checkForUpdate,
       paused: () =>
         updateGateRef.current.installing || updateGateRef.current.checking,
       offer: (offer) => {
-        setUpdate({
-          caption: describeCheck({
-            available: true,
-            version: offer.version,
-            currentVersion: offer.currentVersion,
-          }),
-          offered: offer.update,
-        });
-        setUpdatePrompt(offer);
+        void (async () => {
+          const policy = await readUpdatePolicy();
+          if (policy !== null) setUpdatePolicy(policy);
+          if (policy?.silent && !updateGateRef.current.installing) {
+            await installAutomatically(offer);
+          } else {
+            prompt(offer);
+          }
+        })();
       },
       now: Date.now,
       setInterval: (run, ms) => window.setInterval(run, ms),
@@ -273,9 +358,11 @@ export function App() {
   const busyRef = useRef(false);
   // The Rust shell holds a close or a Quit until the running action ends, so
   // closing the window never stops `tacho` between two file writes. A sign-in
-  // or a first run holds nothing: see `busyHoldsClose`.
+  // or a first run holds nothing: see `busyHoldsClose`. An automatic install
+  // mid-swap holds it too, whatever `busy` says.
   useEffect(() => {
-    void reportBusy(busyHoldsClose(busy));
+    busyHoldRef.current = busyHoldsClose(busy);
+    void reportBusy(busyHoldRef.current || installHoldRef.current);
   }, [busy]);
   // Set by a tick that wants `tacho status`, cleared by the read that asks
   // it. A tick that joins a plain read already out leaves it set, so the
@@ -944,9 +1031,23 @@ export function App() {
     setNotice(null);
     setUpdate({ caption: `installing v${offered.version}…`, offered });
     setLog([{ text: `$ update to v${offered.version}`, err: false }]);
+    const append = (text: string, err = false) =>
+      setLog((prev) => [...prev, { text, err }]);
     try {
-      const { relaunched } = await installUpdate(offered, (line) =>
-        setLog((prev) => [...prev, { text: line, err: false }]),
+      const { relaunched } = await installUpdate(
+        offered,
+        (line) => append(line),
+        async () => {
+          // The collector would otherwise run the old build until the next
+          // login (ADR-202 §4).
+          const restart = await restartTachoService();
+          const text = describeRestart(restart);
+          if (text !== null) append(text, !restart.ok);
+          // The relaunch is an exit request, and the Rust shell holds one
+          // while the page reports busy. Under the hold the window hid and
+          // the app never reopened.
+          await reportBusy(false);
+        },
       );
       // The version is on disk now. If the relaunch failed, the running
       // binary is still the old one and the feed still offers this version,
@@ -977,6 +1078,25 @@ export function App() {
       });
       updateGateRef.current.installing = false;
       setBusy(null);
+    }
+  }
+  // After an automatic install: relaunch into the build on disk.
+  async function doRestart() {
+    try {
+      await restartApp();
+    } catch (e) {
+      setError(
+        `Oxagen did not restart: ${e instanceof Error ? e.message : String(e)}. Quit it and open it again to use v${installedVersion}.`,
+      );
+    }
+  }
+  async function doSetAutoUpdate(enabled: boolean) {
+    try {
+      setUpdatePolicy(await setAutoUpdate(enabled));
+    } catch (e) {
+      setError(
+        `Could not save the update setting: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
 
@@ -1031,6 +1151,9 @@ export function App() {
       ? false
       : (state.cli_links_present ??
         (state.oxagen_on_path !== null || state.tacho_on_path !== null));
+  // The masthead offers Install for a version the watch or a check found,
+  // until the person's own install of it starts.
+  const installOffered = update.offered !== null && busy !== "update";
 
   // A running sidecar locks the pickers, with one exception: the sign-in that
   // fills them. Picking changes local state only, but `applyWorkspace` reads
@@ -1936,6 +2059,30 @@ export function App() {
         </div>
       </section>
 
+      {state?.platform === "macos" && updatePolicy && (
+        <section className="panel" aria-labelledby="updates">
+          <p className="eyebrow" id="updates">
+            Updates
+          </p>
+          <p className="sub">
+            With this on, Oxagen installs each new version in the background,
+            and your next restart runs it.
+          </p>
+          <label className="check">
+            <input
+              type="checkbox"
+              id="auto-update"
+              checked={updatePolicy.auto_update}
+              onChange={(e) => void doSetAutoUpdate(e.target.checked)}
+            />
+            Install updates automatically
+          </label>
+          {updatePolicy.auto_update && updatePolicy.blocker && (
+            <p className="sub">{updatePolicy.blocker}</p>
+          )}
+        </section>
+      )}
+
       {skewNote && (
         <section className="panel" aria-label="Tools out of date">
           <p className="sub">{skewNote}</p>
@@ -2026,13 +2173,23 @@ export function App() {
               {update.caption}
             </span>
           )}
-          {update.offered && busy !== "update" ? (
+          {autoInstalling !== null ? null : installOffered ? (
             <button
               type="button"
               onClick={doInstallUpdate}
               disabled={busy !== null || checking || !state}
             >
               Install
+            </button>
+          ) : installedVersion !== null ? (
+            // A restart while an action runs would be held like a Quit, and
+            // the app would exit instead of reopening.
+            <button
+              type="button"
+              onClick={doRestart}
+              disabled={busy !== null}
+            >
+              Restart
             </button>
           ) : (
             <button

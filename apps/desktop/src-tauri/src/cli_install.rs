@@ -247,7 +247,7 @@ pub fn cli_install_dir() -> PathBuf {
     Roots::real().cli_install_dir()
 }
 
-fn read_json_object(path: &Path) -> Map<String, Value> {
+pub(crate) fn read_json_object(path: &Path) -> Map<String, Value> {
     crate::read_json(path)
         .and_then(|v| v.as_object().cloned())
         .unwrap_or_default()
@@ -259,7 +259,7 @@ const CONFIG_DIR_CREATED: &str = "configDirCreated";
 /// Write `desktop.json`. When `~/.config` is not there yet, this write is what
 /// creates it, and the file records that under `configDirCreated`, so
 /// Uninstall removes an empty `~/.config` only when Oxagen made it.
-fn write_desktop_config(roots: &Roots, config: &Map<String, Value>) -> Result<(), String> {
+pub(crate) fn write_desktop_config(roots: &Roots, config: &Map<String, Value>) -> Result<(), String> {
     let mut config = config.clone();
     if !roots.home.join(".config").exists() {
         config.insert(CONFIG_DIR_CREATED.to_string(), Value::Bool(true));

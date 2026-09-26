@@ -5,6 +5,10 @@
  * platform-specific install; this module turns its results and download
  * events into the words the masthead control and the Activity log show,
  * and the pure half of that is what the tests cover.
+ *
+ * Two paths install (ADR-202). `installUpdate` is the person's click: it
+ * installs and relaunches. `installInBackground` is the automatic install on
+ * a Mac that passes the gates in update.rs: it installs and never relaunches.
  */
 import { relaunch } from "@tauri-apps/plugin-process";
 import {
@@ -12,6 +16,7 @@ import {
   type DownloadEvent,
   type Update,
 } from "@tauri-apps/plugin-updater";
+import type { restartTachoService } from "./bridge";
 
 /** What `check()` found, minus the plugin handle. */
 export type UpdateCheck =
@@ -139,9 +144,34 @@ export async function checkForUpdate(
 }
 
 /**
+ * What runs between the install and the relaunch: the collector restart
+ * (ADR-202 §4). It must not throw. The new build is on disk by then, so
+ * nothing after the install may turn it into a failed update.
+ */
+export type AfterInstall = () => Promise<void>;
+
+/** An `AfterInstall` that throws anyway is logged, never rethrown. */
+async function runAfterInstall(
+  afterInstall: AfterInstall,
+  onLine: (line: string) => void,
+): Promise<void> {
+  try {
+    await afterInstall();
+  } catch (error) {
+    onLine(
+      `After the install: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+/**
  * Download, verify and install, streaming progress lines to `onLine`, then
- * relaunch into the new build. On Windows the installer quits the app
- * itself; `relaunch()` covers macOS and Linux.
+ * run `afterInstall` and relaunch into the new build. On Windows the
+ * installer quits the app itself; `relaunch()` covers macOS and Linux.
+ *
+ * `afterInstall` must also release the page's busy hold. A relaunch is an
+ * exit request, and the Rust shell holds an exit while the page is busy, so
+ * a relaunch under the hold hid the window and never reopened the app.
  *
  * A relaunch that fails is not an update that failed: the new build is on
  * disk by then. It used to reject, so the app said "Update failed" and
@@ -150,6 +180,7 @@ export async function checkForUpdate(
 export async function installUpdate(
   update: Update,
   onLine: (line: string) => void,
+  afterInstall: AfterInstall = async () => {},
 ): Promise<{ relaunched: boolean }> {
   let progress = DOWNLOAD_START;
   await update.downloadAndInstall((event) => {
@@ -157,7 +188,9 @@ export async function installUpdate(
     progress = next.progress;
     if (next.line !== null) onLine(next.line);
   });
-  onLine(`Installed v${update.version}; relaunching…`);
+  onLine(`Installed v${update.version}.`);
+  await runAfterInstall(afterInstall, onLine);
+  onLine("Relaunching…");
   try {
     await relaunch();
     return { relaunched: true };
@@ -168,3 +201,56 @@ export async function installUpdate(
     return { relaunched: false };
   }
 }
+
+/**
+ * The automatic install (ADR-202 §2). The download runs with no hold on
+ * quit, so a quit mid-download drops it and the next launch checks again.
+ * The install runs under `hold`, so a close or a Quit during the bundle swap
+ * waits for the swap to finish. `afterInstall` restarts the collector while
+ * the hold still covers it.
+ *
+ * It never relaunches. The running app keeps the old build until the person
+ * clicks Restart or opens the app again. A download, signature, or install
+ * error rejects, and the caller shows the prompt for the same version.
+ */
+export async function installInBackground(
+  update: Update,
+  hold: (holding: boolean) => Promise<void>,
+  afterInstall: AfterInstall,
+  onLine: (line: string) => void,
+): Promise<void> {
+  let progress = DOWNLOAD_START;
+  await update.download((event) => {
+    const next = applyDownloadEvent(progress, event);
+    progress = next.progress;
+    if (next.line !== null) onLine(next.line);
+  });
+  await hold(true);
+  try {
+    await update.install();
+    onLine(`Installed v${update.version}. Restart Oxagen to use it.`);
+    await runAfterInstall(afterInstall, onLine);
+  } finally {
+    await hold(false);
+  }
+}
+
+/** What `restartTachoService` in bridge.ts answered. */
+export type ServiceRestart = Awaited<ReturnType<typeof restartTachoService>>;
+
+/**
+ * The Activity log's line for a collector restart, or null when a collector
+ * that is not running, or a platform with none to restart, leaves nothing
+ * to say.
+ */
+export function describeRestart(result: ServiceRestart): string | null {
+  if (!result.ok) {
+    return `The collector did not restart, so it runs the old build until you sign out or run tacho enroll: ${result.error}`;
+  }
+  return result.outcome === "restarted"
+    ? "Restarted the collector on the new build."
+    : null;
+}
+
+/** Relaunch into the build on disk: the masthead's Restart button. */
+export const restartApp = () => relaunch();

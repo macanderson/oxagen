@@ -10,8 +10,10 @@ const {
   applyDownloadEvent,
   checkForUpdate,
   describeCheck,
+  describeRestart,
   DOWNLOAD_START,
   formatBytes,
+  installInBackground,
   installUpdate,
 } = await import("./updater");
 
@@ -180,8 +182,53 @@ describe("installUpdate", () => {
       "  50% · 2.0 MB of 4.0 MB",
       "  100% · 4.0 MB of 4.0 MB",
       "Downloaded 4.0 MB; verifying the signature and installing…",
-      "Installed v2.2.0; relaunching…",
+      "Installed v2.2.0.",
+      "Relaunching…",
     ]);
+    expect(relaunch).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs afterInstall between the install and the relaunch", async () => {
+    relaunch.mockClear();
+    const order: string[] = [];
+    const update = {
+      version: "2.2.0",
+      currentVersion: "2.1.1",
+      downloadAndInstall: vi.fn(async () => {
+        order.push("install");
+      }),
+    };
+    relaunch.mockImplementationOnce(async () => {
+      order.push("relaunch");
+    });
+    await installUpdate(
+      asUpdate(update),
+      () => {},
+      async () => {
+        order.push("after");
+      },
+    );
+    expect(order).toEqual(["install", "after", "relaunch"]);
+  });
+
+  it("still relaunches when afterInstall throws, and logs why", async () => {
+    relaunch.mockClear();
+    const lines: string[] = [];
+    const update = {
+      version: "2.2.0",
+      currentVersion: "2.1.1",
+      downloadAndInstall: vi.fn(async () => {}),
+    };
+    await expect(
+      installUpdate(
+        asUpdate(update),
+        (line) => lines.push(line),
+        async () => {
+          throw new Error("launchctl missing");
+        },
+      ),
+    ).resolves.toEqual({ relaunched: true });
+    expect(lines).toContain("After the install: launchctl missing");
     expect(relaunch).toHaveBeenCalledTimes(1);
   });
 
@@ -215,5 +262,125 @@ describe("a relaunch that fails after the install landed", () => {
       installUpdate(asUpdate(update), (line) => lines.push(line)),
     ).resolves.toEqual({ relaunched: false });
     expect(lines.at(-1)).toContain("Quit Oxagen and open it again");
+  });
+});
+
+describe("installInBackground", () => {
+  /** A handle whose download and install record their turn in `order`. */
+  function recordingUpdate(order: string[], failInstall = false) {
+    return {
+      version: "2.2.0",
+      currentVersion: "2.1.1",
+      download: vi.fn(
+        async (onEvent?: (e: DownloadEvent) => void): Promise<void> => {
+          order.push("download");
+          onEvent?.({ event: "Started", data: { contentLength: 4 * MB } });
+          onEvent?.({ event: "Progress", data: { chunkLength: 4 * MB } });
+          onEvent?.({ event: "Finished" });
+        },
+      ),
+      install: vi.fn(async () => {
+        order.push("install");
+        if (failInstall) throw new Error("rename failed");
+      }),
+      downloadAndInstall: vi.fn(),
+    };
+  }
+
+  beforeEach(() => {
+    relaunch.mockClear();
+  });
+
+  it("downloads unheld, installs under the hold, restarts the collector, then lets go", async () => {
+    const order: string[] = [];
+    const lines: string[] = [];
+    const update = recordingUpdate(order);
+    await installInBackground(
+      asUpdate(update),
+      async (holding) => {
+        order.push(holding ? "hold" : "release");
+      },
+      async () => {
+        order.push("after");
+      },
+      (line) => lines.push(line),
+    );
+    expect(order).toEqual(["download", "hold", "install", "after", "release"]);
+    expect(lines).toEqual([
+      "Downloading 4.0 MB…",
+      "  100% · 4.0 MB of 4.0 MB",
+      "Downloaded 4.0 MB; verifying the signature and installing…",
+      "Installed v2.2.0. Restart Oxagen to use it.",
+    ]);
+    expect(update.downloadAndInstall).not.toHaveBeenCalled();
+  });
+
+  it("never relaunches", async () => {
+    await installInBackground(
+      asUpdate(recordingUpdate([])),
+      async () => {},
+      async () => {},
+      () => {},
+    );
+    expect(relaunch).not.toHaveBeenCalled();
+  });
+
+  it("releases the hold and rejects when the install fails, so the caller can prompt", async () => {
+    const order: string[] = [];
+    await expect(
+      installInBackground(
+        asUpdate(recordingUpdate(order, true)),
+        async (holding) => {
+          order.push(holding ? "hold" : "release");
+        },
+        async () => {
+          order.push("after");
+        },
+        () => {},
+      ),
+    ).rejects.toThrow(/rename failed/);
+    expect(order).toEqual(["download", "hold", "install", "release"]);
+  });
+
+  it("takes no hold when the download fails", async () => {
+    const hold = vi.fn(async () => {});
+    const update = recordingUpdate([]);
+    update.download.mockRejectedValueOnce(new Error("signature mismatch"));
+    await expect(
+      installInBackground(asUpdate(update), hold, async () => {}, () => {}),
+    ).rejects.toThrow(/signature/);
+    expect(hold).not.toHaveBeenCalled();
+    expect(update.install).not.toHaveBeenCalled();
+  });
+
+  it("is still an install when the collector restart throws", async () => {
+    const lines: string[] = [];
+    await expect(
+      installInBackground(
+        asUpdate(recordingUpdate([])),
+        async () => {},
+        async () => {
+          throw new Error("launchctl missing");
+        },
+        (line) => lines.push(line),
+      ),
+    ).resolves.toBeUndefined();
+    expect(lines.at(-1)).toBe("After the install: launchctl missing");
+  });
+});
+
+describe("describeRestart", () => {
+  it("says the collector restarted, or why it did not", () => {
+    expect(describeRestart({ ok: true, outcome: "restarted" })).toBe(
+      "Restarted the collector on the new build.",
+    );
+    expect(
+      describeRestart({ ok: false, error: "kickstart failed" }),
+    ).toContain("runs the old build until you sign out or run tacho enroll");
+  });
+
+  it("says nothing when there was no collector to restart", () => {
+    expect(describeRestart({ ok: true, outcome: "not_running" })).toBeNull();
+    expect(describeRestart({ ok: true, outcome: "unsupported" })).toBeNull();
   });
 });
