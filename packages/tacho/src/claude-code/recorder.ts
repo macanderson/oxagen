@@ -855,6 +855,23 @@ export class SessionRecorder {
   }
 
   /**
+   * Judge a model call that seals on another chain against this family's
+   * ledger. The proxy files a call on the host's chain when the session
+   * ended while the call streamed, and the session's own OTel or transcript
+   * record of that call can still arrive here. The caller puts `attrs` on
+   * the frame it seals, and calls `commit` once that frame has sealed, so a
+   * later sighting on this chain is stamped its duplicate and a reader
+   * counts the call once.
+   */
+  judgeModelCallSealedElsewhere(body: Record<string, unknown>): {
+    attrs: Record<string, string>;
+    commit: () => void;
+  } {
+    const sighting = this.llmCallSighting(body, "collector");
+    return { attrs: sighting.attrs ?? {}, commit: sighting.commit };
+  }
+
+  /**
    * Seal a collector event on the chain a hook's subagent identity names, the
    * same chain `ingestHook` routes that hook to. A subagent's `PreToolUse`
    * decision sealed on the root chain left its `tool_requested` on the
