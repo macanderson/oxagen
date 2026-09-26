@@ -403,7 +403,9 @@ describe("readModelCallFrames", () => {
       ),
     ).toHaveLength(2);
     // The priced row selects the search column so the outer read can use it.
-    const priced = query.slice(query.indexOf("FROM ("), query.indexOf(") AS c"));
+    // Up to the first join: `) AS c` alone first matches `) AS cache_write_5m`
+    // in the outer select list.
+    const priced = query.slice(query.indexOf("FROM ("), query.indexOf("LEFT JOIN"));
     expect(priced).toContain("web_search_requests");
     expect(query).not.toContain("web_fetch_requests");
     expect(frames[0]).toMatchObject({ serverToolRequests: 3 });
