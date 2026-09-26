@@ -58,6 +58,7 @@ describe("agent.memory.write handler", () => {
           // TEST_CTX carries no executionStepId, so the key is absent, not the request id.
           executionStepId: null,
         },
+        inputType: "document",
       },
     );
     expect(mocks.writeMemoryMock).toHaveBeenCalledTimes(1);

@@ -1216,7 +1216,7 @@ export const flows: Flow[] = [
       },
       {
         label: "embed",
-        sub: "1536-d vector",
+        sub: "1024-d Voyage vector",
         exit: "recorded, not fatal",
       },
       {

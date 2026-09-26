@@ -252,6 +252,7 @@ export async function resolveEntity(
         // credit charge. See @oxagen/telemetry NIL_UUID.
         executionStepId: null,
       },
+      inputType: "document",
     });
   } catch (err) {
     // Log the cause before degrading. A 401 means a bad gateway credential and

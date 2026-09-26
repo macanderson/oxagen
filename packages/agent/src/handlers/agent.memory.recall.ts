@@ -39,6 +39,7 @@ export async function agentMemoryRecallHandler(
       surface: ctx.surface,
       executionStepId: ctx.executionStepId ?? null,
     },
+    inputType: "query",
   });
   const rows = await recallMemories({
     embedding,

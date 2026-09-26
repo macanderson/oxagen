@@ -1,7 +1,8 @@
 import pino from "pino";
-import { embed, embedMany as embedManyThroughGateway } from "ai";
-import { embeddingProvider, type ModelCredential } from "./models";
-import type { TurnFunding } from "./funding-source";
+import { embed, embedMany as embedManyThroughProvider } from "ai";
+import { APICallError, type EmbeddingModelV4 } from "@ai-sdk/provider";
+import { requireEnv } from "@oxagen/config/env";
+import { createVoyageEmbeddingModel, type VoyageInputType } from "./voyage";
 import {
   providerFromModelId,
   hashPrompt,
@@ -19,12 +20,74 @@ const logger = pino({
   base: { app: "ai.embed" },
 });
 
-// Match the 1536-dim AgentMemory vector index. Swapping models requires a
-// re-index, so we pin here and treat the index name as the contract. `MODEL` is
-// the logical id used for cost/telemetry; `GATEWAY_MODEL` is the `creator/model`
-// id the Vercel AI Gateway addresses.
-const MODEL = "text-embedding-3-small";
-const GATEWAY_MODEL = "openai/text-embedding-3-small";
+// Every Neo4j vector index is sized to this model's vectors
+// (packages/ontology/src/schema.cypher). Changing either constant means
+// resizing the indexes and embedding every stored text again, so both are
+// pinned here. Mac chose Voyage with one platform key for every organisation
+// on 2026-09-26 (#4148, ADR-192).
+export const EMBEDDING_MODEL = "voyage-3-large";
+export const EMBEDDING_DIMENSIONS = 1024;
+const MODEL = EMBEDDING_MODEL;
+
+/**
+ * Embeddings could not be produced: the key is missing, Voyage refused the
+ * key or the request, or Voyage stayed unavailable after the SDK's retries.
+ *
+ * Carries a stable `code` so the API answers 503 with the provider's reason
+ * instead of an unhandled 500 (#4148). `statusCode` and `providerMessage` are
+ * what Voyage said, when it said anything.
+ */
+export class EmbeddingUnavailableError extends Error {
+  readonly code = "embedding_unavailable" as const;
+  readonly provider = "voyage" as const;
+  constructor(
+    message: string,
+    readonly statusCode?: number,
+    readonly providerMessage?: string,
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
+    this.name = "EmbeddingUnavailableError";
+  }
+}
+
+/**
+ * Wrap a provider failure. The AI SDK wraps the last attempt in a RetryError
+ * after its retries, so the APICallError is read from `lastError` when present.
+ */
+function embeddingUnavailable(err: unknown): EmbeddingUnavailableError {
+  if (err instanceof EmbeddingUnavailableError) return err;
+  const last =
+    typeof err === "object" && err !== null && "lastError" in err
+      ? (err as { lastError: unknown }).lastError
+      : err;
+  const apiError = APICallError.isInstance(last) ? last : undefined;
+  const providerMessage = apiError?.responseBody?.slice(0, 500);
+  return new EmbeddingUnavailableError(
+    apiError?.statusCode
+      ? `Embeddings are unavailable: Voyage answered ${apiError.statusCode}`
+      : "Embeddings are unavailable: Voyage could not be reached",
+    apiError?.statusCode,
+    providerMessage ?? (err instanceof Error ? err.message : String(err)),
+    { cause: err },
+  );
+}
+
+/** The platform's Voyage model, built per call so a rotated key takes effect. */
+function voyageModel(inputType: VoyageInputType | undefined): EmbeddingModelV4 {
+  const { VOYAGE_API_KEY } = requireEnv(["VOYAGE_API_KEY"] as const);
+  if (!VOYAGE_API_KEY) {
+    throw new EmbeddingUnavailableError(
+      "Embeddings are unavailable: VOYAGE_API_KEY is not set",
+    );
+  }
+  return createVoyageEmbeddingModel({
+    apiKey: VOYAGE_API_KEY,
+    modelId: EMBEDDING_MODEL,
+    outputDimension: EMBEDDING_DIMENSIONS,
+    inputType,
+  });
+}
 
 export interface EmbedTextOpts {
   /**
@@ -49,12 +112,12 @@ export interface EmbedTextOpts {
     executionStepId: string | null;
   };
   /**
-   * The organisation's own key, when it has one (ADR-053 §2). Used only when
-   * it is a gateway key — OpenRouter does not serve embeddings — so the
-   * platform key may still answer, and then the call is billed. Which one
-   * answered is decided here, not by the caller.
+   * `document` for text Oxagen stores and later searches, `query` for text it
+   * searches with. Voyage embeds the two differently, and recall is better
+   * when each side says which it is. Leave unset for symmetric comparisons,
+   * such as one prompt against another.
    */
-  credential?: ModelCredential;
+  inputType?: VoyageInputType;
 }
 
 /**
@@ -71,8 +134,6 @@ async function meterEmbeddingCall(params: {
   usageKnown: boolean;
   durationMs: number;
   telemetry: EmbedTextOpts["telemetry"];
-  /** Who paid the vendor; `org` reports the usage and charges nothing. */
-  fundedBy: TurnFunding;
 }): Promise<void> {
   const { orgId, workspaceId, surface, executionStepId } = params.telemetry;
   // Embeddings are input-only; the rate card prices them per the same meter.
@@ -89,7 +150,7 @@ async function meterEmbeddingCall(params: {
       org_id: orgId,
       workspace_id: workspaceId,
       model: MODEL,
-      provider: providerFromModelId(`openai:${MODEL}`),
+      provider: providerFromModelId(`voyage:${MODEL}`),
       input_tokens: params.inputTokens,
       output_tokens: 0,
       cached_tokens: 0,
@@ -99,32 +160,20 @@ async function meterEmbeddingCall(params: {
       prompt_hash: params.promptHash,
       created_at: new Date().toISOString(),
     },
-    params.fundedBy === "platform"
-      ? {
-          orgId,
-          reason: CREDIT_REASONS.CONSUME_EMBEDDING,
-          referenceId: executionStepId ?? undefined,
-          model: MODEL,
-          inputTokens: params.inputTokens,
-          outputTokens: 0,
-          cachedTokens: 0,
-        }
-      : undefined,
+    // Oxagen's key serves every embedding, so every embedding is charged.
+    {
+      orgId,
+      reason: CREDIT_REASONS.CONSUME_EMBEDDING,
+      referenceId: executionStepId ?? undefined,
+      model: MODEL,
+      inputTokens: params.inputTokens,
+      outputTokens: 0,
+      cachedTokens: 0,
+    },
     params.usageKnown,
   );
 }
 
-/**
- * Embed `text` using the pinned embedding model through the Vercel AI Gateway
- * and write one `token_usage` row to ClickHouse via @oxagen/telemetry
- * through a durable delivery queue. Surface origin and execution step flow through
- * `opts.telemetry` so every embedding call is metered alongside language-model
- * calls. The gateway client reads `AI_GATEWAY_API_KEY`
- * from the environment — there is no direct-provider fallback.
- *
- * Embedding several texts at once? Use {@link embedMany}: it is one round trip
- * and one metered call instead of N of each.
- */
 /**
  * A provider call that threw reported no usage. Close the admission so it
  * stops counting as incomplete; the provider error is what the caller sees.
@@ -146,12 +195,22 @@ async function voidEmbeddingAdmission(
   });
 }
 
+/**
+ * Embed `text` with the pinned Voyage model on the platform key and write one
+ * `token_usage` row to ClickHouse via @oxagen/telemetry through a durable
+ * delivery queue. Surface origin and execution step flow through
+ * `opts.telemetry` so every embedding call is metered alongside language-model
+ * calls. The key is `VOYAGE_API_KEY`. There is no fallback provider: a failure
+ * throws {@link EmbeddingUnavailableError}.
+ *
+ * Embedding several texts at once? Use {@link embedMany}: it is one round trip
+ * and one metered call instead of N of each.
+ */
 export async function embedText(
   text: string,
   opts: EmbedTextOpts,
 ): Promise<number[]> {
-  const { provider, fundedBy } = embeddingProvider(opts.credential);
-  const model = provider.embeddingModel(GATEWAY_MODEL);
+  const model = voyageModel(opts.inputType);
   const startedAt = Date.now();
   const promptHash = await hashPrompt(text);
   const usageId = await admitTokenUsage(
@@ -162,13 +221,13 @@ export async function embedText(
   const { embedding, usage } = await embed({ model, value: text }).catch(
     async (err: unknown) => {
       await voidEmbeddingAdmission(usageId, opts);
-      throw err;
+      throw embeddingUnavailable(err);
     },
   );
 
-  // Warn when the AI SDK embedding response omits usage (gateway outage, partial
-  // response, or SDK version skew) so the billing gap is visible in logs rather
-  // than silently recorded as zero tokens / zero cost.
+  // Warn when the embedding response omits usage (a partial response or SDK
+  // version skew) so the billing gap is visible in logs rather than silently
+  // recorded as zero tokens and zero cost.
   if (!usage) {
     logger.warn(
       { model: MODEL, executionStepId: opts.telemetry.executionStepId },
@@ -183,14 +242,13 @@ export async function embedText(
     usageKnown: usage?.tokens !== undefined,
     durationMs: Date.now() - startedAt,
     telemetry: opts.telemetry,
-    fundedBy,
   });
 
   return embedding;
 }
 
 /**
- * Embed several texts in ONE gateway call, metered ONE time.
+ * Embed several texts in ONE provider call, metered ONE time.
  *
  * The per-item alternative is `texts.map(embedText)`, and it is wrong twice
  * over: N HTTP round trips, and N charges. The second used to be the expensive
@@ -208,8 +266,7 @@ export async function embedMany(
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
-  const { provider, fundedBy } = embeddingProvider(opts.credential);
-  const model = provider.embeddingModel(GATEWAY_MODEL);
+  const model = voyageModel(opts.inputType);
   const startedAt = Date.now();
   const promptHash = await hashPrompt(texts.join("\n"));
   const usageId = await admitTokenUsage(
@@ -217,12 +274,12 @@ export async function embedMany(
     opts.telemetry.workspaceId,
   );
 
-  const { embeddings, usage } = await embedManyThroughGateway({
+  const { embeddings, usage } = await embedManyThroughProvider({
     model,
     values: texts,
   }).catch(async (err: unknown) => {
     await voidEmbeddingAdmission(usageId, opts);
-    throw err;
+    throw embeddingUnavailable(err);
   });
 
   if (!usage) {
@@ -243,7 +300,6 @@ export async function embedMany(
     usageKnown: usage?.tokens !== undefined,
     durationMs: Date.now() - startedAt,
     telemetry: opts.telemetry,
-    fundedBy,
   });
 
   return embeddings;

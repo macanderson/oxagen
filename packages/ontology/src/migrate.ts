@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDirectRunEntry } from "@oxagen/telemetry";
-import type { Session } from "neo4j-driver";
+import { int as neo4jInt, type Session } from "neo4j-driver";
 import { closeDriver, session } from "./client";
 import { sanitizeLabel } from "./labels";
 import { listOrgGraphDatabases } from "./org-graph";
@@ -200,6 +200,108 @@ export async function pascalCaseDomainLabels(s: Session): Promise<void> {
 }
 
 /**
+ * The vector length every embedding index holds: voyage-3-large at 1,024
+ * dimensions (#4148). It must equal `EMBEDDING_DIMENSIONS` in
+ * packages/ai/src/embed.ts and every `vector.dimensions` in schema.cypher.
+ */
+export const EMBEDDING_DIMENSIONS = 1024;
+
+/** The vector indexes schema.cypher creates. No other index is touched. */
+export const EMBEDDING_INDEXES = [
+  "document_embedding_index",
+  "memory_embedding_index",
+  "message_embedding_index",
+  "entity_node_embedding_index",
+  "graph_node_embedding_index",
+] as const;
+
+/** Nodes cleared per transaction, so a large graph never holds one huge lock. */
+const CLEAR_BATCH = 1000;
+
+/**
+ * Move a graph from one embedding size to another, before schema.cypher runs.
+ *
+ * `CREATE VECTOR INDEX ... IF NOT EXISTS` never resizes an index that exists,
+ * so an embedding index of any other size is dropped here and schema.cypher
+ * recreates it at {@link EMBEDDING_DIMENSIONS}.
+ *
+ * A vector of the old size stays on its node, and Neo4j leaves a mis-sized
+ * vector out of the index without an error. Such a node would never be found
+ * by search and never be selected by the backfill, which reads
+ * `n.embedding IS NULL`. So those vectors are cleared, with the model that made
+ * them, in batches. The backfill embeds them again with the current model.
+ *
+ * A no-op once every index and vector is the current size.
+ */
+export async function resizeEmbeddingIndexes(s: Session): Promise<void> {
+  const shown = await s.run(
+    `SHOW INDEXES YIELD name, type, options
+     WHERE type = 'VECTOR'
+     RETURN name, options`,
+  );
+  for (const record of shown.records) {
+    const name = String(record.get("name"));
+    if (!(EMBEDDING_INDEXES as readonly string[]).includes(name)) continue;
+    const options = record.get("options") as {
+      indexConfig?: Record<string, unknown>;
+    } | null;
+    const dimensions = toNumber(options?.indexConfig?.["vector.dimensions"]);
+    if (dimensions === EMBEDDING_DIMENSIONS) continue;
+    process.stdout.write(
+      JSON.stringify({
+        level: "info",
+        msg: "Neo4j migrate: dropping a vector index of the old size so schema.cypher recreates it",
+        index: name,
+        from: dimensions,
+        to: EMBEDDING_DIMENSIONS,
+      }) + "\n",
+    );
+    // The name is one of EMBEDDING_INDEXES, so it is safe to interpolate.
+    await s.run(`DROP INDEX ${name} IF EXISTS`);
+  }
+
+  const counted = await s.run(
+    `MATCH (n)
+     WHERE n.embedding IS NOT NULL AND size(n.embedding) <> $dimensions
+     RETURN count(n) AS stale`,
+    { dimensions: EMBEDDING_DIMENSIONS },
+  );
+  const stale = toNumber(counted.records[0]?.get("stale"));
+  if (stale === 0) return;
+
+  process.stdout.write(
+    JSON.stringify({
+      level: "info",
+      msg: "Neo4j migrate: clearing vectors of the old size so the backfill embeds them again",
+      stale,
+      to: EMBEDDING_DIMENSIONS,
+    }) + "\n",
+  );
+  let cleared = 0;
+  for (;;) {
+    const batch = await s.run(
+      `MATCH (n)
+       WHERE n.embedding IS NOT NULL AND size(n.embedding) <> $dimensions
+       WITH n LIMIT $batch
+       SET n.embedding = null
+       REMOVE n.embeddingModel
+       RETURN count(n) AS done`,
+      { dimensions: EMBEDDING_DIMENSIONS, batch: neo4jInt(CLEAR_BATCH) },
+    );
+    const done = toNumber(batch.records[0]?.get("done"));
+    cleared += done;
+    if (done === 0) break;
+  }
+  process.stdout.write(
+    JSON.stringify({
+      level: "info",
+      msg: "Neo4j migrate: cleared vectors of the old size",
+      cleared,
+    }) + "\n",
+  );
+}
+
+/**
  * Apply `schema.cypher` (and the legacy clean-up passes) to one database. With
  * no argument that is the POOLED database; an organisation provisioned into its
  * own database (ADR-098) is migrated by name — by the provisioner right after
@@ -216,6 +318,9 @@ export async function migrate(database?: string | null): Promise<void> {
     // promote :KnowledgeNode -> :GraphNode without hitting the uniqueness
     // constraint. No-op on clean graphs. See dedupeLegacyKnowledgeNodes.
     await dedupeLegacyKnowledgeNodes(s);
+    // Drop embedding indexes and clear vectors of another size, so the
+    // statements below recreate the indexes at the current size.
+    await resizeEmbeddingIndexes(s);
     for (const stmt of statements) {
       await s.run(stmt);
     }

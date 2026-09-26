@@ -59,7 +59,8 @@ export type ProviderName =
   | "zai"
   | "xai"
   | "deepseek"
-  | "google";
+  | "google"
+  | "voyage";
 
 export interface ProviderModelRate {
   /** Provider that bills us for this model. */
@@ -531,6 +532,15 @@ export const PROVIDER_RATE_CARD: RateCard = {
     outputPer1M: 0.0,
     cachedInputPer1M: 0.13,
     cacheWritePer1M: 0.13,
+  },
+  // Oxagen's embedding model since #4148. Voyage's list price on 2026-09-26,
+  // with no free allowance: it is on Voyage's older-models list.
+  "voyage-3-large": {
+    provider: "voyage",
+    inputPer1M: 0.18,
+    outputPer1M: 0.0,
+    cachedInputPer1M: 0.18,
+    cacheWritePer1M: 0.18,
   },
 };
 

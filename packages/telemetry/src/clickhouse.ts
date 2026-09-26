@@ -351,6 +351,7 @@ export type Provider =
   | "meta"
   | "mistral"
   | "deepseek"
+  | "voyage"
   | "";
 
 export interface TokenUsageRow {
@@ -832,6 +833,7 @@ export function providerFromModelId(modelId: string): Provider {
     case "meta":
     case "mistral":
     case "deepseek":
+    case "voyage":
       return head;
   }
   const id = modelId.toLowerCase();
@@ -856,6 +858,7 @@ export function providerFromModelId(modelId: string): Provider {
     return "google";
   if (id.startsWith("flux")) return "bfl";
   if (id.startsWith("grok")) return "xai";
+  if (id.startsWith("voyage")) return "voyage";
   return "";
 }
 

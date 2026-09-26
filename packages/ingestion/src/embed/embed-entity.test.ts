@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
   upsertEmbedding: vi.fn(),
 }));
 
-vi.mock("@oxagen/ai", () => ({ embedText: mocks.embedText }));
+vi.mock("@oxagen/ai", () => ({
+  embedText: mocks.embedText,
+  EMBEDDING_MODEL: "voyage-3-large",
+}));
 vi.mock("../mutations/upsert-entity", () => ({
   upsertEmbedding: mocks.upsertEmbedding,
 }));
@@ -21,7 +24,7 @@ import { embedEntity } from "./index";
 
 describe("embedEntity telemetry (no synthesized execution_step_id)", () => {
   beforeEach(() => {
-    mocks.embedText.mockReset().mockResolvedValue(new Array(1536).fill(0));
+    mocks.embedText.mockReset().mockResolvedValue(new Array(1024).fill(0));
     mocks.upsertEmbedding.mockReset().mockResolvedValue(undefined);
   });
 
@@ -43,5 +46,25 @@ describe("embedEntity telemetry (no synthesized execution_step_id)", () => {
     // Specifically: it must NOT be the old synthesized correlation string.
     expect(opts.telemetry.executionStepId).not.toBe("embed:node-abc");
     expect(opts.telemetry.surface).toBe("ingestion");
+  });
+
+  it("embeds as a document and records the model on the node", async () => {
+    await embedEntity({
+      nodeId: "node-abc",
+      entityType: "github:pull_request",
+      text: "some entity text",
+      orgId: "11111111-1111-1111-1111-111111111111",
+      workspaceId: "22222222-2222-2222-2222-222222222222",
+      connectionId: "33333333-3333-3333-3333-333333333333",
+    });
+
+    const opts = mocks.embedText.mock.calls[0]![1] as { inputType?: string };
+    expect(opts.inputType).toBe("document");
+    expect(mocks.upsertEmbedding).toHaveBeenCalledWith(
+      "node-abc",
+      expect.any(Array),
+      "voyage-3-large",
+      "11111111-1111-1111-1111-111111111111",
+    );
   });
 });

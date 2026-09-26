@@ -1,9 +1,7 @@
-import { embedText } from "@oxagen/ai";
+import { EMBEDDING_MODEL, embedText } from "@oxagen/ai";
 import { upsertEmbedding } from "../mutations/upsert-entity";
 import type { EmbedRequest } from "../types";
 
-// 1536 dims = text-embedding-3-small, matches all EntityNode vector indexes.
-const EMBED_MODEL = "openai/text-embedding-3-small";
 
 export function renderEntityText(
   entityType: string,
@@ -37,6 +35,7 @@ export async function embedEntity(req: EmbedRequest): Promise<void> {
       // `embed:<nodeId>` broke both writes (dropped CH row + unbilled charge).
       executionStepId: null,
     },
+    inputType: "document",
   });
-  await upsertEmbedding(req.nodeId, vector, EMBED_MODEL, req.orgId);
+  await upsertEmbedding(req.nodeId, vector, EMBEDDING_MODEL, req.orgId);
 }
