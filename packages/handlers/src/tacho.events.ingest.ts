@@ -2071,11 +2071,32 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       // deltas were skipped — and on the retry their heads had advanced, so the
       // deltas folded empty and the spend was undercounted for good.
       //
-      // `conflict` maps to 409: neither `ControlUnreachable` nor the 400/422
-      // the shipper quarantines on, so it takes the "keep the batch, back off"
-      // branch (`spool.ts`) and the next attempt reads the rows as they now
-      // are. At most one retry: a conflict on the INSERT path means the row
-      // exists, so the retry takes the existing-session path.
+      // `conflict` maps to 409, which the shipper answers by leaving this
+      // session out for a few seconds while the rest of the host ships
+      // (`spool.ts`). The next attempt reads the rows as they now are. At most
+      // one retry: a conflict on the INSERT path means the row exists, so the
+      // retry takes the existing-session path.
+      //
+      // Unless the row is one this transaction cannot read. The unique index
+      // on `session_uuid` spans every tenant, and row-level security hides a
+      // row another workspace or organization holds, so the retry would read
+      // nothing, insert, and conflict again, for ever (#3944, S-03). Read it
+      // once more: the INSERT waited for the row it lost to, so a row this
+      // tenant holds is visible now. One that is still not visible belongs to
+      // a host outside this workspace, and is refused the way a session held
+      // by another host here is. The shipper matches the message and sets the
+      // session aside (`SESSION_OWNED_ELSEWHERE`).
+      if (!accepted && !existing) {
+        const visible = await tx.query.tachoSessions.findFirst({
+          where: eq(schema.tachoSessions.sessionUuid, sessionUuid),
+          columns: { id: true },
+        });
+        if (visible === undefined)
+          throw tachoDenied(
+            capability,
+            "Forbidden: session belongs to another host",
+          );
+      }
       if (!accepted) {
         throw new HandlerError({
           code: "conflict",

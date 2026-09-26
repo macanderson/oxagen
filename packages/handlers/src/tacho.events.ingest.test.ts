@@ -372,6 +372,13 @@ interface FakeDb {
    */
   hideSessionFromNextRead: boolean;
   /**
+   * Sessions another workspace or organization holds. Row-level security
+   * hides them from every read this tenant makes, and the unique index on
+   * `session_uuid`, which spans tenants, still makes an INSERT of the same
+   * uuid conflict. The rows stay in `sessions` for that conflict to hit.
+   */
+  foreignTenantSessions: Set<string>;
+  /**
    * A concurrent batch for the same session commits between this request's read
    * and its write, advancing the row's `seq_count` to this value. One-shot:
    * applied on the next session read and then cleared, which is the interleaving
@@ -480,6 +487,7 @@ function fakeDb(): FakeDb {
     hideSessionFromRead: false,
     promoteTierOnRead: undefined,
     hideSessionFromNextRead: false,
+    foreignTenantSessions: new Set<string>(),
     advanceSeqCountOnRead: undefined,
     moveHostOnRead: undefined,
     closeOnRead: false,
@@ -688,6 +696,8 @@ function wire(db: FakeDb): void {
               }
               const row = sessionNamed(db, args.where);
               if (!row) return undefined;
+              if (db.foreignTenantSessions.has(row["sessionUuid"] as string))
+                return undefined;
               // A read returns VALUES, not a live handle on the row — which is
               // the whole reason `existing` can be stale. Snapshotting here is
               // what lets the fixture model a concurrent commit landing
@@ -796,12 +806,19 @@ function wire(db: FakeDb): void {
                   ? // The ownership read before any body is written: which
                     // host opened each session the batch names, and its
                     // recorded head for a successor's chain test.
-                    [...db.sessions.values()].map((row) => ({
-                      sessionUuid: row["sessionUuid"],
-                      hostId: row["hostId"],
-                      seqCount: row["seqCount"],
-                      lastHash: row["lastHash"],
-                    }))
+                    [...db.sessions.values()]
+                      .filter(
+                        (row) =>
+                          !db.foreignTenantSessions.has(
+                            row["sessionUuid"] as string,
+                          ),
+                      )
+                      .map((row) => ({
+                        sessionUuid: row["sessionUuid"],
+                        hostId: row["hostId"],
+                        seqCount: row["seqCount"],
+                        lastHash: row["lastHash"],
+                      }))
                   : tableName(table) === "contained_launches"
                     ? db.containedLaunches
                     : tableName(table) === "context_promotions"
@@ -3272,8 +3289,9 @@ describe("ingest_tacho_events: bodies and the seal", () => {
       sealedAt: null,
       genesisHash: (events[0] as TachoEvent).hash,
     });
-    // Invisible to the read that precedes the INSERT: that is the race.
-    db.hideSessionFromRead = true;
+    // Invisible to the read that precedes the INSERT, and committed by the
+    // time the INSERT conflicts with it: that is the race.
+    db.hideSessionFromNextRead = true;
     wire(db);
 
     await expect(
@@ -3293,6 +3311,34 @@ describe("ingest_tacho_events: bodies and the seal", () => {
         (u) => u.table === "hosts" && "sessionsCount" in u.values,
       ),
     ).toBeUndefined();
+  });
+
+  // #3944, S-03: a session uuid another workspace or organization holds is
+  // hidden by row-level security, so every retry read nothing, inserted, and
+  // conflicted again. The 409 it answered was retried for ever.
+  it("refuses a session another tenant holds as owned elsewhere, not as a race", async () => {
+    const db = fakeDb();
+    const events = session();
+    db.sessions.set(SESSION, {
+      id: "s-elsewhere",
+      sessionUuid: SESSION,
+      hostId: "55555555-5555-4555-8555-555555555555",
+      seqCount: 3,
+      sealedAt: null,
+    });
+    db.foreignTenantSessions.add(SESSION);
+    wire(db);
+
+    const err = await tachoEventsIngestHandler(batch(events), CONTEXT).catch(
+      (e: unknown) => e,
+    );
+    // The message the host's shipper matches to set the session aside.
+    expect(err).toMatchObject({ code: "authz_denied" });
+    expect(String((err as Error).message)).toMatch(
+      /session belongs to another host/,
+    );
+    expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    expect(db.sessions.get(SESSION)?.["id"]).toBe("s-elsewhere");
   });
 
   it("refuses an update whose tier moved under the read", async () => {

@@ -57,6 +57,8 @@ import {
   HOST_REVOKED_MESSAGE,
   MAX_BODY_AUTHORITY_WAIT_MS,
   MAX_CONSECUTIVE_QUARANTINES,
+  PARKED_EVENT_MAX_AGE_MS,
+  PARKED_SESSION_MIN_WAIT_MS,
   RETENTION_HOLD_LOG_INTERVAL_MS,
   type ShipperOptions,
 } from "./spool";
@@ -955,6 +957,96 @@ describe("shipper", () => {
     await retry.s.drain();
     expect(offered).toBe(true);
     expect(wal.stats().unshipped).toBe(0);
+  });
+
+  // #3944, S-03: a root that never landed was retried for ever, and every
+  // other 409 held the batch at the head of the WAL, which stopped the host.
+  describe("a session the control plane refuses with a 409", () => {
+    /** One session whose third frame is refused until something changes. */
+    function refusedAtThird(reason: string) {
+      const paths = scratchPaths();
+      const wal = new Wal(paths.wal);
+      const early = distinctSession("refused-child");
+      const other = distinctSession("other-root");
+      wal.append(early);
+      wal.append(other);
+      const refused = early[2] as TachoEvent;
+      const offered: TachoEvent[][] = [];
+      const client = {
+        ingest: async (batch: TachoEvent[]) => {
+          offered.push(batch);
+          if (batch.some((e) => e.event_id_idem === refused.event_id_idem))
+            throw new ControlError(
+              409,
+              `{"code":"conflict","reason":"${reason}"}`,
+            );
+          return okResponse(batch);
+        },
+      };
+      return { paths, wal, early, other, refused, offered, client };
+    }
+    const quarantined = (dir: string) =>
+      readdirSync(dir).filter((f) => f.endsWith(".json"));
+
+    it("parks a session whose write lost a race and ships the others", async () => {
+      const t = refusedAtThird("session_moved_under_read");
+      const { s, logs } = shipper(t.wal, t.client, t.paths.quarantine, () =>
+        Date.parse(t.refused.ts),
+      );
+      await s.drain();
+      await s.drain();
+      // The other session and the refused one's first two frames shipped.
+      expect(t.wal.stats().unshipped).toBe(t.early.length - 2);
+      expect(quarantined(t.paths.quarantine)).toHaveLength(0);
+      expect(logs.some((l) => l.includes("waits"))).toBe(true);
+    });
+
+    it("quarantines the refused event once it is past both bounds, and ships the session's later frames", async () => {
+      const t = refusedAtThird("root_session_unrecorded");
+      // The event is already older than the age bound when first refused.
+      let clock = Date.parse(t.refused.ts) + PARKED_EVENT_MAX_AGE_MS;
+      const { s } = shipper(t.wal, t.client, t.paths.quarantine, () => clock);
+      await s.drain();
+      expect(quarantined(t.paths.quarantine)).toHaveLength(0);
+      // Parked, and offered again at every wait, until this shipper has
+      // held it for the minimum wait.
+      const giveUpAt = clock + PARKED_SESSION_MIN_WAIT_MS;
+      while (clock < giveUpAt) {
+        clock += 10 * 60_000;
+        await s.drain();
+      }
+      expect(quarantined(t.paths.quarantine)).toEqual([
+        `${t.refused.session_uuid}-${String(t.refused.seq).padStart(8, "0")}.json`,
+      ]);
+      // Nothing is left: the session's frames after the refused one shipped.
+      expect(t.wal.stats().unshipped).toBe(0);
+    });
+
+    it("keeps parking an event younger than the age bound (negative)", async () => {
+      const t = refusedAtThird("root_session_unrecorded");
+      let clock = Date.parse(t.refused.ts) + 60_000;
+      const { s } = shipper(t.wal, t.client, t.paths.quarantine, () => clock);
+      await s.drain();
+      // Three hours of parking, far past the minimum wait.
+      for (let i = 0; i < 18; i += 1) {
+        clock += 10 * 60_000;
+        await s.drain();
+      }
+      expect(quarantined(t.paths.quarantine)).toHaveLength(0);
+      expect(t.wal.stats().unshipped).toBe(t.early.length - 2);
+    });
+
+    it("keeps parking an old event this shipper has not yet held for the minimum wait (negative)", async () => {
+      const t = refusedAtThird("root_session_unrecorded");
+      // A backlog after an outage: the event is old, but this shipper only
+      // just met it, and its root may be further back in the queue.
+      let clock = Date.parse(t.refused.ts) + 3 * PARKED_EVENT_MAX_AGE_MS;
+      const { s } = shipper(t.wal, t.client, t.paths.quarantine, () => clock);
+      await s.drain();
+      clock += PARKED_SESSION_MIN_WAIT_MS / 2;
+      await s.drain();
+      expect(quarantined(t.paths.quarantine)).toHaveLength(0);
+    });
   });
 
   it("drains past a request the route refuses as too large, rather than wedging", async () => {
