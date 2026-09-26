@@ -1054,3 +1054,65 @@ describe("CostTab", () => {
     expect(screen.queryByTestId("waterfall-cut")).toBeNull();
   });
 });
+
+// #3721. A run's calls can run web searches, which the book prices per
+// request. The tab left them out: the class table's rows summed to less than
+// the run's cost, and nothing said what the rest was.
+describe("CostTab, web searches", () => {
+  const withSearches = (requests: number, micros: string | null): RunCost => {
+    const rollup = releaseRunCost().rollup;
+    if (rollup === null) throw new Error("the builder's rollup is present");
+    const [model] = rollup.byModel;
+    if (model === undefined) throw new Error("the builder has one model");
+    const cost = (value: string) => ({
+      micros: value,
+      currency: "USD",
+      basis: "gateway_observed" as const,
+    });
+    return {
+      rollup: {
+        ...rollup,
+        cost: cost(String(4_130_000 + Number(micros ?? "0"))),
+        searchRequests: requests,
+        byModel: [
+          {
+            ...model,
+            cost: cost(String(4_130_000 + Number(micros ?? "0"))),
+            searchRequests: requests,
+            searchCost: micros === null ? null : cost(micros),
+          },
+        ],
+      },
+    };
+  };
+
+  it("lists the run's searches in requests, with their cost in the class total", async () => {
+    await renderTab(props({ cost: readOk(withSearches(3, "30000")) }));
+    const row = screen.getByTestId("token-class-searches");
+    expect(row.children[1]).toHaveTextContent("3 search requests");
+    expect(row.children[2]).toHaveTextContent("$0.03");
+    // The rows sum to the run's recorded cost, searches included.
+    expect(screen.getByTestId("token-class-total")).toHaveTextContent("$4.16");
+    // Requests are not tokens: the token total is the classes' alone.
+    expect(screen.getByTestId("token-class-total-tokens")).toHaveTextContent(
+      "768,981",
+    );
+    expect(screen.getAllByTestId("token-class-row")).toHaveLength(6);
+  });
+
+  it("draws no search row for a run that ran none (negative)", async () => {
+    await renderTab(props());
+    expect(screen.queryByTestId("token-class-searches")).toBeNull();
+    expect(screen.getByTestId("token-class-total")).toHaveTextContent("$4.13");
+  });
+
+  it("leaves the total not recorded when the searches' cost is not (negative)", async () => {
+    await renderTab(props({ cost: readOk(withSearches(3, null)) }));
+    expect(
+      screen.getByTestId("token-class-searches").children[2],
+    ).toHaveTextContent("not recorded");
+    expect(screen.getByTestId("token-class-total")).toHaveTextContent(
+      "not recorded",
+    );
+  });
+});

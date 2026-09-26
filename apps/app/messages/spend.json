@@ -563,6 +563,8 @@
       "cacheHitNote": "cache_read ÷ (input_uncached + cache_read), token-weighted",
       "cacheWritten": "Written to cache",
       "cacheWrittenNote": "cache_write ÷ (input_uncached + cache_read + cache_write), token-weighted",
+      "searches": "Web searches",
+      "searchesNote": "{count, plural, one {# request} other {# requests}}, priced per request and kept out of the token total",
       "cacheWriteShare": "Cache write cost share",
       "effectiveInput": "Effective input price",
       "unmapped": "Unmapped classes",

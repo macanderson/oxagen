@@ -43,8 +43,8 @@ const tokens = {
   reasoning: 0,
 };
 /**
- * The same counts as `get_spend` answers them. The page's view leaves out
- * `server_tool_request`.
+ * The same counts as `get_spend` answers them, with the web search requests
+ * the view carries beside the token classes (#3721).
  */
 const wireTokens = { ...tokens, server_tool_request: 0 };
 const priced = {
@@ -89,7 +89,7 @@ describe("toSpendReport", () => {
     });
     const view = SpendReport.parse(toSpendReport(out));
     expect(view.total).toEqual(figure);
-    expect(view.rows[0]?.tokens).toEqual(tokens);
+    expect(view.rows[0]?.tokens).toEqual(wireTokens);
     expect(view.rows.map((row) => [row.key, row.provider, row.cost])).toEqual([
       ["claude-sonnet-5", "anthropic", priced],
       ["unpriced-model", null, null],

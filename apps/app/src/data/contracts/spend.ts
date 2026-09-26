@@ -66,6 +66,12 @@ const SpendTokens = z.object({
   cache_write_1h: Count,
   output: Count,
   reasoning: Count,
+  /**
+   * Web search requests, which the book prices per request (#3721). Not
+   * tokens, so no token total or share counts them. Absent from a view
+   * built before the rollup recorded them.
+   */
+  server_tool_request: Count.optional(),
 });
 
 const SpendRow = SpendFigure.extend({

@@ -620,6 +620,66 @@ describe("runs.cost", () => {
     });
   });
 
+  // #3721. The rollup records a run's web searches as requests and prices
+  // them per request; the view carries both beside the token classes.
+  it("carries each model's web search requests and their recorded cost", async () => {
+    const cost = (micros: string) => ({
+      micros,
+      currency: "USD",
+      basis: "client_attested" as const,
+    });
+    const searched = { ...tokens, server_tool_request: 3 };
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        rollup: {
+          cost: cost("31000"),
+          tokens: searched,
+          cacheHitRate: 0.9,
+          turns: 2,
+          steps: 7,
+          modelCalls: 4,
+          toolCalls: 3,
+          retries: 0,
+          productiveRatio: 1,
+          byModel: [
+            {
+              model: "claude-opus-5",
+              provider: "anthropic",
+              calls: 4,
+              cost: cost("31000"),
+              tokens: searched,
+              costByClass: {
+                input_uncached: cost("100"),
+                cache_read: cost("90"),
+                cache_write_5m: cost("10"),
+                cache_write_1h: cost("0"),
+                output: cost("600"),
+                reasoning: cost("200"),
+                server_tool_request: cost("30000"),
+              },
+              cacheSaving: cost("810"),
+              hasUnpriced: false,
+            },
+          ],
+          byTool: [],
+          priceEntryIds: ["prc_1"],
+          rolledUpAt: "2026-09-15T08:59:00.000Z",
+          isEstimate: false,
+        },
+      }),
+    );
+    const read = await runs.cost(ctx, "tse_4f0a");
+    const rollup = read.ok ? read.value.rollup : null;
+    expect(rollup?.searchRequests).toBe(3);
+    expect(rollup?.byModel[0]).toMatchObject({
+      searchRequests: 3,
+      searchCost: cost("30000"),
+    });
+    // Requests are not a token class in the view.
+    expect(rollup?.tokens).not.toHaveProperty("serverToolRequest");
+  });
+
   it("keeps a row's unrecorded cache saving as null, never a zero, beside its recorded split (negative)", async () => {
     const cost = (micros: string) => ({
       micros,

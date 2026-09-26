@@ -53,6 +53,8 @@ type ContractTokens = {
   cache_write_1h: number;
   output: number;
   reasoning: number;
+  /** Web search requests, not tokens: `toTokens` leaves them out. */
+  server_tool_request: number;
 };
 
 /** The rollup's snake_case token classes, in the app's own spelling. */
@@ -178,6 +180,7 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
         : {
             cost: toCost(rollup.cost),
             tokens: toTokens(rollup.tokens),
+            searchRequests: rollup.tokens.server_tool_request,
             cacheHitRate: rollup.cacheHitRate,
             turns: rollup.turns,
             steps: rollup.steps,
@@ -192,6 +195,11 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
               cost: toCost(row.cost),
               tokens: toTokens(row.tokens),
               costByClass: toCostByClass(row.costByClass),
+              searchRequests: row.tokens.server_tool_request,
+              searchCost:
+                row.costByClass === null
+                  ? null
+                  : costOf(row.costByClass.server_tool_request),
               // A row rolled up before savings were recorded answers null,
               // and the page says "not recorded" for it, never a zero.
               cacheSaving: toCost(row.cacheSaving),
