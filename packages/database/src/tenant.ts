@@ -310,6 +310,9 @@ function tenantTransaction<T>(
  *    off. This is the one under-read `withOrgDb` can still produce, and it is
  *    derivable from the table's class rather than from a list of names.
  *
+ * Inside an open `withTenantDb` callback, use `withTransactionOrgWideRead`
+ * instead: it widens the same read on the connection the caller holds.
+ *
  * Requires an active tenant scope, like `withTenantDb` — the scope is where the
  * organisation comes from. The workspace in that scope is ignored, which is the
  * point: a caller in a real workspace that asks for the organisation gets the
@@ -403,6 +406,51 @@ export async function withTransactionOrgScope<T>(
     const result = await fn(orgTx);
     await orgTx.execute(
       sql`select set_config('app.current_workspace_id', ${previous?.workspace ?? ""}, true)`,
+    );
+    return result;
+  });
+}
+
+/**
+ * Run an ORGANISATION-WIDE READ inside an already-open tenant transaction,
+ * on the same connection.
+ *
+ * `withOrgDb` opens its own transaction. Called from inside a `withTenantDb`
+ * callback, that holds one pool connection while it waits for a second, and
+ * enough concurrent callers doing so exhaust the pool waiting on each other.
+ * The control plane builds a Tacho host's policy bundle inside the host's
+ * tenant transaction on every poll and every ingest batch, so a read there
+ * that needs every workspace's rows (which repositories the organisation
+ * bound, #3941) cannot nest `withOrgDb`.
+ *
+ * This turns `app.org_wide` on in a savepoint, runs `fn`, and puts the
+ * previous value back. Everything `withOrgDb` states about the widening holds
+ * here, because the policies enforce it, not the caller:
+ *
+ *  - `app.org_wide` is the whole predicate of the `FOR SELECT` policy
+ *    `tenant_org_wide_read`, beside `org_id = app.current_org_id`. It is in
+ *    no `tenant_isolation` clause and no WITH CHECK, so an UPDATE, a DELETE
+ *    or an INSERT inside `fn` is judged exactly as it was before the call.
+ *  - The org GUC, the bypass GUC and the workspace GUC are left as the
+ *    caller set them. Only the read of this organisation's rows widens.
+ *  - `workspace_only` tables have no org-wide policy and read as before.
+ *
+ * A savepoint restores transaction-local settings when `fn` throws, so a
+ * failed read leaves the widening off. On success the prior value is
+ * restored explicitly before the caller's own statements resume.
+ */
+export async function withTransactionOrgWideRead<T>(
+  tx: Tx,
+  fn: (orgTx: Tx) => Promise<T>,
+): Promise<T> {
+  return tx.transaction(async (orgTx) => {
+    const [previous] = await orgTx.execute<{ org_wide: string | null }>(
+      sql`select current_setting('app.org_wide', true) as org_wide`,
+    );
+    await orgTx.execute(sql`select set_config('app.org_wide', 'on', true)`);
+    const result = await fn(orgTx);
+    await orgTx.execute(
+      sql`select set_config('app.org_wide', ${previous?.org_wide ?? "off"}, true)`,
     );
     return result;
   });
