@@ -168,6 +168,43 @@ async function worktreeFingerprint(
 }
 
 /**
+ * Whether some hunk in a session-basis patch was taken against a state
+ * other than `baseline`, so the patch is not a diff from `baseline`. The
+ * frame names `baseline` as the patch's base (`diff_base_sha`), and the
+ * limitation tells a reader not to apply it there.
+ *
+ * A file that held edits at the session's first read is taken against what
+ * it held then, which is never the baseline. A path taken against
+ * `head_ref` differs only when a commit between the baseline and `head_ref`
+ * changed it, as a pull does. A read that fails counts as mixed.
+ */
+async function mixedBases(
+  read: (args: string[], statuses?: number[]) => Promise<string | undefined>,
+  baseline: string | undefined,
+  measured: MeasuredPaths,
+): Promise<boolean> {
+  if (measured.fromPreSession.length > 0) return true;
+  if (
+    measured.fromHead.length === 0 ||
+    !baseline ||
+    !HASH.test(baseline) ||
+    measured.headRef === baseline
+  )
+    return false;
+  const moved = await read([
+    "diff",
+    "--name-only",
+    "-z",
+    "--no-renames",
+    baseline,
+    measured.headRef,
+    "--",
+    ...measured.fromHead.map((path) => `:(literal)${path}`),
+  ]);
+  return moved === undefined || moved.length > 0;
+}
+
+/**
  * Snapshot bytes describe the observed tree against `baseline`.
  *
  * `measured`, when given, is what the reconciliation beside this snapshot
@@ -178,9 +215,10 @@ async function worktreeFingerprint(
  * pre-session copy (#3384), and any other against the `HEAD` the
  * reconciliation read. Taking every path against the baseline put a pulled
  * hunk into the patch of a file the session then edited, beside a row that
- * counted only the session's edit (#4320). Without `measured`, as for a
- * session measured the old way, the patch holds every change since the
- * baseline, including changes present before the run.
+ * counted only the session's edit (#4320). A patch with a hunk that differs
+ * from what the baseline would give says so (`mixed_bases`). Without
+ * `measured`, as for a session measured the old way, the patch holds every
+ * change since the baseline, including changes present before the run.
  */
 export async function readWorktreeSnapshot(
   exec: ExecAsync,
@@ -280,6 +318,10 @@ export async function readWorktreeSnapshot(
     // Each against what it held at the session's first read, as its row
     // was counted: the copy, or nothing for a path that was absent then.
     for (const { path, copy } of measured.fromPreSession) {
+      if (remaining === 0) {
+        limitations.push("patch_size_limit");
+        break;
+      }
       let present: boolean;
       try {
         present = (await lstat(join(root, path))).isFile();
@@ -315,6 +357,8 @@ export async function readWorktreeSnapshot(
     // commit since then moved the tree those counts describe.
     if (head !== undefined && HASH.test(head) && head !== measured.headRef)
       limitations.push("head_changed_during_capture");
+    if (await mixedBases(read, baseline, measured))
+      limitations.push("mixed_bases");
     fromNothing = new Set(measured.fromHead);
   }
   const untrackedPaths = (untracked?.split("\0").filter(Boolean) ?? []).filter(

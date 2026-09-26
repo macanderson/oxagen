@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   mkdtempSync,
   rmSync,
   unlinkSync,
@@ -76,7 +77,10 @@ describe("the patch beside a session-basis reconciliation", () => {
     expect(patched(snapshot?.patch)).toEqual(["shared.txt"]);
     // One added line, as the row counts. The upstream hunk is not in it.
     expect(hunkLines(snapshot?.patch)).toEqual(["+session line"]);
-    expect(snapshot?.complete).toBe(true);
+    // So the patch is not a diff from the baseline the frame names, and says
+    // so.
+    expect(snapshot?.limitations).toEqual(["mixed_bases"]);
+    expect(snapshot?.complete).toBe(false);
   });
 
   it("takes a file that already held edits against what it held then, as its row counts it", async () => {
@@ -123,7 +127,77 @@ describe("the patch beside a session-basis reconciliation", () => {
       baseline_paths: [],
       pre_session_paths: ["a.txt", "notes.txt"],
     });
-    expect(snapshot?.complete).toBe(true);
+    expect(snapshot?.limitations).toEqual(["mixed_bases"]);
+  });
+
+  it("claims no mode change for an executable file that already held edits", async () => {
+    const r = rig();
+    writeFileSync(join(r.work, "run.sh"), "#!/bin/sh\necho one\n");
+    chmodSync(join(r.work, "run.sh"), 0o755);
+    r.git(r.work, ["add", "."]);
+    r.git(r.work, ["commit", "-q", "-m", "script"], datedNow());
+    // A person's edit to the script and an untracked executable, both from
+    // before the session.
+    writeFileSync(join(r.work, "run.sh"), "#!/bin/sh\necho one\necho person\n");
+    writeFileSync(join(r.work, "tool.sh"), "#!/bin/sh\n");
+    chmodSync(join(r.work, "tool.sh"), 0o755);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const startedAt = Date.now();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const baseline = r.git(r.work, ["rev-parse", "HEAD"]).trim();
+    const copies = join(r.root, "tacho", "pre-session", "session");
+    const start = {
+      baseline,
+      firstReadAt: startedAt,
+      preexisting: await readPreexistingPaths(r.exec, r.work, startedAt, {
+        dir: copies,
+        capBytes: 1024,
+      }),
+    };
+    // The session adds a line to the script and deletes the tool.
+    writeFileSync(
+      join(r.work, "run.sh"),
+      "#!/bin/sh\necho one\necho person\necho session\n",
+    );
+    unlinkSync(join(r.work, "tool.sh"));
+
+    const reading = await readSessionChanges(r.exec, r.work, start, copies);
+    const snapshot = await readWorktreeSnapshot(
+      r.exec,
+      r.work,
+      baseline,
+      reading?.measured,
+    );
+    expect(patched(snapshot?.patch)).toEqual(["run.sh", "tool.sh"]);
+    expect(hunkLines(snapshot?.patch)).toEqual(["+echo session", "-#!/bin/sh"]);
+    expect(snapshot?.patch).not.toMatch(/^(?:old|new) mode /m);
+    expect(snapshot?.patch).toContain("deleted file mode 100755\n");
+  });
+
+  it("spawns no diff for a file that already held edits once the patch is full", async () => {
+    const r = rig();
+    writeFileSync(join(r.work, "big.txt"), "");
+    r.git(r.work, ["add", "."]);
+    r.git(r.work, ["commit", "-q", "-m", "empty"], datedNow());
+    writeFileSync(
+      join(r.work, "big.txt"),
+      "x".repeat(WORKTREE_PATCH_MAX_BYTES + 1024),
+    );
+    writeFileSync(join(r.work, "late.txt"), "written again\n");
+    const head = r.git(r.work, ["rev-parse", "HEAD"]).trim();
+    const noIndex: string[][] = [];
+    const exec: typeof r.exec = (command, args) => {
+      if (args.includes("--no-index")) noIndex.push(args);
+      return r.exec(command, args);
+    };
+    const snapshot = await readWorktreeSnapshot(exec, r.work, head, {
+      headRef: head,
+      fromBaseline: [],
+      fromHead: ["big.txt"],
+      fromPreSession: [{ path: "late.txt", copy: null }],
+    });
+    expect(snapshot?.limitations).toContain("patch_size_limit");
+    expect(noIndex).toEqual([]);
   });
 
   it("takes a path the session committed against the baseline, as its row counts it", async () => {
@@ -154,6 +228,9 @@ describe("the patch beside a session-basis reconciliation", () => {
     );
     expect(patched(snapshot?.patch)).toEqual(["mine.txt", "new.txt"]);
     expect(hunkLines(snapshot?.patch)).toEqual(["+one", "+two", "+new"]);
+    // HEAD moved, and no commit since the baseline changed new.txt, so its
+    // hunk is what the baseline would give.
+    expect(snapshot?.limitations).toEqual([]);
   });
 });
 
@@ -189,6 +266,8 @@ function fake(patch: string, moving = false) {
     else if (args.includes("remote"))
       stdout = "https://token@github.com/acme/repo.git";
     else if (args.includes("ls-files")) stdout = "";
+    // No commit between the baseline and HEAD changed a reported path.
+    else if (args.includes("--name-only")) stdout = "";
     else if (args.includes("diff")) stdout = patch;
     return { status: 0, stdout, stderr: "" };
   });
@@ -246,7 +325,7 @@ describe("worktree snapshots", () => {
     });
     const diffs = exec.mock.calls
       .map(([, args]) => args)
-      .filter((args) => args.includes("diff"));
+      .filter((args) => args.includes("diff") && !args.includes("--name-only"));
     // The committed path against the baseline, the rest against HEAD.
     expect(diffs[0]?.slice(diffs[0].indexOf("--") - 1)).toEqual([
       "c".repeat(40),
@@ -294,6 +373,32 @@ describe("worktree snapshots", () => {
       },
     );
     expect(result?.limitations).toEqual(["head_changed_during_capture"]);
+  });
+  it("marks a patch whose HEAD hunk a pulled commit changed as mixed", async () => {
+    const underlying = fake("diff --git a/a b/a\n");
+    const exec = vi.fn(async (command: string, args: string[]) =>
+      args.includes("--name-only")
+        ? { status: 0, stdout: "a\0", stderr: "" }
+        : underlying(command, args),
+    );
+    const result = await readWorktreeSnapshot(exec, "/repo", "c".repeat(40), {
+      headRef: "a".repeat(40),
+      fromBaseline: [],
+      fromHead: ["a", "b"],
+      fromPreSession: [],
+    });
+    expect(result?.limitations).toEqual(["mixed_bases"]);
+    // Only the paths taken against HEAD are compared, between the two commits.
+    const compared = exec.mock.calls
+      .map(([, args]) => args)
+      .find((args) => args.includes("--name-only"));
+    expect(compared?.slice(compared.indexOf("--name-only") + 3)).toEqual([
+      "c".repeat(40),
+      "a".repeat(40),
+      "--",
+      ":(literal)a",
+      ":(literal)b",
+    ]);
   });
   it("names a pre-session hunk by its path, quoted where git quotes it", () => {
     const raw = [
