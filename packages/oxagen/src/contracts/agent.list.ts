@@ -16,7 +16,9 @@
 // store that does not exist, so null.
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { runtimeRefSchema } from "./runtime.shared";
 import { costSchema } from "./spend.shared";
+import { toolbeltRefSchema } from "./toolbelt.shared";
 
 const instant = z.string().datetime({ offset: true });
 
@@ -66,6 +68,14 @@ export const agentListItem = z
     /** `org_ns.ws_ns.slug` (ADR-024); null until the namespaces are backfilled. */
     agentKey: z.string().nullable(),
     harness: agentHarnessSchema,
+    /**
+     * The runtime the agent runs on now (ADR-192). Null for an agent Oxagen
+     * runs on no named runtime (stella's in-app assistant) and for an agent
+     * registered before runtimes existed that the backfill could not place.
+     */
+    runtime: runtimeRefSchema.nullable(),
+    /** The toolbelt the agent carries now. Null only when the workspace has no belt yet. */
+    toolbelt: toolbeltRefSchema.nullable(),
     /** `prn_…` of the delegated principal; null on a row that predates Agent RBAC. */
     principalId: z.string().nullable(),
     /** `usr_…` of the person the agent acts for (`principals.parent_user_id`); null when none. */

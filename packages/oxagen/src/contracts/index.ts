@@ -27,6 +27,17 @@ import { agentApprovalListResolved } from "./agent.approval.list_resolved";
 import { agentList } from "./agent.list";
 import { agentGet } from "./agent.get";
 import { agentRegister } from "./agent.register";
+// ADR-192 (#4369): runtimes, toolbelts, tool state, and the two version writes.
+import { agentMove } from "./agent.move";
+import { agentToolbeltAssign } from "./agent.toolbelt.assign";
+import { runtimeCreate } from "./runtime.create";
+import { runtimeList } from "./runtime.list";
+import { toolbeltList } from "./toolbelt.list";
+import { toolbeltGet } from "./toolbelt.get";
+import { toolbeltClone } from "./toolbelt.clone";
+import { toolbeltUpdate } from "./toolbelt.update";
+import { toolbeltDelete } from "./toolbelt.delete";
+import { toolStateSet } from "./tool.state.set";
 import { agentCredentialRotate } from "./agent.credential.rotate";
 import { agentSuspend } from "./agent.suspend";
 import { agentRetire } from "./agent.retire";
@@ -450,6 +461,25 @@ export type {
   SpendGroupKind,
   TokenCounts,
 } from "./spend.shared";
+// Runtime and toolbelt vocabulary (ADR-192). Not capabilities, so exported
+// here to satisfy the file-coverage guard.
+export {
+  RUNTIME_SLUG_MAX,
+  runtimeIdSchema,
+  runtimeRefSchema,
+  runtimeSlugSchema,
+} from "./runtime.shared";
+export type { RuntimeRef } from "./runtime.shared";
+export {
+  TOOLBELT_SLUG_MAX,
+  toolIdSchema,
+  toolServerIdSchema,
+  toolbeltIdSchema,
+  toolbeltKindSchema,
+  toolbeltRefSchema,
+  toolbeltSlugSchema,
+} from "./toolbelt.shared";
+export type { ToolbeltKind, ToolbeltRef } from "./toolbelt.shared";
 // Who an operator is, shared by the rows that name one (get_spend). Not a
 // capability, so exported here to satisfy the file-coverage guard.
 export { operatorFactsSchema } from "./operator.shared";
@@ -651,6 +681,16 @@ export {
   agentList,
   agentGet,
   agentRegister,
+  agentMove,
+  agentToolbeltAssign,
+  runtimeCreate,
+  runtimeList,
+  toolbeltList,
+  toolbeltGet,
+  toolbeltClone,
+  toolbeltUpdate,
+  toolbeltDelete,
+  toolStateSet,
   agentCredentialRotate,
   agentSuspend,
   agentRetire,
@@ -1062,6 +1102,16 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentList,
   agentGet,
   agentRegister,
+  agentMove,
+  agentToolbeltAssign,
+  runtimeCreate,
+  runtimeList,
+  toolbeltList,
+  toolbeltGet,
+  toolbeltClone,
+  toolbeltUpdate,
+  toolbeltDelete,
+  toolStateSet,
   agentCredentialRotate,
   agentSuspend,
   agentRetire,

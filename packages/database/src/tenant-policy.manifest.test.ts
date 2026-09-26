@@ -255,7 +255,9 @@ describe("tenant policy manifest", () => {
     // 125 adds billing.gau_ledger and billing.prepaid_orders (ADR-165).
     // 126 adds ingestion.working_copies (record_working_copy).
     // 127 adds agent.context_sync_state (the repository sync, ADR-184).
-    expect(POLICY_MANIFEST.length).toBe(127);
+    // 130 adds agent.runtimes, tools.toolbelts and tools.toolbelt_tools
+    // (ADR-192, 2026-09-25).
+    expect(POLICY_MANIFEST.length).toBe(130);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

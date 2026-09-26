@@ -4,7 +4,9 @@
 // consequence to one agent, within limits over the tool's declared measures.
 // The ledger is where remaining authority lives: reservations at decision
 // time, settlements at receipt time, releases on failure or denial.
+// The toolbelts (ADR-192) sit at the end of the file.
 import {
+  boolean,
   check,
   index,
   jsonb,
@@ -14,13 +16,16 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { toolsSchema } from "./_schemas";
 import {
   appendOnlyAuditMixin,
   auditMixin,
+  citext,
   idMixin,
   orgScopeMixin,
+  softDeleteMixin,
   uuidv7Default,
 } from "./_mixins";
 
@@ -154,5 +159,78 @@ export const mandateLedger = toolsSchema.table(
       sql`${t.kind} IN ('reserve', 'settle', 'release')`,
     ),
     valueCheck: check("mandate_ledger_value_check", sql`${t.value} >= 0`),
+  }),
+);
+
+// ── toolbelts (ADR-192) ──────────────────────────────────────────────────────
+// A toolbelt is the set of tools an agent is shown. It narrows what the agent
+// can reach and never widens a grant: roles, mandates and kill switches still
+// decide each call.
+//
+// Every workspace holds one `all_tools` belt, created the first time a
+// toolbelt path touches the workspace. It stores no member rows: its members
+// are every tool an owner or admin made available (`agent.tools.enabled`),
+// each active as its `default_active` says. A `custom` belt is a clone: it
+// stores one row per tool it holds, active or not, copied from the belt it
+// was cloned from and edited from there.
+export const toolbelts = toolsSchema.table(
+  "toolbelts",
+  {
+    ...idMixin("tbt"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    ...softDeleteMixin(),
+    name: text("name").notNull(),
+    slug: citext("slug").notNull(),
+    description: text("description"),
+    kind: text("kind").notNull().default("custom"),
+    // The belt this one was cloned from; null on the All tools belt.
+    clonedFromId: uuid("cloned_from_id").references(
+      (): AnyPgColumn => toolbelts.id,
+    ),
+  },
+  (t) => ({
+    workspaceSlugUniq: uniqueIndex("toolbelts_workspace_slug_uniq")
+      .on(t.workspaceId, t.slug)
+      .where(sql`${t.deletedAt} IS NULL`),
+    // One All tools belt per workspace; the partial index makes the lazy
+    // create race-safe (INSERT ... ON CONFLICT DO NOTHING).
+    allToolsUniq: uniqueIndex("toolbelts_all_tools_uniq")
+      .on(t.workspaceId)
+      .where(sql`${t.kind} = 'all_tools' AND ${t.deletedAt} IS NULL`),
+    orgIdx: index("toolbelts_org_idx").on(t.orgId, t.workspaceId),
+    kindCheck: check(
+      "toolbelts_kind_check",
+      sql`${t.kind} IN ('all_tools', 'custom')`,
+    ),
+    slugCheck: check(
+      "toolbelts_slug_check",
+      sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND char_length(${t.slug}) <= 40`,
+    ),
+  }),
+);
+
+// A custom belt's members. `tool_id` is an agent.tools row (app-enforced, no
+// cross-schema FK). Removing a server from a belt deletes its rows; turning a
+// server or a tool off in a belt clears `active` and keeps the row.
+export const toolbeltTools = toolsSchema.table(
+  "toolbelt_tools",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    toolbeltId: uuid("toolbelt_id")
+      .notNull()
+      .references(() => toolbelts.id),
+    toolId: uuid("tool_id").notNull(),
+    active: boolean("active").notNull().default(true),
+  },
+  (t) => ({
+    memberUniq: uniqueIndex("toolbelt_tools_member_uniq").on(
+      t.toolbeltId,
+      t.toolId,
+    ),
+    toolIdx: index("toolbelt_tools_tool_idx").on(t.toolId),
+    orgIdx: index("toolbelt_tools_org_idx").on(t.orgId, t.workspaceId),
   }),
 );

@@ -58,12 +58,14 @@ export const RESERVED_ORG_SLUGS: ReadonlySet<string> = new Set([
  * They stay reachable from THIS path on purpose: `apps/app` may import platform
  * code only through `@oxagen/oxagen/contracts/*` (ARCHITECTURE.md §2, INV-03,
  * enforced by `apps/app/src/test/arch/import-graph.test.ts`), so a contract
- * file is the app's doorway to a shared shape. The onboarding form reads both
- * from here, and the definition is still in one place.
+ * file is the app's doorway to a shared shape. The onboarding form reads these
+ * from here, and the definition is still in one place. `slugFromName` is the
+ * one derivation every name-made slug uses (ADR-192).
  */
 export {
   RESERVED_WORKSPACE_SLUGS,
   WORKSPACE_SLUG_PATTERN,
+  slugFromName,
 } from "../workspace-slug";
 
 /** `organizations.namespace`: 2-6 lowercase letters or digits, no hyphen. */
