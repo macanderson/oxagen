@@ -1063,6 +1063,37 @@ describe("the Runs panel", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
+  // The dialog cannot close while a command is in flight, but the board can
+  // go away under it. The answer then draws nothing, and the page is read
+  // again, so the row shows what the command changed.
+  it.each([
+    ["ledger", "arun_gone", "Pause evidence ingress"],
+    ["tacho", "tse_gone", "Pause at the next boundary"],
+  ] as const)(
+    "reads the page again when the board goes away before a %s run's pause is answered (negative)",
+    async (source, id, button) => {
+      let settle: (value: unknown) => void = () => undefined;
+      dispatchRunCommand.mockReturnValue(
+        new Promise((resolve) => {
+          settle = resolve;
+        }),
+      );
+      await loaded({
+        runs: runPage([runRow({ id, source })]),
+        approvals: NO_APPROVALS,
+      });
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId("row-pause"));
+      await user.click(screen.getByRole("button", { name: button }));
+      expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+      cleanup();
+      settle({ ok: true, value: { commandIds: ["tcm_10"] } });
+      await waitFor(() => {
+        expect(refresh).toHaveBeenCalledTimes(1);
+      });
+    },
+  );
+
   // Review round 2 on #4382: closing unmounts the dialog (`key`), so nothing
   // checked that focus still goes back to the row that opened it.
   it("gives focus back to the row's Pause button when the dialog closes", async () => {
