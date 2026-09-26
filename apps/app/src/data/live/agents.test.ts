@@ -48,6 +48,7 @@ const item = {
   principalId: null,
   operatorId: null,
   operatorName: null,
+  operatorAvatarUrl: null,
   status: "unenrolled",
   tier: null,
   enforcementTier: null,

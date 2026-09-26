@@ -158,6 +158,8 @@ describe("reconcile — PLATFORM_ALLOWLIST", () => {
       "NEO4J_URL",
       "NEO4J_USER",
       "OXAGEN_AGENT_TOKEN",
+      "LEFTHOOK",
+      "HUSKY",
     ]) {
       expect(
         PLATFORM_ALLOWLIST.has(k),

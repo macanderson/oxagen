@@ -1246,6 +1246,7 @@ export function runRoster(
         toolbelt: null,
         operatorId: "usr_marcusbell",
         operatorName: "Marcus Bell",
+        operatorAvatarUrl: null,
         principalId: "prn_91",
         credentials: 1,
         hosts: 1,

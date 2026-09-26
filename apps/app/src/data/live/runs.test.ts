@@ -78,6 +78,7 @@ const run = {
   operatorKind: "human",
   operatorName: "Ada Lovelace",
   operatorAttribution: "host_enroller",
+  operatorAvatarUrl: "https://avatars.example.com/ada.png",
   operatorRole: null,
   status: "live",
   outcome: "running",
@@ -120,6 +121,7 @@ describe("runs.list", () => {
             operatorKind: "human",
             operatorName: "Ada Lovelace",
             operatorAttribution: "host_enroller",
+            operatorAvatarUrl: "https://avatars.example.com/ada.png",
             // Not stamped on this row, so not recorded (#3999).
             operatorRole: null,
             status: "live",
@@ -747,6 +749,7 @@ describe("runs.cost", () => {
     kernelRead.mockResolvedValue(
       readOk({
         runId: "tse_4f0a",
+        baseline: null,
         rollup: {
           cost: cost("31000"),
           tokens: searched,
@@ -807,6 +810,7 @@ describe("runs.cost", () => {
     kernelRead.mockResolvedValue(
       readOk({
         runId: "tse_4f0a",
+        baseline: null,
         rollup: {
           cost: cost("1000"),
           tokens: searched,

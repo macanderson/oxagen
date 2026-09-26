@@ -571,6 +571,7 @@ describe("readTachoToolCallFrames", () => {
       orgId: ORG,
       workspaceId: WS,
       rootSessionUuid: RUN,
+      sessionUuids: [RUN],
     });
     const { query } = lastQuery();
     expect(query).toContain("source = 'otel_span'");
@@ -578,10 +579,13 @@ describe("readTachoToolCallFrames", () => {
     // Without it an unmatched span answers 0, which would price the call's
     // result at nothing instead of leaving it unrecorded.
     expect(query).toContain("SETTINGS join_use_nulls = 1");
-    // Both sides are bounded to the run's tree, so a span of another run
-    // with the same tool use id cannot join.
+    // Both sides are bounded to the run's tree and its sessions, so a span of
+    // another run with the same tool use id cannot join.
     expect(
       query.match(/root_session_uuid = \{rootSessionUuid:UUID\}/g),
+    ).toHaveLength(2);
+    expect(
+      query.match(/session_uuid IN \{sessionUuids:Array\(UUID\)\}/g),
     ).toHaveLength(2);
     expect(query).toContain("ORDER BY h.ts, h.seq");
     expect(frame?.resultTokens).toBeNull();
@@ -604,6 +608,7 @@ describe("readTachoToolCallFrames", () => {
       orgId: ORG,
       workspaceId: WS,
       rootSessionUuid: RUN,
+      sessionUuids: [RUN],
     });
     expect(frames[0]).toEqual({
       name: null,
