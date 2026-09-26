@@ -375,6 +375,10 @@ const PLATFORM_NAMED_ROWS: Readonly<
   "src/ui/command-failure.ts": {
     "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
   },
+  // ⌘K's pause dialog caps its reason at the limit pause_workspace_runs enforces.
+  "src/features/shell/pause-workspace-dialog.tsx": {
+    "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
+  },
   // The record wizard shows the label and file name a slug will get, using
   // the same pure functions the publish handler runs, so the preview matches.
   // Both files check a slug against the pattern the contract enforces, and
