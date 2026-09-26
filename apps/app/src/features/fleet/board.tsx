@@ -28,7 +28,6 @@ import {
   useState,
   useTransition,
 } from "react";
-import { flushSync } from "react-dom";
 import type { ApprovalQueue } from "@/data/contracts/approvals";
 import type { InterjectionQueue } from "@/data/contracts/interjections";
 import {
@@ -746,10 +745,17 @@ function PauseDialog({
       showingRef.current = null;
     };
   }, [runId]);
-  // The confirm step replaces the button that opened it, so focus moves to
-  // Back rather than falling to the page behind the dialog.
+  // Set by Back, so the first step it draws again takes focus back to Cancel.
+  // Closing the dialog also leaves the confirm step, and takes no focus.
+  const backedOutRef = useRef(false);
+  // Each step replaces the button that opened it, so focus moves to that
+  // step's button rather than falling to the page behind the dialog.
   useEffect(() => {
     if (confirmingCancel) backRef.current?.focus();
+    else if (backedOutRef.current) {
+      backedOutRef.current = false;
+      cancelRunRef.current?.focus();
+    }
   }, [confirmingCancel]);
 
   function close() {
@@ -820,15 +826,13 @@ function PauseDialog({
           data-testid="pause-cancel-back"
           disabled={pending}
           onClick={() => {
-            // Back removes itself, so focus would fall to the popup. Draw the
-            // first step now and give focus to the button that opened this
-            // one. A refusal the cancel came back with goes too, since the
-            // person has stepped back from that cancel.
-            flushSync(() => {
-              setFailure(null);
-              setConfirmingCancel(false);
-            });
-            cancelRunRef.current?.focus();
+            // Back removes itself, so focus would fall to the popup. The
+            // effect above gives it to Cancel once the first step is drawn.
+            // A refusal the cancel came back with goes too, since the person
+            // has stepped back from that cancel.
+            backedOutRef.current = true;
+            setFailure(null);
+            setConfirmingCancel(false);
           }}
           className={buttonSecondary}
         >
