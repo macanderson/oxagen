@@ -437,3 +437,82 @@ export async function runTurns(
     );
   }
 }
+
+// ── oxagen run pause-all ─────────────────────────────────────────────────────
+
+/** Mirrors the `pause_workspace_runs` contract output. */
+export interface RunPauseAllResult {
+  queued: number;
+  commandIds: string[];
+  skipped: {
+    runId: string;
+    agentKey: string;
+    reason: "run_sealed" | "no_host" | "host_revoked" | "host_offline";
+    commandId: string;
+  }[];
+}
+
+/** Why a run was skipped, as the receipt prints it. */
+const SKIP_REASONS: Record<
+  RunPauseAllResult["skipped"][number]["reason"],
+  string
+> = {
+  run_sealed: "the run has ended",
+  no_host: "the run names no enrolled host",
+  host_revoked: "the run's host was revoked",
+  host_offline: "the run's host has not checked in for five minutes",
+};
+
+/**
+ * `oxagen run pause-all --reason <text>`: `pause_workspace_runs`. Queues a
+ * pause for every live wrapped run in the configured workspace as one
+ * decision with one audit event, and prints how many runs took it, each run
+ * that was skipped with why, and the command ids. Ledger runs (`arun_…`) are
+ * not paused; pause one from its own row in the app or through the API.
+ *
+ * The API admits an org Owner or Admin, or the workspace Owner. A pause is
+ * queued, not applied: each run stops at the next boundary its harness
+ * reaches after its host collects the command.
+ */
+export async function runPauseAll(
+  opts: { reason: string; json?: boolean },
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  const reason = opts.reason.trim();
+  if (reason === "") {
+    out.error("Give a reason with --reason. Nothing was paused.", "reason");
+    return;
+  }
+  let result: RunPauseAllResult;
+  try {
+    result = await apiPostOrThrow<RunPauseAllResult>(
+      "commands/pause-workspace",
+      { reason },
+    );
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+  writer.write(
+    result.queued === 1
+      ? "Queued a pause for 1 live run."
+      : `Queued a pause for ${result.queued} live runs.`,
+  );
+  if (result.skipped.length > 0) {
+    writer.write(`Skipped ${result.skipped.length}, which no host can reach:`);
+    for (const skip of result.skipped)
+      writer.write(
+        `  ${skip.runId} (${skip.agentKey}): ${SKIP_REASONS[skip.reason]}`,
+      );
+  }
+  if (result.commandIds.length > 0)
+    writer.write(`Command ids: ${result.commandIds.join(", ")}`);
+  writer.write(
+    "Ledger runs are not paused. Each run stops at its next boundary once its host collects the command.",
+  );
+}

@@ -231,6 +231,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [dispatch_command](tacho.command.dispatch.md) | [tacho.command.dispatch.ts](../../packages/oxagen/src/contracts/tacho.command.dispatch.ts) | api, mcp |
 | [fetch_commands](tacho.command.fetch.md) | [tacho.command.fetch.ts](../../packages/oxagen/src/contracts/tacho.command.fetch.ts) | api |
 | [list_commands](tacho.command.list.md) | [tacho.command.list.ts](../../packages/oxagen/src/contracts/tacho.command.list.ts) | api, mcp |
+| [pause_workspace_runs](tacho.workspace_runs.pause.md) | [tacho.workspace_runs.pause.ts](../../packages/oxagen/src/contracts/tacho.workspace_runs.pause.ts) | api, mcp, agent, cli |
 
 ## Conversation
 

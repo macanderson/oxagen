@@ -770,6 +770,17 @@ export function buildProgram(): Command {
         await runDownload(exportId, opts);
       },
     );
+  runCmd
+    .command("pause-all")
+    .description(
+      "Pause every live wrapped run in the workspace as one recorded decision. Org Owner or Admin, or workspace Owner",
+    )
+    .requiredOption("--reason <text>", "Why the runs are paused (recorded)")
+    .option("--json", "Output JSON")
+    .action(async (opts: { reason: string; json?: boolean }) => {
+      const { runPauseAll } = await import("./commands/run.js");
+      await runPauseAll(opts);
+    });
 
   // ── verify: check a run export offline ──────────────────────────────────────
 
