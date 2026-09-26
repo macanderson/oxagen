@@ -18,6 +18,7 @@ import {
   unsignedBundle,
 } from "../host/test-support";
 import { type DaemonHandle, startDaemon } from "./daemon";
+import { SEALED_STATE_RETAIN_MS } from "./registry";
 
 const FIRST = "11111111-2222-3333-4444-555555555555";
 const SECOND = "66666666-7777-8888-9999-aaaaaaaaaaaa";
@@ -110,5 +111,20 @@ describe("the sweep", () => {
     expect(verifyChain(firstChain, { expectGenesis: true })).toMatchObject({
       ok: true,
     });
+  });
+
+  it("drops a sealed session's call ledgers an hour after it went quiet", async () => {
+    let clock = 1_000;
+    const handle = await boot(() => clock);
+    await handle.api.handleHook(hook(FIRST, "SessionStart"));
+    await handle.api.handleHook(hook(FIRST, "SessionEnd"));
+    const record = handle.registry.get(FIRST)!;
+    await handle.tick();
+    expect(record.sealed).toBe(true);
+    clock += SEALED_STATE_RETAIN_MS + 1_000;
+    await handle.tick();
+    // The tick's sweep released it, so there is nothing left to release.
+    expect(handle.registry.releaseSealedState()).toBe(0);
+    expect(record.sealed).toBe(true);
   });
 });

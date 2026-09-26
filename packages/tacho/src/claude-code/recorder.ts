@@ -940,6 +940,26 @@ export class SessionRecorder {
    * needs full-history verification must not call it, or must verify before
    * trimming.
    */
+  /**
+   * Forget what only a chain still taking frames needs: every model and tool
+   * call the dedupe ledgers hold, and the subagent chains that closed. The
+   * ledgers hold up to `LLM_CALL_LEDGER_CAPACITY` and
+   * `TOOL_CALL_LEDGER_CAPACITY` entries, and exist to recognise a second
+   * source reporting a call the chain already holds. A closed subagent keeps
+   * a copy of the session's context. The registry calls this for a session
+   * sealed long enough that no second source is still coming
+   * (`SessionRegistry.releaseSealedState`). A frame that reaches a released
+   * subagent later opens it again where its WAL file ends (`chainTail`).
+   */
+  releaseSealedState(): void {
+    this.llmCalls = new LlmCallLedger();
+    this.toolCalls = new ToolCallLedger();
+    for (const [subagentId, link] of [...this.children]) {
+      if (link.open) link.recorder.releaseSealedState();
+      else this.children.delete(subagentId);
+    }
+  }
+
   trimSealedEvents(keep: number): void {
     if (this.events.length > keep) {
       this.events.splice(0, this.events.length - keep);

@@ -3355,6 +3355,10 @@ async function initializeDaemon(
             registry.settleSwept(candidate);
           }
           registry.forgetSealed(timers.walRetainMs);
+          // A sealed session is kept for a week; what only a running chain
+          // needs is dropped an hour after it went quiet, so `daemon.json`
+          // stays bounded however many sessions that week held (C-02).
+          if (registry.releaseSealedState() > 0) stateDirty = true;
           if (failure !== undefined) throw failure.error;
         }
         if (t - lastCheckpoint >= timers.checkpointMs) {

@@ -24,6 +24,7 @@ import {
   type RegistryState,
   rememberBaseline,
   rememberForRoot,
+  SEALED_STATE_RETAIN_MS,
   SessionRegistry,
   STALE_PID_SESSION_MS,
   TOMBSTONE_RETAIN_MS,
@@ -535,5 +536,115 @@ describe("messages queued on a session that seals", () => {
     await hook(registry, "SessionStart", { source: "resume" });
     expect(record.sealed).toBe(false);
     expect(record.control.resumeOwed).toBeUndefined();
+  });
+});
+
+describe("a long-running registry", () => {
+  /** What one released sealed session may cost in `daemon.json`. */
+  const RELEASED_SESSION_BYTES = 2_048;
+
+  it("keeps a sealed session's call ledgers for an hour, then holds a bounded state for it", async () => {
+    const { registry, hook, now } = harness();
+    await hook(registry, "SessionStart", { source: "startup" });
+    await hook(registry, "UserPromptSubmit", { prompt: "one" });
+    await hook(registry, "Stop");
+    await hook(registry, "SessionEnd", { reason: "prompt_input_exit" });
+    const template = registry.state().sessions[0]!;
+    // Ledgers well short of their capacity, so the test stays light. A
+    // released session holds none, whatever size they reached.
+    const llmCalls = {
+      keys: Array.from({ length: 512 }, (_, i): [string, string[], boolean] => [
+        `request:req_${String(i).padStart(24, "0")}`,
+        ["proxy", "otel"],
+        true,
+      ]),
+    };
+    const toolCalls = {
+      calls: Array.from(
+        { length: 128 },
+        (_, i): [string, string[], boolean] => [
+          `toolu_${String(i).padStart(24, "0")}`,
+          ["hook", "otel"],
+          true,
+        ],
+      ),
+    };
+    const ledgerBytes = JSON.stringify({ llmCalls, toolCalls }).length;
+    const subagent = {
+      state: { ...template.recorder, children: {} },
+      type: "general-purpose",
+      open: false,
+    };
+    const session = (i: number, sealedAgoMs: number, sealed = true) => ({
+      ...template,
+      harnessSessionId: `sess-${i}`,
+      recorder: {
+        ...template.recorder,
+        sessionUuid: `11111111-0000-4000-8000-${String(i).padStart(12, "0")}`,
+        llmCalls,
+        toolCalls,
+        children: { [`agent-a${i}`]: subagent, [`agent-b${i}`]: subagent },
+      },
+      toolUseIds: { [`derived-${i}`]: `stella_${i}` },
+      sealed,
+      lastSeenAt: new Date(now() - sealedAgoMs).toISOString(),
+    });
+    // A week of sessions: 280 sealed more than an hour ago, 20 sealed in
+    // the last ten minutes, and one still running.
+    const sessions = [
+      ...Array.from({ length: 280 }, (_, i) =>
+        session(i, (i + 3) * 30 * 60_000),
+      ),
+      ...Array.from({ length: 20 }, (_, i) => session(280 + i, 10 * 60_000)),
+      session(300, 60_000, false),
+    ];
+    const long = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now,
+    });
+    long.restore({ schema: "tacho.daemon-state.v1", sessions });
+    const before = JSON.stringify(long.state()).length;
+    expect(before).toBeGreaterThan(300 * ledgerBytes);
+
+    expect(long.releaseSealedState()).toBe(280);
+    // Released once: the next pass changes nothing and dirties nothing.
+    expect(long.releaseSealedState()).toBe(0);
+    // The 21 recent or running sessions keep everything. Each of the 280
+    // released ones holds its chain position, context, and totals, and
+    // nothing that grows with the calls it made or the subagents it ran.
+    const state = long.state();
+    const recentBytes = JSON.stringify(
+      state.sessions.filter((s) => Number(s.harnessSessionId.slice(5)) >= 280),
+    ).length;
+    const releasedBytes = JSON.stringify(
+      state.sessions.filter((s) => Number(s.harnessSessionId.slice(5)) < 280),
+    ).length;
+    expect(recentBytes).toBeGreaterThan(21 * ledgerBytes);
+    expect(releasedBytes).toBeLessThan(280 * RELEASED_SESSION_BYTES);
+    expect(JSON.stringify(state).length).toBeLessThan(
+      recentBytes + releasedBytes + 1_024,
+    );
+    const kept = (id: string) =>
+      state.sessions.find((s) => s.harnessSessionId === id);
+    expect(kept("sess-300")?.recorder.llmCalls?.keys).toHaveLength(512);
+    expect(kept("sess-290")?.recorder.toolCalls?.calls).toHaveLength(128);
+    expect(kept("sess-0")?.recorder.llmCalls?.keys).toEqual([]);
+    expect(kept("sess-0")?.recorder.toolCalls?.calls).toEqual([]);
+    expect(kept("sess-0")?.recorder.children).toEqual({});
+    expect(kept("sess-0")?.toolUseIds).toBeUndefined();
+  });
+
+  it("releases a resumed session again once it seals and goes quiet", async () => {
+    const { registry, hook, advance } = harness();
+    await hook(registry, "SessionStart", { source: "startup" });
+    await hook(registry, "SessionEnd", { reason: "prompt_input_exit" });
+    advance(SEALED_STATE_RETAIN_MS + 1_000);
+    expect(registry.releaseSealedState()).toBe(1);
+    await hook(registry, "SessionStart", { source: "resume" });
+    await hook(registry, "SessionEnd", { reason: "prompt_input_exit" });
+    expect(registry.releaseSealedState()).toBe(0);
+    advance(SEALED_STATE_RETAIN_MS + 1_000);
+    expect(registry.releaseSealedState()).toBe(1);
   });
 });

@@ -373,6 +373,16 @@ export const TOMBSTONE_RETAIN_MS = 30 * 24 * 60 * 60_000;
 export const MAX_TOMBSTONES = 512;
 
 /**
+ * How long a sealed session keeps its call ledgers, closed subagent chains,
+ * and open tool-use ids (`releaseSealedState`). The ledgers recognise a second source reporting a
+ * call the chain already holds: the transcript tailer reads a sealed
+ * transcript until it has sat unchanged for five minutes
+ * (`DEFAULT_SEALED_TAIL_IDLE_MS`), and OTel exports in batches seconds
+ * apart. An hour covers both.
+ */
+export const SEALED_STATE_RETAIN_MS = 60 * 60_000;
+
+/**
  * How long a session with a pid may go without a single event before the
  * sweep closes it anyway. The OS hands a freed pid to the next process it
  * starts, so a pid that still answers is not proof the harness is running.
@@ -457,6 +467,8 @@ export class SessionRegistry {
   private readonly expiredOnSeal: CommandAcknowledgement[] = [];
   /** The pid each record's start time was last read for, read or not. */
   private readonly startReadFor = new WeakMap<SessionRecord, number>();
+  /** Sealed records `releaseSealedState` has already emptied. */
+  private readonly released = new WeakSet<SessionRecord>();
 
   constructor(options: RegistryOptions) {
     this.options = options;
@@ -806,6 +818,7 @@ export class SessionRegistry {
   private reopen(record: SessionRecord): void {
     record.sealed = false;
     delete record.closedIdle;
+    this.released.delete(record);
     // `SessionRecorder` has no reopen of its own. A rollback to a mark taken
     // this instant undoes nothing, and it sets the one flag it is handed.
     record.recorder.rollbackChain({
@@ -910,6 +923,38 @@ export class SessionRegistry {
   seal(session: string | SessionRecord): void {
     const record = typeof session === "string" ? this.get(session) : session;
     if (record) this.close(record);
+  }
+
+  /**
+   * Empty the call ledgers, closed subagent chains, and open tool-use ids of
+   * every sealed session quiet for longer than `retainMs`, and answer how
+   * many it emptied.
+   *
+   * A sealed session stays in the registry, and in `daemon.json`, for
+   * `walRetainMs` (seven days), so a resume continues its chain. Its model
+   * call ledger alone holds up to `LLM_CALL_LEDGER_CAPACITY` keys, and
+   * `persistState` wrote every one of them for every session sealed that
+   * week on every tick that changed anything. On a busy host the file
+   * outgrew the longest string Node can build, and every tick failed with
+   * "Cannot create a string longer than 0x1fffffe8 characters". Emptied, a
+   * sealed session keeps its chain position, context, and totals, and
+   * nothing that grows with the calls it made. The hook-id ledger is left alone: it
+   * is pruned after every complete spool drain (`pruneHookIds`), and a
+   * replay still waiting in the spool needs it.
+   */
+  releaseSealedState(retainMs: number = SEALED_STATE_RETAIN_MS): number {
+    const cutoff = this.options.now() - retainMs;
+    let released = 0;
+    for (const record of this.sessions.values()) {
+      if (!record.sealed || record.pendingTerminal === true) continue;
+      if (this.released.has(record)) continue;
+      if (Date.parse(record.lastSeenAt) >= cutoff) continue;
+      record.recorder.releaseSealedState();
+      record.toolUseIds = {};
+      this.released.add(record);
+      released += 1;
+    }
+    return released;
   }
 
   /**
