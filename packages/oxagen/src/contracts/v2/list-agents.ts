@@ -33,8 +33,11 @@ export const listAgents = defineTool({
   },
   sensitivity: "medium",
   defaultEffect: "deny",
+  // `list_agents` also names `Member` on its org map, where it is not a role:
+  // `SystemOrgRole` is Owner, Admin, Compliance and Billing, and Member is a
+  // workspace role, which the workspace map already grants.
   defaultRoles: {
-    org: { Owner: "allow", Admin: "allow", Member: "allow" },
+    org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow" },
   },
   noBillingGate: true,
