@@ -133,7 +133,11 @@ If you see it, the store had lost a table and has just got it back.
 ## Adding a migration
 
 - **ClickHouse:** a new `packages/telemetry/src/migrations/NNNN_*.sql`. The
-  drift check picks it up with no edit here.
+  drift check picks it up with no edit here. A file may hold a
+  `REBUILD TABLE <table> PARTITION BY toYYYYMM(<column>)` directive (0034 does).
+  Only `migrate.ts` can apply it: it rebuilds the table one partition at a
+  time and finishes a rebuild an earlier run stopped (`table-rebuild.ts`).
+  Sent by hand, the directive fails as a syntax error.
 - **Neo4j:** a named `CREATE CONSTRAINT` / `CREATE INDEX` in
   `packages/ontology/src/schema.cypher`. Name it — an unnamed index gets an
   auto-generated name the check can never match, so it would be invisible.

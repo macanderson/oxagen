@@ -196,6 +196,64 @@ describe.skipIf(!chUp)("REBUILD TABLE against ClickHouse (#4297)", () => {
     }
   }, 120_000);
 
+  it("finishes a copy that stopped part way, dropping a partial month and a month the source no longer holds", async () => {
+    const {
+      clickhouseRebuildStore,
+      engineWithKey,
+      rebuildPartitionKey,
+      shadowTableName,
+    } = await import("./table-rebuild");
+    const { name, ids } = await oldTable();
+    const shadow = shadowTableName(name);
+    try {
+      const ch = await client();
+      const store = clickhouseRebuildStore(ch);
+      const live = (await store.shapes([name])).get(name);
+      if (live === undefined) throw new Error(`${name} is missing`);
+      // The state a run leaves when it stops inside the copy: the shadow holds
+      // one row of September, and a month whose rows have since expired from
+      // the source.
+      await store.createShadow(
+        name,
+        shadow,
+        engineWithKey(live, NEW_KEY, name),
+      );
+      await ch.command({
+        query: `INSERT INTO ${shadow} SELECT * FROM ${name} WHERE seq = 3`,
+      });
+      await ch.insert({
+        table: shadow,
+        format: "JSONEachRow",
+        values: [
+          {
+            org_id: randomUUID(),
+            workspace_id: randomUUID(),
+            session_uuid: randomUUID(),
+            seq: 0,
+            ts: "2025-01-02 00:00:00.000",
+            received_at: "2025-01-02 00:00:00.000",
+            kind: "agent_start",
+            event_id_idem: "expired",
+          },
+        ],
+      });
+      expect(await activePartitions(shadow)).toEqual(["202501", "202609"]);
+
+      await expect(
+        rebuildPartitionKey(
+          store,
+          { table: name, partitionBy: NEW_KEY },
+          quiet,
+        ),
+      ).resolves.toBe("rebuilt");
+      expect(await idsIn(name)).toEqual([...ids].sort());
+      expect(await activePartitions(name)).toEqual(["202608", "202609"]);
+      expect(await shapeOf(shadow)).toBeUndefined();
+    } finally {
+      await dropAll(name);
+    }
+  }, 120_000);
+
   it("finishes a rebuild that stopped after the swap, with a write the old table took late", async () => {
     const { clickhouseRebuildStore, rebuildPartitionKey } = await import(
       "./table-rebuild"
