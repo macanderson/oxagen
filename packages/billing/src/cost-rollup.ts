@@ -593,7 +593,14 @@ export interface DailyTotalsRecord {
   costBasis: CostBasis | null;
   provenMicros: bigint | null;
   acceptedMicros: bigint | null;
+  /**
+   * The group's graded runs' advanced steps over their steps (ADR-199), the
+   * division the agent baseline makes. Null when no run in the group is
+   * graded.
+   */
   productiveRatio: number | null;
+  /** The steps behind `productiveRatio`, its weight when days are summed. */
+  gradedSteps: number | null;
   tokens: TokenCounts;
 }
 
@@ -610,8 +617,9 @@ interface Accumulator {
   basis: CostBasis | null;
   proven: bigint | null;
   accepted: bigint | null;
-  ratioSum: number;
-  ratioCount: number;
+  advancedSteps: number;
+  gradedSteps: number;
+  graded: boolean;
   tokens: TokenCounts;
 }
 
@@ -624,8 +632,9 @@ function accumulator(provider: string | null): Accumulator {
     basis: null,
     proven: null,
     accepted: null,
-    ratioSum: 0,
-    ratioCount: 0,
+    advancedSteps: 0,
+    gradedSteps: 0,
+    graded: false,
     tokens: { ...ZERO_TOKENS },
   };
 }
@@ -650,9 +659,12 @@ function addValue(acc: Accumulator, run: RunTotalsRecord, cost: bigint | null) {
     acc.accepted ??= 0n;
     if (run.accepted && cost !== null) acc.accepted += cost;
   }
-  if (run.productiveRatio !== null) {
-    acc.ratioSum += run.productiveRatio;
-    acc.ratioCount += 1;
+  // Steps, not runs, weight the ratio: a group's ratio is its graded runs'
+  // advanced steps over their steps, as the agent baseline divides them.
+  if (run.advancedSteps !== null) {
+    acc.graded = true;
+    acc.advancedSteps += run.advancedSteps;
+    acc.gradedSteps += run.steps;
   }
 }
 
@@ -746,7 +758,10 @@ export function dailyTotalsFromRuns(
     provenMicros: acc.proven,
     acceptedMicros: acc.accepted,
     productiveRatio:
-      acc.ratioCount === 0 ? null : acc.ratioSum / acc.ratioCount,
+      !acc.graded || acc.gradedSteps === 0
+        ? null
+        : acc.advancedSteps / acc.gradedSteps,
+    gradedSteps: acc.graded ? acc.gradedSteps : null,
     tokens: acc.tokens,
   }));
 }

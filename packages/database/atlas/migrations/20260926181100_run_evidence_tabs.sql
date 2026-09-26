@@ -109,6 +109,18 @@ ALTER TABLE "cost"."run_totals"
 CREATE INDEX IF NOT EXISTS "run_totals_agent_started_idx"
   ON "cost"."run_totals" ("workspace_id", "agent_key", "started_at");
 
+-- A day's productive ratio is its graded runs' advanced steps over their
+-- steps, the division the baseline makes. The daily row stores those steps as
+-- the ratio's weight, so a read that sums days divides the same way. Null on
+-- a row rolled up before this, which a read weights by its run count.
+ALTER TABLE "cost"."daily_totals"
+  ADD COLUMN "graded_steps" integer NULL;
+
+ALTER TABLE "cost"."daily_totals"
+  ADD CONSTRAINT "daily_totals_graded_steps_check"
+  CHECK ("graded_steps" IS NULL OR "graded_steps" >= 0)
+  NOT VALID;
+
 -- ════════════════════════════════════════════════════════════════════════════
 -- 5. The stamped operator role stays as it was stamped (#3999, ADR-197).
 --

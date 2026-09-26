@@ -430,6 +430,12 @@ export const dailyTotals = costSchema.table(
     provenMicros: bigint("proven_micros", { mode: "bigint" }),
     acceptedMicros: bigint("accepted_micros", { mode: "bigint" }),
     productiveRatio: numeric("productive_ratio", { precision: 9, scale: 8 }),
+    // The steps of the group's graded runs, the weight behind
+    // `productive_ratio` (advanced steps over these, ADR-199). A read that
+    // sums days weights each day's ratio by it, so the Spend ratio and the
+    // Run page's baseline divide the same way. Null on a row rolled up
+    // before the column existed, and on a group with no graded run.
+    gradedSteps: integer("graded_steps"),
     tokens: jsonb("tokens").notNull(),
     rolledUpAt: timestamp("rolled_up_at", {
       withTimezone: true,
@@ -458,6 +464,10 @@ export const dailyTotals = costSchema.table(
     countsCheck: check(
       "daily_totals_counts_check",
       sql`${t.runs} >= 0 AND ${t.calls} >= 0`,
+    ),
+    gradedStepsCheck: check(
+      "daily_totals_graded_steps_check",
+      sql`${t.gradedSteps} IS NULL OR ${t.gradedSteps} >= 0`,
     ),
   }),
 );

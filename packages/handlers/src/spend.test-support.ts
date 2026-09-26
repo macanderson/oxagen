@@ -129,6 +129,7 @@ export function daily(
     provenMicros: null,
     acceptedMicros: null,
     productiveRatio: null,
+    gradedSteps: null,
     tokens: { ...ZERO_TOKENS },
     ...over,
   };

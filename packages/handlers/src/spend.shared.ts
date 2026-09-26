@@ -59,6 +59,12 @@ interface FigureSource {
   provenMicros: bigint | null;
   acceptedMicros: bigint | null;
   productiveRatio: number | null;
+  /**
+   * The graded steps behind `productiveRatio`, its weight in a sum. Null on
+   * a daily row rolled up before the weight was stored; that row weighs as
+   * its run count.
+   */
+  gradedSteps: number | null;
 }
 
 /** Sum figures into one; a null stays null unless some source carries a value. */
@@ -86,9 +92,12 @@ export function sumFigures(sources: readonly FigureSource[]): SpendFigure {
       accepted =
         accepted === null ? s.acceptedMicros : accepted + s.acceptedMicros;
     if (s.productiveRatio !== null) {
-      // Weighted by runs so a group of many runs outweighs one.
-      ratioSum += s.productiveRatio * Math.max(1, s.runs);
-      ratioWeight += Math.max(1, s.runs);
+      // Weighted by graded steps, so the sum is advanced steps over steps,
+      // the division the agent baseline makes (ADR-199). A row with no
+      // stored weight weighs as its run count.
+      const weight = s.gradedSteps ?? Math.max(1, s.runs);
+      ratioSum += s.productiveRatio * weight;
+      ratioWeight += weight;
     }
   }
   return {
@@ -141,6 +150,7 @@ export function runFigure(run: RunTotalsRecord): FigureSource {
           ? run.costMicros
           : 0n,
     productiveRatio: run.productiveRatio,
+    gradedSteps: run.advancedSteps === null ? null : run.steps,
   };
 }
 
@@ -182,6 +192,7 @@ export async function readDailyTotals(
     acceptedMicros: r.acceptedMicros,
     productiveRatio:
       r.productiveRatio === null ? null : Number(r.productiveRatio),
+    gradedSteps: r.gradedSteps,
     tokens: r.tokens as TokenCounts,
   }));
 }

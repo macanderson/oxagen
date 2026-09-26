@@ -928,6 +928,7 @@ async function replaceDailyTotals(
       acceptedMicros: r.acceptedMicros,
       productiveRatio:
         r.productiveRatio === null ? null : r.productiveRatio.toFixed(8),
+      gradedSteps: r.gradedSteps,
       tokens: r.tokens,
       rolledUpAt,
     })),

@@ -4174,7 +4174,7 @@
       "writes": []
     }
   ],
-  "contentHash": "0e8e57db15bae41e25a8ad5f76463260362cfc6af6eeda9af9df1342df78d192",
+  "contentHash": "0bb5ab01b22f329113bee1241d8fec72aa48546b08b9dc0f02f8e9060d066fc9",
   "domains": [
     {
       "name": "agent",
@@ -13762,6 +13762,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "numeric(9, 8)"
+        },
+        {
+          "name": "graded_steps",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
         },
         {
           "name": "tokens",

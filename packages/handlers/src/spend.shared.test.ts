@@ -13,8 +13,8 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
-import { readRunTotals } from "./spend.shared";
-import { OPERATOR, SCOPE } from "./spend.test-support";
+import { readRunTotals, runFigure, sumFigures } from "./spend.shared";
+import { daily, OPERATOR, run, SCOPE } from "./spend.test-support";
 
 /** Hands the read a mock database and keeps the query it built without running it. */
 function captureQuery() {
@@ -84,5 +84,36 @@ describe("readRunTotals", () => {
     expect(captured[0]!.params).toContain("acme.core.cc");
     expect(captured[1]!.sql).toMatch(/"breakdown"->'tools' @> \$\d+::jsonb/);
     expect(captured[1]!.params).toContain(JSON.stringify([{ name: "Bash" }]));
+  });
+});
+
+describe("sumFigures", () => {
+  it("weights each day's productive ratio by its graded steps", () => {
+    // 9 of 10 steps advanced one day and 0 of 2 the next: 9 of 12 overall.
+    // A run-weighted mean would read 0.45.
+    const out = sumFigures([
+      daily({ productiveRatio: 0.9, gradedSteps: 10 }),
+      daily({ productiveRatio: 0, gradedSteps: 2 }),
+    ]);
+    expect(out.productiveRatio).toBeCloseTo(9 / 12);
+  });
+
+  it("weighs a day rolled up before the weight was stored by its run count", () => {
+    const out = sumFigures([
+      daily({ productiveRatio: 1, gradedSteps: null, runs: 3 }),
+      daily({ productiveRatio: 0, gradedSteps: 1 }),
+    ]);
+    expect(out.productiveRatio).toBeCloseTo(3 / 4);
+  });
+
+  it("weights a run by its steps once the rollup has graded it", () => {
+    const graded = run({
+      steps: 4,
+      advancedSteps: 1,
+      unproductiveSteps: 3,
+      productiveRatio: 0.25,
+    });
+    expect(runFigure(graded).gradedSteps).toBe(4);
+    expect(runFigure(run()).gradedSteps).toBeNull();
   });
 });

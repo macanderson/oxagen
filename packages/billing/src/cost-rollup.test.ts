@@ -773,6 +773,40 @@ describe("dailyTotalsFromRuns", () => {
     expect(bash.costBasis).toBe(null);
   });
 
+  const ungraded: RunTotalsRecord = {
+    ...base,
+    advancedSteps: null,
+    unproductiveSteps: null,
+    productiveRatio: null,
+  };
+
+  it("weights a group's productive ratio by its graded steps, as the baseline does", () => {
+    const graded = (steps: number, advanced: number): RunTotalsRecord => ({
+      ...base,
+      steps,
+      advancedSteps: advanced,
+      unproductiveSteps: steps - advanced,
+      productiveRatio: advanced / steps,
+    });
+    const rows = dailyTotalsFromRuns([
+      graded(10, 9),
+      graded(2, 0),
+      // An ungraded run adds nothing to the ratio or its weight.
+      ungraded,
+    ]);
+    const agent = rows.find((r) => r.groupKind === "agent")!;
+    // 9 of 12 steps advanced. The mean of the two runs' ratios would be 0.45.
+    expect(agent.productiveRatio).toBeCloseTo(9 / 12, 12);
+    expect(agent.gradedSteps).toBe(12);
+  });
+
+  it("leaves a group with no graded run without a ratio or a weight", () => {
+    const rows = dailyTotalsFromRuns([ungraded]);
+    const agent = rows.find((r) => r.groupKind === "agent")!;
+    expect(agent.productiveRatio).toBeNull();
+    expect(agent.gradedSteps).toBeNull();
+  });
+
   it("keeps a group with no priced run at no cost", () => {
     const rows = dailyTotalsFromRuns([
       rollupRun({ meta, book: BOOK, toolCalls: [], modelCalls: [] }),
