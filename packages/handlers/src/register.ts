@@ -1385,6 +1385,22 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./shell.nav_counts.get"))
         .shellNavCountsGetHandler as CapabilityHandlerFn,
   );
+  // Interjections (#3839): the questions a run paused to ask a person, which
+  // the Fleet waiting tile, the Fleet count and the approvals drawer read.
+  // They live here, not in @oxagen/agent, because the answer queues its
+  // message through this package's command store.
+  registerHandler(
+    "list_interjections",
+    async () =>
+      (await import("./agent.interjection.list"))
+        .agentInterjectionListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "answer_interjection",
+    async () =>
+      (await import("./agent.interjection.answer"))
+        .agentInterjectionAnswerHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "set_preferences",
     async () =>
