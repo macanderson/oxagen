@@ -399,7 +399,7 @@ CREATE TABLE IF NOT EXISTS tacho_events (
 ENGINE = ReplacingMergeTree(received_at)
 PARTITION BY toYYYYMM(ts)
 ORDER BY (org_id, workspace_id, session_uuid, seq)
-SETTINGS index_granularity = 8192;
+SETTINGS index_granularity = 8192, min_bytes_for_wide_part = 67108864, vertical_merge_algorithm_min_rows_to_activate = 1;
 
 ALTER TABLE tacho_events ADD INDEX IF NOT EXISTS tacho_events_idem_idx event_id_idem TYPE bloom_filter GRANULARITY 4;
 ALTER TABLE tacho_events ADD INDEX IF NOT EXISTS tacho_events_tool_use_idx tool_use_id TYPE bloom_filter GRANULARITY 4;

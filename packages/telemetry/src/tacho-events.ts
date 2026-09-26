@@ -79,6 +79,15 @@ export const TACHO_EVENTS_INSERT_MAX_MEMORY_BYTES = 512 * 1024 * 1024;
  * of JSON (`TACHO_MAX_REQUEST_BYTES`), and 512 MiB is a third of the cap. An
  * insert that passes the bound fails with code 241, which ingest answers 503
  * with Retry-After.
+ *
+ * Measured (#4316), on ClickHouse 24.8 as CI runs it: a full request of the
+ * smallest frames, 5,692 frames in 4 MiB of JSON, peaks at 76 MiB once
+ * migration 0033 keeps every insert in the compact part layout. Before 0033
+ * the same batch wrote a wide part and failed at the 512 MiB bound every
+ * time. `tacho-events-insert.integration.test.ts` repeats the measurement on
+ * every CI run and prints it. Production's own week of inserts is not
+ * recorded here: its ClickHouse logs reach CloudWatch at warning level, with
+ * no per-query memory, and the table held no rows on 2026-09-25.
  */
 export const TACHO_EVENTS_INSERT_SETTINGS: ClickHouseSettings = {
   max_memory_usage: String(TACHO_EVENTS_INSERT_MAX_MEMORY_BYTES),

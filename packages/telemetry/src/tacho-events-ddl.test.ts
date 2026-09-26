@@ -8,9 +8,12 @@ import {
   bodyColumnType,
   DROPPED_COLUMNS,
   RETIRED_COLUMNS,
+  TACHO_EVENTS_MODIFIABLE_SETTINGS,
+  TACHO_EVENTS_TABLE_SETTINGS,
   tachoEventsColumns,
   tachoEventsCreatedColumns,
   tachoEventsMigration,
+  tachoEventsModifySettings,
 } from "./tacho-events-ddl";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -167,6 +170,30 @@ describe("tacho_events DDL", () => {
     expect(statements).toEqual([
       "ALTER TABLE tacho_events MODIFY TTL toDateTime(received_at) + INTERVAL 13 MONTH SETTINGS materialize_ttl_after_modify = 0;",
     ]);
+  });
+
+  it("keeps inserts and merges out of the wide writer's memory, forward as well as generated (#4316)", () => {
+    // A wide part of this table opens a buffer per column stream, about
+    // 1.3 GiB against the node's 1.5 GiB cap. 0027 carries the settings for a
+    // cluster created today; 0033 carries them to every cluster created
+    // before. Both lines come from one list, and this holds them to it.
+    const ddl = tachoEventsMigration();
+    expect(ddl).toContain(
+      "SETTINGS index_granularity = 8192, min_bytes_for_wide_part = 67108864, vertical_merge_algorithm_min_rows_to_activate = 1;",
+    );
+    const forward = readFileSync(
+      join(here, "migrations", "0033_tacho_events_part_settings.sql"),
+      "utf8",
+    );
+    const statements = forward
+      .split("\n")
+      .filter((line) => line.trim() !== "" && !line.startsWith("--"));
+    expect(statements).toEqual([tachoEventsModifySettings()]);
+    expect(TACHO_EVENTS_MODIFIABLE_SETTINGS.map(([name]) => name)).toEqual(
+      TACHO_EVENTS_TABLE_SETTINGS.map(([name]) => name).filter(
+        (name) => name !== "index_granularity",
+      ),
+    );
   });
 
   it("orders by tenant, session, and seq under ReplacingMergeTree", () => {
