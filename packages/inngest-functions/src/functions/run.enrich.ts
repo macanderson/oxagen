@@ -219,7 +219,6 @@ export function dueForEnrichment(
   const changed = sql`${table.updatedAt} IS DISTINCT FROM ${table.summaryObservedRevision}`;
   const unchanged = sql`${table.updatedAt} IS NOT DISTINCT FROM ${table.summaryObservedRevision}`;
   return and(
-    lt(table.summarySpentUsdMicros, ENRICHMENT_RUN_TOTAL_BUDGET_MICROS),
     or(
       isNull(table.summaryObservedAt),
       and(
@@ -253,6 +252,7 @@ export function dueForEnrichment(
       ),
       and(sealedRun(table), unchanged),
     ),
+    lt(table.summarySpentUsdMicros, ENRICHMENT_RUN_TOTAL_BUDGET_MICROS),
   );
 }
 
