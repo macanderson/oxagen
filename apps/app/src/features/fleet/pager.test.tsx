@@ -155,7 +155,10 @@ describe("RunsPager", () => {
       pullRequests: "with",
       list: list({ status: ["sealed"] }),
     });
-    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–10 of 10+");
+    // No count, so no position and no total: nothing counted "10+".
+    expect(screen.getByTestId("pager-range")).toHaveTextContent(
+      "10 runs on this page",
+    );
     expect(screen.getByRole("link", { name: "Newest runs" })).toHaveAttribute(
       "href",
       "/acme/core?prs=with",

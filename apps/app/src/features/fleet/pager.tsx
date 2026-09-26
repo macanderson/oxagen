@@ -7,8 +7,8 @@
 //
 // A read that did not count (a pull-request filter, which only the frames
 // answer, or a count that failed) has no total to page against, so the pager
-// falls back to the cursor: the rows this read returned, and a link to older
-// runs when more follow.
+// falls back to the cursor: how many rows this read returned, and a link to
+// older runs when more follow.
 import { useLocale, useTranslations } from "next-intl";
 import type { PullRequestFilter } from "@/data/contracts/runs";
 import { routes } from "@/shared/safe-path";
@@ -89,15 +89,11 @@ export function RunsPager({
   const { from, to } = pageRange(list, pageSize, rows);
 
   if (total === undefined) {
-    // No count: the rows of this read, and the cursor to the next.
-    const range =
-      rows === 0
-        ? t("none")
-        : t(nextCursor === null ? "range" : "rangeMore", {
-            from: count(from),
-            to: count(to),
-            total: count(to),
-          });
+    // No count: how many rows this read returned, and the cursor to the next.
+    // A cursor page has no position in a counted list, so the range names
+    // neither a start nor a total: a later page read "1–12 of 12" before, a
+    // figure nothing counted.
+    const range = rows === 0 ? t("none") : t("shown", { n: rows });
     return (
       <nav
         aria-label={t("label")}

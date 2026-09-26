@@ -203,7 +203,8 @@
         "rangeEmptyMore": "0 of {total}+",
         "previous": "Previous",
         "next": "Next",
-        "page": "Page {page}"
+        "page": "Page {page}",
+        "shown": "{n, plural, one {# run on this page} other {# runs on this page}}"
       },
       "pause": "Pause",
       "resolve": "Resolve",
@@ -318,7 +319,7 @@
       "neededValue": "{permission} on {ws}",
       "decidedBy": "Decided by",
       "decidedByValue": "policy not recorded · deny wins over every allow",
-      "decidedByIam": "IAM rule <c>{rule}</c> · deny wins over every allow",
+      "decidedByIam": "IAM rule <c>{rule}</c>",
       "decidedByRule": "decision rule <c>{rule}</c>",
       "bodyRule": "A decision rule on <b>{org}</b> refused this read. Your roles include <c>{permission} on {ws}</c>. A workspace admin can change the rule, and the change lands in the audit record."
     },

@@ -468,6 +468,7 @@
       "all": "All approvals",
       "gone": "That approval is no longer listed.",
       "empty": "Nothing is waiting on a human.",
+      "emptyRead": "Nothing is waiting in the workspaces Oxagen could read.",
       "emptyDetail": "A call parks here when policy returns <code>approve</code>. Denials never park; they end the call and are free.",
       "rowNotBacked": "Risk, amount, side effect, taint and task are not returned for a parked call yet.",
       "truncated": "Oxagen read the first {count} workspaces of this organization. Calls parked in the rest are not counted here.",

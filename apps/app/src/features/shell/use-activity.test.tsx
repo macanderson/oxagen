@@ -121,6 +121,42 @@ describe("orgWaiting", () => {
     expect(orgWaiting(data)).toEqual({ count: 1, partial: true });
   });
 
+  // #4370 review: a workspace whose approvals failed and whose questions
+  // loaded left its questions out of the badge while the drawer's heading
+  // counted them ("3+" against "5+ waiting on you").
+  it("counts a workspace's questions when its approvals failed, as the drawer does", () => {
+    const data = shellData({
+      approvals: {
+        workspaces: [
+          shellWorkspace({
+            pending: readOk({
+              items: [
+                approvalItem(),
+                approvalItem({ id: "apr_02K5RS8F3J" }),
+                approvalItem({ id: "apr_03K5RS8F3J" }),
+              ],
+              more: false,
+            }),
+          }),
+          shellWorkspace({
+            slug: "finops",
+            pending: readError("run_index_unavailable", 503),
+            interjections: readOk({
+              items: [
+                interjectionItem(),
+                interjectionItem({ id: "inj_02K5RSA4TW" }),
+              ],
+              more: false,
+            }),
+          }),
+        ],
+        truncated: false,
+        readAt: 0,
+      },
+    });
+    expect(orgWaiting(data)).toEqual({ count: 5, partial: true });
+  });
+
   // #3839: the badge counted parked calls only while an agent could sit
   // paused on a question the drawer never listed.
   it("adds each workspace's open interjections to its parked calls", () => {

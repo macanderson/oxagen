@@ -25,7 +25,7 @@ import {
   it,
   vi,
 } from "vitest";
-import { readOk } from "@/data/read";
+import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
@@ -587,6 +587,32 @@ describe("the drawer", () => {
     ).toHaveTextContent(
       "Oxagen read the first 1 workspaces of this organization.",
     );
+  });
+
+  // #4370 review: with every approvals read empty and one workspace's
+  // questions unread, the drawer said "Nothing is waiting on a human." under
+  // that workspace's own read failure.
+  it("claims nothing waits only in the workspaces it read (negative)", async () => {
+    const user = userEvent.setup();
+    renderShell(
+      shellData({
+        approvals: {
+          workspaces: [
+            shellWorkspace({
+              interjections: readError("run_index_unavailable", 503),
+            }),
+          ],
+          truncated: false,
+          readAt: Date.now(),
+        },
+      }),
+    );
+    await user.click(button());
+    const empty = within(drawer()).getByTestId("apdrawer-empty");
+    expect(empty).toHaveTextContent(
+      "Nothing is waiting in the workspaces Oxagen could read.",
+    );
+    expect(drawer()).not.toHaveTextContent("Nothing is waiting on a human.");
   });
 
   // #3839: the drawer said an interjection had no record. It now lists each

@@ -36,6 +36,18 @@ afterEach(async () => {
 });
 
 describe("WaitingTile", () => {
+  // #4370 review: the aria-label replaced the button's name, so a screen
+  // reader heard "Open approvals" and never the figure or its note.
+  it("describes the figure and its note to a screen reader", () => {
+    const tile = show({
+      approvals: approvalQueue([approvalItem()]),
+      interjections: interjectionQueue([interjectionItem()]),
+      now: NOW,
+    });
+    expect(tile).toHaveAccessibleDescription(/Waiting on a human/);
+    expect(tile).toHaveAccessibleDescription(/2/);
+  });
+
   it("names the oldest of several interjections when no approval waits", () => {
     const tile = show({
       approvals: approvalQueue([]),

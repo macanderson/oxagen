@@ -350,6 +350,12 @@ export function ApprovalsDrawer({
   ]);
   const waitingLabel =
     n === null ? null : `${String(n)}${waiting?.partial === true ? "+" : ""}`;
+  // An empty list proves nothing waits only when every queue was read. A
+  // failed approvals or questions read, or workspaces past the read, leaves
+  // the claim to the workspaces that were read.
+  const waitingUnread =
+    data.approvals.truncated ||
+    data.approvals.workspaces.some((w) => !w.pending.ok || !w.interjections.ok);
 
   return (
     <>
@@ -472,8 +478,11 @@ export function ApprovalsDrawer({
                 </>
               ) : (
                 <div className="px-1.5 py-6 text-center">
-                  <p className="text-[12.5px] text-muted-foreground">
-                    {t("empty")}
+                  <p
+                    data-testid="apdrawer-empty"
+                    className="text-[12.5px] text-muted-foreground"
+                  >
+                    {waitingUnread ? t("emptyRead") : t("empty")}
                   </p>
                   <p className="mt-2 text-[11.5px] text-muted-foreground">
                     {t.rich("emptyDetail", {

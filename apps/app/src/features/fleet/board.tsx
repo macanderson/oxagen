@@ -824,6 +824,7 @@ export function FleetBoard({
 } & Place) {
   const t = useTranslations("fleet.runs");
   const pauseT = useTranslations("fleet.pause");
+  const tokensWhyId = useId();
   const navigate = useNavigate();
   const failureText = useActionFailure();
   const [chip, setChip] = useState<RunChip>("all");
@@ -988,27 +989,21 @@ export function FleetBoard({
                     );
                   // The design's Tokens header sorts. list_runs orders on the
                   // server (#3837), and its sort keys do not include tokens,
-                  // so the control is drawn where the design has it,
-                  // disabled, and its hover says why.
+                  // so the header is plain text. The reason is on hover and
+                  // in the header's description for a screen reader: a
+                  // disabled button cannot take focus, so its title reached
+                  // no one using a keyboard.
                   if (sortKey === undefined)
                     return (
                       <th
                         key={key}
                         scope="col"
-                        aria-sort="none"
+                        data-testid="head-tokens"
+                        title={t("tokensUnsorted")}
+                        aria-describedby={tokensWhyId}
                         className={`${headCell} ${align}`}
                       >
-                        <button
-                          type="button"
-                          disabled
-                          data-testid="sort-tokens"
-                          aria-label={t("sortBy", { column: label })}
-                          title={t("tokensUnsorted")}
-                          className="inline-flex cursor-not-allowed items-center gap-1 uppercase tracking-[inherit]"
-                        >
-                          {label}
-                          <ArrowUpDown aria-hidden className="size-3" />
-                        </button>
+                        {label}
                       </th>
                     );
                   const sorted = list.sort === sortKey ? list.dir : null;
@@ -1074,6 +1069,9 @@ export function FleetBoard({
               )}
             </tbody>
           </table>
+          <p id={tokensWhyId} className="sr-only">
+            {t("tokensUnsorted")}
+          </p>
         </div>
         <RunsPager
           list={list}

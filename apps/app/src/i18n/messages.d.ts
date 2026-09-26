@@ -3044,6 +3044,7 @@ type Messages = {
         previous: string;
         next: string;
         page: string;
+        shown: string;
       };
       pause: string;
       resolve: string;
@@ -7827,6 +7828,7 @@ type Messages = {
       all: string;
       gone: string;
       empty: string;
+      emptyRead: string;
       emptyDetail: string;
       rowNotBacked: string;
       truncated: string;

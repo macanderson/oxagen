@@ -7,7 +7,7 @@
 // and never reads as a zero: no approvals read means no figure, and no
 // interjections read leaves the figure a floor with a "+".
 import { useLocale, useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { type ReactNode, useId } from "react";
 import type { ApprovalQueue } from "@/data/contracts/approvals";
 import type { InterjectionQueue } from "@/data/contracts/interjections";
 import type { Read } from "@/data/read";
@@ -29,6 +29,7 @@ export function WaitingTile({
 }) {
   const t = useTranslations("fleet.stats.waiting");
   const locale = useLocale();
+  const figureId = useId();
   const w = waitingOf(approvals, interjections);
 
   const windowWords = (seconds: number) => {
@@ -103,16 +104,24 @@ export function WaitingTile({
   }
 
   return (
+    // The name is the action; the description is the figure. Without the
+    // description a screen reader heard "Open approvals, button" and never
+    // the count, the oldest wait, or which reads were missing.
     <button
       type="button"
       data-testid="tile"
       aria-label={t("open")}
+      aria-describedby={`${figureId}-term ${figureId}-value ${figureId}-note`}
       onClick={openApprovals}
       className={`${statTile} cursor-pointer text-left transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`}
     >
-      <span className={statTerm}>{t("title")}</span>
-      <span className={`${statValue} text-info`}>{value}</span>
-      <span className={statNote}>
+      <span id={`${figureId}-term`} className={statTerm}>
+        {t("title")}
+      </span>
+      <span id={`${figureId}-value`} className={`${statValue} text-info`}>
+        {value}
+      </span>
+      <span id={`${figureId}-note`} className={statNote}>
         {clauses.map(({ key, node }, i) => (
           <span key={key}>
             {i > 0 ? " · " : null}

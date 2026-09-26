@@ -207,9 +207,10 @@ describe("Fleet reads", () => {
       "c1",
     );
     // The page size is the read's own limit (25 until the person picks
-    // another), and every run is listed until a filter is chosen.
+    // another), and every run is listed until a filter is chosen. Fleet
+    // asks for the total, because its pager prints one.
     expect(calls.runs).toEqual([
-      [ctx, { cursor: "c1", limit: 25, pullRequests: "any" }],
+      [ctx, { cursor: "c1", limit: 25, pullRequests: "any", count: true }],
     ]);
     expect(calls.approvals).toEqual([[ctx, { runId: null }]]);
     // The open questions, for the waiting tile (#3839).
@@ -642,11 +643,12 @@ describe("the Runs panel", () => {
     );
   });
 
-  it("draws the Tokens sort where the design has it, disabled while the server cannot order by tokens (#3834, #3837)", async () => {
+  it("draws the Tokens header with no sort while the server cannot order by tokens (#3834, #3837)", async () => {
     await loaded();
-    const sort = screen.getByRole("button", { name: "Sort by Tokens" });
-    expect(sort).toBeDisabled();
-    expect(sort.closest("th")).toHaveAttribute("aria-sort", "none");
+    expect(screen.queryByRole("button", { name: /Sort by Tokens/ })).toBeNull();
+    expect(
+      screen.getByRole("columnheader", { name: /^Tokens/ }),
+    ).toBeInTheDocument();
   });
 
   it("reads a live run with a parked call as parked for approval, and resolves it on the Run page", async () => {
@@ -836,7 +838,9 @@ describe("list controls", () => {
   it("lists every run the read returned, and says when the read stopped before the oldest run", async () => {
     await loaded({ runs: runPage(many, "c2"), approvals: NO_APPROVALS });
     expect(rows()).toHaveLength(12);
-    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–12 of 12+");
+    expect(screen.getByTestId("pager-range")).toHaveTextContent(
+      "12 runs on this page",
+    );
     expect(screen.getByRole("link", { name: "Older runs" })).toHaveAttribute(
       "href",
       "/acme/core-platform?cursor=c2",
@@ -881,7 +885,11 @@ describe("list controls", () => {
       "href",
       "/acme/core-platform",
     );
-    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–12 of 12");
+    // A later cursor page is not rows 1–12 of 12: nothing counted it (#4370
+    // review). It says how many rows it holds and nothing more.
+    const range = screen.getByTestId("pager-range");
+    expect(range).toHaveTextContent("12 runs on this page");
+    expect(range).not.toHaveTextContent("1–12");
   });
 
   // #3837: the search, the facets, the order and the page are the read's.
@@ -983,6 +991,7 @@ describe("list controls", () => {
       status: ["sealed"],
       query: "deploy",
       offset: 50,
+      count: true,
     });
     expect(screen.getByTestId("pager-range")).toHaveTextContent("51–62 of 279");
     expect(screen.getByRole("link", { name: "Previous" })).toHaveAttribute(
@@ -1229,9 +1238,10 @@ describe("not-loaded states", () => {
       approvals: NO_APPROVALS,
     });
     const decided = screen.getByTestId("fleet-decided-by");
-    expect(decided).toHaveTextContent(
-      "IAM rule 8:default · deny wins over every allow",
-    );
+    expect(decided).toHaveTextContent("IAM rule 8:default");
+    // 8:default means no grant matched. No deny beat an allow, so the line
+    // does not say one did (#4370 review).
+    expect(decided).not.toHaveTextContent("deny wins");
     expect(decided).toHaveAttribute("data-recorded", "true");
     expect(within(decided).getByText("8:default").tagName).toBe("CODE");
     expect(screen.getByTestId("fleet-denied")).toHaveTextContent(

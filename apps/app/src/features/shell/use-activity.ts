@@ -49,19 +49,25 @@ export type ShellCounts = {
 };
 
 export function orgWaiting(data: ShellData): OrgWaiting | null {
-  const read = data.approvals.workspaces.flatMap((w) =>
-    w.pending.ok ? [{ queue: w.pending.value, w }] : [],
-  );
-  if (read.length === 0) return null;
+  const { workspaces } = data.approvals;
+  // The approvals and the questions are two reads per workspace, and each
+  // counts where it landed. A workspace whose approvals failed still counts
+  // its questions, as the drawer lists them, so the badge and the drawer's
+  // heading add the same rows. The failed read makes the figure partial.
+  // With no approvals read and no open question, there is nothing to count:
+  // null draws no badge rather than a zero nobody counted.
+  const questions = workspaces.reduce((n, w) => n + openQuestions(w), 0);
+  if (!workspaces.some((w) => w.pending.ok) && questions === 0) return null;
   return {
-    count: read.reduce(
-      (n, { queue, w }) => n + queue.items.length + openQuestions(w),
-      0,
+    count: workspaces.reduce(
+      (n, w) => n + (w.pending.ok ? w.pending.value.items.length : 0),
+      questions,
     ),
     partial:
       data.approvals.truncated ||
-      read.length < data.approvals.workspaces.length ||
-      read.some(({ queue, w }) => queue.more || questionsShort(w)),
+      workspaces.some(
+        (w) => !w.pending.ok || w.pending.value.more || questionsShort(w),
+      ),
   };
 }
 

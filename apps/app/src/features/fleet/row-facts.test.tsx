@@ -158,16 +158,18 @@ describe("tokens (#3834)", () => {
   });
 
   // list_runs orders the rows on the server (#3837) and has no tokens sort
-  // key, so the header is drawn disabled and keeps the read's order.
-  it("draws the Tokens header without a sort, and says why", async () => {
+  // key, so the header offers no sort and keeps the read's order. The reason
+  // is in the header's text, which a screen reader reads, and on hover. A
+  // disabled button carried it before, and a keyboard never reached it.
+  it("draws the Tokens header without a sort, and says why to every reader", async () => {
     await renderFleet(priced);
-    const sort = screen.getByRole("button", { name: "Sort by Tokens" });
-    expect(sort).toBeDisabled();
-    expect(sort).toHaveAttribute(
-      "title",
-      "Runs are ordered on the server, which cannot order them by tokens yet.",
-    );
-    expect(sort.closest("th")).toHaveAttribute("aria-sort", "none");
+    expect(screen.queryByRole("button", { name: /Sort by Tokens/ })).toBeNull();
+    const head = screen.getByTestId("head-tokens");
+    const why =
+      "Runs are ordered on the server, which cannot order them by tokens yet.";
+    expect(head).toHaveAttribute("title", why);
+    expect(head).toHaveAccessibleDescription(why);
+    expect(head).not.toHaveAttribute("aria-sort");
   });
 });
 
