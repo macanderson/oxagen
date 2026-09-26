@@ -291,13 +291,16 @@
       "positionNoTurn": "step {steps} · frame {frames}",
       "recordedAs": "Recorded as",
       "recordedValue": "<mono>control.pause</mono> frame · operator authority",
+      "ledgerRecordedValue": "command receipt · operator authority",
       "reason": "Reason — the model reads this on resume, so write it for the agent",
       "note": "Pause is not cancel. Nothing is revoked, and the run resumes exactly where it stopped; the gap is visible in the chain and the receipts.",
       "footer": "Recorded as a <mono>control.pause</mono> frame under <mono>run.pause</mono>.",
+      "ledgerFooter": "Recorded as a command receipt under <mono>run.pause</mono>. The producer writes this run's frames, so the pause adds none.",
       "confirm": "Pause at the next boundary",
       "pending": "Queueing",
       "cancel": "Cancel",
-      "queued": "Pause queued for {run}. It takes effect at the next boundary."
+      "queued": "Pause queued for {run}. It takes effect at the next boundary.",
+      "ledgerApplied": "Evidence ingress is paused for {run}. The external process may still be running."
     },
     "empty": {
       "title": "No runs yet in {workspace}",

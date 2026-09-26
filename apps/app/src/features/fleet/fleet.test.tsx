@@ -837,18 +837,66 @@ describe("the Runs panel", () => {
     expect(refresh).toHaveBeenCalled();
   });
 
-  it("says why a ledger run cannot be paused and sends nothing (negative)", async () => {
+  // #2953: the row refused Pause on every ledger run, though dispatch_command
+  // has fenced a ledger run's evidence ingress since #3637.
+  it("pauses a ledger run's evidence ingress from its row and says so", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_ledger_pause"] },
+    });
     await loaded({
       runs: runPage([runRow({ id: "arun_ledger", source: "ledger" })]),
       approvals: NO_APPROVALS,
     });
     const user = userEvent.setup();
     await user.click(screen.getByTestId("row-pause"));
-    expect(screen.getByTestId("pause-refusal")).toHaveTextContent(
-      "Pause refuses the next evidence batch",
+    const dialog = screen.getByRole("dialog", { name: "Pause this run" });
+    expect(screen.queryByTestId("pause-refusal")).toBeNull();
+    expect(dialog).toHaveTextContent(
+      "Pause refuses new evidence batches at the next ingest boundary. It does not stop the external process.",
+    );
+    expect(dialog).toHaveTextContent("command receipt · operator authority");
+    expect(dialog).toHaveTextContent(
+      "The reason is recorded with the command. Oxagen does not send it to the external process.",
+    );
+    expect(dialog).not.toHaveTextContent("control.pause frame");
+    const note = dialog.querySelector("[data-sheet-footer] [data-footer-note]");
+    expect(note).toHaveTextContent(
+      "Recorded as a command receipt under run.pause.",
+    );
+    await user.type(within(dialog).getByLabelText("Reason"), "Audit hold");
+    await user.click(
+      screen.getByRole("button", { name: "Pause evidence ingress" }),
+    );
+    expect(dispatchRunCommand).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_ledger",
+      "pause",
+      "Audit hold",
     );
     expect(
-      screen.getByRole("button", { name: "Pause at the next boundary" }),
+      await screen.findByText(
+        "Evidence ingress is paused for arun_ledger. The external process may still be running.",
+      ),
+    ).toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("says why a ledger run whose ingress a cancel revoked cannot be paused (negative)", async () => {
+    await loaded({
+      runs: runPage([
+        runRow({ id: "arun_ledger", source: "ledger", ingressRevoked: true }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    expect(screen.getByTestId("pause-refusal")).toHaveTextContent(
+      "Evidence ingress is revoked.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Pause evidence ingress" }),
     ).toBeDisabled();
     expect(dispatchRunCommand).not.toHaveBeenCalled();
   });
@@ -856,7 +904,7 @@ describe("the Runs panel", () => {
   it("says why a run whose host stopped polling cannot be paused (negative)", async () => {
     await loaded({
       runs: runPage([
-        // A wrapped run: a ledger run is refused first, for its own reason.
+        // A wrapped run: the host's poll decides whether it can take one.
         runRow({
           id: "tse_quiet",
           source: "tacho",

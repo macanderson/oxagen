@@ -253,7 +253,7 @@
         {
           "route": "/[org]/[ws]",
           "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-          "entry": "/[org]/[ws] (Fleet) \u2014 Pause on a live run's row opens the pause dialog, which queues dispatch_command for that run, and Steer in the header queues one steer per selected agent at the turn boundary (features/fleet/actions.ts, features/fleet/board.tsx, features/fleet/steer-fleet.tsx)",
+          "entry": "/[org]/[ws] (Fleet) \u2014 Pause on a live run's row opens the pause dialog, which queues dispatch_command for that run and fences a ledger run's evidence ingress, and Steer in the header queues one steer per selected agent at the turn boundary, with Interrupt as the ceiling where a selected run is on the gateway or contained tier, and holds it for the next run of an idle agent (features/fleet/actions.ts, features/fleet/board.tsx, features/fleet/steer-fleet.tsx)",
           "proof": "apps/app/src/features/fleet/fleet.test.tsx",
           "verifiedAt": "2026-09-23",
           "verifiedBy": "session-01GDv3vs-fleet-rev1"

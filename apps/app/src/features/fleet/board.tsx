@@ -648,16 +648,21 @@ function RunRowView({
 
 type PauseRefusal =
   | `blocked.${(typeof COMMAND_BLOCK_COPY)[CommandBlock]}`
-  | "ledgerReason"
+  | "ledgerRevoked"
   | "roleReason";
 
 /**
  * Why a live run cannot take a pause from Oxagen, or null when it can. The
  * enforcement tier plays no part (ADR-163): the row's `commandBlock` says
  * whether the run's host can collect a command.
+ *
+ * A ledger run takes a pause too. `dispatch_command` fences its evidence
+ * ingress (#3637), as the Run page's Pause does. Only a ledger run whose
+ * ingress was revoked by a cancel refuses one.
  */
 function pauseRefusal(run: RunRow, canCommand: boolean): PauseRefusal | null {
-  if (run.source === "ledger") return "ledgerReason";
+  if (run.source === "ledger" && run.ingressRevoked === true)
+    return "ledgerRevoked";
   const block = commandBlockOf(run);
   if (block !== null) return `blocked.${COMMAND_BLOCK_COPY[block]}`;
   if (!canCommand) return "roleReason";
@@ -686,6 +691,10 @@ function PauseDialog({
   const [failure, setFailure] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const refusal = run === null ? null : pauseRefusal(run, canCommand);
+  // A ledger run's pause fences its evidence ingress, applies at once, and
+  // writes a command receipt rather than a frame, so its copy is the Run
+  // page's ledger copy.
+  const ledger = run?.source === "ledger";
 
   function close() {
     setReason("");
@@ -729,7 +738,7 @@ function PauseDialog({
       closeLabel={t("cancel")}
       headerClose
       testId="pause-dialog"
-      footerNote={t.rich("footer", {
+      footerNote={t.rich(ledger ? "ledgerFooter" : "footer", {
         mono: (chunks) => <span className={mono}>{chunks}</span>,
       })}
       footer={
@@ -740,13 +749,19 @@ function PauseDialog({
           disabled={refusal !== null || pending}
           className={buttonPrimary}
         >
-          {pending ? t("pending") : t("confirm")}
+          {pending
+            ? t("pending")
+            : ledger
+              ? command("ledgerPause.confirm")
+              : t("confirm")}
         </button>
       }
     >
       {run === null ? null : (
         <form id={formId} onSubmit={submit} className="flex flex-col gap-3">
-          <p className="text-[12.5px] text-muted-foreground">{t("body")}</p>
+          <p className="text-[12.5px] text-muted-foreground">
+            {ledger ? command("ledgerPause.body") : t("body")}
+          </p>
           <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-[7px] text-[12.5px]">
             <dt className="text-dim">{t("run")}</dt>
             <dd className={mono}>{run.id}</dd>
@@ -762,9 +777,11 @@ function PauseDialog({
             </dd>
             <dt className="text-dim">{t("recordedAs")}</dt>
             <dd>
-              {t.rich("recordedValue", {
-                mono: (chunks) => <span className={mono}>{chunks}</span>,
-              })}
+              {ledger
+                ? t("ledgerRecordedValue")
+                : t.rich("recordedValue", {
+                    mono: (chunks) => <span className={mono}>{chunks}</span>,
+                  })}
             </dd>
           </dl>
           {refusal === null ? null : (
@@ -776,7 +793,7 @@ function PauseDialog({
             </p>
           )}
           <label htmlFor={fieldId} className="text-xs font-medium">
-            {t("reason")}
+            {ledger ? command("reasonLabel") : t("reason")}
           </label>
           <textarea
             id={fieldId}
@@ -789,7 +806,9 @@ function PauseDialog({
             }}
             className={`${inputBase} resize-y max-md:text-base`}
           />
-          <p className="text-xs text-muted-foreground">{t("note")}</p>
+          <p className="text-xs text-muted-foreground">
+            {ledger ? command("ledgerReasonHelp") : t("note")}
+          </p>
           {failure === null ? null : (
             <FormAlert testId="pause-failure">{failure}</FormAlert>
           )}
@@ -1136,7 +1155,12 @@ export function FleetBoard({
         }}
         onQueued={(run) => {
           setPausing(null);
-          toast(pauseT("queued", { run: run.id }), "approval");
+          toast(
+            pauseT(run.source === "ledger" ? "ledgerApplied" : "queued", {
+              run: run.id,
+            }),
+            "approval",
+          );
           navigate.refresh();
         }}
       />

@@ -47,6 +47,7 @@ const RUNS: RunRow[] = [
 const GATEWAY_RUNS: RunRow[] = [
   runRow({
     id: "tse_live",
+    source: "tacho",
     agentKey: "acme.core.release-bot",
     turns: 12,
     enforcementTier: "gateway",
@@ -165,14 +166,22 @@ describe("Steer the fleet", () => {
     );
   });
 
-  it("does not count a gateway run its host no longer reaches (negative)", () => {
+  it("does not count a gateway run its host no longer reaches, or a ledger run (negative)", () => {
     renderDialog({
       runs: [
         runRow({
           id: "tse_quiet",
+          source: "tacho",
           agentKey: "acme.core.release-bot",
           enforcementTier: "gateway",
           commandBlock: "host_offline",
+        }),
+        // A steer to an agent reaches its wrapped runs, never a ledger run.
+        runRow({
+          id: "arun_gateway",
+          source: "ledger",
+          agentKey: "acme.core.docs",
+          enforcementTier: "gateway",
         }),
       ],
     });
@@ -215,6 +224,7 @@ describe("Steer the fleet", () => {
       runs: [
         runRow({
           id: "tse_box",
+          source: "tacho",
           agentKey: "acme.core.docs",
           enforcementTier: "contained",
         }),

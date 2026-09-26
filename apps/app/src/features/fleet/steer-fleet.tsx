@@ -62,15 +62,17 @@ const INTERRUPT_TIERS: ReadonlySet<EnforcementTier> = new Set([
 ]);
 
 /**
- * The agents with a run in flight that can carry an interrupt: on a tier
- * whose proxy can cut the call, reachable by its host, and on a harness that
- * takes steering text mid-run.
+ * The agents with a run in flight that can carry an interrupt: a wrapped run
+ * (a steer to an agent reaches its wrapped sessions only), on a tier whose
+ * proxy can cut the call, reachable by its host, and on a harness that takes
+ * steering text mid-run.
  */
 function interruptCarriers(runs: readonly RunRow[]): Set<string> {
   const carriers = new Set<string>();
   for (const run of runs)
     if (
       run.status === "live" &&
+      run.source === "tacho" &&
       run.agentKey !== null &&
       INTERRUPT_TIERS.has(run.enforcementTier) &&
       commandBlockOf(run) === null &&
