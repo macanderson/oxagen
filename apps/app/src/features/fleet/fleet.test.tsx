@@ -1007,6 +1007,7 @@ describe("the Runs panel", () => {
     expect(
       within(dialog).getByRole("button", { name: "Close Evidence ingress" }),
     ).toBeDisabled();
+    await expectNoAxe(document.body);
     await user.keyboard("{Escape}");
     expect(screen.getByRole("dialog", { name: "Evidence ingress" })).toBe(
       dialog,
@@ -1053,6 +1054,7 @@ describe("the Runs panel", () => {
       within(dialog).getByRole("button", { name: "Cancel" }),
     ).toBeDisabled();
     expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
+    await expectNoAxe(document.body);
     await user.keyboard("{Escape}");
     expect(screen.getByRole("dialog", { name: "Pause this run" })).toBe(dialog);
     settle({ ok: false, reason: "denied", code: "host_offline" });
@@ -1151,12 +1153,19 @@ describe("the Runs panel", () => {
       within(dialog).queryByRole("button", { name: "Pause evidence ingress" }),
     ).toBeNull();
     await expectNoAxe(document.body);
-    // Back returns to both commands, and still sends nothing.
+    // Back returns to both commands, and still sends nothing. Back removes
+    // itself, so focus goes to the button that opened the confirm step.
     await user.click(back);
     expect(within(dialog).queryByTestId("pause-cancel-warning")).toBeNull();
     expect(
       within(dialog).getByRole("button", { name: "Pause evidence ingress" }),
     ).toBeEnabled();
+    const cancel = within(dialog).getByRole("button", {
+      name: "Cancel evidence ingress",
+    });
+    await waitFor(() => {
+      expect(cancel).toHaveFocus();
+    });
     expect(dispatchRunCommand).not.toHaveBeenCalled();
     // The confirming click is the one that sends the cancel.
     await cancelIngress(user, dialog);
@@ -1245,7 +1254,59 @@ describe("the Runs panel", () => {
         name: "Revoke evidence ingress for good",
       }),
     ).toBeEnabled();
-    expect(within(dialog).getByRole("button", { name: "Back" })).toBeEnabled();
+    const back = within(dialog).getByRole("button", { name: "Back" });
+    expect(back).toBeEnabled();
+    await expectNoAxe(document.body);
+    // Review round 3 on #4382: Back left the refusal on screen, under two
+    // commands it did not answer. It now goes with the confirm step, and
+    // focus goes to the button that opened it.
+    await user.click(back);
+    expect(within(dialog).queryByTestId("pause-failure")).toBeNull();
+    const cancel = within(dialog).getByRole("button", {
+      name: "Cancel evidence ingress",
+    });
+    await waitFor(() => {
+      expect(cancel).toHaveFocus();
+    });
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+  });
+
+  // Review round 3 on #4382: a double click on "Cancel evidence ingress" sent
+  // the cancel whenever the layout put the confirm button under the second
+  // click. The confirm button now refuses any click past the first of a
+  // series, wherever it lands.
+  it("sends no cancel on a double click's second click, and sends it on a single click (negative)", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_11"] },
+    });
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Cancel evidence ingress" }),
+    );
+    const revoke = within(dialog).getByRole("button", {
+      name: "Revoke evidence ingress for good",
+    });
+    fireEvent.click(revoke, { detail: 2 });
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
+    expect(
+      within(dialog).getByTestId("pause-cancel-warning"),
+    ).toBeInTheDocument();
+    fireEvent.click(revoke, { detail: 1 });
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+    expect(dispatchRunCommand).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_ledger",
+      "cancel",
+      "",
+    );
+    expect(
+      await within(dialog).findByTestId("ledger-applied"),
+    ).toHaveTextContent("Further appends are refused");
   });
 
   it("says a ledger command no live run took, claims no change, and re-reads nothing on close (negative)", async () => {

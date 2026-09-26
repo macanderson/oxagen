@@ -28,6 +28,7 @@ import {
   useState,
   useTransition,
 } from "react";
+import { flushSync } from "react-dom";
 import type { ApprovalQueue } from "@/data/contracts/approvals";
 import type { InterjectionQueue } from "@/data/contracts/interjections";
 import {
@@ -732,6 +733,7 @@ function PauseDialog({
   const [pending, startTransition] = useTransition();
   const warningId = useId();
   const backRef = useRef<HTMLButtonElement>(null);
+  const cancelRunRef = useRef<HTMLButtonElement>(null);
   const refusal = run === null ? null : pauseRefusal(run, canCommand);
   const ledger = run?.source === "ledger";
   // The run this dialog shows while it is mounted, and null once it has
@@ -803,8 +805,10 @@ function PauseDialog({
   }
 
   const blocked = refusal !== null || pending;
-  // Each step's buttons are keyed apart, so the first click's button is not
-  // reused as the one that sends the cancel: a double click lands on Back.
+  // Each step's buttons are keyed apart, so the confirm step draws buttons of
+  // its own rather than relabelling the ones the first step drew. The layout
+  // decides what sits under the pointer for a double click's second click, so
+  // the confirm button refuses that click itself (`event.detail`).
   const actions = ledger ? (
     applied !== null ? null : confirmingCancel ? (
       <>
@@ -816,7 +820,15 @@ function PauseDialog({
           data-testid="pause-cancel-back"
           disabled={pending}
           onClick={() => {
-            setConfirmingCancel(false);
+            // Back removes itself, so focus would fall to the popup. Draw the
+            // first step now and give focus to the button that opened this
+            // one. A refusal the cancel came back with goes too, since the
+            // person has stepped back from that cancel.
+            flushSync(() => {
+              setFailure(null);
+              setConfirmingCancel(false);
+            });
+            cancelRunRef.current?.focus();
           }}
           className={buttonSecondary}
         >
@@ -829,7 +841,11 @@ function PauseDialog({
           data-testid="pause-cancel-confirm"
           aria-describedby={warningId}
           disabled={blocked}
-          onClick={() => {
+          onClick={(event) => {
+            // A double click's second click counts 2 wherever it lands, and
+            // never sends the cancel. Enter and Space click with a count of
+            // 0, so the keyboard still sends it.
+            if (event.detail > 1) return;
             send("cancel");
           }}
           className={buttonDanger}
@@ -841,6 +857,7 @@ function PauseDialog({
       <>
         <button
           key="cancel-run"
+          ref={cancelRunRef}
           type="button"
           data-touch-target=""
           data-testid="pause-cancel-run"
