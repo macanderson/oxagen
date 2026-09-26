@@ -35,9 +35,20 @@ import {
   tachoHarnessSchema,
 } from "../wire";
 import {
+  CODEX_HOOK_EVENTS,
+  type CodexHookEventName,
+  codexHookTimeoutS,
+} from "../host/codex-writer";
+import { cursorHookTimeoutS } from "../host/cursor-writer";
+import {
   COMMAND_HOOK_TIMEOUTS_S,
   SESSION_END_TIMEOUT_S,
 } from "../host/settings-writer";
+import {
+  STELLA_HOOK_EVENTS,
+  type StellaHookEventName,
+  stellaHookTimeoutMs,
+} from "../host/stella-writer";
 import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
 import {
   cursorAnswer,
@@ -269,6 +280,15 @@ export interface HookRunDeps {
   /** `win32` has no Unix socket, so the hook posts over loopback TCP. */
   platform?: NodeJS.Platform;
   /**
+   * Milliseconds since the harness started this process. The time spent
+   * starting up, reading stdin and running `ps` comes out of the daemon's
+   * response budget, so the whole hook still finishes under the harness's
+   * timeout. `runHookProcess` passes the process uptime. It defaults to 0 for
+   * a caller (a test, an SDK adapter) that did not start a process for the
+   * hook.
+   */
+  elapsedMs?: () => number;
+  /**
    * Identifies this one hook invocation across the live request and its
    * spool fallback, so a daemon that already recorded the live request does
    * not record the spool replay of the same hook a second time (a client
@@ -293,29 +313,93 @@ export interface HookRunResult {
 }
 
 /**
- * A margin under the harness's own timeout for a hook whose budget derives
- * from one, so this process's own answer (fallback to a local decision) is
- * what a slow request gets, not Claude Code timing the command out itself
- * and treating the hook as failed.
+ * The time the hook keeps back under the harness's timeout, so a daemon that
+ * accepts the connection and never answers still leaves this process time
+ * to decide locally, spool the event and exit before the harness kills it.
+ * It covers the harness's own spawn (Codex runs a hook through a login
+ * shell), the local decision and the spool write. Half the timeout, and
+ * never more than five seconds.
  */
 const HARNESS_TIMEOUT_MARGIN_MS = 5_000;
 
-const RESPONSE_BUDGET_MS: Record<string, number> = {
-  // Strictly less than `COMMAND_HOOK_TIMEOUTS_S.PermissionRequest` (the
-  // harness's own timeout, 600s): equalling it left no room for this
-  // process to still answer locally before Claude Code's own clock ran out
-  // first, which is a daemon-down failure this budget exists to avoid.
-  PermissionRequest:
-    COMMAND_HOOK_TIMEOUTS_S.PermissionRequest * 1_000 -
-    HARNESS_TIMEOUT_MARGIN_MS,
-  PreToolUse: 10_000,
-  SessionStart: 5_000,
-  UserPromptSubmit: 5_000,
-  Stop: 5_000,
-  // Under `SESSION_END_TIMEOUT_S` by the harness margin, so a daemon that
-  // accepts the connection and never answers still leaves time to spool.
-  SessionEnd: SESSION_END_TIMEOUT_S * 1_000 - HARNESS_TIMEOUT_MARGIN_MS,
-};
+/**
+ * The least time the daemon gets once stdin or `ps` has used up the rest. A
+ * daemon that is up answers over the socket in a few milliseconds.
+ */
+const MIN_RESPONSE_BUDGET_MS = 100;
+
+/**
+ * The timeout assumed for an event the harness's writer does not register:
+ * the shortest one any writer registers, five seconds, which is what Claude
+ * Code's http hooks and every telemetry command hook of Codex, Cursor and
+ * Stella get.
+ */
+const UNREGISTERED_EVENT_KILL_MS = 5_000;
+
+/**
+ * How long the harness waits for this hook before it kills the process, in
+ * milliseconds. It is the timeout the harness's writer registers for the
+ * event, so the hook reads the same number the harness enforces. The same
+ * event can differ by harness: Claude Code gives `SessionEnd` ten seconds,
+ * while Codex and Cursor give it five (H-13).
+ *
+ * `cursorEvent` is Cursor's own event name, because Cursor's timeouts are
+ * set per Cursor event and two of them can map to one Claude Code name.
+ */
+export function harnessKillMs(
+  harness: TachoHarness,
+  event: string,
+  cursorEvent?: string,
+): number {
+  switch (harness) {
+    case "codex":
+      return (CODEX_HOOK_EVENTS as readonly string[]).includes(event)
+        ? codexHookTimeoutS(event as CodexHookEventName) * 1_000
+        : UNREGISTERED_EVENT_KILL_MS;
+    case "cursor":
+      return cursorEvent !== undefined &&
+        Object.hasOwn(CURSOR_TO_CLAUDE_EVENT, cursorEvent)
+        ? cursorHookTimeoutS(cursorEvent as CursorHookEventName) * 1_000
+        : UNREGISTERED_EVENT_KILL_MS;
+    case "stella":
+      return (STELLA_HOOK_EVENTS as readonly string[]).includes(event)
+        ? stellaHookTimeoutMs(event as StellaHookEventName)
+        : UNREGISTERED_EVENT_KILL_MS;
+    default:
+      if (Object.hasOwn(COMMAND_HOOK_TIMEOUTS_S, event))
+        return (
+          COMMAND_HOOK_TIMEOUTS_S[
+            event as keyof typeof COMMAND_HOOK_TIMEOUTS_S
+          ] * 1_000
+        );
+      return event === "SessionEnd"
+        ? SESSION_END_TIMEOUT_S * 1_000
+        : UNREGISTERED_EVENT_KILL_MS;
+  }
+}
+
+/**
+ * How long to wait for the daemon's answer: the harness timeout, less the
+ * margin, less what this process has already spent since it started.
+ *
+ * | Harness timeout | Budget from process start |
+ * |---|---|
+ * | 5 s (telemetry on Codex, Cursor and Stella; Codex and Cursor `SessionEnd`) | 2.5 s |
+ * | 10 s (`SessionStart`, `UserPromptSubmit`, `Stop`; Claude Code `SessionEnd`) | 5 s |
+ * | 15 s (`PreToolUse`; Cursor `subagentStart`) | 10 s |
+ * | 600 s (`PermissionRequest`) | 595 s |
+ *
+ * The budget used to be a fixed 5 s for every telemetry event, equal to the
+ * five-second kill, so a daemon slower than that got the process killed
+ * before it could spool the event (H-13).
+ */
+export function responseBudgetMs(killMs: number, elapsedMs = 0): number {
+  const margin = Math.min(HARNESS_TIMEOUT_MARGIN_MS, killMs / 2);
+  return Math.max(
+    MIN_RESPONSE_BUDGET_MS,
+    Math.floor(killMs - margin - elapsedMs),
+  );
+}
 
 /** The Codex hooks that look for the Codex process (`codexHarnessPid`). */
 const CODEX_PID_EVENTS: ReadonlySet<string> = new Set([
@@ -819,6 +903,15 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   // that many Cursor conversations share: it outlives each of them, and a
   // cancel of one conversation would signal the rest. A Cursor session ends
   // on Cursor's own `sessionEnd`, or on the daemon's idle bound.
+  // Cursor sets its hook timeouts per Cursor event, so its own name is kept
+  // for the response budget before the adapter renames it.
+  const cursorEvent =
+    cursor &&
+    typeof raw === "object" &&
+    raw !== null &&
+    typeof (raw as Record<string, unknown>)["hook_event_name"] === "string"
+      ? ((raw as Record<string, unknown>)["hook_event_name"] as string)
+      : undefined;
   if (cursor) raw = translateCursorPayload(raw);
   const parsed = hookInputSchema.safeParse(raw);
   if (!parsed.success) {
@@ -906,6 +999,10 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
         },
       })
     : emptyAnswer;
+  const killMs = harnessKillMs(harness, input.hook_event_name, cursorEvent);
+  const elapsed = deps.elapsedMs ?? (() => 0);
+  // Read at each post, so the time already spent comes off the budget.
+  const responseBudget = (): number => responseBudgetMs(killMs, elapsed());
   const env: Record<string, string> = {
     ...snapshotEnv(deps.env, DEFAULT_SECRET_ENV_PATTERN),
     ...(harnessPid !== undefined
@@ -957,8 +1054,7 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
             },
             body: JSON.stringify({ payload: raw, env, ...label }),
             connectTimeoutMs: deps.connectTimeoutMs ?? 50,
-            responseTimeoutMs:
-              RESPONSE_BUDGET_MS[input.hook_event_name] ?? 5_000,
+            responseTimeoutMs: responseBudget(),
           });
           const document =
             result.status === 200 ? tryParseAnswerBody(result.body) : undefined;
@@ -1024,7 +1120,7 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       },
       body: JSON.stringify({ payload: raw, env, hook_id: hookId, ...label }),
       connectTimeoutMs: deps.connectTimeoutMs ?? 50,
-      responseTimeoutMs: RESPONSE_BUDGET_MS[input.hook_event_name] ?? 5_000,
+      responseTimeoutMs: responseBudget(),
     });
     if (result.status === 200) {
       // A 200 whose body is not a JSON object is a fault, not a decision. It
