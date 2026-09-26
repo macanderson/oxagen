@@ -683,32 +683,44 @@ export function App() {
     // connected app must never reach `tacho verify`, whichever path asked.
     const picks = verifiable(only ?? runPicks ?? hostHarnesses);
     if (picks.length === 0) return;
+    // The same guard as `act`: a second click that lands before React has
+    // disabled the button must not start a second verify loop beside the
+    // first, each recording its own run (#4318).
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy("connect");
     setError(null);
     setNotice(null);
     setConfirming(null);
     setLog([]);
     setRanOnce(true);
-    const results: Partial<Record<Harness, ConnectResult>> = { ...runs };
-    for (const h of picks) {
-      setLog((prev) => [
-        ...prev,
-        { text: `$ tacho verify --harness ${h}`, err: false },
-      ]);
-      try {
-        results[h] = await connectRun(h, (line, stream) =>
-          setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
-        );
-      } catch (e) {
-        results[h] = {
-          ok: false,
-          detail: e instanceof Error ? e.message : String(e),
-        };
+    try {
+      const results: Partial<Record<Harness, ConnectResult>> = { ...runs };
+      for (const h of picks) {
+        setLog((prev) => [
+          ...prev,
+          { text: `$ tacho verify --harness ${h}`, err: false },
+        ]);
+        try {
+          results[h] = await connectRun(h, (line, stream) =>
+            setLog((prev) => [
+              ...prev,
+              { text: line, err: stream === "stderr" },
+            ]),
+          );
+        } catch (e) {
+          results[h] = {
+            ok: false,
+            detail: e instanceof Error ? e.message : String(e),
+          };
+        }
+        setRuns({ ...results });
       }
-      setRuns({ ...results });
+    } finally {
+      busyRef.current = false;
+      setBusy(null);
+      await refresh(true);
     }
-    setBusy(null);
-    await refresh(true);
   }
 
   const openWorkspace = () => {
