@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   capturedDiffOf,
   checkoutOf,
+  foldProvisionalContexts,
   readSessionConfig,
   readSessionTitle,
   readWorkContexts,
@@ -78,6 +79,8 @@ describe("run work evidence", () => {
       complete: "true",
       limitations: "",
       omitted: "",
+      redactions: "",
+      redaction_count: 0,
     };
     expect(capturedDiffOf(diff).completeness).toBe("not_captured");
     expect(
@@ -96,6 +99,174 @@ describe("run work evidence", () => {
       limitations: ["patch_size_limit"],
       seq: "9",
     });
+  });
+});
+
+// #3791: the collector sets `diff_complete` from the snapshot, and the seal
+// then redacts any credential out of the patch. The flag alone called a
+// sanitized patch exact.
+describe("a patch the recorder redacted", () => {
+  const retained: WorkDiffRow = {
+    ...context,
+    seq: 9,
+    observed_at: "2026-09-23",
+    base: "b".repeat(40),
+    content_digest: "sha256:test",
+    bytes_ref: "body",
+    complete: "true",
+    limitations: "",
+    omitted: "",
+    redactions: "[]",
+    redaction_count: 0,
+  };
+  const oneRedaction = JSON.stringify([
+    {
+      path: "bytes:10-50",
+      reason: "github_token",
+      original_digest: `sha256:${"c".repeat(64)}`,
+    },
+  ]);
+
+  it("reads partial and names content_redacted when the recorder counted redactions", () => {
+    expect(
+      capturedDiffOf({
+        ...retained,
+        redactions: oneRedaction,
+        redaction_count: "2",
+      }),
+    ).toMatchObject({
+      completeness: "partial",
+      limitations: ["content_redacted"],
+    });
+  });
+
+  it("reads partial from the redaction list alone, for a frame with no count", () => {
+    expect(
+      capturedDiffOf({
+        ...retained,
+        redactions: oneRedaction,
+        redaction_count: 0,
+      }),
+    ).toMatchObject({
+      completeness: "partial",
+      limitations: ["content_redacted"],
+    });
+  });
+
+  it("keeps the collector's limitations beside the redaction", () => {
+    expect(
+      capturedDiffOf({
+        ...retained,
+        complete: "false",
+        limitations: "patch_size_limit",
+        redaction_count: 1,
+      }).limitations,
+    ).toEqual(["patch_size_limit", "content_redacted"]);
+  });
+
+  it("keeps not_retained ahead of partial when the redacted bytes were withheld", () => {
+    expect(
+      capturedDiffOf({ ...retained, bytes_ref: "", redaction_count: 1 }),
+    ).toMatchObject({
+      completeness: "not_retained",
+      limitations: ["content_redacted"],
+    });
+  });
+
+  it("reads a patch with no redaction complete (negative)", () => {
+    for (const redactions of ["[]", ""])
+      expect(
+        capturedDiffOf({ ...retained, redactions, redaction_count: 0 }),
+      ).toMatchObject({ completeness: "complete", limitations: [] });
+    expect(
+      capturedDiffOf({ ...retained, redactions: "[]", redaction_count: "0" })
+        .completeness,
+    ).toBe("complete");
+  });
+});
+
+// #3791: the daemon seals a session's first hook before its first Git read,
+// so that frame names the path alone. Grouped on its own, it was a second
+// checkout that no repository or branch could match.
+describe("foldProvisionalContexts", () => {
+  const pathOnly: WorkContextRow = {
+    path: "/work/project",
+    branch: "",
+    head: "",
+    remote: "",
+    repository: "",
+    first_seq: 1,
+    last_seq: 1,
+  };
+  const located: WorkContextRow = { ...context, first_seq: 2, last_seq: 9 };
+
+  it("folds a path-only row into the Git context read after it at the same path", () => {
+    const { rows, alias } = foldProvisionalContexts([pathOnly, located]);
+    expect(rows).toEqual([{ ...located, first_seq: 1, last_seq: 9 }]);
+    expect(alias).toEqual(
+      new Map([[checkoutOf(pathOnly, []).id, checkoutOf(located, []).id]]),
+    );
+  });
+
+  it("keeps each branch at the path its own checkout, and folds the path-only row into the first (negative)", () => {
+    const second: WorkContextRow = {
+      ...context,
+      branch: "fix/two",
+      head: "d".repeat(40),
+      first_seq: 10,
+      last_seq: 20,
+    };
+    const { rows, alias } = foldProvisionalContexts([
+      pathOnly,
+      located,
+      second,
+    ]);
+    expect(rows.map(({ branch, first_seq }) => [branch, first_seq])).toEqual([
+      ["fix/one", 1],
+      ["fix/two", 10],
+    ]);
+    expect(alias.get(checkoutOf(pathOnly, []).id)).toBe(
+      checkoutOf(located, []).id,
+    );
+  });
+
+  it("keeps two repositories at the same path apart (negative)", () => {
+    const other: WorkContextRow = {
+      ...context,
+      remote: workDigest("github.com/acme/other"),
+      first_seq: 10,
+      last_seq: 20,
+    };
+    const { rows, alias } = foldProvisionalContexts([located, other]);
+    expect(rows).toEqual([located, other]);
+    expect(alias.size).toBe(0);
+  });
+
+  it("folds a path-only row seen after every Git read into the latest context before it", () => {
+    const second: WorkContextRow = {
+      ...context,
+      branch: "fix/two",
+      first_seq: 10,
+      last_seq: 20,
+    };
+    const late: WorkContextRow = { ...pathOnly, first_seq: 30, last_seq: 31 };
+    const { rows, alias } = foldProvisionalContexts([located, second, late]);
+    expect(rows).toEqual([located, { ...second, last_seq: 31 }]);
+    expect(alias.get(checkoutOf(late, []).id)).toBe(checkoutOf(second, []).id);
+  });
+
+  it("keeps a path-only row with no Git context at its path (negative)", () => {
+    const elsewhere: WorkContextRow = { ...pathOnly, path: "/tmp/scratch" };
+    const { rows, alias } = foldProvisionalContexts([elsewhere, located]);
+    expect(rows).toEqual([elsewhere, located]);
+    expect(alias.size).toBe(0);
+  });
+
+  it("does not fold a detached HEAD, which records its head (negative)", () => {
+    const detached: WorkContextRow = { ...pathOnly, head: "e".repeat(40) };
+    const { rows, alias } = foldProvisionalContexts([detached, located]);
+    expect(rows).toEqual([detached, located]);
+    expect(alias.size).toBe(0);
   });
 });
 
@@ -151,6 +322,15 @@ describe("run work reads", () => {
     );
     expect(query).toContain(
       "AND if(attrs['pr.url'] != '', attrs['pr.url'], attrs['pr_url']) != ''",
+    );
+  });
+  // #3791: a captured diff reads the redactions the seal recorded, so a
+  // sanitized patch is not called exact.
+  it("reads a captured diff's redaction list and count", async () => {
+    const query = await queryOf(readWorkDiffs);
+    expect(query).toMatch(/\bomitted, redactions,/);
+    expect(query).toContain(
+      "toUInt32OrZero(attrs['oxagen.content_redactions_total']) AS redaction_count",
     );
   });
   // ADR-171: a chain break is reported beside the facts, never by hiding the

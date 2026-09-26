@@ -13,6 +13,7 @@ import {
   capturedDiffOf,
   checkoutOf,
   connectedRunRepositories,
+  foldProvisionalContexts,
   prLinkOf,
   readWorkPrLinks,
   readWorkContexts,
@@ -116,7 +117,12 @@ export function createRunWorkGetHandler(
         deps.repositories(scope),
       ],
     );
-    const checkouts = contexts
+    // A session's first hook is sealed before its first Git read, so it names
+    // a path and nothing else. It folds into the Git context recorded at the
+    // same path, rather than standing as a checkout no repository or branch
+    // can match, which kept the work incomplete for good (#3791).
+    const located = foldProvisionalContexts(contexts);
+    const checkouts = located.rows
       .slice(0, WORK_CONTEXT_CAP)
       .map((row) => checkoutOf(row, repositories));
     // A PR the harness linked is a receipt: it names the PR outright, so it
@@ -154,6 +160,8 @@ export function createRunWorkGetHandler(
     );
     const warnings = [...new Set([...prs.warnings, ...linkWarnings])];
     if (links.length > WORK_PR_LINK_CAP) warnings.push("pr_link_limit");
+    // Read before the fold: a query that hit its limit may have cut rows,
+    // whatever the fold leaves.
     if (contexts.length > WORK_CONTEXT_CAP) warnings.push("checkout_limit");
     if (diffs.length > WORK_DIFF_CAP) warnings.push("captured_diff_limit");
     if (subagents.length > WORK_SUBAGENT_CAP) warnings.push("subagent_limit");
@@ -167,7 +175,11 @@ export function createRunWorkGetHandler(
       runId: input.runId,
       machine: run.row.host?.hostname ? { name: run.row.host.hostname } : null,
       checkouts,
-      diffs: diffs.slice(0, WORK_DIFF_CAP).map(capturedDiffOf),
+      diffs: diffs.slice(0, WORK_DIFF_CAP).map((row) => {
+        const diff = capturedDiffOf(row);
+        const folded = located.alias.get(diff.checkoutId);
+        return folded === undefined ? diff : { ...diff, checkoutId: folded };
+      }),
       pullRequests: prs.pullRequests,
       subagents: subagents.slice(0, WORK_SUBAGENT_CAP).map(subagentOf),
       complete: warnings.length === 0,
