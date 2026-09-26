@@ -25,7 +25,8 @@ import {
   digestBytes,
   type JsonValue,
   readArchiveSegment,
-  unflattenEvent,
+  type UnflattenReading,
+  unflattenEventReading,
   wrappedFrameOf,
 } from "@oxagen/tacho";
 import {
@@ -203,22 +204,51 @@ async function allTachoRecords(
 
 /**
  * A wrapped frame as the export writes it. When the stored row rebuilds the
- * sealed event, proven by its hash (`unflattenEvent`), the frame is
+ * sealed event, proven by its hash (`unflattenEventReading`), the frame is
  * `wrappedFrameOf` that event and carries it, so a verifier recomputes the
  * hash (#3733). Otherwise it is the row's projection with no event, and the
  * verifier prints the frame's digest as not carried.
+ *
+ * `first` is the reading that rebuilt an earlier row of the session. The
+ * rows of one session mostly share a reading, so trying it first saves the
+ * search on most rows (#3814). The answer carries the reading this row
+ * matched, or null when none did.
  */
-function tachoExportFrame(record: TachoEventRecord): JsonValue {
-  const event = unflattenEvent(record.envelope);
+function tachoExportFrame(
+  record: TachoEventRecord,
+  first: UnflattenReading | null,
+): { frame: JsonValue; reading: UnflattenReading | null } {
+  const { event, reading } = unflattenEventReading(record.envelope, {
+    first,
+  });
   if (event !== null) {
     const bytesRef =
       record.frame.bytesRef === "" ? null : record.frame.bytesRef;
-    return wrappedFrameOf(
-      event as unknown as Record<string, JsonValue>,
-      bytesRef,
-    );
+    return {
+      frame: wrappedFrameOf(
+        event as unknown as Record<string, JsonValue>,
+        bytesRef,
+      ),
+      reading,
+    };
   }
-  return tachoEnvelope(record.frame);
+  return { frame: tachoEnvelope(record.frame), reading: null };
+}
+
+/**
+ * Every row of a session as the export writes it, in order. The last reading
+ * that rebuilt a row is tried first on the next one. A row that no reading
+ * rebuilds leaves the carried reading as it was.
+ */
+function tachoExportFrames(records: readonly TachoEventRecord[]): JsonValue[] {
+  const frames: JsonValue[] = [];
+  let reading: UnflattenReading | null = null;
+  for (const record of records) {
+    const built = tachoExportFrame(record, reading);
+    frames.push(built.frame);
+    if (built.reading !== null) reading = built.reading;
+  }
+  return frames;
 }
 
 /** A wrapped frame's projection from its row, without the event. */
@@ -273,7 +303,7 @@ export async function readSealedSegments(
           enforcementTier: record.enforcementTier,
           completenessGaps: record.completenessGaps,
           replayGrade: record.replayGrade,
-          envelopes: records.map(tachoExportFrame),
+          envelopes: tachoExportFrames(records),
           digests: records.map((r) => r.frame.hash),
         },
       ];

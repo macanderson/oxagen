@@ -6,6 +6,7 @@
  */
 import { schema } from "@oxagen/database";
 import {
+  type ChainCursor,
   flattenEvent,
   GENESIS_CURSOR,
   hashEvent,
@@ -26,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   selectTachoEvents: vi.fn(),
   selectTachoEventRecords: vi.fn(),
   selectTachoSubagentEvents: vi.fn(),
+  unflattenEventReading: vi.fn(),
 }));
 
 vi.mock("@oxagen/database", async (importOriginal) => {
@@ -48,6 +50,13 @@ vi.mock("@oxagen/run-ledger", async (importOriginal) => ({
 vi.mock("@oxagen/run-ledger/evidence-store", () => ({
   evidenceStore: () => ({ getSegment: mocks.getSegment }),
 }));
+// The real function, wrapped so a test can read what the export passed it.
+vi.mock("@oxagen/tacho", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@oxagen/tacho")>()),
+  unflattenEventReading: mocks.unflattenEventReading,
+}));
+const { unflattenEventReading: realUnflattenEventReading } =
+  await vi.importActual<typeof import("@oxagen/tacho")>("@oxagen/tacho");
 vi.mock("@oxagen/telemetry", () => ({
   selectTachoEvents: mocks.selectTachoEvents,
   selectTachoEventRecords: mocks.selectTachoEventRecords,
@@ -102,6 +111,7 @@ beforeEach(() => {
       return fn();
     },
   );
+  mocks.unflattenEventReading.mockImplementation(realUnflattenEventReading);
 });
 
 describe("resolveRunRecord", () => {
@@ -364,6 +374,135 @@ describe("readSealedSegments", () => {
     expect(carried).toEqual(
       wrappedFrameOf(carried?.["event"] as Record<string, JsonValue>, null),
     );
+  });
+
+  // #3814: each row used to search every reading it leaves open, although
+  // the rows of one session mostly share one.
+  it("tries the reading that rebuilt a row first on the session's next row", async () => {
+    // Both events sent an empty `host` group and a whole-second ts, so a row
+    // rebuilds them only with those two readings flipped.
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    const events = [
+      { tool_name: "Read", tool_status: "ok" },
+      { tool_name: "Bash", tool_status: "ok" },
+    ].map((body) => {
+      const sealed = sealEvent(
+        {
+          v: "tacho/1.0",
+          event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+          session_id: "sess-1",
+          session_uuid: SESSION,
+          root_session_uuid: SESSION,
+          ts: "2026-09-11T09:00:00Z",
+          fidelity: "sdk",
+          source: "hook",
+          agent: {
+            agent_key: "acme.core.cc-laptop",
+            fleet_id: "wrk_1",
+            runtime: "claude-code",
+            harness: "claude-code",
+            wrapper_version: "2.1.1",
+          },
+          turn: { turn_seq: 1 },
+          host: {},
+          kind: "tool_call",
+          body,
+        } as UnsealedTachoEvent,
+        cursor,
+      );
+      cursor = sealed.next;
+      return sealed.event;
+    });
+    const records: TachoEventRecord[] = events.map((event, seq) => {
+      const { bytes_ref: _serverOwned, ...flat } = flattenEvent(event);
+      return {
+        frame: { ...tachoRow(seq), hash: event.hash },
+        envelope: { ...flat, ts: "2026-09-11 09:00:00.000" },
+      };
+    });
+    mocks.selectTachoEventRecords.mockResolvedValue(records);
+    const [segment] = await readSealedSegments(SCOPE, {
+      source: "tacho",
+      sessionUuid: SESSION,
+      enforcementTier: "harness",
+      completenessGaps: [],
+      replayGrade: null,
+    });
+    expect(
+      (segment?.envelopes ?? []).map(
+        (frame) => (frame as Record<string, unknown>)["event"],
+      ),
+    ).toEqual(events);
+    const calls = mocks.unflattenEventReading.mock.calls;
+    const results = mocks.unflattenEventReading.mock.results.map(
+      (result) => result.value as { reading: unknown; tried: number },
+    );
+    expect(calls).toHaveLength(2);
+    // The first row has nothing to carry and searches.
+    expect(calls[0]?.[1]).toEqual({ first: null });
+    expect(results[0]?.reading).toEqual(["group:host", "ts:whole_second"]);
+    expect(results[0]?.tried).toBeGreaterThan(1);
+    // The second row is handed that reading and matches on it at once.
+    expect(calls[1]?.[1]).toEqual({ first: results[0]?.reading });
+    expect(results[1]?.tried).toBe(1);
+  });
+
+  it("keeps carrying the last reading that matched past a row no reading rebuilds (negative)", async () => {
+    const event = sealEvent(
+      {
+        v: "tacho/1.0",
+        event_id: "evt_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        session_id: "sess-1",
+        session_uuid: SESSION,
+        root_session_uuid: SESSION,
+        ts: "2026-09-11T09:00:00Z",
+        fidelity: "sdk",
+        source: "hook",
+        agent: {
+          agent_key: "acme.core.cc-laptop",
+          fleet_id: "wrk_1",
+          runtime: "claude-code",
+          harness: "claude-code",
+          wrapper_version: "2.1.1",
+        },
+        turn: { turn_seq: 1 },
+        kind: "tool_call",
+        body: { tool_name: "Read", tool_status: "ok" },
+      } as UnsealedTachoEvent,
+      GENESIS_CURSOR,
+    ).event;
+    const { bytes_ref: _serverOwned, ...flat } = flattenEvent(event);
+    const envelope = { ...flat, ts: "2026-09-11 09:00:00.000" };
+    const matching: TachoEventRecord = {
+      frame: { ...tachoRow(0), hash: event.hash },
+      envelope,
+    };
+    // The row says Write where the sealed event said Read.
+    const unproven: TachoEventRecord = {
+      frame: tachoRow(1),
+      envelope: { ...envelope, body: JSON.stringify({ tool_name: "Write" }) },
+    };
+    mocks.selectTachoEventRecords.mockResolvedValue([
+      matching,
+      unproven,
+      matching,
+    ]);
+    await readSealedSegments(SCOPE, {
+      source: "tacho",
+      sessionUuid: SESSION,
+      enforcementTier: "harness",
+      completenessGaps: [],
+      replayGrade: null,
+    });
+    const calls = mocks.unflattenEventReading.mock.calls;
+    const first = (
+      mocks.unflattenEventReading.mock.results[0]?.value as {
+        reading: unknown;
+      }
+    ).reading;
+    expect(first).toEqual(["ts:whole_second"]);
+    expect(calls[1]?.[1]).toEqual({ first });
+    expect(calls[2]?.[1]).toEqual({ first });
   });
 });
 
