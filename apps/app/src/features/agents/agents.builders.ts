@@ -59,6 +59,7 @@ export function agentPage(
     nextCursor,
     totals: {
       identities: 7,
+      retired: 0,
       enrolled: 2,
       unenrolled: 5,
       holdingMandate: 1,

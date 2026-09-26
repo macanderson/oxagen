@@ -392,12 +392,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it("lists the workspace's live agents by slug with the figures the stores record", async () => {
       const out = agentList.output.parse(await list(tenant));
+      // echo is retired, so a read that does not ask for it never sees it.
       expect(out.items.map((i) => i.slug)).toEqual([
         "alpha",
         "bravo",
         "charlie",
         "delta",
-        "echo",
       ]);
       const alpha = out.items[0]!;
       expect(alpha.harness).toBe("claude-code");
@@ -448,8 +448,23 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(bravo.enforcementTier).toBeNull();
     });
 
+    it("lists a retired agent only when the caller asks for it", async () => {
+      const shown = await list(tenant, { includeRetired: true });
+      expect(shown.items.map((i) => i.slug)).toEqual([
+        "alpha",
+        "bravo",
+        "charlie",
+        "delta",
+        "echo",
+      ]);
+      const hidden = await list(tenant, { includeRetired: false });
+      expect(hidden.items.map((i) => i.slug)).not.toContain("echo");
+      // The tiles count live agents whichever the page asked for.
+      expect(shown.totals).toEqual(hidden.totals);
+    });
+
     it("derives each status from what the row holds", async () => {
-      const out = await list(tenant);
+      const out = await list(tenant, { includeRetired: true });
       const status = Object.fromEntries(
         out.items.map((i) => [i.slug, i.status]),
       );
@@ -474,10 +489,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // two, of which one is open, and the newest is the open one. The
       // hostless telemetry_gap notice belongs to no agent.
       expect(out.totals).toEqual({
-        identities: 5,
+        // echo is retired, so it is counted in `retired` and nowhere else.
+        identities: 4,
+        retired: 1,
         enrolled: 2,
-        // charlie alone: delta is suspended and echo retired, and neither
-        // is waiting to enroll.
+        // charlie alone: delta is suspended, so it is not waiting to enroll.
         unenrolled: 1,
         holdingMandate: 1,
         mandateHolders: [
@@ -505,12 +521,25 @@ describe.skipIf(!process.env.DATABASE_URL)(
         cursor: first.nextCursor!,
       });
       expect(second.items.map((i) => i.slug)).toEqual(["charlie", "delta"]);
-      const third = await list(tenant, {
-        limit: 2,
-        cursor: second.nextCursor!,
+      // echo is retired, so the live walk ends at delta.
+      expect(second.nextCursor).toBeNull();
+    });
+
+    it("pages retired agents in slug order when the caller asks for them", async () => {
+      const first = await list(tenant, { limit: 4, includeRetired: true });
+      expect(first.items.map((i) => i.slug)).toEqual([
+        "alpha",
+        "bravo",
+        "charlie",
+        "delta",
+      ]);
+      const second = await list(tenant, {
+        limit: 4,
+        cursor: first.nextCursor!,
+        includeRetired: true,
       });
-      expect(third.items.map((i) => i.slug)).toEqual(["echo"]);
-      expect(third.nextCursor).toBeNull();
+      expect(second.items.map((i) => i.slug)).toEqual(["echo"]);
+      expect(second.nextCursor).toBeNull();
     });
 
     it("another org sees only its own agents", async () => {
@@ -518,6 +547,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(out.items.map((i) => i.slug)).toEqual(["alpha"]);
       expect(out.items[0]!.status).toBe("unenrolled");
       expect(out.totals.identities).toBe(1);
+      expect(out.totals.retired).toBe(0);
     });
   },
 );
