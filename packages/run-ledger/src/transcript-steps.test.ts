@@ -32,6 +32,7 @@ import {
   type TranscriptRecallBody,
   transcriptCounts,
   turnFolds,
+  UNKEYED_TOOL_PAIRING,
   wordsHalf,
 } from "./transcript-steps";
 
@@ -291,6 +292,60 @@ describe("the everything zoom", () => {
       ]);
       expect(nth(folded, 0).decision).toBeNull();
       expect(nth(folded, 1).decision?.decision).toBe("steer");
+    });
+  });
+
+  describe("a question the host held the loop to ask (#3941)", () => {
+    it("reads the question and its answer as policy entries of their own", () => {
+      const entries = foldTranscript(
+        [
+          w(0, "agent_start"),
+          w(1, "repo.unknown"),
+          w(2, "control.interject"),
+          w(3, "control.answer", {
+            body: JSON.stringify({ path: "deny", source: "timeout" }),
+          }),
+          w(4, "skills.resolved"),
+        ],
+        "everything",
+      );
+      expect(entries.map((e) => [e.opening.type, e.node, e.kind])).toEqual([
+        ["agent_start", "control", "frame"],
+        ["repo.unknown", "control", "frame"],
+        ["control.interject", "policy", "policy"],
+        ["control.answer", "policy", "policy"],
+        ["skills.resolved", "control", "frame"],
+      ]);
+    });
+
+    it("never becomes the decision of the turn it falls inside", () => {
+      // The question is about the run, like an operator's command: the turn
+      // it lands in made no decision because of it.
+      const [turn] = foldTranscript(
+        [
+          w(1, "turn_start", { turnSeq: 1 }),
+          w(2, "control.interject", { turnSeq: 1 }),
+          w(3, "control.answer", { turnSeq: 1 }),
+        ],
+        "turns",
+      );
+      expect(turn?.kind).toBe("turn");
+      expect(turn?.members.map((m) => m.type)).toEqual([
+        "turn_start",
+        "control.interject",
+        "control.answer",
+      ]);
+      expect(turn?.decision).toBeNull();
+      expect(turn?.gates).toEqual([]);
+    });
+
+    it("stays out of the gates an unkeyed tool call may pair across, which ADR-191's SQL reads", () => {
+      expect(UNKEYED_TOOL_PAIRING.gates).toContain("policy_decision");
+      expect(UNKEYED_TOOL_PAIRING.gates).not.toContain("control.interject");
+      expect(UNKEYED_TOOL_PAIRING.gates).not.toContain("control.answer");
+      expect(UNKEYED_TOOL_PAIRING.gates).not.toContain(
+        "oxagen:command_applied",
+      );
     });
   });
 });

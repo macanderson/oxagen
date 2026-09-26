@@ -788,12 +788,23 @@ export { isTranscriptKind, TRANSCRIPT_KINDS, type TranscriptKind };
 export const COMMAND_APPLIED = "oxagen:command_applied";
 
 /**
- * Frames that record a decision a rule or a person made about a call, or an
- * operator's command to the run (`oxagen:command_applied`).
+ * The question a host held the loop to ask a person, and how it was answered
+ * (#3941). Like an operator's command, each is about the run, never about one
+ * call.
+ */
+export const CONTROL_INTERJECT = "control.interject";
+export const CONTROL_ANSWER = "control.answer";
+
+/**
+ * Frames that record a decision a rule or a person made about a call, an
+ * operator's command to the run (`oxagen:command_applied`), or a question the
+ * host put to a person about the run and its answer.
  */
 export const POLICY_TYPES: ReadonlySet<string> = new Set([
   "tool.approval_recorded",
   COMMAND_APPLIED,
+  CONTROL_INTERJECT,
+  CONTROL_ANSWER,
   "policy_decision",
   "approval_request",
   "approval_decision",
@@ -810,6 +821,8 @@ export const RECALL_TYPES: ReadonlySet<string> = new Set([
   // What the assembler put in front of a wrapped agent at its start, and
   // what it cut (ADR-093).
   "steering.manifest",
+  // A skill the resolver loaded into the session (#3098, #3941).
+  "skills.loaded",
 ]);
 /** The wrapped agent's own stop frame. */
 const AGENT_STOP = "agent_stop";
