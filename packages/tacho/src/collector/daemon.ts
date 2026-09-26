@@ -16,6 +16,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { z } from "zod";
+import { quarantineHookPayload } from "../claude-code/hook-client";
 import { hookInputSchema } from "../claude-code/hooks";
 import { homedir, hostname as osHostname } from "node:os";
 import { dirname, join } from "node:path";
@@ -45,6 +46,7 @@ import { type DeviceKey, loadOrCreateDeviceKey } from "../host/device-key";
 import {
   ensureDir,
   readJsonFileIfExists,
+  readJsonStateFile,
   writeSensitiveFileAtomic,
 } from "../host/fs";
 import {
@@ -168,7 +170,13 @@ export interface DaemonTimers {
   detectorMs: number;
   checkpointMs: number;
   sweepMs: number;
+  /** How long a session with no harness pid may go quiet before the sweep closes it. */
   idleSessionMs: number;
+  /**
+   * The same bound for a Cursor session, which never carries a pid
+   * (ADR-141). It applies when it is the shorter of the two.
+   */
+  cursorIdleSessionMs: number;
   walRetainMs: number;
 }
 
@@ -180,6 +188,10 @@ export const DEFAULT_TIMERS: DaemonTimers = {
   checkpointMs: 60_000,
   sweepMs: 30_000,
   idleSessionMs: 6 * 60 * 60_000,
+  // One hour, four times the longest a Cursor agent's shell tool waits on a
+  // command in the foreground (about fifteen minutes). A quiet session sealed
+  // by this bound reopens on its next hook (ADR-172). ADR-141 records why.
+  cursorIdleSessionMs: 60 * 60_000,
   walRetainMs: 7 * 24 * 60 * 60_000,
 };
 
@@ -493,6 +505,16 @@ async function initializeDaemon(
     host: { hostname_digest: digestText(host.hostname || osHostname()) },
     now,
   };
+  /**
+   * A state file that did not parse at startup was set aside, and the daemon
+   * starts without what it held (W-05). Said once, with where the bytes went.
+   */
+  const logSetAside = (what: string, movedTo: string | undefined): void =>
+    log(
+      movedTo === undefined
+        ? `${what} did not parse and could not be moved aside; starting without it`
+        : `${what} did not parse; moved it to ${movedTo} and started without it`,
+    );
   const wal = new Wal(
     paths.wal,
     (failure) => {
@@ -510,6 +532,7 @@ async function initializeDaemon(
         `WAL event line unparseable for session ${failure.session_uuid}: ${failure.reason}`,
       );
     },
+    (movedTo) => logSetAside("WAL cursor", movedTo),
   );
   // Only the daemon repairs a torn tail, and only once, before anything else
   // touches the WAL: a reader building its own `Wal` (`tacho status`, `tacho
@@ -556,7 +579,11 @@ async function initializeDaemon(
   const priorStateWrittenAt = existsSync(paths.daemonState)
     ? statSync(paths.daemonState).mtimeMs
     : undefined;
-  const persisted = parseRegistryState(readJsonFileIfExists(paths.daemonState));
+  const persisted = parseRegistryState(
+    readJsonStateFile(paths.daemonState, (movedTo) =>
+      logSetAside("daemon state", movedTo),
+    ),
+  );
   if (persisted !== undefined) {
     for (const session of persisted.sessions)
       reconcileRestoredCursor(session.recorder, wal, log);
@@ -1739,7 +1766,9 @@ async function initializeDaemon(
     }),
   ]);
   try {
-    const saved = readJsonFileIfExists(pendingEndsPath);
+    const saved = readJsonStateFile(pendingEndsPath, (movedTo) =>
+      logSetAside("pending session ends", movedTo),
+    );
     if (saved !== undefined && !Array.isArray(saved))
       throw new Error("expected a list of pending session ends");
     for (const value of (saved as unknown[] | undefined) ?? []) {
@@ -1933,7 +1962,7 @@ async function initializeDaemon(
         : pendingSessionEnds.get(pendingUuid);
     if (pendingUuid !== undefined && pending?.terminal !== undefined) {
       try {
-        flushPendingTerminal(pending.terminal);
+        await flushJournaledTerminal(pending);
         return {};
       } catch (error) {
         if (!(error instanceof WalRecoveryConflict)) throw error;
@@ -2042,7 +2071,7 @@ async function initializeDaemon(
         outcome.record.sealed = false;
         outcome.record.pendingTerminal = true;
       }
-      flushPendingTerminal(pending.terminal);
+      await flushJournaledTerminal(pending);
     } else {
       try {
         record(outcome.events, outcome.bodies);
@@ -2142,6 +2171,33 @@ async function initializeDaemon(
     log(
       `session end for ${uuid} conflicts with the WAL at ${conflict.sessionUuid}:${conflict.seq}; its sealed terminal is in quarantine/${name}, and the end is sealed again on the chain the WAL holds`,
     );
+  }
+
+  /**
+   * Flush a journaled terminal once the body indexes it consults are built
+   * off the synchronous path.
+   *
+   * `appendRecovered` asks each body file which of the terminal's bodies it
+   * already stores, so a retried batch writes none twice (ADR-139). A body
+   * file with no sidecar was answered by reading it end to end on the event
+   * loop, about 0.8 seconds per GB, while no hook, `/status` request, or
+   * model call was answered (#4299). `Wal.withBodiesIndexed` builds those
+   * indexes with awaited reads first. The flush itself stays one
+   * synchronous step, run in the same turn as the check that the indexes
+   * cover their files.
+   */
+  async function flushJournaledTerminal(
+    pending: PendingSessionEnd,
+  ): Promise<void> {
+    const sessions = (pending.terminal?.bodies ?? []).map(
+      (body) => body.session_uuid,
+    );
+    await wal.withBodiesIndexed(sessions, () => {
+      // Read after the build. A mandate that narrowed while it ran has taken
+      // bodies out of the journal (`purgePendingEndBodies`).
+      if (pending.terminal !== undefined)
+        flushPendingTerminal(pending.terminal);
+    });
   }
 
   function flushPendingTerminal(
@@ -2889,11 +2945,37 @@ async function initializeDaemon(
         now,
         log,
       }),
-    handleHook: (envelope) =>
-      serial.run(async () => {
+    handleHook: (envelope) => {
+      // A payload with no session id or no event name cannot be filed on a
+      // session. Claude Code's http hooks post here directly, so a refusal
+      // left only a log line and the event was gone (H-07). It is kept in
+      // quarantine, the way `tacho-hook` keeps a payload it cannot read, and
+      // still refused.
+      const readable = hookInputSchema.safeParse(envelope.payload);
+      if (!readable.success) {
+        const at = now();
+        quarantineHookPayload(paths.quarantine, {
+          hookId: envelope.hook_id ?? ulid(at),
+          receivedAt: toProtocolTimestamp(at),
+          reason: `payload is not a hook: ${readable.error.issues
+            .map(
+              (issue) =>
+                `${issue.path.join(".") || "payload"}: ${issue.message}`,
+            )
+            .join("; ")}`,
+          rawText: JSON.stringify(envelope.payload) ?? String(envelope.payload),
+          label:
+            envelope.agent !== undefined
+              ? { agent: envelope.agent }
+              : { harness: envelope.harness ?? "claude-code" },
+        });
+        return Promise.reject(readable.error);
+      }
+      return serial.run(async () => {
         await drainSpool();
         return handleHookInner(envelope);
-      }),
+      });
+    },
     handleOtlp: (signal, payload) =>
       serial.run(async () => {
         lastOtlpAt = now();
@@ -3139,6 +3221,8 @@ async function initializeDaemon(
   let lastCheckpoint = 0;
   let lastSweep = 0;
   let lastCompact = 0;
+  const COMPACT_EVERY_MS = 60 * 60_000;
+  const COMPACT_RETRY_MS = 60_000;
 
   // A narrowing this host owed when it last exited. Run here rather than left
   // to the first poll: a poll can be a bundle refresh interval away, or an
@@ -3284,7 +3368,10 @@ async function initializeDaemon(
           let failure: { error: unknown } | undefined;
           const candidates = registry.sweepCandidates(
             isProcessAlive,
-            timers.idleSessionMs,
+            (session) =>
+              session.harness === "cursor"
+                ? Math.min(timers.idleSessionMs, timers.cursorIdleSessionMs)
+                : timers.idleSessionMs,
             (session) =>
               pendingSessionEnds.has(session.recorder.sessionUuid) ||
               spoolHolds(session),
@@ -3342,11 +3429,22 @@ async function initializeDaemon(
     // and already land a batch or more after the tool frames they belong with.
     void startGitReads();
     await stage("compact", () => {
-      if (now() - lastCompact >= 60 * 60_000) {
-        lastCompact = now();
+      if (now() - lastCompact < COMPACT_EVERY_MS) return;
+      lastCompact = now();
+      // A failed pass is tried again in a minute, not an hour, and does not
+      // take the quarantine sweep down with it (W-08). `Wal.compact` reports
+      // a file it cannot remove and goes on, so what throws here is the
+      // pass as a whole: the WAL directory could not be listed, or the
+      // cursor could not be written.
+      let failure: unknown;
+      try {
         wal.compact(now(), timers.walRetainMs);
-        sweepQuarantine(now(), timers.walRetainMs);
+      } catch (error) {
+        failure = error;
+        lastCompact = now() - COMPACT_EVERY_MS + COMPACT_RETRY_MS;
       }
+      sweepQuarantine(now(), timers.walRetainMs);
+      if (failure !== undefined) throw failure;
     });
     // The WAL is the record; a recorder's in-memory list of what it sealed is
     // only read inside one synchronous ingest (`everySealed`). Kept whole, it

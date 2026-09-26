@@ -905,7 +905,8 @@
                     {
                       "type": "null"
                     }
-                  ]
+                  ],
+                  "default": null
                 },
                 "toolStatus": {
                   "anyOf": [
@@ -915,7 +916,8 @@
                     {
                       "type": "null"
                     }
-                  ]
+                  ],
+                  "default": null
                 },
                 "approvalId": {
                   "anyOf": [
@@ -925,7 +927,8 @@
                     {
                       "type": "null"
                     }
-                  ]
+                  ],
+                  "default": null
                 },
                 "body": {
                   "type": "object",
@@ -1032,9 +1035,6 @@
                 "observedAt",
                 "digest",
                 "summary",
-                "tool",
-                "toolStatus",
-                "approvalId",
                 "body",
                 "cost"
               ],

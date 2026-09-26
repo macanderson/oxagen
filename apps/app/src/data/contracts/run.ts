@@ -69,7 +69,7 @@ export const RunFrame = z.object({
   /** How the tool call ended, as its producer recorded it; null when it recorded none. */
   toolStatus: z.string().nullable(),
   /** The approval a parked tool call waits on (`apr_…`); null on every other frame. */
-  approvalId: z.string().nullable(),
+  approvalId: PublicId.nullable(),
   body: FrameBody,
   cost: Cost.nullable(),
 });

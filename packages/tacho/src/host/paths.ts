@@ -48,6 +48,12 @@ export interface TachoPaths {
   hookIdJournal: string;
   /** Transcript byte cursors, so a restart does not re-read every transcript. */
   transcriptTailState: string;
+  /**
+   * The Stella identity cache: one file per Stella process, holding its pid
+   * and start time, so most Stella hooks run no `ps` (`resolveStellaIdentity`).
+   * A cache only, so `tacho unenroll` removes it.
+   */
+  stellaIdentity: string;
   /** The daemon's pid file. */
   pid: string;
   /** Daemon stdout/stderr when run as a service. */
@@ -145,6 +151,7 @@ export function tachoPaths(
     pendingEnds: join(root, "pending-session-ends.json"),
     hookIdJournal: join(root, "hook-ids.jsonl"),
     transcriptTailState: join(root, "transcript-tail.json"),
+    stellaIdentity: join(root, "stella-identity"),
     pid: join(root, "tachod.pid"),
     log: join(root, "tachod.log"),
     claudeSettings: join(claudeConfigDir, "settings.json"),
