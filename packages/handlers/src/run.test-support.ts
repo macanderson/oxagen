@@ -513,15 +513,18 @@ export function memoryTachoFrames(sessionUuid: string, rows: TachoFrameRow[]) {
  * alone (`root_session_uuid`, never the root's own), only the listed ones
  * when `sessionUuids` is given, in (session, seq) order, strictly after the
  * position, at or below `throughSeq` when one is given, at most `limit`.
+ * It reads `rows` as they are at each call, so a test can record a frame
+ * between two reads.
  */
 export function memorySubagentFrames(rows: TachoFrameRow[]) {
-  const ordered = [...rows].sort((a, b) =>
-    a.sessionUuid === b.sessionUuid
-      ? a.seq - b.seq
-      : (a.sessionUuid ?? "") < (b.sessionUuid ?? "")
-        ? -1
-        : 1,
-  );
+  const ordered = () =>
+    [...rows].sort((a, b) =>
+      a.sessionUuid === b.sessionUuid
+        ? a.seq - b.seq
+        : (a.sessionUuid ?? "") < (b.sessionUuid ?? "")
+          ? -1
+          : 1,
+    );
   return (args: {
     rootSessionUuid: string;
     sessionUuids?: readonly string[];
@@ -530,7 +533,7 @@ export function memorySubagentFrames(rows: TachoFrameRow[]) {
     limit: number;
   }) =>
     Promise.resolve(
-      ordered
+      ordered()
         .filter((r) => {
           const session = r.sessionUuid ?? "";
           if (r.rootSessionUuid !== args.rootSessionUuid) return false;

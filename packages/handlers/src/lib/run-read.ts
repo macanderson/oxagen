@@ -24,7 +24,9 @@ import {
   ledgerFrame,
   listSubagentChains,
   listSubagentSessions,
+  namedSubagentChainRead,
   type RunChainReads,
+  type RunChainWindowReads,
   type RunFrame,
   type RunStore,
   subagentChainRead,
@@ -292,18 +294,20 @@ export async function readChainFrames(
 }
 
 /**
- * Every frame of the run up to `cap`. Answers whether the cap cut the read
- * short, so a caller can say so rather than present a prefix as the whole.
- * A wrapped session reads in one bounded query; the ledger reads page by
- * page.
+ * Every frame of the run up to `cap`, or with `from` every frame from the
+ * one at that seq on. Answers whether the cap cut the read short, so a
+ * caller can say so rather than present a prefix as the whole. A wrapped
+ * session reads in one bounded query; the ledger reads page by page.
  */
 export async function readAllFrames(
   deps: RunReadDeps,
   run: ResolvedRun,
   cap: number,
+  from?: string,
 ): Promise<{ frames: RunFrame[]; complete: boolean }> {
   const frames: RunFrame[] = [];
-  let after = startCursorSeq(run);
+  let after =
+    from === undefined ? startCursorSeq(run) : (BigInt(from) - 1n).toString();
   const page = run.source === "tacho" ? cap + 1 : FRAME_READ_MAX;
   for (;;) {
     const want = Math.min(page, cap - frames.length + 1);
@@ -341,6 +345,35 @@ export function runChainReads(
             deps.tachoChildSessions,
           )
         : null,
+  };
+}
+
+/**
+ * How `deps` reads a window of the run (`RunChainWindowReads` in
+ * `@oxagen/run-ledger`): its own chain from a frame on, and for a wrapped
+ * run the subagent chains Postgres lists under it and the ones the window
+ * holds. Null when `deps` reads subagent frames but cannot list the chains,
+ * since a window cannot tell which chains it holds; the caller reads the
+ * whole run.
+ */
+export function runChainWindowReads(
+  deps: RunReadDeps,
+  run: ResolvedRun,
+): RunChainWindowReads | null {
+  const own = (from: string, cap: number) =>
+    readAllFrames(deps, run, cap, from);
+  const none = () => Promise.resolve({ frames: [], complete: true });
+  if (run.source === "ledger" || deps.tachoSubagentFrames === undefined)
+    return { own, chains: null, subagents: none };
+  const listChains = deps.tachoChains;
+  if (listChains === undefined) return null;
+  return {
+    own,
+    chains: () => listChains(run.sessionUuid),
+    subagents: namedSubagentChainRead(
+      deps.tachoSubagentFrames,
+      run.sessionUuid,
+    ),
   };
 }
 
