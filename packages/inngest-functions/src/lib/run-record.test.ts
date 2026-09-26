@@ -68,6 +68,7 @@ import {
   readSealedSegments,
   readTranscriptFramesOf,
   resolveRunRecord,
+  runFramePages,
 } from "./run-record";
 
 const SCOPE = {
@@ -581,6 +582,83 @@ describe("readRunFrames", () => {
   it("reads an empty wrapped session as no frames (negative)", async () => {
     tachoChain([]);
     expect(await readRunFrames(SCOPE, WRAPPED)).toEqual([]);
+  });
+});
+
+// #3784: the enrichment job read every frame of a run into one array before
+// it read any text. It now pulls pages and stops at its ceiling.
+describe("runFramePages", () => {
+  /** Every page a reader pulls to the end, as frame seqs. */
+  async function pagesOf(record: Parameters<typeof runFramePages>[1]) {
+    const pages: number[][] = [];
+    for await (const page of runFramePages(SCOPE, record))
+      pages.push(page.map((frame) => Number(frame.seq)));
+    return pages;
+  }
+
+  it("reads a wrapped session a page at a time, each inside the tenant scope", async () => {
+    tachoChain(range(0, 1200));
+    const pages = await pagesOf(WRAPPED);
+    expect(pages.map((page) => page.length)).toEqual([500, 500, 201]);
+    expect(pages.flat()).toEqual(range(0, 1200));
+    expect(scopes.length).toBeGreaterThan(0);
+    expect(scopes.every((scope) => scope === SCOPE)).toBe(true);
+  });
+
+  it("reads no further page once the reader stops", async () => {
+    tachoChain(range(0, 1200));
+    const pages = runFramePages(SCOPE, WRAPPED);
+    const first = await pages.next();
+    expect(first.done).toBe(false);
+    expect(first.value).toHaveLength(500);
+    await pages.return(undefined);
+    expect(mocks.selectTachoEvents).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads past a recorded break in a wrapped session's chain", async () => {
+    const seqs = [...range(0, 299), ...range(800, 1000)];
+    tachoChain(seqs);
+    expect((await pagesOf(WRAPPED)).flat()).toEqual(seqs);
+  });
+
+  it("reads a ledger run's events a page at a time from each page's last run_seq", async () => {
+    const event = (runSeq: number) => ({
+      runSeq: String(runSeq),
+      eventType: "admission.run_admitted",
+      stage: "admission",
+      observedAt: "2026-09-25T12:00:00.000Z",
+      eventDigest: `sha256:${String(runSeq).padStart(64, "0")}`,
+      payload: {},
+      body: {
+        bodyRef: null,
+        bodyDigest: null,
+        bodyBytes: null,
+        redactions: null,
+        fidelity: "digest_only",
+      },
+    });
+    const events = range(1, 503).map(event);
+    const readAttemptEventsSince = vi.fn(
+      (_runId: string, after: string, limit: number) =>
+        Promise.resolve(
+          events
+            .filter((e) => Number(e.runSeq) > Number(after))
+            .slice(0, limit),
+        ),
+    );
+    mocks.createPostgresRunStore.mockReturnValue({ readAttemptEventsSince });
+    const pages = await pagesOf({ source: "ledger", runId: "r1", attempts: [] });
+    expect(pages.map((page) => page.length)).toEqual([500, 3]);
+    expect(pages.flat()).toEqual(range(1, 503));
+    expect(readAttemptEventsSince.mock.calls).toEqual([
+      ["r1", "0", 500],
+      ["r1", "500", 500],
+    ]);
+  });
+
+  it("yields no page for a run with no frames (negative)", async () => {
+    tachoChain([]);
+    expect(await pagesOf(WRAPPED)).toEqual([]);
   });
 });
 

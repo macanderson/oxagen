@@ -23,7 +23,6 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { z } from "zod";
-import { digestBytes } from "@oxagen/tacho";
 import { createFunction, MAX_BATCH_SIZE } from "../create-function";
 import {
   collectRunText,
@@ -35,10 +34,15 @@ import {
   ENRICHMENT_CHUNK_CHARS,
   ENRICHMENT_RUN_BUDGET_USD,
 } from "../lib/run-enrichment";
-import { readRunFrames, resolveRunRecord } from "../lib/run-record";
+import { resolveRunRecord, runFramePages } from "../lib/run-record";
 import { logger } from "../logger";
 
 import { RUN_ENRICH_EVENT } from "../events";
+import {
+  discardEnrichmentChunks,
+  keepEnrichmentChunks,
+  readEnrichmentChunk,
+} from "../lib/run-enrichment-scratch";
 
 export { RUN_ENRICH_EVENT };
 
@@ -77,6 +81,49 @@ export function enrichableWorkspace() {
  */
 function costOf(result: { costUsd?: number }): number {
   return result.costUsd ?? 0;
+}
+
+/**
+ * One portion of a run's transcript the job reduces: a chunk the read step
+ * kept in scratch, or text a reduction step returned. Its text is read only
+ * inside the step that needs it (#3784). The engine runs the handler again
+ * from the top after each step, and the job deletes its chunks in its last
+ * step, so a read outside a step would fail on the final pass.
+ */
+interface TranscriptPortion {
+  chars: number;
+  text: () => Promise<string>;
+}
+
+function portionOf(text: string): TranscriptPortion {
+  return { chars: text.length, text: async () => text };
+}
+
+/** How long the portions are once joined by newlines, as a prompt joins them. */
+function portionChars(portions: readonly TranscriptPortion[]): number {
+  return (
+    portions.reduce((sum, portion) => sum + portion.chars, 0) +
+    Math.max(0, portions.length - 1)
+  );
+}
+
+/**
+ * The portions' texts, read one at a time. With `cut`, they are joined and
+ * cut to one chunk, and a portion past that chunk is not read.
+ */
+async function portionTexts(
+  portions: readonly TranscriptPortion[],
+  cut: boolean,
+): Promise<string[]> {
+  const parts: string[] = [];
+  let length = -1;
+  for (const portion of portions) {
+    if (cut && length >= ENRICHMENT_CHUNK_CHARS) break;
+    const text = await portion.text();
+    parts.push(text);
+    length += text.length + 1;
+  }
+  return cut ? [parts.join("\n").slice(0, ENRICHMENT_CHUNK_CHARS)] : parts;
 }
 
 /** How long a failed run waits before the sweep tries it again unchanged. */
@@ -384,6 +431,8 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
       const failure = event.data as {
         event?: { data?: unknown };
         error?: unknown;
+        /** The failed job's run id, which keys its scratch chunks. */
+        run_id?: unknown;
       };
       const parsed = eventSchema.safeParse(failure.event?.data);
       if (!parsed.success) return;
@@ -392,6 +441,20 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
       await step.run("record-failure", () =>
         recordEnrichmentFailure(parsed.data, reason, new Date(at)),
       );
+      // The failed job never reached its own cleanup, so its transcript
+      // chunks are deleted here, by the names its manifest gives (#3784).
+      const jobRunId = failure.run_id;
+      if (typeof jobRunId === "string" && jobRunId !== "") {
+        const scope = {
+          orgId: parsed.data.orgId,
+          workspaceId: parsed.data.workspaceId,
+        };
+        await step.run("discard-scratch", () =>
+          runInTenantScope(scope, () =>
+            discardEnrichmentChunks(scope, jobRunId),
+          ),
+        );
+      }
       const error = failure.error as { message?: unknown } | undefined;
       logger.warn(
         {
@@ -418,13 +481,26 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
     },
   },
   { event: RUN_ENRICH_EVENT },
-  async ({ event, events, step }) => {
+  async ({ event, events, step, runId }) => {
     const latest = events?.at(-1) ?? event;
     const data = eventSchema.parse(latest.data);
     const scope = { orgId: data.orgId, workspaceId: data.workspaceId };
     const inScope = <T>(fn: () => Promise<T>) => runInTenantScope(scope, fn);
     const table = runTable(data.runPublicId);
     const where = runWhere(data);
+    // The job's transcript chunks are scratch objects keyed by its run id,
+    // which the failure handler also receives, so either can delete them.
+    const jobRunId = () => {
+      if (runId === undefined || runId === "")
+        throw new Error("run.enrich needs its run id to keep its transcript");
+      return runId;
+    };
+    // Delete what the job kept. `count` comes from the read step's output;
+    // without it the job's manifest says what to delete.
+    const discardScratch = (count?: number) =>
+      runId === undefined || runId === ""
+        ? Promise.resolve()
+        : inScope(() => discardEnrichmentChunks(scope, runId, count));
     const readable = async () =>
       inScope(() =>
         withTenantDb(async (tx) => {
@@ -438,6 +514,9 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
       );
     // Durable read-record output may come from an earlier deployment. Recheck before resuming it.
     if (!(await readable())) {
+      // A run that stopped being readable after the read step kept its
+      // chunks leaves them here. The manifest read finds nothing otherwise.
+      if (runId) await step.run("discard-scratch", () => discardScratch());
       logSkip(data, "not_found");
       return { status: "not_found" };
     }
@@ -588,9 +667,13 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
         if (!previous) return null;
         const record = await resolveRunRecord(scope, data.runPublicId);
         if (!record) return null;
-        const frames = await readRunFrames(scope, record);
-        const transcript = await collectRunText(scope, frames, (s, ref) =>
-          evidenceStore().getBody(s, ref),
+        // The frames arrive a page at a time, and the read stops pulling
+        // pages at its ceiling, so one step holds one page of frames and at
+        // most the text ceiling (#3784).
+        const transcript = await collectRunText(
+          scope,
+          runFramePages(scope, record),
+          (s, ref) => evidenceStore().getBody(s, ref),
         );
         const { chunks, firstPrompt, ...facts } = transcript;
         // Until a model writes the account, the run is named for its first
@@ -607,43 +690,44 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
               .set({ name: title })
               .where(and(where, isNull(table.name), isNull(table.summary))),
           );
-        const refs: string[] = [];
-        for (const text of chunks) {
-          const bytes = new TextEncoder().encode(text);
-          const stored = await evidenceStore().put({
-            ...scope,
-            runId: data.runPublicId,
-            digest: digestBytes(bytes),
-            contentType: "text/plain",
-            bytes,
-          });
-          refs.push(stored.ref);
-        }
-        const bytes = new TextEncoder().encode(JSON.stringify(refs));
-        const manifest = await evidenceStore().put({
-          ...scope,
-          runId: data.runPublicId,
-          digest: digestBytes(bytes),
-          contentType: "application/json",
-          bytes,
-        });
+        // Keyed on the summary, not the name: a fallback title is a name
+        // with no account behind it, and must not stop the model's.
+        const unchanged =
+          (previous.digest === transcript.digest ||
+            previous.digest === `partial:${transcript.digest}`) &&
+          previous.hasSummary;
+        // Only a run the model will read keeps its chunks, as scratch
+        // objects the job deletes when it ends (#3784). `scratch` is how many
+        // chunk names the job's manifest holds, from this attempt or an
+        // earlier one of this step.
+        const kept = unchanged || facts.retained === 0 ? [] : chunks;
+        const scratch = await keepEnrichmentChunks(scope, jobRunId(), kept);
         return {
           ...facts,
           revision: previous.revision ?? null,
-          manifest: manifest.ref,
-          // Keyed on the summary, not the name: a fallback title is a name
-          // with no account behind it, and must not stop the model's.
-          unchanged:
-            (previous.digest === transcript.digest ||
-              previous.digest === `partial:${transcript.digest}`) &&
-            previous.hasSummary,
+          chunkChars: kept.map((text) => text.length),
+          scratch,
+          unchanged,
         };
       }),
     );
     if (!collected) {
+      await step.run("discard-scratch", () => discardScratch());
       logSkip(data, "not_found");
       return { status: "not_found" };
     }
+    // A read step recorded by a deployment from before #3784 names a
+    // manifest of chunk bodies instead of a scratch count. Those bodies sit
+    // in the content-addressed store with frame bodies, so they are read and
+    // never deleted.
+    const legacyManifest =
+      "manifest" in collected && typeof collected.manifest === "string"
+        ? collected.manifest
+        : null;
+    const scratch =
+      "scratch" in collected && typeof collected.scratch === "number"
+        ? collected.scratch
+        : 0;
     if (collected.unchanged || collected.retained === 0) {
       await step.run("no-generation", () =>
         markObserved(
@@ -652,20 +736,30 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
           collected.revision,
         ),
       );
+      if (scratch > 0)
+        await step.run("discard-scratch", () => discardScratch(scratch));
       const status = collected.unchanged ? "unchanged" : "no_retained_text";
       logSkip(data, status);
       return { status };
     }
-    const manifest = await inScope(() =>
-      evidenceStore().getBody(scope, collected.manifest),
-    );
-    const refs = z
-      .array(z.string())
-      .parse(JSON.parse(new TextDecoder().decode(manifest.bytes)));
-    let chunks: string[] = [];
-    for (const ref of refs) {
-      const body = await inScope(() => evidenceStore().getBody(scope, ref));
-      chunks.push(new TextDecoder().decode(body.bytes));
+    let chunks: TranscriptPortion[] = [];
+    if (legacyManifest !== null) {
+      const manifest = await inScope(() =>
+        evidenceStore().getBody(scope, legacyManifest),
+      );
+      const refs = z
+        .array(z.string())
+        .parse(JSON.parse(new TextDecoder().decode(manifest.bytes)));
+      for (const ref of refs) {
+        const body = await inScope(() => evidenceStore().getBody(scope, ref));
+        chunks.push(portionOf(new TextDecoder().decode(body.bytes)));
+      }
+    } else {
+      chunks = collected.chunkChars.map((chars, index) => ({
+        chars,
+        text: () =>
+          inScope(() => readEnrichmentChunk(scope, jobRunId(), index)),
+      }));
     }
     let level = 0;
     // What the job has spent on this run, from each call's reported tokens.
@@ -675,7 +769,7 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
     let budgetReached = false;
     // Each reduction consumes every chunk, in order. The text itself stops at
     // ENRICHMENT_TEXT_CEILING_CHARS (collectRunText), which bounds the chunks.
-    while (chunks.join("\n").length > ENRICHMENT_CHUNK_CHARS) {
+    while (portionChars(chunks) > ENRICHMENT_CHUNK_CHARS) {
       const reduced: string[] = [];
       let next = 0;
       for (; next < chunks.length; next += 1) {
@@ -683,8 +777,9 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
           budgetReached = true;
           break;
         }
-        const chunk = chunks[next]!;
+        const portion = chunks[next]!;
         const result = await step.run(`reduce-${level}-${next}`, async () => {
+          const chunk = await portion.text();
           if (!(await enabled()))
             throw new Error("Run enrichment was disabled");
           return narrate(
@@ -698,22 +793,21 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
       if (budgetReached) {
         // Out of budget: nothing more is reduced. The account is written
         // from the portions reduced so far and the earliest of the rest, cut
-        // to one chunk, and says it covers only the start of the run.
-        chunks = [
-          [...reduced, ...chunks.slice(next)]
-            .join("\n")
-            .slice(0, ENRICHMENT_CHUNK_CHARS),
-        ];
+        // to one chunk (`portionTexts`), and says it covers only the start of
+        // the run.
+        chunks = [...reduced.map(portionOf), ...chunks.slice(next)];
         break;
       }
       const joined = reduced.join("\n");
       chunks = [];
       for (let at = 0; at < joined.length; at += ENRICHMENT_CHUNK_CHARS)
-        chunks.push(joined.slice(at, at + ENRICHMENT_CHUNK_CHARS));
+        chunks.push(portionOf(joined.slice(at, at + ENRICHMENT_CHUNK_CHARS)));
       level += 1;
     }
+    const portions = chunks;
     const generated = await step.run("write-account", async () => {
       if (!(await enabled())) throw new Error("Run enrichment was disabled");
+      const chunks = await portionTexts(portions, budgetReached);
       const result = await narrate(
         `Return only JSON with name (short, specific user goal, at most 80 characters) and summary (concise account of all recorded turns, at most 1600 characters). Name the distinctive task, not the first generic greeting. This input covers ${collected.frames} frames and ${collected.retained} retained text bodies; ${collected.missing} bodies were unavailable. State missing evidence when it limits the account.${budgetReached ? " The summarizing budget ran out, so this input covers only the start of the run. Say so in the summary." : ""}\n\n${chunks.join("\n")}`,
       );
@@ -757,6 +851,9 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
         ),
       );
     });
+    // The account is written, so the chunks it was written from go (#3784).
+    if (scratch > 0)
+      await step.run("discard-scratch", () => discardScratch(scratch));
     logger.info(
       {
         runPublicId: data.runPublicId,
