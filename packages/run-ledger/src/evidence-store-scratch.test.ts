@@ -157,6 +157,17 @@ describe("evidence scratch objects", () => {
     }
   });
 
+  // The enrichment job's cleanup reads a job's manifest to learn what to
+  // delete, and reads this error, by name, as "the job kept nothing"
+  // (`enrichmentScratchCount`). Any other error makes the cleanup step throw
+  // and retry, so a failure handler for a job that kept nothing would fail.
+  it("answers a name never written with the driver's not-found error (negative)", async () => {
+    const store = storeOn();
+    await expect(
+      store.getScratch(scope, "01K5RQ8M4Z3V9X2W7T6Y5U4I3Q", "manifest"),
+    ).rejects.toMatchObject({ name: "StorageNotFoundError" });
+  });
+
   it("keeps each job's objects apart, so one job's cleanup leaves another's (negative)", async () => {
     const store = storeOn();
     const other = "01K5RQ8M4Z3V9X2W7T6Y5U4I3P";

@@ -3058,4 +3058,42 @@ describe("readWords beside another read of the same run", () => {
     ]);
     expect(getBody).toHaveBeenCalledTimes(2);
   });
+
+  // `only` narrows the answer as well as the reads. A half with no kept body
+  // that `only` leaves out is not answered as showing no words, so a
+  // prompts-only read leaves the fold's own word on every other entry.
+  it("leaves a half with no kept body out of the answer when `only` leaves it out (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const frames = [
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Ship it."),
+      }),
+      // A model step the recorder kept no body for.
+      tachoRow(1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        turnSeq: 1,
+      }),
+    ].map((row) => tachoFrameOf(row));
+    const [prompt, model] = stepFolds(frames);
+    if (!prompt || !model) throw new Error("no folds");
+    expect([prompt.node, model.node]).toEqual(["prompt", "model"]);
+    expect(model.response?.body.bodyRef ?? null).toBeNull();
+    const prompts = await readWords(deps.bodies, SCOPE, [prompt, model], {
+      only: (fold) => fold.node === "prompt",
+    });
+    expect(prompts.has(prompt)).toBe(true);
+    expect(prompts.has(model)).toBe(false);
+    // Asked for every half, the same half answers as showing no words.
+    const every = await readWords(deps.bodies, SCOPE, [prompt, model]);
+    expect(every.has(model)).toBe(true);
+    expect(every.get(model)).toBeNull();
+    // The prompt's body, once for each read. The model step has none to open.
+    expect(getBody).toHaveBeenCalledTimes(2);
+  });
 });

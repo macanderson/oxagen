@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   checkoutId,
   prLinkOf,
+  WORK_CONTEXT_CAP,
   workDigest,
   type WorkContextRow,
   type WorkDiffRow,
@@ -299,6 +300,43 @@ describe("get_run_work", () => {
     const result = await handler({ runId: RUN_ID }, ctx());
     expect(result.checkouts).toMatchObject([{ path: "/tmp/scratch" }]);
     expect(result.warnings).toEqual(["repository_not_connected"]);
+    expect(result.complete).toBe(false);
+  });
+  // #3791: the fold can leave fewer checkouts than the read returned. A read
+  // that returned one row past its limit may have cut rows the fold never
+  // saw, so the limit is judged on the rows read.
+  it("warns checkout_limit when the read hit its limit, though the fold leaves no more checkouts than the limit (negative)", async () => {
+    const { handler, deps } = setup({ chainVerified: true });
+    const pathOnly: WorkContextRow = {
+      path: "/work/app",
+      branch: "",
+      head: "",
+      remote: "",
+      repository: "",
+      first_seq: 0,
+      last_seq: 0,
+    };
+    const branches = Array.from(
+      { length: WORK_CONTEXT_CAP },
+      (_, n): WorkContextRow => ({
+        path: "/work/app",
+        branch: `fix/${String(n)}`,
+        head: "b".repeat(40),
+        remote: workDigest("github.com/acme/app"),
+        repository: "https://github.com/acme/app",
+        first_seq: n + 1,
+        last_seq: n + 1,
+      }),
+    );
+    vi.mocked(deps.contexts).mockResolvedValue([pathOnly, ...branches]);
+    const result = await handler({ runId: RUN_ID }, ctx());
+    // The path-only row folded into the first branch read after it.
+    expect(result.checkouts).toHaveLength(WORK_CONTEXT_CAP);
+    expect(result.checkouts[0]).toMatchObject({
+      branch: "fix/0",
+      firstSeq: "0",
+    });
+    expect(result.warnings).toContain("checkout_limit");
     expect(result.complete).toBe(false);
   });
   it("reads a PR link from the frame first and its URL second", () => {

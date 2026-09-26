@@ -866,6 +866,72 @@ describe("which runs the sweep queues", () => {
     );
     expect(evaluateDue(query.sql, query.params, row)).toBe(due);
   });
+
+  // #3784: the sweep reads `due AND candidate`, so that Postgres can read the
+  // candidates from each table's partial index. A due run that the candidate
+  // predicate leaves out is never queued and never summarized, and nothing
+  // reports it. So every row the due rule admits must be a candidate.
+  it("finds every due run among the candidates the partial indexes hold", async () => {
+    const { dueForEnrichment } = await import("./run.enrich");
+    const { runEnrichmentCandidate, schema } = await import("@oxagen/database");
+    const { PgDialect } = await import("drizzle-orm/pg-core");
+    const dialect = new PgDialect();
+    const due = dialect.sqlToQuery(
+      dueForEnrichment(schema.tachoSessions, now)!,
+    );
+    const candidate = dialect.sqlToQuery(
+      runEnrichmentCandidate(schema.tachoSessions),
+    );
+    // The candidate predicate is written by hand, in upper case and with its
+    // one literal inline, so the index can match it. `evaluateDue` reads
+    // drizzle's lower-case operators and bound values, so it is given those.
+    const candidateSql = candidate.sql
+      .replace(/\b(IS NOT NULL|IS NULL|OR)\b/gu, (keyword) =>
+        keyword.toLowerCase(),
+      )
+      .replace(/ LIKE 'partial:%'/u, () => " like $1");
+    const candidateParams = ["partial:%"];
+    let dueRows = 0;
+    let leftOut = 0;
+    for (const observedAt of [
+      null,
+      minutesAgo(1),
+      minutesAgo(6),
+      minutesAgo(31),
+    ])
+      for (const revision of [null, "r"])
+        for (const error of [null, "model_refused"])
+          for (const changed of [false, true])
+            for (const digest of [null, "d", "partial:d"])
+              for (const live of [false, true])
+                for (const named of [false, true]) {
+                  const row = {
+                    observedAt,
+                    revision,
+                    error,
+                    changed,
+                    digest,
+                    live,
+                    named,
+                  };
+                  const isCandidate = evaluateDue(
+                    candidateSql,
+                    candidateParams,
+                    row,
+                  );
+                  if (!isCandidate) leftOut += 1;
+                  if (!evaluateDue(due.sql, due.params, row)) continue;
+                  dueRows += 1;
+                  expect({ row, isCandidate }).toEqual({
+                    row,
+                    isCandidate: true,
+                  });
+                }
+    expect(dueRows).toBeGreaterThan(0);
+    // The index is worth having only because it leaves runs out: one that
+    // was enriched and has not changed since is not a candidate.
+    expect(leftOut).toBeGreaterThan(0);
+  });
 });
 
 /**
@@ -1180,6 +1246,81 @@ describe("the transcript chunks a job keeps", () => {
     });
     state.readable = false;
     expect(await run()).toEqual({ status: "not_found" });
+    expect(state.scratch.size).toBe(0);
+  });
+
+  /**
+   * What an earlier attempt of this job's read step kept before it failed:
+   * the manifest and two chunks. A retried step keeps the manifest's count,
+   * so the job still knows to delete them.
+   */
+  function keptByEarlierAttempt() {
+    state.scratch.set(key("manifest"), {
+      bytes: encode(JSON.stringify({ chunks: 2 })),
+      contentType: "application/json",
+    });
+    state.scratch.set(key("chunk-0"), {
+      bytes: encode("first"),
+      contentType: "text/plain",
+    });
+    state.scratch.set(key("chunk-1"), {
+      bytes: encode("second"),
+      contentType: "text/plain",
+    });
+  }
+
+  it("deletes what an earlier attempt of the read step kept when the run needs no account", async () => {
+    keptByEarlierAttempt();
+    // The retry reads a run with no retained text, so no model is asked.
+    state.frames = [
+      tachoFrame({
+        seq: 1,
+        ts: "2026-09-22 00:00:00.000",
+        kind: "tool_call",
+        hash: `sha256:${"d".repeat(64)}`,
+        contentDigest: "",
+        bytesRef: "",
+        redactions: "",
+        toolName: "Read",
+        toolStatus: "ok",
+        toolUseId: "toolu_1",
+        model: "",
+        provider: "",
+        policyDecision: "",
+        costUsdMicros: null,
+        turnSeq: 1,
+      }),
+    ];
+    expect(await run()).toEqual({ status: "no_retained_text" });
+    expect(state.call).not.toHaveBeenCalled();
+    expect(state.scratchWritten).toEqual([]);
+    expect(state.scratchDeleted).toEqual([
+      key("chunk-0"),
+      key("chunk-1"),
+      key("manifest"),
+    ]);
+    expect(state.scratch.size).toBe(0);
+  });
+
+  it("deletes what an earlier attempt of the read step kept when the read finds no run", async () => {
+    keptByEarlierAttempt();
+    const outcome = await state.handlers.get("run/enrich")!({
+      event: { data },
+      events: [{ data }],
+      step: {
+        // The read step's recorded answer: the run's row was gone by the
+        // time the retry read it.
+        run: (name: string, fn: () => unknown) =>
+          name === "read-record" ? Promise.resolve(null) : fn(),
+      },
+      runId: JOB_RUN_ID,
+    });
+    expect(outcome).toEqual({ status: "not_found" });
+    expect(state.scratchDeleted).toEqual([
+      key("chunk-0"),
+      key("chunk-1"),
+      key("manifest"),
+    ]);
     expect(state.scratch.size).toBe(0);
   });
 

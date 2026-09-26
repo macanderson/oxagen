@@ -276,6 +276,65 @@ describe("a paged read", () => {
     expect(got.truncated).toBe(false);
     expect(got.chunks.join("")).not.toContain("The transcript stops here.");
   });
+
+  it("cuts the text at the first frame past the body-read ceiling that would open a body, not at a frame that opens none", async () => {
+    const ceiling = ENRICHMENT_BODY_READ_CEILING;
+    /** A frame that kept no body, such as a tool call's. */
+    const bare = (seq: number) =>
+      tachoFrame({
+        seq,
+        ts: "2026-09-22 00:00:00.000",
+        kind: "tool_call",
+        hash: digestBytes(new TextEncoder().encode(`bare-${seq}`)),
+        contentDigest: "",
+        bytesRef: "",
+        redactions: "",
+        toolName: "Read",
+        toolStatus: "ok",
+        toolUseId: `toolu_${seq}`,
+        model: "",
+        provider: "",
+        policyDecision: "",
+        costUsdMicros: null,
+        turnSeq: seq,
+      });
+    const bodies = Array.from(
+      { length: ceiling + 2 },
+      (_, i) => `short reply ${i}`,
+    );
+    const read = bodies
+      .slice(0, ceiling)
+      .map((text, i) => frame(i, text));
+    // A frame that opens no body costs no read, so the read ceiling leaves
+    // it in, and nothing was cut.
+    const toolAfter = await collectRunText(
+      scope,
+      [...read, bare(ceiling)],
+      readOf(bodies),
+    );
+    expect(toolAfter).toMatchObject({
+      truncated: false,
+      frames: ceiling + 1,
+      retained: ceiling,
+    });
+    expect(toolAfter.chunks.join("")).not.toContain(
+      "The transcript stops here.",
+    );
+    // The next frame that would open a body is where the text stops.
+    const get = vi.fn(readOf(bodies));
+    const bodyAfter = await collectRunText(
+      scope,
+      [...read, bare(ceiling), frame(ceiling + 1, bodies[ceiling + 1]!)],
+      get,
+    );
+    expect(bodyAfter).toMatchObject({
+      truncated: true,
+      frames: ceiling + 1,
+      retained: ceiling,
+    });
+    expect(get).toHaveBeenCalledTimes(ceiling);
+    expect(bodyAfter.chunks.join("")).toContain("The transcript stops here.");
+  });
 });
 
 it("uses the same resolved funding for the selected model, credit gate and Stella credential", async () => {
