@@ -151,6 +151,10 @@ const ACTIONS = new Set([
   "decline",
   "accept",
   "resolve",
+  // answer_interjection: a person answers the question an agent paused its
+  // run to ask (#3839). Not "resolve": an approval is resolved, a question is
+  // answered.
+  "answer",
   "suggest",
   "infer",
   "check",
