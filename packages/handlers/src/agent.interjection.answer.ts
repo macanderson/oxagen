@@ -358,6 +358,41 @@ async function createPath(
 }
 
 /**
+ * Run the path a person took on a repository question: find the repository,
+ * then link it or create a workspace for it. `resolvedRepository` is set when
+ * this call resolved the repository, so the answer records it on the row.
+ */
+async function takePath(
+  deps: AnswerInterjectionDeps,
+  ctx: CheckedContext,
+  scope: RunScope,
+  row: LockedInterjection,
+  input: Pick<AgentInterjectionAnswerInput, "path" | "create">,
+): Promise<{ outcome: PathOutcome; resolvedRepository: string | null }> {
+  const body = row.body;
+  if (body === null) {
+    // The ingest writes only a body that parsed, so this is drift between
+    // the stored body and its schema.
+    logger.error(
+      { orgId: scope.orgId, interjectionId: row.publicId },
+      "answer_interjection: the stored control.interject body no longer parses",
+    );
+    throw unresolved();
+  }
+  const resolvedRepository =
+    row.repository === null
+      ? await deps.resolveRepository(scope, body)
+      : null;
+  const fullName = row.repository ?? resolvedRepository;
+  if (fullName === null) throw unresolved();
+  const outcome =
+    input.path === "create" && input.create !== undefined
+      ? await createPath(deps, ctx, input.create, fullName)
+      : await linkPath(deps, ctx, scope, body, fullName);
+  return { outcome, resolvedRepository };
+}
+
+/**
  * The `message` command that carries the answer to a wrapped run, or null
  * when the run cannot take one: a sealed run, a host that is gone, or, for a
  * free-text answer, a harness that reads text only at session start. The rule
@@ -445,30 +480,12 @@ export function createAnswerInterjectionHandler(
     if (first.answeredAt !== null) throw answered();
     if (first.expiresAt.getTime() <= now.getTime()) throw expired();
 
-    let outcome: PathOutcome | null = null;
-    let resolvedRepository: string | null = null;
-    if (first.kind === "repo_unknown") {
-      const body = first.body;
-      if (body === null) {
-        // The ingest writes only a body that parsed, so this is drift
-        // between the stored body and its schema.
-        logger.error(
-          { orgId: scope.orgId, interjectionId: first.publicId },
-          "answer_interjection: the stored control.interject body no longer parses",
-        );
-        throw unresolved();
-      }
-      let fullName = first.repository;
-      if (fullName === null) {
-        fullName = await deps.resolveRepository(scope, body);
-        resolvedRepository = fullName;
-      }
-      if (fullName === null) throw unresolved();
-      outcome =
-        input.path === "create" && input.create !== undefined
-          ? await createPath(deps, ctx, input.create, fullName)
-          : await linkPath(deps, ctx, scope, body, fullName);
-    }
+    const taken =
+      first.kind === "repo_unknown"
+        ? await takePath(deps, ctx, scope, first, input)
+        : null;
+    const outcome = taken?.outcome ?? null;
+    const resolvedRepository = taken?.resolvedRepository ?? null;
 
     const result = await deps.withStore(async (store) => {
       const row = await store.lock(scope, first.id);
