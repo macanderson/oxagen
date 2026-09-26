@@ -11,13 +11,15 @@ import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const command = vi.hoisted(() => vi.fn(async () => ({ query_id: "q" })));
-/** What each read of `system.mutations` answers, in order; then none pending. */
-const polls = vi.hoisted(
-  () => [] as Array<{ pending: string; failing: string }>,
-);
+type Unfinished = { mutation_id: string; latest_fail_reason: string };
+/**
+ * What each read of `system.mutations` answers, in order: the unfinished
+ * mutations on the table. Once the list runs out, none is unfinished.
+ */
+const reads = vi.hoisted(() => [] as Unfinished[][]);
 const query = vi.hoisted(() =>
   vi.fn(async () => ({
-    json: async () => [polls.shift() ?? { pending: "0", failing: "0" }],
+    json: async () => reads.shift() ?? [],
   })),
 );
 
@@ -30,9 +32,17 @@ import {
   CLAUDE_SESSIONS_TABLE,
   ERASE_CLAUDE_SESSIONS_QUERY,
   ERASE_CLAUDE_SESSIONS_WAIT_MS,
-  PENDING_CLAUDE_SESSIONS_MUTATIONS_QUERY,
+  UNFINISHED_CLAUDE_SESSIONS_MUTATIONS_QUERY,
+  claudeSessionsEraseRemaining,
   eraseClaudeSessionRows,
+  submitClaudeSessionsErase,
 } from "./claude-telemetry";
+
+/** An unfinished mutation, failing when `reason` is given. */
+const running = (id: string, reason = ""): Unfinished => ({
+  mutation_id: id,
+  latest_fail_reason: reason,
+});
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migration0007 = readFileSync(
@@ -43,7 +53,7 @@ const migration0007 = readFileSync(
 beforeEach(() => {
   command.mockClear();
   query.mockClear();
-  polls.length = 0;
+  reads.length = 0;
 });
 
 /** A clock that moves only when the erase sleeps. */
@@ -125,36 +135,65 @@ describe("eraseClaudeSessionRows", () => {
   // table failed on every attempt.
   it("waits past 30 seconds for a long mutation, one short read at a time", async () => {
     const clock = fakeClock();
-    for (let i = 0; i < 6; i += 1) polls.push({ pending: "1", failing: "0" });
+    reads.push([], [running("m2")]);
+    for (let i = 0; i < 6; i += 1) reads.push([running("m2")]);
     await eraseClaudeSessionRows("person@example.test", clock);
     expect(clock.now()).toBeGreaterThan(30_000);
     expect(clock.slept).toEqual([1_000, 2_000, 4_000, 8_000, 15_000, 15_000]);
-    expect(query).toHaveBeenCalledTimes(7);
     expect(query).toHaveBeenCalledWith({
-      query: PENDING_CLAUDE_SESSIONS_MUTATIONS_QUERY,
+      query: UNFINISHED_CLAUDE_SESSIONS_MUTATIONS_QUERY,
       query_params: { table: CLAUDE_SESSIONS_TABLE },
       format: "JSONEachRow",
     });
-    expect(PENDING_CLAUDE_SESSIONS_MUTATIONS_QUERY).toContain(
+    expect(UNFINISHED_CLAUDE_SESSIONS_MUTATIONS_QUERY).toContain(
       "system.mutations",
     );
-    expect(PENDING_CLAUDE_SESSIONS_MUTATIONS_QUERY).toContain("is_done = 0");
+    expect(UNFINISHED_CLAUDE_SESSIONS_MUTATIONS_QUERY).toContain("is_done = 0");
   });
 
   it("returns at once when the mutation is already done (negative)", async () => {
     const clock = fakeClock();
     await eraseClaudeSessionRows("person@example.test", clock);
     expect(clock.slept).toEqual([]);
-    expect(query).toHaveBeenCalledOnce();
   });
 
-  it("throws once the wait runs out, and says when the mutation is failing", async () => {
+  it("throws once the wait runs out", async () => {
     const clock = fakeClock();
-    for (let i = 0; i < 200; i += 1) polls.push({ pending: "1", failing: "1" });
+    reads.push([]);
+    for (let i = 0; i < 200; i += 1) reads.push([running("m2")]);
     await expect(
       eraseClaudeSessionRows("person@example.test", clock),
-    ).rejects.toThrow(/did not finish within 900 seconds.*1 of them failing/);
+    ).rejects.toThrow(/did not finish within 900 seconds/);
     expect(clock.now()).toBeGreaterThanOrEqual(ERASE_CLAUDE_SESSIONS_WAIT_MS);
+  });
+
+  // The wait used to count every unfinished mutation on the table, so one
+  // that never finished made every later erase run out its wait and fail.
+  it("returns once its own mutation finishes while an older one stays unfinished", async () => {
+    const clock = fakeClock();
+    reads.push(
+      [running("m1", "Memory limit exceeded")],
+      [running("m1", "Memory limit exceeded"), running("m2")],
+      [running("m1", "Memory limit exceeded"), running("m2")],
+      [running("m1", "Memory limit exceeded")],
+    );
+    await eraseClaudeSessionRows("person@example.test", clock);
+    expect(clock.slept).toEqual([1_000]);
+  });
+
+  it("throws at once when its own mutation fails, without naming the reason", async () => {
+    const clock = fakeClock();
+    reads.push([], [running("m2")], [running("m2", "while DELETE WHERE ...")]);
+    const error = await eraseClaudeSessionRows(
+      "person@example.test",
+      clock,
+    ).then(
+      () => undefined,
+      (err: unknown) => err as Error,
+    );
+    expect(error?.message).toMatch(/mutation m2 failing/);
+    expect(error?.message).not.toContain("DELETE WHERE");
+    expect(clock.slept).toEqual([]);
   });
 
   it("passes a ClickHouse refusal to the caller", async () => {
@@ -162,5 +201,30 @@ describe("eraseClaudeSessionRows", () => {
     await expect(eraseClaudeSessionRows("person@example.test")).rejects.toThrow(
       "TOO_MANY_MUTATIONS",
     );
+  });
+});
+
+describe("the erase in two halves", () => {
+  it("names only the mutation its own statement queued", async () => {
+    reads.push([running("m1")], [running("m1"), running("m2")]);
+    await expect(
+      submitClaudeSessionsErase("person@example.test"),
+    ).resolves.toEqual(["m2"]);
+    expect(command).toHaveBeenCalledOnce();
+  });
+
+  it("names nothing when its mutation finished before the second read", async () => {
+    reads.push([running("m1")], [running("m1")]);
+    await expect(
+      submitClaudeSessionsErase("person@example.test"),
+    ).resolves.toEqual([]);
+  });
+
+  it("counts only the erase's own mutations, and none once they are gone", async () => {
+    reads.push([running("m1", "stuck"), running("m2")], [running("m1")]);
+    await expect(claudeSessionsEraseRemaining(["m2"])).resolves.toBe(1);
+    await expect(claudeSessionsEraseRemaining(["m2"])).resolves.toBe(0);
+    await expect(claudeSessionsEraseRemaining([])).resolves.toBe(0);
+    expect(query).toHaveBeenCalledTimes(2);
   });
 });
