@@ -715,7 +715,7 @@ function PauseDialog({
   const ledger = run?.source === "ledger";
   // Pause and Resume share one slot, as on the Run page (#4112).
   const halt: LedgerCommand =
-    ledger && run?.ingressPaused === true ? "resume" : "pause";
+    ledger && run.ingressPaused === true ? "resume" : "pause";
 
   function close() {
     const changed = applied !== null;
