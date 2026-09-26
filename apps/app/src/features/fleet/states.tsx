@@ -4,13 +4,16 @@
 //
 // The shape is the design's `.state-wrap`, drawn by the shared `StateWrap`: a
 // glyph tile, an h2, one paragraph and the actions, centred with no panel
-// around them. The copy is the design's, with two lines changed to what the
-// record holds: the error's trace line says the trace id and region were not
-// recorded and prints the instant the read failed in UTC (a failed read
-// carries neither, #3841), and the denied state's "Decided by" says the policy
-// was not recorded (a refusal carries only the permission it needed, #3841).
+// around them. The copy is the design's. The error's trace line prints the
+// trace id, the region and the instant the read failed in UTC, and the denied
+// state's "Decided by" names the rule that refused the read, each from what
+// the kernel seam recorded (#3841). A fact the record does not hold reads
+// "not recorded", and its span carries `data-recorded="false"`. The store
+// keeps no versioned policies, so a rule id is printed as a rule, never as a
+// policy.
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import type { DecidedBy } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import {
   buttonPrimary,
@@ -70,12 +73,21 @@ export function FleetError({
   code: errorCode,
   status,
   readAt,
+  traceId = null,
+  region = null,
+  requestId,
   ws,
 }: {
   code: string;
   status: number;
   /** Epoch milliseconds the read failed at. */
   readAt: number;
+  /** The trace the read ran under; null or absent when none was recorded. */
+  traceId?: string | null;
+  /** The region that answered; null or absent when it was not recorded. */
+  region?: string | null;
+  /** The id the kernel seam gave the read; absent when it never reached the kernel. */
+  requestId?: string;
   ws: string;
 }) {
   const t = useTranslations("fleet.error");
@@ -88,12 +100,43 @@ export function FleetError({
       actions={
         <>
           <TryAgain />
-          <OpenIncident code={errorCode} status={status} at={at} ws={ws} />
+          <OpenIncident
+            code={errorCode}
+            status={status}
+            at={at}
+            traceId={traceId}
+            requestId={requestId}
+            ws={ws}
+          />
         </>
       }
       after={
         <p data-testid="fleet-error-trace" className={stateTrace}>
-          <span data-recorded="false">{t("trace", { at })}</span>
+          <span
+            data-testid="fleet-error-trace-id"
+            data-recorded={traceId === null ? "false" : "true"}
+          >
+            {traceId === null
+              ? t("traceNotRecorded")
+              : t("traceId", { id: traceId })}
+          </span>
+          {" · "}
+          <span
+            data-testid="fleet-error-region"
+            data-recorded={region === null ? "false" : "true"}
+          >
+            {region ?? t("regionNotRecorded")}
+          </span>
+          {" · "}
+          <span data-recorded="true">{at}</span>
+          {requestId === undefined ? null : (
+            <>
+              {" · "}
+              <span data-testid="fleet-error-request" data-recorded="true">
+                {t("requestId", { id: requestId })}
+              </span>
+            </>
+          )}
         </p>
       }
     >
@@ -102,8 +145,28 @@ export function FleetError({
   );
 }
 
+/** The Decided by line: the rule the record names, or "not recorded". */
+function DecidedByValue({ decidedBy }: { decidedBy: DecidedBy | null }) {
+  const t = useTranslations("fleet.denied");
+  if (decidedBy === null)
+    return (
+      <span data-testid="fleet-decided-by" data-recorded="false">
+        {t("decidedByValue")}
+      </span>
+    );
+  return (
+    <span data-testid="fleet-decided-by" data-recorded="true">
+      {t.rich(decidedBy.source === "iam" ? "decidedByIam" : "decidedByRule", {
+        rule: decidedBy.id,
+        c: (chunks) => <code className={mono}>{chunks}</code>,
+      })}
+    </span>
+  );
+}
+
 export function FleetDenied({
   permission,
+  decidedBy = null,
   orgName,
   viewerName,
   wsRole,
@@ -111,6 +174,8 @@ export function FleetDenied({
   ws,
 }: {
   permission: string;
+  /** The rule that refused the read; null or absent when none was recorded. */
+  decidedBy?: DecidedBy | null;
   orgName: string;
   /** The signed-in person's name, or their email when they set no name. */
   viewerName: string;
@@ -119,6 +184,7 @@ export function FleetDenied({
   ws: string;
 }) {
   const t = useTranslations("fleet.denied");
+  const byRule = decidedBy?.source === "decision_rule";
   return (
     <StateWrap
       testId="fleet-denied"
@@ -148,11 +214,15 @@ export function FleetDenied({
             {t("neededValue", { permission, ws })}
           </dd>
           <dt className={kvTerm}>{t("decidedBy")}</dt>
-          <dd className={kvValue}>{t("decidedByValue")}</dd>
+          <dd className={kvValue}>
+            <DecidedByValue decidedBy={decidedBy} />
+          </dd>
         </dl>
       }
     >
-      {t.rich("body", {
+      {/* A decision rule refuses a person whose roles grant the read, so the
+          body says a rule refused it rather than that a role is missing. */}
+      {t.rich(byRule ? "bodyRule" : "body", {
         org: orgName,
         permission,
         ws,
