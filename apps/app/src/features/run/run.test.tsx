@@ -2736,7 +2736,9 @@ describe("figures", () => {
     });
     const cost = within(screen.getByTestId("run-stat-cost"));
     expect(cost.getByText("$2.50")).toBeTruthy();
-    expect(cost.getByText("agent reported, provisional")).toBeTruthy();
+    expect(
+      cost.getByText("provisional figure the agent reported"),
+    ).toBeTruthy();
     // Nothing records what the unproductive steps cost.
     expect(
       within(screen.getByTestId("run-stat-wasted")).getByText("not recorded"),
@@ -3683,9 +3685,7 @@ describe("what the session recorded", () => {
     });
     const tokens = screen.getByTestId("run-stat-tokens");
     expect(tokens).toHaveTextContent("1,160");
-    expect(tokens).toHaveTextContent(
-      "reported by the session, provisional until the rollup",
-    );
+    expect(tokens).toHaveTextContent("provisional count the session reported");
   });
 });
 

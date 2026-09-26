@@ -42,6 +42,11 @@ const tokens = {
   output: 300,
   reasoning: 0,
 };
+/**
+ * The same counts as `get_spend` answers them, with the web search requests
+ * the view carries beside the token classes (#3721).
+ */
+const wireTokens = { ...tokens, server_tool_request: 0 };
 const priced = {
   micros: "12345678",
   currency: "USD",
@@ -69,7 +74,7 @@ describe("toSpendReport", () => {
           key: "claude-sonnet-5",
           provider: "anthropic",
           operator: null,
-          tokens,
+          tokens: wireTokens,
         },
         {
           ...figure,
@@ -78,13 +83,13 @@ describe("toSpendReport", () => {
           key: "unpriced-model",
           provider: null,
           operator: null,
-          tokens,
+          tokens: wireTokens,
         },
       ],
     });
     const view = SpendReport.parse(toSpendReport(out));
     expect(view.total).toEqual(figure);
-    expect(view.rows[0]?.tokens).toEqual(tokens);
+    expect(view.rows[0]?.tokens).toEqual(wireTokens);
     expect(view.rows.map((row) => [row.key, row.provider, row.cost])).toEqual([
       ["claude-sonnet-5", "anthropic", priced],
       ["unpriced-model", null, null],
@@ -108,14 +113,14 @@ describe("toFleetSpend", () => {
           key: "claude-sonnet-5",
           provider: "anthropic",
           operator: null,
-          tokens,
+          tokens: wireTokens,
         },
         {
           ...figure,
           key: "claude-haiku-5",
           provider: "anthropic",
           operator: null,
-          tokens: { ...tokens, input_uncached: 800, cache_read: 1200 },
+          tokens: { ...wireTokens, input_uncached: 800, cache_read: 1200 },
         },
       ],
     });
@@ -480,11 +485,15 @@ describe("toUnpricedModels", () => {
               tokenClass: "input_uncached",
               unpricedFrom: "2026-08-20T00:00:00.000Z",
               unpricedTo: "2026-09-15T00:00:00.000Z",
+              calls: 1240,
+              units: 9000000,
             },
             {
               tokenClass: "output",
               unpricedFrom: "2026-08-20T00:00:00.000Z",
               unpricedTo: "2026-09-15T00:00:00.000Z",
+              calls: 1240,
+              units: 400000,
             },
           ],
           fullyUnpriced: true,
@@ -504,6 +513,24 @@ describe("toUnpricedModels", () => {
           firstSeen: "2026-08-20T00:00:00.000Z",
           lastSeen: "2026-09-15T00:00:00.000Z",
           missingClasses: ["input_uncached", "output"],
+          // The calls and tokens still unpriced in each class, and when
+          // (#3281): the page says how much a later rate leaves uncovered.
+          missingClassWindows: [
+            {
+              tokenClass: "input_uncached",
+              calls: 1240,
+              units: 9000000,
+              from: "2026-08-20T00:00:00.000Z",
+              to: "2026-09-15T00:00:00.000Z",
+            },
+            {
+              tokenClass: "output",
+              calls: 1240,
+              units: 400000,
+              from: "2026-08-20T00:00:00.000Z",
+              to: "2026-09-15T00:00:00.000Z",
+            },
+          ],
           fullyUnpriced: true,
         },
       ],

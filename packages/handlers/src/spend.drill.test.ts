@@ -1,4 +1,5 @@
 import { spendDrill } from "@oxagen/oxagen/contracts/spend.drill";
+import type { UnmeteredRuns } from "@oxagen/oxagen/contracts/spend.shared";
 import type { RunTotalsRecord } from "@oxagen/billing";
 import { describe, expect, it, vi } from "vitest";
 import { createSpendDrillHandler, trailingWindow } from "./spend.drill";
@@ -8,7 +9,10 @@ import { ctx, OPERATOR, pricedRun, run, SCOPE } from "./spend.test-support";
 const NOW = new Date("2026-09-14T15:00:00.000Z");
 
 /** A fake store that filters the rows the way the Postgres predicate does. */
-function harness(rows: RunTotalsRecord[]) {
+function harness(
+  rows: RunTotalsRecord[],
+  unmetered: UnmeteredRuns = { total: 0, byHarness: [] },
+) {
   const readRunTotals = vi.fn(
     async (
       _scope: SpendScope,
@@ -30,8 +34,13 @@ function harness(rows: RunTotalsRecord[]) {
         }
       }),
   );
-  const handler = createSpendDrillHandler({ readRunTotals, now: () => NOW });
-  return { handler, readRunTotals };
+  const readUnmeteredRuns = vi.fn(async () => unmetered);
+  const handler = createSpendDrillHandler({
+    readRunTotals,
+    readUnmeteredRuns,
+    now: () => NOW,
+  });
+  return { handler, readRunTotals, readUnmeteredRuns };
 }
 
 describe("trailingWindow", () => {
@@ -160,11 +169,44 @@ describe("get_spend_drill", () => {
       .fn()
       .mockResolvedValueOnce([pricedRun(300n, { startedAt: NOW })])
       .mockResolvedValueOnce([pricedRun(200n, { startedAt: NOW })]);
-    const handler = createSpendDrillHandler({ readRunTotals, now: () => NOW });
+    const handler = createSpendDrillHandler({
+      readRunTotals,
+      readUnmeteredRuns: async () => ({ total: 0, byHarness: [] }),
+      now: () => NOW,
+    });
     const out = await handler(
       { kind: "operator", key: OPERATOR, days: 1 },
       ctx(),
     );
     expect(out.share).toBe(1);
+  });
+});
+
+describe("get_spend_drill, runs with no usage (#3304)", () => {
+  const unmetered: UnmeteredRuns = {
+    total: 1,
+    byHarness: [{ harness: "codex", runs: 1 }],
+  };
+
+  it("counts the key's own runs that reported no usage, with the drill's filter", async () => {
+    const h = harness([pricedRun(300n, { startedAt: NOW })], unmetered);
+    const out = await h.handler(
+      { kind: "agent", key: "acme.core.cc", days: 7 },
+      ctx(),
+    );
+    expect(h.readUnmeteredRuns).toHaveBeenCalledWith(SCOPE, {
+      from: "2026-09-08",
+      to: "2026-09-14",
+      filter: { kind: "agent", key: "acme.core.cc" },
+    });
+    expect(out.unmeteredRuns).toEqual(unmetered);
+    expect(() => spendDrill.output.parse(out)).not.toThrow();
+  });
+
+  it("leaves a tool drill without the count, since it carries no money (negative)", async () => {
+    const h = harness([pricedRun(300n, { startedAt: NOW })], unmetered);
+    const out = await h.handler({ kind: "tool", key: "Read", days: 7 }, ctx());
+    expect(h.readUnmeteredRuns).not.toHaveBeenCalled();
+    expect(out.unmeteredRuns).toBeUndefined();
   });
 });

@@ -1,0 +1,73 @@
+{
+  "schema": "mcp-tools-lock/v1",
+  "server": "billing",
+  "source": {
+    "type": "openapi",
+    "document_hash": "sha256:6fa18a2e480f0eff389b0bde7ced4ec0212eb0c11647444a0eb367f6dae9d902",
+    "repo": "github.com/a-intel/billing-service",
+    "path": "openapi/billing.yaml",
+    "ref": "main"
+  },
+  "tools": {
+    "cancel_refund": {
+      "definition_hash": "sha256:f27ac7b1ff45c24fa848d899d7e80032c1eb8b595cd6d33482c0e4533ccf1bdd",
+      "upstream": {
+        "operation": "cancelRefund",
+        "method": "POST",
+        "path": "/refunds/{refund_id}/cancel"
+      },
+      "upstream_hash": "sha256:52fd294764912bf6fdabed0254ba960e33311a2d5cefde405f0b9ba1eb64d655",
+      "version": 1
+    },
+    "create_refund": {
+      "definition_hash": "sha256:af945200d56d25ff0035152f2f3ecf94a370aa2eb441da4dd769624d8a452e29",
+      "upstream": {
+        "operation": "createRefund",
+        "method": "POST",
+        "path": "/refunds"
+      },
+      "upstream_hash": "sha256:eac1ee3a2bf078ac8e83aaccba5daf1c5f1082320018f4476aa8552134be2f0f",
+      "version": 3
+    },
+    "get_charge": {
+      "definition_hash": "sha256:fef6c725819aed0b91a9487328fa263de9f366b6cf0118438cf540ec6a782864",
+      "upstream": {
+        "operation": "getCharge",
+        "method": "GET",
+        "path": "/charges/{charge_id}"
+      },
+      "upstream_hash": "sha256:58dfbc51092d4fb58be99045f9a123ac5d5cd00591856b6a9a81d63a6d0eca6d",
+      "version": 1
+    },
+    "get_refund": {
+      "definition_hash": "sha256:6b50dec802d7233b476944fb853ca753c1a85b96525346818ec270d8c2a6a282",
+      "upstream": {
+        "operation": "getRefund",
+        "method": "GET",
+        "path": "/refunds/{refund_id}"
+      },
+      "upstream_hash": "sha256:ed9803e7da6e4616852c0b92590d7d45d46481ccc5e78ac6b7b8c9af0a22f9d6",
+      "version": 1
+    },
+    "list_charges": {
+      "definition_hash": "sha256:3dad5e7ad14b863ed2d9db3389bed06c4728aefd54e05ac9417258d7b999d743",
+      "upstream": {
+        "operation": "listCharges",
+        "method": "GET",
+        "path": "/customers/{customer_id}/charges"
+      },
+      "upstream_hash": "sha256:5909e97a7f1fe37cf702e04a23480bef7a82468d763521183ca2545ab526817b",
+      "version": 2
+    },
+    "list_refunds": {
+      "definition_hash": "sha256:e0d927ef37d6f24fb4be60239fa2b701f9e8ab52e86227368b5b1095a0ca9956",
+      "upstream": {
+        "operation": "listRefunds",
+        "method": "GET",
+        "path": "/charges/{charge_id}/refunds"
+      },
+      "upstream_hash": "sha256:f71c20537cfeb3b310c6eca9e5477256d0523217f677198167c26ffd6bdcae21",
+      "version": 1
+    }
+  }
+}

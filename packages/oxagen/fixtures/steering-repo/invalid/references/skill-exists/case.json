@@ -1,0 +1,18 @@
+{
+  "check": "references",
+  "rule": "skill-exists",
+  "severity": "error",
+  "description": "skills names a skill no record defines.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/platform/a-intel.platform.reviewer-rule.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/platform/a-intel.platform.reviewer-rule.md",
+      "line": 10,
+      "field": "skills.0"
+    }
+  ]
+}

@@ -46,7 +46,11 @@
  */
 import { readFileSync } from "node:fs";
 import { z } from "zod";
-import { deriveCacheWrite1h, type PublishedModelPrice } from "./price-sources";
+import {
+  deriveCacheWrite1h,
+  deriveServerToolRequest,
+  type PublishedModelPrice,
+} from "./price-sources";
 
 export const PRICE_OVERRIDES_ENV = "OXAGEN_PRICE_OVERRIDES";
 export const PRICE_OVERRIDES_FILE_ENV = "OXAGEN_PRICE_OVERRIDES_FILE";
@@ -61,6 +65,7 @@ const rateSchema = z
     cacheWrite5mPer1M: z.number().finite().nonnegative().optional(),
     cacheWrite1hPer1M: z.number().finite().nonnegative().optional(),
     reasoningPer1M: z.number().finite().nonnegative().optional(),
+    serverToolRequestPer1M: z.number().finite().nonnegative().optional(),
   })
   .strict();
 
@@ -136,6 +141,9 @@ export function parsePriceOverrides(body: unknown): PublishedModelPrice[] {
           cacheWrite5m,
         ),
       reasoningPer1M: rate.reasoningPer1M ?? rate.outputPer1M,
+      serverToolRequestPer1M:
+        rate.serverToolRequestPer1M ??
+        deriveServerToolRequest(rate.provider ?? vendorOf(model)),
       // Still a list row in the book — the operator is stating what the
       // provider bills *this installation*, which is what a list price is —
       // but provenance keeps it distinct so the sync report can say how many

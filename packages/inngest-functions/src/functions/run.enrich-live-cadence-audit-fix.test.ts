@@ -40,17 +40,20 @@ describe("dueForEnrichment for a live run", () => {
     // observed 30 minutes ago, or ended and unchanged since its account.
     expect(sql).toMatch(
       new RegExp(
-        String.raw`\) and \(${esc(s)}\."name" is null or ${esc(s)}\."summary_observed_at" is null or ${esc(s)}\."summary_observed_at" < \$4 or \(${esc(s)}\."outcome" <> \$5 and ${esc(s)}\."updated_at" IS NOT DISTINCT FROM ${esc(s)}\."summary_observed_revision"\)\) and ${esc(s)}\."summary_spent_usd_micros" < \$6\)$`,
+        String.raw`\) and \(${esc(s)}\."name" is null or ${esc(s)}\."summary_observed_at" is null or ${esc(s)}\."summary_observed_at" < \$6 or \(${esc(s)}\."outcome" <> \$7 and ${esc(s)}\."updated_at" IS NOT DISTINCT FROM ${esc(s)}\."summary_observed_revision"\)\) and ${esc(s)}\."summary_spent_usd_micros" < \$8\)$`,
       ),
     );
-    expect(params[3]).toBe("2026-09-23T11:30:00.000Z");
-    expect(params[4]).toBe("running");
+    expect(params[5]).toBe("2026-09-23T11:30:00.000Z");
+    expect(params[6]).toBe("running");
     // A run whose accounts have cost the run's cap is never due (#4312).
-    expect(params[5]).toBe(5_000_000);
+    expect(params[7]).toBe(5_000_000);
     // The five-minute retry for partial evidence and the retry after a
-    // failure keep their own bounds.
+    // failure keep their own bounds, and each also backs off from the
+    // sweep's own time (#4113).
     expect(params[1]).toBe("2026-09-23T11:55:00.000Z");
-    expect(params[2]).toBe("2026-09-23T11:30:00.000Z");
+    expect(params[2]).toBe("2026-09-23T12:00:00.000Z");
+    expect(params[3]).toBe("2026-09-23T11:30:00.000Z");
+    expect(params[4]).toBe("2026-09-23T12:00:00.000Z");
   });
 
   it("treats a pending or running ledger run as live", () => {
@@ -58,10 +61,10 @@ describe("dueForEnrichment for a live run", () => {
     const r = '"agent"."agent_runs"';
     expect(sql).toMatch(
       new RegExp(
-        String.raw`\) and \(${esc(r)}\."name" is null or ${esc(r)}\."summary_observed_at" is null or ${esc(r)}\."summary_observed_at" < \$4 or \(${esc(r)}\."status" not in \(\$5, \$6\) and ${esc(r)}\."updated_at" IS NOT DISTINCT FROM ${esc(r)}\."summary_observed_revision"\)\) and ${esc(r)}\."summary_spent_usd_micros" < \$7\)$`,
+        String.raw`\) and \(${esc(r)}\."name" is null or ${esc(r)}\."summary_observed_at" is null or ${esc(r)}\."summary_observed_at" < \$6 or \(${esc(r)}\."status" not in \(\$7, \$8\) and ${esc(r)}\."updated_at" IS NOT DISTINCT FROM ${esc(r)}\."summary_observed_revision"\)\) and ${esc(r)}\."summary_spent_usd_micros" < \$9\)$`,
       ),
     );
-    expect(params.slice(3)).toEqual([
+    expect(params.slice(5)).toEqual([
       "2026-09-23T11:30:00.000Z",
       "pending",
       "running",

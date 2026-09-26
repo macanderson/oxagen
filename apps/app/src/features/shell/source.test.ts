@@ -132,8 +132,10 @@ const source = {
   },
 };
 const listed = readOk({
-  orgs: [{ slug: "acme", name: "Acme Robotics" }],
-  workspaces: [{ slug: "core-platform", name: "Core platform" }],
+  orgs: [{ slug: "acme", name: "Acme Robotics", avatarUrl: null }],
+  workspaces: [
+    { slug: "core-platform", name: "Core platform", avatarUrl: null },
+  ],
 });
 
 const emptyQueue = readOk({ items: [], more: false });
@@ -400,10 +402,11 @@ describe("shellSource across the organization's workspaces", () => {
     const many = Array.from({ length: WORKSPACE_BOUND + 3 }, (_, i) => ({
       slug: `ws-${String(i)}`,
       name: `Workspace ${String(i)}`,
+      avatarUrl: null,
     }));
     context.mockResolvedValue(
       readOk({
-        orgs: [{ slug: "acme", name: "Acme Robotics" }],
+        orgs: [{ slug: "acme", name: "Acme Robotics", avatarUrl: null }],
         workspaces: many,
       }),
     );

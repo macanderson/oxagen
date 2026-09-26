@@ -41,6 +41,7 @@
   },
   "dependencies": {
     "@oxagen/billing": "workspace:*",
+    "@oxagen/oxagen": "workspace:*",
     "@oxagen/steering-freshness": "workspace:*",
     "@oxagen/tacho": "workspace:*",
     "commander": "12.1.0",

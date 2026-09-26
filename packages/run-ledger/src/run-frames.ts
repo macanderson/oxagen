@@ -157,6 +157,11 @@ export interface RunFrame {
   /** The evidence stage (ledger) or the stage a wrapped kind belongs to. */
   stage: string;
   observedAt: Date;
+  /**
+   * When the control plane received a wrapped frame
+   * (`tacho_events.received_at`). Ledger frames leave it unset.
+   */
+  receivedAt?: Date;
   /** The frame's own digest: `event_digest` or the chain `hash`. */
   digest: string;
   /** A short machine-derived label from identifiers in the receipt. */
@@ -510,6 +515,8 @@ export interface TachoFrameRowLike {
   apiDurationMs?: number | null;
   /** The reasoning effort the call ran at; empty when unrecorded. */
   effort?: string;
+  /** When the control plane received the frame, as DateTime64 text. */
+  receivedAt?: string;
   /** The chain the row was recorded on; set by a read across a run's chains. */
   sessionUuid?: string;
   rootSessionUuid?: string;
@@ -643,6 +650,9 @@ export function tachoFrame(stored: TachoFrameRowLike): RunFrame {
     type: row.kind,
     stage: tachoStage(row.kind),
     observedAt: tachoTimestamp(row.ts),
+    ...(row.receivedAt === undefined
+      ? {}
+      : { receivedAt: tachoTimestamp(row.receivedAt) }),
     digest: row.hash,
     summary: tachoFrameSummary(row),
     body,

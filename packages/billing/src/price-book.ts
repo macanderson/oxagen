@@ -493,49 +493,16 @@ function rowToEntry(row: Row): PriceEntry {
 }
 
 /**
- * Every entry an organization resolves against: its own rows and the list.
- * Reads through the system connection with an explicit org predicate because
- * the rollup job runs outside a tenant scope.
+ * Every entry an organization resolves against: its own rows and the list,
+ * with their whole history. Reads through the system connection with an
+ * explicit org predicate, the connection {@link loadPriceBookSlice} reads the
+ * cost rollup's rows through. A read that needs only some models over a span
+ * takes the slice instead: the whole book grows with every hourly sync.
  */
 export async function loadPriceBook(args: {
   orgId: string;
 }): Promise<PriceBook> {
   const rows = await withSystemDb((tx) =>
-    tx
-      .select()
-      .from(schema.priceEntries)
-      .where(
-        or(
-          isNull(schema.priceEntries.orgId),
-          eq(schema.priceEntries.orgId, args.orgId),
-        ),
-      ),
-  );
-  return rows.map(rowToEntry);
-}
-
-/**
- * The same book as {@link loadPriceBook} — the list rows and the
- * organization's own, with their whole history — read inside the caller's
- * tenant scope instead of through the system connection.
- *
- * Which one a caller wants is not a style choice. A rollup job runs with no
- * tenant scope open and has to name the organization itself, so it takes
- * {@link loadPriceBook}. A handler serving one organization's console read
- * already has that scope, and reaching for the system connection there marks
- * an ordinary page view as unscoped access and asks the policy nothing. The
- * `get_run_transcript` handler prices its blocks through this for that reason
- * (#3526): every nonempty transcript page was opening the system connection.
- *
- * The org predicate is in the query as well as the policy, since a stack with
- * RLS enforcement off runs the query under `app.rls_bypass`. No `at` filter:
- * a transcript prices each block at the instant its own frame ran, so the
- * windows that have since closed are exactly the rows it needs.
- */
-export async function loadPriceBookInTenantScope(args: {
-  orgId: string;
-}): Promise<PriceBook> {
-  const rows = await withTenantDb((tx) =>
     tx
       .select()
       .from(schema.priceEntries)
@@ -590,6 +557,35 @@ function sliceCondition(slice: PriceBookSlice) {
 }
 
 /**
+ * How many model ids one select of a slice read carries. `inArray` binds one
+ * parameter per name, and {@link priceBookNames} gives a date-stamped id three
+ * names, or six behind a `creator/` prefix. So 5,000 ids bind about 30,000 of
+ * the 65,535 parameters Postgres accepts in one statement. `arrayOverlaps`
+ * binds the whole name list as one array parameter.
+ */
+const SLICE_MODELS_PER_SELECT = 5_000;
+
+/**
+ * Runs a slice read on `tx`: one select per {@link SLICE_MODELS_PER_SELECT}
+ * model ids, one after another on the same connection. Two ids in different
+ * chunks can share a row (`gpt-4o-2026-08-01` and `gpt-4o-2026-09-01` are both
+ * priced by `gpt-4o`), so each row is kept once, by id.
+ */
+async function selectSlice(tx: Tx, slice: PriceBookSlice): Promise<PriceBook> {
+  const byId = new Map<string, PriceEntry>();
+  for (let at = 0; at < slice.models.length; at += SLICE_MODELS_PER_SELECT) {
+    const models = slice.models.slice(at, at + SLICE_MODELS_PER_SELECT);
+    const rows = await tx
+      .select()
+      .from(schema.priceEntries)
+      .where(sliceCondition({ ...slice, models }));
+    for (const row of rows)
+      if (!byId.has(row.id)) byId.set(row.id, rowToEntry(row));
+  }
+  return [...byId.values()];
+}
+
+/**
  * The rows of the book that could price `slice.models` between `slice.from`
  * and `slice.to`, through the system connection. A rollup job takes this
  * rather than {@link loadPriceBook}.
@@ -605,7 +601,10 @@ function sliceCondition(slice: PriceBookSlice) {
  * The span keeps a closed window that overlaps it, so a frame priced at the
  * instant it ran still finds the rate of its own time. No models means no
  * rows, answered without a query: an empty name list must never reach the
- * store as a filter that selects nothing, or as no filter at all.
+ * store as a filter that selects nothing, or as no filter at all. A long model
+ * list is read in chunks ({@link SLICE_MODELS_PER_SELECT}), so a window that
+ * ran many distinct ids gets more selects instead of a statement Postgres
+ * refuses.
  */
 export async function loadPriceBookSlice(
   slice: PriceBookSlice,
@@ -613,25 +612,30 @@ export async function loadPriceBookSlice(
   if (slice.models.length === 0) return [];
   // tenancy: system read because the cost rollup runs outside a tenant scope.
   // sliceCondition keeps it filtered to the list rows and the orgId's own rows.
-  const rows = await withSystemDb((tx) =>
-    tx.select().from(schema.priceEntries).where(sliceCondition(slice)),
-  );
-  return rows.map(rowToEntry);
+  return withSystemDb((tx) => selectSlice(tx, slice));
 }
 
 /**
  * {@link loadPriceBookSlice} inside the caller's tenant scope, for a handler
- * serving one organization's read, for the reason
- * {@link loadPriceBookInTenantScope} gives.
+ * serving one organization's read.
+ *
+ * Which connection a caller takes is not a style choice. A rollup job runs
+ * with no tenant scope open and has to name the organization itself, so it
+ * takes {@link loadPriceBookSlice}. A handler serving one organization's
+ * console read already has that scope, and reaching for the system connection
+ * there marks an ordinary page view as unscoped access and asks the policy
+ * nothing. The `get_run_transcript` and `get_usage_breakdown` handlers price
+ * through this for that reason (#3526): every nonempty transcript page was
+ * opening the system connection.
+ *
+ * The org predicate is in the query as well as the policy, since a stack with
+ * RLS enforcement off runs the query under `app.rls_bypass`.
  */
 export async function loadPriceBookSliceInTenantScope(
   slice: PriceBookSlice,
 ): Promise<PriceBook> {
   if (slice.models.length === 0) return [];
-  const rows = await withTenantDb((tx) =>
-    tx.select().from(schema.priceEntries).where(sliceCondition(slice)),
-  );
-  return rows.map(rowToEntry);
+  return withTenantDb((tx) => selectSlice(tx, slice));
 }
 
 /**

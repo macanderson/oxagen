@@ -28,6 +28,8 @@ export type PageHeaderProps = {
   actions?: ReactNode;
   /** A large figure beside the title, e.g. <Money variant="large"> for a run's cost (feedback 5). */
   figure?: ReactNode;
+  /** The avatar before the title, on a page about one organization. */
+  leading?: ReactNode;
 };
 
 export function PageHeader({
@@ -38,12 +40,14 @@ export function PageHeader({
   meta,
   actions,
   figure,
+  leading,
 }: PageHeaderProps) {
   return (
     <header className="flex flex-col gap-3 pb-[18px] sm:flex-row sm:items-start sm:justify-between">
       <div className="flex min-w-0 flex-col gap-1">
         {eyebrow ? <p className={`${eyebrowStyle} mb-1`}>{eyebrow}</p> : null}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          {leading}
           <h1
             className={`min-w-0 text-2xl font-bold leading-tight text-foreground ${mono ? "break-all font-mono tracking-normal" : "tracking-[-0.015em]"}`}
           >

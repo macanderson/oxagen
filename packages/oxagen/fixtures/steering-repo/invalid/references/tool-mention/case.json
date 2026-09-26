@@ -1,0 +1,17 @@
+{
+  "check": "references",
+  "rule": "mention-resolves",
+  "severity": "error",
+  "description": "An @tool: mention names a tool no server imports.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/billing/a-intel.billing.missing-tool.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/billing/a-intel.billing.missing-tool.md",
+      "line": 16
+    }
+  ]
+}

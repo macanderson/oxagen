@@ -1,0 +1,22 @@
+{
+  "note": "What Oxagen knows outside the repository, for the references check: enrolled runtimes, members and teams, reviewer groups, and vault credentials.",
+  "runtimes": [
+    "ci-linux-01"
+  ],
+  "members": [
+    "dana",
+    "priya"
+  ],
+  "teams": [
+    "platform-team"
+  ],
+  "groups": [
+    "billing-leads"
+  ],
+  "credentials": [
+    "billing-oauth-client",
+    "embeddings",
+    "stripe-live",
+    "stripe-test"
+  ]
+}

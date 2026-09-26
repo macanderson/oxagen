@@ -105,6 +105,7 @@ import {
   type ListedRun,
   listRuns,
   parkedRunIds,
+  reportedNoUsage,
   RUN_CHIPS,
   type RunChip,
   shownCost,
@@ -170,6 +171,18 @@ function Tiles({
       : []),
     ...(spend.unpriced > 0
       ? [t("spend.unpriced", { count: spend.unpriced })]
+      : []),
+    // Runs whose harness reported no usage at all (#3304): their cost is
+    // not in the total, and the note names the harness that ran them.
+    ...(spend.noUsage.length > 0
+      ? [
+          t("spend.noUsage", {
+            count: spend.noUsage.reduce((sum, row) => sum + row.runs, 0),
+            harnesses: spend.noUsage
+              .map((row) => `${row.harness} ${formatCount(row.runs, locale)}`)
+              .join(", "),
+          }),
+        ]
       : []),
   ].join(" · ");
   return (
@@ -552,7 +565,16 @@ function RunRowView({
         return (
           <td key={column} className={numericCell}>
             {cost === null ? (
-              notRecorded
+              reportedNoUsage(run) ? (
+                <span
+                  data-testid="row-cost-no-usage"
+                  className="text-muted-foreground"
+                >
+                  {t("noUsage")}
+                </span>
+              ) : (
+                notRecorded
+              )
             ) : (
               <>
                 <Money value={cost.value} />

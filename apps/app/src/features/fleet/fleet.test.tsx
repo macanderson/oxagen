@@ -426,6 +426,41 @@ describe("summary tiles", () => {
     );
   });
 
+  // #3304. A wrapped run whose harness reported no usage says so in its cost
+  // cell, and the tile names the harness beside a total that leaves it out.
+  it("says a wrapped run reported no usage, in its cell and in Spend shown", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          id: "tse_codex",
+          source: "tacho",
+          status: "sealed",
+          cost: null,
+          tokens: {
+            inputUncached: 0,
+            cacheRead: 0,
+            cacheWrite5m: 0,
+            cacheWrite1h: 0,
+            output: 0,
+            reasoning: 0,
+          },
+          harness: { name: "codex", version: null, runtime: "codex" },
+        }),
+        runRow({ id: "arun_done", cost: usd("2870000") }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    expect(
+      within(row("tse_codex")).getByTestId("row-cost-no-usage"),
+    ).toHaveTextContent("no usage reported");
+    expect(screen.getByTestId("spend-basis")).toHaveTextContent(
+      "gateway_observed · USD · 1 run reported no usage (codex 1)",
+    );
+    expect(screen.getByTestId("spend-basis")).not.toHaveTextContent(
+      "no cost recorded",
+    );
+  });
+
   it("shows the rolled-up cost over the reported one (negative)", async () => {
     await renderFleet({
       runs: runPage([

@@ -146,6 +146,7 @@ export function costByClassOf(
     cache_write_1h: figure(byClass.cache_write_1h),
     output: figure(byClass.output),
     reasoning: figure(byClass.reasoning),
+    server_tool_request: figure(byClass.server_tool_request),
   };
 }
 

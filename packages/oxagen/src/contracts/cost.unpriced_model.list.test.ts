@@ -19,11 +19,15 @@ const model = {
       tokenClass: "input_uncached",
       unpricedFrom: "2026-08-20T00:00:00.000Z",
       unpricedTo: "2026-09-17T00:00:00.000Z",
+      calls: 0,
+      units: 0,
     },
     {
       tokenClass: "output",
       unpricedFrom: "2026-08-20T00:00:00.000Z",
       unpricedTo: "2026-09-17T00:00:00.000Z",
+      calls: 0,
+      units: 0,
     },
   ],
   fullyUnpriced: false,
@@ -73,17 +77,23 @@ describe("list_unpriced_models contract", () => {
         tokenClass: "reasoning",
         unpricedFrom: "2026-09-01T00:00:00.000Z",
         unpricedTo: "2026-09-05T00:00:00.000Z",
+        calls: 0,
+        units: 0,
       }),
     ).toEqual({
       tokenClass: "reasoning",
       unpricedFrom: "2026-09-01T00:00:00.000Z",
       unpricedTo: "2026-09-05T00:00:00.000Z",
+      calls: 0,
+      units: 0,
     });
     expect(
       missingClassWindowSchema.safeParse({
         tokenClass: "not-a-class",
         unpricedFrom: "2026-09-01T00:00:00.000Z",
         unpricedTo: "2026-09-05T00:00:00.000Z",
+        calls: 0,
+        units: 0,
       }).success,
     ).toBe(false);
   });

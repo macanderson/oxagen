@@ -4,6 +4,7 @@
 import { orgList } from "@oxagen/oxagen/contracts/org.list";
 import { workspaceList } from "@oxagen/oxagen/contracts/workspace.list";
 import { describe, expect, it } from "vitest";
+import { OrgChoice, WorkspaceChoice } from "@/data/contracts/shell";
 import { toOrgChoices, toWorkspaceChoices } from "./pretenant";
 
 const orgs = orgList.output.parse({
@@ -59,20 +60,58 @@ const workspaces = workspaceList.output.parse({
 });
 
 describe("toOrgChoices", () => {
-  it("lists every organization the viewer belongs to by slug and name", () => {
+  it("lists every organization the viewer belongs to by slug, name and avatar", () => {
     expect(toOrgChoices(orgs)).toEqual([
-      { slug: "acme", name: "Acme Robotics" },
-      { slug: "globex", name: "Globex" },
+      { slug: "acme", name: "Acme Robotics", avatarUrl: null },
+      {
+        slug: "globex",
+        name: "Globex",
+        avatarUrl: "https://example.test/globex.png",
+      },
     ]);
+  });
+
+  it("reads a blank avatar as none, so the view model does not refuse the list (negative)", () => {
+    const blank = orgList.output.parse({
+      organizations: [{ ...orgs.organizations[0], avatarUrl: "" }],
+    });
+    expect(toOrgChoices(blank)).toEqual([
+      { slug: "acme", name: "Acme Robotics", avatarUrl: null },
+    ]);
+    expect(OrgChoice.safeParse(toOrgChoices(blank)[0]).success).toBe(true);
   });
 });
 
 describe("toWorkspaceChoices", () => {
   it("lists the workspaces the viewer is a member of", () => {
     expect(toWorkspaceChoices(workspaces)).toEqual([
-      { slug: "core", name: "Core platform" },
-      { slug: "research", name: "Research" },
+      { slug: "core", name: "Core platform", avatarUrl: null },
+      { slug: "research", name: "Research", avatarUrl: null },
     ]);
+  });
+
+  it("carries a workspace's avatar and reads a blank one as none", () => {
+    const set = workspaceList.output.parse({
+      organization: workspaces.organization,
+      workspaces: [
+        {
+          ...workspace("core", "Core platform", "owner"),
+          avatarUrl: "https://example.test/core.png",
+        },
+        { ...workspace("research", "Research", "viewer"), avatarUrl: "" },
+      ],
+    });
+    const choices = toWorkspaceChoices(set);
+    expect(choices).toEqual([
+      {
+        slug: "core",
+        name: "Core platform",
+        avatarUrl: "https://example.test/core.png",
+      },
+      { slug: "research", name: "Research", avatarUrl: null },
+    ]);
+    for (const choice of choices)
+      expect(WorkspaceChoice.safeParse(choice).success).toBe(true);
   });
 
   it("leaves out a workspace the viewer is not a member of (negative)", () => {

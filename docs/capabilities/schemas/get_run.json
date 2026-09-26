@@ -252,7 +252,8 @@
           "taskRef": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 256
               },
               {
                 "type": "null"
@@ -719,7 +720,8 @@
           "name": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 256
               },
               {
                 "type": "null"
@@ -886,6 +888,10 @@
                   "reasoning": {
                     "type": "integer",
                     "minimum": 0
+                  },
+                  "server_tool_request": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 },
                 "required": [
@@ -894,7 +900,8 @@
                   "cache_write_5m",
                   "cache_write_1h",
                   "output",
-                  "reasoning"
+                  "reasoning",
+                  "server_tool_request"
                 ],
                 "additionalProperties": false
               },

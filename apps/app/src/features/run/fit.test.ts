@@ -18,6 +18,7 @@ function metrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
   return {
     whole: true,
     tokens: null,
+    searches: null,
     priced: null,
     cost: null,
     costIsEstimate: false,

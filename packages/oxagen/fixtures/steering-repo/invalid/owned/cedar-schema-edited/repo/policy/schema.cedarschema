@@ -1,0 +1,61 @@
+// Written by Oxagen on publish, from the workspace's imported tools, the
+// built-in tool vocabulary, and the files in agents/. Do not edit.
+
+entity Workspace;
+
+// An agent is an operator, a runtime, and a harness, in one workspace.
+entity Agent in [Workspace] {
+  operator: String,
+  runtime: String,
+  harness: String
+};
+
+// What a call acts on: a repository, a connection, a cluster.
+entity Target;
+
+// The tool version, as tools.toml classifies it.
+type Tool = {
+  name: String,
+  version: Long,
+  risk: String,
+  side_effect: String,
+  egress: String,
+  impacts: Set<String>
+};
+
+// The call's own arguments. Each is optional, so a rule tests it with has first.
+type Args = {
+  amount?: Long,
+  charge_id?: String,
+  customer_id?: String,
+  refund_id?: String
+};
+
+type Call = {
+  tool: Tool,
+  args: Args,
+  approval: { granted: Bool, approvers: Long },
+  harness_tool?: String,
+  skill?: String
+};
+
+// One action per imported tool, and one per built-in tool.
+action "billing__list_charges",
+       "billing__get_charge",
+       "billing__create_refund",
+       "billing__get_refund",
+       "billing__list_refunds",
+       "billing__cancel_refund",
+       "stripe__list_charges",
+       "stripe__create_refund",
+       "builtin__read_file",
+       "builtin__search_files",
+       "builtin__write_file",
+       "builtin__web_fetch",
+       "builtin__web_search",
+       "builtin__start_subagent"
+  appliesTo {
+    principal: Agent,
+    resource: Target,
+    context: Call
+  };

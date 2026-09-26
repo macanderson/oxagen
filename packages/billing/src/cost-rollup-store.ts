@@ -23,6 +23,7 @@ import {
 } from "@oxagen/telemetry";
 import {
   MODEL_CALL_EVENT_TYPES,
+  subagentSessionsQuery,
   TOOL_CALL_EVENT_TYPES,
 } from "@oxagen/run-ledger";
 import {
@@ -49,6 +50,7 @@ import {
   type RunTotalsRecord,
   type TokenCounts,
   type ToolCallFrame,
+  ZERO_TOKENS,
 } from "./cost-rollup";
 import {
   loadPriceBookSlice,
@@ -247,9 +249,10 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
   if (publicId.startsWith("tse_")) {
     // tenancy: the scheduled rollup job runs outside a tenant scope and finds
     // the session by its globally unique public id; the agent join and the
-    // cost-center subquery are filtered by the session's own orgId.
-    const rows = await withSystemDb((tx) =>
-      tx
+    // cost-center subquery are filtered by the session's own orgId, and the
+    // subagent list by its orgId and workspaceId.
+    const found = await withSystemDb(async (tx) => {
+      const rows = await tx
         .select({
           sessionUuid: sessions.sessionUuid,
           orgId: sessions.orgId,
@@ -297,10 +300,31 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
             isNull(sessions.parentSessionUuid),
           ),
         )
-        .limit(1),
-    );
-    const row = rows[0];
-    if (!row) return null;
+        .limit(1);
+      const root = rows[0];
+      if (!root) return null;
+      // The run's chains: the root, then every subagent session under it in
+      // the run's own workspace. The frame reads name this list so they read
+      // the run's chains by the table's sort key rather than every chain the
+      // workspace holds (#4103). A chain that registers after this read is
+      // picked up by the next `cost.run-progress` rollup, or by the nightly
+      // sweep, which lists a run whose tree landed a batch after its row was
+      // written (`listRunsAwaitingRollup`).
+      const children = await subagentSessionsQuery(
+        tx,
+        { orgId: root.orgId, workspaceId: root.workspaceId },
+        root.sessionUuid,
+      );
+      return {
+        row: root,
+        sessionUuids: [
+          root.sessionUuid,
+          ...children.map((child) => child.sessionUuid),
+        ],
+      };
+    });
+    if (!found) return null;
+    const { row, sessionUuids } = found;
     return {
       meta: {
         runId: publicId,
@@ -320,7 +344,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
         enforcementTier: tier(row.enforcementTier),
         replayGrade: grade(row.replayGrade),
       },
-      frames: { kind: "tacho", rootSessionUuid: row.sessionUuid },
+      frames: { kind: "tacho", rootSessionUuid: row.sessionUuid, sessionUuids },
     };
   }
   return null;
@@ -365,6 +389,7 @@ function toFrame(row: ModelCallFrameRow): ModelCallFrame {
       cache_write_1h: row.cacheWrite1h,
       output: row.output,
       reasoning: row.reasoning,
+      server_tool_request: row.serverToolRequests,
     },
     reportedCostMicros:
       row.reportedCostMicros === null ? null : BigInt(row.reportedCostMicros),
@@ -431,7 +456,9 @@ export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
     steps: row.steps,
     modelCalls: row.modelCalls,
     toolCalls: row.toolCalls,
-    tokens: row.tokens as TokenCounts,
+    // A row rolled up before `server_tool_request` existed has no key for it.
+    // The rollup counted none then, so it reads as 0.
+    tokens: { ...ZERO_TOKENS, ...(row.tokens as Partial<TokenCounts>) },
     costMicros: row.costMicros,
     currency: row.currency,
     costBasis: row.costBasis as CostBasis | null,
@@ -446,6 +473,12 @@ export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
 }
 
 type ModelBreakdown = RunTotalsRecord["breakdown"]["models"][number];
+
+/** Every class at 0n. A stored split is revived over it. */
+const ZERO_COST_BY_CLASS = Object.fromEntries(
+  Object.keys(ZERO_TOKENS).map((c) => [c, 0n]),
+) as ModelBreakdown["costByClass"];
+
 type ModelBreakdownJson = Omit<
   ModelBreakdown,
   "costMicros" | "costByClass" | "cacheSavingMicros" | "hasUnpriced"
@@ -470,10 +503,17 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
   return {
     models: raw.models.map((m) => ({
       ...m,
+      // A row rolled up before `server_tool_request` existed has no key for
+      // it in either record. The rollup counted and priced none then, so both
+      // read as 0.
+      tokens: { ...ZERO_TOKENS, ...m.tokens },
       costMicros: m.costMicros === null ? null : BigInt(m.costMicros),
-      costByClass: Object.fromEntries(
-        Object.entries(m.costByClass).map(([k, v]) => [k, BigInt(v)]),
-      ) as ModelBreakdown["costByClass"],
+      costByClass: {
+        ...ZERO_COST_BY_CLASS,
+        ...Object.fromEntries(
+          Object.entries(m.costByClass).map(([k, v]) => [k, BigInt(v)]),
+        ),
+      } as ModelBreakdown["costByClass"],
       // A row rolled up before the saving was recorded carries no key. Its
       // saving was never priced, so it reads as not recorded, never as 0,
       // until the run's next rollup writes one.
@@ -698,6 +738,7 @@ const productionRunRollupDeps: RunRollupDeps = {
           orgId: source.meta.orgId,
           workspaceId: source.meta.workspaceId,
           rootSessionUuid: source.frames.rootSessionUuid,
+          sessionUuids: source.frames.sessionUuids,
         }),
   loadPriceBook: loadPriceBookSlice,
   readCarried,

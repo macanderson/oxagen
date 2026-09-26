@@ -1,0 +1,18 @@
+{
+  "check": "schema",
+  "rule": "enum-value",
+  "severity": "error",
+  "description": "force is not one of must, should, may, info.",
+  "refused_by_reader": true,
+  "changed": [
+    "steering/billing/a-intel.billing.refund-reasons.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/billing/a-intel.billing.refund-reasons.md",
+      "line": 7,
+      "field": "force"
+    }
+  ]
+}

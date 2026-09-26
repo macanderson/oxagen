@@ -1,0 +1,17 @@
+{
+  "check": "schema",
+  "rule": "skill-description-required",
+  "severity": "error",
+  "description": "A skill has no description, which harnesses need to choose it.",
+  "refused_by_reader": true,
+  "changed": [
+    "steering/skills/a-intel.platform.code-reviewer/SKILL.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/skills/a-intel.platform.code-reviewer/SKILL.md",
+      "field": "description"
+    }
+  ]
+}
