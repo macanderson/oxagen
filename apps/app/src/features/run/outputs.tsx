@@ -284,6 +284,7 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
                 ? "font-medium text-muted-foreground"
                 : "font-mono font-semibold text-foreground"
             }`}
+            title={node.name}
           >
             {node.name}
           </b>
