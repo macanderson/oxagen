@@ -123,6 +123,9 @@ describe("get_run contract", () => {
       observedAt: "2026-09-08T10:06:04.000Z",
       digest: `sha256:${"0".repeat(64)}`,
       summary: "read_file completed",
+      tool: "read_file",
+      toolStatus: "completed",
+      approvalId: null,
       body: {
         digest: `sha256:${"a".repeat(64)}`,
         bytesRef: "evb:v1:evidence:v1:" + "a".repeat(64),
