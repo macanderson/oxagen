@@ -51,8 +51,9 @@ export interface FrameIdentity {
   tool: string | null;
   /**
    * How the call ended, as its receipt words it: a tool call's outcome, and
-   * a ledger model call's (`completed`, `failed`, `cancelled`). A failed one
-   * answers the errors chip (`frameKinds`).
+   * a ledger model call's (`completed`, `failed`, `cancelled`). Any word in
+   * `FAILED_OUTCOMES`, a cancelled or timed-out call included, answers the
+   * errors chip (`frameKinds`).
    */
   toolStatus: string | null;
   model: string | null;

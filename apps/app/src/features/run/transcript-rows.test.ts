@@ -418,7 +418,11 @@ describe("a model step's rows", () => {
     expect(priced.map((row) => [row.kind, row.failed])).toEqual([
       ["usage", true],
     ]);
-    expect(rowsFrom([model({ kinds: [], outcome: "failed" })])).toEqual([]);
+    // The page reads `error`, never `outcome`: a step the server states is
+    // no error draws no failed row, whatever its outcome says.
+    expect(
+      rowsFrom([model({ kinds: [], outcome: "failed", error: false })]),
+    ).toEqual([]);
   });
 
   // Finding P2-3 of the ADR-182 third review: the server counts `thinking`

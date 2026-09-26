@@ -105,12 +105,23 @@ fold, and the client fold introduced with #3345.
   never hides a row that a live page already holds or takes it out of a
   count.
   A failure that will repeat is remembered for a minute: the store has no
-  object, its bytes no longer hash, or its key no longer opens it. Erasure
-  destroys the key and leaves the object, so the last case is how an erased
-  body reads. A kept digest answers only while its key still opens bodies,
-  which each read learns from the bodies it reads, reading one body again for
-  a key it has not read. So a process that read a run before erasure and one
-  that never did give the same answer, for at most one read per key.
+  object, its bytes no longer hash, its envelope does not open, or KMS says
+  its key cannot be used. Erasure destroys the key and leaves the object, so
+  the last case is how an erased body reads. A kept digest answers only while
+  its key still opens bodies, which each read learns from the bodies it
+  reads, reading one body again for a key it has not read. So a process that
+  read a run before erasure and one that never did give the same answer, for
+  at most one read per key. Only KMS refusing the key marks the key gone. A
+  body whose own envelope does not open fails only itself, because a
+  reference names the deployment's KEK and one damaged body says nothing
+  about the others.
+- A later read that settles a body can move its entry from shown to quiet,
+  for example a blank prompt whose first read timed out. A live tail does not
+  send that entry again until the view rebases, so the page keeps the row
+  until then. That is accepted: the count is right, and a row a reader
+  already holds does not vanish mid-read.
+- A ledger model call that ended `cancelled` or `timeout` now counts as an
+  error, as a tool call that ended that way already did.
 - A chip selects what the Run page draws under it, so a chip's count in
   `counts.kinds` is the count of what the chip shows. `prompt` is the
   operator's prompt and no longer a model call's request, `responses` takes

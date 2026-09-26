@@ -105,6 +105,7 @@ import {
 } from "@oxagen/run-ledger";
 import {
   BodyKeyGoneError,
+  BodyUnopenableError,
   type EvidenceStore,
   evidenceStore,
   parseEvidenceBodyRef,
@@ -148,6 +149,11 @@ import {
 const RECALL_BODY_MAX = 1_048_576;
 /** Bodies read at once. */
 const BODY_CONCURRENCY = 8;
+/**
+ * The most bytes of bodies and reassemblies one read holds so that a second
+ * ask for the same object is not a second read (`readEachOnce`).
+ */
+const BODY_HOLD_BYTES = 33_554_432;
 /**
  * The most halves one read reads for their words (`readWords`): about three
  * per turn, the prompt, the reply and the model step before the reply. An
@@ -374,7 +380,9 @@ function foldThrough(
  * text (`not_text`), the store has no such object or the bytes no longer hash
  * to the recorded digest (`gone`), the object is there and its key no longer
  * opens it, as after erasure (`erased`), or the read failed in a way that may
- * pass (`unread`).
+ * pass (`unread`). A body whose own envelope does not open while its key may
+ * still open others (`BodyUnopenableError`) reads as `gone`, like bytes that
+ * no longer hash.
  *
  * One body the store cannot answer (an object gone missing, a key id this
  * deployment no longer holds, a transient read failure) leaves its own half
@@ -388,16 +396,21 @@ type BodyRead =
 /**
  * What one read has learned about the keys its bodies are sealed under,
  * named by the key id in each body's reference: a key that opened a body
- * (`opened`), and one that no longer opens one (`gone`).
+ * (`opened`), and one KMS says no longer opens any (`gone`).
  *
- * Erasure destroys a key and leaves its bodies in the store (§13.5), so a
- * key that fails one body fails every body under it, and a key that opened
- * one body has not been destroyed. The words cache keeps what each body said
- * with no expiry, and that stays true after erasure; whether the body can
- * still be read does not. So what a read learns about its keys decides
- * whether a kept digest stands (`readWords`). It is learned per read and
- * never kept across reads, so a process that read a run before erasure
- * answers what a process that never read it answers.
+ * Erasure destroys a key and leaves its bodies in the store (§13.5). KMS
+ * then refuses the key itself (`BodyKeyGoneError`), so every body under it
+ * fails, and a key that opened a body has not been destroyed. One body whose
+ * own envelope does not open (`BodyUnopenableError`) says nothing about its
+ * key: a reference names the deployment's KEK, which seals every body, so
+ * that failure leaves this set alone and fails that body only.
+ *
+ * The words cache keeps what each body said with no expiry, and that stays
+ * true after erasure; whether the body can still be read does not. So what a
+ * read learns about its keys decides whether a kept digest stands
+ * (`readWords`). It is learned per read and never kept across reads, so a
+ * process that read a run before erasure answers what a process that never
+ * read it answers.
  */
 interface BodyKeys {
   opened: Set<string>;
@@ -406,6 +419,63 @@ interface BodyKeys {
 
 function bodyKeys(): BodyKeys {
   return { opened: new Set(), gone: new Set() };
+}
+
+type BodyReader = Pick<EvidenceStore, "getBody" | "getAssembly">;
+
+/**
+ * `bodies`, asked at most once per object for one read of one run.
+ *
+ * One read asks for the same body more than once. `readWords` reads the word
+ * halves before the page is cut, and reads one body again per key to learn
+ * the key still opens bodies; then `half` reads each half the page shows, and
+ * a recall entry's body is read for its half and again for its listing. Here
+ * each object is asked for once, and every later ask gets the same answer, a
+ * failure included, so a read never shows a half it could not read for its
+ * words, or the reverse.
+ *
+ * What it holds is bounded by `maxBytes`. An object that would take the held
+ * bytes past it is not held, and a later ask for it reads it again, so a read
+ * of 2,000 word halves holds at most that much. Make one per read: nothing
+ * held here is ever released.
+ */
+function readEachOnce(
+  bodies: BodyReader,
+  maxBytes: number = BODY_HOLD_BYTES,
+): BodyReader {
+  let heldBytes = 0;
+  const once = <T>(
+    ask: (scope: RunScope, ref: string) => Promise<T>,
+    sizeOf: (answer: T) => number,
+  ) => {
+    const held = new Map<string, Promise<T>>();
+    return (scope: RunScope, ref: string): Promise<T> => {
+      const key = `${scope.orgId}/${scope.workspaceId}/${ref}`;
+      const kept = held.get(key);
+      if (kept !== undefined) return kept;
+      const answer = ask(scope, ref);
+      held.set(key, answer);
+      void answer.then(
+        (value) => {
+          const size = sizeOf(value);
+          if (heldBytes + size > maxBytes) held.delete(key);
+          else heldBytes += size;
+        },
+        () => undefined,
+      );
+      return answer;
+    };
+  };
+  return {
+    getBody: once(
+      (scope, ref) => bodies.getBody(scope, ref),
+      (stored) => stored.bytes.byteLength,
+    ),
+    getAssembly: once(
+      (scope, ref) => bodies.getAssembly(scope, ref),
+      (bytes) => bytes?.byteLength ?? 0,
+    ),
+  };
 }
 
 /** The key id a frame's body reference names; null for a foreign reference. */
@@ -438,6 +508,13 @@ async function readBody(
         );
       }
       return { state: "erased" };
+    }
+    if (err instanceof BodyUnopenableError) {
+      logger.warn(
+        { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
+        "get_run_transcript: a frame body does not open; its half is shown without text",
+      );
+      return { state: "gone" };
     }
     logger.warn(
       { err, seq: frame.seq, type: frame.type, bytesRef: bodyRef },
@@ -573,15 +650,18 @@ async function half(
  *
  * A half `cache` holds costs no read. What each read says is kept in it. A
  * body that will fail again on a retry (the store says it is gone, it no
- * longer hashes, or its key no longer opens it) is kept as unreadable for
- * the cache's failure TTL and left out of the answer; a read that failed in
- * a way that may pass is not kept, and is tried again on the next read.
+ * longer hashes, it does not open, or its key no longer opens any body) is
+ * kept as unreadable for the cache's failure TTL and left out of the answer;
+ * a read that failed in a way that may pass is not kept, and is tried again
+ * on the next read.
  *
  * A kept digest answers only while its body's key still opens bodies, which
  * this read learns (`keys`) from the bodies it reads under that key. For a
  * key it reads no body under, one body is read again to find out. So after
  * erasure a process that kept digests answers what a process that never
- * read the run answers, at the cost of at most one read per key.
+ * read the run answers, at the cost of at most one read per key. A body read
+ * again that does not open fails only itself: its kept digest no longer
+ * answers, and every other body under its key still does.
  */
 export async function readWords(
   bodies: Pick<EvidenceStore, "getBody" | "getAssembly">,
@@ -637,6 +717,9 @@ export async function readWords(
     const keyId = keyIdOf(frame);
     return keyId !== null && keys.gone.has(keyId);
   };
+  // Bodies this read found will fail again. A kept digest of one of them no
+  // longer answers, as a read with no cache would not.
+  const failed = new Set<RunFrame>();
   const said = await mapConcurrent(
     reads,
     BODY_CONCURRENCY,
@@ -648,6 +731,7 @@ export async function readWords(
       }
       const body = await readBody(bodies, scope, frame, keys);
       if (body.state === "gone" || body.state === "erased") {
+        failed.add(frame);
         cache?.fail(scope, frame);
         return undefined;
       }
@@ -669,7 +753,7 @@ export async function readWords(
   });
   for (const { fold, frame, said: kept } of hits) {
     if (gone(frame)) cache?.fail(scope, frame);
-    else words.set(fold, wordsOf(fold, kept));
+    else if (!failed.has(frame)) words.set(fold, wordsOf(fold, kept));
   }
   return words;
 }
@@ -878,6 +962,8 @@ export function createRunTranscriptGetHandler(
     // (`BodyKeys`), so a kept digest whose body can no longer be read does
     // not count (`readWords`).
     const keys = bodyKeys();
+    // Every body this read asks for more than once is read once.
+    const bodies = readEachOnce(deps.bodies);
     // Which prompts and replies show nothing, and which reply repeats words
     // the reader was just shown, need their words. At `steps`, the zoom the
     // Run page draws rows from, they are read over the whole run, before the
@@ -905,7 +991,7 @@ export function createRunTranscriptGetHandler(
       input.zoom === "steps"
         ? all
         : steps.filter((step) => step.node === "prompt"),
-      (needed) => readWords(deps.bodies, scope, needed, { cache: words, keys }),
+      (needed) => readWords(bodies, scope, needed, { cache: words, keys }),
     );
     // Counted over every entry at the zoom, whatever the chips or query, so
     // a chip's count and the rows it shows agree. The frames' own policy and
@@ -939,7 +1025,7 @@ export function createRunTranscriptGetHandler(
             input.query,
             async (frame) => {
               const body = await half(
-                deps.bodies,
+                bodies,
                 scope,
                 frame,
                 TRANSCRIPT_TEXT_MAX,
@@ -1047,7 +1133,7 @@ export function createRunTranscriptGetHandler(
       BODY_CONCURRENCY,
       async (fold) => ({
         request: await half(
-          deps.bodies,
+          bodies,
           scope,
           fold.request,
           textMax,
@@ -1055,7 +1141,7 @@ export function createRunTranscriptGetHandler(
           keys,
         ),
         response: await half(
-          deps.bodies,
+          bodies,
           scope,
           fold.response,
           textMax,
@@ -1073,7 +1159,7 @@ export function createRunTranscriptGetHandler(
         fold.node === "recall"
           ? recallOf(
               fold.opening,
-              await recallBody(deps.bodies, scope, fold.opening),
+              await recallBody(bodies, scope, fold.opening),
             )
           : null,
     );

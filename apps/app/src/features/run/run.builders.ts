@@ -211,6 +211,8 @@ export function transcriptBody(
 export function transcriptEntry(
   overrides: Partial<TranscriptEntry> = {},
 ): TranscriptEntry {
+  const kinds = overrides.kinds ?? ["responses"];
+  const outcome = overrides.outcome === undefined ? "ok" : overrides.outcome;
   const entry: Omit<TranscriptEntry, "key"> = {
     seq: "11",
     endSeq: "14",
@@ -236,7 +238,10 @@ export function transcriptEntry(
     node: "model",
     quiet: false,
     outcome: "ok",
-    error: false,
+    // What the server states, by its own rule, unless the fixture says
+    // otherwise: an entry that failed, was refused or answers the errors
+    // chip is an error.
+    error: countsAsError({ outcome, kinds: new Set(kinds) }),
     approvalId: null,
     gates: [],
     subject: null,

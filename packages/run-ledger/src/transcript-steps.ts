@@ -1067,7 +1067,9 @@ export interface TranscriptCounts {
  * each entry states it (`error`), so a reader marks a row failed by the same
  * rule and keeps none of its own (ADR-182).
  */
-export function countsAsError(fold: TranscriptFold): boolean {
+export function countsAsError(
+  fold: Pick<TranscriptFold, "outcome" | "kinds">,
+): boolean {
   return (
     fold.outcome === "failed" ||
     fold.outcome === "denied" ||
