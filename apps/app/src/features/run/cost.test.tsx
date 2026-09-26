@@ -27,7 +27,6 @@ import {
   RELEASE_RUN_CLASSES,
   releaseRunCost,
   releaseRunTurns,
-  type TurnSpec,
 } from "./cost.builders";
 import { runMetrics } from "./metrics";
 import { NOW, runDetail, runOutputs, runRow, runSource } from "./run.builders";
@@ -50,6 +49,7 @@ vi.mock("./actions", () => ({
   exportRun: vi.fn(),
   readRunExport: vi.fn(),
 }));
+vi.mock("./fit-actions", () => ({ openFitChange: vi.fn() }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
@@ -301,17 +301,43 @@ describe("CostTab", () => {
     expect(screen.getByTestId("inst-calls")).toHaveTextContent("1 failed");
   });
 
-  it("reads the model fit, names the effort's reason, and offers no action on a run that fits", async () => {
-    await renderTab(props({ agentRead: agent() }));
-    const fit = screen.getByTestId("model-fit");
-    expect(fit).toHaveTextContent("generated · not the record");
+  // The reading is Oxagen's, stored on the run after the seal (ADR-194); the
+  // tab draws it and computes nothing. model-fit.test.tsx holds each card.
+  it("draws the stored Model fit reading of a sealed run, and the effort the record holds", async () => {
+    const run = runRow({
+      ...RELEASE_RUN,
+      status: "sealed",
+      outcome: "completed",
+      sealedAt: new Date(NOW).toISOString(),
+      effort: "high",
+      effortSource: "request",
+      fit: {
+        method: "run-fit/v1",
+        readAt: new Date(NOW).toISOString(),
+        sealedAt: new Date(NOW).toISOString(),
+        read: {
+          prompts: 2,
+          turns: 7,
+          steps: 24,
+          failed: 1,
+          outputTokens: 12_000,
+          reasoningTokens: 900,
+        },
+        model: { verdict: "fit", tier: "opus" },
+        effort: { verdict: "fit", effort: "high", source: "request" },
+      },
+    });
+    await renderTab(props({ run, agentRead: agent() }));
+    expect(screen.getByTestId("model-fit")).toHaveTextContent(
+      "generated · not the record",
+    );
     expect(screen.getByTestId("fit-model-card")).toHaveTextContent(
       "The opus class matches this shape of work.",
     );
-    expect(screen.queryByTestId("fit-move")).toBeNull();
     expect(screen.getByTestId("fit-effort-card")).toHaveTextContent(
-      "no contract records the setting from the request body yet",
+      "Effort high, read from the model request, fits this run.",
     );
+    expect(screen.queryByTestId("fit-change-model")).toBeNull();
     const read = screen.getByTestId("fit-read");
     expect(read).toHaveTextContent(
       "2 prompts · 7 turns · 24 steps · 1 tool call failed",
@@ -319,116 +345,18 @@ describe("CostTab", () => {
     expect(read).toHaveTextContent(".oxagen/agents/release-manager.toml");
   });
 
-  it("argues one rung down for a small first-try run, and draws the move as a stub that says what it would do", async () => {
-    const run = runRow({
-      ...RELEASE_RUN,
-      turns: 2,
-      steps: 5,
-      model: { slug: "claude-sonnet-5", provider: "anthropic", tier: "sonnet" },
-      enforcementTier: "harness",
-    });
-    const turns: TurnSpec[] = [
-      {
-        prompt: true,
-        steps: [
-          {
-            kind: "model",
-            micros: "120000",
-            ms: 4_000,
-            cacheRead: 10_000,
-            inputUncached: 2_000,
-          },
-          { kind: "tools", calls: [{ name: "Read", ms: 500 }] },
-        ],
-      },
-      {
-        prompt: false,
-        steps: [
-          {
-            kind: "model",
-            micros: "90000",
-            ms: 3_000,
-            cacheRead: 12_000,
-            inputUncached: 1_000,
-          },
-        ],
-      },
-    ];
-    await renderTab(
-      props({
-        run,
-        transcript: readOk(costTranscript(turns)),
-        agentRead: agent({
-          definition: {
-            path: ".oxagen/agents/release.toml",
-            digest: "sha256:ab",
-            commitSha: "4f1c2d9",
-            branch: "main",
-            pullRequestUrl: "https://github.com/acme/platform/pull/12",
-            source: "",
-            committedAt: "2026-09-10T10:00:00.000Z",
-          },
-        }),
-      }),
+  it("draws no reading for a live run, and says the gateway run's request carried no effort (negative)", async () => {
+    await renderTab(props());
+    expect(screen.getByTestId("fit-model-card")).toHaveTextContent(
+      "The run is still open. Oxagen reads it once it seals.",
     );
-    const card = screen.getByTestId("fit-model-card");
-    expect(card.dataset.verdict).toBe("over");
-    expect(card).toHaveTextContent("Wrong model tier");
-    expect(card).toHaveTextContent(
-      "This run landed in 2 turns and 5 steps, first try, with no tool call failing. The reading argues for the haiku class, one rung down the same family.",
-    );
-    const move = screen.getByRole("button", {
-      name: "Move this agent to haiku",
-    });
-    expect(move).toBeDisabled();
-    expect(move).toHaveAccessibleDescription(
-      "Opens a Context pull request against .oxagen/agents/release.toml. No contract opens one from this page yet.",
-    );
-    // At the harness tier the call never passed through Oxagen.
     expect(screen.getByTestId("fit-effort-card")).toHaveTextContent(
-      "The model call did not go through Oxagen, so the request body was never read.",
-    );
-  });
-
-  it("argues one rung up for a run that took more than one prompt on a small class", async () => {
-    const run = runRow({
-      ...RELEASE_RUN,
-      model: { slug: "claude-haiku-4-5", provider: "anthropic", tier: "haiku" },
-    });
-    await renderTab(props({ run }));
-    const card = screen.getByTestId("fit-model-card");
-    expect(card.dataset.verdict).toBe("under");
-    expect(card).toHaveTextContent(
-      "This run took 2 prompts to land on the haiku class, and 1 tool call failed. The reading argues for the sonnet class, one rung up the same family.",
-    );
-    // No agent was read, so the stub names the definition without a path.
-    expect(
-      screen.getByRole("button", { name: "Move this agent to sonnet" }),
-    ).toHaveAccessibleDescription(
-      "Opens a Context pull request against the agent definition. No contract opens one from this page yet.",
-    );
-  });
-
-  it("claims no rung for a model the ladder does not know, and no reading for a sealed run read short (negative)", async () => {
-    await renderTab(props({ run: runRow({ ...RELEASE_RUN, model: null }) }));
-    expect(screen.getByTestId("fit-model-card")).toHaveTextContent(
-      "The run records no model class",
-    );
-    cleanup();
-    const cut = costTranscript(releaseRunTurns());
-    await renderTab(
-      props({
-        run: runRow({ ...RELEASE_RUN, sealedAt: new Date(NOW).toISOString() }),
-        transcript: readOk({ ...cut, cursor: "next", complete: false }),
-      }),
-    );
-    expect(screen.getByTestId("fit-model-card")).toHaveTextContent(
-      "the record does not carry all four yet",
+      "This agent sent no effort setting, so the model used its own default.",
     );
     expect(screen.getByTestId("fit-read")).toHaveTextContent(
       "There is no reading for this run.",
     );
-    expect(screen.queryByTestId("fit-move")).toBeNull();
+    expect(screen.queryByTestId("fit-change-model")).toBeNull();
   });
 
   it("says not recorded wherever the record carries nothing, and never prints a figure for it (negative)", async () => {

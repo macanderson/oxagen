@@ -10,7 +10,7 @@ import type { MandateList } from "@/data/contracts/mandates";
 import type { Read } from "@/data/read";
 import type { SafePath } from "@/shared/safe-path";
 import { DefinitionForm } from "./definition-form";
-import { definitionSeed } from "./definition-seed";
+import { definitionSeed } from "@/shared/agent-definition-seed";
 
 export function DefinitionSection({
   detail,

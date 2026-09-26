@@ -1,4 +1,5 @@
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
+import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
 import {
   registerHandler,
@@ -50,6 +51,19 @@ registerHandlersOnce("@oxagen/handlers", () => {
       headSha: out.headSha,
       retryAfterSeconds: out.retryAfterSeconds,
     };
+  });
+  // The durable Model fit reading (#3893, ADR-194) reads the run the way the
+  // Run page does, through this package, which @oxagen/inngest-functions
+  // cannot import. The reader is installed here and loaded on the first run.
+  setRunFitRunner(async (scope, runPublicId) => {
+    const [{ runInTenantScope }, fit] = await Promise.all([
+      import("@oxagen/tenancy"),
+      import("./lib/run-fit"),
+    ]);
+    const out = await runInTenantScope(scope, () =>
+      fit.writeRunFitReading(fit.defaultRunFitDeps(), scope, runPublicId),
+    );
+    return out.outcome;
   });
   registerHandler("get_run_issue_providers", () =>
     import("./run.issue.providers.get").then(

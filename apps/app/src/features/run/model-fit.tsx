@@ -1,33 +1,40 @@
 // Model fit, first on the Cost tab (pages/run.md, Model fit; the mockup's
 // `runFitPanel`): whether the model class and the effort setting were the
-// right size for this run, one card each, read by `runFit`, the same reading
-// the rig strip's badges print, so the two cannot disagree.
+// right size for this run, one card each. Both cards draw `run.fit`, the
+// reading Oxagen computed from the record after the seal (ADR-194), the same
+// reading the rig strip's badges print, so the two cannot disagree.
 //
 // The panel is generated, not the record, and says so in its badge. A reading
 // names a capability class, never a model id, and changes nothing on its own:
-// moving an agent is a Context pull request against its definition file, and
-// a sealed run keeps the model it ran on. No contract opens that pull request
-// from this page yet, so the card's action is drawn as a stub that says what
-// it would do, never a control that silently does nothing.
+// a card that argues for a move offers it as a Context pull request against
+// the agent's definition file (`fit-change.tsx`), and a sealed run keeps the
+// model it ran on.
 //
-// Effort is never captured today (`fit.ts`, `EffortFit`), so its card names
-// why and offers nothing.
+// The effort card prints the effort the record holds, from the helper the rig
+// prints it from, and the reading's verdict beside it only where the reading
+// read that same value.
 import { useTranslations } from "next-intl";
 import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
+import type { OrgRole } from "@/server/viewer";
 import { Badge } from "@/ui/badge";
-import { buttonSecondary, mono } from "@/ui/control-styles";
-import { type FitRead, type ModelFit, runFit } from "./fit";
-import type { RunMetrics } from "./metrics";
+import { mono } from "@/ui/control-styles";
+import {
+  effortVerdict,
+  fitOf,
+  type FitRead,
+  type ModelFit,
+  runEffort,
+} from "./fit";
+import { definitionPath, FitChange } from "./fit-change";
 import { Note, Panel, PanelBody } from "./parts";
-
-/** `.btn.sm { padding:4px 9px; font-size:12px; border-radius:7px }` */
-const buttonSmall = `${buttonSecondary} min-h-7 rounded-[7px] px-[9px] py-1 text-xs`;
+import type { Place } from "./tab-props";
 
 /** `.panel-b b` over `p.muted { margin:6px 0 0; font-size:12.5px }`: a card's title and its reading. */
 const cardTitle = "m-0 text-sm font-bold text-foreground";
 const cardReading = "mb-0 mt-1.5 text-[12.5px] text-muted-foreground";
+const cardAction = "mt-2.5";
 
 /**
  * The file a reading argues against: the path the agent's last committed
@@ -37,33 +44,46 @@ const cardReading = "mb-0 mt-1.5 text-[12.5px] text-muted-foreground";
  */
 function definitionFile(agent: Read<AgentDetail> | null): string | null {
   if (agent === null || !agent.ok) return null;
-  const { definition, identity } = agent.value;
-  return definition?.path ?? `.oxagen/agents/${identity.slug}.toml`;
+  return definitionPath(agent.value.identity, agent.value.definition);
 }
 
+type Move = {
+  agent: Read<AgentDetail> | null;
+  place: Place;
+  orgRole: OrgRole;
+};
+
 function ModelCard({
+  run,
   model,
   read,
-  tier,
-  file,
+  live,
+  move,
 }: {
+  run: RunRow;
   model: ModelFit | null;
   read: FitRead | null;
-  tier: string | null;
-  file: string | null;
+  /** No reading exists for this run: it is live, or its reading is not stored yet. */
+  live: boolean | null;
+  move: Move;
 }) {
   const t = useTranslations("run.cost.fit");
+  const tier = run.model?.tier ?? null;
   if (model === null || read === null) {
     return (
       <PanelBody>
         <div data-testid="fit-model-card">
           <h4 className={cardTitle}>{t("modelTier")}</h4>
           <p className={cardReading}>
-            {read === null
-              ? t("noRead")
-              : tier === null
-                ? t("noTier")
-                : t("noLadder", { tier })}
+            {live === true
+              ? t("live")
+              : live === false
+                ? t("pending")
+                : read === null
+                  ? t("noRead")
+                  : tier === null
+                    ? t("noTier")
+                    : t("noLadder", { tier })}
           </p>
         </div>
       </PanelBody>
@@ -84,7 +104,7 @@ function ModelCard({
       <div data-testid="fit-model-card" data-verdict={model.verdict}>
         <div className="flex flex-wrap items-center gap-[9px]">
           <h4 className={cardTitle}>{t("wrongTier")}</h4>
-          <Badge tone="approval">{t("wrongTier")}</Badge>
+          <Badge tone="approval">{t(`modelVerdict.${model.verdict}`)}</Badge>
         </div>
         <p className={cardReading}>
           {model.verdict === "over"
@@ -100,28 +120,80 @@ function ModelCard({
                 suggest: model.suggest,
               })}
         </p>
-        <div className="mt-2.5 flex flex-wrap items-center gap-[9px]">
-          {/* A stub: no contract opens the pull request from this page yet, so
-              the button is disabled and the line beside it says what it would do. */}
-          <button
-            type="button"
-            disabled
-            aria-describedby="run-fit-move-why"
-            data-testid="fit-move"
-            className={buttonSmall}
-          >
-            {t("move", { suggest: model.suggest })}
-          </button>
-          <span
-            id="run-fit-move-why"
-            className="min-w-0 text-[11.5px] text-muted-foreground"
-          >
-            {t.rich("moveStub", {
-              file: () => (
-                <span className={mono}>{file ?? t("fileFallback")}</span>
-              ),
-            })}
-          </span>
+        <div className={cardAction}>
+          <FitChange
+            kind="model"
+            today={run.model?.slug ?? model.tier}
+            suggest={model.suggest}
+            {...move}
+          />
+        </div>
+      </div>
+    </PanelBody>
+  );
+}
+
+function EffortCard({ run, move }: { run: RunRow; move: Move }) {
+  const t = useTranslations("run.cost.fit");
+  const effort = runEffort(run);
+  const verdict = effortVerdict(run);
+  if (!effort.seen) {
+    return (
+      <PanelBody>
+        <div data-testid="fit-effort-card" data-verdict="unseen">
+          <h4 className={cardTitle}>{t(`effortTitle.${effort.why}`)}</h4>
+          <p className={cardReading}>{t(`effortWhy.${effort.why}`)}</p>
+        </div>
+      </PanelBody>
+    );
+  }
+  const source = t(`effortSource.${effort.source}`);
+  if (verdict === null || verdict.verdict === "fit") {
+    return (
+      <PanelBody>
+        <div
+          data-testid="fit-effort-card"
+          data-verdict={verdict === null ? "none" : "fit"}
+        >
+          <h4 className={cardTitle}>
+            {verdict === null ? t("effort") : t("effortFit")}
+          </h4>
+          <p className={cardReading}>
+            {verdict === null
+              ? t("effortNoVerdict", { effort: effort.value, source })
+              : t("effortFitSay", { effort: effort.value, source })}
+          </p>
+        </div>
+      </PanelBody>
+    );
+  }
+  return (
+    <PanelBody>
+      <div data-testid="fit-effort-card" data-verdict={verdict.verdict}>
+        <div className="flex flex-wrap items-center gap-[9px]">
+          <h4 className={cardTitle}>{t("wrongEffort")}</h4>
+          <Badge tone="approval">{t(`effortVerdict.${verdict.verdict}`)}</Badge>
+        </div>
+        <p className={cardReading}>
+          {verdict.verdict === "over"
+            ? t("effortOverSay", {
+                effort: effort.value,
+                source,
+                suggest: verdict.suggest,
+              })
+            : t("effortUnderSay", {
+                effort: effort.value,
+                source,
+                suggest: verdict.suggest,
+              })}
+        </p>
+        <div className={cardAction}>
+          <FitChange
+            kind="effort"
+            today={effort.value}
+            suggest={verdict.suggest}
+            {...move}
+          />
         </div>
       </div>
     </PanelBody>
@@ -130,19 +202,24 @@ function ModelCard({
 
 export function ModelFitPanel({
   run,
-  metrics,
   agent,
+  place,
+  orgRole,
 }: {
   run: RunRow;
-  metrics: RunMetrics;
   agent: Read<AgentDetail> | null;
+  place: Place;
+  /** The viewer's organization role: the change is refused below Member. */
+  orgRole: OrgRole;
 }) {
   const t = useTranslations("run.cost.fit");
   const tRun = useTranslations("run");
-  const fit = runFit(run, metrics);
+  const fit = fitOf(run);
   const file = definitionFile(agent);
   const fileNode = () =>
     file === null ? t("fileFallback") : <span className={mono}>{file}</span>;
+  const move = { agent, place, orgRole };
+  const read = fit?.read ?? null;
   return (
     <Panel
       title={t("title")}
@@ -155,26 +232,22 @@ export function ModelFitPanel({
       }
     >
       <ModelCard
-        model={fit.model}
-        read={fit.read}
-        tier={run.model?.tier ?? null}
-        file={file}
+        run={run}
+        model={fit?.model ?? null}
+        read={read}
+        live={fit === null ? run.status === "live" : null}
+        move={move}
       />
-      <PanelBody>
-        <div data-testid="fit-effort-card">
-          <h4 className={cardTitle}>{t("effort")}</h4>
-          <p className={cardReading}>{t(`effortWhy.${fit.effort.why}`)}</p>
-        </div>
-      </PanelBody>
+      <EffortCard run={run} move={move} />
       <PanelBody>
         <Note testId="fit-read">
-          {fit.read === null
+          {read === null
             ? t.rich("readNone", { file: fileNode })
             : t.rich("read", {
-                prompts: fit.read.prompts,
-                turns: fit.read.turns,
-                steps: fit.read.steps,
-                failed: fit.read.failed,
+                prompts: read.prompts,
+                turns: read.turns,
+                steps: read.steps,
+                failed: read.failed,
                 file: fileNode,
               })}
         </Note>

@@ -116,6 +116,7 @@ describe("toRunPage", () => {
           reportedTokens: null,
           effort: null,
           effortSource: null,
+          fit: null,
           thinking: null,
           permissionMode: null,
           model: null,
@@ -271,6 +272,29 @@ describe("toRunPage", () => {
       "harness",
     ]);
     expect(page.runs[0]).toMatchObject({ effort: "high" });
+  });
+
+  it("carries the Model fit reading get_run stored, with its provenance (#3893)", () => {
+    const fit: NonNullable<Run["fit"]> = {
+      method: "run-fit/v1",
+      readAt: "2026-09-15T08:45:00.000Z",
+      sealedAt: "2026-09-15T08:40:00.000Z",
+      read: {
+        prompts: 1,
+        turns: 12,
+        steps: 40,
+        failed: 0,
+        outputTokens: 900,
+        reasoningTokens: 0,
+      },
+      model: null,
+      effort: { verdict: "unseen", why: "not_sent" },
+    };
+    const page = toRunPage({ runs: [{ ...ledgerRun, fit }], nextCursor: null });
+    expect(RunPage.parse(page).runs[0]?.fit).toEqual(fit);
+    // A list_runs row leaves it out, and the view reads no reading.
+    const listed = toRunPage({ runs: [ledgerRun], nextCursor: null });
+    expect(listed.runs[0]?.fit).toBeNull();
   });
 
   it("maps an empty page to an empty page", () => {

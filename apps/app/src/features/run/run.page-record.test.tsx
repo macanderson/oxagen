@@ -47,6 +47,7 @@ vi.mock("./actions", () => ({
   readRunExport: vi.fn(),
   sealRun: vi.fn(),
 }));
+vi.mock("./fit-actions", () => ({ openFitChange: vi.fn() }));
 vi.mock("next-intl/server", async () => {
   const { translator } = await import("@/test/intl");
   return { getTranslations: (namespace?: string) => translator(namespace) };

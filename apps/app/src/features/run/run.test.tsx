@@ -93,6 +93,7 @@ vi.mock("./actions", () => ({
   readRunExport: vi.fn(),
   sealRun: vi.fn(),
 }));
+vi.mock("./fit-actions", () => ({ openFitChange: vi.fn() }));
 vi.mock("next-intl/server", async () => {
   const { translator } = await import("@/test/intl");
   return { getTranslations: (namespace?: string) => translator(namespace) };
@@ -490,6 +491,109 @@ describe("header", () => {
     expect(chip).toHaveAttribute("title", title);
     await expectNoAxe(container);
   });
+
+  /** A stored reading of a sealed run: a class too heavy and an effort that fits. */
+  const READING: NonNullable<RunRow["fit"]> = {
+    method: "run-fit/v1",
+    readAt: "2026-09-15T08:45:00.000Z",
+    sealedAt: "2026-09-15T08:40:00.000Z",
+    read: {
+      prompts: 1,
+      turns: 2,
+      steps: 5,
+      failed: 0,
+      outputTokens: 1_000,
+      reasoningTokens: 100,
+    },
+    model: { verdict: "over", tier: "sonnet", suggest: "haiku" },
+    effort: { verdict: "fit", effort: "high", source: "request" },
+  };
+
+  it("draws the rig's fit badges from the stored reading (#3893)", async () => {
+    const { container } = await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            effort: "high",
+            effortSource: "request",
+            fit: READING,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const rig = within(screen.getByTestId("run-rig"));
+    expect(rig.getByTestId("run-fit-model")).toHaveTextContent(
+      "Wrong model tier",
+    );
+    expect(rig.getByTestId("run-fit-effort")).toHaveTextContent("Effort fit");
+    await expectNoAxe(container);
+  });
+
+  it("draws no fit badge on a live run, and no effort badge for an effort the reading did not see (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            outcome: "running",
+            sealedAt: null,
+            effort: "high",
+            effortSource: "request",
+            fit: READING,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByTestId("run-fit-model")).toBeNull();
+    expect(screen.queryByTestId("run-fit-effort")).toBeNull();
+    cleanup();
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            effort: null,
+            fit: {
+              ...READING,
+              effort: { verdict: "unseen", why: "not_proxied" },
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-fit-model")).toBeTruthy();
+    expect(screen.queryByTestId("run-fit-effort")).toBeNull();
+  });
+
+  it.each<[string, Partial<RunRow>, string, string]>([
+    [
+      "a recorded effort",
+      { effort: "high", effortSource: "request", fit: READING },
+      "effort high",
+      "Effort high, read from the model request, fits this run.",
+    ],
+    [
+      "no effort on a gateway run",
+      { effort: null, effortSource: null, enforcementTier: "gateway" },
+      "effort not captured",
+      "This agent sent no effort setting, so the model used its own default.",
+    ],
+  ])(
+    "prints the same effort on the rig and on the Cost tab's effort card: %s (regression #3893)",
+    async (_case, row, rig, card) => {
+      await renderRun(
+        {
+          detail: ok(runDetail({ run: runRow(row) })),
+          transcript: ok(runTranscript()),
+        },
+        { tab: "cost" },
+      );
+      expect(screen.getByTestId("run-effort")).toHaveTextContent(rig);
+      expect(screen.getByTestId("fit-effort-card")).toHaveTextContent(card);
+    },
+  );
 
   it("reads the agent's 30-day runs and spend onto its card, and leaves them off when the roster does not hold it", async () => {
     await renderRun({

@@ -23,7 +23,8 @@ import {
   type RunGetOutput,
 } from "@oxagen/oxagen/contracts/run.get";
 import type { RunFrame } from "@oxagen/run-ledger";
-import { invalidCursor, microsString } from "./run.list";
+import { invalidCursor, microsString, runScope } from "./run.list";
+import { readStoredFit, storedFitOf } from "./lib/run-fit";
 import {
   readSessionConfig,
   readSessionTitle,
@@ -115,6 +116,8 @@ export type RunGetDeps = RunReadDeps & {
   sessionTitle: typeof readSessionTitle;
   /** The session's latest effort and thinking settings. */
   sessionConfig: typeof readSessionConfig;
+  /** The run's stored Model fit columns (#3893); null when it has no row. */
+  storedFit: typeof readStoredFit;
 };
 
 export function createRunGetHandler(
@@ -167,6 +170,29 @@ export function createRunGetHandler(
             }),
           ])
         : Promise.resolve([null, null] as const);
+    // The Model fit reading is of a seal, so a live run reads none. A failed
+    // read leaves the reading off rather than failing the page (#3893).
+    const sealedAt = run.item.status === "live" ? null : run.item.sealedAt;
+    const fit =
+      sealedAt === null
+        ? Promise.resolve(null)
+        : deps
+            .storedFit(
+              runScope(ctx),
+              run.source === "ledger"
+                ? { source: "ledger", runId: run.runId }
+                : { source: "tacho", publicId: run.item.id },
+            )
+            .then(
+              (stored) => storedFitOf(stored, sealedAt),
+              (err: unknown) => {
+                logger.warn(
+                  { err, runId: input.runId },
+                  "get_run: the run's Model fit reading could not be read",
+                );
+                return null;
+              },
+            );
     // One frame past the page tells a full page from the end of the recording.
     // A sealed run whose page had nothing behind it answers no cursor, because
     // nothing will ever lie past it; a live run keeps its resume point, since
@@ -177,8 +203,9 @@ export function createRunGetHandler(
     // small bounded read was the one it picked for the Run stream and the
     // assistant alike (#4243). The page comes back empty and says why, with no
     // cursor, so a caller keeps its own and nobody reads the run as sealed.
-    const [[title, config], read] = await Promise.all([
+    const [[title, config], reading, read] = await Promise.all([
       header,
+      fit,
       poll(
         run,
         cursor ?? startCursorSeq(run),
@@ -208,6 +235,7 @@ export function createRunGetHandler(
         // it was read (#3891). The fit reading reads it the same way.
         ...runEffortOf(config, run.item.effort),
         ...(config === null ? {} : { thinking: config.thinking }),
+        fit: reading,
       },
       frames: {
         frames: frames.map(toFrame),
@@ -234,6 +262,7 @@ export function defaultRunGetDeps(): RunGetDeps {
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     sessionTitle: readSessionTitle,
     sessionConfig: readSessionConfig,
+    storedFit: readStoredFit,
   };
 }
 

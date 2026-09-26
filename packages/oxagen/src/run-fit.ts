@@ -136,14 +136,103 @@ export interface RunFitInput {
   read: RunFitRead | null;
 }
 
+/** A run this short, landed first try, is a small job for any model. */
+const SMALL_TURNS = 3;
+const SMALL_STEPS = 12;
+
+/**
+ * The share of output a first-try run may spend reasoning before the reading
+ * argues for less effort: the mockup's `runFit` bound (engine.js:2369).
+ */
+const REASONING_SHARE_OVER = 0.2;
+
+/** The longest effort word the reading stores: the schema's bound. */
+const EFFORT_MAX = 32;
+
+/** Where a value sits on the first ladder that holds it, or null. */
+function rungOf(
+  ladders: readonly (readonly string[])[],
+  value: string | null,
+): { ladder: readonly string[]; rank: number } | null {
+  if (value === null) return null;
+  for (const ladder of ladders) {
+    const rank = ladder.indexOf(value);
+    if (rank !== -1) return { ladder, rank };
+  }
+  return null;
+}
+
+/** The operator prompted again, or a tool call failed: the run was redone. */
+const redone = (read: RunFitRead): boolean =>
+  read.prompts > 1 || read.failed > 0;
+
+/**
+ * The model class verdict. Down a rung when a small job landed first try;
+ * up a rung when the run had to be redone, whatever its size, because a
+ * retry outweighs a short run. Anything else fits, and so does a class at
+ * the end of its ladder, where no rung is left to argue for.
+ */
+function modelFit(tier: string | null, read: RunFitRead): RunModelFit | null {
+  const rung = rungOf(MODEL_CLASS_LADDERS, tier);
+  if (tier === null || rung === null) return null;
+  const small = read.turns <= SMALL_TURNS || read.steps <= SMALL_STEPS;
+  const lower = rung.ladder[rung.rank - 1];
+  const higher = rung.ladder[rung.rank + 1];
+  if (!redone(read) && small && lower !== undefined)
+    return { verdict: "over", tier, suggest: lower };
+  if (redone(read) && higher !== undefined)
+    return { verdict: "under", tier, suggest: higher };
+  return { verdict: "fit", tier };
+}
+
+/**
+ * The effort verdict, following the mockup's rule (engine.js:2360-2383).
+ * Less effort when a first-try run still spent more than a fifth of its
+ * output reasoning; more effort when the run was redone. `fit` names no
+ * move: it is also the answer for an effort the ladder does not hold (an
+ * Anthropic `xhigh` or `max`) and for a run whose figures were not read,
+ * because neither leaves a rung the record can argue for.
+ */
+function effortFit(input: RunFitInput): RunEffortFit {
+  if (input.effort === null || input.effort.trim() === "")
+    return {
+      verdict: "unseen",
+      why: input.proxied ? "not_sent" : "not_proxied",
+    };
+  const effort = input.effort.trim().slice(0, EFFORT_MAX);
+  const source = input.effortSource ?? "harness";
+  const { read } = input;
+  const rung = rungOf(EFFORT_LADDERS, effort);
+  if (read === null || rung === null)
+    return { verdict: "fit", effort, source };
+  const lower = rung.ladder[rung.rank - 1];
+  const higher = rung.ladder[rung.rank + 1];
+  const reasoned =
+    read.outputTokens !== null &&
+    read.reasoningTokens !== null &&
+    read.outputTokens > 0 &&
+    read.reasoningTokens > REASONING_SHARE_OVER * read.outputTokens;
+  if (!redone(read) && reasoned && lower !== undefined)
+    return { verdict: "over", effort, source, suggest: lower };
+  if (redone(read) && higher !== undefined)
+    return { verdict: "under", effort, source, suggest: higher };
+  return { verdict: "fit", effort, source };
+}
+
 /**
  * The reading for one sealed run. Pure: the caller reads the record and
- * stores the answer.
+ * stores the answer with its provenance.
  *
- * The Effort and tools lane writes the rule (#3893), ported from the app's
- * `features/run/fit.ts` and the mockup's effort rule. Until then it refuses,
- * and nothing calls it.
+ * The model verdict needs the figures and a class on a known ladder, and is
+ * null without either. The effort verdict is never null: with no effort in
+ * the record it says why none was seen.
  */
-export function runFit(_input: RunFitInput): RunFitReading {
-  throw new Error("runFit: not implemented (#3893)");
+export function runFit(input: RunFitInput): RunFitReading {
+  const effort = effortFit(input);
+  if (input.read === null) return { read: null, model: null, effort };
+  return {
+    read: input.read,
+    model: modelFit(input.tier, input.read),
+    effort,
+  };
 }

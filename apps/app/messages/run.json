@@ -292,12 +292,59 @@
         "noRead": "The reading needs the run's prompts, turns, steps, and failed tool calls, and the record does not carry all four yet.",
         "noTier": "The run records no model class, so the reading has no rung to argue for.",
         "noLadder": "Oxagen places the {tier} class on no capability ladder, so the reading has no rung to argue for.",
-        "move": "Move this agent to {suggest}",
-        "moveStub": "Opens a Context pull request against <file></file>. No contract opens one from this page yet.",
+        "live": "The run is still open. Oxagen reads it once it seals.",
+        "pending": "Oxagen has not read this seal yet. The reading is written a few minutes after the run seals.",
+        "modelVerdict": {
+          "over": "Heavier than needed",
+          "under": "Lighter than needed"
+        },
         "fileFallback": "the agent definition",
+        "effortTitle": {
+          "not_proxied": "Effort not captured",
+          "not_sent": "No effort setting"
+        },
         "effortWhy": {
           "not_proxied": "Oxagen did not capture the effort setting for this run. The model call did not go through Oxagen, so the request body was never read. Oxagen reads it only where it proxies the call, at the gateway and contained tiers.",
           "not_sent": "This agent sent no effort setting, so the model used its own default. The call went through Oxagen, and its request body carried none."
+        },
+        "effortSource": {
+          "request": "read from the model request",
+          "harness": "reported by the harness"
+        },
+        "effortFit": "Effort fits this run",
+        "wrongEffort": "Wrong effort setting",
+        "effortVerdict": {
+          "over": "More effort than needed",
+          "under": "Less effort than needed"
+        },
+        "effortNoVerdict": "Effort {effort}, {source}.",
+        "effortFitSay": "Effort {effort}, {source}, fits this run. Nothing in the record argues for moving it either way.",
+        "effortOverSay": "This run landed first try at effort {effort}, {source}, and still spent more than a fifth of its output reasoning. The reading argues for effort {suggest}, one level down.",
+        "effortUnderSay": "This run was redone at effort {effort}, {source}: the operator prompted again or a tool call failed. The reading argues for effort {suggest}, one level up, where the model reasons before it acts.",
+        "change": {
+          "move": "Move this agent to {suggest}",
+          "setEffort": "Set effort to {suggest}",
+          "noAgent": "The agent was not read, so its definition file is not known.",
+          "roleReason": "Opening a pull request against an agent's definition needs an organization Owner, Admin or Member role.",
+          "why": {
+            "model": "A Model fit reading of {run} found the model class was the wrong size for the work.",
+            "effort": "A Model fit reading of {run} found the effort setting was the wrong size for the work."
+          },
+          "agent": "Agent",
+          "file": "File",
+          "today": "Today",
+          "proposed": "Proposed",
+          "effect": "Effect per run",
+          "effectNotRecorded": "not recorded",
+          "merge": "Nothing changes until somebody merges this pull request. Every sealed run keeps the model and effort it ran on.",
+          "open": "Open the pull request",
+          "pending": "Opening the pull request",
+          "opened": "Opened <pr></pr>. It changes nothing until somebody merges it.",
+          "close": "Close",
+          "message": {
+            "model": "{agent}: model {suggest}",
+            "effort": "{agent}: effort {suggest}"
+          }
         },
         "read": "Read from this run only: {prompts, plural, one {# prompt} other {# prompts}} · {turns, plural, one {# turn} other {# turns}} · {steps, plural, one {# step} other {# steps}} · {failed, plural, =0 {no tool call failed} one {# tool call failed} other {# tool calls failed}}. A reading is an argument. It changes nothing until somebody merges the change to <file></file>, and every run the agent has sealed keeps the model it ran on.",
         "readNone": "There is no reading for this run. A reading argues for a change to <file></file> and changes nothing until somebody merges it."
@@ -969,7 +1016,9 @@
       "statusParked": "parked",
       "fit": {
         "fit": "Model fit",
-        "wrongTier": "Wrong model tier"
+        "wrongTier": "Wrong model tier",
+        "effortFit": "Effort fit",
+        "wrongEffort": "Wrong effort setting"
       },
       "runs30d": "{count} runs 30d"
     },
