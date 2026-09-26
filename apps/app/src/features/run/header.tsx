@@ -1077,6 +1077,13 @@ export function RunHeader({
               wsRole={wsRole}
             />
           ) : null}
+          {/* Every command sent to the run and how far each got (#2953).
+              Export stays last, as the header always ends on it. */}
+          <DeliveryReport
+            org={place.org}
+            ws={place.ws}
+            query={{ runId: run.id }}
+          />
           <ExportAction
             org={place.org}
             ws={place.ws}
@@ -1084,11 +1091,6 @@ export function RunHeader({
             sealed={sealed}
             closedIdle={run.sealSource === "idle_timeout"}
             orgRole={orgRole}
-          />
-          <DeliveryReport
-            org={place.org}
-            ws={place.ws}
-            query={{ runId: run.id }}
           />
         </div>
       </header>

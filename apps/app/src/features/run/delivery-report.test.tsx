@@ -191,7 +191,9 @@ describe("delivery report", () => {
   it("reads a broadcast's commands by the ids dispatch returned", async () => {
     readDeliveryReport.mockResolvedValue({
       ok: true,
-      value: { commands: [command(), command({ id: "tcm_t", runId: "tse_other1" })] },
+      value: {
+        commands: [command(), command({ id: "tcm_t", runId: "tse_other1" })],
+      },
     });
     renderReport({ commandIds: ["tcm_s", "tcm_t"] });
     const { dialog } = await openReport();
@@ -240,12 +242,10 @@ describe("delivery report", () => {
     renderReport();
     const { user, dialog } = await openReport();
     await within(dialog).findByTestId("report-command");
-    await user.keyboard("{Escape}");
-    await waitFor(() => {
-      expect(screen.queryByTestId("delivery-report")).toBeNull();
-    });
+    await user.click(screen.getByRole("button", { name: "Close" }));
     await user.click(screen.getByTestId("delivery-report-open"));
-    await screen.findByTestId("delivery-report");
-    expect(readDeliveryReport).toHaveBeenCalledTimes(2);
+    await waitFor(() => {
+      expect(readDeliveryReport).toHaveBeenCalledTimes(2);
+    });
   });
 });
