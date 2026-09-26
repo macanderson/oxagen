@@ -42,6 +42,9 @@
     },
     "runStatus": {
       "live": "live",
+      "stale": "stale",
+      "staleWhy": "Oxagen has not heard from this run's host in five minutes. The run may have stopped. Oxagen closes a run after 12 hours with no event.",
+      "staleRevokedWhy": "This run's host was revoked, so Oxagen refuses its events and its commands. The run may still be going on that machine. Oxagen closes a run after 12 hours with no event.",
       "sealed": "sealed",
       "halted": "halted",
       "running": "running",

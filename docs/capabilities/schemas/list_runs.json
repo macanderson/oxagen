@@ -41,6 +41,9 @@
           "with",
           "without"
         ]
+      },
+      "countLive": {
+        "type": "boolean"
       }
     },
     "additionalProperties": false
@@ -587,6 +590,75 @@
                 }
               ]
             },
+            "place": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "branch": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "repository": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "host": {
+                              "type": "string"
+                            },
+                            "owner": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "url": {
+                              "type": "string",
+                              "format": "uri"
+                            }
+                          },
+                          "required": [
+                            "host",
+                            "owner",
+                            "name",
+                            "url"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "branch"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "harness": {
               "anyOf": [
                 {
@@ -808,6 +880,10 @@
             "type": "null"
           }
         ]
+      },
+      "liveRuns": {
+        "type": "integer",
+        "minimum": 0
       },
       "warnings": {
         "type": "array",

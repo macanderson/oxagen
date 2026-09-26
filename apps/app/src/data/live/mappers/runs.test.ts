@@ -118,6 +118,7 @@ describe("toRunPage", () => {
           model: null,
           harness: null,
           machine: null,
+          place: null,
           taskRef: "ENG-4121",
           name: "Cut the 3.2 release branch",
           summary: {
@@ -260,5 +261,25 @@ describe("toRunPage", () => {
       runs: [],
       nextCursor: null,
     });
+  });
+
+  it("carries the workspace's live count, and leaves it out when the read had none (A-04)", () => {
+    const counted = toRunPage({ runs: [], nextCursor: null, liveRuns: 3 });
+    expect(counted.liveRuns).toBe(3);
+    expect(RunPage.safeParse(counted).success).toBe(true);
+    expect(toRunPage({ runs: [], nextCursor: null })).not.toHaveProperty(
+      "liveRuns",
+    );
+  });
+
+  it("carries where a wrapped session ran, and null where the row says nothing (A-05)", () => {
+    const place = { path: "/Users/mb/src/platform", branch: "fix/tags" };
+    const page = toRunPage({
+      runs: [{ ...ledgerRun, place }, ledgerRun],
+      nextCursor: null,
+    });
+    expect(page.runs[0]?.place).toEqual(place);
+    expect(page.runs[1]?.place).toBeNull();
+    expect(RunPage.safeParse(page).success).toBe(true);
   });
 });

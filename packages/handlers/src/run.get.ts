@@ -12,6 +12,12 @@
 // harness titled answers that title as the run's name: it is the name the
 // operator already knows the session by.
 //
+// A wrapped session's `place` names its repository here and not on
+// `list_runs`: the session keeps only a digest of its git remote, and this
+// read matches it against the workspace's connected repositories, so the Run
+// header can name the repository while the work read is pending or after it
+// failed.
+//
 // `waitMs` is the handler-side long poll (ARCHITECTURE.md §3.5): with no event
 // past the cursor, the handler sleeps POLL_INTERVAL_MS at a time inside the
 // tenant scope until one lands or the budget runs out. The gates and the audit
@@ -23,8 +29,18 @@ import {
   type RunGetOutput,
 } from "@oxagen/oxagen/contracts/run.get";
 import type { RunFrame } from "@oxagen/run-ledger";
-import { invalidCursor, microsString } from "./run.list";
-import { readSessionConfig, readSessionTitle } from "./lib/run-work";
+import {
+  invalidCursor,
+  microsString,
+  runScope,
+  type RunScope,
+} from "./run.list";
+import {
+  connectedRunRepositories,
+  readSessionConfig,
+  readSessionTitle,
+  workDigest,
+} from "./lib/run-work";
 import { logger } from "./logger";
 import {
   defaultRunReadDeps,
@@ -101,6 +117,82 @@ export function toFrame(frame: RunFrame): RunFrameOut {
   };
 }
 
+// ---- Place ----------------------------------------------------------------------------
+
+/** A connected repository, as a run's `place` names it. */
+export type PlaceRepository = {
+  host: string;
+  owner: string;
+  name: string;
+  url: string;
+};
+
+/**
+ * The connected repository whose remote hashes to `digest`, or null when none
+ * does. The digest is the one `get_run_work` matches a checkout by.
+ */
+export async function readSessionRepository(
+  scope: RunScope,
+  digest: string,
+): Promise<PlaceRepository | null> {
+  const repositories = await connectedRunRepositories(scope);
+  const match = repositories.find(
+    (repo) => workDigest(`${repo.host}/${repo.owner}/${repo.name}`) === digest,
+  );
+  return match === undefined
+    ? null
+    : {
+        host: match.host,
+        owner: match.owner,
+        name: match.name,
+        url: match.url,
+      };
+}
+
+/**
+ * The session's repository for its `place`, or undefined when there is no
+ * digest to match or the read failed, so the row says it was not read rather
+ * than that no repository matched.
+ */
+function placeRepository(
+  deps: Pick<RunGetDeps, "sessionRepository">,
+  scope: RunScope,
+  run: ResolvedRun,
+  runId: string,
+): Promise<PlaceRepository | null | undefined> {
+  const digest =
+    run.source === "tacho" ? (run.row.session.gitRemoteDigest ?? null) : null;
+  if (digest === null || digest.trim() === "")
+    return Promise.resolve(undefined);
+  return deps.sessionRepository(scope, digest).catch((err: unknown) => {
+    logger.warn(
+      { err, runId },
+      "get_run: the session's repository could not be read; its place names none",
+    );
+    return undefined;
+  });
+}
+
+/**
+ * The run's `place` with its repository, when the read answered. A session
+ * that recorded no directory, no branch and no matching repository keeps a
+ * null place.
+ */
+function withRepository(
+  place: RunGetOutput["run"]["place"],
+  repository: PlaceRepository | null | undefined,
+): Pick<RunGetOutput["run"], "place"> {
+  if (repository === undefined || place === undefined) return {};
+  if (place === null && repository === null) return {};
+  return {
+    place: {
+      path: place?.path ?? null,
+      branch: place?.branch ?? null,
+      repository,
+    },
+  };
+}
+
 // ---- Dependencies ---------------------------------------------------------------------
 
 export type RunGetDeps = RunReadDeps & {
@@ -111,6 +203,8 @@ export type RunGetDeps = RunReadDeps & {
   sessionTitle: typeof readSessionTitle;
   /** The session's latest effort and thinking settings. */
   sessionConfig: typeof readSessionConfig;
+  /** The connected repository a session's remote digest names. */
+  sessionRepository: typeof readSessionRepository;
 };
 
 export function createRunGetHandler(
@@ -143,7 +237,8 @@ export function createRunGetHandler(
     // The title and the effort settings are ClickHouse's to give. A failed
     // read leaves the heading on the run id and the settings on what the
     // session row holds, rather than failing the page. They are read while
-    // the frames are, since neither needs the other.
+    // the frames are, since neither needs the other. So is the repository.
+    const repository = placeRepository(deps, runScope(ctx), run, input.runId);
     const header =
       run.source === "tacho"
         ? Promise.all([
@@ -173,7 +268,7 @@ export function createRunGetHandler(
     // small bounded read was the one it picked for the Run stream and the
     // assistant alike (#4243). The page comes back empty and says why, with no
     // cursor, so a caller keeps its own and nobody reads the run as sealed.
-    const [[title, config], read] = await Promise.all([
+    const [[title, config], read, named] = await Promise.all([
       header,
       poll(
         run,
@@ -190,6 +285,7 @@ export function createRunGetHandler(
           return { batch: [] as RunFrame[], failed: true };
         },
       ),
+      repository,
     ]);
     const { batch } = read;
     const frames = batch.slice(0, input.frameLimit);
@@ -206,6 +302,7 @@ export function createRunGetHandler(
               effort: config.effort ?? run.item.effort ?? null,
               thinking: config.thinking,
             }),
+        ...withRepository(run.item.place, named),
       },
       frames: {
         frames: frames.map(toFrame),
@@ -232,6 +329,7 @@ export function defaultRunGetDeps(): RunGetDeps {
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     sessionTitle: readSessionTitle,
     sessionConfig: readSessionConfig,
+    sessionRepository: readSessionRepository,
   };
 }
 

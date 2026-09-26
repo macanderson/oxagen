@@ -11,7 +11,6 @@ import {
   forgeOf,
   type ListQuery,
   listRuns,
-  liveCount,
   oldestApproval,
   parkedRunIds,
   pullRequestCount,
@@ -89,10 +88,6 @@ describe("chipRows", () => {
 });
 
 describe("tile figures", () => {
-  it("counts a live run and not a parked one as live", () => {
-    expect(liveCount(all)).toBe(1);
-  });
-
   it("sums the recorded costs, reads the bases off the rows and counts the rows with none", () => {
     const spend = spendShown(all);
     // 4.131265 + 4.131265 + 2.000000; the halted run recorded no cost.

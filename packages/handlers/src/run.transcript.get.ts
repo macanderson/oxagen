@@ -125,6 +125,7 @@ import {
   runScope,
   type RunScope,
 } from "./run.list";
+import { encodeFrameCursor } from "./run.get";
 import {
   defaultRunReadDeps,
   resolveRun,
@@ -265,6 +266,22 @@ export function cursorPosition(
   // reads from the start; a subagent chain past the frame cap has nothing
   // this read can resume into.
   return session === null ? -1 : frames.length - 1;
+}
+
+/**
+ * The `get_run` cursor of the last frame on the run's own chain in `frames`,
+ * or null when it holds none. A subagent's frames sit on chains of their own
+ * and `get_run` reads only the run's chain, so they are passed over. The Run
+ * stream opens after this frame: a reader holding the transcript is sent only
+ * the frames the read did not hold, not the whole run from its first frame.
+ */
+export function frameCursorOf(frames: readonly RunFrame[]): string | null {
+  for (let i = frames.length - 1; i >= 0; i -= 1) {
+    const frame = frames[i];
+    if (frame !== undefined && frame.chain === undefined)
+      return encodeFrameCursor(frame.seq);
+  }
+  return null;
 }
 
 /** An entry's extent: the positions of its opening and last frames in the run. */
@@ -892,6 +909,7 @@ export function createRunTranscriptGetHandler(
       });
     const more = plan.through + 1 < folds.length;
     const cursor = live || more ? nextCursor() : null;
+    const frameCursor = frameCursorOf(read.frames);
     if (page.length === 0) {
       return {
         zoom: input.zoom,
@@ -899,6 +917,7 @@ export function createRunTranscriptGetHandler(
         entries: [],
         cursor,
         complete: read.complete,
+        frameCursor,
         counts,
         figures,
         ...search,
@@ -1038,6 +1057,7 @@ export function createRunTranscriptGetHandler(
       entries,
       cursor,
       complete: read.complete,
+      frameCursor,
       counts,
       figures,
       ...search,

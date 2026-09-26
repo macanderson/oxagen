@@ -196,6 +196,66 @@ export function commandBlockOf(run: {
   return run.commandBlock ?? null;
 }
 
+/**
+ * How often a page with no stream reads a live wrapped run again, so its
+ * stale light moves without a reload: the host poll window that decides the
+ * reading (`HOST_POLL_WINDOW_MS` in `@oxagen/oxagen`, five minutes). A light
+ * then trails the host by at most two windows.
+ */
+export const STALE_REREAD_MS = 5 * 60_000;
+
+/**
+ * Whether a later read can change a row's stale light: a live wrapped run,
+ * whose host can go quiet or come back. A ledger run has no host to miss.
+ */
+export function canGoStale(run: {
+  status: RunStatus;
+  source: "ledger" | "tacho";
+}): boolean {
+  return run.status === "live" && run.source === "tacho";
+}
+
+/** Why an open run reads stale: its host went quiet, or it was revoked. */
+export type StaleReason = Extract<
+  CommandBlock,
+  "host_offline" | "host_revoked"
+>;
+
+/**
+ * Why an open run's light reads stale, or null when it reads live.
+ *
+ * - `host_offline`: the host has not checked in within the poll window, five
+ *   minutes (`HOST_POLL_WINDOW_MS`). The host polls every few seconds while
+ *   its daemon runs, so a laptop that went to sleep or a daemon that was
+ *   killed reads stale within minutes rather than live until Oxagen closes
+ *   the run after 12 hours with no event.
+ * - `host_revoked`: the host's enrollment was revoked, so Oxagen refuses its
+ *   polls and its events, and the run is as unreachable as an offline one.
+ *
+ * A run with no host has no heartbeat to miss. A ledger run, and a wrapped
+ * session no host is recorded for, read live until they seal. The Run page
+ * reads the row again when its stream says the reading changed. Fleet reads
+ * it again every `STALE_REREAD_MS` while it lists a live wrapped run.
+ */
+export function staleReason(run: {
+  status: RunStatus;
+  commandBlock?: CommandBlock | null;
+}): StaleReason | null {
+  if (run.status !== "live") return null;
+  return run.commandBlock === "host_offline" ||
+    run.commandBlock === "host_revoked"
+    ? run.commandBlock
+    : null;
+}
+
+/** Whether an open run's light reads stale (`staleReason`). */
+export function isStale(run: {
+  status: RunStatus;
+  commandBlock?: CommandBlock | null;
+}): boolean {
+  return staleReason(run) !== null;
+}
+
 /** Token totals by kind, as the recorder counted them. */
 /**
  * A pull request (or GitLab merge request) the run's frames name. The URL is
@@ -267,6 +327,32 @@ export const RunRow = z.object({
   /** Token totals from the session's counted model calls; null when none were recorded. */
   reportedTokens: RunTokens.nullable().optional(),
   machine: RunMachine.nullable(),
+  /**
+   * Where a wrapped session ran, as its start recorded it: the working
+   * directory and the git branch. Null for a ledger run, and where the
+   * session recorded neither. The Run header's checkout strip shows it while
+   * the work read is in flight or after it failed.
+   *
+   * `repository` is the connected repository the session's remote matches,
+   * null when none does. `get_run` answers it; a Fleet row leaves it out,
+   * which reads as not read.
+   */
+  place: z
+    .object({
+      path: z.string().min(1).nullable(),
+      branch: z.string().min(1).nullable(),
+      repository: z
+        .object({
+          host: z.string(),
+          owner: z.string(),
+          name: z.string(),
+          url: z.url(),
+        })
+        .nullable()
+        .optional(),
+    })
+    .nullable()
+    .optional(),
   harness: z
     .object({
       name: z.string(),
@@ -343,6 +429,11 @@ export const RunPage = z.object({
   runs: z.array(RunRow),
   /** Opaque; the next page's cursor, null on the last page. */
   nextCursor: z.string().nullable(),
+  /**
+   * How many runs in the workspace are live, whatever the page, the cursor
+   * or the filter. Absent when the read could not count them.
+   */
+  liveRuns: z.number().int().nonnegative().optional(),
   /** `pull_requests_unread`: the page's pull requests could not be read. */
   warnings: z.array(z.enum(["pull_requests_unread"])).optional(),
 });
