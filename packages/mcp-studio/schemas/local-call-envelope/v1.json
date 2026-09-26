@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/local-call-envelope/v1.json",
+  "title": "Local call envelope",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "local-call-envelope/v1"
+    },
+    "tool": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^(?=[a-z0-9_]{4,64}$)[a-z][a-z0-9_]{0,23}__[a-z][a-z0-9_]*$",
+      "description": "The tool the agent called, such as files__read_file."
+    },
+    "upstream": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "The name the local server knows the tool by."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The tool's version in the lock."
+    },
+    "definition_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "The tool's definition hash in the lock."
+    },
+    "package_digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "The lock's digest of the package or binary. The local gateway refuses a command that does not match."
+    },
+    "arguments_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "SHA-256 over the RFC 8785 form of the upstream arguments, after the input was shaped."
+    },
+    "machine": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "description": "The enrolled machine the call may run on."
+    },
+    "nonce": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22,64}$",
+      "description": "A single-use value, at least 128 bits of randomness in base64url."
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the cloud gateway signed the envelope."
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the envelope stops being valid: after issued_at, and at most 30 seconds after it."
+    },
+    "signature": {
+      "type": "object",
+      "properties": {
+        "key_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "The first 8 bytes of the SHA-256 of the signing public key, in hex."
+        },
+        "alg": {
+          "const": "ed25519"
+        },
+        "sig": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{86}==$",
+          "description": "The signature over the envelope's RFC 8785 bytes without its signature field."
+        }
+      },
+      "required": [
+        "key_id",
+        "alg",
+        "sig"
+      ],
+      "additionalProperties": false,
+      "description": "The cloud gateway's signature."
+    }
+  },
+  "required": [
+    "schema",
+    "tool",
+    "upstream",
+    "version",
+    "definition_hash",
+    "package_digest",
+    "arguments_hash",
+    "machine",
+    "nonce",
+    "issued_at",
+    "expires_at",
+    "signature"
+  ],
+  "additionalProperties": false,
+  "description": "One call to a local server that the cloud gateway decided and signed for the local gateway."
+}
