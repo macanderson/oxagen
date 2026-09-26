@@ -88,9 +88,12 @@ attest figures the seal never signed, at a time it was not written.
 ### 6. The chain read
 
 `get_run_chain` answers each seal's `archiveSegmentDigest` and
-`attestation: { alg, keyId, sig, signsOver }`. The payload's values are the
-seal's own fields, so the attestation names them and carries no copy. A seal
-with no signature, and a key id without its signature, answer null. A
+`attestation: { alg, keyId, sig, signsOver }`. The attestation names the
+payload's fields and carries no copy of their values. The seal entry does not
+carry all eight yet: the attempt's public id and the seal's own tier, gaps,
+and grade are missing, so the export bundle is where a signature is checked
+(#4399). A seal with no signature, and a key id without its signature, answer
+null. A
 wrapped session has no seal row, and its seal answers null for both.
 
 ### 7. The export

@@ -275,9 +275,11 @@ function toChainSeal(seal: LedgerSeal): RunChainGetOutput["seals"][number] {
 
 /**
  * The attestation the seal signed when it was written (ADR-195), or null
- * for a seal written with no attester key or before the seal signed. The
- * values it signs are this seal's own fields, so it names the fields and
- * carries no copy of them. A key id without its signature is not an
+ * for a seal written with no attester key or before the seal signed. It
+ * names the signed fields and carries no copy of their values. The entry
+ * lacks the attempt's public id and the seal's own tier, gaps and grade, so
+ * the export bundle is where a signature is checked (#4399). A key id
+ * without its signature is not an
  * attestation, and the row's CHECK refuses one.
  */
 function sealAttestation(

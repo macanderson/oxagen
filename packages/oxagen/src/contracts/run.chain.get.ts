@@ -137,9 +137,11 @@ export const chainSealSchema = z
       .regex(/^sha256:[0-9a-f]{64}$/)
       .nullable(),
     /**
-     * The attester's Ed25519 signature over the seal (#4000). The values it
-     * signs are this seal's own fields, so it carries only the names of the
-     * fields it signs over. Null on a seal written before attestation, on a
+     * The attester's Ed25519 signature over the seal (#4000). It carries the
+     * names of the fields it signs over and no copy of their values. This
+     * entry lacks four of them (the attempt's public id and the seal's own
+     * tier, gaps and grade), so a signature is checked from the export
+     * bundle (#4399). Null on a seal written before attestation, on a
      * seal written with no attester key configured, and on a wrapped
      * session's seal.
      */
