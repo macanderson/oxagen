@@ -1742,7 +1742,9 @@ export function TranscriptView({
     const timer = setTimeout(() => {
       void loadMore();
     }, 0);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [firstFull, firstCursor, loadMore]);
 
   /**
