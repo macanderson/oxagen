@@ -22,6 +22,7 @@
 import { useTranslations } from "next-intl";
 import type { RunTranscript, TranscriptEntry } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
+import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { linkText, mono } from "@/ui/control-styles";
 import { type ListRow, ListTable } from "@/ui/list-table";
