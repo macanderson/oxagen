@@ -98,7 +98,10 @@ function unreadableStatus(status: number): boolean {
 
 const connections = schema.sourceConnections;
 
-/** A connected GitHub source, as `githubConnectionOf` weighs it. */
+/**
+ * A connected GitHub source, as `githubConnectionOf` weighs it.
+ * @internal Exported for its unit test.
+ */
 export type GithubConnectionRow = {
   id: string;
   deliveryConfig: unknown;
@@ -120,6 +123,7 @@ function ownerOf(row: GithubConnectionRow): string | null {
  * installation, whose account is the owner, and GitHub answers 404 when the
  * installation cannot see the repository. A source that names another owner
  * reads another account, so it is never tried. Null when none fits.
+ * @internal Exported for its unit test.
  */
 export function githubConnectionOf(
   rows: readonly GithubConnectionRow[],
