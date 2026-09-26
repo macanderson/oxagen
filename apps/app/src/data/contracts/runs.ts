@@ -287,6 +287,19 @@ export const RunRow = z.object({
   /** Token totals from the session's counted model calls; null when none were recorded. */
   reportedTokens: RunTokens.nullable().optional(),
   machine: RunMachine.nullable(),
+  /**
+   * Where a wrapped session ran, as its start recorded it: the working
+   * directory and the git branch. Null for a ledger run, and where the
+   * session recorded neither. The Run header's checkout strip shows it while
+   * the work read is in flight or after it failed.
+   */
+  place: z
+    .object({
+      path: z.string().min(1).nullable(),
+      branch: z.string().min(1).nullable(),
+    })
+    .nullable()
+    .optional(),
   harness: z
     .object({
       name: z.string(),

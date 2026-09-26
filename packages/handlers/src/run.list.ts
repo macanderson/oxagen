@@ -568,6 +568,11 @@ const tachoColumns = {
     totalCostMicros: sessions.totalCostMicros,
     costBasis: sessions.costBasis,
     effort: sessions.effort,
+    // Where the session ran, as its start recorded it (the Run header's
+    // checkout strip, while the work read is pending or when it failed).
+    cwd: sessions.cwd,
+    gitBranch: sessions.gitBranch,
+    worktreeBranch: sessions.worktreeBranch,
     permissionModeInitial: sessions.permissionModeInitial,
     permissionModeFinal: sessions.permissionModeFinal,
     inputTokens: sessions.inputTokens,
@@ -808,6 +813,10 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   costBasis?: string | null;
   /** The effort level the harness reported in its context frames. */
   effort?: string | null;
+  /** The working directory and git branches the session's start recorded; absent where not selected. */
+  cwd?: string | null;
+  gitBranch?: string | null;
+  worktreeBranch?: string | null;
   permissionModeInitial?: string | null;
   permissionModeFinal?: string | null;
   /** Token counters ingest folds from the session's counted `llm_call` frames. */
@@ -1139,6 +1148,7 @@ export function toLedgerRunItem(
     permissionMode: null,
     reportedTokens: null,
     machine: null,
+    place: null,
     name: run.name,
     summary: generatedSummary(run),
     ...enrichmentError(run),
@@ -1270,6 +1280,28 @@ export function reportedTokensOf(
   return { input, output, cacheRead, cacheWrite };
 }
 
+/**
+ * Where the session ran, as its start recorded it. A session that ran in a
+ * worktree names the worktree's branch, the branch its work went to. Omitted
+ * when the reader selected none of the columns, so a caller reads "not known"
+ * rather than "not recorded"; null when the session recorded neither.
+ */
+export function tachoPlace(
+  session: Pick<TachoSessionColumns, "cwd" | "gitBranch" | "worktreeBranch">,
+): Pick<RunItem, "place"> {
+  if (
+    session.cwd === undefined &&
+    session.gitBranch === undefined &&
+    session.worktreeBranch === undefined
+  )
+    return {};
+  const path = blankToNull(session.cwd ?? null);
+  const branch =
+    blankToNull(session.worktreeBranch ?? null) ??
+    blankToNull(session.gitBranch ?? null);
+  return { place: path === null && branch === null ? null : { path, branch } };
+}
+
 export function toTachoRunItem(
   row: TachoSessionRow,
   totals: RunRollup | undefined,
@@ -1339,6 +1371,7 @@ export function toTachoRunItem(
     ),
     reportedTokens: reportedTokensOf(session),
     machine: toRunMachine(row.host, row.session.machineSnapshot),
+    ...tachoPlace(session),
     harness: session.harness
       ? {
           name: session.harness,

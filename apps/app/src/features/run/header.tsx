@@ -214,13 +214,19 @@ function useHostFacts(run: RunRow): string {
   ].join(" ");
 }
 
-/** The host with no enrolled checkout: its name, and that no path is held. */
+/**
+ * The host with no path to copy. `enrolled` says the work read answered and
+ * the host enrolled no checkout, so the chip can say no path is held. Without
+ * that answer the chip names the host and claims nothing about a path.
+ */
 function MachineChip({
   run,
   machine,
+  enrolled = true,
 }: {
   run: RunRow;
   machine: string | null;
+  enrolled?: boolean;
 }) {
   const t = useTranslations("run.header");
   const facts = useHostFacts(run);
@@ -234,48 +240,100 @@ function MachineChip({
     <Chip
       code
       testId="run-machine"
-      title={t("withFacts", {
-        reading: t("pathNotEnrolled", { machine }),
-        facts,
-      })}
+      title={
+        enrolled
+          ? t("withFacts", {
+              reading: t("pathNotEnrolled", { machine }),
+              facts,
+            })
+          : facts
+      }
     >
       <Folder aria-hidden="true" className="size-3 flex-none" />
       {machine}
-      <span className="text-dim">{t("pathNotCaptured")}</span>
+      {enrolled ? (
+        <span className="text-dim">{t("pathNotCaptured")}</span>
+      ) : null}
     </Chip>
   );
 }
 
 /**
- * The checkout strip from what the outputs recorded, while the work read is
- * still in flight or when it failed: the pull requests, and the host.
+ * The working directory the session recorded, as `<machine>:<path>` to copy,
+ * or the host alone when the row holds no directory.
  */
-function WhereFromOutputs({
+function SessionPath({
+  run,
+  machine,
+  enrolled,
+}: {
+  run: RunRow;
+  machine: string | null;
+  enrolled: boolean;
+}) {
+  const t = useTranslations("run.header");
+  const facts = useHostFacts(run);
+  const path = run.place?.path ?? null;
+  if (machine === null || path === null)
+    return <MachineChip run={run} machine={machine} enrolled={enrolled} />;
+  return (
+    <CopyPath
+      text={`${machine}:${path}`}
+      title={t("withFacts", {
+        reading: t("pathSession", { machine }),
+        facts,
+      })}
+    />
+  );
+}
+
+/**
+ * The checkout strip from the row alone, while the work read is in flight
+ * (`pending`) or after it failed (`failed`): the branch and the working
+ * directory the session recorded, the pull requests the outputs recorded, and
+ * the host.
+ *
+ * It never says a fact was not captured. The work read is what would say so,
+ * and it has not answered. A failed read says it failed instead, so a read
+ * that failed is not shown as a gap in the recording.
+ */
+function WhereFromRow({
   run,
   pulls,
+  read,
 }: {
   run: RunRow;
   pulls: readonly RunOutputNode[] | null;
+  read: "pending" | "failed";
 }) {
   const t = useTranslations("run.header");
+  const branch = run.place?.branch ?? null;
   return (
     <WhereRow>
-      <Chip>{t("repoNotCaptured")}</Chip>
-      {pulls === null || pulls.length === 0 ? (
-        <Chip>
-          <span className="text-dim">{t("noPullRequest")}</span>
+      {read === "failed" ? (
+        <Chip testId="run-work-unread" title={t("workUnreadWhy")}>
+          <span className="text-dim">{t("repoNotRead")}</span>
         </Chip>
-      ) : (
-        pulls.map((pull) => (
-          <PullChip
-            key={`${pull.seq ?? ""}${pull.name}`}
-            url={pull.note}
-            label={recordedPullLabel(pull)}
-            state={null}
-          />
-        ))
+      ) : null}
+      {branch === null ? null : (
+        <Chip code testId="run-branch">
+          <GitBranch aria-hidden="true" className="size-3 flex-none" />
+          {branch}
+        </Chip>
       )}
-      <MachineChip run={run} machine={run.machine?.hostname ?? null} />
+      {(pulls ?? []).map((pull) => (
+        <PullChip
+          key={`${pull.seq ?? ""}${pull.name}`}
+          url={pull.note}
+          label={recordedPullLabel(pull)}
+          state={null}
+        />
+      ))}
+      <SessionPath
+        run={run}
+        machine={run.machine?.hostname ?? null}
+        enrolled={false}
+      />
     </WhereRow>
   );
 }
@@ -413,16 +471,16 @@ function WhereFromWork({
   const t = useTranslations("run.header");
   const facts = useHostFacts(run);
   const work = use(read);
-  if (!work.ok) return <WhereFromOutputs run={run} pulls={pulls} />;
+  if (!work.ok) return <WhereFromRow run={run} pulls={pulls} read="failed" />;
   const checkout = latestCheckout(work.value);
   const repo = checkout?.repository ?? work.value.pullRequests[0]?.repository;
   const prs = work.value.pullRequests;
+  // With no enrolled checkout, the branch the session recorded stands in.
+  const branch = checkout?.branch ?? run.place?.branch ?? null;
   // A branch that is a pull request's head links to the pull request, never
   // to `/tree/refs/pull/...`.
   const headPr =
-    checkout?.branch === null || checkout === null
-      ? undefined
-      : prs.find((pr) => pr.headRef === checkout.branch);
+    branch === null ? undefined : prs.find((pr) => pr.headRef === branch);
   const machine = work.value.machine?.name ?? run.machine?.hostname ?? null;
   // A pull request the frames recorded that the work read could not read
   // back (its repository is not connected, or it is a GitLab merge request)
@@ -436,25 +494,23 @@ function WhereFromWork({
         <Chip>
           {/* The branch chip beside it is what was captured, so only the
               repository is named as missing then. */}
-          {checkout?.branch == null
-            ? t("repoNotCaptured")
-            : t("repoOnlyNotCaptured")}
+          {branch === null ? t("repoNotCaptured") : t("repoOnlyNotCaptured")}
         </Chip>
       ) : (
         <ForgeChip url={repo.url}>
           {repo.owner}/{repo.name}
         </ForgeChip>
       )}
-      {checkout?.branch == null ? null : (
+      {branch === null ? null : (
         <ForgeChip
           url={
             headPr?.url ??
-            (repo === undefined ? null : `${repo.url}/tree/${checkout.branch}`)
+            (repo === undefined ? null : `${repo.url}/tree/${branch}`)
           }
           code
         >
           <GitBranch aria-hidden="true" className="size-3 flex-none" />
-          {checkout.branch}
+          {branch}
         </ForgeChip>
       )}
       {prs.length === 0 && recordedOnly.length === 0 ? (
@@ -483,7 +539,9 @@ function WhereFromWork({
         </>
       )}
       {machine === null || checkout === null ? (
-        <MachineChip run={run} machine={machine} />
+        // No enrolled checkout: the directory the session recorded, when the
+        // row holds one, else the host and that no path is held.
+        <SessionPath run={run} machine={machine} enrolled />
       ) : (
         <CopyPath
           text={`${machine}:${checkout.path}`}
@@ -812,7 +870,9 @@ export function RunHeader({
             )}
           </div>
           <Rig run={run} agent={agent} fit={fit} />
-          <Suspense fallback={<WhereFromOutputs run={run} pulls={pulls} />}>
+          <Suspense
+            fallback={<WhereFromRow run={run} pulls={pulls} read="pending" />}
+          >
             <WhereFromWork read={work} run={run} pulls={pulls} />
           </Suspense>
           <Suspense fallback={null}>

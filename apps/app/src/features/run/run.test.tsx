@@ -949,7 +949,7 @@ describe("header", () => {
     expect(chips).not.toHaveTextContent("$612.48");
   });
 
-  it("draws the pull requests the outputs recorded when the work read fails, and says the repository was not captured (negative)", async () => {
+  it("draws the pull requests the outputs recorded when the work read fails, and says the read failed, not that nothing was captured (A-05)", async () => {
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
@@ -963,17 +963,93 @@ describe("header", () => {
       ),
     });
     const checkout = within(await screen.findByTestId("run-checkout"));
-    expect(
-      checkout.getByText("repository and branch not captured"),
-    ).toBeTruthy();
+    const unread = checkout.getByTestId("run-work-unread");
+    expect(unread).toHaveTextContent("repository not read");
+    expect(unread.getAttribute("title")).toContain(
+      "The read of this run's work failed",
+    );
+    // A failed read is not a gap in the recording.
+    expect(checkout.queryByText(/not captured/)).toBeNull();
     expect(checkout.getByText("acme/platform#482")).toBeTruthy();
     expect(checkout.getByText("acme/docs#17")).toBeTruthy();
     expect(checkout.queryByText("no pull request")).toBeNull();
-    // No checkout was read, so no path is offered to copy.
+    // The row holds no directory, so no path is offered to copy.
     expect(checkout.queryByTestId("run-checkout-path")).toBeNull();
     expect(checkout.getByTestId("run-machine")).toHaveTextContent(
-      "mac-studio.local",
+      /^mac-studio\.local$/,
     );
+  });
+
+  it("draws the branch and the directory the session recorded when the work read fails (A-05)", async () => {
+    // tacho.sessions holds the session's cwd and git branch. The strip said
+    // "repository and branch not captured" and "path not captured" over them
+    // whenever the ClickHouse work read failed.
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      work: readError("clickhouse_unavailable", 503),
+    });
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    expect(checkout.getByTestId("run-branch")).toHaveTextContent("fix/tags");
+    const path = checkout.getByTestId("run-checkout-path");
+    expect(path).toHaveTextContent("mac-studio.local:/Users/mb/src/platform");
+    expect(path.getAttribute("title")).toContain(
+      "The session recorded this working directory on mac-studio.local.",
+    );
+    expect(checkout.getByTestId("run-work-unread")).toBeTruthy();
+    expect(checkout.queryByText(/not captured/)).toBeNull();
+  });
+
+  it("claims nothing about the checkout while the work read is in flight (A-05)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      // Never answers, so the strip stays on its fallback.
+      work: () => new Promise(() => {}),
+    });
+    const checkout = within(screen.getByTestId("run-checkout"));
+    expect(checkout.getByTestId("run-branch")).toHaveTextContent("fix/tags");
+    expect(checkout.getByTestId("run-checkout-path")).toHaveTextContent(
+      "mac-studio.local:/Users/mb/src/platform",
+    );
+    // Negative: neither a gap in the recording nor a failure is claimed, and
+    // no pull request is said to be missing before the read answers.
+    expect(checkout.queryByText(/not captured/)).toBeNull();
+    expect(checkout.queryByTestId("run-work-unread")).toBeNull();
+    expect(checkout.queryByText("no pull request")).toBeNull();
+  });
+
+  it("draws the session's branch and directory when the host enrolled no checkout (A-05)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    // The branch is recorded, so only the repository is named as missing.
+    expect(checkout.getByText("repository not captured")).toBeTruthy();
+    expect(checkout.getByText("fix/tags")).toBeTruthy();
+    expect(checkout.getByTestId("run-checkout-path")).toHaveTextContent(
+      "mac-studio.local:/Users/mb/src/platform",
+    );
+    expect(checkout.queryByText("path not captured")).toBeNull();
   });
 
   it("links a branch that heads no pull request to its tree on the forge", async () => {

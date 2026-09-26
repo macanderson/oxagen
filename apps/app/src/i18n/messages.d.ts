@@ -6743,6 +6743,8 @@ type Messages = {
       versionNotCaptured: string;
       repoNotCaptured: string;
       repoOnlyNotCaptured: string;
+      repoNotRead: string;
+      workUnreadWhy: string;
       noPullRequest: string;
       pullState: {
         open: string;
@@ -6789,6 +6791,7 @@ type Messages = {
       };
       pathNotEnrolled: string;
       pathRecorded: string;
+      pathSession: string;
       withFacts: string;
       pausedTitle: string;
       statusPaused: string;

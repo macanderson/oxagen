@@ -1284,6 +1284,54 @@ describe("a run row names who ran it, on what, with which model", () => {
     });
   });
 
+  it("says where a wrapped session ran, as its start recorded it, and nothing for a ledger run (A-05)", async () => {
+    // The Run header drew "repository and branch not captured" whenever the
+    // work read was pending or failed, though the session row held both.
+    const { list } = handlerOver(
+      [ledgerRun({ publicId: "arun_place", runId: RUN_A })],
+      [
+        tachoSession({
+          publicId: "tse_place",
+          session: { cwd: "/Users/mb/src/platform", gitBranch: "main" },
+        }),
+        tachoSession({
+          publicId: "tse_worktree",
+          session: {
+            cwd: "/Users/mb/src/platform/.worktrees/fix",
+            gitBranch: "main",
+            worktreeBranch: "fix/tags",
+          },
+        }),
+        tachoSession({
+          publicId: "tse_nowhere",
+          session: { cwd: " ", gitBranch: null, worktreeBranch: null },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(runList.output.parse(out)).toEqual(out);
+    const place = (id: string) => out.runs.find((r) => r.id === id)?.place;
+    expect(place("tse_place")).toEqual({
+      path: "/Users/mb/src/platform",
+      branch: "main",
+    });
+    // A session in a worktree worked on the worktree's branch.
+    expect(place("tse_worktree")).toEqual({
+      path: "/Users/mb/src/platform/.worktrees/fix",
+      branch: "fix/tags",
+    });
+    // Negative: a blank column is unrecorded, and a ledger run has no host.
+    expect(place("tse_nowhere")).toBeNull();
+    expect(place("arun_place")).toBeNull();
+  });
+
+  it("selects the session's place in the page's own statement (A-05)", () => {
+    const query = tachoPageQuery(db, SCOPE, page).toSQL();
+    expect(query.sql).toContain('"tacho"."sessions"."cwd"');
+    expect(query.sql).toContain('"tacho"."sessions"."git_branch"');
+    expect(query.sql).toContain('"tacho"."sessions"."worktree_branch"');
+  });
+
   // #4024: ingest attributes a wrapped session to whoever enrolled the host,
   // so the row says so; a ledger run names the principal it was admitted for.
   it("marks a wrapped session's operator as the host's enroller", async () => {

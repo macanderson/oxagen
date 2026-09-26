@@ -755,9 +755,10 @@ type RunReads = {
   /**
    * `get_run_work`, started with the page and awaited by the header's
    * checkout strip and the Changes panel. A test that says nothing about it
-   * gets a run whose host enrolled no checkout and opened no pull request.
+   * gets a run whose host enrolled no checkout and opened no pull request. A
+   * function answers the read itself, which is how a test holds it pending.
    */
-  work?: Read<RunWork>;
+  work?: Read<RunWork> | (() => Promise<Read<RunWork>>);
   /**
    * The spine above the tabs, read with the page and not with a tab. A test
    * that says nothing about it gets a run that produced nothing, so a test
@@ -887,18 +888,20 @@ export function runSource(reads: RunReads) {
           }),
         ),
       work: (_ctx, runId) =>
-        Promise.resolve(
-          reads.work ??
-            readOk({
-              runId,
-              machine: null,
-              checkouts: [],
-              diffs: [],
-              pullRequests: [],
-              complete: false,
-              warnings: ["checkout_context_not_recorded"],
-            }),
-        ),
+        typeof reads.work === "function"
+          ? reads.work()
+          : Promise.resolve(
+              reads.work ??
+                readOk({
+                  runId,
+                  machine: null,
+                  checkouts: [],
+                  diffs: [],
+                  pullRequests: [],
+                  complete: false,
+                  warnings: ["checkout_context_not_recorded"],
+                }),
+            ),
       get: answer("get", reads.detail),
       frameBody: answer("frameBody", reads.frameBody),
       cost: answer("cost", reads.cost ?? readOk(runCost())),

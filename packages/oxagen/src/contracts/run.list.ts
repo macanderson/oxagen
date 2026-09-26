@@ -455,6 +455,22 @@ export const runItemSchema = z
       .optional(),
     /** The machine the run ran on; null for a ledger run. */
     machine: runMachineSchema.nullable(),
+    /**
+     * Where a wrapped session ran, as its start recorded it: the working
+     * directory and the git branch (the worktree's branch when it ran in one).
+     * Each is null where the session recorded none, and the whole is null for
+     * a ledger run, which records no host. The repository is not here: the
+     * session keeps only a digest of its remote, and `get_run_work` names
+     * the repository from the checkout the host enrolled.
+     */
+    place: z
+      .object({
+        path: z.string().nullable(),
+        branch: z.string().nullable(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
     /** The recorded agent harness, independent of its model and wrapper. */
     harness: z
       .object({
