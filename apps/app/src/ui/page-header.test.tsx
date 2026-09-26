@@ -27,6 +27,17 @@ describe("PageHeader", () => {
     expect(screen.getByRole("button", { name: "Export" })).toBeVisible();
   });
 
+  it("draws the leading avatar before the title", () => {
+    render(
+      <PageHeader
+        title="Acme Robotics"
+        leading={<span data-testid="leading">A</span>}
+      />,
+    );
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading.previousElementSibling).toBe(screen.getByTestId("leading"));
+  });
+
   it("renders only the title when nothing else is given", () => {
     const { container } = render(<PageHeader title="Fleet" />);
     expect(container.querySelectorAll("p")).toHaveLength(0);
