@@ -75,8 +75,12 @@ export const RUN_PULL_REQUEST_LINKED_EVENT = "run/pull-request.linked";
  */
 export const AGENT_INTERJECTION_RAISED_EVENT = "agent/interjection.raised";
 
-/** The data `AGENT_INTERJECTION_RAISED_EVENT` carries. */
-export interface AgentInterjectionRaisedEventData {
+/**
+ * The data `AGENT_INTERJECTION_RAISED_EVENT` carries. A type alias rather than
+ * an interface: Inngest's `EventPayload` takes `Record<string, unknown>` data,
+ * and only an object type alias satisfies that index signature.
+ */
+export type AgentInterjectionRaisedEventData = {
   /** The organization's uuid. */
   orgId: string;
   /** The workspace's uuid. */
@@ -85,4 +89,4 @@ export interface AgentInterjectionRaisedEventData {
   interjectionId: string;
   /** RFC 3339; the deadline the control plane computed, not the host's. */
   expiresAt: string;
-}
+};
