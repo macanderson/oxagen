@@ -53,7 +53,12 @@
  */
 import { digestBytes, type Sha256Digest } from "../digest";
 import { MAX_OBSERVED_CHANGES } from "../envelope";
+import { canonicalRemote } from "../remote";
 import type { ExecAsync, ExecResult } from "../host/service";
+
+// The rule lives in the leaf module `../remote`, which the control plane
+// imports from the package root. The host keeps importing it from here.
+export { canonicalRemote };
 
 /** Repository facts for one working directory, all optional. */
 export interface GitFacts {
@@ -212,50 +217,6 @@ export async function readGitFacts(
   if (remote !== undefined)
     facts.remote_digest = digestBytes(canonicalRemote(remote));
   return facts;
-}
-
-/**
- * The remote URL reduced to the repository it names, so two hosts working
- * the same repository digest to the same value.
- *
- * The digest exists to tell repositories apart without saying which one, so
- * it has to depend on the repository and nothing else. A remote often
- * carries per-machine credentials in its userinfo
- * (`https://user:token@host/acme/repo.git`), and hashing that raw made the
- * identity depend on the token: two developers, or one developer after a
- * rotation, produced different digests for the same repository and nothing
- * downstream could correlate them.
- *
- * So the userinfo, the query, and the fragment go, the scheme and the `.git`
- * suffix go, `scp` syntax (`git@host:acme/repo.git`) is folded onto the same
- * shape as its URL form, and the host is lowercased. The path is not, because a repository name is
- * case sensitive on most forges. None of this is reversible and none of it
- * needs to be: nothing reads the digest back, it is only compared.
- */
-export function canonicalRemote(remote: string): string {
-  let value = remote.trim();
-  // `git@host:acme/repo.git` is the same repository as
-  // `ssh://git@host/acme/repo.git`.
-  const scp = /^([^/@]+)@([^/:]+):(.+)$/.exec(value);
-  if (scp !== null && !value.includes("://"))
-    value = `ssh://${scp[2] ?? ""}/${scp[3] ?? ""}`;
-  value = value.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "");
-  // Userinfo, which is where a token rides.
-  const at = value.indexOf("@");
-  const firstSlash = value.indexOf("/");
-  if (at !== -1 && (firstSlash === -1 || at < firstSlash))
-    value = value.slice(at + 1);
-  // The query and the fragment, which is where the other kind of token rides
-  // (`https://host/acme/repo.git?access_token=...`). Left on, the token
-  // changed the digest on every rotation, and the `.git` suffix was no longer
-  // at the end for the line below to find.
-  value = value.replace(/[?#].*$/, "");
-  // Trailing slashes first: the `.git` anchor does not match with one after
-  // it, so the other order left `repo.git/` carrying its suffix.
-  value = value.replace(/\/+$/, "").replace(/\.git$/, "");
-  const slash = value.indexOf("/");
-  if (slash === -1) return value.toLowerCase();
-  return `${value.slice(0, slash).toLowerCase()}${value.slice(slash)}`;
 }
 
 /**

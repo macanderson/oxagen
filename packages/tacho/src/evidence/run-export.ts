@@ -68,6 +68,24 @@ export interface RunExportAttempt {
   enforcement_tier: string;
   completeness_gaps: string[];
   replay_grade: string | null;
+  /**
+   * Set on an attempt that is one of a wrapped run's subagent chains. Such
+   * an attempt's `attempt_id` is the chain's session uuid, and its frames
+   * chain from genesis at their own seq 0. Absent on the run's own chain
+   * and on every ledger attempt.
+   */
+  chain?: RunExportAttemptChain;
+}
+
+/** Where a subagent chain sits in its run. */
+export interface RunExportAttemptChain {
+  session_uuid: string;
+  /** The chain that spawned this one. */
+  parent_session_uuid: string | null;
+  subagent_id: string | null;
+  subagent_type: string | null;
+  /** The parent's tool call that spawned the subagent. */
+  spawn_tool_use_id: string | null;
 }
 
 export interface RunExportManifest {

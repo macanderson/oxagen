@@ -729,6 +729,26 @@ export const KIND_BODIES = {
   // steers delivered beside it. The chain carries the body as the host
   // sealed it; its schema is `steeringManifestFrameSchema` in `wire.ts`.
   "steering.manifest": z.object({}).catchall(json),
+  // An unbound repository and the question it raised (#3941). The host seals
+  // `repo.unknown` when a session starts in a repository the workspace has
+  // not bound, then `control.interject` when it holds the loop to ask a
+  // person, and `control.answer` when the answer or the timeout arrives.
+  // `repo.bound` and `workspace.created` record what a link or create
+  // answer did. Each body is opaque on the wire, like `proof.observed`. Its
+  // strict schema is in `interjection.ts`, which the host applies before it
+  // seals and the control plane's ingest applies again.
+  "repo.unknown": z.object({}).catchall(json),
+  "control.interject": z.object({}).catchall(json),
+  "control.answer": z.object({}).catchall(json),
+  "repo.bound": z.object({}).catchall(json),
+  "workspace.created": z.object({}).catchall(json),
+  // Which skills a session may load (#3941, #3098). `skills.resolved` is
+  // sealed once the repository question is settled, and its strict schema is
+  // in `interjection.ts`. `skills.searched` and `skills.loaded` are the skill
+  // resolver's frames, which #3098 produces and defines.
+  "skills.resolved": z.object({}).catchall(json),
+  "skills.searched": z.object({}).catchall(json),
+  "skills.loaded": z.object({}).catchall(json),
 } as const;
 
 export type TachoKind = keyof typeof KIND_BODIES;

@@ -234,6 +234,15 @@ export const BUNDLE_FEATURE_DAILY_BUDGET = "daily_budget" as const;
 export const BUNDLE_FEATURE_STEER_NEXT_STEP = "steer_next_step" as const;
 
 /**
+ * The host can parse `unbound_repo`: what to do when a session starts in a
+ * repository the workspace has not bound, and the digests of the
+ * repositories it has (#3941). Gated for the same reason `gateway_tools` is:
+ * the bundle schema is strict, so a host built before the field would reject
+ * the whole mandate.
+ */
+export const BUNDLE_FEATURE_UNBOUND_REPO = "unbound_repo" as const;
+
+/**
  * Every bundle feature the host in *this* tree can parse, which is what it
  * advertises. One list, read by the daemon's health report and by enrollment,
  * so a field added to `policyBundleSchema` is advertised from the one place
@@ -249,6 +258,7 @@ export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_CONTAINMENT,
   BUNDLE_FEATURE_DAILY_BUDGET,
   BUNDLE_FEATURE_STEER_NEXT_STEP,
+  BUNDLE_FEATURE_UNBOUND_REPO,
 ] as const;
 
 export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];
@@ -903,6 +913,42 @@ export const policyBundleSchema = z
      */
     containment: z
       .object({ required: z.literal(true) })
+      .strict()
+      .optional(),
+    /**
+     * What the host does when a session starts in a repository the
+     * workspace has not bound (#3941). `ask` holds the loop at the first
+     * prompt and asks a person to link the repository, create a workspace
+     * for it, or run without skills. The host decides locally, before the
+     * first model call, by digesting its remote and looking for the digest
+     * in `bound_remote_digests`: every repository the organization bound,
+     * in any workspace, each as its canonical digest and its folded digest
+     * (`canonicalRemote` and `foldedRemote` in `remote.ts`).
+     *
+     * `link` carries what the link path would apply, for the question the
+     * host shows. `timeout_ms` is how long the host waits before it answers
+     * `deny` itself.
+     *
+     * Absent when the workspace's skills are off, and absent for a host that
+     * did not advertise `BUNDLE_FEATURE_UNBOUND_REPO`. Absent means the host
+     * asks nothing.
+     */
+    unbound_repo: z
+      .object({
+        policy: z.literal("ask"),
+        timeout_ms: z.number().int().positive(),
+        workspace_slug: z.string().min(1).max(64),
+        config_version: z.string().min(1).max(64).nullable(),
+        bound_remote_digests: z
+          .array(z.string().regex(SHA256_DIGEST_PATTERN))
+          .max(4096),
+        link: z
+          .object({
+            skills_pinned: z.number().int().nonnegative().nullable(),
+            linked_repositories: z.number().int().nonnegative(),
+          })
+          .strict(),
+      })
       .strict()
       .optional(),
     signature: z

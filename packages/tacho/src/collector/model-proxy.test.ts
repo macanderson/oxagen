@@ -3399,6 +3399,7 @@ describe("the wire and the host file", () => {
       "containment",
       "daily_budget",
       "steer_next_step",
+      "unbound_repo",
     ]);
   });
 
