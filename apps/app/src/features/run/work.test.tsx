@@ -198,13 +198,14 @@ describe("the Changes panel's Release row", () => {
   });
 
   it("says the state was not read when GitHub gave none, and links nothing it cannot name (negative)", async () => {
-    await renderChanges(
+    const panel = await renderChanges(
       readOk(runWork({ releases: [release({ state: null, url: null })] })),
     );
     const row = within(screen.getByTestId("run-release"));
     expect(row.getByText("v4.11.0")).toBeTruthy();
     expect(row.queryByRole("link")).toBeNull();
     expect(row.getByText("state not read")).toBeTruthy();
+    await expectNoAxe(panel);
   });
 
   it("draws no Release row when the session created no release (negative)", async () => {

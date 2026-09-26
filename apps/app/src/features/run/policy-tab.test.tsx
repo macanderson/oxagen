@@ -125,22 +125,26 @@ describe("Rules that fired", () => {
     ).toBeNull();
   });
 
-  it("says none for a decision that named no rule (negative)", () => {
-    const { rows } = renderRows([decided("2", "bundle", [], null)]);
+  it("says none for a decision that named no rule (negative)", async () => {
+    const { container, rows } = renderRows([decided("2", "bundle", [], null)]);
     const [row] = rows;
     if (row === undefined) throw new Error("a row");
     expect(within(row).getByTestId("policy-rules")).toHaveTextContent("none");
+    await expectNoAxe(container);
   });
 });
 
 describe("Taint", () => {
-  it("reads not recorded where no producer assessed the inputs (negative)", () => {
-    const { rows } = renderRows([decided("2", "bundle", ["Read"], null)]);
+  it("reads not recorded where no producer assessed the inputs (negative)", async () => {
+    const { container, rows } = renderRows([
+      decided("2", "bundle", ["Read"], null),
+    ]);
     const [row] = rows;
     if (row === undefined) throw new Error("a row");
     expect(within(row).queryByTestId("policy-taint")).toBeNull();
     const cells = within(row).getAllByRole("cell");
     expect(cells[4]?.textContent).toBe("not recorded");
+    await expectNoAxe(container);
   });
 
   it("prints the labels a producer assessed, and none when it found none", async () => {

@@ -530,6 +530,36 @@ describe("header", () => {
     await expectNoAxe(container);
   });
 
+  it("draws the rig's other two badges: a model class that fits, and an effort the reading would move (#3893)", async () => {
+    const { container } = await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            effort: "high",
+            effortSource: "request",
+            fit: {
+              ...READING,
+              model: { verdict: "fit", tier: "sonnet" },
+              effort: {
+                verdict: "over",
+                effort: "high",
+                source: "request",
+                suggest: "medium",
+              },
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const rig = within(screen.getByTestId("run-rig"));
+    expect(rig.getByTestId("run-fit-model")).toHaveTextContent("Model fit");
+    expect(rig.getByTestId("run-fit-effort")).toHaveTextContent(
+      "Wrong effort setting",
+    );
+    await expectNoAxe(container);
+  });
+
   it("draws no fit badge on a live run, and no effort badge for an effort the reading did not see (negative)", async () => {
     await renderRun({
       detail: ok(

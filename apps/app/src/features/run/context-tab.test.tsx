@@ -515,7 +515,7 @@ describe("ContextTab with the window on record (ADR-200)", () => {
   });
 
   it("fills the retrieval figures from the assembler's manifest, and leaves the floor it does not record", async () => {
-    await renderContext({
+    const { container } = await renderContext({
       context: readOk(runContext({ assemblies: [contextAssembly()] })),
     });
     const stats = region("Retrieval stats");
@@ -528,15 +528,17 @@ describe("ContextTab with the window on record (ADR-200)", () => {
     expect(value("Headroom left")).toBe("1,400 tok");
     expect(value("Composition digest")).toBe(`sha256:${"b".repeat(64)}`);
     expect(stats.getByText("600 of 2,000 tok")).toBeTruthy();
+    await expectNoAxe(container);
   });
 
   it("names the context read's failure in the Prompt window and keeps the reported total (negative)", async () => {
-    await renderContext({
+    const { container } = await renderContext({
       context: readError("frame_store_unreachable", 502),
     });
     const window = region("Prompt window");
     expect(window.getByText("15,368 tok in")).toBeTruthy();
     expect(window.getByText(/frame_store_unreachable/)).toBeTruthy();
     expect(region("Prompt").getByText(/15,368 tok sent/)).toBeTruthy();
+    await expectNoAxe(container);
   });
 });

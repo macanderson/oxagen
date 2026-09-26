@@ -81,8 +81,8 @@ describe("RequestWindow", () => {
     await expectNoAxe(container);
   });
 
-  it("says the provider and model are not recorded when the window names neither (negative)", () => {
-    render(
+  it("says the provider and model are not recorded when the window names neither (negative)", async () => {
+    const { container } = render(
       <IntlProvider>
         <RequestWindow
           read={readOk(
@@ -105,10 +105,11 @@ describe("RequestWindow", () => {
       "not recorded",
     );
     expect(panel.queryByRole("link")).toBeNull();
+    await expectNoAxe(container);
   });
 
-  it("names the read's failure (negative)", () => {
-    render(
+  it("names the read's failure (negative)", async () => {
+    const { container } = render(
       <IntlProvider>
         <RequestWindow
           read={readError("frame_store_unreachable", 502)}
@@ -118,6 +119,7 @@ describe("RequestWindow", () => {
       </IntlProvider>,
     );
     expect(screen.getByText(/frame_store_unreachable/)).toBeTruthy();
+    await expectNoAxe(container);
   });
 });
 
@@ -148,8 +150,8 @@ describe("CompositionBar", () => {
 });
 
 describe("AssembledContext", () => {
-  it("says the budget's use without a share when the budget is zero (negative)", () => {
-    render(
+  it("says the budget's use without a share when the budget is zero (negative)", async () => {
+    const { container } = render(
       <IntlProvider>
         <AssembledContext
           read={readOk(
@@ -173,6 +175,7 @@ describe("AssembledContext", () => {
         "No text was included",
       ),
     ).toBeTruthy();
+    await expectNoAxe(container);
   });
 
   it("says a frame with no readable manifest summary has none (negative)", async () => {

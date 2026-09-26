@@ -1037,7 +1037,7 @@ describe("the open frame's window (ADR-200)", () => {
   });
 
   it("names the context read's failure inside the frame (negative)", async () => {
-    await renderTab({
+    const { container } = await renderTab({
       body: "2",
       frameBody: ok(runFrameBody({ seq: "2" })),
       context: readError("frame_store_unreachable", 502),
@@ -1045,6 +1045,7 @@ describe("the open frame's window (ADR-200)", () => {
     expect(screen.getByTestId("frame-open")).toHaveTextContent(
       "frame_store_unreachable",
     );
+    await expectNoAxe(container);
   });
 
   it("draws the assembler's budget, spend and headroom on the frame it sealed", async () => {

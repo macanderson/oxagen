@@ -415,8 +415,8 @@ describe("WaterfallPanel's finding pins (#4001)", () => {
     ).toEqual(["3"]);
   });
 
-  it("pins a finding citing two turns to both, and a run-level finding to the total row only", () => {
-    renderPanel(THREE, {
+  it("pins a finding citing two turns to both, and a run-level finding to the total row only", async () => {
+    const { container } = renderPanel(THREE, {
       findings: cited(
         finding("fnd_shell", "repeated_shell_commands", {
           runLevel: false,
@@ -442,6 +442,7 @@ describe("WaterfallPanel's finding pins (#4001)", () => {
         .getAllByTestId("waterfall-pin")
         .map((pin) => pin.getAttribute("data-turn")),
     ).toEqual(["1", "3"]);
+    await expectNoAxe(container);
   });
 
   it("pins a finding whose frames were not recorded to the total row, never a guessed turn (negative)", () => {
@@ -471,8 +472,8 @@ describe("WaterfallPanel's finding pins (#4001)", () => {
     );
   });
 
-  it("says the pins are not recorded when the findings read fails (negative)", () => {
-    renderPanel(THREE, {
+  it("says the pins are not recorded when the findings read fails (negative)", async () => {
+    const { container } = renderPanel(THREE, {
       findings: readError("findings_unreachable", 502),
     });
     expect(screen.queryByTestId("waterfall-pin")).toBeNull();
@@ -481,5 +482,6 @@ describe("WaterfallPanel's finding pins (#4001)", () => {
     expect(screen.getByTestId("waterfall-panel")).toHaveTextContent(
       "findings_unreachable",
     );
+    await expectNoAxe(container);
   });
 });

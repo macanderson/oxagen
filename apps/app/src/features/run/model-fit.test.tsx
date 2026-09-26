@@ -218,8 +218,8 @@ describe("ModelFitPanel", () => {
     await expectNoAxe(container);
   });
 
-  it("claims no rung for a class on no ladder, and says the record lacked a figure (negative)", () => {
-    renderPanel({
+  it("claims no rung for a class on no ladder, and says the record lacked a figure (negative)", async () => {
+    const offLadder = renderPanel({
       row: run({
         model: { slug: "x-1", provider: "x", tier: "ultra" },
         fit: reading({ model: null }),
@@ -228,10 +228,14 @@ describe("ModelFitPanel", () => {
     expect(screen.getByTestId("fit-model-card")).toHaveTextContent(
       "Oxagen places the ultra class on no capability ladder",
     );
+    await expectNoAxe(offLadder.container);
     cleanup();
-    renderPanel({ row: run({ fit: reading({ read: null, model: null }) }) });
+    const unread = renderPanel({
+      row: run({ fit: reading({ read: null, model: null }) }),
+    });
     expect(screen.getByTestId("fit-model-card")).toHaveTextContent(
       "the record does not carry all four yet",
     );
+    await expectNoAxe(unread.container);
   });
 });

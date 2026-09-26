@@ -11,7 +11,14 @@
 // the total row of Spend by token class and the stat row to one number, and
 // the waterfall's total row to the Shape of the run instrument. The negative
 // tests hold every panel to "not recorded" where the record carries nothing.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentDetail } from "@/data/contracts/agents";
@@ -24,6 +31,7 @@ import type {
 import type { RunRow } from "@/data/contracts/runs";
 import type { SpendFindingEvidence } from "@/data/contracts/spend";
 import { type Read, readError, readOk } from "@/data/read";
+import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
@@ -43,8 +51,15 @@ vi.mock("next/link", () => ({
     <a {...rest}>{children}</a>
   ),
 }));
+// One router for the file, so a test can read where the finding dialog's
+// Close button sends the reader.
+const nav = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  refresh: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => nav,
   usePathname: () => "/acme/core-platform/runs/tse_7k2m9q",
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -1080,7 +1095,7 @@ describe("CostTab against the agent's baseline (#3984)", () => {
   });
 
   it("says not recorded for a figure too few of the agent's runs carry (negative)", async () => {
-    await renderTab(
+    const { container } = await renderTab(
       props({
         cost: readOk(
           releaseCost(
@@ -1097,6 +1112,43 @@ describe("CostTab against the agent's baseline (#3984)", () => {
       "this agent's 30-day ratio is not recorded",
     );
     expect(screen.queryByTestId("inst-cost-median")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("prints the agent's median and 30-day ratio alone for a run with no cost or ratio to set beside them (negative)", async () => {
+    const { container } = await renderTab(
+      props({
+        run: runRow({ ...RELEASE_RUN, cost: null }),
+        cost: readOk({ rollup: null, baseline: BASELINE }),
+      }),
+    );
+    // No gap is drawn against a cost the record does not hold.
+    expect(screen.getByTestId("inst-cost-median")).toHaveTextContent(
+      /^this agent's median run is \$2\.89$/,
+    );
+    expect(screen.getByTestId("inst-ratio-baseline")).toHaveTextContent(
+      /^this agent's 30-day ratio is 62%$/,
+    );
+    await expectNoAxe(container);
+  });
+
+  it("prints a run level with its baseline with no sign", async () => {
+    await renderTab(
+      props({
+        cost: readOk(
+          releaseCost(
+            { productiveRatio: 0.62 },
+            { ...BASELINE, medianCost: usd("4130000") },
+          ),
+        ),
+      }),
+    );
+    expect(screen.getByTestId("inst-cost-median")).toHaveTextContent(
+      /^\$0\.00 vs this agent's median run \$4\.13$/,
+    );
+    expect(screen.getByTestId("inst-ratio-baseline")).toHaveTextContent(
+      /^0 pts vs 30-day 62%$/,
+    );
   });
 
   it("names why the unproductive steps made no progress, and counts advanced against did not", async () => {
@@ -1197,6 +1249,36 @@ describe("CostTab's tool costs (#3892)", () => {
     );
     await expectNoAxe(container);
   });
+
+  it("lists the unpriced tools after the priced ones, most called first", async () => {
+    // The unpriced pair arrives in the reverse of its call order, so a sort
+    // that left them where they came would fail here.
+    await renderTab(
+      props({
+        cost: readOk(
+          releaseCost({
+            byTool: [
+              { name: "Grep", calls: 1, resultTokens: null, cost: null },
+              { name: "Glob", calls: 6, resultTokens: null, cost: null },
+              {
+                name: "Read",
+                calls: 5,
+                resultTokens: 60_000,
+                cost: usd("300000", "estimated"),
+              },
+            ],
+          }),
+        ),
+      }),
+    );
+    expect(
+      screen.getAllByTestId("dearest-tool").map((row) => row.textContent),
+    ).toEqual([
+      "Read5 calls · $0.30",
+      "Glob6 calls · not recorded",
+      "Grep1 call · not recorded",
+    ]);
+  });
 });
 
 describe("CostTab's finding pins (#4001)", () => {
@@ -1270,8 +1352,19 @@ describe("CostTab's finding pins (#4001)", () => {
       }),
     });
     await renderTab(tab);
-    expect(screen.getByTestId("spend-evidence-dialog")).toBeTruthy();
+    const dialog = screen.getByTestId("spend-evidence-dialog");
     expect(screen.getByTestId("cost-tab")).toBeTruthy();
+    // Closing returns to the Cost tab it opened over, not to Spend's
+    // Findings list, which is the dialog's own default.
+    nav.replace.mockClear();
+    await userEvent
+      .setup()
+      .click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(nav.replace).toHaveBeenCalledWith(
+        routes.run("acme", "core-platform", RELEASE_RUN.id, { tab: "cost" }),
+      );
+    });
   });
 
   it("reads no evidence for a value that is not a finding id (negative)", async () => {

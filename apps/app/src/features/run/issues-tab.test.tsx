@@ -240,7 +240,7 @@ describe("the Issues panel", () => {
   });
 
   it("marks only a status that was not read with the tracker gap, and says why (negative)", async () => {
-    await renderIssues({
+    const { container } = await renderIssues({
       issues: readOk(
         runIssues({
           issues: [
@@ -274,6 +274,7 @@ describe("the Issues panel", () => {
     // No page is named, so the row links nowhere.
     expect(within(unread).queryByRole("link")).toBeNull();
     expect(within(unread).getByText("no link")).toBeTruthy();
+    await expectNoAxe(container);
   });
 
   it("filters the rows by status, and keeps an unread status under All alone", async () => {
@@ -348,7 +349,7 @@ describe("the Issues panel", () => {
   });
 
   it("says the list may be short, and counts a floor, when a limit cut it (negative)", async () => {
-    await renderIssues({
+    const { container } = await renderIssues({
       issues: readOk(
         runIssues({
           complete: false,
@@ -360,16 +361,18 @@ describe("the Issues panel", () => {
     expect(screen.getByTestId("run-issues-incomplete")).toHaveTextContent(
       "Some records could not be read, so this list may be short.",
     );
+    await expectNoAxe(container);
   });
 
   it("says no issue is linked, and draws no table, when the run names none (negative)", async () => {
-    await renderIssues({
+    const { container } = await renderIssues({
       run: runRow({ taskRef: null }),
       issues: readOk(runIssues({ issues: [] })),
     });
     expect(screen.getByText("No issue is linked to this session.")).toBeTruthy();
     expect(screen.getByText("0 in this session")).toBeTruthy();
     expect(screen.queryByRole("table", { name: "Issues" })).toBeNull();
+    await expectNoAxe(container);
     cleanup();
     await renderIssues({
       run: runRow({ taskRef: null }),
@@ -383,10 +386,13 @@ describe("the Issues panel", () => {
   });
 
   it("names the failed read and draws no rows when the issues could not be loaded (negative)", async () => {
-    await renderIssues({ issues: readError("frame_store_unreachable", 502) });
+    const { container } = await renderIssues({
+      issues: readError("frame_store_unreachable", 502),
+    });
     const issues = region("Issues");
     expect(issues.queryAllByTestId("run-issue")).toHaveLength(0);
     expect(issues.getByText(/Issues could not be loaded/)).toBeTruthy();
+    await expectNoAxe(container);
   });
 });
 

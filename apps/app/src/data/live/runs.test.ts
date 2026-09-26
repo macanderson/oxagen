@@ -705,6 +705,101 @@ describe("runs.cost", () => {
     );
   });
 
+  it("maps the agent's baseline, the graded steps and each tool's estimated cost into the view (#3984, #3892)", async () => {
+    const usd = (micros: string, basis: "mixed" | "estimated") => ({
+      micros,
+      currency: "USD",
+      basis,
+    });
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        baseline: {
+          windowDays: 30,
+          before: "2026-09-15T08:00:00.000Z",
+          runs: 12,
+          medianCost: usd("2890000", "mixed"),
+          productiveRatio: 0.62,
+        },
+        rollup: {
+          cost: usd("4130000", "mixed"),
+          tokens,
+          cacheHitRate: 0.9,
+          turns: 2,
+          steps: 7,
+          modelCalls: 4,
+          toolCalls: 3,
+          retries: 1,
+          productiveRatio: 5 / 7,
+          advancedSteps: 5,
+          unproductiveSteps: 2,
+          unproductiveCauses: { failed: 1, repeated: 0, retried: 1 },
+          byModel: [],
+          byTool: [
+            {
+              name: "Read",
+              calls: 2,
+              resultTokens: 60_000,
+              cost: usd("300000", "estimated"),
+            },
+            { name: "Grep", calls: 1, resultTokens: null, cost: null },
+          ],
+          priceEntryIds: ["prc_1"],
+          rolledUpAt: "2026-09-15T08:59:00.000Z",
+          isEstimate: false,
+        },
+      }),
+    );
+    const read = await runs.cost(ctx, "tse_4f0a");
+    if (!read.ok) throw new Error("expected an ok read");
+    expect(read.value.baseline).toEqual({
+      windowDays: 30,
+      before: "2026-09-15T08:00:00.000Z",
+      runs: 12,
+      medianCost: usd("2890000", "mixed"),
+      productiveRatio: 0.62,
+    });
+    expect(read.value.rollup).toMatchObject({
+      advancedSteps: 5,
+      unproductiveSteps: 2,
+      unproductiveCauses: { failed: 1, repeated: 0, retried: 1 },
+    });
+    expect(read.value.rollup?.byTool).toEqual([
+      {
+        name: "Read",
+        calls: 2,
+        resultTokens: 60_000,
+        cost: usd("300000", "estimated"),
+      },
+      { name: "Grep", calls: 1, resultTokens: null, cost: null },
+    ]);
+  });
+
+  it("keeps a baseline figure too few runs carry as null, never a zero (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        baseline: {
+          windowDays: 30,
+          before: "2026-09-15T08:00:00.000Z",
+          runs: 3,
+          medianCost: null,
+          productiveRatio: null,
+        },
+        rollup: null,
+      }),
+    );
+    const read = await runs.cost(ctx, "tse_4f0a");
+    if (!read.ok) throw new Error("expected an ok read");
+    expect(read.value.baseline).toEqual({
+      windowDays: 30,
+      before: "2026-09-15T08:00:00.000Z",
+      runs: 3,
+      medianCost: null,
+      productiveRatio: null,
+    });
+  });
+
   it("maps a wrapped run's provisional figures, with each model's cost in the view's money", async () => {
     kernelRead.mockResolvedValue(
       readOk({
@@ -1322,6 +1417,71 @@ describe("runs.chain", () => {
     expect(read.value.seals).toHaveLength(2);
     expect(read.value.seals[0]?.terminalStatus).toBe("abandoned");
     expect(read.value.seals[1]?.terminalStatus).toBe("completed");
+  });
+
+  it("carries a signed seal's archive digest and signature, naming the key by reference (#4000)", async () => {
+    const signsOver = [
+      "run_id",
+      "attempt_id",
+      "frame_count",
+      "merkle_root",
+      "archive_segment_digest",
+      "enforcement_tier",
+      "completeness_gaps",
+      "replay_grade",
+    ];
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "arun_4f0a",
+        hashRule: "ledger.event_stream_digest_v1",
+        frameCount: 7,
+        firstSeq: "1",
+        lastSeq: "7",
+        merkleRoot: `sha256:${"2".repeat(64)}`,
+        checkpoints: [],
+        gaps: {
+          missingSequences: [],
+          missingFrameCount: 0,
+          missingBodies: 0,
+          recorded: [],
+        },
+        seals: [
+          {
+            sealedAt: "2026-09-11T10:05:00.000Z",
+            terminalStatus: "completed",
+            eventCount: 7,
+            finalRunSeq: "7",
+            finalEventDigest: `sha256:${"2".repeat(64)}`,
+            eventStreamDigest: `sha256:${"2".repeat(64)}`,
+            merkleRoot: `sha256:${"2".repeat(64)}`,
+            archiveSegmentRef: "runs/arun_4f0a/attempt-1.ndjson.zst",
+            archiveSegmentDigest: `sha256:${"3".repeat(64)}`,
+            attestation: {
+              alg: "ed25519",
+              keyId: `sha256:${"4".repeat(64)}`,
+              sig: "c2lnbmF0dXJl",
+              signsOver,
+            },
+          },
+        ],
+        enforcementTier: "gateway",
+        recordedGrade: "view",
+        ladder: [],
+        complete: true,
+      }),
+    );
+    const read = await runs.chain(ctx, "arun_4f0a");
+    if (!read.ok) throw new Error("expected an ok read");
+    const seal = read.value.seals[0];
+    expect(seal?.archiveSegmentDigest).toBe(`sha256:${"3".repeat(64)}`);
+    // The contract's `keyId` is a digest, not a public id, so the view names
+    // it `keyRef` (INV-11) and carries no `keyId` beside it.
+    expect(seal?.attestation).toEqual({
+      alg: "ed25519",
+      keyRef: `sha256:${"4".repeat(64)}`,
+      sig: "c2lnbmF0dXJl",
+      signsOver,
+    });
   });
 
   it("reports a record the view refuses rather than passing it on (negative)", async () => {
