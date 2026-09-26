@@ -78,6 +78,7 @@ import {
   isProcessAlive,
   listClaudeProcesses,
   readProcessStarts,
+  readProcessStartsAsync,
 } from "../host/process-scan";
 import type { Exec, ExecAsync, ExecResult } from "../host/service";
 import {
@@ -535,12 +536,23 @@ async function initializeDaemon(
   // sweep compare that with the pid's start time now, so a pid the OS has
   // handed to another process is neither signalled nor kept open (#4314).
   // Windows has no `ps`, so there this answers nothing and the bare pid
-  // stands, as `pidReused` in inbox.ts says.
+  // stands, as `pidReused` in inbox.ts says. Linux reads `/proc` and spawns
+  // nothing (`readProcessStarts` says why).
   const platform = options.platform ?? process.platform;
+  const injectedStarts = options.processStarts;
   const processStarts =
-    options.processStarts ??
+    injectedStarts ??
     ((pids: readonly number[]) =>
       readProcessStarts(pids, options.exec, platform));
+  // The sweep's read, which runs before the sweep takes the hook queue.
+  const processStartsAsync = async (
+    pids: readonly number[],
+  ): Promise<ReadonlyMap<number, string> | undefined> =>
+    injectedStarts !== undefined
+      ? injectedStarts(pids)
+      : options.exec !== undefined
+        ? readProcessStarts(pids, options.exec, platform)
+        : readProcessStartsAsync(pids, undefined, platform);
   const loaded = options.host ?? readHostFile(paths.hostFile);
   if (loaded === undefined) {
     throw new Error(
@@ -3386,13 +3398,14 @@ async function initializeDaemon(
   }
 
   /**
-   * The sweep's test of a session's pid: the process answers, and it is the
-   * one the session recorded. One `ps` call reads the start time of every
-   * live pid that has one recorded, so a pid the OS gave to a later process
-   * seals its session on this sweep rather than after `STALE_PID_SESSION_MS`.
-   * A pid `ps` did not list keeps the plain liveness answer.
+   * The start time of every live pid a session recorded one for, in one
+   * read (one `ps` call off Linux). It runs before the sweep takes the hook
+   * queue and does not hold the event loop, because a hook waits on that
+   * queue. Undefined when nothing needs reading or nothing answered.
    */
-  function sweepLiveness(): (pid: number, instance?: string) => boolean {
+  async function sweepStarts(): Promise<
+    ReadonlyMap<number, string> | undefined
+  > {
     const pids = registry
       .live()
       .filter(
@@ -3403,7 +3416,24 @@ async function initializeDaemon(
       )
       .map((session) => session.pid as number)
       .filter(isProcessAlive);
-    const started = pids.length > 0 ? processStarts(pids) : undefined;
+    if (pids.length === 0) return undefined;
+    try {
+      return await processStartsAsync(pids);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * The sweep's test of a session's pid: the process answers, and it is the
+   * one the session recorded. A pid whose start time now differs from the
+   * recorded one names another process, so its session seals on this sweep
+   * rather than after `STALE_PID_SESSION_MS`. A pid with no start time read
+   * keeps the plain liveness answer.
+   */
+  function sweepLiveness(
+    started: ReadonlyMap<number, string> | undefined,
+  ): (pid: number, instance?: string) => boolean {
     return (pid, instance) => {
       if (!isProcessAlive(pid)) return false;
       const now = instance === undefined ? undefined : started?.get(pid);
@@ -3438,6 +3468,9 @@ async function initializeDaemon(
         }
       }
     });
+    // Read before the queue is taken: `ps` is a process spawn.
+    const started =
+      now() - lastSweep >= timers.sweepMs ? await sweepStarts() : undefined;
     await stage("spool, transcripts, sweep, checkpoint", () =>
       serial.run(async () => {
         const t = now();
@@ -3453,7 +3486,7 @@ async function initializeDaemon(
           // disk, and `forgetSealed` then dropped it (#3719).
           let failure: { error: unknown } | undefined;
           const candidates = registry.sweepCandidates(
-            sweepLiveness(),
+            sweepLiveness(started),
             timers.idleSessionMs,
             (session) =>
               pendingSessionEnds.has(session.recorder.sessionUuid) ||

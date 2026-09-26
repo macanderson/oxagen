@@ -5,10 +5,15 @@
  * a live hook first named the pid (#4314).
  */
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ClaudeCodeContext } from "../claude-code/context";
 import { readHostFile, writeHostFile } from "../host/host-file";
-import { readProcessStarts } from "../host/process-scan";
+import {
+  procStartTicks,
+  readProcessStarts,
+  readProcessStartsAsync,
+} from "../host/process-scan";
 import type { Exec } from "../host/service";
 import {
   bundleSigner,
@@ -231,6 +236,33 @@ describe("the recorded start time", () => {
     restored.restore(JSON.parse(JSON.stringify(registry.state())));
     expect(restored.get("sess-1")?.pidInstance).toBe(STARTED);
   });
+
+  it("is read again when a resume reopens the session under the same pid", () => {
+    const table = processTable({ 4242: STARTED });
+    const registry = new SessionRegistry({
+      context: CONTEXT,
+      scope: TEST_ENROLLMENT,
+      now: () => Date.parse("2026-09-25T10:00:00.000Z"),
+      processStarts: table.processStarts,
+    });
+    const { record } = registry.ensure("sess-1", {
+      pid: 4242,
+      lastHookEvent: "SessionStart",
+    });
+    expect(record.pidInstance).toBe(STARTED);
+    registry.seal(record);
+    // The resumed harness is a new process that got the same pid.
+    table.table.set(4242, LATER);
+    const resumed = registry.ensure("sess-1", {
+      pid: 4242,
+      lastHookEvent: "SessionStart",
+    });
+    expect(resumed.reopened).toBe(true);
+    expect(record.pidInstance).toBe(LATER);
+    const alive = (pid: number, instance?: string) =>
+      instance === undefined || table.table.get(pid) === instance;
+    expect(registry.sweepCandidates(alive, 60 * 60_000)).toEqual([]);
+  });
 });
 
 describe("readProcessStarts", () => {
@@ -258,19 +290,93 @@ describe("readProcessStarts", () => {
       readProcessStarts(
         [4242],
         () => ({ status: 1, stdout: "", stderr: "" }),
-        "linux",
+        "darwin",
       ),
     ).toEqual(new Map());
     expect(
       readProcessStarts(
         [4242],
         () => ({ status: null, stdout: "", stderr: "" }),
-        "linux",
+        "darwin",
       ),
     ).toBeUndefined();
   });
 
-  it.skipIf(process.platform === "win32")(
+  it("reads the same way without holding the event loop", async () => {
+    const calls: string[][] = [];
+    const started = await readProcessStartsAsync(
+      [4242, 5151],
+      async (cmd, args) => {
+        calls.push([cmd, ...args]);
+        return { status: 0, stdout: `4242 ${STARTED}\n`, stderr: "" };
+      },
+      "darwin",
+    );
+    expect(started).toEqual(new Map([[4242, STARTED]]));
+    expect(calls).toEqual([["ps", "-o", "pid=,lstart=", "-p", "4242,5151"]]);
+  });
+
+  const BOOT = "9f0c2b7e-51a4-4a4e-8d0b-3c1e7f2a6b90";
+  /** A `/proc/<pid>/stat` line whose command name holds spaces and parentheses. */
+  const stat = (pid: number, ticks: number) =>
+    `${pid} (tacho (hook) x) S 1 ${pid} ${pid} 0 -1 4194560 100 0 0 0 5 3 0 0 20 0 4 0 ${ticks} 12345678 900 18446744073709551615\n`;
+
+  it("counts /proc/<pid>/stat fields from the last parenthesis", () => {
+    expect(procStartTicks(stat(4242, 98765))).toBe("98765");
+    expect(procStartTicks("4242 (claude) S 1")).toBeUndefined();
+    expect(procStartTicks("garbage")).toBeUndefined();
+  });
+
+  it("reads the boot id and start ticks from /proc on Linux, so a clock step leaves the value alone", () => {
+    // procps prints lstart as the boot time plus the start ticks, and the
+    // kernel moves the boot time when the wall clock is stepped. Each `ps`
+    // here answers as it would after a step; none of it may reach the value.
+    let step = 0;
+    const exec: Exec = () => {
+      step += 1;
+      return {
+        status: 0,
+        stdout: `4242 Fri Sep 25 09:00:0${step} 2026\n`,
+        stderr: "",
+      };
+    };
+    const files: Record<string, string> = {
+      "/proc/sys/kernel/random/boot_id": `${BOOT}\n`,
+      "/proc/4242/stat": stat(4242, 98765),
+    };
+    const read = (path: string) => files[path];
+    const first = readProcessStarts([4242, 5151], exec, "linux", read);
+    const second = readProcessStarts([4242, 5151], exec, "linux", read);
+    expect(first).toEqual(new Map([[4242, `${BOOT}:98765`]]));
+    expect(second).toEqual(first);
+    expect(step).toBe(0);
+    // With no boot id there is nothing to tell one boot's ticks from the
+    // next, so nothing is answered and the bare pid stands.
+    expect(
+      readProcessStarts([4242], exec, "linux", (path) =>
+        path.endsWith("boot_id") ? undefined : files[path],
+      ),
+    ).toBeUndefined();
+  });
+
+  it.runIf(process.platform === "linux")(
+    "reads this process's start from the real /proc, the same across two reads",
+    async () => {
+      vi.mocked(spawnSync).mockClear();
+      const first = readProcessStarts([process.pid])?.get(process.pid);
+      await new Promise((resolve) => setTimeout(resolve, 1_100));
+      const second = readProcessStarts([process.pid])?.get(process.pid);
+      expect(first).toMatch(/^[0-9a-f-]{36}:\d+$/);
+      expect(second).toBe(first);
+      const ticks = procStartTicks(readFileSync("/proc/self/stat", "utf8"));
+      expect(first?.endsWith(`:${ticks}`)).toBe(true);
+      expect(
+        vi.mocked(spawnSync).mock.calls.some(([command]) => command === "ps"),
+      ).toBe(false);
+    },
+  );
+
+  it.runIf(process.platform === "darwin")(
     "reads this process's start time from a real ps, in UTC",
     () => {
       const started = readProcessStarts([process.pid])?.get(process.pid);
@@ -362,6 +468,38 @@ describe("the daemon's sweep", () => {
     expect(handle.wal.read(record.recorder.sessionUuid).at(-1)?.kind).toBe(
       "agent_stop",
     );
+  });
+
+  it("keeps a resumed session open when its new process got the old pid", async () => {
+    const table = processTable({ [pid]: STARTED });
+    const { handle } = await boot(table.processStarts);
+    await handle.api.handleHook(hook);
+    await handle.api.handleHook({
+      payload: {
+        session_id: SESSION,
+        hook_event_name: "SessionEnd",
+        reason: "prompt_input_exit",
+      },
+      env: { CLAUDE_PID: String(pid) },
+    });
+    await handle.tick();
+    const record = handle.registry.get(SESSION)!;
+    expect(record.sealed).toBe(true);
+
+    // The harness resumes in a new process, and the OS hands it the same pid.
+    table.table.set(pid, LATER);
+    await handle.api.handleHook({
+      payload: {
+        session_id: SESSION,
+        hook_event_name: "SessionStart",
+        source: "resume",
+      },
+      env: { CLAUDE_PID: String(pid) },
+    });
+    expect(record.sealed).toBe(false);
+    expect(record.pidInstance).toBe(LATER);
+    await handle.tick();
+    expect(record.sealed).toBe(false);
   });
 
   it("keeps the start time across a restart", async () => {

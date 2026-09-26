@@ -661,7 +661,19 @@ export class SessionRegistry {
       : this.get(harnessSessionId);
     if (existing) {
       const reopened = reopens(existing, facts);
-      if (reopened) this.reopen(existing);
+      if (reopened) {
+        this.reopen(existing);
+        // A resume runs in a new process, and the OS may have given it the
+        // pid the session had before. The start time recorded for that
+        // earlier process no longer names the harness, so it is read again
+        // (`notePid`, below). Kept, the next sweep saw a different start
+        // time, sealed the resumed session while it ran, and every cancel
+        // after that was refused as "session has ended".
+        if (facts.pid !== undefined) {
+          delete existing.pidInstance;
+          this.startReadFor.delete(existing);
+        }
+      }
       if (facts.transcriptPath !== undefined)
         existing.transcriptPath = facts.transcriptPath;
       if (facts.cwd !== undefined) {
