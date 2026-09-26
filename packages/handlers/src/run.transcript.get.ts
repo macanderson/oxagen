@@ -28,9 +28,10 @@
 // The cache keeps no text: every half on the page, and every half a search
 // looks inside, is read from the evidence store. A read's body cost is its
 // page's halves, at most one read each, plus the word bodies it has not read
-// before, not the whole run's, plus one body per key it read no body under,
-// to learn that erasure has not destroyed the key (`BodyKeys`). A body that
-// could not be read settles nothing, so its entry stays as the fold said.
+// before, not the whole run's, plus at most one body per key its other reads
+// taught it nothing about, to learn that erasure has not destroyed the key
+// (`BodyKeys`). A body that could not be read settles nothing, so its entry
+// stays as the fold said.
 //
 // A `query` narrows the entries the chips kept (`searchFolds`). Label, tool
 // and target are matched on the entry; each half of an entry they do not
@@ -162,9 +163,10 @@ const BODY_HOLD_BYTES = 33_554_432;
  *
  * The bound is per chain, so a subagent chain spliced in late cannot take a
  * slot another chain's entry already held (#4334). A read can therefore read
- * more than 2,000 halves when a run has subagents, but no more than the
- * frames it folds (`TRANSCRIPT_FRAME_CAP`). A subagent chain adds a handful:
- * its replies and the model step before each.
+ * more than 2,000 halves when a run has subagents, up to the 10,000 frames
+ * it folds (`TRANSCRIPT_FRAME_CAP`). A subagent chain can be as long as the
+ * run's own, so a cold read of a run with subagents can read five times the
+ * bodies one chain's bound allows.
  */
 export const TRANSCRIPT_WORDS_HALF_MAX = 2_000;
 
@@ -433,7 +435,9 @@ type BodyRead =
  * read learns about its keys decides whether a kept digest stands
  * (`readWords`). It is learned per read and never kept across reads, so a
  * process that read a run before erasure answers what a process that never
- * read it answers.
+ * read it answers. A read that waits on another's read of a body takes what
+ * that read learned (`WordsRead`), so it learns as much as if it had opened
+ * the body itself.
  */
 interface BodyKeys {
   opened: Set<string>;
@@ -442,6 +446,19 @@ interface BodyKeys {
 
 function bodyKeys(): BodyKeys {
   return { opened: new Set(), gone: new Set() };
+}
+
+/**
+ * One read of a body for its words (`readWords`): what the body says, or
+ * null when it could not be read whole; whether it will fail again on a
+ * retry; and what the read learned about the body's key. A read that waits
+ * on another's read of the body (`WordsCache.share`) takes all three, so it
+ * learns the key's state as the read that opened the body did.
+ */
+interface WordsRead {
+  said: BodyWords | null;
+  failed: boolean;
+  learned: BodyKeys;
 }
 
 type BodyReader = Pick<EvidenceStore, "getBody" | "getAssembly">;
@@ -507,11 +524,27 @@ function keyIdOf(frame: RunFrame): string | null {
   return ref === null ? null : (parseEvidenceBodyRef(ref)?.keyId ?? null);
 }
 
+/**
+ * Add what one body read learned about keys to what a read has learned.
+ * `readWords` reads a body into a `BodyKeys` of its own, because a read that
+ * waits on it takes what it learned as well.
+ */
+function learnKeys(keys: BodyKeys, learned: BodyKeys): void {
+  for (const keyId of learned.opened) keys.opened.add(keyId);
+  for (const keyId of learned.gone) keys.gone.add(keyId);
+}
+
+/**
+ * `frame`'s body, read whole. What the read learns about the body's key goes
+ * into `keys`. `told` holds the keys this read has already logged as gone,
+ * and is `keys.gone` unless the caller reads into a set of its own.
+ */
 async function readBody(
   bodies: Pick<EvidenceStore, "getBody" | "getAssembly">,
   scope: RunScope,
   frame: RunFrame,
   keys: BodyKeys,
+  told: Set<string> = keys.gone,
 ): Promise<BodyRead> {
   const { bodyRef, bodyDigest } = frame.body;
   if (bodyRef === null || bodyDigest === null) return { state: "none" };
@@ -523,8 +556,10 @@ async function readBody(
     if (err instanceof BodyKeyGoneError) {
       // Said once per key per read: an erased run has a body per frame, and
       // each would say the same thing.
-      if (!keys.gone.has(err.keyId)) {
-        keys.gone.add(err.keyId);
+      const first = !told.has(err.keyId);
+      told.add(err.keyId);
+      keys.gone.add(err.keyId);
+      if (first) {
         logger.warn(
           { err, seq: frame.seq, type: frame.type, keyId: err.keyId },
           "get_run_transcript: a body key no longer opens its bodies; they are shown without text",
@@ -692,7 +727,8 @@ async function half(
  *
  * A kept digest answers only while its body's key still opens bodies, which
  * this read learns (`keys`) from the bodies it reads under that key. For a
- * key it reads no body under, one body is read again to find out. So after
+ * key it learns nothing about that way, one body is read again to find out,
+ * at most once per key. So after
  * erasure a process that kept digests answers what a process that never
  * read the run answers, at the cost of at most one read per key. A body read
  * again that does not open fails only itself: its kept digest no longer
@@ -702,8 +738,14 @@ async function half(
  * `everything` together). Each asks `cache` again just before it opens a
  * body, since the other may have read it by then, and a body the other is
  * reading at that moment is waited on (`WordsCache.share`), not opened
- * twice. A read that tests a key is never shared: it must learn the key's
- * state for this read, not for the read that opened the body.
+ * twice. A read that waits takes what the other learned about the body's
+ * key along with its words (`WordsRead`), so each read learns the keys its
+ * words lean on. A read that finds the words already kept by the other knows
+ * the key opened, since only a body that opened is kept. A read that finds
+ * the body already failed, or whose own read failed before KMS answered,
+ * learns nothing about the key, so where a kept digest leans on it, one body
+ * under it is read again once the other reads are done. A read that tests a
+ * key is never shared: it reads the body itself.
  */
 export async function readWords(
   bodies: Pick<EvidenceStore, "getBody" | "getAssembly">,
@@ -746,8 +788,11 @@ export async function readWords(
   }
   // One body per key this read knows nothing about, read again to learn
   // whether the key still opens it. A key that one of `reads` names needs
-  // none: that read is the test.
+  // none yet: that read, or the read it waits on, is the test. A key it
+  // leaves untested is tested once the reads are done (below).
   const learning = new Set(reads.map(({ frame }) => keyIdOf(frame)));
+  // Keys this read tests with a body of their own, so none is tested twice.
+  const tested = new Set<string>();
   for (const { frame } of hits) {
     const keyId = keyIdOf(frame);
     if (
@@ -758,6 +803,7 @@ export async function readWords(
     )
       continue;
     learning.add(keyId);
+    tested.add(keyId);
     reads.push({ fold: null, frame });
   }
   const gone = (frame: RunFrame) => {
@@ -767,6 +813,36 @@ export async function readWords(
   // Bodies this read found will fail again. A kept digest of one of them no
   // longer answers, as a read with no cache would not.
   const failed = new Set<RunFrame>();
+  // The keys this read has logged as gone. Each body is read into a
+  // `BodyKeys` of its own, so `readBody` cannot tell from that alone.
+  const told = new Set(keys.gone);
+  // What `frame`'s body says, kept in `cache` before a shared read settles,
+  // so a read that asks once it has settled finds it there. What the read
+  // learned about the body's key comes back with it rather than going into
+  // `keys`, because a read beside this one may be waiting on it.
+  const load = async (frame: RunFrame): Promise<WordsRead> => {
+    const learned = bodyKeys();
+    const body = await readBody(bodies, scope, frame, learned, told);
+    if (body.state === "gone" || body.state === "erased") {
+      cache?.fail(scope, frame);
+      return { said: null, failed: true, learned };
+    }
+    // Bytes that are not text were read whole, and show no words.
+    const said: BodyWords | null =
+      body.state === "read"
+        ? bodyWords(body)
+        : body.state === "not_text"
+          ? { stream: false, words: null }
+          : null;
+    if (said !== null) cache?.set(scope, frame, said);
+    return { said, failed: false, learned };
+  };
+  // A body read, this read's own or one it waited on, added to this read.
+  const take = (frame: RunFrame, read: WordsRead): BodyWords | null => {
+    learnKeys(keys, read.learned);
+    if (read.failed) failed.add(frame);
+    return read.said;
+  };
   const said = await mapConcurrent(
     reads,
     BODY_CONCURRENCY,
@@ -776,39 +852,51 @@ export async function readWords(
         cache?.fail(scope, frame);
         return undefined;
       }
-      // What the body says, kept in `cache` before a shared read settles, so
-      // a read that asks once it has settled finds it there. Null when the
-      // body could not be read whole.
-      const load = async (): Promise<BodyWords | null> => {
-        const body = await readBody(bodies, scope, frame, keys);
-        if (body.state === "gone" || body.state === "erased") {
-          failed.add(frame);
-          cache?.fail(scope, frame);
-          return null;
-        }
-        // Bytes that are not text were read whole, and show no words.
-        const read: BodyWords | null =
-          body.state === "read"
-            ? bodyWords(body)
-            : body.state === "not_text"
-              ? { stream: false, words: null }
-              : null;
-        if (read !== null) cache?.set(scope, frame, read);
-        return read;
-      };
-      // A key's test answers no entry. It reads the body itself, so what it
-      // learns lands in this read's `keys`.
+      // A key's test answers no entry, and is never shared: it reads the
+      // body itself.
       if (fold === null) {
-        await load();
+        take(frame, await load(frame));
         return undefined;
       }
       // A read running beside this one may have read the body by now.
       const landed = cache?.get(scope, frame);
       if (landed === UNREADABLE) return undefined;
-      if (landed !== undefined) return wordsOf(fold, landed);
-      const says =
-        cache === null ? await load() : await cache.share(scope, frame, load);
+      if (landed !== undefined) {
+        // Only a body that opened is kept, so its key opened.
+        const keyId = keyIdOf(frame);
+        if (keyId !== null) keys.opened.add(keyId);
+        return wordsOf(fold, landed);
+      }
+      const says = take(
+        frame,
+        cache === null
+          ? await load(frame)
+          : await cache.share(scope, frame, () => load(frame)),
+      );
       return says === null ? undefined : wordsOf(fold, says);
+    },
+  );
+  // A read that found a body another read had already failed, or whose own
+  // read failed before KMS answered, learned nothing about the body's key.
+  // Where a kept digest leans on a key still unknown, one body under it is
+  // read again, unshared, as the test the read above did not make.
+  const untested = new Map<string, RunFrame>();
+  for (const { frame } of hits) {
+    const keyId = keyIdOf(frame);
+    if (
+      keyId === null ||
+      keys.opened.has(keyId) ||
+      keys.gone.has(keyId) ||
+      tested.has(keyId)
+    )
+      continue;
+    if (!untested.has(keyId)) untested.set(keyId, frame);
+  }
+  await mapConcurrent(
+    [...untested.values()],
+    BODY_CONCURRENCY,
+    async (frame) => {
+      take(frame, await load(frame));
     },
   );
   reads.forEach(({ fold }, i) => {

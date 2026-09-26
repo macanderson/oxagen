@@ -40,6 +40,12 @@
 // transcript's read keeps what the body says with `set` before its shared
 // promise settles, so a read that asks after it settles finds the digest
 // here. The shared promise is dropped when it settles.
+//
+// A shared read that has been in flight for `SHARED_READ_MAX_MS` is not
+// joined. A blob GET or a KMS decrypt that hangs would otherwise hold every
+// later reader of that body in the process for as long as it hangs. A caller
+// that finds a read that old starts one of its own, and later callers join
+// that one.
 import type { RunFrame, TranscriptWords } from "@oxagen/run-ledger";
 
 /**
@@ -61,10 +67,12 @@ export interface WordsCacheLimits {
 
 /**
  * 16,384 bodies. An entry holds its key and one digest, a few hundred bytes,
- * so the cache stays under 10 MB. A long run's whole-run read asks for at
- * most 2,000 halves on each chain (`TRANSCRIPT_WORDS_HALF_MAX`). A subagent
- * chain adds a handful, so about eight such runs fit at once. A failed read
- * is remembered for a minute.
+ * so the cache stays under 10 MB. A whole-run read asks for at most 2,000
+ * halves on each chain (`TRANSCRIPT_WORDS_HALF_MAX`), so about eight long
+ * runs with no subagents fit at once. The bound is per chain, and a run can
+ * have many subagent chains, so one read can ask for as many halves as the
+ * 10,000 frames it folds (`TRANSCRIPT_FRAME_CAP`). One run that large takes
+ * about 60 percent of the cache. A failed read is remembered for a minute.
  */
 export const WORDS_CACHE_LIMITS: WordsCacheLimits = {
   maxEntries: 16_384,
@@ -75,6 +83,14 @@ interface Scope {
   orgId: string;
   workspaceId: string;
 }
+
+/**
+ * How long a shared read of a body can be in flight and still be joined. A
+ * body read is one blob GET and one KMS decrypt, which answer in well under
+ * a second, so a read still in flight after 15 seconds is stuck. A caller
+ * that finds one that old reads the body itself (`share`).
+ */
+const SHARED_READ_MAX_MS = 15_000;
 
 /** What the cache answers for a body it remembers as unreadable. */
 export const UNREADABLE = "unreadable";
@@ -99,6 +115,8 @@ export interface WordsCache {
    * `read`, run at most once at a time for the frame's body. While one read
    * of the body is in flight, a second caller is handed its promise and
    * opens nothing. Once it settles, the next caller runs `read` again. A
+   * read in flight for `SHARED_READ_MAX_MS` or longer is not joined: the
+   * next caller runs `read` itself, and later callers join that read. A
    * frame with no kept body is read every time.
    */
   share<T>(scope: Scope, frame: RunFrame, read: () => Promise<T>): Promise<T>;
@@ -112,7 +130,7 @@ function keyOf(scope: Scope, frame: RunFrame): string | null {
 
 export function createWordsCache(
   limits: WordsCacheLimits = WORDS_CACHE_LIMITS,
-  now: () => number = Date.now,
+  now: () => number = () => Date.now(),
 ): WordsCache {
   type Held = BodyWords | typeof UNREADABLE;
   const kept = new Map<string, { words: Held; until: number | null }>();
@@ -128,9 +146,13 @@ export function createWordsCache(
     kept.set(key, { words, until });
   };
 
-  // Keyed like `kept`. Every caller that shares a read of one body reads it
-  // into the same type, so a promise held here is the type its caller names.
-  const inFlight = new Map<string, Promise<unknown>>();
+  // Keyed like `kept`, with the time each read started. Every caller that
+  // shares a read of one body reads it into the same type, so a promise held
+  // here is the type its caller names.
+  const inFlight = new Map<
+    string,
+    { read: Promise<unknown>; startedAt: number }
+  >();
 
   return {
     get(scope, frame) {
@@ -158,9 +180,18 @@ export function createWordsCache(
       const key = keyOf(scope, frame);
       if (key === null) return read();
       const pending = inFlight.get(key);
-      if (pending !== undefined) return pending as Promise<T>;
-      const started = read().finally(() => inFlight.delete(key));
-      inFlight.set(key, started);
+      if (
+        pending !== undefined &&
+        now() - pending.startedAt < SHARED_READ_MAX_MS
+      )
+        return pending.read as Promise<T>;
+      const startedAt = now();
+      // A stuck read that settles after a fresh one replaced it leaves the
+      // fresh one in place.
+      const started: Promise<T> = read().finally(() => {
+        if (inFlight.get(key)?.read === started) inFlight.delete(key);
+      });
+      inFlight.set(key, { read: started, startedAt });
       return started;
     },
   };

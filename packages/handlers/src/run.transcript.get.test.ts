@@ -44,7 +44,11 @@ import {
   tachoRow,
   tachoSession,
 } from "./run.test-support";
-import { createWordsCache } from "./lib/transcript-words-cache";
+import {
+  createWordsCache,
+  UNREADABLE,
+  type WordsCache,
+} from "./lib/transcript-words-cache";
 import { decodeFrameCursor, encodeFrameCursor } from "./run.get";
 
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
@@ -3199,6 +3203,81 @@ describe("readWords beside another read of the same run", () => {
     expect(two.size).toBe(0);
     // One body for each read: its own test of the key.
     expect(getBody).toHaveBeenCalledTimes(2);
+  });
+
+  /** A store whose KEK erasure has destroyed: KMS refuses the key itself. */
+  const erasedKey = () =>
+    Promise.reject(
+      new BodyKeyGoneError("k", {
+        cause: Object.assign(new Error("pending deletion"), {
+          name: "KMSInvalidStateException",
+        }),
+      }),
+    );
+
+  // Review round 1 on #4382: a read that waited on another's read of a body
+  // learned nothing about the body's key, since the shared read wrote what
+  // it learned into the other read's keys. So after erasure the read that
+  // waited answered the digests it kept under that key.
+  it("learns an erased key from the read it waits on, so neither of two reads at once answers a kept digest (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const folds = stepFolds(frames(2, "Joined"));
+    const prompts = folds.filter((fold) => fold.node === "prompt");
+    const cache = createWordsCache();
+    // Only the prompts are kept. Each full read below then holds the prompts
+    // as kept digests and misses the model steps, all under one key.
+    const warm = await readWords(deps.bodies, SCOPE, folds, {
+      cache,
+      only: (fold) => fold.node === "prompt",
+    });
+    expect(warm.size).toBe(2);
+    getBody.mockClear();
+    getBody.mockImplementation(erasedKey);
+    const [one, two] = await Promise.all([
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+    ]);
+    for (const answer of [one, two]) {
+      expect(prompts.filter((fold) => answer.has(fold))).toEqual([]);
+      expect(answer.size).toBe(0);
+    }
+    // Each model step's body is opened once, by the read that got there
+    // first. The other read waits on those reads and learns the key there.
+    expect(getBody).toHaveBeenCalledTimes(2);
+  });
+
+  // Review round 1 on #4382: a read that found a body it missed already
+  // failed by another read took that as the key's test, and learned nothing
+  // about the key from it.
+  it("tests the key itself when a body it missed was failed by another read meanwhile (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const [prompt, model] = stepFolds(frames(1, "Beaten"));
+    if (!prompt || !model) throw new Error("no folds");
+    const modelRef = model.response?.body.bodyRef;
+    const kept = createWordsCache();
+    await readWords(deps.bodies, SCOPE, [prompt], { cache: kept });
+    // The model step's body misses when the read looks first, and reads as
+    // failed by the time the read would open it.
+    let asked = 0;
+    const cache: WordsCache = {
+      ...kept,
+      get: (scope, frame) => {
+        if (frame.body.bodyRef !== modelRef) return kept.get(scope, frame);
+        asked += 1;
+        return asked === 1 ? undefined : UNREADABLE;
+      },
+    };
+    getBody.mockClear();
+    getBody.mockImplementation(erasedKey);
+    const words = await readWords(deps.bodies, SCOPE, [prompt, model], {
+      cache,
+    });
+    expect(words.has(prompt)).toBe(false);
+    expect(words.has(model)).toBe(false);
+    // The prompt's body, read again to learn the key.
+    expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([
+      prompt.request?.body.bodyRef,
+    ]);
   });
 });
 

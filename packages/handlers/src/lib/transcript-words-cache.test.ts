@@ -169,6 +169,39 @@ describe("WordsCache.share", () => {
     expect(read).toHaveBeenCalledTimes(3);
   });
 
+  // Review round 1 on #4382: a read that hung held every later reader of the
+  // body in the process for as long as it hung.
+  it("starts a read of its own rather than join one in flight for 15 seconds", async () => {
+    vi.useFakeTimers({ now: 0 });
+    try {
+      const cache = createWordsCache();
+      const stuck = held<string>();
+      const first = cache.share(A, frame(1), () => stuck.promise);
+      vi.advanceTimersByTime(14_999);
+      const join = vi.fn(() => Promise.resolve("never read"));
+      const joined = cache.share(A, frame(1), join);
+      expect(join).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      const fresh = held<string>();
+      const own = vi.fn(() => fresh.promise);
+      const late = cache.share(A, frame(1), own);
+      expect(own).toHaveBeenCalledTimes(1);
+      // The stuck read settles after the fresh one replaced it, and leaves
+      // the fresh one to be joined.
+      stuck.settle("stuck");
+      await expect(first).resolves.toBe("stuck");
+      await expect(joined).resolves.toBe("stuck");
+      const next = vi.fn(() => Promise.resolve("never read"));
+      const third = cache.share(A, frame(1), next);
+      expect(next).not.toHaveBeenCalled();
+      fresh.settle("fresh");
+      await expect(late).resolves.toBe("fresh");
+      await expect(third).resolves.toBe("fresh");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("reads a frame with no kept body every time, since nothing names it (negative)", async () => {
     const cache = createWordsCache();
     const pending = held<string>();
