@@ -10,20 +10,18 @@ import {
   RESERVED_ORG_SLUGS,
   RESERVED_WORKSPACE_SLUGS,
   WORKSPACE_SLUG_PATTERN,
+  slugFromName,
 } from "@oxagen/oxagen/contracts/org.create";
 
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
-/** Lowercase, hyphen-separated, trimmed of edge hyphens, at most `max` characters. */
+/**
+ * The slug a name suggests, by the one rule every name-made slug follows
+ * (`slugFromName`, ADR-198): spaces become hyphens and every other special
+ * character, apostrophes included, is dropped.
+ */
 export function toSlug(input: string, max = 40): string {
-  return input
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, max)
-    .replace(/-+$/g, "");
+  return slugFromName(input, max);
 }
 
 /** The namespace a name suggests: its letters and digits, at most six. */

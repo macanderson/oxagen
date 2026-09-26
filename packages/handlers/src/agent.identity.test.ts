@@ -97,6 +97,9 @@ import { agentRegisterHandler } from "./agent.register";
 import { agentCredentialRotateHandler } from "./agent.credential.rotate";
 import { agentSuspendHandler } from "./agent.suspend";
 import { agentRetireHandler } from "./agent.retire";
+import { agentMoveHandler } from "./agent.move";
+import { agentToolbeltAssignHandler } from "./agent.toolbelt.assign";
+import { agentMove } from "@oxagen/oxagen/contracts/agent.move";
 import { agentRegister } from "@oxagen/oxagen/contracts/agent.register";
 import { agentCredentialRotate } from "@oxagen/oxagen/contracts/agent.credential.rotate";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
@@ -104,10 +107,13 @@ import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { makeCTX } from "./test-utils/fixtures";
 
+/** A runtime id the gate cases name; the tx double holds no runtime row. */
+const GATE_RUNTIME_ID = "rtm_0123456789abcdefghjkmn";
+
 const REGISTER_INPUT = agentRegister.input.parse({
-  slug: "release-bot",
   name: "Release bot",
   harness: "stella",
+  runtimeId: GATE_RUNTIME_ID,
 });
 
 const WRITES = [
@@ -148,18 +154,17 @@ const forbidden =
     isHandlerError(err) && err.code === "forbidden" && err.reason === reason;
 
 /**
- * The gate passed: register's next step is the agent insert, which the
- * double refuses with its own error; the other three read the identity first
- * and the double answers with no row, so they refuse `not_found`.
+ * The gate passed: register's next step reads the runtime the input names,
+ * and the other three read the identity. The double answers every read with
+ * no row, so each refuses `not_found` with its own reason.
  */
 const pastGate =
   (name: (typeof WRITES)[number][0]) =>
   (err: unknown): boolean =>
-    name === "register_agent"
-      ? err instanceof Error && /a write reached the store/.test(err.message)
-      : isHandlerError(err) &&
-        err.code === "not_found" &&
-        err.reason === "agent_not_found";
+    isHandlerError(err) &&
+    err.code === "not_found" &&
+    err.reason ===
+      (name === "register_agent" ? "runtime_not_found" : "agent_not_found");
 
 /** An API-key call: no signed-in user, the key's id. */
 const KEY_CTX = makeCTX({ userId: null, apiKeyId: "aky_row", surface: "mcp" });
@@ -251,8 +256,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
     const { resolveApiKey } = await import("@oxagen/auth/resolvers");
 
     let owner: import("@oxagen/agent/handlers/_agent-identity.test-support").SeededTenant;
+    let laptop: Awaited<ReturnType<typeof support.seedRuntime>>;
+    let cloud: Awaited<ReturnType<typeof support.seedRuntime>>;
     const orgIds: string[] = [];
     const userIds: string[] = [];
+    const registerInput = (over: Record<string, unknown> = {}) =>
+      agentRegister.input.parse({
+        name: "Release bot",
+        harness: "stella",
+        runtimeId: laptop.publicId,
+        ...over,
+      });
 
     const inScope = <T>(t: typeof owner, fn: () => Promise<T>) =>
       runInTenantScope({ orgId: t.orgId, workspaceId: t.workspaceId }, fn);
@@ -269,6 +283,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
       orgIds.push(owner.orgId);
       userIds.push(owner.userId);
       await support.seedMember(owner, "Owner");
+      laptop = await support.seedRuntime(owner, {
+        name: "Mac's laptop",
+        slug: "macs-laptop",
+      });
+      cloud = await support.seedRuntime(owner, {
+        name: "Cloud VM",
+        slug: "cloud-vm",
+      });
     });
 
     afterAll(async () => {
@@ -284,14 +306,28 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let rotatedSecret: string;
     let firstRetire: Awaited<ReturnType<typeof agentRetireHandler>>;
 
-    it("register_agent mints the row, its principal and one credential whose secret is returned once and never stored", async () => {
+    it("register_agent mints the row, its principal, version 1 on its runtime and belt, and one credential whose secret is returned once and never stored", async () => {
       registered = await inScope(owner, () =>
-        agentRegisterHandler(REGISTER_INPUT, ctx()),
+        agentRegisterHandler(registerInput(), ctx()),
       );
       expect(agentRegister.output.parse(registered)).toEqual(registered);
+      // The slug is derived from the name (ADR-198).
+      expect(registered.slug).toBe("release-bot");
       expect(registered.agentKey).toBe(
         `${owner.orgNamespace}.${owner.workspaceNamespace}.release-bot`,
       );
+      expect(registered.runtime).toEqual({
+        id: laptop.publicId,
+        name: "Mac's laptop",
+        slug: "macs-laptop",
+      });
+      // No belt named: the workspace's All tools belt, created on first use.
+      expect(registered.toolbelt).toMatchObject({
+        name: "All tools",
+        slug: "all-tools",
+        kind: "all_tools",
+      });
+      expect(registered.version).toBe(1);
       const stored = await withSystemDb((tx) =>
         tx
           .select({
@@ -329,17 +365,154 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(read.credentials.map((c) => c.id)).toEqual([
         registered.credential.id,
       ]);
+      expect(read.runtime?.slug).toBe("macs-laptop");
+      expect(read.versions.map((v) => [v.version, v.changeKind])).toEqual([
+        [1, "registered"],
+      ]);
+    });
+
+    it("register_agent refuses a second agent with the same harness on the runtime, naming the one that holds it", async () => {
+      await expect(
+        inScope(owner, () =>
+          agentRegisterHandler(
+            registerInput({ name: "Second bot", slug: "second-bot" }),
+            ctx(),
+          ),
+        ),
+      ).rejects.toSatisfy(
+        (err: unknown) =>
+          isHandlerError(err) &&
+          err.code === "conflict" &&
+          err.reason === "runtime_harness_taken" &&
+          /Release bot/.test(err.message),
+      );
     });
 
     it("register_agent refuses a slug the workspace already holds", async () => {
       await expect(
-        inScope(owner, () => agentRegisterHandler(REGISTER_INPUT, ctx())),
+        inScope(owner, () =>
+          agentRegisterHandler(
+            registerInput({ runtimeId: cloud.publicId }),
+            ctx(),
+          ),
+        ),
       ).rejects.toSatisfy(
         (err: unknown) =>
           isHandlerError(err) &&
           err.code === "conflict" &&
           err.reason === "agent_slug_taken",
       );
+    });
+
+    it("register_agent refuses a runtime the workspace does not hold", async () => {
+      await expect(
+        inScope(owner, () =>
+          agentRegisterHandler(
+            registerInput({ slug: "ghost", runtimeId: GATE_RUNTIME_ID }),
+            ctx(),
+          ),
+        ),
+      ).rejects.toSatisfy(
+        (err: unknown) =>
+          isHandlerError(err) &&
+          err.code === "not_found" &&
+          err.reason === "runtime_not_found",
+      );
+    });
+
+    it("move_agent puts the agent on another runtime as version 2, keeps its principal, and revokes its live host", async () => {
+      const host = await support.seedHost(owner, registered.agentKey!, {
+        hostname: "old-laptop",
+      });
+      const moved = await inScope(owner, () =>
+        agentMoveHandler(
+          { agentId: registered.agentId, runtimeId: cloud.publicId },
+          ctx(),
+        ),
+      );
+      expect(agentMove.output.parse(moved)).toEqual({
+        agentId: registered.agentId,
+        runtime: { id: cloud.publicId, name: "Cloud VM", slug: "cloud-vm" },
+        version: 2,
+        revokedHosts: 1,
+      });
+      const [stored] = await withSystemDb((tx) =>
+        tx
+          .select({ status: schema.tachoHosts.status })
+          .from(schema.tachoHosts)
+          .where(eq(schema.tachoHosts.id, host.id)),
+      );
+      expect(stored?.status).toBe("revoked");
+      const read = await inScope(owner, () =>
+        agentGetHandler({ agentId: registered.agentId }, ctx()),
+      );
+      expect(read.identity.principalId).toBe(registered.principalId);
+      expect(read.runtime?.slug).toBe("cloud-vm");
+      expect(read.versions.map((v) => [v.version, v.changeKind])).toEqual([
+        [2, "runtime_changed"],
+        [1, "registered"],
+      ]);
+      // Moving to the runtime the agent is already on changes nothing.
+      await expect(
+        inScope(owner, () =>
+          agentMoveHandler(
+            { agentId: registered.agentId, runtimeId: cloud.publicId },
+            ctx(),
+          ),
+        ),
+      ).rejects.toSatisfy(
+        (err: unknown) =>
+          isHandlerError(err) &&
+          err.code === "conflict" &&
+          err.reason === "same_runtime",
+      );
+    });
+
+    it("assign_agent_toolbelt writes version 3 with the new belt and refuses the belt the agent already carries", async () => {
+      const belt = await support.seedToolbelt(owner, {
+        kind: "custom",
+        name: "Read only",
+        slug: "read-only",
+      });
+      const assigned = await inScope(owner, () =>
+        agentToolbeltAssignHandler(
+          { agentId: registered.agentId, toolbeltId: belt.publicId },
+          ctx(),
+        ),
+      );
+      expect(assigned).toEqual({
+        agentId: registered.agentId,
+        toolbelt: {
+          id: belt.publicId,
+          name: "Read only",
+          slug: "read-only",
+          kind: "custom",
+        },
+        version: 3,
+      });
+      await expect(
+        inScope(owner, () =>
+          agentToolbeltAssignHandler(
+            { agentId: registered.agentId, toolbeltId: belt.publicId },
+            ctx(),
+          ),
+        ),
+      ).rejects.toSatisfy(
+        (err: unknown) =>
+          isHandlerError(err) &&
+          err.code === "conflict" &&
+          err.reason === "same_toolbelt",
+      );
+      const read = await inScope(owner, () =>
+        agentGetHandler({ agentId: registered.agentId }, ctx()),
+      );
+      expect(read.toolbelt?.slug).toBe("read-only");
+      expect(read.versions[0]).toMatchObject({
+        version: 3,
+        changeKind: "toolbelt_changed",
+        runtime: { slug: "cloud-vm" },
+        toolbelt: { slug: "read-only" },
+      });
     });
 
     it("rotate_agent_credential retires the live key and mints one more in the same write", async () => {
@@ -489,7 +662,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
             reason: schema.tachoControlCommands.reason,
           })
           .from(schema.tachoControlCommands)
-          .where(eq(schema.tachoControlCommands.orgId, owner.orgId)),
+          .where(
+            and(
+              eq(schema.tachoControlCommands.orgId, owner.orgId),
+              // The move above queued a revoke for the old laptop's host.
+              eq(schema.tachoControlCommands.hostId, host.id),
+            ),
+          ),
       );
       expect(commands).toEqual([
         {
@@ -507,7 +686,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
       expect(read.identity.status).toBe("retired");
       expect(read.identity.principalId).toBe(registered.principalId);
-      expect(read.hosts.map((h) => h.revokedAt !== null)).toEqual([true]);
+      // The host the move revoked and the one retirement revoked.
+      expect(read.hosts.map((h) => h.revokedAt !== null)).toEqual([true, true]);
     });
 
     it("a retired identity answers retire again with the recorded instant, without a write, and refuses rotate and suspend", async () => {

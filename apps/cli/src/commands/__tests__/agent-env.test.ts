@@ -1,8 +1,8 @@
 /**
  * `oxagen agent env …` output-discipline + wiring tests (ADR-023 §4).
  *
- * Agent handles resolve to public ids (agt_…) via the agent-definition list
- * (GET); env slugs resolve via the environment list. --json emits one JSON
+ * Agent handles resolve to public ids (agt_…) through get_agent (an agent key
+ * by its last segment, the slug); env slugs resolve via the environment list. --json emits one JSON
  * line; pretty prints a summary/table; a missing --env is a usage error
  * (exit 2, no API call); API failures route to a uniform stderr error (exit 1).
  */
@@ -45,10 +45,8 @@ function makeWriter(): { writer: CommandWriter; out: string[]; err: string[] } {
   };
 }
 
-const AGENTS = [
-  { agentId: "agt_code", slug: "coder", agentKey: "acme.default.coder" },
-  { agentId: "agt_rev", slug: "reviewer", agentKey: null },
-];
+/** get_agent's answer for "coder", as far as the handle resolution reads it. */
+const CODER = { identity: { id: "agt_code" } };
 
 const BINDING = {
   id: "aeb_1",
@@ -83,8 +81,8 @@ describe("handleAgentEnvBind", () => {
   });
 
   it("resolves an agent slug + env slug then binds", async () => {
-    mockGet.mockResolvedValueOnce({ agents: AGENTS });
     mockPost
+      .mockResolvedValueOnce(CODER)
       .mockResolvedValueOnce({
         environments: [{ id: "env_1", slug: "staging" }],
       })
@@ -95,7 +93,7 @@ describe("handleAgentEnvBind", () => {
       { env: "staging", primary: true },
       writer,
     );
-    expect(mockGet).toHaveBeenCalledWith("agent/definitions");
+    expect(mockPost).toHaveBeenCalledWith("agents/get", { agentId: "coder" });
     expect(mockPost).toHaveBeenLastCalledWith("agent/environment/bind", {
       agentId: "agt_code",
       environmentId: "env_1",
@@ -125,19 +123,22 @@ describe("handleAgentEnvBind", () => {
   });
 
   it("fails cleanly when the agent handle is unknown (exit 1)", async () => {
-    mockGet.mockResolvedValueOnce({ agents: AGENTS });
+    mockPost.mockRejectedValueOnce(new ApiError("No agent", 404));
     const { writer, err } = makeWriter();
     await handleAgentEnvBind("ghost", { env: "env_1" }, writer);
     expect(err[0]).toContain("No agent matching 'ghost'");
     expect(process.exitCode).toBe(1);
-    expect(mockPost).not.toHaveBeenCalled();
+    // The lookup was the only call: nothing was bound.
+    expect(mockPost).toHaveBeenCalledOnce();
   });
 
-  it("matches an agent by its agent-key", async () => {
-    mockGet.mockResolvedValueOnce({ agents: AGENTS });
-    mockPost.mockResolvedValueOnce({ binding: BINDING });
+  it("matches an agent by its agent-key, read by its slug", async () => {
+    mockPost
+      .mockResolvedValueOnce(CODER)
+      .mockResolvedValueOnce({ binding: BINDING });
     const { writer } = makeWriter();
     await handleAgentEnvBind("acme.default.coder", { env: "env_1" }, writer);
+    expect(mockPost).toHaveBeenCalledWith("agents/get", { agentId: "coder" });
     expect(mockPost).toHaveBeenCalledWith("agent/environment/bind", {
       agentId: "agt_code",
       environmentId: "env_1",

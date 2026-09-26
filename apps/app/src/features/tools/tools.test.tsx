@@ -66,6 +66,10 @@ const actions = vi.hoisted(() => ({
   readConnection: vi.fn(),
   registerServer: vi.fn(),
   removeProvider: vi.fn(),
+  cloneToolbelt: vi.fn(),
+  updateToolbelt: vi.fn(),
+  deleteToolbelt: vi.fn(),
+  setToolState: vi.fn(),
 }));
 vi.mock("./actions", () => actions);
 vi.mock("./provider-auth-actions", () => ({
@@ -233,7 +237,7 @@ describe("Tools › tabs", () => {
     );
   });
 
-  it("counts the registry's versions, the providers and the switches denying, and nothing for the two unstored tabs", async () => {
+  it("counts the registry's versions, the providers and the switches denying, and nothing for Toolbelts or Policy", async () => {
     await renderTools();
     const count = (tab: string) =>
       document.querySelector(`[data-count="${tab}"]`)?.textContent ?? null;
@@ -607,45 +611,43 @@ describe("Tools › tools tab", () => {
 });
 
 describe("Tools › toolbelts tab", () => {
-  it("keeps both panels and says toolbelts and assignments are not stored, rather than drawing an empty table", async () => {
-    await renderTools({}, "toolbelts");
+  it("lists the workspace's belts from list_toolbelts, All tools first, and opens none", async () => {
+    const { calls } = await renderTools({}, "toolbelts");
+    expect(calls.toolbelts).toHaveLength(1);
+    expect(calls.toolbelt).toHaveLength(0);
     const belts = screen.getByRole("region", { name: "Toolbelts" });
     expect(
-      within(belts).getByText(
-        "A toolbelt is a named set of tool versions assigned to agents. It decides what a model is shown, and nothing else.",
-      ),
-    ).toBeVisible();
-    expect(
-      within(belts).getByTestId("tools-toolbelts-not-backed"),
-    ).toHaveAttribute("data-gap", "#3852");
-    expect(within(belts).queryByRole("table")).not.toBeInTheDocument();
-    expect(
-      within(belts).getByText(/Assigning a belt is not a permission/),
-    ).toBeVisible();
-    const assignments = screen.getByRole("region", { name: "Assignments" });
-    expect(
-      within(assignments).getByTestId("tools-assignments-not-backed"),
-    ).toHaveAttribute("data-gap", "#3852");
-    expect(
-      within(assignments).getByTestId("tools-assignments-agents"),
-    ).toHaveAttribute("href", "/acme/core-platform/agents");
+      within(belts)
+        .getAllByTestId("toolbelt-row")
+        .map((row) => row.getAttribute("data-belt")),
+    ).toEqual(["tbt_alltools", "tbt_reviewbelt"]);
+    expect(screen.queryByTestId("tools-belt")).not.toBeInTheDocument();
+    expect(document.querySelector('[data-gap="#3852"]')).toBeNull();
   });
 
-  it("opens New toolbelt with the three owners, and saves nothing", async () => {
-    await renderTools({}, "toolbelts");
-    fireEvent.click(screen.getByTestId("tools-belt-new-open"));
-    const dialog = await screen.findByTestId("tools-belt-new");
-    expect(
-      within(dialog)
-        .getAllByRole("option")
-        .map((option) => option.textContent),
-    ).toEqual(["platform", "finops", "security"]);
-    expect(within(dialog).getByTestId("tools-belt-new-confirm")).toBeDisabled();
+  it("opens the belt the URL names below the list", async () => {
+    const { calls } = await renderTools({}, "toolbelts", {
+      belt: "tbt_reviewbelt",
+    });
+    expect(calls.toolbelt).toHaveLength(1);
+    expect(calls.toolbelt[0]?.[1]).toBe("tbt_reviewbelt");
+    expect(screen.getByTestId("tools-belt")).toHaveAttribute(
+      "data-belt",
+      "tbt_reviewbelt",
+    );
   });
 
-  it("offers a member no New toolbelt", async () => {
+  it("reads no belt for an id that is not a toolbelt's", async () => {
+    const { calls } = await renderTools({}, "toolbelts", { belt: "Review" });
+    expect(calls.toolbelt).toHaveLength(0);
+  });
+
+  it("offers a member no New toolbelt and no Clone", async () => {
     await renderTools({}, "toolbelts", {}, member);
-    expect(screen.queryByTestId("tools-belt-new-open")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("tools-belt-new")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("toolbelt-clone-tbt_alltools"),
+    ).not.toBeInTheDocument();
   });
 });
 

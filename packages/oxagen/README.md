@@ -91,7 +91,7 @@ handlers and installs no gate.
   `./mandates/schemas`, `./mandates/schemas.sample` (test data),
   `./approval-rules/schemas`, `./tacho/schemas`, `./tacho/command-limits`,
   `./skill-frontmatter`, `./skills`, `./configuration-clone`,
-  `./agent-definition-source`, `./avatar`, and
+  `./agent-version-config`, `./avatar`, and
   `./lib/relationship-type-pattern`.
 - Credential and principal helpers: `./platform-operator`, `./agent-credential`,
   `./cli-session`, `./ledger-run-token`, and `./client-ip`.

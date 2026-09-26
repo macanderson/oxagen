@@ -19,7 +19,6 @@ const original: ConfigurationSource = {
   source:
     '---\nname: review\nversion: "1.0.0"\nscope: workspace\n---\nReview changes.',
   files: [{ path: "notes.md", content: "Notes" }],
-  harness: null,
   repository: { bindingId: "binding" } as ConfigurationSource["repository"],
 };
 beforeEach(() => {
@@ -69,16 +68,11 @@ describe("get_clone_draft", () => {
     ]);
   });
   it("rules a candidate out by its workspace slug or display name without a GitHub call", async () => {
-    const source = vi.fn().mockResolvedValue({
-      ...original,
-      kind: "agent" as const,
-      name: "Review",
-      source: 'slug = "review"\nname = "Review"\ndescription = "Reviews."\n',
-    });
+    const source = vi.fn().mockResolvedValue(original);
     const taken = vi.fn().mockResolvedValue(
       takenNames({
         slugs: new Set(["review-cloned"]),
-        names: new Set(["Review-cloned-1"]),
+        names: new Set(["review-cloned-1"]),
       }),
     );
     const branchTaken = vi.fn().mockResolvedValue(false);
@@ -86,10 +80,10 @@ describe("get_clone_draft", () => {
       source,
       taken,
       branchTaken,
-    })({ kind: "agent", sourceId: "review" }, makeCTX());
+    })({ kind: "skill", sourceId: "review" }, makeCTX());
     expect(out).toMatchObject({
       slug: "review-cloned-2",
-      name: "Review-cloned-2",
+      name: "review-cloned-2",
     });
     expect(taken).toHaveBeenCalledTimes(1);
     expect(branchTaken).toHaveBeenCalledTimes(1);

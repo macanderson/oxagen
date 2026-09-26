@@ -53,18 +53,6 @@ describe("the wizard registry", () => {
     }
   });
 
-  it("carries the agent wizard: five steps, ending on a pull request", async () => {
-    const agent = await WIZARDS.agent?.();
-    expect(agent?.need).toBe("agent.write");
-    expect(agent?.steps(agent.init())).toEqual([
-      "describe",
-      "identity",
-      "definition",
-      "toolbelt",
-      "pullRequest",
-    ]);
-  });
-
   it("carries the context-record wizard: five steps, ending on a pull request", async () => {
     const record = await WIZARDS.record?.();
     expect(record?.need).toBe("steering.write");

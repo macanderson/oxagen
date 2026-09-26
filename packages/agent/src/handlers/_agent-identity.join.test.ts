@@ -3,7 +3,7 @@
  * read actually issues.
  *
  * `agents.principal_id` names the agent's OWN delegated principal, which
- * `create_agent_definition` writes with `kind = 'agent'` and `parent_user_id` =
+ * `register_agent` writes with `kind = 'agent'` and `parent_user_id` =
  * the registering user. Two seams in `relations.ts` join `auth.users` on that
  * column and they are not interchangeable: `operatorUserJoin` also requires
  * `kind = 'human'`, which an agent principal never is, so pointing this read at
@@ -64,7 +64,9 @@ describe("an agent identity's operator", () => {
     expect(sql).toMatch(/join .*"iam"\."principals"/i);
     expect(sql).toMatch(/join .*"auth"\."users"/i);
     // The join predicate names the column and nothing else.
-    expect(sql).toMatch(/"auth"\."users"\."id" = "iam"\."principals"\."parent_user_id"/);
+    expect(sql).toMatch(
+      /"auth"\."users"\."id" = "iam"\."principals"\."parent_user_id"/,
+    );
     // The defect, stated as the assertion. `kind` is bound as a parameter
     // rather than inlined, so the SQL text alone cannot see it — the value has
     // to be read off the params. An agent's own principal is `kind = 'agent'`,

@@ -100,24 +100,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
     ),
   );
   registerHandler(
-    "suggest_agent_def",
-    async () =>
-      (await import("./agent.definition.suggest"))
-        .agentDefinitionSuggestHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "revise_agent_def",
-    async () =>
-      (await import("./agent.definition.revise"))
-        .agentDefinitionReviseHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "summarize_agent_def",
-    async () =>
-      (await import("./agent.definition.summarize"))
-        .agentDefinitionSummarizeHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "get_memory_policy",
     async () =>
       (await import("./agent.memory_policy.read"))
@@ -1317,16 +1299,72 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .agentRetireHandler as CapabilityHandlerFn,
   );
   registerHandler(
-    "commit_agent_definition",
-    async () =>
-      (await import("./agent.definition.commit"))
-        .agentDefinitionCommitHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
     "get_agent_toolbelt",
     async () =>
       (await import("./agent.toolbelt.get"))
         .agentToolbeltGetHandler as CapabilityHandlerFn,
+  );
+  // ADR-198 (#4369): an agent is one operator on one runtime with one
+  // harness. Runtimes, toolbelts, tool state, and the two writes that make a
+  // new agent version.
+  registerHandler(
+    "move_agent",
+    async () =>
+      (await import("./agent.move")).agentMoveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "assign_agent_toolbelt",
+    async () =>
+      (await import("./agent.toolbelt.assign"))
+        .agentToolbeltAssignHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "create_runtime",
+    async () =>
+      (await import("./runtime.create"))
+        .runtimeCreateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_runtimes",
+    async () =>
+      (await import("./runtime.list"))
+        .runtimeListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_toolbelts",
+    async () =>
+      (await import("./toolbelt.list"))
+        .toolbeltListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "get_toolbelt",
+    async () =>
+      (await import("./toolbelt.get"))
+        .toolbeltGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "clone_toolbelt",
+    async () =>
+      (await import("./toolbelt.clone"))
+        .toolbeltCloneHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "update_toolbelt",
+    async () =>
+      (await import("./toolbelt.update"))
+        .toolbeltUpdateHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "delete_toolbelt",
+    async () =>
+      (await import("./toolbelt.delete"))
+        .toolbeltDeleteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "set_tool_state",
+    async () =>
+      (await import("./tool.state.set"))
+        .toolStateSetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "list_incidents",
@@ -1527,12 +1565,6 @@ registerHandlersOnce("@oxagen/handlers", () => {
     "list_skills",
     async () =>
       (await import("./skill.list")).skillListHandler as CapabilityHandlerFn,
-  );
-  registerHandler(
-    "propose_agent",
-    async () =>
-      (await import("./agent.propose"))
-        .proposeAgentHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "propose_skill",

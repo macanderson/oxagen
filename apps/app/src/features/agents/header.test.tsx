@@ -2,10 +2,9 @@
 // The agent page's header drawn on its own (header.tsx), for the states the
 // page test in agent.test.tsx does not reach: a newest run made on behalf of
 // someone other than the agent's operator, an identity with no operator or
-// description, a run with no replay grade, a retired identity, which keeps
-// Clone and loses every write that would act on it, and the built-in
-// assistant, which keeps only its kill switch. Axe runs after every test
-// (INV-26).
+// description, a run with no replay grade, a retired identity, which loses
+// every write that would act on it, and the built-in assistant, which keeps
+// only its kill switch. Axe runs after every test (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -113,7 +112,7 @@ describe("AgentHeader", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers a retired identity Clone and nothing that acts on it (negative)", () => {
+  it("offers a retired identity nothing that acts on it (negative)", () => {
     renderHeader({
       identity: agentDetail({ identity: { status: "retired" } }).identity,
     });

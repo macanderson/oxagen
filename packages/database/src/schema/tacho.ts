@@ -181,6 +181,10 @@ export const tachoHosts = tachoSchema.table(
     agentId: uuid("agent_id"),
     agentPrincipalId: uuid("agent_principal_id"),
     apiKeyId: uuid("api_key_id").notNull(),
+    // The runtime this enrollment binds (agent.runtimes, app-enforced; ADR-198).
+    // A token enrollment takes the agent's runtime; an operator enrollment
+    // finds or creates the runtime its hostname names.
+    runtimeId: uuid("runtime_id"),
     // Host facts (the readable forms live here under RLS; ClickHouse gets digests)
     hostname: text("hostname").notNull(),
     hostnameDigest: text("hostname_digest").notNull(),
@@ -301,6 +305,9 @@ export const tachoHosts = tachoSchema.table(
   },
   (t) => ({
     orgIdx: index("tacho_hosts_org_idx").on(t.orgId, t.workspaceId),
+    runtimeIdx: index("tacho_hosts_runtime_idx")
+      .on(t.runtimeId)
+      .where(sql`${t.runtimeId} IS NOT NULL`),
     apiKeyUniq: uniqueIndex("tacho_hosts_api_key_uniq").on(t.apiKeyId),
     // One live host per agent key; a revoked host gives its key up.
     agentKeyUniq: uniqueIndex("tacho_hosts_agent_key_uniq")

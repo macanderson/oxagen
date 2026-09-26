@@ -873,7 +873,7 @@ export function runSource(reads: RunReads) {
     };
   };
   const source: DataSource = {
-    runtimes: { list: refuse, agents: refuse },
+    runtimes: { list: refuse, agents: refuse, named: refuse },
     conversations: { latest: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
@@ -1014,6 +1014,8 @@ export function runSource(reads: RunReads) {
       approvalRules: refuse,
       connections: refuse,
       mcpServers: refuse,
+      toolbelts: refuse,
+      toolbelt: refuse,
     },
   };
   return { source, calls };
@@ -1108,6 +1110,8 @@ export function runRoster(
         agentKey: "acme.core.release-bot",
         harness: "claude-code",
         managed: false,
+        runtime: null,
+        toolbelt: null,
         operatorId: "usr_marcusbell",
         operatorName: "Marcus Bell",
         principalId: "prn_91",

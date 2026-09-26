@@ -17,7 +17,7 @@
 // Roles: org Owner or Admin, asserted in the handler (INV-29; Appendix E: the
 // five Skills writes are org Owner or Admin). An API key carries no user to
 // hold that role, so the capability ships on the API alone, as open_context_pr
-// and commit_agent_definition do. A skill write spends no governed action
+// does. A skill write spends no governed action
 // units: `noBillingGate: true` (ARCHITECTURE.md §1.5).
 import { z } from "zod";
 import { registerCapability } from "../registry";

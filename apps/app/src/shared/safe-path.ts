@@ -266,9 +266,6 @@ export const routes = {
         cursor: q?.cursor,
       },
     ),
-  /** The agent's definition file in the source editor. */
-  agentSource: (org: string, ws: string, agent: string): SafePath =>
-    pathOf(org, ws, "agents", agent, "source"),
   /**
    * One mandate (#2957), at the flat route ARCHITECTURE.md §1.2 states:
    * `/{org}/{ws}/mandates/{mandate}`.
@@ -299,15 +296,20 @@ export const routes = {
   /**
    * One step of Register an agent (#2967, ADR-065 decision 1). `agent` carries
    * the identity `register_agent` minted from the name step to the wrap and
-   * run steps, so a reload lands back on the same registration.
+   * run steps, so a reload lands back on the same registration. `runtime`
+   * opens the name step with that runtime chosen (`rtm_…`, ADR-198), which is
+   * where Add a runtime lands.
    */
   register: (
     org: string,
     ws: string,
     step: string,
-    q?: { agent: string },
+    q?: { agent?: string; runtime?: string },
   ): SafePath =>
-    withQuery(pathOf(org, ws, "register", step), { agent: q?.agent }),
+    withQuery(pathOf(org, ws, "register", step), {
+      agent: q?.agent,
+      runtime: q?.runtime,
+    }),
   /**
    * Billing; `cursor` opens a later page of its invoices, `checkout` is where
    * a Stripe Checkout returns. The two meters return to different values —
@@ -417,7 +419,8 @@ export const routes = {
   /**
    * Tools; its tabs are path segments (`/tools/providers`), as the mockup's
    * route names them, and the first tab is the bare path. A category chip, a
-   * provider chip, the API-names toggle and a cursor are query values.
+   * provider chip, the API-names toggle, a cursor and the toolbelt open on the
+   * Toolbelts tab (`belt`, ADR-198) are query values.
    */
   tools: (
     org: string,
@@ -428,6 +431,7 @@ export const routes = {
       provider?: string;
       names?: string;
       cursor?: string;
+      belt?: string;
     } = {},
   ): SafePath =>
     withQuery(
@@ -439,6 +443,7 @@ export const routes = {
         provider: q.provider,
         names: q.names,
         cursor: q.cursor,
+        belt: q.belt,
       },
     ),
   /**

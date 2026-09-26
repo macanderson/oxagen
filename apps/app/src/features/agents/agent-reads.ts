@@ -24,17 +24,21 @@ export const AGENT_TABS = [
   "runtime",
   "permissions",
   "activity",
-  "definition",
 ] as const;
 export type AgentTab = (typeof AGENT_TABS)[number];
 
-/** The rev1 tab ids, each landing on the tab that absorbed it (`IAM_TAB_ALIAS`). */
+/**
+ * The rev1 tab ids, each landing on the tab that absorbed it (`IAM_TAB_ALIAS`).
+ * `definition` was the agent's definition file, removed by ADR-198: a link to
+ * it lands on the Toolbelt tab, which holds what the agent carries now.
+ */
 const TAB_ALIASES: Readonly<Record<string, AgentTab>> = {
   mandates: "permissions",
   budgets: "permissions",
   runs: "activity",
   incidents: "activity",
   enrollment: "runtime",
+  definition: "toolbelt",
 };
 
 /** The tab a URL segment names; an alias lands on its tab and anything else on Overview. */
@@ -74,6 +78,10 @@ export type AgentReads = {
   budgets: SourceRead<DataSource["spend"]["budgets"]> | null;
   /** The organization's role catalogue, for the permissions each held role carries; null off Permissions. */
   roles: SourceRead<DataSource["org"]["roles"]> | null;
+  /** The workspace's toolbelts, for the belt picker (ADR-198); null off Toolbelt. */
+  belts: SourceRead<DataSource["tools"]["toolbelts"]> | null;
+  /** The workspace's runtimes, for the Move control (ADR-198); null off Runtime. */
+  runtimes: SourceRead<DataSource["runtimes"]["named"]> | null;
   period: DayRange;
 };
 
@@ -102,6 +110,8 @@ export async function readAgentTab(
     findings,
     budgets,
     roles,
+    belts,
+    runtimes,
   ] = await Promise.all([
     source.agents.toolbelt(ctx, id),
     source.mandates.list(ctx, { agentId: id }),
@@ -116,6 +126,8 @@ export async function readAgentTab(
     tab === "activity" ? source.spend.findings(ctx) : none,
     tab === "permissions" ? source.spend.budgets(ctx) : none,
     tab === "permissions" ? source.org.roles(ctx) : none,
+    tab === "toolbelt" ? source.tools.toolbelts(ctx) : none,
+    tab === "runtime" ? source.runtimes.named(ctx) : none,
   ]);
   return {
     toolbelt,
@@ -127,6 +139,8 @@ export async function readAgentTab(
     findings,
     budgets,
     roles,
+    belts,
+    runtimes,
     period,
   };
 }

@@ -59,7 +59,6 @@ export async function CostTab(props: RunTabProps): Promise<ReactNode> {
 function CostSections({
   run,
   metrics,
-  agent,
   cost,
   turns,
 }: RunTabProps & { turns: Read<RunTurns> }) {
@@ -81,7 +80,7 @@ function CostSections({
   return (
     <div data-testid="cost-tab" className="flex flex-col gap-3.5">
       {estimate ? <CostEstimate /> : null}
-      <ModelFitPanel run={run} metrics={metrics} agent={agent} />
+      <ModelFitPanel run={run} metrics={metrics} />
       <Instruments
         run={run}
         metrics={metrics}

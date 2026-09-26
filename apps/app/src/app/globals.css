@@ -52,7 +52,7 @@
   --color-kind-fact: var(--k-fact);
   --color-kind-memory: var(--k-memory);
   --color-kind-preference: var(--k-preference);
-  /* Code surfaces (ui/code-editor.tsx): the ground and the syntax colours. */
+  /* Code surfaces (ui/code-panel.tsx): the ground and the syntax colours. */
   --color-code-bg: var(--code-bg);
   --color-code-comment: var(--code-comment);
   --color-code-table: var(--code-table);

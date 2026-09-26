@@ -117,7 +117,7 @@ describe("gitignoreWithOxagen", () => {
 });
 
 describe("open_init_pr", () => {
-  it("pushes the six files to oxagen/init and opens one pull request into the production branch", async () => {
+  it("pushes the five files to oxagen/init and opens one pull request into the production branch", async () => {
     const client = fakeGithub();
     const out = await handler(client)(INPUT, makeCTX());
     expect(out).toEqual({
@@ -134,7 +134,6 @@ describe("open_init_pr", () => {
         ".oxagen/rules/governance.toml",
         ".oxagen/rules/.gitkeep",
         ".oxagen/proposals/.gitkeep",
-        ".oxagen/agents/.gitkeep",
         ".gitignore",
       ],
       reused: false,

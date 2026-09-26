@@ -15,7 +15,10 @@ import {
   activeCredentialsByAgent,
   activeMandatesByPrincipal,
   agentKeysFor,
+  bindingRefs,
   identityStatus,
+  runtimeRef,
+  toolbeltRef,
   latestLiveHostByAgentKey,
   listAgentIdentities,
   liveHostsByAgentKey,
@@ -58,6 +61,10 @@ export function toAgentListItem(
     mandates: number | null;
     host: string | null;
     figures: RunWindowFigures | undefined;
+    /** The agent's runtime (ADR-198); null when it runs on no named runtime. */
+    runtime?: AgentListItem["runtime"];
+    /** The agent's toolbelt, the All tools belt when the row names none. */
+    toolbelt?: AgentListItem["toolbelt"];
   },
 ): AgentListItem {
   return {
@@ -67,6 +74,8 @@ export function toAgentListItem(
     description: row.description,
     agentKey: facts.agentKey,
     harness: row.harness as AgentListItem["harness"],
+    runtime: facts.runtime ?? null,
+    toolbelt: facts.toolbelt ?? null,
     managed: isManagedAgentType(row.agentType),
     principalId: row.principalPublicId,
     operatorId: row.operatorPublicId,
@@ -145,6 +154,10 @@ export async function agentListHandler(
       page.map((r) => ({ id: r.id, agentKey: keys.get(r.id) ?? null })),
       windowStart,
     );
+    const bindings = await bindingRefs(tx, scope, {
+      runtimeIds: page.map((r) => r.runtimeId),
+      toolbeltIds: page.map((r) => r.toolbeltId),
+    });
 
     // The tiles cover the whole workspace, so they are counted apart from
     // the page: every live agent, how many hold a credential or a host, and
@@ -228,6 +241,15 @@ export async function agentListHandler(
               : (mandates.get(row.principalId) ?? 0),
           host: agentKey ? (liveHost.get(agentKey) ?? null) : null,
           figures: figures.get(row.id),
+          runtime:
+            row.runtimeId === null
+              ? null
+              : runtimeRef(bindings.runtimes.get(row.runtimeId)),
+          toolbelt: toolbeltRef(
+            row.toolbeltId === null
+              ? bindings.allTools
+              : bindings.toolbelts.get(row.toolbeltId),
+          ),
         });
       }),
       nextCursor:
