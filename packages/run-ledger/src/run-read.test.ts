@@ -26,10 +26,14 @@ import {
   type FrameRead,
   listSubagentChains,
   listSubagentSessions,
+  namedSubagentChainRead,
   readRunChains,
   readTranscriptFrames,
+  readTranscriptWindow,
   type RunChainReads,
+  type RunChainWindowReads,
   subagentChainRead,
+  type SubagentChainRow,
   subagentChainsQuery,
   subagentSessionsQuery,
   withoutLateReports,
@@ -142,9 +146,10 @@ describe("withoutLateReports", () => {
     costMicros: "5",
     ...over,
   });
-  const strip = (frames: Late[]) =>
+  const strip = (frames: Late[], observed: string[] = []) =>
     withoutLateReports(
       frames as unknown as Parameters<typeof withoutLateReports>[0],
+      observed,
     ) as unknown as Late[];
 
   it("strips a harness report that follows the chain's first observed call, and none before it", () => {
@@ -161,6 +166,15 @@ describe("withoutLateReports", () => {
       // Only a model call is a second account of a metered call.
       ["4", "5", { input: 10 }],
     ]);
+  });
+
+  it("carries a chain the proxy observed before the frames start, for a read partway into the run", () => {
+    const frames = strip(
+      [call(1), call(2, { chain: { sessionUuid: CHILD } })],
+      [""],
+    );
+    // The run's own chain was observed before seq 1; the subagent was not.
+    expect(frames.map((f) => f.costMicros)).toEqual([null, "5"]);
   });
 
   it("holds the rule per chain, so an observed subagent leaves the root's reports standing", () => {
@@ -295,6 +309,274 @@ describe("subagentChainRead", () => {
       10,
     );
     expect(got).toEqual({ frames: [], complete: true });
+    expect(read).not.toHaveBeenCalled();
+  });
+});
+
+// #3823: a page read from a cursor reads a window of the run, not all of it.
+describe("readTranscriptWindow", () => {
+  const SECOND = "0192d4a8-7c1e-7a00-8000-00000000c2d0";
+  const at = (second: number) =>
+    new Date(`2026-09-11T09:00:${String(second).padStart(2, "0")}.000Z`);
+
+  /** A frame recorded on subagent chain `uuid` under the root. */
+  const onChain = (
+    uuid: string,
+    seq: number,
+    over: Partial<TachoFrameRowLike> = {},
+  ) =>
+    row(seq, {
+      sessionUuid: uuid,
+      rootSessionUuid: ROOT,
+      parentSessionUuid: ROOT,
+      ...over,
+    });
+
+  /** A `subagent_start` on the run's own chain, spawning by `toolu`. */
+  const spawn = (seq: number, toolu: string) =>
+    row(seq, { kind: "subagent_start", toolUseId: toolu });
+
+  /** A subagent chain's session row. */
+  function chainRow(
+    uuid: string,
+    over: Partial<SubagentChainRow> = {},
+  ): SubagentChainRow {
+    return {
+      sessionUuid: uuid,
+      sessionId: uuid,
+      parentSessionUuid: ROOT,
+      subagentId: null,
+      subagentType: null,
+      spawnToolUseId: null,
+      seqCount: 2,
+      startedAt: at(0),
+      lastEventAt: at(0),
+      createdAt: at(0),
+      finalHash: null,
+      sealedAt: null,
+      enforcementTier: "observe",
+      completenessGaps: [],
+      replayGrade: null,
+      ...over,
+    };
+  }
+
+  /**
+   * Reads over a run whose own chain is `own` and whose subagent frames are
+   * `children`, the chains listed as `chains`. The own read answers the
+   * frames from the one at `fromSeq` on.
+   */
+  function reads(
+    own: TachoFrameRowLike[],
+    children: TachoFrameRowLike[],
+    chains: SubagentChainRow[],
+  ) {
+    const ownRead = vi.fn((fromSeq: string, cap: number) =>
+      whole(own.filter((r) => r.seq >= Number(fromSeq)).map(tachoFrame))(cap),
+    );
+    const subagents = vi.fn((uuids: readonly string[], cap: number) =>
+      whole(
+        children
+          .filter((r) => uuids.includes(r.sessionUuid ?? ""))
+          .map(tachoFrame),
+      )(cap),
+    );
+    const window: RunChainWindowReads = {
+      own: ownRead,
+      chains: () => Promise.resolve(chains),
+      subagents,
+    };
+    return { window, ownRead, subagents };
+  }
+
+  const start = (
+    over: Partial<Parameters<typeof readTranscriptWindow>[1]> = {},
+  ) => ({
+    fromSeq: "5",
+    observed: false,
+    movedAfter: at(30),
+    holds: [],
+    ...over,
+  });
+
+  const keys = (frames: RunFrame[]) =>
+    frames.map((f) => `${f.chain?.sessionUuid ?? "root"}:${f.seq}`);
+
+  const root = [3, 4, 5, 6, 7, 8].map((seq) =>
+    seq === 6 ? spawn(6, "toolu_A") : row(seq),
+  );
+
+  it("reads the run's own chain from the window's first frame, with the chains spawned inside it", async () => {
+    const { window, ownRead, subagents } = reads(
+      root,
+      [
+        onChain(CHILD, 0, { spawnToolUseId: "toolu_A" }),
+        onChain(CHILD, 1, { spawnToolUseId: "toolu_A" }),
+        onChain(SECOND, 0, { spawnToolUseId: "toolu_B" }),
+      ],
+      [
+        chainRow(CHILD, { spawnToolUseId: "toolu_A", startedAt: at(6) }),
+        // Spawned before the window and quiet since the last read.
+        chainRow(SECOND, { spawnToolUseId: "toolu_B", startedAt: at(1) }),
+      ],
+    );
+    const read = await readTranscriptWindow(window, start(), 100);
+    expect(read?.complete).toBe(true);
+    expect(keys(read?.frames ?? [])).toEqual([
+      "root:5",
+      "root:6",
+      `${CHILD}:0`,
+      `${CHILD}:1`,
+      "root:7",
+      "root:8",
+    ]);
+    expect(ownRead).toHaveBeenCalledWith("5", 100);
+    expect(subagents).toHaveBeenCalledWith([CHILD], 100);
+  });
+
+  it("places a chain that records no spawn by the time it began", async () => {
+    const { window } = reads(
+      root,
+      [onChain(CHILD, 0, { ts: "2026-09-11 09:00:07.500" })],
+      [chainRow(CHILD, { startedAt: new Date("2026-09-11T09:00:07.500Z") })],
+    );
+    const read = await readTranscriptWindow(window, start(), 100);
+    expect(keys(read?.frames ?? [])).toEqual([
+      "root:5",
+      "root:6",
+      "root:7",
+      `${CHILD}:0`,
+      "root:8",
+    ]);
+  });
+
+  it("reads the whole run instead when a chain before the window moved since the last read (negative)", async () => {
+    const { window, subagents } = reads(
+      root,
+      [],
+      [
+        chainRow(SECOND, {
+          spawnToolUseId: "toolu_B",
+          startedAt: at(1),
+          lastEventAt: at(40),
+        }),
+      ],
+    );
+    expect(await readTranscriptWindow(window, start(), 100)).toBeNull();
+    expect(subagents).not.toHaveBeenCalled();
+  });
+
+  it("counts every chain as moved when the reader cannot say when it last read (negative)", async () => {
+    const { window } = reads(
+      root,
+      [],
+      [chainRow(SECOND, { spawnToolUseId: "toolu_B", startedAt: at(1) })],
+    );
+    expect(
+      await readTranscriptWindow(window, start({ movedAfter: null }), 100),
+    ).toBeNull();
+  });
+
+  it("reads the whole run instead when a cursor names a chain before the window (negative)", async () => {
+    const { window } = reads(
+      root,
+      [],
+      [chainRow(SECOND, { spawnToolUseId: "toolu_B", startedAt: at(1) })],
+    );
+    expect(
+      await readTranscriptWindow(window, start({ holds: [SECOND] }), 100),
+    ).toBeNull();
+  });
+
+  it("reads the whole run instead for a chain that began inside the window with its spawn outside it (negative)", async () => {
+    const { window } = reads(
+      root,
+      [],
+      [chainRow(SECOND, { spawnToolUseId: "toolu_B", startedAt: at(7) })],
+    );
+    expect(await readTranscriptWindow(window, start(), 100)).toBeNull();
+  });
+
+  it("keeps the run's own chain short so each chain it holds is read whole under the cap", async () => {
+    const own = [5, 6, 7, 8, 9, 10, 11, 12].map((seq) =>
+      seq === 7 ? spawn(7, "toolu_A") : row(seq),
+    );
+    const children = [0, 1, 2, 3, 4].map((seq) =>
+      onChain(CHILD, seq, { spawnToolUseId: "toolu_A" }),
+    );
+    const { window } = reads(own, children, [
+      chainRow(CHILD, {
+        spawnToolUseId: "toolu_A",
+        startedAt: at(7),
+        seqCount: 5,
+      }),
+    ]);
+    const read = await readTranscriptWindow(window, start(), 10);
+    // Five frames of the run's own chain and the whole chain: ten.
+    expect(keys(read?.frames ?? [])).toEqual([
+      "root:5",
+      "root:6",
+      "root:7",
+      ...children.map((r) => `${CHILD}:${r.seq}`),
+      "root:8",
+      "root:9",
+    ]);
+    expect(read?.complete).toBe(false);
+  });
+
+  it("reads the whole run instead when a chain holds more frames than its row said (negative)", async () => {
+    const children = [0, 1, 2, 3].map((seq) => onChain(CHILD, seq));
+    const { window } = reads(root, children, [
+      chainRow(CHILD, {
+        spawnToolUseId: "toolu_A",
+        startedAt: at(6),
+        seqCount: 1,
+      }),
+    ]);
+    // Four frames of the run's own chain fit with a chain of one, not of four.
+    expect(await readTranscriptWindow(window, start(), 6)).toBeNull();
+  });
+
+  it("uncounts a harness report inside the window when the proxy observed the run before it", async () => {
+    const own = [row(5, { costUsdMicros: 9 })];
+    const { window } = reads(own, [], []);
+    const observed = await readTranscriptWindow(
+      window,
+      start({ observed: true }),
+      100,
+    );
+    const unobserved = await readTranscriptWindow(window, start(), 100);
+    expect(observed?.frames.map((f) => f.costMicros)).toEqual([null]);
+    expect(unobserved?.frames.map((f) => f.costMicros)).toEqual([9]);
+  });
+
+  it("says the cap cut the window short of the run's last frame", async () => {
+    const { window } = reads(root, [], []);
+    const read = await readTranscriptWindow(window, start(), 2);
+    expect(keys(read?.frames ?? [])).toEqual(["root:5", "root:6"]);
+    expect(read?.complete).toBe(false);
+  });
+});
+
+describe("namedSubagentChainRead", () => {
+  it("reads the named chains in one read of one row past the cap", async () => {
+    const read = vi.fn((args: { limit: number }) =>
+      Promise.resolve([onChild(0), onChild(1)].slice(0, args.limit)),
+    );
+    const got = await namedSubagentChainRead(read, ROOT)([CHILD], 1);
+    expect(got.frames).toHaveLength(1);
+    expect(got.complete).toBe(false);
+    expect(read.mock.calls).toEqual([
+      [{ rootSessionUuid: ROOT, sessionUuids: [CHILD], after: null, limit: 2 }],
+    ]);
+  });
+
+  it("reads nothing for no chains (negative)", async () => {
+    const read = vi.fn();
+    expect(await namedSubagentChainRead(read, ROOT)([], 10)).toEqual({
+      frames: [],
+      complete: true,
+    });
     expect(read).not.toHaveBeenCalled();
   });
 });
