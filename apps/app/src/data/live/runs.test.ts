@@ -11,6 +11,7 @@ import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
 import { runTurnsGet } from "@oxagen/oxagen/contracts/run.turns.get";
 import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
+import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { kernelRead, captureError } = vi.hoisted(() => ({
@@ -336,6 +337,50 @@ describe("runs.get", () => {
       toolStatus: "parked",
       approvalId: "apr_0a1b",
     });
+  });
+
+  // #3972: the pause get_run answers reaches the header, its issuer's blank
+  // name read as none; a row that carries no pause stays "not read".
+  it("maps the pause get_run answers, a blank issuer name read as none, and leaves an absent one absent", async () => {
+    const pause = {
+      state: "paused",
+      commandId: "tcm_0p",
+      resumeCommandId: null,
+      seq: "41",
+      turn: 3,
+      step: 12,
+      by: { id: "usr_0a", name: " " },
+      issuedAt: "2026-09-15T08:56:00.000Z",
+      appliedAt: "2026-09-15T08:56:04.000Z",
+      reason: "budget review",
+    };
+    kernelRead.mockResolvedValue(
+      readOk({
+        run: { ...run, pause },
+        frames: { frames: [], cursor: null },
+        witnessFor: null,
+      }),
+    );
+    const read = await runs.get(ctx, "tse_4f0a", { framesAfter: null });
+    expect(read.ok && read.value.run.pause).toEqual({
+      ...pause,
+      by: { id: "usr_0a", name: null },
+    });
+    kernelRead.mockResolvedValue(
+      readOk({
+        run: { ...run, pause: null },
+        frames: { frames: [], cursor: null },
+        witnessFor: null,
+      }),
+    );
+    const none = await runs.get(ctx, "tse_4f0a", { framesAfter: null });
+    expect(none.ok && none.value.run.pause).toBeNull();
+    kernelRead.mockResolvedValue(
+      readOk({ run, frames: { frames: [], cursor: null }, witnessFor: null }),
+    );
+    const unread = await runs.get(ctx, "tse_4f0a", { framesAfter: null });
+    expect(unread.ok && "pause" in unread.value.run).toBe(false);
+    expect(captureError).not.toHaveBeenCalled();
   });
 
   it("passes the frame cursor the URL carried", async () => {
@@ -1518,6 +1563,77 @@ describe("runs.outputs", () => {
       readOk({ ...outputs, nodes: [{ ...node, name: "" }] }),
     );
     expect(await runs.outputs(ctx, "tse_4f0a")).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("runs.commands", () => {
+  const command = {
+    id: "tcm_0s",
+    runId: "tse_4f0a",
+    command: "steer",
+    status: "applied",
+    requestedMode: "interrupt",
+    deliveryMode: "next_step",
+    degradedReason: "harness_tier",
+    reason: null,
+    issuedAt: "2026-09-15T08:56:00.000Z",
+    expiresAt: "2026-09-15T09:06:00.000Z",
+    sentAt: "2026-09-15T08:56:02.000Z",
+    acknowledgedAt: "2026-09-15T08:56:05.000Z",
+    appliedAt: "2026-09-15T08:56:05.000Z",
+    appliedAtSeq: 41,
+    detail: null,
+    issuedBy: { id: "usr_0a", name: "Ada Park" },
+    text: "Run the migration tests before you push.",
+  };
+
+  it("reads one run's report at the contract's ceiling and keeps the requested and the delivered mode apart", async () => {
+    kernelRead.mockResolvedValue(readOk({ commands: [command] }));
+    const read = await runs.commands(ctx, { runId: "tse_4f0a" });
+    expect(read).toEqual(readOk({ commands: [command] }));
+    expect(read.ok && read.value.commands[0]).toMatchObject({
+      requestedMode: "interrupt",
+      deliveryMode: "next_step",
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: tachoCommandList,
+      input: { runId: "tse_4f0a", limit: 100 },
+      page: "run",
+    });
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("reads a broadcast's commands by id, one row per id, and reads a blank issuer name as none", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        commands: [{ ...command, issuedBy: { id: "usr_0a", name: "" } }],
+      }),
+    );
+    const read = await runs.commands(ctx, {
+      commandIds: ["tcm_0s", "tcm_0t", "tcm_0u"],
+    });
+    expect(read.ok && read.value.commands[0]?.issuedBy).toEqual({
+      id: "usr_0a",
+      name: null,
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: tachoCommandList,
+      input: { commandIds: ["tcm_0s", "tcm_0t", "tcm_0u"], limit: 3 },
+      page: "run",
+    });
+  });
+
+  it("passes a refusal through, and answers record_unmappable once for a row the view refuses (negative)", async () => {
+    const denied = readError("forbidden", 403);
+    kernelRead.mockResolvedValue(denied);
+    expect(await runs.commands(ctx, { runId: "tse_4f0a" })).toEqual(denied);
+    kernelRead.mockResolvedValue(
+      readOk({ commands: [{ ...command, status: "pending" }] }),
+    );
+    expect(await runs.commands(ctx, { runId: "tse_4f0a" })).toEqual(
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledOnce();

@@ -368,6 +368,7 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       turns: refuse,
       transcript: refuse,
       chain: refuse,
+      commands: refuse,
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,

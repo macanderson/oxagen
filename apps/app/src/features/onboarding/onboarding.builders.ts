@@ -179,6 +179,7 @@ export function onboardingSource(reads: Reads): {
         return Promise.resolve(answer(reads.run, "runs.get"));
       },
       frameBody: refuse("runs.frameBody"),
+      commands: refuse("runs.commands"),
       cost: refuse("runs.cost"),
       turns: refuse("runs.turns"),
       transcript: refuse("runs.transcript"),

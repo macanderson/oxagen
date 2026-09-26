@@ -12,6 +12,7 @@ import type { runGet } from "@oxagen/oxagen/contracts/run.get";
 import type { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
 import type { runTurnsGet } from "@oxagen/oxagen/contracts/run.turns.get";
+import type { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
 import type { z } from "zod";
 import { Cost, moneyFromMicros } from "@/data/contracts/money";
 import type {
@@ -23,6 +24,7 @@ import type {
   RunTranscript,
   RunTurns,
 } from "@/data/contracts/run";
+import type { CommandReport } from "@/data/contracts/runs";
 import type { ContractOutput } from "@/server/kernel";
 import { toRunRow } from "./runs";
 
@@ -480,5 +482,48 @@ export function toRunOutputs(
     })),
     tally: out.tally,
     complete: out.complete,
+  };
+}
+
+type CommandListOutput = ContractOutput<typeof tachoCommandList>;
+
+/**
+ * `list_commands` as the delivery report reads it (#2953). The requested mode
+ * and the mode achieved stay two fields, never one (INV-10), and a blank
+ * issuer name reads as none, since the view refuses an empty one.
+ */
+export function toCommandReport(
+  out: CommandListOutput,
+): z.input<typeof CommandReport> {
+  return {
+    commands: out.commands.map((command) => ({
+      id: command.id,
+      runId: command.runId,
+      command: command.command,
+      status: command.status,
+      requestedMode: command.requestedMode,
+      deliveryMode: command.deliveryMode,
+      degradedReason: command.degradedReason,
+      reason: command.reason,
+      issuedAt: command.issuedAt,
+      expiresAt: command.expiresAt,
+      sentAt: command.sentAt,
+      acknowledgedAt: command.acknowledgedAt,
+      appliedAt: command.appliedAt,
+      appliedAtSeq: command.appliedAtSeq,
+      detail: command.detail,
+      issuedBy:
+        command.issuedBy === null
+          ? null
+          : {
+              id: command.issuedBy.id,
+              name:
+                command.issuedBy.name === null ||
+                command.issuedBy.name.trim() === ""
+                  ? null
+                  : command.issuedBy.name,
+            },
+      text: command.text,
+    })),
   };
 }
