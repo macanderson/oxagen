@@ -354,6 +354,7 @@
         "rate": "effective input price <rate></rate> per million",
         "rateNotPriced": "effective input price not recorded",
         "nothingWritten": "nothing written to cache",
+        "written": "<share></share> of input written to cache",
         "shape": "Shape of the run",
         "framesInRun": "{count, plural, one {# frame} other {# frames}} in the run",
         "turnsUnit": "turns",

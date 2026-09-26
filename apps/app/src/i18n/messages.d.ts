@@ -6185,6 +6185,7 @@ type Messages = {
         rate: string;
         rateNotPriced: string;
         nothingWritten: string;
+        written: string;
         shape: string;
         framesInRun: string;
         turnsUnit: string;

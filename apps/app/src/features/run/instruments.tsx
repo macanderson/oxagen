@@ -22,7 +22,12 @@ import {
   formatRatio,
   ratioWidth,
 } from "@/ui/money-format";
-import { type ClassPrices, type Ledger, perTurn } from "./cost-figures";
+import {
+  cacheRebuildShare,
+  type ClassPrices,
+  type Ledger,
+  perTurn,
+} from "./cost-figures";
 import {
   type Family,
   type ProvisionalModel,
@@ -226,11 +231,7 @@ const PROVISIONAL_MODELS = 3;
  * each model with what the session reported it cost and over how many calls,
  * dearest first, so a live run's spend is readable before it is rolled up.
  */
-function ProvisionalModels({
-  provisional,
-}: {
-  provisional: ProvisionalSpend;
-}) {
+function ProvisionalModels({ provisional }: { provisional: ProvisionalSpend }) {
   const t = useTranslations("run.cost.inst");
   const locale = useLocale();
   const shown = provisional.byModel.slice(0, PROVISIONAL_MODELS);
@@ -494,6 +495,7 @@ function TokensTile({
   }
   const { byClass } = tokens;
   const writes = byClass.cache_write_5m + byClass.cache_write_1h;
+  const rebuilt = cacheRebuildShare(tokens);
   const rate = prices.inputRate;
   return (
     <Tile
@@ -578,7 +580,16 @@ function TokensTile({
                       <b>{formatMoney(rate, { locale, precision: "cents" })}</b>
                     ),
                   }),
-            writes: writes === 0 ? t("nothingWritten") : null,
+            // The hit rate leaves cache writes out, so a rebuilt cache shows
+            // here as the share of input written to it (A-08).
+            writes:
+              writes === 0
+                ? t("nothingWritten")
+                : rebuilt === null
+                  ? null
+                  : t.rich("written", {
+                      share: () => <b>{formatRatio(rebuilt, locale)}</b>,
+                    }),
           }}
         />
       }

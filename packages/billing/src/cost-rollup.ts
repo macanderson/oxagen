@@ -297,6 +297,11 @@ export function priceFrame(
  * spend; token-weighted when no frame cost anything; null when no frame
  * carried input tokens (spec §12.6: never computed from missing data as if
  * it were zero).
+ *
+ * Cache writes are not in the denominator, so a run that rebuilt its cache
+ * can still read a high rate. The record keeps the write counts by class,
+ * and the Run page's Cost tab prints the share of input written to the
+ * cache beside this rate (`cacheRebuildShare`, A-08).
  */
 export function cacheHitRate(
   frames: readonly { tokens: TokenCounts; scaled: bigint }[],
