@@ -59,7 +59,7 @@ export function toRunRow(
     permissionMode: run.permissionMode ?? null,
     reportedTokens: run.reportedTokens ?? null,
     machine: run.machine,
-    harness: run.harness ?? null,
+    harness: run.harness,
     taskRef: run.taskRef,
     name: run.name,
     enrichmentEnabled: run.enrichmentEnabled ?? true,

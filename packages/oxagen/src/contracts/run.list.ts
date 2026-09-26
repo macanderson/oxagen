@@ -455,15 +455,17 @@ export const runItemSchema = z
       .optional(),
     /** The machine the run ran on; null for a ledger run. */
     machine: runMachineSchema.nullable(),
-    /** The recorded agent harness, independent of its model and wrapper. */
+    /**
+     * The recorded agent harness, independent of its model and wrapper. Null
+     * when the session recorded none, and for every ledger run.
+     */
     harness: z
       .object({
         name: z.string(),
         version: z.string().nullable(),
         runtime: z.string().nullable(),
       })
-      .nullable()
-      .optional(),
+      .nullable(),
     /** False when the workspace turned automatic run names and summaries off (ADR-153). */
     enrichmentEnabled: z.boolean().optional(),
     /**

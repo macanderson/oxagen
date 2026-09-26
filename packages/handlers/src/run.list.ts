@@ -1132,13 +1132,14 @@ export function toLedgerRunItem(
     completenessGaps: gaps,
     canSummarize: canSummarizeRun({ status, completenessGaps: gaps }),
     // The ledger records evidence an external engine submits. It names no
-    // model on the run row and no host at all, so both stay null rather than
+    // model, harness or host on the run row, so each stays null rather than
     // being reconstructed from a frame that may not be there.
     model: null,
     effort: null,
     permissionMode: null,
     reportedTokens: null,
     machine: null,
+    harness: null,
     name: run.name,
     summary: generatedSummary(run),
     ...enrichmentError(run),

@@ -281,6 +281,8 @@ describe("get_run", () => {
       cost: { micros: "12500", currency: "USD", basis: "gateway_observed" },
       taskRef: "review the PR",
     });
+    // The ledger records no harness, and the row says so with a null key.
+    expect(out.run).toHaveProperty("harness", null);
     expect(out.frames?.frames.map((f) => f.seq)).toEqual(["1", "2", "3"]);
     // Sealed, and the page held the whole recording: nothing to continue from.
     expect(out.frames?.cursor).toBeNull();
