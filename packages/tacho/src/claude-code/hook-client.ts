@@ -5,6 +5,7 @@
  * from the cached bundle, spool the event for replay, and answer anyway, so
  * enforcement never depends on the daemon being up.
  */
+import { readdirSync } from "node:fs";
 import { request } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -765,6 +766,20 @@ function codexAnswer(
 const MAX_QUARANTINED_PAYLOAD_BYTES = 65_536;
 
 /**
+ * The most hook payloads `quarantine/` holds at once. Past it a new one is
+ * not written. Without a cap, a harness that changed its payload shape would
+ * write a file for every event until the sweep ages them out, a week later,
+ * and `tacho status` reads the whole folder on every call.
+ */
+export const MAX_QUARANTINED_HOOK_PAYLOADS = 1_000;
+
+/** The file name ending of a quarantined hook payload. */
+const HOOK_PAYLOAD_SUFFIX = ".hook-payload.json";
+
+/** A ULID, the only hook id this module uses as a file name. */
+const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+
+/**
  * A payload this process could not even parse, kept where a person can find
  * it, bounded so an oversized or runaway stdin does not turn the record
  * itself into the next problem. Best-effort and silent on its own failure:
@@ -800,6 +815,12 @@ function quarantineUnreadablePayload(
  * `tacho status` counts it and the daemon's sweep ages it out. `tacho-hook`
  * calls it for stdin it cannot read, and the daemon for an http hook body it
  * cannot file on a session. Best-effort and silent on its own failure.
+ *
+ * The daemon's hook id comes from the request body, so it names the file
+ * only when it is a ULID. Any other value would let a caller pick a path
+ * outside `quarantine/` (`../x`), so the file gets a fresh ULID and the
+ * record keeps the value the caller sent. Once the folder holds
+ * `MAX_QUARANTINED_HOOK_PAYLOADS` payloads, nothing more is written.
  */
 export function quarantineHookPayload(
   quarantineDir: string,
@@ -814,9 +835,15 @@ export function quarantineHookPayload(
   const { hookId, receivedAt, reason, rawText, label } = record;
   try {
     ensureDir(quarantineDir);
+    const held = readdirSync(quarantineDir).filter((name) =>
+      name.endsWith(HOOK_PAYLOAD_SUFFIX),
+    ).length;
+    if (held >= MAX_QUARANTINED_HOOK_PAYLOADS) return;
+    const fileId =
+      typeof hookId === "string" && ULID_PATTERN.test(hookId) ? hookId : ulid();
     const truncated = rawText.length > MAX_QUARANTINED_PAYLOAD_BYTES;
     writeSensitiveFileAtomic(
-      join(quarantineDir, `${hookId}.hook-payload.json`),
+      join(quarantineDir, `${fileId}${HOOK_PAYLOAD_SUFFIX}`),
       JSON.stringify({
         schema: "tacho.quarantined-hook-payload.v1",
         received_at: receivedAt,
