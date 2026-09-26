@@ -99,6 +99,15 @@ export function interjectionItem(
     question: "Which branch should the release cut from?",
     raisedAt: at(-216),
     expiresAt: at(-216 + 1800),
+    answeredAt: null,
+    answer: null,
+    answeredBy: null,
+    kind: "question",
+    raisedSeq: null,
+    body: null,
+    repository: null,
+    path: null,
+    receiptId: null,
     ...overrides,
   };
 }
@@ -241,6 +250,8 @@ export function fleetSource(reads: FleetReads) {
         calls.interjections.push(args);
         return Promise.resolve(reads.interjections ?? NO_INTERJECTIONS);
       },
+      // Fleet reads the open queue only; one run's questions are the Run page's.
+      forRun: refuse,
     },
     agents: {
       list: (...args) => {

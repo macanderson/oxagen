@@ -70,7 +70,7 @@ const source = {
     outcomesSettings: vi.fn(),
   },
   approvals: { pending, resolved: vi.fn(), resolvedSince },
-  interjections: { open: openInterjections },
+  interjections: { open: openInterjections, forRun: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),

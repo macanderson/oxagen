@@ -22,6 +22,10 @@ import type {
   ApprovalQueue,
   ResolvedApprovals,
 } from "@/data/contracts/approvals";
+import type {
+  InterjectionItem,
+  InterjectionQueue,
+} from "@/data/contracts/interjections";
 import type { MandateList } from "@/data/contracts/mandates";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
@@ -821,6 +825,12 @@ type RunReads = {
    * passes one to prove the figures stay the recorded ones whatever it says.
    */
   priceBook?: Read<PriceBook>;
+  /**
+   * `interjections.forRun`, read only for a run whose recording carries a
+   * `control.interject` frame (#3941); refused when absent, so an ordinary
+   * run that reads it fails loudly.
+   */
+  interjections?: Read<InterjectionQueue>;
 };
 
 /** The agent read a test left out: refused, so nothing about the agent is invented. */
@@ -846,6 +856,7 @@ export function runSource(reads: RunReads) {
     agent: unknown[][];
     /** The page prices nothing, so any read of the price book is a defect (#4069). */
     priceBook: unknown[][];
+    interjections: unknown[][];
   } = {
     get: [],
     frameBody: [],
@@ -859,6 +870,7 @@ export function runSource(reads: RunReads) {
     outputs: [],
     agent: [],
     priceBook: [],
+    interjections: [],
   };
   const refuse = () => Promise.reject(new Error("not a Run read"));
   const answer = <T>(
@@ -943,7 +955,10 @@ export function runSource(reads: RunReads) {
       ),
       resolvedSince: refuse,
     },
-    interjections: { open: refuse },
+    interjections: {
+      open: refuse,
+      forRun: answer("interjections", reads.interjections),
+    },
     agents: {
       list: () =>
         reads.roster === undefined ? refuse() : Promise.resolve(reads.roster),
@@ -1142,4 +1157,93 @@ export function runRoster(
       tamper: { recorded: 0, open: 0, newest: null },
     },
   };
+}
+
+/**
+ * The question a host shows when a session starts in a repository no
+ * workspace bound, as `interjectionQuestion` in @oxagen/tacho writes it for
+ * core-platform and a 30-minute timeout.
+ */
+const HELD_QUESTION =
+  "Oxagen is holding this session before its first model call. It started " +
+  "in a repository that no workspace in your organization has bound, and " +
+  "skills are on for workspace core-platform. Should Oxagen link this " +
+  "repository to core-platform, or create a new workspace for it with " +
+  "skills off? A person with access answers on this run's page in Oxagen. " +
+  "With no answer in 30 minutes, the session goes on without skills.";
+
+/**
+ * A repository question a host raised on this run (#3941), as
+ * `interjections.forRun` answers it: raised a minute before the render by
+ * the `control.interject` frame at seq 3, still open, with the body the host
+ * sealed and the repository the control plane matched to its digest.
+ */
+export function runInterjection(
+  overrides: Partial<InterjectionItem> = {},
+): InterjectionItem {
+  return {
+    id: "inj_7w2k9d",
+    runId: "tse_7k2m9q",
+    agentKey: "acme.core.release-bot",
+    question: HELD_QUESTION,
+    raisedAt: at(-60),
+    expiresAt: at(-60 + 1800),
+    answeredAt: null,
+    answer: null,
+    answeredBy: null,
+    kind: "repo_unknown",
+    raisedSeq: "3",
+    body: {
+      interjectionKey: "01K6QW3D5N7TYBA2ZXC8VJ4M1P",
+      reason: "repo_unknown",
+      question: HELD_QUESTION,
+      remoteDigest: `sha256:${"a".repeat(64)}`,
+      remoteDigestFolded: `sha256:${"b".repeat(64)}`,
+      timeoutMs: 1_800_000,
+      expiresAt: at(-60 + 1800),
+      onTimeout: "deny",
+      paths: [
+        {
+          path: "link",
+          workspaceSlug: "core-platform",
+          configVersion: "skl_v7",
+          skillsPinned: 7,
+          linkedRepositories: 2,
+        },
+        {
+          path: "create",
+          proposedName: "edge-proxy",
+          proposedSlug: "edge-proxy",
+          skillsEnabled: false,
+        },
+      ],
+    },
+    repository: "acme/edge-proxy",
+    path: null,
+    receiptId: null,
+    ...overrides,
+  };
+}
+
+/**
+ * The frames a host seals before it holds the loop: the session's start, the
+ * repository it could not match, and the question, at seqs 1 to 3 on the
+ * run's own chain, the last a minute before the render.
+ */
+export function heldFrames(): RunFrame[] {
+  const frame = (seq: string, type: string, summary: string, stage: string) =>
+    runFrame({
+      cursor: `ZjoxOn${seq}`,
+      seq,
+      type,
+      stage,
+      summary,
+      observedAt: at(-60),
+      cost: null,
+    });
+  return [
+    frame("1", "agent_start", "agent_start", "control"),
+    frame("2", "repo.unknown", "unbound repository", "control"),
+    frame("3", "control.interject", "loop held", "policy"),
+  ];
 }

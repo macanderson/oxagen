@@ -511,7 +511,7 @@ export function agentsSource(reads: AgentReads) {
       outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
-    interjections: { open: refuse },
+    interjections: { open: refuse, forRun: refuse },
     agents: {
       list: answer(reads.list, "list"),
       get: answer(reads.get, "get"),
