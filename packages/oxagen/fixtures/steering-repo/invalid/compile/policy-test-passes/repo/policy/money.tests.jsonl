@@ -1,2 +1,2 @@
 {"name":"refund under limit","principal":"a-intel.core.release-bot","tool":"billing__create_refund@3","context":{"args":{"amount":4000}},"expect":"allow"}
-{"name":"refund over limit","principal":"a-intel.core.release-bot","tool":"billing__create_refund@3","context":{"args":{"amount":64000}},"expect":"require_approval"}
+{"name":"refund over limit","principal":"a-intel.core.release-bot","tool":"billing__create_refund@3","context":{"args":{"amount":64000}},"expect":"allow"}
