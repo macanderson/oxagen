@@ -20,9 +20,9 @@ import {
   type AttesterKey,
   signAttestation,
 } from "@oxagen/tacho";
+import { ATTESTER_KEY_ENV } from "./attester-key";
 
-/** The deployment's attester key, the same variable `export_run` reads. */
-export const ATTESTER_KEY_ENV = "TACHO_BUNDLE_SIGNING_PRIVATE_KEY";
+export { ATTESTER_KEY_ENV };
 
 /**
  * The key parsed from the variable's value, kept per process. It is keyed by

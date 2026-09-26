@@ -83,7 +83,7 @@ describe("ledgerContextWindows", () => {
       bytes: 10_000,
     });
     const tokens = window?.blocks.map((block) => block.tokens) ?? [];
-    expect(tokens.reduce((sum, t) => sum + (t ?? 0), 0)).toBe(12_345);
+    expect(tokens.reduce<number>((sum, t) => sum + (t ?? 0), 0)).toBe(12_345);
     // 10%, 2.5%, 30%, 5% and 52.5% of 12,345.
     expect(tokens).toEqual([1235, 309, 3703, 617, 6481]);
   });
