@@ -10,7 +10,7 @@
 
 ## Intent
 
-The runtimes named in the workspace, in name order, each with its live agents and their harness, its live host enrollments, and when a host last reported (ADR-198, #4369).
+The runtimes named in the workspace, in name order, each with its live agents and their harness, its live host enrollments, when a host last reported (ADR-198, #4369), and whether it requires the contained launcher (ADR-204, #4372).
 
 The register form reads this to keep a runtime and harness pair from being registered twice. It disables a runtime that already runs the chosen harness, and a harness the chosen runtime already runs, and names the agent that holds the pair. A retired agent frees its pair and is not listed.
 
@@ -26,6 +26,7 @@ None (`{}`).
 | `items[].name` | `string` | |
 | `items[].slug` | `string` | |
 | `items[].createdAt` | `string` | ISO-8601. |
+| `items[].containmentRequired` | `boolean` | Whether every agent on the runtime must run under the contained launcher (ADR-204). |
 | `items[].agents[]` | object | `id` (`agt_…`), `name`, `slug`, `harness` of each live agent on the runtime, at most 16. |
 | `items[].liveHosts` | `number` | Host enrollments bound to the runtime that are not revoked. |
 | `items[].lastSeenAt` | `string \| null` | The newest `last_seen_at` among its hosts; null when none has reported. |

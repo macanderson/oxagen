@@ -1,7 +1,7 @@
 {
   "name": "list_runtimes",
   "domain": "runtime",
-  "description": "List the runtimes named in this workspace, each with the live agents on it and their harness, the live host enrollments bound to it, and when a host last reported.",
+  "description": "List the runtimes named in this workspace, each with the live agents on it and their harness, the live host enrollments bound to it, when a host last reported, and whether it requires the contained launcher.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -99,6 +99,9 @@
                   "type": "null"
                 }
               ]
+            },
+            "containmentRequired": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -108,7 +111,8 @@
             "createdAt",
             "agents",
             "liveHosts",
-            "lastSeenAt"
+            "lastSeenAt",
+            "containmentRequired"
           ],
           "additionalProperties": false
         },
