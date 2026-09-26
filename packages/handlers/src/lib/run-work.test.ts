@@ -255,6 +255,44 @@ describe("foldProvisionalContexts", () => {
     expect(alias.get(checkoutOf(late, []).id)).toBe(checkoutOf(second, []).id);
   });
 
+  // Review round 3 on #4382: the fold read only when each context started.
+  // A session on fix/one visited fix/two and came back, so fix/one's row
+  // spans 2 to 40 with its early start. A path-only frame at 30 folded into
+  // fix/two, the context that started last before it, and stretched fix/two
+  // over the frames fix/one holds.
+  describe("a Git context the session came back to", () => {
+    const back: WorkContextRow = { ...context, first_seq: 2, last_seq: 40 };
+    const frame: WorkContextRow = { ...pathOnly, first_seq: 30, last_seq: 30 };
+
+    it("folds a frame into the Git context whose span holds it, and stretches nothing (negative)", () => {
+      const visit: WorkContextRow = {
+        ...context,
+        branch: "fix/two",
+        head: "d".repeat(40),
+        first_seq: 13,
+        last_seq: 20,
+      };
+      const { rows, alias } = foldProvisionalContexts([back, visit, frame]);
+      expect(rows).toEqual([back, visit]);
+      expect(alias.get(checkoutOf(frame, []).id)).toBe(checkoutOf(back, []).id);
+    });
+
+    it("folds a frame two Git contexts span into the one that started last", () => {
+      const visit: WorkContextRow = {
+        ...context,
+        branch: "fix/two",
+        head: "d".repeat(40),
+        first_seq: 13,
+        last_seq: 35,
+      };
+      const { rows, alias } = foldProvisionalContexts([back, visit, frame]);
+      expect(rows).toEqual([back, visit]);
+      expect(alias.get(checkoutOf(frame, []).id)).toBe(
+        checkoutOf(visit, []).id,
+      );
+    });
+  });
+
   it("keeps a path-only row with no Git context at its path (negative)", () => {
     const elsewhere: WorkContextRow = { ...pathOnly, path: "/tmp/scratch" };
     const { rows, alias } = foldProvisionalContexts([elsewhere, located]);

@@ -337,10 +337,17 @@ function pathOnly(row: WorkContextRow): boolean {
 /**
  * The Git context a path-only frame at `seq` belongs to, among `others`,
  * every context the read returned but the path-only row the frame is in.
- * First choice is the context that starts next after the frame, when it is
- * a Git context at `path`: the Git read the daemon ran right after that
- * hook. Failing that, it is the context that started last before the frame,
- * when that is a Git context at `path`: the one in effect when the frame was
+ * First choice is a Git context at `path` whose recorded span contains the
+ * frame. The read groups a context's frames into one row, so a context the
+ * session left and came back to keeps its early start, and only its span
+ * shows the session was back in it. When several contexts span the frame,
+ * the one that started last wins. A fold into a span that holds the frame
+ * stretches nothing.
+ *
+ * Next is the context that starts next after the frame, when it is a Git
+ * context at `path`: the Git read the daemon ran right after that hook.
+ * Failing that, it is the context that started last before the frame, when
+ * that is a Git context at `path`: the one in effect when the frame was
  * sealed. When another context starts in between, it separates the frame
  * from that Git context, and the frame folds into neither.
  */
@@ -349,19 +356,27 @@ function foldTarget(
   seq: number,
   others: readonly WorkContextRow[],
 ): WorkContextRow | undefined {
+  const gitAt = (row: WorkContextRow | undefined) =>
+    row !== undefined && row.path === path && !pathOnly(row) ? row : undefined;
+  let around: WorkContextRow | undefined;
   let next: WorkContextRow | undefined;
   let previous: WorkContextRow | undefined;
   for (const candidate of others) {
     const start = Number(candidate.first_seq);
+    if (
+      gitAt(candidate) !== undefined &&
+      start <= seq &&
+      seq <= Number(candidate.last_seq) &&
+      (around === undefined || start > Number(around.first_seq))
+    )
+      around = candidate;
     if (start > seq) {
       if (next === undefined || start < Number(next.first_seq))
         next = candidate;
     } else if (previous === undefined || start > Number(previous.first_seq))
       previous = candidate;
   }
-  const gitAt = (row: WorkContextRow | undefined) =>
-    row !== undefined && row.path === path && !pathOnly(row) ? row : undefined;
-  return gitAt(next) ?? gitAt(previous);
+  return around ?? gitAt(next) ?? gitAt(previous);
 }
 
 /**
@@ -378,8 +393,8 @@ function foldTarget(
  * the session moved elsewhere. So the row's first and last frames, the two
  * it knows, each fold on their own (`foldTarget`), and neither stretches a
  * Git context past the start of another context. A frame that folds into
- * nothing stays a path-only checkout. Every decision reads the starts the
- * read returned, never a span an earlier fold widened.
+ * nothing stays a path-only checkout. Every decision reads the spans the
+ * read returned, never one an earlier fold widened.
  *
  * `alias` maps a row that folded whole to the checkout id its first frame
  * folded into, so a captured diff never points at a checkout the read no
