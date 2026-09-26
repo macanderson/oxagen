@@ -167,10 +167,12 @@ and passes it as `TACHO_HARNESS_PID`. An operator's `cancel` sends that pid
 after 500 ms, and takes only a process named `codex` or `codex-<target>`.
 A Codex hook carries no pid on Windows, or under a Codex process that serves
 many threads: `app-server`, which the Codex GUI drives, `exec-server`, and
-the MCP server modes. A Cursor hook carries none
-either, because the process that runs Cursor's hooks serves many
-conversations and outlives each of them. Those sessions end on the harness's
-own `SessionEnd`, or after six idle hours.
+the MCP server modes. Those Codex sessions end on Codex's own `SessionEnd`,
+or after six idle hours. A Cursor hook carries no pid either, because the
+process that runs Cursor's hooks serves many conversations and outlives each
+of them. A Cursor session ends on Cursor's own `sessionEnd`, or after one
+hour with no hook (ADR-141). A session sealed that way reopens on its next
+hook.
 
 ## The gateway: the loopback model proxy
 

@@ -20,31 +20,143 @@ import { redactText } from "../evidence/redaction";
 import { contextFactsFromEnv, digestText, hostFactsFromEnv } from "./context";
 import { classifyTool, type EffectKind, pullRequestAttrs } from "./tools";
 
-/** Tolerant: passthrough so a new upstream member lands in `attrs`. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * An optional text member. `null` reads as absent, a number or a boolean
+ * reads as its text, and any other value is left out of the parse. The
+ * strict form refused the whole payload over one such member, and the hook
+ * answered with nothing recorded (H-07). `payloadRepairs` notes each value
+ * this read changed, with the value itself, so the record keeps it.
+ */
+const textMember = z.preprocess((value) => {
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
+  return typeof value === "string" ? value : undefined;
+}, z.string().optional());
+
+/**
+ * An optional path member: `cwd` or `transcript_path`. It keeps a string
+ * only. `null` reads as absent, and any other value is left out. A number
+ * read as text would become a relative path such as `17`, where the daemon
+ * would run its git reads, and a bad `transcript_path` would move the tailer
+ * off a good transcript.
+ */
+const pathMember = z.preprocess(
+  (value) => (typeof value === "string" ? value : undefined),
+  z.string().optional(),
+);
+
+/**
+ * Tolerant: passthrough so a new upstream member lands in `attrs`, and each
+ * typed member reads a value of the wrong type rather than refusing the
+ * event. Only `session_id` and `hook_event_name` stay strict, because an
+ * event with neither cannot be filed on a session.
+ */
 export const hookInputSchema = z
   .object({
     session_id: z.string(),
     hook_event_name: z.string(),
     // Codex sends `null` when there is no transcript; Claude Code omits it.
-    transcript_path: z.preprocess(
-      (value) => (value === null ? undefined : value),
-      z.string().optional(),
+    transcript_path: pathMember,
+    cwd: pathMember,
+    prompt_id: textMember,
+    permission_mode: textMember,
+    agent_id: textMember,
+    agent_type: textMember,
+    tool_name: textMember,
+    // A string or a list is kept whole under `value`, the way the Cursor and
+    // Stella adapters already keep one.
+    tool_input: z.preprocess(
+      (value) =>
+        value === null || value === undefined
+          ? undefined
+          : isRecord(value)
+            ? value
+            : { value },
+      z.record(z.unknown()).optional(),
     ),
-    cwd: z.string().optional(),
-    prompt_id: z.string().optional(),
-    permission_mode: z.string().optional(),
-    agent_id: z.string().optional(),
-    agent_type: z.string().optional(),
-    tool_name: z.string().optional(),
-    tool_input: z.record(z.unknown()).optional(),
-    tool_use_id: z.string().optional(),
+    tool_use_id: textMember,
     tool_response: z.unknown().optional(),
-    duration_ms: z.number().optional(),
+    duration_ms: z.preprocess(
+      (value) =>
+        typeof value === "number" && Number.isFinite(value) ? value : undefined,
+      z.number().optional(),
+    ),
     error: z.unknown().optional(),
   })
   .passthrough();
 
 export type HookInput = z.infer<typeof hookInputSchema>;
+
+/**
+ * The attr that lists the members `hookInputSchema` read differently from
+ * how they arrived, so an event the strict schema would have refused is
+ * recorded with the reason beside it.
+ */
+export const PAYLOAD_REPAIRS_ATTR = "oxagen.payload_repairs";
+
+/** The members `payloadRepairs` checks, in the order it lists them. */
+const TYPED_MEMBERS = [
+  ["cwd", "path"],
+  ["prompt_id", "text"],
+  ["permission_mode", "text"],
+  ["agent_id", "text"],
+  ["agent_type", "text"],
+  ["tool_name", "text"],
+  ["tool_use_id", "text"],
+  ["transcript_path", "path"],
+] as const;
+
+function kindOf(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "a list";
+  return typeof value === "object" ? "an object" : `a ${typeof value}`;
+}
+
+/**
+ * What `hookInputSchema` changed on this payload, one clause per member, or
+ * undefined when it changed nothing. A `null` reads as absent. A value that
+ * cannot be read, including any path that is not a string, is left out of the
+ * parse and kept here as JSON. A `transcript_path` of `null` is not listed:
+ * Codex sends one whenever there is no transcript, and the schema has always
+ * read it as absent.
+ */
+export function payloadRepairs(raw: unknown): string | undefined {
+  if (!isRecord(raw)) return undefined;
+  const notes: string[] = [];
+  const setAside = (key: string, value: unknown) =>
+    `${key}: ${kindOf(value)}, left out: ${JSON.stringify(value)}`;
+  for (const [key, type] of TYPED_MEMBERS) {
+    const value = raw[key];
+    if (value === undefined || typeof value === "string") continue;
+    if (value === null) {
+      if (key !== "transcript_path") notes.push(`${key}: null, read as absent`);
+    } else if (
+      type === "text" &&
+      (typeof value === "number" || typeof value === "boolean")
+    )
+      notes.push(`${key}: ${kindOf(value)}, read as text`);
+    else notes.push(setAside(key, value));
+  }
+  const input = raw["tool_input"];
+  if (input === null) notes.push("tool_input: null, read as absent");
+  else if (input !== undefined && !isRecord(input))
+    notes.push(`tool_input: ${kindOf(input)}, kept as {"value": ...}`);
+  const duration = raw["duration_ms"];
+  if (
+    duration !== undefined &&
+    !(typeof duration === "number" && Number.isFinite(duration))
+  )
+    notes.push(
+      duration === null
+        ? "duration_ms: null, read as absent"
+        : setAside("duration_ms", duration),
+    );
+  return notes.length > 0 ? notes.join("; ") : undefined;
+}
 
 /**
  * The attr saying why a turn closed when no `Stop` closed it: `api_error`
@@ -312,9 +424,15 @@ export function normalizeHook(
   options: NormalizeHookOptions,
 ): HookDraft[] {
   const input = hookInputSchema.parse(raw);
+  const repairs = payloadRepairs(raw);
   const base = {
     hook_event_name: input.hook_event_name,
-    attrs: leftovers(input),
+    attrs: {
+      ...leftovers(input),
+      ...(repairs !== undefined
+        ? { [PAYLOAD_REPAIRS_ATTR]: attrValue(repairs) }
+        : {}),
+    },
     ...(input.agent_id !== undefined
       ? {
           subagent: {
