@@ -1446,8 +1446,19 @@ export function buildProgram(): Command {
     .option("--token <apiKey>", "Operator token for the server-side revoke")
     .option("--purge", "Also delete the local WAL, spool, and quarantine")
     .option("--reason <text>", "Reason recorded with the revoke")
+    .option(
+      "--harness <name>",
+      "The agent to unenroll, by the harness it hooks, when this machine holds more than one enrollment",
+    )
+    .option("--all", "Unenroll every agent on this machine")
     .action(
-      async (opts: { token?: string; purge?: boolean; reason?: string }) => {
+      async (opts: {
+        token?: string;
+        purge?: boolean;
+        reason?: string;
+        harness?: string;
+        all?: boolean;
+      }) => {
         const { handleTachoUnenroll } = await import("./commands/tacho.js");
         if (!(await handleTachoUnenroll(opts))) process.exitCode = 1;
       },
@@ -1594,6 +1605,11 @@ export function buildProgram(): Command {
       "--purge",
       "Without an agent: also delete the local WAL, spool, and quarantine",
     )
+    .option(
+      "--harness <name>",
+      "Without an agent: the one to unenroll, by the harness it hooks, when this machine holds more than one enrollment",
+    )
+    .option("--all", "Without an agent: unenroll every agent on this machine")
     .action(
       async (
         agentHandle: string | undefined,
@@ -1603,6 +1619,8 @@ export function buildProgram(): Command {
           json?: boolean;
           token?: string;
           purge?: boolean;
+          harness?: string;
+          all?: boolean;
         },
       ) => {
         if (agentHandle === undefined) {
@@ -1630,6 +1648,8 @@ export function buildProgram(): Command {
             [
               ["--token", opts.token !== undefined],
               ["--purge", opts.purge === true],
+              ["--harness", opts.harness !== undefined],
+              ["--all", opts.all === true],
             ],
           )
         ) {
