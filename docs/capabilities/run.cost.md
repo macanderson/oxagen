@@ -36,7 +36,7 @@ The rollup:
 | Field | Type | Description |
 |---|---|---|
 | `cost` | object or null | `{ micros, currency, basis }`; null when no model frame was priced |
-| `tokens` | object | counts by class: `input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning` |
+| `tokens` | object | counts by class: `input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning`, and `server_tool_request`, the web searches the run's calls ran. Searches are requests, not tokens. A web fetch carries no per-request charge and is not counted |
 | `cacheHitRate` | number or null | `cache_read ÷ (input_uncached + cache_read)`, weighted by each frame's spend; null when no frame carried input tokens. Cache writes are not in the denominator, so a run that rebuilt its cache can still read a high rate. The rebuild share, `(cache_write_5m + cache_write_1h) ÷ (input_uncached + cache_read + cache_write_5m + cache_write_1h)`, comes from `tokens`, and the Run page's Cost tab prints it beside the rate |
 | `turns` | integer or null | null for a ledger run whose model-call payloads are encrypted |
 | `steps`, `modelCalls`, `toolCalls` | integer | counts from the frames |
@@ -54,7 +54,7 @@ Each `byModel` entry:
 |---|---|---|
 | `cost` | object or null | the model's recorded cost, `{ micros, currency, basis }`; null when none of its frames was priced |
 | `tokens` | object | the model's counts by class |
-| `costByClass` | object or null | `cost` split by the six classes in `tokens`, each `{ micros, currency, basis }`. Every class is priced from the price book at its frame's instant and rounded once. A class no entry priced is a zero figure. An estimated frame's own reported figure has no split, so it sits under `output`. Null exactly when `cost` is |
+| `costByClass` | object or null | `cost` split by the classes in `tokens`, each `{ micros, currency, basis }`. `server_tool_request` is priced per request. Every class is priced from the price book at its frame's instant and rounded once. A class no entry priced is a zero figure. An estimated frame's own reported figure has no split, so it sits under `output`. Null exactly when `cost` is |
 | `cacheSaving` | object or null | what the model's cache reads saved: each frame's `cache_read` tokens priced at the `input_uncached` rate less the `cache_read` rate, both at the frame's instant. A zero figure when no frame read the cache. Null when a frame that read the cache had no price for either class, when none of the model's frames was priced, and on a row rolled up before the saving was recorded, until the run's next rollup |
 | `hasUnpriced` | boolean | true when any call to the model went unpriced, including a model where another call did price and `cost` is therefore not null |
 

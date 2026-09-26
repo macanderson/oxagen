@@ -28,6 +28,29 @@ describe("latestHarnessTitle", () => {
     ).toBe("Kept");
   });
 
+  // #4224: the harness puts no bound on its title, and the column stored it
+  // whole.
+  it("cuts a long title to the display cap, never between a surrogate pair", () => {
+    // The cut falls at unit 255, and the emoji's halves sit at 254 and 255.
+    const long = `${"a".repeat(254)}😀${"a".repeat(44)}`;
+    expect(long).toHaveLength(300);
+    const title = latestHarnessTitle([
+      frame("2026-09-23T10:00:00.000Z", { session_title: long }),
+    ])?.title;
+    expect(title).toBe(`${"a".repeat(254)}…`);
+    expect(title!.length).toBeLessThanOrEqual(256);
+    expect(title).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/u);
+  });
+
+  it("keeps a title of exactly 256 units whole", () => {
+    const exact = "b".repeat(256);
+    expect(
+      latestHarnessTitle([
+        frame("2026-09-23T10:00:00.000Z", { session_title: exact }),
+      ])?.title,
+    ).toBe(exact);
+  });
+
   it("skips a frame whose time does not parse", () => {
     expect(
       latestHarnessTitle([frame("garbage", { session_title: "Lost" })]),

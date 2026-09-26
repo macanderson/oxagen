@@ -292,6 +292,7 @@ describe("toRunPage: tokens, compaction and pull request state", () => {
     cache_write_1h: 0,
     output: 900,
     reasoning: 100,
+    server_tool_request: 0,
   };
 
   it("carries the rollup's token classes in the view's names, and its cache rate (#3834)", () => {

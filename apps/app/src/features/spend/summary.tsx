@@ -11,7 +11,13 @@ import type { Read } from "@/data/read";
 import { statNote } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount, formatRatio } from "@/ui/money-format";
-import { BasisLabel, NotRecordedValue, Tile, TileStrip } from "./figures";
+import {
+  BasisLabel,
+  NotRecordedValue,
+  Tile,
+  TileStrip,
+  UnmeteredNote,
+} from "./figures";
 import { cacheHitRate, sumClasses, totalOf } from "./rollup";
 
 export function SummaryTiles({
@@ -46,6 +52,11 @@ export function SummaryTiles({
               {t("estimated", { count: estimatedRuns })}
             </span>
           )}
+          <UnmeteredNote
+            unmetered={month.unmeteredRuns}
+            className={statNote}
+            testId="spend-unmetered"
+          />
         </Tile>
         <Tile
           term={t("tokens")}

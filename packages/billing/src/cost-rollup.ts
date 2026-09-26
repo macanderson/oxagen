@@ -53,6 +53,7 @@ export const ZERO_TOKENS: TokenCounts = {
   cache_write_1h: 0,
   output: 0,
   reasoning: 0,
+  server_tool_request: 0,
 };
 
 /** Who observed a single frame. */
@@ -213,6 +214,7 @@ const PRICE_CLASS: Record<TokenClass, PriceTokenClass> = {
   cache_write_1h: "cache_write_1h",
   output: "output",
   reasoning: "reasoning",
+  server_tool_request: "server_tool_request",
 };
 
 interface PricedFrame {
@@ -237,6 +239,7 @@ const zeroScaled = (): Record<TokenClass, bigint> => ({
   cache_write_1h: 0n,
   output: 0n,
   reasoning: 0n,
+  server_tool_request: 0n,
 });
 
 /**

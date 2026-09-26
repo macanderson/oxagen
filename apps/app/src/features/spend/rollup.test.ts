@@ -14,6 +14,7 @@ import {
   perRun,
   reasoningShare,
   savingOf,
+  searchRequestsOf,
   sumClasses,
   sumCost,
   totalOf,
@@ -56,6 +57,19 @@ function finding(over: Partial<SpendFinding>): SpendFinding {
     ...over,
   };
 }
+
+describe("web search requests (#3721)", () => {
+  it("sums the requests over one level and keeps them out of the token total", () => {
+    const rows = [
+      { tokens: tokens({ server_tool_request: 3 }) },
+      { tokens: tokens({ server_tool_request: 2 }) },
+      // A view built before the rollup recorded searches carries no key.
+      { tokens: tokens() },
+    ];
+    expect(searchRequestsOf(rows)).toBe(5);
+    expect(totalOf(sumClasses(rows))).toBe(3 * 500);
+  });
+});
 
 describe("token classes", () => {
   it("folds the two cache-write TTLs into one class", () => {

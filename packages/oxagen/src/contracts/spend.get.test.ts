@@ -99,6 +99,7 @@ describe("get_spend contract", () => {
         cache_write_1h: 0,
         output: 1,
         reasoning: 0,
+        server_tool_request: 0,
       },
     };
     expect(spendRowSchema.parse(row)).toEqual(row);

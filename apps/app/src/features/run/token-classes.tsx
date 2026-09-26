@@ -6,7 +6,9 @@
 // rollup priced each call at its own instant (ADR-060), so nothing here is
 // priced by the page. Its total row is the stat row's Tokens figure and the
 // Tokens instrument's, and its cost is the sum of the rows; the note sets it
-// against the run's recorded cost, which the run row can carry on its own.
+// against the run's recorded cost, which the run row can carry on its own. A
+// run that ran web searches gets one more row: its searches counted in
+// requests, whose cost the total adds and whose count no token figure does.
 //
 // Prompt composition would split the mean model request into conversation,
 // context frames, tool definitions, steering and system. That split is not
@@ -14,6 +16,7 @@
 // them are recorded or derived: the effective input price is the input
 // classes' recorded cost over the input tokens.
 import { useLocale, useTranslations } from "next-intl";
+import { ratioOfMicros } from "@/data/contracts/money";
 import type { RunCost } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { mono } from "@/ui/control-styles";
@@ -33,6 +36,9 @@ const pair =
   "grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]";
 /** `table.narrow { min-width:0 }`: a table that fits a half-width panel. */
 const narrowTable = "w-full min-w-0 border-collapse text-[13px]";
+
+/** The book's class for web searches, which are priced per request (#3721). */
+const SEARCH_CLASS = "server_tool_request";
 /** `.hr { height:1px; background:var(--border); margin:14px 0 }` */
 const rule = "my-3.5 h-px border-0 bg-border";
 
@@ -56,8 +62,12 @@ function TokenClasses({
 }) {
   const t = useTranslations("run.cost");
   const locale = useLocale();
-  const { tokens, priced } = metrics;
+  const { tokens, priced, searches } = metrics;
   const count = (value: number) => formatCount(value, locale);
+  const searchShare =
+    searches === null || searches.cost === null || prices.total === null
+      ? null
+      : ratioOfMicros(searches.cost, prices.total);
   const recorded = metrics.cost;
   const entries = cost.ok ? (cost.value.rollup?.priceEntryIds ?? []) : [];
   return (
@@ -137,6 +147,36 @@ function TokenClasses({
                     </tr>
                   );
                 })}
+                {/* Web searches bill per request (#3721): their cost is in
+                    the total below, and their count stays out of every
+                    token figure. */}
+                {searches === null ? null : (
+                  <tr
+                    data-testid="token-class-searches"
+                    data-class={SEARCH_CLASS}
+                  >
+                    <td className={`${cell} ${mono}`}>{SEARCH_CLASS}</td>
+                    <td className={numericCell}>
+                      {t("classes.searchRequests", {
+                        count: searches.requests,
+                      })}
+                    </td>
+                    <td className={numericCell}>
+                      {searches.cost === null ? (
+                        <NoValue />
+                      ) : (
+                        <Money value={searches.cost} precision="exact" />
+                      )}
+                    </td>
+                    <td className={`${numericCell} text-dim`}>
+                      {searchShare === null ? (
+                        <NoValue />
+                      ) : (
+                        formatRatio(searchShare, locale)
+                      )}
+                    </td>
+                  </tr>
+                )}
                 <tr data-testid="token-class-total" className="font-semibold">
                   <td className={cell}>{t("classes.total")}</td>
                   <td
