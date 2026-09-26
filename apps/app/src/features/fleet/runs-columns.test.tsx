@@ -308,27 +308,20 @@ describe("lines changed and the summary on a Fleet row", () => {
     expect(rowOf("arun_nosummary")).toHaveTextContent("No summary yet");
   });
 
-  it("sorts on the lines changed, with rows that recorded none last", async () => {
+  // #3837: a header sorts only when the read can order the whole workspace
+  // by it. Lines changed has no single order across both stores, and sorting
+  // the rows of one page would put page 2's largest change out of reach.
+  it("draws the Lines header without a sort, since the read cannot order by it", async () => {
     await renderFleet([
       runRow({
         id: "tse_small",
         diff: { added: 1, removed: 0, basis: "git_observed" },
       }),
-      runRow({ id: "tse_none", diff: null }),
-      runRow({
-        id: "tse_big",
-        diff: { added: 90, removed: 10, basis: "harness_reported" },
-      }),
     ]);
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Sort by Lines" }));
-    const order = () =>
-      within(runsPanel())
-        .getAllByTestId("run-row")
-        .map((r) => within(r).getAllByRole("link")[0]?.textContent);
-    expect(order()).toEqual(["tse_small", "tse_big", "tse_none"]);
-    await user.click(screen.getByRole("button", { name: "Sort by Lines" }));
-    expect(order()).toEqual(["tse_big", "tse_small", "tse_none"]);
+    expect(screen.queryByRole("button", { name: "Sort by Lines" })).toBeNull();
+    expect(
+      screen.getByRole("columnheader", { name: "Lines" }),
+    ).not.toHaveAttribute("aria-sort");
   });
 });
 

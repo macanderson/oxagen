@@ -81,6 +81,17 @@ import {
   runDiffOf,
 } from "./lib/run-list-work";
 import { logger } from "./logger";
+import {
+  countRuns,
+  isNewestFirst,
+  postgresRunIndex,
+  readRunIndexPage,
+  refuseRunIndexInput,
+  type RunIndexDeps,
+  type RunRowsByPublicId,
+  runIndexRequest,
+  usesRunIndex,
+} from "./run.list.index";
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import {
   and,
@@ -650,6 +661,46 @@ export function tachoPageQuery(db: QueryDb, scope: RunScope, q: PageQuery) {
     .limit(q.limit + 1);
 }
 
+/** V2 ledger runs by public id, in the scope's workspace (the run index's page). */
+export function ledgerByPublicIdsQuery(
+  db: QueryDb,
+  scope: RunScope,
+  publicIds: readonly string[],
+) {
+  return ledgerRunsSelect(db).where(
+    and(
+      inArray(runs.publicId, [...publicIds]),
+      eq(runs.orgId, scope.orgId),
+      eq(runs.workspaceId, scope.workspaceId),
+      eq(runs.specVersion, 2),
+    ),
+  );
+}
+
+/** Root sessions by public id, in the scope's workspace (the run index's page). */
+export function tachoByPublicIdsQuery(
+  db: QueryDb,
+  scope: RunScope,
+  publicIds: readonly string[],
+) {
+  return tachoSessionsSelect(db).where(
+    and(
+      inArray(sessions.publicId, [...publicIds]),
+      eq(sessions.orgId, scope.orgId),
+      eq(sessions.workspaceId, scope.workspaceId),
+      isNull(sessions.parentSessionUuid),
+    ),
+  );
+}
+
+/** The run index's rows, read through the keyset page's own selects. */
+export const postgresRunRows: RunRowsByPublicId = {
+  ledger: (scope, publicIds) =>
+    withTenantDb((tx) => ledgerByPublicIdsQuery(tx, scope, publicIds)),
+  tacho: (scope, publicIds) =>
+    withTenantDb((tx) => tachoByPublicIdsQuery(tx, scope, publicIds)),
+};
+
 /** One root session by public id, only in the scope's workspace. */
 export function tachoSessionQuery(
   db: QueryDb,
@@ -895,6 +946,12 @@ export type RunListDeps = {
   readPullRequests?: ReadRunPullRequests;
   /** Git's uncommitted change per wrapped session; absent reads none. */
   readGitDiffs?: ReadRunGitDiffs;
+  /**
+   * The run index (#3837): the filters, the search, the order, the offset and
+   * the bounded total. Absent, a page carries no total and an input that
+   * needs the index is refused.
+   */
+  runIndex?: RunIndexDeps;
 };
 
 type FleetItem =
@@ -921,8 +978,29 @@ export function createRunListHandler(
       input.cursor === undefined ? null : decodeRunCursor(input.cursor);
     if (input.cursor !== undefined && cursor === null)
       throw invalidCursor(runList.name);
+    refuseRunIndexInput(runList.name, input);
     const filter = input.pullRequests ?? "any";
     const withoutWitnessRuns = hidesWitnessRuns(ctx);
+    const runIndex = deps.runIndex;
+    const indexed = usesRunIndex(input);
+    if (indexed && runIndex === undefined)
+      throw new Error("list_runs: the run index is not wired");
+
+    // The total counts every run the filters and the search let through,
+    // whatever the page. It depends on nothing a page returns, so it is read
+    // beside the pages.
+    const counted =
+      runIndex === undefined
+        ? Promise.resolve<Pick<RunListOutput, "total" | "totalBound">>({})
+        : countRuns(
+            runIndex.index,
+            scope,
+            runIndexRequest(input, {
+              cursor: null,
+              limit: input.limit,
+              withoutWitnessRuns,
+            }),
+          );
 
     // The enrichment flag depends on nothing the pages return, so it is read
     // alongside them rather than after the rollups.
@@ -934,6 +1012,23 @@ export function createRunListHandler(
     // only: a ledger run's pull requests are receipts this read cannot see,
     // so it can be listed as neither "with" nor "without".
     async function readBatch(at: RunCursor | null, limit: number) {
+      if (indexed && runIndex !== undefined) {
+        const read = await readRunIndexPage(
+          runIndex,
+          scope,
+          runIndexRequest(input, { cursor: at, limit, withoutWitnessRuns }),
+        );
+        const last = read.items.at(-1);
+        return {
+          items: read.items,
+          // A cursor is a position in the newest-first order. In any other
+          // order the caller pages by offset.
+          nextCursor:
+            read.more && last !== undefined && isNewestFirst(input.sort)
+              ? encodeRunCursor({ at: last.startedAt, id: last.id })
+              : null,
+        };
+      }
       const page = { cursor: at, limit, withoutWitnessRuns };
       const [ledger, tacho] = await Promise.all([
         filter === "any"
@@ -1051,7 +1146,7 @@ export function createRunListHandler(
         : [],
     );
     const noGit = new Map<string, LineCounts>();
-    const [enabled, enrich, costs, gitDiffs] = await Promise.all([
+    const [enabled, enrich, costs, gitDiffs, total] = await Promise.all([
       enabledRead,
       ledgerEnrichment(
         deps,
@@ -1073,6 +1168,7 @@ export function createRunListHandler(
             );
             return noGit;
           }),
+      counted,
     ]);
     return {
       runs: items.map((item) => {
@@ -1103,6 +1199,7 @@ export function createRunListHandler(
       }),
       nextCursor,
       ...(linksUnread ? { warnings: ["pull_requests_unread" as const] } : {}),
+      ...total,
     };
   };
 }
@@ -1129,4 +1226,5 @@ export const runListHandler = createRunListHandler({
   readEnrichmentEnabled: readRunEnrichmentEnabled,
   readPullRequests: readRunPullRequests,
   readGitDiffs: postgresRunGitDiffs,
+  runIndex: { index: postgresRunIndex, rows: postgresRunRows },
 });

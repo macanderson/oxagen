@@ -7,14 +7,15 @@
 // and the labels say "shown" for that reason. Every figure here comes from
 // `view.ts` over the same rows the table draws.
 //
-// The page size is the read's own limit, and the pull-request filter is the
-// read's own filter, so both change what `list_runs` returns rather than
-// slicing a fixed page. The page size and the columns shown are the person's
-// saved choice (`prefs.ts`), kept in a cookie the page reads on the server.
-// Search, facets and sort run over the rows the read returned. The pager says
-// so: its total carries a `+` when the read stopped before the oldest run, and
-// a link opens the next read.
-import { ArrowUpDown, Columns3 } from "lucide-react";
+// The page size is the read's own limit, and the search, the facets, the order,
+// the page and the pull-request filter are the read's own inputs, values on
+// the URL that `list_runs` applies across the workspace (#3837). A change to
+// any of them is a navigation (`list-bar.tsx`, the headers), never a filter
+// over the rows one read returned. The pager (`pager.tsx`) reads the read's
+// total. The page size and the columns shown are the person's saved choice
+// (`prefs.ts`), kept in a cookie the page reads on the server. The chips
+// filter the rows of the page, because parked comes from the approvals read.
+import { ArrowUpDown } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
@@ -46,7 +47,6 @@ import {
   buttonPrimary,
   buttonSecondary,
   inputBase,
-  linkText,
   mono,
   panel,
   panelHeader,
@@ -76,27 +76,28 @@ import {
   type FleetColumn,
   type FleetPrefs,
   fleetPrefsCookieString,
-  PAGE_SIZES,
   type PageSize,
-  pageSizeOf,
   shownColumns,
   withColumn,
 } from "./prefs";
+import { RunsListBar } from "./list-bar";
 import {
-  applyList,
+  effectiveListQuery,
+  type FleetListQuery,
+  listQueryToRoute,
+  nextSort,
+  SORTABLE_COLUMNS,
+  withList,
+} from "./list-query";
+import { RunsPager } from "./pager";
+import {
   chipRows,
-  type Facets,
-  facetValues,
   type ListedRun,
-  type ListQuery,
   listRuns,
   liveCount,
   parkedRunIds,
-  pullRequestLabel,
   RUN_CHIPS,
-  type RowWords,
   type RunChip,
-  type SortKey,
   shownCost,
   spendShown,
 } from "./view";
@@ -212,7 +213,7 @@ function Tiles({
   );
 }
 
-// ── Row words and cells ──────────────────────────────────────────────────
+// ── Cells ────────────────────────────────────────────────────────────────
 
 // A run's second line: its name (the harness title, else the generated one),
 // else its task reference, the same fallback the Run page's header reads.
@@ -220,50 +221,6 @@ function Tiles({
 // title the harness recorded. A run with neither shows only its id.
 function runTitle(run: RunRow): string | null {
   return run.name ?? run.taskRef;
-}
-
-function useRowWords(listed: readonly ListedRun[]): RowWords[] {
-  const t = useTranslations("fleet.runs");
-  const status = useTranslations("ui.runStatus");
-  const grade = useTranslations("ui.replayGrade");
-  return useMemo(
-    () =>
-      listed.map(({ run, state }) => {
-        // The design's lifecycle word (live, sealed, halted, parked for
-        // approval), which the Status facet lists too. The outcome stays on
-        // the badge's hover text.
-        const statusWord =
-          state === "parked" ? t("parked") : status(run.status);
-        const operator =
-          run.operatorName ??
-          (run.operatorKind === null
-            ? (run.operatorId ?? t("notRecorded"))
-            : t(`operatorKind.${run.operatorKind}`));
-        const words = {
-          run: run.id,
-          agent: run.agentKey ?? t("notRecorded"),
-          operator,
-          status: statusWord,
-          tier: run.enforcementTier,
-          replay:
-            run.replayGrade === null
-              ? t("notRecorded")
-              : grade(`${run.replayGrade}.label`),
-        };
-        const text = [
-          ...Object.values(words),
-          runTitle(run) ?? "",
-          run.enrichmentEnabled === false ? "" : (run.summary?.text ?? ""),
-          ...(run.pullRequests ?? []).map(
-            (pull) => pullRequestLabel(pull) ?? "",
-          ),
-          run.harness?.name ?? "",
-          run.cost?.basis ?? "",
-        ].join(" ");
-        return { ...words, text };
-      }),
-    [listed, t, status, grade],
-  );
 }
 
 /**
@@ -321,36 +278,13 @@ function Started({ at, now }: { at: string; now: number }) {
 
 // ── The Runs panel ───────────────────────────────────────────────────────
 
-/**
- * How each column heads the table. `sort` names what a header click sorts
- * on. `tokens` has no figure to sort yet, and `summary` is prose with no
- * order a reader would use, so neither sorts.
- */
-const COLUMN_HEAD: Record<
-  FleetColumn,
-  { sort: SortKey | "tokens" | null; numeric?: boolean }
-> = {
-  run: { sort: "run" },
-  summary: { sort: null },
-  agent: { sort: "agent" },
-  operator: { sort: "operator" },
-  status: { sort: "status" },
-  pullRequests: { sort: "pullRequests" },
-  diff: { sort: "diff", numeric: true },
-  tier: { sort: "tier" },
-  replay: { sort: "replay" },
-  tokens: { sort: "tokens", numeric: true },
-  cost: { sort: "cost", numeric: true },
-  frames: { sort: "frames", numeric: true },
-  started: { sort: "started" },
-};
-
-const FACETS = ["tier", "replay", "status"] as const;
-
-const PR_FILTERS: readonly PullRequestFilter[] = ["any", "with", "without"];
-
-const selectBase =
-  "rounded-lg border border-input-border bg-input-bg px-2 py-[5px] text-xs text-input-fg max-md:min-h-11 max-md:text-base focus-visible:outline-2 focus-visible:outline-input-ring";
+/** Which columns right-align their figures. */
+const NUMERIC_COLUMNS: ReadonlySet<FleetColumn> = new Set([
+  "diff",
+  "tokens",
+  "cost",
+  "frames",
+]);
 
 function Chips({
   chip,
@@ -377,125 +311,6 @@ function Chips({
           {t(`chips.${name}`)}
         </button>
       ))}
-    </div>
-  );
-}
-
-function ListBar({
-  query,
-  setQuery,
-  words,
-  pageSize,
-  onPageSize,
-  pullRequests,
-  onPullRequests,
-  onColumns,
-}: {
-  query: ListQuery;
-  setQuery: (next: ListQuery) => void;
-  words: readonly RowWords[];
-  pageSize: PageSize;
-  onPageSize: (size: PageSize) => void;
-  pullRequests: PullRequestFilter;
-  onPullRequests: (filter: PullRequestFilter) => void;
-  onColumns: () => void;
-}) {
-  const t = useTranslations("fleet.runs");
-  const rowsId = useId();
-  return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-[9px]">
-      <input
-        type="search"
-        value={query.search}
-        placeholder={t("search")}
-        aria-label={t("search")}
-        onChange={(event) => {
-          setQuery({ ...query, search: event.target.value, page: 1 });
-        }}
-        className={`${inputBase} min-w-36 flex-[1_1_200px] py-1.5 max-md:min-h-11 max-md:text-base`}
-      />
-      {FACETS.map((facet) => {
-        const label = t(`columns.${facet}`);
-        return (
-          <select
-            key={facet}
-            aria-label={t("facetLabel", { facet: label })}
-            data-testid={`facet-${facet}`}
-            value={query.facets[facet] ?? ""}
-            onChange={(event) => {
-              const value = event.target.value;
-              const facets: Facets = {
-                ...query.facets,
-                [facet]: value === "" ? null : value,
-              };
-              setQuery({ ...query, facets, page: 1 });
-            }}
-            className={selectBase}
-          >
-            <option value="">{t("facetAll", { facet: label })}</option>
-            {facetValues(words, facet).map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        );
-      })}
-      <select
-        aria-label={t("prFilter.label")}
-        data-testid="pr-filter"
-        value={pullRequests}
-        onChange={(event) => {
-          const next = PR_FILTERS.find((f) => f === event.target.value);
-          if (next !== undefined) onPullRequests(next);
-        }}
-        className={selectBase}
-      >
-        {PR_FILTERS.map((filter) => (
-          <option key={filter} value={filter}>
-            {t(`prFilter.${filter}`)}
-          </option>
-        ))}
-      </select>
-      <button
-        type="button"
-        data-testid="columns-open"
-        data-touch-target=""
-        onClick={onColumns}
-        className={`${buttonSecondary} inline-flex items-center gap-1.5 px-2.5 py-1 text-xs`}
-      >
-        <Columns3 aria-hidden className="size-3.5" />
-        {t("columnsPicker.open")}
-      </button>
-      <label
-        htmlFor={rowsId}
-        className="ms-auto inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px] text-muted-foreground"
-      >
-        {t("rows")}
-        <select
-          id={rowsId}
-          data-testid="rows-per-page"
-          value={String(pageSize)}
-          onChange={(event) => {
-            onPageSize(pageSizeOf(event.target.value));
-          }}
-          className={selectBase}
-        >
-          {PAGE_SIZES.map((size) => (
-            <option key={size} value={String(size)}>
-              {String(size)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {pullRequests === "any" ? null : (
-        <p
-          data-testid="pr-filter-note"
-          className="basis-full text-[11.5px] text-muted-foreground"
-        >
-          {t("prFilter.note")}
-        </p>
-      )}
     </div>
   );
 }
@@ -571,71 +386,6 @@ function ColumnPicker({
         })}
       </fieldset>
     </SheetDialog>
-  );
-}
-
-function Pager({
-  from,
-  to,
-  total,
-  more,
-  org,
-  ws,
-  cursor,
-  nextCursor,
-  pullRequests,
-}: {
-  from: number;
-  to: number;
-  total: number;
-  /** True when the read stopped before the oldest run. */
-  more: boolean;
-  cursor: string | null;
-  nextCursor: string | null;
-  pullRequests: PullRequestFilter;
-} & Place) {
-  const t = useTranslations("fleet.runs.pager");
-  const locale = useLocale();
-  const range =
-    total === 0
-      ? t("none")
-      : t(more ? "rangeMore" : "range", {
-          from: formatCount(from, locale),
-          to: formatCount(to, locale),
-          total: formatCount(total, locale),
-        });
-  return (
-    <nav
-      aria-label={t("label")}
-      className="flex flex-wrap items-center gap-2 px-3 py-2 text-[11.5px] text-muted-foreground"
-    >
-      <span data-testid="pager-range" className="font-mono tabular-nums">
-        {range}
-      </span>
-      <span className="ms-auto flex flex-wrap items-center gap-3">
-        {cursor === null ? null : (
-          <SafeLink
-            to={routes.fleet(org, ws, { prs: pullRequests })}
-            data-touch-target=""
-            className={`${linkText} inline-flex items-center`}
-          >
-            {t("newest")}
-          </SafeLink>
-        )}
-        {nextCursor === null ? null : (
-          <SafeLink
-            to={routes.fleet(org, ws, {
-              cursor: nextCursor,
-              prs: pullRequests,
-            })}
-            data-touch-target=""
-            className={`${linkText} inline-flex items-center`}
-          >
-            {t("older")}
-          </SafeLink>
-        )}
-      </span>
-    </nav>
   );
 }
 
@@ -1065,6 +815,9 @@ export function FleetBoard({
   prefs: savedPrefs = DEFAULT_FLEET_PREFS,
   pullRequests = "any",
   pullRequestsUnread = false,
+  list: askedList,
+  total,
+  totalBound,
   org,
   ws,
 }: {
@@ -1086,21 +839,19 @@ export function FleetBoard({
   pullRequests?: PullRequestFilter;
   /** The read could not see this page's pull requests. */
   pullRequestsUnread?: boolean;
+  /** The search, facets, order and page the URL asked for (#3837). */
+  list: FleetListQuery;
+  /** The runs that match, across the workspace; null past `totalBound`; absent when not counted. */
+  total?: number | null;
+  totalBound?: number;
 } & Place) {
   const t = useTranslations("fleet.runs");
   const pauseT = useTranslations("fleet.pause");
   const navigate = useNavigate();
   const failureText = useActionFailure();
   const [chip, setChip] = useState<RunChip>("all");
-  const [query, setQuery] = useState<ListQuery>({
-    search: "",
-    facets: { tier: null, replay: null, status: null },
-    sort: null,
-    // The read already holds one page, of the size the person chose; the
-    // table lists all of it.
-    perPage: 0,
-    page: 1,
-  });
+  // What the read served: a pull-request filter pages newest first.
+  const list = effectiveListQuery(askedList, pullRequests);
   const [prefs, setPrefs] = useState<FleetPrefs>(savedPrefs);
   const [picking, setPicking] = useState(false);
   const [reading, startReading] = useTransition();
@@ -1116,8 +867,19 @@ export function FleetBoard({
     [runs, approvals],
   );
   const listed = useMemo(() => chipRows(all, chip), [all, chip]);
-  const words = useRowWords(listed);
-  const page = applyList(listed, words, query);
+
+  /** Read the list again with a new query: a navigation to its URL. */
+  function readList(next: FleetListQuery, filter = pullRequests) {
+    startReading(() => {
+      navigate.push(
+        routes.fleet(
+          org,
+          ws,
+          listQueryToRoute(effectiveListQuery(next, filter), filter),
+        ),
+      );
+    });
+  }
 
   /** Apply a choice now and remember it in this browser for a year. */
   function save(next: FleetPrefs) {
@@ -1128,35 +890,23 @@ export function FleetBoard({
     );
   }
 
-  // The page size is the read's limit, so a new size reads again from the
-  // newest run: the page re-renders on the server with the saved cookie.
+  // The page size is the read's limit, so a new size reads page 1 again:
+  // the page re-renders on the server with the saved cookie.
   function changePageSize(size: PageSize) {
     if (size === prefs.pageSize) return;
     save({ ...prefs, pageSize: size });
-    startReading(() => {
-      if (cursor === null) navigate.refresh();
-      else navigate.push(routes.fleet(org, ws, { prs: pullRequests }));
-    });
+    if (cursor === null && list.page === 1)
+      startReading(() => {
+        navigate.refresh();
+      });
+    else readList(withList(list, {}));
   }
 
   // The filter is the read's filter and lives in the URL, so a filtered
-  // Fleet can be linked, and a new filter starts from the newest run.
+  // Fleet can be linked, and a new filter starts from page 1.
   function changeFilter(next: PullRequestFilter) {
     if (next === pullRequests) return;
-    startReading(() => {
-      navigate.push(routes.fleet(org, ws, { prs: next }));
-    });
-  }
-
-  function sortBy(key: SortKey) {
-    const current = query.sort;
-    const sort =
-      current?.key !== key
-        ? { key, dir: 1 as const }
-        : current.dir === 1
-          ? { key, dir: -1 as const }
-          : null;
-    setQuery({ ...query, sort, page: 1 });
+    readList(withList(list, {}), next);
   }
 
   function exportRow(run: RunRow) {
@@ -1205,18 +955,13 @@ export function FleetBoard({
           <h2 id="fleet-runs" className={panelTitle}>
             {t("title")}
           </h2>
-          <Chips
-            chip={chip}
-            onChip={(next) => {
-              setChip(next);
-              setQuery({ ...query, page: 1 });
-            }}
-          />
+          <Chips chip={chip} onChip={setChip} />
         </div>
-        <ListBar
-          query={query}
-          setQuery={setQuery}
-          words={words}
+        <RunsListBar
+          list={list}
+          onList={(next) => {
+            readList(next);
+          }}
           pageSize={prefs.pageSize}
           onPageSize={changePageSize}
           pullRequests={pullRequests}
@@ -1244,12 +989,17 @@ export function FleetBoard({
             <thead>
               <tr className="border-b border-border">
                 {columns.map((key) => {
-                  const head = COLUMN_HEAD[key];
                   const label = t(`columns.${key}`);
-                  const align =
-                    head.numeric === true ? "text-right" : "text-left";
-                  const sortKey = head.sort;
-                  if (sortKey === null)
+                  const align = NUMERIC_COLUMNS.has(key)
+                    ? "text-right"
+                    : "text-left";
+                  // The read orders by these columns across the workspace.
+                  // The others have no single order in both stores, so they
+                  // do not sort. Under a pull-request filter the read pages
+                  // newest first, so no header sorts.
+                  const sortKey =
+                    pullRequests === "any" ? SORTABLE_COLUMNS[key] : undefined;
+                  if (sortKey === undefined && key !== "tokens")
                     return (
                       <th
                         key={key}
@@ -1264,7 +1014,7 @@ export function FleetBoard({
                   // recorded" and there is no order to put them in. The
                   // control is drawn where the design has it, disabled, and
                   // its hover says why.
-                  if (sortKey === "tokens")
+                  if (sortKey === undefined)
                     return (
                       <th
                         key={key}
@@ -1285,16 +1035,15 @@ export function FleetBoard({
                         </button>
                       </th>
                     );
-                  const sorted =
-                    query.sort?.key === sortKey ? query.sort.dir : 0;
+                  const sorted = list.sort === sortKey ? list.dir : null;
                   return (
                     <th
                       key={key}
                       scope="col"
                       aria-sort={
-                        sorted === 1
+                        sorted === "asc"
                           ? "ascending"
-                          : sorted === -1
+                          : sorted === "desc"
                             ? "descending"
                             : "none"
                       }
@@ -1304,7 +1053,7 @@ export function FleetBoard({
                         type="button"
                         aria-label={t("sortBy", { column: label })}
                         onClick={() => {
-                          sortBy(sortKey);
+                          readList(nextSort(list, sortKey));
                         }}
                         className="inline-flex items-center gap-1 uppercase tracking-[inherit] hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                       >
@@ -1320,7 +1069,7 @@ export function FleetBoard({
               </tr>
             </thead>
             <tbody className="divide-y divide-border [&>tr]:transition-colors [&>tr:hover]:bg-hl">
-              {page.rows.length === 0 ? (
+              {listed.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length + 1}
@@ -1331,38 +1080,36 @@ export function FleetBoard({
                   </td>
                 </tr>
               ) : (
-                page.rows.map((index) => {
-                  const row = listed[index];
-                  return row === undefined ? null : (
-                    <RunRowView
-                      key={row.run.id}
-                      listed={row}
-                      columns={columns}
-                      now={now}
-                      org={org}
-                      ws={ws}
-                      exporting={exportingId === row.run.id}
-                      onPause={(run) => {
-                        setPausing(run);
-                      }}
-                      onExport={exportRow}
-                    />
-                  );
-                })
+                listed.map((row) => (
+                  <RunRowView
+                    key={row.run.id}
+                    listed={row}
+                    columns={columns}
+                    now={now}
+                    org={org}
+                    ws={ws}
+                    exporting={exportingId === row.run.id}
+                    onPause={(run) => {
+                      setPausing(run);
+                    }}
+                    onExport={exportRow}
+                  />
+                ))
               )}
             </tbody>
           </table>
         </div>
-        <Pager
-          from={page.from}
-          to={page.to}
-          total={page.total}
-          more={nextCursor !== null}
-          org={org}
-          ws={ws}
+        <RunsPager
+          list={list}
+          pageSize={prefs.pageSize}
+          rows={runs.length}
+          {...(total === undefined ? {} : { total })}
+          {...(totalBound === undefined ? {} : { totalBound })}
           cursor={cursor}
           nextCursor={nextCursor}
           pullRequests={pullRequests}
+          org={org}
+          ws={ws}
         />
       </section>
       <ColumnPicker

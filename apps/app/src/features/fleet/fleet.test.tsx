@@ -14,7 +14,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readError } from "@/data/read";
+import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
@@ -151,6 +151,7 @@ async function renderFleet(
   view: {
     prefs?: Parameters<typeof Fleet>[0]["prefs"];
     pullRequests?: Parameters<typeof Fleet>[0]["pullRequests"];
+    list?: Parameters<typeof Fleet>[0]["list"];
   } = {},
 ) {
   const { source, calls } = fleetSource(reads);
@@ -601,11 +602,12 @@ describe("the Runs panel", () => {
         .getAllByRole("option")
         .map((o) => o.textContent),
     ).toEqual([
+      // The lifecycle words the record holds (#3837). Parked comes from the
+      // approvals read, so the chips find it and the read cannot filter on it.
       "All · Status",
-      "halted",
       "live",
-      "parked for approval",
       "sealed",
+      "halted",
     ]);
   });
 
@@ -885,35 +887,143 @@ describe("list controls", () => {
     expect(screen.getByTestId("pager-range")).toHaveTextContent("1–12 of 12");
   });
 
-  it("searches, filters on a facet and sorts on a column", async () => {
+  // #3837: the search, the facets, the order and the page are the read's.
+  it("sends a search, a facet and a column's order to the read as a navigation", async () => {
     await loaded({ runs: runPage(many), approvals: NO_APPROVALS });
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText("Search this list"), "arun_07");
-    expect(rows()).toHaveLength(1);
-    await user.clear(screen.getByLabelText("Search this list"));
+    await user.type(screen.getByRole("searchbox"), "arun_07{Enter}");
+    expect(push).toHaveBeenLastCalledWith("/acme/core-platform?q=arun_07");
+    // The rows are the read's: typing filters nothing on this page.
+    expect(rows()).toHaveLength(12);
     await user.selectOptions(screen.getByTestId("facet-tier"), "gateway");
-    expect(rows()).toHaveLength(4);
-    expect(
-      within(screen.getByTestId("facet-status"))
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["All · Status", "sealed"]);
-    await user.selectOptions(screen.getByTestId("facet-tier"), "");
-    const frames = screen.getByRole("button", { name: "Sort by Frames" });
-    await user.click(frames);
-    expect(frames.closest("th")).toHaveAttribute("aria-sort", "ascending");
-    expect(rows()[0]).toHaveTextContent("arun_00");
-    await user.click(frames);
-    expect(frames.closest("th")).toHaveAttribute("aria-sort", "descending");
-    expect(rows()[0]).toHaveTextContent("arun_11");
+    expect(push).toHaveBeenLastCalledWith("/acme/core-platform?tier=gateway");
+    await user.click(screen.getByRole("button", { name: "Sort by Cost" }));
+    expect(push).toHaveBeenLastCalledWith(
+      "/acme/core-platform?sort=cost&dir=asc",
+    );
   });
 
-  it("says no rows match when a search finds none (negative)", async () => {
-    await loaded({ runs: runPage(many), approvals: NO_APPROVALS });
+  it("sorts only the columns the read can order, and marks the order the URL asked for", async () => {
+    const { calls } = await renderFleet(
+      { runs: runPage(many), approvals: NO_APPROVALS },
+      null,
+      undefined,
+      {
+        list: {
+          q: "",
+          status: [],
+          tier: [],
+          replay: [],
+          sort: "cost",
+          dir: "desc",
+          page: 1,
+        },
+      },
+    );
+    expect(calls.runs[0]?.[1]).toMatchObject({
+      sort: { key: "cost", dir: "desc" },
+    });
+    const cost = screen.getByRole("button", { name: "Sort by Cost" });
+    expect(cost.closest("th")).toHaveAttribute("aria-sort", "descending");
+    // Frames, Run, Pull requests and Lines have no single order in both
+    // stores, so their headers do not sort.
+    for (const column of ["Frames", "Run", "Lines"])
+      expect(
+        screen.queryByRole("button", { name: `Sort by ${column}` }),
+      ).toBeNull();
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText("Search this list"), "zzz");
+    await user.click(cost);
+    expect(push).toHaveBeenLastCalledWith("/acme/core-platform");
+  });
+
+  it("reads the pager from the read's total, with page buttons to the last page", async () => {
+    const { container } = await loaded({
+      runs: readOk({
+        runs: many,
+        nextCursor: null,
+        total: 279,
+        totalBound: 10_000,
+      }),
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–12 of 279");
+    expect(screen.getByRole("link", { name: "Page 12" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform?page=12",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("reads page N at its offset and keeps the list on the pager's links", async () => {
+    const { calls } = await renderFleet(
+      {
+        runs: readOk({
+          runs: many,
+          nextCursor: null,
+          total: 279,
+          totalBound: 10_000,
+        }),
+        approvals: NO_APPROVALS,
+      },
+      null,
+      undefined,
+      {
+        list: {
+          q: "deploy",
+          status: ["sealed"],
+          tier: [],
+          replay: [],
+          sort: "started",
+          dir: "desc",
+          page: 3,
+        },
+      },
+    );
+    expect(calls.runs[0]?.[1]).toEqual({
+      cursor: null,
+      limit: 25,
+      pullRequests: "any",
+      status: ["sealed"],
+      query: "deploy",
+      offset: 50,
+    });
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("51–62 of 279");
+    expect(screen.getByRole("link", { name: "Previous" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform?q=deploy&status=sealed&page=2",
+    );
+  });
+
+  it("keeps the table and says no rows match when a search finds none (negative)", async () => {
+    const { calls } = await renderFleet(
+      {
+        runs: readOk({
+          runs: [],
+          nextCursor: null,
+          total: 0,
+          totalBound: 10_000,
+        }),
+        approvals: NO_APPROVALS,
+      },
+      null,
+      undefined,
+      {
+        list: {
+          q: "zzz",
+          status: [],
+          tier: [],
+          replay: [],
+          sort: "started",
+          dir: "desc",
+          page: 1,
+        },
+      },
+    );
+    expect(calls.runs[0]?.[1]).toMatchObject({ query: "zzz" });
+    expect(screen.queryByTestId("fleet-empty")).toBeNull();
     expect(runsPanel()).toHaveTextContent("No rows match.");
     expect(screen.getByTestId("pager-range")).toHaveTextContent("0 of 0");
+    expect(screen.getByRole("searchbox")).toHaveValue("zzz");
   });
 });
 

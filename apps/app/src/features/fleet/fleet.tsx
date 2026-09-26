@@ -213,6 +213,11 @@ export async function Fleet({
         pullRequestsUnread={
           runs.value.warnings?.includes("pull_requests_unread") === true
         }
+        list={list}
+        {...(runs.value.total === undefined ? {} : { total: runs.value.total })}
+        {...(runs.value.totalBound === undefined
+          ? {}
+          : { totalBound: runs.value.totalBound })}
         approvals={approvals}
         interjections={interjections}
         agentTotal={agents.ok ? agents.value.totals.identities : null}

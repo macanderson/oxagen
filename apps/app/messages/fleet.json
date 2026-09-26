@@ -154,7 +154,6 @@
         "parked": "parked",
         "sealed": "sealed"
       },
-      "search": "Search this list",
       "searchRuns": "Search runs",
       "facetAll": "All · {facet}",
       "facetLabel": "Filter by {facet}",
