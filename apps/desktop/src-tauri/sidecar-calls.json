@@ -1,0 +1,112 @@
+[
+  {
+    "sidecar": "oxagen",
+    "args": ["login", "--browser"]
+  },
+  {
+    "sidecar": "oxagen",
+    "args": ["login", "--browser", "--signup"]
+  },
+  {
+    "sidecar": "oxagen",
+    "args": ["logout"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["status", "--json"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["detect", "--json"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["verify", "--harness", "claude-code", "--json"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["verify", "--harness", "codex", "--json"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["verify", "--harness", "cursor", "--json"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["verify", "--harness", "stella", "--json"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": [
+      "enroll",
+      "--org",
+      "acme",
+      "--workspace",
+      "core",
+      "--harness",
+      "claude-code,codex"
+    ]
+  },
+  {
+    "sidecar": "tacho",
+    "args": [
+      "enroll",
+      "--workspace",
+      "core",
+      "--harness",
+      "claude-code,codex,cursor,stella,claude-desktop"
+    ]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["enroll", "--harness", "cursor"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["reassign", "--org", "globex", "--workspace", "ops"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["reassign", "--workspace", "ops"]
+  },
+  {
+    "sidecar": "oxagen",
+    "args": [
+      "tacho",
+      "reassign",
+      "--org",
+      "globex",
+      "--workspace",
+      "ops",
+      "--default"
+    ]
+  },
+  {
+    "sidecar": "oxagen",
+    "args": ["tacho", "reassign", "--workspace", "ops", "--default"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["reassign", "--harness", "claude-code,stella"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["reassign", "--harness", "claude-code"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["unenroll"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["reassign", "--harness", "claude-code,claude-desktop"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["unenroll"]
+  },
+  {
+    "sidecar": "tacho",
+    "args": ["unenroll", "--purge"]
+  }
+]

@@ -6,11 +6,14 @@
 //! files. The commands here are the reads the UI polls, the two control-plane
 //! calls the pickers need, and the PATH install that a sidecar cannot do for
 //! itself.
+mod activity;
 mod cli_install;
 #[cfg(test)]
 mod install_rig_tests;
 mod machine;
+mod sidecar;
 
+use activity::{Activity, ExitDecision};
 use cli_install::{CliInstallState, CliInstallView};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -20,7 +23,7 @@ use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Manager,
+    Manager, RunEvent, WindowEvent,
 };
 
 /// `~/.config/oxagen` on every platform, matching `oxagenConfigPath` in
@@ -278,18 +281,12 @@ fn api_post(path: String, body: Value) -> Result<Value, String> {
 /// thread: it can wait on the launch-time install, and `remove_dir_all` over
 /// the collector's spool and WAL is no quicker.
 #[tauri::command(async)]
-fn remove_local_data(install_state: tauri::State<CliInstallState>) -> Result<cli_install::RemovalReport, String> {
+fn remove_local_data(
+    app: tauri::AppHandle,
+    install_state: tauri::State<CliInstallState>,
+) -> Result<cli_install::RemovalReport, String> {
+    let _job = activity::Job::start(&app);
     cli_install::remove_everything_in(&cli_install::InstallEnv::real(), &install_state)
-}
-
-/// The environment to spawn a sidecar with, on top of the app's own:
-/// `TACHO_BIN_DIR` while the app runs from a transient directory and a
-/// durable copy exists. Asked per spawn, because a copy made during this
-/// launch cannot be exported to the app's own environment: see
-/// `cli_install::export_bin_dir`.
-#[tauri::command]
-fn sidecar_env() -> std::collections::BTreeMap<String, String> {
-    cli_install::sidecar_env()
 }
 
 /// The end of the collector log. Bounded: see `machine::tail_lines`.
@@ -304,7 +301,7 @@ pub fn run() {
     // copy from an earlier launch is what tacho must write into hooks when
     // the app runs from an AppImage or a mounted .dmg. A copy
     // `ensure_cli_installed` makes later in this launch reaches the sidecars
-    // through `sidecar_env` instead; see `cli_install::export_bin_dir`.
+    // through `sidecar::run_sidecar` instead; see `cli_install::export_bin_dir`.
     cli_install::export_bin_dir();
     // Before any sidecar can create `~/.config`, so Uninstall knows whether
     // the person had one already. See `cli_install::record_config_dir`.
@@ -315,6 +312,8 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(CliInstallState::default())
+        .manage(Activity::default())
+        .manage(sidecar::Running::default())
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Open Oxagen", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Oxagen", true, None::<&str>)?;
@@ -325,6 +324,9 @@ pub fn run() {
                 .tooltip("Oxagen")
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => {
+                        // The person is back: a close that was waiting for
+                        // work to end no longer quits the app.
+                        app.state::<Activity>().cancel_exit();
                         if let Some(window) = app.get_webview_window("main") {
                             let _ = window.show();
                             let _ = window.unminimize();
@@ -345,6 +347,7 @@ pub fn run() {
             // same managed state afterward if the user acts manually.
             let handle = app.handle().clone();
             std::thread::spawn(move || {
+                let _job = activity::Job::start(&handle);
                 if let Some(state) = handle.try_state::<CliInstallState>() {
                     cli_install::ensure_cli_installed(&state);
                 }
@@ -352,17 +355,41 @@ pub fn run() {
 
             Ok(())
         })
+        // Closing the window while work runs hides it, and the app exits
+        // when the work ends: see `activity`.
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.state::<Activity>().request_exit() == ExitDecision::WhenIdle {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             desktop_state,
             api_post,
             cli_install::install_cli,
             cli_install::uninstall_cli,
             remove_local_data,
-            sidecar_env,
+            sidecar::run_sidecar,
+            sidecar::kill_sidecar,
+            activity::set_busy,
             log_tail
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running the Oxagen desktop app");
+        .build(tauri::generate_context!())
+        .expect("error while building the Oxagen desktop app")
+        .run(|app, event| {
+            // The tray's Quit, and the last window closing, while work runs:
+            // the same as a close.
+            if let RunEvent::ExitRequested { api, .. } = &event {
+                if app.state::<Activity>().request_exit() == ExitDecision::WhenIdle {
+                    api.prevent_exit();
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.hide();
+                    }
+                }
+            }
+        });
 }
 
 #[cfg(test)]

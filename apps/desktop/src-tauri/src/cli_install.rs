@@ -185,17 +185,16 @@ impl InstallEnv {
 /// Called first thing in `run()`, before any thread exists. Changing the
 /// environment once other threads run is unsound on Unix (a concurrent
 /// `getenv` in WebKit or the async runtime can read freed memory), so a copy
-/// made later in the launch is not exported here: the webview asks
-/// `sidecar_env` for it and passes it to each sidecar it spawns.
+/// made later in the launch is not exported here: `sidecar::run_sidecar`
+/// adds `sidecar_env` to each sidecar it spawns.
 pub fn export_bin_dir() {
     for (key, value) in sidecar_env() {
         std::env::set_var(key, value);
     }
 }
 
-/// What a sidecar needs in its environment on top of the app's own, asked
-/// for each spawn (the `sidecar_env` command) so a copy made during this
-/// launch is used at once.
+/// What a sidecar needs in its environment on top of the app's own, read
+/// for each spawn so a copy made during this launch is used at once.
 pub fn sidecar_env() -> std::collections::BTreeMap<String, String> {
     sidecar_env_for(sidecar_dir_is_transient(), bin_dir().as_deref())
 }
@@ -1611,7 +1610,8 @@ pub(crate) fn link_cli_in(env: &InstallEnv, state: &CliInstallState) -> Result<C
 /// shell, then copy 240 MB of sidecars, and a synchronous command freezes
 /// the window for all of it.
 #[tauri::command(async)]
-pub fn install_cli(state: tauri::State<CliInstallState>) -> Result<InstallResult, String> {
+pub fn install_cli(app: tauri::AppHandle, state: tauri::State<CliInstallState>) -> Result<InstallResult, String> {
+    let _job = crate::activity::Job::start(&app);
     let view = link_cli_in(&InstallEnv::real(), &state)?;
     if view.state == "failed" {
         return Err(view.note);
@@ -1743,7 +1743,8 @@ pub(crate) fn unlink_cli_in(env: &InstallEnv) -> UnlinkOutcome {
 /// that we refused to overwrite is also one we refuse to delete. `async` for
 /// the same reason as `install_cli`.
 #[tauri::command(async)]
-pub fn uninstall_cli(state: tauri::State<CliInstallState>) -> Result<Vec<String>, String> {
+pub fn uninstall_cli(app: tauri::AppHandle, state: tauri::State<CliInstallState>) -> Result<Vec<String>, String> {
+    let _job = crate::activity::Job::start(&app);
     let _guard = install_guard();
     let env = InstallEnv::real();
     let outcome = unlink_cli_in(&env);

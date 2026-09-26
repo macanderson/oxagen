@@ -43,7 +43,6 @@ import { gatewayText, serviceStatusText } from "./tacho-status";
 import { computeAgentRows, HEALTH_LABEL, summarizeAgents } from "./agents";
 import {
   checkLiveSession,
-  sidecarEnv,
   type ConnectResult,
   connectRun,
   type DesktopState,
@@ -57,6 +56,7 @@ import {
   type OrgItem,
   readState,
   removeLocalData,
+  reportBusy,
   runSidecar,
   type TachoStatus,
   tachoStatus,
@@ -64,6 +64,7 @@ import {
   type WorkspaceItem,
 } from "./bridge";
 import {
+  addHarnessArgs,
   ago,
   collectorText,
   defaultRegistration,
@@ -76,6 +77,7 @@ import {
   HARNESSES,
   type Harness,
   loginArgs,
+  logoutArgs,
   needsWorkspacePick,
   pendingChange,
   reassignArgs,
@@ -264,6 +266,11 @@ export function App() {
   // status` then: it would read the same files `enroll` or `unenroll` is
   // rewriting, and its transient failure replaced the action's own error.
   const busyRef = useRef(false);
+  // The Rust shell holds a close or a Quit until the running action ends, so
+  // closing the window never stops `tacho` between two file writes.
+  useEffect(() => {
+    void reportBusy(busy !== null);
+  }, [busy]);
   // Set by a tick that wants `tacho status`, cleared by the read that asks
   // it. A tick that joins a plain read already out leaves it set, so the
   // next read asks instead of the hooks going unread for another 20 s.
@@ -539,13 +546,8 @@ export function App() {
     setConfirming(null);
     setLog([{ text: `$ ${sidecar} ${args.join(" ")}`, err: false }]);
     try {
-      const env = await sidecarEnv();
-      const run = runSidecar(
-        sidecar,
-        args,
-        (line, stream) =>
-          setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
-        { env },
+      const run = runSidecar(sidecar, args, (line, stream) =>
+        setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
       );
       let result: RunOutcome;
       if (landed) {
@@ -630,7 +632,7 @@ export function App() {
     );
   };
   const signOut = () =>
-    act("signout", "oxagen", ["logout"], () => {
+    act("signout", "oxagen", logoutArgs(), () => {
       setOrgs(null);
       setWorkspaces(null);
       setPickedOrg(null);
@@ -781,13 +783,10 @@ export function App() {
 
   const addHarness = async (h: Harness) => {
     if (!host) return;
-    const harnesses = [...host.harnesses, h];
+    const call = addHarnessArgs(host.harnesses, h);
     if (!(await requireLiveSession("add"))) return;
-    return act(
-      "add",
-      "tacho",
-      ["reassign", "--harness", harnesses.join(",")],
-      () => setNotice(`${labelOf(h)} is now wrapped.`),
+    return act("add", call.sidecar, call.args, () =>
+      setNotice(`${labelOf(h)} is now wrapped.`),
     );
   };
 

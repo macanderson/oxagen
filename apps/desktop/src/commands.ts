@@ -2,6 +2,14 @@
  * The app's contract with the CLIs: the argv each panel action hands to a
  * sidecar, as pure functions of UI state. Kept apart from the React tree so
  * the mapping is testable without a webview.
+ *
+ * Every argv the app sends is built here, and nowhere else. The Rust shell
+ * runs a sidecar only for the commands on its allowlist
+ * (`src-tauri/src/sidecar.rs`), and `src-tauri/sidecar-calls.json` holds one
+ * of each command these builders make. `commands.test.ts` fails when a
+ * builder and that file disagree, and the Rust test fails when the file holds
+ * a command the allowlist refuses, so a new argv cannot break a panel
+ * without breaking a test first.
  */
 export type Harness =
   | "claude-code"
@@ -250,6 +258,40 @@ export function reassignArgs(
 /** `tacho unenroll`, with `--purge` when the operator also drops the WAL. */
 export function unenrollArgs(purge: boolean): string[] {
   return ["unenroll", ...(purge ? ["--purge"] : [])];
+}
+
+/** `oxagen logout`: Sign out. */
+export function logoutArgs(): string[] {
+  return ["logout"];
+}
+
+/** `tacho status --json`: the poll's read of the hooks and the service. */
+export function statusArgs(): string[] {
+  return ["status", "--json"];
+}
+
+/** `tacho detect --json`: the wizard's scan for agents. */
+export function detectArgs(): string[] {
+  return ["detect", "--json"];
+}
+
+/** `tacho verify --harness <h> --json`: one recorded turn on that agent. */
+export function verifyArgs(harness: Harness): string[] {
+  return ["verify", "--harness", harness, "--json"];
+}
+
+/**
+ * Wrap one more agent: `tacho reassign` with the enrolled list plus this one.
+ * Reassign keeps the device key and re-writes every hook.
+ */
+export function addHarnessArgs(
+  enrolled: readonly string[],
+  harness: Harness,
+): SidecarCall {
+  return {
+    sidecar: "tacho",
+    args: ["reassign", "--harness", [...enrolled, harness].join(",")],
+  };
 }
 
 /** Toggle a harness in a list; the list never empties. */

@@ -1,5 +1,7 @@
+import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  addHarnessArgs,
   ago,
   collectorText,
   deregisterNeedsSession,
@@ -25,8 +27,13 @@ import {
   primaryAction,
   reassignArgs,
   sessionLanded,
+  type SidecarCall,
+  detectArgs,
+  logoutArgs,
+  statusArgs,
   toggleHarness,
   unenrollArgs,
+  verifyArgs,
 } from "./commands";
 
 const HOST = {
@@ -506,5 +513,80 @@ describe("describeCliInstall", () => {
         note: "see the log",
       }),
     ).toBe("see the log");
+  });
+});
+
+/**
+ * One of each argv the panels send, from the builders above. The Rust shell
+ * runs a sidecar only when its allowlist accepts the argv
+ * (`src-tauri/src/sidecar.rs`), and its test reads this list from
+ * `src-tauri/sidecar-calls.json`. Here the file is checked against the
+ * builders, there against the allowlist, so a builder that starts sending a
+ * new argv fails one of the two until the allowlist takes it (#4318, D-12).
+ */
+function everyCall(): SidecarCall[] {
+  const tacho = (args: string[]): SidecarCall => ({ sidecar: "tacho", args });
+  const oxagen = (args: string[]): SidecarCall => ({ sidecar: "oxagen", args });
+  return [
+    oxagen(loginArgs()),
+    oxagen(loginArgs({ signup: true })),
+    oxagen(logoutArgs()),
+    tacho(statusArgs()),
+    tacho(detectArgs()),
+    ...verifiable(HARNESSES).map((h) => tacho(verifyArgs(h))),
+    tacho(
+      enrollArgs({
+        org: "acme",
+        workspace: "core",
+        harnesses: ["claude-code", "codex"],
+      }),
+    ),
+    tacho(enrollArgs({ org: null, workspace: "core", harnesses: HARNESSES })),
+    tacho(enrollArgs({ org: null, workspace: null, harnesses: ["cursor"] })),
+    reassignArgs(HOST, { org: "globex", workspace: "ops", harnesses: null }),
+    reassignArgs(HOST, { org: null, workspace: "ops", harnesses: null }),
+    reassignArgs(
+      HOST,
+      { org: "globex", workspace: "ops", harnesses: null },
+      true,
+    ),
+    reassignArgs(HOST, { org: null, workspace: "ops", harnesses: null }, true),
+    reassignArgs(HOST, {
+      org: null,
+      workspace: null,
+      harnesses: ["claude-code", "stella"],
+    }),
+    deregisterArgs(["claude-code", "codex"], "codex"),
+    deregisterArgs(["claude-code"], "claude-code"),
+    addHarnessArgs(["claude-code"], "claude-desktop"),
+    tacho(unenrollArgs(false)),
+    tacho(unenrollArgs(true)),
+  ];
+}
+
+describe("the sidecar allowlist's fixture", () => {
+  const fixture = new URL("../src-tauri/sidecar-calls.json", import.meta.url);
+
+  it("holds one of each argv the builders make", () => {
+    // UPDATE_SIDECAR_CALLS=1 rewrites the file from the builders.
+    if (process.env.UPDATE_SIDECAR_CALLS === "1")
+      writeFileSync(fixture, `${JSON.stringify(everyCall(), null, 2)}\n`);
+    expect(JSON.parse(readFileSync(fixture, "utf8"))).toEqual(everyCall());
+  });
+
+  it("builds the argv the Rust allowlist names", () => {
+    expect(statusArgs()).toEqual(["status", "--json"]);
+    expect(detectArgs()).toEqual(["detect", "--json"]);
+    expect(verifyArgs("codex")).toEqual([
+      "verify",
+      "--harness",
+      "codex",
+      "--json",
+    ]);
+    expect(logoutArgs()).toEqual(["logout"]);
+    expect(addHarnessArgs(["claude-code", "codex"], "cursor")).toEqual({
+      sidecar: "tacho",
+      args: ["reassign", "--harness", "claude-code,codex,cursor"],
+    });
   });
 });
