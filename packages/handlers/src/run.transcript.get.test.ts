@@ -3279,6 +3279,43 @@ describe("readWords beside another read of the same run", () => {
       prompt.request?.body.bodyRef,
     ]);
   });
+
+  // Review round 2 on #4382: no test covered the case where the only body a
+  // read opens under a key fails before KMS answers. That read learns
+  // nothing about the key, and a kept digest leans on it, so the test of the
+  // key must still run once the reads are done.
+  it("tests the key after the reads when the only body it read under the key failed before KMS answered (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const [prompt, model] = stepFolds(frames(1, "Unanswered"));
+    if (!prompt || !model) throw new Error("no folds");
+    const promptRef = prompt.request?.body.bodyRef;
+    const modelRef = model.response?.body.bodyRef;
+    const cache = createWordsCache();
+    // Only the prompt is kept. The read below then holds the prompt as a
+    // kept digest and opens the model step's body, the one body it reads
+    // under the key.
+    await readWords(deps.bodies, SCOPE, [prompt], { cache });
+    getBody.mockClear();
+    // The store drops the model step's read before KMS is asked, and KMS
+    // refuses the key for any body that reaches it.
+    getBody.mockImplementation((_scope: unknown, ref: string) =>
+      ref === modelRef
+        ? Promise.reject(new Error("socket hang up"))
+        : erasedKey(),
+    );
+    const words = await readWords(deps.bodies, SCOPE, [prompt, model], {
+      cache,
+    });
+    expect(words.has(model)).toBe(false);
+    // The retest found the key gone, so the kept digest does not answer.
+    expect(words.has(prompt)).toBe(false);
+    // The model step's body, then the prompt's, read again once the reads
+    // were done to learn the key.
+    expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([
+      modelRef,
+      promptRef,
+    ]);
+  });
 });
 
 // Findings P2-1 and P3-1 of the ADR-182 fourth review. A read that failed set
