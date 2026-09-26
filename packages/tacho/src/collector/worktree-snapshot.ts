@@ -174,12 +174,13 @@ async function worktreeFingerprint(
  * reported and what it measured each path against (`readSessionChanges`).
  * The patch then covers those paths and no others, and takes each against
  * the same state its row was counted from: a path the session committed
- * against the baseline, and any other against the `HEAD` the reconciliation
- * read. Taking every path against the baseline put a pulled hunk into the
- * patch of a file the session then edited, beside a row that counted only
- * the session's edit (#4320). Without `measured`, as for a session measured
- * the old way, the patch holds every change since the baseline, including
- * changes present before the run.
+ * against the baseline, a file that already held edits against its
+ * pre-session copy (#3384), and any other against the `HEAD` the
+ * reconciliation read. Taking every path against the baseline put a pulled
+ * hunk into the patch of a file the session then edited, beside a row that
+ * counted only the session's edit (#4320). Without `measured`, as for a
+ * session measured the old way, the patch holds every change since the
+ * baseline, including changes present before the run.
  */
 export async function readWorktreeSnapshot(
   exec: ExecAsync,
