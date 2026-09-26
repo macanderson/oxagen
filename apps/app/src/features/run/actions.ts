@@ -30,6 +30,7 @@ import { TRANSCRIPT_ENTRY_DEFAULT } from "@oxagen/oxagen/contracts/run.transcrip
 import type {
   RunTranscript,
   TranscriptKind,
+  TranscriptText,
   TranscriptZoom,
 } from "@/data/contracts/run";
 import { DeliveryMode } from "@/data/contracts/runs";
@@ -227,8 +228,9 @@ export async function readRunExport(
 }
 
 /**
- * One later page of the transcript, for the player's own pagination
- * (`get_run_transcript`).
+ * One page of the transcript read on demand (`get_run_transcript`): the page
+ * past a cursor, for the player's own pagination, or the first page of a
+ * search, which the server runs over the whole run (ADR-182).
  *
  * The read happens on demand: a navigation would throw away the playhead and
  * the scroll position, so appending a page cannot wait for the route to
@@ -237,33 +239,42 @@ export async function readRunExport(
  * carries everything the first one does, the assembled reply included (ADR-167,
  * ADR-182).
  *
- * A cursor the capability did not write comes back as `invalid` on `after`,
- * the one input a caller varies here: the run, the zoom and the chips come
- * from the page. That is what lets the view say "this resume point is not one
- * the read wrote" instead of "something went wrong". Every other refusal keeps
- * the kind and code the port answered.
+ * A read the contract refuses comes back as `invalid` on the input the
+ * caller varied: `after` when it sent a cursor, which the capability did not
+ * write, and `query` when it sent only a search, which the contract bounds.
+ * That is what lets the view say "this resume point is not one the read
+ * wrote" instead of "something went wrong". Every other refusal keeps the
+ * kind and code the port answered.
  */
 export async function readTranscriptPage(
   org: string,
   ws: string,
   runId: string,
   zoom: TranscriptZoom,
-  kinds: readonly TranscriptKind[],
-  after: string,
+  q: {
+    kinds?: readonly TranscriptKind[];
+    after?: string;
+    text?: TranscriptText;
+    query?: string;
+  },
 ): Promise<ActionResult<RunTranscript>> {
   const ctx = await requireViewer(org, ws);
   const read = await dataSource().runs.transcript(ctx, runId, zoom, {
-    kinds: [...kinds],
+    kinds: [...(q.kinds ?? [])],
     limit: TRANSCRIPT_ENTRY_DEFAULT,
-    after,
+    ...(q.after === undefined ? {} : { after: q.after }),
+    ...(q.text === undefined ? {} : { text: q.text }),
+    ...(q.query === undefined ? {} : { query: q.query }),
   });
   if (!read.ok && read.reason === "error" && read.code === "invalid_input") {
-    return {
-      ok: false,
-      reason: "invalid",
-      code: "invalid_cursor",
-      field: "after",
-    };
+    return q.after === undefined
+      ? { ok: false, reason: "invalid", code: "invalid_query", field: "query" }
+      : {
+          ok: false,
+          reason: "invalid",
+          code: "invalid_cursor",
+          field: "after",
+        };
   }
   return readToActionResult(read);
 }
