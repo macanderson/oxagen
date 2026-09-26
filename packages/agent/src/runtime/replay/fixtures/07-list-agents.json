@@ -18,6 +18,7 @@
           "principalId": null,
           "operatorId": null,
           "operatorName": null,
+          "operatorAvatarUrl": null,
           "status": "enrolled",
           "tier": null,
           "enforcementTier": "gateway",
