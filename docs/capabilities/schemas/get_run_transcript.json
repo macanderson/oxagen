@@ -53,6 +53,17 @@
         "type": "string",
         "maxLength": 256
       },
+      "before": {
+        "type": "string",
+        "maxLength": 256
+      },
+      "from": {
+        "type": "string",
+        "enum": [
+          "start",
+          "end"
+        ]
+      },
       "text": {
         "type": "string",
         "enum": [
@@ -2311,6 +2322,16 @@
         "maxItems": 500
       },
       "cursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "before": {
         "anyOf": [
           {
             "type": "string"

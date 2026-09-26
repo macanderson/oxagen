@@ -72,6 +72,7 @@
 // with bytes the record does not vouch for. So does a body the store cannot
 // answer at all: one missing object must not blank the whole page.
 import type { CapabilityHandler } from "@oxagen/oxagen";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
   runTranscriptGet,
   type RunTranscriptGetOutput,
@@ -323,6 +324,23 @@ export function decodeTranscriptCursor(raw: string): TranscriptCursor | null {
   return { through, high, seen: { at: Number(at), window: digest } };
 }
 
+/**
+ * `b:<key>`: the opening frame of the first entry a page read `from` the end
+ * or `before` a cursor sent. A read `before` it sends the entries ahead of
+ * that entry. It carries no receipt: the page ahead of it is read as the run
+ * stands then, whole.
+ */
+export function encodeBeforeCursor(key: string): string {
+  return Buffer.from(`b:${key}`, "utf8").toString("base64url");
+}
+
+/** The frame a `before` cursor names, or null for one this handler did not write. */
+export function decodeBeforeCursor(raw: string): string | null {
+  const text = Buffer.from(raw, "base64url").toString("utf8");
+  if (!text.startsWith("b:")) return null;
+  return decodeKey(text.slice(2));
+}
+
 /** When the control plane received `frame`, in epoch ms; null when unknown. */
 function receivedMs(frame: RunFrame): number | null {
   const at = frame.receivedAt?.getTime();
@@ -522,6 +540,34 @@ export function planTranscriptPage(
 }
 
 /**
+ * The page that ends just before fold `end`: at most `limit` folds, in fold
+ * order, and `start`, the first of them. A read `from` the end passes the
+ * number of folds, and a read `before` a cursor the fold the cursor names.
+ *
+ * `through` and `high` are where a reader stands who holds every fold up to
+ * the page's last, as a reader that paged forward to it would. So a read
+ * after the cursor they make sends what follows the page, and what grew past
+ * `high` since. A fold ahead of the page that grows is sent that way too,
+ * although the reader was never sent it: a reader that holds only a tail
+ * places such an entry by its time, or leaves it for the page ahead.
+ */
+export function planPageBefore(
+  folds: readonly FoldSpan[],
+  end: number,
+  limit: number,
+): TranscriptPagePlan & { start: number } {
+  const stop = Math.max(0, Math.min(end, folds.length));
+  const start = Math.max(0, stop - limit);
+  const indexes: number[] = [];
+  for (let i = start; i < stop; i += 1) indexes.push(i);
+  let high = -1;
+  for (let i = 0; i < stop; i += 1) {
+    high = Math.max(high, (folds[i] as FoldSpan).end);
+  }
+  return { indexes, through: stop - 1, high, start };
+}
+
+/**
  * The folds a page read from a cursor can still send, the cursor given as
  * frame positions in the run as read (`cursorPosition`): those that open
  * after its `through` frame, those at or before it whose last frame lies
@@ -564,6 +610,24 @@ function foldThrough(
     if ((spans[i] as FoldSpan).open <= position) through = i;
   }
   return through;
+}
+
+/**
+ * The fold index a `before` cursor's entry opens at: the page ahead of it
+ * ends just before this fold. When no fold opens at the key any longer (its
+ * opening frame was a model call's copy a richer one replaced), the first
+ * fold that opens after the frame's position, so every fold that opens at or
+ * before it is ahead of the reader's first entry.
+ */
+function foldBefore(
+  spans: readonly FoldSpan[],
+  openKeys: readonly string[],
+  shown: readonly RunFrame[],
+  key: string,
+): number {
+  const exact = openKeys.indexOf(key);
+  if (exact !== -1) return exact;
+  return foldThrough(spans, openKeys, shown, key) + 1;
 }
 
 // ---- Bodies ---------------------------------------------------------------------------
@@ -1274,6 +1338,25 @@ export function createRunTranscriptGetHandler(
     if (input.after !== undefined && after === null) {
       throw invalidCursor(runTranscriptGet.name);
     }
+    const before =
+      input.before === undefined ? null : decodeBeforeCursor(input.before);
+    if (input.before !== undefined && before === null) {
+      throw invalidCursor(runTranscriptGet.name);
+    }
+    // A read stands in one place: after a cursor, before one, or at an end.
+    const places = [input.after, input.before, input.from].filter(
+      (place) => place !== undefined,
+    );
+    if (places.length > 1) {
+      throw new CapabilityError(
+        runTranscriptGet.name,
+        "invalid_input",
+        "conflicting_position",
+      );
+    }
+    // A read from the end or before a cursor pages backward: it sends the
+    // folds just ahead of a point, and says where the page ahead of it opens.
+    const backward = input.from === "end" || before !== null;
 
     const scope = runScope(ctx);
     const run = await resolveRun(deps, ctx, input.runId);
@@ -1414,28 +1497,39 @@ export function createRunTranscriptGetHandler(
     // sequence alone no longer orders the frames of a run. The fold states
     // each entry's span in those positions.
     const spans = folds.map((fold) => fold.span);
+    const openKeys = folds.map((fold) => frameKey(fold.opening));
     const through =
       after === null || at === null
         ? -1
-        : foldThrough(
-            spans,
-            folds.map((fold) => frameKey(fold.opening)),
-            shown,
-            after.through,
-          );
-    const plan = planTranscriptPage(
-      spans,
-      at === null ? null : { through, high: at.highAt },
-      input.limit,
-      late === null
-        ? []
-        : folds.flatMap((fold, i) => (i <= through && late(fold) ? [i] : [])),
-    );
+        : foldThrough(spans, openKeys, shown, after.through);
+    const backPlan = backward
+      ? planPageBefore(
+          spans,
+          before === null
+            ? folds.length
+            : foldBefore(spans, openKeys, shown, before),
+          input.limit,
+        )
+      : null;
+    const plan =
+      backPlan ??
+      planTranscriptPage(
+        spans,
+        at === null ? null : { through, high: at.highAt },
+        input.limit,
+        late === null
+          ? []
+          : folds.flatMap((fold, i) =>
+              i <= through && late(fold) ? [i] : [],
+            ),
+      );
     const page = plan.indexes.map((i) => folds[i] as TranscriptFold);
     // The receipt covers every frame of the read. An entry this page did not
     // reach is past its `through`, where the next page sends it by position,
     // or it grew past its `high`, where the next page sends it again.
-    const receipt = transcriptReceipt(shown);
+    // A page read before a cursor carries none: the reader holds the entries
+    // after it already, and a receipt would stand for frames it was not sent.
+    const receipt = before === null ? transcriptReceipt(shown) : null;
     // The cursor names frames by key, so it survives a later read that holds
     // more frames, or hides one this read showed. The reader's place in fold
     // order moves only when the page sends a new entry: a page of grown
@@ -1460,12 +1554,26 @@ export function createRunTranscriptGetHandler(
     const more = plan.through + 1 < folds.length;
     const cursor = live || more ? nextCursor() : null;
     const frameCursor = frameCursorOf(read.frames);
+    // Where the page ahead of a backward page opens: null once the page
+    // opens at the first entry.
+    const ahead =
+      backPlan === null
+        ? {}
+        : {
+            before:
+              backPlan.start > 0 && backPlan.indexes.length > 0
+                ? encodeBeforeCursor(
+                    frameKey((folds[backPlan.start] as TranscriptFold).opening),
+                  )
+                : null,
+          };
     if (page.length === 0) {
       return {
         zoom: input.zoom,
         kinds: input.kinds,
         entries: [],
         cursor,
+        ...ahead,
         complete: read.complete,
         frameCursor,
         counts,
@@ -1609,6 +1717,7 @@ export function createRunTranscriptGetHandler(
       kinds: input.kinds,
       entries,
       cursor,
+      ...ahead,
       complete: read.complete,
       frameCursor,
       counts,

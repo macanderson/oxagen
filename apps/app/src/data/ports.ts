@@ -275,7 +275,8 @@ export interface DataSource {
      * `limit` is the entries a page carries, the contract's default when
      * omitted. `text` is how much of each body a page carries, the zoom's cap
      * when omitted, and `query` narrows the entries to those that hold it,
-     * searched on the server.
+     * searched on the server. `before` reads the page ahead of a cursor a
+     * backward page carried, and `from: "end"` reads the run's last page.
      */
     transcript(
       ctx: WsCtx,
@@ -284,6 +285,8 @@ export interface DataSource {
       q?: {
         kinds?: TranscriptKind[];
         after?: string | null;
+        before?: string;
+        from?: "start" | "end";
         limit?: number;
         text?: TranscriptText;
         query?: string;
