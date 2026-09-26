@@ -642,6 +642,130 @@
       "reread": "Re-read the run",
       "roleReason": "Sealing a run needs an organization Owner or Admin role, or the workspace Owner role."
     },
+    "interjection": {
+      "eyebrow": "Run",
+      "meta": "Run facts",
+      "tier": "{tier} tier",
+      "status": {
+        "waiting": "paused",
+        "waitingCaption": "waiting on a person",
+        "answered": "answered",
+        "timedOut": "timed out"
+      },
+      "note": {
+        "waiting": "<strong>The loop is stopped.</strong> The harness is holding before its first model call. Nothing has been charged since {at}.",
+        "answered": "<strong>Answered at {at}.</strong> {answer}",
+        "answeredUnrecorded": "<strong>Answered at {at}.</strong> The answer's text is not recorded.",
+        "timedOut": "<strong>Nobody answered in time.</strong> The question closed at {at}, and the run went on without skills.",
+        "windowClosed": "<strong>The answer window closed at {at}.</strong> Oxagen has not recorded the timeout yet."
+      },
+      "panes": {
+        "agent": "Agent view",
+        "agentSource": "harness",
+        "operator": "Operator question",
+        "operatorSource": "Oxagen",
+        "frames": "Frames",
+        "framesSource": "frames"
+      },
+      "question": {
+        "from": "Oxagen",
+        "label": "question"
+      },
+      "reply": {
+        "timeout": "Timeout",
+        "label": "answer"
+      },
+      "held": "the loop is held",
+      "repository": "{repository} matches no workspace in this organization.",
+      "repositoryUnresolved": "Oxagen has not resolved which repository this run started in.",
+      "unavailable": {
+        "missing": "Oxagen has not recorded this question yet. Re-read the run in a moment.",
+        "noBody": "This question carries no body, so its paths cannot be shown."
+      },
+      "pick": {
+        "legend": "Your answer",
+        "link": "Link it to {ws}",
+        "linkDescription": "Becomes a linked repository of {ws}.",
+        "create": "Create a new workspace",
+        "createDescription": "Called {name}, with this repository as its main repository.",
+        "createDescriptionUnnamed": "A new workspace with this repository as its main repository.",
+        "name": "Workspace name",
+        "slug": "Workspace slug",
+        "slugHelp": "2 to 40 lowercase letters, digits, and single hyphens."
+      },
+      "consequence": {
+        "gain": "Gains",
+        "loss": "Loses",
+        "same": "Unchanged",
+        "linkVersion": "Uses the skills configuration {version}.",
+        "linkPinned": "{count, plural, =0 {{ws} pins no skills.} one {{ws} pins # skill.} other {{ws} pins # skills.}}",
+        "linkRepositories": "{count, plural, =0 {{ws} links no other repository.} one {{ws} links # other repository.} other {{ws} links # other repositories.}}",
+        "linkSpend": "This repository's spend and audit are recorded under {ws}.",
+        "createSkillsOff": "Skills ship off. The run resolves no skills in the new workspace.",
+        "createOwn": "Its own spend, audit, and owner.",
+        "createContinues": "The run goes on with either path."
+      },
+      "send": "Send this answer",
+      "sending": "Sending",
+      "pickOne": "pick one",
+      "answersAs": "answers in your name",
+      "nameFirst": "Name the workspace and give it a slug.",
+      "roleReason": "Answering needs an organization Owner or Admin role, or the workspace Owner role.",
+      "closedReason": "The answer window closed at {at}.",
+      "receipt": {
+        "sent": "Answer recorded. Receipt {receipt}.",
+        "linked": "Linked {repository} to {ws}.",
+        "created": "Created the workspace {slug}."
+      },
+      "timeout": {
+        "title": "If nobody answers",
+        "body": "At {minutes, plural, one {# minute} other {# minutes}} this times out to deny. The run continues with no skills, and the agent is told why.",
+        "closes": "The window closes at {at}."
+      },
+      "answer": {
+        "title": "Answer",
+        "closed": "closed",
+        "by": "Answered by",
+        "byTimeout": "the timeout",
+        "path": "Path",
+        "paths": {
+          "link": "link",
+          "create": "create",
+          "deny": "deny"
+        },
+        "pathNotRecorded": "not recorded",
+        "receipt": "Receipt",
+        "receiptNotRecorded": "not recorded",
+        "waited": "Waited",
+        "transcript": "Open the transcript"
+      },
+      "frames": {
+        "pending": "waits on a person",
+        "firstCall": "the first model call has not happened",
+        "cut": "This read stopped before the end of the recording, so later frames are not listed."
+      },
+      "failure": {
+        "orgRoleRequired": "Your role cannot answer this question. An organization Owner or Admin, or the workspace Owner, can.",
+        "noPrincipal": "Oxagen could not tell who is signed in. Sign in again and retry.",
+        "answered": "Someone already answered this question. Re-read the run to see the answer.",
+        "expired": "The answer window closed before this answer arrived. Nothing was linked or created.",
+        "answerShape": "Oxagen refused this answer for this kind of question. Re-read the run and try again.",
+        "repositoryUnresolved": "Oxagen could not tell which repository this run started in, so it cannot link or create for it.",
+        "slugTaken": "A workspace in this organization already uses that slug. Choose another.",
+        "mainRepoClaimed": "Another workspace already holds this repository as its main repository.",
+        "githubNotConnected": "This workspace has no GitHub connection, so Oxagen cannot reach the repository. Connect GitHub first.",
+        "githubNotAuthorized": "This organization has no usable GitHub authorization. Connect GitHub from an existing workspace's settings first.",
+        "installationUnreachable": "The GitHub App is not installed on the repository's owner, or Oxagen cannot reach that installation.",
+        "repositoryNotInstalled": "The GitHub App installation cannot see this repository.",
+        "choice": "Pick link or create, then send.",
+        "slug": "A slug takes 2 to 40 lowercase letters, digits, and single hyphens, and cannot be a reserved word.",
+        "name": "A workspace name takes 1 to 120 characters.",
+        "refused": "Oxagen refused the answer: {code}.",
+        "invalid": "Oxagen refused the answer's fields. Check them and retry.",
+        "pendingApproval": "Your answer is waiting for approval. The request is {accessRequestId}.",
+        "unavailable": "Oxagen could not record the answer: {code}. Retry, and report the code if it repeats."
+      }
+    },
     "record": {
       "reread": "Re-read the run",
       "summarize": {

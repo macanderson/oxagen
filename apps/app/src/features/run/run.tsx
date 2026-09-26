@@ -26,6 +26,7 @@ import { GovernedActionsTab } from "./actions-tab";
 import { ChainTab } from "./chain";
 import { CostTab } from "./cost";
 import { RunHeader } from "./header";
+import { interjectionOf, RunInterjection } from "./interjection";
 import { IssuesCount } from "./issues-tab";
 import { runMetrics } from "./metrics";
 import { OutputsSpine } from "./outputs";
@@ -253,6 +254,33 @@ export async function Run({
         <RunEmpty run={run} org={place.org} ws={place.ws} />
       </>
     );
+  // A run whose host held the loop on a repository question opens on the
+  // question (#3941). Any tab opens the ordinary page, which is how the
+  // answered page's transcript link reaches the rest of the run.
+  const interject = tab === null ? interjectionOf(detail) : null;
+  if (interject !== null) {
+    // A thrown read folds to the Run page's own read error, so the question's
+    // pane says the read failed rather than the page throwing.
+    const question = await source.interjections
+      .forRun(ctx, run.id)
+      .catch(() =>
+        readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
+      );
+    return (
+      <>
+        {record}
+        <RunInterjection
+          detail={detail}
+          interject={interject}
+          question={question}
+          place={place}
+          orgRole={ctx.orgRole}
+          wsRole={ctx.wsRole}
+          now={at}
+        />
+      </>
+    );
+  }
   const agentSlug = run.agentKey?.split(".").at(-1) ?? null;
   // Started, never awaited here: provider latency (GitHub pull requests,
   // checks, diffs) streams inside the boundaries that draw it and cannot hold
