@@ -382,6 +382,17 @@ describe("embedText on the platform Voyage key (#4148)", () => {
   });
 
   it("throws EmbeddingUnavailableError before admitting usage when VOYAGE_API_KEY is unset", async () => {
+    // The top-level beforeEach stubs it again for the next test.
+    delete process.env.VOYAGE_API_KEY;
+    const err = await embedText("no key", { telemetry: BASE_TELEMETRY }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(EmbeddingUnavailableError);
+    expect(mocks.embed).not.toHaveBeenCalled();
+    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+  });
+
+  it("throws EmbeddingUnavailableError, not a config error, when VOYAGE_API_KEY is empty", async () => {
     vi.stubEnv("VOYAGE_API_KEY", "");
     const err = await embedText("no key", { telemetry: BASE_TELEMETRY }).catch(
       (e: unknown) => e,
