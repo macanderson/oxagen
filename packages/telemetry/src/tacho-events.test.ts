@@ -286,6 +286,32 @@ describe("selectTachoEvents", () => {
     expect(rows.map(({ effort }) => effort)).toEqual(["high", "", ""]);
     expect(chSelect.mock.calls.at(-1)?.[0]?.query).toContain("effort");
   });
+  it("reads when the control plane received each frame, on the run's chain and its subagents' (#4083)", async () => {
+    chSelect.mockResolvedValueOnce({
+      data: [{ seq: "1", received_at: "2026-09-08 10:06:05.123" }],
+    });
+    const rows = await selectTachoEvents({
+      sessionUuid: SESSION,
+      afterSeq: 0,
+      limit: 10,
+    });
+    expect(rows[0]?.receivedAt).toBe("2026-09-08 10:06:05.123");
+    expect(chSelect.mock.calls.at(-1)?.[0]?.query).toContain(
+      "toString(received_at) AS received_at",
+    );
+    chSelect.mockResolvedValueOnce({
+      data: [{ seq: "0", received_at: "2026-09-08 10:06:06.000" }],
+    });
+    const chained = await selectTachoSubagentEvents({
+      rootSessionUuid: SESSION,
+      after: null,
+      limit: 10,
+    });
+    expect(chained[0]?.receivedAt).toBe("2026-09-08 10:06:06.000");
+    expect(chSelect.mock.calls.at(-1)?.[0]?.query).toContain(
+      "toString(received_at) AS received_at",
+    );
+  });
 });
 
 describe("selectTachoEvents: an upper bound", () => {

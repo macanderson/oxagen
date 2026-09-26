@@ -158,6 +158,7 @@
       "emptySearch": "Nothing matches this search.",
       "emptyErrors": "No failed calls in this run.",
       "cut": "{count} entries. The run has more frames than one read carries and the read offered no resume point, so this stops short of the end.",
+      "cutLive": "{count} entries. The run has more frames than one read carries, so this view stops here. The run is still recording.",
       "more": "Read more",
       "readingMore": "Reading",
       "loadedMore": "{count} entries read so far. More lie past this page.",
