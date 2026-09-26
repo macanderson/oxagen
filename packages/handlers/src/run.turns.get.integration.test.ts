@@ -409,12 +409,13 @@ async function harness() {
 async function reference(runId: string) {
   const { deps } = await harness();
   const { ctx } = await import("./run.test-support");
-  const { readRunFrames, resolveRun, withoutLateReports } = await import(
-    "./lib/run-read"
+  const { resolveRun, runChainReads } = await import("./lib/run-read");
+  const { readRunChains, withoutLateReports } = await import(
+    "@oxagen/run-ledger"
   );
   const { framesTurns } = await import("./lib/run-turns");
   const run = await resolveRun(deps, ctx(SCOPE), runId);
-  const read = await readRunFrames(deps, run, 10_000);
+  const read = await readRunChains(runChainReads(deps, run), 10_000);
   expect(read.complete).toBe(true);
   return framesTurns(withoutLateReports(read.frames), RUN_TURNS_MAX);
 }

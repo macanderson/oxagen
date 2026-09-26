@@ -30,16 +30,19 @@ vi.mock("@oxagen/storage", () => ({
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { makeWithTenantDbMock } from "@oxagen/database";
-import { archiveFrameOf, type SealedFrameRow } from "@oxagen/run-ledger";
+import {
+  archiveFrameOf,
+  readRunChains,
+  type SealedFrameRow,
+} from "@oxagen/run-ledger";
 import { buildArchiveSegment } from "@oxagen/tacho";
 import {
   defaultRunReadDeps,
   readFrameAt,
   readFrames,
-  readRunFrames,
   type ResolvedRun,
+  runChainReads,
   type RunReadDeps,
-  withoutLateReports,
 } from "./run-read";
 import { tachoRow } from "../run.test-support";
 
@@ -211,8 +214,15 @@ describe("readFrameAt: a wrapped run", () => {
   });
 });
 
-describe("readRunFrames: a wrapped run's subagent chains", () => {
+// The composition itself (the splice, the cap over every chain, the listed
+// chains) is `readRunChains` and `subagentChainRead` in @oxagen/run-ledger,
+// tested there. These check that `deps` reaches it: the root chain through
+// `tachoFrames`, the subagents through `tachoSubagentFrames` and
+// `tachoChildSessions`.
+describe("runChainReads: a wrapped run's subagent chains", () => {
   const run = tachoRun(3);
+  const readRunFrames = (d: RunReadDeps, r: ResolvedRun, cap: number) =>
+    readRunChains(runChainReads(d, r), cap);
   const child = (seq: number) =>
     tachoRow(seq, {
       sessionUuid: CHILD,
@@ -312,51 +322,17 @@ describe("readRunFrames: a wrapped run's subagent chains", () => {
     );
     expect(own.frames).toHaveLength(3);
   });
-});
 
-describe("withoutLateReports", () => {
-  type Late = {
-    seq: string;
-    type: string;
-    usageObserved?: boolean;
-    chain?: { sessionUuid: string };
-    usage: { input: number } | null;
-    costMicros: string | null;
-  };
-  const call = (seq: number, over: Partial<Late> = {}): Late => ({
-    seq: String(seq),
-    type: "llm_call",
-    usage: { input: 10 },
-    costMicros: "5",
-    ...over,
-  });
-  const strip = (frames: Late[]) =>
-    withoutLateReports(
-      frames as unknown as Parameters<typeof withoutLateReports>[0],
-    ) as unknown as Late[];
-
-  it("strips a harness report that follows the chain's first observed call, and none before it", () => {
-    const frames = strip([
-      call(1),
-      call(2, { usageObserved: true }),
-      call(3),
-      call(4, { type: "tool_call" }),
-    ]);
-    expect(frames.map((f) => [f.seq, f.costMicros, f.usage])).toEqual([
-      ["1", "5", { input: 10 }],
-      ["2", "5", { input: 10 }],
-      ["3", null, null],
-      // Only a model call is a second account of a metered call.
-      ["4", "5", { input: 10 }],
-    ]);
-  });
-
-  it("holds the rule per chain, so an observed subagent leaves the root's reports standing", () => {
-    const frames = strip([
-      call(1, { chain: { sessionUuid: CHILD }, usageObserved: true }),
-      call(2),
-      call(3, { chain: { sessionUuid: CHILD } }),
-    ]);
-    expect(frames.map((f) => f.costMicros)).toEqual(["5", "5", null]);
+  it("reads no subagent chains for a ledger run, which records none (negative)", () => {
+    const { deps: wired } = deps([child(0)]);
+    const ledger: ResolvedRun = {
+      source: "ledger",
+      runId: UUID_RUN,
+      row: {} as never,
+      record: {} as never,
+      item: {} as never,
+      witnessFor: null,
+    };
+    expect(runChainReads(wired, ledger).subagents).toBeNull();
   });
 });

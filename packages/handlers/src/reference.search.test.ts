@@ -47,6 +47,9 @@ const H = vi.hoisted(() => {
   return {
     schema,
     rowsByTable: new Map<string, unknown[]>(),
+    // The last where() condition each table's query built, as the drizzle
+    // mock below renders it.
+    whereByTable: new Map<string, unknown>(),
     mockInvoke: vi.fn(),
     mockCapabilitiesForSurface: vi.fn(),
     mockListCapabilities: vi.fn(),
@@ -70,7 +73,10 @@ const mockWithTenantDb = vi.fn(
         captured = t.__table;
         return tx;
       },
-      where: () => tx,
+      where: (cond: unknown) => {
+        if (captured) H.whereByTable.set(captured, cond);
+        return tx;
+      },
       orderBy: () => tx,
       limit: () =>
         Promise.resolve(captured ? (H.rowsByTable.get(captured) ?? []) : []),
@@ -118,6 +124,7 @@ vi.mock("drizzle-orm", () => ({
   eq: (a: unknown, b: unknown) => ({ eq: [a, b] }),
   ilike: (a: unknown, b: unknown) => ({ ilike: [a, b] }),
   isNull: (a: unknown) => ({ isNull: a }),
+  ne: (a: unknown, b: unknown) => ({ ne: [a, b] }),
   or: (...args: unknown[]) => ({ or: args }),
 }));
 
@@ -150,6 +157,7 @@ const ctx: CapabilityContext = {
 
 function resetDefaults() {
   H.rowsByTable.clear();
+  H.whereByTable.clear();
   H.mockInvoke.mockReset();
   H.mockInvoke.mockImplementation(async (name: string) => {
     if (name === "search_nodes") return { nodes: [] };
@@ -273,6 +281,19 @@ describe("referenceSearchHandler", () => {
     expect(results[0]?.slug).toBe("agt_x");
     expect(results[0]?.label).toBe("Billing Agent");
     expect(results[0]?.type).toBe("agent");
+  });
+
+  it.each([
+    ["query mode", { query: "billing", types: ["agent" as const], limit: 10 }],
+    [
+      "slug resolve mode",
+      { query: "", slug: "agt_x", types: ["agent" as const], limit: 10 },
+    ],
+  ])("leaves retired (archived) agents out in %s", async (_mode, input) => {
+    await referenceSearchHandler(input, ctx);
+    const where = H.whereByTable.get("agents") as { and: unknown[] };
+    expect(where.and).toContainEqual({ isNull: "deletedAt" });
+    expect(where.and).toContainEqual({ ne: ["status", "archived"] });
   });
 
   it("degrades a failing graph source to empty while Postgres types still return", async () => {

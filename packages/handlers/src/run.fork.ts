@@ -32,11 +32,7 @@ import { runFork, type RunForkOutput } from "@oxagen/oxagen/contracts/run.fork";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import type { AttemptRecord, RunStore } from "@oxagen/run-ledger";
 import { isRunNotWritableError } from "@oxagen/run-ledger/run-errors";
-import {
-  gradeAllows,
-  isContentBearingFrame,
-  isReplayGrade,
-} from "@oxagen/tacho";
+import { frameOwesBody, gradeAllows, isReplayGrade } from "@oxagen/tacho";
 import {
   defaultRunReadDeps,
   ledgerStore,
@@ -96,17 +92,19 @@ export function createRunForkHandler(
     }
 
     // Walk the recording up to the branch point under the seal's rule
-    // (`deriveCompletenessGaps`): a content-bearing frame, or any frame whose
-    // digest was recorded, must have its body, or the cassette has a hole
-    // before the fork.
+    // (`frameOwesBody`): a content-bearing frame, or any frame whose digest
+    // was recorded, must have its body, or the cassette has a hole before the
+    // fork.
     let after = "0";
     for (;;) {
       const page = await readFrames(deps, run, after, PAGE);
       for (const frame of page) {
         if (BigInt(frame.seq) > fromSeq) break;
-        const carriesContent =
-          isContentBearingFrame(frame.type) || frame.body.bodyDigest !== null;
-        if (carriesContent && frame.body.bodyRef === null) {
+        const owesBody = frameOwesBody({
+          type: frame.type,
+          digest: frame.body.bodyDigest,
+        });
+        if (owesBody && frame.body.bodyRef === null) {
           throw conflict("gap_before_from_seq");
         }
       }

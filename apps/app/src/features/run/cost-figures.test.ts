@@ -4,7 +4,13 @@
 // the rows it heads, and a total a row is missing from is null, never a
 // partial sum shown as the whole.
 import { describe, expect, it } from "vitest";
-import { classPrices, classShare, ledgerOf, perTurn } from "./cost-figures";
+import {
+  cacheRebuildShare,
+  classPrices,
+  classShare,
+  ledgerOf,
+  perTurn,
+} from "./cost-figures";
 import type { PricedClasses, TokenFigures, TurnFigure } from "./metrics";
 
 const usd = (micros: string) => ({
@@ -179,5 +185,50 @@ describe("perTurn", () => {
   it("answers nothing for no cost or no turns (negative)", () => {
     expect(perTurn(null, 7)).toBeNull();
     expect(perTurn(usd("4130000"), 0)).toBeNull();
+  });
+});
+
+describe("cacheRebuildShare", () => {
+  it("shows a rebuilt cache the hit rate hides: half the input written, little read back", () => {
+    const rebuilt: TokenFigures = {
+      total: 820_000,
+      input: 800_000,
+      output: 20_000,
+      byClass: {
+        input_uncached: 5_000,
+        cache_read: 395_000,
+        cache_write_5m: 300_000,
+        cache_write_1h: 100_000,
+        output: 20_000,
+        reasoning: 0,
+      },
+    };
+    // The hit rate over the same run: 395,000 ÷ (5,000 + 395,000).
+    const { input_uncached, cache_read } = rebuilt.byClass;
+    expect(cache_read / (input_uncached + cache_read)).toBeCloseTo(0.9875);
+    expect(cacheRebuildShare(rebuilt)).toBe(0.5);
+  });
+
+  it("is zero for a run that wrote nothing to the cache", () => {
+    expect(cacheRebuildShare(TOKENS)).toBe(0);
+  });
+
+  it("is null with no tokens or no input token (negative)", () => {
+    expect(cacheRebuildShare(null)).toBeNull();
+    expect(
+      cacheRebuildShare({
+        total: 10,
+        input: 0,
+        output: 10,
+        byClass: {
+          input_uncached: 0,
+          cache_read: 0,
+          cache_write_5m: 0,
+          cache_write_1h: 0,
+          output: 10,
+          reasoning: 0,
+        },
+      }),
+    ).toBeNull();
   });
 });

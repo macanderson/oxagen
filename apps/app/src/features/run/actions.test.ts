@@ -577,8 +577,7 @@ describe("readTranscriptPage", () => {
       "core-platform",
       RUN,
       "steps",
-      ["tools"],
-      "ZjoxMQ",
+      { kinds: ["tools"], after: "ZjoxMQ" },
     );
     expect(read).toEqual({
       ok: true,
@@ -588,6 +587,9 @@ describe("readTranscriptPage", () => {
         entries: [],
         cursor: null,
         complete: true,
+        counts: null,
+        figures: null,
+        search: null,
       },
     });
     expect(invoke).toHaveBeenCalledWith(
@@ -653,8 +655,7 @@ describe("readTranscriptPage", () => {
       "core-platform",
       RUN,
       "steps",
-      [],
-      "ZjoxMA",
+      { after: "ZjoxMA" },
     );
     expect(page).toEqual({ ok: true, value: toRunTranscript(out) });
   });
@@ -742,8 +743,7 @@ describe("readTranscriptPage", () => {
       "core-platform",
       RUN,
       "everything",
-      [],
-      "ZjoxMQ",
+      { after: "ZjoxMQ" },
     );
     expect(page).toEqual({ ok: true, value: toRunTranscript(out) });
     if (!page.ok) throw new Error("the page was read");
@@ -755,6 +755,10 @@ describe("readTranscriptPage", () => {
         name: "create_release",
         input: { tag: "v1.2.0" },
         callKey: "tu_1",
+        stepKey: null,
+        result: null,
+        family: null,
+        tool: null,
       },
     ]);
     expect(response?.text).toBe(
@@ -771,14 +775,9 @@ describe("readTranscriptPage", () => {
       ),
     );
     expect(
-      await readTranscriptPage(
-        "acme",
-        "core-platform",
-        RUN,
-        "steps",
-        [],
-        "not-a-cursor",
-      ),
+      await readTranscriptPage("acme", "core-platform", RUN, "steps", {
+        after: "not-a-cursor",
+      }),
     ).toEqual({
       ok: false,
       reason: "invalid",
@@ -787,17 +786,70 @@ describe("readTranscriptPage", () => {
     });
   });
 
+  it("asks for whole bodies and a search, and reads the first page of matches with no cursor", async () => {
+    invoke.mockResolvedValue({
+      zoom: "steps",
+      kinds: [],
+      entries: [],
+      cursor: null,
+      complete: true,
+      search: { query: "retry", matched: 0, unsearched: 2 },
+    });
+    const read = await readTranscriptPage(
+      "acme",
+      "core-platform",
+      RUN,
+      "steps",
+      {
+        text: "full",
+        query: "retry",
+      },
+    );
+    expect(invoke).toHaveBeenCalledWith(
+      "get_run_transcript",
+      {
+        runId: RUN,
+        zoom: "steps",
+        kinds: [],
+        limit: 200,
+        text: "full",
+        query: "retry",
+      },
+      expect.objectContaining(TENANT),
+    );
+    expect(read.ok && read.value.search).toEqual({
+      query: "retry",
+      matched: 0,
+      unsearched: 2,
+    });
+  });
+
+  it("answers a search the contract refuses as invalid on the query, not on a cursor it was not sent (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.CapabilityError(
+        "get_run_transcript",
+        "invalid_input",
+        "query too long",
+      ),
+    );
+    expect(
+      await readTranscriptPage("acme", "core-platform", RUN, "steps", {
+        query: "x",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_query",
+      field: "query",
+    });
+  });
+
   it("answers a denied read as denied, naming the permission the Run page needs (negative)", async () => {
     invoke.mockRejectedValue(denied("get_run_transcript"));
     expect(
-      await readTranscriptPage(
-        "acme",
-        "core-platform",
-        RUN,
-        "steps",
-        [],
-        "ZjoxMQ",
-      ),
+      await readTranscriptPage("acme", "core-platform", RUN, "steps", {
+        after: "ZjoxMQ",
+      }),
     ).toEqual({
       ok: false,
       reason: "denied",
@@ -811,14 +863,9 @@ describe("readTranscriptPage", () => {
       accessRequestId: "areq_01k4qj9e",
     });
     expect(
-      await readTranscriptPage(
-        "acme",
-        "core-platform",
-        RUN,
-        "steps",
-        [],
-        "ZjoxMQ",
-      ),
+      await readTranscriptPage("acme", "core-platform", RUN, "steps", {
+        after: "ZjoxMQ",
+      }),
     ).toEqual({
       ok: false,
       reason: "pending_approval",
@@ -833,28 +880,18 @@ describe("readTranscriptPage", () => {
       message: "run not found",
     });
     expect(
-      await readTranscriptPage(
-        "acme",
-        "core-platform",
-        RUN,
-        "steps",
-        [],
-        "ZjoxMQ",
-      ),
+      await readTranscriptPage("acme", "core-platform", RUN, "steps", {
+        after: "ZjoxMQ",
+      }),
     ).toEqual({ ok: false, reason: "not_found", code: "run_not_found" });
   });
 
   it("answers a store that failed as unavailable with the Run page's error code, not as invalid (negative)", async () => {
     invoke.mockRejectedValue(new Error("clickhouse unreachable"));
     expect(
-      await readTranscriptPage(
-        "acme",
-        "core-platform",
-        RUN,
-        "steps",
-        [],
-        "ZjoxMQ",
-      ),
+      await readTranscriptPage("acme", "core-platform", RUN, "steps", {
+        after: "ZjoxMQ",
+      }),
     ).toEqual({
       ok: false,
       reason: "unavailable",
@@ -906,6 +943,7 @@ describe("readTranscriptPage", () => {
             sessionUuid: CHAIN,
             decision: "allow",
             type: "policy_decision",
+            harness: false,
             at: "2026-09-15T08:10:01.000Z",
           },
           frames: 2,
@@ -922,8 +960,7 @@ describe("readTranscriptPage", () => {
       "core-platform",
       RUN,
       "everything",
-      [],
-      "ZjoxMA",
+      { after: "ZjoxMA" },
     );
     expect(page).toEqual({ ok: true, value: toRunTranscript(out) });
     if (!page.ok) throw new Error("the page was read");

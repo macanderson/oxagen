@@ -47,6 +47,9 @@
  * all reads and `--no-optional-locks` keeps every one of them off the index
  * lock, so two concurrent git processes in one worktree contend for nothing
  * and neither can disturb the agent working there.
+ *
+ * Which of those changes a session made is decided in `session-changes.ts`,
+ * which reads through the helpers exported here.
  */
 import { digestBytes, type Sha256Digest } from "../digest";
 import { MAX_OBSERVED_CHANGES } from "../envelope";
@@ -77,7 +80,7 @@ export interface GitWorkingTreeChange {
  * commit. Diffing against it is what `HEAD` would mean if `HEAD` existed,
  * and the hash is a constant of the format rather than of any repository.
  */
-const EMPTY_TREE_OBJECT = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+export const EMPTY_TREE_OBJECT = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
 /**
  * The most stdout this module parses from one git invocation. A worktree
@@ -132,7 +135,7 @@ export const UNTRACKED_COUNT_CONCURRENCY = 4;
  * for every read but the untracked-file probe, where git follows `diff` and
  * exits 1 to say the two inputs differ, which is the answer being asked for.
  */
-async function git(
+export async function git(
   exec: ExecAsync,
   cwd: string,
   args: string[],
@@ -159,7 +162,7 @@ async function git(
     : stdout;
 }
 
-function firstLine(value: string | undefined): string | undefined {
+export function firstLine(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
   const line = value.split("\n", 1)[0]?.trim();
   return line === undefined || line.length === 0 ? undefined : line;
@@ -223,9 +226,9 @@ export async function readGitFacts(
  * rotation, produced different digests for the same repository and nothing
  * downstream could correlate them.
  *
- * So the userinfo goes, the scheme and the `.git` suffix go, `scp` syntax
- * (`git@host:acme/repo.git`) is folded onto the same shape as its URL form,
- * and the host is lowercased. The path is not, because a repository name is
+ * So the userinfo, the query, and the fragment go, the scheme and the `.git`
+ * suffix go, `scp` syntax (`git@host:acme/repo.git`) is folded onto the same
+ * shape as its URL form, and the host is lowercased. The path is not, because a repository name is
  * case sensitive on most forges. None of this is reversible and none of it
  * needs to be: nothing reads the digest back, it is only compared.
  */
@@ -242,6 +245,11 @@ export function canonicalRemote(remote: string): string {
   const firstSlash = value.indexOf("/");
   if (at !== -1 && (firstSlash === -1 || at < firstSlash))
     value = value.slice(at + 1);
+  // The query and the fragment, which is where the other kind of token rides
+  // (`https://host/acme/repo.git?access_token=...`). Left on, the token
+  // changed the digest on every rotation, and the `.git` suffix was no longer
+  // at the end for the line below to find.
+  value = value.replace(/[?#].*$/, "");
   // Trailing slashes first: the `.git` anchor does not match with one after
   // it, so the other order left `repo.git/` carrying its suffix.
   value = value.replace(/\/+$/, "").replace(/\.git$/, "");
@@ -250,15 +258,38 @@ export function canonicalRemote(remote: string): string {
   return `${value.slice(0, slash).toLowerCase()}${value.slice(slash)}`;
 }
 
-/** The index and worktree letters of a porcelain v1 entry, mapped to a status. */
-function statusOf(code: string): GitChangeStatus {
+/**
+ * The status of one path against `HEAD`, from a two-letter code, or
+ * undefined when the path holds what `HEAD` holds.
+ *
+ * Two readers hand codes here. A name-status diff gives one letter, which
+ * already describes the worktree against the ref and arrives as `"M "`. A
+ * porcelain v1 entry gives two: the index against `HEAD`, then the worktree
+ * against the index. Porcelain letters decide the status only where no
+ * name-status diff exists to ask, which is the reader without a baseline
+ * (`readWorkingTreeChanges`) and the untracked `??` entries every reader
+ * takes from `status`. The session reader derives every tracked status from
+ * the same diff that gives its line counts, so the two fields of a row
+ * describe one state.
+ *
+ * Where porcelain letters are read, they are read as one state rather than
+ * left to right. Left to right, a file staged as modified and then deleted
+ * (`MD`) reported `modified` beside a line count that described its
+ * deletion, and a file added to the index and then deleted (`AD`) reported
+ * `added` although the worktree holds nothing `HEAD` does not.
+ */
+function statusOf(code: string): GitChangeStatus | undefined {
   if (code === "??" || code === "!!") return "added";
-  for (const letter of code) {
-    if (letter === "R" || letter === "C") return "renamed";
-    if (letter === "A") return "added";
-    if (letter === "D") return "deleted";
-    if (letter === "M" || letter === "U" || letter === "T") return "modified";
-  }
+  const index = code[0] ?? " ";
+  const worktree = code[1] ?? " ";
+  if (index === "U" || worktree === "U" || code === "AA" || code === "DD")
+    return "modified";
+  // Gone from the worktree. A path the index added and the worktree then
+  // removed was never in `HEAD`, so against `HEAD` nothing changed.
+  if (worktree === "D") return index === "A" ? undefined : "deleted";
+  if (index === "R" || index === "C") return "renamed";
+  if (index === "A") return "added";
+  if (index === "D") return "deleted";
   return "modified";
 }
 
@@ -298,8 +329,8 @@ export function parsePorcelainZ(
  *
  * NUL-delimited rather than the default, because the default C-quotes any
  * path that needs it and this reader must key by the same spelling the
- * porcelain status uses. A rename writes three fields — status, old path,
- * new path — and the new path is the one the run changed.
+ * porcelain status uses. A rename writes three fields (status, old path,
+ * new path), and the new path is the one the run changed.
  */
 export function parseNameStatusZ(
   stdout: string,
@@ -359,7 +390,7 @@ export function parseNumstat(
  * spawn each, and sixty-four spawns at once on an operator's laptop is a
  * worse neighbour than the blocking read this replaced.
  */
-async function pooled(
+export async function pooled(
   tasks: readonly (() => Promise<void>)[],
   limit: number,
 ): Promise<void> {
@@ -408,6 +439,31 @@ async function untrackedLineCount(
 }
 
 /**
+ * Whether `HEAD` is a branch that has no commit yet, proven rather than
+ * assumed. A failed diff is not proof of an unborn repository: a timeout or
+ * a killed process fails the same way. Only a symbolic HEAD whose branch
+ * does not exist can be compared with the empty tree.
+ */
+export async function provenUnborn(
+  exec: ExecAsync,
+  cwd: string,
+): Promise<boolean> {
+  if ((await git(exec, cwd, ["rev-parse", "--verify", "HEAD"])) !== undefined)
+    return false;
+  const symbolic = firstLine(
+    await git(exec, cwd, ["symbolic-ref", "-q", "HEAD"]),
+  );
+  if (symbolic === undefined) return false;
+  const absent = await git(
+    exec,
+    cwd,
+    ["show-ref", "--verify", "--quiet", symbolic],
+    [1],
+  );
+  return absent !== undefined;
+}
+
+/**
  * Every path the worktree holds differently from `HEAD`, with line counts.
  *
  * The status listing decides which paths are reported, and the numstat only
@@ -427,6 +483,12 @@ async function untrackedLineCount(
  * unrelated questions about the same worktree, both are reads, and
  * `--no-optional-locks` keeps both off the index lock. The untracked probes
  * come last because they need the root to build an absolute path.
+ *
+ * With a baseline this is the measure ADR-188 replaced: every change since
+ * that commit, which counts a pull's files and edits that predate the
+ * session. The daemon reads through `readSessionChanges` in
+ * `session-changes.ts`, which keeps this measure only for a session restored
+ * from a state file older than that rule.
  */
 export async function readWorkingTreeChanges(
   exec: ExecAsync,
@@ -458,7 +520,7 @@ export async function readWorkingTreeChanges(
   // Against a baseline, the question is what this session changed, and work it
   // committed is no longer in `status` at all: the tree is clean and `HEAD` has
   // moved. Comparing the worktree with the current `HEAD` answers a different
-  // question — what is uncommitted now — and a run that committed its work
+  // question, what is uncommitted now, and a run that committed its work
   // recorded none of it. So the tracked half comes from a diff against the
   // commit the session started on, which covers committed and uncommitted
   // alike, and only the untracked half still comes from `status`, because an
@@ -489,75 +551,89 @@ export async function readWorkingTreeChanges(
     git(exec, cwd, ["diff", "--numstat", ref, "-z"]).then(async (head) => {
       if (head !== undefined) return head;
       if (ref !== "HEAD") return undefined;
-      // A failed diff is not proof of an unborn repository. Only a symbolic
-      // HEAD whose branch does not exist can be compared with the empty tree.
-      if (
-        (await git(exec, cwd, ["rev-parse", "--verify", "HEAD"])) !== undefined
-      )
-        return undefined;
-      const symbolic = firstLine(
-        await git(exec, cwd, ["symbolic-ref", "-q", "HEAD"]),
-      );
-      if (symbolic === undefined) return undefined;
-      const absent = await git(
-        exec,
-        cwd,
-        ["show-ref", "--verify", "--quiet", symbolic],
-        [1],
-      );
-      if (absent === undefined) return undefined;
+      if (!(await provenUnborn(exec, cwd))) return undefined;
       return git(exec, cwd, ["diff", "--numstat", EMPTY_TREE_OBJECT, "-z"]);
     }),
     git(exec, cwd, ["rev-parse", "--show-toplevel"]).then(firstLine),
   ]);
   if (numstatOut === undefined) return undefined;
   const counts = parseNumstat(numstatOut);
-  const absolute = (repoRelative: string): string =>
-    root === undefined
-      ? repoRelative
-      : `${root.replace(/\/$/, "")}/${repoRelative}`;
+  if (root !== undefined)
+    await countUntracked(exec, cwd, root, entries, counts);
+  return rowsOf(entries, counts, root);
+}
 
-  // Untracked files, in path order so the same ones are measured on every
-  // pass rather than whichever order git happened to list the tree in, and a
-  // directory entry left out because it names a subtree and not a file.
-  if (root !== undefined) {
-    const untracked = entries
-      // `??` and nothing else. A tracked path missing from the numstat is a
-      // change git reported no line count for (a mode change, for one), and
-      // diffing it against nothing would count the whole file as added.
-      .filter((entry) => entry.code === "??")
-      .map((entry) => entry.path)
-      .filter(
-        (repoRelative) =>
-          !repoRelative.endsWith("/") && !counts.has(repoRelative),
-      )
-      .sort()
-      .slice(0, MAX_UNTRACKED_LINE_COUNTS);
-    await pooled(
-      untracked.map((repoRelative) => async () => {
-        const added = await untrackedLineCount(
-          exec,
-          cwd,
-          absolute(repoRelative),
-        );
-        if (added !== undefined)
-          counts.set(repoRelative, { added, removed: 0 });
-      }),
-      UNTRACKED_COUNT_CONCURRENCY,
-    );
-  }
-
-  return entries.map((entry) => {
-    const repoRelative = entry.path;
-    const count = counts.get(repoRelative);
-    return {
-      path: absolute(repoRelative),
-      repo_relative_path: root === undefined ? "" : repoRelative,
-      status: statusOf(entry.code),
+/**
+ * The reported rows for these entries: absolute paths where the root is
+ * known, counts where a diff or a probe gave one, and no row for a path
+ * whose code says it holds what `HEAD` holds.
+ */
+export function rowsOf(
+  entries: readonly { code: string; path: string }[],
+  counts: ReadonlyMap<string, { added: number; removed: number }>,
+  root: string | undefined,
+): GitWorkingTreeChange[] {
+  const out: GitWorkingTreeChange[] = [];
+  for (const entry of entries) {
+    const status = statusOf(entry.code);
+    if (status === undefined) continue;
+    const count = counts.get(entry.path);
+    out.push({
+      path: absoluteIn(root, entry.path),
+      repo_relative_path: root === undefined ? "" : entry.path,
+      status,
       lines_added: count?.added ?? 0,
       lines_removed: count?.removed ?? 0,
-    };
-  });
+    });
+  }
+  return out;
+}
+
+export function absoluteIn(
+  root: string | undefined,
+  repoRelative: string,
+): string {
+  return root === undefined
+    ? repoRelative
+    : `${root.replace(/\/$/, "")}/${repoRelative}`;
+}
+
+/**
+ * Measure the untracked files in `entries` that no diff counted, in path
+ * order so the same ones are measured on every pass, and write their counts
+ * into `counts`. A directory entry is left out because it names a subtree
+ * and not a file.
+ */
+export async function countUntracked(
+  exec: ExecAsync,
+  cwd: string,
+  root: string,
+  entries: readonly { code: string; path: string }[],
+  counts: Map<string, { added: number; removed: number }>,
+): Promise<void> {
+  const untracked = entries
+    // `??` and nothing else. A tracked path missing from the numstat is a
+    // change git reported no line count for (a mode change, for one), and
+    // diffing it against nothing would count the whole file as added.
+    .filter((entry) => entry.code === "??")
+    .map((entry) => entry.path)
+    .filter(
+      (repoRelative) =>
+        !repoRelative.endsWith("/") && !counts.has(repoRelative),
+    )
+    .sort()
+    .slice(0, MAX_UNTRACKED_LINE_COUNTS);
+  await pooled(
+    untracked.map((repoRelative) => async () => {
+      const added = await untrackedLineCount(
+        exec,
+        cwd,
+        absoluteIn(root, repoRelative),
+      );
+      if (added !== undefined) counts.set(repoRelative, { added, removed: 0 });
+    }),
+    UNTRACKED_COUNT_CONCURRENCY,
+  );
 }
 
 /**

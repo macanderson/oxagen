@@ -134,6 +134,7 @@ function props({
     place: { org: "acme", ws: "core-platform", runId: run.id },
     view: { kinds: [], frames: null, body: null },
     metrics: runMetrics({ run, cost, transcript }),
+    transcript,
     everything: transcript,
     cost,
     outputs: readOk(runOutputs()),
@@ -794,6 +795,27 @@ describe("CostTab", () => {
     }
   });
 
+  it("marks the last turn live only on a live run, never on a halted run with no seal (#3375)", async () => {
+    await renderTab(props());
+    expect(screen.getByTestId("inst-cost")).toHaveTextContent("turn 7 · live");
+    cleanup();
+    await renderTab(
+      props({
+        run: runRow({
+          ...RELEASE_RUN,
+          status: "halted",
+          outcome: "cancelled",
+          sealedAt: null,
+        }),
+      }),
+    );
+    for (const id of ["inst-cost", "inst-shape"]) {
+      const tile = screen.getByTestId(id);
+      expect(tile).toHaveTextContent("turn 7");
+      expect(tile).not.toHaveTextContent("live");
+    }
+  });
+
   it("says the cache hit was not recorded, and leaves out the reasoning and per-call parts the rollup did not carry (negative)", async () => {
     await renderTab(
       props({
@@ -830,6 +852,43 @@ describe("CostTab", () => {
     expect(screen.getByTestId("inst-cost")).toHaveTextContent(
       "cache hit not recorded",
     );
+  });
+
+  it("shows a rebuilt cache as the share of input written to it, beside a hit rate that leaves writes out (A-08)", async () => {
+    // Half the input went into cache writes and little was read back: the
+    // hit rate, which leaves writes out of its denominator, still reads high.
+    await renderTab(
+      props({
+        cost: readOk(
+          costRollup({
+            micros: "4130000",
+            tokens: {
+              inputUncached: 5_000,
+              cacheRead: 395_000,
+              cacheWrite5m: 300_000,
+              cacheWrite1h: 100_000,
+              output: 20_000,
+              reasoning: 0,
+            },
+            byClass: {
+              ...RELEASE_RUN_CLASSES,
+              cacheWrite5m: "1875000",
+              cacheWrite1h: "1000000",
+              output: "2246106",
+              reasoning: "0",
+            },
+            cacheSaving: "3555000",
+            cacheHitRate: 0.9875,
+            modelCalls: 8,
+          }),
+        ),
+      }),
+    );
+    const tokens = screen.getByTestId("inst-tokens");
+    expect(tokens).toHaveTextContent("Cache hit 98.8% of input");
+    // 400,000 written of 800,000 input tokens.
+    expect(tokens).toHaveTextContent("50% of input written to cache");
+    expect(tokens).not.toHaveTextContent("nothing written to cache");
   });
 
   it("leaves the total without a cost when a model the run used has no recorded split, and names no recorded cost or price entry the record lacks (negative)", async () => {

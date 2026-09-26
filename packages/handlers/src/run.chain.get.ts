@@ -31,7 +31,7 @@ import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import type { RunFrame } from "@oxagen/run-ledger";
 import {
   explainReplayGrade,
-  isContentBearingFrame,
+  frameOwesBody,
   isReplayGrade,
 } from "@oxagen/tacho";
 import { and, asc, eq } from "drizzle-orm";
@@ -186,16 +186,23 @@ export function sequenceGaps(
 }
 
 /**
- * Frames that carried content and whose bytes were not retained — the same
- * rule the seal derives `body_missing` from (`deriveCompletenessGaps`): a
- * content-bearing frame with no body reference, or any frame whose digest was
- * recorded and whose bytes were not.
+ * Frames that owe a body and whose bytes were not all retained, under the
+ * rule both seals derive `body_missing` from (`frameOwesBody`,
+ * `bodyIsPartial`): a content-bearing frame with no body reference, any frame
+ * whose digest was recorded and whose bytes were not, or a model call whose
+ * body holds one half of the exchange. A wrapped session's later sighting of
+ * a model call owes nothing, because the frame sealed first holds the call's
+ * content.
  */
 export function missingBodies(frames: readonly RunFrame[]): number {
   return frames.filter(
     (frame) =>
-      (isContentBearingFrame(frame.type) || frame.body.bodyDigest !== null) &&
-      frame.body.bodyRef === null,
+      frameOwesBody({
+        type: frame.type,
+        digest: frame.body.bodyDigest,
+        laterSighting: (frame.llmCall?.duplicateOf ?? null) !== null,
+      }) &&
+      (frame.body.bodyRef === null || frame.llmCall?.partial === true),
   ).length;
 }
 
@@ -342,8 +349,7 @@ export function createRunChainGetHandler(
     // grade yet — `toLedgerRunItem` already nulls it on the row. Returning the
     // previous attempt's seal grade here would present a historical trust
     // grade as the current run's before the active attempt has sealed.
-    const recordedGrade =
-      run.item.status === "live" ? null : recordedGradeRaw;
+    const recordedGrade = run.item.status === "live" ? null : recordedGradeRaw;
     const first = read.frames.at(0);
     const last = read.frames.at(-1);
 

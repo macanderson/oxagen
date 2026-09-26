@@ -43,12 +43,16 @@
  * names none either. An effect frame that names another call stays its own
  * step.
  *
- * Nothing here reads a body. A frame carries its body reference, and the fold
- * prefers a half whose body was kept; the caller reads the bodies of the
- * halves it names.
+ * Nothing in the fold reads a body. A frame carries its body reference, and
+ * the fold prefers a half whose body was kept; the caller reads the bodies of
+ * the halves it names. Two facts need the words themselves, and `markWords`
+ * settles them once the caller has read those words: which prompts and
+ * replies have nothing to show, and which reply repeats words the reader was
+ * just shown.
  */
 import {
   addFrameUsage,
+  boundaryHalf,
   COMMAND_APPLIED,
   FAILED_OUTCOMES,
   type FrameUsage,
@@ -59,10 +63,12 @@ import {
   RECALL_TYPES,
   type RunFrame,
   stepKind,
+  stopsRun,
   type TranscriptKind,
   turnOrdinals,
 } from "./run-frames";
 import {
+  digestBytes,
   TRANSCRIPT_NODES,
   TRANSCRIPT_OUTCOMES,
   type TranscriptNode,
@@ -102,6 +108,13 @@ export interface TranscriptDecision {
   type: string;
   /** Who decided, in `FrameIdentity.policySource`'s words; null when unrecorded. */
   source: string | null;
+  /**
+   * Whether the source is the agent's harness checking itself rather than
+   * Oxagen policy or an operator. False when the source is unrecorded. This
+   * is the one place the rule lives: the counts and the Run page's Policy
+   * tab both read it here (ADR-182).
+   */
+  harness: boolean;
   at: Date;
 }
 
@@ -169,9 +182,9 @@ export interface TranscriptFold {
   /** First frame to last, in milliseconds; null for one frame or an unfinished call. */
   durationMs: number | null;
   /**
-   * The key of an earlier entry in the same turn whose kept body this one
-   * repeats byte for byte: a message that echoes the operator's prompt, or a
-   * reply that says again what the last one said. Null otherwise.
+   * The key of an earlier entry in the same turn whose words this reply says
+   * again: the operator's prompt, or the words said last before it on its
+   * chain (`markWords`). Null otherwise, and null until `markWords` runs.
    */
   echoOf: string | null;
 }
@@ -229,11 +242,6 @@ const ANSWER: ReadonlySet<string> = new Set([
   "tool.approval_recorded",
   "token_denied",
 ]);
-/** The run's own stop frames: a wrapped agent's, and the ledger attempt's. */
-const SEAL: ReadonlySet<string> = new Set([
-  "agent_stop",
-  "terminal.attempt_terminated",
-]);
 /** Frames that frame the run rather than record what it did. */
 const CONTROL: ReadonlySet<string> = new Set([
   "agent_start",
@@ -269,6 +277,7 @@ function addCost(sum: number | null, cost: number | null): number | null {
 
 function decisionOf(frame: RunFrame): TranscriptDecision | null {
   if (!POLICY_TYPES.has(frame.type)) return null;
+  const source = frame.identity.policySource ?? null;
   return {
     seq: frame.seq,
     ...(frame.chain === undefined
@@ -276,7 +285,8 @@ function decisionOf(frame: RunFrame): TranscriptDecision | null {
       : { sessionUuid: frame.chain.sessionUuid }),
     decision: frame.identity.policy ?? frame.type,
     type: frame.type,
-    source: frame.identity.policySource ?? null,
+    source,
+    harness: source !== null && HARNESS_SOURCES.has(source),
     at: frame.observedAt,
   };
 }
@@ -296,27 +306,12 @@ function wordOf(gate: TranscriptDecision): string | null {
   return gate.decision === gate.type ? null : gate.decision;
 }
 
-/**
- * The half a turn boundary's own body is. The operator's prompt is what went
- * out; a `turn_end` or a message the harness reported apart from it
- * (`tachoFramePhase`) is what came back. A boundary whose body was not kept
- * is no half.
- */
-function boundarySlot(frame: RunFrame): "request" | "response" | null {
-  if (frame.body.bodyRef === null) return null;
-  if (frame.type === "turn_start") return "request";
-  if (frame.type === "turn_end") return "response";
-  if (frame.type === "oxagen:message" && frame.phase === "response")
-    return "response";
-  return null;
-}
-
 /** A frame with nothing to read on it: no call half, no decision, no kept boundary body. */
 function isBare(frame: RunFrame): boolean {
   return (
     stepKind(frame) === null &&
     !POLICY_TYPES.has(frame.type) &&
-    boundarySlot(frame) === null
+    boundaryHalf(frame) === null
   );
 }
 
@@ -333,16 +328,40 @@ interface Group {
   tag: Tag;
 }
 
-/** The steps of the frames in `[from, to)`, one turn's worth. */
+/**
+ * The steps of the frames in `[from, to)`, one turn's worth. Linear in the
+ * frames: the frames are visited in order and a frame, once claimed, stays
+ * claimed, so each index below is walked forward and never rescanned.
+ */
 function groupTurn(frames: readonly RunFrame[], from: number, to: number) {
   const byKey = new Map<string, number[]>();
+  /**
+   * Keyed frames by key, type and chain, in order, each with how far a
+   * search has passed. Rule 2 asks for the first one after a request that no
+   * step took. The requests come in order and a claim is never undone, so
+   * what one search passed no later search wants.
+   */
+  const byClose = new Map<string, { list: number[]; next: number }>();
+  const closeKey = (key: string, type: string, chain: string) =>
+    `${key}\u0000${type}\u0000${chain}`;
   for (let i = from; i < to; i += 1) {
-    const key = callOf(frames[i] as RunFrame);
+    const frame = frames[i] as RunFrame;
+    const key = callOf(frame);
     if (key === null) continue;
     const list = byKey.get(key);
     if (list === undefined) byKey.set(key, [i]);
     else list.push(i);
+    const close = closeKey(key, frame.type, chainOf(frame));
+    const entry = byClose.get(close);
+    if (entry === undefined) byClose.set(close, { list: [i], next: 0 });
+    else entry.list.push(i);
   }
+  /**
+   * Keys and chains rule 1 found no tool call for. Frames are only ever
+   * claimed, so a key that holds no unclaimed tool call from one frame on
+   * holds none from any later frame either.
+   */
+  const noCall = new Set<string>();
   const claimed = new Set<number>();
   const at = (i: number) => frames[i] as RunFrame;
 
@@ -368,6 +387,8 @@ function groupTurn(frames: readonly RunFrame[], from: number, to: number) {
     const key = callOf(first);
     if (key === null || stepKind(first) === "model_call") return null;
     const chain = chainOf(first);
+    const dead = `${key}\u0000${chain}`;
+    if (noCall.has(dead)) return null;
     const indexes = (byKey.get(key) ?? []).filter(
       (j) =>
         j >= i &&
@@ -375,7 +396,10 @@ function groupTurn(frames: readonly RunFrame[], from: number, to: number) {
         stepKind(at(j)) !== "model_call" &&
         chainOf(at(j)) === chain,
     );
-    if (!indexes.some((j) => stepKind(at(j)) === "tool_call")) return null;
+    if (!indexes.some((j) => stepKind(at(j)) === "tool_call")) {
+      noCall.add(dead);
+      return null;
+    }
     return { indexes: withEffects(indexes, key, chain), tag: "tool" };
   };
 
@@ -395,11 +419,16 @@ function groupTurn(frames: readonly RunFrame[], from: number, to: number) {
         ? j
         : null;
     }
-    for (const j of byKey.get(key) ?? []) {
-      if (j <= i || claimed.has(j)) continue;
-      if (at(j).type === type && chainOf(at(j)) === chainOf(first)) return j;
-    }
-    return null;
+    const entry = byClose.get(closeKey(key, type, chainOf(first)));
+    if (entry === undefined) return null;
+    const { list } = entry;
+    while (
+      entry.next < list.length &&
+      ((list[entry.next] as number) <= i ||
+        claimed.has(list[entry.next] as number))
+    )
+      entry.next += 1;
+    return list[entry.next] ?? null;
   };
 
   const pairGroup = (i: number): Group => {
@@ -576,7 +605,11 @@ function modelFacts(
   const last = members[members.length - 1] as RunFrame;
   return {
     node: "model",
-    quiet: false,
+    // A model step draws a row under `responses` when its reply was kept,
+    // and a usage row when it carried a cost, tokens or an effort. One that
+    // did neither draws nothing: a call still waiting on its reply, or one
+    // kept as a digest with no figures. So it is quiet, and counts nowhere.
+    quiet: !kinds.has("responses") && !kinds.has("usage"),
     outcome: kinds.has("errors")
       ? "failed"
       : halves.response === null
@@ -598,7 +631,7 @@ function eventNode(opening: RunFrame): TranscriptNode {
   if (opensRunTurn(opening)) return "prompt";
   if (REPLY.has(opening.type)) return "reply";
   if (RECALL_TYPES.has(opening.type)) return "recall";
-  if (SEAL.has(opening.type) && opening.chain === undefined) return "seal";
+  if (stopsRun(opening)) return "seal";
   if (POLICY_TYPES.has(opening.type)) return "policy";
   if (isControl(opening.type)) return "control";
   return "event";
@@ -665,7 +698,7 @@ function stepFold(
   }
   const decision = gates[gates.length - 1] ?? null;
   if (decision !== null) kinds.add("policy");
-  const slot = boundarySlot(opening);
+  const slot = boundaryHalf(opening);
   const halves =
     tag === "event"
       ? {
@@ -748,42 +781,120 @@ function nestSubagents(folds: readonly TranscriptFold[]): void {
 }
 
 /**
- * Each reply that repeats an earlier entry of its turn byte for byte. On the
- * run's own chain, a message whose body is the operator's prompt is that
- * prompt again (a run recorded before #4051 sealed the transcript's copy of
- * it). On any chain, a reply identical to the reply before it is the same
- * words twice. Bodies compare by their recorded digest.
+ * What an entry says, as `markWords` compares it: the digest of the words a
+ * reader is shown for it (`wordsDigest`), never the words themselves. For a
+ * prompt, the text of its request; for a reply, the text of its response;
+ * for a model step, the last text block of its reply that has words, or the
+ * reply's text where the recorder assembled none. Null when the entry shows
+ * no words: the half kept no body, the body could not be read or is not
+ * text, a prompt or reply was kept as a model stream, which a reader is shown
+ * no text for, or the words are only whitespace.
  */
-function markEchoes(folds: readonly TranscriptFold[]): void {
+export type TranscriptWords = string | null;
+
+/**
+ * The one rule for what counts as the same words (ADR-182): the sha256 of the
+ * text with its surrounding whitespace trimmed, or null when nothing is left
+ * (the text is blank). Two halves say the same thing exactly when their
+ * digests are equal, so a caller can keep the digest and let the words go.
+ */
+export function wordsDigest(text: string | null): TranscriptWords {
+  if (text === null) return null;
+  const words = text.trim();
+  return words === "" ? null : digestBytes(words);
+}
+
+/**
+ * The half whose words an entry says: a prompt's request, and the response
+ * of a reply or a model step.
+ */
+export function wordsHalf(fold: TranscriptFold): RunFrame | null {
+  return fold.node === "prompt" ? fold.request : fold.response;
+}
+
+/**
+ * Settles the two facts about an entry that need its words, once `read` has
+ * read them (ADR-182). The fold reads no body, so it cannot settle either:
+ *
+ * - A prompt or reply with no words to show, or only whitespace, is `quiet`.
+ * - A reply that says again what the reader was just shown repeats it
+ *   (`echoOf`), and is `quiet` too. On the run's own chain, that is the
+ *   operator's prompt of its turn: a run recorded before #4051 also sealed
+ *   the transcript's copy of the prompt with its words. On any chain, it is
+ *   the words said last before the reply in its turn on that chain, by a
+ *   model step or an earlier reply: a turn's closing message repeats the
+ *   model's last text block on every harness that records both.
+ *
+ * Words compare by `wordsDigest`, the digest of the words with their
+ * surrounding whitespace trimmed. That is not the body's digest: a model's
+ * reply is kept as the stream it arrived in, and a turn's closing message as
+ * plain words, so the two bodies never share a digest even when they say the
+ * same thing, while the digests of their words are equal.
+ *
+ * `read` is asked once, for every prompt and reply and for the model step or
+ * reply said right before each reply. An entry it leaves out of its answer
+ * (a read bound it passed) keeps what the fold said about it.
+ */
+export async function markWords(
+  folds: readonly TranscriptFold[],
+  read: (
+    needed: readonly TranscriptFold[],
+  ) => Promise<ReadonlyMap<TranscriptFold, TranscriptWords>>,
+): Promise<void> {
+  const needed = new Set<TranscriptFold>();
+  const prompts = new Map<TranscriptFold, TranscriptFold[]>();
+  const before = new Map<TranscriptFold, TranscriptFold>();
   let turn: number | null | undefined;
-  let prompts = new Map<string, string>();
-  let previous = null as { digest: string; key: string } | null;
+  let asked: TranscriptFold[] = [];
+  let said = new Map<string, TranscriptFold>();
   for (const fold of folds) {
     if (fold.turn !== turn) {
       turn = fold.turn;
-      prompts = new Map();
-      previous = null;
+      asked = [];
+      said = new Map();
     }
+    if (fold.quiet || wordsHalf(fold) === null) continue;
+    const chain = chainOf(fold.opening);
     if (fold.node === "prompt") {
-      const digest = fold.request?.body.bodyDigest ?? null;
-      if (digest !== null && !prompts.has(digest))
-        prompts.set(digest, fold.key);
+      needed.add(fold);
+      asked.push(fold);
+    } else if (fold.node === "reply") {
+      needed.add(fold);
+      if (fold.opening.chain === undefined) prompts.set(fold, [...asked]);
+      const last = said.get(chain);
+      if (last !== undefined) {
+        needed.add(last);
+        before.set(fold, last);
+      }
+      said.set(chain, fold);
+    } else if (fold.node === "model") {
+      said.set(chain, fold);
+    }
+  }
+  if (needed.size === 0) return;
+  const words = await read([...needed]);
+  const digestOf = (fold: TranscriptFold | undefined) =>
+    fold === undefined ? null : (words.get(fold) ?? null);
+  for (const fold of needed) {
+    if (fold.node !== "prompt" && fold.node !== "reply") continue;
+    if (!words.has(fold)) continue;
+    const digest = digestOf(fold);
+    if (digest === null) {
+      fold.quiet = true;
       continue;
     }
     if (fold.node !== "reply") continue;
-    const digest = fold.response?.body.bodyDigest ?? null;
-    if (digest === null) continue;
-    const prompt =
-      fold.opening.chain === undefined ? prompts.get(digest) : undefined;
-    if (prompt !== undefined) fold.echoOf = prompt;
-    else if (previous?.digest === digest) fold.echoOf = previous.key;
-    else previous = { digest, key: fold.key };
+    const echoed =
+      prompts.get(fold)?.find((prompt) => digestOf(prompt) === digest) ??
+      (digestOf(before.get(fold)) === digest ? before.get(fold) : undefined);
+    if (echoed === undefined) continue;
+    fold.echoOf = echoed.key;
+    fold.quiet = true;
   }
 }
 
 function withRelations(folds: TranscriptFold[]): TranscriptFold[] {
   nestSubagents(folds);
-  markEchoes(folds);
   return folds;
 }
 
@@ -797,25 +908,35 @@ export function stepFolds(frames: readonly RunFrame[]): TranscriptFold[] {
   );
 }
 
-/** The `everything` zoom: one entry per frame, each read as a step of one frame. */
+/**
+ * The `everything` zoom: one entry per frame, each read as a step of one
+ * frame.
+ *
+ * A call's request frame on its own says what went out and nothing about how
+ * the call ended, so its outcome is null rather than `pending`: the call it
+ * opens may well have completed in a later frame.
+ */
 export function frameFolds(frames: readonly RunFrame[]): TranscriptFold[] {
   const turns = turnOrdinals(frames);
   return withRelations(
-    frames.map((frame, i) =>
-      stepFold(
+    frames.map((frame, i) => {
+      const kind = stepKind(frame);
+      const fold = stepFold(
         frames,
         {
           indexes: [i],
           tag:
-            stepKind(frame) === "model_call"
+            kind === "model_call"
               ? "model"
-              : stepKind(frame) === "tool_call"
+              : kind === "tool_call"
                 ? "tool"
                 : "event",
         },
         turns,
-      ),
-    ),
+      );
+      if (kind !== null && frame.phase === "request") fold.outcome = null;
+      return fold;
+    }),
   );
 }
 
@@ -932,11 +1053,20 @@ export function filterFoldsByKind(
   return folds.filter((fold) => [...fold.kinds].some((k) => wanted.has(k)));
 }
 
-/** What a folded run holds, counted over every entry whatever the chips. */
+/**
+ * What a folded run holds, counted over every entry whatever the chips.
+ *
+ * Every figure counts only the entries a reader is shown something for
+ * (`quiet` false). An entry with nothing to show, and a reply that repeats
+ * words the reader was just shown (`markWords`), draws no row, so no chip and
+ * no total counts it: a count and the rows it stands for agree (ADR-182).
+ * The unit is the entry, not the row: a model step that said three things is
+ * one entry under `responses`.
+ */
 export interface TranscriptCounts {
   /** Entries per chip. An entry that answers two chips counts under both. */
   kinds: Record<TranscriptKind, number>;
-  /** Entries that have something to show (`quiet` false). */
+  /** Entries that have something to show. */
   entries: number;
   /** Entries that failed or were refused, or that answer the errors chip. */
   errors: number;
@@ -955,22 +1085,43 @@ export function transcriptCounts(
   let errors = 0;
   let policy = 0;
   for (const fold of folds) {
+    if (fold.quiet) continue;
     for (const kind of fold.kinds) kinds[kind] = (kinds[kind] ?? 0) + 1;
-    if (!fold.quiet) entries += 1;
+    entries += 1;
     if (
       fold.outcome === "failed" ||
       fold.outcome === "denied" ||
       fold.kinds.has("errors")
     )
       errors += 1;
-    const source = fold.decision?.source ?? null;
-    if (
-      fold.kinds.has("policy") &&
-      (source === null || !HARNESS_SOURCES.has(source))
-    )
+    if (fold.kinds.has("policy") && fold.decision?.harness !== true)
       policy += 1;
   }
   return { kinds, entries, errors, policy };
+}
+
+/**
+ * The counts of the run's frames that a page reading at `steps` still needs
+ * from `everything`, where each frame is its own entry: how many the policy
+ * and recall chips keep, and how many of those decisions a rule or a person
+ * made. The Run page's tab badges count the frames its Governed actions,
+ * Policy and Context tabs list, and this lets one read at `steps` carry them.
+ *
+ * They are `transcriptCounts` at `everything`, not a second rule. They need
+ * no words (`markWords`): only a prompt or a reply can turn quiet on its
+ * words, and neither is a policy or recall frame.
+ */
+export interface FrameCounts {
+  kinds: { policy: number; recall: number };
+  policy: number;
+}
+
+export function frameCounts(frames: readonly RunFrame[]): FrameCounts {
+  const counts = transcriptCounts(frameFolds(frames), ["policy", "recall"]);
+  return {
+    kinds: { policy: counts.kinds.policy, recall: counts.kinds.recall },
+    policy: counts.policy,
+  };
 }
 
 /** A `tool_use` block of a model's reply, as far as claiming it needs. */
@@ -980,47 +1131,142 @@ export interface ToolUseRef {
 }
 
 /**
- * Which tool step recorded each `tool_use` block of a model step's reply, so
- * a reader draws the call once, as that step. A block and a step with the
- * same call key are the same call. Where either side kept no key, the block
- * is the next tool step of the same name in the turn, after the reply, that
- * no other block claimed. Null for a call no tool step recorded.
+ * Which tool step recorded each `tool_use` block of a model's reply, so a
+ * reader draws the call once, as that step. A block and a step with the same
+ * call key are the same call. Where either side kept no key, the block is the
+ * first tool step of the same name (`bareToolName`) on the reply's chain and
+ * in its turn that opens after the reply and before that chain's next model
+ * call, and that no earlier block of the same reply took. Null for a call no
+ * tool step recorded.
  *
- * `steps` are the run's `steps` zoom. The claimer keeps its claims across
- * calls, so one reader passes each model step of the run to it in order.
+ * `steps` are the run's `steps` zoom. The claimer is asked about the frame
+ * that carried the reply, and finds the step that frame belongs to, so the
+ * `turns` and `everything` zooms claim as `steps` does. A reply's claims
+ * depend on the run's steps and its own blocks alone, never on which other
+ * replies a page holds or the order they are asked about: tool calls run
+ * between one model call and the next, so two replies on a chain never
+ * compete for a step.
+ *
+ * Built in O(n log n) over the steps; each block costs a binary search plus
+ * the same-named steps in its reply's window.
  */
 export function toolUseClaimer(
   steps: readonly TranscriptFold[],
-): (model: TranscriptFold, uses: readonly ToolUseRef[]) => (string | null)[] {
-  const tools = steps.filter((step) => step.node === "tool");
+): (
+  carrier: RunFrame | null,
+  uses: readonly ToolUseRef[],
+) => (string | null)[] {
   const byCall = new Map<string, TranscriptFold>();
-  for (const tool of tools)
-    for (const frame of tool.members) {
+  /** Tool steps by chain and bare name, in the order they open. */
+  const byName = new Map<string, TranscriptFold[]>();
+  /** Where each chain's model steps open, in order. */
+  const modelOpens = new Map<string, number[]>();
+  const stepOf = new Map<RunFrame, TranscriptFold>();
+  const push = <T>(map: Map<string, T[]>, key: string, value: T) => {
+    const list = map.get(key);
+    if (list === undefined) map.set(key, [value]);
+    else list.push(value);
+  };
+  const nameKey = (chain: string, name: string) => `${chain}\u0000${name}`;
+  for (const step of steps) {
+    for (const frame of step.members)
+      if (!stepOf.has(frame)) stepOf.set(frame, step);
+    const chain = chainOf(step.opening);
+    if (step.node === "model") push(modelOpens, chain, step.span.open);
+    if (step.node !== "tool") continue;
+    for (const frame of step.members) {
       const key = callOf(frame);
-      if (key !== null && !byCall.has(key)) byCall.set(key, tool);
+      if (key !== null && !byCall.has(key)) byCall.set(key, step);
     }
-  const claimed = new Set<TranscriptFold>();
-  return (model, uses) =>
-    uses.map((use) => {
+    if (step.subject !== null)
+      push(byName, nameKey(chain, bareToolName(step.subject)), step);
+  }
+  for (const list of byName.values())
+    list.sort((a, b) => a.span.open - b.span.open);
+  for (const opens of modelOpens.values()) opens.sort((a, b) => a - b);
+
+  return (carrier, uses) => {
+    const reply = carrier === null ? undefined : stepOf.get(carrier);
+    const claimed = new Set<TranscriptFold>();
+    const claim = (tool: TranscriptFold): string => {
+      claimed.add(tool);
+      return tool.key;
+    };
+    return uses.map((use) => {
       const keyed = use.callKey === null ? undefined : byCall.get(use.callKey);
-      if (keyed !== undefined) return keyed.key;
-      const name = bareToolName(use.name);
-      const match = tools.find(
-        (tool) =>
-          tool.turn === model.turn &&
-          tool.span.open > model.span.end &&
-          !claimed.has(tool) &&
-          (callOf(tool.opening) === null || use.callKey === null) &&
-          tool.subject !== null &&
-          bareToolName(tool.subject) === name,
-      );
-      if (match === undefined) return null;
-      claimed.add(match);
-      return match.key;
+      if (keyed !== undefined) return claim(keyed);
+      if (reply === undefined) return null;
+      const chain = chainOf(reply.opening);
+      const after = reply.span.end;
+      const opens = modelOpens.get(chain) ?? [];
+      const bound = opens[firstIndex(opens, (open) => open > after)];
+      const list = byName.get(nameKey(chain, bareToolName(use.name))) ?? [];
+      for (
+        let i = firstIndex(list, (tool) => tool.span.open > after);
+        i < list.length;
+        i += 1
+      ) {
+        const tool = list[i] as TranscriptFold;
+        // Turns only grow along a chain, so a step in a later turn, or at or
+        // past the chain's next model call, ends the reply's window.
+        if (bound !== undefined && tool.span.open >= bound) break;
+        if (tool.turn !== reply.turn) break;
+        if (claimed.has(tool)) continue;
+        if (callOf(tool.opening) !== null && use.callKey !== null) continue;
+        return claim(tool);
+      }
+      return null;
     });
+  };
+}
+
+/**
+ * The first index of a list sorted on `past` whose item is past the point,
+ * or the list's length when none is: a binary search.
+ */
+function firstIndex<T>(list: readonly T[], past: (item: T) => boolean): number {
+  let low = 0;
+  let high = list.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (past(list[mid] as T)) high = mid;
+    else low = mid + 1;
+  }
+  return low;
 }
 
 // ── Recall ──────────────────────────────────────────────────────────────────
+
+/** One item a recall listed, and what became of it. */
+export interface TranscriptRecallItem {
+  kind: string;
+  label: string;
+  tokens: number | null;
+  /**
+   * Whether the item reached the model. A listing that records no outcome
+   * put every item in front of it; any outcome but `included` is a cut.
+   */
+  outcome: "included" | "cut";
+  /** The reason recorded for a cut (`budget`, `tier`, or a later word); null when none. */
+  reason: string | null;
+  /** The item that replaced a cut one; null when none was recorded. */
+  supersededBy: string | null;
+  /** The force the item carried (`must`, `should`, `may`, `info`); null when not recorded. */
+  force: string | null;
+}
+
+/**
+ * What the server made of a recall frame's body: `listed` when it read a
+ * list of items or frames from it, `unretained` when the frame kept no body,
+ * `unreadable` when the kept body could not be read or no longer hashes to
+ * its digest, and `unlisted` when it lists neither or is too large to be a
+ * listing.
+ */
+export type TranscriptRecallBody =
+  | "listed"
+  | "unretained"
+  | "unreadable"
+  | "unlisted";
 
 /** What a recall frame says it put in front of the model. */
 export interface TranscriptRecall {
@@ -1029,9 +1275,21 @@ export interface TranscriptRecall {
   count: number | null;
   tokens: number | null;
   cut: number | null;
-  /** The items that reached the model, in the order listed. */
-  items: { kind: string; label: string; tokens: number | null }[];
+  /** Every item listed, in the order listed, each with its outcome. */
+  items: TranscriptRecallItem[];
+  /** The policy bundle a manifest was assembled on; null when it names none. */
+  bundleVersion: number | null;
+  body: TranscriptRecallBody;
 }
+
+/**
+ * A recall frame's body as the server found it: the text it kept, or why
+ * there is none to parse. `unlisted` is a body too large to be any listing,
+ * so it is never read.
+ */
+export type RecallBody =
+  | { state: "kept"; text: string }
+  | { state: Exclude<TranscriptRecallBody, "listed"> };
 
 /** The most listed items a recall carries; a manifest holds at most this many. */
 export const RECALL_ITEM_MAX = 2_000;
@@ -1055,19 +1313,16 @@ function count(value: unknown): number | null {
 /**
  * What a recall frame put in front of the model, read from its kept body:
  * a steering manifest (ADR-093) lists its items with the outcome of each, and
- * a context frame lists its frames. A body that lists neither, or none kept,
- * falls back to the frame count the ledger's `context.frames_selected`
- * records. Only items that reached the model are listed; the rest are
- * counted in `cut`.
+ * a context frame lists its frames. Every listed item is carried with its
+ * outcome and the reason recorded for a cut, so no reader parses the body
+ * again (ADR-182). A body that lists neither, or none kept, falls back to
+ * the frame count the ledger's `context.frames_selected` records.
  */
-export function recallOf(
-  frame: RunFrame,
-  body: string | null,
-): TranscriptRecall {
+export function recallOf(frame: RunFrame, body: RecallBody): TranscriptRecall {
   let parsed: unknown = null;
-  if (body !== null) {
+  if (body.state === "kept") {
     try {
-      parsed = JSON.parse(body);
+      parsed = JSON.parse(body.text);
     } catch {
       parsed = null;
     }
@@ -1079,23 +1334,30 @@ export function recallOf(
       ? parsed["frames"]
       : undefined;
   if (isRecord(parsed) && Array.isArray(list)) {
-    const kept = list
-      .filter(isRecord)
-      .filter(
-        (item) =>
-          item["outcome"] === undefined || item["outcome"] === "included",
-      );
+    const listed = list.filter(isRecord);
+    const included = (item: Record<string, unknown>) =>
+      item["outcome"] === undefined || item["outcome"] === "included";
+    const kept = listed.filter(included).length;
+    // A manifest that records the outcome of each item and no total of what
+    // it cut has cut what it listed and did not include.
+    const judged = listed.some((item) => item["outcome"] !== undefined);
     return {
       unit: Array.isArray(items) ? "items" : "frames",
-      count: count(parsed["included"]) ?? kept.length,
+      count: count(parsed["included"]) ?? kept,
       tokens: count(parsed["spent_tokens"]) ?? count(parsed["tokens"]),
-      cut: count(parsed["cut"]),
-      items: kept.slice(0, RECALL_ITEM_MAX).map((item) => ({
+      cut: count(parsed["cut"]) ?? (judged ? listed.length - kept : null),
+      items: listed.slice(0, RECALL_ITEM_MAX).map((item) => ({
         kind: text(item, "kind") ?? text(item, "type") ?? "",
         label:
           text(item, "label") ?? text(item, "id") ?? text(item, "name") ?? "",
         tokens: count(item["tokens"]) ?? count(item["tok"]),
+        outcome: included(item) ? "included" : "cut",
+        reason: text(item, "reason"),
+        supersededBy: text(item, "superseded_by"),
+        force: text(item, "force"),
       })),
+      bundleVersion: count(parsed["bundle_version"]),
+      body: "listed",
     };
   }
   return {
@@ -1104,5 +1366,7 @@ export function recallOf(
     tokens: null,
     cut: null,
     items: [],
+    bundleVersion: null,
+    body: body.state === "kept" ? "unlisted" : body.state,
   };
 }

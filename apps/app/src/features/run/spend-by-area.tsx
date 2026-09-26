@@ -49,17 +49,6 @@ const toolRow =
 /** `.meter .lab b .dim { font-weight:500 }`: the token count beside an area's money. */
 const areaTokens = "font-medium text-dim";
 
-type ToolTally = { name: string; calls: number };
-
-function tallyTools(metrics: RunMetrics): ToolTally[] {
-  const by = new Map<string, number>();
-  for (const call of metrics.toolCalls ?? [])
-    by.set(call.name, (by.get(call.name) ?? 0) + 1);
-  return [...by.entries()]
-    .map(([name, calls]) => ({ name, calls }))
-    .sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name));
-}
-
 export function SpendByArea({
   metrics,
   prices,
@@ -76,7 +65,8 @@ export function SpendByArea({
     output === null || prices.total === null
       ? null
       : ratioOfMicros(output, prices.total);
-  const tools = tallyTools(metrics);
+  // The server's calls per tool, most called first (ADR-182).
+  const tools = metrics.toolCalls?.tools ?? [];
   return (
     <Panel
       title={t("title")}
@@ -146,15 +136,17 @@ export function SpendByArea({
             <ul className="m-0 list-none p-0">
               {tools.slice(0, TOOL_ROWS).map((tool) => (
                 <li
-                  key={tool.name}
+                  // The server lists each name once, and at most one row of
+                  // calls whose record named no tool.
+                  key={tool.name ?? ""}
                   data-testid="dearest-tool"
                   className={toolRow}
                 >
                   <span
                     className={`${mono} min-w-0 truncate`}
-                    title={tool.name}
+                    title={tool.name ?? t("unnamedTool")}
                   >
-                    {tool.name}
+                    {tool.name ?? t("unnamedTool")}
                   </span>
                   <span className="whitespace-nowrap font-mono text-dim">
                     {t("calls", { count: tool.calls })} · <NoValue />

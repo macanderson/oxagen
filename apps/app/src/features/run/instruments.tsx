@@ -22,7 +22,12 @@ import {
   formatRatio,
   ratioWidth,
 } from "@/ui/money-format";
-import { type ClassPrices, type Ledger, perTurn } from "./cost-figures";
+import {
+  cacheRebuildShare,
+  type ClassPrices,
+  type Ledger,
+  perTurn,
+} from "./cost-figures";
 import {
   type Family,
   type ProvisionalModel,
@@ -226,11 +231,7 @@ const PROVISIONAL_MODELS = 3;
  * each model with what the session reported it cost and over how many calls,
  * dearest first, so a live run's spend is readable before it is rolled up.
  */
-function ProvisionalModels({
-  provisional,
-}: {
-  provisional: ProvisionalSpend;
-}) {
+function ProvisionalModels({ provisional }: { provisional: ProvisionalSpend }) {
   const t = useTranslations("run.cost.inst");
   const locale = useLocale();
   const shown = provisional.byModel.slice(0, PROVISIONAL_MODELS);
@@ -494,6 +495,7 @@ function TokensTile({
   }
   const { byClass } = tokens;
   const writes = byClass.cache_write_5m + byClass.cache_write_1h;
+  const rebuilt = cacheRebuildShare(tokens);
   const rate = prices.inputRate;
   return (
     <Tile
@@ -578,7 +580,16 @@ function TokensTile({
                       <b>{formatMoney(rate, { locale, precision: "cents" })}</b>
                     ),
                   }),
-            writes: writes === 0 ? t("nothingWritten") : null,
+            // The hit rate leaves cache writes out, so a rebuilt cache shows
+            // here as the share of input written to it (A-08).
+            writes:
+              writes === 0
+                ? t("nothingWritten")
+                : rebuilt === null
+                  ? null
+                  : t.rich("written", {
+                      share: () => <b>{formatRatio(rebuilt, locale)}</b>,
+                    }),
           }}
         />
       }
@@ -605,7 +616,7 @@ function ShapeTile({
   const widest = Math.max(0, ...rows.map((row) => row.steps));
   // `.lab` names the busiest turn once, over the first column that reaches it.
   const labelled = rows.findIndex((row) => row.steps === widest);
-  const calls = metrics.toolCalls?.length ?? null;
+  const calls = metrics.toolCalls?.count ?? null;
   const { batches } = metrics;
   return (
     <Tile
@@ -770,7 +781,7 @@ function CallsTile({ metrics }: { metrics: RunMetrics }) {
       />
     );
   }
-  const failed = toolCalls.filter((call) => call.failed).length;
+  const { failed } = toolCalls;
   return (
     <Tile
       testId="inst-calls"
@@ -778,7 +789,7 @@ function CallsTile({ metrics }: { metrics: RunMetrics }) {
       basis={t("familyCount", { count: fams.length })}
       value={
         <>
-          {count(toolCalls.length)}
+          {count(toolCalls.count)}
           <small className={instUnit}>{t("callsUnit")}</small>
           {failed === 0 ? null : (
             <small className={failedUnit}>
@@ -869,7 +880,10 @@ export function Instruments({
   retries: number | null;
 }) {
   const t = useTranslations("run.cost.inst");
-  const live = run.sealedAt === null;
+  // Live is the run's status, as everywhere else on the page. A halted run
+  // can have no seal, and reading liveness from the seal would mark its last
+  // turn as still running (#3375).
+  const live = run.status === "live";
   return (
     <section
       aria-label={t("label")}

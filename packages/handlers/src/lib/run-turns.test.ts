@@ -7,6 +7,7 @@ import {
   type RunFrame,
   tachoFrame,
   UNKEYED_TOOL_PAIRING,
+  withoutLateReports,
 } from "@oxagen/run-ledger";
 import { type TachoTurnGroup, unkeyedToolPattern } from "@oxagen/telemetry";
 import { describe, expect, it } from "vitest";
@@ -17,7 +18,6 @@ import {
   tachoTurns,
   tachoTurnStarts,
 } from "./run-turns";
-import { withoutLateReports } from "./run-read";
 
 const ROOT = "0192d4a8-7c1e-7a00-8000-00000000c0de";
 const CHILD_A = "0192d4a8-7c1e-7a00-8000-0000000000c1";

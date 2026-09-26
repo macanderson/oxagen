@@ -117,6 +117,21 @@ export {
   type TachoFrameRowLike,
   type BisectResult,
 } from "./run-frames";
+// The frames a run's transcript folds, composed once for every reader of a
+// run's steps: the Run page and the summary job (ADR-182).
+export {
+  TRANSCRIPT_FRAME_CAP,
+  listSubagentSessions,
+  readRunChains,
+  readTranscriptFrames,
+  subagentChainRead,
+  subagentSessionsQuery,
+  withoutLateReports,
+  type FrameRead,
+  type RunChainReads,
+  type SubagentChainPosition,
+  type SubagentRowRead,
+} from "./run-read";
 // The one transcript fold: steps, turns as steps grouped by turn, and every
 // fact a reader would otherwise derive from the frames (ADR-182).
 export {
@@ -126,19 +141,28 @@ export {
   turnFolds,
   filterFoldsByKind,
   transcriptCounts,
+  frameCounts,
   toolUseClaimer,
+  markWords,
+  wordsDigest,
+  wordsHalf,
+  type RecallBody,
   recallOf,
   RECALL_ITEM_MAX,
   TRANSCRIPT_NODES,
   TRANSCRIPT_OUTCOMES,
   UNKEYED_TOOL_PAIRING,
   type TranscriptCounts,
+  type FrameCounts,
   type TranscriptDecision,
   type TranscriptEntryKind,
   type TranscriptFold,
   type TranscriptNode,
   type TranscriptOutcome,
   type TranscriptRecall,
+  type TranscriptRecallBody,
+  type TranscriptRecallItem,
+  type TranscriptWords,
   type TranscriptZoom,
   type ToolUseRef,
 } from "./transcript-steps";

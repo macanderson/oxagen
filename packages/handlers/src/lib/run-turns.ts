@@ -165,9 +165,9 @@ function stepsByTurn(
  * point at a different frame of the run.
  *
  * The caller has already removed the cost and usage of a harness's late
- * report (`withoutLateReports` in run-read.ts). A later sighting of a model
- * call already carries no cost (`tachoFrame`), and its usage is not counted
- * here.
+ * report (`withoutLateReports` in `@oxagen/run-ledger`). A later sighting of
+ * a model call already carries no cost (`tachoFrame`), and its usage is not
+ * counted here.
  */
 export function framesTurns(
   frames: readonly RunFrame[],
