@@ -79,20 +79,40 @@ export interface ModelCallFrameRow {
 }
 
 /**
- * One tool call as the rollup reads it. The members after `name` mirror
- * billing's `ToolCallFrame` (#4001). They are optional until the Context and
- * cost lane's reader selects them (`tool_status`, the two digests,
- * `tool_is_mutating`, and the OTel span's result tokens); each is null where
- * the frame recorded none.
+ * One tool call as the rollup reads it, in the shape of billing's
+ * `ToolCallFrame`. The rollup grades the call from its status and digests
+ * (#3984, ADR-192) and prices its result tokens (#3892). Each member is null
+ * where the frame recorded none.
  */
 interface ToolCallFrameRow {
   /** Null when the frame names no tool. */
   name: string | null;
-  status?: "ok" | "error" | "rejected" | null;
-  inputDigest?: string | null;
-  outputDigest?: string | null;
-  isMutating?: boolean | null;
-  resultTokens?: number | null;
+  /**
+   * `tool_status` when it is `ok`, `error` or `rejected`. A `cancelled` call
+   * and a frame that recorded no status read null: neither says the call
+   * failed.
+   */
+  status: "ok" | "error" | "rejected" | null;
+  /** Null when the hook recorded no digest. */
+  inputDigest: string | null;
+  outputDigest: string | null;
+  /** The classifier's flag; null when it said nothing. */
+  isMutating: boolean | null;
+  /** The tool-result tokens the OTel span of the same tool use recorded. */
+  resultTokens: number | null;
+}
+
+/** The `tool_status` values a rollup grades on; `cancelled` is left out on purpose. */
+const GRADED_TOOL_STATUSES: ReadonlySet<string> = new Set([
+  "ok",
+  "error",
+  "rejected",
+]);
+
+function toolFrameStatus(status: string): ToolCallFrameRow["status"] {
+  return GRADED_TOOL_STATUSES.has(status)
+    ? (status as ToolCallFrameRow["status"])
+    : null;
 }
 
 /**
@@ -356,6 +376,13 @@ export async function readModelCallFrames(args: {
  * that carries a tool call once (the ingest handler's `numToolCalls` rule); a
  * ledger run's tool calls are its `tool.call_completed` events in Postgres,
  * which the rollup store reads.
+ *
+ * Each call comes with what the rollup grades it by (its status, its input and
+ * output digests, and the classifier's mutating flag, ADR-192) and the result
+ * tokens the OTel tool span of the same tool use recorded, joined on
+ * `tool_use_id` the way {@link readTachoToolCallObservations} joins them.
+ * `join_use_nulls` makes a call with no span read null, never 0: a zero would
+ * price the call's result at nothing rather than leave it unrecorded.
  */
 export async function readTachoToolCallFrames(args: {
   orgId: string;
@@ -365,14 +392,37 @@ export async function readTachoToolCallFrames(args: {
   const ch = clickhouse();
   const result = await ch.query({
     query: `
-      SELECT tool_name AS name
-      FROM tacho_events FINAL
-      WHERE org_id = {orgId:UUID}
-        AND workspace_id = {workspaceId:UUID}
-        AND root_session_uuid = {rootSessionUuid:UUID}
-        AND kind = 'tool_call'
-        AND source = 'hook'
-      ORDER BY ts, seq
+      SELECT
+        h.tool_name                                                    AS name,
+        h.tool_status                                                  AS status,
+        h.tool_input_digest                                            AS input_digest,
+        h.tool_output_digest                                           AS output_digest,
+        h.tool_is_mutating                                             AS is_mutating,
+        r.result_tokens                                                AS result_tokens
+      FROM (
+        SELECT ts, seq, tool_name, tool_status, tool_input_digest,
+               tool_output_digest, tool_is_mutating, tool_use_id
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
+          AND root_session_uuid = {rootSessionUuid:UUID}
+          AND kind = 'tool_call'
+          AND source = 'hook'
+      ) AS h
+      LEFT JOIN (
+        SELECT tool_use_id, max(tool_result_tokens) AS result_tokens
+        FROM tacho_events FINAL
+        WHERE org_id = {orgId:UUID}
+          AND workspace_id = {workspaceId:UUID}
+          AND root_session_uuid = {rootSessionUuid:UUID}
+          AND kind = 'tool_call'
+          AND source = 'otel_span'
+          AND tool_use_id != ''
+          AND tool_result_tokens IS NOT NULL
+        GROUP BY tool_use_id
+      ) AS r ON r.tool_use_id = h.tool_use_id
+      ORDER BY h.ts, h.seq
+      SETTINGS join_use_nulls = 1
     `,
     query_params: {
       orgId: args.orgId,
@@ -381,8 +431,23 @@ export async function readTachoToolCallFrames(args: {
     },
     format: "JSONEachRow",
   });
-  const rows = (await result.json()) as { name: string }[];
-  return rows.map((r) => ({ name: r.name === "" ? null : r.name }));
+  type Row = {
+    name: string;
+    status: string;
+    input_digest: string;
+    output_digest: string;
+    is_mutating: boolean | null;
+    result_tokens: string | number | null;
+  };
+  const rows = (await result.json()) as Row[];
+  return rows.map((r) => ({
+    name: r.name === "" ? null : r.name,
+    status: toolFrameStatus(r.status),
+    inputDigest: r.input_digest === "" ? null : r.input_digest,
+    outputDigest: r.output_digest === "" ? null : r.output_digest,
+    isMutating: r.is_mutating,
+    resultTokens: r.result_tokens === null ? null : Number(r.result_tokens),
+  }));
 }
 
 /** One hook-recorded tool call of a wrapped run, as the findings job reads it. */

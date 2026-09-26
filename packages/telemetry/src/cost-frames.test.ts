@@ -448,8 +448,19 @@ describe("readModelCallFrames", () => {
 });
 
 describe("readTachoToolCallFrames", () => {
-  it("reads the hook source's tool calls and hides an empty name", async () => {
-    answer([{ name: "Bash" }, { name: "" }]);
+  /** A hook row as ClickHouse answers it, every column recorded. */
+  const hookRow = (over: Record<string, unknown> = {}) => ({
+    name: "Read",
+    status: "ok",
+    input_digest: "sha256:in",
+    output_digest: "sha256:out",
+    is_mutating: false,
+    result_tokens: "812",
+    ...over,
+  });
+
+  it("reads the hook source's tool calls with what the rollup grades them by", async () => {
+    answer([hookRow(), hookRow({ name: "Bash", is_mutating: true })]);
     const frames = await readTachoToolCallFrames({
       orgId: ORG,
       workspaceId: WS,
@@ -463,7 +474,89 @@ describe("readTachoToolCallFrames", () => {
       workspaceId: WS,
       rootSessionUuid: RUN,
     });
-    expect(frames).toEqual([{ name: "Bash" }, { name: null }]);
+    expect(selectedColumns(query)).toEqual([
+      "name",
+      "status",
+      "input_digest",
+      "output_digest",
+      "is_mutating",
+      "result_tokens",
+    ]);
+    expect(frames).toEqual([
+      {
+        name: "Read",
+        status: "ok",
+        inputDigest: "sha256:in",
+        outputDigest: "sha256:out",
+        isMutating: false,
+        resultTokens: 812,
+      },
+      {
+        name: "Bash",
+        status: "ok",
+        inputDigest: "sha256:in",
+        outputDigest: "sha256:out",
+        isMutating: true,
+        resultTokens: 812,
+      },
+    ]);
+  });
+
+  it("joins the OTel span's result tokens on the tool use, in the run's own tree, with a missing span read as null", async () => {
+    answer([hookRow({ result_tokens: null })]);
+    const [frame] = await readTachoToolCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      rootSessionUuid: RUN,
+    });
+    const { query } = lastQuery();
+    expect(query).toContain("source = 'otel_span'");
+    expect(query).toContain("ON r.tool_use_id = h.tool_use_id");
+    // Without it an unmatched span answers 0, which would price the call's
+    // result at nothing instead of leaving it unrecorded.
+    expect(query).toContain("SETTINGS join_use_nulls = 1");
+    // Both sides are bounded to the run's tree, so a span of another run
+    // with the same tool use id cannot join.
+    expect(
+      query.match(/root_session_uuid = \{rootSessionUuid:UUID\}/g),
+    ).toHaveLength(2);
+    expect(query).toContain("ORDER BY h.ts, h.seq");
+    expect(frame?.resultTokens).toBeNull();
+  });
+
+  it("reads an empty name, empty digests and an ungraded status as null", async () => {
+    answer([
+      hookRow({
+        name: "",
+        status: "",
+        input_digest: "",
+        output_digest: "",
+        is_mutating: null,
+      }),
+      hookRow({ status: "cancelled" }),
+      hookRow({ status: "error" }),
+      hookRow({ status: "rejected" }),
+    ]);
+    const frames = await readTachoToolCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      rootSessionUuid: RUN,
+    });
+    expect(frames[0]).toEqual({
+      name: null,
+      status: null,
+      inputDigest: null,
+      outputDigest: null,
+      isMutating: null,
+      resultTokens: 812,
+    });
+    // A cancelled call did not fail: it is left ungraded rather than counted.
+    expect(frames.map((f) => f.status)).toEqual([
+      null,
+      null,
+      "error",
+      "rejected",
+    ]);
   });
 });
 

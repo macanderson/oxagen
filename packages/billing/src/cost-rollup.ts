@@ -37,6 +37,7 @@ import {
   type PriceBook,
   type PriceTokenClass,
 } from "./price-book";
+import { gradeSteps } from "./step-grade";
 
 export type { CostBasis, SpendGroupKind } from "@oxagen/database/schema";
 export { UNASSIGNED_COST_CENTER_KEY } from "@oxagen/database/schema";
@@ -72,19 +73,19 @@ export interface ModelCallFrame {
 /**
  * One tool call; `name` is null when the frame hides it (an encrypted payload).
  *
- * The members after `name` grade the call and price its result (#3984). They
- * are optional until the Context and cost lane's frame readers fill them;
- * that lane makes them required when it does. Each is null where the frame
- * recorded none.
+ * The members after `name` grade the call (./step-grade.ts, ADR-192) and price
+ * its result. Each is null where the frame recorded none.
  */
 export interface ToolCallFrame {
   name: string | null;
-  status?: "ok" | "error" | "rejected" | null;
-  inputDigest?: string | null;
-  outputDigest?: string | null;
-  isMutating?: boolean | null;
+  /** Null for a call that was cancelled, or whose frame recorded no status. */
+  status: "ok" | "error" | "rejected" | null;
+  inputDigest: string | null;
+  outputDigest: string | null;
+  /** The classifier's flag; null when it said nothing. */
+  isMutating: boolean | null;
   /** The tool-result tokens the OTel tool span recorded for the call. */
-  resultTokens?: number | null;
+  resultTokens: number | null;
 }
 
 /** What the run's own record says, independent of its frames. */
@@ -177,11 +178,11 @@ export interface RunBreakdown {
   models: ModelBreakdown[];
   tools: ToolBreakdown[];
   /**
-   * The unproductive steps by cause (#3984), stored in the jsonb with no
-   * column. Null exactly when the run's steps are not graded. Optional until
-   * the Context and cost lane's rollup writes it; absent reads as null.
+   * The unproductive steps by cause (#3984, ADR-192), stored in the jsonb with
+   * no column. Null exactly when the run's steps are not graded: a run with no
+   * step, and a row rolled up before grading existed, which revives as null.
    */
-  steps?: StepCauses | null;
+  steps: StepCauses | null;
 }
 
 /** The `cost.run_totals` row, as the store writes it. */
@@ -196,18 +197,18 @@ export interface RunTotalsRecord extends RunMeta {
   priceEntryIds: string[];
   cacheHitRate: number | null;
   breakdown: RunBreakdown;
-  /** Proof and value columns other lanes write; the rollup carries what it read. */
+  /** The witness verdict (ADR-064), rebuilt with the row. */
   verdict: string | null;
+  /** A person's acceptance: a column another lane writes, which the rollup carries. */
   accepted: boolean | null;
+  /** `advancedSteps / steps`; null exactly when the steps are not graded. */
   productiveRatio: number | null;
   /**
-   * The steps that advanced the run and the steps that did not (#3984),
-   * null together, and summing to `steps` when set. Optional until the
-   * Context and cost lane's rollup grades the steps and computes
-   * `productiveRatio` from them; absent reads as null.
+   * The steps that advanced the run and the steps that did not (#3984,
+   * ADR-192): null together, and summing to `steps` when set.
    */
-  advancedSteps?: number | null;
-  unproductiveSteps?: number | null;
+  advancedSteps: number | null;
+  unproductiveSteps: number | null;
 }
 
 const MILLION = 1_000_000n;
@@ -378,8 +379,12 @@ interface RollupInput {
   modelCalls: readonly ModelCallFrame[];
   toolCalls: readonly ToolCallFrame[];
   book: PriceBook;
-  /** Columns other lanes own, carried through from the existing row. */
-  carried?: Pick<RunTotalsRecord, "verdict" | "accepted" | "productiveRatio">;
+  /**
+   * The verdict the store read, and the acceptance another lane owns, carried
+   * through from the existing row. The productive ratio is not carried: the
+   * rollup computes it from the steps it grades.
+   */
+  carried?: Pick<RunTotalsRecord, "verdict" | "accepted">;
 }
 
 /** Rebuild one run's row from its frames. */
@@ -454,9 +459,15 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
 
   const modelCalls = input.modelCalls.length;
   const toolCalls = input.toolCalls.length;
+  const steps = modelCalls + toolCalls;
+  const grade = gradeSteps({
+    modelCalls,
+    toolCalls: input.toolCalls,
+    retries: meta.retries,
+  });
   return {
     ...meta,
-    steps: modelCalls + toolCalls,
+    steps,
     modelCalls,
     toolCalls,
     tokens,
@@ -492,10 +503,13 @@ export function rollupRun(input: RollupInput): RunTotalsRecord {
       tools: [...byTool.entries()]
         .map(([name, calls]) => ({ name, calls }))
         .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+      steps: grade === null ? null : grade.causes,
     },
     verdict: input.carried?.verdict ?? null,
     accepted: input.carried?.accepted ?? null,
-    productiveRatio: input.carried?.productiveRatio ?? null,
+    productiveRatio: grade === null ? null : grade.advanced / steps,
+    advancedSteps: grade === null ? null : grade.advanced,
+    unproductiveSteps: grade === null ? null : grade.unproductive,
   };
 }
 
