@@ -19,6 +19,7 @@ const PREDECESSOR: SuccessionHost = {
   orgId: "org-1",
   workspaceId: "ws-1",
   deviceKeyFingerprint: `sha256:${"d".repeat(64)}`,
+  agentKey: "acme.core.cc-laptop",
 };
 
 const HOST: SuccessionHost = {
