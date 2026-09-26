@@ -80,6 +80,19 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
+/** A viewer of the organization and the workspace, whom dispatch refuses. */
+const viewerCtx = unsafeMint(WsCtx, {
+  userId: "usr_marcusbell",
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+  orgRole: "viewer",
+  workspaceId: "7b000000-0000-4000-8000-000000000001",
+  wsSlug: "core-platform",
+  wsName: "Core platform",
+  wsRole: "viewer",
+});
+
 const DENIED = {
   ok: false,
   reason: "denied",
@@ -131,6 +144,10 @@ const RUNS = [
 ];
 const PARKED = approvalItem({ id: "apr_parked", runId: "arun_parked" });
 
+/** A page holding one live ledger run, for the controls its row offers. */
+const ledgerRuns = (over: Parameters<typeof runRow>[0] = {}) =>
+  runPage([runRow({ id: "arun_ledger", source: "ledger", ...over })]);
+
 /** One `list_agents` page with its cursor, for the roster's walk. */
 function pageValue(
   keys: string[],
@@ -149,6 +166,8 @@ async function renderFleet(
   view: {
     prefs?: Parameters<typeof Fleet>[0]["prefs"];
     pullRequests?: Parameters<typeof Fleet>[0]["pullRequests"];
+    /** A viewer other than the workspace member the page reads as. */
+    ctx?: typeof ctx;
   } = {},
 ) {
   const { source, calls } = fleetSource(reads);
@@ -664,6 +683,10 @@ describe("the Runs panel", () => {
     expect(
       within(dialog).getByRole("button", { name: "Cancel" }),
     ).toBeInTheDocument();
+    // A wrapped run's row offers Pause alone. Cancel is the ledger's control.
+    expect(
+      within(dialog).queryByRole("button", { name: "Cancel evidence ingress" }),
+    ).toBeNull();
     await user.type(
       within(dialog).getByLabelText(
         "Reason — the model reads this on resume, so write it for the agent",
@@ -690,26 +713,151 @@ describe("the Runs panel", () => {
     expect(refresh).toHaveBeenCalled();
   });
 
-  it("says why a ledger run cannot be paused and sends nothing (negative)", async () => {
+  // #3665: a live ledger run's row refused every command and named a Cancel
+  // the page did not have. It now offers what the Run page offers: Pause or
+  // Resume of the run's evidence ingress, and Cancel.
+  it("cancels a live ledger run's evidence ingress from its row and says what changed", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_1"] },
+    });
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    expect(dialog).toHaveTextContent("refuses further appends");
+    // The wrapped copy names a control frame the ledger never writes.
+    expect(dialog).not.toHaveTextContent("control.pause");
+    await user.type(within(dialog).getByLabelText("Reason"), "Key leaked");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Cancel evidence ingress" }),
+    );
+    expect(dispatchRunCommand).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_ledger",
+      "cancel",
+      "Key leaked",
+    );
+    expect(
+      await within(dialog).findByTestId("ledger-applied"),
+    ).toHaveTextContent("Further appends are refused");
+    expect(refresh).not.toHaveBeenCalled();
+    // Closing re-reads the page, so the row shows what the ledger now holds.
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it("pauses a live ledger run's evidence ingress from its row", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_2"] },
+    });
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    expect(
+      within(dialog).queryByRole("button", { name: "Resume evidence ingress" }),
+    ).toBeNull();
+    await user.click(
+      within(dialog).getByRole("button", { name: "Pause evidence ingress" }),
+    );
+    expect(dispatchRunCommand).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_ledger",
+      "pause",
+      "",
+    );
+    expect(
+      await within(dialog).findByTestId("ledger-applied"),
+    ).toHaveTextContent("Evidence ingress is paused.");
+  });
+
+  it("offers Resume, not Pause, on a ledger run whose ingress is paused", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_3"] },
+    });
     await loaded({
-      runs: runPage([runRow({ id: "arun_ledger", source: "ledger" })]),
+      runs: ledgerRuns({ ingressPaused: true }),
+      approvals: NO_APPROVALS,
+    });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    expect(
+      within(dialog).queryByRole("button", { name: "Pause evidence ingress" }),
+    ).toBeNull();
+    await user.click(
+      within(dialog).getByRole("button", { name: "Resume evidence ingress" }),
+    );
+    expect(dispatchRunCommand).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_ledger",
+      "resume",
+      "",
+    );
+    expect(
+      await within(dialog).findByTestId("ledger-applied"),
+    ).toHaveTextContent("Evidence ingress is open.");
+  });
+
+  it("says a cancelled ledger run's ingress is revoked, and sends nothing (negative)", async () => {
+    await loaded({
+      runs: ledgerRuns({ ingressRevoked: true }),
       approvals: NO_APPROVALS,
     });
     const user = userEvent.setup();
     await user.click(screen.getByTestId("row-pause"));
     expect(screen.getByTestId("pause-refusal")).toHaveTextContent(
-      "Pause refuses the next evidence batch",
+      "Evidence ingress is revoked.",
     );
-    expect(
-      screen.getByRole("button", { name: "Pause at the next boundary" }),
-    ).toBeDisabled();
+    for (const name of ["Pause evidence ingress", "Cancel evidence ingress"])
+      expect(screen.getByRole("button", { name })).toBeDisabled();
+    expect(screen.getByLabelText("Reason")).toBeDisabled();
     expect(dispatchRunCommand).not.toHaveBeenCalled();
+  });
+
+  it("says a viewer cannot command a ledger run, and sends nothing (negative)", async () => {
+    await renderFleet(
+      { runs: ledgerRuns(), approvals: NO_APPROVALS },
+      null,
+      undefined,
+      { ctx: viewerCtx },
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    expect(screen.getByTestId("pause-refusal")).toHaveTextContent(
+      "Sending a command needs an organization Owner or Admin role",
+    );
+    for (const name of ["Pause evidence ingress", "Cancel evidence ingress"])
+      expect(screen.getByRole("button", { name })).toBeDisabled();
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
+  });
+
+  it("names the refusal a ledger cancel came back with, and claims no change (negative)", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "run_sealed",
+    });
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    await user.click(
+      screen.getByRole("button", { name: "Cancel evidence ingress" }),
+    );
+    expect(await screen.findByTestId("pause-failure")).toBeInTheDocument();
+    expect(screen.queryByTestId("ledger-applied")).toBeNull();
   });
 
   it("says why a run whose host stopped polling cannot be paused (negative)", async () => {
     await loaded({
       runs: runPage([
-        // A wrapped run: a ledger run is refused first, for its own reason.
+        // A wrapped run: a ledger run has no host for this block to name.
         runRow({
           id: "tse_quiet",
           source: "tacho",
