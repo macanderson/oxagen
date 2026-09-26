@@ -73,6 +73,7 @@ import type { TachoBody } from "../wire";
 import {
   ensureDir,
   readJsonFileIfExists,
+  readJsonStateFile,
   writeSensitiveFileAtomic,
 } from "./fs";
 import {
@@ -188,6 +189,8 @@ export class Wal {
    * from byte 0.
    */
   private readonly unverifiedResume = new Set<string>();
+  /** Sessions whose last event `sealedAt` has already read. */
+  private readonly sealLookedUp = new Set<string>();
   private readonly bodyIndexes: BodyIndexStore;
   /**
    * Event and body files written since the last `flush`, so a group commit
@@ -207,14 +210,38 @@ export class Wal {
       failure: WalEventParseFailure,
     ) => void = (failure) =>
       console.warn("WAL event line unparseable", failure),
+    /**
+     * Given only by the daemon, the file's one writer: a `cursor.json` that
+     * does not parse is renamed aside and reported here, and the WAL starts
+     * from an empty cursor. A reader leaves the file where it is.
+     */
+    onCursorSetAside?: (movedTo: string | undefined) => void,
   ) {
     this.dir = dir;
     ensureDir(dir);
     this.bodyIndexes = new BodyIndexStore(dir);
     this.cursorPath = join(dir, "cursor.json");
-    const raw = readJsonFileIfExists(this.cursorPath) as
-      | Partial<Cursor>
-      | undefined;
+    // A cursor that does not parse is read as empty rather than thrown, so
+    // neither the daemon nor `tacho status` refuses to start over it (W-05).
+    // Every event then reads as unshipped and ships again, which ingest
+    // answers idempotently on `event_id_idem`, and `compact` finds each
+    // sealed session's seal again from its last event.
+    let raw: Partial<Cursor> | undefined;
+    if (onCursorSetAside !== undefined)
+      raw = readJsonStateFile(this.cursorPath, onCursorSetAside) as
+        | Partial<Cursor>
+        | undefined;
+    else
+      try {
+        raw = readJsonFileIfExists(this.cursorPath) as
+          | Partial<Cursor>
+          | undefined;
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        console.warn("WAL cursor unreadable, read as empty", {
+          path: this.cursorPath,
+        });
+      }
     this.cursor = {
       shipped: raw?.shipped ?? {},
       sealed: raw?.sealed ?? {},
@@ -1525,7 +1552,7 @@ export class Wal {
     }
     const removed: string[] = [];
     for (const session of this.sessions()) {
-      const sealedAt = this.cursor.sealed[session];
+      const sealedAt = this.sealedAt(session);
       if (sealedAt === undefined) continue;
       const path = this.fileFor(session);
       try {
@@ -1582,6 +1609,23 @@ export class Wal {
     }
     if (removed.length > 0) this.persistCursor();
     return removed;
+  }
+
+  /**
+   * When a session was sealed, from the cursor, or from its last event when
+   * the cursor has no entry. A cursor read as empty (see the constructor)
+   * lost every seal, and without this no session sealed before then would
+   * ever be compacted. The last event is read once per session per process,
+   * and only for a session the cursor does not hold as sealed.
+   */
+  private sealedAt(session: string): string | undefined {
+    const known = this.cursor.sealed[session];
+    if (known !== undefined || this.sealLookedUp.has(session)) return known;
+    this.sealLookedUp.add(session);
+    const last = this.head(session);
+    if (last?.kind !== "agent_stop") return undefined;
+    this.cursor.sealed[session] = last.ts;
+    return last.ts;
   }
 
   /**

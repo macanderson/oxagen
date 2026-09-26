@@ -484,6 +484,39 @@ describe("Wal", () => {
     expect(wal.sessions()).toEqual([]);
   });
 
+  it("reads a cursor that does not parse as empty, and still compacts a session sealed before it was lost", () => {
+    // W-05: a truncated cursor.json threw from the constructor, so neither
+    // the daemon nor `tacho status` could start.
+    const paths = scratchPaths();
+    const session = minimalSession();
+    const uuid = session[0]!.session_uuid;
+    const last = session.at(-1)!.seq;
+    const wal = new Wal(paths.wal);
+    wal.append(session);
+    wal.markShipped(uuid, last);
+    const cursorPath = join(paths.wal, "cursor.json");
+    writeFileSync(cursorPath, readFileSync(cursorPath, "utf8").slice(0, 10));
+
+    // A reader starts, and leaves the file where it is.
+    expect(new Wal(paths.wal).shippedThrough(uuid)).toBe(-1);
+    expect(existsSync(cursorPath)).toBe(true);
+
+    // The daemon moves it aside.
+    const moved: Array<string | undefined> = [];
+    const owner = new Wal(paths.wal, undefined, undefined, undefined, (to) =>
+      moved.push(to),
+    );
+    expect(moved).toHaveLength(1);
+    expect(existsSync(cursorPath)).toBe(false);
+    expect(existsSync(moved[0]!)).toBe(true);
+    // Every event ships again. The seal came back from the last event, so
+    // the session still ages out.
+    owner.markShipped(uuid, last);
+    expect(owner.compact(Date.now() + 10 * 86_400_000, 86_400_000)).toEqual([
+      uuid,
+    ]);
+  });
+
   it("files bodies beside their events and answers them per batch", () => {
     const paths = scratchPaths();
     const wal = new Wal(paths.wal);

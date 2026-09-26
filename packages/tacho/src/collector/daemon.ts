@@ -50,6 +50,7 @@ import { type DeviceKey, loadOrCreateDeviceKey } from "../host/device-key";
 import {
   ensureDir,
   readJsonFileIfExists,
+  readJsonStateFile,
   writeSensitiveFileAtomic,
 } from "../host/fs";
 import {
@@ -498,6 +499,16 @@ async function initializeDaemon(
     host: { hostname_digest: digestText(host.hostname || osHostname()) },
     now,
   };
+  /**
+   * A state file that did not parse at startup was set aside, and the daemon
+   * starts without what it held (W-05). Said once, with where the bytes went.
+   */
+  const logSetAside = (what: string, movedTo: string | undefined): void =>
+    log(
+      movedTo === undefined
+        ? `${what} did not parse and could not be moved aside; starting without it`
+        : `${what} did not parse; moved it to ${movedTo} and started without it`,
+    );
   const wal = new Wal(
     paths.wal,
     (failure) => {
@@ -515,6 +526,7 @@ async function initializeDaemon(
         `WAL event line unparseable for session ${failure.session_uuid}: ${failure.reason}`,
       );
     },
+    (movedTo) => logSetAside("WAL cursor", movedTo),
   );
   // Only the daemon repairs a torn tail, and only once, before anything else
   // touches the WAL: a reader building its own `Wal` (`tacho status`, `tacho
@@ -561,7 +573,11 @@ async function initializeDaemon(
   const priorStateWrittenAt = existsSync(paths.daemonState)
     ? statSync(paths.daemonState).mtimeMs
     : undefined;
-  const persisted = parseRegistryState(readJsonFileIfExists(paths.daemonState));
+  const persisted = parseRegistryState(
+    readJsonStateFile(paths.daemonState, (movedTo) =>
+      logSetAside("daemon state", movedTo),
+    ),
+  );
   if (persisted !== undefined) {
     for (const session of persisted.sessions)
       reconcileRestoredCursor(session.recorder, wal, log);
@@ -1751,7 +1767,9 @@ async function initializeDaemon(
     }),
   ]);
   try {
-    const saved = readJsonFileIfExists(pendingEndsPath);
+    const saved = readJsonStateFile(pendingEndsPath, (movedTo) =>
+      logSetAside("pending session ends", movedTo),
+    );
     if (saved !== undefined && !Array.isArray(saved))
       throw new Error("expected a list of pending session ends");
     for (const value of (saved as unknown[] | undefined) ?? []) {
