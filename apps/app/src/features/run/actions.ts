@@ -15,6 +15,7 @@
 // port rather than the kernel seam, so the Run page maps every page of a
 // transcript with one mapper (ADR-167, ADR-182). So is the delivery report,
 // through `runs.commands`, the read a control frame's inspector makes.
+import { agentInterjectionAnswer } from "@oxagen/oxagen/contracts/agent.interjection.answer";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import {
   COMMAND_REASON_MAX,
@@ -28,6 +29,7 @@ import { runSeal } from "@oxagen/oxagen/contracts/run.seal";
 import { runFork } from "@oxagen/oxagen/contracts/run.fork";
 import { runSummarize } from "@oxagen/oxagen/contracts/run.summarize";
 import { TRANSCRIPT_ENTRY_DEFAULT } from "@oxagen/oxagen/contracts/run.transcript.get";
+import { z } from "zod";
 import type {
   RunTranscript,
   TranscriptKind,
@@ -392,6 +394,71 @@ export async function bisectRuns(
         },
       }
     : result;
+}
+
+/** What answering a question did, exactly as `answer_interjection` answers it. */
+export type AnsweredInterjection = ContractOutput<
+  typeof agentInterjectionAnswer
+>;
+
+/**
+ * The two answers a person can give a repository question: link the
+ * repository to the workspace the host named, or create a workspace for it
+ * under the name and slug the person typed.
+ */
+export type InterjectionChoice =
+  | { path: "link" }
+  | { path: "create"; name: string; slug: string };
+
+const Choice = z.discriminatedUnion("path", [
+  z.object({ path: z.literal("link") }).strict(),
+  z
+    .object({ path: z.literal("create"), name: z.string(), slug: z.string() })
+    .strict(),
+]);
+
+/**
+ * Answer the question a host held this run on (`answer_interjection`,
+ * #3941). The answer is one governed write: it links the repository or
+ * creates the workspace, records the answer on the question with a receipt,
+ * and queues the release the host reads to let the run go on.
+ *
+ * A server action is an endpoint, so the choice is parsed here rather than
+ * trusted from the page: anything but the two shapes comes back as `invalid`
+ * on `path` before the kernel runs. The name and slug are trimmed and then
+ * left to the contract, which `kernelWrite` parses before the handler runs,
+ * so a slug the contract refuses comes back naming `create.slug`. Every
+ * refusal the handler makes keeps its reason as the code: someone answered
+ * first, the run stopped waiting, or the viewer's role cannot link or create.
+ */
+export async function answerInterjection(
+  org: string,
+  ws: string,
+  interjectionId: string,
+  choice: InterjectionChoice,
+): Promise<ActionResult<AnsweredInterjection>> {
+  const ctx = await requireViewer(org, ws);
+  const parsed = Choice.safeParse(choice);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "interjection_choice",
+      field: "path",
+    };
+  }
+  const picked = parsed.data;
+  return kernelWrite(
+    ctx,
+    agentInterjectionAnswer,
+    picked.path === "create"
+      ? {
+          interjectionId,
+          path: "create",
+          create: { name: picked.name.trim(), slug: picked.slug.trim() },
+        }
+      : { interjectionId, path: "link" },
+  );
 }
 
 export async function setRunEnrichment(

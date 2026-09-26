@@ -54,6 +54,8 @@ import {
   addFrameUsage,
   boundaryHalf,
   COMMAND_APPLIED,
+  CONTROL_ANSWER,
+  CONTROL_INTERJECT,
   FAILED_OUTCOMES,
   type FrameUsage,
   frameKey,
@@ -201,9 +203,19 @@ const TOOL_CLOSE: Readonly<Record<string, string>> = {
   tool_requested: "tool_call",
   "tool.engine_call_started": "tool.engine_call_completed",
 };
-/** Decisions about a tool call; an operator command is about the run instead. */
+/**
+ * Policy frames about the run rather than about any one call: an operator's
+ * command, and a question the host held the loop to ask with its answer
+ * (#3941).
+ */
+const RUN_DECISIONS: ReadonlySet<string> = new Set([
+  COMMAND_APPLIED,
+  CONTROL_INTERJECT,
+  CONTROL_ANSWER,
+]);
+/** Decisions about a tool call. A run decision is about the run instead. */
 const TOOL_GATE: ReadonlySet<string> = new Set(
-  [...POLICY_TYPES].filter((type) => type !== COMMAND_APPLIED),
+  [...POLICY_TYPES].filter((type) => !RUN_DECISIONS.has(type)),
 );
 /**
  * Rule 3's vocabulary, for the grouped SQL behind a wrapped run's per-turn
@@ -251,6 +263,13 @@ const CONTROL: ReadonlySet<string> = new Set([
   "subagent_stop",
   "turn_start",
   "turn_end",
+  // The repository the session runs in, what an answer bound or made for
+  // it, and which skills it may load (#3941, #3098).
+  "repo.unknown",
+  "repo.bound",
+  "workspace.created",
+  "skills.resolved",
+  "skills.searched",
 ]);
 const REPLY: ReadonlySet<string> = new Set(["turn_end", "oxagen:message"]);
 /** Decision sources that are the agent's harness checking itself. */
@@ -293,12 +312,13 @@ function decisionOf(frame: RunFrame): TranscriptDecision | null {
 
 /**
  * The decision `frame` records about the call an entry holds. An operator
- * command is about the run, not about any one call, so folding it into a
- * step or a turn does not make it that entry's decision. It is the decision
- * of the entry it opens.
+ * command, or a question the host held the loop to ask and its answer, is
+ * about the run, not about any one call, so folding it into a step or a turn
+ * does not make it that entry's decision. It is the decision of the entry it
+ * opens.
  */
 function callDecisionOf(frame: RunFrame): TranscriptDecision | null {
-  return frame.type === COMMAND_APPLIED ? null : decisionOf(frame);
+  return RUN_DECISIONS.has(frame.type) ? null : decisionOf(frame);
 }
 
 /** The word a decision recorded; null when the frame recorded only its type. */

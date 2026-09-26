@@ -39,6 +39,7 @@ const kernel =
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
+  answerInterjection,
   bisectRuns,
   exportRun,
   forkRun,
@@ -91,6 +92,16 @@ class HandlerRefusal extends Error {
   }
 }
 const refused = (reason: string) => new HandlerRefusal(reason);
+
+/** What `assertOrgRole` throws: `code: "forbidden"` with the rule it missed in `reason`. */
+class HandlerForbidden extends Error {
+  readonly code = "forbidden";
+
+  constructor(readonly reason: string) {
+    super(reason);
+    this.name = "HandlerForbidden";
+  }
+}
 
 beforeEach(() => {
   invoke.mockReset();
@@ -1082,6 +1093,127 @@ describe("readDeliveryReport", () => {
     invoke.mockRejectedValue(denied("list_commands"));
     expect(
       await readDeliveryReport("acme", "core-platform", { runId: RUN }),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
+});
+
+describe("answerInterjection", () => {
+  const QUESTION = "inj_7w2k9d";
+  const linked = {
+    interjectionId: QUESTION,
+    runId: RUN,
+    answeredAt: "2026-09-15T09:02:00.000Z",
+    commandIds: ["tcm_release1"],
+    receiptId: "rcp_01k6qw44",
+    path: "link" as const,
+    repository: { bindingId: "rbd_4t8e", fullName: "acme/edge-proxy" },
+    workspace: null,
+  };
+
+  it("links the repository through answer_interjection and answers the receipt", async () => {
+    invoke.mockResolvedValue(linked);
+    expect(
+      await answerInterjection("acme", "core-platform", QUESTION, {
+        path: "link",
+      }),
+    ).toEqual({ ok: true, value: linked });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "answer_interjection",
+      { interjectionId: QUESTION, path: "link" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("creates the workspace under the trimmed name and slug the person typed", async () => {
+    const created = {
+      ...linked,
+      receiptId: "rcp_01k6qw45",
+      path: "create" as const,
+      workspace: { publicId: "wsp_9e2c", slug: "edge-proxy" },
+    };
+    invoke.mockResolvedValue(created);
+    expect(
+      await answerInterjection("acme", "core-platform", QUESTION, {
+        path: "create",
+        name: "  Edge proxy ",
+        slug: " edge-proxy  ",
+      }),
+    ).toEqual({ ok: true, value: created });
+    expect(invoke.mock.calls[0]?.[1]).toEqual({
+      interjectionId: QUESTION,
+      path: "create",
+      create: { name: "Edge proxy", slug: "edge-proxy" },
+    });
+  });
+
+  it("refuses a choice that is neither shape before the kernel runs (negative)", async () => {
+    for (const choice of [
+      { path: "deny" },
+      { path: "create", name: "Edge proxy" },
+      { path: "link", slug: "edge-proxy" },
+      null,
+    ]) {
+      expect(
+        await answerInterjection(
+          "acme",
+          "core-platform",
+          QUESTION,
+          // A server action is an endpoint: the page's types do not bind a caller.
+          choice as unknown as Parameters<typeof answerInterjection>[3],
+        ),
+      ).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "interjection_choice",
+        field: "path",
+      });
+    }
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("names create.slug when the contract refuses the slug, before the handler runs (negative)", async () => {
+    expect(
+      await answerInterjection("acme", "core-platform", QUESTION, {
+        path: "create",
+        name: "Edge proxy",
+        slug: "Edge Proxy",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "create.slug",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns the role the handler asked for as denied with its reason (negative)", async () => {
+    invoke.mockRejectedValue(new HandlerForbidden("org_role_required"));
+    expect(
+      await answerInterjection("acme", "core-platform", QUESTION, {
+        path: "link",
+      }),
+    ).toMatchObject({ ok: false, reason: "denied", code: "org_role_required" });
+  });
+
+  it("keeps a question someone else answered, or one the run stopped waiting on, as a conflict with its reason (negative)", async () => {
+    for (const reason of ["interjection_answered", "interjection_expired"]) {
+      invoke.mockRejectedValueOnce(refused(reason));
+      expect(
+        await answerInterjection("acme", "core-platform", QUESTION, {
+          path: "link",
+        }),
+      ).toMatchObject({ ok: false, reason: "conflict", code: reason });
+    }
+  });
+
+  it("returns a kernel denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("answer_interjection"));
+    expect(
+      await answerInterjection("acme", "core-platform", QUESTION, {
+        path: "link",
+      }),
     ).toMatchObject({ ok: false, reason: "denied" });
   });
 });

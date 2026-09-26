@@ -27,6 +27,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "answer_interjection": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "the Run page of a run whose host held the loop on a repository question: pick Link it to the workspace or Create a new workspace, then Send this answer, which shows the receipt (features/run/interjection.tsx, features/run/interjection-answer.tsx, features/run/actions.ts)",
+      "testid": "interjection-send",
+      "proof": "apps/app/src/features/run/interjection.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "session_035c2e7b-fbe1-4333-ba43-83a8243eea28"
+    },
     "archive_workspace": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
@@ -842,6 +851,15 @@
           "proof": "apps/app/src/features/shell/approvals-drawer.test.tsx",
           "verifiedAt": "2026-09-25",
           "verifiedBy": "session_69a4a70c-08c7-498d-8bcc-8ec9c9335dbf"
+        },
+        {
+          "route": "/[org]/[ws]/runs/[run]",
+          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+          "entry": "the Run page of a run whose recording carries control.interject reads that run's questions, answered or not, and draws the question, its two paths, its window and its answer (data/live/interjections.ts, features/run/run.tsx, features/run/interjection.tsx)",
+          "testid": "run-interjection",
+          "proof": "apps/app/src/features/run/interjection.test.tsx",
+          "verifiedAt": "2026-09-26",
+          "verifiedBy": "session_035c2e7b-fbe1-4333-ba43-83a8243eea28"
         }
       ]
     },

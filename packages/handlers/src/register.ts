@@ -1,4 +1,5 @@
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
+import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
 import {
@@ -59,6 +60,24 @@ registerHandlersOnce("@oxagen/handlers", () => {
       request,
     ),
   );
+  // The interjection timeout (#3941) lives there too, and is loaded on its
+  // first run.
+  setInterjectionTimeoutRunner({
+    resolve: async (request) => {
+      const timeout = await import("./lib/interjection-timeout");
+      return timeout.resolveRaisedInterjectionRepository(
+        request,
+        timeout.POSTGRES_INTERJECTION_TIMEOUT_DEPS,
+      );
+    },
+    deny: async (request) => {
+      const timeout = await import("./lib/interjection-timeout");
+      return timeout.denyExpiredInterjection(
+        request,
+        timeout.POSTGRES_INTERJECTION_TIMEOUT_DEPS,
+      );
+    },
+  });
   registerHandler("get_run_issue_providers", () =>
     import("./run.issue.providers.get").then(
       (m) => m.handler as CapabilityHandlerFn,

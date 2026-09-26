@@ -35,6 +35,11 @@ vi.mock("@oxagen/iam/machine-key-scope", () => ({
   gatewayMandateTools: () => gatewayMandateTools(),
 }));
 
+// The clause's reads have their own suite (tacho-unbound-repo.test.ts). Here
+// the question is who asks for it and where it lands.
+const resolveUnboundRepo = vi.hoisted(() => vi.fn());
+vi.mock("./tacho-unbound-repo", () => ({ resolveUnboundRepo }));
+
 const { agentDaySpend, resolveHostMandate, signBundle, unsignedBundle } =
   await import("./tacho-host");
 const { policyBundleSchema } = await import("@oxagen/oxagen/tacho/schemas");
@@ -46,6 +51,7 @@ const {
   BUNDLE_FEATURE_INDEPENDENT_MODELS,
   BUNDLE_FEATURE_MODEL_PRICES,
   BUNDLE_FEATURE_STEERING_MANIFEST,
+  BUNDLE_FEATURE_UNBOUND_REPO,
 } = await import("@oxagen/tacho");
 const { assembleWorkspaceSteering } = await import("./tacho-steering");
 const { PROVIDER_RATE_CARD } = await import("@oxagen/billing");
@@ -733,5 +739,109 @@ describe("the agent's day spend on the control envelope (ADR-160)", () => {
     const { tx } = hostsTransaction(["tch_ours"]);
     selectAgentDaySpend.mockRejectedValueOnce(new Error("store degraded"));
     expect(await agentDaySpend(tx, ours, NOON)).toBeUndefined();
+  });
+});
+
+describe("the unbound repository clause on the bundle (#3941)", () => {
+  const CLAUSE = {
+    policy: "ask" as const,
+    timeout_ms: 30 * 60 * 1000,
+    workspace_slug: "payments",
+    config_version: "skl_v3",
+    bound_remote_digests: [`sha256:${"a".repeat(64)}`],
+    link: { skills_pinned: 4, linked_repositories: 2 },
+  };
+  const WITH_CLAUSE = { ...NO_MANDATE, unboundRepo: CLAUSE };
+  const ASKS = [...CURRENT, BUNDLE_FEATURE_UNBOUND_REPO];
+
+  function withMandate(
+    features: string[],
+    mandate: Parameters<typeof unsignedBundle>[4],
+  ) {
+    return unsignedBundle(
+      host(features),
+      { org: 1, workspace: 1 },
+      { mode: "digest_only", classes: [] },
+      STEERING,
+      mandate,
+      NOW,
+    );
+  }
+  const signature = { key_id: "k", alg: "ed25519", sig: "s" };
+
+  beforeEach(() => resolveUnboundRepo.mockReset());
+
+  it("signs the clause for a host that advertised it, and the host's schema parses it", () => {
+    const result = withMandate(ASKS, WITH_CLAUSE);
+    expect(result.unbound_repo).toEqual(CLAUSE);
+    expect(
+      policyBundleSchema.parse({ ...result, signature }).unbound_repo,
+    ).toEqual(CLAUSE);
+  });
+
+  it("withholds it from a host that did not, whose strict parser would refuse the whole mandate", () => {
+    const older = policyBundleSchema.omit({ unbound_repo: true }).strict();
+    const plain = withMandate(CURRENT, WITH_CLAUSE);
+    expect(plain).not.toHaveProperty("unbound_repo");
+    expect(() => older.parse({ ...plain, signature })).not.toThrow();
+    expect(() =>
+      older.parse({ ...withMandate(ASKS, WITH_CLAUSE), signature }),
+    ).toThrow();
+  });
+
+  it("states nothing when the mandate resolved no clause (skills off)", () => {
+    expect(withMandate(ASKS, NO_MANDATE)).not.toHaveProperty("unbound_repo");
+  });
+
+  it("moves the etag with the clause, so the host refetches when a repository is bound", () => {
+    const before = withMandate(ASKS, WITH_CLAUSE).etag;
+    expect(withMandate(ASKS, NO_MANDATE).etag).not.toBe(before);
+    const bound = {
+      ...NO_MANDATE,
+      unboundRepo: {
+        ...CLAUSE,
+        bound_remote_digests: [
+          ...CLAUSE.bound_remote_digests,
+          `sha256:${"b".repeat(64)}`,
+        ],
+      },
+    };
+    expect(withMandate(ASKS, bound).etag).not.toBe(before);
+    expect(withMandate(ASKS, WITH_CLAUSE).etag).toBe(before);
+  });
+
+  it("resolves the clause only for a host that advertised it, and puts it on the mandate", async () => {
+    const tx = {
+      query: { workspaces: { findFirst: async () => undefined } },
+    } as unknown as Parameters<typeof resolveHostMandate>[0];
+    const ctx = { orgId: "o", workspaceId: "w" };
+    const plainHost = {
+      ...host(CURRENT),
+      agentId: null,
+      agentPrincipalId: null,
+    };
+    resolveUnboundRepo.mockResolvedValue(CLAUSE);
+    const plain = await resolveHostMandate(tx, ctx, plainHost);
+    expect(resolveUnboundRepo).not.toHaveBeenCalled();
+    expect(plain).not.toHaveProperty("unboundRepo");
+
+    const asking = { ...host(ASKS), agentId: null, agentPrincipalId: null };
+    const mandate = await resolveHostMandate(tx, ctx, asking);
+    expect(resolveUnboundRepo).toHaveBeenCalledWith(tx, ctx, true);
+    expect(mandate.unboundRepo).toEqual(CLAUSE);
+    expect(withMandate(ASKS, mandate).unbound_repo).toEqual(CLAUSE);
+  });
+
+  it("leaves the mandate without a clause when the read resolves none (negative)", async () => {
+    const tx = {
+      query: { workspaces: { findFirst: async () => undefined } },
+    } as unknown as Parameters<typeof resolveHostMandate>[0];
+    resolveUnboundRepo.mockResolvedValue(undefined);
+    const mandate = await resolveHostMandate(
+      tx,
+      { orgId: "o", workspaceId: "w" },
+      { ...host(ASKS), agentId: null, agentPrincipalId: null },
+    );
+    expect(mandate).not.toHaveProperty("unboundRepo");
   });
 });

@@ -13,7 +13,8 @@
     "./tacho-idle-close": "./src/lib/tacho-idle-close.ts",
     "./client": "./src/inngest.ts",
     "./steering-sync-runner": "./src/lib/steering-sync-runner.ts",
-    "./run-pull-request-backfill-runner": "./src/lib/run-pull-request-backfill-runner.ts"
+    "./run-pull-request-backfill-runner": "./src/lib/run-pull-request-backfill-runner.ts",
+    "./interjection-timeout-runner": "./src/lib/interjection-timeout-runner.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -109,6 +109,12 @@ import {
   RUN_ENRICH_EVENT,
   RUN_PROGRESSED_EVENT,
 } from "@oxagen/inngest-functions/events";
+import {
+  isInterjectionFrame,
+  type RaisedInterjection,
+  recordInterjectionFrames,
+  sendInterjectionsRaised,
+} from "./lib/interjection-frames";
 import { recordProofFrames } from "./lib/proof";
 import { readdressNextRunCommands } from "./lib/next-run-commands";
 import { sendPullRequestLinks } from "./lib/run-pull-request-links";
@@ -1601,6 +1607,9 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     };
     // The batch's fresh `proof.observed` frames, by the root session they belong to.
     const proofsByRoot = new Map<string, TachoEvent[]>();
+    // The fresh repository-question frames on each run's own chain, by root
+    // session (#3941). A subagent's chain raises no question.
+    const interjectionsByRoot = new Map<string, TachoEvent[]>();
     // Who each session's tool calls are billed to, read off the rows this
     // transaction wrote. The ledger entries are built after the commit, from
     // every event in the batch (see the billing step below).
@@ -2404,6 +2413,14 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           frames.push(event);
           proofsByRoot.set(lineage.root, frames);
         }
+        if (lineage.root === sessionUuid) {
+          const questions = fresh.filter(isInterjectionFrame);
+          if (questions.length > 0)
+            interjectionsByRoot.set(sessionUuid, [
+              ...(interjectionsByRoot.get(sessionUuid) ?? []),
+              ...questions,
+            ]);
+        }
         if (delta.totalCostMicros > 0)
           batchSpendMicros += BigInt(delta.totalCostMicros);
         // A reopen asks too, whatever the batch carried: the run's row was
@@ -2500,6 +2517,23 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       });
       if (root && (await isHeldHere(root.hostId)))
         rootIds.set(rootSessionUuid, root.publicId);
+    }
+
+    // Each question a host raised on a run's own chain opens its row, and a
+    // host's own timeout answer closes it (#3941). Only a run this host
+    // holds, as everything read from `rootIds` is.
+    const raisedInterjections: RaisedInterjection[] = [];
+    for (const [rootSessionUuid, frames] of interjectionsByRoot) {
+      const runId = rootIds.get(rootSessionUuid);
+      if (runId === undefined) continue;
+      raisedInterjections.push(
+        ...(await recordInterjectionFrames(
+          tx,
+          { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          { publicId: runId, agentKey: host.agentKey },
+          frames,
+        )),
+      );
     }
 
     // A run is one piece of work across its chains. When a subagent reports,
@@ -2684,8 +2718,20 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       rootIds,
       sessionRoots,
       promptedRuns,
+      raisedInterjections,
     };
   });
+
+  // Each question the batch raised starts its timeout (#3941, D8). Sent as
+  // soon as the rows commit rather than after the ClickHouse append below: a
+  // re-sent batch folds its frames as already recorded, so an event held
+  // back behind a failed append would never be sent. Best effort, once per
+  // row by its event id.
+  await sendInterjectionsRaised(
+    (events) => eventClient.send(events),
+    ctx,
+    result.raisedInterjections,
+  );
 
   // Every event this batch re-sends below a session's recorded head is
   // compared with the frame ClickHouse holds at that seq (§8.3). The same

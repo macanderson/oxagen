@@ -225,7 +225,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
-    interjections: { open: refuse },
+    interjections: { open: refuse, forRun: refuse },
     agents: {
       list: refuse,
       get: refuse,

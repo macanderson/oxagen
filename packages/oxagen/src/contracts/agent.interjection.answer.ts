@@ -60,7 +60,7 @@ export const agentInterjectionAnswer = registerCapability({
     "Answer the question an agent paused to ask: with text, or, for a repository the workspace has not bound, by linking it or creating a workspace for it. The answer is recorded on the question with a receipt, and a wrapped run whose host can take it receives the answer as a message.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
-  layers: ["schema", "api", "mcp", "cli", "unit", "docs"],
+  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   mutates: true,
   noBillingGate: true,

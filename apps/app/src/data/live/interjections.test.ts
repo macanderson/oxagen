@@ -1,7 +1,8 @@
-// The interjections port (#3839): list_interjections with `open: true`
+// The interjections port (#3839, #3941): list_interjections with `open: true`
 // through the kernel seam for the workspace (Fleet, the shell) or one run,
-// walked to the end of its cursor under a bound, with a refusal passed through
-// and an unmappable record reported once.
+// walked to the end of its cursor under a bound, and with `open: false` for
+// the Run page's one run, answered questions included. A refusal is passed
+// through and an unmappable record reported once.
 import { agentInterjectionList } from "@oxagen/oxagen/contracts/agent.interjection.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -41,6 +42,12 @@ const item = {
   answeredAt: null,
   answer: null,
   answeredBy: null,
+  kind: "question",
+  raisedSeq: null,
+  body: null,
+  repository: null,
+  path: null,
+  receiptId: null,
 };
 
 const mapped = {
@@ -50,6 +57,24 @@ const mapped = {
   question: "Which branch should the release cut from?",
   raisedAt: "2026-09-25T09:00:00.000Z",
   expiresAt: "2026-09-25T09:30:00.000Z",
+  answeredAt: null,
+  answer: null,
+  answeredBy: null,
+  kind: "question",
+  raisedSeq: null,
+  body: null,
+  repository: null,
+  path: null,
+  receiptId: null,
+};
+
+/** The same question answered, as `open: false` returns it. */
+const answered = {
+  ...item,
+  answeredAt: "2026-09-25T09:04:00.000Z",
+  answer: "main",
+  answeredBy: "usr_marcusbell",
+  receiptId: "rcp_01k6qw44",
 };
 
 beforeEach(() => {
@@ -129,5 +154,70 @@ describe("interjections.open", () => {
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("interjections.forRun", () => {
+  it("reads one run's questions, answered or not, for the Run page", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ items: [answered], nextCursor: null }),
+    );
+    expect(await interjections.forRun(ctx, "tse_7k2m9q")).toEqual(
+      readOk({
+        items: [
+          {
+            ...mapped,
+            answeredAt: "2026-09-25T09:04:00.000Z",
+            answer: "main",
+            answeredBy: "usr_marcusbell",
+            receiptId: "rcp_01k6qw44",
+          },
+        ],
+        more: false,
+      }),
+    );
+    expect(kernelRead).toHaveBeenCalledOnce();
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: agentInterjectionList,
+      input: { runId: "tse_7k2m9q", open: false, limit: 100 },
+      page: "run",
+    });
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("reads one page and says when the run holds more questions than it took", async () => {
+    kernelRead.mockResolvedValue(readOk({ items: [item], nextCursor: "c2" }));
+    const out = await interjections.forRun(ctx, "tse_7k2m9q");
+    expect(out.ok && out.value.more).toBe(true);
+    expect(kernelRead).toHaveBeenCalledOnce();
+  });
+
+  it("passes a refusal through (negative)", async () => {
+    const denied = {
+      ok: false as const,
+      reason: "denied" as const,
+      permission: "run.read",
+    };
+    kernelRead.mockResolvedValue(denied);
+    expect(await interjections.forRun(ctx, "tse_7k2m9q")).toEqual(denied);
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("answers record_unmappable and reports once for a record the view refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        items: [{ ...answered, answeredBy: "7c9e6679-7425" }],
+        nextCursor: null,
+      }),
+    );
+    expect(await interjections.forRun(ctx, "tse_7k2m9q")).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+    expect(captureError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: "interjections.forRun record_unmappable",
+      }),
+    );
   });
 });

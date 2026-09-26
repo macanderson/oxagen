@@ -96,6 +96,15 @@ export function interjectionItem(
     question: "Which branch should the release cut from?",
     raisedAt: "2026-09-23T09:27:32Z",
     expiresAt: "2026-09-23T09:57:32Z",
+    answeredAt: null,
+    answer: null,
+    answeredBy: null,
+    kind: "question",
+    raisedSeq: null,
+    body: null,
+    repository: null,
+    path: null,
+    receiptId: null,
     ...overrides,
   };
 }

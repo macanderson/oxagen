@@ -27,3 +27,18 @@ export function canCommandRun(orgRole: string, wsRole: string): boolean {
 export function canSealRun(orgRole: string, wsRole: string): boolean {
   return COMMANDING_ORG_ROLES.has(orgRole) || wsRole === "owner";
 }
+
+/**
+ * Whether this viewer may answer a run's repository question with a path
+ * (`answer_interjection`, #3941): an organization Owner or Admin, or the
+ * workspace's Owner. A path answer links the repository or creates a
+ * workspace, the pair `link_repository` and `create_workspace` admit, so the
+ * handler holds a workspace Member to the same pair even though the
+ * contract's `defaultRoles` admit a Member for a free-text answer.
+ */
+export function canAnswerRepositoryQuestion(
+  orgRole: string,
+  wsRole: string,
+): boolean {
+  return COMMANDING_ORG_ROLES.has(orgRole) || wsRole === "owner";
+}

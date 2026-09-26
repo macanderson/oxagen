@@ -235,7 +235,7 @@ export function toolsSource(reads: ToolsReads) {
       outcomesSettings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
-    interjections: { open: refuse },
+    interjections: { open: refuse, forRun: refuse },
     agents: {
       list: answer(
         reads.agents ?? readOk(agentPage([agentPageRow("invoice-bot")])),

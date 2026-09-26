@@ -59,6 +59,12 @@ export function tachoStage(kind: string): string {
     case "model.response":
     case "context.assembled":
     case "steering.manifest":
+    // Which skills the session may load, and the resolver's search and load
+    // (#3941, #3098). They sit beside the steering manifest: what the model
+    // was given to work with.
+    case "skills.resolved":
+    case "skills.searched":
+    case "skills.loaded":
       return "model";
     case "tool_requested":
     case "tool_call":
@@ -74,6 +80,9 @@ export function tachoStage(kind: string): string {
     case "token_denied":
     // An operator's pause, resume, cancel or steer as the host applied it.
     case "oxagen:command_applied":
+    // The question a host held the loop to ask, and its answer (#3941).
+    case "control.interject":
+    case "control.answer":
       return "policy";
     case "file_io":
     case "network":
@@ -81,6 +90,12 @@ export function tachoStage(kind: string): string {
       return "effect";
     case "proof.observed":
       return "proof";
+    // The repository the session runs in, and what an answer bound or made
+    // for it (#3941).
+    case "repo.unknown":
+    case "repo.bound":
+    case "workspace.created":
+      return "control";
     default:
       return kind.startsWith("oxagen:") ? "control" : "chain";
   }
@@ -120,9 +135,63 @@ export function tachoFrameSummary(row: TachoFrameRowLike): string {
       const command = row.attrs?.["command.name"] ?? "";
       return command === "" ? row.kind : `operator ${command}`;
     }
+    case "repo.unknown":
+      return "unbound repository";
+    case "control.interject":
+      return "loop held";
+    case "control.answer": {
+      const path = bodyText(row, "path");
+      if (path === null) return row.kind;
+      return bodyText(row, "source") === "timeout"
+        ? `answer ${path} (timeout)`
+        : `answer ${path}`;
+    }
+    case "repo.bound": {
+      const slug = bodyText(row, "workspace_slug");
+      return slug === null ? row.kind : `bound to ${slug}`;
+    }
+    case "workspace.created": {
+      const slug = bodyText(row, "workspace_slug");
+      return slug === null ? row.kind : `workspace ${slug}`;
+    }
+    case "skills.resolved": {
+      const inScope = bodyNumber(row, "in_scope");
+      return inScope === null ? row.kind : `${inScope} in scope`;
+    }
     default:
       return row.kind;
   }
+}
+
+/**
+ * The frame's body as the store holds it: JSON text, or null when the row
+ * carries none or it does not parse. The summaries of the #3941 kinds read
+ * one member each, so a malformed body falls back to the kind.
+ */
+function bodyOf(row: TachoFrameRowLike): Record<string, unknown> | null {
+  if (row.body === undefined || row.body === "") return null;
+  try {
+    const parsed: unknown = JSON.parse(row.body);
+    return typeof parsed === "object" &&
+      parsed !== null &&
+      !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A non-empty string member of the body, or null. */
+function bodyText(row: TachoFrameRowLike, key: string): string | null {
+  const value = bodyOf(row)?.[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/** A finite number member of the body, or null. */
+function bodyNumber(row: TachoFrameRowLike, key: string): number | null {
+  const value = bodyOf(row)?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 /**

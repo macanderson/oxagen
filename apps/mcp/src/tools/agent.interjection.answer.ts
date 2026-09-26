@@ -10,7 +10,13 @@ export const schema = {
     "The question to answer: its public id (inj_…) or its uuid",
   ),
   answer: agentInterjectionAnswer.input.shape.answer.describe(
-    "The answer, 1 to 4,000 characters. A wrapped run whose host can take it receives it as a message",
+    "The free-text answer to an agent's own question, 1 to 4,000 characters. A wrapped run whose host can take it receives it as a message. Leave it out for a repository question, which takes path",
+  ),
+  path: agentInterjectionAnswer.input.shape.path.describe(
+    "For a repository question only: link binds the repository to this workspace, and create makes a new workspace for it with skills off. Needs an org Owner or Admin, or the workspace Owner",
+  ),
+  create: agentInterjectionAnswer.input.shape.create.describe(
+    "With path create only: the new workspace's name and slug",
   ),
 };
 

@@ -11,6 +11,11 @@
 // answer handler, which queues its message through this package's command
 // store. @oxagen/handlers depends on @oxagen/agent, so the other way round
 // would be a package cycle.
+//
+// A `repo_unknown` row (#3941) carries the `control.interject` body the
+// ingest copied from the host's frame. The body is read through its schema
+// again here, so one row whose stored body drifted from the schema reads as
+// a null body instead of failing the whole page's output parse.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import type {
   AgentInterjectionListInput,
@@ -19,6 +24,7 @@ import type {
 } from "@oxagen/oxagen/contracts/agent.interjection.list";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { schema, withTenantDb } from "@oxagen/database";
+import { INTERJECTION_PATHS, interjectBodySchema } from "@oxagen/tacho";
 import { and, asc, eq, gt, isNull, or, type SQL, sql } from "drizzle-orm";
 import { isCursorInstant } from "./lib/cursor-instant";
 
@@ -33,6 +39,12 @@ export type InterjectionListRow = {
   answeredAt: Date | null;
   answer: string | null;
   answeredByPublicId: string | null;
+  kind: string;
+  raisedSeq: number | null;
+  body: unknown;
+  repository: string | null;
+  path: string | null;
+  receiptId: string | null;
 };
 
 /**
@@ -67,6 +79,10 @@ export function decodeInterjectionCursor(
 export function toInterjectionListItem(
   row: InterjectionListRow,
 ): InterjectionListItem {
+  const kind = row.kind === "repo_unknown" ? "repo_unknown" : "question";
+  const body =
+    kind === "repo_unknown" ? interjectBodySchema.safeParse(row.body) : null;
+  const path = INTERJECTION_PATHS.find((p) => p === row.path) ?? null;
   return {
     id: row.publicId,
     runId: row.runPublicId,
@@ -77,6 +93,13 @@ export function toInterjectionListItem(
     answeredAt: row.answeredAt?.toISOString() ?? null,
     answer: row.answer,
     answeredBy: row.answeredByPublicId,
+    kind,
+    raisedSeq: row.raisedSeq === null ? null : String(row.raisedSeq),
+    body: body?.success ? body.data : null,
+    repository: row.repository,
+    // Only a repository question takes a path; the table refuses one on a question.
+    path: kind === "repo_unknown" ? path : null,
+    receiptId: row.receiptId,
   };
 }
 
@@ -141,6 +164,12 @@ export const agentInterjectionListHandler: CapabilityHandler<
         answeredAt: ij.answeredAt,
         answer: ij.answer,
         answeredByPublicId: schema.users.publicId,
+        kind: ij.kind,
+        raisedSeq: ij.raisedSeq,
+        body: ij.body,
+        repository: ij.repository,
+        path: ij.path,
+        receiptId: ij.receiptId,
       })
       .from(ij)
       .leftJoin(schema.users, eq(schema.users.id, ij.answeredByUserId))

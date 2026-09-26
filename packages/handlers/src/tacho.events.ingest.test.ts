@@ -25,12 +25,20 @@ const mocks = vi.hoisted(() => ({
   sendEvent: vi.fn(),
   bodyPut: vi.fn(),
   recordProofFrames: vi.fn(),
+  recordInterjectionFrames: vi.fn(),
   fetchAgentRunAuthzIn: vi.fn(),
   selectAgentDaySpend: vi.fn(),
 }));
 
 vi.mock("./lib/proof", () => ({
   recordProofFrames: mocks.recordProofFrames,
+}));
+
+// The rows themselves have their own suite (lib/interjection-frames.test.ts).
+// Here the question is which frames reach the recorder and what is sent.
+vi.mock("./lib/interjection-frames", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./lib/interjection-frames")>()),
+  recordInterjectionFrames: mocks.recordInterjectionFrames,
 }));
 
 vi.mock("@oxagen/run-ledger/evidence-store", () => ({
@@ -1050,6 +1058,7 @@ beforeEach(() => {
   mocks.recordGovernedActions.mockResolvedValue({ billedUnits: 0 });
   mocks.sendEvent.mockResolvedValue(undefined);
   mocks.recordProofFrames.mockResolvedValue({ written: 0, witnessRunIds: [] });
+  mocks.recordInterjectionFrames.mockResolvedValue([]);
   mocks.fetchAgentRunAuthzIn.mockResolvedValue({
     roles: [],
     roleGrants: [],
@@ -6908,5 +6917,172 @@ describe("a run's first prompt", () => {
       ],
     );
     expect(prompts.size).toBe(0);
+  });
+});
+
+describe("the repository question a host raised (#3941)", () => {
+  const RUN = "tse_fake0000000000000001";
+  const RAISED = {
+    interjectionId: "inj_0123456789abcdefghjkmn",
+    expiresAt: new Date("2026-09-08T10:36:03.000Z"),
+  };
+  const QUESTION = {
+    interjection_key: "01K6Z000000000000000000000",
+    reason: "repo_unknown",
+    question: "Link this repository to core, or create a workspace for it?",
+    remote_digest: `sha256:${"e".repeat(64)}`,
+    timeout_ms: 30 * 60 * 1000,
+    expires_at: "2026-09-08T10:36:03.000Z",
+    on_timeout: "deny",
+    paths: [
+      {
+        path: "link",
+        workspace_slug: "core",
+        config_version: "skl_v2",
+        skills_pinned: 3,
+        linked_repositories: 1,
+      },
+      {
+        path: "create",
+        proposed_name: "payments",
+        proposed_slug: "payments",
+        skills_enabled: false,
+      },
+    ],
+  };
+
+  /** A root session held on the question at its first prompt. */
+  function questionSession(): TachoEvent[] {
+    let cursor: ChainCursor = GENESIS_CURSOR;
+    return [
+      unsealed("agent_start", { session_start_source: "startup" }),
+      unsealed("repo.unknown", {
+        remote_digest: QUESTION.remote_digest,
+        skills_enabled: true,
+        unbound_repo: "ask",
+        config_version: "skl_v2",
+      }),
+      unsealed("control.interject", QUESTION),
+      unsealed("turn_start", { prompt_length: 3 }),
+    ].map((draft) => {
+      const sealed = sealEvent(draft, cursor);
+      cursor = sealed.next;
+      return sealed.event;
+    });
+  }
+
+  const raisedEvents = () =>
+    mocks.sendEvent.mock.calls
+      .flatMap(([sent]) => (Array.isArray(sent) ? sent : [sent]))
+      .filter(
+        (event: { name: string }) => event.name === "agent/interjection.raised",
+      );
+
+  it("hands the run's own question frames to the recorder and starts one timeout per row", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = questionSession();
+    mocks.recordInterjectionFrames.mockResolvedValue([RAISED]);
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    expect(mocks.recordInterjectionFrames).toHaveBeenCalledOnce();
+    expect(mocks.recordInterjectionFrames.mock.calls[0]?.slice(1)).toEqual([
+      { orgId: CONTEXT.orgId, workspaceId: CONTEXT.workspaceId },
+      { publicId: RUN, agentKey: "acme.core.cc-laptop" },
+      [events[2]],
+    ]);
+    expect(raisedEvents()).toEqual([
+      {
+        name: "agent/interjection.raised",
+        id: `interjection-raised:${RAISED.interjectionId}`,
+        data: {
+          orgId: CONTEXT.orgId,
+          workspaceId: CONTEXT.workspaceId,
+          interjectionId: RAISED.interjectionId,
+          expiresAt: RAISED.expiresAt.toISOString(),
+        },
+      },
+    ]);
+  });
+
+  it("records nothing and starts nothing again for a re-sent batch", async () => {
+    const db = fakeDb();
+    wire(db);
+    const events = questionSession();
+    mocks.recordInterjectionFrames.mockResolvedValue([RAISED]);
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    await tachoEventsIngestHandler(batch(events), CONTEXT);
+    // The re-send folds every frame as already recorded, so the recorder is
+    // not asked again, and the one timeout stands.
+    expect(mocks.recordInterjectionFrames).toHaveBeenCalledOnce();
+    expect(raisedEvents()).toHaveLength(1);
+  });
+
+  it("starts no timeout when the recorder wrote no row (negative)", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(questionSession()), CONTEXT);
+    expect(mocks.recordInterjectionFrames).toHaveBeenCalledOnce();
+    expect(raisedEvents()).toEqual([]);
+  });
+
+  it("still accepts the batch when the timeout cannot be started", async () => {
+    const db = fakeDb();
+    wire(db);
+    mocks.recordInterjectionFrames.mockResolvedValue([RAISED]);
+    mocks.sendEvent.mockRejectedValue(new Error("event bus down"));
+    await expect(
+      tachoEventsIngestHandler(batch(questionSession()), CONTEXT),
+    ).resolves.toBeDefined();
+  });
+
+  it("asks the recorder nothing for a batch with no question", async () => {
+    const db = fakeDb();
+    wire(db);
+    await tachoEventsIngestHandler(batch(session()), CONTEXT);
+    expect(mocks.recordInterjectionFrames).not.toHaveBeenCalled();
+  });
+
+  it("leaves a subagent chain's question frame out: only the run's own chain raises one", async () => {
+    const db = fakeDb();
+    wire(db);
+    const ROOT_SESSION = crypto.randomUUID();
+    db.sessions.set(ROOT_SESSION, {
+      id: "s0",
+      publicId: "tse_fake00000000000000root",
+      sessionUuid: ROOT_SESSION,
+      hostId: HOST_ID,
+      parentSessionUuid: null,
+    });
+    const genesis = sealEvent(
+      unsealed("agent_start", { session_start_source: "startup" }),
+      GENESIS_CURSOR,
+    );
+    db.sessions.set(SESSION, {
+      id: "s1",
+      publicId: RUN,
+      sessionUuid: SESSION,
+      hostId: HOST_ID,
+      seqCount: 1,
+      lastHash: genesis.event.hash,
+      chainVerified: true,
+      telemetryGapCount: 0,
+      numToolCalls: 0,
+      contentFrames: 0,
+      bodyFrames: 0,
+      toolBodyFrames: 0,
+      enforcementTier: "observe",
+      rootSessionUuid: ROOT_SESSION,
+      parentSessionUuid: ROOT_SESSION,
+    });
+    const question = sealEvent(
+      {
+        ...unsealed("control.interject", QUESTION),
+        root_session_uuid: ROOT_SESSION,
+        parent_session_uuid: ROOT_SESSION,
+      },
+      genesis.next,
+    ).event;
+    await tachoEventsIngestHandler(batch([question]), CONTEXT);
+    expect(mocks.recordInterjectionFrames).not.toHaveBeenCalled();
   });
 });

@@ -69,6 +69,29 @@ describe("tachoStage", () => {
       checkpoint: "chain",
     });
   });
+
+  it("files the unbound-repository kinds under a stage, never under chain (#3941)", () => {
+    const kinds = [
+      "repo.unknown",
+      "control.interject",
+      "control.answer",
+      "repo.bound",
+      "workspace.created",
+      "skills.resolved",
+      "skills.searched",
+      "skills.loaded",
+    ];
+    expect(Object.fromEntries(kinds.map((k) => [k, tachoStage(k)]))).toEqual({
+      "repo.unknown": "control",
+      "control.interject": "policy",
+      "control.answer": "policy",
+      "repo.bound": "control",
+      "workspace.created": "control",
+      "skills.resolved": "model",
+      "skills.searched": "model",
+      "skills.loaded": "model",
+    });
+  });
 });
 
 describe("tachoFrameSummary", () => {
@@ -106,6 +129,54 @@ describe("tachoFrameSummary", () => {
     expect(tachoFrameSummary(row(1, "approval_decision"))).toBe(
       "approval_decision",
     );
+  });
+
+  it("reads the unbound-repository frames from their bodies (#3941)", () => {
+    const body = (value: Record<string, unknown>) => ({
+      body: JSON.stringify(value),
+    });
+    expect(tachoFrameSummary(row(1, "repo.unknown"))).toBe(
+      "unbound repository",
+    );
+    expect(tachoFrameSummary(row(2, "control.interject"))).toBe("loop held");
+    expect(
+      tachoFrameSummary(
+        row(3, "control.answer", body({ path: "link", source: "person" })),
+      ),
+    ).toBe("answer link");
+    expect(
+      tachoFrameSummary(
+        row(3, "control.answer", body({ path: "deny", source: "timeout" })),
+      ),
+    ).toBe("answer deny (timeout)");
+    expect(
+      tachoFrameSummary(
+        row(4, "repo.bound", body({ workspace_slug: "payments" })),
+      ),
+    ).toBe("bound to payments");
+    expect(
+      tachoFrameSummary(
+        row(5, "workspace.created", body({ workspace_slug: "billing-api" })),
+      ),
+    ).toBe("workspace billing-api");
+    expect(
+      tachoFrameSummary(row(6, "skills.resolved", body({ in_scope: 0 }))),
+    ).toBe("0 in scope");
+  });
+
+  it("falls back to the kind when the body is missing, malformed or lacks the member (negative)", () => {
+    expect(tachoFrameSummary(row(1, "control.answer"))).toBe("control.answer");
+    expect(
+      tachoFrameSummary(row(1, "control.answer", { body: "{not json" })),
+    ).toBe("control.answer");
+    expect(tachoFrameSummary(row(1, "repo.bound", { body: "[]" }))).toBe(
+      "repo.bound",
+    );
+    expect(
+      tachoFrameSummary(
+        row(1, "skills.resolved", { body: JSON.stringify({ in_scope: "3" }) }),
+      ),
+    ).toBe("skills.resolved");
   });
 });
 

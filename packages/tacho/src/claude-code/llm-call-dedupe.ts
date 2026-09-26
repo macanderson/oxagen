@@ -216,6 +216,11 @@ export class LlmCallLedger {
     };
   }
 
+  /** Whether no model call has been registered yet. */
+  get isEmpty(): boolean {
+    return this.entries.size === 0;
+  }
+
   /** Register a sighting and say what it is. */
   note(body: Record<string, unknown>, source: string): LlmCallVerdict {
     const sighting = this.judge(body, source);
