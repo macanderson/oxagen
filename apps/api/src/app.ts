@@ -276,6 +276,7 @@ import { tachoContainedLaunchRegisterRoute } from "./routes/v1/tacho.contained_l
 import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
 import { tachoGithubTokenIssueRoute } from "./routes/v1/tacho.github_token.issue";
 import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
+import { tachoWorkspaceRunsPauseRoute } from "./routes/v1/tacho.workspace_runs.pause";
 import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
 import { tachoCommandListRoute } from "./routes/v1/tacho.command.list";
 import { tachoEnrollmentCreateRoute } from "./routes/v1/tacho.enrollment.create";
@@ -761,6 +762,8 @@ orgScoped.route("/repository/gitlab/attach", repositoryGitlabAttachRoute);
 // and the workspace rather than to a host, so they sit beside /runs.
 orgScoped.route("/commands", tachoCommandDispatchRoute);
 orgScoped.route("/commands/list", tachoCommandListRoute);
+// pause_workspace_runs: every live run in the workspace, one decision (#3862).
+orgScoped.route("/commands/pause-workspace", tachoWorkspaceRunsPauseRoute);
 orgScoped.route("/tacho/hosts", tachoHostListRoute);
 orgScoped.route("/tacho/session-policy", tachoSessionPolicyReadRoute);
 orgScoped.route("/tacho/session-policy", tachoSessionPolicyWriteRoute);

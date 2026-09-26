@@ -296,9 +296,6 @@ export const RESERVED_SECURITY_EVENT_TYPES = [
   "agent_run.forged_decision_reference",
   "agent_run.stale_deny_generation",
   "agent_run.finalization_grant_misuse",
-  // The pause_workspace_runs handler that writes it lands after its contract
-  // (#3862). Remove this entry in the change that adds the emitter.
-  "tacho.workspace_runs_paused",
 ] as const satisfies readonly SecurityEventType[];
 
 export type ReservedSecurityEventType =

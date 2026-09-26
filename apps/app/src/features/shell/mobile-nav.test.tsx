@@ -45,6 +45,11 @@ const nav = vi.hoisted(() => ({ pathname: "/acme/core-platform", query: "" }));
 vi.mock("./command-actions", () => ({
   searchCommands: () => Promise.resolve({ ok: true, value: { rows: [] } }),
 }));
+// The command menu's pause_workspace_runs write is never sent here;
+// pause-workspace-dialog.test.tsx and shell-client.test.tsx cover it.
+vi.mock("./pause-workspace-actions", () => ({
+  pauseWorkspaceRunsAction: () => new Promise(() => undefined),
+}));
 // Opening the assistant reads stella's engine. Here the read never answers,
 // and an unanswered read holds nothing
 // (assistant-flyout.engine-health.test.tsx).

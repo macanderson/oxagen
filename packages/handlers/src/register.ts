@@ -1252,6 +1252,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoCommandDispatchHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "pause_workspace_runs",
+    async () =>
+      (await import("./tacho.workspace_runs.pause"))
+        .pauseWorkspaceRunsHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "fetch_commands",
     async () =>
       (await import("./tacho.command.fetch"))

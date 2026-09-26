@@ -245,7 +245,7 @@
     "dispatch_command": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] \u2014 Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command, and an observe-tier run draws all four disabled with the recorded reason (features/run/actions.ts, features/run/run-controls.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command. A run its host cannot reach draws them disabled with the recorded reason, and an observe-tier run on a polling host takes all four (ADR-163) (features/run/actions.ts, features/run/run-controls.tsx)",
       "proof": "apps/app/src/features/run/controls.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "session-018UrgFq-mc1-columns",
@@ -1054,6 +1054,15 @@
       "proof": "apps/app/src/features/repositories/repositories.test.tsx",
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
+    },
+    "pause_workspace_runs": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: ⌘K › “Pause every live run in this workspace” opens a dialog that asks for the reason, queues pause_workspace_runs through features/shell/pause-workspace-actions.ts, and shows the receipt of queued and skipped runs (features/shell/pause-workspace-dialog.tsx, features/shell/command-menu.tsx)",
+      "testid": "pause-workspace-dialog",
+      "proof": "apps/app/src/features/shell/pause-workspace-dialog.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session-69a4a70c-fleet-command-menu"
     },
     "preview_skill_search": {
       "route": "/[org]/[ws]/steering?tab=skills",
