@@ -32,6 +32,7 @@ import { Badge, type BadgeTone } from "@/ui/badge";
 import { buttonSecondary, eyebrowQuiet, mono } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
+import { frameHref } from "./frame-link";
 
 /** More than this many nodes of one kind in a row fold to a count. */
 const FOLD_OVER = 3;
@@ -201,16 +202,24 @@ const DOT_TONE: Partial<Record<RunOutputNode["state"], string>> = {
 /** `.ro-tick { position:absolute; left:-23px; top:12px; width:9px; height:1px; background:var(--rule) }` */
 const tick = "absolute -left-[23px] top-3 h-px w-[9px] bg-rule";
 
-/** `fr 118`: the frame that recorded the node, which opens the Frames tab on it. */
-function Frame({ seq, place }: { seq: string | null; place: Place }) {
+/**
+ * `fr 118`: the frame that recorded the node, which opens the Frames tab on
+ * it. A subagent's node names its chain beside the seq, and the link opens
+ * the frame on that chain (#3823).
+ */
+function Frame({
+  node,
+  place,
+}: {
+  node: Pick<RunOutputNode, "seq" | "chainRef"> | undefined;
+  place: Place;
+}) {
   const t = useTranslations("run.outputs");
+  const seq = node?.seq ?? null;
   if (seq === null) return null;
   return (
     <SafeLink
-      to={routes.run(place.org, place.ws, place.runId, {
-        tab: "actions",
-        body: seq,
-      })}
+      to={frameHref(place, { seq, chainRef: node?.chainRef })}
       title={t("frameTitle")}
       className="shrink-0 rounded-md border border-border bg-background px-1.5 py-px font-mono text-[10.5px] text-dim hover:border-rule hover:text-foreground"
     >
@@ -289,7 +298,7 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
           </b>
           <Badge tone={TONE[node.state]}>{t(`state.${node.state}`)}</Badge>
           <Stat stat={node.stat} />
-          <Frame seq={node.seq} place={place} />
+          <Frame node={node} place={place} />
         </div>
         <div className="mt-[3px] flex flex-wrap items-baseline gap-2 text-[11.5px] leading-normal">
           {node.where === null ? null : (
@@ -386,7 +395,7 @@ function ReadMark({
           <span className="text-dim"> · {notes.join(" · ")}</span>
         )}
       </span>
-      <Frame seq={group.items.at(-1)?.seq ?? null} place={place} />
+      <Frame node={group.items.at(-1)} place={place} />
     </li>
   );
 }

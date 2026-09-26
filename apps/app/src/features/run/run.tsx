@@ -207,7 +207,10 @@ export async function Run({
   kinds: string | null;
   /** `?frames=`, the opaque cursor a later frames page was read from. */
   frames: string | null;
-  /** `?body=`, the seq of the frame whose body is open; anything but a seq opens none. */
+  /**
+   * `?body=`, the frame whose body is open: its seq, or `<chain>:<seq>` for a
+   * subagent's frame. Anything else opens none.
+   */
   body: string | null;
   /** `?reads=hide` folds the spine's read marks away. */
   reads: string | null;

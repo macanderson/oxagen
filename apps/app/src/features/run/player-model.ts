@@ -17,9 +17,7 @@ import type {
 } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
-
-/** A frame's position as the contract spells it (`frameSeqSchema`): decimal, at most 19 digits. */
-const FRAME_SEQ = /^\d{1,19}$/;
+import { frameKey, parseFrameKey } from "./frame-link";
 
 /**
  * The six classes a frame folds into (`FK_ORDER`), in the legend's order.
@@ -66,9 +64,11 @@ export function kindCounts(
 }
 
 /**
- * The run's own frames at `everything`, by seq. A subagent's entries are left
- * out: its chain is numbered from 0 like the run's, so its seq names a frame
- * of another chain, and the page of frames is the run's own.
+ * The run's frames at `everything`, by `frameKey`: a frame of the run's own
+ * chain by its seq, and a subagent's frame by its chain and seq. A subagent's
+ * chain is numbered from 0 like the run's, so its entry never stands in for
+ * the run's frame of that seq, and an open subagent frame still finds the
+ * envelope the transcript carries for it (#3823).
  */
 export function entriesBySeq(
   read: Read<RunTranscript>,
@@ -76,8 +76,8 @@ export function entriesBySeq(
   const map = new Map<string, TranscriptEntry>();
   if (!read.ok) return map;
   for (const entry of read.value.entries) {
-    if (entry.subagent === undefined && !map.has(entry.seq))
-      map.set(entry.seq, entry);
+    const key = frameKey({ seq: entry.seq, chainRef: entry.subagent?.chainRef });
+    if (!map.has(key)) map.set(key, entry);
   }
   return map;
 }
@@ -236,6 +236,11 @@ export function timelineMarks(
 /** The frame open in the player: `?body=` when it names one, else the first frame shown. */
 export type OpenFrame = {
   seq: string;
+  /**
+   * The subagent chain the frame was recorded on, when `?body=` named one;
+   * absent on the run's own chain.
+   */
+  chainRef?: string;
   /** Its place on the page; -1 when the URL named a frame this page does not hold. */
   index: number;
   /** The frame itself when the page holds it. */
@@ -251,9 +256,12 @@ export function openFrameOf(
   frames: readonly RunFrame[],
   body: string | null,
 ): OpenFrame | null {
-  if (body !== null && FRAME_SEQ.test(body)) {
-    const index = frames.findIndex((frame) => frame.seq === body);
-    return { seq: body, index, frame: frames[index] ?? null, named: true };
+  const at = parseFrameKey(body);
+  if (at !== null) {
+    const index = frames.findIndex(
+      (frame) => frame.seq === at.seq && frame.chainRef === at.chainRef,
+    );
+    return { ...at, index, frame: frames[index] ?? null, named: true };
   }
   const first = frames[0];
   return first === undefined
@@ -279,10 +287,14 @@ export type Steps = {
 /**
  * Where ◀ and ▶ lead from the open frame: its neighbours on the page, or for
  * a frame the page does not hold, the nearest shown frames either side of it.
+ * A subagent's frame the page does not hold has no neighbour on it: its seq
+ * counts another chain, so the page's first and last frames are the way back.
  */
 export function stepsOf(frames: readonly RunFrame[], open: OpenFrame): Steps {
   const first = frames[0]?.seq ?? null;
   const last = frames.at(-1)?.seq ?? null;
+  if (open.index < 0 && open.chainRef !== undefined)
+    return { first, last, prev: null, next: null };
   if (open.index >= 0) {
     return {
       first,

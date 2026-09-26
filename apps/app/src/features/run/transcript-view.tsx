@@ -58,6 +58,7 @@ import { formatCount, formatDuration, ratioWidth } from "@/ui/money-format";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import type { ActionResult } from "@/server/kernel";
 import { readTranscriptPage } from "./actions";
+import { frameHref } from "./frame-link";
 import type { KindFilter } from "./tab-props";
 import { Note } from "./parts";
 import type { ToolDiff, ToolGroup } from "./tool-detail";
@@ -483,8 +484,9 @@ function Clock({ at, elapsedMs }: { at: string; elapsedMs: number }) {
 
 /**
  * A chip that opens one frame on the Governed actions tab. A subagent's frame
- * is on its own chain, which that tab does not read, so a link by seq would
- * open the run's own frame of that number: it reads as a plain chip.
+ * is on its own chain, numbered from 0 like the run's, so the link names the
+ * chain beside the seq and opens that frame, not the run's frame of that
+ * number (#3823).
  */
 function FrameChip({
   frame,
@@ -497,22 +499,8 @@ function FrameChip({
   place: Place;
   className?: string;
 }) {
-  const t = useTranslations("run.transcript");
-  if (frame.chainRef !== null) {
-    return (
-      <span className={className} title={t("subagentFrame")}>
-        {children}
-      </span>
-    );
-  }
   return (
-    <SafeLink
-      to={routes.run(place.org, place.ws, place.runId, {
-        tab: "actions",
-        body: frame.seq,
-      })}
-      className={className}
-    >
+    <SafeLink to={frameHref(place, frame)} className={className}>
       {children}
     </SafeLink>
   );

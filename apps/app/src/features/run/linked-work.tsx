@@ -20,12 +20,12 @@ import type { RunOutputNode, RunOutputs } from "@/data/contracts/run";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { Read } from "@/data/read";
 import { parseGitHubUrl } from "@/shared/github-url";
-import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { eyebrowQuiet, mono, note } from "@/ui/control-styles";
 import { formatCount } from "@/ui/money-format";
 import { GitHubLink, SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
+import { type FrameAt, frameHref, frameKey } from "./frame-link";
 import { Panel, PanelBody } from "./parts";
 import type { Place } from "./tab-props";
 import { isFileChange } from "./work";
@@ -120,19 +120,19 @@ const ARTIFACT_GLYPH: Partial<Record<RunOutputNode["kind"], string>> = {
   media: "▣",
 };
 
-/** `fr 41`: the frame that recorded the row, which opens the frame player on it. */
-function FrameChip({ seq, place }: { seq: string; place: Place }) {
+/**
+ * `fr 41`: the frame that recorded the row, which opens the frame player on
+ * it, on the subagent's chain when a subagent recorded it (#3823).
+ */
+function FrameChip({ frame, place }: { frame: FrameAt; place: Place }) {
   const t = useTranslations("run.issues.linked");
   return (
     <SafeLink
-      to={routes.run(place.org, place.ws, place.runId, {
-        tab: "actions",
-        body: seq,
-      })}
+      to={frameHref(place, frame)}
       title={t("frameTitle")}
       className={`${edgeChip} border-border text-muted-foreground hover:border-rule hover:text-foreground`}
     >
-      {t("frame", { seq })}
+      {t("frame", { seq: frame.seq })}
     </SafeLink>
   );
 }
@@ -144,7 +144,7 @@ export function EdgeChip({
   place,
 }: {
   edge: Edge;
-  frames?: readonly string[];
+  frames?: readonly FrameAt[];
   place: Place;
 }) {
   const t = useTranslations("run.issues.linked");
@@ -157,8 +157,12 @@ export function EdgeChip({
       >
         {t(`edge.${edge}`)}
       </span>
-      {[...new Set(frames)].map((seq) => (
-        <FrameChip key={seq} seq={seq} place={place} />
+      {[
+        ...new Map(
+          frames.map((frame): [string, FrameAt] => [frameKey(frame), frame]),
+        ),
+      ].map(([key, frame]) => (
+        <FrameChip key={key} frame={frame} place={place} />
       ))}
     </span>
   );
@@ -279,10 +283,10 @@ function shortSha(sha: string) {
 }
 
 /** The frames a checkout was seen on: its first, and its last when it differs. */
-function checkoutFrames(checkout: Checkout): string[] {
+function checkoutFrames(checkout: Checkout): FrameAt[] {
   return checkout.firstSeq === checkout.lastSeq
-    ? [checkout.firstSeq]
-    : [checkout.firstSeq, checkout.lastSeq];
+    ? [{ seq: checkout.firstSeq }]
+    : [{ seq: checkout.firstSeq }, { seq: checkout.lastSeq }];
 }
 
 const ASSOCIATION_EDGE: Record<Pull["association"], Edge> = {
@@ -512,7 +516,7 @@ function Artifacts({
       {work.pullRequests.map((pull) => {
         const recorded = matched.get(pull) ?? [];
         const frames = recorded.flatMap((node) =>
-          node.seq === null ? [] : [node.seq],
+          node.seq === null ? [] : [{ seq: node.seq, chainRef: node.chainRef }],
         );
         const edge: Edge =
           recorded.length > 0 ? "observed" : ASSOCIATION_EDGE[pull.association];
@@ -572,7 +576,11 @@ function Artifacts({
             edge={
               <EdgeChip
                 edge="observed"
-                frames={node.seq === null ? [] : [node.seq]}
+                frames={
+                  node.seq === null
+                    ? []
+                    : [{ seq: node.seq, chainRef: node.chainRef }]
+                }
                 place={place}
               />
             }
@@ -783,7 +791,7 @@ function FilesChanged({
                 data-testid="run-linked-captured"
                 className="flex min-w-0 flex-wrap items-center gap-2 border-t border-border py-1.5 text-[11.5px] text-muted-foreground first:border-t-0"
               >
-                <FrameChip seq={diff.seq} place={place} />
+                <FrameChip frame={{ seq: diff.seq }} place={place} />
                 <span>{t(`capture.${diff.completeness}`)}</span>
                 {diff.digest === null ? null : (
                   <code

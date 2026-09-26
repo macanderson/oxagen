@@ -554,9 +554,9 @@
     "get_run_frame_body": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=actions&body=<seq> \u2014 the Governed actions tab's frame player reads get_run_frame_body for the open frame when the URL names it (data/live/runs.ts, features/run/actions-tab.tsx, features/run/frame-player.tsx)",
+      "entry": "/[org]/[ws]/runs/[run]?tab=actions&body=<seq> \u2014 the Governed actions tab's frame player reads get_run_frame_body for the open frame when the URL names it, and a subagent's frame by its chain and seq as body=<chain>:<seq> (data/live/runs.ts, features/run/actions-tab.tsx, features/run/frame-link.ts, features/run/frame-player.tsx)",
       "proof": "apps/app/src/features/run/actions-tab.test.tsx",
-      "verifiedAt": "2026-09-24",
+      "verifiedAt": "2026-09-26",
       "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
     },
     "get_run_outputs": {

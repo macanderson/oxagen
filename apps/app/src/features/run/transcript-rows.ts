@@ -137,7 +137,7 @@ export const FEED_GROUPS: readonly FeedGroup[] = TRANSCRIPT_KINDS.filter(
   (kind): kind is FeedGroup => kind !== "policy" && kind !== "errors",
 );
 
-/** A frame a row links to. `chainRef` is set for a subagent's frame, which no link can open by seq. */
+/** A frame a row links to. `chainRef` is set for a subagent's frame, which a link opens by its chain and seq. */
 export type FrameRef = { seq: string; type: string; chainRef: string | null };
 
 /** A decision a rule or a person made about a call, and the frame that records it. */

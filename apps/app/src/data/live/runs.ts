@@ -154,17 +154,21 @@ export const runs: DataSource["runs"] = {
       "runs.get",
     );
   },
-  async frameBody(ctx, runId, seq) {
+  async frameBody(ctx, runId, seq, chainRef) {
+    // A subagent's frame is named by its chain beside the seq (#3823).
     const read = await kernelRead(ctx, {
       contract: runFrameBodyGet,
-      input: { runId, seq },
+      input:
+        chainRef === undefined
+          ? { runId, seq }
+          : { runId, seq, sessionUuid: chainRef },
       page: "run",
     });
     if (!read.ok) return read;
     return view(
       ctx.orgId,
       RunFrameBody,
-      toRunFrameBody(seq, read.value),
+      toRunFrameBody(seq, read.value, chainRef),
       "runs.frameBody",
     );
   },

@@ -50,6 +50,7 @@ import {
   runRow,
   runSource,
   runTranscript,
+  transcriptEntry,
 } from "./run.builders";
 
 const push = vi.fn();
@@ -440,6 +441,87 @@ describe("the open frame", () => {
       "Bodyno content",
     );
     expect(screen.queryByTestId("frame-body")).toBeNull();
+  });
+});
+
+describe("a subagent's frame (#3823)", () => {
+  // A subagent records on a chain of its own, numbered from 0 like the run's,
+  // so its frame 3 is not the run's frame 3 (`model.response`, turn 1).
+  const CHAIN = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+  function withSubagent(): RunTranscript {
+    const base = releaseTranscript();
+    return {
+      ...base,
+      entries: [
+        ...base.entries,
+        transcriptEntry({
+          seq: "3",
+          endSeq: "3",
+          at: releaseAt(3),
+          kind: "tool_call",
+          type: "tool_call",
+          label: "Grep ok",
+          kinds: ["tools"],
+          turn: 2,
+          frames: 1,
+          request: null,
+          response: null,
+          cost: { micros: "300", currency: "USD", basis: "gateway_observed" },
+          cumulativeCost: null,
+          subagent: { chainRef: CHAIN, type: "Explore" },
+        }),
+      ],
+    };
+  }
+
+  it("opens ?body=<chain>:<seq>, reads the body on that chain, and shows the envelope the transcript carries for it", async () => {
+    const { calls, container } = await renderTab({
+      body: `${CHAIN}:3`,
+      everything: ok(withSubagent()),
+      frameBody: ok(
+        runFrameBody({
+          seq: "3",
+          chainRef: CHAIN,
+          contentType: "text/plain",
+          text: "a.test.ts",
+          bytes: 9,
+        }),
+      ),
+    });
+    expect(calls.frameBody).toEqual([[ctx, "tse_7k2m9q", "3", CHAIN]]);
+    const open = screen.getByTestId("frame-open");
+    expect(open).toHaveAttribute("data-seq", "3");
+    expect(screen.getByTestId("frame-off-page")).toHaveTextContent(
+      "Frame 3 is on a subagent's chain",
+    );
+    expect(open).toHaveTextContent(`Subagent chain${CHAIN}`);
+    // The subagent's own envelope, not the run's frame 3's.
+    expect(open).toHaveTextContent("Turnturn 2");
+    expect(screen.getByTestId("frame-cost")).toHaveTextContent(
+      "gateway_observed",
+    );
+    expect(screen.getByTestId("frame-cost")).not.toHaveTextContent("$0.4126");
+    expect(screen.getByTestId("frame-body")).toHaveTextContent("a.test.ts");
+    // The page lists the run's own frames, and none of them is the open one.
+    for (const row of screen.getAllByTestId("frame-row"))
+      expect(row).not.toHaveAttribute("aria-current");
+    for (const tick of screen.getAllByTestId("timeline-tick"))
+      expect(tick).not.toHaveAttribute("aria-current");
+    // Its seq counts another chain, so no frame of the page neighbours it.
+    expect(screen.getByTestId("frame-previous")).toBeDisabled();
+    expect(screen.getByTestId("frame-next")).toBeDisabled();
+    await expectNoAxe(container);
+  });
+
+  it("reads the run's own frame 3 by its seq alone (negative)", async () => {
+    const { calls } = await renderTab({
+      body: "3",
+      everything: ok(withSubagent()),
+      frameBody: ok(runFrameBody({ seq: "3" })),
+    });
+    expect(calls.frameBody).toEqual([[ctx, "tse_7k2m9q", "3"]]);
+    expect(screen.getByTestId("frame-open")).toHaveTextContent("Turnturn 1");
+    expect(screen.queryByTestId("frame-off-page")).toBeNull();
   });
 });
 

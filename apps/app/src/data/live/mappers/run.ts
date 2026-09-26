@@ -98,6 +98,9 @@ export function toRunDetail(
       frames: out.frames.frames.map((frame) => ({
         cursor: frame.cursor,
         seq: frame.seq,
+        ...(frame.sessionUuid === undefined
+          ? {}
+          : { chainRef: frame.sessionUuid }),
         type: frame.type,
         stage: frame.stage,
         observedAt: frame.observedAt,
@@ -140,10 +143,13 @@ function decodeBody(base64: string): { text: string | null; bytes: number } {
 export function toRunFrameBody(
   seq: string,
   out: RunFrameBodyOutput,
+  /** The subagent chain the frame was read from; absent on the run's own. */
+  chainRef?: string,
 ): z.input<typeof RunFrameBody> {
   const decoded = out.bytes === null ? null : decodeBody(out.bytes);
   return {
     seq,
+    ...(chainRef === undefined ? {} : { chainRef }),
     contentType: out.contentType,
     text: decoded === null ? null : decoded.text,
     bytes: decoded === null ? null : decoded.bytes,
@@ -467,6 +473,7 @@ export function toRunOutputs(
     source: out.source,
     nodes: out.nodes.map((node) => ({
       seq: node.seq,
+      ...(node.sessionUuid === undefined ? {} : { chainRef: node.sessionUuid }),
       kind: node.kind,
       name: node.name,
       nameIsLocator: node.nameIsLocator,

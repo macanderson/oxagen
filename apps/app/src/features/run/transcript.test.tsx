@@ -696,7 +696,7 @@ describe("the rows", () => {
     expect(time?.getAttribute("title")).toBe("+7.8 s from the run's start");
   });
 
-  it("marks a subagent's row and links no frame of its chain (negative: the run's own frame still links)", () => {
+  it("marks a subagent's row and links its frame by its chain and seq, not the run's frame of that seq (#3823)", () => {
     const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c1";
     const grep = (seq: number, t: number, body: string): StepSpec => ({
       seq,
@@ -732,11 +732,19 @@ describe("the rows", () => {
       "subagent Explore",
     );
     fireEvent.click(within(sub).getByRole("button", { name: "Show the call" }));
-    expect(within(sub).queryAllByRole("link")).toHaveLength(0);
+    expect(
+      within(sub).getByRole("link", { name: "tool_call · fr 3" }),
+    ).toHaveAttribute(
+      "href",
+      `/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=${CHAIN}%3A3`,
+    );
     fireEvent.click(within(own).getByRole("button", { name: "Show the call" }));
     expect(
       within(own).getByRole("link", { name: "tool_call · fr 4" }),
-    ).toBeTruthy();
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=4",
+    );
   });
 
   it("shows a step's result as its output and its request as the call, never one for the other (#3375)", () => {

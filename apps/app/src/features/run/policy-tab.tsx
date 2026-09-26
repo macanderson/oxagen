@@ -14,19 +14,19 @@
 import { useTranslations } from "next-intl";
 import type { RunTranscript, TranscriptEntry } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
-import { routes } from "@/shared/safe-path";
 import { Badge, type BadgeTone } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
 import { type ListRow, ListTable } from "@/ui/list-table";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
+import { frameHref } from "./frame-link";
 import { Note, NoValue, Panel, PanelBody } from "./parts";
 import { entriesOf } from "./recorded-entries";
 import type { FrameTabProps, Place } from "./tab-props";
 import { entryKey } from "./transcript-rows";
 import { isWhole } from "./whole-transcript";
 
-/** A frame's seq, linked to the frame player when it is on the run's own chain. */
+/** A frame's seq, linked to the frame player on the chain it was recorded on. */
 export function FrameLink({
   seq,
   chainRef,
@@ -34,22 +34,18 @@ export function FrameLink({
   label = seq,
 }: {
   seq: string;
-  /** Set for a subagent's frame, which the player cannot open by seq. */
+  /**
+   * Set for a subagent's frame. Its chain is numbered from 0 like the run's,
+   * so the link names the chain beside the seq (#3823).
+   */
   chainRef: string | undefined;
   place: Place;
   /** The link's words where a bare seq would not say it is a frame. */
   label?: string;
 }) {
-  // The player reads the run's own chain. A subagent's frame shares its seq
-  // with a different frame there, so it is named and not linked.
-  if (chainRef !== undefined)
-    return <span className={`${mono} text-muted-foreground`}>{label}</span>;
   return (
     <SafeLink
-      to={routes.run(place.org, place.ws, place.runId, {
-        tab: "actions",
-        body: seq,
-      })}
+      to={frameHref(place, { seq, chainRef })}
       className={`${mono} text-muted-foreground hover:text-foreground`}
     >
       {label}
