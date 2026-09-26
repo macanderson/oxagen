@@ -526,6 +526,11 @@ async function initializeDaemon(
     if (outcome !== "ok")
       log(`WAL tail repair for session ${session}: ${outcome}`);
   }
+  // After the event tails, which say where each chain ends, and before a
+  // recorder seals the next event at an orphan's seq (#3372).
+  const orphanBodies = wal.repairOrphanBodies();
+  if (orphanBodies > 0)
+    log(`WAL removed ${orphanBodies} body lines a crash left with no event`);
   // Every recorder this daemon opens without restored state, a session or a
   // subagent under one, starts after the last event its WAL file already
   // holds. `reconcileRestoredCursor` below does the same for the chains
