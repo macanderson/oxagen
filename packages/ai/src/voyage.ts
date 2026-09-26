@@ -173,7 +173,7 @@ export function createVoyageEmbeddingModel(
       });
     }
 
-    const embeddings: number[][] = new Array(values.length);
+    const embeddings = new Array<number[]>(values.length);
     for (const item of data) {
       const index = item.index;
       const vector = item.embedding;
