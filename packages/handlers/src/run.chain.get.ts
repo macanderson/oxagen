@@ -34,6 +34,7 @@ import {
   frameOwesBody,
   isReplayGrade,
 } from "@oxagen/tacho";
+import { TACHO_EVENTS_RETENTION_MONTHS } from "@oxagen/telemetry";
 import { and, asc, eq } from "drizzle-orm";
 import {
   ledgerAllSealsQuery,
@@ -108,6 +109,8 @@ export type RunChainGetDeps = RunReadDeps & {
    * every attempt, so the seals shown beside them must too.
    */
   ledgerSeals: (scope: RunScope, runId: string) => Promise<LedgerSeal[]>;
+  /** The clock the retention boundary is measured on; the system's by default. */
+  now?: () => Date;
 };
 
 export const postgresChainCheckpoints = async (
@@ -209,6 +212,29 @@ export function missingBodies(frames: readonly RunFrame[]): number {
 /** Bodies the recording retained: what `view` needs at least one of. */
 function retainedBodies(frames: readonly RunFrame[]): number {
   return frames.filter((frame) => frame.body.bodyRef !== null).length;
+}
+
+/**
+ * Whether a wrapped session's earliest frames may have expired from
+ * `tacho_events` (#4316). The table keeps a frame
+ * `TACHO_EVENTS_RETENTION_MONTHS` after receipt (migration 0032), and a
+ * wrapped session has no archive segment. A frame that expired is not a chain
+ * break, so a session this old is not bounded from seq 0: the frames below the
+ * first one read are not reported missing. The trade is that a frame really
+ * lost at the head of such a session goes unreported too. Interior gaps and
+ * the tail are still checked.
+ *
+ * `createdAt` is the session row's birth on the server's clock, the clock the
+ * TTL counts from. Ingest writes the row in the same request that receives
+ * the first frames, so the row is never younger than its first frame's
+ * receipt, and the comparison needs no slack. The session's own `startedAt`
+ * comes from the host's clock, and a host set back a year would make a fresh
+ * session look expired.
+ */
+export function framesMayHaveExpired(createdAt: Date, now: Date): boolean {
+  const boundary = new Date(now.getTime());
+  boundary.setUTCMonth(boundary.getUTCMonth() - TACHO_EVENTS_RETENTION_MONTHS);
+  return createdAt.getTime() < boundary.getTime();
 }
 
 // ---- The seal side --------------------------------------------------------------------
@@ -314,8 +340,20 @@ export function createRunChainGetHandler(
     // and mark a valid long run as chain_break, even though complete: false
     // already says those frames were not read (finding 4052307524). Apply the
     // terminal bound only when the walk finished.
+    //
+    // A wrapped session starts at seq 0, unless its earliest frames may have
+    // expired, in which case the frames below the first one read are gone,
+    // not missing (#4316).
+    // A reader that did not select `createdAt` bounds from seq 0, as every
+    // read did before #4316.
+    const bornAt =
+      run.source === "tacho" ? run.row.session.createdAt : undefined;
+    const startsAtZero =
+      run.source === "tacho" &&
+      (bornAt === undefined ||
+        !framesMayHaveExpired(bornAt, deps.now?.() ?? new Date()));
     const sequences = sequenceGaps(read.frames, {
-      start: run.source === "tacho" ? "0" : null,
+      start: startsAtZero ? "0" : null,
       end: read.complete ? expectedEnd : null,
     });
     const recorded =

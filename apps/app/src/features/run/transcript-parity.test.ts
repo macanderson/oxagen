@@ -119,7 +119,9 @@ const model = { model: "claude-opus-5", provider: "anthropic" };
  * second: a prompt of only whitespace; a model step that kept its thinking
  * and reported no reasoning tokens; a model step that called Grep, which no
  * tool step recorded; a closing message that says something new; a model
- * call still waiting on its reply; and the run's stop.
+ * step that reported reasoning tokens and kept none of the thought; a model
+ * call that failed with no reply kept and no figures; a model call still
+ * waiting on its reply; and the run's stop.
  */
 const rows: TachoFrameRow[] = [
   tachoRow(0, {
@@ -235,6 +237,24 @@ const rows: TachoFrameRow[] = [
     ...stored("Nothing more to do."),
   }),
   tachoRow(12, {
+    kind: "llm_call",
+    ...none,
+    ...model,
+    costUsdMicros: 5,
+    turnSeq: 2,
+    // The harness's own transcript reports the reasoning tokens.
+    source: "transcript",
+    body: JSON.stringify({ thinking_tokens: 50 }),
+    ...stored(streamOf([{ type: "text", text: "Looked again." }])),
+  }),
+  tachoRow(13, {
+    kind: "llm_call",
+    ...none,
+    ...model,
+    toolStatus: "error",
+    turnSeq: 2,
+  }),
+  tachoRow(14, {
     kind: "model.request",
     ...none,
     ...model,
@@ -242,7 +262,7 @@ const rows: TachoFrameRow[] = [
     turnSeq: 2,
     ...stored('{"messages":[]}'),
   }),
-  tachoRow(13, { kind: "agent_stop", ...none, turnSeq: 2 }),
+  tachoRow(15, { kind: "agent_stop", ...none, turnSeq: 2 }),
 ];
 
 function transcript() {
@@ -314,8 +334,10 @@ describe("the Transcript tab's counts and rows", () => {
     // The fixture holds what used to split them: a closing message that
     // repeats the model's streamed words, a prompt of only whitespace, a
     // model step that only called a tool, one kept as a digest with nothing
-    // to draw, a thought kept with no reasoning tokens reported, a call only
-    // the reply records, and a call still waiting on its reply.
+    // to draw, a thought kept with no reasoning tokens reported, reasoning
+    // tokens reported with no thought kept, a call only the reply records, a
+    // call that failed with nothing kept, and a call still waiting on its
+    // reply.
     expect(drawn.map((row) => [row.entry, row.kind, row.group])).toEqual([
       ["0", "prompt", "prompt"],
       ["1", "calls", "responses"],
@@ -332,17 +354,30 @@ describe("the Transcript tab's counts and rows", () => {
       ["10", "usage", "usage"],
       ["10", "tool", "responses"],
       ["11", "text", "responses"],
-      ["13", "seal", "seal"],
+      ["12", "text", "responses"],
+      ["12", "thinking", "thinking"],
+      ["12", "usage", "usage"],
+      ["13", "event", null],
+      ["15", "seal", "seal"],
     ]);
-    expect(counts.entries).toBe(10);
-    expect(counts.kinds.responses).toBe(5);
-    expect(counts.kinds.thinking).toBe(0);
+    expect(counts.entries).toBe(12);
+    expect(counts.kinds.responses).toBe(6);
+    expect(counts.kinds.thinking).toBe(1);
     expect(counts.kinds.tools).toBe(3);
-    expect(counts.errors).toBe(1);
+    expect(counts.errors).toBe(2);
+    // The failed call with nothing kept draws one failed row, so the errors
+    // toggle shows it.
+    expect(drawn.find((row) => row.entry === "13")).toMatchObject({
+      failed: true,
+    });
     // The step that only called Read names it, and draws the call once, as
     // the Read step's row.
-    expect(drawn.find((row) => row.kind === "calls")).toMatchObject({
-      tools: ["Read"],
-    });
+    const calls = drawn.filter((row) => row.kind === "calls");
+    expect(calls.map((row) => [row.entry, row.tools])).toEqual([
+      ["1", ["Read"]],
+      // Grep, which no tool step recorded, is drawn as its own row after
+      // this one, so this row does not name it again.
+      ["10", []],
+    ]);
   });
 });

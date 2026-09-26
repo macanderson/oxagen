@@ -257,7 +257,13 @@ describe("the kind chips", () => {
         stepsOf(
           releaseSteps().map((spec) =>
             spec.seq === 12
-              ? { ...spec, kinds: ["tools"], outcome: "ok", label: "Bash ok" }
+              ? {
+                  ...spec,
+                  kinds: ["tools"],
+                  outcome: "ok",
+                  error: false,
+                  label: "Bash ok",
+                }
               : spec,
           ),
           { counts: { ...releaseCounts(), errors: 0 } },
@@ -873,6 +879,7 @@ describe("event rows", () => {
       label: "deny Bash",
       subject: "Bash",
       outcome: "denied",
+      error: true,
       gates: [{ seq: 2, decision: "deny", type: "policy_decision" }],
       turn: 1,
     },
@@ -898,6 +905,7 @@ describe("event rows", () => {
       turn: 1,
       kinds: ["errors"],
       outcome: "failed",
+      error: true,
     },
   ];
   const events = () =>
@@ -1291,6 +1299,7 @@ describe("paging past the cursor", () => {
 /** An EventSource the test drives, capturing each one the hook opens. */
 function fakeEventSource(state: number) {
   const instances: {
+    url: string;
     onmessage: ((event: MessageEvent<string>) => void) | null;
   }[] = [];
   class FakeEventSource {
@@ -1306,7 +1315,7 @@ function fakeEventSource(state: number) {
     }
     addEventListener(): void {}
     removeEventListener(): void {}
-    constructor() {
+    constructor(readonly url: string) {
       instances.push(this);
     }
   }
@@ -1324,6 +1333,26 @@ describe("following a live run", () => {
       expect(readTranscriptPage).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it("opens the stream after the last frame the transcript folded, not at the run's first (A-06)", () => {
+    const instances = fakeEventSource(1);
+    try {
+      renderSection({
+        read: readOk(
+          mockupTranscript({
+            cursor: "ZjoxMQ",
+            complete: false,
+            frameCursor: "Zjo3OTk5",
+          }),
+        ),
+        status: "live",
+      });
+      expect(instances).toHaveLength(1);
+      expect(instances[0]?.url).toMatch(/\/stream\?after=Zjo3OTk5$/);
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 
@@ -1522,6 +1551,7 @@ describe("a call the in-app assistant parked", () => {
         outcome,
         ...(approvalId === undefined ? {} : { approvalId }),
         kinds: outcome === "denied" ? ["tools", "errors"] : ["tools"],
+        error: outcome === "denied",
         request: {
           seq: 3,
           type: "tool.engine_call_started",

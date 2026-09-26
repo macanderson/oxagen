@@ -570,12 +570,14 @@ export const transcriptEntrySchema = z
     node: transcriptNodeSchema.nullable().optional(),
     /**
      * True when the entry has nothing to show a reader beyond its frames: a
-     * prompt or reply with no words to show, a reply that repeats words the
-     * reader was just shown (`echoOf`), a model step that kept no reply and
-     * carried no cost, tokens or effort, or an event with no decision and no
-     * failure. `counts` counts no quiet entry. The words are read at `steps`
-     * only: at `everything` a prompt or reply is quiet only when it kept no
-     * half at all, so one whose words are blank or repeat is not quiet there.
+     * prompt or reply whose body was read and holds no words, a reply that
+     * repeats words the reader was just shown (`echoOf`), a model step that
+     * kept no reply, carried no cost, tokens or effort, and did not fail, or
+     * an event with no decision and no failure. A body that could not be
+     * read does not make its entry quiet. `counts` counts no quiet entry.
+     * The words are read at `steps` only: at `everything` a prompt or reply
+     * is quiet only when it kept no half at all, so one whose words are
+     * blank or repeat is not quiet there.
      */
     quiet: z.boolean().optional(),
     /**
@@ -584,6 +586,12 @@ export const transcriptEntrySchema = z
      * its entry's outcome is null too.
      */
     outcome: transcriptOutcomeSchema.nullable().optional(),
+    /**
+     * True when `counts.errors` counts the entry: it failed, it was refused,
+     * or a frame in it answers the errors chip. A reader marks the entry's
+     * rows failed by this and keeps no rule of its own.
+     */
+    error: z.boolean().optional(),
     /** The approval a parked call waits on (`apr_…`); null otherwise. */
     approvalId: z.string().nullable().optional(),
     /**
@@ -862,6 +870,13 @@ export const runTranscriptGet = registerCapability({
        * it as the whole.
        */
       complete: z.boolean(),
+      /**
+       * The `get_run` frame cursor of the last frame on the run's own chain
+       * that this read folded; null when it folded none. A reader that follows
+       * the run opens its stream after this frame, so the stream sends only
+       * the frames this read did not hold rather than the whole run again.
+       */
+      frameCursor: z.string().nullable().optional(),
       /** The run's entries counted at this zoom, whatever the chips. */
       counts: transcriptCountsSchema.optional(),
       /** The run's figures, whatever the zoom, chips or query. */

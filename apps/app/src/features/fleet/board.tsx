@@ -4,8 +4,9 @@
 //
 // One client component holds both, because the filter chips change what the
 // tiles add up: Spend shown and Tokens shown are sums over the rows listed,
-// and the labels say "shown" for that reason. Every figure here comes from
-// `view.ts` over the same rows the table draws.
+// and the labels say "shown" for that reason. Those figures come from
+// `view.ts` over the same rows the table draws. Live runs is the workspace's,
+// counted by `list_runs` whatever the page or the chips, as its label says.
 //
 // The page size is the read's own limit, and the pull-request filter is the
 // read's own filter, so both change what `list_runs` returns rather than
@@ -28,10 +29,14 @@ import type { ApprovalQueue } from "@/data/contracts/approvals";
 import {
   type CommandBlock,
   commandBlockOf,
+  isStale,
   type PullRequestFilter,
   type RunDiff,
   type RunPullRequest,
   type RunRow,
+  canGoStale,
+  STALE_REREAD_MS,
+  staleReason,
 } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { openApprovals } from "@/features/shell/client";
@@ -69,6 +74,7 @@ import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { SheetDialog } from "@/ui/sheet-dialog";
 import { StatusBadge } from "@/ui/status-badge";
 import { cell, headCell, numericCell } from "@/ui/table";
+import { LiveRefresh } from "@/ui/live-refresh";
 import { ToastStack, useToasts } from "@/ui/toast";
 import { dispatchRunCommand, exportFleetRun } from "./actions";
 import { Clock } from "@/ui/clock";
@@ -94,7 +100,6 @@ import {
   type ListedRun,
   type ListQuery,
   listRuns,
-  liveCount,
   oldestApproval,
   parkedRunIds,
   pullRequestLabel,
@@ -215,11 +220,14 @@ function Tiles({
   listed,
   approvals,
   agentTotal,
+  liveRuns,
   now,
 }: {
   listed: readonly ListedRun[];
   approvals: Read<ApprovalQueue>;
   agentTotal: number | null;
+  /** The workspace's live runs, as `list_runs` counted them; null when it could not. */
+  liveRuns: number | null;
   now: number;
 }) {
   const t = useTranslations("fleet.stats");
@@ -241,9 +249,24 @@ function Tiles({
   ].join(" · ");
   return (
     <section aria-label={t("label")} className={`${statStrip} mb-4`}>
+      {/* Every live run in the workspace, parked ones included, as the Live
+          chip lists them. A page of rows could not say how many the
+          workspace holds, so a missing count is said, never taken from the
+          page. */}
       <Tile
         term={t("live.title")}
-        value={formatCount(liveCount(listed), locale)}
+        value={
+          liveRuns === null ? (
+            <span
+              data-testid="live-not-counted"
+              className="text-base font-medium text-muted-foreground"
+            >
+              {t("live.notCounted")}
+            </span>
+          ) : (
+            formatCount(liveRuns, locale)
+          )
+        }
         note={
           agentTotal === null
             ? t("live.basisUnread")
@@ -1003,7 +1026,9 @@ function RunRowView({
       case "status":
         return (
           <td key={column} className={cell}>
-            {state === "parked" ? (
+            {/* A stale run's host went quiet, so its parked call is no longer
+                news of the run: stale wins, as on the Run page's header. */}
+            {state === "parked" && !isStale(run) ? (
               <Badge tone="approval" data-status="parked">
                 {t("parked")}
               </Badge>
@@ -1012,6 +1037,7 @@ function RunRowView({
                 status={run.status}
                 outcome={run.outcome}
                 vocabulary="lifecycle"
+                stale={staleReason(run)}
               />
             )}
           </td>
@@ -1318,6 +1344,7 @@ export function FleetBoard({
   cursor,
   approvals,
   agentTotal,
+  liveRuns = null,
   now,
   canCommand,
   prefs: savedPrefs = DEFAULT_FLEET_PREFS,
@@ -1332,6 +1359,8 @@ export function FleetBoard({
   approvals: Read<ApprovalQueue>;
   /** Identities in the workspace; null when the agents read failed. */
   agentTotal: number | null;
+  /** The workspace's live runs (`list_runs`' `liveRuns`); null when not counted. */
+  liveRuns?: number | null;
   /** Epoch milliseconds the reads returned at. */
   now: number;
   /** Whether `dispatch_command` admits this viewer. */
@@ -1449,10 +1478,18 @@ export function FleetBoard({
 
   return (
     <>
+      {/* A live wrapped run's stale light is as of this read. With no stream
+          to say the host went quiet, Fleet reads itself again once per host
+          poll window while it lists one (A-02). */}
+      <LiveRefresh
+        active={runs.some(canGoStale)}
+        intervalMs={STALE_REREAD_MS}
+      />
       <Tiles
         listed={listed}
         approvals={approvals}
         agentTotal={agentTotal}
+        liveRuns={liveRuns}
         now={now}
       />
       <section aria-labelledby="fleet-runs" className={panel}>

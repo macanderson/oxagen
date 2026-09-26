@@ -55,9 +55,13 @@ function chDateTime(ms: number): string {
 /**
  * The window's manifests, newest first, one per session (the newest, if a
  * session sealed more than one), as record ids by outcome. The table is keyed
- * on (org, workspace, session, seq), so the `ts` bound keeps this from
- * scanning the tenant's whole history. One SELECT over one table, because
- * chSelect admits nothing more.
+ * on (org, workspace, session, seq) and partitioned by the month of
+ * `received_at` (#4297), so the `ts` bound picks the window and the
+ * `received_at` bound keeps the read to the months around it rather than the
+ * tenant's whole history. A manifest stamped in the window reached the
+ * control plane no earlier than a day before it opened, allowing the host's
+ * clock a day's lead, and a late one is still read. One SELECT over one
+ * table, because chSelect admits nothing more.
  */
 const MANIFESTS_IN_WINDOW = `
   SELECT session_uuid,
@@ -82,6 +86,7 @@ const MANIFESTS_IN_WINDOW = `
     AND chain_verified = 1
     AND ts >= {since:DateTime64(3)}
     AND ts < {until:DateTime64(3)}
+    AND received_at >= {since:DateTime64(3)} - INTERVAL 1 DAY
   GROUP BY session_uuid
   ORDER BY max(ts) DESC, session_uuid
   LIMIT {scan:UInt32}

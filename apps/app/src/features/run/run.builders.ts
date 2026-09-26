@@ -27,7 +27,7 @@ import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { PriceBook } from "@/data/contracts/spend";
 import type { DataSource } from "@/data/ports";
-import { frameFolds, tachoFrame } from "@oxagen/run-ledger";
+import { countsAsError, frameFolds, tachoFrame } from "@oxagen/run-ledger";
 import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import { type Read, readOk } from "@/data/read";
 
@@ -211,6 +211,8 @@ export function transcriptBody(
 export function transcriptEntry(
   overrides: Partial<TranscriptEntry> = {},
 ): TranscriptEntry {
+  const kinds = overrides.kinds ?? ["responses"];
+  const outcome = overrides.outcome === undefined ? "ok" : overrides.outcome;
   const entry: Omit<TranscriptEntry, "key"> = {
     seq: "11",
     endSeq: "14",
@@ -236,6 +238,10 @@ export function transcriptEntry(
     node: "model",
     quiet: false,
     outcome: "ok",
+    // What the server states, by its own rule, unless the fixture says
+    // otherwise: an entry that failed, was refused or answers the errors
+    // chip is an error.
+    error: countsAsError({ outcome, kinds: new Set(kinds) }),
     approvalId: null,
     gates: [],
     subject: null,
@@ -451,6 +457,7 @@ export function mockupTranscript(
       node: fold.node,
       quiet: fold.quiet,
       outcome: fold.outcome,
+      error: countsAsError(fold),
       subject: fold.subject,
       family: fold.family,
       model: spec.kind === "model_call" ? spec.label : null,
@@ -755,9 +762,10 @@ type RunReads = {
   /**
    * `get_run_work`, started with the page and awaited by the header's
    * checkout strip and the Changes panel. A test that says nothing about it
-   * gets a run whose host enrolled no checkout and opened no pull request.
+   * gets a run whose host enrolled no checkout and opened no pull request. A
+   * function answers the read itself, which is how a test holds it pending.
    */
-  work?: Read<RunWork>;
+  work?: Read<RunWork> | (() => Promise<Read<RunWork>>);
   /**
    * The spine above the tabs, read with the page and not with a tab. A test
    * that says nothing about it gets a run that produced nothing, so a test
@@ -887,18 +895,20 @@ export function runSource(reads: RunReads) {
           }),
         ),
       work: (_ctx, runId) =>
-        Promise.resolve(
-          reads.work ??
-            readOk({
-              runId,
-              machine: null,
-              checkouts: [],
-              diffs: [],
-              pullRequests: [],
-              complete: false,
-              warnings: ["checkout_context_not_recorded"],
-            }),
-        ),
+        typeof reads.work === "function"
+          ? reads.work()
+          : Promise.resolve(
+              reads.work ??
+                readOk({
+                  runId,
+                  machine: null,
+                  checkouts: [],
+                  diffs: [],
+                  pullRequests: [],
+                  complete: false,
+                  warnings: ["checkout_context_not_recorded"],
+                }),
+            ),
       get: answer("get", reads.detail),
       frameBody: answer("frameBody", reads.frameBody),
       cost: answer("cost", reads.cost ?? readOk(runCost())),
@@ -1096,6 +1106,7 @@ export function runRoster(
         description: null,
         agentKey: "acme.core.release-bot",
         harness: "claude-code",
+        managed: false,
         operatorId: "usr_marcusbell",
         operatorName: "Marcus Bell",
         principalId: "prn_91",

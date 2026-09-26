@@ -24,7 +24,7 @@ The identity lives in Postgres and the definition in git (ADR-057 decision 1): `
 
 | Field | Type | Notes |
 |---|---|---|
-| `identity` | object | `id`, `slug`, `name`, `description`, `agentKey`, `harness`, `principalId`, `operatorId`, `status`, `registeredAt` as in `list_agents`; `firstFrameAt` is the start of the earliest run either store recorded, null before the first. `costCenter` is the label `set_cost_center` stored on the agent (ADR-142), null when the agent inherits the workspace's. |
+| `identity` | object | `id`, `slug`, `name`, `description`, `agentKey`, `harness`, `managed`, `principalId`, `operatorId`, `status`, `registeredAt` as in `list_agents`; `firstFrameAt` is the start of the earliest run either store recorded, null before the first. `costCenter` is the label `set_cost_center` stored on the agent (ADR-142), null when the agent inherits the workspace's. |
 | `credentials[]` | object | `id` (`aky_…`), `name`, `prefix`, `createdAt`, `expiresAt`, `lastUsedAt`, `revokedAt` — revoked credentials stay listed with their date. Newest first. |
 | `roles[]` | object | `id` (`rol_…`), `name`, `scopeKind`, `isSystemDefault`, `assignedAt`, `expiresAt` — the live, unexpired assignments on the agent's principal. |
 | `hosts[]` | object | `hostEnrollmentId` (`tch_…`), `hostname`, `platform`, `status`, `mode`, `harnesses`, `deviceKeyFingerprint`, `collectorVersion`, `hooksOk`, `bundleVersionServed`, `lastSeenAt`, `expiresAt`, `revokedAt`. Newest first, revoked hosts included. |

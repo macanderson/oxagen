@@ -4,6 +4,7 @@
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
+import { isManagedAgentType } from "@oxagen/oxagen/interactive-agent";
 import type {
   AgentGetInput,
   AgentGetOutput,
@@ -239,6 +240,7 @@ export async function agentGetHandler(
         description: row.description,
         agentKey,
         harness: row.harness as AgentGetOutput["identity"]["harness"],
+        managed: isManagedAgentType(row.agentType),
         principalId: row.principalPublicId,
         operatorId: row.operatorPublicId,
         status: identityStatus(row, held),

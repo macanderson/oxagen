@@ -12,6 +12,7 @@
           "description": null,
           "agentKey": "agt_replay",
           "harness": "claude-code",
+          "managed": false,
           "principalId": null,
           "operatorId": null,
           "operatorName": null,
@@ -40,6 +41,7 @@
       "nextCursor": null,
       "totals": {
         "identities": 1,
+        "retired": 0,
         "enrolled": 1,
         "unenrolled": 0,
         "holdingMandate": null,

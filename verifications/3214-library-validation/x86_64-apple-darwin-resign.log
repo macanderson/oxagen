@@ -1,0 +1,94 @@
+##[group]Run plain="$RUNNER_TEMP/Plain.app"
+plain="$RUNNER_TEMP/Plain.app"
+rm -rf "$plain"
+cp -R "apps/desktop/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Oxagen.app" "$plain"
+codesign --force --deep -s - "$plain"
+bash apps/desktop/scripts/smoke-macos-bundle.sh "$plain" apps/desktop/src-tauri/entitlements.plist
+shell: /bin/bash --noprofile --norc -e -o pipefail {0}
+env:
+  HAS_APPLE_CERT: false
+  PNPM_HOME: /Users/runner/setup-pnpm/node_modules/.bin
+  CARGO_HOME: /Users/runner/.cargo
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+  CACHE_ON_FAILURE: false
+  APPLE_SIGNING_IDENTITY: -
+##[endgroup]
+/Users/runner/work/_temp/Plain.app: replacing existing signature
+/Users/runner/work/_temp/Plain.app has a binary signed without the hardened runtime.
+Checking a copy re-signed ad hoc with --options runtime and apps/desktop/src-tauri/entitlements.plist: /var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/tmp.wxuIycVQA2/Plain.app
+/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/tmp.wxuIycVQA2/Plain.app/Contents/MacOS/tacho: replacing existing signature
+/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/tmp.wxuIycVQA2/Plain.app/Contents/MacOS/oxagen: replacing existing signature
+/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/tmp.wxuIycVQA2/Plain.app: replacing existing signature
+oxagen-desktop in the copy: flags=0x10002(adhoc,runtime)
+tacho in the copy: flags=0x10002(adhoc,runtime)
+oxagen in the copy: flags=0x10002(adhoc,runtime)
+
+== Signatures
+--prepared:/private/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/tmp.wxuIycVQA2/Plain.app/Contents/MacOS/oxagen
+--validated:/private/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/tmp.wxuIycVQA2/Plain.app/Contents/MacOS/oxagen
+--prepared:/private/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/tmp.wxuIycVQA2/Plain.app/Contents/MacOS/tacho
+--validated:/private/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/tmp.wxuIycVQA2/Plain.app/Contents/MacOS/tacho
+/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/tmp.wxuIycVQA2/Plain.app: valid on disk
+/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/tmp.wxuIycVQA2/Plain.app: satisfies its Designated Requirement
+
+-- oxagen-desktop
+Executable=/private/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/tmp.wxuIycVQA2/Plain.app/Contents/MacOS/oxagen-desktop
+Identifier=sh.oxagen.desktop
+Format=app bundle with Mach-O thin (x86_64)
+CodeDirectory v=20500 size=53778 flags=0x10002(adhoc,runtime) hashes=1670+7 location=embedded
+Signature=adhoc
+Info.plist entries=16
+TeamIdentifier=not set
+Runtime Version=15.5.0
+Sealed Resources version=2 rules=13 files=3
+Internal requirements count=0 size=12
+{
+  "com.apple.security.cs.allow-jit" => 1
+  "com.apple.security.cs.allow-unsigned-executable-memory" => 1
+}
+
+-- tacho
+Executable=/private/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/tmp.wxuIycVQA2/Plain.app/Contents/MacOS/tacho
+Identifier=tacho-55554944e384741f519e39ebaa846c86435584ba
+Format=Mach-O thin (x86_64)
+CodeDirectory v=20500 size=982671 flags=0x10002(adhoc,runtime) hashes=30697+7 location=embedded
+Signature=adhoc
+Info.plist=not bound
+TeamIdentifier=not set
+Runtime Version=15.0.0
+Sealed Resources=none
+Internal requirements count=0 size=12
+{
+  "com.apple.security.cs.allow-jit" => 1
+  "com.apple.security.cs.allow-unsigned-executable-memory" => 1
+}
+
+-- oxagen
+Executable=/private/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/tmp.wxuIycVQA2/Plain.app/Contents/MacOS/oxagen
+Identifier=oxagen-55554944e384741f519e39ebaa846c86435584ba
+Format=Mach-O thin (x86_64)
+CodeDirectory v=20500 size=979824 flags=0x10002(adhoc,runtime) hashes=30608+7 location=embedded
+Signature=adhoc
+Info.plist=not bound
+TeamIdentifier=not set
+Runtime Version=15.0.0
+Sealed Resources=none
+Internal requirements count=0 size=12
+{
+  "com.apple.security.cs.allow-jit" => 1
+  "com.apple.security.cs.allow-unsigned-executable-memory" => 1
+}
+
+== Sidecars
+tacho --version: 2.1.1
+oxagen --version: 2.1.1
+
+== App, for 20 seconds
+oxagen-desktop is still running after 20 seconds.
+-- app output
+
+== Library validation messages in the system log, last five minutes
+Timestamp               Ty Process[PID:TID]
+2026-09-26 00:20:27.082 Df log[13462:9e67] [com.apple.log:] log run noninteractively, parent: 12803 (bash), args: 'log' 'show' '--last' '5m' '--style' 'compact' '--predicate' 'eventMessage CONTAINS[c] "library validation"'
+2026-09-26 00:20:55.743 Df log[14336:a774] [com.apple.log:] log run noninteractively, parent: 13721 (bash), args: 'log' 'show' '--last' '5m' '--style' 'compact' '--predicate' 'eventMessage CONTAINS[c] "library validation"'

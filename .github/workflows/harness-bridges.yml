@@ -1,0 +1,114 @@
+# The harness bridges on a checkout without symlinks (#3367, ADR-141).
+#
+# `.agents/skills` (Codex) and `.cursor/commands` (Cursor) are committed as
+# symlinks into `.claude/`. Git for Windows writes each one as a text file
+# holding its target unless symlinks are on, which needs Developer Mode or an
+# administrator, and Codex and Cursor then see no skills and no commands.
+# `tools/scripts/ensure-harness-bridges.mjs` runs from the root `prepare`
+# script and links them again: a junction on Windows, a symlink elsewhere.
+#
+# Each leg checks out with `core.symlinks=false`, shows the bridges arrive as
+# text files, runs the script, and checks that both lead to directories with
+# the skills and commands in them and that `git status` stays clean.
+name: Harness bridges
+
+on:
+  pull_request:
+    paths:
+      - ".agents/**"
+      - ".cursor/**"
+      - ".claude/skills/**"
+      - ".claude/commands/**"
+      - "tools/scripts/ensure-harness-bridges.*"
+      - "package.json"
+      - ".github/workflows/harness-bridges.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".agents/**"
+      - ".cursor/**"
+      - "tools/scripts/ensure-harness-bridges.*"
+      - "package.json"
+
+concurrency:
+  group: harness-bridges-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  bridges:
+    name: Bridges without symlinks (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    steps:
+      - name: Turn symlinks off, as on a Windows machine without Developer Mode
+        run: git config --global core.symlinks false
+
+      - uses: actions/checkout@v5
+
+      - name: The bridges arrive as text files
+        shell: bash
+        run: |
+          for bridge in .agents/skills .cursor/commands; do
+            if [ -L "$bridge" ] || [ -d "$bridge" ] || [ ! -f "$bridge" ]; then
+              echo "::error::$bridge is not the text file a checkout without symlinks writes"
+              exit 1
+            fi
+            echo "$bridge holds: $(cat "$bridge")"
+          done
+
+      - name: The check fails before the bootstrap
+        shell: bash
+        run: |
+          if node tools/scripts/ensure-harness-bridges.mjs --check; then
+            echo "::error::the check passed on text-file bridges"
+            exit 1
+          fi
+
+      - name: Link the bridges
+        run: node tools/scripts/ensure-harness-bridges.mjs
+
+      - name: Both bridges lead to the skills and commands
+        run: node tools/scripts/ensure-harness-bridges.mjs --check
+
+      - name: Codex and Cursor can list them
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            for (const [bridge, source] of [[".agents/skills", ".claude/skills"], [".cursor/commands", ".claude/commands"]]) {
+              const seen = fs.readdirSync(bridge).sort();
+              const want = fs.readdirSync(source).sort();
+              if (seen.length === 0 || JSON.stringify(seen) !== JSON.stringify(want)) {
+                console.error(`${bridge} lists ${seen.length} entries, ${source} has ${want.length}`);
+                process.exit(1);
+              }
+              console.log(`${bridge}: ${seen.length} entries, the same as ${source}`);
+            }
+          '
+
+      - name: git status stays clean
+        shell: bash
+        run: |
+          changed="$(git status --porcelain -- .agents .cursor)"
+          if [ -n "$changed" ]; then
+            echo "$changed"
+            echo "::error::linking the bridges left the checkout modified"
+            exit 1
+          fi
+
+      - name: A second run changes nothing
+        shell: bash
+        run: |
+          out="$(node tools/scripts/ensure-harness-bridges.mjs)"
+          if [ -n "$out" ]; then
+            echo "$out"
+            echo "::error::a second run changed something"
+            exit 1
+          fi

@@ -35,6 +35,11 @@ export interface TachoPaths {
   /** Recorder state the daemon persists so a restart continues each chain. */
   daemonState: string;
   /**
+   * The sealed sessions `daemonState` leaves out once they are released, and
+   * the commands the daemon answered. Written only when either changes.
+   */
+  daemonSealedState: string;
+  /**
    * Sealed terminal batches the daemon has not yet landed in the WAL. A batch
    * waits here for the moment between sealing and the WAL append, so the file
    * can hold a run's content and has to be purged with the WAL (ADR-139).
@@ -48,6 +53,19 @@ export interface TachoPaths {
   hookIdJournal: string;
   /** Transcript byte cursors, so a restart does not re-read every transcript. */
   transcriptTailState: string;
+  /**
+   * Copies of the files that held uncommitted edits when a session first
+   * read a worktree, one directory per session, so a reconciliation can
+   * count only the session's lines in them (ADR-188). Never shipped, and
+   * removed when the daemon forgets the session.
+   */
+  preSessionCopies: string;
+  /**
+   * The Stella identity cache: one file per Stella process, holding its pid
+   * and start time, so most Stella hooks run no `ps` (`resolveStellaIdentity`).
+   * A cache only, so `tacho unenroll` removes it.
+   */
+  stellaIdentity: string;
   /** The daemon's pid file. */
   pid: string;
   /** Daemon stdout/stderr when run as a service. */
@@ -142,9 +160,12 @@ export function tachoPaths(
     spool: join(root, "spool"),
     quarantine: join(root, "quarantine"),
     daemonState: join(root, "daemon.json"),
+    daemonSealedState: join(root, "daemon-sealed.json"),
     pendingEnds: join(root, "pending-session-ends.json"),
     hookIdJournal: join(root, "hook-ids.jsonl"),
     transcriptTailState: join(root, "transcript-tail.json"),
+    preSessionCopies: join(root, "pre-session"),
+    stellaIdentity: join(root, "stella-identity"),
     pid: join(root, "tachod.pid"),
     log: join(root, "tachod.log"),
     claudeSettings: join(claudeConfigDir, "settings.json"),

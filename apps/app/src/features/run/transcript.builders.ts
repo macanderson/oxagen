@@ -21,6 +21,7 @@ import {
   type TranscriptUsage,
 } from "@/data/contracts/run";
 import { toRunTranscript } from "@/data/live/mappers/run";
+import { countsAsError } from "@oxagen/run-ledger";
 import { NOW } from "./run.builders";
 
 /**
@@ -109,6 +110,11 @@ export type StepSpec = {
   }[];
   kinds?: TranscriptKind[];
   outcome?: TranscriptOutcome | null;
+  /**
+   * The server counts the step under `counts.errors`. Absent means what the
+   * server states by its own rule (`countsAsError`) over `outcome` and `kinds`.
+   */
+  error?: boolean;
   subject?: string;
   /** The subject as the harness knows it, as the server reads it; absent means the answer did not say. */
   tool?: string;
@@ -287,6 +293,12 @@ export function stepsOf(
       node: spec.node,
       quiet: spec.quiet ?? false,
       outcome: spec.outcome ?? null,
+      error:
+        spec.error ??
+        countsAsError({
+          outcome: spec.outcome ?? null,
+          kinds: new Set(spec.kinds ?? []),
+        }),
       approvalId: spec.approvalId ?? null,
       gates,
       subject: spec.subject ?? null,
@@ -563,7 +575,12 @@ export function releaseSteps(): StepSpec[] {
           stderr: "",
         },
       },
-      { label: "Bash error", kinds: ["tools", "errors"], outcome: "failed" },
+      {
+        label: "Bash error",
+        kinds: ["tools", "errors"],
+        outcome: "failed",
+        error: true,
+      },
     ),
     modelStep(
       13,

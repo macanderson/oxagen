@@ -136,6 +136,16 @@ export interface SessionFacts {
   transcriptPath?: string;
   cwd?: string;
   pid?: number;
+  /**
+   * When the process behind `pid` started, as `ps` printed it in UTC the
+   * first time a live hook named that pid. A pid alone is not the harness: once the
+   * harness exits, the OS hands its pid to the next process it starts. The
+   * kill path and the sweep compare this with the pid's start time now and
+   * treat a different one as a different process. Absent where no start
+   * time could be read (Windows, or no `ps`), and then the bare pid stands,
+   * as it did before this was kept.
+   */
+  pidInstance?: string;
   /** Which harness runs the session; fixed at first sight, Claude Code by default. */
   harness?: TachoHarness;
   /** A custom agent's name (`--agent`); fixed at first sight. */
@@ -329,6 +339,34 @@ export interface RegistryState {
   tombstones?: ChainTombstone[];
 }
 
+/** The schema of the sealed-state file (`TachoPaths.daemonSealedState`). */
+export const SEALED_STATE_SCHEMA = "tacho.daemon-sealed-state.v1";
+
+/**
+ * The sealed-state file: the released sessions `daemon.json` leaves out
+ * (`SessionRegistry.coldState`), and the acknowledgement of every command
+ * this host answered, oldest first, as the daemon's `HandledCommands` holds
+ * them. Both change far less often than the ticks that write
+ * `daemon.json`, so they are written only when they change.
+ */
+export interface SealedState {
+  schema: typeof SEALED_STATE_SCHEMA;
+  sessions: PersistedSession[];
+  handled: unknown[];
+}
+
+export function parseSealedState(value: unknown): SealedState | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const candidate = value as Partial<SealedState>;
+  if (candidate.schema !== SEALED_STATE_SCHEMA) return undefined;
+  if (!Array.isArray(candidate.sessions)) return undefined;
+  return {
+    schema: SEALED_STATE_SCHEMA,
+    sessions: candidate.sessions,
+    handled: Array.isArray(candidate.handled) ? candidate.handled : [],
+  };
+}
+
 /**
  * Where a forgotten session's chain stopped. `forgetSealed` drops a sealed
  * session a week after it was last seen, but the harness still holds its
@@ -355,6 +393,16 @@ export const TOMBSTONE_RETAIN_MS = 30 * 24 * 60 * 60_000;
 
 /** The most tombstones kept; the oldest is dropped first. */
 export const MAX_TOMBSTONES = 512;
+
+/**
+ * How long a sealed session keeps its call ledgers, closed subagent chains,
+ * and open tool-use ids (`releaseSealedState`). The ledgers recognise a second source reporting a
+ * call the chain already holds: the transcript tailer reads a sealed
+ * transcript until it has sat unchanged for five minutes
+ * (`DEFAULT_SEALED_TAIL_IDLE_MS`), and OTel exports in batches seconds
+ * apart. An hour covers both.
+ */
+export const SEALED_STATE_RETAIN_MS = 60 * 60_000;
 
 /**
  * How long a session with a pid may go without a single event before the
@@ -399,6 +447,13 @@ export interface RegistryOptions {
   context: ClaudeCodeContext;
   scope: string;
   now: () => number;
+  /**
+   * The start time of each of these pids, as `readProcessStarts` reads it.
+   * Absent, or answering undefined, records no `pidInstance`.
+   */
+  processStarts?: (
+    pids: readonly number[],
+  ) => ReadonlyMap<number, string> | undefined;
 }
 
 /**
@@ -432,6 +487,18 @@ export class SessionRegistry {
    * boundary delivered them, waiting for the daemon to send them.
    */
   private readonly expiredOnSeal: CommandAcknowledgement[] = [];
+  /** The pid each record's start time was last read for, read or not. */
+  private readonly startReadFor = new WeakMap<SessionRecord, number>();
+  /**
+   * Sealed records `releaseSealedState` has emptied, with their state as the
+   * sealed-state file holds it. A record leaves this map when anything
+   * touches it (`frozenStamp`), and goes back once it is released again.
+   */
+  private readonly frozen = new Map<SessionRecord, FrozenSession>();
+  /** The frozen set changed since the sealed-state file was last written. */
+  private coldDirty = false;
+  /** The frozen states the sealed-state file held when it was last written. */
+  private coldEntries = new Set<FrozenSession>();
 
   constructor(options: RegistryOptions) {
     this.options = options;
@@ -624,7 +691,19 @@ export class SessionRegistry {
       : this.get(harnessSessionId);
     if (existing) {
       const reopened = reopens(existing, facts);
-      if (reopened) this.reopen(existing);
+      if (reopened) {
+        this.reopen(existing);
+        // A resume runs in a new process, and the OS may have given it the
+        // pid the session had before. The start time recorded for that
+        // earlier process no longer names the harness, so it is read again
+        // (`notePid`, below). Kept, the next sweep saw a different start
+        // time, sealed the resumed session while it ran, and every cancel
+        // after that was refused as "session has ended".
+        if (facts.pid !== undefined) {
+          delete existing.pidInstance;
+          this.startReadFor.delete(existing);
+        }
+      }
       if (facts.transcriptPath !== undefined)
         existing.transcriptPath = facts.transcriptPath;
       if (facts.cwd !== undefined) {
@@ -646,7 +725,8 @@ export class SessionRegistry {
         }
         existing.cwd = facts.cwd;
       }
-      if (facts.pid !== undefined) existing.pid = facts.pid;
+      if (facts.pid !== undefined)
+        this.notePid(existing, facts.pid, facts.seenAt === undefined);
       if (facts.lastHookEvent !== undefined)
         existing.lastHookEvent = facts.lastHookEvent;
       if (facts.baselineCommit !== undefined)
@@ -694,8 +774,32 @@ export class SessionRegistry {
       ...optionalFacts(facts),
     };
     this.sessions.set(this.key(harnessSessionId, facts), record);
+    if (facts.pid !== undefined && facts.pidInstance === undefined)
+      this.notePid(record, facts.pid, facts.seenAt === undefined);
     this.noteAgent(record, true);
     return { record, created: true };
+  }
+
+  /**
+   * Take the pid a hook named, and read when its process started the first
+   * time a live hook names it. A live hook's harness is waiting on the
+   * answer, so the pid still names the harness while the read runs. A
+   * replayed hook may come from a harness that exited while the daemon was
+   * down, and its pid may name another process by now, so it reads nothing
+   * and the next live hook does. One read per pid, not one per hook: `ps` is
+   * a process spawn.
+   */
+  private notePid(record: SessionRecord, pid: number, live: boolean): void {
+    if (record.pid !== pid) {
+      record.pid = pid;
+      delete record.pidInstance;
+    }
+    if (!live || record.pidInstance !== undefined) return;
+    if (isInternalSession(record.harnessSessionId)) return;
+    if (this.startReadFor.get(record) === pid) return;
+    this.startReadFor.set(record, pid);
+    const started = this.options.processStarts?.([pid])?.get(pid);
+    if (started !== undefined) record.pidInstance = started;
   }
 
   /**
@@ -756,6 +860,7 @@ export class SessionRegistry {
   private reopen(record: SessionRecord): void {
     record.sealed = false;
     delete record.closedIdle;
+    this.thaw(record);
     // `SessionRecorder` has no reopen of its own. A rollback to a mark taken
     // this instant undoes nothing, and it sets the one flag it is handed.
     record.recorder.rollbackChain({
@@ -863,6 +968,119 @@ export class SessionRegistry {
   }
 
   /**
+   * Empty the call ledgers, closed subagent chains, and open tool-use ids of
+   * every sealed session quiet for longer than `retainMs`, and answer how
+   * many it emptied.
+   *
+   * A sealed session stays in the registry, and in `daemon.json`, for
+   * `walRetainMs` (seven days), so a resume continues its chain. Its model
+   * call ledger alone holds up to `LLM_CALL_LEDGER_CAPACITY` keys, and
+   * `persistState` wrote every one of them for every session sealed that
+   * week on every tick that changed anything. On a busy host the file
+   * outgrew the longest string Node can build, and every tick failed with
+   * "Cannot create a string longer than 0x1fffffe8 characters". Emptied, a
+   * sealed session keeps its chain position, context, and totals, and
+   * nothing that grows with the calls it made. The hook-id ledger is left alone: it
+   * is pruned after every complete spool drain (`pruneHookIds`), and a
+   * replay still waiting in the spool needs it.
+   */
+  releaseSealedState(retainMs: number = SEALED_STATE_RETAIN_MS): number {
+    const cutoff = this.options.now() - retainMs;
+    this.thawTouched();
+    let released = 0;
+    for (const [key, record] of this.sessions) {
+      if (!record.sealed || record.pendingTerminal === true) continue;
+      if (this.frozen.has(record)) continue;
+      if (Date.parse(record.lastSeenAt) >= cutoff) continue;
+      record.recorder.releaseSealedState();
+      record.toolUseIds = {};
+      this.freeze(key, record);
+      released += 1;
+    }
+    return released;
+  }
+
+  /**
+   * The state `daemon.json` holds: every session but the released ones the
+   * sealed-state file already holds (`coldState`), with the roster and the
+   * tombstones. The daemon writes it on every tick that changed anything, so
+   * what it costs grows with the sessions running and the hour after they
+   * seal, and not with the week of sealed sessions a host keeps. A session
+   * released since the sealed-state file was last written stays here until
+   * that file holds it, so no write order can lose it.
+   */
+  hotState(): RegistryState {
+    this.thawTouched();
+    return {
+      schema: "tacho.daemon-state.v1",
+      sessions: this.list()
+        .filter((record) => {
+          const frozen = this.frozen.get(record);
+          return frozen === undefined || !this.coldEntries.has(frozen);
+        })
+        .map((record) => this.persisted(record)),
+      agents: [...this.roster.values()].map((entry) => ({ ...entry })),
+      ...(this.tombstones.size > 0
+        ? { tombstones: [...this.tombstones.values()].map(copyTombstone) }
+        : {}),
+    };
+  }
+
+  /**
+   * The released sessions for the sealed-state file, as a JSON array, when
+   * that file must be written again: a session was released, touched, or
+   * forgotten since the last write, or `force`. Undefined when the file
+   * already holds them. Each session is serialized once, when it is
+   * released. The caller writes the file after `daemon.json`, and calls
+   * `written` once the write landed.
+   */
+  coldState(force = false): { json: string; written: () => void } | undefined {
+    this.thawTouched();
+    if (!this.coldDirty && !force) return undefined;
+    const entries = new Set(this.frozen.values());
+    return {
+      json: `[${[...entries].map((entry) => entry.json).join(",")}]`,
+      written: () => {
+        this.coldEntries = entries;
+        this.coldDirty = false;
+      },
+    };
+  }
+
+  private freeze(key: string, record: SessionRecord): FrozenSession {
+    const entry: FrozenSession = {
+      key,
+      stamp: frozenStamp(record),
+      json: JSON.stringify(this.persisted(record)),
+    };
+    this.frozen.set(record, entry);
+    this.coldDirty = true;
+    return entry;
+  }
+
+  private thaw(record: SessionRecord): void {
+    if (this.frozen.delete(record)) this.coldDirty = true;
+  }
+
+  /**
+   * Take back into `daemon.json` every released record that changed since it
+   * was frozen, or that the registry no longer holds under its key (it was
+   * forgotten, or a restore replaced it). A late frame, a resume, or a hook
+   * id pruned away all change the stamp.
+   */
+  private thawTouched(): void {
+    for (const [record, entry] of this.frozen) {
+      if (
+        this.sessions.get(entry.key) !== record ||
+        frozenStamp(record) !== entry.stamp
+      ) {
+        this.frozen.delete(record);
+        this.coldDirty = true;
+      }
+    }
+  }
+
+  /**
    * Forget sealed sessions older than `retainMs`, and report the harness
    * session ids dropped. The roster keeps them counted, and a tombstone keeps
    * where each chain stopped, so a resume after this continues it.
@@ -902,7 +1120,8 @@ export class SessionRegistry {
    * The chains a sweep would close, and how each one ends, without closing
    * any of them. A chain closes when its process is gone, or when it went
    * quiet: past `idleMs` with no pid known, past `staleMs` with one (a pid
-   * can be reused, so it alone cannot keep a chain open). A session whose
+   * can be reused, so it alone cannot keep a chain open). `idleMs` may be
+   * read per record, because Cursor's bound is shorter than the rest. A session whose
    * process is gone with no turn open finished its last turn and exited:
    * that is how Stella, which has no SessionEnd, ends every session, so it
    * closes as `completed`. Anything else closes as `crashed`, including a
@@ -915,8 +1134,8 @@ export class SessionRegistry {
    * `forgetSealed` later dropped it (#3719).
    */
   sweepCandidates(
-    isAlive: (pid: number) => boolean,
-    idleMs: number,
+    isAlive: (pid: number, instance?: string) => boolean,
+    idleMs: number | ((record: SessionRecord) => number),
     deferSeal: (session: SessionRecord) => boolean = () => false,
     staleMs: number = STALE_PID_SESSION_MS,
   ): SweepCandidate[] {
@@ -924,12 +1143,17 @@ export class SessionRegistry {
     const now = this.options.now();
     for (const record of this.sessions.values()) {
       if (record.sealed || deferSeal(record)) continue;
-      const gone = record.pid !== undefined ? !isAlive(record.pid) : false;
+      // `isAlive` is handed the start time the pid was recorded with, so a
+      // pid now held by a process that started later reads as gone.
+      const gone =
+        record.pid !== undefined
+          ? !isAlive(record.pid, record.pidInstance)
+          : false;
       const quiet = now - Date.parse(record.lastSeenAt);
       // The daemon's own chain is exempt: its pid is this process.
       const idle =
         record.pid === undefined
-          ? quiet > idleMs
+          ? quiet > (typeof idleMs === "function" ? idleMs(record) : idleMs)
           : quiet > staleMs && !isInternalSession(record.harnessSessionId);
       if (!gone && !idle) continue;
       if (!record.recorder.hasStarted) {
@@ -977,8 +1201,8 @@ export class SessionRegistry {
    * writes them must use `sweepCandidates` and settle each chain itself.
    */
   sweep(
-    isAlive: (pid: number) => boolean,
-    idleMs: number,
+    isAlive: (pid: number, instance?: string) => boolean,
+    idleMs: number | ((record: SessionRecord) => number),
     deferSeal: (session: SessionRecord) => boolean = () => false,
     staleMs: number = STALE_PID_SESSION_MS,
   ): TachoEvent[] {
@@ -995,34 +1219,11 @@ export class SessionRegistry {
     return out;
   }
 
+  /** Every session, the roster, and the tombstones. */
   state(): RegistryState {
     return {
       schema: "tacho.daemon-state.v1",
-      sessions: this.list().map((record) => ({
-        harnessSessionId: record.harnessSessionId,
-        recorder: record.recorder.state(),
-        control: {
-          paused: record.control.paused,
-          cancelled: record.control.cancelled,
-          messages: [...record.control.messages],
-          ...(record.control.pauseEffect !== undefined
-            ? { pauseEffect: record.control.pauseEffect }
-            : {}),
-          ...(record.control.resumeOwed !== undefined
-            ? { resumeOwed: record.control.resumeOwed }
-            : {}),
-        },
-        startedAt: record.startedAt,
-        lastSeenAt: record.lastSeenAt,
-        sealed: record.sealed,
-        lastCheckpointSeq: record.lastCheckpointSeq,
-        ambient: record.ambient,
-        ...(Object.keys(record.toolUseIds).length > 0
-          ? { toolUseIds: { ...record.toolUseIds } }
-          : {}),
-        ...(record.hookIds.size > 0 ? { hookIds: [...record.hookIds] } : {}),
-        ...optionalFacts(record),
-      })),
+      sessions: this.list().map((record) => this.persisted(record)),
       agents: [...this.roster.values()].map((entry) => ({ ...entry })),
       ...(this.tombstones.size > 0
         ? { tombstones: [...this.tombstones.values()].map(copyTombstone) }
@@ -1030,9 +1231,44 @@ export class SessionRegistry {
     };
   }
 
-  restore(state: RegistryState): void {
+  private persisted(record: SessionRecord): PersistedSession {
+    return {
+      harnessSessionId: record.harnessSessionId,
+      recorder: record.recorder.state(),
+      control: {
+        paused: record.control.paused,
+        cancelled: record.control.cancelled,
+        messages: [...record.control.messages],
+        ...(record.control.pauseEffect !== undefined
+          ? { pauseEffect: record.control.pauseEffect }
+          : {}),
+        ...(record.control.resumeOwed !== undefined
+          ? { resumeOwed: record.control.resumeOwed }
+          : {}),
+      },
+      startedAt: record.startedAt,
+      lastSeenAt: record.lastSeenAt,
+      sealed: record.sealed,
+      lastCheckpointSeq: record.lastCheckpointSeq,
+      ambient: record.ambient,
+      ...(Object.keys(record.toolUseIds).length > 0
+        ? { toolUseIds: { ...record.toolUseIds } }
+        : {}),
+      ...(record.hookIds.size > 0 ? { hookIds: [...record.hookIds] } : {}),
+      ...optionalFacts(record),
+    };
+  }
+
+  /**
+   * Take back a state file's sessions, roster, and tombstones. `sealedFile`
+   * marks sessions read from the sealed-state file: each is released
+   * already, and that file holds it as it is.
+   */
+  restore(state: RegistryState, options: { sealedFile?: boolean } = {}): void {
+    let coldDirty = this.coldDirty;
     for (const persisted of state.sessions) {
-      this.sessions.set(this.key(persisted.harnessSessionId, persisted), {
+      const key = this.key(persisted.harnessSessionId, persisted);
+      this.sessions.set(key, {
         harnessSessionId: persisted.harnessSessionId,
         recorder: new SessionRecorder({
           context: contextForHarness(
@@ -1077,7 +1313,17 @@ export class SessionRegistry {
         hookIds: restoredHookIds(persisted),
         ...optionalFacts(persisted),
       });
+      if (options.sealedFile !== true) continue;
+      const record = this.sessions.get(key) as SessionRecord;
+      // Only a sealed session belongs there. Anything else stays in
+      // `daemon.json`, and the next write of the sealed-state file drops it.
+      if (!record.sealed) {
+        coldDirty = true;
+        continue;
+      }
+      this.coldEntries.add(this.freeze(key, record));
     }
+    if (options.sealedFile === true) this.coldDirty = coldDirty;
     for (const entry of state.agents ?? []) {
       this.roster.set(entry.key, { ...entry });
     }
@@ -1203,6 +1449,9 @@ function optionalFacts(facts: SessionFacts): SessionFacts {
       : {}),
     ...(facts.cwd !== undefined ? { cwd: facts.cwd } : {}),
     ...(facts.pid !== undefined ? { pid: facts.pid } : {}),
+    ...(facts.pid !== undefined && typeof facts.pidInstance === "string"
+      ? { pidInstance: facts.pidInstance }
+      : {}),
     ...(facts.lastHookEvent !== undefined
       ? { lastHookEvent: facts.lastHookEvent }
       : {}),
@@ -1247,6 +1496,41 @@ function reopens(record: SessionRecord, facts: SessionFacts): boolean {
   if (!record.sealed || record.pendingTerminal === true) return false;
   if (facts.lastHookEvent === undefined) return false;
   return facts.lastHookEvent === "SessionStart" || record.closedIdle === true;
+}
+
+/** A released session as the sealed-state file holds it. */
+interface FrozenSession {
+  /** Its key in the registry's map. */
+  key: string;
+  /** `frozenStamp` when it was frozen. */
+  stamp: string;
+  /** Its `PersistedSession`, serialized once. */
+  json: string;
+}
+
+/**
+ * What moves when anything touches a record: a frame sealed on its chain
+ * moves the cursor or opens a subagent chain, a hook or OTel record moves
+ * `lastSeenAt`, and a resume clears `sealed`. A released record whose stamp
+ * moved is serialized again rather than kept as it was frozen.
+ */
+function frozenStamp(record: SessionRecord): string {
+  const cursor = record.recorder.chainCursor;
+  return [
+    cursor.seq,
+    cursor.prevHash,
+    record.recorder.openChildren.size,
+    record.lastSeenAt,
+    record.sealed ? 1 : 0,
+    record.pendingTerminal === true ? 1 : 0,
+    record.pid ?? "",
+    record.pidInstance ?? "",
+    record.control.messages.length,
+    record.hookIds.size,
+    Object.keys(record.toolUseIds).length,
+    record.transcriptPath ?? "",
+    record.cwd ?? "",
+  ].join("|");
 }
 
 function copyTombstone(tombstone: ChainTombstone): ChainTombstone {

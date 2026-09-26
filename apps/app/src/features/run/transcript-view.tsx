@@ -49,7 +49,7 @@ import {
   type TranscriptCounts,
   type TranscriptSearch,
 } from "@/data/contracts/run";
-import type { RunRow } from "@/data/contracts/runs";
+import { isStale, type RunRow } from "@/data/contracts/runs";
 import type { DiffLine } from "@/shared/line-diff";
 import { routes } from "@/shared/safe-path";
 import { useFormatter } from "@/ui/formatter";
@@ -75,6 +75,7 @@ import {
   rebaseEntries,
 } from "./transcript-rows";
 import { useRunStream } from "./use-run-stream";
+import { useStaleRefresh } from "./use-stale-refresh";
 
 type Place = { org: string; ws: string; runId: string };
 
@@ -90,6 +91,7 @@ export type TranscriptRun = Pick<
   | "operatorName"
   | "sealedAt"
   | "ingressPaused"
+  | "commandBlock"
 >;
 
 /** Why a later page did not arrive, in the shape the action answers with. */
@@ -1490,9 +1492,13 @@ export function TranscriptView({
 }: {
   /**
    * `cursor` is set when entries lie past this read: more can be paged in.
-   * `counts` is the whole run's, counted by the server.
+   * `counts` is the whole run's, counted by the server. `frameCursor` is
+   * where the live stream opens.
    */
-  transcript: Pick<RunTranscript, "complete" | "cursor" | "counts">;
+  transcript: Pick<
+    RunTranscript,
+    "complete" | "cursor" | "counts" | "frameCursor"
+  >;
   /** The whole-run transcript's entries at `steps`, at least one. */
   entries: Frames;
   run: TranscriptRun;
@@ -1765,14 +1771,27 @@ export function TranscriptView({
   // A live run reads its tail when the stream says a frame landed. The
   // stream stays open while the viewer is paused: the run keeps recording,
   // and the count beside the transport says how far behind the viewer is.
+  // It opens after the last frame the transcript folded, so it signals only
+  // frames the page has not read.
+  //
+  // The page's stale reading (`isStale`) is as of its read. The header and
+  // the run controls read it too, and this component owns neither, so the
+  // page is read again when the stream says the reading changed: the row the
+  // route sends when it opens disagrees, or a frame lands while the page
+  // reads stale, which means the host is back.
+  const stale = isStale(run);
+  const staleRefresh = useStaleRefresh(stale);
   const stream = useRunStream({
     url: `/api/v1/${encodeURIComponent(org)}/${encodeURIComponent(
       ws,
     )}/runs/${encodeURIComponent(runId)}/stream`,
+    after: transcript.frameCursor ?? null,
     enabled: live,
     onFrames: () => {
+      staleRefresh.onFrames();
       void loadMore();
     },
+    onRun: staleRefresh.onRun,
   });
 
   // The seal changes the header, the badges and the record actions, none of

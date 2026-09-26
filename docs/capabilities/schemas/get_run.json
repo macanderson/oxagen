@@ -589,6 +589,75 @@
               }
             ]
           },
+          "place": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "branch": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "repository": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "host": {
+                            "type": "string"
+                          },
+                          "owner": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string",
+                            "format": "uri"
+                          }
+                        },
+                        "required": [
+                          "host",
+                          "owner",
+                          "name",
+                          "url"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "path",
+                  "branch"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "harness": {
             "anyOf": [
               {
@@ -836,7 +905,8 @@
                     {
                       "type": "null"
                     }
-                  ]
+                  ],
+                  "default": null
                 },
                 "toolStatus": {
                   "anyOf": [
@@ -846,7 +916,8 @@
                     {
                       "type": "null"
                     }
-                  ]
+                  ],
+                  "default": null
                 },
                 "approvalId": {
                   "anyOf": [
@@ -856,7 +927,8 @@
                     {
                       "type": "null"
                     }
-                  ]
+                  ],
+                  "default": null
                 },
                 "body": {
                   "type": "object",
@@ -963,9 +1035,6 @@
                 "observedAt",
                 "digest",
                 "summary",
-                "tool",
-                "toolStatus",
-                "approvalId",
                 "body",
                 "cost"
               ],

@@ -4146,7 +4146,7 @@
       "writes": []
     }
   ],
-  "contentHash": "e3a5bba1519777d4b9b0ce48348048e75466c22b07e03a8270ae4d6d60d04d25",
+  "contentHash": "7a137fe8e6b355fce4d001ae696ab19ea1301cc07285d73d3c39870a198f6fc3",
   "domains": [
     {
       "name": "agent",
@@ -7688,6 +7688,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "summary_spent_usd_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
         },
         {
           "name": "spec_version",
@@ -21715,13 +21721,13 @@
           "name": "lines_added",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "lines_removed",
           "nullable": false,
           "primaryKey": false,
-          "type": "integer"
+          "type": "bigint"
         },
         {
           "name": "observed_status",
@@ -22644,6 +22650,12 @@
           "type": "bigint"
         },
         {
+          "name": "harness_reported_cost_micros",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
           "name": "cost_basis",
           "nullable": true,
           "primaryKey": false,
@@ -22996,6 +23008,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "text"
+        },
+        {
+          "name": "summary_spent_usd_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
         },
         {
           "name": "harness_title",

@@ -92,6 +92,9 @@
                 "custom"
               ]
             },
+            "managed": {
+              "type": "boolean"
+            },
             "principalId": {
               "anyOf": [
                 {
@@ -316,6 +319,7 @@
             "description",
             "agentKey",
             "harness",
+            "managed",
             "principalId",
             "operatorId",
             "operatorName",

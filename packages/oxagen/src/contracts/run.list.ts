@@ -455,6 +455,36 @@ export const runItemSchema = z
       .optional(),
     /** The machine the run ran on; null for a ledger run. */
     machine: runMachineSchema.nullable(),
+    /**
+     * Where a wrapped session ran, as its start recorded it: the working
+     * directory and the git branch (the worktree's branch when it ran in one).
+     * Each is null where the session recorded none, and the whole is null for
+     * a ledger run, which records no host.
+     *
+     * `repository` is the connected repository whose remote matches the
+     * digest the session recorded, or null when none matches. The session
+     * keeps only that digest, so naming the repository takes a read of the
+     * workspace's connected repositories: `get_run` makes it, and `list_runs`
+     * does not, so a list row leaves `repository` out.
+     */
+    place: z
+      .object({
+        path: z.string().nullable(),
+        branch: z.string().nullable(),
+        repository: z
+          .object({
+            host: z.string(),
+            owner: z.string(),
+            name: z.string(),
+            url: z.string().url(),
+          })
+          .strict()
+          .nullable()
+          .optional(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
     /** The recorded agent harness, independent of its model and wrapper. */
     harness: z
       .object({
@@ -572,12 +602,28 @@ export const runList = registerCapability({
        * the read looks through a bounded number of runs per page.
        */
       pullRequests: z.enum(RUN_PULL_REQUEST_FILTERS).optional(),
+      /**
+       * `true` answers `liveRuns`, the workspace's live count. The count reads
+       * every root session the workspace holds, so a read that does not show
+       * it leaves this out and pays nothing for it. Fleet sets it.
+       */
+      countLive: z.boolean().optional(),
     })
     .strict(),
   output: z
     .object({
       runs: z.array(runItemSchema).max(100),
       nextCursor: z.string().nullable(),
+      /**
+       * How many runs in the workspace are live, whatever the page, the
+       * cursor or the pull-request filter: the ledger runs still running and
+       * the root wrapped sessions still open that `list_runs` would list. A
+       * wrapped session whose host is revoked or has not polled within
+       * `HOST_POLL_WINDOW_MS` is not counted, since its row reads stale. A
+       * session with no host is counted. Answered only when the input sets
+       * `countLive`, and absent when the count could not be read.
+       */
+      liveRuns: z.number().int().nonnegative().optional(),
       /**
        * `pull_requests_unread`: the pull-request frames could not be read, so
        * rows carry no `pullRequests` and a filtered page decided on the

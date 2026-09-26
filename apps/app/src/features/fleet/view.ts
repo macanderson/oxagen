@@ -1,6 +1,7 @@
 // What Fleet computes from the rows it read (fleet.md, "Functionality"): the
-// state word a row carries, which rows a filter chip lists, the four tile
-// figures over the rows listed, how a row names its pull requests, and the
+// state word a row carries, which rows a filter chip lists, the tile figures
+// over the rows listed (Live runs is the workspace's, counted by `list_runs`,
+// not a figure over the rows), how a row names its pull requests, and the
 // list controls (search, facets, sort) over the same rows. The page size is
 // the read's own limit, so no control here pages the rows. Pure, so the tiles and the table read one
 // computation and a header can never disagree with the rows beneath it.
@@ -75,11 +76,6 @@ export function listRuns(
   parked: ReadonlySet<string>,
 ): ListedRun[] {
   return runs.map((run) => ({ run, state: rowState(run, parked) }));
-}
-
-/** Live runs among the rows listed; a parked run is waiting, so it is not counted live. */
-export function liveCount(rows: readonly ListedRun[]): number {
-  return rows.filter((row) => row.state === "live").length;
 }
 
 type ShownCost = { value: Cost; reported: boolean; estimate: boolean };

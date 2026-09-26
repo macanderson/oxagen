@@ -7,7 +7,7 @@
  * unpromoted upstream attributes ride in the `attrs` map. Tenant columns are
  * deliberately absent: the control plane stamps them from the API key scope.
  */
-import { hashEvent } from "./chain";
+import { eventHashHolds } from "./chain";
 import {
   BODY_MEMBER_NAMES,
   type TachoEvent,
@@ -406,8 +406,8 @@ function* subsetsBySize(count: number): Generator<boolean[]> {
  * no redactions may have been `{ redactions: [] }` or absent; `spawn_depth`
  * reads 0 from ClickHouse whether it was 0 or unset; `ts` keeps milliseconds
  * only; and the address members of `anthropic` are never stored (#3072). So
- * this builds each reading the row allows and keeps the one whose
- * `hashEvent` equals the row's own `hash`. A match is proof: the hash is what
+ * this builds each reading the row allows and keeps the one that hashes to
+ * the row's own `hash` (`eventHashHolds`). A match is proof: the hash is what
  * the chain links, and sha256 does not collide. When no reading matches, the
  * event is not guessed. The caller records that it was not carried.
  *
@@ -546,13 +546,13 @@ export function unflattenEvent(row: TachoEventRow): TachoEvent | null {
     flags.forEach((flip, i) => {
       if (flip) open[i]?.(candidate);
     });
-    if (hashEvent(candidate) !== hash) continue;
+    if (!eventHashHolds(candidate, hash)) continue;
     // The hash matched the reading; parsing it is the schema's word that the
     // reading is an event, and parsing must not change what was hashed.
     const parsed = tachoEventSchema.safeParse(candidate);
     if (
       parsed.success &&
-      hashEvent(parsed.data as unknown as Record<string, unknown>) === hash
+      eventHashHolds(parsed.data as unknown as Record<string, unknown>, hash)
     ) {
       return parsed.data;
     }

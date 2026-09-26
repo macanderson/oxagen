@@ -663,12 +663,41 @@ async function unenrollLocked(
     deps.paths.deviceKey,
     deps.paths.socket,
     deps.paths.daemonState,
+    deps.paths.daemonSealedState,
     deps.paths.hookIdJournal,
     deps.paths.transcriptTailState,
     deps.paths.pid,
     deps.paths.daemonLauncher,
   ]) {
     if (existsSync(path)) unlinkSync(path);
+  }
+  // The copies of files that held uncommitted edits when a session started.
+  // Only the daemon removes them, when it forgets a session, and daemon.json
+  // went above, so no daemon would ever remove these. They hold a person's
+  // worktree content, so they go whether or not the record is purged. A
+  // failure is a warning that names the folder, not a throw that would stop
+  // the unenroll before it deals with host.json.
+  try {
+    rmSync(deps.paths.preSessionCopies, { recursive: true, force: true });
+    deps.out(
+      `      pre-session copies removed from ${deps.paths.preSessionCopies}`,
+    );
+  } catch (error) {
+    warnings.push(
+      `could not remove the pre-session copies in ${deps.paths.preSessionCopies}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  // The Stella identity cache holds pids and start times and nothing else. A
+  // later enrollment rebuilds it, so it goes whether or not `--purge` was
+  // given, and an emptied root can then be removed. A cache left behind does
+  // no harm, so a failure here becomes a warning. A throw would stop the
+  // unenroll after the keys are gone and before it deals with host.json.
+  try {
+    rmSync(deps.paths.stellaIdentity, { recursive: true, force: true });
+  } catch (error) {
+    warnings.push(
+      `could not remove the Stella identity cache: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
   // A harness file that could not be cleaned still needs the enrollment id
   // and the displaced values to be cleaned later, so host.json outlives it.

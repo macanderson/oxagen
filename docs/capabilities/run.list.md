@@ -26,6 +26,7 @@ The in-app agent's turns are excluded. Each turn is a run of its own (MC spec §
 | `limit` | integer | no | 1-100, default 50 |
 | `cursor` | string | no | the `nextCursor` of an earlier page; a cursor this capability did not write is `invalid_input` |
 | `pullRequests` | `any`, `with` or `without` | no | absent or `any` lists every run. `with` lists wrapped sessions whose frames name a pull request or whose `pr_open` calls ingest counted. `without` lists wrapped sessions with neither. Both leave out ledger runs, whose receipts name a repository id and no page. A filtered page reads at most five batches of 100 sessions, so it may hold fewer than `limit` runs and still carry a `nextCursor`, which continues after the last session it read |
+| `countLive` | boolean | no | `true` answers `liveRuns`. The count reads every root session in the workspace, so a caller that does not show it leaves this out and pays nothing for it. Fleet sets it on every page |
 
 ## Output
 
@@ -33,6 +34,7 @@ The in-app agent's turns are excluded. Each turn is a run of its own (MC spec §
 |---|---|---|
 | `runs` | object[] | see the row below |
 | `nextCursor` | string or null | null on the last page |
+| `liveRuns` | integer, optional | how many runs in the workspace are live, whatever the page, the cursor, or the filter: ledger runs still `pending` or `running`, and root wrapped sessions still `running`, counted over the same runs the pages list. A wrapped session whose row reads stale is left out: its host was revoked, or has not polled within `HOST_POLL_WINDOW_MS` (five minutes), the rule `commandBlock` reads as `host_revoked` or `host_offline`. A session with no host is counted. Answered only when the input sets `countLive`. Absent when the count could not be read, and the page still answers |
 | `warnings` | array of `pull_requests_unread`, optional | the pull-request frames could not be read. Rows carry no `pullRequests`, and a filtered page decided on the counted `pr_open` calls alone |
 
 Each row:
@@ -56,6 +58,7 @@ Each row:
 | `model` | `{ id, provider, tier }` or null | the model the run ended on, falling back to the one it started on (`tacho.sessions.model_final`, then `model_initial`). `provider` is the vendor the id names and `tier` the capability class inside that vendor's family (`haiku`, `sonnet`, `opus`; `mini`, `nano`; `flash`, `pro`), not a billing tier and not Oxagen's white-labelled fast/balanced/precise. Either is null when the id names none this platform recognises. Null for every ledger run, which records no model on its row |
 | `commandBlock` | `run_sealed` \| `no_host` \| `host_revoked` \| `host_offline` or null | why an operator command cannot reach the run, or null when it can (ADR-163). The enforcement tier plays no part: an observe-tier run whose host polled in the last five minutes takes pause, resume, cancel and steer. `host_offline` is a host that has not polled for commands in that window. Null for a ledger run, which the ledger path controls. Absent when the host's status was not read |
 | `machine` | `{ hostname, platform, osVersion, arch, nodeVersion }` or null | the enrolled host the run ran on (`tacho.hosts`). `hostname` and `platform` are required of an enrolment and the rest may be null. Null for a ledger run, which names no host |
+| `place` | `{ path, branch }` or null, optional | where a wrapped session ran, as its start recorded it. `path` is the first recorded of the worktree (`worktree_path`), the project directory (`project_dir`), and the working directory (`cwd`), the order `get_run_work` names a checkout's path in. `branch` is the git branch, the worktree's branch when the session ran in one (`worktree_branch`, else `git_branch`). Each is null where the session recorded none. Null for a ledger run, and when the session recorded neither. A list row carries no `repository`: the session keeps only a digest of its remote, and [`get_run`](run.get.md) matches that digest to a connected repository |
 | `taskRef` | string or null | the goal a ledger run was admitted for. Null for a wrapped session, since no dispatch record names its task. `get_run_work` reads the issues its pull requests close |
 | `startedAt` | string | RFC 3339 |
 | `sealedAt` | string or null | when the server recorded the seal, so it trails the stop by the host's shipping delay. Null while live |
