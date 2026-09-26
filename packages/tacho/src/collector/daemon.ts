@@ -2461,6 +2461,12 @@ async function initializeDaemon(
    * Calls land on the daemon's own chain, not a session chain: a connected
    * app has no agent session — no prompt, no model, no turn — and inventing
    * one would put a step in the ledger that nobody took.
+   *
+   * The exception is a hooked session that uses the gateway as one of its
+   * MCP servers. Claude Code names each call's `tool_use_id` in the request,
+   * and when a live session's `PreToolUse` requested that call, the gateway's
+   * frame lands on that session's chain as the call's one `tool_call`, so the
+   * `PostToolUse` for it seals nothing (ADR-189).
    */
   const connected = new Map<
     string,
@@ -2497,68 +2503,133 @@ async function initializeDaemon(
     if (call.status === "rejected") seen.refused += 1;
     seen.lastSeenAt = toProtocolTimestamp(now());
     connected.set(call.client, seen);
-    // Only the host chain, not `markEveryChain`: this is the forward path a
-    // connected app waits on, and the comment above this function already
-    // explains why nothing here may cost more than the one chain it touches.
-    const mark = hostRecorder.markChain();
+    const toolUseId = call.toolUseId;
+    if (toolUseId !== undefined && sessionAwaiting(toolUseId) !== undefined) {
+      // A session chain is written on the serial queue, where that session's
+      // hooks are handled too. Sealed off it, this frame could land while a
+      // queued hook stands between its chain mark and its write, and that
+      // hook's rollback after a failed write would take the chain back behind
+      // a frame the WAL already holds. The client's answer does not wait for
+      // the queue. The frame still lands before the call's PostToolUse,
+      // because the queue runs in order and the harness sends that hook only
+      // once it has the answer. A failed write is logged, and the rollback
+      // leaves the call awaited, so the PostToolUse seals it instead.
+      serial
+        .run(async () => sealGatewayFrame(call, sessionAwaiting(toolUseId)))
+        .catch((error: unknown) =>
+          log(
+            `mcp gateway could not record ${call.toolName} (${toolUseId}): ${error instanceof Error ? error.message : String(error)}`,
+          ),
+        );
+      return;
+    }
+    sealGatewayFrame(call, undefined);
+  }
+
+  /**
+   * Seal one gateway call on the session chain that is waiting on it, or on
+   * the daemon's own chain when none is, and write it in the same
+   * synchronous stretch.
+   */
+  function sealGatewayFrame(
+    call: GatewayCallRecord,
+    session: SessionRecord | undefined,
+  ): void {
+    // One chain only, not `markEveryChain`: the daemon's chain is written on
+    // the forward path a connected app waits on, and the comment above
+    // `recordGatewayCall` explains why nothing there may cost more than the
+    // one chain it touches.
+    const recorder = session?.recorder ?? hostRecorder;
+    const mark = recorder.markChain();
     try {
-      recordHostGatewayEvent(call);
+      const { kind, body, fields } = gatewayFrame(call);
+      if (session !== undefined && call.toolUseId !== undefined)
+        record(
+          session.recorder.sealGatewayCall(
+            kind,
+            { ...body, tool_use_id: call.toolUseId },
+            fields,
+          ),
+          session.recorder.takeBodies(),
+        );
+      else
+        record(
+          [hostRecorder.sealCollectorEvent(kind, body, fields)],
+          hostRecorder.takeBodies(),
+        );
     } catch (error) {
-      hostRecorder.rollbackChain(mark);
+      recorder.rollbackChain(mark);
       throw error;
     }
   }
 
-  function recordHostGatewayEvent(call: GatewayCallRecord): void {
-    record(
-      [
-        hostRecorder.sealCollectorEvent(
-          call.status === "rejected" ? "policy_decision" : "tool_call",
-          {
-            tool_name: call.toolName,
-            tool_source: "mcp",
-            mcp_server_name: "oxagen",
-            mcp_tool_name: call.toolName,
-            tool_status: call.status,
-            tool_duration_ms: call.durationMs,
-            ...(call.inputDigest === undefined
-              ? {}
-              : {
-                  tool_input_digest: call.inputDigest,
-                  tool_input_bytes: call.inputBytes,
-                }),
-            ...(call.outputDigest === undefined
-              ? {}
-              : {
-                  tool_output_digest: call.outputDigest,
-                  tool_output_bytes: call.outputBytes,
-                }),
-            ...(call.status === "rejected"
-              ? {
-                  policy_decision: "deny",
-                  policy_source: "kernel",
-                  policy_reason: call.refusedReason ?? "refused",
-                }
-              : {}),
-          },
-          {
-            attrs: {
-              "oxagen.connected_app": call.client,
-              "oxagen.mcp_session": call.sessionId,
-              [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
-            },
-            // The gateway hands over the arguments and the result; the
-            // recorder redacts them, digests what is left and buffers the
-            // body for the WAL. A rejected call chains the digest the same
-            // way, but `contentClassOf` gives `policy_decision` no retention
-            // class, so its bytes are never kept: the record says what was
-            // attempted, not what it would have said.
-            ...(call.content === undefined ? {} : { content: call.content }),
-          },
-        ),
-      ],
-      hostRecorder.takeBodies(),
-    );
+  /**
+   * The live session whose hook requested this call and is still waiting on
+   * it, or undefined. A session that already holds a frame for the id is not
+   * waiting, so a second call naming the same id seals on the daemon's chain
+   * rather than vanishing as a repeat.
+   */
+  function sessionAwaiting(toolUseId: string): SessionRecord | undefined {
+    return registry
+      .list()
+      .find(
+        (candidate) =>
+          !candidate.sealed &&
+          !candidate.pendingTerminal &&
+          candidate.recorder.awaitsToolCall(toolUseId),
+      );
+  }
+
+  /** The frame one gateway call seals, on whichever chain it lands. */
+  function gatewayFrame(call: GatewayCallRecord): {
+    kind: "tool_call" | "policy_decision";
+    body: Record<string, unknown>;
+    fields: Parameters<SessionRecorder["sealCollectorEvent"]>[2];
+  } {
+    return {
+      kind: call.status === "rejected" ? "policy_decision" : "tool_call",
+      body: {
+        tool_name: call.toolName,
+        tool_source: "mcp",
+        mcp_server_name: "oxagen",
+        mcp_tool_name: call.toolName,
+        tool_status: call.status,
+        tool_duration_ms: call.durationMs,
+        ...(call.inputDigest === undefined
+          ? {}
+          : {
+              tool_input_digest: call.inputDigest,
+              tool_input_bytes: call.inputBytes,
+            }),
+        ...(call.outputDigest === undefined
+          ? {}
+          : {
+              tool_output_digest: call.outputDigest,
+              tool_output_bytes: call.outputBytes,
+            }),
+        ...(call.status === "rejected"
+          ? {
+              policy_decision: "deny",
+              policy_source: "kernel",
+              policy_reason: call.refusedReason ?? "refused",
+            }
+          : {}),
+      },
+      fields: {
+        attrs: {
+          "oxagen.connected_app": call.client,
+          "oxagen.mcp_session": call.sessionId,
+          [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
+        },
+        // The gateway hands over the arguments and the result; the
+        // recorder redacts them, digests what is left and buffers the
+        // body for the WAL. A rejected call chains the digest the same
+        // way, but `contentClassOf` gives `policy_decision` no retention
+        // class, so its bytes are never kept: the record says what was
+        // attempted, not what it would have said.
+        ...(call.content === undefined ? {} : { content: call.content }),
+      },
+    };
   }
 
   const gateway = createMcpGateway({
@@ -2879,7 +2950,10 @@ async function initializeDaemon(
     // synchronous end to end — `sealCollectorEvent` advances the chain and
     // `wal.append` appends, neither with an await inside — so it cannot
     // interleave with a queued task however many forwards are in flight. The
-    // queue was never protecting the forward; it was only ever costing.
+    // queue was never protecting the forward; it was only ever costing. A
+    // call a hooked session is waiting on is the one exception: its frame is
+    // sealed on the session's chain, through the queue, and the forward's
+    // answer does not wait for it (ADR-189).
     mcp: (body, context) => gateway.handle(body, context),
     mcpClose: (sessionId) => gateway.forget(sessionId),
     issueRunToken: (input) =>

@@ -855,6 +855,67 @@ export class SessionRecorder {
   }
 
   /**
+   * Whether this session or one of its subagents requested a tool call that
+   * no source has sealed yet: its `PreToolUse` was recorded and its
+   * `PostToolUse` was not.
+   */
+  awaitsToolCall(toolUseId: string): boolean {
+    return this.toolCallLedger.awaits(toolUseId);
+  }
+
+  /**
+   * Seal a call the local MCP gateway served for this session, which the
+   * harness named by its `tool_use_id` (ADR-189). It lands on the chain whose
+   * hook requested the call, a subagent's when a subagent made it. A
+   * `tool_call` is judged against the family's tool-call ledger as the
+   * gateway's sighting, so the `PostToolUse` that reports the same call next
+   * seals nothing. A `policy_decision` is the gateway refusing the call. It
+   * is not a sighting of the call and always seals, beside the `tool_call`
+   * the hook then seals for the refused call.
+   */
+  sealGatewayCall(
+    kind: "tool_call" | "policy_decision",
+    body: Record<string, unknown> & { tool_use_id: string },
+    fields: Parameters<SessionRecorder["sealCollectorEvent"]>[2] = {},
+  ): TachoEvent[] {
+    return this.everySealed(() => {
+      const owner =
+        this.options.parent === undefined
+          ? this.toolCallLedger.ownerOf(body.tool_use_id)
+          : undefined;
+      const target =
+        (owner !== undefined
+          ? this.children.get(owner)?.recorder
+          : undefined) ?? this;
+      return target.sealGatewaySighting(kind, body, fields);
+    });
+  }
+
+  private sealGatewaySighting(
+    kind: "tool_call" | "policy_decision",
+    body: Record<string, unknown>,
+    fields: Parameters<SessionRecorder["sealCollectorEvent"]>[2] = {},
+  ): TachoEvent[] {
+    const sighting =
+      kind === "tool_call"
+        ? this.toolCallSighting(body, "gateway", fields.content !== undefined)
+        : NO_SIGHTING;
+    if (sighting.attrs === undefined) {
+      sighting.commit();
+      return [];
+    }
+    const event = this.seal(kind, body, {
+      ts: fields.ts ?? this.now(),
+      source: fields.source ?? "collector",
+      attrs: { ...fields.attrs, ...sighting.attrs },
+      ...(fields.content !== undefined ? { content: fields.content } : {}),
+      turn: {},
+    });
+    sighting.commit();
+    return [event];
+  }
+
+  /**
    * Seal a collector event on the chain a hook's subagent identity names, the
    * same chain `ingestHook` routes that hook to. A subagent's `PreToolUse`
    * decision sealed on the root chain left its `tool_requested` on the
@@ -1454,6 +1515,16 @@ export class SessionRecorder {
       turn: draft.turn ?? {},
     });
     sighting.commit();
+    // The call is known to the family from its request on, so the MCP
+    // gateway can find the chain that is waiting on it (ADR-189).
+    if (
+      draft.kind === "tool_requested" &&
+      typeof body["tool_use_id"] === "string"
+    )
+      this.toolCallLedger.claim(
+        body["tool_use_id"],
+        this.options.parent?.subagentId,
+      );
     if (draft.kind === "turn_end") {
       this.turnOpen = false;
       this.turnReply = undefined;
