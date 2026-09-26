@@ -18,8 +18,11 @@
 // `agent.approval_requests`, but `list_approvals` does not return the risk,
 // and no amount, side effect, taint or task is recorded, so a row draws none
 // of them, the critical border (risk critical, irreversible or tainted) has
-// nothing to read, and one line says so (#3848). An interjection has no
-// record (#3849), so the list holds approvals only and a line says that too.
+// nothing to read, and one line says so (#3848).
+//
+// The open interjections come first (#3839): a question an agent paused its
+// run to ask, from `list_interjections`, one row each, linking to the run.
+// They count in the header and the list's heading beside the parked calls.
 import { ChevronLeft, ShieldCheck, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "@/ui/formatter";
@@ -33,13 +36,13 @@ import { buttonSecondary, linkText, mono } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 import { routes } from "@/shared/safe-path";
 import { ReadFailure } from "@/ui/read-failure";
+import { InterjectionRow } from "./interjection-row";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
 import { orgWaiting } from "./use-activity";
 
 /** The issues that own what a row cannot show, carried as data attributes only. */
 const ROW_GAP = "#3848";
-const INTERJECTION_GAP = "#3849";
 
 /** Under two minutes left, a countdown takes the critical ink (mockup `sec<120`, `.apsm-clk.warn`). */
 const WARN_BELOW_SECONDS = 120;
@@ -312,6 +315,16 @@ export function ApprovalsDrawer({
       ? w.pending.value.items.map((item) => ({ item, wsName: w.name }))
       : [],
   );
+  const questions = data.approvals.workspaces.flatMap((w) =>
+    w.interjections.ok
+      ? w.interjections.value.items.map((item) => ({
+          item,
+          wsName: w.name,
+          slug: w.slug,
+        }))
+      : [],
+  );
+  const listed = questions.length + pending.length;
   const resolved = data.approvals.workspaces.flatMap((w) =>
     w.resolved.ok
       ? w.resolved.value.items.map((item) => ({
@@ -330,6 +343,9 @@ export function ApprovalsDrawer({
   );
   const failures = data.approvals.workspaces.flatMap((w) => [
     ...(w.pending.ok ? [] : [{ key: `${w.slug}-p`, read: w.pending, w }]),
+    ...(w.interjections.ok
+      ? []
+      : [{ key: `${w.slug}-i`, read: w.interjections, w }]),
     ...(w.resolved.ok ? [] : [{ key: `${w.slug}-r`, read: w.resolved, w }]),
   ]);
   const waitingLabel =
@@ -411,15 +427,27 @@ export function ApprovalsDrawer({
                   <ReadFailure read={read} section={w.name} />
                 </div>
               ))}
-              {pending.length > 0 ? (
+              {listed > 0 ? (
                 <>
                   <p className={eyebrow}>
                     {/* The header's "+" carries into the list it heads. */}
                     {t("waitingOnYou", {
-                      count: `${String(pending.length)}${waiting?.partial === true ? "+" : ""}`,
+                      count: `${String(listed)}${waiting?.partial === true ? "+" : ""}`,
                     })}
                   </p>
                   <ul className="flex flex-col gap-2">
+                    {questions.map(({ item, wsName, slug }) => (
+                      <InterjectionRow
+                        key={item.id}
+                        item={item}
+                        org={data.org.slug}
+                        ws={slug}
+                        wsName={wsName}
+                        now={now}
+                        countdown={countdown}
+                        agent={shortAgent(item.agentKey)}
+                      />
+                    ))}
                     {pending.map(({ item, wsName }) => (
                       <PendingRow
                         key={item.id}
@@ -432,13 +460,15 @@ export function ApprovalsDrawer({
                       />
                     ))}
                   </ul>
-                  <p
-                    data-testid="approval-row-not-backed"
-                    data-gap={ROW_GAP}
-                    className="mt-2 text-xs text-muted-foreground"
-                  >
-                    {t("rowNotBacked")}
-                  </p>
+                  {pending.length > 0 ? (
+                    <p
+                      data-testid="approval-row-not-backed"
+                      data-gap={ROW_GAP}
+                      className="mt-2 text-xs text-muted-foreground"
+                    >
+                      {t("rowNotBacked")}
+                    </p>
+                  ) : null}
                 </>
               ) : (
                 <div className="px-1.5 py-6 text-center">
@@ -454,13 +484,6 @@ export function ApprovalsDrawer({
                   </p>
                 </div>
               )}
-              <p
-                data-testid="interjection-not-backed"
-                data-gap={INTERJECTION_GAP}
-                className="mt-2 text-xs text-muted-foreground"
-              >
-                {t("interjectionNotBacked")}
-              </p>
               {data.approvals.truncated ? (
                 <p
                   data-testid="apdrawer-truncated"
