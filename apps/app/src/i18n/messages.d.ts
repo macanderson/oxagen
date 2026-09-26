@@ -8532,6 +8532,8 @@ type Messages = {
       classTotal: string;
       cacheHit: string;
       cacheHitNote: string;
+      cacheWritten: string;
+      cacheWrittenNote: string;
       cacheWriteShare: string;
       effectiveInput: string;
       unmapped: string;

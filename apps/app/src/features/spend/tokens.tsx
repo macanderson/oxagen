@@ -17,6 +17,7 @@ import { BasisLabel, NotRecordedValue } from "./figures";
 import { NotBacked, NotBackedPanel } from "./not-backed";
 import {
   cacheHitRate,
+  cacheWriteShare,
   classesOf,
   perRun,
   reasoningShare,
@@ -84,6 +85,11 @@ export function TokensSection({
               <dt>{t("cacheHit")}</dt>
               <dd className="text-foreground">
                 <Ratio value={cacheHitRate(classes)} /> {t("cacheHitNote")}
+              </dd>
+              <dt>{t("cacheWritten")}</dt>
+              <dd className="text-foreground">
+                <Ratio value={cacheWriteShare(classes)} />{" "}
+                {t("cacheWrittenNote")}
               </dd>
               <dt>{t("cacheWriteShare")}</dt>
               <dd>
