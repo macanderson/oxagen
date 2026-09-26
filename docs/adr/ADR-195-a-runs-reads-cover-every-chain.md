@@ -88,6 +88,30 @@ started in.
 9. **`fork_run` needs no change.** It refuses a wrapped run by name
    (`fork_requires_ledger_run`), and only a wrapped run records subagent
    chains.
+10. **The transcript's cursor carries a receipt (#4083).** A subagent chain
+    numbers from 0, so a frame it records after a read can fold before that
+    read's cursor, where the cursor's positions cannot call it new. A live
+    reader was not sent it until the run sealed. The cursor now also carries
+    the receipt time (`tacho_events.received_at`) through which the reader
+    was sent every frame, and how many entries of the next batch it already
+    holds, since the server stamps one receipt time on a whole batch. An
+    entry at or before the cursor with a frame received after the receipt is
+    sent again, after the grown entries and before the new ones. The receipt
+    trails the read by a settle margin of 10 seconds (`RECEIPT_SETTLE_MS`),
+    because ingest commits the session row in Postgres before it inserts the
+    frame into ClickHouse. The one-frame and two-frame cursors still decode.
+11. **A read from a transcript cursor reads a window of the run (#3823).**
+    The cursor names the frame on the run's own chain that opens the latest
+    turn the reader was sent, with the run's turn and cumulative cost there.
+    The next read starts at that frame and holds every chain spawned inside
+    the window, so a page no longer reads the run again from frame 0. A read
+    falls back to the whole run when only the whole run can place a chain:
+    one that began before the window and has recorded since the receipt, one
+    the cursor names, or one that names a spawn the window lacks. `counts`
+    and `figures` ride only the read from the run's first frame, and the Run
+    page keeps that read's counts on every chip (decision D6 of #3823). A
+    read with `query` is not windowed and searches the run up to the frame
+    cap.
 
 ## Consequences
 
@@ -103,6 +127,18 @@ started in.
 - A subagent chain that ingest registered and never wrote to reads as a head
   with no `lastSeq`, a chain with no frames and no gaps, and no export
   attempt.
+- A live reader is sent a late subagent entry on the first tail read after
+  its receipt, with no reload. An entry with a frame received inside the
+  settle margin is sent again on each read until the margin passes it, and
+  the reader replaces the copy it holds.
+- A reader of a long run pages past frame 10 000, because each page reads a
+  window. A subagent chain that began before the window and keeps recording
+  sends every read back to the whole run until it stops.
+- The chips keep the first read's whole-run counts until the page reads the
+  run again, so on a live run they trail the tail.
+- A reader holding a cursor written before the receipt is not sent a late
+  subagent frame the server received before its next read. The page shows
+  that frame once it reads the run again, as it did before this change.
 
 ## Alternatives rejected
 
@@ -118,3 +154,11 @@ started in.
   sequence rules in both verifiers, so an attempt per chain needs no new
   shape. The `chain` block is additive, and the verifiers do not read the
   manifest strictly.
+- **A transcript read of the whole run on every page.** It places a late
+  frame with no receipt, but every page costs a read from frame 0, and a run
+  past 10 000 frames never pages past the cap.
+- **Counts over a window.** They would be the window's and not the run's, so
+  each chip would renumber from page to page.
+- **A receipt with no settle margin.** A read taken between the Postgres
+  commit and the ClickHouse insert would move the receipt past a frame it
+  never read, and that frame would never be sent.
