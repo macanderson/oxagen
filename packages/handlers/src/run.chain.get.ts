@@ -215,16 +215,6 @@ function retainedBodies(frames: readonly RunFrame[]): number {
 }
 
 /**
- * How far before the retention boundary a session must have started for its
- * first frames to count as possibly expired. The TTL is measured from when
- * the control plane received a frame, and a session's `startedAt` is its
- * first frame's own time. A host whose clock runs ahead of the server's puts
- * `startedAt` after the frame's receipt, so a week of slack keeps such a
- * session from reading as broken.
- */
-const EXPIRY_CLOCK_SLACK_MS = 7 * 24 * 60 * 60_000;
-
-/**
  * Whether a wrapped session's earliest frames may have expired from
  * `tacho_events` (#4316). The table keeps a frame
  * `TACHO_EVENTS_RETENTION_MONTHS` after receipt (migration 0032), and a
@@ -233,11 +223,18 @@ const EXPIRY_CLOCK_SLACK_MS = 7 * 24 * 60 * 60_000;
  * first one read are not reported missing. The trade is that a frame really
  * lost at the head of such a session goes unreported too. Interior gaps and
  * the tail are still checked.
+ *
+ * `createdAt` is the session row's birth on the server's clock, the clock the
+ * TTL counts from. Ingest writes the row in the same request that receives
+ * the first frames, so the row is never younger than its first frame's
+ * receipt, and the comparison needs no slack. The session's own `startedAt`
+ * comes from the host's clock, and a host set back a year would make a fresh
+ * session look expired.
  */
-export function framesMayHaveExpired(startedAt: Date, now: Date): boolean {
+export function framesMayHaveExpired(createdAt: Date, now: Date): boolean {
   const boundary = new Date(now.getTime());
   boundary.setUTCMonth(boundary.getUTCMonth() - TACHO_EVENTS_RETENTION_MONTHS);
-  return startedAt.getTime() < boundary.getTime() + EXPIRY_CLOCK_SLACK_MS;
+  return createdAt.getTime() < boundary.getTime();
 }
 
 // ---- The seal side --------------------------------------------------------------------
@@ -347,12 +344,14 @@ export function createRunChainGetHandler(
     // A wrapped session starts at seq 0, unless its earliest frames may have
     // expired, in which case the frames below the first one read are gone,
     // not missing (#4316).
+    // A reader that did not select `createdAt` bounds from seq 0, as every
+    // read did before #4316.
+    const bornAt =
+      run.source === "tacho" ? run.row.session.createdAt : undefined;
     const startsAtZero =
       run.source === "tacho" &&
-      !framesMayHaveExpired(
-        run.row.session.startedAt,
-        deps.now?.() ?? new Date(),
-      );
+      (bornAt === undefined ||
+        !framesMayHaveExpired(bornAt, deps.now?.() ?? new Date()));
     const sequences = sequenceGaps(read.frames, {
       start: startsAtZero ? "0" : null,
       end: read.complete ? expectedEnd : null,

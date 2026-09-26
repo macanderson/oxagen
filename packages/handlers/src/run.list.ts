@@ -523,6 +523,9 @@ const tachoColumns = {
     numToolCalls: sessions.numToolCalls,
     seqCount: sessions.seqCount,
     startedAt: sessions.startedAt,
+    // The server's clock, which the tacho_events TTL counts from.
+    // `get_run_chain` reads it to tell expired frames from missing ones.
+    createdAt: sessions.createdAt,
     sealedAt: sessions.sealedAt,
     sealSource: sessions.sealSource,
     endedAt: sessions.endedAt,
@@ -796,6 +799,11 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   numToolCalls: number;
   seqCount: number;
   startedAt: Date;
+  /**
+   * The row's server-clock birth, at or before its first frame's receipt.
+   * Absent where a reader did not select it.
+   */
+  createdAt?: Date;
   sealedAt: Date | null;
   /** `agent_stop`, `idle_timeout` or `operator`; null while open or on a seal older than the column. */
   sealSource?: string | null;

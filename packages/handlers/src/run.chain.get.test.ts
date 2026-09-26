@@ -354,10 +354,10 @@ describe("get_run_chain", () => {
   // #4316: tacho_events keeps a frame 13 months after receipt (0032), and a
   // wrapped session has no archive, so an old session's first frames are gone.
   describe("frames past the tacho_events retention window", () => {
-    /** A sealed session whose first three frames expired. */
-    const expiredHead = (startedAt: Date) =>
+    /** A sealed session missing its first three frames, born at `createdAt`. */
+    const expiredHead = (createdAt: Date, startedAt: Date = createdAt) =>
       tachoHarness([tachoRow(3), tachoRow(4)], {
-        session: { seqCount: 5, completenessGaps: [], startedAt },
+        session: { seqCount: 5, completenessGaps: [], createdAt, startedAt },
       });
 
     it("reports no chain break and keeps the grade for a session older than the window", async () => {
@@ -389,29 +389,52 @@ describe("get_run_chain", () => {
       expect(out.ladder[1]?.reason).toContain("chain_break");
     });
 
+    // The TTL counts from the server's receipt. A host whose clock is set
+    // back a year stamps an old `startedAt` on a fresh session, which used to
+    // hide a real head break.
+    it("still reports the missing head of a fresh session whose host clock is set back (negative)", async () => {
+      const out = await expiredHead(
+        new Date("2026-09-01T00:00:00.000Z"),
+        new Date("2025-08-01T00:00:00.000Z"),
+      )({ runId: TACHO_ID }, ctx());
+      expect(out.gaps.missingSequences).toEqual([{ from: "0", to: "2" }]);
+      expect(out.ladder[1]?.reason).toContain("chain_break");
+    });
+
+    it("still reports the missing head when the reader did not select the row's birth (negative)", async () => {
+      const out = await tachoHarness([tachoRow(3), tachoRow(4)], {
+        session: {
+          seqCount: 5,
+          completenessGaps: [],
+          startedAt: new Date("2025-08-01T00:00:00.000Z"),
+        },
+      })({ runId: TACHO_ID }, ctx());
+      expect(out.gaps.missingSequences).toEqual([{ from: "0", to: "2" }]);
+    });
+
     it("still reports an interior gap in a session older than the window (negative)", async () => {
       const out = await tachoHarness([tachoRow(3), tachoRow(6)], {
         session: {
           seqCount: 7,
           completenessGaps: [],
-          startedAt: new Date("2025-08-01T00:00:00.000Z"),
+          createdAt: new Date("2025-08-01T00:00:00.000Z"),
         },
       })({ runId: TACHO_ID }, ctx());
       expect(out.gaps.missingSequences).toEqual([{ from: "4", to: "5" }]);
       expect(out.ladder[1]?.reason).toContain("chain_break");
     });
 
-    it("counts the window in calendar months, with a week of slack for a fast host clock", () => {
+    it("counts the window in calendar months from the row's birth, with no slack", () => {
       const now = new Date("2026-09-25T12:00:00.000Z");
       // 13 months before now is 2025-08-25T12:00Z.
       expect(
         framesMayHaveExpired(new Date("2025-08-25T11:59:00.000Z"), now),
       ).toBe(true);
       expect(
-        framesMayHaveExpired(new Date("2025-08-31T12:00:00.000Z"), now),
-      ).toBe(true);
+        framesMayHaveExpired(new Date("2025-08-25T12:00:00.000Z"), now),
+      ).toBe(false);
       expect(
-        framesMayHaveExpired(new Date("2025-09-02T00:00:00.000Z"), now),
+        framesMayHaveExpired(new Date("2025-08-31T12:00:00.000Z"), now),
       ).toBe(false);
       expect(
         framesMayHaveExpired(new Date("2026-09-11T10:00:01.000Z"), now),
