@@ -39,6 +39,7 @@ const identity = {
   description: null,
   agentKey: null,
   harness: "claude-code",
+  managed: false,
   principalId: "prn_0123456789abcdefghjkmn",
   operatorId: null,
   status: "unenrolled",

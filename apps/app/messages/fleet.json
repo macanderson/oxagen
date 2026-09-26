@@ -40,6 +40,7 @@
       "label": "Fleet summary",
       "live": {
         "title": "Live runs",
+        "notCounted": "not counted",
         "basis": "of {count, plural, one {# agent} other {# agents}} in this workspace",
         "basisUnread": "the workspace's agents were not read"
       },

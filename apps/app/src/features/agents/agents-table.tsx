@@ -32,6 +32,11 @@
 // **A retired row is a deleted record.** It is listed only when a person
 // chose to show deregistered agents. It is dimmed, and its actions cell holds
 // a Deregistered badge and no action: nothing can be assigned to it.
+//
+// **The managed row is Oxagen's.** stella acts as the built-in assistant
+// (`qa-chat`), and deregistering it stopped stella in the workspace (#4350).
+// Its actions cell holds a badge and no action; the agent's page keeps the
+// kill switch, which is how a person stops stella.
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, useMemo, useState } from "react";
@@ -505,6 +510,12 @@ function RowActions({
         <Badge tone="quiet" data-status="retired">
           {t("cells.deregistered")}
         </Badge>
+      ) : row.managed ? (
+        <span title={t("cells.managedTitle")}>
+          <Badge tone="quiet" data-managed="true">
+            {t("cells.managed")}
+          </Badge>
+        </span>
       ) : (
         <>
           <SafeLink

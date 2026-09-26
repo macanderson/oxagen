@@ -1542,14 +1542,17 @@ describe("enroll → status → unenroll", () => {
     // A deferred session end that never reached the WAL holds run content,
     // so the purge takes it with the WAL.
     writeSensitiveFileAtomic(d.paths.pendingEnds, "[]");
-    // The hook-id journal belongs to the daemon state and goes with it.
+    // The hook-id journal and the sealed-state file belong to the daemon
+    // state and go with it.
     writeSensitiveFileAtomic(d.paths.hookIdJournal, "");
+    writeSensitiveFileAtomic(d.paths.daemonSealedState, "{}");
     // A Stella hook left its identity cache behind.
     writeSensitiveFileAtomic(join(d.paths.stellaIdentity, "4242.json"), "{}");
     const second = await unenroll({ token: "t", purge: true }, d);
     expect(second.revoked).toBe(true);
     expect(existsSync(d.paths.pendingEnds)).toBe(false);
     expect(existsSync(d.paths.hookIdJournal)).toBe(false);
+    expect(existsSync(d.paths.daemonSealedState)).toBe(false);
     expect(existsSync(d.paths.stellaIdentity)).toBe(false);
     // Nothing is left, so the machine looks like one that was never enrolled.
     expect(existsSync(d.paths.root)).toBe(false);
@@ -1576,6 +1579,22 @@ describe("enroll → status → unenroll", () => {
     expect(
       (await unenroll({ token: "t" }, failing)).warnings.join("\n"),
     ).toContain("service removal failed");
+  });
+
+  it("removes the pre-session copies without --purge, since no daemon is left to", async () => {
+    const d = deps();
+    const signer = bundleSigner();
+    writeHostFile(
+      d.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    const session = join(d.paths.preSessionCopies, "session-uuid");
+    mkdirSync(session, { recursive: true });
+    writeFileSync(join(session, "0".repeat(32)), "a person's edit\n");
+    const removed = await unenroll({ token: "t" }, d);
+    expect(removed.ok).toBe(true);
+    expect(existsSync(d.paths.preSessionCopies)).toBe(false);
+    expect(d.lines.join("\n")).toContain("pre-session copies removed");
   });
 });
 

@@ -20,6 +20,7 @@ const item = {
     slug: "all-tools",
     kind: "all_tools",
   },
+  managed: false,
   principalId: "prn_0123456789abcdefghjkmn",
   operatorId: "usr_0123456789abcdefghjkmn",
   operatorName: "Marcus Bell",

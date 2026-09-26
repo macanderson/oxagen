@@ -1204,43 +1204,51 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     if (refusal !== undefined) {
       refused += 1;
       const view = deps.policy();
-      deps.record([
-        recorder.sealCollectorEvent(
-          "policy_decision",
-          {
-            policy_decision: "deny",
-            policy_source: refusal.source,
-            policy_reason_code: refusal.code,
-            policy_reason_digest: digestText(refusal.message),
-            bundle_version: view.bundle.version,
-            bundle_mode: view.bundle.mode,
-          },
-          {
-            fidelity: "proxy",
-            attrs: {
-              ...attrs,
-              "oxagen.refused": "model_call",
-              "oxagen.provider": route.provider,
-              "oxagen.request_digest": digestBytes(body),
-              // The model the refusal was about, when the proxy could read
-              // one. A `model_not_permitted` frame that does not name the
-              // model leaves the operator guessing which entry to add.
-              ...(askedModel !== undefined
-                ? { "oxagen.model": askedModel.slice(0, 512) }
-                : {}),
-              ...(modelAmbiguous ? { "oxagen.model_ambiguous": "true" } : {}),
-              ...(record !== undefined
-                ? {
-                    "oxagen.session_spend_usd_micros": String(
-                      spendFor(sessionKey),
-                    ),
-                  }
-                : {}),
-              ...("attrs" in refusal ? refusal.attrs : {}),
+      // A write that fails takes the frame's seq back with it, for the reason
+      // `settle` gives. The caller answers this call 502.
+      const mark = recorder.markChain();
+      try {
+        deps.record([
+          recorder.sealCollectorEvent(
+            "policy_decision",
+            {
+              policy_decision: "deny",
+              policy_source: refusal.source,
+              policy_reason_code: refusal.code,
+              policy_reason_digest: digestText(refusal.message),
+              bundle_version: view.bundle.version,
+              bundle_mode: view.bundle.mode,
             },
-          },
-        ),
-      ]);
+            {
+              fidelity: "proxy",
+              attrs: {
+                ...attrs,
+                "oxagen.refused": "model_call",
+                "oxagen.provider": route.provider,
+                "oxagen.request_digest": digestBytes(body),
+                // The model the refusal was about, when the proxy could read
+                // one. A `model_not_permitted` frame that does not name the
+                // model leaves the operator guessing which entry to add.
+                ...(askedModel !== undefined
+                  ? { "oxagen.model": askedModel.slice(0, 512) }
+                  : {}),
+                ...(modelAmbiguous ? { "oxagen.model_ambiguous": "true" } : {}),
+                ...(record !== undefined
+                  ? {
+                      "oxagen.session_spend_usd_micros": String(
+                        spendFor(sessionKey),
+                      ),
+                    }
+                  : {}),
+                ...("attrs" in refusal ? refusal.attrs : {}),
+              },
+            },
+          ),
+        ]);
+      } catch (error) {
+        recorder.rollbackChain(mark);
+        throw error;
+      }
       deps.log(
         `model proxy: refused ${route.provider} ${route.api} (${refusal.code})`,
       );
@@ -1414,6 +1422,13 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       settled = true;
       set.delete(entry);
       if (set.size === 0) inFlight.delete(sessionKey);
+      // Taken before the seal, so a write that fails takes the frame's seq
+      // back with it. Left advanced, the recorder stood one seq past a WAL
+      // tail that never held the frame. The next frame then sealed a gap,
+      // and the control plane refuses a chain from its first gap on (#4311).
+      // `settleMetered` is synchronous, so no other writer seals between
+      // the mark and the rollback.
+      const mark = recorder.markChain();
       try {
         settleMetered(errorClass);
       } catch (error) {
@@ -1422,8 +1437,19 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         // with nothing above it to catch a throw, and Node treats an
         // uncaught exception thrown from a listener as fatal, which would
         // take the whole daemon down mid-call over one frame. The response
-        // already sent, or already decided, is unaffected; only this call's
-        // own frame is lost, and that is logged rather than silent.
+        // already sent, or already decided, is unaffected. Only this call's
+        // own frame is lost, with its body, and that is logged rather than
+        // silent.
+        // The next call folds against this one's request unless it is
+        // forgotten, and would ship pointing at a body that never landed.
+        if (fold !== undefined) priors.forget(sessionKey);
+        try {
+          recorder.rollbackChain(mark);
+        } catch (rollbackError) {
+          deps.log(
+            `model proxy: rolling the chain back after a failed frame failed too: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+          );
+        }
         deps.log(
           `model proxy: sealing the call's frame failed, the response the caller already has is unaffected: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -1475,7 +1501,26 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
       // request alone — usually the smaller half, already folded down to
       // what changed — would have replayed fine on its own. The response is
       // dropped first.
-      let requestContentText = requestTooLarge ? undefined : fold?.text;
+      // The session can end while its call is still streaming. Its chain is
+      // then sealed, or its terminal is on the way to the WAL, and a frame
+      // sealed there would follow its `agent_stop`. The call goes to the
+      // host's own chain instead, as one that starts after the session ended
+      // does (`session_closed`, C-04). The request is stored whole there: a
+      // fold points at the session's previous body, which sits on another
+      // chain. The session's next call, after a resume, folds against
+      // nothing rather than against a body stored on the host's chain.
+      const closed =
+        record !== undefined &&
+        (record.sealed || record.pendingTerminal === true);
+      const unfolded = closed && fold !== undefined;
+      if (unfolded) priors.forget(sessionKey);
+      let requestContentText = unfolded
+        ? fold.fullBytes > TACHO_MAX_BODY_BYTES
+          ? undefined
+          : requestText
+        : requestTooLarge
+          ? undefined
+          : fold?.text;
       let responseContentText = responseText;
       if (
         requestContentText !== undefined &&
@@ -1517,129 +1562,144 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
             ? "too_large"
             : undefined;
       const exchange = exchangeContent(requestContentText, responseContentText);
+      const chain = closed ? deps.hostRecorder() : recorder;
+      const callBody: Record<string, unknown> = {
+        provider: route.provider,
+        ...(model !== undefined ? { model } : {}),
+        ...(usage.inputTokens !== undefined
+          ? { input_tokens: usage.inputTokens }
+          : {}),
+        ...(usage.outputTokens !== undefined
+          ? { output_tokens: usage.outputTokens }
+          : {}),
+        ...(usage.cacheReadTokens !== undefined
+          ? { cache_read_tokens: usage.cacheReadTokens }
+          : {}),
+        ...(usage.cacheCreationTokens !== undefined
+          ? { cache_creation_tokens: usage.cacheCreationTokens }
+          : {}),
+        ...(usage.cacheCreation5mTokens !== undefined
+          ? { cache_creation_5m_tokens: usage.cacheCreation5mTokens }
+          : {}),
+        ...(usage.cacheCreation1hTokens !== undefined
+          ? { cache_creation_1h_tokens: usage.cacheCreation1hTokens }
+          : {}),
+        ...(usage.thinkingTokens !== undefined
+          ? { thinking_tokens: usage.thinkingTokens }
+          : {}),
+        ...(priced !== undefined ? { cost_usd_micros: priced } : {}),
+        cost_basis:
+          priced !== undefined
+            ? cut || familyPriced
+              ? "estimated"
+              : "observed"
+            : hasTokenCounts(usage)
+              ? "observed_unpriced"
+              : "observed_no_usage",
+        ...(usage.serviceTier !== undefined
+          ? { service_tier: usage.serviceTier }
+          : {}),
+        ...(usage.stopReason !== undefined
+          ? { stop_reason: usage.stopReason }
+          : {}),
+        ...(firstByteAt !== undefined
+          ? { ttft_ms: Math.max(0, firstByteAt - startedAt) }
+          : {}),
+        api_duration_ms: Math.max(0, deps.now() - startedAt),
+        ...(status !== undefined ? { api_status_code: status } : {}),
+        ...(failed !== undefined || usage.streamError !== undefined
+          ? { api_error_class: failed ?? `stream_${usage.streamError}` }
+          : {}),
+        ...(requestId !== undefined ? { request_id: requestId } : {}),
+        ...(usage.responseId !== undefined
+          ? { message_id: usage.responseId }
+          : {}),
+      };
+      // Judged against the session's ledger too, so the session's own record
+      // of this call, arriving later, is stamped a duplicate of this frame.
+      const sessionSighting = closed
+        ? recorder.judgeModelCallSealedElsewhere(callBody)
+        : undefined;
       deps.record(
         [
-          recorder.sealCollectorEvent(
-            "llm_call",
-            {
-              provider: route.provider,
-              ...(model !== undefined ? { model } : {}),
-              ...(usage.inputTokens !== undefined
-                ? { input_tokens: usage.inputTokens }
+          chain.sealCollectorEvent("llm_call", callBody, {
+            ts: toProtocolTimestamp(settledAt),
+            fidelity: "proxy",
+            // The recorder redacts these bytes, digests what is left and puts
+            // that digest on the frame as `content.digest`, overriding any the
+            // caller supplies. So `content.digest` is the one a reader
+            // verifies the body against, and the proxy does not compute it:
+            // the proxy has not redacted, and a digest of the bytes before
+            // redaction would name a body that never ships. The two wire
+            // digests below are a different claim and keep their meaning, that
+            // these exact bytes crossed the wire to this vendor.
+            ...(exchange !== undefined ? { content: exchange } : {}),
+            attrs: {
+              ...attrs,
+              // The frame names the session it belongs to, and how the
+              // proxy matched the call to it.
+              ...(closed
+                ? {
+                    "oxagen.correlation": "session_closed",
+                    "oxagen.session_correlation": how,
+                    "oxagen.session_uuid": recorder.sessionUuid,
+                  }
                 : {}),
-              ...(usage.outputTokens !== undefined
-                ? { output_tokens: usage.outputTokens }
+              ...sessionSighting?.attrs,
+              [TACHO_METERING_ATTR]: TACHO_METERING_OBSERVED,
+              "oxagen.request_digest": requestDigest,
+              "oxagen.request_bytes": String(requestBytes),
+              "oxagen.response_digest": `sha256:${responseHash.digest("hex")}`,
+              "oxagen.response_bytes": String(responseBytes),
+              "oxagen.stream": meter?.isStreaming === true ? "1" : "0",
+              "oxagen.upstream_host": target.host,
+              ...(responseType !== undefined
+                ? { "oxagen.response_content_type": responseType }
                 : {}),
-              ...(usage.cacheReadTokens !== undefined
-                ? { cache_read_tokens: usage.cacheReadTokens }
+              ...(injected ? { "oxagen.request_injected": "1" } : {}),
+              // The body named more than one model and no `models` clause
+              // refused it, so `model` above may be a duplicate the vendor
+              // never ran. The frame says so rather than reading as pinned.
+              ...(modelAmbiguous ? { "oxagen.model_ambiguous": "true" } : {}),
+              // A half left out of the body. The seal reads these two attrs
+              // (`bodyIsPartial`), so a call with half a body grades as one
+              // missing its body rather than as a whole capture.
+              ...(fold !== undefined && requestContentText === undefined
+                ? { [REQUEST_BODY_OMITTED_ATTR]: "too_large" }
+                : fold === undefined && sent === undefined && body.length > 0
+                  ? { [REQUEST_BODY_OMITTED_ATTR]: "not_decoded" }
+                  : {}),
+              ...(fold !== undefined
+                ? {
+                    "oxagen.request_full_digest": fold.fullDigest,
+                    "oxagen.request_full_bytes": String(fold.fullBytes),
+                    "oxagen.request_stored_bytes": String(
+                      unfolded ? fold.fullBytes : fold.storedBytes,
+                    ),
+                  }
                 : {}),
-              ...(usage.cacheCreationTokens !== undefined
-                ? { cache_creation_tokens: usage.cacheCreationTokens }
+              ...(fold?.prior !== undefined && !unfolded
+                ? {
+                    "oxagen.request_prior_digest": fold.prior.unchanged_from,
+                    "oxagen.request_prior_messages": String(
+                      fold.prior.messages,
+                    ),
+                    "oxagen.request_prior_fields": fold.prior.fields.join(","),
+                  }
                 : {}),
-              ...(usage.cacheCreation5mTokens !== undefined
-                ? { cache_creation_5m_tokens: usage.cacheCreation5mTokens }
+              ...(responseOmitted !== undefined
+                ? { [RESPONSE_BODY_OMITTED_ATTR]: responseOmitted }
                 : {}),
-              ...(usage.cacheCreation1hTokens !== undefined
-                ? { cache_creation_1h_tokens: usage.cacheCreation1hTokens }
+              ...(abortReason !== undefined
+                ? { "oxagen.interrupted": "1" }
                 : {}),
-              ...(usage.thinkingTokens !== undefined
-                ? { thinking_tokens: usage.thinkingTokens }
-                : {}),
-              ...(priced !== undefined ? { cost_usd_micros: priced } : {}),
-              cost_basis:
-                priced !== undefined
-                  ? cut || familyPriced
-                    ? "estimated"
-                    : "observed"
-                  : hasTokenCounts(usage)
-                    ? "observed_unpriced"
-                    : "observed_no_usage",
-              ...(usage.serviceTier !== undefined
-                ? { service_tier: usage.serviceTier }
-                : {}),
-              ...(usage.stopReason !== undefined
-                ? { stop_reason: usage.stopReason }
-                : {}),
-              ...(firstByteAt !== undefined
-                ? { ttft_ms: Math.max(0, firstByteAt - startedAt) }
-                : {}),
-              api_duration_ms: Math.max(0, deps.now() - startedAt),
-              ...(status !== undefined ? { api_status_code: status } : {}),
-              ...(failed !== undefined || usage.streamError !== undefined
-                ? { api_error_class: failed ?? `stream_${usage.streamError}` }
-                : {}),
-              ...(requestId !== undefined ? { request_id: requestId } : {}),
-              ...(usage.responseId !== undefined
-                ? { message_id: usage.responseId }
-                : {}),
+              ...(cut ? { "oxagen.usage_partial": "1" } : {}),
             },
-            {
-              ts: toProtocolTimestamp(settledAt),
-              fidelity: "proxy",
-              // The recorder redacts these bytes, digests what is left and puts
-              // that digest on the frame as `content.digest`, overriding any the
-              // caller supplies. So `content.digest` is the one a reader
-              // verifies the body against, and the proxy does not compute it:
-              // the proxy has not redacted, and a digest of the bytes before
-              // redaction would name a body that never ships. The two wire
-              // digests below are a different claim and keep their meaning, that
-              // these exact bytes crossed the wire to this vendor.
-              ...(exchange !== undefined ? { content: exchange } : {}),
-              attrs: {
-                ...attrs,
-                [TACHO_METERING_ATTR]: TACHO_METERING_OBSERVED,
-                "oxagen.request_digest": requestDigest,
-                "oxagen.request_bytes": String(requestBytes),
-                "oxagen.response_digest": `sha256:${responseHash.digest("hex")}`,
-                "oxagen.response_bytes": String(responseBytes),
-                "oxagen.stream": meter?.isStreaming === true ? "1" : "0",
-                "oxagen.upstream_host": target.host,
-                ...(responseType !== undefined
-                  ? { "oxagen.response_content_type": responseType }
-                  : {}),
-                ...(injected ? { "oxagen.request_injected": "1" } : {}),
-                // The body named more than one model and no `models` clause
-                // refused it, so `model` above may be a duplicate the vendor
-                // never ran. The frame says so rather than reading as pinned.
-                ...(modelAmbiguous ? { "oxagen.model_ambiguous": "true" } : {}),
-                // A half left out of the body. The seal reads these two attrs
-                // (`bodyIsPartial`), so a call with half a body grades as one
-                // missing its body rather than as a whole capture.
-                ...(fold !== undefined && requestContentText === undefined
-                  ? { [REQUEST_BODY_OMITTED_ATTR]: "too_large" }
-                  : fold === undefined && sent === undefined && body.length > 0
-                    ? { [REQUEST_BODY_OMITTED_ATTR]: "not_decoded" }
-                    : {}),
-                ...(fold !== undefined
-                  ? {
-                      "oxagen.request_full_digest": fold.fullDigest,
-                      "oxagen.request_full_bytes": String(fold.fullBytes),
-                      "oxagen.request_stored_bytes": String(fold.storedBytes),
-                    }
-                  : {}),
-                ...(fold?.prior !== undefined
-                  ? {
-                      "oxagen.request_prior_digest": fold.prior.unchanged_from,
-                      "oxagen.request_prior_messages": String(
-                        fold.prior.messages,
-                      ),
-                      "oxagen.request_prior_fields":
-                        fold.prior.fields.join(","),
-                    }
-                  : {}),
-                ...(responseOmitted !== undefined
-                  ? { [RESPONSE_BODY_OMITTED_ATTR]: responseOmitted }
-                  : {}),
-                ...(abortReason !== undefined
-                  ? { "oxagen.interrupted": "1" }
-                  : {}),
-                ...(cut ? { "oxagen.usage_partial": "1" } : {}),
-              },
-            },
-          ),
+          }),
         ],
-        recorder.takeBodies(),
+        chain.takeBodies(),
       );
+      sessionSighting?.commit();
     };
 
     // The caller went away: stop paying for tokens nobody will read.

@@ -53,10 +53,7 @@ export function writeFileAtomic(
   const fd = openSync(tmp, "w", options.mode);
   try {
     try {
-      writeSync(
-        fd,
-        typeof data === "string" ? Buffer.from(data, "utf8") : data,
-      );
+      writeAll(fd, typeof data === "string" ? Buffer.from(data, "utf8") : data);
       fsyncSync(fd);
     } finally {
       closeSync(fd);
@@ -83,6 +80,30 @@ export function writeFileAtomic(
 }
 
 /**
+ * Write every byte of `bytes` to `fd`.
+ *
+ * `writeSync` can take fewer bytes than it was given, on a disk that fills
+ * part way through the write, and it says so only in its return value. That
+ * value was ignored, so a short write was fsynced and renamed into place as
+ * a truncated file. A truncated `cursor.json` or `daemon.json` then stopped
+ * the daemon from starting (W-05).
+ */
+function writeAll(fd: number, bytes: Buffer): void {
+  let offset = 0;
+  while (offset < bytes.length) {
+    const written = writeSync(fd, bytes, offset, bytes.length - offset);
+    if (written <= 0)
+      throw Object.assign(
+        new Error(
+          `write took ${offset} of ${bytes.length} bytes and then no more`,
+        ),
+        { code: "EIO" },
+      );
+    offset += written;
+  }
+}
+
+/**
  * A sensitive file (a key, a token, the host record) at mode 0600 in a
  * directory made 0700 if missing.
  */
@@ -105,5 +126,38 @@ export function readJsonFileIfExists(path: string): unknown | undefined {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
+  }
+}
+
+/**
+ * A JSON state file its owner reads at startup, read as absent when it does
+ * not parse. The file is renamed to `<name>.corrupt-<ms>` beside it first,
+ * so the owner starts empty and the bytes stay for incident review.
+ * `onSetAside` gets the new path, or undefined when the rename failed too.
+ *
+ * A truncated state file used to throw here, and the daemon refused to
+ * start until someone deleted the file by hand (W-05). Only the process that
+ * writes the file may call this: a reader such as `tacho status` must not
+ * move a file the daemon may be writing.
+ */
+export function readJsonStateFile(
+  path: string,
+  onSetAside: (movedTo: string | undefined) => void,
+  now: number = Date.now(),
+): unknown | undefined {
+  try {
+    return readJsonFileIfExists(path);
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    let movedTo: string | undefined = `${path}.corrupt-${now}`;
+    try {
+      renameSync(path, movedTo);
+    } catch {
+      // The next write replaces the file whole, so it is still read as
+      // absent.
+      movedTo = undefined;
+    }
+    onSetAside(movedTo);
+    return undefined;
   }
 }

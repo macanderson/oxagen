@@ -187,6 +187,22 @@ describe("postgresRunGitDiffs", () => {
       expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId, A, B]),
     );
   });
+
+  // #3944, S-02: one file's line count can pass 2^31 - 1, and an ::int cast
+  // of the sum raised 22003 and dropped git's figures for the whole page.
+  it("sums the line counts as bigint", async () => {
+    tenantDb.rows = [{ chain: A, root: A, added: 2 ** 32, removed: 0 }];
+    const out = await postgresRunGitDiffs(SCOPE, [A]);
+    expect(out.get(A)).toEqual({ added: 2 ** 32, removed: 0 });
+    const [query] = tenantDb.sql;
+    expect(query?.sql).toContain(
+      'sum("tacho"."session_files"."lines_added"), 0)::bigint',
+    );
+    expect(query?.sql).toContain(
+      'sum("tacho"."session_files"."lines_removed"), 0)::bigint',
+    );
+    expect(query?.sql).not.toMatch(/::int\b/);
+  });
 });
 
 describe("runDiffOf", () => {

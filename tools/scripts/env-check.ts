@@ -75,6 +75,9 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "PLAYWRIGHT_BASE_URL",
   // apps/app e2e: the port Playwright starts `next dev` on (default 3000).
   "E2E_PORT",
+  // apps/desktop/scripts/e2e-webdriver.mjs: where the desktop-rig.yml
+  // webdriver job keeps its screenshots and steps.
+  "E2E_EVIDENCE",
   // Set automatically by the Vitest runner; used to keep CLI turn assembly
   // (workspace MCP fetch) hermetic in unit tests. Never a deployed var.
   "VITEST",

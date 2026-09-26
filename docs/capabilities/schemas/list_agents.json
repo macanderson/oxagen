@@ -158,6 +158,9 @@
                 }
               ]
             },
+            "managed": {
+              "type": "boolean"
+            },
             "principalId": {
               "anyOf": [
                 {
@@ -384,6 +387,7 @@
             "harness",
             "runtime",
             "toolbelt",
+            "managed",
             "principalId",
             "operatorId",
             "operatorName",

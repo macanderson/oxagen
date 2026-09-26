@@ -9,6 +9,7 @@ import {
   agentEnforcementTierSchema,
 } from "@oxagen/oxagen/contracts/agent.list";
 import { microsString } from "@oxagen/oxagen/contracts/spend.shared";
+import { isManagedAgentType } from "@oxagen/oxagen/interactive-agent";
 import type { CapabilityContext } from "../types";
 import {
   activeCredentialsByAgent,
@@ -75,6 +76,7 @@ export function toAgentListItem(
     harness: row.harness as AgentListItem["harness"],
     runtime: facts.runtime ?? null,
     toolbelt: facts.toolbelt ?? null,
+    managed: isManagedAgentType(row.agentType),
     principalId: row.principalPublicId,
     operatorId: row.operatorPublicId,
     operatorName: row.operatorPublicId === null ? null : row.operatorName,

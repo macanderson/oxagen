@@ -916,7 +916,7 @@
     "list_runs": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] \u2014 the Fleet Runs panel and the four summary tiles rolled up from its rows: the Tier and Replay columns render list_runs' recorded enforcementTier and replayGrade, and Spend shown sums the recorded cost with its basis (features/fleet/board.tsx, features/fleet/view.ts, data/live/mappers/runs.ts, data/live/mappers/mappers.type-test.ts, data/live/runs.ts)",
+      "entry": "/[org]/[ws] \u2014 the Fleet Runs panel and the summary tiles: Live runs reads list_runs' workspace count (liveRuns), the Tier and Replay columns render list_runs' recorded enforcementTier and replayGrade, and Spend shown sums the recorded cost with its basis (features/fleet/board.tsx, features/fleet/view.ts, data/live/mappers/runs.ts, data/live/mappers/mappers.type-test.ts, data/live/runs.ts)",
       "proof": "apps/app/src/features/fleet/fleet.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session-01GDv3vs-fleet-rev1"

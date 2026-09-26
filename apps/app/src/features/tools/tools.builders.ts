@@ -94,6 +94,7 @@ export function agentPageRow(
     harness: "custom",
     runtime: null,
     toolbelt: null,
+    managed: false,
     operatorId: null,
     operatorName: null,
     principalId: null,

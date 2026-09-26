@@ -21,6 +21,7 @@ const row = {
   name: "Release bot",
   description: null,
   harness: "stella",
+  agentType: "custom",
   status: "draft",
   createdAt: new Date("2026-09-13T10:00:00.000Z"),
   // A draft agent nothing has written since it was registered, which is what
@@ -78,6 +79,7 @@ describe("list_agents row", () => {
     expect(item.status).toBe("unenrolled");
     expect(item.runtime).toBeNull();
     expect(item.toolbelt).toBeNull();
+    expect(item.managed).toBe(false);
     expect(agentList.output.shape.items.element.parse(item)).toEqual(item);
   });
 
@@ -105,6 +107,24 @@ describe("list_agents row", () => {
     });
     expect(item.runtime).toEqual(runtime);
     expect(item.toolbelt).toEqual(toolbelt);
+    expect(agentList.output.shape.items.element.parse(item)).toEqual(item);
+  });
+
+  // #4350: the Agents page read no flag, offered Deregister on the built-in
+  // assistant, and deregistering it stopped stella in the workspace.
+  it("marks the built-in assistant managed", () => {
+    const item = toAgentListItem(
+      { ...row, slug: "qa-chat", agentType: "interactive_chat" },
+      {
+        agentKey: null,
+        credentials: 0,
+        hosts: 0,
+        incidents: 0,
+        ...none,
+        figures: undefined,
+      },
+    );
+    expect(item.managed).toBe(true);
     expect(agentList.output.shape.items.element.parse(item)).toEqual(item);
   });
 

@@ -9,7 +9,7 @@
   },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "prepare": "lefthook install",
+    "prepare": "lefthook install && node tools/scripts/ensure-harness-bridges.mjs",
     "dev": "tsx tools/scripts/dev.ts",
     "cli:dev": "tsx tools/scripts/cli-dev.ts",
     "cli:install": "tsx tools/scripts/cli-dev.ts --once",
@@ -91,6 +91,7 @@
     "book:build": "node tools/scripts/build-book-editions.mjs",
     "book:check": "node tools/scripts/build-book-editions.mjs --check",
     "check:prose": "node tools/scripts/check-prose.mjs",
+    "check:bridges": "node tools/scripts/ensure-harness-bridges.mjs --check",
     "db:provision-enterprise": "tsx --env-file-if-exists=.env.local tools/scripts/provision-enterprise-org.ts",
     "check:system-db": "tsx tools/scripts/check-system-db-justifications.ts"
   },

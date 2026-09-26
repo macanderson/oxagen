@@ -86,7 +86,9 @@
         "tokensBasis": "{count, plural, one {# wrapped session} other {# wrapped sessions}}, as the harness reported them. Ledger runs' tokens are not in this total.",
         "wrappedOnly": "wrapped sessions",
         "spendBasis": "Priced wrapped sessions in the last 30 days. Ledger runs and unpriced sessions are not in this figure.",
-        "deregistered": "deregistered"
+        "deregistered": "deregistered",
+        "managed": "managed by Oxagen",
+        "managedTitle": "stella acts as this agent. Oxagen manages it, so it cannot be edited, suspended, or deregistered. Use its kill switch to stop stella."
       },
       "health": {
         "tamper": "tamper",
@@ -190,6 +192,8 @@
         "label": "Agent",
         "eyebrow": "Agent",
         "tierNotRecorded": "tier not recorded",
+        "managed": "managed by Oxagen",
+        "managedTitle": "stella acts as this agent. Oxagen manages it, so it cannot be edited, suspended, or deregistered. Use its kill switch to stop stella.",
         "fromRun": "Recorded on run {run}",
         "replay": "replay {grade}",
         "replayNotRecorded": "replay not recorded",

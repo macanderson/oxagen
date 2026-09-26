@@ -76,6 +76,12 @@ export const agentListItem = z
     runtime: runtimeRefSchema.nullable(),
     /** The toolbelt the agent carries now. Null only when the workspace has no belt yet. */
     toolbelt: toolbeltRefSchema.nullable(),
+    /**
+     * True for the built-in assistant every workspace carries (`qa-chat`,
+     * `isManagedAgentType`). Oxagen owns it: no identity write accepts it,
+     * and its kill switch is how a person stops it.
+     */
+    managed: z.boolean(),
     /** `prn_…` of the delegated principal; null on a row that predates Agent RBAC. */
     principalId: z.string().nullable(),
     /** `usr_…` of the person the agent acts for (`principals.parent_user_id`); null when none. */

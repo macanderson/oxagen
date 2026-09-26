@@ -145,6 +145,8 @@ type Messages = {
         wrappedOnly: string;
         spendBasis: string;
         deregistered: string;
+        managed: string;
+        managedTitle: string;
       };
       health: {
         tamper: string;
@@ -248,6 +250,8 @@ type Messages = {
         label: string;
         eyebrow: string;
         tierNotRecorded: string;
+        managed: string;
+        managedTitle: string;
         fromRun: string;
         replay: string;
         replayNotRecorded: string;
@@ -2562,6 +2566,7 @@ type Messages = {
       label: string;
       live: {
         title: string;
+        notCounted: string;
         basis: string;
         basisUnread: string;
       };
@@ -6440,6 +6445,10 @@ type Messages = {
       versionNotCaptured: string;
       repoNotCaptured: string;
       repoOnlyNotCaptured: string;
+      repoNotRead: string;
+      workNotRead: string;
+      workUnreadWhy: string;
+      workUnreadRepoWhy: string;
       noPullRequest: string;
       pullState: {
         open: string;
@@ -6486,6 +6495,7 @@ type Messages = {
       };
       pathNotEnrolled: string;
       pathRecorded: string;
+      pathSession: string;
       withFacts: string;
       pausedTitle: string;
       statusPaused: string;
@@ -10220,6 +10230,9 @@ type Messages = {
     };
     runStatus: {
       live: string;
+      stale: string;
+      staleWhy: string;
+      staleRevokedWhy: string;
       sealed: string;
       halted: string;
       running: string;

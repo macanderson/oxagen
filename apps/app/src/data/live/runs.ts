@@ -138,6 +138,7 @@ export const runs: DataSource["runs"] = {
         ...(q.pullRequests === undefined || q.pullRequests === "any"
           ? {}
           : { pullRequests: q.pullRequests }),
+        ...(q.countLive === true ? { countLive: true } : {}),
       },
       page: "fleet",
     });

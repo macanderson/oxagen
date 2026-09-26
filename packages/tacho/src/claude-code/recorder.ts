@@ -855,6 +855,84 @@ export class SessionRecorder {
   }
 
   /**
+   * Judge a model call that seals on another chain against this family's
+   * ledger. The proxy files a call on the host's chain when the session
+   * ended while the call streamed, and the session's own OTel or transcript
+   * record of that call can still arrive here. The caller puts `attrs` on
+   * the frame it seals, and calls `commit` once that frame has sealed, so a
+   * later sighting on this chain is stamped its duplicate and a reader
+   * counts the call once.
+   */
+  judgeModelCallSealedElsewhere(body: Record<string, unknown>): {
+    attrs: Record<string, string>;
+    commit: () => void;
+  } {
+    const sighting = this.llmCallSighting(body, "collector");
+    return { attrs: sighting.attrs ?? {}, commit: sighting.commit };
+  }
+
+  /**
+   * Whether this session or one of its subagents requested a tool call that
+   * no source has sealed yet: its `PreToolUse` was recorded and its
+   * `PostToolUse` was not.
+   */
+  awaitsToolCall(toolUseId: string): boolean {
+    return this.toolCallLedger.awaits(toolUseId);
+  }
+
+  /**
+   * Seal a call the local MCP gateway served for this session, which the
+   * harness named by its `tool_use_id` (ADR-189). It lands on the chain whose
+   * hook requested the call, a subagent's when a subagent made it. A
+   * `tool_call` is judged against the family's tool-call ledger as the
+   * gateway's sighting, so the `PostToolUse` that reports the same call next
+   * seals nothing. A `policy_decision` is the gateway refusing the call. It
+   * is not a sighting of the call and always seals, beside the `tool_call`
+   * the hook then seals for the refused call.
+   */
+  sealGatewayCall(
+    kind: "tool_call" | "policy_decision",
+    body: Record<string, unknown> & { tool_use_id: string },
+    fields: Parameters<SessionRecorder["sealCollectorEvent"]>[2] = {},
+  ): TachoEvent[] {
+    return this.everySealed(() => {
+      const owner =
+        this.options.parent === undefined
+          ? this.toolCallLedger.ownerOf(body.tool_use_id)
+          : undefined;
+      const target =
+        (owner !== undefined
+          ? this.children.get(owner)?.recorder
+          : undefined) ?? this;
+      return target.sealGatewaySighting(kind, body, fields);
+    });
+  }
+
+  private sealGatewaySighting(
+    kind: "tool_call" | "policy_decision",
+    body: Record<string, unknown>,
+    fields: Parameters<SessionRecorder["sealCollectorEvent"]>[2] = {},
+  ): TachoEvent[] {
+    const sighting =
+      kind === "tool_call"
+        ? this.toolCallSighting(body, "gateway", fields.content !== undefined)
+        : NO_SIGHTING;
+    if (sighting.attrs === undefined) {
+      sighting.commit();
+      return [];
+    }
+    const event = this.seal(kind, body, {
+      ts: fields.ts ?? this.now(),
+      source: fields.source ?? "collector",
+      attrs: { ...fields.attrs, ...sighting.attrs },
+      ...(fields.content !== undefined ? { content: fields.content } : {}),
+      turn: {},
+    });
+    sighting.commit();
+    return [event];
+  }
+
+  /**
    * Seal a collector event on the chain a hook's subagent identity names, the
    * same chain `ingestHook` routes that hook to. A subagent's `PreToolUse`
    * decision sealed on the root chain left its `tool_requested` on the
@@ -909,6 +987,27 @@ export class SessionRecorder {
   }
 
   /**
+   * Forget what only a chain still taking frames needs: every model and tool
+   * call the dedupe ledgers hold, the open turn's reply, and every subagent
+   * chain. The ledgers hold up to `LLM_CALL_LEDGER_CAPACITY` and
+   * `TOOL_CALL_LEDGER_CAPACITY` entries, and exist to recognise a second
+   * source reporting a call the chain already holds. The reply holds up to
+   * `TACHO_MAX_BODY_BYTES`, and a session the sweep or the idle bound sealed
+   * keeps it (`sealFinal` does not clear it). A subagent keeps a copy of the
+   * session's context, and a sweep leaves one it finalized marked open. The
+   * registry calls this for a session sealed long enough that no second
+   * source is still coming (`SessionRegistry.releaseSealedState`), when no
+   * subagent runs. A frame that reaches a released subagent later opens it
+   * again where its WAL file ends (`chainTail`).
+   */
+  releaseSealedState(): void {
+    this.llmCalls = new LlmCallLedger();
+    this.toolCalls = new ToolCallLedger();
+    this.turnReply = undefined;
+    this.children.clear();
+  }
+
+  /**
    * Drop sealed events and OTel metric points older than the most recent
    * `keep`, on this chain and every subagent chain under it, so a
    * long-lived session's in-memory history does not grow for the whole
@@ -956,6 +1055,36 @@ export class SessionRecorder {
     return toProtocolTimestamp(this.options.context.now?.() ?? Date.now());
   }
 
+  /**
+   * Fill in the subagent type and the spawning call on a child chain that
+   * opened without them. The transcript tailer can open a child chain before
+   * its `SubagentStart` arrives, and the tailer knows neither. `seal` stamps
+   * each frame's `subagent` block from these options, and `state` persists
+   * the spawning call from them, so the hook that names them fills them in
+   * here. A value already set stays. The captured `SubagentStart` (Claude
+   * Code 2.1.263) names the type and no spawning call, so on such a chain
+   * the spawning call stays unset until a hook names one.
+   */
+  private nameSubagent(
+    subagentType: string | undefined,
+    spawnToolUseId: string | undefined,
+  ): void {
+    const parent = this.options.parent;
+    if (parent === undefined) return;
+    const type = parent.subagentType === undefined ? subagentType : undefined;
+    const spawn =
+      parent.spawnToolUseId === undefined ? spawnToolUseId : undefined;
+    if (type === undefined && spawn === undefined) return;
+    this.options = {
+      ...this.options,
+      parent: {
+        ...parent,
+        ...(type !== undefined ? { subagentType: type } : {}),
+        ...(spawn !== undefined ? { spawnToolUseId: spawn } : {}),
+      },
+    };
+  }
+
   private child(
     subagentId: string,
     subagentType: string | undefined,
@@ -966,6 +1095,9 @@ export class SessionRecorder {
     if (existing) {
       if (subagentType !== undefined && existing.type === undefined)
         existing.type = subagentType;
+      // A spawning call id on any hook but `SubagentStart` is the subagent's
+      // own call, so only the type is filled in here. See `sealHook`.
+      existing.recorder.nameSubagent(subagentType, undefined);
       return existing.recorder;
     }
     const recorder = new SessionRecorder({
@@ -1271,6 +1403,7 @@ export class SessionRecorder {
           : undefined;
       const isStart = first.hook_event_name === "SubagentStart";
       const child = this.child(subagentId, subagentType, spawnToolUseId, ts);
+      if (isStart) child.nameSubagent(subagentType, spawnToolUseId);
       const out: TachoEvent[] = this.pendingChildGenesis.splice(0);
       // The OTel records of this subagent's tool calls carry no `agent_id`,
       // only the `tool_use_id` this hook names first. The spawn's id is the
@@ -1454,6 +1587,16 @@ export class SessionRecorder {
       turn: draft.turn ?? {},
     });
     sighting.commit();
+    // The call is known to the family from its request on, so the MCP
+    // gateway can find the chain that is waiting on it (ADR-189).
+    if (
+      draft.kind === "tool_requested" &&
+      typeof body["tool_use_id"] === "string"
+    )
+      this.toolCallLedger.claim(
+        body["tool_use_id"],
+        this.options.parent?.subagentId,
+      );
     if (draft.kind === "turn_end") {
       this.turnOpen = false;
       this.turnReply = undefined;

@@ -8,12 +8,14 @@
 //
 // A wrapped run is counted in ClickHouse (`selectTachoTurnGroups`): each chain
 // comes back tallied per turn, and `tachoTurns` below places every subagent
-// chain in the turn that spawned it and adds the tallies up. That SQL counts
-// steps by a rule of its own, a second definition of a step, until each frame
-// carries its step key from ingest. `framesTurns` over a wrapped run's spliced
-// frames is the reference the ClickHouse path is tested against
-// (`run.turns.get.integration.test.ts`), so the two cannot drift apart
-// unnoticed.
+// chain in the turn that spawned it and adds the tallies up. The fold cannot
+// serve that read: a wrapped run can pass 250,000 frames and the fold reads at
+// most 10,000 (#4067). So the SQL counts steps by the fold's rules, spelled
+// for the store, and reads the fold's own vocabulary for the one rule that
+// depends on frame order, rule 3 (`UNKEYED_TOOL_PAIRING`, ADR-191).
+// `framesTurns` over a wrapped run's spliced frames is the reference the
+// ClickHouse path is tested against (`run.turns.get.integration.test.ts`),
+// including the unkeyed tool calls whose halves are not adjacent (#4308).
 //
 // A turn is what `turnOrdinals` says it is, the numbering the transcript's
 // entries carry, so a turn here and a turn there are the same turn.
@@ -35,12 +37,11 @@ import { microsString } from "../run.list";
 /** One chain's frames within one turn, as the ClickHouse path tallies them. */
 export interface TurnTally {
   frames: number;
-  /** Single-frame model calls that are no later sighting of a call. */
+  /** Model calls, each once: `llm_call` frames that are no later sighting of a call. */
   modelCalls: number;
-  modelRequests: number;
-  modelResponses: number;
+  /** Tool calls by call id. */
   keyedToolCalls: number;
-  unkeyedToolRequests: number;
+  /** Tool calls with no call id, paired by the fold's rule 3 in the query. */
   unkeyedToolCalls: number;
   costMicros: number | null;
   inputUncached: number | null;
@@ -50,19 +51,8 @@ export interface TurnTally {
 const addNullable = (a: number | null, b: number | null): number | null =>
   a === null ? b : b === null ? a : a + b;
 
-/**
- * One chain's model calls in ClickHouse's tally: each single frame, and each
- * request and response pair.
- */
-const modelSteps = (t: TurnTally) =>
-  t.modelCalls + Math.max(t.modelRequests, t.modelResponses);
-
-/**
- * One chain's tool calls in ClickHouse's tally: each call id, and each
- * unkeyed request and result pair.
- */
-const toolSteps = (t: TurnTally) =>
-  t.keyedToolCalls + Math.max(t.unkeyedToolRequests, t.unkeyedToolCalls);
+/** One chain's tool calls: each call id, and each unkeyed call rule 3 found. */
+const toolSteps = (t: TurnTally) => t.keyedToolCalls + t.unkeyedToolCalls;
 
 /** What one turn adds up to, across its chains. */
 interface TurnSum {
@@ -85,9 +75,9 @@ function sumOf(tallies: readonly TurnTally[]): TurnSum {
   };
   for (const t of tallies) {
     out.frames += t.frames;
-    // Halves pair within a chain, never across two: each chain's steps are
-    // counted on their own and then added.
-    out.modelSteps += modelSteps(t);
+    // Halves pair within a chain, never across two: the query counts each
+    // chain's steps on their own, and they are added here.
+    out.modelSteps += t.modelCalls;
     out.toolSteps += toolSteps(t);
     out.costMicros = addNullable(out.costMicros, t.costMicros);
     out.inputUncached = addNullable(out.inputUncached, t.inputUncached);
@@ -273,10 +263,7 @@ export function tachoTurnStarts(root: TachoChainTurnFacts | undefined): {
 const tallyOf = (g: TachoTurnGroup): TurnTally => ({
   frames: g.frames,
   modelCalls: g.modelCalls,
-  modelRequests: g.modelRequests,
-  modelResponses: g.modelResponses,
   keyedToolCalls: g.keyedToolCalls,
-  unkeyedToolRequests: g.unkeyedToolRequests,
   unkeyedToolCalls: g.unkeyedToolCalls,
   costMicros: g.costMicros,
   inputUncached: g.inputUncached,

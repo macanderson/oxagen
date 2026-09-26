@@ -154,6 +154,8 @@ export const agentGet = registerCapability({
           description: z.string().nullable(),
           agentKey: z.string().nullable(),
           harness: agentHarnessSchema,
+          /** True for the built-in assistant (`qa-chat`), which no identity write accepts. */
+          managed: z.boolean(),
           principalId: z.string().nullable(),
           operatorId: z.string().nullable(),
           status: agentIdentityStatusSchema,

@@ -11,8 +11,8 @@
 // operator's id and not a name, and an id is a key, not a label.
 //
 // No action here is gold. The one gold action of the workspace is Wrap Claude
-// Code on the Agents page. Clone and Kill switch are not in the design; they
-// stay because they are the only place either write is reachable from.
+// Code on the Agents page. Kill switch is not in the design; it stays because
+// it is the only place that write is reachable from.
 import { useTranslations } from "next-intl";
 import type { AgentDetail, AgentStatus } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
@@ -99,6 +99,13 @@ export function AgentHeader({
           className="flex flex-wrap items-center gap-2"
         >
           <StatusPill status={identity.status} />
+          {identity.managed ? (
+            <span title={t("managedTitle")}>
+              <Badge tone="quiet" dot={false} data-managed="true">
+                {t("managed")}
+              </Badge>
+            </span>
+          ) : null}
           {lastRun === null ? (
             <Badge tone="quiet" dot={false} mono data-tier="">
               {t("tierNotRecorded")}
@@ -144,7 +151,8 @@ export function AgentHeader({
           gap="agent_avatar"
           testId="edit-avatar"
         />
-        {live ? (
+        {/* The built-in assistant takes no identity write (#4350). */}
+        {live && !identity.managed ? (
           <AgentActions
             org={org}
             ws={ws}

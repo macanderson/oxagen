@@ -9,6 +9,7 @@ import {
   agentVersionContainment,
 } from "@oxagen/oxagen/agent-version-config";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
+import { isManagedAgentType } from "@oxagen/oxagen/interactive-agent";
 import type {
   AgentGetInput,
   AgentGetOutput,
@@ -343,6 +344,7 @@ export async function agentGetHandler(
         description: row.description,
         agentKey,
         harness: row.harness as AgentGetOutput["identity"]["harness"],
+        managed: isManagedAgentType(row.agentType),
         principalId: row.principalPublicId,
         operatorId: row.operatorPublicId,
         status: identityStatus(row, held),
