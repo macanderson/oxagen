@@ -967,6 +967,34 @@ describe("readObservedModels", () => {
     expect(classCall.query).not.toContain("root_session_uuid");
   });
 
+  // #3281. The unpriced-model report compares the class-bucket read against
+  // the book, so it must count each wrapped call once, by the same stamp the
+  // frame read and the summary read drop. The transcript joins are the one
+  // place the stamped row is wanted, and they add no call.
+  it("drops stamped duplicate rows from the class-bucket read's priced rows", async () => {
+    answerBoth([
+      {
+        model: "claude-sonnet-5",
+        provider: "",
+        calls: "1",
+        tokens: "10",
+        first_seen: "2026-09-10T00:00:00.000Z",
+        last_seen: "2026-09-10T00:00:00.000Z",
+      },
+    ]);
+    await readObservedModels({ orgId: ORG, since: SINCE });
+    const classCall = queryMock.mock.calls[1]![0];
+    const tc = classCall.query.slice(classCall.query.indexOf("tc AS ("));
+    const priced = tc.slice(0, tc.indexOf("LEFT JOIN"));
+    expect(priced).toContain("attrs[{duplicateAttr:String}] = ''");
+    expect(
+      classCall.query.match(/attrs\[\{duplicateAttr:String\}\] = ''/g),
+    ).toHaveLength(1);
+    expect(classCall.query_params).toMatchObject({
+      duplicateAttr: "oxagen.llm_call_duplicate_of",
+    });
+  });
+
   it("counts a wrapped call's provider-side web searches as server_tool_request usage", async () => {
     // #3281. `tacho_events` records the web searches a model made
     // (`web_search_requests`) and the book prices them as
