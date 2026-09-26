@@ -12,6 +12,7 @@
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { RunTranscript } from "@/data/contracts/run";
+import { isStale } from "@/data/contracts/runs";
 import { TRANSCRIPT_KINDS } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
 import { ReadFailure } from "@/ui/read-failure";
@@ -85,6 +86,7 @@ export function TranscriptSection({
             ws={ws}
             runId={runId}
             after={read.value.frameCursor ?? null}
+            stale={isStale(run)}
           />
         ) : null}
       </Panel>
