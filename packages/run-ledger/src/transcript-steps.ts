@@ -193,6 +193,21 @@ const TOOL_GATE: ReadonlySet<string> = new Set(
   [...POLICY_TYPES].filter((type) => type !== COMMAND_APPLIED),
 );
 /**
+ * Rule 3's vocabulary, for the grouped SQL behind a wrapped run's per-turn
+ * ledger (`selectTachoTurnGroups`, ADR-190). That query cannot call this
+ * fold, so it counts an unkeyed tool call by the same rule, spelled for the
+ * store: a request pairs with the receipt of its own spelling when nothing
+ * but these gates sits between them on its chain. It builds that rule from
+ * this object, so the two cannot name different kinds.
+ */
+export const UNKEYED_TOOL_PAIRING: {
+  readonly closes: ReadonlyArray<readonly [request: string, receipt: string]>;
+  readonly gates: readonly string[];
+} = {
+  closes: Object.entries(TOOL_CLOSE),
+  gates: [...TOOL_GATE],
+};
+/**
  * The effect frames the recorder writes about a tool call: the command it
  * ran, the file it touched, the host it reached (tacho spec §6.1). They are
  * more evidence for the call beside them, not steps of their own.

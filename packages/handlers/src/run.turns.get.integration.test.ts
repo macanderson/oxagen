@@ -2,16 +2,18 @@
 // must equal the rows the same run's frames add up to when read the way the
 // transcript reads them (every chain spliced in where it was spawned, the
 // proxy's late-report rule applied), with steps counted by the transcript's
-// own step fold (`framesTurns`, ADR-182). The SQL counts steps by a rule of
-// its own, so this is what keeps the two definitions answering alike. A
-// mocked client accepts any SQL, so only a live server can tell a query that
-// counts right from one that does not.
+// own step fold (`framesTurns`, ADR-182). The SQL counts steps by the fold's
+// rules spelled for the store, reading the fold's rule 3 vocabulary
+// (ADR-190), so this is what keeps the two answering alike. A mocked client
+// accepts any SQL, so only a live server can tell a query that counts right
+// from one that does not.
 //
 // The fixture is one wrapped run built to exercise every rule the contract
 // states: a model call three sources reported and a transcript message's
 // further block, a harness report after the proxy began observing, parallel
-// and duplicated tool results, unkeyed tool frames, a turn with no cost, cost
-// recorded before the first turn, and subagent chains placed by tool call id,
+// and duplicated tool results, unkeyed tool frames adjacent and apart, a
+// turn with no cost, cost recorded before the first turn, and subagent chains
+// placed by tool call id,
 // by agent id, by when they began, and inside another subagent. One subagent
 // chain is observed by the proxy partway through, so the late-report rule is
 // held per chain. A second run records no `turn_start`, opens its turns on the
@@ -222,6 +224,29 @@ const ROWS: Row[] = [
     cacheRead: 27,
     requestId: "req_4",
   }),
+  // Turn 4 (#4308): unkeyed tool frames whose halves are not adjacent. The
+  // fold pairs a request only with the receipt right after it, with nothing
+  // but gates between, so a model call between them makes two calls, and so
+  // does Claude Code's own permission check. A gate between them does not,
+  // and nor does a later sighting of a model call, which the fold hides
+  // before it pairs.
+  row(ROOT, 25, 70, "turn_start"),
+  row(ROOT, 26, 71, "tool_requested"),
+  row(ROOT, 27, 72, "llm_call", { source: "otel_log", requestId: "req_5" }),
+  row(ROOT, 28, 73, "tool_call"),
+  row(ROOT, 29, 74, "tool_requested"),
+  row(ROOT, 30, 75, "harness_permission"),
+  row(ROOT, 31, 76, "tool_call"),
+  row(ROOT, 32, 77, "tool_requested"),
+  row(ROOT, 33, 78, "policy_decision"),
+  row(ROOT, 34, 79, "tool_call"),
+  row(ROOT, 35, 80, "tool_requested"),
+  row(ROOT, 36, 81, "llm_call", {
+    source: "transcript",
+    attrs: { [DUP]: "otel_log" },
+    requestId: "req_5",
+  }),
+  row(ROOT, 37, 82, "tool_call"),
   // Subagent A, spawned by tu_task in turn 1.
   row(CHILD_A, 0, 7, "turn_start", {
     subagentId: "agent_a",
@@ -441,6 +466,10 @@ describe.skipIf(!chUp)("get_run_turns against ClickHouse", () => {
       // two results pair as two calls; the loose chain's tool call is a third.
       [2, 7, 2, 3, "3"],
       [3, 4, 2, 0, "37"],
+      // Two calls around the model call, two around the harness check, one
+      // through the gate, and one around the hidden sighting. The query on
+      // main paired by count and answered 4.
+      [4, 13, 1, 6, null],
     ]);
     expect(out.turns[0]?.cumulativeCost?.micros).toBe("135");
     expect(out.turns[0]?.tokens).toEqual({ inputUncached: 18, cacheRead: 105 });

@@ -2,8 +2,13 @@
 // reference the ClickHouse path is checked against) and from ClickHouse's
 // per-chain tallies (a wrapped run). The SQL that produces the tallies is
 // checked against a real ClickHouse in run.turns.get.integration.test.ts.
-import { ledgerFrame, type RunFrame, tachoFrame } from "@oxagen/run-ledger";
-import type { TachoTurnGroup } from "@oxagen/telemetry";
+import {
+  ledgerFrame,
+  type RunFrame,
+  tachoFrame,
+  UNKEYED_TOOL_PAIRING,
+} from "@oxagen/run-ledger";
+import { type TachoTurnGroup, unkeyedToolPattern } from "@oxagen/telemetry";
 import { describe, expect, it } from "vitest";
 import { event, tachoRow } from "../run.test-support";
 import {
@@ -298,10 +303,7 @@ const group = (over: Partial<TachoTurnGroup>): TachoTurnGroup => ({
   firstAt: "2026-09-11 09:00:00.000",
   frames: 1,
   modelCalls: 0,
-  modelRequests: 0,
-  modelResponses: 0,
   keyedToolCalls: 0,
-  unkeyedToolRequests: 0,
   unkeyedToolCalls: 0,
   costMicros: null,
   inputUncached: null,
@@ -518,11 +520,9 @@ describe("tachoTurns", () => {
         chain(CHILD_A, {
           spawnToolUseId: "tu_task",
           frames: 12,
-          modelCalls: 2,
-          modelRequests: 1,
+          modelCalls: 3,
           keyedToolCalls: 1,
-          unkeyedToolRequests: 2,
-          unkeyedToolCalls: 1,
+          unkeyedToolCalls: 2,
           costMicros: 20,
           inputUncached: 5,
         }),
@@ -535,9 +535,9 @@ describe("tachoTurns", () => {
         seq: "1",
         at: "2026-09-11T09:00:01.000Z",
         frames: 42,
-        // 4 on the root; 2 single calls and one unpaired request on the subagent.
+        // 4 on the root and 3 on the subagent.
         modelSteps: 7,
-        // 3 on the root; one keyed and two unkeyed requests on the subagent.
+        // 3 on the root; one keyed and two unkeyed calls on the subagent.
         toolSteps: 6,
         cost: { micros: "120", currency: "USD", basis: "client_attested" },
         cumulativeCost: {
@@ -594,7 +594,7 @@ describe("tachoTurns", () => {
     });
   });
 
-  it("pairs a request with a response on its own chain, never with one on another", () => {
+  it("adds each chain's own calls, so halves on two chains stay two calls", () => {
     const { turns } = tachoTurns({
       rootSessionUuid: ROOT,
       starts: [0],
@@ -603,19 +603,20 @@ describe("tachoTurns", () => {
       groups: [
         group({
           turnKey: 0,
-          modelRequests: 1,
-          unkeyedToolRequests: 1,
+          modelCalls: 1,
+          unkeyedToolCalls: 1,
           spawns: [{ seq: 1, toolUseId: "tu_task", subagentId: null }],
         }),
         chain(CHILD_A, {
           spawnToolUseId: "tu_task",
-          modelResponses: 1,
+          modelCalls: 1,
           unkeyedToolCalls: 1,
         }),
       ],
     });
-    // One unanswered request on the root and one lone response on the
-    // subagent are two calls, not one.
+    // The query pairs within one chain. An unanswered request on the root
+    // and a lone receipt on the subagent come back as a call each, and the
+    // turn holds both.
     expect(turns[0]).toMatchObject({ modelSteps: 2, toolSteps: 2 });
   });
 
@@ -656,5 +657,87 @@ describe("tachoTurns", () => {
     });
     expect(turns.map((t) => t.seq)).toEqual(["0", "10"]);
     expect(complete).toBe(false);
+  });
+});
+
+// #4308, ADR-190. `selectTachoTurnGroups` counts an unkeyed tool call by the
+// fold's rule 3, spelled for the store: one letter per frame of a chain in seq
+// order, then the matches of `unkeyedToolPattern`. This spells the same rule
+// here and holds it to the fold over many generated turns. The query's SQL is
+// held to the fold on a real server in run.turns.get.integration.test.ts.
+describe("the query's rule 3 against the fold", () => {
+  const KINDS = [
+    "tool_requested",
+    "tool_call",
+    "policy_decision",
+    "approval_request",
+    "harness_permission",
+    "llm_call",
+    "command",
+    "oxagen:hook_health",
+  ];
+
+  /** The query's letter for a frame, from the fold's vocabulary. */
+  function letter(kind: string, keyed: boolean): string {
+    if (keyed) return "x";
+    const request = UNKEYED_TOOL_PAIRING.closes.findIndex(([r]) => r === kind);
+    if (request >= 0) return String.fromCharCode(65 + request);
+    const receipt = UNKEYED_TOOL_PAIRING.closes.findIndex(
+      ([, c]) => c === kind,
+    );
+    if (receipt >= 0) return String.fromCharCode(97 + receipt);
+    return UNKEYED_TOOL_PAIRING.gates.includes(kind) ? "g" : "x";
+  }
+
+  /** A small seeded generator, so a failure names the turn that made it. */
+  function generator(seed: number) {
+    let state = seed;
+    return () => {
+      state = (state * 1_103_515_245 + 12_345) % 2_147_483_648;
+      return state / 2_147_483_648;
+    };
+  }
+
+  it("counts the unkeyed tool calls the fold draws, turn after turn", () => {
+    const pattern = new RegExp(unkeyedToolPattern(UNKEYED_TOOL_PAIRING), "g");
+    const halves = new Set(UNKEYED_TOOL_PAIRING.closes.flat());
+    for (let seed = 1; seed <= 400; seed += 1) {
+      const next = generator(seed);
+      const length = 1 + Math.floor(next() * 12);
+      const kinds = Array.from(
+        { length },
+        () => KINDS[Math.floor(next() * KINDS.length)] as string,
+      );
+      const keyed = kinds.map(() => next() < 0.15);
+      const frames = [
+        turnStart(0),
+        ...kinds.map((kind, i) =>
+          frame(i + 1, {
+            kind,
+            toolName: kind.startsWith("tool") ? "Bash" : "",
+            toolStatus: kind === "tool_call" ? "ok" : "",
+            toolUseId: keyed[i] ? `tu_${i}` : "",
+          }),
+        ),
+      ];
+      const drawn = framesTurns(frames, 10).turns[0]?.toolSteps ?? 0;
+
+      const unkeyed = kinds.filter((k, i) => !keyed[i] && halves.has(k));
+      const paired = (
+        kinds
+          .map((k, i) => letter(k, keyed[i] ?? false))
+          .join("")
+          .match(pattern) ?? []
+      ).length;
+      const keyedCalls = new Set(
+        kinds.flatMap((k, i) => (keyed[i] && halves.has(k) ? [`tu_${i}`] : [])),
+      ).size;
+      expect({
+        seed,
+        kinds,
+        keyed,
+        counted: keyedCalls + unkeyed.length - paired,
+      }).toEqual({ seed, kinds, keyed, counted: drawn });
+    }
   });
 });
