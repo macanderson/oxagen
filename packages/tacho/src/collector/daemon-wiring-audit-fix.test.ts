@@ -107,11 +107,15 @@ function fakePlane(etag: string) {
   // refused the way the API refuses the key a revoke retired: 403 with the
   // reason `host_revoked`.
   let revoked: readonly string[] | "all" | undefined;
+  // How the bundle endpoint answers: normally, not at all (a refused
+  // connection), or never.
+  let bundleEndpoint: "answers" | "refuses" | "hangs" = "answers";
+  let announced = etag;
   const requests: string[] = [];
   const control = (): ControlEnvelope => ({
     host_status: "active",
     deny_generation: { org: 1, workspace: 1 },
-    bundle_etag: etag,
+    bundle_etag: announced,
     commands: queue.splice(0),
   });
   const fetch: FetchLike = async (url, init) => {
@@ -150,6 +154,8 @@ function fakePlane(etag: string) {
       };
     }
     if (url.endsWith("/bundle")) {
+      if (bundleEndpoint === "refuses") throw new Error("ECONNREFUSED");
+      if (bundleEndpoint === "hangs") await new Promise(() => undefined);
       return {
         ok: true,
         status: 200,
@@ -188,6 +194,14 @@ function fakePlane(etag: string) {
     revoke: (only?: readonly string[]) => {
       revoked = only ?? "all";
     },
+    bundleEndpoint: (mode: "answers" | "refuses" | "hangs") => {
+      bundleEndpoint = mode;
+    },
+    /** Name another etag in every control envelope. */
+    announce: (next: string) => {
+      announced = next;
+    },
+    bundleRequests: () => requests.filter((url) => url.endsWith("/bundle")),
   };
 }
 
@@ -214,6 +228,7 @@ describe("the daemon's audit wiring", () => {
       paths?: ReturnType<typeof scratchPaths>;
       log?: string[];
       timers?: Partial<DaemonTimers>;
+      now?: () => number;
     } = {},
   ) {
     const paths = options.paths ?? scratchPaths();
@@ -243,7 +258,7 @@ describe("the daemon's audit wiring", () => {
       paths,
       fetch: plane.fetch,
       exec: fakeGit(options.git ?? (() => repoAnswers(BASELINE_SHA))),
-      now: () => 1_000,
+      now: options.now ?? (() => 1_000),
       log: (line) => options.log?.push(line),
       listen: false,
       transcriptRoots: [`${paths.root}/no-transcripts`],
@@ -730,6 +745,93 @@ describe("the daemon's audit wiring", () => {
     expect(record.control.messages.map((m) => m.id)).toEqual(["cmd_steer"]);
     await handle.stop();
     expect(readFileSync(paths.daemonState, "utf8")).toContain(text);
+  });
+
+  it("sends one bundle request for refreshes that overlap", async () => {
+    const { handle, plane, signer } = await boot();
+    plane.offerBundle(
+      signer.sign(unsignedBundle({ version: 4, etag: "etag-4" })),
+    );
+    const results = await Promise.all([
+      handle.refreshBundle(),
+      handle.refreshBundle(),
+      handle.refreshBundle(),
+    ]);
+    expect(results).toEqual([true, true, true]);
+    expect(plane.bundleRequests()).toHaveLength(1);
+    expect(handle.host().bundle.version).toBe(4);
+  });
+
+  it("stops asking a bundle endpoint that refuses on every batch and poll", async () => {
+    // Every envelope names an etag this host does not hold, so every batch
+    // and poll asks for the bundle. Each one used to send its own request
+    // and wait out the client's timeout when the endpoint did not answer.
+    const { handle, plane } = await boot();
+    await handle.api.handleHook(hook("SessionStart", { cwd: CWD }));
+    plane.announce("etag-9");
+    plane.bundleEndpoint("refuses");
+    for (let i = 0; i < 4; i += 1) {
+      await handle.api.handleHook(hook("Notification", { message: `n${i}` }));
+      await handle.tick();
+    }
+    expect(plane.bundleRequests()).toHaveLength(1);
+  });
+
+  it("answers a hook without waiting out a bundle request that hangs", async () => {
+    // A mandate past its signed window asks for a refresh before a tool
+    // call. A hook holds the queue every agent on the host waits on, so it
+    // waits `hookBundleWaitMs` and then decides on the bundle it has.
+    let clock = 1_000;
+    const { handle, plane } = await boot({
+      bundle: {
+        issued_at: "1970-01-01T00:00:00.000Z",
+        expires_at: "1970-01-01T00:00:00.500Z",
+      },
+      timers: { hookBundleWaitMs: 50 },
+      now: () => clock,
+    });
+    await handle.api.handleHook(hook("SessionStart", { cwd: CWD }));
+    // The control plane answers, then the signed window runs out.
+    await handle.tick();
+    clock += 1_000;
+    plane.bundleEndpoint("hangs");
+    const started = Date.now();
+    const answer = await handle.api.handleHook(
+      hook("PreToolUse", {
+        tool_name: "Bash",
+        tool_input: { command: "make build" },
+        tool_use_id: "toolu_hang",
+      }),
+    );
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(JSON.stringify(answer)).toContain("deny");
+    expect(plane.bundleRequests()).toHaveLength(1);
+  });
+
+  it("keeps the bundle it holds when an older one arrives", async () => {
+    const log: string[] = [];
+    const { handle, plane, signer } = await boot({
+      bundle: {
+        version: 5,
+        etag: "etag-5",
+        issued_at: "2026-09-12T00:00:00.000Z",
+      },
+      log,
+    });
+    plane.offerBundle(
+      signer.sign(
+        unsignedBundle({
+          version: 4,
+          etag: "etag-4",
+          issued_at: "2026-09-11T00:00:00.000Z",
+        }),
+      ),
+    );
+    expect(await handle.refreshBundle()).toBe(false);
+    expect(handle.host().bundle.version).toBe(5);
+    expect(log).toContain(
+      "refused bundle 4: this host holds bundle 5, issued later",
+    );
   });
 
   it("does not verify a bundle signed for another host", async () => {

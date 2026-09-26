@@ -101,6 +101,7 @@ import {
   type ControlEnvelope,
   type DaemonHealth,
   type ModelBaseUrlReport,
+  type PolicyBundle,
   TACHO_BUNDLE_FEATURES,
   TACHO_CREDENTIAL_GATEWAY_BROKERED,
   TACHO_CREDENTIAL_HARNESS_HELD,
@@ -179,6 +180,11 @@ export interface DaemonTimers {
   stopLaneMs: number;
   /** The longest `stop` spends shipping the WAL once the host chain is sealed. */
   stopDrainMs: number;
+  /**
+   * The longest a hook waits for a bundle refresh it asked for. A hook holds
+   * the queue every wrapped agent on the host waits on.
+   */
+  hookBundleWaitMs: number;
 }
 
 export const DEFAULT_TIMERS: DaemonTimers = {
@@ -194,6 +200,7 @@ export const DEFAULT_TIMERS: DaemonTimers = {
   // gives `stop` (run.ts), which leaves time to seal and persist between them.
   stopLaneMs: 1_500,
   stopDrainMs: 2_000,
+  hookBundleWaitMs: 2_000,
 };
 
 /** How often the daemon looks at Codex's static run token. */
@@ -383,6 +390,21 @@ function settleWithin(
     };
     work.then(done, done);
   });
+}
+
+/**
+ * Whether `candidate` is an older mandate than `held`: a lower version and
+ * no later `issued_at`. Both, so a control plane whose version count started
+ * over still reaches a host with a bundle it issues now.
+ */
+export function olderBundle(
+  candidate: Pick<PolicyBundle, "version" | "issued_at">,
+  held: Pick<PolicyBundle, "version" | "issued_at">,
+): boolean {
+  return (
+    candidate.version < held.version &&
+    !(Date.parse(candidate.issued_at) > Date.parse(held.issued_at))
+  );
 }
 
 /** A serial queue: hook handling for one daemon never interleaves. */
@@ -1325,7 +1347,15 @@ async function initializeDaemon(
     }
   }
 
-  async function refreshBundle(): Promise<boolean> {
+  /**
+   * One bundle request, and what came of it: `cached` for a verified
+   * replacement written to `host.json`, `confirmed` for `not_modified`, and
+   * `refused` for anything that left the mandate unconfirmed (no answer, no
+   * bundle, one that does not verify or is older than the one held, or a
+   * narrowing this host could not honour). Callers go through
+   * `refreshBundle`.
+   */
+  async function fetchBundle(): Promise<"cached" | "confirmed" | "refused"> {
     try {
       // Past half its signed window the poll sends no etag, so an unchanged
       // mandate comes back freshly signed and the copy on disk stays fresh
@@ -1352,9 +1382,9 @@ async function initializeDaemon(
         mandateConfirmedAt = now();
         // The branch a narrowing whose sweep failed returns through for ever.
         retryOwedBodyPurge();
-        return false;
+        return "confirmed";
       }
-      if (response.bundle === null) return false;
+      if (response.bundle === null) return "refused";
       const verification = verifyBundle(
         response.bundle,
         host.bundle_public_key_pem,
@@ -1364,7 +1394,18 @@ async function initializeDaemon(
         log(
           `refused a bundle that does not verify: ${verification.reason ?? "unknown"}`,
         );
-        return false;
+        return "refused";
+      }
+      // A response that left before a newer bundle was cached must not
+      // replace it. The version counts mandate changes and a copy signed
+      // again keeps it, so an older mandate has a lower version and an
+      // earlier `issued_at`. A copy that fails to verify can be replaced by
+      // anything that does.
+      if (bundleVerified && olderBundle(response.bundle, host.bundle)) {
+        log(
+          `refused bundle ${response.bundle.version}: this host holds bundle ${host.bundle.version}, issued later`,
+        );
+        return "refused";
       }
       // A verified replacement is the control plane's own word on what may be
       // kept, which is the one thing that authorises erasing what is already
@@ -1386,7 +1427,7 @@ async function initializeDaemon(
         log(
           "refusing to cache a narrowed bundle this host can neither enforce on disk nor remember owing; the old etag stands so the next poll retries",
         );
-        return false;
+        return "refused";
       }
       host = applyControlFacts(paths.hostFile, host, {
         bundle: response.bundle,
@@ -1396,13 +1437,58 @@ async function initializeDaemon(
       // The replacement verified, so this response is a confirmation.
       mandateConfirmedAt = now();
       log(`bundle ${response.bundle.version} (${response.bundle.etag}) cached`);
-      return true;
+      return "cached";
     } catch (error) {
       log(
         `bundle refresh failed: ${error instanceof Error ? error.message : String(error)}`,
       );
-      return false;
+      return "refused";
     }
+  }
+
+  // One bundle request in flight at a time, and a pause after one that came
+  // to nothing (C-11). Every ingest batch and command poll whose envelope
+  // names another etag asks for a refresh, and so do the hooks and the tick.
+  // Each used to send its own request and wait up to the client's 15 s
+  // timeout for it, so a failing bundle endpoint held every batch that long,
+  // and two requests in flight could cache whichever verified last.
+  const BUNDLE_REFRESH_MIN_BACKOFF_MS = 2_000;
+  const BUNDLE_REFRESH_MAX_BACKOFF_MS = 60_000;
+  let bundleFetch: Promise<boolean> | undefined;
+  let bundleBackoffMs = 0;
+  let bundleRetryAt = 0;
+
+  /**
+   * Refresh the bundle, and answer whether a new one was cached. A caller
+   * that arrives while a request is in flight shares it. After a request
+   * that came to nothing, callers get `false` without a request until the
+   * backoff passes (2 s, doubling to 60 s). `force` skips the backoff, for
+   * the callers that ask on purpose: an operator's `refresh_bundle`, SIGHUP,
+   * and the tick, which has its own `bundleRefreshMs` cadence.
+   */
+  function refreshBundle(options: { force?: boolean } = {}): Promise<boolean> {
+    if (bundleFetch !== undefined) return bundleFetch;
+    if (options.force !== true && now() < bundleRetryAt)
+      return Promise.resolve(false);
+    const run = fetchBundle()
+      .then((outcome) => {
+        if (outcome === "refused") {
+          bundleBackoffMs = Math.min(
+            Math.max(bundleBackoffMs * 2, BUNDLE_REFRESH_MIN_BACKOFF_MS),
+            BUNDLE_REFRESH_MAX_BACKOFF_MS,
+          );
+          bundleRetryAt = now() + bundleBackoffMs;
+        } else {
+          bundleBackoffMs = 0;
+          bundleRetryAt = 0;
+        }
+        return outcome === "cached";
+      })
+      .finally(() => {
+        if (bundleFetch === run) bundleFetch = undefined;
+      });
+    bundleFetch = run;
+    return run;
   }
 
   async function onControl(control: ControlEnvelope): Promise<void> {
@@ -1432,7 +1518,7 @@ async function initializeDaemon(
             kill,
             processStart: (pid) => processStarts([pid])?.get(pid),
             refreshBundle: async () => {
-              await refreshBundle();
+              await refreshBundle({ force: true });
             },
             onHostSuspended: (reason) => {
               host = applyControlFacts(paths.hostFile, host, {
@@ -2021,8 +2107,11 @@ async function initializeDaemon(
         {
           registry,
           policy,
+          // A hook waits a bounded time for a refresh and none during a
+          // backoff. It holds the hook queue, and past the wait it decides
+          // on the bundle it has, which is what a failed refresh left it.
           refreshBundle: async () => {
-            await refreshBundle();
+            await settleWithin(refreshBundle(), timers.hookBundleWaitMs);
           },
           acknowledge: (ack) => {
             acks.push(ack);
@@ -3404,7 +3493,7 @@ async function initializeDaemon(
       if (shipper.hostRevoked) return;
       if (now() - lastRefresh >= timers.bundleRefreshMs) {
         lastRefresh = now();
-        await refreshBundle();
+        await refreshBundle({ force: true });
         await refreshUpstreams();
       }
     });
@@ -3572,7 +3661,7 @@ async function initializeDaemon(
      */
     flushGitReads: () => startGitReads(),
     drainSpool: () => serial.run(drainSpool),
-    refreshBundle,
+    refreshBundle: () => refreshBundle({ force: true }),
     stop: async () => {
       if (stopped) return;
       stopped = true;
