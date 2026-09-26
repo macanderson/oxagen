@@ -942,6 +942,9 @@ describe("the open frame's window (ADR-193)", () => {
       "12,000",
     );
     expect(
+      panel.getByText("12,000 tok as the provider reported them"),
+    ).toBeTruthy();
+    expect(
       panel.getByRole("link", { name: "answered at frame 3" }),
     ).toHaveAttribute("href", frameLink("3"));
     expect(
@@ -1013,7 +1016,7 @@ describe("the open frame's window (ADR-193)", () => {
       "not recorded",
     );
     expect(
-      panel.getByText("Bytes only, because the provider reported no input"),
+      panel.getByText("The provider reported no input"),
     ).toBeTruthy();
     expect(screen.getAllByTestId("window-part")[1]).toHaveTextContent(
       "Conversation 300 bytes",

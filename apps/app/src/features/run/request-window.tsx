@@ -251,7 +251,9 @@ export function RequestWindow({
         aside={
           recorded.promptTokens === null
             ? t("compositionBytes")
-            : t("compositionNote")
+            : t("compositionNote", {
+                count: formatCount(recorded.promptTokens, locale),
+              })
         }
       >
         <CompositionBar recorded={recorded} />
