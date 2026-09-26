@@ -543,6 +543,29 @@ describe("answer_interjection: the link path", () => {
     expect(store.audits).toEqual([]);
   });
 
+  it("leaves off a release the host's schema would refuse, and still records the answer (negative)", async () => {
+    const store = new MemoryStore([repoQuestion()]);
+    const paths = fakePaths();
+    // A binding id past the host's 64-character bound.
+    paths.link.mockResolvedValueOnce({
+      ...LINKED,
+      bindingId: `rpb_${"0".repeat(80)}`,
+    });
+    const out = await handlerFor(store, { paths })(pathInput(), OPERATOR);
+    expect(out.path).toBe("link");
+    expect(store.questions[0]?.path).toBe("link");
+    expect(store.queued[0]?.payload).not.toHaveProperty("interjection");
+  });
+
+  it("names the person by a lowercase usr_ id, which the host's schema requires", async () => {
+    const store = new MemoryStore([repoQuestion()]);
+    store.userPublicId = async () => "USR_0123456789ABCDEFGHJKMN";
+    await handlerFor(store)(pathInput(), OPERATOR);
+    expect(store.queued[0]?.payload["interjection"]).toMatchObject({
+      answered_by: USER_PUBLIC_ID,
+    });
+  });
+
   it("releases the hold of a harness that reads text only at session start: the host applies it", async () => {
     const store = new MemoryStore(
       [repoQuestion()],

@@ -80,6 +80,7 @@ import {
   type InterjectionAnswerPayload,
   type InterjectionPath,
   interjectBodySchema,
+  interjectionAnswerPayloadSchema,
 } from "@oxagen/tacho";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { resolveInterjectionRepository } from "./lib/interjection-repository";
@@ -358,6 +359,47 @@ async function createPath(
 }
 
 /**
+ * The release the host reads from `payload.interjection`, or undefined when
+ * the answer took no path. The host applies it only when it parses with the
+ * host's own schema, and ignores it otherwise, holding the loop until its own
+ * deadline. So it is parsed here first, and a payload that would not parse is
+ * logged and left off.
+ */
+async function releaseOf(args: {
+  store: InterjectionAnswerStore;
+  row: LockedInterjection;
+  outcome: PathOutcome | null;
+  receiptId: string;
+  userId: string | null;
+}): Promise<InterjectionAnswerPayload | undefined> {
+  const { row, outcome } = args;
+  if (outcome === null || row.body === null) return undefined;
+  const userPublicId =
+    args.userId === null ? null : await args.store.userPublicId(args.userId);
+  const release = interjectionAnswerPayloadSchema.safeParse({
+    key: row.body.interjection_key,
+    path: outcome.path,
+    source: "person",
+    receipt_id: args.receiptId,
+    answered_by: userPublicId?.toLowerCase() ?? null,
+    binding_id: outcome.repository.bindingId,
+    workspace_slug: outcome.workspaceSlug,
+    ...(outcome.workspace === null
+      ? {}
+      : { workspace_id: outcome.workspace.publicId }),
+  });
+  if (release.success) return release.data;
+  logger.error(
+    {
+      interjectionId: row.publicId,
+      issue: release.error.issues[0]?.path.join("."),
+    },
+    "answer_interjection: the release would not parse on the host; the host holds the loop until its own deadline",
+  );
+  return undefined;
+}
+
+/**
  * Run the path a person took on a repository question: find the repository,
  * then link it or create a workspace for it. `resolvedRepository` is set when
  * this call resolved the repository, so the answer records it on the row.
@@ -509,24 +551,13 @@ export function createAnswerInterjectionHandler(
       const commandIds: string[] = [];
       if (row.runPublicId.startsWith("tse_")) {
         const session = await store.session(scope, row.runPublicId);
-        const interjection: InterjectionAnswerPayload | undefined =
-          outcome === null || row.body === null
-            ? undefined
-            : {
-                key: row.body.interjection_key,
-                path: outcome.path,
-                source: "person",
-                receipt_id: receiptId,
-                answered_by:
-                  actingUserId === null
-                    ? null
-                    : await store.userPublicId(actingUserId),
-                binding_id: outcome.repository.bindingId,
-                workspace_slug: outcome.workspaceSlug,
-                ...(outcome.workspace === null
-                  ? {}
-                  : { workspace_id: outcome.workspace.publicId }),
-              };
+        const interjection = await releaseOf({
+          store,
+          row,
+          outcome,
+          receiptId,
+          userId: actingUserId,
+        });
         const command =
           session === null
             ? null
