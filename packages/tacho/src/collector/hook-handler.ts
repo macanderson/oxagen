@@ -175,6 +175,11 @@ function policyFacts(
     deny_generation_org: view.denyGeneration.org,
     deny_generation_ws: view.denyGeneration.workspace,
     ...(evaluation.rule !== undefined ? { policy_rule: evaluation.rule } : {}),
+    // The list is what the Run page's Policy tab prints (#3971); the joined
+    // `policy_rule` stays for older readers and `tacho.session_commands`.
+    ...(evaluation.rules !== undefined && evaluation.rules.length > 0
+      ? { policy_rules: evaluation.rules.slice(0, 64) }
+      : {}),
     ...(evaluation.capability_id !== undefined
       ? { capability_id: evaluation.capability_id }
       : {}),
