@@ -5,9 +5,10 @@
  * and the seal it read. A reading without its provenance cannot be cited,
  * so a CHECK sets the four together.
  *
- * The migration is discovered, not hard-coded, as `tacho.test.ts` does it:
- * the latest migration that defines each constraint must set all four
- * columns together, so the database refuses what Drizzle's types refuse.
+ * The migration is discovered, not hard-coded: the newest migration file
+ * that names each constraint is read from the name to the end of its
+ * statement, and that text must compare all four columns' IS NULL, so the
+ * database refuses what Drizzle's types refuse.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
