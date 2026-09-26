@@ -1,6 +1,7 @@
-// `list_commands`: the delivery report for one run (Mission Control spec
-// §7.4, §7.6). Every row addressed to the run, newest first, in the recorded
-// status with one derivation: a `queued` row whose expiry has passed reads
+// `list_commands`: the delivery report for one run, or for the commands one
+// broadcast queued (Mission Control spec §7.4, §7.6). Every row addressed to
+// the run, or every row the ids name, newest first, in the recorded status
+// with one derivation: a `queued` row whose expiry has passed reads
 // `expired`, the status the sweep writes on the host's next poll
 // (`expireCommands` in ./lib/tacho-host.ts, the same predicate). A row the
 // host holds (`sent`, `received`, `acknowledged`) reads as recorded whatever
@@ -8,11 +9,20 @@
 // and until then the report carries `expiresAt` for the app to render
 // "past expiry, awaiting the host". Nothing shown is a status nobody wrote.
 //
+// Each row names its run (`target_id`), the person who issued it
+// (`issued_by_user_id` joined to `auth.users`, a blank name read as none),
+// and, for a steer or a message, the text it carried (`payload.text`).
+//
 // The run is fenced the way `get_run` fences it: a `tse_…` id resolves only
 // in the caller's workspace, an `arun_…` id through the ledger's RLS and the
-// identity query; an id neither resolves is `not_found`.
+// identity query; an id neither resolves is `not_found`. A read by
+// `commandIds` is fenced by the same workspace predicate the run read uses,
+// so an id from another workspace, or one that names no command, is left out
+// rather than refused. It reads rows addressed to a run only: the report
+// names each row's run, and a host-addressed row has none.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
   type CommandReportItem,
   type ListCommandsOutput,
@@ -20,7 +30,7 @@ import {
 } from "@oxagen/oxagen/contracts/tacho.command.list";
 import { schema, withTenantDb } from "@oxagen/database";
 import { createPostgresRunStore, type RunStore } from "@oxagen/run-ledger";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import {
   postgresRunQueries,
   type RunQueries,
@@ -31,6 +41,7 @@ import {
 export type CommandRow = Pick<
   typeof schema.tachoControlCommands.$inferSelect,
   | "publicId"
+  | "targetId"
   | "command"
   | "outcome"
   | "requestedMode"
@@ -44,7 +55,20 @@ export type CommandRow = Pick<
   | "appliedAt"
   | "appliedAtSeq"
   | "outcomeDetail"
->;
+> & {
+  /** `payload.text`; null when the payload carries none. */
+  payloadText: string | null;
+  /** The issuer's `users.public_id` (`usr_…`); null when the row names no user. */
+  issuedByPublicId: string | null;
+  /** The issuer's `users.display_name`, as stored. */
+  issuedByName: string | null;
+};
+
+/** The commands that carry prompt content, and so the only ones whose text a report shows. */
+const TEXT_COMMANDS: ReadonlySet<string> = new Set(["steer", "message"]);
+
+const blankToNull = (value: string | null): string | null =>
+  value === null || value.trim() === "" ? null : value;
 
 /** The status a report shows: the recorded one, or `expired` for a `queued` row the clock passed. */
 export function reportedStatus(
@@ -66,6 +90,7 @@ const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 export function toReportItem(row: CommandRow, now: Date): CommandReportItem {
   return {
     id: row.publicId,
+    runId: row.targetId,
     command: row.command as CommandReportItem["command"],
     status: reportedStatus(row, now),
     requestedMode: row.requestedMode as CommandReportItem["requestedMode"],
@@ -79,6 +104,11 @@ export function toReportItem(row: CommandRow, now: Date): CommandReportItem {
     appliedAt: iso(row.appliedAt),
     appliedAtSeq: row.appliedAtSeq,
     detail: row.outcomeDetail,
+    issuedBy:
+      row.issuedByPublicId === null
+        ? null
+        : { id: row.issuedByPublicId, name: blankToNull(row.issuedByName) },
+    text: TEXT_COMMANDS.has(row.command) ? row.payloadText : null,
   };
 }
 
@@ -91,33 +121,102 @@ type ListCommandsDeps = {
     runPublicId: string,
     limit: number,
   ) => Promise<CommandRow[]>;
+  /** The run-addressed rows among `commandIds` in the scope's workspace, newest first. */
+  commandsByIds: (
+    scope: RunScope,
+    commandIds: readonly string[],
+    limit: number,
+  ) => Promise<CommandRow[]>;
   now: () => Date;
 };
 
 const runNotFound = () =>
   new HandlerError({ code: "not_found", reason: "run_not_found" });
 
+/** A read that names both a run and command ids, or neither. */
+const runOrCommands = () =>
+  new CapabilityError(tachoCommandList.name, "invalid_input", "run_or_commands");
+
 export function createListCommandsHandler(
   deps: ListCommandsDeps,
 ): CapabilityHandler<typeof tachoCommandList> {
   return async (input, ctx): Promise<ListCommandsOutput> => {
+    const { runId, commandIds } = input;
+    if ((runId === undefined) === (commandIds === undefined))
+      throw runOrCommands();
     const scope = runScope(ctx);
-    if (input.runId.startsWith("tse_")) {
-      if (!(await deps.queries.tachoSession(scope, input.runId)))
-        throw runNotFound();
+    if (commandIds !== undefined) {
+      const now = deps.now();
+      const rows = await deps.commandsByIds(
+        scope,
+        [...new Set(commandIds)],
+        input.limit,
+      );
+      return { commands: rows.map((row) => toReportItem(row, now)) };
+    }
+    if (runId === undefined) throw runOrCommands();
+    if (runId.startsWith("tse_")) {
+      if (!(await deps.queries.tachoSession(scope, runId))) throw runNotFound();
     } else {
-      const summary = await deps.store.getRunByPublicId(input.runId);
+      const summary = await deps.store.getRunByPublicId(runId);
       if (!summary) throw runNotFound();
       if (!(await deps.queries.ledgerIdentity(scope, summary.runId)))
         throw runNotFound();
     }
     const now = deps.now();
-    const rows = await deps.commandsForRun(scope, input.runId, input.limit);
+    const rows = await deps.commandsForRun(scope, runId, input.limit);
     return { commands: rows.map((row) => toReportItem(row, now)) };
   };
 }
 
 const commands = schema.tachoControlCommands;
+const users = schema.users;
+
+/** The report's columns, the issuer's public id and name among them. */
+const reportColumns = {
+  publicId: commands.publicId,
+  targetId: commands.targetId,
+  command: commands.command,
+  outcome: commands.outcome,
+  requestedMode: commands.requestedMode,
+  deliveryMode: commands.deliveryMode,
+  degradedReason: commands.degradedReason,
+  reason: commands.reason,
+  issuedAt: commands.issuedAt,
+  expiresAt: commands.expiresAt,
+  deliveredAt: commands.deliveredAt,
+  acknowledgedAt: commands.acknowledgedAt,
+  appliedAt: commands.appliedAt,
+  appliedAtSeq: commands.appliedAtSeq,
+  outcomeDetail: commands.outcomeDetail,
+  payloadText: sql<string | null>`${commands.payload}->>'text'`,
+  issuedByPublicId: users.publicId,
+  issuedByName: users.displayName,
+};
+
+/** The report's rows matching `where` in the scope's workspace, newest first. */
+function readReport(
+  scope: RunScope,
+  where: SQL | undefined,
+  limit: number,
+): Promise<CommandRow[]> {
+  return withTenantDb((tx) =>
+    tx
+      .select(reportColumns)
+      .from(commands)
+      .leftJoin(users, eq(users.id, commands.issuedByUserId))
+      .where(
+        and(
+          eq(commands.orgId, scope.orgId),
+          eq(commands.workspaceId, scope.workspaceId),
+          eq(commands.targetKind, "run"),
+          where,
+        ),
+      )
+      .orderBy(desc(commands.issuedAt), desc(commands.publicId))
+      .limit(limit),
+  );
+}
 
 function defaultListCommandsDeps(): ListCommandsDeps {
   // Construction is pure: nothing connects until a read runs inside the scope.
@@ -126,36 +225,9 @@ function defaultListCommandsDeps(): ListCommandsDeps {
     queries: postgresRunQueries,
     store: { getRunByPublicId: (id) => ledger.getRunByPublicId(id) },
     commandsForRun: (scope, runPublicId, limit) =>
-      withTenantDb((tx) =>
-        tx
-          .select({
-            publicId: commands.publicId,
-            command: commands.command,
-            outcome: commands.outcome,
-            requestedMode: commands.requestedMode,
-            deliveryMode: commands.deliveryMode,
-            degradedReason: commands.degradedReason,
-            reason: commands.reason,
-            issuedAt: commands.issuedAt,
-            expiresAt: commands.expiresAt,
-            deliveredAt: commands.deliveredAt,
-            acknowledgedAt: commands.acknowledgedAt,
-            appliedAt: commands.appliedAt,
-            appliedAtSeq: commands.appliedAtSeq,
-            outcomeDetail: commands.outcomeDetail,
-          })
-          .from(commands)
-          .where(
-            and(
-              eq(commands.orgId, scope.orgId),
-              eq(commands.workspaceId, scope.workspaceId),
-              eq(commands.targetKind, "run"),
-              eq(commands.targetId, runPublicId),
-            ),
-          )
-          .orderBy(desc(commands.issuedAt), desc(commands.publicId))
-          .limit(limit),
-      ),
+      readReport(scope, eq(commands.targetId, runPublicId), limit),
+    commandsByIds: (scope, commandIds, limit) =>
+      readReport(scope, inArray(commands.publicId, [...commandIds]), limit),
     now: () => new Date(),
   };
 }

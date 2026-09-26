@@ -7,7 +7,10 @@ import { buildContext } from "../context";
 export const schema = {
   ...tachoCommandList.input.shape,
   runId: tachoCommandList.input.shape.runId.describe(
-    "The run's public id: arun_… (evidence ledger) or tse_… (wrapped agent session)",
+    "The run whose commands to list: arun_… (evidence ledger) or tse_… (wrapped agent session). Send this or commandIds, not both",
+  ),
+  commandIds: tachoCommandList.input.shape.commandIds.describe(
+    "The commands to list (tcm_…), such as the ids a broadcast dispatch_command returned. Send this or runId, not both. An id outside the workspace is left out",
   ),
   limit: tachoCommandList.input.shape.limit.describe(
     "Max commands to return, newest first (1–100)",

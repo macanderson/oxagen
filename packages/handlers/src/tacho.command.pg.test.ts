@@ -28,6 +28,9 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
   const tag = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
   const orgId = crypto.randomUUID();
   const workspaceId = crypto.randomUUID();
+  // A second workspace in the same organization, whose command a read by
+  // command ids must leave out.
+  const otherWorkspaceId = crypto.randomUUID();
   const userId = crypto.randomUUID();
   const apiKeyId = crypto.randomUUID();
   const hostId = crypto.randomUUID();
@@ -77,6 +80,13 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
     scoped(() =>
       tachoCommandListHandler(
         tachoCommandList.input.parse({ runId }),
+        operator,
+      ),
+    );
+  const reportByIds = (commandIds: string[]) =>
+    scoped(() =>
+      tachoCommandListHandler(
+        tachoCommandList.input.parse({ commandIds }),
         operator,
       ),
     );
@@ -138,6 +148,13 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
         name: "Core",
         slug: "core",
         namespace: "core",
+      });
+      await tx.insert(schema.workspaces).values({
+        id: otherWorkspaceId,
+        orgId,
+        name: "Other",
+        slug: "other",
+        namespace: "other",
       });
       // The Owner role the handler's gate resolves for the operator.
       const [principal] = await tx
@@ -231,7 +248,7 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
       await tx.delete(schema.roles).where(eq(schema.roles.orgId, orgId));
       await tx
         .delete(schema.workspaces)
-        .where(eq(schema.workspaces.id, workspaceId));
+        .where(inArray(schema.workspaces.id, [workspaceId, otherWorkspaceId]));
       await tx
         .delete(schema.organizations)
         .where(eq(schema.organizations.id, orgId));
@@ -446,5 +463,68 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
       status: "sent",
       deliveryMode: "next_step",
     });
+
+    // 7. Each row names its run and its issuer, by public id, with the name
+    //    null because the fixture's user records none. The steer quotes its
+    //    text; the pause and the resume carry none.
+    const [issuer] = await withSystemDb((tx) =>
+      tx
+        .select({ publicId: schema.users.publicId })
+        .from(schema.users)
+        .where(eq(schema.users.id, userId)),
+    );
+    expect(issuer?.publicId).toMatch(/^usr_/);
+    for (const command of final.commands) {
+      expect(command.runId).toBe(publicIds.live);
+      expect(command.issuedBy).toEqual({ id: issuer?.publicId, name: null });
+    }
+    expect(final.commands.map((c) => c.text)).toEqual([
+      null,
+      "use production read replica",
+      null,
+      "use staging",
+    ]);
+  });
+
+  it("reads a broadcast's rows by command id, each naming its run, and leaves out an id from another workspace (negative)", async () => {
+    const broadcast = await withSystemDb((tx) =>
+      tx
+        .select({
+          publicId: schema.tachoControlCommands.publicId,
+          targetId: schema.tachoControlCommands.targetId,
+        })
+        .from(schema.tachoControlCommands)
+        .where(
+          inArray(schema.tachoControlCommands.targetId, [
+            publicIds.live,
+            publicIds.observe,
+          ]),
+        ),
+    );
+    const [foreign] = await withSystemDb((tx) =>
+      tx
+        .insert(schema.tachoControlCommands)
+        .values({
+          orgId,
+          workspaceId: otherWorkspaceId,
+          targetKind: "run",
+          targetId: `tse_${tag}0000000000000x`,
+          command: "pause",
+          issuedByUserId: userId,
+          createdById: userId,
+          updatedById: userId,
+        })
+        .returning({ publicId: schema.tachoControlCommands.publicId }),
+    );
+    if (!foreign) throw new Error("fixture insert returned no row");
+    const ids = [...broadcast.map((r) => r.publicId), foreign.publicId];
+    const read = await reportByIds(ids);
+    expect(read.commands.map((c) => c.id).sort()).toEqual(
+      broadcast.map((r) => r.publicId).sort(),
+    );
+    const runOf = new Map(broadcast.map((r) => [r.publicId, r.targetId]));
+    for (const command of read.commands)
+      expect(command.runId).toBe(runOf.get(command.id));
+    expect(read.commands.map((c) => c.id)).not.toContain(foreign.publicId);
   });
 });

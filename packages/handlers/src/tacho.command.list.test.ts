@@ -1,8 +1,10 @@
 // list_commands: the delivery report reads the recorded status, derives
 // `expired` only for a `queued` row past its expiry, fences the run the way
-// get_run does, and maps every column the report carries.
+// get_run does, maps every column the report carries, names the issuer and a
+// steer's text, and reads a broadcast's rows by their command ids.
 import { describe, expect, it, vi } from "vitest";
 import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
 import {
   type CommandRow,
@@ -25,9 +27,12 @@ const CTX: CapabilityContext = {
   messageId: null,
 };
 
+const ISSUER = "usr_0123456789abcdefghjkmn";
+
 function row(over: Partial<CommandRow> = {}): CommandRow {
   return {
     publicId: "tcm_1",
+    targetId: RUN,
     command: "steer",
     outcome: "applied",
     requestedMode: "interrupt",
@@ -41,6 +46,9 @@ function row(over: Partial<CommandRow> = {}): CommandRow {
     appliedAt: new Date("2026-09-14T09:00:09.000Z"),
     appliedAtSeq: 41,
     outcomeDetail: null,
+    payloadText: "Run the migration tests before you push.",
+    issuedByPublicId: ISSUER,
+    issuedByName: "Ada Park",
     ...over,
   };
 }
@@ -85,6 +93,7 @@ describe("toReportItem", () => {
     const item = toReportItem(row(), NOW);
     expect(item).toEqual({
       id: "tcm_1",
+      runId: RUN,
       command: "steer",
       status: "applied",
       requestedMode: "interrupt",
@@ -98,6 +107,8 @@ describe("toReportItem", () => {
       appliedAt: "2026-09-14T09:00:09.000Z",
       appliedAtSeq: 41,
       detail: null,
+      issuedBy: { id: ISSUER, name: "Ada Park" },
+      text: "Run the migration tests before you push.",
     });
     expect(
       tachoCommandList.output.safeParse({ commands: [item] }).success,
@@ -115,6 +126,7 @@ describe("toReportItem", () => {
         acknowledgedAt: null,
         appliedAt: null,
         appliedAtSeq: null,
+        payloadText: null,
       }),
       NOW,
     );
@@ -123,7 +135,39 @@ describe("toReportItem", () => {
       reason: "budget review",
       sentAt: null,
       appliedAtSeq: null,
+      text: null,
     });
+  });
+
+  it("names the issuer, and reads a blank name as none and a row with no user as no issuer", () => {
+    expect(toReportItem(row({ issuedByName: "  " }), NOW).issuedBy).toEqual({
+      id: ISSUER,
+      name: null,
+    });
+    expect(toReportItem(row({ issuedByName: null }), NOW).issuedBy).toEqual({
+      id: ISSUER,
+      name: null,
+    });
+    expect(
+      toReportItem(
+        row({ issuedByPublicId: null, issuedByName: null }),
+        NOW,
+      ).issuedBy,
+    ).toBeNull();
+  });
+
+  it("carries the text on a steer and a message only, whatever another command's payload holds", () => {
+    expect(toReportItem(row({ command: "message" }), NOW).text).toBe(
+      "Run the migration tests before you push.",
+    );
+    // A pause's payload holds its address, never text; a stray `text` on any
+    // command that carries no prompt content is not what the report quotes.
+    for (const command of ["pause", "resume", "cancel", "kill"]) {
+      expect(
+        toReportItem(row({ command, payloadText: "stray" }), NOW).text,
+      ).toBeNull();
+    }
+    expect(toReportItem(row({ payloadText: null }), NOW).text).toBeNull();
   });
 });
 
@@ -133,6 +177,7 @@ function handlerOver(args: {
   rows: CommandRow[];
 }) {
   const commandsForRun = vi.fn(async () => args.rows);
+  const commandsByIds = vi.fn(async () => args.rows);
   const handler = createListCommandsHandler({
     queries: {
       tachoSession: async (_scope, id) =>
@@ -149,9 +194,10 @@ function handlerOver(args: {
       },
     },
     commandsForRun,
+    commandsByIds,
     now: () => NOW,
   });
-  return { handler, commandsForRun };
+  return { handler, commandsForRun, commandsByIds };
 }
 
 describe("list_commands handler", () => {
@@ -208,5 +254,60 @@ describe("list_commands handler", () => {
       ),
     ).rejects.toSatisfy(notFound);
     expect(commandsForRun).not.toHaveBeenCalled();
+  });
+});
+
+describe("list_commands by command ids", () => {
+  it("reads the rows the ids name, once each, with the limit passed through, and fences no run", async () => {
+    const other = "tse_9zzzzzzzzzzzzzzzzzzzzz";
+    const { handler, commandsForRun, commandsByIds } = handlerOver({
+      tacho: [],
+      ledger: [],
+      rows: [
+        row({ publicId: "tcm_2", targetId: other }),
+        row({ publicId: "tcm_1" }),
+      ],
+    });
+    const output = await handler(
+      tachoCommandList.input.parse({
+        commandIds: ["tcm_1", "tcm_2", "tcm_1"],
+        limit: 2,
+      }),
+      CTX,
+    );
+    expect(output.commands.map((c) => [c.id, c.runId])).toEqual([
+      ["tcm_2", other],
+      ["tcm_1", RUN],
+    ]);
+    expect(commandsByIds).toHaveBeenCalledWith(
+      { orgId: CTX.orgId, workspaceId: CTX.workspaceId },
+      ["tcm_1", "tcm_2"],
+      2,
+    );
+    expect(commandsForRun).not.toHaveBeenCalled();
+    expect(tachoCommandList.output.safeParse(output).success).toBe(true);
+  });
+
+  it("refuses a read that names both a run and command ids, or neither, as run_or_commands (negative)", async () => {
+    const { handler, commandsForRun, commandsByIds } = handlerOver({
+      tacho: [RUN],
+      ledger: [],
+      rows: [row()],
+    });
+    const refused = (e: unknown) =>
+      e instanceof CapabilityError &&
+      e.code === "invalid_input" &&
+      e.message === "run_or_commands";
+    await expect(
+      handler(
+        tachoCommandList.input.parse({ runId: RUN, commandIds: ["tcm_1"] }),
+        CTX,
+      ),
+    ).rejects.toSatisfy(refused);
+    await expect(
+      handler(tachoCommandList.input.parse({}), CTX),
+    ).rejects.toSatisfy(refused);
+    expect(commandsForRun).not.toHaveBeenCalled();
+    expect(commandsByIds).not.toHaveBeenCalled();
   });
 });
