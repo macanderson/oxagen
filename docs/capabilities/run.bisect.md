@@ -31,12 +31,13 @@ The first frame at which two recordings diverge (Mission Control spec §8.4 "bis
 | Field | Type | Description |
 |---|---|---|
 | `divergentSeq` | string or null | run A's sequence at the first position whose keys differ (run B's when A has ended); null when the runs agree throughout and have the same length |
+| `divergentSessionUuid` | uuid, absent on a run's own chain | the subagent chain the frame `divergentSeq` names lies on, in whichever run it names. A subagent chain numbers its frames from 0, so the seq alone would name a frame on the run's own chain |
 | `keyA`, `keyB` | string or null | the keys at that position; null for the run that has no frame there |
 | `aligned` | integer | positions compared before the divergence, or in total when there is none |
 
-Alignment is by position, so a ledger run and a wrapped session can be compared. A run longer than 10 000 frames is compared over its first 10 000: a divergence inside that prefix is answered, and two runs whose prefixes agree when either was cut are refused, because the frames past the cap were never compared.
+Alignment is by position, so a ledger run and a wrapped session can be compared. A wrapped run is read as every chain it recorded: each subagent chain is spliced in after the `subagent_start` that spawned it, the order `get_run_transcript` shows, and every recorded frame is kept (#3823). A run longer than 10,000 frames, counted over every chain, is compared over its first 10,000: a divergence inside that prefix is answered, and two runs whose prefixes agree when either was cut are refused, because the frames past the cap were never compared.
 
 ## Errors
 
 - `not_found` (404): either run is outside the caller's workspace.
-- `conflict` (409), `reason: run_exceeds_bisect_cap`: the first 10 000 frames of both runs agree and at least one run has more, so no answer covers the whole recording.
+- `conflict` (409), `reason: run_exceeds_bisect_cap`: the first 10,000 frames of both runs agree and at least one run has more, so no answer covers the whole recording.
