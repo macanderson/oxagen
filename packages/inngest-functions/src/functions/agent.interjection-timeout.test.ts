@@ -22,6 +22,7 @@ import {
 import {
   AGENT_INTERJECTION_RAISED_EVENT,
   agentInterjectionTimeout,
+  DENY_GRACE_MS,
 } from "./agent.interjection-timeout";
 
 type Handler = (args: {
@@ -97,6 +98,7 @@ describe("agent.interjection-timeout", () => {
         commandIds: ["tcm_0123abc"],
       },
     });
+    // A deny that settled the row does not ask again.
     expect(order).toEqual(["resolve-repository", "expiry", "deny"]);
     expect(installed.resolve).toHaveBeenCalledWith(DATA);
     expect(installed.deny).toHaveBeenCalledWith(DATA);
@@ -123,6 +125,37 @@ describe("agent.interjection-timeout", () => {
     await expect(
       handler({ event: { data: DATA }, step }),
     ).resolves.toMatchObject({ denied: { outcome: "answered" } });
+  });
+
+  it("asks once more past the deadline when the runner's clock reads it as not yet due", async () => {
+    const deny = vi
+      .fn<InterjectionTimeoutRunner["deny"]>()
+      .mockResolvedValueOnce({
+        outcome: "not_due",
+        receiptId: null,
+        commandIds: [],
+      })
+      .mockResolvedValueOnce({
+        outcome: "denied",
+        receiptId: "rcp_0123abc",
+        commandIds: [],
+      });
+    setInterjectionTimeoutRunner(runner({ deny }));
+    await expect(
+      handler({ event: { data: DATA }, step }),
+    ).resolves.toMatchObject({ denied: { outcome: "denied" } });
+    expect(order).toEqual([
+      "resolve-repository",
+      "expiry",
+      "deny",
+      "expiry-grace",
+      "deny-again",
+    ]);
+    const grace = step.sleep.mock.calls[1]?.[1];
+    expect(grace).toBeInstanceOf(Date);
+    expect((grace as Date).getTime()).toBe(
+      Date.parse(DATA.expiresAt) + DENY_GRACE_MS,
+    );
   });
 
   it("refuses a malformed event without a retry, and runs no step (negative)", async () => {

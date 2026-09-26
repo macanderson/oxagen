@@ -7,6 +7,9 @@ import { interjectionTimeoutRunner } from "../lib/interjection-timeout-runner";
 
 export { AGENT_INTERJECTION_RAISED_EVENT };
 
+/** How far past the deadline the second deny waits, for a clock that runs behind. */
+export const DENY_GRACE_MS = 30_000;
+
 const eventSchema = z.object({
   orgId: z.string().uuid(),
   workspaceId: z.string().uuid(),
@@ -30,6 +33,10 @@ const eventSchema = z.object({
  *    event, and queue the message that releases the host's hold and tells the
  *    agent why. When the host's own timeout closed the row first, add the
  *    receipt and the audit event only. A person's answer is left alone.
+ * 4. `deny-again`: the runner reads the deadline on its own clock, and a
+ *    clock behind Inngest's answers `not_due` at the wake time. Nothing would
+ *    retry that, so the function sleeps past the deadline by
+ *    `DENY_GRACE_MS` and asks once more.
  *
  * The runner is installed by `@oxagen/handlers/register`. The ingest sends
  * the event once per row, with the id `interjection-raised:<id>`.
@@ -56,6 +63,14 @@ export const [agentInterjectionTimeout] = createFunction(
     const denied = await step.run("deny", () =>
       interjectionTimeoutRunner().deny(request),
     );
-    return { resolved, denied };
+    if (denied.outcome !== "not_due") return { resolved, denied };
+    await step.sleep(
+      "expiry-grace",
+      new Date(Date.parse(request.expiresAt) + DENY_GRACE_MS),
+    );
+    const again = await step.run("deny-again", () =>
+      interjectionTimeoutRunner().deny(request),
+    );
+    return { resolved, denied: again };
   },
 );
