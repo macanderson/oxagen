@@ -101,6 +101,7 @@ const LEDGER_ROW = {
   operatorId: null,
   operatorKind: null,
   operatorName: null,
+  operatorAvatarUrl: null,
   operatorAttribution: null,
   operatorRole: null,
   status: "sealed",
