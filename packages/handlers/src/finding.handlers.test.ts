@@ -400,7 +400,8 @@ describe("list_findings for one run (#4001)", () => {
     expect(withRun?.sql).toMatch(/"findings"\."cited_runs" @> \$\d+/);
     expect(withRun?.params).toEqual(expect.arrayContaining([ORG, WS, "open"]));
     expect(JSON.stringify(withRun?.params)).toContain(RUN);
-    expect(without?.sql).not.toContain("cited_runs");
+    // The select still lists the column; only the filter on it is absent.
+    expect(without?.sql).not.toMatch(/"cited_runs" @>/);
   });
 
   it("answers null frames for a finding written before frames were stored, with its calls as the total", async () => {
