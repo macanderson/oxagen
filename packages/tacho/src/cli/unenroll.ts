@@ -74,6 +74,12 @@ export interface UnenrollOptions extends CredentialOptions {
    * one enrollment (ADR-202). Every other agent's enrollment is kept.
    */
   harness?: TachoHarness;
+  /**
+   * Every agent's enrollment on the machine, one after another, as the
+   * desktop app's Uninstall needs. The root goes last, so it clears what
+   * no enrollment accounts for any more.
+   */
+  all?: boolean;
 }
 
 export interface UnenrollResult {
@@ -514,10 +520,13 @@ export async function unenroll(
       warnings: [warning],
     };
   }
-  let slotRoot: string | undefined;
+  const slotRoots: string[] = [];
   try {
-    const target = unenrollTarget(deps.paths, options.harness);
-    if ("refused" in target) {
+    const target =
+      options.all === true
+        ? undefined
+        : unenrollTarget(deps.paths, options.harness);
+    if (target !== undefined && "refused" in target) {
       deps.err(`error: ${target.refused}`);
       return {
         ok: false,
@@ -526,25 +535,32 @@ export async function unenroll(
         warnings: [target.refused],
       };
     }
-    if (enrolledSlots(deps.paths).length > 1 && target.host !== undefined)
-      deps.out(`Unenrolling ${describeSlot(target)}`);
+    const targets = target !== undefined ? [target] : everySlot(deps.paths);
+    const many = enrolledSlots(deps.paths).length > 1;
     const installed = serviceInstalled(deps);
-    let result: UnenrollResult;
-    if (target.harness === undefined) {
-      result = await unenrollLocked(options, deps);
-    } else {
-      slotRoot = target.paths.root;
+    const results: UnenrollResult[] = [];
+    for (const slot of targets) {
+      if (many && slot.host !== undefined)
+        deps.out(`Unenrolling ${describeSlot(slot)}`);
+      if (slot.harness === undefined) {
+        results.push(await unenrollLocked(options, deps));
+        continue;
+      }
+      slotRoots.push(slot.paths.root);
       // The harness files this slot's enroll recorded, as `recordedCliDeps`
       // does for the root.
-      const read = readHostFileLenient(target.paths.hostFile);
-      result = await unenrollLocked(
-        options,
-        slotDeps(
-          deps,
-          withRecordedHarnessFiles(target.paths, read.host ?? read.salvaged),
+      const read = readHostFileLenient(slot.paths.hostFile);
+      results.push(
+        await unenrollLocked(
+          options,
+          slotDeps(
+            deps,
+            withRecordedHarnessFiles(slot.paths, read.host ?? read.salvaged),
+          ),
         ),
       );
     }
+    const result = combined(results);
     const restart = restartForRemaining(installed, deps);
     return restart === undefined
       ? result
@@ -553,12 +569,26 @@ export async function unenroll(
     lock.release();
     // Nothing of ours left in it: the directory goes too, so a machine that
     // was enrolled and purged looks like one that never was.
-    if (slotRoot !== undefined) {
-      removeIfEmpty(slotRoot);
-      removeIfEmpty(join(deps.paths.root, SLOTS_DIR));
-    }
+    for (const slotRoot of slotRoots) removeIfEmpty(slotRoot);
+    if (slotRoots.length > 0) removeIfEmpty(join(deps.paths.root, SLOTS_DIR));
     removeIfEmpty(deps.paths.root);
   }
+}
+
+/** What `--all` unenrolls: every agent's slot, then the root. */
+function everySlot(root: TachoPaths): Slot[] {
+  const [rootSlot, ...subSlots] = listSlots(root);
+  return [...subSlots, rootSlot as Slot];
+}
+
+/** One result for several unenrolls: ok and revoked only when each was. */
+function combined(results: readonly UnenrollResult[]): UnenrollResult {
+  return {
+    ok: results.every((result) => result.ok),
+    settingsChanged: results.some((result) => result.settingsChanged),
+    revoked: results.every((result) => result.revoked),
+    warnings: results.flatMap((result) => result.warnings),
+  };
 }
 
 /**
@@ -587,7 +617,7 @@ export function unenrollTarget(
   }
   if (present.length <= 1) return present[0] ?? rootSlot;
   return {
-    refused: `this machine holds ${present.length} enrollments: ${listed}. Pass --harness to name the one to remove, and run \`tacho unenroll --harness <name>\` once for each agent to remove them all`,
+    refused: `this machine holds ${present.length} enrollments: ${listed}. Pass --harness to name the one to remove, or --all to remove them all`,
   };
 }
 

@@ -820,7 +820,7 @@ export function App() {
     setBusy("uninstall");
     setError(null);
     setNotice(null);
-    setLog([{ text: "$ tacho unenroll --purge", err: false }]);
+    setLog([{ text: "$ tacho unenroll --all --purge", err: false }]);
     try {
       // Always, enrolled or not: `unenroll` strips Tacho's hooks and the
       // service whether or not host.json is there, and finishes a revoke an

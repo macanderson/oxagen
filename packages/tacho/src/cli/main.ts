@@ -343,8 +343,14 @@ export function buildTachoProgram(): Command {
       "The agent to unenroll, by the harness it hooks, when this machine holds more than one enrollment",
       parseOneHarness,
     )
+    .option("--all", "Unenroll every agent on this machine")
     .action(async (opts: Record<string, unknown>) => {
       const harness = opts["harness"] as TachoHarness | undefined;
+      if (harness !== undefined && opts["all"] === true) {
+        deps.err("error: pass --harness or --all, not both");
+        process.exitCode = 1;
+        return;
+      }
       const result = await unenroll(
         {
           token: tokenOption(opts, deps.err),
@@ -353,6 +359,7 @@ export function buildTachoProgram(): Command {
           purge: opts["purge"] as boolean | undefined,
           reason: opts["reason"] as string | undefined,
           ...(harness !== undefined ? { harness } : {}),
+          ...(opts["all"] === true ? { all: true } : {}),
         },
         recordedCliDeps(),
       );
