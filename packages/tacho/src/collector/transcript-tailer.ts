@@ -30,7 +30,7 @@ import { promises as fs } from "node:fs";
 import type { SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent } from "../envelope";
 import type { FrameBody } from "../evidence/frame-body";
-import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
+import { readJsonStateFile, writeSensitiveFileAtomic } from "../host/fs";
 import type { TachoHarness } from "../wire";
 import { sessionMapKey } from "./registry";
 
@@ -239,7 +239,13 @@ export class TranscriptTailer {
     this.options = options;
     this.budget = options.budgetBytes ?? DEFAULT_TAIL_BUDGET_BYTES;
     if (options.statePath !== undefined) {
-      const persisted = readJsonFileIfExists(options.statePath);
+      const persisted = readJsonStateFile(options.statePath, (movedTo) =>
+        options.log?.(
+          movedTo === undefined
+            ? "transcript tail state did not parse and could not be moved aside; starting without it"
+            : `transcript tail state did not parse; moved it to ${movedTo} and started without it`,
+        ),
+      );
       if (isPersistedTailState(persisted)) {
         for (const [id, cursor] of Object.entries(persisted.cursors))
           this.cursors.set(id, {
