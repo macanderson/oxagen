@@ -15,7 +15,11 @@
 // two cannot disagree either.
 import type { RunRow } from "@/data/contracts/runs";
 
-/** The stored reading, as `get_run` answers it. */
+/**
+ * The stored reading, as `get_run` answers it.
+ *
+ * @internal Exported for the tests that build a reading.
+ */
 export type RunFit = NonNullable<RunRow["fit"]>;
 export type FitRead = NonNullable<RunFit["read"]>;
 export type ModelFit = NonNullable<RunFit["model"]>;
@@ -31,7 +35,7 @@ export type ModelFit = NonNullable<RunFit["model"]>;
  * gateway and contained tiers) and the request carried none, and
  * `not_proxied` elsewhere, where Oxagen never saw the request body.
  */
-export type RunEffort =
+type RunEffort =
   | { seen: true; value: string; source: "request" | "harness" }
   | { seen: false; why: "not_proxied" | "not_sent" };
 
@@ -63,7 +67,7 @@ export function fitOf(run: RunRow): RunFit | null {
 }
 
 /** The effort verdict with a move in it: one rung down (over) or up (under). */
-export type EffortMove = { verdict: "over" | "under"; suggest: string };
+type EffortMove = { verdict: "over" | "under"; suggest: string };
 
 /**
  * The effort verdict the page draws beside the record's own value, or null

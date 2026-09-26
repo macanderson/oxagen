@@ -13,7 +13,7 @@ import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
 
-export type FitChangeDraft = {
+type FitChangeDraft = {
   agentId: string;
   branch: string;
   /** The commit and pull request title. */
