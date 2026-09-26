@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/relay-envelope/v1.json",
+  "title": "Relay envelope",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "relay-envelope/v1"
+    },
+    "relay": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "description": "The relay this envelope is for, as network = relay:<name> names it."
+    },
+    "nonce": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{22,64}$",
+      "description": "A single-use value, at least 128 bits of randomness in base64url."
+    },
+    "issued_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the cloud gateway signed the envelope."
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the envelope stops being valid: after issued_at, and at most 30 seconds after it."
+    },
+    "target": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "http"
+            },
+            "method": {
+              "type": "string",
+              "enum": [
+                "GET",
+                "PUT",
+                "POST",
+                "DELETE",
+                "OPTIONS",
+                "HEAD",
+                "PATCH",
+                "TRACE"
+              ]
+            },
+            "host": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Omitted for 443."
+            },
+            "path": {
+              "type": "string",
+              "maxLength": 8192,
+              "pattern": "^\\/[^\\s#]*$",
+              "description": "The path and query string, percent-encoded, exactly as the relay sends them."
+            }
+          },
+          "required": [
+            "kind",
+            "method",
+            "host",
+            "path"
+          ],
+          "additionalProperties": false,
+          "description": "An HTTP request, including an MCP streamable HTTP request."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "grpc"
+            },
+            "host": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Omitted for 443."
+            },
+            "service": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+              "description": "The full service name, such as a_intel.ledger.v1.Ledger."
+            },
+            "method": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "description": "The method name, such as PostEntry."
+            }
+          },
+          "required": [
+            "kind",
+            "host",
+            "service",
+            "method"
+          ],
+          "additionalProperties": false,
+          "description": "One gRPC call."
+        }
+      ]
+    },
+    "body_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "SHA-256 of the exact request body bytes. An empty body hashes the empty string."
+    },
+    "deadline_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300000,
+      "description": "How long the relay waits for the response. 30000 when omitted."
+    },
+    "credential": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+          "description": "The credential's name in the relay's own store."
+        },
+        "scheme": {
+          "type": "string",
+          "enum": [
+            "bearer",
+            "basic",
+            "header"
+          ]
+        },
+        "header": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,128}$"
+        }
+      },
+      "required": [
+        "name",
+        "scheme"
+      ],
+      "additionalProperties": false,
+      "description": "A customer-held credential the relay adds to the request.",
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "scheme": {
+                "const": "header"
+              }
+            },
+            "required": [
+              "scheme"
+            ]
+          },
+          "then": {
+            "required": [
+              "header"
+            ]
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "properties": {
+                "scheme": {
+                  "const": "header"
+                }
+              },
+              "required": [
+                "scheme"
+              ]
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "header"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "signature": {
+      "type": "object",
+      "properties": {
+        "key_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "The first 8 bytes of the SHA-256 of the signing public key, in hex."
+        },
+        "alg": {
+          "const": "ed25519"
+        },
+        "sig": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{86}==$",
+          "description": "The signature over the envelope's RFC 8785 bytes without its signature field."
+        }
+      },
+      "required": [
+        "key_id",
+        "alg",
+        "sig"
+      ],
+      "additionalProperties": false,
+      "description": "The cloud gateway's signature."
+    }
+  },
+  "required": [
+    "schema",
+    "relay",
+    "nonce",
+    "issued_at",
+    "expires_at",
+    "target",
+    "body_hash",
+    "signature"
+  ],
+  "additionalProperties": false,
+  "description": "One request the cloud gateway decided and signed for a relay inside a private network."
+}
