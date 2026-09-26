@@ -275,6 +275,16 @@ interface RunChainResult {
   recordedGrade: string | null;
   ladder: { grade: string; met: boolean; reason: string }[];
   complete: boolean;
+  /** A wrapped run's subagent chains, each walked on its own (#3823). */
+  chains?: {
+    sessionUuid: string;
+    subagentId: string | null;
+    subagentType: string | null;
+    frameCount: number;
+    gaps: { missingFrameCount: number; missingBodies: number };
+    sealedAt: string | null;
+    complete: boolean;
+  }[];
 }
 
 /**
@@ -335,6 +345,22 @@ export async function runChain(
   }
   if (result.checkpoints.length > 0) {
     writer.write(`${result.checkpoints.length} signed checkpoint(s).`);
+  }
+  // Each subagent chain numbers its own frames from 0, so its gaps are its
+  // own and are printed on its own line.
+  const chains = result.chains ?? [];
+  if (chains.length > 0) {
+    writer.write("");
+    writer.write("Subagent chains");
+    for (const chain of chains) {
+      const name =
+        chain.subagentType ?? chain.subagentId ?? chain.sessionUuid;
+      writer.write(
+        `  ${name} (${chain.sessionUuid}): ${chain.frameCount} frames, ${chain.gaps.missingFrameCount} missing frames, ${chain.gaps.missingBodies} missing bodies${
+          chain.sealedAt === null ? ", unsealed" : ""
+        }${chain.complete ? "" : ", cut short"}`,
+      );
+    }
   }
   if (!result.complete) {
     writer.write(

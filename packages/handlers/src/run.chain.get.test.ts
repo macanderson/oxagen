@@ -1,22 +1,31 @@
+import { schema } from "@oxagen/database";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import type { TachoFrameRow } from "@oxagen/telemetry";
+import { drizzle } from "drizzle-orm/pg-proxy";
 import { describe, expect, it } from "vitest";
 import {
+  type ChainCheckpointRow,
   type CheckpointRow,
   createRunChainGetHandler,
   missingBodies,
   type RunChainGetDeps,
   framesMayHaveExpired,
   sequenceGaps,
+  tachoChainCheckpointsQuery,
 } from "./run.chain.get";
 import {
   ctx,
   ledgerRun,
   memoryEvents,
   memoryStores,
+  memorySubagentChains,
+  memorySubagentFrames,
   memoryTachoFrames,
+  SCOPE,
   seal,
+  subagentChain,
+  type SubagentChainFixture,
   summary,
   tachoRow,
   tachoSession,
@@ -57,6 +66,11 @@ function tachoHarness(
     session?: Record<string, unknown>;
     onCheckpoints?: (sessionId: string) => void;
     now?: Date;
+    /** The run's subagent chains, as Postgres lists them (#3823). */
+    chains?: SubagentChainFixture[];
+    /** Their frames, as the subagent read answers them. */
+    children?: TachoFrameRow[];
+    chainCheckpoints?: ChainCheckpointRow[];
   } = {},
 ) {
   // seqCount is the next expected sequence (last.seq + 1). Default it to the
@@ -86,6 +100,18 @@ function tachoHarness(
       over.onCheckpoints?.(sessionId);
       return Promise.resolve(over.checkpoints ?? []);
     },
+    chainCheckpoints: (_scope, sessionIds) =>
+      Promise.resolve(
+        (over.chainCheckpoints ?? []).filter((row) =>
+          sessionIds.includes(row.sessionId),
+        ),
+      ),
+    ...(over.chains === undefined
+      ? {}
+      : {
+          tachoChains: memorySubagentChains(over.chains),
+          tachoSubagentFrames: memorySubagentFrames(over.children ?? []),
+        }),
     ledgerSeals: () =>
       Promise.reject(new Error("a wrapped session reads no ledger seals")),
     now: () => over.now ?? NOW,
@@ -140,6 +166,8 @@ function ledgerHarness(
     readWitnessFor: stores.readWitnessFor,
     tachoFrames: memoryTachoFrames(SESSION_UUID, []),
     checkpoints: () => Promise.reject(new Error("a ledger run reads none")),
+    chainCheckpoints: () =>
+      Promise.reject(new Error("a ledger run has no subagent chains")),
     ledgerSeals: () => Promise.resolve(attemptSeals),
   };
   return createRunChainGetHandler(deps);
@@ -565,5 +593,229 @@ describe("get_run_chain", () => {
     await expect(chain({ runId: "tse_nope" }, ctx())).rejects.toSatisfy(
       (e) => isHandlerError(e) && e.code === "not_found",
     );
+  });
+});
+
+// #3823: each subagent records on a hash chain of its own, numbered from 0,
+// with its own session row and checkpoints. Its gaps are its own, never the
+// run's, and the ladder still sees them.
+describe("get_run_chain subagent chains (#3823)", () => {
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+  const SECOND = "0192d4a8-7c1e-7a00-8000-00000000c1d1";
+  const THIRD = "0192d4a8-7c1e-7a00-8000-00000000c1d2";
+  const EMPTY = "0192d4a8-7c1e-7a00-8000-00000000c1d3";
+  const FOREIGN_ROOT = "0192d4a8-7c1e-7a00-8000-00000000beef";
+  const FOREIGN_CHILD = "0192d4a8-7c1e-7a00-8000-00000000f0e1";
+  const DIGEST = `sha256:${"c".repeat(64)}`;
+  const SEALED_AT = new Date("2026-09-11T09:04:00.000Z");
+
+  /** A frame that kept its body, so it owes nothing to the ladder. */
+  const kept = (row: TachoFrameRow): TachoFrameRow => ({
+    ...row,
+    contentDigest: DIGEST,
+    bytesRef: `evb:v1:k:${"c".repeat(64)}`,
+  });
+  const root = (seqs: number[]) => seqs.map((seq) => kept(tachoRow(seq)));
+  /** A frame on a subagent chain, as the subagent read answers it. */
+  const onChain = (session: string, seq: number, rootUuid = SESSION_UUID) =>
+    tachoRow(seq, {
+      sessionUuid: session,
+      rootSessionUuid: rootUuid,
+      parentSessionUuid: rootUuid,
+      subagentId: "agent-1",
+      subagentType: "Explore",
+      spawnToolUseId: "toolu_A",
+    });
+  const chainRow = (
+    sessionUuid: string,
+    over: Partial<SubagentChainFixture> = {},
+  ) => subagentChain({ sessionUuid, rootSessionUuid: SESSION_UUID, ...over });
+
+  it("walks each subagent chain on its own, numbering its gaps on its own seq", async () => {
+    const child = chainRow(CHILD, { seqCount: 4 });
+    const second = chainRow(SECOND, {
+      seqCount: 2,
+      subagentId: "agent-2",
+      subagentType: null,
+      startedAt: new Date("2026-09-11T09:03:00.000Z"),
+      finalHash: HEAD,
+      sealedAt: SEALED_AT,
+    });
+    const foreign = subagentChain({
+      sessionUuid: FOREIGN_CHILD,
+      rootSessionUuid: FOREIGN_ROOT,
+      seqCount: 1,
+    });
+    const chain = tachoHarness(root([0, 1, 2]), {
+      session: { completenessGaps: [] },
+      chains: [child, second, foreign],
+      children: [
+        // The child chain lost its seq 2.
+        ...[0, 1, 3].map((seq) => kept(onChain(CHILD, seq))),
+        ...[0, 1].map((seq) => kept(onChain(SECOND, seq))),
+        kept(onChain(FOREIGN_CHILD, 0, FOREIGN_ROOT)),
+      ],
+      chainCheckpoints: [
+        { ...checkpoint({ seq: 1, eventCount: 2 }), sessionId: child.sessionId },
+        { ...checkpoint({ seq: 0 }), sessionId: foreign.sessionId },
+      ],
+    });
+    const out = await chain({ runId: TACHO_ID }, ctx());
+    expect(runChainGet.output.parse(out)).toEqual(out);
+    // The run's own chain is whole: the child's gap is not the run's.
+    expect(out.frameCount).toBe(3);
+    expect(out.gaps.missingSequences).toEqual([]);
+    expect(out.chains).toEqual([
+      {
+        sessionUuid: CHILD,
+        parentSessionUuid: SESSION_UUID,
+        subagentId: "agent-1",
+        subagentType: "Explore",
+        frameCount: 3,
+        firstSeq: "0",
+        lastSeq: "3",
+        gaps: {
+          missingSequences: [{ from: "2", to: "2" }],
+          missingFrameCount: 1,
+          missingBodies: 0,
+        },
+        checkpoints: [expect.objectContaining({ seq: "1", eventCount: 2 })],
+        finalHash: null,
+        sealedAt: null,
+        complete: true,
+      },
+      {
+        sessionUuid: SECOND,
+        parentSessionUuid: SESSION_UUID,
+        subagentId: "agent-2",
+        subagentType: null,
+        frameCount: 2,
+        firstSeq: "0",
+        lastSeq: "1",
+        gaps: { missingSequences: [], missingFrameCount: 0, missingBodies: 0 },
+        checkpoints: [],
+        finalHash: HEAD,
+        sealedAt: SEALED_AT.toISOString(),
+        complete: true,
+      },
+    ]);
+    // A break on a subagent's chain is a break in the run's record.
+    expect(out.ladder[1]?.reason).toContain("chain_break");
+    expect(out.complete).toBe(true);
+  });
+
+  it("carries a subagent's missing body to the ladder, and a whole subagent chain changes nothing (negative)", async () => {
+    const alone = await tachoHarness(root([0, 1]), {
+      session: { completenessGaps: [] },
+      chains: [],
+    })({ runId: TACHO_ID }, ctx());
+    expect(alone.chains).toEqual([]);
+
+    const whole = await tachoHarness(root([0, 1]), {
+      session: { completenessGaps: [] },
+      chains: [chainRow(CHILD, { seqCount: 1 })],
+      children: [kept(onChain(CHILD, 0))],
+    })({ runId: TACHO_ID }, ctx());
+    expect(whole.ladder).toEqual(alone.ladder);
+
+    const bodiless = await tachoHarness(root([0, 1]), {
+      session: { completenessGaps: [] },
+      chains: [chainRow(CHILD, { seqCount: 1 })],
+      // A tool call that kept no body.
+      children: [onChain(CHILD, 0)],
+    })({ runId: TACHO_ID }, ctx());
+    expect(bodiless.gaps.missingBodies).toBe(0);
+    expect(bodiless.chains?.[0]?.gaps.missingBodies).toBe(1);
+    expect(bodiless.ladder.some((r) => r.reason === "body_missing")).toBe(
+      true,
+    );
+    expect(alone.ladder.some((r) => r.reason === "body_missing")).toBe(false);
+  });
+
+  it("marks the chain the frame cap cut, and every chain past it, incomplete", async () => {
+    const spread = (session: string, count: number) =>
+      Array.from({ length: count }, (_, seq) => kept(onChain(session, seq)));
+    const chain = tachoHarness(root([0]), {
+      session: { completenessGaps: [] },
+      chains: [
+        chainRow(CHILD, { seqCount: 6_000 }),
+        chainRow(SECOND, { seqCount: 6_000 }),
+        chainRow(THIRD, { seqCount: 10 }),
+        // Registered, with nothing recorded: there was nothing to cut.
+        chainRow(EMPTY, { seqCount: 0 }),
+      ],
+      children: [
+        ...spread(CHILD, 6_000),
+        ...spread(SECOND, 6_000),
+        ...spread(THIRD, 10),
+      ],
+    });
+    const out = await chain({ runId: TACHO_ID }, ctx());
+    const byChain = new Map(out.chains?.map((c) => [c.sessionUuid, c]));
+    expect(byChain.get(CHILD)).toMatchObject({
+      frameCount: 6_000,
+      complete: true,
+    });
+    // Cut short: no tail is reported missing for frames never read.
+    expect(byChain.get(SECOND)).toMatchObject({
+      frameCount: 4_000,
+      lastSeq: "3999",
+      complete: false,
+      gaps: { missingSequences: [], missingFrameCount: 0 },
+    });
+    expect(byChain.get(THIRD)).toMatchObject({
+      frameCount: 0,
+      complete: false,
+      gaps: { missingSequences: [], missingFrameCount: 0 },
+    });
+    expect(byChain.get(EMPTY)).toMatchObject({ frameCount: 0, complete: true });
+    // The run's own chain was read whole, and the run's was not.
+    expect(out.frameCount).toBe(1);
+    expect(out.complete).toBe(false);
+  });
+
+  it("does not report the head of a subagent chain whose frames may have expired", async () => {
+    const out = await tachoHarness(root([0]), {
+      session: { completenessGaps: [] },
+      chains: [
+        chainRow(CHILD, {
+          seqCount: 5,
+          createdAt: new Date("2025-08-01T00:00:00.000Z"),
+        }),
+        chainRow(SECOND, { seqCount: 5 }),
+      ],
+      children: [
+        ...[3, 4].map((seq) => kept(onChain(CHILD, seq))),
+        ...[3, 4].map((seq) => kept(onChain(SECOND, seq))),
+      ],
+    })({ runId: TACHO_ID }, ctx());
+    expect(out.chains?.[0]?.gaps.missingSequences).toEqual([]);
+    // A chain inside the window still reports its lost head.
+    expect(out.chains?.[1]?.gaps.missingSequences).toEqual([
+      { from: "0", to: "2" },
+    ]);
+  });
+
+  it("answers no chains on a ledger run (negative)", async () => {
+    const out = await ledgerHarness()({ runId: LEDGER_ID }, ctx());
+    expect("chains" in out).toBe(false);
+  });
+
+  it("reads the chains' checkpoints by their session row ids in one fenced query", () => {
+    const db = drizzle(() => Promise.resolve({ rows: [] }), { schema });
+    const ids = [
+      "0192d4a8-7c1e-7000-8000-00000000c1d0",
+      "0192d4a8-7c1e-7000-8000-00000000c1d1",
+    ];
+    const query = tachoChainCheckpointsQuery(db, SCOPE, ids).toSQL();
+    expect(query.sql).toMatch(/"checkpoints"\."org_id" = \$\d+/);
+    expect(query.sql).toMatch(/"checkpoints"\."workspace_id" = \$\d+/);
+    expect(query.sql).toMatch(
+      /"checkpoints"\."session_id" in \(\$\d+, \$\d+\)/,
+    );
+    expect(query.sql).toMatch(
+      /order by "checkpoints"\."session_id" asc, "checkpoints"\."seq" asc/,
+    );
+    expect(query.params).toEqual([SCOPE.orgId, SCOPE.workspaceId, ...ids]);
   });
 });

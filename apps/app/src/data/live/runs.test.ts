@@ -1326,6 +1326,101 @@ describe("runs.chain", () => {
     expect(read.value.seals[1]?.terminalStatus).toBe("completed");
   });
 
+  // #3823: each subagent chain is walked on its own and mapped with its
+  // session uuids and the harness's subagent id as references.
+  it("maps each subagent chain with its own gaps, checkpoints and seal", async () => {
+    const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    const ROOT = "0192d4a8-7c1e-7a00-8000-00000000c0de";
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        hashRule: "tacho.sha256_prev_hash_v1",
+        frameCount: 3,
+        firstSeq: "0",
+        lastSeq: "2",
+        merkleRoot: null,
+        checkpoints: [],
+        gaps: {
+          missingSequences: [],
+          missingFrameCount: 0,
+          missingBodies: 0,
+          recorded: [],
+        },
+        seals: [],
+        enforcementTier: "observe",
+        recordedGrade: null,
+        ladder: [],
+        complete: true,
+        chains: [
+          {
+            sessionUuid: CHILD,
+            parentSessionUuid: ROOT,
+            subagentId: "agent-1",
+            subagentType: "Explore",
+            frameCount: 3,
+            firstSeq: "0",
+            lastSeq: "3",
+            gaps: {
+              missingSequences: [{ from: "2", to: "2" }],
+              missingFrameCount: 1,
+              missingBodies: 0,
+            },
+            checkpoints: [
+              {
+                seq: "1",
+                chainHead: `sha256:${"a".repeat(64)}`,
+                eventCount: 2,
+                signedAt: "2026-09-11T09:02:00.000Z",
+                deviceKeyFingerprint: "dk:abc",
+                platformKeyId: "pk:1",
+                countersignedAt: null,
+                anchorRoot: null,
+                anchoredAt: null,
+              },
+            ],
+            finalHash: `sha256:${"b".repeat(64)}`,
+            sealedAt: "2026-09-11T09:04:00.000Z",
+            complete: true,
+          },
+        ],
+      }),
+    );
+    const read = await runs.chain(ctx, "tse_4f0a");
+    if (!read.ok) throw new Error("expected an ok read");
+    expect(read.value.chains).toEqual([
+      {
+        chainRef: CHILD,
+        parentChainRef: ROOT,
+        subagentRef: "agent-1",
+        subagentType: "Explore",
+        frameCount: 3,
+        firstSeq: "0",
+        lastSeq: "3",
+        gaps: {
+          missingSequences: [{ from: "2", to: "2" }],
+          missingFrameCount: 1,
+          missingBodies: 0,
+        },
+        checkpoints: [
+          {
+            seq: "1",
+            chainHead: `sha256:${"a".repeat(64)}`,
+            eventCount: 2,
+            signedAt: "2026-09-11T09:02:00.000Z",
+            deviceKeyFingerprint: "dk:abc",
+            platformKey: "pk:1",
+            countersignedAt: null,
+            anchorRoot: null,
+            anchoredAt: null,
+          },
+        ],
+        finalHash: `sha256:${"b".repeat(64)}`,
+        sealedAt: "2026-09-11T09:04:00.000Z",
+        complete: true,
+      },
+    ]);
+  });
+
   it("reports a record the view refuses rather than passing it on (negative)", async () => {
     kernelRead.mockResolvedValue(
       readOk({
