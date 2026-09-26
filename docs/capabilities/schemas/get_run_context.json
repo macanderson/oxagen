@@ -1,0 +1,243 @@
+{
+  "name": "get_run_context",
+  "domain": "run",
+  "description": "Read what one run's model requests carried: each request's window as system, steering, tools, context and conversation blocks with their bytes and their share of the prompt tokens the vendor reported, the model calls recorded with no window, and the steering assembler's budget, spend, and included and cut counts.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "runId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "wrapped",
+          "ledger"
+        ]
+      },
+      "windows": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "seq": {
+              "type": "string"
+            },
+            "responseSeq": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "modelCallId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "provider": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "model": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "promptTokens": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "blocks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "system",
+                      "steering",
+                      "tools",
+                      "context",
+                      "conversation"
+                    ]
+                  },
+                  "bytes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "items": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "tokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "bytes",
+                  "items",
+                  "tokens"
+                ],
+                "additionalProperties": false
+              },
+              "minItems": 1,
+              "maxItems": 5
+            }
+          },
+          "required": [
+            "seq",
+            "responseSeq",
+            "modelCallId",
+            "provider",
+            "model",
+            "promptTokens",
+            "bytes",
+            "blocks"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 500
+      },
+      "unmeasured": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "assemblies": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "seq": {
+              "type": "string"
+            },
+            "budgetTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "spentTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "included": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "cut": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "textDigest": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "seq",
+            "budgetTokens",
+            "spentTokens",
+            "included",
+            "cut",
+            "textDigest"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 50
+      },
+      "complete": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "runId",
+      "source",
+      "windows",
+      "unmeasured",
+      "assemblies",
+      "complete"
+    ],
+    "additionalProperties": false
+  }
+}

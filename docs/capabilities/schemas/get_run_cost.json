@@ -1,7 +1,7 @@
 {
   "name": "get_run_cost",
   "domain": "run",
-  "description": "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model breakdown (cost by token class, cache saving, whether any call went unpriced) and per-tool breakdown, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime.",
+  "description": "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps and how many of them advanced the run, model and tool calls, and the per-model breakdown (cost by token class, cache saving, whether any call went unpriced) and per-tool breakdown with each tool's result tokens and their estimated cost, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime. It also answers the agent's median cost and productive share over its runs in the 30 days before this one.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -168,6 +168,58 @@
                     "type": "number",
                     "minimum": 0,
                     "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "advancedSteps": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "unproductiveSteps": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "unproductiveCauses": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "failed": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "repeated": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "retried": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "failed",
+                      "repeated",
+                      "retried"
+                    ],
+                    "additionalProperties": false
                   },
                   {
                     "type": "null"
@@ -505,11 +557,57 @@
                     "calls": {
                       "type": "integer",
                       "minimum": 0
+                    },
+                    "resultTokens": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cost": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "micros": {
+                              "type": "string"
+                            },
+                            "currency": {
+                              "type": "string"
+                            },
+                            "basis": {
+                              "type": "string",
+                              "enum": [
+                                "gateway_observed",
+                                "client_attested",
+                                "mixed",
+                                "estimated"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "micros",
+                            "currency",
+                            "basis"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
                     "name",
-                    "calls"
+                    "calls",
+                    "resultTokens",
+                    "cost"
                   ],
                   "additionalProperties": false
                 }
@@ -537,6 +635,9 @@
               "toolCalls",
               "retries",
               "productiveRatio",
+              "advancedSteps",
+              "unproductiveSteps",
+              "unproductiveCauses",
               "byModel",
               "byTool",
               "priceEntryIds",
@@ -639,11 +740,87 @@
             "type": "null"
           }
         ]
+      },
+      "baseline": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "windowDays": {
+                "const": 30
+              },
+              "before": {
+                "type": "string"
+              },
+              "runs": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "medianCost": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "micros": {
+                        "type": "string"
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "basis": {
+                        "type": "string",
+                        "enum": [
+                          "gateway_observed",
+                          "client_attested",
+                          "mixed",
+                          "estimated"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "micros",
+                      "currency",
+                      "basis"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "productiveRatio": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "windowDays",
+              "before",
+              "runs",
+              "medianCost",
+              "productiveRatio"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
       }
     },
     "required": [
       "runId",
-      "rollup"
+      "rollup",
+      "baseline"
     ],
     "additionalProperties": false
   }
