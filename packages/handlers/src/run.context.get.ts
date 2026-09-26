@@ -117,7 +117,10 @@ async function wrappedReading(
     else if (!isLaterLlmCallSighting(row)) unmeasuredCalls.push(row);
   }
   // A call the transcript reported first and the proxy measured second is
-  // one call with a window, not an unmeasured one beside it.
+  // one call with a window, not an unmeasured one beside it. The two are
+  // joined on the vendor's request id, so a first sighting that recorded
+  // none stays counted as unmeasured: the read cannot show it is the same
+  // call, and it does not guess.
   const measured = new Set(
     windows.flatMap((w) => (w.modelCallId === null ? [] : [w.modelCallId])),
   );

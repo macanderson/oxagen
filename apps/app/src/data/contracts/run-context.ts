@@ -12,7 +12,7 @@ const Count = z.number().int().nonnegative();
 const Seq = z.string().regex(/^\d{1,19}$/);
 
 /** The blocks of a window, in the order a request carries them. */
-export const CONTEXT_BLOCKS = [
+const CONTEXT_BLOCKS = [
   "system",
   "steering",
   "tools",

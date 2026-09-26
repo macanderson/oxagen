@@ -60,7 +60,11 @@ export function drawsAssembly(type: string | null): boolean {
   return type !== null && ASSEMBLY_TYPES.has(type);
 }
 
-/** The window recorded at `seq`, or null when that frame recorded none. */
+/**
+ * The window recorded at `seq`, or null when that frame recorded none.
+ *
+ * @internal Exported for its test.
+ */
 export function windowAt(
   context: RunContext,
   seq: string,
@@ -68,7 +72,11 @@ export function windowAt(
   return context.windows.find((entry) => entry.seq === seq) ?? null;
 }
 
-/** The manifest summary sealed at `seq`, or null when none was. */
+/**
+ * The manifest summary sealed at `seq`, or null when none was.
+ *
+ * @internal Exported for its test.
+ */
 export function assemblyAt(
   context: RunContext,
   seq: string,
