@@ -22,6 +22,8 @@ import {
   approvalItem,
   approvalQueue,
   fleetSource,
+  interjectionItem,
+  interjectionQueue,
   NOW,
   runPage,
   runRow,
@@ -209,6 +211,8 @@ describe("Fleet reads", () => {
       [ctx, { cursor: "c1", limit: 25, pullRequests: "any" }],
     ]);
     expect(calls.approvals).toEqual([[ctx, { runId: null }]]);
+    // The open questions, for the waiting tile (#3839).
+    expect(calls.interjections).toEqual([[ctx, { runId: null }]]);
     expect(calls.agents).toEqual([[ctx, { cursor: null }]]);
   });
 
@@ -425,17 +429,45 @@ describe("summary tiles", () => {
     window.addEventListener("oxagen:open-approvals", opened);
     await loaded();
     expect(waitingTile()).toHaveTextContent(
-      "Waiting on a human1oldest approval has waited 2:30 of 10m · interjections not recorded · open the drawer",
+      "Waiting on a human1oldest approval has waited 2:30 of 10m · open the drawer",
     );
     fireEvent.click(waitingTile());
     expect(opened).toHaveBeenCalledOnce();
     window.removeEventListener("oxagen:open-approvals", opened);
   });
 
-  it("says nothing is parked on an empty queue", async () => {
+  it("says nothing is waiting on an empty queue", async () => {
     await loaded({ approvals: NO_APPROVALS });
     expect(waitingTile()).toHaveTextContent(
-      "0nothing is parked · interjections not recorded · open the drawer",
+      "0nothing is waiting · open the drawer",
+    );
+  });
+
+  // #3839: the tile counted approvals alone and said interjections were not
+  // recorded. It now adds the open questions and names them.
+  it("adds an open interjection to the approvals and names it beside the oldest approval", async () => {
+    await loaded({ interjections: interjectionQueue([interjectionItem()]) });
+    expect(waitingTile()).toHaveTextContent(
+      "Waiting on a human2oldest approval has waited 2:30 of 10m · 1 interjection · open the drawer",
+    );
+    expect(screen.queryByTestId("interjections-not-recorded")).toBeNull();
+  });
+
+  it("names the interjection's own wait against its 30-minute window when no approval waits", async () => {
+    await loaded({
+      approvals: NO_APPROVALS,
+      interjections: interjectionQueue([interjectionItem()]),
+    });
+    expect(waitingTile()).toHaveTextContent(
+      "1an interjection has waited 3:36 of 30m · open the drawer",
+    );
+  });
+
+  it("counts the approvals as a floor and says the interjections were not read (negative)", async () => {
+    await loaded({ interjections: readError("record_unmappable", 502) });
+    expect(waitingTile()).toHaveTextContent("1+");
+    expect(screen.getByTestId("interjections-unread")).toHaveTextContent(
+      "interjections not read: record_unmappable",
     );
   });
 
@@ -453,7 +485,7 @@ describe("summary tiles", () => {
       agents: { ok: false, reason: "denied", permission: "agent.read" },
     });
     expect(waitingTile()).toHaveTextContent(
-      "approvals not read: workspace.read · interjections not recorded",
+      "Waiting on a human—approvals not read: workspace.read",
     );
     expect(tile("Live runs")).toHaveTextContent(
       "the workspace's agents were not read",
@@ -903,6 +935,14 @@ describe("not-loaded states", () => {
     expect(
       within(empty).getByRole("link", { name: "Open Agents" }),
     ).toHaveAttribute("href", "/acme/core-platform/agents");
+    // The CLI path to a first run (#2950): the enroll command, set as code.
+    const enroll = within(empty).getByTestId("fleet-empty-enroll");
+    expect(enroll).toHaveTextContent(
+      "To record an agent that already runs on a machine, run oxagen agent enroll on that machine.",
+    );
+    expect(within(enroll).getByText("oxagen agent enroll").tagName).toBe(
+      "CODE",
+    );
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
   });

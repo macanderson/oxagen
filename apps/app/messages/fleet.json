@@ -47,13 +47,16 @@
         "title": "Waiting on a human",
         "open": "Open approvals",
         "oldest": "oldest approval has waited <clock></clock> of {window}",
-        "none": "nothing is parked",
+        "oldestInterjection": "{count, plural, one {an interjection has} other {the oldest of # interjections has}} waited <clock></clock> of {window}",
+        "none": "nothing is waiting",
         "drawer": "open the drawer",
         "more": "{count}+",
         "moreBasis": "more are parked than this page read",
+        "moreInterjections": "more questions wait than this page read",
         "window": "{minutes}m",
         "windowSeconds": "{minutes}m {seconds}s",
-        "interjections": "interjections not recorded",
+        "interjections": "{count, plural, one {# interjection} other {# interjections}}",
+        "interjectionsUnread": "interjections not read: {code}",
         "unread": "approvals not read: {code}"
       },
       "spend": {
@@ -273,7 +276,8 @@
       "title": "No runs yet in {workspace}",
       "body": "Nothing has reached Oxagen from this workspace. A run appears the moment a registered agent makes its first model call. You do not create runs here. Agents do.",
       "register": "Register Agent",
-      "agents": "Open Agents"
+      "agents": "Open Agents",
+      "enroll": "To record an agent that already runs on a machine, run <code>oxagen agent enroll</code> on that machine."
     },
     "error": {
       "title": "Fleet could not be loaded",

@@ -5,7 +5,9 @@
 // for the workspace the sidebar points at. A count is null until its read
 // lands and draws nothing then; a read that failed, or answered null, is
 // listed in `unrecorded` so the sidebar says so rather than drawing a zero or
-// nothing at all. No interjection is recorded (#3849), so none is counted.
+// nothing at all. The topbar badge and the Fleet count each add the open
+// interjections to the pending approvals (#3839), from the same reads the
+// drawer lists, so the count and the list never disagree.
 import type { NotificationFeed } from "@/data/contracts/shell";
 import type { Read } from "@/data/read";
 import { useWorkspaceActivity } from "./activity-store";
@@ -13,11 +15,21 @@ import type { ShellData } from "./shell-data";
 import { useSidebarSections } from "./sidebar-sections";
 
 export type OrgWaiting = {
-  /** Pending approvals across every workspace read. An open interjection would add here; none is recorded yet. */
+  /** Pending approvals plus open interjections across every workspace read. */
   count: number;
-  /** True when a workspace was not read, or its queue ran past the read: the badge says "+". */
+  /** True when a workspace or its questions were not read, or a queue ran past the read: the badge says "+". */
   partial: boolean;
 };
+
+/** Open questions in one workspace's read, or 0 when the read failed (the caller marks that partial). */
+function openQuestions(w: ShellData["approvals"]["workspaces"][number]) {
+  return w.interjections.ok ? w.interjections.value.items.length : 0;
+}
+
+/** True when a workspace's questions were not read or ran past the read. */
+function questionsShort(w: ShellData["approvals"]["workspaces"][number]) {
+  return !w.interjections.ok || w.interjections.value.more;
+}
 
 /** The three nav items that carry a count (audit-prompt check 5). */
 type NavCountKey = "fleet" | "steering" | "audit";
@@ -38,15 +50,18 @@ export type ShellCounts = {
 
 export function orgWaiting(data: ShellData): OrgWaiting | null {
   const read = data.approvals.workspaces.flatMap((w) =>
-    w.pending.ok ? [w.pending.value] : [],
+    w.pending.ok ? [{ queue: w.pending.value, w }] : [],
   );
   if (read.length === 0) return null;
   return {
-    count: read.reduce((n, queue) => n + queue.items.length, 0),
+    count: read.reduce(
+      (n, { queue, w }) => n + queue.items.length + openQuestions(w),
+      0,
+    ),
     partial:
       data.approvals.truncated ||
       read.length < data.approvals.workspaces.length ||
-      read.some((queue) => queue.more),
+      read.some(({ queue, w }) => queue.more || questionsShort(w)),
   };
 }
 
@@ -71,8 +86,14 @@ export function useShellCounts(data: ShellData): ShellCounts {
   if (read !== null && audit === null) unrecorded.push("audit");
   return {
     waiting: orgWaiting(data),
-    fleet: here?.pending.ok ? here.pending.value.items.length : null,
-    fleetMore: here?.pending.ok === true && here.pending.value.more,
+    // The same sum as the badge, for this workspace: parked calls plus open
+    // questions. The phone's Fleet slot reads it too.
+    fleet: here?.pending.ok
+      ? here.pending.value.items.length + openQuestions(here)
+      : null,
+    fleetMore:
+      here?.pending.ok === true &&
+      (here.pending.value.more || questionsShort(here)),
     steering,
     audit,
     unrecorded,

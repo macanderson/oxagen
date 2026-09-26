@@ -1,14 +1,16 @@
 // Fleet (fleet.md in the roadmap's mockups): every run in the workspace, live
 // and recent. The header with Steer and Register Agent, the four summary tiles,
-// and the Runs panel, from one `list_runs` read, the pending approvals and the
-// workspace's agents. Approvals are decided in the shell's drawer; Fleet counts
-// them in one tile and opens the drawer from it.
+// and the Runs panel, from one `list_runs` read, the pending approvals, the
+// open interjections and the workspace's agents. Approvals and interjections
+// are listed in the shell's drawer; Fleet counts both in one tile and opens
+// the drawer from it.
 //
 // A not-loaded state replaces the page body and never the shell. The runs
 // read decides it: a refusal is the access-denied state, a failure is the
 // error state, and a workspace with no runs on its newest page is the empty
-// state. The approvals and agents reads only feed a tile or the steer dialog,
-// so either failing says so on its tile and leaves the rest of the page up.
+// state. The approvals, interjections and agents reads only feed a tile or the
+// steer dialog, so any of them failing says so on its tile and leaves the rest
+// of the page up.
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import type { AgentPage } from "@/data/contracts/agents";
@@ -73,14 +75,15 @@ async function readFleet(
   pageSize: number,
   pullRequests: PullRequestFilter,
 ) {
-  const [runs, approvals, agents] = await Promise.all([
+  const [runs, approvals, interjections, agents] = await Promise.all([
     source.runs.list(ctx, { cursor, limit: pageSize, pullRequests }),
     source.approvals.pending(ctx, { runId: null }),
+    source.interjections.open(ctx, { runId: null }),
     readAgentRoster(ctx, source),
   ]);
   // The approval clocks and the error line start from the instant the reads
   // returned; a component may not read a clock while it renders.
-  return { runs, approvals, agents, now: Date.now() };
+  return { runs, approvals, interjections, agents, now: Date.now() };
 }
 
 export async function Fleet({
@@ -102,7 +105,7 @@ export async function Fleet({
   /** The onboarding banners the page draws under the header, when the gate has any. */
   banners?: ReactNode;
 }) {
-  const { runs, approvals, agents, now } = await readFleet(
+  const { runs, approvals, interjections, agents, now } = await readFleet(
     ctx,
     source,
     cursor,
@@ -189,6 +192,7 @@ export async function Fleet({
           runs.value.warnings?.includes("pull_requests_unread") === true
         }
         approvals={approvals}
+        interjections={interjections}
         agentTotal={agents.ok ? agents.value.totals.identities : null}
         now={now}
         canCommand={canCommand}

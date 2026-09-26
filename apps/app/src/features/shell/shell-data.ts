@@ -6,6 +6,7 @@ import type {
   ApprovalQueue,
   ResolvedApprovalItem,
 } from "@/data/contracts/approvals";
+import type { InterjectionQueue } from "@/data/contracts/interjections";
 import type {
   NavCounts,
   NotificationFeed,
@@ -15,14 +16,16 @@ import type { Read } from "@/data/read";
 
 /**
  * One workspace's share of the approvals drawer (mockup `apdBody()`): the calls
- * parked there, and what was resolved there since the start of the viewer's
- * day. `list_approvals` and `list_resolved_approvals` are workspace-scoped, so
+ * parked there, the questions agents paused to ask there (#3839), and what was
+ * resolved there since the start of the viewer's day. `list_approvals`,
+ * `list_interjections` and `list_resolved_approvals` are workspace-scoped, so
  * the drawer is the sum of these.
  */
 export type WorkspaceApprovals = {
   slug: string;
   name: string;
   pending: Read<ApprovalQueue>;
+  interjections: Read<InterjectionQueue>;
   resolved: Read<{ items: ResolvedApprovalItem[]; more: boolean }>;
 };
 

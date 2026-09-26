@@ -802,6 +802,25 @@
         }
       ]
     },
+    "list_interjections": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "Fleet: the Waiting on a human tile adds the open questions list_interjections returns to the pending approvals, and its basis line names them (data/live/interjections.ts, features/fleet/waiting.ts, features/fleet/waiting-tile.tsx, features/fleet/fleet.tsx)",
+      "proof": "apps/app/src/features/fleet/fleet.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session_69a4a70c-08c7-498d-8bcc-8ec9c9335dbf",
+      "also": [
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/layout.tsx",
+          "entry": "the approvals drawer lists each open question first, links it to its run, and counts it in the topbar button, the sidebar's Fleet count and the phone's Fleet slot (features/shell/source.ts, features/shell/approvals-drawer.tsx, features/shell/interjection-row.tsx, features/shell/use-activity.ts)",
+          "testid": "interjection-row",
+          "proof": "apps/app/src/features/shell/approvals-drawer.test.tsx",
+          "verifiedAt": "2026-09-25",
+          "verifiedBy": "session_69a4a70c-08c7-498d-8bcc-8ec9c9335dbf"
+        }
+      ]
+    },
     "list_invoices": {
       "route": "/[org]/billing",
       "page": "apps/app/src/app/[org]/billing/page.tsx",

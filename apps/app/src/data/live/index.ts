@@ -1,12 +1,12 @@
 // The live DataSource: every port method is a kernelRead plus a typed mapper
 // (ARCHITECTURE.md §3.3). src/data/source.ts is its only importer.
 import type { DataSource } from "@/data/ports";
-import { readOk } from "@/data/read";
 import { agents } from "./agents";
 import { approvals } from "./approvals";
 import { audit } from "./audit";
 import { billing } from "./billing";
 import { conversations } from "./conversations";
+import { interjections } from "./interjections";
 import { mandates } from "./mandates";
 import { onboarding } from "./onboarding";
 import { org } from "./org";
@@ -25,12 +25,7 @@ export const liveSource: DataSource = {
   conversations,
   runs,
   approvals,
-  // Placeholder until the interjections lane adds ./interjections over
-  // list_interjections (#3839). No page calls it yet, and nothing records an
-  // interjection yet, so the queue is empty.
-  interjections: {
-    open: () => Promise.resolve(readOk({ items: [], more: false })),
-  },
+  interjections,
   agents,
   mandates,
   billing,

@@ -155,7 +155,7 @@
         "spend": "Spend"
       },
       "more": "More",
-      "waiting": ", {count, plural, one {# approval waiting} other {# approvals waiting}}",
+      "waiting": ", {count} waiting on a person",
       "incidents": ", {count, plural, one {# critical incident open} other {# critical incidents open}}",
       "tileWaiting": "{count} waiting",
       "sub": {
@@ -473,7 +473,13 @@
       "rowNotBacked": "Risk, amount, side effect, taint and task are not returned for a parked call yet.",
       "truncated": "Oxagen read the first {count} workspaces of this organization. Calls parked in the rest are not counted here.",
       "note": "A resolution mints a single-use approval token bound to the call digest, the agent, the run, and an expiry. It cannot be replayed on a second call. On expiry the call ends and the reason reaches the model.",
-      "interjectionNotBacked": "An open interjection has no record yet.",
+      "interjection": {
+        "kind": "Interjection",
+        "paused": "{agent} is paused",
+        "pausedUnknown": "An agent is paused",
+        "openRun": "Open run",
+        "openRunLabel": "Open run {run}, paused on this question"
+      },
       "resolvedCard": {
         "chain": "Chain",
         "who": "Who asked",

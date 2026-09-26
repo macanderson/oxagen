@@ -25,6 +25,7 @@ import {
   useTransition,
 } from "react";
 import type { ApprovalQueue } from "@/data/contracts/approvals";
+import type { InterjectionQueue } from "@/data/contracts/interjections";
 import {
   type CommandBlock,
   commandBlockOf,
@@ -32,7 +33,6 @@ import {
   type RunRow,
 } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
-import { openApprovals } from "@/features/shell/client";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { Avatar } from "@/ui/avatar";
@@ -69,7 +69,6 @@ import { cell, headCell, numericCell } from "@/ui/table";
 import { ToastStack, useToasts } from "@/ui/toast";
 import { dispatchRunCommand, exportFleetRun } from "./actions";
 import { DiffCell, PullRequestsCell, SummaryCell } from "./run-cells";
-import { Clock } from "@/ui/clock";
 import {
   DEFAULT_FLEET_PREFS,
   FIXED_COLUMN,
@@ -92,7 +91,6 @@ import {
   type ListQuery,
   listRuns,
   liveCount,
-  oldestApproval,
   parkedRunIds,
   pullRequestLabel,
   RUN_CHIPS,
@@ -101,8 +99,8 @@ import {
   type SortKey,
   shownCost,
   spendShown,
-  windowParts,
 } from "./view";
+import { WaitingTile } from "./waiting-tile";
 
 /** An agent the steer dialog can address. */
 export type FleetAgent = { agentKey: string };
@@ -131,91 +129,16 @@ function Tile({
   );
 }
 
-function WaitingTile({
-  approvals,
-  now,
-}: {
-  approvals: Read<ApprovalQueue>;
-  now: number;
-}) {
-  const t = useTranslations("fleet.stats.waiting");
-  const locale = useLocale();
-  const drawer = t("drawer");
-  // The design counts an open interjection in this tile. No store records
-  // one yet (#3839), so the tile counts approvals and says interjections are
-  // missing rather than letting the count read as the whole of what waits.
-  const interjections = (
-    <span data-recorded="false" data-testid="interjections-not-recorded">
-      {t("interjections")}
-    </span>
-  );
-  let value: ReactNode;
-  let note: ReactNode;
-  if (!approvals.ok) {
-    value = <span className="text-muted-foreground">—</span>;
-    note = (
-      <>
-        {t("unread", {
-          code:
-            approvals.reason === "denied"
-              ? approvals.permission
-              : approvals.reason === "error"
-                ? approvals.code
-                : approvals.accessRequestId,
-        })}
-        {" · "}
-        {interjections}
-      </>
-    );
-  } else {
-    const { items, more } = approvals.value;
-    const count = formatCount(items.length, locale);
-    value = more ? t("more", { count }) : count;
-    const oldest = oldestApproval(items);
-    const limit = oldest === null ? null : windowParts(oldest.windowSeconds);
-    note = (
-      <>
-        {oldest === null || limit === null
-          ? t("none")
-          : t.rich("oldest", {
-              clock: () => (
-                <Clock at={oldest.createdAt} now={now} direction="since" />
-              ),
-              window:
-                limit.seconds === 0
-                  ? t("window", { minutes: limit.minutes })
-                  : t("windowSeconds", limit),
-            })}
-        {more ? ` · ${t("moreBasis")}` : null}
-        {" · "}
-        {interjections}
-        {` · ${drawer}`}
-      </>
-    );
-  }
-  return (
-    <button
-      type="button"
-      data-testid="tile"
-      aria-label={t("open")}
-      onClick={openApprovals}
-      className={`${statTile} cursor-pointer text-left transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`}
-    >
-      <span className={statTerm}>{t("title")}</span>
-      <span className={`${statValue} text-info`}>{value}</span>
-      <span className={statNote}>{note}</span>
-    </button>
-  );
-}
-
 function Tiles({
   listed,
   approvals,
+  interjections,
   agentTotal,
   now,
 }: {
   listed: readonly ListedRun[];
   approvals: Read<ApprovalQueue>;
+  interjections: Read<InterjectionQueue>;
   agentTotal: number | null;
   now: number;
 }) {
@@ -247,7 +170,11 @@ function Tiles({
             : t("live.basis", { count: agentTotal })
         }
       />
-      <WaitingTile approvals={approvals} now={now} />
+      <WaitingTile
+        approvals={approvals}
+        interjections={interjections}
+        now={now}
+      />
       <Tile
         term={t("spend.title")}
         value={
@@ -1131,6 +1058,7 @@ export function FleetBoard({
   nextCursor,
   cursor,
   approvals,
+  interjections,
   agentTotal,
   now,
   canCommand,
@@ -1144,6 +1072,8 @@ export function FleetBoard({
   nextCursor: string | null;
   cursor: string | null;
   approvals: Read<ApprovalQueue>;
+  /** The open questions agents paused to ask, which the waiting tile adds to the approvals. */
+  interjections: Read<InterjectionQueue>;
   /** Identities in the workspace; null when the agents read failed. */
   agentTotal: number | null;
   /** Epoch milliseconds the reads returned at. */
@@ -1266,6 +1196,7 @@ export function FleetBoard({
       <Tiles
         listed={listed}
         approvals={approvals}
+        interjections={interjections}
         agentTotal={agentTotal}
         now={now}
       />

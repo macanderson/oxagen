@@ -87,6 +87,8 @@ import { agentMemoryCitationStatsRoute } from "./routes/v1/agent.memory_citation
 import { agentApprovalListRoute } from "./routes/v1/agent.approval.list";
 import { agentApprovalListResolvedRoute } from "./routes/v1/agent.approval.list_resolved";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
+import { agentInterjectionAnswerRoute } from "./routes/v1/agent.interjection.answer";
+import { agentInterjectionListRoute } from "./routes/v1/agent.interjection.list";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
 import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
@@ -940,6 +942,8 @@ orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/list", agentApprovalListRoute);
 orgScoped.route("/agent/approvals/resolved", agentApprovalListResolvedRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
+orgScoped.route("/agent/interjections/list", agentInterjectionListRoute);
+orgScoped.route("/agent/interjections/answer", agentInterjectionAnswerRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
 // Agent run-trace span tree: one execution plus its steps and tool calls. The
 // list route backs the Activity index.
