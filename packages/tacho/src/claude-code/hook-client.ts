@@ -5,6 +5,7 @@
  * from the cached bundle, spool the event for replay, and answer anyway, so
  * enforcement never depends on the daemon being up.
  */
+import { readdirSync } from "node:fs";
 import { request } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -35,9 +36,20 @@ import {
   tachoHarnessSchema,
 } from "../wire";
 import {
+  CODEX_HOOK_EVENTS,
+  type CodexHookEventName,
+  codexHookTimeoutS,
+} from "../host/codex-writer";
+import { cursorHookTimeoutS } from "../host/cursor-writer";
+import {
   COMMAND_HOOK_TIMEOUTS_S,
   SESSION_END_TIMEOUT_S,
 } from "../host/settings-writer";
+import {
+  STELLA_HOOK_EVENTS,
+  type StellaHookEventName,
+  stellaHookTimeoutMs,
+} from "../host/stella-writer";
 import { DEFAULT_SECRET_ENV_PATTERN, snapshotEnv } from "./context";
 import {
   cursorAnswer,
@@ -48,19 +60,16 @@ import {
 import { codexHarnessPid } from "./harness-process";
 import { hookInputSchema } from "./hooks";
 import {
+  type PsLookup,
   psStartInstance,
+  resolveStellaIdentity,
+  type StellaIdentity,
   stellaAnswer,
   stellaHarnessPid,
   translateStellaPayload,
   tryParseAnswerBody,
 } from "./stella-adapter";
 
-/** The `--harness <name>` flag on the hook command; unknown names default to Claude Code. */
-/**
- * What Cursor shows when a hook payload cannot be read. It names the cause
- * and the repair rather than saying only that something was denied, because
- * the person seeing it did nothing wrong and can act on it.
- */
 /**
  * Refuse a Cursor hook whose payload could not be parsed, in the shape the
  * event it names actually reads.
@@ -96,6 +105,11 @@ function cursorRefusal(raw: unknown, message: string): string {
   })}\n`;
 }
 
+/**
+ * What Cursor shows when a hook payload cannot be read. It names the cause
+ * and the repair rather than saying only that something was denied, because
+ * the person seeing it did nothing wrong and can act on it.
+ */
 const CURSOR_UNREADABLE_PAYLOAD =
   "Oxagen could not read this hook payload, so it cannot say what this agent is permitted to do. Run `tacho status` and check that the wrapper matches this version of Cursor.";
 
@@ -123,6 +137,7 @@ function readHostRouting(
   }
 }
 
+/** The `--harness <name>` flag on the hook command; unknown names default to Claude Code. */
 export function harnessFromArgv(argv: readonly string[]): TachoHarness {
   const index = argv.indexOf("--harness");
   const value = index >= 0 ? argv[index + 1] : undefined;
@@ -253,21 +268,44 @@ export interface HookRunDeps {
   agent?: string;
   /**
    * The harness process's pid, for a harness that exports none: Stella
-   * (whose payload names no session either) and Codex. Defaults to walking
-   * up from this process's parent with `ps` (`stellaHarnessPid`,
-   * `codexHarnessPid`). Undefined means no pid names this one session, and
-   * the daemon falls back to its idle bound. Codex asks only at
-   * `SessionStart` and `UserPromptSubmit`. Cursor never asks.
+   * (whose payload names no session either) and Codex. For Codex it defaults
+   * to walking up from this process's parent with `ps` (`codexHarnessPid`),
+   * and for Stella to the cached identity (`resolveStellaIdentity`).
+   * Undefined means no pid names this one session, and the daemon falls back
+   * to its idle bound. Codex asks only at `SessionStart` and
+   * `UserPromptSubmit`. Cursor never asks. Given for Stella, it and
+   * `harnessInstance` replace the cache.
    */
   harnessPid?: () => number | undefined;
   /**
    * The Stella process instance token (its start time), which keeps a reused
-   * pid off the previous run's chain. Defaults to one `ps` call; `undefined`
-   * from it means the session id falls back to the bare pid form.
+   * pid off the previous run's chain. `undefined` from it means the session
+   * id falls back to the bare pid form. Given, it replaces the cache the way
+   * `harnessPid` does.
    */
   harnessInstance?: (pid: number) => string | undefined;
+  /**
+   * The two `ps` reads behind a Stella identity when neither override above
+   * is given: the parent's parent and name, and a process's start time. The
+   * identity is cached under `TACHO_HOME` (`resolveStellaIdentity`), so most
+   * hooks call neither. A test injects them to count the calls or to fail
+   * one.
+   */
+  stellaPs?: {
+    lookup?: PsLookup;
+    startInstance?: (pid: number) => string | undefined;
+  };
   /** `win32` has no Unix socket, so the hook posts over loopback TCP. */
   platform?: NodeJS.Platform;
+  /**
+   * Milliseconds since the harness started this process. The time spent
+   * starting up, reading stdin and running `ps` comes out of the daemon's
+   * response budget, so the whole hook still finishes under the harness's
+   * timeout. `runHookProcess` passes the process uptime. It defaults to 0 for
+   * a caller (a test, an SDK adapter) that did not start a process for the
+   * hook.
+   */
+  elapsedMs?: () => number;
   /**
    * Identifies this one hook invocation across the live request and its
    * spool fallback, so a daemon that already recorded the live request does
@@ -293,29 +331,93 @@ export interface HookRunResult {
 }
 
 /**
- * A margin under the harness's own timeout for a hook whose budget derives
- * from one, so this process's own answer (fallback to a local decision) is
- * what a slow request gets, not Claude Code timing the command out itself
- * and treating the hook as failed.
+ * The time the hook keeps back under the harness's timeout, so a daemon that
+ * accepts the connection and never answers still leaves this process time
+ * to decide locally, spool the event and exit before the harness kills it.
+ * It covers the harness's own spawn (Codex runs a hook through a login
+ * shell), the local decision and the spool write. Half the timeout, and
+ * never more than five seconds.
  */
 const HARNESS_TIMEOUT_MARGIN_MS = 5_000;
 
-const RESPONSE_BUDGET_MS: Record<string, number> = {
-  // Strictly less than `COMMAND_HOOK_TIMEOUTS_S.PermissionRequest` (the
-  // harness's own timeout, 600s): equalling it left no room for this
-  // process to still answer locally before Claude Code's own clock ran out
-  // first, which is a daemon-down failure this budget exists to avoid.
-  PermissionRequest:
-    COMMAND_HOOK_TIMEOUTS_S.PermissionRequest * 1_000 -
-    HARNESS_TIMEOUT_MARGIN_MS,
-  PreToolUse: 10_000,
-  SessionStart: 5_000,
-  UserPromptSubmit: 5_000,
-  Stop: 5_000,
-  // Under `SESSION_END_TIMEOUT_S` by the harness margin, so a daemon that
-  // accepts the connection and never answers still leaves time to spool.
-  SessionEnd: SESSION_END_TIMEOUT_S * 1_000 - HARNESS_TIMEOUT_MARGIN_MS,
-};
+/**
+ * The least time the daemon gets once stdin or `ps` has used up the rest. A
+ * daemon that is up answers over the socket in a few milliseconds.
+ */
+const MIN_RESPONSE_BUDGET_MS = 100;
+
+/**
+ * The timeout assumed for an event the harness's writer does not register:
+ * the shortest one any writer registers, five seconds, which is what Claude
+ * Code's http hooks and every telemetry command hook of Codex, Cursor and
+ * Stella get.
+ */
+const UNREGISTERED_EVENT_KILL_MS = 5_000;
+
+/**
+ * How long the harness waits for this hook before it kills the process, in
+ * milliseconds. It is the timeout the harness's writer registers for the
+ * event, so the hook reads the same number the harness enforces. The same
+ * event can differ by harness: Claude Code gives `SessionEnd` ten seconds,
+ * while Codex and Cursor give it five (H-13).
+ *
+ * `cursorEvent` is Cursor's own event name, because Cursor's timeouts are
+ * set per Cursor event and two of them can map to one Claude Code name.
+ */
+export function harnessKillMs(
+  harness: TachoHarness,
+  event: string,
+  cursorEvent?: string,
+): number {
+  switch (harness) {
+    case "codex":
+      return (CODEX_HOOK_EVENTS as readonly string[]).includes(event)
+        ? codexHookTimeoutS(event as CodexHookEventName) * 1_000
+        : UNREGISTERED_EVENT_KILL_MS;
+    case "cursor":
+      return cursorEvent !== undefined &&
+        Object.hasOwn(CURSOR_TO_CLAUDE_EVENT, cursorEvent)
+        ? cursorHookTimeoutS(cursorEvent as CursorHookEventName) * 1_000
+        : UNREGISTERED_EVENT_KILL_MS;
+    case "stella":
+      return (STELLA_HOOK_EVENTS as readonly string[]).includes(event)
+        ? stellaHookTimeoutMs(event as StellaHookEventName)
+        : UNREGISTERED_EVENT_KILL_MS;
+    default:
+      if (Object.hasOwn(COMMAND_HOOK_TIMEOUTS_S, event))
+        return (
+          COMMAND_HOOK_TIMEOUTS_S[
+            event as keyof typeof COMMAND_HOOK_TIMEOUTS_S
+          ] * 1_000
+        );
+      return event === "SessionEnd"
+        ? SESSION_END_TIMEOUT_S * 1_000
+        : UNREGISTERED_EVENT_KILL_MS;
+  }
+}
+
+/**
+ * How long to wait for the daemon's answer: the harness timeout, less the
+ * margin, less what this process has already spent since it started.
+ *
+ * | Harness timeout | Budget from process start |
+ * |---|---|
+ * | 5 s (telemetry on Codex, Cursor and Stella; Codex and Cursor `SessionEnd`) | 2.5 s |
+ * | 10 s (`SessionStart`, `UserPromptSubmit`, `Stop`; Claude Code `SessionEnd`) | 5 s |
+ * | 15 s (`PreToolUse`; Cursor `subagentStart`) | 10 s |
+ * | 600 s (`PermissionRequest`) | 595 s |
+ *
+ * The budget used to be a fixed 5 s for every telemetry event, equal to the
+ * five-second kill, so a daemon slower than that got the process killed
+ * before it could spool the event (H-13).
+ */
+export function responseBudgetMs(killMs: number, elapsedMs = 0): number {
+  const margin = Math.min(HARNESS_TIMEOUT_MARGIN_MS, killMs / 2);
+  return Math.max(
+    MIN_RESPONSE_BUDGET_MS,
+    Math.floor(killMs - margin - elapsedMs),
+  );
+}
 
 /** The Codex hooks that look for the Codex process (`codexHarnessPid`). */
 const CODEX_PID_EVENTS: ReadonlySet<string> = new Set([
@@ -664,6 +766,20 @@ function codexAnswer(
 const MAX_QUARANTINED_PAYLOAD_BYTES = 65_536;
 
 /**
+ * The most hook payloads `quarantine/` holds at once. Past it a new one is
+ * not written. Without a cap, a harness that changed its payload shape would
+ * write a file for every event until the sweep ages them out, a week later,
+ * and `tacho status` reads the whole folder on every call.
+ */
+export const MAX_QUARANTINED_HOOK_PAYLOADS = 1_000;
+
+/** The file name ending of a quarantined hook payload. */
+const HOOK_PAYLOAD_SUFFIX = ".hook-payload.json";
+
+/** A ULID, the only hook id this module uses as a file name. */
+const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+
+/**
  * A payload this process could not even parse, kept where a person can find
  * it, bounded so an oversized or runaway stdin does not turn the record
  * itself into the next problem. Best-effort and silent on its own failure:
@@ -685,11 +801,49 @@ function quarantineUnreadablePayload(
   rawText: string,
   label: Record<string, string>,
 ): void {
+  quarantineHookPayload(deps.paths.quarantine, {
+    hookId,
+    receivedAt,
+    reason,
+    rawText,
+    label,
+  });
+}
+
+/**
+ * Keep one hook payload that cannot become an event in `quarantine/`, where
+ * `tacho status` counts it and the daemon's sweep ages it out. `tacho-hook`
+ * calls it for stdin it cannot read, and the daemon for an http hook body it
+ * cannot file on a session. Best-effort and silent on its own failure.
+ *
+ * The daemon's hook id comes from the request body, so it names the file
+ * only when it is a ULID. Any other value would let a caller pick a path
+ * outside `quarantine/` (`../x`), so the file gets a fresh ULID and the
+ * record keeps the value the caller sent. Once the folder holds
+ * `MAX_QUARANTINED_HOOK_PAYLOADS` payloads, nothing more is written.
+ */
+export function quarantineHookPayload(
+  quarantineDir: string,
+  record: {
+    hookId: string;
+    receivedAt: string;
+    reason: string;
+    rawText: string;
+    label: Record<string, string>;
+  },
+): void {
+  const { hookId, receivedAt, reason, rawText, label } = record;
   try {
-    ensureDir(deps.paths.quarantine);
+    ensureDir(quarantineDir);
+    const held = readdirSync(quarantineDir).filter((name) =>
+      name.endsWith(HOOK_PAYLOAD_SUFFIX),
+    ).length;
+    if (held >= MAX_QUARANTINED_HOOK_PAYLOADS) return;
+    const fileId =
+      typeof hookId === "string" && ULID_PATTERN.test(hookId) ? hookId : ulid();
     const truncated = rawText.length > MAX_QUARANTINED_PAYLOAD_BYTES;
     writeSensitiveFileAtomic(
-      join(deps.paths.quarantine, `${hookId}.hook-payload.json`),
+      join(quarantineDir, `${fileId}${HOOK_PAYLOAD_SUFFIX}`),
       JSON.stringify({
         schema: "tacho.quarantined-hook-payload.v1",
         received_at: receivedAt,
@@ -769,17 +923,56 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       path: "invalid",
     };
   }
+  // The enrollment is read before anything that spawns a process, so an
+  // unenrolled machine answers a Stella hook without running `ps` (H-14).
+  // What the read found is acted on further down, after the payload parse.
+  let host: HostFile | undefined;
+  let hostReadError: { error: unknown } | undefined;
+  try {
+    host = (deps.readHost ?? (() => readHostFile(deps.paths.hostFile)))();
+  } catch (error) {
+    hostReadError = { error };
+  }
   let harnessPid: number | undefined;
   if (stella) {
-    const pid = deps.harnessPid?.() ?? stellaHarnessPid(process.ppid, platform);
-    harnessPid = pid;
-    // Windows has no `ps`, so there the id stays the bare pid form.
-    const instance = (
-      deps.harnessInstance ??
-      ((pid: number) =>
-        platform === "win32" ? undefined : psStartInstance(pid))
-    )(pid);
-    raw = translateStellaPayload(raw, pid, instance);
+    let identity: StellaIdentity;
+    if (deps.harnessPid !== undefined || deps.harnessInstance !== undefined) {
+      const pid =
+        deps.harnessPid?.() ?? stellaHarnessPid(process.ppid, platform);
+      // Windows has no `ps`, so there the id stays the bare pid form.
+      const instance = (
+        deps.harnessInstance ??
+        ((pid: number) =>
+          platform === "win32" ? undefined : psStartInstance(pid))
+      )(pid);
+      identity = { pid, ...(instance !== undefined ? { instance } : {}) };
+    } else if (host === undefined && hostReadError === undefined) {
+      // Unenrolled: nothing is posted or spooled, so the id is never read.
+      identity = { pid: process.ppid };
+    } else {
+      const stellaEvent =
+        typeof raw === "object" &&
+        raw !== null &&
+        typeof (raw as Record<string, unknown>)["event"] === "string"
+          ? ((raw as Record<string, unknown>)["event"] as string)
+          : undefined;
+      identity = resolveStellaIdentity({
+        parentPid: process.ppid,
+        platform,
+        cacheDir: deps.paths.stellaIdentity,
+        now: now(),
+        ...(stellaEvent !== undefined ? { event: stellaEvent } : {}),
+        ...(deps.stellaPs?.lookup !== undefined
+          ? { lookup: deps.stellaPs.lookup }
+          : {}),
+        ...(deps.stellaPs?.startInstance !== undefined
+          ? { startInstance: deps.stellaPs.startInstance }
+          : {}),
+      });
+    }
+    if (host !== undefined || hostReadError !== undefined)
+      harnessPid = identity.pid;
+    raw = translateStellaPayload(raw, identity.pid, identity.instance);
   }
   // Cursor issues both the session id and the tool-use id, so its adapter
   // only renames. It gets no harness pid, on purpose (#3989). In Cursor
@@ -792,7 +985,16 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
   // (`activeSessionIdsByConversationId`). So the walk would reach a process
   // that many Cursor conversations share: it outlives each of them, and a
   // cancel of one conversation would signal the rest. A Cursor session ends
-  // on Cursor's own `sessionEnd`, or on the daemon's idle bound.
+  // on Cursor's own `sessionEnd`, or after an hour with no hook (ADR-141).
+  // Cursor sets its hook timeouts per Cursor event, so its own name is kept
+  // for the response budget before the adapter renames it.
+  const cursorEvent =
+    cursor &&
+    typeof raw === "object" &&
+    raw !== null &&
+    typeof (raw as Record<string, unknown>)["hook_event_name"] === "string"
+      ? ((raw as Record<string, unknown>)["hook_event_name"] as string)
+      : undefined;
   if (cursor) raw = translateCursorPayload(raw);
   const parsed = hookInputSchema.safeParse(raw);
   if (!parsed.success) {
@@ -880,6 +1082,10 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
         },
       })
     : emptyAnswer;
+  const killMs = harnessKillMs(harness, input.hook_event_name, cursorEvent);
+  const elapsed = deps.elapsedMs ?? (() => 0);
+  // Read at each post, so the time already spent comes off the budget.
+  const responseBudget = (): number => responseBudgetMs(killMs, elapsed());
   const env: Record<string, string> = {
     ...snapshotEnv(deps.env, DEFAULT_SECRET_ENV_PATTERN),
     ...(harnessPid !== undefined
@@ -905,10 +1111,8 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
           path: "invalid",
         }
       : undefined;
-  let host: HostFile | undefined;
-  try {
-    host = (deps.readHost ?? (() => readHostFile(deps.paths.hostFile)))();
-  } catch (error) {
+  if (hostReadError !== undefined) {
+    const { error } = hostReadError;
     const problem = error instanceof Error ? error.message : String(error);
     // Forward on the routing fields alone when they read: the daemon that
     // wrote the file can decide, and only the offline fallback needs the
@@ -931,8 +1135,7 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
             },
             body: JSON.stringify({ payload: raw, env, ...label }),
             connectTimeoutMs: deps.connectTimeoutMs ?? 50,
-            responseTimeoutMs:
-              RESPONSE_BUDGET_MS[input.hook_event_name] ?? 5_000,
+            responseTimeoutMs: responseBudget(),
           });
           const document =
             result.status === 200 ? tryParseAnswerBody(result.body) : undefined;
@@ -998,7 +1201,7 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       },
       body: JSON.stringify({ payload: raw, env, hook_id: hookId, ...label }),
       connectTimeoutMs: deps.connectTimeoutMs ?? 50,
-      responseTimeoutMs: RESPONSE_BUDGET_MS[input.hook_event_name] ?? 5_000,
+      responseTimeoutMs: responseBudget(),
     });
     if (result.status === 200) {
       // A 200 whose body is not a JSON object is a fault, not a decision. It

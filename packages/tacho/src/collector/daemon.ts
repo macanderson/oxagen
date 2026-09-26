@@ -16,6 +16,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { z } from "zod";
+import { quarantineHookPayload } from "../claude-code/hook-client";
 import { hookInputSchema } from "../claude-code/hooks";
 import { homedir, hostname as osHostname } from "node:os";
 import { dirname, join } from "node:path";
@@ -177,7 +178,13 @@ export interface DaemonTimers {
   detectorMs: number;
   checkpointMs: number;
   sweepMs: number;
+  /** How long a session with no harness pid may go quiet before the sweep closes it. */
   idleSessionMs: number;
+  /**
+   * The same bound for a Cursor session, which never carries a pid
+   * (ADR-141). It applies when it is the shorter of the two.
+   */
+  cursorIdleSessionMs: number;
   walRetainMs: number;
   /** The longest `stop` waits for the git lane before it seals the host chain. */
   stopLaneMs: number;
@@ -200,6 +207,10 @@ export const DEFAULT_TIMERS: DaemonTimers = {
   checkpointMs: 60_000,
   sweepMs: 30_000,
   idleSessionMs: 6 * 60 * 60_000,
+  // One hour, four times the longest a Cursor agent's shell tool waits on a
+  // command in the foreground (about fifteen minutes). A quiet session sealed
+  // by this bound reopens on its next hook (ADR-172). ADR-141 records why.
+  cursorIdleSessionMs: 60 * 60_000,
   walRetainMs: 7 * 24 * 60 * 60_000,
   // The three add up to 4 s, inside the 5 s `STOP_GRACE_MS` the process
   // gives `stop` (run.ts), which leaves time to close the listeners and
@@ -3091,17 +3102,43 @@ async function initializeDaemon(
         now,
         log,
       }),
-    // Once `stop` began, a hook or an OTLP post still waiting for the queue
-    // is refused rather than run. `stop` seals the host chain behind them
-    // within `stopQueueMs`, and each one queued ahead of that seal was time
-    // it did not have. A refused hook is answered locally and spooled by
-    // `tacho-hook`, and the next start replays it.
-    handleHook: (envelope) =>
-      serial.run(async () => {
+    handleHook: (envelope) => {
+      // A payload with no session id or no event name cannot be filed on a
+      // session. Claude Code's http hooks post here directly, so a refusal
+      // left only a log line and the event was gone (H-07). It is kept in
+      // quarantine, the way `tacho-hook` keeps a payload it cannot read, and
+      // still refused.
+      const readable = hookInputSchema.safeParse(envelope.payload);
+      if (!readable.success) {
+        const at = now();
+        quarantineHookPayload(paths.quarantine, {
+          hookId: envelope.hook_id ?? ulid(at),
+          receivedAt: toProtocolTimestamp(at),
+          reason: `payload is not a hook: ${readable.error.issues
+            .map(
+              (issue) =>
+                `${issue.path.join(".") || "payload"}: ${issue.message}`,
+            )
+            .join("; ")}`,
+          rawText: JSON.stringify(envelope.payload) ?? String(envelope.payload),
+          label:
+            envelope.agent !== undefined
+              ? { agent: envelope.agent }
+              : { harness: envelope.harness ?? "claude-code" },
+        });
+        return Promise.reject(readable.error);
+      }
+      // Once `stop` began, a hook or an OTLP post still waiting for the queue
+      // is refused rather than run. `stop` seals the host chain behind them
+      // within `stopQueueMs`, and each one queued ahead of that seal was time
+      // it did not have. A refused hook is answered locally and spooled by
+      // `tacho-hook`, and the next start replays it.
+      return serial.run(async () => {
         if (stopped) throw new Error(STOPPING);
         await drainSpool();
         return handleHookInner(envelope);
-      }),
+      });
+    },
     handleOtlp: (signal, payload) =>
       serial.run(async () => {
         if (stopped) throw new Error(STOPPING);
@@ -3540,7 +3577,10 @@ async function initializeDaemon(
           let failure: { error: unknown } | undefined;
           const candidates = registry.sweepCandidates(
             sweepLiveness(started),
-            timers.idleSessionMs,
+            (session) =>
+              session.harness === "cursor"
+                ? Math.min(timers.idleSessionMs, timers.cursorIdleSessionMs)
+                : timers.idleSessionMs,
             (session) =>
               pendingSessionEnds.has(session.recorder.sessionUuid) ||
               spoolHolds(session),

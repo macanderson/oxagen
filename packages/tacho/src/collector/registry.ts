@@ -1120,7 +1120,8 @@ export class SessionRegistry {
    * The chains a sweep would close, and how each one ends, without closing
    * any of them. A chain closes when its process is gone, or when it went
    * quiet: past `idleMs` with no pid known, past `staleMs` with one (a pid
-   * can be reused, so it alone cannot keep a chain open). A session whose
+   * can be reused, so it alone cannot keep a chain open). `idleMs` may be
+   * read per record, because Cursor's bound is shorter than the rest. A session whose
    * process is gone with no turn open finished its last turn and exited:
    * that is how Stella, which has no SessionEnd, ends every session, so it
    * closes as `completed`. Anything else closes as `crashed`, including a
@@ -1134,7 +1135,7 @@ export class SessionRegistry {
    */
   sweepCandidates(
     isAlive: (pid: number, instance?: string) => boolean,
-    idleMs: number,
+    idleMs: number | ((record: SessionRecord) => number),
     deferSeal: (session: SessionRecord) => boolean = () => false,
     staleMs: number = STALE_PID_SESSION_MS,
   ): SweepCandidate[] {
@@ -1152,7 +1153,7 @@ export class SessionRegistry {
       // The daemon's own chain is exempt: its pid is this process.
       const idle =
         record.pid === undefined
-          ? quiet > idleMs
+          ? quiet > (typeof idleMs === "function" ? idleMs(record) : idleMs)
           : quiet > staleMs && !isInternalSession(record.harnessSessionId);
       if (!gone && !idle) continue;
       if (!record.recorder.hasStarted) {
@@ -1201,7 +1202,7 @@ export class SessionRegistry {
    */
   sweep(
     isAlive: (pid: number, instance?: string) => boolean,
-    idleMs: number,
+    idleMs: number | ((record: SessionRecord) => number),
     deferSeal: (session: SessionRecord) => boolean = () => false,
     staleMs: number = STALE_PID_SESSION_MS,
   ): TachoEvent[] {
