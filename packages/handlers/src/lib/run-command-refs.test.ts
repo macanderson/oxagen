@@ -1,14 +1,21 @@
+import type {
+  RunCheckout,
+  RunRepository,
+} from "@oxagen/oxagen/contracts/run.work.get";
 import { tachoEventsColumns } from "@oxagen/telemetry";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  connectionOf,
   issueRefOfAttrs,
   issueRefsOfCommand,
   issueRefsOfFrame,
   readRunCommandRefFrames,
   releaseRefsOfCommand,
   releaseRefsOfFrame,
+  resolveFrameRepository,
   type CommandRefFrameRow,
 } from "./run-command-refs";
+import type { ConnectedRunRepository } from "./run-work";
 
 const chSelect = vi.hoisted(() => vi.fn());
 vi.mock("@oxagen/telemetry", async (original) => ({
@@ -324,5 +331,158 @@ describe("readRunCommandRefFrames", () => {
     expect(chSelect.mock.calls[0]?.[0]).toMatchObject({
       params: { limit: 2001 },
     });
+  });
+});
+
+// ADR-197 rule 3: the repository a frame's bare `#N` or tag belongs to, from
+// the record alone. A wrong answer would draw another repository's issue
+// state on this run, so every step of the rule is held here, and a record
+// that names no single repository answers null rather than a guess.
+describe("resolveFrameRepository (ADR-197)", () => {
+  const repo = (owner: string, name: string): RunRepository => ({
+    host: "github.com",
+    owner,
+    name,
+    url: `https://github.com/${owner}/${name}`,
+    connected: false,
+  });
+  const app = repo("acme", "app");
+  const docs = repo("acme", "docs");
+  const connectedApp: ConnectedRunRepository = {
+    host: "github.com",
+    owner: "Acme",
+    name: "App",
+    url: "https://github.com/Acme/App",
+    connected: true,
+    connectionId: "conn_app",
+  };
+  const checkout = (
+    path: string,
+    repository: RunRepository | null,
+  ): RunCheckout => ({
+    id: `chk_${path}`,
+    path,
+    branch: null,
+    headSha: null,
+    remoteDigest: null,
+    repository,
+    firstSeq: "1",
+    lastSeq: "9",
+  });
+
+  it("takes the repository the frame names, in the connection's spelling when the workspace holds one", () => {
+    expect(
+      resolveFrameRepository(acme, "/work/app", [], [connectedApp]),
+    ).toEqual({
+      host: "github.com",
+      owner: "Acme",
+      name: "App",
+      url: "https://github.com/Acme/App",
+      connected: true,
+    });
+  });
+
+  it("names an unconnected repository the frame names ahead of the checkout's, and matches no connection on another host", () => {
+    const enterprise: ConnectedRunRepository = {
+      ...connectedApp,
+      host: "github.example.com",
+      url: "https://github.example.com/acme/cli",
+      owner: "acme",
+      name: "cli",
+    };
+    expect(
+      resolveFrameRepository(
+        { owner: "acme", name: "cli" },
+        "/work/app",
+        [checkout("/work/app", app)],
+        [enterprise],
+      ),
+    ).toEqual({
+      host: "github.com",
+      owner: "acme",
+      name: "cli",
+      url: "https://github.com/acme/cli",
+      connected: false,
+    });
+  });
+
+  it("takes the one repository recorded at the frame's path before the run's", () => {
+    // The run recorded two repositories, so only the path can pick one.
+    expect(
+      resolveFrameRepository(
+        null,
+        "/work/docs",
+        [checkout("/work/app", app), checkout("/work/docs", docs)],
+        [],
+      ),
+    ).toEqual(docs);
+  });
+
+  it("falls back to the run's only repository, one repository however its URL is cased", () => {
+    expect(
+      resolveFrameRepository(
+        null,
+        "/elsewhere",
+        [
+          checkout("/work/app", app),
+          checkout("/work/app-2", {
+            ...app,
+            url: "https://github.com/ACME/App",
+          }),
+          checkout("/tmp", null),
+        ],
+        [],
+      ),
+    ).toEqual(app);
+  });
+
+  it("answers null when the path and the run each name several repositories or none (negative)", () => {
+    const two = [checkout("/work/app", app), checkout("/work/docs", docs)];
+    expect(resolveFrameRepository(null, "/elsewhere", two, [])).toBeNull();
+    // Two remotes recorded at one path pick neither.
+    expect(
+      resolveFrameRepository(
+        null,
+        "/work/app",
+        [checkout("/work/app", app), checkout("/work/app", docs)],
+        [],
+      ),
+    ).toBeNull();
+    expect(resolveFrameRepository(null, "/work/app", [], [])).toBeNull();
+    expect(
+      resolveFrameRepository(null, "/tmp", [checkout("/tmp", null)], []),
+    ).toBeNull();
+  });
+});
+
+describe("connectionOf", () => {
+  const connection: ConnectedRunRepository = {
+    host: "github.com",
+    owner: "Acme",
+    name: "App",
+    url: "https://github.com/Acme/App",
+    connected: true,
+    connectionId: "conn_app",
+  };
+
+  it("finds the connection a connected repository is read through, whatever the URL's case", () => {
+    expect(
+      connectionOf(
+        {
+          host: "github.com",
+          owner: "acme",
+          name: "app",
+          url: "https://github.com/acme/app",
+          connected: true,
+        },
+        [connection],
+      ),
+    ).toBe(connection);
+  });
+
+  it("reads nothing through a connection for a repository resolved as unconnected (negative)", () => {
+    expect(
+      connectionOf({ ...connection, connected: false }, [connection]),
+    ).toBeUndefined();
   });
 });

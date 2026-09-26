@@ -453,6 +453,25 @@ describe("the frames a finding cites (#4001)", () => {
     ]);
   });
 
+  it("stores the run's own frame before a subagent's at the same seq, whichever ran first", () => {
+    // A seq is a position on its own chain, so the run and a subagent can
+    // both cite seq 3. The subagent's call ran first here, so an order kept
+    // from the calls would list it first.
+    const r = run();
+    const [finding] = detect({
+      runs: [r],
+      toolCalls: [
+        bash(r, 1),
+        { ...bash(r, 2, SUBAGENT), seq: 3 },
+        bash(r, 3),
+      ],
+    });
+    expect(finding?.evidence.frames?.[r.runId]).toEqual({
+      seqs: [{ seq: "3" }, { seq: "3", sessionUuid: SUBAGENT }],
+      total: 2,
+    });
+  });
+
   it("stores no frames for a finding about a run's cache, which cites no call", () => {
     const r = run({
       cacheWriteMicros: 40_000n,

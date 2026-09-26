@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ConnectedRunRepository } from "./run-work";
 import {
   createIssueStateCache,
+  ISSUE_STATE_CACHE_MAX,
   type IssueTrackerDeps,
   readClosingIssues,
   readIssueStates,
@@ -122,6 +123,21 @@ describe("readIssueStates (#3970)", () => {
       t.deps,
     );
     expect(t.getIssues).toHaveBeenCalledTimes(2);
+  });
+
+  it("holds at most the cache's bound, dropping the oldest state first", async () => {
+    // The process cache lives as long as the server does, so its bound is
+    // what keeps a long-lived process from growing with every issue read.
+    const t = tracker();
+    for (let i = 0; i < ISSUE_STATE_CACHE_MAX; i += 1)
+      t.deps.cache.set(`old-${String(i)}`, { at: T0, found: null });
+    await readIssueStates(scope, [ask("a", 482)], [acme], t.deps);
+    expect(t.deps.cache.size).toBe(ISSUE_STATE_CACHE_MAX);
+    expect(t.deps.cache.has("old-0")).toBe(false);
+    expect(t.deps.cache.has("old-1")).toBe(true);
+    // The state just read is the one kept: a second load answers from it.
+    await readIssueStates(scope, [ask("a", 482)], [acme], t.deps);
+    expect(t.getIssues).toHaveBeenCalledOnce();
   });
 
   it("says why a state was not read: no connection, not GitHub (negative)", async () => {
