@@ -4253,10 +4253,10 @@ describe("two agents on one machine (ADR-202)", () => {
    * token with an enrollment of its own, and the OS hands out the next port
    * on each ask.
    */
-  async function twoAgents() {
+  async function twoAgents(findFreePort?: () => Promise<number>) {
     const d = deps();
     let next = 47123;
-    d.findFreePort = async () => next++;
+    d.findFreePort = findFreePort ?? (async () => next++);
     const first = await enroll(
       {
         token: "tok",
@@ -4390,6 +4390,14 @@ describe("two agents on one machine (ADR-202)", () => {
     expect(d.lines).toContain(
       `Agent       codex as acme.core.codex-agent in ${codex.root}`,
     );
+  });
+
+  it("steps a new agent's ports past the first agent's when the OS keeps offering them", async () => {
+    // The OS answers with the first agent's collector port every time. The
+    // first agent holds 47123 and its model proxy 47124, so the second gets
+    // 47125 and 47126.
+    const { codex } = await twoAgents(async () => 47123);
+    expect(readHostFile(codex.hostFile)?.port).toBe(47125);
   });
 
   it("unenrolls one agent by its harness and keeps the other", async () => {

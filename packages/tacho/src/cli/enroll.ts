@@ -477,12 +477,18 @@ export function harnessFileProblems(
  */
 async function portClearOfSlots(deps: CliDeps): Promise<number> {
   const taken = portsInUse(rootPathsOf(deps), deps.paths.root);
+  const clear = (port: number) =>
+    !taken.has(port) && !taken.has(modelProxyPortFor({ port }));
   let port = await deps.findFreePort();
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    if (!taken.has(port) && !taken.has(modelProxyPortFor({ port })))
-      return port;
+    if (clear(port)) return port;
     port = await deps.findFreePort();
   }
+  // The OS kept offering ports another agent holds. Returning the last one
+  // put two agents on one port. Step past them instead: each slot holds two
+  // ports, so a clear pair is a few ports away. The OS answer was only a
+  // hint anyway, since nothing reserves a port until tachod listens on it.
+  while (!clear(port)) port = port < 65535 ? port + 1 : 1024;
   return port;
 }
 
