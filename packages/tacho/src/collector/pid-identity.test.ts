@@ -377,7 +377,7 @@ describe("readProcessStarts", () => {
   );
 
   it.runIf(process.platform === "darwin")(
-    "reads this process's start time from a real ps, in UTC",
+    "reads this process's start time from a real ps, in UTC and the C locale",
     () => {
       const started = readProcessStarts([process.pid])?.get(process.pid);
       expect(started).toBeDefined();
@@ -385,6 +385,8 @@ describe("readProcessStarts", () => {
         .mocked(spawnSync)
         .mock.calls.find(([command]) => command === "ps");
       expect(call?.[2]?.env?.["TZ"]).toBe("UTC");
+      expect(call?.[2]?.env?.["LC_ALL"]).toBe("C");
+      expect(call?.[2]?.env?.["LANG"]).toBe("C");
       const at = Date.parse(`${started} UTC`);
       const expected = Date.now() - process.uptime() * 1_000;
       expect(Math.abs(at - expected)).toBeLessThan(5_000);

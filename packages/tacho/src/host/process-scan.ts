@@ -51,12 +51,13 @@ export function listClaudeProcesses(exec: Exec): ClaudeProcess[] {
 const PROCESS_START_TIMEOUT_MS = 2_000;
 
 /**
- * `ps` prints `lstart` in its own time zone. A laptop that changes zone
- * while the daemon runs would print a different string for the same
- * process, and every session would read as a new process, so the zone is
- * pinned to UTC.
+ * `ps` prints `lstart` in its own time zone and locale. A laptop that
+ * changes zone while the daemon runs, or a daemon restarted from a shell
+ * with a different `LANG` than the service manager's, would print a
+ * different string for the same process, and every session would read as a
+ * new process. The zone is pinned to UTC and the locale to C.
  */
-const PS_ENV = { ...process.env, TZ: "UTC" };
+const PS_ENV = { ...process.env, TZ: "UTC", LC_ALL: "C", LANG: "C" };
 
 function psExec(command: string, args: string[]): ReturnType<Exec> {
   const result = spawnSync(command, args, {
