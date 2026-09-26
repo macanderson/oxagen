@@ -164,9 +164,11 @@ const MAX_SERVER_REQUESTED_WAIT_MS = 5 * 60_000;
  * Whether a refusal says the control plane holds this session under another
  * host. Re-enrolling mid-session does it: the live session keeps recording,
  * its new events carry the new enrollment id, and the session row still
- * names the old host. The ingest route answers 403 for the whole batch, and
- * no retry changes the owner. Matched on the route's message, which
- * `tacho.events.ingest.ts` keeps in step with this string.
+ * names the old host. So does a session uuid another workspace holds, and a
+ * chain whose root or parent session another host holds. The ingest route
+ * answers 403 for the whole batch, and no retry changes the owner. Matched
+ * on the route's message, which `tacho.events.ingest.ts` keeps in step with
+ * this string.
  */
 const SESSION_OWNED_ELSEWHERE = "session belongs to another host";
 function sessionOwnedElsewhere(error: ControlError): boolean {

@@ -443,6 +443,9 @@ function fakeDb(): FakeDb {
         workspaceId: CONTEXT.workspaceId,
         status: "active",
         mode: "observe",
+        // The key the fixture's frames carry, as a real host's daemon stamps
+        // its own enrollment's key on every frame.
+        agentKey: "acme.core.cc-laptop",
         // No gateway call has ever been authorised for this host. The default,
         // because it is the honest one: a tier may only rise on evidence the
         // control plane holds, and by default it holds none.
@@ -701,8 +704,14 @@ function wire(db: FakeDb): void {
               // A read returns VALUES, not a live handle on the row — which is
               // the whole reason `existing` can be stale. Snapshotting here is
               // what lets the fixture model a concurrent commit landing
-              // between the read and the write.
-              const snapshot = { ...row };
+              // between the read and the write. A row the case seeded without
+              // a lineage is a root session, as ingest's genesis row for a
+              // root is.
+              const snapshot = {
+                rootSessionUuid: row["sessionUuid"],
+                parentSessionUuid: null,
+                ...row,
+              };
               if (db.advanceSeqCountOnRead !== undefined) {
                 row["seqCount"] = db.advanceSeqCountOnRead;
                 db.advanceSeqCountOnRead = undefined;
@@ -3829,12 +3838,16 @@ describe("proof.observed frames (ADR-064)", () => {
       toolBodyFrames: 0,
       enforcementTier: "observe",
       sealedAt: new Date("2026-09-08T10:06:02.000Z"),
+      rootSessionUuid,
       parentSessionUuid,
     });
     return sealEvent(
       {
         ...unsealed("proof.observed", FLIP),
         root_session_uuid: rootSessionUuid,
+        ...(parentSessionUuid === null
+          ? {}
+          : { parent_session_uuid: parentSessionUuid }),
       },
       genesis.next,
     ).event;
@@ -3961,6 +3974,173 @@ describe("proof.observed frames (ADR-064)", () => {
     ]);
     expect(mocks.recordProofFrames).not.toHaveBeenCalled();
     expect(mocks.sendEvent).not.toHaveBeenCalled();
+  });
+
+  // #3944, S-09: the producer named the root, parent and agent key, and ingest
+  // routed proof frames, reopens and rollups by whatever a batch said.
+  describe("the run a chain belongs to (#3944, S-09)", () => {
+    const OTHER_HOST_ID = "66666666-6666-4666-8666-666666666666";
+    const OTHER_ROOT = "77777777-7777-4777-8777-777777777777";
+    const OTHER_RUN = "tse_fake0000000000000other";
+
+    /** A root session another live host in this workspace recorded. */
+    function otherHostsRoot(db: FakeDb, hostOverrides = {}) {
+      db.hosts.push({
+        ...(db.hosts[0] as Record<string, unknown>),
+        id: OTHER_HOST_ID,
+        publicId: "tch_otherhost0000000000000",
+        apiKeyId: "aky_other",
+        agentKey: "acme.core.other",
+        deviceKeyFingerprint: `sha256:${"f".repeat(64)}`,
+        ...hostOverrides,
+      });
+      db.sessions.set(OTHER_ROOT, {
+        id: "s-other",
+        publicId: OTHER_RUN,
+        sessionUuid: OTHER_ROOT,
+        hostId: OTHER_HOST_ID,
+        seqCount: 4,
+        sealedAt: new Date("2026-09-08T10:00:00.000Z"),
+        rootSessionUuid: OTHER_ROOT,
+        parentSessionUuid: null,
+      });
+    }
+
+    /** This host's session, one frame long, recorded under `root`. */
+    function recordedChain(db: FakeDb, root: string, parent: string | null) {
+      const genesis = sealEvent(
+        unsealed("agent_start", { session_start_source: "startup" }),
+        GENESIS_CURSOR,
+      );
+      db.sessions.set(SESSION, {
+        id: "s1",
+        publicId: RUN,
+        sessionUuid: SESSION,
+        hostId: HOST_ID,
+        seqCount: 1,
+        lastHash: genesis.event.hash,
+        chainVerified: true,
+        telemetryGapCount: 0,
+        numToolCalls: 0,
+        contentFrames: 0,
+        bodyFrames: 0,
+        toolBodyFrames: 0,
+        enforcementTier: "observe",
+        sealedAt: null,
+        rootSessionUuid: root,
+        parentSessionUuid: parent,
+      });
+      return genesis.next;
+    }
+
+    /** A new chain whose frames name `root` as both root and parent. */
+    function subagentOf(root: string): TachoEvent[] {
+      let cursor: ChainCursor = GENESIS_CURSOR;
+      return [
+        unsealed("agent_start", { session_start_source: "startup" }),
+        unsealed("turn_start", { prompt_length: 3 }),
+      ].map((draft) => {
+        const sealed = sealEvent(
+          { ...draft, root_session_uuid: root, parent_session_uuid: root },
+          cursor,
+        );
+        cursor = sealed.next;
+        return sealed.event;
+      });
+    }
+
+    it("records a proof frame under the run its chain opened with, whatever root the frame names", async () => {
+      const db = fakeDb();
+      wire(db);
+      otherHostsRoot(db);
+      const cursor = recordedChain(db, SESSION, null);
+      const proof = sealEvent(
+        { ...unsealed("proof.observed", FLIP), root_session_uuid: OTHER_ROOT },
+        cursor,
+      ).event;
+      mocks.recordProofFrames.mockResolvedValue({
+        written: 1,
+        witnessRunIds: [],
+      });
+      await tachoEventsIngestHandler(batch([proof]), CONTEXT);
+      expect(mocks.recordProofFrames).toHaveBeenCalledOnce();
+      expect(mocks.recordProofFrames.mock.calls[0]?.[2]).toBe(RUN);
+    });
+
+    it("refuses a proof frame whose chain's root another host holds", async () => {
+      const db = fakeDb();
+      wire(db);
+      otherHostsRoot(db);
+      // This host's subagent chain landed first. Another host then recorded
+      // a root under the uuid the chain names.
+      const cursor = recordedChain(db, OTHER_ROOT, OTHER_ROOT);
+      const proof = sealEvent(
+        {
+          ...unsealed("proof.observed", FLIP),
+          root_session_uuid: OTHER_ROOT,
+          parent_session_uuid: OTHER_ROOT,
+        },
+        cursor,
+      ).event;
+      await expect(
+        tachoEventsIngestHandler(batch([proof]), CONTEXT),
+      ).rejects.toThrow(/session belongs to another host/);
+      expect(mocks.recordProofFrames).not.toHaveBeenCalled();
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    });
+
+    it("refuses a new chain whose root another host holds, and writes none of it", async () => {
+      const db = fakeDb();
+      wire(db);
+      otherHostsRoot(db);
+      await expect(
+        tachoEventsIngestHandler(batch(subagentOf(OTHER_ROOT)), CONTEXT),
+      ).rejects.toThrow(/session belongs to another host/);
+      expect(db.sessions.has(SESSION)).toBe(false);
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    });
+
+    it("opens a chain whose root a revoked predecessor of this host holds (negative)", async () => {
+      const db = fakeDb();
+      wire(db);
+      // The same machine enrolled before in this workspace, and was revoked.
+      otherHostsRoot(db, {
+        status: "revoked",
+        deviceKeyFingerprint: DEVICE_KEY,
+      });
+      await tachoEventsIngestHandler(batch(subagentOf(OTHER_ROOT)), CONTEXT);
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        rootSessionUuid: OTHER_ROOT,
+        parentSessionUuid: OTHER_ROOT,
+      });
+    });
+
+    it("files a new session under the host's agent key, not the key its frames carry", async () => {
+      const db = fakeDb();
+      wire(db);
+      const forged = sealEvent(
+        unsealed(
+          "agent_start",
+          { session_start_source: "startup" },
+          "hook",
+          CLAUDE_CODE,
+          {
+            agent: {
+              agent_key: "acme.core.someone-else",
+              fleet_id: "wrk_1",
+              ...CLAUDE_CODE,
+              wrapper_version: "2.1.1",
+              host_enrollment_id: HOST_PUBLIC,
+            },
+          },
+        ),
+        GENESIS_CURSOR,
+      ).event;
+      await tachoEventsIngestHandler(batch([forged]), CONTEXT);
+      expect(db.sessions.get(SESSION)?.["agentKey"]).toBe(
+        "acme.core.cc-laptop",
+      );
+    });
   });
 
   it("records a frame whose proof body the schema refuses, skips only its verdict, and says so", async () => {

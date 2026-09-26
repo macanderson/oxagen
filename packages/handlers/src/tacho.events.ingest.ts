@@ -30,8 +30,9 @@
 // billing, so a batch refused at any step leaves its commands queued.
 //
 // Proof (ADR-064): each fresh `proof.observed` frame writes its verdict row
-// (lib/proof.ts) under the run it is part of, the root session named by its
-// `root_session_uuid`, whichever session's chain carried it. A verdict reaching
+// (lib/proof.ts) under the run it is part of: the root session its chain's
+// row recorded at genesis, whichever session's chain carried it, and only a
+// root this host (or a predecessor it succeeds) holds. A verdict reaching
 // a root sealed before it asks the rollup for the run's row again, so the row
 // carries it. A proof body the run-evidence schema refuses is still recorded
 // as a frame; only its verdict row is skipped, and `proof_rejections` names it.
@@ -912,7 +913,10 @@ function genesisRow(
     sessionUuid: first.session_uuid,
     harnessSessionId: first.session_id,
     hostId: host.id,
-    agentKey: first.agent.agent_key,
+    // The host's own key, never the batch's. Spend and runs group by this
+    // column (`_agent-identity.ts`), so a key the producer chose would file
+    // its work under another agent (#3944, S-09).
+    agentKey: host.agentKey,
     // The registered agent the host enrolled as (enroll_host, #2967); null
     // for an operator-enrolled host.
     agentId: host.agentId,
@@ -1439,6 +1443,27 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     // closed them for silence.
     const batchRootUuids = new Set<string>();
     const subagentReportedRootUuids = new Set<string>();
+    // The root each session in the batch belongs to, as its row records it.
+    const sessionRoots = new Map<string, string>();
+    // Whether a session row's host is this host, or an earlier enrollment of
+    // the same machine that this host succeeds (ADR-179). A root or parent
+    // session held by any other host is not this batch's to name.
+    const heldHere = new Map<string, boolean>();
+    const isHeldHere = async (
+      hostId: string | null | undefined,
+    ): Promise<boolean> => {
+      if (hostId === host.id) return true;
+      if (!hostId) return false;
+      let held = heldHere.get(hostId);
+      if (held === undefined) {
+        const holder = (await readSuccessionHosts(tx, "id", [hostId])).get(
+          hostId,
+        );
+        held = holder !== undefined && succeedsHost(holder, host);
+        heldHere.set(hostId, held);
+      }
+      return held;
+    };
     // The batch's fresh `proof.observed` frames, by the root session they belong to.
     const proofsByRoot = new Map<string, TachoEvent[]>();
     // Who each session's tool calls are billed to, read off the rows this
@@ -1488,7 +1513,6 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     for (const [sessionUuid, events] of bySession) {
       events.sort((a, b) => a.seq - b.seq);
       const first = events[0] as TachoEvent;
-      batchRootUuids.add(first.root_session_uuid);
       const last = events[events.length - 1] as TachoEvent;
       const existing = await tx.query.tachoSessions.findFirst({
         where: eq(schema.tachoSessions.sessionUuid, sessionUuid),
@@ -1518,6 +1542,9 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           // The session's own server-clock birth. A gateway call the control
           // plane served before this chain existed is not evidence about it.
           createdAt: true,
+          // The run the chain belongs to, fixed at genesis (#3944, S-09).
+          rootSessionUuid: true,
+          parentSessionUuid: true,
         },
       });
       // The collector's Shipper matches this message to set the session
@@ -1547,6 +1574,58 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         }
         succeeds = true;
       }
+
+      // The run this chain belongs to (#3944, S-09). The producer names its
+      // root and parent on every frame, and ingest used to route proof
+      // frames, reopens and rollups by whatever the batch said, so a later
+      // batch could attach frames to another host's run. The row's values,
+      // fixed at genesis, decide now. A batch that names others is still
+      // recorded, since its frames are hashed as sent, and is logged.
+      const lineage = existing
+        ? {
+            root: existing.rootSessionUuid,
+            parent: existing.parentSessionUuid ?? null,
+          }
+        : {
+            root: first.root_session_uuid,
+            parent: first.parent_session_uuid ?? null,
+          };
+      if (
+        events.some(
+          (event) =>
+            event.root_session_uuid !== lineage.root ||
+            (event.parent_session_uuid ?? null) !== lineage.parent,
+        )
+      ) {
+        logger.warn(
+          {
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            hostId: host.id,
+            sessionUuid,
+          },
+          "tacho.events.ingest: a batch named a root or parent session its chain did not open with; the recorded ones stand",
+        );
+      }
+      // A new chain may name a root or parent this workspace has recorded
+      // only when this host, or a predecessor it succeeds, holds it. The
+      // shipper matches the message and sets the session aside.
+      if (!existing) {
+        for (const named of new Set([lineage.root, lineage.parent])) {
+          if (named === null || named === sessionUuid) continue;
+          const recorded = await tx.query.tachoSessions.findFirst({
+            where: eq(schema.tachoSessions.sessionUuid, named),
+            columns: { hostId: true },
+          });
+          if (recorded !== undefined && !(await isHeldHere(recorded.hostId)))
+            throw tachoDenied(
+              capability,
+              "Forbidden: session belongs to another host: its root or parent session is recorded under another host",
+            );
+        }
+      }
+      batchRootUuids.add(lineage.root);
+      sessionRoots.set(sessionUuid, lineage.root);
 
       let ok = true;
       let breakSeq: number | null = null;
@@ -2166,9 +2245,9 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         for (const event of fresh) {
           if (event.kind !== PROOF_OBSERVED_KIND) continue;
           if (refusedProofs.has(event.event_id_idem)) continue;
-          const frames = proofsByRoot.get(event.root_session_uuid) ?? [];
+          const frames = proofsByRoot.get(lineage.root) ?? [];
           frames.push(event);
-          proofsByRoot.set(event.root_session_uuid, frames);
+          proofsByRoot.set(lineage.root, frames);
         }
         if (delta.totalCostMicros > 0)
           batchSpendMicros += BigInt(delta.totalCostMicros);
@@ -2180,9 +2259,9 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           delta.totalCostMicros > 0 ||
           "sealedAt" in reopen
         )
-          progressedRootUuids.add(first.root_session_uuid);
-        if (fresh.length > 0 && first.root_session_uuid !== sessionUuid)
-          subagentReportedRootUuids.add(first.root_session_uuid);
+          progressedRootUuids.add(lineage.root);
+        if (fresh.length > 0 && lineage.root !== sessionUuid)
+          subagentReportedRootUuids.add(lineage.root);
       }
       if (
         accepted &&
@@ -2213,7 +2292,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           eq(schema.tachoSessions.sessionUuid, rootSessionUuid),
           isNull(schema.tachoSessions.parentSessionUuid),
         ),
-        columns: { publicId: true, sealedAt: true },
+        columns: { publicId: true, sealedAt: true, hostId: true },
       });
       if (!root)
         throw new HandlerError({
@@ -2221,6 +2300,13 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           reason: "root_session_unrecorded",
           message: `proof frames name root session ${rootSessionUuid}, which this workspace has not recorded`,
         });
+      // A verdict lands on a run this host recorded, and on no other host's
+      // (#3944, S-09).
+      if (!(await isHeldHere(root.hostId)))
+        throw tachoDenied(
+          capability,
+          "Forbidden: session belongs to another host: its root session is recorded under another host",
+        );
       // Attempts are numbered in the order the frames were observed, across
       // the root's chain and its subagents' chains.
       frames.sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
@@ -2234,10 +2320,38 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       rollupRoots.push(...proofs.witnessRunIds);
     }
 
+    // The public id of every root the batch touched. An open root's row is
+    // its running estimate. A root this batch sealed is left to
+    // `cost/run.sealed`. A root sealed earlier is rolled up again too: a
+    // subagent's chain, or a harness that carried on after the daemon's sweep
+    // sealed it, can land frames after the seal's rollup, and nothing else
+    // would ever count them. One read per root, like the proof loop above: a
+    // batch names one or two.
+    //
+    // Only a root this host holds, or a predecessor it succeeds held (#3944,
+    // S-09). Every use below (the reopen, the rollups, the run's name, the
+    // ledger's run) reads this map, so none of them reaches another host's
+    // run.
+    const rootIds = new Map<string, string>();
+    for (const rootSessionUuid of batchRootUuids) {
+      const root = await tx.query.tachoSessions.findFirst({
+        where: and(
+          eq(schema.tachoSessions.orgId, ctx.orgId),
+          eq(schema.tachoSessions.workspaceId, ctx.workspaceId),
+          eq(schema.tachoSessions.sessionUuid, rootSessionUuid),
+          isNull(schema.tachoSessions.parentSessionUuid),
+        ),
+        columns: { publicId: true, hostId: true },
+      });
+      if (root && (await isHeldHere(root.hostId)))
+        rootIds.set(rootSessionUuid, root.publicId);
+    }
+
     // A run is one piece of work across its chains. When a subagent reports,
     // a root the control plane closed for silence was not done, so it is
     // reopened too, conditional on the close still standing.
     for (const rootSessionUuid of subagentReportedRootUuids) {
+      if (!rootIds.has(rootSessionUuid)) continue;
       const reopened = await tx
         .update(schema.tachoSessions)
         .set({ ...IDLE_CLOSE_UNDONE, updatedAt: now })
@@ -2255,27 +2369,6 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         )
         .returning({ id: schema.tachoSessions.id });
       if (reopened.length > 0) progressedRootUuids.add(rootSessionUuid);
-    }
-
-    // The public id of every root the batch touched. An open root's row is
-    // its running estimate. A root this batch sealed is left to
-    // `cost/run.sealed`. A root sealed earlier is rolled up again too: a
-    // subagent's chain, or a harness that carried on after the daemon's sweep
-    // sealed it, can land frames after the seal's rollup, and nothing else
-    // would ever count them. One read per root, like the proof loop above: a
-    // batch names one or two.
-    const rootIds = new Map<string, string>();
-    for (const rootSessionUuid of batchRootUuids) {
-      const root = await tx.query.tachoSessions.findFirst({
-        where: and(
-          eq(schema.tachoSessions.orgId, ctx.orgId),
-          eq(schema.tachoSessions.workspaceId, ctx.workspaceId),
-          eq(schema.tachoSessions.sessionUuid, rootSessionUuid),
-          isNull(schema.tachoSessions.parentSessionUuid),
-        ),
-        columns: { publicId: true },
-      });
-      if (root) rootIds.set(rootSessionUuid, root.publicId);
     }
 
     // Name each run whose first prompt this batch carries, and remember it so
@@ -2379,17 +2472,6 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     // tool call Tacho recorded and an action the kernel recorded for the same
     // agent group together. Read only when the batch has something to bill.
     if (input.events.some(isBillableToolCall)) {
-      const rootRuns = new Map<string, string | null>();
-      for (const root of new Set(rootUuids.values())) {
-        const row = await tx.query.tachoSessions.findFirst({
-          where: and(
-            eq(schema.tachoSessions.sessionUuid, root),
-            isNull(schema.tachoSessions.parentSessionUuid),
-          ),
-          columns: { publicId: true },
-        });
-        rootRuns.set(root, row?.publicId ?? null);
-      }
       const agent = host.agentId
         ? await tx.query.agents.findFirst({
             where: eq(schema.agents.id, host.agentId),
@@ -2402,8 +2484,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         attribution.set(sessionUuid, {
           ...entry,
           agentId,
-          runId:
-            root === undefined ? entry.runId : (rootRuns.get(root) ?? null),
+          runId: root === undefined ? entry.runId : (rootIds.get(root) ?? null),
         });
       }
     }
@@ -2446,6 +2527,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       sealedRoots,
       progressRoots,
       rootIds,
+      sessionRoots,
       promptedRuns,
     };
   });
@@ -2551,7 +2633,8 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
   for (const event of input.events) {
     if (event.kind !== "llm_call" && event.kind !== "tool_call") continue;
     if (!resent.missing.has(event.event_id_idem)) continue;
-    const runId = result.rootIds.get(event.root_session_uuid);
+    const root = result.sessionRoots.get(event.session_uuid);
+    const runId = root === undefined ? undefined : result.rootIds.get(root);
     if (runId !== undefined && !rollupRoots.has(runId))
       progressRoots.add(runId);
   }
