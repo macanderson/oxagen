@@ -8,6 +8,8 @@
  */
 import { readHostFile } from "../host/host-file";
 import { acquireInstallLock } from "../host/install-lock";
+import type { TachoPaths } from "../host/paths";
+import { describeSlot, enrolledSlots, type Slot } from "../host/slots";
 import type { TachoHarness } from "../wire";
 import {
   type CliDeps,
@@ -20,7 +22,14 @@ import {
   rootRefusal,
   type RunsAs,
 } from "./enroll";
-import { revokeAndMark, stopGateway, stripEnrollmentHooks } from "./unenroll";
+import { depsForSlot } from "./slot-deps";
+import {
+  restartForRemaining,
+  revokeAndMark,
+  serviceInstalled,
+  stopGateway,
+  stripEnrollmentHooks,
+} from "./unenroll";
 
 export interface ReassignOptions extends CredentialOptions {
   /** Keep the current harness list (default) or replace it. */
@@ -58,10 +67,57 @@ export async function reassign(
     return { ok: false, warnings: [] };
   }
   try {
-    return await reassignLocked(options, deps);
+    const target = reassignTarget(deps.paths, options.harnesses);
+    if ("refused" in target) {
+      deps.err(target.refused);
+      return { ok: false, warnings: [] };
+    }
+    const installed = serviceInstalled(deps);
+    const result = await reassignLocked(options, depsForSlot(deps, target));
+    // A reassign that failed after the revoke removed the one service, and
+    // with it every other agent's collector.
+    const restart = restartForRemaining(installed, deps);
+    return restart === undefined
+      ? result
+      : { ...result, ok: false, warnings: [...result.warnings, restart] };
   } finally {
     lock.release();
   }
+}
+
+/**
+ * The enrollment a reassign moves (ADR-202). The one on the machine when
+ * there is one. With more than one, the one whose harnesses `--harness`
+ * names: the flag replaces the harness list, and naming at least one of the
+ * agent's own harnesses says which agent. Refused when it names none, or
+ * names harnesses of two agents.
+ */
+export function reassignTarget(
+  root: TachoPaths,
+  harnesses: readonly TachoHarness[] | undefined,
+): Slot | { refused: string } {
+  const present = enrolledSlots(root);
+  const [only] = present;
+  if (present.length <= 1)
+    return only ?? { harness: undefined, paths: root, host: undefined };
+  const listed = present.map(describeSlot).join("; ");
+  if (harnesses === undefined)
+    return {
+      refused: `This machine holds ${present.length} enrollments: ${listed}. Pass --harness with the harnesses of the one to reassign.`,
+    };
+  const named: readonly string[] = harnesses;
+  const matching = present.filter(
+    (slot) =>
+      slot.host?.harnesses.some((harness) => named.includes(harness)) === true,
+  );
+  const [match] = matching;
+  if (match !== undefined && matching.length === 1) return match;
+  return {
+    refused:
+      matching.length === 0
+        ? `No enrollment on this machine hooks ${harnesses.join(", ")}. It holds ${listed}. Run \`tacho enroll --harness ${harnesses.join(",")}\` to enroll another agent.`
+        : `--harness names the harnesses of more than one agent: ${matching.map(describeSlot).join("; ")}. Reassign one agent at a time.`,
+  };
 }
 
 async function reassignLocked(

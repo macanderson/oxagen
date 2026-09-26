@@ -10,6 +10,7 @@
  */
 import { request } from "node:http";
 import { readHostFile } from "../host/host-file";
+import { slotHolding } from "../host/slots";
 import type { CliDeps } from "./deps";
 
 /** The agent names this command accepts, and the harness each one is. */
@@ -140,7 +141,10 @@ export async function runContained(
     );
     return 2;
   }
-  const host = readHostFile(deps.paths.hostFile);
+  // The run goes to the collector of the agent that hooks this harness, so
+  // it lands under that agent's key when the machine holds more than one.
+  const paths = slotHolding(deps.paths, harness)?.paths ?? deps.paths;
+  const host = readHostFile(paths.hostFile);
   if (host === undefined) {
     deps.err("This machine is not enrolled. Run `tacho enroll` first.");
     return 1;
@@ -178,7 +182,7 @@ export async function runContained(
     status = await stream({
       ...(deps.platform === "win32"
         ? { loopbackPort: host.port }
-        : { socketPath: deps.paths.socket }),
+        : { socketPath: paths.socket }),
       token: host.local_token,
       body,
       ...(deps.signal !== undefined ? { signal: deps.signal } : {}),

@@ -545,7 +545,10 @@ export async function unenroll(
         ),
       );
     }
-    return restartForRemaining(installed, result, deps);
+    const restart = restartForRemaining(installed, deps);
+    return restart === undefined
+      ? result
+      : { ...result, ok: false, warnings: [...result.warnings, restart] };
   } finally {
     lock.release();
     // Nothing of ours left in it: the directory goes too, so a machine that
@@ -588,7 +591,7 @@ export function unenrollTarget(
   };
 }
 
-function serviceInstalled(deps: CliDeps): boolean {
+export function serviceInstalled(deps: CliDeps): boolean {
   try {
     return deps.serviceManager.status().installed;
   } catch {
@@ -598,19 +601,19 @@ function serviceInstalled(deps: CliDeps): boolean {
 
 /**
  * Put the service back for the agents that are still enrolled. One tachod
- * serves every slot (ADR-202), so the unenroll above stopped the other
- * agents' collectors and model proxies with its own, and they are down
- * until this starts it again. The command is this binary's, as `enroll`
- * installs it.
+ * serves every slot (ADR-202), so an unenroll or a failed reassign that
+ * removed the service stopped the other agents' collectors and model
+ * proxies with its own, and they are down until this starts it again. The
+ * command is this binary's, as `enroll` installs it. `deps` are the root's.
+ * Returns a warning when the service could not be started again.
  */
-function restartForRemaining(
+export function restartForRemaining(
   installed: boolean,
-  result: UnenrollResult,
   deps: CliDeps,
-): UnenrollResult {
+): string | undefined {
   const remaining = listSlots(deps.paths).filter(slotIsLive);
   if (!installed || remaining.length === 0 || serviceInstalled(deps))
-    return result;
+    return undefined;
   const agents = remaining.map((slot) => slot.host.agent_key).join(", ");
   deps.out(
     `Starting the ${deps.serviceManager.kind} service again for ${agents}`,
@@ -619,11 +622,11 @@ function restartForRemaining(
     deps.serviceManager.install(
       daemonServiceSpec(deps.runtime.daemonCommand, deps),
     );
-    return result;
+    return undefined;
   } catch (error) {
     const warning = `the service could not be started again, so ${agents} ${remaining.length === 1 ? "has" : "have"} no collector or model proxy: ${error instanceof Error ? error.message : String(error)}. Run \`tacho enroll\` for one of them to install it again`;
     deps.err(`warning: ${warning}`);
-    return { ...result, ok: false, warnings: [...result.warnings, warning] };
+    return warning;
   }
 }
 

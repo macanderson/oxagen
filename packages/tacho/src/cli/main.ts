@@ -310,7 +310,12 @@ export function buildTachoProgram(): Command {
       );
       // A host whose events are not reaching Oxagen is not working, whatever
       // else is installed, so a script or the installer can gate on this.
-      if (!report.enrolled || report.shipping?.healthy === false)
+      // Every agent on the machine counts, not only the first.
+      const reports = [report, ...(report.enrollments ?? [])];
+      if (
+        !report.enrolled ||
+        reports.some((entry) => entry.shipping?.healthy === false)
+      )
         process.exitCode = 1;
     });
 
@@ -358,7 +363,7 @@ export function buildTachoProgram(): Command {
     .option("--api-url <url>", "Oxagen API base URL")
     .option(
       "--harness <list>",
-      "Replace the harness list (default: keep the current one)",
+      "Replace the harness list (default: keep the current one). On a machine with more than one agent, it also names the agent to reassign",
     )
     .option("--reason <text>", "Reason recorded with the revoke")
     .option("--allow-root", "Reassign even when running as root")

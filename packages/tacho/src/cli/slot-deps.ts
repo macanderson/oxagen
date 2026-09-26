@@ -7,7 +7,7 @@
  */
 import { withRecordedHarnessFiles } from "../host/host-file";
 import type { TachoPaths } from "../host/paths";
-import { slotHolding } from "../host/slots";
+import { type Slot, slotHolding } from "../host/slots";
 import type { CliDeps } from "./deps";
 
 export function slotDeps<D extends CliDeps>(deps: D, paths: TachoPaths): D {
@@ -34,7 +34,15 @@ export function slotDeps<D extends CliDeps>(deps: D, paths: TachoPaths): D {
  */
 export function depsForHarness<D extends CliDeps>(deps: D, harness: string): D {
   const slot = slotHolding(rootPathsOf(deps), harness);
-  return slot === undefined
+  return slot === undefined ? deps : depsForSlot(deps, slot);
+}
+
+/**
+ * `deps` bound to `slot`, with the harness files its enroll recorded. The
+ * root slot is `deps` itself, whose harness files the CLI already overlaid.
+ */
+export function depsForSlot<D extends CliDeps>(deps: D, slot: Slot): D {
+  return slot.harness === undefined
     ? deps
     : slotDeps(deps, withRecordedHarnessFiles(slot.paths, slot.host));
 }
