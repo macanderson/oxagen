@@ -46,7 +46,10 @@ export function WaitingTile({
       node: t("unread", { code: w.approvalsUnread }),
     });
   } else if (w.oldest === null) {
-    clauses.push({ key: "none", node: t("none") });
+    // "Nothing is waiting" is a claim about both queues. With the questions
+    // unread the page cannot make it, so the unread clause below stands alone.
+    if (w.interjectionsUnread === null)
+      clauses.push({ key: "none", node: t("none") });
   } else {
     const { since, windowSeconds, kind } = w.oldest;
     const clock = () => <Clock at={since} now={now} direction="since" />;

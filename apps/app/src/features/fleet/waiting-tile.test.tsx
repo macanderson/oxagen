@@ -90,6 +90,20 @@ describe("WaitingTile", () => {
     expect(tile).not.toHaveTextContent("open the drawer");
   });
 
+  // With no approval parked and the questions unread, the tile cannot say
+  // nothing is waiting: it drew "0+ nothing is waiting" before this fix.
+  it("does not say nothing is waiting when the questions were not read (negative)", () => {
+    const tile = show({
+      approvals: approvalQueue([]),
+      interjections: DENIED,
+      now: NOW,
+    });
+    expect(tile).toHaveTextContent(
+      "Waiting on a human0+interjections not read: workspace.read · open the drawer",
+    );
+    expect(tile).not.toHaveTextContent("nothing is waiting");
+  });
+
   it("says nothing is waiting with no approval and no question", () => {
     const tile = show({
       approvals: approvalQueue([]),
