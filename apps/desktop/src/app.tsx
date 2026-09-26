@@ -71,6 +71,7 @@ import {
   deregisterArgs,
   deregisterNeedsSession,
   describeCliInstall,
+  detectedMeta,
   enforcementText,
   enrollArgs,
   HARNESS_LABEL,
@@ -81,6 +82,7 @@ import {
   needsWorkspacePick,
   pendingChange,
   reassignArgs,
+  registrable,
   isConnected,
   type SessionView,
   sessionLanded,
@@ -1267,14 +1269,16 @@ export function App() {
                     {detected.harnesses.map((d) => (
                       <div
                         key={d.harness}
-                        className={`agent ${d.installed ? "" : "absent"}`}
+                        className={`agent ${registrable(d) ? "" : "absent"}`}
                       >
-                        <label className={`check ${d.installed ? "" : "off"}`}>
+                        <label
+                          className={`check ${registrable(d) ? "" : "off"}`}
+                        >
                           <input
                             type="checkbox"
                             id={`register-${d.harness}`}
                             checked={(registration ?? []).includes(d.harness)}
-                            disabled={!d.installed || busy !== null}
+                            disabled={!registrable(d) || busy !== null}
                             onChange={(e) =>
                               setRegistration((prev) => {
                                 const list = prev ?? [];
@@ -1286,11 +1290,7 @@ export function App() {
                           />
                           <span className="name">{d.label}</span>
                         </label>
-                        <span className="meta">
-                          {d.installed
-                            ? `${d.version ?? "installed"} · ${d.path}`
-                            : "not found on this machine"}
-                        </span>
+                        <span className="meta">{detectedMeta(d)}</span>
                       </div>
                     ))}
                   </div>

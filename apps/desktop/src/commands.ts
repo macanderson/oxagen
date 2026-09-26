@@ -409,11 +409,56 @@ export function wizardStep(input: {
   return input.outcomeSeen ? 5 : 4;
 }
 
-/** Default selection for step 3: every installed harness, none of the absent ones. */
+/**
+ * Default selection for step 3: every installed harness, none of the absent
+ * ones. A harness the scan did not find stays unticked even when it can be
+ * covered anyway (see `registrable`): the person may not have it, so they
+ * tick it themselves.
+ */
 export function defaultRegistration(
   detected: ReadonlyArray<{ harness: Harness; installed: boolean }>,
 ): Harness[] {
   return detected.filter((d) => d.installed).map((d) => d.harness);
+}
+
+/** What the wizard reads from one `tacho detect` entry. */
+export interface DetectedRow {
+  installed: boolean;
+  path?: string;
+  version?: string;
+  foundVia?: "cli" | "app";
+  coverableWhenAbsent?: string;
+  unavailableReason?: string;
+}
+
+/**
+ * Whether step 3 lets the person tick this agent. A found agent can be
+ * ticked, and so can one that registering covers whether or not the scan
+ * found it: Cursor on Linux, whose editor ships as an AppImage the scan
+ * cannot see, or wherever neither probe answered (ADR-141). The row used to
+ * be disabled whenever `installed` was false, so a machine with only the
+ * Cursor editor on Linux could not register it (#3367). An app with no build
+ * for this platform never can.
+ */
+export function registrable(detected: DetectedRow): boolean {
+  if (detected.unavailableReason !== undefined) return false;
+  return detected.installed || detected.coverableWhenAbsent !== undefined;
+}
+
+/** The line beside an agent in step 3: what the scan found, and where. */
+export function detectedMeta(detected: DetectedRow): string {
+  if (detected.installed) {
+    const found =
+      detected.foundVia === "app"
+        ? "the editor"
+        : (detected.version ?? "installed");
+    return detected.path ? `${found} · ${detected.path}` : found;
+  }
+  if (detected.unavailableReason !== undefined)
+    return detected.unavailableReason;
+  if (detected.coverableWhenAbsent !== undefined)
+    return `not found by the scan · ${detected.coverableWhenAbsent}`;
+  return "not found on this machine";
 }
 
 /** What `DesktopState.cli_install` reports about the launch-time PATH link. */

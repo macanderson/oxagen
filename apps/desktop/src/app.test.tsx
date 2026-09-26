@@ -6,7 +6,12 @@
  */
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ConnectResult, DesktopState, HostView } from "./bridge";
+import type {
+  ConnectResult,
+  DesktopState,
+  DetectReport,
+  HostView,
+} from "./bridge";
 
 // React warns unless the test environment says it drives updates in act().
 (
@@ -69,13 +74,16 @@ const machine: DesktopState = {
 const bridge = vi.hoisted(() => ({
   connectRun: vi.fn(),
   reportBusy: vi.fn(),
+  readState: vi.fn(),
+  detectHarnesses: vi.fn(),
 }));
 
 vi.mock("./bridge", async (importOriginal) => {
   const real = await importOriginal<typeof import("./bridge")>();
   return {
     ...real,
-    readState: vi.fn(async () => machine),
+    readState: bridge.readState,
+    detectHarnesses: bridge.detectHarnesses,
     tachoStatus: vi.fn(async () => null),
     listOrganizations: vi.fn(async () => [
       { id: "org_1", slug: "acme", name: "Acme" },
@@ -116,6 +124,9 @@ async function renderEnrolled() {
 beforeEach(() => {
   bridge.connectRun.mockReset();
   bridge.reportBusy.mockReset();
+  bridge.readState.mockReset();
+  bridge.readState.mockResolvedValue(machine);
+  bridge.detectHarnesses.mockReset();
 });
 
 afterEach(() => {
@@ -183,5 +194,100 @@ describe("the window", () => {
     const masthead = document.querySelector(".masthead .version");
     expect(masthead?.textContent).toContain("collector running · active");
     expect(masthead?.textContent).not.toContain("connected");
+  });
+});
+
+// #3367: the wizard disabled every row whose scan said not installed, so a
+// machine with only the Cursor editor on Linux, where the scan cannot see
+// an AppImage, could not register Cursor at all.
+describe("the setup wizard's agent step", () => {
+  const note =
+    "enrollment writes ~/.cursor/hooks.json, which governs the Cursor editor and the cursor-agent CLI alike";
+
+  /** Sign-in done, the workspace picked: step 3 scans with this report. */
+  async function scanWith(report: DetectReport) {
+    bridge.readState.mockResolvedValue({
+      ...machine,
+      host: null,
+      daemon: null,
+    });
+    bridge.detectHarnesses.mockResolvedValue(report);
+    render(<App />);
+    const next = await screen.findByRole("button", { name: "Continue" });
+    await vi.waitFor(() => expect(next).not.toHaveProperty("disabled", true));
+    await act(async () => {
+      next.click();
+    });
+    await screen.findByText("Claude Code");
+  }
+
+  const checkbox = (harness: string) =>
+    document.getElementById(`register-${harness}`) as HTMLInputElement;
+
+  it("offers a Cursor the scan did not find, unticked, with the coverage note", async () => {
+    await scanWith({
+      enrolled: false,
+      harnesses: [
+        {
+          harness: "claude-code",
+          label: "Claude Code",
+          installed: true,
+          path: "/usr/local/bin/claude",
+          version: "2.1.263",
+          foundVia: "cli",
+          enrolled: false,
+        },
+        {
+          harness: "cursor",
+          label: "Cursor",
+          installed: false,
+          enrolled: false,
+          coverableWhenAbsent: note,
+        },
+        { harness: "codex", label: "Codex", installed: false, enrolled: false },
+      ],
+    });
+    expect(checkbox("cursor").disabled).toBe(false);
+    expect(checkbox("cursor").checked).toBe(false);
+    expect(screen.getByText(`not found by the scan · ${note}`)).toBeTruthy();
+    // An agent that is absent and not coverable is still refused.
+    expect(checkbox("codex").disabled).toBe(true);
+    // Ticking it adds Cursor to what registers.
+    await act(async () => {
+      checkbox("cursor").click();
+    });
+    expect(
+      screen.getByRole("button", {
+        name: "Yes, register Claude Code and Cursor with Oxagen",
+      }),
+    ).toBeTruthy();
+  });
+
+  it("offers and ticks a Cursor found as the editor", async () => {
+    await scanWith({
+      enrolled: false,
+      harnesses: [
+        {
+          harness: "claude-code",
+          label: "Claude Code",
+          installed: false,
+          enrolled: false,
+        },
+        {
+          harness: "cursor",
+          label: "Cursor",
+          installed: true,
+          path: "/Applications/Cursor.app",
+          foundVia: "app",
+          enrolled: false,
+          coverableWhenAbsent: note,
+        },
+      ],
+    });
+    expect(checkbox("cursor").disabled).toBe(false);
+    expect(checkbox("cursor").checked).toBe(true);
+    expect(
+      screen.getByText("the editor · /Applications/Cursor.app"),
+    ).toBeTruthy();
   });
 });

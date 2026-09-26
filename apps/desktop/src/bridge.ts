@@ -374,6 +374,20 @@ export interface DetectedHarness {
   path?: string;
   version?: string;
   enrolled: boolean;
+  /**
+   * Which probe found it: `cli` for an executable on PATH, `app` for an
+   * application on disk (the Cursor editor). Absent when neither did, and on
+   * a tacho that predates the field.
+   */
+  foundVia?: "cli" | "app";
+  /**
+   * Why registering this agent covers the machine whether or not the scan
+   * found it. Cursor's hooks file governs the editor and the CLI alike, and
+   * the scan cannot see a Linux editor installed as an AppImage (ADR-141).
+   */
+  coverableWhenAbsent?: string;
+  /** Set when this platform has no build of the app (Claude Desktop on Linux). */
+  unavailableReason?: string;
 }
 export interface DetectReport {
   enrolled: boolean;

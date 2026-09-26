@@ -29,7 +29,9 @@ import {
   sessionLanded,
   type SidecarCall,
   detectArgs,
+  detectedMeta,
   logoutArgs,
+  registrable,
   statusArgs,
   toggleHarness,
   unenrollArgs,
@@ -588,5 +590,66 @@ describe("the sidecar allowlist's fixture", () => {
       sidecar: "tacho",
       args: ["reassign", "--harness", "claude-code,codex,cursor"],
     });
+  });
+});
+
+// #3367: a Cursor the scan did not find is still coverable, since
+// ~/.cursor/hooks.json governs the editor and the CLI alike, and the scan
+// cannot see a Linux editor installed as an AppImage (ADR-141).
+describe("step 3's rows", () => {
+  const note =
+    "enrollment writes ~/.cursor/hooks.json, which governs the Cursor editor and the cursor-agent CLI alike";
+
+  it("offers a Cursor the scan did not find, with the coverage note", () => {
+    const cursor = { installed: false, coverableWhenAbsent: note };
+    expect(registrable(cursor)).toBe(true);
+    expect(detectedMeta(cursor)).toBe(`not found by the scan · ${note}`);
+  });
+
+  it("offers a Cursor found as the editor, and says so", () => {
+    const editor = {
+      installed: true,
+      foundVia: "app" as const,
+      path: "/Applications/Cursor.app",
+      coverableWhenAbsent: note,
+    };
+    expect(registrable(editor)).toBe(true);
+    expect(detectedMeta(editor)).toBe("the editor · /Applications/Cursor.app");
+  });
+
+  it("still refuses an agent that is absent and not coverable, or has no build here", () => {
+    expect(registrable({ installed: false })).toBe(false);
+    expect(detectedMeta({ installed: false })).toBe(
+      "not found on this machine",
+    );
+    const linuxDesktop = {
+      installed: false,
+      unavailableReason: "Claude Desktop has no Linux build",
+    };
+    expect(registrable(linuxDesktop)).toBe(false);
+    expect(detectedMeta(linuxDesktop)).toBe(
+      "Claude Desktop has no Linux build",
+    );
+  });
+
+  it("reads a CLI the way it always did", () => {
+    const cli = {
+      installed: true,
+      foundVia: "cli" as const,
+      path: "/usr/local/bin/claude",
+      version: "2.1.263",
+    };
+    expect(registrable(cli)).toBe(true);
+    expect(detectedMeta(cli)).toBe("2.1.263 · /usr/local/bin/claude");
+    expect(detectedMeta({ installed: true })).toBe("installed");
+  });
+
+  it("leaves a Cursor the scan did not find unticked by default", () => {
+    expect(
+      defaultRegistration([
+        { harness: "claude-code", installed: true },
+        { harness: "cursor", installed: false },
+      ]),
+    ).toEqual(["claude-code"]);
   });
 });
