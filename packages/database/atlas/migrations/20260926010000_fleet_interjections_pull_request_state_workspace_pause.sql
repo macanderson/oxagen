@@ -33,7 +33,10 @@ CREATE TABLE IF NOT EXISTS agent.interjections (
   CONSTRAINT interjections_public_id_unique UNIQUE(public_id),
   CONSTRAINT "interjections_run_public_id_check" CHECK (run_public_id ~ '^(arun|tse)_[0-9a-z]+$'),
   CONSTRAINT "interjections_answer_check" CHECK ((answered_at IS NULL AND answer IS NULL AND answered_by_user_id IS NULL) OR (answered_at IS NOT NULL AND answer IS NOT NULL)),
-  CONSTRAINT "interjections_window_check" CHECK (expires_at > raised_at)
+  CONSTRAINT "interjections_window_check" CHECK (expires_at > raised_at),
+  CONSTRAINT "interjections_question_check" CHECK (question <> ''),
+  CONSTRAINT "interjections_agent_key_check" CHECK (agent_key IS NULL OR agent_key <> ''),
+  CONSTRAINT "interjections_answer_length_check" CHECK (answer IS NULL OR char_length(answer) <= 4000)
 );
 CREATE INDEX IF NOT EXISTS interjections_open_idx ON agent.interjections (org_id, workspace_id, expires_at) WHERE answered_at IS NULL;
 CREATE INDEX IF NOT EXISTS interjections_run_idx ON agent.interjections (workspace_id, run_public_id);

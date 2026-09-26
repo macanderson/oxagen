@@ -641,6 +641,21 @@ describe("list_runs", () => {
     expect(decodeRunCursor(encodeRunCursor(cursor))).toEqual(cursor);
   });
 
+  it("refuses a signed year Date.parse accepts and Postgres does not (negative)", () => {
+    // The filtered read casts the instant to timestamptz, which refuses this
+    // year, so a cursor that passed a Date.parse check came back as a 500.
+    const crafted = Buffer.from(
+      JSON.stringify(["-000001-01-01T00:00:00.000Z", "tse_x"]),
+      "utf8",
+    ).toString("base64url");
+    expect(decodeRunCursor(crafted)).toBeNull();
+    expect(
+      decodeRunCursor(
+        encodeRunCursor({ at: "2026-09-11 10:00:00+00", id: "tse_x" }),
+      ),
+    ).toBeNull();
+  });
+
   it("binds the cursor instant as a string the driver can send (negative)", () => {
     // Production paged with a JS Date in a raw `sql` fragment. postgres.js has
     // no serializer for that param and threw "The string argument must be of

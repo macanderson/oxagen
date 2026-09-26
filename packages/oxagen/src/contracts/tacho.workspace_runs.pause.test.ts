@@ -37,6 +37,26 @@ describe("pause_workspace_runs contract", () => {
     }
   });
 
+  it("answers any agent key the session column holds, so a committed pause is never refused", () => {
+    // The column is unbounded text, and the ingest envelope allows 512
+    // characters. A 128-character cap here rejected the output after the
+    // pause and its audit row had committed.
+    const receipt = {
+      queued: 0,
+      commandIds: [],
+      skipped: [
+        {
+          runId: "tse_4q8r1t6v3x5z0b2d7h2k9m",
+          agentKey: `acme.platform.${"release-manager-".repeat(10)}laptop`,
+          reason: "host_offline",
+          commandId: "tcm_c",
+        },
+      ],
+    };
+    expect(receipt.skipped[0]?.agentKey.length).toBeGreaterThan(128);
+    expect(pauseWorkspaceRuns.output.safeParse(receipt).success).toBe(true);
+  });
+
   it("separates the runs that took the pause from the ones skipped, with why", () => {
     const receipt = {
       queued: 2,

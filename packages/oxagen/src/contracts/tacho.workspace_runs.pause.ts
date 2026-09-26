@@ -63,7 +63,10 @@ export const pauseWorkspaceRuns = registerCapability({
         z
           .object({
             runId: runPublicIdSchema,
-            agentKey: z.string().min(1).max(128),
+            // The session's agent key as the column holds it. tacho.sessions
+            // bounds it no tighter than text, so neither does this output: a
+            // bound here would refuse a pause that had already committed.
+            agentKey: z.string(),
             reason: z.enum(COMMAND_BLOCKS),
             commandId: z.string().min(1),
           })

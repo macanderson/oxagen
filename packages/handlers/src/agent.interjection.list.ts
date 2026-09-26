@@ -17,8 +17,10 @@ import type {
   agentInterjectionList,
   InterjectionListItem,
 } from "@oxagen/oxagen/contracts/agent.interjection.list";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { schema, withTenantDb } from "@oxagen/database";
 import { and, asc, eq, gt, isNull, or, type SQL, sql } from "drizzle-orm";
+import { isCursorInstant } from "./lib/cursor-instant";
 
 /** The columns one page reads; the join fills `answeredByPublicId` or leaves it null. */
 export type InterjectionListRow = {
@@ -57,7 +59,7 @@ export function decodeInterjectionCursor(
   const [at, id, rest] = Buffer.from(cursor, "base64url")
     .toString("utf8")
     .split("|");
-  if (!at || !id || rest !== undefined || Number.isNaN(Date.parse(at)))
+  if (!at || !id || rest !== undefined || !isCursorInstant(at))
     return undefined;
   return { expiresAt: new Date(at), id };
 }
@@ -118,6 +120,15 @@ export const agentInterjectionListHandler: CapabilityHandler<
   typeof agentInterjectionList
 > = async (input, ctx) => {
   const after = decodeInterjectionCursor(input.cursor);
+  // A cursor this handler did not mint is refused, as list_runs refuses one,
+  // rather than read as the first page: a caller paging on would otherwise
+  // loop back to the start without being told.
+  if (input.cursor && after === undefined)
+    throw new CapabilityError(
+      "list_interjections",
+      "invalid_input",
+      "invalid_cursor",
+    );
   const rows: InterjectionListRow[] = await withTenantDb((tx) =>
     tx
       .select({

@@ -116,6 +116,35 @@ describe("list_interjections cursor", () => {
       ),
     ).toBeUndefined();
   });
+
+  it("refuses a signed year Date.parse accepts and Postgres does not (negative)", () => {
+    // Before, this passed the Date.parse guard and reached the query as
+    // '-000001-01-01T00:00:00.000Z'::timestamptz, which Postgres refuses: a 500.
+    expect(
+      decodeInterjectionCursor(
+        Buffer.from("-000001-01-01T00:00:00.000Z|inj_x").toString("base64url"),
+      ),
+    ).toBeUndefined();
+  });
+});
+
+describe("list_interjections refuses a cursor it did not mint", () => {
+  it("answers invalid_cursor instead of the first page (negative)", async () => {
+    const seen = recording([row()]);
+    const attempt = agentInterjectionListHandler(
+      agentInterjectionList.input.parse({
+        cursor: Buffer.from("-000001-01-01T00:00:00.000Z|inj_x").toString(
+          "base64url",
+        ),
+      }),
+      makeCTX({ orgId: ORG, workspaceId: WS }),
+    );
+    await expect(attempt).rejects.toMatchObject({
+      code: "invalid_input",
+      message: expect.stringContaining("invalid_cursor"),
+    });
+    expect(seen.limit).toBeUndefined();
+  });
 });
 
 describe("list_interjections item", () => {

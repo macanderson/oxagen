@@ -52,6 +52,22 @@ export const interjections = agentSchema.table(
       "interjections_window_check",
       sql`${t.expiresAt} > ${t.raisedAt}`,
     ),
+    // The readers refuse a blank question or agent key (list_interjections'
+    // output and the app's InterjectionItem), and one such row would fail the
+    // whole page. The table refuses them first. The answer's bound mirrors
+    // answer_interjection's input.
+    questionCheck: check(
+      "interjections_question_check",
+      sql`${t.question} <> ''`,
+    ),
+    agentKeyCheck: check(
+      "interjections_agent_key_check",
+      sql`${t.agentKey} IS NULL OR ${t.agentKey} <> ''`,
+    ),
+    answerLengthCheck: check(
+      "interjections_answer_length_check",
+      sql`${t.answer} IS NULL OR char_length(${t.answer}) <= 4000`,
+    ),
     // The open queue list_interjections and get_nav_counts read.
     openIdx: index("interjections_open_idx")
       .on(t.orgId, t.workspaceId, t.expiresAt)

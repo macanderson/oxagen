@@ -80,6 +80,7 @@ import {
   readRunPullRequests,
   runDiffOf,
 } from "./lib/run-list-work";
+import { isCursorInstant } from "./lib/cursor-instant";
 import { compactedProbe } from "./lib/run-list-status";
 import { logger } from "./logger";
 import {
@@ -138,7 +139,7 @@ export function decodeRunCursor(raw: string): RunCursor | null {
       value.length !== 2 ||
       typeof value[0] !== "string" ||
       typeof value[1] !== "string" ||
-      Number.isNaN(Date.parse(value[0])) ||
+      !isCursorInstant(value[0]) ||
       !/^(arun|tse)_[0-9a-z]+$/.test(value[1])
     )
       return null;
