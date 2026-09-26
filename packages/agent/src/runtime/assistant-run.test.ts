@@ -11,6 +11,7 @@ import type { SQL } from "drizzle-orm";
 import { schema } from "@oxagen/database";
 import { digestJcs } from "@oxagen/run-evidence";
 import {
+  deferredAttester,
   digestOfCanonicalJson,
   RETENTION_CONTENT_CLASSES,
   validateInlineEventPayload,
@@ -1662,5 +1663,11 @@ describe("assistantRunStore", () => {
     const options = storeOptions.at(-1);
     expect(options?.["bodies"]).toBeDefined();
     expect(options?.["archive"]).toBeDefined();
+  });
+
+  it("signs its seals with the process-wide attester (ADR-195)", () => {
+    storeOptions.length = 0;
+    assistantRunStore();
+    expect(storeOptions.at(-1)?.["attester"]).toBe(deferredAttester);
   });
 });

@@ -12,6 +12,8 @@ import {
   EVENT_SCHEMA_VERSION,
 } from "@oxagen/run-ledger";
 import {
+  type Attestation,
+  type AttestationPayload,
   attesterKeyFromPem,
   type ChainCursor,
   digestBytes,
@@ -20,6 +22,7 @@ import {
   type JsonValue,
   merkleRoot,
   sealEvent,
+  signAttestation,
   type UnsealedTachoEvent,
   verifyAttestation,
   verifyRunExport,
@@ -117,6 +120,7 @@ function ledgerSegment(over: Partial<SealedSegment> = {}): SealedSegment {
     replayGrade: "view",
     envelopes,
     digests,
+    sealAttestation: null,
     ...over,
   };
 }
@@ -152,6 +156,7 @@ function tachoSegment(): SealedSegment {
     replayGrade: "fork",
     envelopes,
     digests,
+    sealAttestation: null,
   };
 }
 
@@ -297,6 +302,97 @@ describe("the run export bundle", () => {
     ).toBe(true);
 
     expect(runVerifier(writeBundle(files))).toMatchObject({ ok: true });
+  });
+
+  describe("the signature the seal wrote (ADR-195)", () => {
+    const RUN = "arun_5f0c2e9a1b7d4c3e8f6a02";
+
+    /** The payload the export recomputes for one ledger segment. */
+    function payloadOf(segment: SealedSegment): AttestationPayload {
+      return {
+        run_id: RUN,
+        attempt_id: segment.attemptPublicId,
+        frame_count: segment.frameCount,
+        merkle_root: segment.merkleRoot,
+        archive_segment_digest: String(segment.archiveSegmentDigest),
+        enforcement_tier: segment.enforcementTier,
+        completeness_gaps: [...segment.completenessGaps],
+        replay_grade: segment.replayGrade,
+      };
+    }
+
+    function exportOf(segment: SealedSegment) {
+      const files = unpack(
+        buildRunExportBundle({
+          runId: RUN,
+          source: "ledger",
+          segments: [segment],
+          key,
+          now: new Date("2026-09-14T12:00:00.000Z"),
+        }).bytes,
+      );
+      const attestation = JSON.parse(files["attestation.json"] as string);
+      return { files, shipped: attestation.attestations[0] as Attestation };
+    }
+
+    it("ships the seal's signature when the seal's key is the deployment's key, and both verifiers hold", () => {
+      const base = ledgerSegment({ enforcementTier: "gateway" });
+      const sealed = signAttestation(payloadOf(base), key);
+      const { files, shipped } = exportOf({
+        ...base,
+        sealAttestation: { keyId: key.keyId, sig: sealed.sig },
+      });
+      expect(shipped).toEqual(sealed);
+      expect(shipped.payload.enforcement_tier).toBe("gateway");
+      expect(verifyAttestation(shipped, key.publicKeyPem)).toBe(true);
+      expect(runVerifier(writeBundle(files))).toMatchObject({ ok: true });
+    });
+
+    it("ships the seal's signature unchanged when the figures moved after the seal, and the verifier says so (negative)", () => {
+      // The seal signed two frames; the segment the export read holds three.
+      // Re-signing would attest the new figures. The export never does.
+      const base = ledgerSegment();
+      const sealed = signAttestation(
+        { ...payloadOf(base), frame_count: 2 },
+        key,
+      );
+      const { files, shipped } = exportOf({
+        ...base,
+        sealAttestation: { keyId: key.keyId, sig: sealed.sig },
+      });
+      expect(shipped.sig).toBe(sealed.sig);
+      expect(shipped.payload.frame_count).toBe(3);
+      expect(verifyAttestation(shipped, key.publicKeyPem)).toBe(false);
+      const script = runVerifier(writeBundle(files));
+      expect(script.ok).toBe(false);
+      expect(script.output).toMatch(
+        /attestation for arat_0123456789abcdefghjkmn does not verify/,
+      );
+    });
+
+    it("signs with the current key when the seal's key was rotated away from", () => {
+      const rotated = attesterKeyFromPem(
+        generateKeyPairSync("ed25519")
+          .privateKey.export({ type: "pkcs8", format: "pem" })
+          .toString(),
+      );
+      const base = ledgerSegment();
+      const sealed = signAttestation(payloadOf(base), rotated);
+      const { files, shipped } = exportOf({
+        ...base,
+        sealAttestation: { keyId: rotated.keyId, sig: sealed.sig },
+      });
+      expect(shipped.key_id).toBe(key.keyId);
+      expect(shipped.sig).not.toBe(sealed.sig);
+      expect(verifyAttestation(shipped, key.publicKeyPem)).toBe(true);
+      expect(runVerifier(writeBundle(files))).toMatchObject({ ok: true });
+    });
+
+    it("signs with the current key a seal that was written unsigned", () => {
+      const { shipped } = exportOf(ledgerSegment());
+      expect(shipped.key_id).toBe(key.keyId);
+      expect(verifyAttestation(shipped, key.publicKeyPem)).toBe(true);
+    });
   });
 
   it("the verifier fails on a changed frame, a dropped frame and a foreign key (negative)", () => {

@@ -36,6 +36,7 @@ import { digestJcs } from "@oxagen/run-evidence";
 import {
   canonicalJson,
   createPostgresRunStore,
+  deferredAttester,
   digestOfCanonicalJson,
   parseRunSpecV2,
   RETENTION_CONTENT_CLASSES,
@@ -705,6 +706,9 @@ export function assistantRunStore(): RunStore {
   return createPostgresRunStore({
     archive: deferredEvidenceArchive,
     bodies: deferredEvidenceBodies,
+    // The assistant seals its own attempts, so its seals are signed when a
+    // key is configured (ADR-195).
+    attester: deferredAttester,
   });
 }
 
