@@ -69,6 +69,7 @@ export function bootstrapIAMRuntime(): void {
         reason: machineDenial,
         principal: null,
         decision: null,
+        decidedBy: "machine_key_scope",
       };
     }
 
@@ -86,7 +87,18 @@ export function bootstrapIAMRuntime(): void {
     // attaches it to the CheckedContext on an allow and to the thrown
     // CapabilityError otherwise. Agent-run execution fails closed when it is
     // null — an unrecorded decision is not an allowed one.
-    return { outcome, reason, principal, decision: decision ?? null };
+    //
+    // `decidedBy` is the resolver's rule id for the step that decided
+    // (`7:role_grant`, `8:default`, `tier_gate`), so a denied page can name
+    // the rule (#3841). Only the id travels: the step's description embeds
+    // internal role ids. Null when the trace names no deciding step.
+    return {
+      outcome,
+      reason,
+      principal,
+      decision: decision ?? null,
+      decidedBy: result.trace.decidedBy?.rule ?? null,
+    };
   };
 
   setKernelIAMRuntime(kernelIAMAdapter, /* enforced */ true);

@@ -7,6 +7,7 @@ export * from "./org";
 export * from "./auth";
 export * from "./workspace";
 export * from "./agent";
+export * from "./interjection";
 export * from "./chat";
 export * from "./content";
 export * from "./billing";

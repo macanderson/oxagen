@@ -40,13 +40,15 @@ const Count = z.number().int().nonnegative();
 
 /**
  * The sidebar's counts for one workspace (`get_nav_counts`, mockup
- * `sidebar()`): what waits on a person there. Pending approvals, open
- * steering proposals and open critical incidents, each read from the store
- * that owns it. A null is a read that answered no figure, and the sidebar
- * draws it as not recorded rather than as a zero.
+ * `sidebar()`): what waits on a person there. Pending approvals, open agent
+ * questions (interjections), open steering proposals and open critical
+ * incidents, each read from the store that owns it. A null is a read that
+ * answered no figure, and the sidebar draws it as not recorded rather than as
+ * a zero.
  */
 export const NavCounts = z.object({
   approvals: Count.nullable(),
+  interjections: Count.nullable(),
   proposals: Count.nullable(),
   incidents: Count.nullable(),
 });

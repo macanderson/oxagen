@@ -110,6 +110,7 @@ import {
   RUN_PROGRESSED_EVENT,
 } from "@oxagen/inngest-functions/events";
 import { recordProofFrames } from "./lib/proof";
+import { sendPullRequestLinks } from "./lib/run-pull-request-links";
 import {
   type TachoHostRow,
   controlEnvelope,
@@ -2758,6 +2759,14 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       );
     }
   }
+
+  // Each pull request link the batch records gets its row and one read of
+  // its state (ADR-192). Best-effort, once per root session and URL.
+  await sendPullRequestLinks(
+    (events) => eventClient.send(events),
+    ctx,
+    input.events,
+  );
 
   // Billing: one governed action unit per allowed tool call (ADR-165). Run
   // after every write above, so a charge never lands for a frame the record

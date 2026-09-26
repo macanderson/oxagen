@@ -195,16 +195,40 @@ export const routes = {
   /**
    * Fleet; `cursor` opens a later page of its runs table, and `prs` lists
    * only the runs `with` or `without` pull requests (`any`, or absent, is all).
+   * `q` is the search, `status`, `tier` and `replay` each carry a
+   * comma-joined list, `sort` and `dir` the order, and `page` the page number
+   * from 1 (#3837). A default is left out of the URL: `prs` `any`, the
+   * `started` descending order, and page 1.
    */
   fleet: (
     org: string,
     ws: string,
-    q?: { cursor?: string; prs?: "any" | "with" | "without" },
-  ): SafePath =>
-    withQuery(pathOf(org, ws), {
+    q?: {
+      cursor?: string;
+      prs?: "any" | "with" | "without";
+      q?: string;
+      status?: string;
+      tier?: string;
+      replay?: string;
+      sort?: string;
+      dir?: "asc" | "desc";
+      page?: number;
+    },
+  ): SafePath => {
+    const defaultOrder =
+      (q?.sort ?? "started") === "started" && (q?.dir ?? "desc") === "desc";
+    return withQuery(pathOf(org, ws), {
       prs: q?.prs === "any" ? undefined : q?.prs,
+      q: q?.q === "" ? undefined : q?.q,
+      status: q?.status === "" ? undefined : q?.status,
+      tier: q?.tier === "" ? undefined : q?.tier,
+      replay: q?.replay === "" ? undefined : q?.replay,
+      sort: defaultOrder ? undefined : q?.sort,
+      dir: defaultOrder ? undefined : q?.dir,
+      page: q?.page === undefined || q.page <= 1 ? undefined : String(q.page),
       cursor: q?.cursor,
-    }),
+    });
+  },
   /**
    * Agent IAM; `cursor` opens a later page of the identities table, and
    * `deregistered` lists retired agents beside the live ones.

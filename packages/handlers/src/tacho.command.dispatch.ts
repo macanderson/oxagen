@@ -65,6 +65,7 @@ import {
   steerBlockOf,
 } from "@oxagen/oxagen/contracts/run.list";
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
+import { writeRecipientCommand } from "./lib/run-command-recipients";
 import { logger } from "./logger";
 import { ledgerIdentityQuery, type RunScope, runScope } from "./run.list";
 
@@ -415,30 +416,23 @@ export function createDispatchCommandHandler(
           session_uuid: session.sessionUuid,
           ...(input.payload ? { text: input.payload.text } : {}),
         };
-        const { publicId } = await store.insert({
-          scope,
-          session,
-          command: input.command,
-          payload,
-          requestedMode,
-          deliveryMode: resolved?.deliveryMode ?? null,
-          degradedReason: resolved?.degradedReason ?? null,
-          reason: input.reason ?? null,
-          outcome: reason === null ? "queued" : "failed",
-          outcomeDetail: reason,
-          issuedByUserId: actingUserId,
-          issuedAt: now,
-          expiresAt,
-        });
-        if (reason === null) {
-          await store.supersede({
+        const { publicId } = await writeRecipientCommand(
+          store,
+          {
             scope,
-            runPublicId: session.publicId,
+            session,
             command: input.command,
-            successorPublicId: publicId,
-            now,
-          });
-        }
+            payload,
+            requestedMode,
+            deliveryMode: resolved?.deliveryMode ?? null,
+            degradedReason: resolved?.degradedReason ?? null,
+            reason: input.reason ?? null,
+            issuedByUserId: actingUserId,
+            issuedAt: now,
+            expiresAt,
+          },
+          reason,
+        );
         ids.push(publicId);
       }
       return ids;

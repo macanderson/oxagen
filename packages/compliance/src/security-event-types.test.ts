@@ -373,7 +373,12 @@ describe("the emitted subset", () => {
   it("names the six still without an emitter", () => {
     // The audit found eight. auth.password_changed and auth.email_verified
     // gained emitters in packages/auth/src/auth.ts (#3938).
+    // tacho.workspace_runs_paused was reserved until its handler landed in
+    // packages/handlers/src/tacho.workspace_runs.pause.ts (#3862).
     expect(RESERVED_SECURITY_EVENT_TYPES).toHaveLength(6);
+    expect(RESERVED_SECURITY_EVENT_TYPES).not.toContain(
+      "tacho.workspace_runs_paused",
+    );
     expect(RESERVED_SECURITY_EVENT_TYPES).not.toContain(
       "auth.password_changed",
     );

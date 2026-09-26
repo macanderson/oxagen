@@ -44,8 +44,16 @@ beforeEach(() => {
 describe("spend.budgets through the kernel seam", () => {
   it("answers the spend error row when the handler's spend read fails (negative, #3064)", async () => {
     invoke.mockRejectedValue(new Error("counter down"));
-    expect(await spend.budgets(ctx)).toEqual(
-      readError("rollup_rebuild_in_progress", 504),
+    const read = await spend.budgets(ctx);
+    // The seam records the failure's facts beside it (#3841): no tracer runs
+    // and no region is set here, so both read null, and the request id is the
+    // one the seam sent.
+    expect(read).toEqual(
+      readError("rollup_rebuild_in_progress", 504, {
+        traceId: null,
+        region: null,
+        requestId: invoke.mock.calls[0]?.[2].requestId ?? "",
+      }),
     );
     expect(invoke).toHaveBeenCalledWith(
       billingBudgetGet.name,

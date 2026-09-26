@@ -236,6 +236,32 @@ describe("routes", () => {
     expect(routes.fleet("acme", "core-platform", { prs: "any" })).toBe(
       "/acme/core-platform",
     );
+    // The list query (#3837): defaults stay out of the URL.
+    expect(
+      routes.fleet("acme", "core-platform", {
+        q: "mac studio",
+        status: "live,halted",
+        tier: "gateway",
+        replay: "fork,not_recorded",
+        sort: "cost",
+        dir: "asc",
+        page: 3,
+      }),
+    ).toBe(
+      "/acme/core-platform?q=mac+studio&status=live%2Chalted&tier=gateway&replay=fork%2Cnot_recorded&sort=cost&dir=asc&page=3",
+    );
+    expect(
+      routes.fleet("acme", "core-platform", {
+        q: "",
+        status: "",
+        sort: "started",
+        dir: "desc",
+        page: 1,
+      }),
+    ).toBe("/acme/core-platform");
+    expect(
+      routes.fleet("acme", "core-platform", { sort: "started", dir: "asc" }),
+    ).toBe("/acme/core-platform?sort=started&dir=asc");
     expect(routes.run("acme", "core-platform", "arun_7k2")).toBe(
       "/acme/core-platform/runs/arun_7k2",
     );

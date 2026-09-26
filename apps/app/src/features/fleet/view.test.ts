@@ -1,21 +1,18 @@
 // What Fleet computes from its rows (fleet.md, Functionality): the state a row
-// reads as, which rows a chip lists, the tile figures over those rows, and
-// the list controls. Each figure is recomputed here from the rows, so a tile
-// that disagreed with its table would fail.
+// reads as, which rows a chip lists, and the tile figures over those rows.
+// Each figure is recomputed here from the rows, so a tile that disagreed with
+// its table would fail. The search, facets, sort and paging are the read's
+// (#3837), covered in list-query.test.ts and the list_runs handler tests.
 import { describe, expect, it } from "vitest";
 import { approvalItem, runRow } from "./fleet.builders";
 import {
-  applyList,
   chipRows,
-  facetValues,
   forgeOf,
-  type ListQuery,
   listRuns,
   oldestApproval,
   parkedRunIds,
   pullRequestCount,
   pullRequestLabel,
-  type RowWords,
   rowState,
   shownCost,
   spendShown,
@@ -238,205 +235,6 @@ describe("tile figures", () => {
         }),
       ])?.windowSeconds,
     ).toBe(0);
-  });
-});
-
-describe("the list controls", () => {
-  const rows = listRuns(
-    Array.from({ length: 12 }, (_, i) =>
-      runRow({
-        id: `arun_${String(i).padStart(2, "0")}`,
-        frames: 100 - i,
-        cost: i === 3 ? null : usd(String((i + 1) * 1_000_000)),
-        enforcementTier: i % 2 === 0 ? "gateway" : "harness",
-      }),
-    ),
-    new Set(),
-  );
-  const words: RowWords[] = rows.map(({ run }) => ({
-    run: run.id,
-    agent: run.agentKey ?? "",
-    operator: "Marcus Bell",
-    status: "live",
-    tier: run.enforcementTier,
-    replay: "fork",
-    text: `${run.id} ${run.enforcementTier}`,
-  }));
-  const base: ListQuery = {
-    search: "",
-    facets: { tier: null, replay: null, status: null },
-    sort: null,
-    perPage: 5,
-    page: 1,
-  };
-
-  it("pages the rows and reports the range", () => {
-    expect(applyList(rows, words, base)).toMatchObject({
-      rows: [0, 1, 2, 3, 4],
-      total: 12,
-      page: 1,
-      pages: 3,
-      from: 1,
-      to: 5,
-    });
-    expect(applyList(rows, words, { ...base, page: 3 })).toMatchObject({
-      rows: [10, 11],
-      from: 11,
-      to: 12,
-    });
-  });
-
-  it("shows every row under All and clamps a page past the end", () => {
-    expect(applyList(rows, words, { ...base, perPage: 0 }).rows).toHaveLength(
-      12,
-    );
-    expect(applyList(rows, words, { ...base, page: 9 }).page).toBe(3);
-  });
-
-  it("searches every word on the row and filters on a facet", () => {
-    expect(applyList(rows, words, { ...base, search: "ARUN_07" }).rows).toEqual(
-      [7],
-    );
-    const gateway = applyList(rows, words, {
-      ...base,
-      perPage: 0,
-      facets: { ...base.facets, tier: "gateway" },
-    });
-    expect(gateway.total).toBe(6);
-    expect(facetValues(words, "tier")).toEqual(["gateway", "harness"]);
-  });
-
-  it("sorts on a figure both ways and keeps an unpriced row last", () => {
-    const up = applyList(rows, words, {
-      ...base,
-      perPage: 0,
-      sort: { key: "cost", dir: 1 },
-    }).rows;
-    expect(up.slice(0, 2)).toEqual([0, 1]);
-    expect(up.at(-1)).toBe(3);
-    const down = applyList(rows, words, {
-      ...base,
-      perPage: 0,
-      sort: { key: "cost", dir: -1 },
-    }).rows;
-    expect(down[0]).toBe(11);
-    expect(down.at(-1)).toBe(3);
-    expect(
-      applyList(rows, words, {
-        ...base,
-        perPage: 0,
-        sort: { key: "frames", dir: 1 },
-      }).rows[0],
-    ).toBe(11);
-  });
-
-  it("sorts a text column in natural order both ways", () => {
-    const named = words.map((w, i) => ({
-      ...w,
-      agent: `agent-${String(12 - i)}`,
-    }));
-    const up = applyList(rows, named, {
-      ...base,
-      perPage: 0,
-      sort: { key: "agent", dir: 1 },
-    }).rows;
-    // agent-1 (row 11) before agent-2 (row 10) before agent-10 (row 2):
-    // numeric collation, not "agent-10" < "agent-2".
-    expect(up.slice(0, 3)).toEqual([11, 10, 9]);
-    expect(up.at(-1)).toBe(0);
-    const down = applyList(rows, named, {
-      ...base,
-      perPage: 0,
-      sort: { key: "agent", dir: -1 },
-    }).rows;
-    expect(down[0]).toBe(0);
-  });
-
-  it("sorts on when a run started", () => {
-    const started = listRuns(
-      [
-        runRow({ id: "arun_late", startedAt: "2026-09-15T08:30:00.000Z" }),
-        runRow({ id: "arun_early", startedAt: "2026-09-15T07:00:00.000Z" }),
-        runRow({ id: "arun_mid", startedAt: "2026-09-15T08:00:00.000Z" }),
-      ],
-      new Set(),
-    );
-    const startedWords = words.slice(0, 3);
-    expect(
-      applyList(started, startedWords, {
-        ...base,
-        sort: { key: "started", dir: 1 },
-      }).rows,
-    ).toEqual([1, 2, 0]);
-    expect(
-      applyList(started, startedWords, {
-        ...base,
-        sort: { key: "started", dir: -1 },
-      }).rows,
-    ).toEqual([0, 2, 1]);
-  });
-
-  it("keeps the order the read returned for rows that compare equal, in either direction", () => {
-    const dirs: (1 | -1)[] = [1, -1];
-    for (const dir of dirs)
-      expect(
-        applyList(rows, words, {
-          ...base,
-          perPage: 0,
-          sort: { key: "operator", dir },
-        }).rows,
-      ).toEqual(rows.map((_, i) => i));
-  });
-
-  it("keeps two unpriced rows in read order after every priced row", () => {
-    const unpriced = listRuns(
-      [
-        runRow({ id: "arun_a", cost: null }),
-        runRow({ id: "arun_b", cost: usd("1000000") }),
-        runRow({ id: "arun_c", cost: null }),
-      ],
-      new Set(),
-    );
-    expect(
-      applyList(unpriced, words.slice(0, 3), {
-        ...base,
-        sort: { key: "cost", dir: -1 },
-      }).rows,
-    ).toEqual([1, 0, 2]);
-  });
-
-  it("sorts a reported cost among the priced rows, where its figure falls", () => {
-    const reported = listRuns(
-      [
-        runRow({ id: "arun_a", cost: null }),
-        runRow({ id: "arun_b", cost: usd("1000000") }),
-        runRow({
-          id: "tse_c",
-          cost: null,
-          reportedCost: usd("3000000", "client_attested"),
-        }),
-      ],
-      new Set(),
-    );
-    expect(
-      applyList(reported, words.slice(0, 3), {
-        ...base,
-        sort: { key: "cost", dir: -1 },
-      }).rows,
-    ).toEqual([2, 1, 0]);
-  });
-
-  it("lists no row it was given no words for (negative)", () => {
-    expect(applyList(rows, words.slice(0, 2), base)).toMatchObject({
-      rows: [0, 1],
-      total: 2,
-    });
-  });
-
-  it("answers an empty range when nothing matches (negative)", () => {
-    expect(
-      applyList(rows, words, { ...base, search: "nothing like this" }),
-    ).toMatchObject({ rows: [], total: 0, from: 0, to: 0, pages: 1 });
   });
 });
 

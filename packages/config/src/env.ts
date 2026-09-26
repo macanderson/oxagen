@@ -322,6 +322,8 @@ export const baseEnvSchema = z.object({
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   OTEL_EXPORTER_OTLP_HEADERS: z.string().optional(),
   OTEL_SERVICE_NAME: z.string().min(1).optional(),
+  // The region a failed read's error line prints beside the trace id (#3841).
+  OXAGEN_REGION: z.string().min(1).optional(),
 
   // ── Error alerting (vendor-neutral outbound webhook) ──
   // When set, high-severity/unhandled server errors captured by

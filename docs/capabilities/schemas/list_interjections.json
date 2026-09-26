@@ -1,0 +1,147 @@
+{
+  "name": "list_interjections",
+  "domain": "agent",
+  "description": "List the questions agents in this workspace paused to ask a person, soonest expiry first, cursor-paged, optionally narrowed to one run",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "agent"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "approval"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 64
+      },
+      "open": {
+        "type": "boolean",
+        "default": true
+      },
+      "limit": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 50
+      },
+      "cursor": {
+        "type": "string",
+        "maxLength": 256
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "runId": {
+              "type": "string"
+            },
+            "agentKey": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "question": {
+              "type": "string",
+              "minLength": 1
+            },
+            "raisedAt": {
+              "type": "string"
+            },
+            "expiresAt": {
+              "type": "string"
+            },
+            "answeredAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "answer": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "answeredBy": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "runId",
+            "agentKey",
+            "question",
+            "raisedAt",
+            "expiresAt",
+            "answeredAt",
+            "answer",
+            "answeredBy"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 100
+      },
+      "nextCursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "items",
+      "nextCursor"
+    ],
+    "additionalProperties": false
+  }
+}

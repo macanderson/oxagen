@@ -6,7 +6,8 @@
   "surfaces": [
     "api",
     "mcp",
-    "agent"
+    "agent",
+    "cli"
   ],
   "sensitivity": "medium",
   "agent": {
@@ -41,6 +42,90 @@
           "with",
           "without"
         ]
+      },
+      "status": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "live",
+            "sealed",
+            "halted"
+          ]
+        },
+        "minItems": 1,
+        "maxItems": 3
+      },
+      "tier": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "contained",
+            "gateway",
+            "harness",
+            "observe"
+          ]
+        },
+        "minItems": 1,
+        "maxItems": 4
+      },
+      "replayGrade": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "inspect",
+            "view",
+            "fork",
+            "retry",
+            "not_recorded"
+          ]
+        },
+        "minItems": 1,
+        "maxItems": 5
+      },
+      "query": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "sort": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "started",
+              "agent",
+              "operator",
+              "status",
+              "tier",
+              "replay",
+              "cost"
+            ]
+          },
+          "dir": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "dir"
+        ],
+        "additionalProperties": false
+      },
+      "offset": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 10000
+      },
+      "count": {
+        "type": "boolean"
       },
       "countLive": {
         "type": "boolean"
@@ -789,6 +874,16 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "stateSeenAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -837,6 +932,66 @@
                   "type": "null"
                 }
               ]
+            },
+            "tokens": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "input_uncached": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cache_read": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cache_write_5m": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cache_write_1h": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "output": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "reasoning": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "input_uncached",
+                    "cache_read",
+                    "cache_write_5m",
+                    "cache_write_1h",
+                    "output",
+                    "reasoning"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "cacheHitRate": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "compacted": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -893,6 +1048,21 @@
             "pull_requests_unread"
           ]
         }
+      },
+      "total": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "totalBound": {
+        "type": "integer",
+        "exclusiveMinimum": 0
       }
     },
     "required": [

@@ -2892,13 +2892,16 @@ type Messages = {
         title: string;
         open: string;
         oldest: string;
+        oldestInterjection: string;
         none: string;
         drawer: string;
         more: string;
         moreBasis: string;
+        moreInterjections: string;
         window: string;
         windowSeconds: string;
         interjections: string;
+        interjectionsUnread: string;
         unread: string;
       };
       spend: {
@@ -2914,6 +2917,9 @@ type Messages = {
         title: string;
         notRecorded: string;
         noCache: string;
+        servedFromCache: string;
+        reported: string;
+        unrecorded: string;
       };
     };
     approvals: {
@@ -2996,7 +3002,7 @@ type Messages = {
         parked: string;
         sealed: string;
       };
-      search: string;
+      searchRuns: string;
       facetAll: string;
       facetLabel: string;
       rows: string;
@@ -3038,6 +3044,12 @@ type Messages = {
         none: string;
         older: string;
         newest: string;
+        rangeEmpty: string;
+        rangeEmptyMore: string;
+        previous: string;
+        next: string;
+        page: string;
+        shown: string;
       };
       pause: string;
       resolve: string;
@@ -3086,6 +3098,7 @@ type Messages = {
         };
         openOnGitHub: string;
         openOnGitLab: string;
+        stateSeen: string;
       };
       diff: {
         none: string;
@@ -3095,6 +3108,16 @@ type Messages = {
           harness_reported: string;
           git_observed: string;
         };
+      };
+      paused: string;
+      pausedHint: string;
+      compacted: string;
+      compactedHint: string;
+      open: string;
+      tokens: {
+        cached: string;
+        reported: string;
+        reportedHint: string;
       };
     };
     pause: {
@@ -3119,13 +3142,17 @@ type Messages = {
       body: string;
       register: string;
       agents: string;
+      enroll: string;
     };
     error: {
       title: string;
       body: string;
       retry: string;
       incident: string;
-      trace: string;
+      traceId: string;
+      traceNotRecorded: string;
+      regionNotRecorded: string;
+      requestId: string;
     };
     denied: {
       title: string;
@@ -3137,6 +3164,9 @@ type Messages = {
       neededValue: string;
       decidedBy: string;
       decidedByValue: string;
+      decidedByIam: string;
+      decidedByRule: string;
+      bodyRule: string;
     };
     pending: {
       title: string;
@@ -3164,6 +3194,8 @@ type Messages = {
       raise: string;
       cancel: string;
       unbacked: string;
+      traceItem: string;
+      requestItem: string;
     };
   };
   mandate: {
@@ -7469,7 +7501,6 @@ type Messages = {
       };
       actions: {
         pauseAll: string;
-        pauseAllNotBacked: string;
         steer: string;
         register: string;
         grant: string;
@@ -7807,11 +7838,18 @@ type Messages = {
       all: string;
       gone: string;
       empty: string;
+      emptyRead: string;
       emptyDetail: string;
       rowNotBacked: string;
       truncated: string;
       note: string;
-      interjectionNotBacked: string;
+      interjection: {
+        kind: string;
+        paused: string;
+        pausedUnknown: string;
+        openRun: string;
+        openRunLabel: string;
+      };
       resolvedCard: {
         chain: string;
         who: string;
@@ -7868,6 +7906,31 @@ type Messages = {
           critical: string;
         };
       };
+    };
+    pauseWorkspace: {
+      title: string;
+      body: string;
+      skippedNote: string;
+      ledger: string;
+      reasonLabel: string;
+      reasonHelp: string;
+      roles: string;
+      cancel: string;
+      confirm: string;
+      pending: string;
+      reasonRequired: string;
+      queued: string;
+      skipped: string;
+      skippedReason: {
+        runSealed: string;
+        noHost: string;
+        hostRevoked: string;
+        hostOffline: string;
+      };
+      commandIds: string;
+      copy: string;
+      copied: string;
+      recorded: string;
     };
   };
   skills: {
@@ -10489,6 +10552,7 @@ type Messages = {
     };
     readFailure: {
       denied: string;
+      deniedByRule: string;
       pendingApproval: string;
       error: string;
     };

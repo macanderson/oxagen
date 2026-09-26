@@ -14,7 +14,7 @@
 import { z } from "zod";
 import { PublicId } from "./common";
 import { Cost } from "./money";
-import { EnforcementTier, ReplayGrade, RunRow } from "./runs";
+import { EnforcementTier, ReplayGrade, RunRow, RunTokenCounts } from "./runs";
 
 const Count = z.number().int().nonnegative();
 const Ratio = z.number().min(0).max(1);
@@ -122,14 +122,6 @@ export const RunDetail = z.object({
 });
 export type RunDetail = z.infer<typeof RunDetail>;
 
-const TokenCounts = z.object({
-  inputUncached: Count,
-  cacheRead: Count,
-  cacheWrite5m: Count,
-  cacheWrite1h: Count,
-  output: Count,
-  reasoning: Count,
-});
 /**
  * A model's recorded cost split by token class. The rollup priced each frame
  * from the price book at the frame's instant (ADR-060), so these are the
@@ -154,7 +146,7 @@ const RunCostModel = z.object({
 });
 
 const RunCostByModel = RunCostModel.extend({
-  tokens: TokenCounts,
+  tokens: RunTokenCounts,
   /** `cost` by token class; null exactly when `cost` is. */
   costByClass: CostByClass.nullable(),
   /**
@@ -171,7 +163,7 @@ const RunCostByTool = z.object({ name: z.string().min(1), calls: Count });
 
 const RunCostRollup = z.object({
   cost: Cost.nullable(),
-  tokens: TokenCounts,
+  tokens: RunTokenCounts,
   /** cache_read ÷ (input_uncached + cache_read), spend-weighted. */
   cacheHitRate: Ratio.nullable(),
   turns: Count.nullable(),

@@ -84,6 +84,7 @@
     },
     "readFailure": {
       "denied": "You cannot see {section} in this workspace. Your roles do not include {permission}; an organization owner can grant it.",
+      "deniedByRule": "You cannot see {section} in this workspace. The decision rule {rule} refused this read. A workspace admin can change the rule.",
       "pendingApproval": "Access to {section} is waiting for approval, request {accessRequestId}.",
       "error": "{section} could not be loaded: the control plane answered {code}. Nothing was changed, and runs kept recording."
     },

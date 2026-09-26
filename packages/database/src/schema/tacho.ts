@@ -12,8 +12,8 @@
  *   - Every table carries org_id + workspace_id NOT NULL -> standard
  *     tenant_isolation RLS (tenant-policy.manifest.ts).
  *   - Public id prefixes: tch_ hosts, tse_ sessions, tsm_ session models,
- *     tsf_ session files, tsc_ session commands, tcm_ control commands,
- *     tin_ incidents, tck_ checkpoints.
+ *     tsf_ session files, trp_ run pull requests, tsc_ session commands,
+ *     tcm_ control commands, tin_ incidents, tck_ checkpoints.
  */
 import { sql } from "drizzle-orm";
 import {
@@ -807,6 +807,74 @@ export const tachoSessionFiles = tachoSchema.table(
       t.path,
     ),
     orgIdx: index("tacho_session_files_org_idx").on(t.orgId, t.workspaceId),
+  }),
+);
+
+// ── run_pull_requests ────────────────────────────────────────────────────────
+// One row per pull request (or GitLab merge request) a root session's record
+// names, with the state a forge last reported for it (#4129, ADR-192). Forge
+// webhooks keep the state current, and one read when the link lands fills it
+// before the first delivery. The link itself stays in the session's frames:
+// this row holds only what the frames cannot, the state.
+export const tachoRunPullRequests = tachoSchema.table(
+  "run_pull_requests",
+  {
+    ...idMixin("trp"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    /** The root `tacho.sessions.id` whose record names the pull request. */
+    sessionId: uuid("session_id").notNull(),
+    /** The https URL as the frame recorded it. */
+    url: text("url").notNull(),
+    provider: text("provider").notNull(),
+    /**
+     * Lower-cased `owner/name`, or the GitLab project path. A match key for
+     * webhook deliveries only, never shown.
+     */
+    repository: text("repository").notNull(),
+    /** The pull request number, or the GitLab merge request iid. */
+    number: integer("number").notNull(),
+    /** `open`, `merged` or `closed`; null until a forge reported one. */
+    state: text("state"),
+    /** Only an open pull request can be a draft. */
+    draft: boolean("draft").notNull().default(false),
+    /** When Oxagen last read the state; null when it never has. */
+    stateSeenAt: ts("state_seen_at"),
+    /**
+     * The forge's `updated_at` for the state held here. A delivery older than
+     * it never overwrites the row, because forges deliver out of order.
+     */
+    sourceUpdatedAt: ts("source_updated_at"),
+  },
+  (t) => ({
+    sessionUrlUniq: uniqueIndex("tacho_run_pull_requests_uniq").on(
+      t.sessionId,
+      t.url,
+    ),
+    // The webhook lookup: every row one delivery updates.
+    forgeIdx: index("tacho_run_pull_requests_forge_idx").on(
+      t.orgId,
+      t.provider,
+      t.repository,
+      t.number,
+    ),
+    orgIdx: index("tacho_run_pull_requests_org_idx").on(t.orgId, t.workspaceId),
+    providerCheck: check(
+      "tacho_run_pull_requests_provider_check",
+      sql`${t.provider} IN ('github', 'gitlab')`,
+    ),
+    stateCheck: check(
+      "tacho_run_pull_requests_state_check",
+      sql`${t.state} IS NULL OR ${t.state} IN ('open', 'merged', 'closed')`,
+    ),
+    numberCheck: check(
+      "tacho_run_pull_requests_number_check",
+      sql`${t.number} > 0`,
+    ),
+    draftCheck: check(
+      "tacho_run_pull_requests_draft_check",
+      sql`NOT ${t.draft} OR ${t.state} IS NULL OR ${t.state} = 'open'`,
+    ),
   }),
 );
 

@@ -12,7 +12,12 @@ vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
 describe("ShellWorkspace", () => {
   it("reads the workspace's counts and feed and publishes them under its slug", async () => {
-    const counts = readOk({ approvals: 2, proposals: null, incidents: null });
+    const counts = readOk({
+      approvals: 2,
+      interjections: null,
+      proposals: null,
+      incidents: null,
+    });
     const feed = readError("control_plane_unavailable", 503);
     const source = {
       shell: {
