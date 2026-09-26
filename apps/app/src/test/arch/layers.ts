@@ -398,6 +398,12 @@ const PLATFORM_NAMED_ROWS: Readonly<
   "src/features/create/record-file.ts": {
     "@oxagen/oxagen/context-record-label": ["CONTEXT_RECORD_LINEAGE"],
   },
+  // A failed read carries the trace id active when it failed, so a person can
+  // hand support one handle (#3841). The kernel seam reads it from the tracer
+  // at classification, through this one named export.
+  "src/server/failure-facts.ts": {
+    "@oxagen/telemetry": ["currentTraceIds"],
+  },
   "instrumentation.ts": {
     "@oxagen/telemetry": ["initTracer", "recordSecurityEvent"],
     "@oxagen/database/security": ["makeSecurityEventInserter"],

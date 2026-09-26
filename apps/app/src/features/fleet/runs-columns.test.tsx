@@ -332,7 +332,16 @@ describe("the pull-request filter", () => {
       { pullRequests: "with", nextCursor: "c9" },
     );
     expect(calls.runs).toEqual([
-      [ctx, { cursor: null, limit: 25, pullRequests: "with", countLive: true }],
+      [
+        ctx,
+        {
+          cursor: null,
+          limit: 25,
+          pullRequests: "with",
+          count: true,
+          countLive: true,
+        },
+      ],
     ]);
     expect(screen.getByTestId("pr-filter")).toHaveValue("with");
     expect(screen.getByTestId("pr-filter-note")).toHaveTextContent(
