@@ -316,11 +316,14 @@ function ReplayGrade({
   chain,
   run,
   place,
+  orgRole,
   fromSeq,
 }: {
   chain: RunChain;
   run: RunRow;
   place: Place;
+  /** The viewer's organization role, which Fork is gated on. */
+  orgRole: OrgRole;
   fromSeq: string | null;
 }) {
   const t = useTranslations("run.chain.grade");
@@ -400,6 +403,7 @@ function ReplayGrade({
             org={place.org}
             ws={place.ws}
             run={run}
+            orgRole={orgRole}
             label={
               fromSeq === null
                 ? tReplay("forkAny")
@@ -556,7 +560,13 @@ export function ChainSection({
     <div className="grid items-start gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))]">
       <HashChain chain={chain} />
       <SealPanel chain={chain} run={run} place={place} orgRole={orgRole} />
-      <ReplayGrade chain={chain} run={run} place={place} fromSeq={fromSeq} />
+      <ReplayGrade
+        chain={chain}
+        run={run}
+        place={place}
+        orgRole={orgRole}
+        fromSeq={fromSeq}
+      />
       <Checkpoints chain={chain} place={place} />
     </div>
   );

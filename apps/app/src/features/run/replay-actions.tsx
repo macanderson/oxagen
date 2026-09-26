@@ -14,8 +14,10 @@
 //
 // Neither is offered on a recording that cannot carry it. Fork needs a ledger
 // run graded `fork` and every body before the branch point retained, which the
-// handler checks and refuses with `conflict`; the button is drawn disabled,
-// with the reason, wherever the row already says the recording is weaker, so a
+// handler checks and refuses with `conflict`. It also needs an organization
+// Owner, Admin or Member, whatever the viewer's workspace role, which the
+// handler refuses with `org_role_required`. The button is drawn disabled, with
+// the reason, wherever the row or the viewer's role already answers, so a
 // person is not sent to a refusal they could have read here.
 //
 // Bisect's other run is picked by name from the workspace's runs. The picker
@@ -24,6 +26,8 @@ import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
 import type { RunRow } from "@/data/contracts/runs";
 import { chooseRuns } from "@/features/shell/client";
+import type { OrgRole } from "@/server/viewer";
+import { canForkRun } from "@/shared/run-command-roles";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import { buttonSecondary, inputBase, mono } from "@/ui/control-styles";
 import { FormAlert, SubmitButton } from "@/ui/form-feedback";
@@ -283,13 +287,17 @@ export function BisectDialog({
 
 /**
  * Fork replay, or the disabled button that says why not. `fork_run` refuses a
- * wrapped session by name and a recording graded below `fork`; both are on
- * the row, so the reason is said here rather than in a refusal.
+ * wrapped session by name, a recording graded below `fork`, and a viewer
+ * whose organization role is not Owner, Admin or Member. The first two are on
+ * the row and the third is the viewer's, so the reason is said here rather
+ * than in a refusal. The recording's reason comes first: a viewer who gains
+ * the role still could not fork a recording that cannot carry it.
  */
 export function ForkAction({
   org,
   ws,
   run,
+  orgRole,
   label,
   testId = "run-fork",
   fromSeq,
@@ -297,14 +305,16 @@ export function ForkAction({
   org: string;
   ws: string;
   run: RunRow;
+  /** The viewer's organization role. `fork_run` reads no workspace role. */
+  orgRole: OrgRole;
   fromSeq?: string;
 } & ActionFace) {
   const t = useTranslations("run.replay");
   const reasonId = useId();
-  const forkable =
+  const recordingAllows =
     run.source === "ledger" &&
     (run.replayGrade === "fork" || run.replayGrade === "retry");
-  if (forkable)
+  if (recordingAllows && canForkRun(orgRole))
     return (
       <ForkDialog
         org={org}
@@ -320,7 +330,9 @@ export function ForkAction({
       ? t("forkNeedsLedger")
       : run.replayGrade === null
         ? t("forkNoGrade")
-        : t("forkNeedsGrade", { grade: run.replayGrade });
+        : !recordingAllows
+          ? t("forkNeedsGrade", { grade: run.replayGrade })
+          : t("forkNeedsRole");
   // The button sits in a row of actions, so a refusal is said on the
   // disabled button itself (on hover, and to assistive tech as its
   // description) rather than as a line under the row.
@@ -354,15 +366,18 @@ export function ReplayActions({
   org,
   ws,
   run,
+  orgRole,
 }: {
   org: string;
   ws: string;
   run: RunRow;
+  /** The viewer's organization role, which Fork is gated on. */
+  orgRole: OrgRole;
 }) {
   // The two buttons sit in the header's action row beside Export.
   return (
     <>
-      <ForkAction org={org} ws={ws} run={run} />
+      <ForkAction org={org} ws={ws} run={run} orgRole={orgRole} />
       <BisectDialog org={org} ws={ws} runId={run.id} />
     </>
   );
