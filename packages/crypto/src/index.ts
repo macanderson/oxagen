@@ -4,6 +4,8 @@
  * Public surface:
  *   encrypt(plaintext, keyId, { adapter })  → Promise<Buffer>
  *   decrypt(ciphertext, keyId, { adapter }) → Promise<Buffer>
+ *   lastingDecryptFailure(err)               (a decrypt failure no retry will pass,
+ *                                             and whether it reaches the key or one body)
  *   ENVELOPE_VERSION                         (wire format constant)
  *   KmsAdapter (interface)                   (implement to swap KEK providers)
  *   EncryptOptions / DecryptOptions
@@ -24,6 +26,10 @@
  */
 
 export { encrypt, decrypt } from "./envelope";
+export {
+  lastingDecryptFailure,
+  type LastingDecryptFailure,
+} from "./decrypt-failure";
 export { ENVELOPE_VERSION } from "./types";
 export type { KmsAdapter, EncryptOptions, DecryptOptions } from "./types";
 export {

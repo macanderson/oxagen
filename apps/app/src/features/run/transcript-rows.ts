@@ -182,7 +182,7 @@ type FeedBase = {
   elapsedMs: number;
   /** The chip that shows or hides the row; null for a row no chip governs. */
   group: FeedGroup | null;
-  /** The entry's call failed, or a rule, a person or the harness refused it. */
+  /** The server counts the row's entry under errors (`error`): it failed or was refused. */
   failed: boolean;
   subagent: TranscriptEntry["subagent"];
   /**
@@ -208,7 +208,11 @@ export type FeedRow = FeedBase &
          * takes without reading the reply, is what the chip shows.
          */
         kind: "calls";
-        /** The tools the reply called, in order; empty when it called none the record kept. */
+        /**
+         * The tools the reply called that a tool step recorded, in order;
+         * each is drawn as that step's row. A call no tool step recorded is
+         * drawn as its own row after this one, so it is not named here.
+         */
         tools: string[];
       }
     | {
@@ -267,21 +271,6 @@ function gateOf(gate: TranscriptEntry["gates"][number]): FeedGate {
 }
 
 /**
- * The entry failed, was refused, or answers the errors chip, as the server
- * states it: the rule `transcriptCounts` counts errors by, so the errors
- * toggle shows the entries its count counted. Every row of an entry takes
- * this, including a call the entry's reply made that no tool step recorded,
- * whose own result the server does not read.
- */
-function failedOf(entry: TranscriptEntry): boolean {
-  return (
-    entry.outcome === "failed" ||
-    entry.outcome === "denied" ||
-    entry.kinds.includes("errors")
-  );
-}
-
-/**
  * The chip a row of `entry` is drawn under. A row appears under a chip only
  * when the server counted its entry there (`kinds`), so a chip's count is
  * the entries it shows (ADR-182). A row the page would file under a chip the
@@ -310,7 +299,11 @@ function base(
     at: entry.at,
     elapsedMs: entry.elapsedMs,
     group: chipOf(entry, group),
-    failed: failedOf(entry),
+    // The server says which entries `counts.errors` counts (`error`), so the
+    // errors toggle shows the entries its count counted. Every row of an
+    // entry takes it, including a call the entry's reply made that no tool
+    // step recorded, whose own result the server does not read.
+    failed: entry.error,
     subagent: entry.subagent,
     parent: entry.parentKey,
     spent: entry.cumulativeCost,
@@ -490,7 +483,8 @@ function blockToolRow(
  * Each row's chip is the server's (`chipOf`): a kept thought is drawn under
  * `thinking` when the step reported reasoning tokens and under `responses`
  * when it did not, and a call no tool step recorded is drawn under
- * `responses`.
+ * `responses`. A step that failed and has nothing else to draw draws one
+ * failed row, so the errors count is what the errors toggle shows.
  */
 function modelRows(entry: TranscriptEntry): FeedRow[] {
   const reply = entry.response;
@@ -544,7 +538,9 @@ function modelRows(entry: TranscriptEntry): FeedRow[] {
       ...base(`${entry.key}:calls`, entry, "responses"),
       kind: "calls",
       tools: (blocks ?? []).flatMap((block) =>
-        block.kind === "tool_use" ? [block.tool ?? block.name] : [],
+        block.kind === "tool_use" && block.stepKey !== null
+          ? [block.tool ?? block.name]
+          : [],
       ),
     });
   }
@@ -569,6 +565,19 @@ function modelRows(entry: TranscriptEntry): FeedRow[] {
       blockToolRow(block, `${entry.key}:u${String(index)}`, entry, frame),
     );
   });
+  // A call that failed with no reply kept and no figures still shows: the
+  // server counts it under errors, so it draws one failed row naming the
+  // model, under no chip.
+  if (rows.length === 0 && entry.error) {
+    rows.push({
+      ...base(`${entry.key}:failed`, entry, null),
+      kind: "event",
+      name: entry.model?.split("/").pop() ?? entry.type,
+      text: null,
+      gates: [],
+      frame,
+    });
+  }
   return rows;
 }
 

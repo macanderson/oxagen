@@ -1,7 +1,7 @@
 import { type RunFrame, tachoFrame, wordsDigest } from "@oxagen/run-ledger";
 import { describe, expect, it } from "vitest";
 import { tachoRow } from "../run.test-support";
-import { createWordsCache } from "./transcript-words-cache";
+import { createWordsCache, UNREADABLE } from "./transcript-words-cache";
 
 const A = { orgId: "org-a", workspaceId: "ws-a" };
 const B = { orgId: "org-b", workspaceId: "ws-a" };
@@ -77,7 +77,7 @@ describe("createWordsCache", () => {
     expect(cache.size()).toBe(2);
   });
 
-  it("remembers a body that could not be read as showing no words, until its TTL passes", () => {
+  it("remembers a body that could not be read as unreadable, not as showing no words, until its TTL passes", () => {
     let at = 0;
     const cache = createWordsCache(
       { maxEntries: 10, failureTtlMs: 1_000 },
@@ -85,7 +85,7 @@ describe("createWordsCache", () => {
     );
     cache.fail(A, frame(1));
     at = 999;
-    expect(cache.get(A, frame(1))).toEqual({ stream: false, words: null });
+    expect(cache.get(A, frame(1))).toBe(UNREADABLE);
     at = 1_000;
     expect(cache.get(A, frame(1))).toBeUndefined();
     expect(cache.size()).toBe(0);

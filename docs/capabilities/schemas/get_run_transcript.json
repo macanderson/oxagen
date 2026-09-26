@@ -1929,6 +1929,9 @@
                 }
               ]
             },
+            "error": {
+              "type": "boolean"
+            },
             "approvalId": {
               "anyOf": [
                 {

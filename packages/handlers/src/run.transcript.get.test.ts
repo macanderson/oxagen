@@ -11,6 +11,10 @@ import {
   tachoFrame as tachoFrameOf,
   wordsDigest,
 } from "@oxagen/run-ledger";
+import {
+  BodyKeyGoneError,
+  BodyUnopenableError,
+} from "@oxagen/run-ledger/evidence-store";
 import { StorageNotFoundError } from "@oxagen/storage";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -1205,13 +1209,12 @@ describe("get_run_transcript and one unreadable body", () => {
         bytesRef: `evb:v1:k:${"5".repeat(64)}`,
       }),
     ];
-    // Each half on the page is read once, at either zoom, and the prompt
-    // once more for its words (`readWords`): the words cache keeps a digest,
-    // not the text a half shows.
+    // Each half on the page is read once, at either zoom. The prompt's read
+    // for its words (`readWords`) is the read its half is answered from.
     for (const zoom of ["steps", "everything"] as const) {
       const { transcript, getBody } = harness(rows);
       await transcript(input({ zoom }), ctx());
-      expect(getBody).toHaveBeenCalledTimes(3);
+      expect(getBody).toHaveBeenCalledTimes(2);
       expect(new Set(getBody.mock.calls.map(([, ref]) => ref)).size).toBe(2);
     }
     const { transcript } = harness(rows);
@@ -1725,11 +1728,10 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
       input({ zoom: "everything", limit: 1 }),
       ctx(),
     );
-    // Only the prompt's body is read: once for its words, for the figures,
-    // and once for the page's one half. The words cache keeps no text, so no
-    // half is answered from it. The reply is never read.
+    // Only the prompt's body is read, once: for its words, for the figures,
+    // and for the page's one half from that same read. The reply is never
+    // read.
     expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([
-      stored("Ship it.").bytesRef,
       stored("Ship it.").bytesRef,
     ]);
     const next = await transcript(
@@ -2216,11 +2218,6 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
   const blank = { toolName: "", toolStatus: "", toolUseId: "" };
   // The Read call's request was kept as a digest only; its result was kept.
   const readRequest = { ...stored('{"path":"src/limits.ts"}'), bytesRef: "" };
-  const forged = stored("the real words");
-  objects.set(forged.bytesRef, {
-    bytes: enc.encode("words the record does not vouch for"),
-    contentType: "text/plain",
-  });
   const run = [
     tachoRow(0, {
       kind: "turn_start",
@@ -2265,10 +2262,15 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
       turnSeq: 1,
       ...stored("The runner calls retry three times."),
     }),
-    // A prompt whose body no longer hashes to its digest shows no words, so
-    // it is quiet (`markWords`), draws no row, and the search skips it: it is
-    // neither matched nor counted as unsearched.
-    tachoRow(6, { kind: "turn_start", ...blank, turnSeq: 2, ...forged }),
+    // A prompt of only whitespace shows no words, so it is quiet
+    // (`markWords`), draws no row, and the search skips it: it is neither
+    // matched nor counted as unsearched.
+    tachoRow(6, {
+      kind: "turn_start",
+      ...blank,
+      turnSeq: 2,
+      ...stored("  \n\t"),
+    }),
   ];
 
   it("finds the query in any half, ignoring case, and says where it matched", async () => {
@@ -2336,12 +2338,14 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
     // second prompt, whose body no longer hashes, is quiet and not searched.
     expect(later.search).toEqual({ query: "retry", matched: 1, unsearched: 0 });
     // The words of the whole run were settled by the first page's word read,
-    // so this read reads no body for its words. The prompt that no longer
-    // hashes is remembered as showing none, and is not read again. The reply
-    // is read by the search and again for the page, because the words cache
-    // keeps no text to answer either from.
+    // so this read reads one body for its words: the first it holds, to learn
+    // that its key still opens bodies. The reply is read once, by the
+    // search, and the page's half is answered from that read.
     const reply = run[5]?.bytesRef;
-    expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([reply, reply]);
+    expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([
+      run[0]?.bytesRef,
+      reply,
+    ]);
   });
 
   it("sends a match that grew behind the cursor once, and never moves the cursor back to it", async () => {
@@ -2526,12 +2530,12 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
     const rows = [0, 1, 2, 3].flatMap(turn);
     const { transcript, getBody } = harness(rows);
     const first = await transcript(input({ zoom: "steps", limit: 3 }), ctx());
-    // The first read reads the whole run's words, once each, and then its
-    // page's halves, once each: the words cache keeps digests, not text.
+    // The first read reads the whole run's words and its page's halves, and
+    // no body twice: a half it read for words is not read again for the page.
     const firstRefs = getBody.mock.calls.map(([, ref]) => ref);
     const twice = firstRefs.filter((ref, i) => firstRefs.indexOf(ref) !== i);
-    expect(new Set(twice)).toEqual(pageRefs(first));
-    expect(twice).toHaveLength(pageRefs(first).size);
+    expect(twice).toEqual([]);
+    for (const ref of pageRefs(first)) expect(firstRefs).toContain(ref);
 
     getBody.mockClear();
     const second = await transcript(
@@ -2541,10 +2545,13 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
     expect(second.entries.map((e) => e.key)).toEqual(["3", "4", "5"]);
     const read = getBody.mock.calls.map(([, ref]) => ref);
     const onPage = pageRefs(second);
-    expect(read.filter((ref) => !onPage.has(ref))).toEqual([]);
-    // Each half on the page is read once, and no body is read for words.
-    expect(read).toHaveLength(onPage.size);
-    expect(new Set(read)).toEqual(onPage);
+    // One body is read for words: the first the cache holds, to learn that
+    // its key still opens bodies.
+    const probe = stored("Prompt 0.").bytesRef;
+    expect(read.filter((ref) => !onPage.has(ref))).toEqual([probe]);
+    // Each half on the page is read once.
+    expect(read).toHaveLength(onPage.size + 1);
+    expect(new Set(read)).toEqual(new Set([probe, ...onPage]));
     // What the read settled is what a read with no cache settles.
     const fresh = await harness(rows).transcript(
       input({ zoom: "steps", limit: 3, after: first.cursor ?? undefined }),
@@ -2605,7 +2612,10 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
     await transcript(input({ zoom: "steps", query: "absent" }), ctx());
     expect(cache.size()).toBe(6);
 
-    // A later read reads no body for its words: only its page's halves.
+    // A later read reads one body for its words, the first the cache holds,
+    // to learn that its key still opens bodies. That body is also the page's
+    // one half, and a read reads each body once (finding P3-2 of the ADR-182
+    // fifth review).
     getBody.mockClear();
     const page = await transcript(input({ zoom: "steps", limit: 1 }), ctx());
     expect(page.entries.map((e) => e.key)).toEqual(["0"]);
@@ -2733,8 +2743,10 @@ describe("readWords remembers a body it cannot read for good", () => {
     const once = await readWords(bodies, SCOPE, folds, { cache });
     const again = await readWords(bodies, SCOPE, folds, { cache });
     expect(getBody).toHaveBeenCalledTimes(1);
-    expect([...once.values()]).toEqual([null]);
-    expect([...again.values()]).toEqual([null]);
+    // A body that could not be read answers nothing, so the prompt keeps
+    // what the fold said rather than reading as blank.
+    expect(once.size).toBe(0);
+    expect(again.size).toBe(0);
     at = 1_000;
     await readWords(bodies, SCOPE, folds, { cache });
     expect(getBody).toHaveBeenCalledTimes(2);
@@ -2761,6 +2773,38 @@ describe("readWords remembers a body it cannot read for good", () => {
     expect(getBody).toHaveBeenCalledTimes(1);
   });
 
+  it("reads no body under a key the read already found gone, and remembers each as unreadable", async () => {
+    const cache = createWordsCache();
+    const folds = stepFolds([prompt("Erased.")]);
+    const { bodies, getBody } = bodiesThat(() => new Error("not asked"));
+    const keys = { opened: new Set<string>(), gone: new Set(["k"]) };
+    const words = await readWords(bodies, SCOPE, folds, { cache, keys });
+    expect(getBody).not.toHaveBeenCalled();
+    expect(words.size).toBe(0);
+    const [fold] = folds;
+    const frame = fold === undefined ? null : fold.request;
+    expect(frame === null ? null : cache.get(SCOPE, frame)).toBe("unreadable");
+  });
+
+  // Finding P2-A of the ADR-182 fifth review: the body read again to learn
+  // its key is itself one this read finds does not open. Its kept digest no
+  // longer answers, as a read with no cache would not settle it.
+  it("answers no kept digest of a body this read found does not open", async () => {
+    const cache = createWordsCache();
+    const folds = stepFolds([prompt(" \n ")]);
+    const [fold] = folds;
+    const frame = fold === undefined ? null : fold.request;
+    if (frame === null) throw new Error("no prompt half");
+    cache.set(SCOPE, frame, { stream: false, words: null });
+    const { bodies, getBody } = bodiesThat(
+      () => new BodyUnopenableError("k", { cause: new Error("tag") }),
+    );
+    const words = await readWords(bodies, SCOPE, folds, { cache });
+    expect(getBody).toHaveBeenCalledTimes(1);
+    expect(words.size).toBe(0);
+    expect(cache.get(SCOPE, frame)).toBe("unreadable");
+  });
+
   it("reads a body again after a failure that may pass (negative)", async () => {
     const cache = createWordsCache();
     const folds = stepFolds([prompt("Flaky.")]);
@@ -2768,5 +2812,181 @@ describe("readWords remembers a body it cannot read for good", () => {
     await readWords(bodies, SCOPE, folds, { cache });
     await readWords(bodies, SCOPE, folds, { cache });
     expect(getBody).toHaveBeenCalledTimes(2);
+  });
+});
+
+// Findings P2-1 and P3-1 of the ADR-182 fourth review. A read that failed set
+// `quiet`, so an entry vanished from its chip on a live run while the rows
+// the page held stayed; and erasure, which destroys the key and leaves the
+// object, was modelled as a deleted object, so a process that had kept a
+// digest before erasure answered differently from one that had not.
+describe("get_run_transcript and a body that cannot be read", () => {
+  const blank = { toolName: "", toolStatus: "", toolUseId: "" };
+  /**
+   * Two turns: a prompt, a model step that says "Done.", and a closing
+   * message that repeats it, which is an echo and so quiet; then a prompt of
+   * only whitespace, which is quiet too.
+   */
+  const run = [
+    tachoRow(0, {
+      kind: "turn_start",
+      ...blank,
+      turnSeq: 1,
+      ...stored("Ship the fix."),
+    }),
+    tachoRow(1, {
+      kind: "llm_call",
+      ...blank,
+      model: "claude-opus-5",
+      provider: "anthropic",
+      turnSeq: 1,
+      ...stored(modelStream(["Done."]), "text/event-stream"),
+    }),
+    tachoRow(2, {
+      kind: "turn_end",
+      ...blank,
+      turnSeq: 1,
+      ...stored("Done."),
+    }),
+    tachoRow(3, {
+      kind: "turn_start",
+      ...blank,
+      turnSeq: 2,
+      ...stored(" \n "),
+    }),
+  ];
+  const marks = (out: { entries: { key?: string; quiet?: boolean }[] }) =>
+    out.entries.map((e) => [e.key, e.quiet]);
+
+  it("keeps a prompt whose read timed out shown, with the same count on every read", async () => {
+    const { transcript, getBody } = harness(run);
+    const prompt = run[0]?.bytesRef;
+    const read = getBody.getMockImplementation();
+    getBody.mockImplementation((scope, ref) =>
+      ref === prompt
+        ? Promise.reject(new Error("timeout"))
+        : (read?.(scope, ref) ?? Promise.reject(new Error("no body"))),
+    );
+    const first = await transcript(input({ zoom: "steps" }), ctx());
+    const second = await transcript(input({ zoom: "steps" }), ctx());
+    expect(first.entries.find((e) => e.key === "0")?.quiet).toBe(false);
+    expect(second.entries.find((e) => e.key === "0")?.quiet).toBe(false);
+    expect(first.counts?.kinds?.prompt).toBe(1);
+    expect(second.counts).toEqual(first.counts);
+    // The read that failed is tried again on the next read, since a timeout
+    // may pass. Within one read it is asked for once, for its words and its
+    // half alike.
+    expect(getBody.mock.calls.filter(([, ref]) => ref === prompt)).toHaveLength(
+      2,
+    );
+  });
+
+  it("settles blank words and an echo only from a body read whole (negative)", async () => {
+    const { transcript } = harness(run);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    expect(marks(out)).toEqual([
+      ["0", false],
+      ["1", false],
+      ["2", true],
+      ["3", true],
+    ]);
+    expect(out.entries.find((e) => e.key === "2")?.echoOf).toBe("1");
+  });
+
+  it("answers the same after erasure whether the process read the run before or not", async () => {
+    const erased = () =>
+      Promise.reject(
+        new BodyKeyGoneError("k", {
+          cause: Object.assign(new Error("pending deletion"), {
+            name: "KMSInvalidStateException",
+          }),
+        }),
+      );
+    const warm = harness(run);
+    const before = await warm.transcript(input({ zoom: "steps" }), ctx());
+    expect(marks(before)).toEqual([
+      ["0", false],
+      ["1", false],
+      ["2", true],
+      ["3", true],
+    ]);
+
+    warm.getBody.mockImplementation(erased);
+    const cold = harness(run);
+    cold.getBody.mockImplementation(erased);
+    const warmAfter = await warm.transcript(input({ zoom: "steps" }), ctx());
+    const coldAfter = await cold.transcript(input({ zoom: "steps" }), ctx());
+    expect(warmAfter).toEqual(coldAfter);
+    // No body can be read, so no entry is settled by its words: each keeps
+    // what the fold said, and no reply is read as an echo.
+    expect(marks(warmAfter)).toEqual([
+      ["0", false],
+      ["1", false],
+      ["2", false],
+      ["3", false],
+    ]);
+    expect(warmAfter.entries.every((e) => e.echoOf === null)).toBe(true);
+    expect(warmAfter.entries.every((e) => e.request?.text == null)).toBe(true);
+
+    // Each erased body is remembered for the failure TTL, so a later read
+    // reads no body for its words, only its page's halves.
+    warm.getBody.mockClear();
+    const again = await warm.transcript(input({ zoom: "steps" }), ctx());
+    expect(again).toEqual(warmAfter);
+    const halves = again.entries.flatMap((e) =>
+      [e.request?.bytesRef, e.response?.bytesRef].filter(
+        (ref): ref is string => typeof ref === "string",
+      ),
+    );
+    expect(warm.getBody).toHaveBeenCalledTimes(halves.length);
+  });
+
+  // Finding P2-A of the ADR-182 fifth review: a reference names the
+  // deployment KEK, so one body that did not open marked the key gone, and
+  // every other body under it lost its words for a minute.
+  it("fails only the body that does not open, and settles the rest under its key", async () => {
+    const tampered = run[0]?.bytesRef;
+    const unopenable = (read: ReturnType<typeof harness>) => {
+      const real = read.getBody.getMockImplementation();
+      read.getBody.mockImplementation((scope, ref) =>
+        ref === tampered
+          ? Promise.reject(
+              new BodyUnopenableError("k", {
+                cause: new Error(
+                  "Unsupported state or unable to authenticate data",
+                ),
+              }),
+            )
+          : (real?.(scope, ref) ?? Promise.reject(new Error("no body"))),
+      );
+    };
+    const settled = [
+      ["0", false],
+      ["1", false],
+      ["2", true],
+      ["3", true],
+    ];
+    const warm = harness(run);
+    const before = await warm.transcript(input({ zoom: "steps" }), ctx());
+    expect(marks(before)).toEqual(settled);
+
+    unopenable(warm);
+    const cold = harness(run);
+    unopenable(cold);
+    const warmAfter = await warm.transcript(input({ zoom: "steps" }), ctx());
+    const coldAfter = await cold.transcript(input({ zoom: "steps" }), ctx());
+    expect(warmAfter).toEqual(coldAfter);
+    // The blank prompt and the echo under the same key still settle, so
+    // nothing the tampered prompt did not decide moves.
+    expect(marks(warmAfter)).toEqual(settled);
+    expect(warmAfter.counts).toEqual(before.counts);
+    expect(warmAfter.entries.find((e) => e.key === "2")?.echoOf).toBe("1");
+    expect(warmAfter.entries.find((e) => e.key === "0")?.request?.text).toBe(
+      null,
+    );
+    // The key was not marked gone: the other bodies' texts are shown.
+    expect(warmAfter.entries.find((e) => e.key === "2")?.response?.text).toBe(
+      "Done.",
+    );
   });
 });
