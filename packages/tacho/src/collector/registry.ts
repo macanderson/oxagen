@@ -136,6 +136,16 @@ export interface SessionFacts {
   transcriptPath?: string;
   cwd?: string;
   pid?: number;
+  /**
+   * When the process behind `pid` started, as `ps` printed it the first time
+   * a live hook named that pid. A pid alone is not the harness: once the
+   * harness exits, the OS hands its pid to the next process it starts. The
+   * kill path and the sweep compare this with the pid's start time now and
+   * treat a different one as a different process. Absent where no start
+   * time could be read (Windows, or no `ps`), and then the bare pid stands,
+   * as it did before this was kept.
+   */
+  pidInstance?: string;
   /** Which harness runs the session; fixed at first sight, Claude Code by default. */
   harness?: TachoHarness;
   /** A custom agent's name (`--agent`); fixed at first sight. */
@@ -405,6 +415,13 @@ export interface RegistryOptions {
   context: ClaudeCodeContext;
   scope: string;
   now: () => number;
+  /**
+   * The start time of each of these pids, as `readProcessStarts` reads it.
+   * Absent, or answering undefined, records no `pidInstance`.
+   */
+  processStarts?: (
+    pids: readonly number[],
+  ) => ReadonlyMap<number, string> | undefined;
 }
 
 /**
@@ -438,6 +455,8 @@ export class SessionRegistry {
    * boundary delivered them, waiting for the daemon to send them.
    */
   private readonly expiredOnSeal: CommandAcknowledgement[] = [];
+  /** The pid each record's start time was last read for, read or not. */
+  private readonly startReadFor = new WeakMap<SessionRecord, number>();
 
   constructor(options: RegistryOptions) {
     this.options = options;
@@ -652,7 +671,8 @@ export class SessionRegistry {
         }
         existing.cwd = facts.cwd;
       }
-      if (facts.pid !== undefined) existing.pid = facts.pid;
+      if (facts.pid !== undefined)
+        this.notePid(existing, facts.pid, facts.seenAt === undefined);
       if (facts.lastHookEvent !== undefined)
         existing.lastHookEvent = facts.lastHookEvent;
       if (facts.baselineCommit !== undefined)
@@ -700,8 +720,32 @@ export class SessionRegistry {
       ...optionalFacts(facts),
     };
     this.sessions.set(this.key(harnessSessionId, facts), record);
+    if (facts.pid !== undefined && facts.pidInstance === undefined)
+      this.notePid(record, facts.pid, facts.seenAt === undefined);
     this.noteAgent(record, true);
     return { record, created: true };
+  }
+
+  /**
+   * Take the pid a hook named, and read when its process started the first
+   * time a live hook names it. A live hook's harness is waiting on the
+   * answer, so the pid still names the harness while the read runs. A
+   * replayed hook may come from a harness that exited while the daemon was
+   * down, and its pid may name another process by now, so it reads nothing
+   * and the next live hook does. One read per pid, not one per hook: `ps` is
+   * a process spawn.
+   */
+  private notePid(record: SessionRecord, pid: number, live: boolean): void {
+    if (record.pid !== pid) {
+      record.pid = pid;
+      delete record.pidInstance;
+    }
+    if (!live || record.pidInstance !== undefined) return;
+    if (isInternalSession(record.harnessSessionId)) return;
+    if (this.startReadFor.get(record) === pid) return;
+    this.startReadFor.set(record, pid);
+    const started = this.options.processStarts?.([pid])?.get(pid);
+    if (started !== undefined) record.pidInstance = started;
   }
 
   /**
@@ -921,7 +965,7 @@ export class SessionRegistry {
    * `forgetSealed` later dropped it (#3719).
    */
   sweepCandidates(
-    isAlive: (pid: number) => boolean,
+    isAlive: (pid: number, instance?: string) => boolean,
     idleMs: number,
     deferSeal: (session: SessionRecord) => boolean = () => false,
     staleMs: number = STALE_PID_SESSION_MS,
@@ -930,7 +974,12 @@ export class SessionRegistry {
     const now = this.options.now();
     for (const record of this.sessions.values()) {
       if (record.sealed || deferSeal(record)) continue;
-      const gone = record.pid !== undefined ? !isAlive(record.pid) : false;
+      // `isAlive` is handed the start time the pid was recorded with, so a
+      // pid now held by a process that started later reads as gone.
+      const gone =
+        record.pid !== undefined
+          ? !isAlive(record.pid, record.pidInstance)
+          : false;
       const quiet = now - Date.parse(record.lastSeenAt);
       // The daemon's own chain is exempt: its pid is this process.
       const idle =
@@ -983,7 +1032,7 @@ export class SessionRegistry {
    * writes them must use `sweepCandidates` and settle each chain itself.
    */
   sweep(
-    isAlive: (pid: number) => boolean,
+    isAlive: (pid: number, instance?: string) => boolean,
     idleMs: number,
     deferSeal: (session: SessionRecord) => boolean = () => false,
     staleMs: number = STALE_PID_SESSION_MS,
@@ -1209,6 +1258,9 @@ function optionalFacts(facts: SessionFacts): SessionFacts {
       : {}),
     ...(facts.cwd !== undefined ? { cwd: facts.cwd } : {}),
     ...(facts.pid !== undefined ? { pid: facts.pid } : {}),
+    ...(facts.pid !== undefined && typeof facts.pidInstance === "string"
+      ? { pidInstance: facts.pidInstance }
+      : {}),
     ...(facts.lastHookEvent !== undefined
       ? { lastHookEvent: facts.lastHookEvent }
       : {}),

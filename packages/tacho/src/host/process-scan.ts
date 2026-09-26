@@ -5,6 +5,7 @@
  * reads and writes `tachod.pid`, the record the service managers stop the
  * daemon by.
  */
+import { spawnSync } from "node:child_process";
 import { readlinkSync } from "node:fs";
 import { win32 } from "node:path";
 import type { Exec } from "./service";
@@ -44,6 +45,54 @@ export function listClaudeProcesses(exec: Exec): ClaudeProcess[] {
   const result = exec("ps", ["-axo", "pid=,ppid=,command="]);
   if (result.status !== 0) return [];
   return parsePsListing(result.stdout);
+}
+
+/** How long one `ps` read of start times may take. */
+const PROCESS_START_TIMEOUT_MS = 2_000;
+
+function psExec(command: string, args: string[]): ReturnType<Exec> {
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: PROCESS_START_TIMEOUT_MS,
+  });
+  return {
+    status: result.status,
+    stdout: typeof result.stdout === "string" ? result.stdout : "",
+    stderr: "",
+  };
+}
+
+/**
+ * When each of these processes started, as `ps -o lstart=` prints it, by
+ * pid: one `ps` call for the whole list (BSD and GNU `ps` both take a comma
+ * list after `-p`). A pid is identified by its number and its start time
+ * together, because the OS hands a freed pid to the next process it starts.
+ *
+ * A pid with no process is left out. Undefined when `ps` cannot answer, and
+ * always on Windows, which has no `ps`: a caller then has no start time to
+ * compare and falls back to the bare pid.
+ */
+export function readProcessStarts(
+  pids: readonly number[],
+  exec: Exec = psExec,
+  platform: NodeJS.Platform = process.platform,
+): Map<number, string> | undefined {
+  if (platform === "win32" || pids.length === 0) return undefined;
+  const result = exec("ps", ["-o", "pid=,lstart=", "-p", pids.join(",")]);
+  // `ps` exits 1, printing nothing, when none of the pids names a process.
+  const noneRunning = result.status === 1 && result.stdout.trim() === "";
+  if (result.status !== 0 && !noneRunning) return undefined;
+  const wanted = new Set(pids);
+  const out = new Map<number, string>();
+  for (const line of result.stdout.split("\n")) {
+    const match = /^\s*(\d+)\s+(\S.*)$/.exec(line);
+    if (match === null) continue;
+    const pid = Number(match[1]);
+    const started = (match[2] ?? "").trim().replace(/\s+/g, " ");
+    if (wanted.has(pid) && started.length > 0) out.set(pid, started);
+  }
+  return out;
 }
 
 export function isProcessAlive(pid: number): boolean {

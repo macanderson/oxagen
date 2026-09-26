@@ -74,7 +74,11 @@ import {
   verifyRunToken,
 } from "../host/run-token";
 import type { TachoPaths } from "../host/paths";
-import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
+import {
+  isProcessAlive,
+  listClaudeProcesses,
+  readProcessStarts,
+} from "../host/process-scan";
 import type { Exec, ExecAsync, ExecResult } from "../host/service";
 import {
   HOST_RETENTION_CLASSES,
@@ -140,6 +144,7 @@ import {
 import {
   forgetHookId,
   HOOK_ID_REPLAY_WINDOW_MS,
+  isInternalSession,
   parseRegistryState,
   pruneHookIds,
   sessionMapKey,
@@ -206,6 +211,13 @@ export interface DaemonOptions {
   /** `win32` listens on loopback TCP only (no Unix socket). */
   platform?: NodeJS.Platform;
   kill?: (pid: number, signal: "SIGTERM" | "SIGKILL") => boolean;
+  /**
+   * When each pid's process started (`readProcessStarts`). Defaults to `ps`
+   * through the injected `exec`, or to a real `ps` when none is injected.
+   */
+  processStarts?: (
+    pids: readonly number[],
+  ) => ReadonlyMap<number, string> | undefined;
   transcriptRoots?: string[];
   /** Override the model proxy's port from the host file (0 = ephemeral). */
   modelProxyPort?: number;
@@ -469,6 +481,16 @@ async function initializeDaemon(
       ? async (command, args) => exec(command, args)
       : defaultExecAsync);
   const kill = options.kill ?? defaultKill;
+  // A session records when its harness started, and the kill path and the
+  // sweep compare that with the pid's start time now, so a pid the OS has
+  // handed to another process is neither signalled nor kept open (#4314).
+  // Windows has no `ps`, so there this answers nothing and the bare pid
+  // stands, as `pidReused` in inbox.ts says.
+  const platform = options.platform ?? process.platform;
+  const processStarts =
+    options.processStarts ??
+    ((pids: readonly number[]) =>
+      readProcessStarts(pids, options.exec, platform));
   const loaded = options.host ?? readHostFile(paths.hostFile);
   if (loaded === undefined) {
     throw new Error(
@@ -548,6 +570,7 @@ async function initializeDaemon(
     context,
     scope: sessionScopeOf(host),
     now,
+    processStarts,
   });
   // Read before anything in this startup touches the file, so it names the
   // previous process's last write — the moment its record of a live session
@@ -1379,6 +1402,7 @@ async function initializeDaemon(
             registry,
             hostRecorder: () => hostRecorder,
             kill,
+            processStart: (pid) => processStarts([pid])?.get(pid),
             refreshBundle: async () => {
               await refreshBundle();
             },
@@ -3244,6 +3268,32 @@ async function initializeDaemon(
     }
   }
 
+  /**
+   * The sweep's test of a session's pid: the process answers, and it is the
+   * one the session recorded. One `ps` call reads the start time of every
+   * live pid that has one recorded, so a pid the OS gave to a later process
+   * seals its session on this sweep rather than after `STALE_PID_SESSION_MS`.
+   * A pid `ps` did not list keeps the plain liveness answer.
+   */
+  function sweepLiveness(): (pid: number, instance?: string) => boolean {
+    const pids = registry
+      .live()
+      .filter(
+        (session) =>
+          session.pid !== undefined &&
+          session.pidInstance !== undefined &&
+          !isInternalSession(session.harnessSessionId),
+      )
+      .map((session) => session.pid as number)
+      .filter(isProcessAlive);
+    const started = pids.length > 0 ? processStarts(pids) : undefined;
+    return (pid, instance) => {
+      if (!isProcessAlive(pid)) return false;
+      const now = instance === undefined ? undefined : started?.get(pid);
+      return now === undefined || now === instance;
+    };
+  }
+
   async function controlTick(): Promise<void> {
     if (stopped) return;
     for (const session of registry.list()) {
@@ -3286,7 +3336,7 @@ async function initializeDaemon(
           // disk, and `forgetSealed` then dropped it (#3719).
           let failure: { error: unknown } | undefined;
           const candidates = registry.sweepCandidates(
-            isProcessAlive,
+            sweepLiveness(),
             timers.idleSessionMs,
             (session) =>
               pendingSessionEnds.has(session.recorder.sessionUuid) ||
