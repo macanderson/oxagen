@@ -1,7 +1,7 @@
 import { withSystemDb, schema, type Tx } from "@oxagen/database";
 import { inTransaction } from "./internal/in-transaction";
 import { withBillingDb } from "./internal/platform-db";
-import { and, asc, eq, inArray, isNull, or, sql, gt } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql, gt } from "drizzle-orm";
 import { CREDIT_REASONS } from "./constants";
 import { MICRO_CREDITS_PER_CREDIT } from "./pricing";
 
@@ -157,6 +157,25 @@ export async function readBalanceMirror(orgId: string): Promise<bigint> {
     }),
   );
   return row?.balanceCents ?? 0n;
+}
+
+/**
+ * The org's newest credit ledger rows, newest first, for display. The ledger
+ * is a platform table on the shared plane (ADR-042 §2), so an organisation on
+ * its own database reads it here and not through `withTenantDb`.
+ */
+export async function recentCreditLedger(
+  orgId: string,
+  limit: number,
+): Promise<Array<typeof schema.creditLedger.$inferSelect>> {
+  return withBillingDb((tx) =>
+    tx
+      .select()
+      .from(schema.creditLedger)
+      .where(eq(schema.creditLedger.orgId, orgId))
+      .orderBy(desc(schema.creditLedger.createdAt))
+      .limit(limit),
+  );
 }
 
 // ---------------------------------------------------------------------------

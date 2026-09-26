@@ -92,6 +92,7 @@ import {
   effectiveBalance,
   owedCredits,
   readBalanceMirror,
+  recentCreditLedger,
 } from "../credits";
 import { assistantSpendThisMonth } from "../metering";
 import {
@@ -153,6 +154,7 @@ describe("billing tenant transactions open on the shared plane", () => {
     ["effectiveBalance", () => effectiveBalance(ORG), () => {}],
     ["owedCredits", () => owedCredits(ORG), () => {}],
     ["readBalanceMirror", () => readBalanceMirror(ORG), () => {}],
+    ["recentCreditLedger", () => recentCreditLedger(ORG, 10), () => {}],
     [
       "createCreditLot",
       () =>
