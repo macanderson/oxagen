@@ -56,6 +56,11 @@ export function isWhole(transcript: RunTranscript): boolean {
  * `isWhole` says it is a prefix. A page that fails after the first keeps what
  * was read and its cursor, so the tab says the list stops short rather than
  * failing a list it mostly holds.
+ *
+ * `frameCursor` is where a live reader's stream opens. Every page answers the
+ * head of the run's fold, so a read that stopped short of it (a failed page,
+ * or the page bound with more to read) answers none: the stream then opens at
+ * the run's first frame, and its signals page the missing entries in.
  */
 export async function readWholeTranscript(
   // Only the transcript read: a caller hands in its whole source, and a test
@@ -92,12 +97,16 @@ export async function readWholeTranscript(
     entries = mergeEntries(entries, next.value.entries);
     last = next.value;
   }
+  // A full page with a cursor is a page the loop did not follow: it failed
+  // or hit the bound. A live run's short last page is the head.
+  const short = last.cursor !== null && last.entries.length >= limit;
   return {
     ok: true,
     value: {
       ...last,
       entries,
       complete: first.value.complete && last.complete,
+      ...(short ? { frameCursor: null } : {}),
     },
   };
 }
