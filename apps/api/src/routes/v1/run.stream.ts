@@ -57,6 +57,17 @@ export const runStreamRoute = new Hono<AppEnv>();
  * nothing and skips nothing, so a dropped connection costs a round trip and no
  * frames.
  *
+ * ## Subagent chains
+ *
+ * A wrapped run's subagents record on chains of their own, and a frame on one
+ * of them is not a frame past the run's own cursor (#3823). Each read of a
+ * wrapped run answers the subagent chains' heads, and the route writes them
+ * as `event: chains` when the stream opens and whenever their cursor moves.
+ * It passes the last cursor it wrote as `chainsAfter`, so `get_run`'s wait
+ * also ends when a subagent records, and a run where only a subagent is
+ * still recording keeps the stream awake. A reconnect writes the heads once
+ * more; the client reads that as one more signal to read the tail.
+ *
  * ## Closing
  *
  * `event: done` closes the stream. It carries a reason: `sealed` when the run
@@ -107,6 +118,7 @@ runStreamRoute.get("/", async (c) => {
   void (async () => {
     let page = first as Awaited<ReturnType<typeof readRun>>;
     let cursor = after;
+    let chainsCursor: string | undefined;
     let deadline = Date.now() + IDLE_MS;
     write(`event: run\ndata: ${JSON.stringify({ run: page.run })}\n\n`);
     try {
@@ -131,6 +143,13 @@ runStreamRoute.get("/", async (c) => {
           break;
         }
         if (page.frames.frames.length > 0) deadline = Date.now() + IDLE_MS;
+        const chains = page.chains;
+        if (chains !== undefined && chains.cursor !== chainsCursor) {
+          write(`event: chains\ndata: ${JSON.stringify({ chains })}\n\n`);
+          if (closed) break;
+          chainsCursor = chains.cursor;
+          deadline = Date.now() + IDLE_MS;
+        }
         // A sealed or halted run whose page had nothing behind it is done:
         // nothing will ever lie past it. A `live` run with a null cursor is
         // merely caught up — no frames yet, or a reconnect that landed
@@ -149,7 +168,7 @@ runStreamRoute.get("/", async (c) => {
           );
           break;
         }
-        page = await readRun(ctx, runId, cursor);
+        page = await readRun(ctx, runId, cursor, chainsCursor);
       }
     } catch (err) {
       // The stream is open, so a failure is a typed event and not a status.
@@ -242,17 +261,22 @@ function streamErrorCode(err: unknown): string | undefined {
     : undefined;
 }
 
-/** One read of the run, waiting inside the handler for a frame past the cursor. */
+/**
+ * One read of the run, waiting inside the handler for a frame past the
+ * cursor, or for a subagent chain to move past `chainsAfter`.
+ */
 function readRun(
   ctx: ReturnType<typeof capabilityContext>,
   runId: string | undefined,
   after: string | undefined,
+  chainsAfter: string | undefined,
 ) {
   return invoke(
     runGet.name,
     runGet.input.parse({
       runId,
       framesAfter: after,
+      chainsAfter,
       frameLimit: FRAME_LIMIT,
       waitMs: WAIT_MS,
     }),
@@ -262,5 +286,6 @@ function readRun(
     run: { status: "live" | "sealed" | "halted" };
     frames: { frames: { cursor: string }[]; cursor: string | null };
     framesError?: { code: string; message: string };
+    chains?: { cursor: string };
   }>;
 }

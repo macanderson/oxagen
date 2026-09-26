@@ -17,6 +17,12 @@
 // signal is coalesced: the hook calls back once per `COALESCE_MS`, however
 // many frames landed in that window.
 //
+// A wrapped run's subagents record on chains of their own, so their frames
+// never arrive as frames past the run's own cursor (#3823). The route writes
+// `event: chains` with every subagent chain's head when the stream opens and
+// whenever a head moves, and the hook treats a moved head as it treats a
+// frame: one more signal, coalesced with the rest, to read the tail.
+//
 // The route also writes `event: run` with the run's row each time the stream
 // opens, and it reopens a quiet stream every few minutes. The hook hands the
 // row's status and command block to `onRun`, so a page can notice that the
@@ -140,6 +146,9 @@ export function useRunStream({
     // Retries since the last frame or clean close; progress resets it.
     let retries = 0;
     let stopped = false;
+    // The last heads the route wrote, kept across reopens, so a reopen that
+    // writes the same heads again is not read as a move.
+    let chainsCursor: string | null = null;
 
     function signal() {
       if (timer !== null) return;
@@ -183,6 +192,27 @@ export function useRunStream({
         retries = 0;
         signal();
       };
+      es.addEventListener("chains", (event: MessageEvent<string>) => {
+        if (stopped) return;
+        let cursor: string | null = null;
+        try {
+          const payload: unknown = JSON.parse(event.data);
+          if (payload !== null && typeof payload === "object") {
+            const opened: Record<string, unknown> = { ...payload };
+            const chains = opened.chains;
+            if (chains !== null && typeof chains === "object") {
+              const heads: Record<string, unknown> = { ...chains };
+              if (typeof heads.cursor === "string") cursor = heads.cursor;
+            }
+          }
+        } catch {
+          // Data, not instructions: a payload that does not parse is dropped.
+        }
+        if (cursor === null || cursor === chainsCursor) return;
+        chainsCursor = cursor;
+        retries = 0;
+        signal();
+      });
       es.addEventListener("run", (event: MessageEvent<string>) => {
         if (stopped) return;
         let row: unknown = null;
