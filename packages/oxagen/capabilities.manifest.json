@@ -2848,12 +2848,14 @@
       "mode": "sync",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "cli"
       ],
       "layers": {
         "schema": true,
         "api": true,
         "mcp": true,
+        "cli": true,
         "unit": true,
         "docs": true,
         "app": true
@@ -4944,6 +4946,26 @@
       }
     },
     {
+      "name": "get_run_context",
+      "file": "run.context.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "get_run_cost",
       "file": "run.cost.ts",
       "domain": "run",
@@ -5111,6 +5133,24 @@
         "api": true,
         "app": true,
         "unit": false,
+        "docs": true
+      }
+    },
+    {
+      "name": "get_run_issues",
+      "file": "run.issues.get.ts",
+      "domain": "run",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "app": true,
+        "unit": true,
         "docs": true
       }
     },

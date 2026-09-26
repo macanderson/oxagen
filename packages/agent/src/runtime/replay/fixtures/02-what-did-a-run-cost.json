@@ -17,7 +17,8 @@
           "cache_write_5m": 0,
           "cache_write_1h": 0,
           "output": 6100,
-          "reasoning": 0
+          "reasoning": 0,
+          "server_tool_request": 0
         },
         "cacheHitRate": 0.71,
         "turns": 3,
@@ -26,18 +27,24 @@
         "toolCalls": 14,
         "retries": 0,
         "productiveRatio": null,
+        "advancedSteps": null,
+        "unproductiveSteps": null,
+        "unproductiveCauses": null,
         "byModel": [],
         "byTool": [
           {
             "name": "create_pull_request",
-            "calls": 1
+            "calls": 1,
+            "resultTokens": null,
+            "cost": null
           }
         ],
         "priceEntryIds": [],
         "rolledUpAt": "2026-09-24T09:05:00.000Z",
         "isEstimate": false
       },
-      "provisional": null
+      "provisional": null,
+      "baseline": null
     }
   },
   "frames": [

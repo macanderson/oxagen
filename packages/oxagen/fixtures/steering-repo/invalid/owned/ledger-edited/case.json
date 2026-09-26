@@ -1,0 +1,17 @@
+{
+  "check": "owned",
+  "rule": "oxagen-writes",
+  "severity": "error",
+  "description": "A person edited the ledger, which only Oxagen writes. The edited line's hash no longer matches it.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/promotions/2026-09.jsonl"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/promotions/2026-09.jsonl",
+      "line": 1
+    }
+  ]
+}

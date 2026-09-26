@@ -1,0 +1,21 @@
+{
+  "check": "schema",
+  "rule": "strict-yaml",
+  "severity": "error",
+  "description": "The frontmatter uses a YAML anchor and alias, outside the strict subset.",
+  "refused_by_reader": true,
+  "changed": [
+    "steering/platform/a-intel.platform.yaml-alias.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/platform/a-intel.platform.yaml-alias.md",
+      "line": 4
+    },
+    {
+      "path": "steering/platform/a-intel.platform.yaml-alias.md",
+      "line": 5
+    }
+  ]
+}

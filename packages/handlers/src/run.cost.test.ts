@@ -1,20 +1,35 @@
-import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
+import {
+  runCostGet,
+  type RunCostBaseline,
+} from "@oxagen/oxagen/contracts/run.cost";
 import { describe, expect, it, vi } from "vitest";
+import type { BaselineRun } from "./lib/run-cost-baseline";
 import { createRunCostHandler, provisionalOf } from "./run.cost";
 import { ctx, pricedRun, run, SCOPE } from "./spend.test-support";
 
 const ROLLED_UP_AT = new Date("2026-09-10T12:31:00.000Z");
 
-function harness(rows: ReturnType<typeof run>[]) {
+/** No baseline: what an agent with a thin history answers. */
+const noBaseline = async (): Promise<RunCostBaseline | null> => null;
+
+function harness(
+  rows: ReturnType<typeof run>[],
+  baseline: RunCostBaseline | null = null,
+) {
   const readRunTotalsByIds = vi.fn(async (_scope, ids: readonly string[]) => {
     const found = rows.filter((r) => ids.includes(r.runId));
     return new Map(
       found.map((r) => [r.runId, { ...r, rolledUpAt: ROLLED_UP_AT }]),
     );
   });
+  const readBaseline = vi.fn(
+    async (_scope, _run: BaselineRun): Promise<RunCostBaseline | null> =>
+      baseline,
+  );
   return {
-    handler: createRunCostHandler({ readRunTotalsByIds }),
+    handler: createRunCostHandler({ readRunTotalsByIds, readBaseline }),
     readRunTotalsByIds,
+    readBaseline,
   };
 }
 
@@ -29,7 +44,11 @@ describe("get_run_cost", () => {
   it("answers rollup: null for a run the rollup has not reached", async () => {
     const h = harness([]);
     const out = await h.handler({ runId: "tse_0000000000000000000001" }, ctx());
-    expect(out).toEqual({ runId: "tse_0000000000000000000001", rollup: null });
+    expect(out).toEqual({
+      runId: "tse_0000000000000000000001",
+      rollup: null,
+      baseline: null,
+    });
     expect(() => runCostGet.output.parse(out)).not.toThrow();
   });
 
@@ -52,6 +71,9 @@ describe("get_run_cost", () => {
       toolCalls: 2,
       retries: 0,
       productiveRatio: 0.5,
+      advancedSteps: null,
+      unproductiveSteps: null,
+      unproductiveCauses: null,
       byModel: [
         {
           model: "claude-sonnet-5",
@@ -86,6 +108,11 @@ describe("get_run_cost", () => {
               currency: "USD",
               basis: "gateway_observed",
             },
+            server_tool_request: {
+              micros: "0",
+              currency: "USD",
+              basis: "gateway_observed",
+            },
           },
           cacheSaving: {
             micros: "0",
@@ -95,7 +122,7 @@ describe("get_run_cost", () => {
           hasUnpriced: false,
         },
       ],
-      byTool: [{ name: "Read", calls: 2 }],
+      byTool: [{ name: "Read", calls: 2, resultTokens: null, cost: null }],
       priceEntryIds: ["0192d4a8-7c1e-7a00-8000-0000000000e1"],
       rolledUpAt: ROLLED_UP_AT.toISOString(),
       // The fixture's row was rebuilt after the run sealed.
@@ -197,11 +224,12 @@ describe("get_run_cost", () => {
     const handler = createRunCostHandler({
       readRunTotalsByIds: async () => new Map(),
       readProvisional,
+      readBaseline: noBaseline,
     });
     const runId = "tse_0000000000000000000002";
     const out = await handler({ runId }, ctx());
     expect(readProvisional).toHaveBeenCalledWith(SCOPE, runId);
-    expect(out).toEqual({ runId, rollup: null, provisional });
+    expect(out).toEqual({ runId, rollup: null, provisional, baseline: null });
     expect(() => runCostGet.output.parse(out)).not.toThrow();
   });
 
@@ -212,6 +240,7 @@ describe("get_run_cost", () => {
       readRunTotalsByIds: async () =>
         new Map([[row.runId, { ...row, rolledUpAt: ROLLED_UP_AT }]]),
       readProvisional,
+      readBaseline: noBaseline,
     });
     const out = await handler({ runId: row.runId }, ctx());
     expect(readProvisional).not.toHaveBeenCalled();
@@ -219,12 +248,110 @@ describe("get_run_cost", () => {
   });
 
   it("answers rollup: null alone when no wrapped session matches", async () => {
+    const readBaseline = vi.fn(noBaseline);
     const handler = createRunCostHandler({
       readRunTotalsByIds: async () => new Map(),
       readProvisional: async () => null,
+      readBaseline,
     });
     const runId = "run_0000000000000000000003";
-    expect(await handler({ runId }, ctx())).toEqual({ runId, rollup: null });
+    expect(await handler({ runId }, ctx())).toEqual({
+      runId,
+      rollup: null,
+      baseline: null,
+    });
+    // No row names an agent or a start, so there is no baseline to read.
+    expect(readBaseline).not.toHaveBeenCalled();
+  });
+});
+
+describe("get_run_cost steps and tool costs (#3984, #3892)", () => {
+  it("answers the graded steps and why the unproductive ones made no progress", async () => {
+    const row = pricedRun(1_250n, {
+      steps: 4,
+      productiveRatio: 0.5,
+      advancedSteps: 2,
+      unproductiveSteps: 2,
+    });
+    row.breakdown.steps = { failed: 1, repeated: 0, retried: 1 };
+    const out = await harness([row]).handler({ runId: row.runId }, ctx());
+    expect(out.rollup).toMatchObject({
+      steps: 4,
+      productiveRatio: 0.5,
+      advancedSteps: 2,
+      unproductiveSteps: 2,
+      unproductiveCauses: { failed: 1, repeated: 0, retried: 1 },
+    });
+    const { rollup } = out;
+    expect(
+      (rollup?.advancedSteps ?? 0) + (rollup?.unproductiveSteps ?? 0),
+    ).toBe(rollup?.steps);
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers all three grade fields null on a row rolled up before grading", async () => {
+    // The columns were filled but the jsonb has no causes: the three travel
+    // together, so none is answered.
+    const row = pricedRun(1_250n, { advancedSteps: 3, unproductiveSteps: 1 });
+    const out = await harness([row]).handler({ runId: row.runId }, ctx());
+    expect(out.rollup).toMatchObject({
+      advancedSteps: null,
+      unproductiveSteps: null,
+      unproductiveCauses: null,
+    });
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("prices each tool's result tokens as an estimate, whatever the run's own basis", async () => {
+    const row = pricedRun(9_000n, { costBasis: "gateway_observed" });
+    row.breakdown.tools = [
+      { name: "Grep", calls: 1, resultTokens: null, costMicros: null },
+      { name: "Read", calls: 2, resultTokens: 1_200, costMicros: 3_600n },
+    ];
+    const out = await harness([row]).handler({ runId: row.runId }, ctx());
+    expect(out.rollup?.cost?.basis).toBe("gateway_observed");
+    expect(out.rollup?.byTool).toEqual([
+      { name: "Grep", calls: 1, resultTokens: null, cost: null },
+      {
+        name: "Read",
+        calls: 2,
+        resultTokens: 1_200,
+        cost: { micros: "3600", currency: "USD", basis: "estimated" },
+      },
+    ]);
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+});
+
+describe("get_run_cost baseline (#3984)", () => {
+  const baseline: RunCostBaseline = {
+    windowDays: 30,
+    before: "2026-09-10T12:00:00.000Z",
+    runs: 12,
+    medianCost: { micros: "2890000", currency: "USD", basis: "mixed" },
+    productiveRatio: 0.62,
+  };
+
+  it("reads the agent's baseline for the run's agent, start and currency", async () => {
+    const row = pricedRun(4_130_000n);
+    const h = harness([row], baseline);
+    const out = await h.handler({ runId: row.runId }, ctx());
+    expect(h.readBaseline).toHaveBeenCalledWith(SCOPE, {
+      runId: row.runId,
+      agentKey: "acme.core.cc",
+      startedAt: row.startedAt,
+      currency: "USD",
+    });
+    expect(out.baseline).toEqual(baseline);
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers baseline: null when the agent's history is too thin", async () => {
+    const row = pricedRun(4_130_000n);
+    const out = await harness([row], null).handler({ runId: row.runId }, ctx());
+    expect(out.baseline).toBeNull();
+    expect(out.rollup).not.toBeNull();
+    expect(() => runCostGet.output.parse(out)).not.toThrow();
   });
 });
 
@@ -298,6 +425,7 @@ describe("provisionalOf", () => {
         runId: "tse_0000000000000000000004",
         rollup: null,
         provisional: out,
+        baseline: null,
       }),
     ).not.toThrow();
   });

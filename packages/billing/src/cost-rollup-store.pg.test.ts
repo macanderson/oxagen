@@ -221,6 +221,7 @@ describe.skipIf(!enabled)(
         cache_write_1h: 0,
         output: 100,
         reasoning: 0,
+        server_tool_request: 0,
       },
       currency: "USD",
       priceEntryIds: [],
@@ -228,10 +229,12 @@ describe.skipIf(!enabled)(
       verdict: null,
       accepted: null,
       productiveRatio: null,
+      advancedSteps: null,
+      unproductiveSteps: null,
       // Overwritten per test.
       costMicros: null,
       costBasis: null,
-      breakdown: { models: [], tools: [] },
+      breakdown: { models: [], tools: [], steps: null },
     });
 
     const priced: RunTotalsRecord = {
@@ -253,6 +256,7 @@ describe.skipIf(!enabled)(
               cache_write_1h: 0n,
               output: 1500n,
               reasoning: 0n,
+              server_tool_request: 0n,
             },
             cacheSavingMicros: 0n,
             basis: "gateway_observed",
@@ -260,6 +264,7 @@ describe.skipIf(!enabled)(
           },
         ],
         tools: [],
+        steps: null,
       },
     };
 
@@ -301,6 +306,7 @@ describe.skipIf(!enabled)(
                 cache_write_1h: 0n,
                 output: 0n,
                 reasoning: 0n,
+                server_tool_request: 0n,
               },
               cacheSavingMicros: null,
               basis: null,
@@ -308,6 +314,7 @@ describe.skipIf(!enabled)(
             },
           ],
           tools: [],
+          steps: null,
         },
       };
       // The stale write lands AFTER the priced one, as it would in the race.
@@ -341,6 +348,7 @@ describe.skipIf(!enabled)(
                 cache_write_1h: 0n,
                 output: 0n,
                 reasoning: 0n,
+                server_tool_request: 0n,
               },
               cacheSavingMicros: null,
               basis: null,
@@ -348,6 +356,7 @@ describe.skipIf(!enabled)(
             },
           ],
           tools: [],
+          steps: null,
         },
       };
       await upsertRunTotals(stale, new Date());
@@ -373,7 +382,7 @@ describe.skipIf(!enabled)(
         modelCalls: 3,
         costMicros: null,
         costBasis: null,
-        breakdown: { models: [], tools: [] },
+        breakdown: { models: [], tools: [], steps: null },
       };
       await upsertRunTotals(grown, new Date());
 
@@ -484,6 +493,47 @@ describe.skipIf(!enabled)(
       const row = await readRow(id);
       expect(row?.sealedAt).toEqual(new Date("2001-06-01T00:05:00.000Z"));
       expect(row?.costBasis).toBeNull();
+    });
+
+    it("rewrites the productive ratio and step counts when a rebuild regrades the run (#3984)", async () => {
+      // The ratio used to ride the carried columns the conflict update left
+      // out, so the first rollup's figure stood however the frames changed.
+      const id = runId("regrade");
+      await upsertRunTotals(
+        {
+          ...priced,
+          runId: id,
+          productiveRatio: 1,
+          advancedSteps: 2,
+          unproductiveSteps: 0,
+          breakdown: {
+            ...priced.breakdown,
+            steps: { failed: 0, repeated: 0, retried: 0 },
+          },
+        },
+        new Date(),
+      );
+      await upsertRunTotals(
+        {
+          ...priced,
+          runId: id,
+          productiveRatio: 0.5,
+          advancedSteps: 1,
+          unproductiveSteps: 1,
+          breakdown: {
+            ...priced.breakdown,
+            steps: { failed: 1, repeated: 0, retried: 0 },
+          },
+        },
+        new Date(),
+      );
+      const row = await readRow(id);
+      expect(row?.productiveRatio).toBe("0.50000000");
+      expect(row?.advancedSteps).toBe(1);
+      expect(row?.unproductiveSteps).toBe(1);
+      expect(
+        (row?.breakdown as { steps?: unknown } | undefined)?.steps,
+      ).toEqual({ failed: 1, repeated: 0, retried: 0 });
     });
 
     it("keeps a run's first cost center on a later rebuild and fills a null (ADR-142)", async () => {
@@ -785,16 +835,19 @@ describe.skipIf(!enabled)("running rollups against Postgres", () => {
         cache_write_1h: 0,
         output: 5,
         reasoning: 0,
+        server_tool_request: 0,
       },
       costMicros: 100n,
       currency: "USD",
       costBasis: "client_attested",
       priceEntryIds: [],
       cacheHitRate: null,
-      breakdown: { models: [], tools: [] },
+      breakdown: { models: [], tools: [], steps: null },
       verdict: null,
       accepted: null,
       productiveRatio: null,
+      advancedSteps: null,
+      unproductiveSteps: null,
       ...over,
     }) satisfies RunTotalsRecord;
 

@@ -17,6 +17,7 @@ import {
   spendFigureSchema,
   spendGroupKindSchema,
   tokenCountsSchema,
+  unmeteredRunsSchema,
 } from "./spend.shared";
 
 export const spendRowSchema = spendFigureSchema
@@ -67,6 +68,8 @@ export const spendGet = registerCapability({
        * estimate over the calls recorded so far, and grows until they seal.
        */
       estimatedRuns: z.number().int().nonnegative().optional(),
+      /** Runs in the period that recorded no usage, by harness. */
+      unmeteredRuns: unmeteredRunsSchema.optional(),
       /** Largest spend first; groups with no cost after those with one. */
       rows: z.array(spendRowSchema),
     })

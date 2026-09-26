@@ -1,0 +1,21 @@
+schema = "context-record/v0.1"
+set_id = "a-intel.core-platform"
+
+[[record]]
+lineage_id = "ctx.a-intel.no-push-to-main"
+label = "Never push to main"
+record_id = "rec_a_intel_no_push_to_main_27e708fab014"
+record_hash = "sha256:0ceaf1f73abd56189c7e6f4e1b7cf6ec652f34986380cf6543a8af988a502680"
+kind = "constraint"
+statement = "Do not push to main or force-push any shared branch."
+origin = "user"
+sharing_scope = "workspace"
+status = "active"
+constraint_effect = "forbid"
+
+[record.provenance]
+source_kind = "proposal"
+source_uri = "oxagen:proposal/prp_01K5V0AB"
+
+[record.steering]
+force = "must"

@@ -13,8 +13,10 @@ import {
   type ModelCallFrame,
   type RunMeta,
   type RunTotalsRecord,
+  type ToolCallFrame,
 } from "./cost-rollup";
 import {
+  ledgerToolStatus,
   modelCallHidesTurn,
   rebuildRunTotals,
   reviveBreakdown,
@@ -55,6 +57,7 @@ function deps(over: {
   verdict?: RunTotalsRecord["verdict"];
   witnessed?: Record<string, string>;
   modelCalls?: ModelCallFrame[];
+  toolCalls?: ToolCallFrame[];
 }) {
   const written: RunTotalsRecord[] = [];
   const scopes: unknown[] = [];
@@ -62,13 +65,20 @@ function deps(over: {
     loadRunSource: async (publicId) => {
       const m = over.runs[publicId];
       return m
-        ? { meta: m, frames: { kind: "tacho", rootSessionUuid: publicId } }
+        ? {
+            meta: m,
+            frames: {
+              kind: "tacho",
+              rootSessionUuid: publicId,
+              sessionUuids: [publicId],
+            },
+          }
         : null;
     },
     readModelCalls: async () => over.modelCalls ?? [],
-    readToolCalls: async () => [],
+    readToolCalls: async () => over.toolCalls ?? [],
     loadPriceBook: vi.fn(async () => []),
-    readCarried: async () => ({ accepted: null, productiveRatio: 0.5 }),
+    readCarried: async () => ({ accepted: true }),
     readVerdict: vi.fn(async (scope) => {
       scopes.push(scope);
       return over.verdict ?? null;
@@ -86,14 +96,14 @@ function deps(over: {
 }
 
 describe("rebuildRunTotals", () => {
-  it("writes the verdict the run's verdict rows aggregate to, beside the carried value columns", async () => {
+  it("writes the verdict the run's verdict rows aggregate to, beside the carried acceptance", async () => {
     const { d, written, scopes } = deps({
       runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
       verdict: "tampered",
     });
     const record = await rebuildRunTotals(WORKER, d);
     expect(record?.verdict).toBe("tampered");
-    expect(record?.productiveRatio).toBe(0.5);
+    expect(record?.accepted).toBe(true);
     expect(written).toHaveLength(1);
     expect(d.readVerdict).toHaveBeenCalledWith(SCOPE, WORKER);
     expect(
@@ -118,6 +128,48 @@ describe("rebuildRunTotals", () => {
     expect(record?.runId).toBe(WITNESS);
     expect(record?.verdict).toBeNull();
     expect(d.readWitnessedRun).toHaveBeenCalledWith(SCOPE, WITNESS);
+  });
+
+  it("grades the steps it read and computes the productive ratio from them, never from the row (#3984)", async () => {
+    const call = (over: Partial<ToolCallFrame>): ToolCallFrame => ({
+      name: "Read",
+      status: "ok",
+      inputDigest: "sha256:in",
+      outputDigest: "sha256:out",
+      isMutating: false,
+      resultTokens: null,
+      ...over,
+    });
+    const { d } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+      toolCalls: [
+        call({ inputDigest: "sha256:a" }),
+        call({ inputDigest: "sha256:a" }),
+        call({ inputDigest: "sha256:b", status: "error" }),
+        call({ inputDigest: "sha256:c" }),
+      ],
+    });
+    const record = await rebuildRunTotals(WORKER, d);
+    expect(record?.steps).toBe(4);
+    expect(record?.advancedSteps).toBe(2);
+    expect(record?.unproductiveSteps).toBe(2);
+    expect(record?.breakdown.steps).toEqual({
+      failed: 1,
+      repeated: 1,
+      retried: 0,
+    });
+    expect(record?.productiveRatio).toBe(0.5);
+  });
+
+  it("answers no ratio for a run with no step, whatever the row held before", async () => {
+    const { d } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+    const record = await rebuildRunTotals(WORKER, d);
+    expect(record?.productiveRatio).toBeNull();
+    expect(record?.advancedSteps).toBeNull();
+    expect(record?.unproductiveSteps).toBeNull();
+    expect(record?.breakdown.steps).toBeNull();
   });
 
   it("keeps a run's own operator when no verdict names it as a witness run (negative)", async () => {
@@ -173,6 +225,7 @@ describe("an in-app assistant run (#4167)", () => {
                   cache_write_1h: 0,
                   output: 100,
                   reasoning: 0,
+                  server_tool_request: 0,
                 },
                 reportedCostMicros: 4500n,
                 basis: "gateway_observed",
@@ -245,6 +298,17 @@ describe("what a ledger run's events are read for (#3372)", () => {
     );
   });
 
+  it("grades a ledger call's outcome as a failure only when it failed or was denied (ADR-199)", () => {
+    expect(ledgerToolStatus("completed")).toBe("ok");
+    expect(ledgerToolStatus("failed")).toBe("error");
+    expect(ledgerToolStatus("denied")).toBe("rejected");
+    // Neither a cancelled call nor one parked on an approval failed.
+    expect(ledgerToolStatus("cancelled")).toBeNull();
+    expect(ledgerToolStatus("parked")).toBeNull();
+    // An encrypted payload carries no outcome to read.
+    expect(ledgerToolStatus(null)).toBeNull();
+  });
+
   it("counts a model call with no turn index as hiding the turn count", () => {
     // An engine call's payload is inline and names no `turn_index`, so a
     // null-payload test alone reported `turns: 0` where the seal's rollup
@@ -311,6 +375,7 @@ describe("the breakdown jsonb (#4069)", () => {
     cache_write_1h: 0n,
     output: 1_500n,
     reasoning: 0n,
+    server_tool_request: 0n,
   };
   const breakdown: RunTotalsRecord["breakdown"] = {
     models: [
@@ -325,6 +390,7 @@ describe("the breakdown jsonb (#4069)", () => {
           cache_write_1h: 0,
           output: 100,
           reasoning: 0,
+          server_tool_request: 0,
         },
         costMicros: 4_800n,
         costByClass: byClass,
@@ -343,6 +409,7 @@ describe("the breakdown jsonb (#4069)", () => {
           cache_write_1h: 0,
           output: 0,
           reasoning: 0,
+          server_tool_request: 0,
         },
         costMicros: null,
         costByClass: {
@@ -356,11 +423,40 @@ describe("the breakdown jsonb (#4069)", () => {
         hasUnpriced: true,
       },
     ],
-    tools: [{ name: "Read", calls: 1 }],
+    tools: [
+      { name: "Grep", calls: 2, resultTokens: null, costMicros: null },
+      { name: "Read", calls: 1, resultTokens: 1_200, costMicros: 3_600n },
+    ],
+    steps: { failed: 1, repeated: 2, retried: 0 },
   };
 
   /** What jsonb hands back: the serialised value through JSON text. */
   const throughJsonb = (value: unknown) => JSON.parse(JSON.stringify(value));
+
+  it("writes each tool's result cost as a decimal string and reads it back (#3892)", () => {
+    const stored = throughJsonb(serializeBreakdown(breakdown));
+    expect(stored.tools).toEqual([
+      { name: "Grep", calls: 2, resultTokens: null, costMicros: null },
+      { name: "Read", calls: 1, resultTokens: 1_200, costMicros: "3600" },
+    ]);
+    expect(stored.steps).toEqual({ failed: 1, repeated: 2, retried: 0 });
+    expect(reviveBreakdown(stored).tools).toEqual(breakdown.tools);
+  });
+
+  it("reads a row rolled up before tool results and step grades as not recorded, never as 0", () => {
+    const stored = throughJsonb(serializeBreakdown(breakdown));
+    for (const t of stored.tools) {
+      delete t.resultTokens;
+      delete t.costMicros;
+    }
+    delete stored.steps;
+    const revived = reviveBreakdown(stored);
+    expect(revived.tools).toEqual([
+      { name: "Grep", calls: 2, resultTokens: null, costMicros: null },
+      { name: "Read", calls: 1, resultTokens: null, costMicros: null },
+    ]);
+    expect(revived.steps).toBeNull();
+  });
 
   it("writes the saving as a decimal string and reads it back as the same bigint or null", () => {
     const stored = throughJsonb(serializeBreakdown(breakdown));
@@ -380,5 +476,22 @@ describe("the breakdown jsonb (#4069)", () => {
     // Everything else the legacy row carried reads as before.
     expect(revived.models[0]!.costByClass).toEqual(byClass);
     expect(revived.models[0]!.costMicros).toBe(4_800n);
+  });
+
+  it("reads a row rolled up before server_tool_request existed as zero requests and zero cost (#3721)", () => {
+    const stored = throughJsonb(serializeBreakdown(breakdown));
+    for (const m of stored.models) {
+      delete m.tokens.server_tool_request;
+      delete m.costByClass.server_tool_request;
+    }
+    const revived = reviveBreakdown(stored);
+    expect(revived.models.map((m) => m.tokens.server_tool_request)).toEqual([
+      0, 0,
+    ]);
+    expect(
+      revived.models.map((m) => m.costByClass.server_tool_request),
+    ).toEqual([0n, 0n]);
+    // The legacy row reads back whole, as the rollup would write it now.
+    expect(revived).toEqual(breakdown);
   });
 });

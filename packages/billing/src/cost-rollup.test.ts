@@ -5,15 +5,23 @@ import {
   divideHalfEven,
   microsToCentsHalfEven,
   priceFrame,
+  priceInputTokens,
   rollupRun,
+  runInputPrice,
   type ModelCallFrame,
   type RunMeta,
   type RunTotalsRecord,
   type TokenCounts,
+  type ToolCallFrame,
   UNASSIGNED_COST_CENTER_KEY,
   ZERO_TOKENS,
 } from "./cost-rollup";
 import type { PriceEntry } from "./price-book";
+import {
+  inCodeCardPrices,
+  mergePublishedPrices,
+  seedsFromPublishedPrices,
+} from "./price-sources";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const WS = "00000000-0000-4000-8000-000000000002";
@@ -51,6 +59,22 @@ const BOOK: PriceEntry[] = [
 
 function tokens(partial: Partial<TokenCounts>): TokenCounts {
   return { ...ZERO_TOKENS, ...partial };
+}
+
+/** A tool call that ran and returned, its outcome and result unrecorded unless a test says. */
+function tool(
+  name: string | null,
+  overrides: Partial<ToolCallFrame> = {},
+): ToolCallFrame {
+  return {
+    name,
+    status: "ok",
+    inputDigest: null,
+    outputDigest: null,
+    isMutating: null,
+    resultTokens: null,
+    ...overrides,
+  };
 }
 
 function frame(overrides: Partial<ModelCallFrame> = {}): ModelCallFrame {
@@ -251,6 +275,7 @@ describe("rollupRun", () => {
       cache_write_1h: 0n,
       output: 1500n,
       reasoning: 0n,
+      server_tool_request: 0n,
     });
     expect(sonnet.costMicros).toBe(8250n);
   });
@@ -373,27 +398,29 @@ describe("rollupRun", () => {
     const record = rollupRun({
       meta,
       book: BOOK,
-      toolCalls: [{ name: "Bash" }, { name: null }],
+      toolCalls: [tool("Bash"), tool(null)],
       modelCalls: [],
     });
     expect(record.costMicros).toBe(null);
     expect(record.costBasis).toBe(null);
     expect(record.cacheHitRate).toBe(null);
     expect(record.toolCalls).toBe(2);
-    expect(record.breakdown.tools).toEqual([{ name: "Bash", calls: 1 }]);
+    expect(record.breakdown.tools).toEqual([
+      { name: "Bash", calls: 1, resultTokens: null, costMicros: null },
+    ]);
     expect(record.breakdown.models).toEqual([]);
   });
 
-  it("carries the proof and value columns another lane wrote", () => {
+  it("carries the verdict and the acceptance it was handed", () => {
     const record = rollupRun({
       meta,
       book: BOOK,
       toolCalls: [],
       modelCalls: [frame()],
-      carried: { verdict: "flipped", accepted: null, productiveRatio: 0.5 },
+      carried: { verdict: "flipped", accepted: true },
     });
     expect(record.verdict).toBe("flipped");
-    expect(record.productiveRatio).toBe(0.5);
+    expect(record.accepted).toBe(true);
     const fresh = rollupRun({
       meta,
       book: BOOK,
@@ -401,6 +428,213 @@ describe("rollupRun", () => {
       modelCalls: [frame()],
     });
     expect(fresh.verdict).toBe(null);
+    expect(fresh.accepted).toBe(null);
+  });
+});
+
+describe("the graded steps (#3984, ADR-199)", () => {
+  const read = (input: string, over: Partial<ToolCallFrame> = {}) =>
+    tool("Read", {
+      inputDigest: input,
+      outputDigest: "sha256:out",
+      isMutating: false,
+      ...over,
+    });
+
+  it("counts advanced and unproductive steps that sum to the run's steps", () => {
+    const record = rollupRun({
+      meta: { ...meta, retries: 1 },
+      book: BOOK,
+      modelCalls: [frame(), frame(), frame()],
+      toolCalls: [
+        read("sha256:a"),
+        read("sha256:a"),
+        read("sha256:b", { status: "error" }),
+        read("sha256:c"),
+      ],
+    });
+    expect(record.steps).toBe(7);
+    expect(record.breakdown.steps).toEqual({
+      failed: 1,
+      repeated: 1,
+      retried: 1,
+    });
+    expect(record.unproductiveSteps).toBe(3);
+    expect(record.advancedSteps).toBe(4);
+    expect((record.advancedSteps ?? 0) + (record.unproductiveSteps ?? 0)).toBe(
+      record.steps,
+    );
+    expect(record.productiveRatio).toBeCloseTo(4 / 7, 12);
+  });
+
+  it("computes the ratio from the frames, not from a carried value", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [frame()],
+      toolCalls: [read("sha256:a")],
+      carried: { verdict: null, accepted: null },
+    });
+    expect(record.productiveRatio).toBe(1);
+  });
+
+  it("leaves a run with no step ungraded, all three null", () => {
+    const record = rollupRun({ meta, book: BOOK, toolCalls: [], modelCalls: [] });
+    expect(record.steps).toBe(0);
+    expect(record.productiveRatio).toBeNull();
+    expect(record.advancedSteps).toBeNull();
+    expect(record.unproductiveSteps).toBeNull();
+    expect(record.breakdown.steps).toBeNull();
+  });
+});
+
+describe("each tool's result cost (#3892, ADR-199)", () => {
+  /** 10,000 input tokens at $3 a million: 30,000 micros, so 3 micros a token. */
+  const priced = frame({
+    tokens: tokens({ input_uncached: 10_000, output: 100 }),
+  });
+
+  it("prices each tool's result tokens at the run's uncached input rate", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [priced],
+      toolCalls: [
+        tool("Read", { resultTokens: 1_200 }),
+        tool("Read", { resultTokens: 300 }),
+        tool("Grep", { resultTokens: 50 }),
+      ],
+    });
+    expect(record.breakdown.tools).toEqual([
+      { name: "Grep", calls: 1, resultTokens: 50, costMicros: 150n },
+      { name: "Read", calls: 2, resultTokens: 1_500, costMicros: 4_500n },
+    ]);
+  });
+
+  it("attributes input the run's cost already counts, never adding to it", () => {
+    const without = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [priced],
+      toolCalls: [tool("Read")],
+    });
+    const withResults = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [priced],
+      toolCalls: [tool("Read", { resultTokens: 1_200 })],
+    });
+    expect(withResults.costMicros).toBe(without.costMicros);
+  });
+
+  it("keeps a client-attested run's own basis on its total", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [{ ...priced, basis: "client_attested" }],
+      toolCalls: [tool("Read", { resultTokens: 1_200 })],
+    });
+    // The tool figure is the contract's `estimated`, applied where the
+    // handler maps it; the run's own figure keeps who observed it.
+    expect(record.costBasis).toBe("client_attested");
+    expect(record.breakdown.tools[0]?.costMicros).toBe(3_600n);
+  });
+
+  it("answers no cost for a tool whose calls recorded no result tokens", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [priced],
+      toolCalls: [tool("Bash"), tool("Bash")],
+    });
+    expect(record.breakdown.tools).toEqual([
+      { name: "Bash", calls: 2, resultTokens: null, costMicros: null },
+    ]);
+  });
+
+  it("answers no cost for an estimated run, which has no input price to apply", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [
+        priced,
+        frame({ model: "mystery-9", reportedCostMicros: 500n }),
+      ],
+      toolCalls: [tool("Read", { resultTokens: 1_200 })],
+    });
+    expect(record.costBasis).toBe("estimated");
+    expect(record.breakdown.tools[0]).toEqual({
+      name: "Read",
+      calls: 1,
+      resultTokens: 1_200,
+      costMicros: null,
+    });
+  });
+
+  it("prices one token by the rule the findings job uses", () => {
+    const record = rollupRun({
+      meta,
+      book: BOOK,
+      modelCalls: [priced],
+      toolCalls: [tool("Read", { resultTokens: 7 })],
+    });
+    const price = runInputPrice(record);
+    expect(price).toEqual({ micros: 30_000n, tokens: 10_000n });
+    expect(price === null ? null : priceInputTokens(price, 7)).toBe(
+      record.breakdown.tools[0]?.costMicros,
+    );
+  });
+});
+
+describe("provider-side web searches (#3721)", () => {
+  // A wrapped call reports the web searches it ran, and the vendor bills each
+  // one: Anthropic charges $10 per 1,000, which is 10_000_000_000 micros per
+  // million requests.
+  const search = entry({
+    id: "pe_search",
+    tokenClass: "server_tool_request",
+    unit: "request",
+    microsPerMillion: 10_000_000_000n,
+  });
+  const searching = frame({
+    tokens: tokens({ input_uncached: 1000, output: 200, server_tool_request: 3 }),
+    reportedCostMicros: null,
+    basis: "client_attested",
+  });
+
+  it("prices a run's searches into its cost and its search class", () => {
+    const record = rollupRun({
+      meta,
+      book: [...BOOK, search],
+      toolCalls: [],
+      modelCalls: [searching],
+    });
+    const model = record.breakdown.models[0]!;
+    // 3 requests at $0.01 each.
+    expect(model.costByClass.server_tool_request).toBe(30_000n);
+    // 1000 input at $3 and 200 output at $15 a million, plus the searches.
+    expect(record.costMicros).toBe(3_000n + 3_000n + 30_000n);
+    expect(record.costBasis).toBe("client_attested");
+    expect(record.tokens.server_tool_request).toBe(3);
+    expect(record.priceEntryIds).toContain("pe_search");
+  });
+
+  it("prices them from the in-code card's seeded rate, so a searching run stays client_attested", () => {
+    // Before the card seeded a search rate, every call that searched missed
+    // the class and read `estimated`, and its search charge was never priced.
+    // The sync's own path: merge the sources, then seed the winners.
+    const book: PriceEntry[] = seedsFromPublishedPrices(
+      mergePublishedPrices([inCodeCardPrices()]).prices,
+      new Date("2026-01-01T00:00:00.000Z"),
+    ).map((seed, i) => ({
+      ...seed,
+      id: `pe_${i}`,
+      orgId: null,
+      source: seed.source ?? "list",
+    }));
+    const p = priceFrame(book, ORG, searching);
+    expect(p.basis).toBe("client_attested");
+    expect(p.scaledByClass.server_tool_request).toBe(30_000_000_000n);
   });
 });
 
@@ -523,7 +757,11 @@ describe("dailyTotalsFromRuns", () => {
   const base = rollupRun({
     meta,
     book: BOOK,
-    toolCalls: [{ name: "Bash" }, { name: "Bash" }, { name: "Read" }],
+    toolCalls: [
+      tool("Bash", { resultTokens: 400 }),
+      tool("Bash"),
+      tool("Read"),
+    ],
     modelCalls: [frame(), frame({ basis: "client_attested" })],
   });
   const runs: RunTotalsRecord[] = [
@@ -584,8 +822,47 @@ describe("dailyTotalsFromRuns", () => {
     const bash = find("tool", "Bash")!;
     expect(bash.calls).toBe(2);
     expect(bash.runs).toBe(1);
+    // The run row prices Bash's result tokens, but that figure is input the
+    // model rows already count, so the tool group keeps no cost (ADR-199).
+    expect(base.breakdown.tools.find((t) => t.name === "Bash")?.costMicros).toBe(
+      1_200n,
+    );
     expect(bash.costMicros).toBe(null);
     expect(bash.costBasis).toBe(null);
+  });
+
+  const ungraded: RunTotalsRecord = {
+    ...base,
+    advancedSteps: null,
+    unproductiveSteps: null,
+    productiveRatio: null,
+  };
+
+  it("weights a group's productive ratio by its graded steps, as the baseline does", () => {
+    const graded = (steps: number, advanced: number): RunTotalsRecord => ({
+      ...base,
+      steps,
+      advancedSteps: advanced,
+      unproductiveSteps: steps - advanced,
+      productiveRatio: advanced / steps,
+    });
+    const rows = dailyTotalsFromRuns([
+      graded(10, 9),
+      graded(2, 0),
+      // An ungraded run adds nothing to the ratio or its weight.
+      ungraded,
+    ]);
+    const agent = rows.find((r) => r.groupKind === "agent")!;
+    // 9 of 12 steps advanced. The mean of the two runs' ratios would be 0.45.
+    expect(agent.productiveRatio).toBeCloseTo(9 / 12, 12);
+    expect(agent.gradedSteps).toBe(12);
+  });
+
+  it("leaves a group with no graded run without a ratio or a weight", () => {
+    const rows = dailyTotalsFromRuns([ungraded]);
+    const agent = rows.find((r) => r.groupKind === "agent")!;
+    expect(agent.productiveRatio).toBeNull();
+    expect(agent.gradedSteps).toBeNull();
   });
 
   it("keeps a group with no priced run at no cost", () => {

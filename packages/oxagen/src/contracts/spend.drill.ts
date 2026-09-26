@@ -19,6 +19,7 @@ import {
   ratioSchema,
   SPEND_RANGE_DAYS_MAX,
   spendFigureSchema,
+  unmeteredRunsSchema,
 } from "./spend.shared";
 
 export const drillKindSchema = z.enum(["operator", "agent", "tool"]);
@@ -113,6 +114,8 @@ export const spendDrill = registerCapability({
           })
           .strict(),
       ),
+      /** The key's runs in the window that recorded no usage, by harness. */
+      unmeteredRuns: unmeteredRunsSchema.optional(),
     })
     .strict(),
 });

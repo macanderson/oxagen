@@ -23,6 +23,7 @@ import {
 } from "@oxagen/telemetry";
 import {
   MODEL_CALL_EVENT_TYPES,
+  subagentSessionsQuery,
   TOOL_CALL_EVENT_TYPES,
 } from "@oxagen/run-ledger";
 import {
@@ -49,6 +50,7 @@ import {
   type RunTotalsRecord,
   type TokenCounts,
   type ToolCallFrame,
+  ZERO_TOKENS,
 } from "./cost-rollup";
 import {
   loadPriceBookSlice,
@@ -247,9 +249,10 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
   if (publicId.startsWith("tse_")) {
     // tenancy: the scheduled rollup job runs outside a tenant scope and finds
     // the session by its globally unique public id; the agent join and the
-    // cost-center subquery are filtered by the session's own orgId.
-    const rows = await withSystemDb((tx) =>
-      tx
+    // cost-center subquery are filtered by the session's own orgId, and the
+    // subagent list by its orgId and workspaceId.
+    const found = await withSystemDb(async (tx) => {
+      const rows = await tx
         .select({
           sessionUuid: sessions.sessionUuid,
           orgId: sessions.orgId,
@@ -297,10 +300,31 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
             isNull(sessions.parentSessionUuid),
           ),
         )
-        .limit(1),
-    );
-    const row = rows[0];
-    if (!row) return null;
+        .limit(1);
+      const root = rows[0];
+      if (!root) return null;
+      // The run's chains: the root, then every subagent session under it in
+      // the run's own workspace. The frame reads name this list so they read
+      // the run's chains by the table's sort key rather than every chain the
+      // workspace holds (#4103). A chain that registers after this read is
+      // picked up by the next `cost.run-progress` rollup, or by the nightly
+      // sweep, which lists a run whose tree landed a batch after its row was
+      // written (`listRunsAwaitingRollup`).
+      const children = await subagentSessionsQuery(
+        tx,
+        { orgId: root.orgId, workspaceId: root.workspaceId },
+        root.sessionUuid,
+      );
+      return {
+        row: root,
+        sessionUuids: [
+          root.sessionUuid,
+          ...children.map((child) => child.sessionUuid),
+        ],
+      };
+    });
+    if (!found) return null;
+    const { row, sessionUuids } = found;
     return {
       meta: {
         runId: publicId,
@@ -320,24 +344,55 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
         enforcementTier: tier(row.enforcementTier),
         replayGrade: grade(row.replayGrade),
       },
-      frames: { kind: "tacho", rootSessionUuid: row.sessionUuid },
+      frames: { kind: "tacho", rootSessionUuid: row.sessionUuid, sessionUuids },
     };
   }
   return null;
 }
 
-/** A ledger run's tool calls, under either spelling; an encrypted payload names no tool. */
+/**
+ * A ledger call's `outcome` as the status the step grader reads (ADR-199).
+ * `failed` is an error and `denied` a refusal. A `cancelled` call and one
+ * `parked` on an approval did not fail, so they read null, as tacho's
+ * `cancelled` does, and are never graded as waste.
+ */
+export function ledgerToolStatus(
+  outcome: string | null,
+): ToolCallFrame["status"] {
+  switch (outcome) {
+    case "completed":
+      return "ok";
+    case "failed":
+      return "error";
+    case "denied":
+      return "rejected";
+    default:
+      return null;
+  }
+}
+
+/**
+ * A ledger run's tool calls in the order they ran, under either spelling,
+ * with the outcome and digests the step grader reads. An encrypted payload
+ * names no tool and carries none of them. The ledger records no mutating
+ * flag and no result tokens, so both read null: a ledger run's repeats are
+ * not graded, and its tools carry no result cost.
+ */
 async function readLedgerToolCalls(args: {
   orgId: string;
   workspaceId: string;
   runUuid: string;
 }): Promise<ToolCallFrame[]> {
+  const payload = events.payloadInline;
   // tenancy: the scheduled rollup job reads outside a tenant scope, so the
   // query is filtered by the run's orgId, workspaceId and run uuid.
   const rows = await withSystemDb((tx) =>
     tx
       .select({
-        name: toolCallName(events.payloadInline),
+        name: toolCallName(payload),
+        outcome: sql<string | null>`${payload}->>'outcome'`,
+        inputDigest: sql<string | null>`${payload}->>'input_digest'`,
+        outputDigest: sql<string | null>`${payload}->>'output_digest'`,
       })
       .from(events)
       .where(
@@ -348,9 +403,17 @@ async function readLedgerToolCalls(args: {
           eq(events.eventRecordVersion, 2),
           inArray(events.eventType, TOOL_CALL_TYPES),
         ),
-      ),
+      )
+      .orderBy(asc(events.runSeq)),
   );
-  return rows.map((r) => ({ name: r.name }));
+  return rows.map((r) => ({
+    name: r.name,
+    status: ledgerToolStatus(r.outcome),
+    inputDigest: r.inputDigest,
+    outputDigest: r.outputDigest,
+    isMutating: null,
+    resultTokens: null,
+  }));
 }
 
 function toFrame(row: ModelCallFrameRow): ModelCallFrame {
@@ -365,6 +428,7 @@ function toFrame(row: ModelCallFrameRow): ModelCallFrame {
       cache_write_1h: row.cacheWrite1h,
       output: row.output,
       reasoning: row.reasoning,
+      server_tool_request: row.serverToolRequests,
     },
     reportedCostMicros:
       row.reportedCostMicros === null ? null : BigInt(row.reportedCostMicros),
@@ -390,9 +454,10 @@ export interface RunRollupDeps {
    * it per run ran the API out of heap (#4202).
    */
   loadPriceBook: (slice: PriceBookSlice) => Promise<PriceBook>;
+  /** The acceptance a person recorded on the row, which no rebuild computes. */
   readCarried: (
     runId: string,
-  ) => Promise<Pick<RunTotalsRecord, "accepted" | "productiveRatio"> | null>;
+  ) => Promise<Pick<RunTotalsRecord, "accepted"> | null>;
   /** The run's witness verdict (ADR-064), aggregated from its verdict rows. */
   readVerdict: (
     scope: RollupScope,
@@ -431,7 +496,9 @@ export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
     steps: row.steps,
     modelCalls: row.modelCalls,
     toolCalls: row.toolCalls,
-    tokens: row.tokens as TokenCounts,
+    // A row rolled up before `server_tool_request` existed has no key for it.
+    // The rollup counted none then, so it reads as 0.
+    tokens: { ...ZERO_TOKENS, ...(row.tokens as Partial<TokenCounts>) },
     costMicros: row.costMicros,
     currency: row.currency,
     costBasis: row.costBasis as CostBasis | null,
@@ -442,10 +509,18 @@ export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
     accepted: row.accepted,
     productiveRatio:
       row.productiveRatio === null ? null : Number(row.productiveRatio),
+    advancedSteps: row.advancedSteps,
+    unproductiveSteps: row.unproductiveSteps,
   };
 }
 
 type ModelBreakdown = RunTotalsRecord["breakdown"]["models"][number];
+
+/** Every class at 0n. A stored split is revived over it. */
+const ZERO_COST_BY_CLASS = Object.fromEntries(
+  Object.keys(ZERO_TOKENS).map((c) => [c, 0n]),
+) as ModelBreakdown["costByClass"];
+
 type ModelBreakdownJson = Omit<
   ModelBreakdown,
   "costMicros" | "costByClass" | "cacheSavingMicros" | "hasUnpriced"
@@ -458,22 +533,38 @@ type ModelBreakdownJson = Omit<
   hasUnpriced?: boolean;
 };
 
+type ToolBreakdown = RunTotalsRecord["breakdown"]["tools"][number];
+type ToolBreakdownJson = Pick<ToolBreakdown, "name" | "calls"> & {
+  /** Absent on a row rolled up before #3892. */
+  resultTokens?: number | null;
+  costMicros?: string | null;
+};
+
 /**
- * jsonb carries the per-model costs as decimal strings; bring them back to
- * bigint. Exported for the round-trip test.
+ * jsonb carries the per-model and per-tool costs as decimal strings; bring
+ * them back to bigint. Exported for the round-trip test.
  */
 export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
   const raw = value as {
     models: ModelBreakdownJson[];
-    tools: RunTotalsRecord["breakdown"]["tools"];
+    tools: ToolBreakdownJson[];
+    /** Absent on a row rolled up before the steps were graded (#3984). */
+    steps?: RunTotalsRecord["breakdown"]["steps"];
   };
   return {
     models: raw.models.map((m) => ({
       ...m,
+      // A row rolled up before `server_tool_request` existed has no key for
+      // it in either record. The rollup counted and priced none then, so both
+      // read as 0.
+      tokens: { ...ZERO_TOKENS, ...m.tokens },
       costMicros: m.costMicros === null ? null : BigInt(m.costMicros),
-      costByClass: Object.fromEntries(
-        Object.entries(m.costByClass).map(([k, v]) => [k, BigInt(v)]),
-      ) as ModelBreakdown["costByClass"],
+      costByClass: {
+        ...ZERO_COST_BY_CLASS,
+        ...Object.fromEntries(
+          Object.entries(m.costByClass).map(([k, v]) => [k, BigInt(v)]),
+        ),
+      } as ModelBreakdown["costByClass"],
       // A row rolled up before the saving was recorded carries no key. Its
       // saving was never priced, so it reads as not recorded, never as 0,
       // until the run's next rollup writes one.
@@ -487,7 +578,19 @@ export function reviveBreakdown(value: unknown): RunTotalsRecord["breakdown"] {
       // group was impossible before this PR seeded the first price book).
       hasUnpriced: m.hasUnpriced ?? m.costMicros === null,
     })),
-    tools: raw.tools,
+    // A row rolled up before result tokens were recorded carries neither
+    // figure, so both read as not recorded until the run's next rollup.
+    tools: raw.tools.map((t) => ({
+      name: t.name,
+      calls: t.calls,
+      resultTokens: t.resultTokens ?? null,
+      costMicros:
+        t.costMicros === undefined || t.costMicros === null
+          ? null
+          : BigInt(t.costMicros),
+    })),
+    // Likewise a row rolled up before its steps were graded.
+    steps: raw.steps ?? null,
   };
 }
 
@@ -503,7 +606,15 @@ export function serializeBreakdown(breakdown: RunTotalsRecord["breakdown"]) {
       cacheSavingMicros:
         m.cacheSavingMicros === null ? null : m.cacheSavingMicros.toString(),
     })),
-    tools: breakdown.tools,
+    tools: breakdown.tools.map(
+      (t): ToolBreakdownJson => ({
+        name: t.name,
+        calls: t.calls,
+        resultTokens: t.resultTokens,
+        costMicros: t.costMicros === null ? null : t.costMicros.toString(),
+      }),
+    ),
+    steps: breakdown.steps,
   };
 }
 
@@ -628,19 +739,22 @@ export async function upsertRunTotals(
     replayGrade: record.replayGrade,
     breakdown: serializeBreakdown(record.breakdown),
     verdict: record.verdict,
-    rolledUpAt,
-  };
-  // The value columns belong to other lanes: a first insert carries what the
-  // rollup read (null until those lanes write), and a rebuild leaves the row's
-  // own values in place rather than replaying a stale read. The verdict is
-  // rebuilt with the rest, from the run's verdict rows (ADR-064).
-  const carried = {
-    accepted: record.accepted,
+    // Graded from the frames with the rest of the row (ADR-199), so a rebuild
+    // writes them. They sat in `carried` below while nothing computed them,
+    // and a rebuild then left a stale ratio in place for good (#3984).
     productiveRatio:
       record.productiveRatio === null
         ? null
         : record.productiveRatio.toFixed(8),
+    advancedSteps: record.advancedSteps,
+    unproductiveSteps: record.unproductiveSteps,
+    rolledUpAt,
   };
+  // A person's acceptance is another lane's column: a first insert carries
+  // what the rollup read, and a rebuild leaves the row's own value in place
+  // rather than replaying a stale read. The verdict is rebuilt with the rest,
+  // from the run's verdict rows (ADR-064).
+  const carried = { accepted: record.accepted };
   // tenancy: the scheduled rollup job writes outside a tenant scope; the row
   // carries the run's own orgId and workspaceId, and the conflict target is the
   // run's globally unique public id, so no other organization's row is written.
@@ -664,23 +778,18 @@ export async function upsertRunTotals(
 }
 
 async function readCarried(runId: string) {
+  // tenancy: the scheduled rollup job reads outside a tenant scope, so this
+  // is a global read of one row, filtered by the run's globally unique id.
   const rows = await withSystemDb((tx) =>
     tx
-      .select({
-        accepted: totals.accepted,
-        productiveRatio: totals.productiveRatio,
-      })
+      .select({ accepted: totals.accepted })
       .from(totals)
       .where(eq(totals.runId, runId))
       .limit(1),
   );
   const row = rows[0];
   if (!row) return null;
-  return {
-    accepted: row.accepted,
-    productiveRatio:
-      row.productiveRatio === null ? null : Number(row.productiveRatio),
-  };
+  return { accepted: row.accepted };
 }
 
 const productionRunRollupDeps: RunRollupDeps = {
@@ -698,6 +807,7 @@ const productionRunRollupDeps: RunRollupDeps = {
           orgId: source.meta.orgId,
           workspaceId: source.meta.workspaceId,
           rootSessionUuid: source.frames.rootSessionUuid,
+          sessionUuids: source.frames.sessionUuids,
         }),
   loadPriceBook: loadPriceBookSlice,
   readCarried,
@@ -786,11 +896,7 @@ export async function rebuildRunTotals(
     modelCalls,
     toolCalls,
     book,
-    carried: {
-      verdict,
-      accepted: carried?.accepted ?? null,
-      productiveRatio: carried?.productiveRatio ?? null,
-    },
+    carried: { verdict, accepted: carried?.accepted ?? null },
   });
   await deps.write(record, deps.now());
   return record;
@@ -863,6 +969,7 @@ async function replaceDailyTotals(
       acceptedMicros: r.acceptedMicros,
       productiveRatio:
         r.productiveRatio === null ? null : r.productiveRatio.toFixed(8),
+      gradedSteps: r.gradedSteps,
       tokens: r.tokens,
       rolledUpAt,
     })),

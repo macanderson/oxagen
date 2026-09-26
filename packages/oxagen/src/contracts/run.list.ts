@@ -27,6 +27,7 @@ import {
 import { z } from "zod";
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import { registerCapability } from "../registry";
+import { runEffortSourceSchema, runFitSchema } from "../run-fit";
 import { costSchema, ratioSchema, tokenCountsSchema } from "./spend.shared";
 
 /**
@@ -117,6 +118,20 @@ export const runSummarySchema = z
  * person whose name the record does not hold.
  */
 export const operatorKindSchema = z.enum(["human", "agent", "service"]);
+
+/**
+ * The workspace roles an operator can hold (`workspace.workspace_users.role`,
+ * lowercased), in the words a run records them (#3999).
+ */
+export const RUN_OPERATOR_ROLES = [
+  "owner",
+  "admin",
+  "member",
+  "billing",
+  "compliance",
+  "viewer",
+] as const;
+export const runOperatorRoleSchema = z.enum(RUN_OPERATOR_ROLES);
 
 /**
  * The model the run was served by, as its recorded id and what that id
@@ -310,6 +325,14 @@ export const RUN_SORT_KEYS = [
  */
 export const RUN_LIST_TOTAL_BOUND = 10_000;
 
+/**
+ * The most UTF-16 code units a run's `name` or `taskRef` carries. A harness
+ * title and a ledger run's goal have no cap where they are written (a goal
+ * may run to 8,192 characters), so the reads cut a longer one on a
+ * code-point boundary and end it with an ellipsis (#4224).
+ */
+export const RUN_LABEL_MAX = 256;
+
 export const runItemSchema = z
   .object({
     id: runPublicIdSchema,
@@ -344,6 +367,13 @@ export const runItemSchema = z
      * as the person at the keyboard. Null when no operator was recorded.
      */
     operatorAttribution: z.enum(["initiator", "host_enroller"]).nullable(),
+    /**
+     * The operator's workspace role when the run opened, stamped then and
+     * never read live (#3999). Null for a run recorded before the role was
+     * stamped, for an operator who is not a person, and for a person with no
+     * membership in the run's workspace.
+     */
+    operatorRole: runOperatorRoleSchema.nullable(),
     status: runStatusSchema,
     outcome: runOutcomeSchema,
     /**
@@ -369,12 +399,13 @@ export const runItemSchema = z
     costIsEstimate: z.boolean().optional(),
     reportedCost: runCostSchema.nullable().optional(),
     /**
-     * The goal a ledger run was admitted for. Null for a wrapped session: no
-     * dispatch record names its task, and a task is never inferred from a
-     * branch name or model output. The issues a session's pull requests close
-     * are read by `get_run_work`.
+     * The goal a ledger run was admitted for, cut to `RUN_LABEL_MAX` with an
+     * ellipsis. The run's spec keeps the whole goal. Null for a wrapped
+     * session: no dispatch record names its task, and a task is never
+     * inferred from a branch name or model output. The issues a session's
+     * pull requests close are read by `get_run_work`.
      */
-    taskRef: z.string().nullable(),
+    taskRef: z.string().max(RUN_LABEL_MAX).nullable(),
     /** RFC 3339. */
     startedAt: z.string().datetime(),
     /**
@@ -466,11 +497,24 @@ export const runItemSchema = z
      */
     effort: z.string().nullable().optional(),
     /**
+     * Where `effort` was read (#3891): `request` from a proxied model
+     * request's body, `harness` from the harness's own report. A request
+     * value wins over the harness's. Null exactly when `effort` is.
+     * `get_run` answers it; `list_runs` leaves it out.
+     */
+    effortSource: runEffortSourceSchema.nullable().optional(),
+    /**
      * Whether the session had always-on thinking enabled, from the latest
      * session config frame. Null when no frame recorded it, and for every
      * ledger run. `get_run` answers it; `list_runs` leaves it out.
      */
     thinking: z.boolean().nullable().optional(),
+    /**
+     * The Model fit reading for the sealed run (#3893). Null for a live run,
+     * for a run whose stored reading read an earlier seal, and for a run with
+     * no reading yet. `get_run` answers it; `list_runs` leaves it out.
+     */
+    fit: runFitSchema.nullable().optional(),
     /**
      * The permission mode the session ended in, falling back to the one it
      * started in. Null when none was recorded, and for every ledger run.
@@ -539,8 +583,15 @@ export const runItemSchema = z
      * `model_refused` or `credit_refused:<code>`. Absent once an account exists.
      */
     enrichmentError: z.string().optional(),
-    /** The generated name; null until `summarize_run` wrote one. */
-    name: z.string().nullable(),
+    /**
+     * What the run is called, cut to `RUN_LABEL_MAX` with an ellipsis. A
+     * wrapped session reads the title its harness gave it first, then the
+     * name Oxagen wrote (the model's, or the fallback from the first
+     * prompt), then the title ingest derived. A ledger run reads the name
+     * Oxagen wrote. With automatic accounts turned off, only the harness
+     * title is read. Null when there is none.
+     */
+    name: z.string().max(RUN_LABEL_MAX).nullable(),
     summary: runSummarySchema.nullable(),
     /**
      * The pull requests the run's frames name, earliest first. Absent when

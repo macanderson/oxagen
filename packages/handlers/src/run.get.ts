@@ -35,10 +35,12 @@ import {
   runScope,
   type RunScope,
 } from "./run.list";
+import { readStoredFit, storedFitOf } from "./lib/run-fit";
 import {
   connectedRunRepositories,
   readSessionConfig,
   readSessionTitle,
+  runEffortOf,
   workDigest,
 } from "./lib/run-work";
 import { logger } from "./logger";
@@ -50,6 +52,7 @@ import {
   type RunReadDeps,
   startCursorSeq,
 } from "./lib/run-read";
+import { runLabel } from "./lib/run-item";
 
 /** How often the long poll re-reads the store. */
 export const POLL_INTERVAL_MS = 500;
@@ -203,6 +206,8 @@ export type RunGetDeps = RunReadDeps & {
   sessionTitle: typeof readSessionTitle;
   /** The session's latest effort and thinking settings. */
   sessionConfig: typeof readSessionConfig;
+  /** The run's stored Model fit columns (#3893); null when it has no row. */
+  storedFit: typeof readStoredFit;
   /** The connected repository a session's remote digest names. */
   sessionRepository: typeof readSessionRepository;
 };
@@ -258,6 +263,29 @@ export function createRunGetHandler(
             }),
           ])
         : Promise.resolve([null, null] as const);
+    // The Model fit reading is of a seal, so a live run reads none. A failed
+    // read leaves the reading off rather than failing the page (#3893).
+    const sealedAt = run.item.status === "live" ? null : run.item.sealedAt;
+    const fit =
+      sealedAt === null
+        ? Promise.resolve(null)
+        : deps
+            .storedFit(
+              runScope(ctx),
+              run.source === "ledger"
+                ? { source: "ledger", runId: run.runId }
+                : { source: "tacho", publicId: run.item.id },
+            )
+            .then(
+              (stored) => storedFitOf(stored, sealedAt),
+              (err: unknown) => {
+                logger.warn(
+                  { err, runId: input.runId },
+                  "get_run: the run's Model fit reading could not be read",
+                );
+                return null;
+              },
+            );
     // One frame past the page tells a full page from the end of the recording.
     // A sealed run whose page had nothing behind it answers no cursor, because
     // nothing will ever lie past it; a live run keeps its resume point, since
@@ -268,8 +296,9 @@ export function createRunGetHandler(
     // small bounded read was the one it picked for the Run stream and the
     // assistant alike (#4243). The page comes back empty and says why, with no
     // cursor, so a caller keeps its own and nobody reads the run as sealed.
-    const [[title, config], read, named] = await Promise.all([
+    const [[title, config], reading, read, named] = await Promise.all([
       header,
+      fit,
       poll(
         run,
         cursor ?? startCursorSeq(run),
@@ -295,13 +324,14 @@ export function createRunGetHandler(
     return {
       run: {
         ...run.item,
-        ...(title === null ? {} : { name: title }),
-        ...(config === null
-          ? {}
-          : {
-              effort: config.effort ?? run.item.effort ?? null,
-              thinking: config.thinking,
-            }),
+        // ClickHouse holds the harness title as the frame carried it, with no
+        // bound, so it is cut like every other run name (#4224).
+        ...(title === null ? {} : { name: runLabel(title) }),
+        // The request's own effort ahead of the harness's report, and where
+        // it was read (#3891). The fit reading reads it the same way.
+        ...runEffortOf(config, run.item.effort),
+        ...(config === null ? {} : { thinking: config.thinking }),
+        fit: reading,
         ...withRepository(run.item.place, named),
       },
       frames: {
@@ -329,6 +359,7 @@ export function defaultRunGetDeps(): RunGetDeps {
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     sessionTitle: readSessionTitle,
     sessionConfig: readSessionConfig,
+    storedFit: readStoredFit,
     sessionRepository: readSessionRepository,
   };
 }

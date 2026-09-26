@@ -116,6 +116,17 @@ export interface TranscriptDecision {
    */
   harness: boolean;
   at: Date;
+  /**
+   * The rule ids or permission patterns that matched, in evaluation order
+   * (#3971), from `FrameIdentity.rules`. Empty when the frame names none.
+   */
+  rules: string[];
+  /**
+   * The taint labels a producer assessed on the call's inputs (#3971). Null
+   * means no producer assessed taint, which is every decision today
+   * (ADR-070); an empty list would mean one assessed the inputs as clean.
+   */
+  taint: string[] | null;
 }
 
 /**
@@ -288,6 +299,8 @@ function decisionOf(frame: RunFrame): TranscriptDecision | null {
     source,
     harness: source !== null && HARNESS_SOURCES.has(source),
     at: frame.observedAt,
+    rules: frame.identity.rules ?? [],
+    taint: frame.identity.taint ?? null,
   };
 }
 

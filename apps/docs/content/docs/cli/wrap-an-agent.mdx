@@ -295,4 +295,6 @@ On a machine with more than one enrollment, `reassign` needs `--harness`. The li
 
 ## Limits
 
+A run's cost comes from the usage its model calls reported. Claude Code reports it itself. Codex and Stella on Anthropic report it through the local model proxy once enrollment points them at it. Cursor never does, because Cursor has no setting that routes its model calls through the proxy. Stella on another provider, or with an Anthropic base URL you set yourself, does not either. Such a run records its tool calls and no usage, so its cost is not in any spend total. The Spend page and the Fleet spend tile say how many runs reported no usage, and on which harness, beside each total that leaves them out.
+
 Wrapping is `client_attested`: the hook call is voluntary, so a custom agent that skips it is not gated and not recorded. Nothing on the collector side can force the call or detect that a step happened without it; a missing event shows up in the fleet record as silence, not as a flagged violation. Each agent enrolled with its own one-time token has its own enrollment, host identity, and key. Harnesses enrolled together in one `tacho enroll` share one enrollment. Custom agents report under the first enrollment on the machine, the one in `~/.config/oxagen/tacho`, and stop being recorded when that enrollment is removed.

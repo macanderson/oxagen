@@ -150,6 +150,13 @@ const RunCostByModel = RunCostModel.extend({
   /** `cost` by token class; null exactly when `cost` is. */
   costByClass: CostByClass.nullable(),
   /**
+   * The web searches the model's calls ran, which the book prices per
+   * request (#3721). Requests, not tokens, so no token figure counts them.
+   */
+  searchRequests: Count.optional(),
+  /** What those searches cost, as recorded; null exactly when `costByClass` is. */
+  searchCost: Cost.nullable().optional(),
+  /**
    * What the model's cache reads saved against uncached input, as the rollup
    * recorded it. Null when it was not recorded, including a row rolled up
    * before the rollup recorded savings: never a zero standing in for that.
@@ -159,11 +166,23 @@ const RunCostByModel = RunCostModel.extend({
   hasUnpriced: z.boolean(),
 });
 
-const RunCostByTool = z.object({ name: z.string().min(1), calls: Count });
+const RunCostByTool = z.object({
+  name: z.string().min(1),
+  calls: Count,
+  /** The tool-result tokens its calls' spans recorded; null when none did. */
+  resultTokens: Count.nullable(),
+  /**
+   * `resultTokens` at the run's uncached input rate, always `estimated`. It
+   * attributes input the run's cost already counts and never adds to it.
+   */
+  cost: Cost.nullable(),
+});
 
 const RunCostRollup = z.object({
   cost: Cost.nullable(),
   tokens: RunTokenCounts,
+  /** Every model's web search requests, summed (#3721). */
+  searchRequests: Count.optional(),
   /** cache_read ÷ (input_uncached + cache_read), spend-weighted. */
   cacheHitRate: Ratio.nullable(),
   turns: Count.nullable(),
@@ -172,6 +191,16 @@ const RunCostRollup = z.object({
   toolCalls: Count,
   retries: Count.nullable(),
   productiveRatio: Ratio.nullable(),
+  /**
+   * The steps that advanced the run and the steps that did not. Null together
+   * until the rollup grades the run; when set they sum to `steps`.
+   */
+  advancedSteps: Count.nullable(),
+  unproductiveSteps: Count.nullable(),
+  /** Why the unproductive steps made no progress; null exactly when the counts are. */
+  unproductiveCauses: z
+    .object({ failed: Count, repeated: Count, retried: Count })
+    .nullable(),
   byModel: z.array(RunCostByModel),
   byTool: z.array(RunCostByTool),
   /** The price entries the frames were priced with (spec §12.2). */
@@ -203,6 +232,22 @@ const RunCostProvisional = z.object({
 export const RunCost = z.object({
   rollup: RunCostRollup.nullable(),
   provisional: RunCostProvisional.nullable().optional(),
+  /**
+   * The agent's sealed runs in the 30 days before this one, this run
+   * excluded. Null when the run names no agent or the agent has too few runs
+   * in the window. Each figure is null when too few of those runs carry it.
+   */
+  baseline: z
+    .object({
+      windowDays: z.literal(30),
+      /** This run's start, the end of the window. */
+      before: z.iso.datetime({ offset: true }),
+      runs: Count,
+      medianCost: Cost.nullable(),
+      productiveRatio: Ratio.nullable(),
+    })
+    .nullable()
+    .optional(),
 });
 export type RunCost = z.infer<typeof RunCost>;
 
@@ -240,8 +285,61 @@ export type RunTurn = z.infer<typeof RunTurn>;
 export const RunTurns = z.object({
   turns: z.array(RunTurn),
   complete: z.boolean(),
+  /**
+   * The turn each subagent chain's frames count toward. A cited subagent
+   * frame is placed at its chain's turn, and a root-chain frame at the last
+   * turn whose `seq` is at or below it. Empty for a ledger run.
+   */
+  chains: z.array(
+    z.object({
+      sessionUuid: z.uuid(),
+      turn: z.number().int().positive(),
+    }),
+  ),
 });
 export type RunTurns = z.infer<typeof RunTurns>;
+
+/**
+ * `list_findings` for one run: each open finding that cites the run, with the
+ * frames it cites there. The Cost tab pins a finding to the turns its frames
+ * fall in.
+ */
+export const RunFindings = z.object({
+  findings: z.array(
+    z.object({
+      id: PublicId,
+      kind: z.enum([
+        "cache_writes_never_read",
+        "duplicate_tool_calls",
+        "repeated_shell_commands",
+        "unpaged_results",
+      ]),
+      /** The level's key: a tool name, an agent key, an operator, or the workspace. */
+      subject: z.string(),
+      saving: Cost,
+      confidence: z.enum(["high", "medium"]),
+      citation: z.object({
+        /** True for a finding that cites the whole run and pins no turn. */
+        runLevel: z.boolean(),
+        /** Null when the finding was written before frames were cited. */
+        frames: z
+          .array(
+            z.object({
+              seq: z.string().regex(/^\d+$/),
+              sessionUuid: z.uuid().optional(),
+            }),
+          )
+          .nullable(),
+        /**
+         * Every call the finding cites in the run, including any past the
+         * cap. Null on an older finding whose evidence did not count the run.
+         */
+        framesTotal: Count.nullable(),
+      }),
+    }),
+  ),
+});
+export type RunFindings = z.infer<typeof RunFindings>;
 
 const TRANSCRIPT_ZOOMS = ["turns", "steps", "everything"] as const;
 export const TranscriptZoom = z.enum(TRANSCRIPT_ZOOMS);
@@ -470,6 +568,10 @@ const TranscriptDecision = z.object({
    */
   harness: z.boolean().default(false),
   at: z.iso.datetime({ offset: true }),
+  /** The rule ids or permission patterns that matched, in evaluation order; empty when none. */
+  rules: z.array(z.string()).default([]),
+  /** Null when no producer assessed taint; empty when one assessed the inputs as untainted. */
+  taint: z.array(z.string()).nullable().default(null),
 });
 
 /**
@@ -799,6 +901,24 @@ const ChainSeal = z.object({
   /** Null on a seal that predates the Merkle root. */
   merkleRoot: z.string().nullable(),
   archiveSegmentRef: z.string().nullable(),
+  /** sha256 over the stored segment's bytes; null on an older seal and a wrapped session's. */
+  archiveSegmentDigest: z.string().nullable(),
+  /**
+   * The attester's signature over the seal, with the names of the seal fields
+   * it signs. Null on a seal written before attestation or with no attester
+   * key, and on a wrapped session's seal.
+   *
+   * `keyRef` is the contract's `keyId`: the digest of the attester's public
+   * key, not a public id, so it is a `…Ref` (INV-11), as `platformKey` is.
+   */
+  attestation: z
+    .object({
+      alg: z.literal("ed25519"),
+      keyRef: z.string(),
+      sig: z.string(),
+      signsOver: z.array(z.string()).min(1),
+    })
+    .nullable(),
 });
 
 /** One rung of the replay ladder, and the machine-readable reason it stands where it does. */

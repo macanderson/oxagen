@@ -1,0 +1,20 @@
+schema = "context-record/v0.1"
+set_id = "a-intel.core-platform"
+
+[[record]]
+lineage_id = "ctx.a-intel.refunds-over-100"
+label = "Refunds over $100"
+record_id = "rec_a_intel_refunds_over_100_ec4ece819896"
+record_hash = "sha256:f0d2845dc6102dfb4875c144a31b5503d54cf8c95454d6e1e3c88c74ffd6ef2c"
+kind = "rule"
+statement = "Refunds over $100 need a person's approval before the agent calls Stripe."
+origin = "user"
+sharing_scope = "workspace"
+status = "active"
+
+[record.provenance]
+source_kind = "proposal"
+source_uri = "oxagen:proposal/prp_01K5RW2P"
+
+[record.steering]
+force = "must"

@@ -42,6 +42,7 @@ import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
   HOST_POLL_WINDOW_MS,
   IN_APP_AGENT_SURFACES,
+  RUN_LABEL_MAX,
   type RunItem,
   runList,
   type RunListOutput,
@@ -72,6 +73,7 @@ import {
   type RunRollup,
   type TachoSessionColumns,
   type TachoSessionRow,
+  runLabel,
   toLedgerRunItem,
   toTachoRunItem,
 } from "./lib/run-item";
@@ -255,6 +257,10 @@ const ledgerColumns = {
     summaryGeneratedAt: runs.summaryGeneratedAt,
     summaryModel: runs.summaryModel,
     summaryError: runs.summaryError,
+    // Stamped by `buildCreateRunSql` when the run was created (#3999). The
+    // read takes the stamp and never joins `workspace_users`, so a role
+    // changed after the run opened does not change what the run says.
+    operatorRole: runs.operatorRole,
   },
   identity: {
     orgNamespace: schema.organizations.namespace,
@@ -263,7 +269,9 @@ const ledgerColumns = {
     operatorPublicId: schema.principals.publicId,
     operatorKind: schema.principals.kind,
     operatorUserName: schema.users.displayName,
-    goal: sql<string | null>`${runs.spec}->>'goal'`,
+    // One character past the label cap is enough for `runLabel` to cut the
+    // same label, so a goal of several kilobytes never leaves Postgres whole.
+    goal: sql<string | null>`left(${runs.spec}->>'goal', ${sql.raw(String(RUN_LABEL_MAX + 1))})`,
   },
 };
 
@@ -487,6 +495,10 @@ const chainSealColumns = {
   terminalStatus: seals.terminalStatus,
   finalEventDigest: seals.finalEventDigest,
   eventStreamDigest: seals.eventStreamDigest,
+  // The attestation the seal signed when it was written (ADR-195).
+  archiveSegmentDigest: seals.archiveSegmentDigest,
+  attestationKeyId: seals.attestationKeyId,
+  attestationSig: seals.attestationSig,
   // Whether compaction moved this attempt's frames to its archive (ADR-193).
   compacted: compactedProbe(),
 };
@@ -646,6 +658,9 @@ const tachoColumns = {
     pullRequests: sessions.pullRequests,
     linesAdded: sessions.linesAdded,
     linesRemoved: sessions.linesRemoved,
+    // Stamped by ingest's genesis row when the session opened (#3999), and
+    // read as stamped: nothing here consults `workspace_users`.
+    operatorRole: sessions.operatorRole,
   },
   operatorPublicId: schema.principals.publicId,
   operatorKind: schema.principals.kind,
@@ -1334,7 +1349,7 @@ export function createRunListHandler(
                 // not the title the harness gave the session.
                 name:
                   item.kind === "tacho"
-                    ? (item.row.session.harnessTitle ?? null)
+                    ? runLabel(item.row.session.harnessTitle)
                     : null,
                 summary: null,
                 canSummarize: false,

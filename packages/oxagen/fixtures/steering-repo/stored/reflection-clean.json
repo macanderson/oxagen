@@ -1,0 +1,25 @@
+{
+  "schema": "reflection/v1",
+  "run": "run_01K5QK7D",
+  "agent": "a-intel.core.release-bot",
+  "outcome": "completed",
+  "summary": "Released 4.2.0 after the first CI run failed on a stale dependency cache.",
+  "grades": {
+    "work": 4,
+    "tools": {
+      "stripe__list_charges": 5
+    }
+  },
+  "lessons": [
+    {
+      "statement": "The CI cache key hashes pnpm-lock.yaml. Update the lockfile with any dependency change.",
+      "kind": "memory",
+      "repos": [
+        "github.com/a-intel/platform"
+      ],
+      "evidence": [
+        "frame:run_01K5QK7D/88"
+      ]
+    }
+  ]
+}

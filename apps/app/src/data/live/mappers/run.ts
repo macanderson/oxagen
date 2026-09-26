@@ -5,6 +5,7 @@
 //
 // The header maps through `toRunRow`, the same function the Fleet table's rows
 // go through, so the two surfaces cannot disagree about one run.
+import type { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import type { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import type { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import type { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
@@ -18,6 +19,7 @@ import type {
   RunChain,
   RunCost,
   RunDetail,
+  RunFindings,
   RunFrameBody,
   RunOutputs,
   RunTranscript,
@@ -33,6 +35,7 @@ type RunFrameBodyOutput = ContractOutput<typeof runFrameBodyGet>;
 type RunChainOutput = ContractOutput<typeof runChainGet>;
 type RunOutputsOutput = ContractOutput<typeof runOutputsGet>;
 type RunTurnsOutput = ContractOutput<typeof runTurnsGet>;
+type FindingListOutput = ContractOutput<typeof findingList>;
 
 /** The contract's own cost shape: its `basis` is the closed set the view also keys on. */
 type ContractCost = NonNullable<RunGetOutput["run"]["cost"]>;
@@ -46,6 +49,26 @@ function toCost(cost: ContractCost | null): z.input<typeof Cost> | null {
   return cost === null ? null : costOf(cost);
 }
 
+/**
+ * A model's search cost, or null when its searches went unpriced. The rollup
+ * writes a zero figure for a class no entry priced, so a model that searched,
+ * carries unpriced usage, and shows a zero search cost had no search rate.
+ * The page then shows no value, never an exact $0 (#3721).
+ */
+function searchCostOf(row: {
+  tokens: { server_tool_request: number };
+  costByClass: { server_tool_request: ContractCost } | null;
+  hasUnpriced: boolean;
+}): z.input<typeof Cost> | null {
+  if (row.costByClass === null) return null;
+  const search = row.costByClass.server_tool_request;
+  const unpriced =
+    row.tokens.server_tool_request > 0 &&
+    row.hasUnpriced &&
+    Number(search.micros) === 0;
+  return unpriced ? null : costOf(search);
+}
+
 type ContractTokens = {
   input_uncached: number;
   cache_read: number;
@@ -53,6 +76,8 @@ type ContractTokens = {
   cache_write_1h: number;
   output: number;
   reasoning: number;
+  /** Web search requests, not tokens: `toTokens` leaves them out. */
+  server_tool_request: number;
 };
 
 /** The rollup's snake_case token classes, in the app's own spelling. */
@@ -157,8 +182,18 @@ export function toRunFrameBody(
 }
 
 export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
-  const { rollup, provisional } = out;
+  const { rollup, provisional, baseline } = out;
   return {
+    baseline:
+      baseline === null
+        ? null
+        : {
+            windowDays: baseline.windowDays,
+            before: baseline.before,
+            runs: baseline.runs,
+            medianCost: toCost(baseline.medianCost),
+            productiveRatio: baseline.productiveRatio,
+          },
     provisional:
       provisional === undefined || provisional === null
         ? null
@@ -178,6 +213,7 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
         : {
             cost: toCost(rollup.cost),
             tokens: toTokens(rollup.tokens),
+            searchRequests: rollup.tokens.server_tool_request,
             cacheHitRate: rollup.cacheHitRate,
             turns: rollup.turns,
             steps: rollup.steps,
@@ -185,6 +221,9 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
             toolCalls: rollup.toolCalls,
             retries: rollup.retries,
             productiveRatio: rollup.productiveRatio,
+            advancedSteps: rollup.advancedSteps,
+            unproductiveSteps: rollup.unproductiveSteps,
+            unproductiveCauses: rollup.unproductiveCauses,
             byModel: rollup.byModel.map((row) => ({
               model: row.model,
               provider: row.provider,
@@ -192,6 +231,8 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
               cost: toCost(row.cost),
               tokens: toTokens(row.tokens),
               costByClass: toCostByClass(row.costByClass),
+              searchRequests: row.tokens.server_tool_request,
+              searchCost: searchCostOf(row),
               // A row rolled up before savings were recorded answers null,
               // and the page says "not recorded" for it, never a zero.
               cacheSaving: toCost(row.cacheSaving),
@@ -200,6 +241,8 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
             byTool: rollup.byTool.map((row) => ({
               name: row.name,
               calls: row.calls,
+              resultTokens: row.resultTokens,
+              cost: toCost(row.cost),
             })),
             priceEntryIds: rollup.priceEntryIds,
             rolledUpAt: rollup.rolledUpAt,
@@ -402,6 +445,48 @@ export function toRunTurns(out: RunTurnsOutput): z.input<typeof RunTurns> {
       },
     })),
     complete: out.complete,
+    chains: out.chains.map((chain) => ({
+      sessionUuid: chain.sessionUuid,
+      turn: chain.turn,
+    })),
+  };
+}
+
+/**
+ * `list_findings` read for one run to the Cost tab's findings: each finding
+ * with its saving and what it cites in the run. A read that names a run
+ * carries a citation on every finding; one without it is not about this run,
+ * so it is left out rather than drawn with no turn.
+ */
+export function toRunFindings(
+  out: FindingListOutput,
+): z.input<typeof RunFindings> {
+  return {
+    findings: out.findings.flatMap((finding) => {
+      const { citation } = finding;
+      if (citation === undefined) return [];
+      return [
+        {
+          id: finding.id,
+          kind: finding.kind,
+          subject: finding.subject,
+          saving: costOf(finding.saving),
+          confidence: finding.confidence,
+          citation: {
+            runLevel: citation.runLevel,
+            frames:
+              citation.frames === null
+                ? null
+                : citation.frames.map((frame) =>
+                    frame.sessionUuid === undefined
+                      ? { seq: frame.seq }
+                      : { seq: frame.seq, sessionUuid: frame.sessionUuid },
+                  ),
+            framesTotal: citation.framesTotal,
+          },
+        },
+      ];
+    }),
   };
 }
 
@@ -443,6 +528,16 @@ export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
       eventStreamDigest: seal.eventStreamDigest,
       merkleRoot: seal.merkleRoot,
       archiveSegmentRef: seal.archiveSegmentRef,
+      archiveSegmentDigest: seal.archiveSegmentDigest,
+      attestation:
+        seal.attestation === null
+          ? null
+          : {
+              alg: seal.attestation.alg,
+              keyRef: seal.attestation.keyId,
+              sig: seal.attestation.sig,
+              signsOver: [...seal.attestation.signsOver],
+            },
     })),
     enforcementTier: out.enforcementTier,
     recordedGrade: out.recordedGrade,

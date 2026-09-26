@@ -35,6 +35,7 @@ function row(
 ): ToolCallObservationRow {
   return {
     rootSessionUuid: SESSION,
+    sessionUuid: SESSION,
     at: "2026-09-10T10:00:00.000Z",
     seq: 1,
     tool: "Bash",
@@ -87,6 +88,7 @@ function pricedRun(): RunTotalsRecord {
             cache_write_1h: 0n,
             output: 0n,
             reasoning: 0n,
+            server_tool_request: 0n,
           },
           cacheSavingMicros: 0n,
           basis: "client_attested",
@@ -94,10 +96,13 @@ function pricedRun(): RunTotalsRecord {
         },
       ],
       tools: [],
+      steps: null,
     },
     verdict: null,
     accepted: null,
     productiveRatio: null,
+    advancedSteps: null,
+    unproductiveSteps: null,
   };
 }
 
@@ -125,6 +130,18 @@ describe("toObservations", () => {
     );
     expect(out).toEqual([
       expect.objectContaining({ runId: RUN_ID, tool: "Bash", seq: 1 }),
+    ]);
+  });
+
+  it("names a subagent's chain and leaves the root's own chain unnamed (#4001)", () => {
+    const SUBAGENT = "00000000-0000-4000-8000-0000000000cc";
+    const out = toObservations(
+      [row({ seq: 4 }), row({ seq: 2, sessionUuid: SUBAGENT })],
+      new Map([[SESSION, RUN_ID]]),
+    );
+    expect(out.map((o) => [o.seq, o.sessionUuid])).toEqual([
+      [4, null],
+      [2, SUBAGENT],
     ]);
   });
 });
@@ -207,6 +224,10 @@ describe("runFindingsPass", () => {
         savingMicros: 15_000n,
       }),
     ]);
+    // The repeat on the root's chain is cited by its seq alone.
+    expect(drafts[0]?.evidence.frames).toEqual({
+      [RUN_ID]: { seqs: [{ seq: "2" }], total: 1 },
+    });
   });
 
   it("writes no drafts for a workspace with no runs in the window, so its open findings are deleted", async () => {

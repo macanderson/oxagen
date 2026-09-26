@@ -1,0 +1,20 @@
+schema = "context-record/v0.1"
+set_id = "a-intel.core-platform"
+
+[[record]]
+lineage_id = "ctx.a-intel.production-branch"
+label = "Production deploys from main"
+record_id = "rec_a_intel_production_branch_2362a00369a8"
+record_hash = "sha256:e18f26e8e075f81a503b770efc728bd802a284c74b44845514e216717ce509bd"
+kind = "fact"
+statement = "main deploys to production on every merge."
+origin = "user"
+sharing_scope = "workspace"
+status = "active"
+
+[record.provenance]
+source_kind = "proposal"
+source_uri = "oxagen:proposal/prp_01K5X9PB"
+
+[record.steering]
+force = "info"

@@ -217,6 +217,12 @@ export interface GatewayCallRecord {
   durationMs: number;
   /** Set when the control plane refused the call. */
   refusedReason?: string;
+  /**
+   * The rules that refused it, from a -32002 refusal's `error.data.ruleIds`,
+   * at most 64 of at most 512 characters each (#3971). The daemon seals them
+   * as `policy_rules` on the `policy_decision` frame.
+   */
+  ruleIds?: string[];
   /** JCS digest of the call's arguments, for `tool_input_digest`. */
   inputDigest?: Sha256Digest;
   inputBytes?: number;
@@ -392,6 +398,32 @@ export function outcomeOf(
     return rpc.error.code === RPC_REFUSED ? "rejected" : "error";
   if (status < 200 || status >= 300) return "error";
   return "ok";
+}
+
+/** The most rules one refusal names, and the longest each may be: the envelope's bounds. */
+const REFUSAL_RULES_MAX = 64;
+const REFUSAL_RULE_MAX = 512;
+
+/**
+ * The rules a control-plane refusal names, in evaluation order (#3971,
+ * ADR-201): a `-32002` answer's `error.data.ruleIds`, strings only, at most
+ * 64 of at most 512 characters each. Undefined for any other answer, and for
+ * a refusal that names none, such as the gateway's own tool ceiling.
+ */
+export function refusalRulesOf(
+  rpc: JsonRpcResponse | undefined,
+): string[] | undefined {
+  const error = rpc?.error;
+  if (error === undefined || error.code !== RPC_REFUSED) return undefined;
+  const data = error.data;
+  if (typeof data !== "object" || data === null) return undefined;
+  const listed = (data as { ruleIds?: unknown }).ruleIds;
+  if (!Array.isArray(listed)) return undefined;
+  const rules = listed
+    .filter((rule): rule is string => typeof rule === "string" && rule !== "")
+    .slice(0, REFUSAL_RULES_MAX)
+    .map((rule) => rule.slice(0, REFUSAL_RULE_MAX));
+  return rules.length > 0 ? rules : undefined;
 }
 
 /** How many tools a `tools/list` result carries, or undefined if not one. */
@@ -680,6 +712,7 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
     // `tools/list` is the exception: a refusal is a decision.
     const isCall = request.method === "tools/call";
     if (!isCall && status !== "rejected") return;
+    const ruleIds = status === "rejected" ? refusalRulesOf(rpc) : undefined;
     const toolUseId = isCall ? toolUseIdOf(request.params) : undefined;
     deps.record({
       sessionId: context.sessionId,
@@ -689,6 +722,7 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
       status,
       durationMs,
       ...(refusedReason === undefined ? {} : { refusedReason }),
+      ...(ruleIds === undefined ? {} : { ruleIds }),
       ...exchangeOf(request, rpc, log),
     });
   }

@@ -7,6 +7,8 @@ import { PublicId } from "./common";
 export const OrgChoice = z.object({
   slug: z.string().min(1),
   name: z.string(),
+  /** The stored avatar the switchers draw: an https URL or a designed avatar; null when it has none. */
+  avatarUrl: z.string().min(1).nullable(),
 });
 
 export type OrgChoice = z.infer<typeof OrgChoice>;
@@ -14,6 +16,8 @@ export type OrgChoice = z.infer<typeof OrgChoice>;
 export const WorkspaceChoice = z.object({
   slug: z.string().min(1),
   name: z.string(),
+  /** The stored avatar the switchers draw: an https URL or a designed avatar; null when it has none. */
+  avatarUrl: z.string().min(1).nullable(),
 });
 export type WorkspaceChoice = z.infer<typeof WorkspaceChoice>;
 

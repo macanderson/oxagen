@@ -1,0 +1,17 @@
+{
+  "check": "references",
+  "rule": "mention-resolves",
+  "severity": "error",
+  "description": "An @record: mention names a lineage no active record has.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/platform/a-intel.platform.missing-record.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/platform/a-intel.platform.missing-record.md",
+      "line": 16
+    }
+  ]
+}

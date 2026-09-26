@@ -2591,6 +2591,7 @@ type Messages = {
         noBasis: string;
         unbased: string;
         unpriced: string;
+        noUsage: string;
         estimated: string;
         notRecorded: string;
         mixed: string;
@@ -2707,6 +2708,7 @@ type Messages = {
       };
       parked: string;
       notRecorded: string;
+      noUsage: string;
       basisNotRecorded: string;
       estimate: string;
       source: {
@@ -5724,6 +5726,7 @@ type Messages = {
       emptySearch: string;
       emptyErrors: string;
       cut: string;
+      cutLive: string;
       more: string;
       readingMore: string;
       loadedMore: string;
@@ -5732,6 +5735,7 @@ type Messages = {
       followDenied: string;
       followLost: string;
       followSealed: string;
+      compacted: string;
     };
     frames: {
       title: string;
@@ -5784,6 +5788,52 @@ type Messages = {
           halted: string;
         };
         basisNotRecorded: string;
+      };
+      window: {
+        title: string;
+        provider: string;
+        model: string;
+        tools: string;
+        context: string;
+        promptTokens: string;
+        answeredAt: string;
+        notApart: string;
+        itemsWithTokens: string;
+        composition: string;
+        compositionNote: string;
+        compositionBytes: string;
+        stack: string;
+        tokens: string;
+        bytes: string;
+        none: string;
+        block: {
+          system: string;
+          steering: string;
+          tools: string;
+          context: string;
+          conversation: string;
+        };
+        items: {
+          system: string;
+          steering: string;
+          tools: string;
+          context: string;
+          conversation: string;
+        };
+      };
+      assembled: {
+        title: string;
+        budget: string;
+        used: string;
+        usedValue: string;
+        tokens: string;
+        frames: string;
+        framesValue: string;
+        by: string;
+        assembler: string;
+        digest: string;
+        noText: string;
+        none: string;
       };
     };
     player: {
@@ -5858,12 +5908,38 @@ type Messages = {
         noRead: string;
         noTier: string;
         noLadder: string;
+        live: string;
+        pending: string;
+        modelVerdict: {
+          over: string;
+          under: string;
+        };
         move: string;
         moveStub: string;
+        effortTitle: {
+          not_proxied: string;
+          not_sent: string;
+        };
         effortWhy: {
           not_proxied: string;
           not_sent: string;
         };
+        effortSource: {
+          request: string;
+          harness: string;
+        };
+        effortFit: string;
+        wrongEffort: string;
+        effortVerdict: {
+          over: string;
+          under: string;
+        };
+        effortNoVerdict: string;
+        effortFitSay: string;
+        effortOverSay: string;
+        effortUnderSay: string;
+        setEffort: string;
+        effortStub: string;
         read: string;
         readNone: string;
       };
@@ -5873,6 +5949,8 @@ type Messages = {
         perTurn: string;
         dearest: string;
         median: string;
+        medianDelta: string;
+        medianOnly: string;
         provisional: string;
         provisionalModel: string;
         provisionalModelUnpriced: string;
@@ -5947,9 +6025,20 @@ type Messages = {
         ratio: string;
         advancedTask: string;
         thirtyDay: string;
+        thirtyDayDelta: string;
+        thirtyDayOnly: string;
+        points: string;
         ratioChart: string;
         advanced: string;
         didNot: string;
+        stepCount: string;
+        unproductive: string;
+        causes: {
+          failed: string;
+          repeated: string;
+          retried: string;
+        };
+        allAdvanced: string;
         retries: string;
       };
       families: {
@@ -5984,10 +6073,13 @@ type Messages = {
         dearest: string;
         calls: string;
         byCalls: string;
+        byCost: string;
+        resultsTitle: string;
         noTools: string;
         toolsNotRead: string;
         unnamedTool: string;
         note: string;
+        noteWithResults: string;
         noteNotRolledUp: string;
       };
       calls: {
@@ -6041,6 +6133,7 @@ type Messages = {
         incomplete: string;
         recorded: string;
         entries: string;
+        searchRequests: string;
       };
       composition: {
         title: string;
@@ -6066,6 +6159,7 @@ type Messages = {
         };
         productive: string;
         productiveValue: string;
+        productiveSteps: string;
       };
     };
     commands: {
@@ -6272,6 +6366,7 @@ type Messages = {
     };
     chain: {
       title: string;
+      compacted: string;
       hash: {
         title: string;
         clean: string;
@@ -6311,7 +6406,8 @@ type Messages = {
         unsealed: string;
         signature: string;
         signsOver: string;
-        notInRead: string;
+        signatureValue: string;
+        unsigned: string;
         merkleRoot: string;
         tier: string;
         archive: string;
@@ -6376,6 +6472,10 @@ type Messages = {
       soFar: string;
       caption: string;
       captionCut: string;
+      finding: string;
+      findingsSection: string;
+      pinTitle: string;
+      pinChartTitle: string;
       totalCut: string;
       partial: string;
       tableLabel: string;
@@ -6526,6 +6626,10 @@ type Messages = {
         not_proxied: string;
         not_sent: string;
       };
+      effortSource: {
+        request: string;
+        harness: string;
+      };
       pathNotEnrolled: string;
       pathRecorded: string;
       pathSession: string;
@@ -6536,6 +6640,8 @@ type Messages = {
       fit: {
         fit: string;
         wrongTier: string;
+        effortFit: string;
+        wrongEffort: string;
       };
       runs30d: string;
     };
@@ -6545,6 +6651,8 @@ type Messages = {
       generated: string;
       onBehalfOf: string;
       operator: string;
+      workspaceRole: string;
+      roleNotRecorded: string;
       generatedBy: string;
       notGenerated: string;
     };
@@ -6579,6 +6687,7 @@ type Messages = {
     issues: {
       title: string;
       count: string;
+      countAtLeast: string;
       issue: string;
       status: string;
       relation: string;
@@ -6588,19 +6697,30 @@ type Messages = {
       viewLabel: string;
       noLink: string;
       task: string;
-      statusWhy: string;
-      empty: string;
-      emptyUnread: string;
-      loading: string;
-      closingUnread: string;
-      pullRequests: string;
+      referenced: string;
       closedBy: string;
+      empty: string;
+      emptyIncomplete: string;
+      incomplete: string;
+      loading: string;
       state: {
         open: string;
         closed: string;
+        in_progress: string;
+        blocked: string;
       };
-      stateWhy: string;
-      note: string;
+      stateAt: string;
+      statusUnknown: string;
+      statusRead: {
+        no_connection: string;
+        not_github: string;
+        repository_unknown: string;
+        not_found: string;
+        read_failed: string;
+        read_limit: string;
+      };
+      statusFilter: string;
+      noMatch: string;
       linked: {
         title: string;
         edge: {
@@ -6675,6 +6795,7 @@ type Messages = {
       empty: string;
       cut: string;
       note: string;
+      none: string;
       decidedBy: string;
       by: {
         oxagen: string;
@@ -6708,6 +6829,7 @@ type Messages = {
         noUsage: string;
         splitNotRecorded: string;
         noRequest: string;
+        splitByBytes: string;
       };
       manifest: {
         label: string;
@@ -6746,6 +6868,9 @@ type Messages = {
         note: string;
         noneTitle: string;
         none: string;
+        frame: string;
+        measured: string;
+        measuredBytes: string;
       };
       frames: {
         title: string;
@@ -6778,6 +6903,9 @@ type Messages = {
         assembledAt: string;
         assembledFrame: string;
         note: string;
+        spent: string;
+        tokens: string;
+        recorded: string;
       };
     };
     work: {
@@ -6792,7 +6920,12 @@ type Messages = {
       base: string;
       baseNotRecorded: string;
       release: string;
-      releaseNotRecorded: string;
+      releaseState: {
+        draft: string;
+        prerelease: string;
+        published: string;
+      };
+      releaseStateUnread: string;
       checks: string;
       noChecks: string;
       ci: {
@@ -7769,6 +7902,7 @@ type Messages = {
   spend: {
     notRecorded: string;
     basisNotRecorded: string;
+    unmetered: string;
     basis: {
       gateway_observed: string;
       client_attested: string;
@@ -8091,6 +8225,8 @@ type Messages = {
         noCost: string;
         estimated: string;
         setRate: string;
+        windowTokens: string;
+        windowRequests: string;
       };
       book: {
         title: string;
@@ -8327,6 +8463,8 @@ type Messages = {
       cacheHitNote: string;
       cacheWritten: string;
       cacheWrittenNote: string;
+      searches: string;
+      searchesNote: string;
       cacheWriteShare: string;
       effectiveInput: string;
       unmapped: string;

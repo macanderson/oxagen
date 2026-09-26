@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./run-spec-v2": "./src/run-spec-v2.ts",
     "./run-errors": "./src/run-errors.ts",
-    "./evidence-store": "./src/evidence-store.ts"
+    "./evidence-store": "./src/evidence-store.ts",
+    "./attester-key": "./src/attester-key.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

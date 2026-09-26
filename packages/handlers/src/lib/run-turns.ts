@@ -375,6 +375,11 @@ export function placeChains(args: {
  * follow the recorded turn index has none: its first frame opens turn 1,
  * whichever chain recorded it, so a chain placed before every root frame is
  * in turn 1.
+ *
+ * `chains` answers the turn each subagent chain counts toward (#4001), so a
+ * reader holding a subagent frame's seq can find its turn. A chain in no
+ * turn, or in a turn past the cap, is left out: the list names only turns
+ * `turns` holds.
  */
 export function tachoTurns(args: {
   rootSessionUuid: string;
@@ -382,7 +387,11 @@ export function tachoTurns(args: {
   boundaries: "turn_start" | "turn_index";
   groups: readonly TachoTurnGroup[];
   cap: number;
-}): { turns: RunTurn[]; complete: boolean } {
+}): {
+  turns: RunTurn[];
+  complete: boolean;
+  chains: { sessionUuid: string; turn: number }[];
+} {
   const index = new Map(args.starts.map((seq, i) => [seq, i + 1]));
   const rootTurns: {
     index: number;
@@ -416,10 +425,19 @@ export function tachoTurns(args: {
   });
   const inTurn = new Map<Placement, TurnTally[]>();
   const first: Placement = args.boundaries === "turn_index" ? 1 : null;
+  const shown = new Set(rootTurns.slice(0, args.cap).map((t) => t.index));
+  const chainTurns: { sessionUuid: string; turn: number }[] = [];
   for (const chain of chains) {
     const turn = placed.get(chain.sessionUuid) ?? first;
     inTurn.set(turn, [...(inTurn.get(turn) ?? []), tallyOf(chain)]);
+    if (turn !== null && shown.has(turn))
+      chainTurns.push({ sessionUuid: chain.sessionUuid, turn });
   }
+  chainTurns.sort(
+    (a, b) =>
+      a.turn - b.turn ||
+      (a.sessionUuid < b.sessionUuid ? -1 : a.sessionUuid > b.sessionUuid ? 1 : 0),
+  );
   const turns = rootTurns.map((t) => ({
     opening: {
       turn: t.index,
@@ -435,5 +453,6 @@ export function tachoTurns(args: {
   return {
     turns: rowsOf(turns.slice(0, args.cap), beforeCost),
     complete: args.starts.length <= args.cap,
+    chains: chainTurns.slice(0, args.cap),
   };
 }

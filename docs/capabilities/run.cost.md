@@ -30,20 +30,23 @@ The Run page's cost strip and Cost tab (Mission Control spec §12.6, §12.7; ADR
 | `runId` | string | as asked |
 | `rollup` | object or null | null until the rollup has built a row for the run, or for an id with no row in the caller's workspace |
 | `provisional` | object, null or absent | present only while `rollup` is null and the id names a wrapped session in the caller's workspace |
+| `baseline` | object or null | the agent's own recent runs, described below; null when the run names no agent, or the agent has fewer than 5 sealed runs in the window (#3984) |
 
 The rollup:
 
 | Field | Type | Description |
 |---|---|---|
 | `cost` | object or null | `{ micros, currency, basis }`; null when no model frame was priced |
-| `tokens` | object | counts by class: `input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning` |
+| `tokens` | object | counts by class: `input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning`, and `server_tool_request`, the web searches the run's calls ran. Searches are requests, not tokens. A web fetch carries no per-request charge and is not counted |
 | `cacheHitRate` | number or null | `cache_read ÷ (input_uncached + cache_read)`, weighted by each frame's spend; null when no frame carried input tokens. Cache writes are not in the denominator, so a run that rebuilt its cache can still read a high rate. The rebuild share, `(cache_write_5m + cache_write_1h) ÷ (input_uncached + cache_read + cache_write_5m + cache_write_1h)`, comes from `tokens`, and the Run page's Cost tab prints it beside the rate |
 | `turns` | integer or null | null for a ledger run whose model-call payloads are encrypted |
 | `steps`, `modelCalls`, `toolCalls` | integer | counts from the frames |
 | `retries` | integer or null | the harness's API retry count; null for a ledger run |
-| `productiveRatio` | number or null | null until the grading lane writes it |
+| `productiveRatio` | number or null | `advancedSteps ÷ steps`; null while the steps are not graded |
+| `advancedSteps`, `unproductiveSteps` | integer or null | the steps that moved the run forward and the steps that did not (#3984). Null together on a row rolled up before grading existed, until its next rollup, and on a run with no steps. When set, they sum to `steps` |
+| `unproductiveCauses` | object or null | `{ failed, repeated, retried }`: why the unproductive steps made no progress. The three sum to `unproductiveSteps`, and the object is null exactly when the counts are |
 | `byModel` | object[] | `{ model, provider, calls, cost, tokens, costByClass, cacheSaving, hasUnpriced }`, one per model the frames used; each `cost` carries its own basis, or is null when none of the model's frames was priced. The per-model fields are described below |
-| `byTool` | object[] | `{ name, calls }` |
+| `byTool` | object[] | `{ name, calls, resultTokens, cost }`. `resultTokens` is the tool-result tokens the OTel tool spans recorded for the tool's calls, summed, or null when no call recorded them. `cost` prices them at the run's uncached input rate, the rule the findings job uses. Its basis is always `estimated`, and it attributes input the run's `cost` already counts, so it never adds to it. It is null when `resultTokens` is null or the run has no input price (#3892) |
 | `priceEntryIds` | string[] | the `cost.price_entries` rows the frames were priced with (spec §12.2) |
 | `rolledUpAt` | string | RFC 3339; when the row was last rebuilt |
 | `isEstimate` | boolean | true when the row was rebuilt while the run was open: every figure covers the frames recorded so far, and the run may add more. False once the rollup has rebuilt the sealed run |
@@ -54,11 +57,19 @@ Each `byModel` entry:
 |---|---|---|
 | `cost` | object or null | the model's recorded cost, `{ micros, currency, basis }`; null when none of its frames was priced |
 | `tokens` | object | the model's counts by class |
-| `costByClass` | object or null | `cost` split by the six classes in `tokens`, each `{ micros, currency, basis }`. Every class is priced from the price book at its frame's instant and rounded once. A class no entry priced is a zero figure. An estimated frame's own reported figure has no split, so it sits under `output`. Null exactly when `cost` is |
+| `costByClass` | object or null | `cost` split by the classes in `tokens`, each `{ micros, currency, basis }`. `server_tool_request` is priced per request. Every class is priced from the price book at its frame's instant and rounded once. A class no entry priced is a zero figure. An estimated frame's own reported figure has no split, so it sits under `output`. Null exactly when `cost` is |
 | `cacheSaving` | object or null | what the model's cache reads saved: each frame's `cache_read` tokens priced at the `input_uncached` rate less the `cache_read` rate, both at the frame's instant. A zero figure when no frame read the cache. Null when a frame that read the cache had no price for either class, when none of the model's frames was priced, and on a row rolled up before the saving was recorded, until the run's next rollup |
 | `hasUnpriced` | boolean | true when any call to the model went unpriced, including a model where another call did price and `cost` is therefore not null |
 
 These are the recorded figures. A reader shows them as they are and does not reprice the token counts with today's price book, because a later rate change would then disagree with the run's recorded cost (#4069).
+
+The rollup grades each step from what its frame recorded (ADR-199). A step is one model call or one tool call, and it counts under one cause at most:
+
+- `failed`: a tool call whose status is `error` or `rejected`. A ledger call's `failed` and `denied` outcomes read the same way. A cancelled call and one parked on an approval did not fail.
+- `repeated`: a tool call with the same tool, input digest and output digest as an earlier call of the run, when it is a shell command or a call the classifier marked read-only. This is the rule the findings job files `repeated_shell_commands` and `duplicate_tool_calls` by. A repeat of a call that writes is not counted, because the write may change what the next call reads.
+- `retried`: the session's API retries, one model call each, and never more than the run's model calls.
+
+A step whose frame hides its outcome counts as advanced. Waits have no record and are not a cause. A ledger run records no read-only flag, so its repeats are not graded.
 
 The provisional figures come from `tacho.session_models` and the root session's tool-call counter. Ingest adds each counted `llm_call` frame to them as it lands, so they cover the run up to its last recorded event. The rollup replaces them once it rebuilds the run.
 
@@ -69,6 +80,16 @@ The provisional figures come from `tacho.session_models` and the root session's 
 | `asOf` | string | RFC 3339; the run's last recorded event |
 
 Subagent sessions are not included. They are separate sessions until the rollup folds them into the run.
+
+The baseline sets this run beside the agent's sealed runs in the 30 days before it started. This run is not in it, and neither is a run that is still open, whose figures are a running estimate. The window ends at this run's start, so a sealed run's baseline does not move as the agent keeps running. A run with no rollup row answers `baseline: null`, because nothing names its agent or its start.
+
+| Field | Type | Description |
+|---|---|---|
+| `windowDays` | integer | always 30 |
+| `before` | string | RFC 3339; this run's `startedAt`, the end of the window |
+| `runs` | integer | the agent's sealed runs in the window, at least 5 |
+| `medianCost` | object or null | the median cost (`percentile_cont(0.5)`) of the runs in the window priced in this run's currency, rounded half to even to whole micros, with the fold of their bases; null when fewer than 5 of them were priced |
+| `productiveRatio` | number or null | `sum(advanced_steps) ÷ sum(steps)` over the graded runs in the window, so a long run weighs as many steps as it took; null when fewer than 5 of them were graded |
 
 ## Honesty
 

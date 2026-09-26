@@ -26,6 +26,7 @@ describe("NodeLabels (@oxagen/ontology)", () => {
       "Plan",
       "SubagentFanout",
       "SubagentRun",
+      "ContextManifest",
     ] as const;
 
     for (const label of required) {
@@ -68,6 +69,7 @@ describe("EdgeTypes (@oxagen/ontology)", () => {
       "APPROVED_BY",
       "DISPATCHED",
       "SPAWNED_FANOUT",
+      "USED_CONTEXT",
     ] as const;
 
     for (const edge of required) {

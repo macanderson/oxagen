@@ -434,6 +434,24 @@ export function buildProgram(): Command {
       await billingStatement(opts as Parameters<typeof billingStatement>[0]);
     });
 
+  // ── findings: the workspace's costed findings (list_findings, ADR-062) ─────
+
+  const findingsCmd = program
+    .command("findings")
+    .description("The workspace's costed findings and what each would save");
+  findingsCmd
+    .command("list")
+    .description(
+      "List the findings by the money at stake; with --run, only those citing the run, with the frames each cites",
+    )
+    .option("--run <id>", "A run id (arun_… or tse_…)")
+    .option("--status <status>", "open (default) | applied | dismissed")
+    .option("--json", "Output JSON")
+    .action(async (opts: { run?: string; status?: string; json?: boolean }) => {
+      const { findingsList } = await import("./commands/findings.js");
+      await findingsList(opts);
+    });
+
   // ── context: a steering proposal on a lineage (propose_record) ──────────────
 
   const contextCmd = program
@@ -733,6 +751,17 @@ export function buildProgram(): Command {
     .action(async (runId: string, opts: { json?: boolean }) => {
       const { runTurns } = await import("./commands/run.js");
       await runTurns(runId, opts);
+    });
+  runCmd
+    .command("context")
+    .description(
+      "Show what each of a run's model requests carried: the prompt tokens and each block's share of them",
+    )
+    .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--json", "Output JSON")
+    .action(async (runId: string, opts: { json?: boolean }) => {
+      const { runContext } = await import("./commands/run-context.js");
+      await runContext(runId, opts);
     });
   runCmd
     .command("export")

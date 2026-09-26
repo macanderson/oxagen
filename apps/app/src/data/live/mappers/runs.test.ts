@@ -19,6 +19,7 @@ const ledgerRun: Run = {
   operatorKind: "human",
   operatorName: "Marcus Bell",
   operatorAttribution: "initiator",
+  operatorRole: "member",
   status: "sealed",
   outcome: "completed",
   turns: 12,
@@ -52,6 +53,7 @@ const unpricedSession: Run = {
   operatorKind: null,
   operatorName: null,
   operatorAttribution: null,
+  operatorRole: null,
   status: "live",
   outcome: "running",
   turns: null,
@@ -98,6 +100,7 @@ describe("toRunPage", () => {
           operatorKind: "human",
           operatorName: "Marcus Bell",
           operatorAttribution: "initiator",
+          operatorRole: "member",
           status: "sealed",
           outcome: "completed",
           turns: 12,
@@ -113,6 +116,8 @@ describe("toRunPage", () => {
           reportedCost: null,
           reportedTokens: null,
           effort: null,
+          effortSource: null,
+          fit: null,
           thinking: null,
           permissionMode: null,
           model: null,
@@ -156,6 +161,8 @@ describe("toRunPage", () => {
       operatorKind: null,
       operatorName: null,
       operatorAttribution: null,
+      // No role was stamped, and the view says so rather than guessing one.
+      operatorRole: null,
       // The session recorded both, so neither is dropped on the way to the view.
       model: {
         slug: "claude-haiku-4-5-20251001",
@@ -256,6 +263,44 @@ describe("toRunPage", () => {
     ).toBe(true);
   });
 
+  it("carries the effort get_run answers and where it was read (#3891)", () => {
+    const page = toRunPage({
+      runs: [
+        { ...unpricedSession, effort: "high", effortSource: "request" },
+        { ...unpricedSession, effort: "medium", effortSource: "harness" },
+      ],
+      nextCursor: null,
+    });
+    expect(RunPage.parse(page).runs.map((run) => run.effortSource)).toEqual([
+      "request",
+      "harness",
+    ]);
+    expect(page.runs[0]).toMatchObject({ effort: "high" });
+  });
+
+  it("carries the Model fit reading get_run stored, with its provenance (#3893)", () => {
+    const fit: NonNullable<Run["fit"]> = {
+      method: "run-fit/v1",
+      readAt: "2026-09-15T08:45:00.000Z",
+      sealedAt: "2026-09-15T08:40:00.000Z",
+      read: {
+        prompts: 1,
+        turns: 12,
+        steps: 40,
+        failed: 0,
+        outputTokens: 900,
+        reasoningTokens: 0,
+      },
+      model: null,
+      effort: { verdict: "unseen", why: "not_sent" },
+    };
+    const page = toRunPage({ runs: [{ ...ledgerRun, fit }], nextCursor: null });
+    expect(RunPage.parse(page).runs[0]?.fit).toEqual(fit);
+    // A list_runs row leaves it out, and the view reads no reading.
+    const listed = toRunPage({ runs: [ledgerRun], nextCursor: null });
+    expect(listed.runs[0]?.fit).toBeNull();
+  });
+
   it("maps an empty page to an empty page", () => {
     expect(toRunPage({ runs: [], nextCursor: null })).toEqual({
       runs: [],
@@ -292,6 +337,7 @@ describe("toRunPage: tokens, compaction and pull request state", () => {
     cache_write_1h: 0,
     output: 900,
     reasoning: 100,
+    server_tool_request: 0,
   };
 
   it("carries the rollup's token classes in the view's names, and its cache rate (#3834)", () => {

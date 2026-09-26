@@ -1,0 +1,486 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/bundle/v1.json",
+  "title": "Published bundle",
+  "description": "What the cloud gateway and session start read for one published version of a steering repo.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "bundle/v1"
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+(?:\\.[a-z0-9-]+)+(?:\\/(?!\\.\\.?(?:\\/|$))[a-z0-9_.-]+){2,}$",
+      "description": "The steering repo, or the organization repo."
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "workspace",
+        "organization"
+      ]
+    },
+    "organization": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 40,
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "workspace": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 40,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "not": {
+        "enum": [
+          "access",
+          "account",
+          "api-keys",
+          "audit",
+          "billing",
+          "dashboard",
+          "developer",
+          "governance",
+          "members",
+          "model-funding",
+          "new-workspace",
+          "register",
+          "roles",
+          "security",
+          "settings",
+          "sso",
+          "workspaces"
+        ]
+      }
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The published version: one more than the last, per repository."
+    },
+    "commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+      "description": "The merge commit the version was built from."
+    },
+    "ledger": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^(?!\\/)(?!.*\\/$)(?!.*\\/\\/)(?!(?:.*\\/)?\\.\\.?(?:\\/|$)).+$"
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "hash": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "seq",
+            "hash"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The ledger line of the merge, or null for version 1, which no steering PR made."
+    },
+    "published_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "lineage": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^(?!\\/)(?!.*\\/$)(?!.*\\/\\/)(?!(?:.*\\/)?\\.\\.?(?:\\/|$)).+$"
+          },
+          "blob": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+            "description": "The record file's blob, so a publish recompiles only changed files."
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^rec_[a-z0-9_]+_[0-9a-f]{12}$"
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "business-rule",
+              "code-rule",
+              "constraint",
+              "procedure",
+              "skill",
+              "fact",
+              "preference",
+              "memory"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "effect": {
+            "type": "string",
+            "enum": [
+              "require",
+              "forbid"
+            ]
+          },
+          "force": {
+            "type": "string",
+            "enum": [
+              "must",
+              "should",
+              "may",
+              "info"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "workspace",
+              "repository",
+              "organization"
+            ]
+          },
+          "load": {
+            "type": "string",
+            "enum": [
+              "always",
+              "match",
+              "relevant",
+              "mention"
+            ],
+            "description": "The load in force: the record's own, or the one its force implies."
+          },
+          "repos": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+(?:\\.[a-z0-9-]+)+(?:\\/(?!\\.\\.?(?:\\/|$))[a-z0-9_.-]+){2,}$"
+            }
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^(?=[a-z0-9_*]{4,64}$)[a-z][a-z0-9_]{0,23}__(?:\\*|[a-z][a-z0-9_]*)$"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$"
+            }
+          },
+          "applies_to": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The record as delivered: its label as a heading, then its body."
+          },
+          "index_tokens": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The record's one index line."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "pattern": "^(?!\\/)(?!.*\\/$)(?!.*\\/\\/)(?!(?:.*\\/)?\\.\\.?(?:\\/|$)).+$"
+                },
+                "blob": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$"
+                }
+              },
+              "required": [
+                "path",
+                "blob"
+              ],
+              "additionalProperties": false
+            },
+            "description": "A skill's other files."
+          }
+        },
+        "required": [
+          "lineage",
+          "path",
+          "blob",
+          "id",
+          "hash",
+          "label",
+          "kind",
+          "force",
+          "scope",
+          "load",
+          "tokens",
+          "index_tokens"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "always_on": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "repository": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z0-9-]+(?:\\.[a-z0-9-]+)+(?:\\/(?!\\.\\.?(?:\\/|$))[a-z0-9_.-]+){2,}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The code repository, or null for a run on a repository no record names."
+          },
+          "text": {
+            "type": "string"
+          },
+          "tokens": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lineages": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$"
+            },
+            "description": "The records in the block, in its order."
+          }
+        },
+        "required": [
+          "repository",
+          "text",
+          "tokens",
+          "lineages"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "policies": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "type": "string",
+              "description": "policy/schema.cedarschema."
+            },
+            "policies": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "pattern": "^(?!\\/)(?!.*\\/$)(?!.*\\/\\/)(?!(?:.*\\/)?\\.\\.?(?:\\/|$)).+$"
+                  },
+                  "blob": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "blob",
+                  "text"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "schema",
+            "policies"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Null when the repository has no policy/ folder."
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "schema": {
+            "const": "agent/v1"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$",
+            "description": "The agent's name and the file's name: agents/<name>.toml."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "operator": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[a-z0-9][a-z0-9._-]*$",
+            "description": "An Oxagen member or team."
+          },
+          "runtime": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "description": "A runtime enrolled in Oxagen."
+          },
+          "harness": {
+            "type": "string",
+            "enum": [
+              "stella",
+              "claude-code",
+              "codex",
+              "cursor",
+              "claude-agent-sdk",
+              "custom"
+            ],
+            "description": "The harness, or the framework adapter, the agent runs in."
+          }
+        },
+        "required": [
+          "schema",
+          "name",
+          "label",
+          "operator",
+          "runtime",
+          "harness"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "tools": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "const": "tool-manifest/v1"
+            }
+          },
+          "required": [
+            "schema"
+          ],
+          "$ref": "https://oxagen.sh/schemas/tool-manifest/v1.json"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Null until the tools compile, or when the repository has no servers."
+    }
+  },
+  "required": [
+    "schema",
+    "repository",
+    "scope",
+    "organization",
+    "version",
+    "commit",
+    "ledger",
+    "published_at",
+    "records",
+    "always_on",
+    "policies",
+    "agents",
+    "tools"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scope": {
+            "const": "workspace"
+          }
+        },
+        "required": [
+          "scope"
+        ]
+      },
+      "then": {
+        "required": [
+          "workspace"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scope": {
+            "const": "organization"
+          }
+        },
+        "required": [
+          "scope"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "workspace"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -286,6 +286,7 @@ export function FramePanel({
   tier,
   body,
   approvals,
+  kindPanel,
   steps,
   hrefOf,
   shown,
@@ -298,6 +299,12 @@ export function FramePanel({
   body: Read<RunFrameBody> | null;
   /** The parked call or the decision this frame records, when it is an approval frame. */
   approvals: ReactNode;
+  /**
+   * The panel for the frame's kind that the record fills beyond its facts:
+   * a model request's window, or the assembler's manifest (ADR-200). Absent
+   * for every other kind.
+   */
+  kindPanel?: ReactNode;
   steps: Steps;
   hrefOf: HrefOf;
   shown: number;
@@ -357,6 +364,7 @@ export function FramePanel({
           </p>
         )}
         {approvals}
+        {kindPanel}
         <FrameFacts frame={frame} entry={entry} />
         {frame === null || (body !== null && body.ok) ? null : (
           // The body read lists its own redactions; without it, the envelope's.

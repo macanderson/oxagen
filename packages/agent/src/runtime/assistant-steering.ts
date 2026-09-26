@@ -245,7 +245,18 @@ export function assistantSystemPrompt(
   baseline: string,
   steering: Pick<AssistantSteering, "text">,
 ): string {
-  return steering.text === null
-    ? baseline
-    : `${baseline}${STEERING_SECTION}${steering.text}`;
+  const section = steeringSection(steering);
+  return section === null ? baseline : `${baseline}${section}`;
+}
+
+/**
+ * The text `assistantSystemPrompt` appends for the steering, its heading
+ * included, or null when there is none. The run's window counts exactly
+ * these characters as steering and the rest of the system prompt as system
+ * (ADR-200).
+ */
+export function steeringSection(
+  steering: Pick<AssistantSteering, "text">,
+): string | null {
+  return steering.text === null ? null : `${STEERING_SECTION}${steering.text}`;
 }

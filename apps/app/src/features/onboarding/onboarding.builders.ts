@@ -81,6 +81,8 @@ export function runsPage(
         enforcementTier: "harness",
         completenessGaps: [],
         canSummarize: false,
+        effortSource: null,
+        fit: null,
         startedAt: "2026-09-15T14:02:11.000Z",
         sealedAt: "2026-09-15T14:02:40.000Z",
       })),
@@ -240,6 +242,9 @@ export function onboardingSource(reads: Reads): {
       outputs: refuse("runs.transcript"),
       work: refuse("runs.transcript"),
       outcomesSettings: refuse("runs.transcript"),
+      issues: refuse("runs.issues"),
+      context: refuse("runs.context"),
+      findings: refuse("runs.findings"),
     },
     approvals: {
       pending: refuse("approvals.pending"),
