@@ -1516,6 +1516,17 @@
     },
     {
       "domain": "run",
+      "name": "get_run_context",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "cli",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
       "name": "get_run_cost",
       "reads": [],
       "surfaces": [
@@ -1552,6 +1563,16 @@
       "reads": [],
       "surfaces": [
         "api"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "run",
+      "name": "get_run_issues",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "writes": []
     },
@@ -2107,6 +2128,7 @@
       "reads": [],
       "surfaces": [
         "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -4153,7 +4175,7 @@
       "writes": []
     }
   ],
-  "contentHash": "cf4c3a2afcf14888f3b7181e848bbe49f79af100c59b23693b45fca3de9b3be3",
+  "contentHash": "07227b2b3724178309ebee74d1ac5a683b5d22da04f8c5fccc7fb8ce95dcb07d",
   "domains": [
     {
       "name": "agent",
@@ -4170,6 +4192,7 @@
         "neo4j:AgentVersion",
         "neo4j:BackgroundTask",
         "neo4j:Citation",
+        "neo4j:ContextManifest",
         "neo4j:Evidence",
         "neo4j:Execution",
         "neo4j:Fanout",
@@ -4649,7 +4672,7 @@
       ],
       "kind": "neo4j",
       "purpose": "Graph data — ontology/entity relationships, workflow lineage, agent memory, semantic retrieval.",
-      "tableCount": 28
+      "tableCount": 29
     },
     {
       "domains": [
@@ -6107,6 +6130,31 @@
     {
       "columns": [
         {
+          "name": "orgId",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "property"
+        },
+        {
+          "name": "publicId",
+          "nullable": true,
+          "primaryKey": true,
+          "type": "property"
+        }
+      ],
+      "domain": "agent",
+      "id": "neo4j:ContextManifest",
+      "meta": {
+        "constraints": "context_manifest_public_id",
+        "indexes": "context_manifest_org"
+      },
+      "name": "ContextManifest",
+      "store": "neo4j",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
           "name": "publicId",
           "nullable": true,
           "primaryKey": true,
@@ -7088,6 +7136,24 @@
           "type": "text"
         },
         {
+          "name": "archive_segment_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "attestation_key_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "attestation_sig",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "model_calls",
           "nullable": true,
           "primaryKey": false,
@@ -7708,6 +7774,30 @@
           "type": "bigint"
         },
         {
+          "name": "fit_reading",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "fit_method",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "fit_read_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "fit_sealed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
           "name": "spec_version",
           "nullable": false,
           "primaryKey": false,
@@ -7730,6 +7820,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "operator_role",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         },
         {
           "name": "agent_principal_id",
@@ -13669,6 +13765,12 @@
           "type": "numeric(9, 8)"
         },
         {
+          "name": "graded_steps",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
           "name": "tokens",
           "nullable": false,
           "primaryKey": false,
@@ -14187,6 +14289,18 @@
           "nullable": true,
           "primaryKey": false,
           "type": "numeric(9, 8)"
+        },
+        {
+          "name": "advanced_steps",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "unproductive_steps",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
         },
         {
           "name": "enforcement_tier",
@@ -22340,6 +22454,12 @@
           "type": "uuid"
         },
         {
+          "name": "operator_role",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
           "name": "root_session_uuid",
           "nullable": false,
           "primaryKey": false,
@@ -23343,6 +23463,30 @@
         },
         {
           "name": "harness_title_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "fit_reading",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "fit_method",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "fit_read_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "fit_sealed_at",
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"

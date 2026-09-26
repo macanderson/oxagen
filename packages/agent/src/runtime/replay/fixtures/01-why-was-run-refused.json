@@ -12,6 +12,7 @@
         "operatorKind": "agent",
         "operatorName": "release-bot",
         "operatorAttribution": null,
+        "operatorRole": null,
         "status": "halted",
         "outcome": "failed",
         "turns": 3,

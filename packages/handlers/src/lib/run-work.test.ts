@@ -10,6 +10,7 @@ import {
   readWorkDiffs,
   readWorkPrLinks,
   readWorkSubagents,
+  runEffortOf,
   workDigest,
   type WorkContextRow,
   type WorkDiffRow,
@@ -450,4 +451,77 @@ describe("run work reads", () => {
       expect(await queryOf(read)).not.toMatch(/chain_verified/);
     },
   );
+});
+
+describe("a run's effort and where it was read (#3891)", () => {
+  const config = (row: Record<string, string> | null) => {
+    chSelect.mockResolvedValueOnce({ data: row === null ? [] : [row] });
+    return readSessionConfig(SESSION);
+  };
+  const row = (over: Record<string, string>) => ({
+    requested: "",
+    setting: "",
+    reported_effort: "",
+    thinking: "",
+    ...over,
+  });
+
+  it("reads the proxied request's effort ahead of the harness's setting and report", async () => {
+    await expect(
+      config(row({ requested: "low", setting: "max", reported_effort: "high" })),
+    ).resolves.toEqual({
+      effort: "low",
+      effortSource: "request",
+      thinking: null,
+    });
+  });
+
+  it("falls back to the harness's setting, then its report", async () => {
+    await expect(
+      config(row({ setting: "max", reported_effort: "high", thinking: "true" })),
+    ).resolves.toEqual({
+      effort: "max",
+      effortSource: "harness",
+      thinking: true,
+    });
+    await expect(config(row({ reported_effort: " high " }))).resolves.toEqual({
+      effort: "high",
+      effortSource: "harness",
+      thinking: null,
+    });
+  });
+
+  it("answers no effort and no source when no frame recorded one (negative)", async () => {
+    await expect(config(null)).resolves.toEqual({
+      effort: null,
+      effortSource: null,
+      thinking: null,
+    });
+    await expect(config(row({ requested: "  " }))).resolves.toMatchObject({
+      effort: null,
+      effortSource: null,
+    });
+  });
+
+  it("reads the frames ahead of the session row, and the row as the harness's report", () => {
+    expect(
+      runEffortOf(
+        { effort: "low", effortSource: "request", thinking: null },
+        "high",
+      ),
+    ).toEqual({ effort: "low", effortSource: "request" });
+    expect(
+      runEffortOf({ effort: null, effortSource: null, thinking: null }, "high"),
+    ).toEqual({ effort: "high", effortSource: "harness" });
+    // A failed read leaves the row standing.
+    expect(runEffortOf(null, "medium")).toEqual({
+      effort: "medium",
+      effortSource: "harness",
+    });
+    expect(runEffortOf(null, "")).toEqual({ effort: null, effortSource: null });
+    expect(runEffortOf(null, null)).toEqual({
+      effort: null,
+      effortSource: null,
+    });
+  });
 });

@@ -1,4 +1,5 @@
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
+import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
 import {
@@ -51,6 +52,19 @@ registerHandlersOnce("@oxagen/handlers", () => {
       headSha: out.headSha,
       retryAfterSeconds: out.retryAfterSeconds,
     };
+  });
+  // The durable Model fit reading (#3893, ADR-201) reads the run the way the
+  // Run page does, through this package, which @oxagen/inngest-functions
+  // cannot import. The reader is installed here and loaded on the first run.
+  setRunFitRunner(async (scope, runPublicId) => {
+    const [{ runInTenantScope }, fit] = await Promise.all([
+      import("@oxagen/tenancy"),
+      import("./lib/run-fit"),
+    ]);
+    const out = await runInTenantScope(scope, () =>
+      fit.writeRunFitReading(fit.defaultRunFitDeps(), scope, runPublicId),
+    );
+    return out.outcome;
   });
   // The pull request backfill (ADR-192) lives in @oxagen/inngest-functions
   // for the same reason, and is loaded on its first run.
@@ -1477,9 +1491,22 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .runTurnsGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "get_run_context",
+    async () =>
+      (await import("./run.context.get"))
+        .runContextGetHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "get_run_work",
     async () =>
       (await import("./run.work.get")).runWorkGetHandler as CapabilityHandlerFn,
+  );
+  // The Run page's Issues tab (#3970, ADR-197).
+  registerHandler(
+    "get_run_issues",
+    async () =>
+      (await import("./run.issues.get"))
+        .runIssuesGetHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "get_run_outputs",

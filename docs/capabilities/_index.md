@@ -473,9 +473,11 @@ after the registered name separately when their contract uses a dotted stem.
 | [fork_run](run.fork.md) | [run.fork.ts](../../packages/oxagen/src/contracts/run.fork.ts) | api |
 | [get_run](run.get.md) | [run.get.ts](../../packages/oxagen/src/contracts/run.get.ts) | api, mcp, agent |
 | [get_run_chain](run.chain.get.md) | [run.chain.get.ts](../../packages/oxagen/src/contracts/run.chain.get.ts) | api, mcp, cli |
+| [get_run_context](run.context.get.md) | [run.context.get.ts](../../packages/oxagen/src/contracts/run.context.get.ts) | api, mcp, cli |
 | [get_run_cost](run.cost.md) | [run.cost.ts](../../packages/oxagen/src/contracts/run.cost.ts) | api, mcp, agent |
 | [get_run_export](run.export.get.md) | [run.export.get.ts](../../packages/oxagen/src/contracts/run.export.get.ts) | api, mcp, cli |
 | [get_run_frame_body](run.frame_body.get.md) | [run.frame_body.get.ts](../../packages/oxagen/src/contracts/run.frame_body.get.ts) | api, mcp |
+| [get_run_issues](run.issues.get.md) | [run.issues.get.ts](../../packages/oxagen/src/contracts/run.issues.get.ts) | api, mcp |
 | [create_run_token](run.token.issue.md) | [run.token.issue.ts](../../packages/oxagen/src/contracts/run.token.issue.ts) | api |
 | [ingest_run_frames](run.frames.ingest.md) | [run.frames.ingest.ts](../../packages/oxagen/src/contracts/run.frames.ingest.ts) | api |
 | [get_run_proof](run.proof.get.md) | [run.proof.get.ts](../../packages/oxagen/src/contracts/run.proof.get.ts) | api |
@@ -560,7 +562,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_spend](spend.get.md) | [spend.get.ts](../../packages/oxagen/src/contracts/spend.get.ts) | api, mcp, agent |
 | [get_spend_drill](spend.drill.md) | [spend.drill.ts](../../packages/oxagen/src/contracts/spend.drill.ts) | api, mcp, agent |
 | [list_cost_centers](cost_center.list.md) | [cost_center.list.ts](../../packages/oxagen/src/contracts/cost_center.list.ts) | api, mcp |
-| [list_findings](finding.list.md) | [finding.list.ts](../../packages/oxagen/src/contracts/finding.list.ts) | api, mcp |
+| [list_findings](finding.list.md) | [finding.list.ts](../../packages/oxagen/src/contracts/finding.list.ts) | api, mcp, cli |
 | [list_waste](spend.waste.md) | [spend.waste.ts](../../packages/oxagen/src/contracts/spend.waste.ts) | api, mcp |
 | [record_finding_fix](finding.fix.record.md) | [finding.fix.record.ts](../../packages/oxagen/src/contracts/finding.fix.record.ts) | api, mcp, agent |
 | [set_cost_center](cost_center.set.md) | [cost_center.set.ts](../../packages/oxagen/src/contracts/cost_center.set.ts) | api, mcp |

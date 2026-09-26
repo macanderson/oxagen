@@ -13,6 +13,7 @@
     "./tacho-idle-close": "./src/lib/tacho-idle-close.ts",
     "./client": "./src/inngest.ts",
     "./steering-sync-runner": "./src/lib/steering-sync-runner.ts",
+    "./run-fit-runner": "./src/lib/run-fit-runner.ts",
     "./run-pull-request-backfill-runner": "./src/lib/run-pull-request-backfill-runner.ts"
   },
   "scripts": {

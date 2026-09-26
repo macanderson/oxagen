@@ -586,6 +586,48 @@ describe("validateInlineEventPayload", () => {
     ).toThrow(RunSpecValidationError);
   });
 
+  it("carries the request's context window on the model intention (ADR-200)", () => {
+    const base = {
+      engine_seq: 7,
+      model_call_id: "req_1",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+    };
+    const window = {
+      blocks: [
+        { kind: "system", bytes: 1204, items: 1 },
+        { kind: "steering", bytes: 88, items: 1 },
+        { kind: "tools", bytes: 9120, items: 14 },
+        { kind: "context", bytes: 412, items: 2 },
+        { kind: "conversation", bytes: 48_211, items: 37 },
+      ],
+    };
+    expect(
+      validateInlineEventPayload("model.engine_call_started", {
+        ...base,
+        window,
+      }).stage,
+    ).toBe("model");
+    // A block the vocabulary does not name, a kind twice, a token count and
+    // an empty window are each refused: the window is bytes and items only.
+    for (const blocks of [
+      [{ kind: "memory", bytes: 1, items: 1 }],
+      [
+        { kind: "system", bytes: 1, items: 1 },
+        { kind: "system", bytes: 2, items: 1 },
+      ],
+      [{ kind: "system", bytes: 1, items: 1, tokens: 1 }],
+      [],
+    ])
+      expect(() =>
+        validateInlineEventPayload("model.engine_call_started", {
+          ...base,
+          window: { blocks },
+        }),
+      ).toThrow(RunSpecValidationError);
+  });
+
   it("rejects an engine receipt that carries prose or an unknown key", () => {
     expect(() =>
       validateInlineEventPayload("tool.engine_call_completed", {

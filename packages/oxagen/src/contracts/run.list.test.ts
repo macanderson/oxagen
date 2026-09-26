@@ -16,6 +16,7 @@ const item = {
   operatorKind: null,
   operatorName: null,
   operatorAttribution: null,
+  operatorRole: null,
   status: "sealed",
   outcome: "completed",
   turns: 2,
@@ -89,6 +90,59 @@ describe("list_runs run row: who ran it, on what, with which model", () => {
           arch: null,
           nodeVersion: null,
         },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("carries the operator's stamped workspace role, and refuses a role outside the six (#3999)", () => {
+    const stamped = {
+      ...item,
+      operatorId: "prn_0123456789abcdefghjkmn",
+      operatorKind: "human",
+      operatorAttribution: "initiator",
+      operatorRole: "member",
+    };
+    expect(runItemSchema.parse(stamped)).toEqual(stamped);
+    expect(
+      runItemSchema.safeParse({ ...stamped, operatorRole: "Member" }).success,
+    ).toBe(false);
+    expect(
+      runItemSchema.safeParse({ ...stamped, operatorRole: "guest" }).success,
+    ).toBe(false);
+    const { operatorRole: _r, ...unstamped } = stamped;
+    expect(runItemSchema.safeParse(unstamped).success).toBe(false);
+  });
+
+  it("carries where the effort was read and the Model fit reading, both optional (#3891, #3893)", () => {
+    const fit = {
+      method: "run-fit/v1",
+      readAt: "2026-09-08T10:07:00.000Z",
+      sealedAt: "2026-09-08T10:06:30.000Z",
+      read: {
+        prompts: 1,
+        turns: 2,
+        steps: 7,
+        failed: 0,
+        outputTokens: 4120,
+        reasoningTokens: null,
+      },
+      model: { verdict: "over", tier: "opus", suggest: "sonnet" },
+      effort: { verdict: "unseen", why: "not_proxied" },
+    };
+    const read = { ...item, effort: "high", effortSource: "request", fit };
+    expect(runItemSchema.parse(read)).toEqual(read);
+    expect(runItemSchema.parse(item)).toEqual(item);
+    expect(
+      runItemSchema.safeParse({ ...item, effortSource: "guess" }).success,
+    ).toBe(false);
+    expect(
+      runItemSchema.safeParse({ ...item, fit: { ...fit, method: "run-fit/v0" } })
+        .success,
+    ).toBe(false);
+    expect(
+      runItemSchema.safeParse({
+        ...item,
+        fit: { ...fit, model: { verdict: "over", tier: "opus" } },
       }).success,
     ).toBe(false);
   });

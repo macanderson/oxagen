@@ -28,7 +28,11 @@
  *
  * `noBillingGate: true`: reading a recording is a console read (§1.5).
  */
-import { COMPLETENESS_GAP_KINDS, REPLAY_GRADES } from "@oxagen/tacho";
+import {
+  COMPLETENESS_GAP_KINDS,
+  REPLAY_GRADES,
+  RUN_ATTESTATION_FIELDS,
+} from "@oxagen/tacho";
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { runPublicIdSchema } from "./run.list";
@@ -123,6 +127,34 @@ export const chainSealSchema = z
     merkleRoot: z.string().nullable(),
     /** Where the compacted segment was written; null while none was. */
     archiveSegmentRef: z.string().nullable(),
+    /**
+     * sha256 over the archive segment's bytes as stored, the digest the
+     * attestation signs (#4000). Null on a seal written before the digest was
+     * recorded, and on a wrapped session's seal.
+     */
+    archiveSegmentDigest: z
+      .string()
+      .regex(/^sha256:[0-9a-f]{64}$/)
+      .nullable(),
+    /**
+     * The attester's Ed25519 signature over the seal (#4000). It carries the
+     * names of the fields it signs over and no copy of their values. This
+     * entry lacks four of them (the attempt's public id and the seal's own
+     * tier, gaps and grade), so a signature is checked from the export
+     * bundle (#4399). Null on a seal written before attestation, on a
+     * seal written with no attester key configured, and on a wrapped
+     * session's seal.
+     */
+    attestation: z
+      .object({
+        alg: z.literal("ed25519"),
+        keyId: z.string().min(1),
+        /** base64 over the RFC 8785 canonical JSON of the signed payload. */
+        sig: z.string().min(1),
+        signsOver: z.array(z.enum(RUN_ATTESTATION_FIELDS)).min(1),
+      })
+      .strict()
+      .nullable(),
   })
   .strict();
 

@@ -684,6 +684,107 @@
           "additionalProperties": false
         }
       },
+      "releases": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "object",
+              "properties": {
+                "host": {
+                  "type": "string"
+                },
+                "owner": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "connected": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "host",
+                "owner",
+                "name",
+                "url",
+                "connected"
+              ],
+              "additionalProperties": false
+            },
+            "tag": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "url": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uri"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "state": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "draft",
+                    "prerelease",
+                    "published"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "frameSeq": {
+              "type": "string"
+            },
+            "observedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "repository",
+            "tag",
+            "name",
+            "url",
+            "state",
+            "frameSeq",
+            "observedAt"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 20
+      },
       "complete": {
         "type": "boolean"
       },
@@ -701,6 +802,7 @@
       "diffs",
       "pullRequests",
       "subagents",
+      "releases",
       "complete",
       "warnings"
     ],

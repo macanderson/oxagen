@@ -8,6 +8,7 @@ import {
   compareMicros,
   Cost,
   decimalFromMicros,
+  differenceOfMicros,
   divMicros,
   isCurrencyCode,
   maxMoney,
@@ -379,6 +380,32 @@ describe("divMicros", () => {
     expect(divMicros(usd("10"), 0)).toBeNull();
     expect(divMicros(usd("10"), -2)).toBeNull();
     expect(() => divMicros(usd("10"), 1.5)).toThrow();
+  });
+});
+
+describe("differenceOfMicros", () => {
+  it("answers the sign and the size of the gap, exact past what a float holds", () => {
+    expect(differenceOfMicros(usd("4130000"), usd("2890000"))).toEqual({
+      sign: 1,
+      gap: usd("1240000"),
+    });
+    expect(differenceOfMicros(usd("2890000"), usd("4130000"))).toEqual({
+      sign: -1,
+      gap: usd("1240000"),
+    });
+    expect(differenceOfMicros(usd("5"), usd("5"))).toEqual({
+      sign: 0,
+      gap: usd("0"),
+    });
+    expect(
+      differenceOfMicros(usd("90071992547409930"), usd("90071992547409920")),
+    ).toEqual({ sign: 1, gap: usd("10") });
+  });
+
+  it("answers null across currencies, since no gap spans two (negative)", () => {
+    expect(
+      differenceOfMicros(usd("1"), { micros: "1", currency: "EUR" }),
+    ).toBeNull();
   });
 });
 

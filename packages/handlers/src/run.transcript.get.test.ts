@@ -388,6 +388,21 @@ describe("get_run_transcript", () => {
     ]);
   });
 
+  it("carries a proxied request's effort ahead of the harness's report on the same frame (#3891)", async () => {
+    const { transcript } = harness([
+      tachoRow(0, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        effort: "medium",
+        body: JSON.stringify({ request_effort: "low" }),
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(out.entries.map((entry) => entry.effort)).toEqual(["low"]);
+  });
+
   it("steps: a second response of the same kind opens a new step, it does not join the first", async () => {
     const { transcript } = harness([
       tachoRow(0, {
@@ -521,6 +536,33 @@ describe("get_run_transcript", () => {
       ["managed_settings", true],
       ["harness", true],
       [null, false],
+    ]);
+  });
+
+  it("names the rules each decision fired, in order, and says no producer assessed taint (#3971)", async () => {
+    const decided = (seq: number, body: Record<string, unknown>) =>
+      tachoRow(seq, {
+        kind: "policy_decision",
+        toolName: "",
+        toolStatus: "",
+        policyDecision: "allow",
+        body: JSON.stringify({ policy_source: "bundle", ...body }),
+      });
+    const { transcript } = harness([
+      decided(0, {
+        policy_rule: "Bash(git add:*) and Bash(git commit:*)",
+        policy_rules: ["Bash(git add:*)", "Bash(git commit:*)"],
+      }),
+      // A decision no rule made names none.
+      decided(1, {}),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(
+      out.entries.map((e) => [e.decision?.rules, e.decision?.taint]),
+    ).toEqual([
+      [["Bash(git add:*)", "Bash(git commit:*)"], null],
+      [[], null],
     ]);
   });
 

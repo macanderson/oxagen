@@ -6,8 +6,10 @@
 // this panel and the Issues tab's Linked work cannot name a different pull
 // request. The files are the ones the outputs recorded with a line stat. The
 // base is the branch each pull request merges into, as GitHub records it. A
-// fact neither read carries (a release, or the base of a run with no pull
-// request) reads as not recorded, never guessed.
+// release row appears only when the session created one, with GitHub's state
+// for it (#3890). A fact neither read carries (the base of a run with no pull
+// request, a release's state GitHub did not answer) reads as not recorded,
+// never guessed.
 import { useLocale, useTranslations } from "next-intl";
 import { use } from "react";
 import type { RunOutputNode, RunOutputs } from "@/data/contracts/run";
@@ -42,6 +44,15 @@ const PR_TONE: Record<Pull["state"], BadgeTone> = {
   open: "approval",
   merged: "allowed",
   closed: "quiet",
+};
+type ReleaseState = NonNullable<
+  NonNullable<RunWork["releases"]>[number]["state"]
+>;
+/** A draft waits on a person to publish it, so it reads as pending. */
+const RELEASE_TONE: Record<ReleaseState, BadgeTone> = {
+  draft: "approval",
+  prerelease: "approval",
+  published: "allowed",
 };
 
 /** One file the run changed, with a stat the record carries. */
@@ -128,6 +139,9 @@ function ChangesBody({
 }) {
   const t = useTranslations("run.work");
   const pulls = work.ok ? work.value.pullRequests : [];
+  // The releases the session created (#3890). The row is drawn only when one
+  // exists (pages/run.md, Changes), so a run that created none has no row.
+  const releases = work.ok ? (work.value.releases ?? []) : [];
   const ci = ciOf(pulls);
   const bases = basesOf(pulls);
   const files = outputs.ok ? outputs.value.nodes.filter(isFileChange) : [];
@@ -208,9 +222,44 @@ function ChangesBody({
             </span>
           )}
         </Row>
-        <Row label={t("release")}>
-          <span className="text-dim">{t("releaseNotRecorded")}</span>
-        </Row>
+        {releases.length === 0 ? null : (
+          <Row label={t("release")}>
+            <span className="flex flex-col gap-1" data-testid="run-release">
+              {releases.map((release) => {
+                const target = parseGitHubUrl(release.url);
+                return (
+                  <span
+                    key={`${release.repository.url}@${release.tag}`}
+                    className="flex flex-wrap items-center gap-1.5"
+                  >
+                    {target === null ? (
+                      <span className="font-mono">{release.tag}</span>
+                    ) : (
+                      <GitHubLink
+                        to={target}
+                        title={release.name ?? undefined}
+                        className="font-mono text-link hover:underline"
+                      >
+                        {release.tag}
+                      </GitHubLink>
+                    )}
+                    {release.state === null ? (
+                      // GitHub had no release with the tag, or could not be
+                      // read: the state is not guessed.
+                      <span className="text-dim">
+                        {t("releaseStateUnread")}
+                      </span>
+                    ) : (
+                      <Badge tone={RELEASE_TONE[release.state]}>
+                        {t(`releaseState.${release.state}`)}
+                      </Badge>
+                    )}
+                  </span>
+                );
+              })}
+            </span>
+          </Row>
+        )}
         <Row label={t("checks")}>
           {ci === null ? (
             <span className="text-dim">{t("noChecks")}</span>

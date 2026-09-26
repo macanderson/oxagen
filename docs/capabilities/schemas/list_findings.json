@@ -1,11 +1,12 @@
 {
   "name": "list_findings",
   "domain": "spend",
-  "description": "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised.",
+  "description": "List this workspace's costed findings ranked by the money at stake (open by default; applied or dismissed most recent first), each with its saving measured minus counterfactual over the runs it cites, its confidence, why and the fix, plus the total saving, its share of the priced spend over the findings' window and that saving annualised. Given a run, it lists only the findings that cite that run, each with the frames it cites there.",
   "mode": "sync",
   "surfaces": [
     "api",
-    "mcp"
+    "mcp",
+    "cli"
   ],
   "sensitivity": "medium",
   "agent": null,
@@ -27,6 +28,9 @@
           "dismissed"
         ],
         "default": "open"
+      },
+      "runId": {
+        "type": "string"
       }
     },
     "additionalProperties": false
@@ -327,6 +331,62 @@
                   "type": "null"
                 }
               ]
+            },
+            "citation": {
+              "type": "object",
+              "properties": {
+                "runId": {
+                  "type": "string"
+                },
+                "runLevel": {
+                  "type": "boolean"
+                },
+                "frames": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "seq": {
+                            "type": "string"
+                          },
+                          "sessionUuid": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        },
+                        "required": [
+                          "seq"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 50
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "framesTotal": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "runId",
+                "runLevel",
+                "frames",
+                "framesTotal"
+              ],
+              "additionalProperties": false
             }
           },
           "required": [

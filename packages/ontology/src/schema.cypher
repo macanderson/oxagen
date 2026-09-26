@@ -71,6 +71,15 @@ CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (n:Evidence) REQUIRE n.id IS UNI
 //   DEMOTED              :Demotion -> :Memory (auditable class demotion)
 //   DISPATCHED           :SubagentFanout -> :SubagentRun (direct child)
 //   SPAWNED_FANOUT       :SubagentRun -> :SubagentFanout (nested dispatch)
+//   USED_CONTEXT         :Execution -> :ContextManifest (one per measured window, ADR-200)
+
+// --- Context-window lineage (ADR-200) ---
+// A best-effort projection at seal of the context windows a run's model
+// requests recorded: one :ContextManifest per window, carrying block kinds and
+// item counts, never bytes or tokens. See
+// packages/agent/src/dispatch/context-projection.ts.
+CREATE CONSTRAINT context_manifest_public_id IF NOT EXISTS FOR (n:ContextManifest) REQUIRE n.publicId IS UNIQUE;
+CREATE INDEX context_manifest_org IF NOT EXISTS FOR (n:ContextManifest) ON (n.orgId);
 
 // --- Org-scope range indexes for fast filtering ---
 // Runtime writes/filters nodes on `orgId` (see packages/agent/src/memory/neo4j.ts

@@ -101,6 +101,11 @@ import {
 } from "node:zlib";
 import { digestText } from "../claude-code/context";
 import type { SessionRecorder } from "../claude-code/recorder";
+import {
+  CONTEXT_WINDOW_ATTR,
+  encodeWindowAttr,
+  measureProviderRequest,
+} from "../context-window";
 import { digestBytes, jcs } from "../digest";
 import { toProtocolTimestamp } from "../timestamp";
 import type { TachoEvent } from "../envelope";
@@ -547,6 +552,46 @@ function modelOf(
     ambiguous:
       leading !== undefined && fromBody !== undefined && leading !== fromBody,
   };
+}
+
+/** The longest effort word a frame carries: the run contract's `effort` bound. */
+const REQUEST_EFFORT_MAX = 32;
+
+/**
+ * The reasoning effort a model request body asks for, as sent (#3891), or
+ * undefined when it names none.
+ *
+ * Each vendor spells the setting in its own place, and the proxy reads the
+ * one each request shape carries (packages/ai/src/provider-posture.ts):
+ * - Anthropic Messages: `output_config.effort`.
+ * - OpenAI Responses: `reasoning.effort`.
+ * - OpenAI Chat Completions: `reasoning_effort`.
+ *
+ * A value that is not a non-blank string is ignored rather than guessed at,
+ * and a long one is clamped so the frame always seals. The word is kept as
+ * the vendor received it: Oxagen records the setting, it does not map one
+ * vendor's ladder onto another's.
+ *
+ * @internal Exported for its unit test.
+ */
+export function requestEffortOf(
+  json: Record<string, unknown> | undefined,
+): string | undefined {
+  if (json === undefined) return undefined;
+  const member = (value: unknown, key: string): unknown =>
+    typeof value === "object" && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)[key]
+      : undefined;
+  for (const candidate of [
+    member(json["output_config"], "effort"),
+    member(json["reasoning"], "effort"),
+    json["reasoning_effort"],
+  ]) {
+    if (typeof candidate !== "string") continue;
+    const effort = candidate.trim();
+    if (effort !== "") return effort.slice(0, REQUEST_EFFORT_MAX);
+  }
+  return undefined;
 }
 
 /**
@@ -1332,6 +1377,11 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     };
 
     let injected = false;
+    // The body `beforeForward` sent in place of the harness's, when it
+    // changed it. It is the request the vendor reads, so the effort is read
+    // from it (#3891), and the window counts what it added as steering
+    // (ADR-200).
+    let injectedJson: Record<string, unknown> | undefined;
     let dropContentEncoding = false;
     let path = route.path;
     if (deps.beforeForward !== undefined) {
@@ -1357,6 +1407,7 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         // The changed body is sent as plain JSON, whatever the caller used.
         dropContentEncoding = true;
         injected = true;
+        injectedJson = result.json;
       }
       if (result.path !== path && result.path.startsWith("/"))
         path = result.path;
@@ -1367,6 +1418,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
     // even before the read moved above `refusalFor` — the two sites always
     // agreed, and now they cannot drift apart.
     const requestModel = askedModel;
+    // The effort setting the request carried (#3891), read now: the parsed
+    // body is released below and the frame seals after the response.
+    const requestEffort = requestEffortOf(injected ? injectedJson : json());
     // The request half of the exchange, decoded: the bytes the vendor is about
     // to read, not the gzip or zstd the harness wrapped them in, and the
     // injected body when `beforeForward` changed one, because the request that
@@ -1387,6 +1441,16 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         : priors.fold(sessionKey, requestText);
     const requestTooLarge =
       fold !== undefined && fold.storedBytes > TACHO_MAX_BODY_BYTES;
+    // What the vendor is about to read, block by block, kept as numbers only
+    // (ADR-200). The attribute rides the envelope, so it survives a
+    // `digest_only` workspace that keeps none of these bytes.
+    const requestWindow = metered
+      ? measureProviderRequest(
+          route.api,
+          injectedJson ?? json(),
+          injectedJson === undefined ? undefined : json(),
+        )
+      : null;
     // Nothing else of the request is kept past this point but its bytes to send.
     decoded = undefined;
     parsed = undefined;
@@ -1602,6 +1666,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
         ...(usage.stopReason !== undefined
           ? { stop_reason: usage.stopReason }
           : {}),
+        ...(requestEffort !== undefined
+          ? { request_effort: requestEffort }
+          : {}),
         ...(firstByteAt !== undefined
           ? { ttft_ms: Math.max(0, firstByteAt - startedAt) }
           : {}),
@@ -1649,6 +1716,9 @@ export function createModelProxy(deps: ModelProxyDeps): ModelProxy {
               [TACHO_METERING_ATTR]: TACHO_METERING_OBSERVED,
               "oxagen.request_digest": requestDigest,
               "oxagen.request_bytes": String(requestBytes),
+              ...(requestWindow !== null
+                ? { [CONTEXT_WINDOW_ATTR]: encodeWindowAttr(requestWindow) }
+                : {}),
               "oxagen.response_digest": `sha256:${responseHash.digest("hex")}`,
               "oxagen.response_bytes": String(responseBytes),
               "oxagen.stream": meter?.isStreaming === true ? "1" : "0",

@@ -55,10 +55,12 @@ export function run(over: Partial<RunTotalsRecord> = {}): RunTotalsRecord {
     costBasis: null,
     priceEntryIds: [],
     cacheHitRate: null,
-    breakdown: { models: [], tools: [] },
+    breakdown: { models: [], tools: [], steps: null },
     verdict: null,
     accepted: null,
     productiveRatio: null,
+    advancedSteps: null,
+    unproductiveSteps: null,
     ...over,
   };
 }
@@ -103,7 +105,8 @@ export function pricedRun(
           hasUnpriced: false,
         },
       ],
-      tools: [{ name: "Read", calls: 2 }],
+      tools: [{ name: "Read", calls: 2, resultTokens: null, costMicros: null }],
+      steps: null,
     },
     ...rest,
   });
@@ -127,6 +130,7 @@ export function daily(
     provenMicros: null,
     acceptedMicros: null,
     productiveRatio: null,
+    gradedSteps: null,
     tokens: { ...ZERO_TOKENS },
     ...over,
   };

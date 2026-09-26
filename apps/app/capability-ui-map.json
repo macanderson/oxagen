@@ -521,10 +521,10 @@
     "get_run_chain": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=chain \u2014 the Chain and seal tab reads get_run_chain: the hash rule, the Merkle root, the checkpoints, the gaps and the replay ladder (data/live/runs.ts, features/run/chain.tsx)",
+      "entry": "/[org]/[ws]/runs/[run]?tab=chain \u2014 the Chain and seal tab reads get_run_chain: the hash rule, the Merkle root, the seal's attestation (the key, the signature and the fields it signs), the checkpoints, the gaps and the replay ladder, under the Compacted note on a run read from its archive segment (data/live/runs.ts, features/run/chain.tsx)",
       "proof": "apps/app/src/features/run/chain.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-replay-ui"
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "run-evidence-tabs-archive-and-replay"
     },
     "get_run_cost": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -542,6 +542,26 @@
       "proof": "apps/app/src/features/run/cost.test.tsx",
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_01QEwd1CHGAXDubLiTupVwv3"
+    },
+    "get_run_context": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=actions&body=<seq>: the Governed actions tab reads get_run_context when the open frame is a model request or a steering.manifest and draws its window (tools offered, context frames, prompt tokens, prompt composition, message stack) or the assembler's budget and counts; the Context tab reads it for the Prompt panel, the Prompt window and Retrieval stats (data/live/runs.ts, features/run/actions-tab.tsx, features/run/request-window.tsx, features/run/context-tab.tsx)",
+      "testid": "window-panel",
+      "proof": "apps/app/src/features/run/actions-tab.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "session-b7da3f21-context-window",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runs/[run]",
+          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+          "entry": "/[org]/[ws]/runs/[run]?tab=context: the Prompt panel's bars and tok sent, the Prompt window's composition, and Retrieval stats read get_run_context (features/run/context-tab.tsx)",
+          "testid": "run-context-window",
+          "proof": "apps/app/src/features/run/context-tab.test.tsx",
+          "verifiedAt": "2026-09-26",
+          "verifiedBy": "session-b7da3f21-context-window"
+        }
+      ]
     },
     "get_run_frame_body": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -747,7 +767,7 @@
     "list_findings": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
-      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes list_findings (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes list_findings (data/live/mappers/spend.ts, data/live/spend.ts). The Run page's Cost tab also reads it for one run, /[org]/[ws]/runs/[run]?tab=cost, and pins each finding to the turns it cites (data/live/runs.ts, features/run/cost.tsx, features/run/waterfall.tsx; proof features/run/waterfall.test.tsx)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -1665,6 +1685,15 @@
       "proof": "apps/app/src/features/run/issues-tab.test.tsx",
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
+    },
+    "get_run_issues": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=issues Issues: the run's task, the issues its recorded pull requests close and the issues its frames name, each with its state on GitHub, its relation, its edge and the frames that show it. The tab strip's Issues count reads the same answer (data/live/runs.ts, features/run/run-issues.ts, features/run/issues-tab.tsx).",
+      "testid": "run-issues",
+      "proof": "apps/app/src/features/run/issues-tab.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "run-evidence-tabs-repository-and-issues"
     },
     "get_run_outcomes_settings": {
       "route": "/[org]/[ws]/runs/[run]",

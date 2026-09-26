@@ -5,6 +5,7 @@
 //
 // The header maps through `toRunRow`, the same function the Fleet table's rows
 // go through, so the two surfaces cannot disagree about one run.
+import type { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import type { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import type { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import type { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
@@ -18,6 +19,7 @@ import type {
   RunChain,
   RunCost,
   RunDetail,
+  RunFindings,
   RunFrameBody,
   RunOutputs,
   RunTranscript,
@@ -33,6 +35,7 @@ type RunFrameBodyOutput = ContractOutput<typeof runFrameBodyGet>;
 type RunChainOutput = ContractOutput<typeof runChainGet>;
 type RunOutputsOutput = ContractOutput<typeof runOutputsGet>;
 type RunTurnsOutput = ContractOutput<typeof runTurnsGet>;
+type FindingListOutput = ContractOutput<typeof findingList>;
 
 /** The contract's own cost shape: its `basis` is the closed set the view also keys on. */
 type ContractCost = NonNullable<RunGetOutput["run"]["cost"]>;
@@ -179,8 +182,18 @@ export function toRunFrameBody(
 }
 
 export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
-  const { rollup, provisional } = out;
+  const { rollup, provisional, baseline } = out;
   return {
+    baseline:
+      baseline === null
+        ? null
+        : {
+            windowDays: baseline.windowDays,
+            before: baseline.before,
+            runs: baseline.runs,
+            medianCost: toCost(baseline.medianCost),
+            productiveRatio: baseline.productiveRatio,
+          },
     provisional:
       provisional === undefined || provisional === null
         ? null
@@ -208,6 +221,9 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
             toolCalls: rollup.toolCalls,
             retries: rollup.retries,
             productiveRatio: rollup.productiveRatio,
+            advancedSteps: rollup.advancedSteps,
+            unproductiveSteps: rollup.unproductiveSteps,
+            unproductiveCauses: rollup.unproductiveCauses,
             byModel: rollup.byModel.map((row) => ({
               model: row.model,
               provider: row.provider,
@@ -225,6 +241,8 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
             byTool: rollup.byTool.map((row) => ({
               name: row.name,
               calls: row.calls,
+              resultTokens: row.resultTokens,
+              cost: toCost(row.cost),
             })),
             priceEntryIds: rollup.priceEntryIds,
             rolledUpAt: rollup.rolledUpAt,
@@ -427,6 +445,48 @@ export function toRunTurns(out: RunTurnsOutput): z.input<typeof RunTurns> {
       },
     })),
     complete: out.complete,
+    chains: out.chains.map((chain) => ({
+      sessionUuid: chain.sessionUuid,
+      turn: chain.turn,
+    })),
+  };
+}
+
+/**
+ * `list_findings` read for one run to the Cost tab's findings: each finding
+ * with its saving and what it cites in the run. A read that names a run
+ * carries a citation on every finding; one without it is not about this run,
+ * so it is left out rather than drawn with no turn.
+ */
+export function toRunFindings(
+  out: FindingListOutput,
+): z.input<typeof RunFindings> {
+  return {
+    findings: out.findings.flatMap((finding) => {
+      const { citation } = finding;
+      if (citation === undefined) return [];
+      return [
+        {
+          id: finding.id,
+          kind: finding.kind,
+          subject: finding.subject,
+          saving: costOf(finding.saving),
+          confidence: finding.confidence,
+          citation: {
+            runLevel: citation.runLevel,
+            frames:
+              citation.frames === null
+                ? null
+                : citation.frames.map((frame) =>
+                    frame.sessionUuid === undefined
+                      ? { seq: frame.seq }
+                      : { seq: frame.seq, sessionUuid: frame.sessionUuid },
+                  ),
+            framesTotal: citation.framesTotal,
+          },
+        },
+      ];
+    }),
   };
 }
 
@@ -468,6 +528,16 @@ export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
       eventStreamDigest: seal.eventStreamDigest,
       merkleRoot: seal.merkleRoot,
       archiveSegmentRef: seal.archiveSegmentRef,
+      archiveSegmentDigest: seal.archiveSegmentDigest,
+      attestation:
+        seal.attestation === null
+          ? null
+          : {
+              alg: seal.attestation.alg,
+              keyRef: seal.attestation.keyId,
+              sig: seal.attestation.sig,
+              signsOver: [...seal.attestation.signsOver],
+            },
     })),
     enforcementTier: out.enforcementTier,
     recordedGrade: out.recordedGrade,

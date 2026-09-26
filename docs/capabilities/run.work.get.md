@@ -22,6 +22,17 @@ Each pull request carries `closingIssues`, read from GitHub's `closingIssuesRefe
 
 `subagents` lists one entry per subagent the session started, keyed by the agent id on its `subagent_start` and `subagent_stop` hook frames. Each entry carries the agent type the frames recorded, the first and last sequence, and whether a stop frame arrived. A type the frames did not carry is null. Ledger runs return an empty list, because the ledger records no subagent frames. The read returns at most 200 subagents and warns with `subagent_limit` past that.
 
+`releases` lists the releases the session created (#3890, ADR-197), one per repository and tag, at the first command frame that created it, in frame order, at most 20 (`release_limit` past that). A release is a `gh release create <tag>` in a command frame's command head, or the `release.repository` and `release.tag` attrs the recorder writes on a GitHub MCP release call's frame. Each names its repository, its tag, and the frame, and carries the release's name, URL and state as GitHub reads it now: `draft`, `prerelease`, or `published`. The repository is the one the command names (`-R`, `--repo` or `GH_REPO`), else the one recorded for the checkout the frame ran in, else the run's only recorded repository. A release whose repository none of these names is left out with the `release_repository_unknown` warning.
+
+The state is read when the page loads, from the repository's first 100 releases through the workspace's connection for it, one read per repository. A state is null when:
+
+- the repository has no connection in this workspace (`recorded_repository_not_connected`);
+- GitHub has no release with the tag (`release_not_found`);
+- the tag is not among the first 100 releases (`release_list_limit`);
+- GitHub could not be read (`release_read_failed`).
+
+The frame read stops at 2,000 frames with the `release_frame_limit` warning. Ledger runs return an empty list, because the ledger records no shell commands.
+
 The read limits checkout groups and recorded diffs to 200 each, PRs and discovery requests to 20 each, and each PR patch response to 512 KiB. A collector snapshot holds at most 256 KiB and probes at most 32 untracked files. Limits do not turn missing evidence into an empty successful result.
 
 Checkouts, captured diffs, subagents and pull request receipts come from every frame the control plane accepted from the run's host, including frames past a chain break. When the session's hash chain broke, the read returns `complete: false` with the `chain_break` warning rather than dropping those frames (ADR-171). A sealed run also names the break in its completeness gaps.

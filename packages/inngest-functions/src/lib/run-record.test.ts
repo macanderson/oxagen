@@ -6,6 +6,7 @@
  */
 import { schema } from "@oxagen/database";
 import {
+  buildArchiveSegment,
   type ChainCursor,
   flattenEvent,
   GENESIS_CURSOR,
@@ -211,6 +212,74 @@ describe("readSealedSegments", () => {
     expect(scopes).toEqual([SCOPE]);
   });
 
+  describe("a ledger seal's own figures (ADR-195)", () => {
+    const FRAME_DIGEST = `sha256:${"1".repeat(64)}` as const;
+    const segment = buildArchiveSegment([
+      {
+        digest: FRAME_DIGEST,
+        envelope: { event_digest: FRAME_DIGEST, run_seq: "1" },
+      },
+    ]);
+
+    function ledgerRecord(seal: Record<string, unknown>) {
+      return {
+        source: "ledger" as const,
+        runId: "r1",
+        attempts: [
+          {
+            attemptId: "a1",
+            attemptPublicId: "arat_0123456789abcdefghjkmn",
+            attemptNumber: 1,
+            seal: {
+              archiveSegmentRef: "evidence/segment/x",
+              merkleRoot: segment.merkleRoot,
+              eventStreamDigest: `sha256:${"d".repeat(64)}`,
+              completenessGaps: ["tool_bodies"],
+              replayGrade: "view",
+              ...seal,
+            },
+          },
+        ],
+      } as unknown as Parameters<typeof readSealedSegments>[1];
+    }
+
+    it("attests at the tier the seal recorded, never a fixed harness tier, and carries the seal's signature", async () => {
+      mocks.getSegment.mockResolvedValue(segment.bytes);
+      const [read] = await readSealedSegments(
+        SCOPE,
+        ledgerRecord({
+          enforcementTier: "gateway",
+          attestationKeyId: "0123456789abcdef",
+          attestationSig: "c2lnbmF0dXJl",
+        }),
+      );
+      expect(read).toMatchObject({
+        enforcementTier: "gateway",
+        frameCount: 1,
+        merkleRoot: segment.merkleRoot,
+        archiveSegmentDigest: segment.segmentDigest,
+        completenessGaps: ["tool_bodies"],
+        replayGrade: "view",
+        sealAttestation: { keyId: "0123456789abcdef", sig: "c2lnbmF0dXJl" },
+      });
+      expect(mocks.getSegment).toHaveBeenCalledWith("evidence/segment/x");
+    });
+
+    it("reads a seal from before the tier column as harness, and an unsigned seal as unsigned (negative)", async () => {
+      mocks.getSegment.mockResolvedValue(segment.bytes);
+      const [read] = await readSealedSegments(
+        SCOPE,
+        ledgerRecord({
+          enforcementTier: null,
+          attestationKeyId: null,
+          attestationSig: null,
+        }),
+      );
+      expect(read?.enforcementTier).toBe("harness");
+      expect(read?.sealAttestation).toBeNull();
+    });
+  });
+
   it("builds a wrapped session's one segment from every row, paging past the first 500", async () => {
     const rows = Array.from({ length: 501 }, (_, i) => tachoRow(i));
     mocks.selectTachoEventRecords.mockImplementation(
@@ -239,6 +308,8 @@ describe("readSealedSegments", () => {
         (c) => c[0].sessionUuid === SESSION,
       ),
     ).toBe(true);
+    // A wrapped session has no seal row, so nothing was signed at seal time.
+    expect(segment?.sealAttestation).toBeNull();
     // No row here rebuilds its event, so every frame is the row's projection.
     expect(
       segment?.envelopes.every(

@@ -8,8 +8,13 @@
 // seal recorded, and it is the only grade this tab states; the ladder under it
 // is computed from what the read could see, so a rung can stand reached while
 // the recorded word is weaker, and the table says which is which (§8.4). The
-// seal's signature and the fields it signs over are not in the chain read, so
-// those rows say not recorded.
+// seal signs its own figures when it is written (ADR-195), and the Seal and
+// attestation panel names the key and the fields it signed. A seal written
+// with no attester key says not recorded there, never a guessed key.
+//
+// A compacted run (ADR-058) is read from its archive segment, and the tab says
+// so above the panels. The segment is what the seal signed, so every figure
+// below reads the same as it did before compaction.
 //
 // A gap is a fact about the record, not a fault to soften: a run that dropped
 // nine frames says so with the sequences it dropped, and a walk that stopped
@@ -190,6 +195,50 @@ function HashChain({ chain }: { chain: RunChain }) {
   );
 }
 
+/**
+ * The signature the seal wrote over its own figures (ADR-195): the key that
+ * made it, the base64 signature, and the payload fields it signs. A seal
+ * written with no attester key, or before seals were signed, carries none,
+ * and both rows say not recorded.
+ */
+function Attestation({ seal }: { seal: Seal }) {
+  const t = useTranslations("run.chain.seal");
+  const { attestation } = seal;
+  if (attestation === null)
+    return (
+      <>
+        <Fact label={t("signature")}>
+          <span title={t("unsigned")}>
+            <NoValue />
+          </span>
+        </Fact>
+        <Fact label={t("signsOver")}>
+          <span title={t("unsigned")}>
+            <NoValue />
+          </span>
+        </Fact>
+      </>
+    );
+  return (
+    <>
+      <Fact label={t("signature")} code>
+        <span data-testid="chain-signature" className="block">
+          {t("signatureValue", {
+            alg: attestation.alg,
+            keyRef: attestation.keyRef,
+          })}
+        </span>
+        <span className="block text-[11px] text-muted-foreground">
+          {attestation.sig}
+        </span>
+      </Fact>
+      <Fact label={t("signsOver")} code>
+        {attestation.signsOver.join(", ")}
+      </Fact>
+    </>
+  );
+}
+
 /** One seal's recorded fields. */
 function SealFacts({ seal }: { seal: Seal }) {
   const t = useTranslations("run.chain.seal");
@@ -251,16 +300,7 @@ function SealPanel({
       ) : (
         <div className="flex flex-col gap-4" data-testid="chain-seals">
           <Facts>
-            <Fact label={t("signature")}>
-              <span title={t("notInRead")}>
-                <NoValue />
-              </span>
-            </Fact>
-            <Fact label={t("signsOver")}>
-              <span title={t("notInRead")}>
-                <NoValue />
-              </span>
-            </Fact>
+            <Attestation seal={latest} />
             <Fact label={t("merkleRoot")} code>
               {latest.merkleRoot ?? chain.merkleRoot ?? <NoValue />}
             </Fact>
@@ -303,6 +343,7 @@ function SealPanel({
                     <Fact label={t("merkleRoot")} code>
                       {seal.merkleRoot ?? <NoValue />}
                     </Fact>
+                    <Attestation seal={seal} />
                   </Facts>
                 </div>
               ))}
@@ -555,7 +596,7 @@ export function ChainSection({
       </Panel>
     );
   const chain = read.value;
-  return (
+  const panels = (
     // `.grid.g2 { grid-template-columns:repeat(auto-fit,minmax(320px,1fr)) }`
     <div className="grid items-start gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))]">
       <HashChain chain={chain} />
@@ -568,6 +609,18 @@ export function ChainSection({
         fromSeq={fromSeq}
       />
       <Checkpoints chain={chain} place={place} />
+    </div>
+  );
+  // Absent for a wrapped session and false for a ledger run whose frames are
+  // still in the log: the note is drawn only when the run says it was
+  // compacted.
+  if (run.compacted !== true) return panels;
+  return (
+    <div className="flex flex-col gap-3.5">
+      <Note testId="chain-compacted">
+        {t.rich("compacted", { b: (chunks) => <b>{chunks}</b> })}
+      </Note>
+      {panels}
     </div>
   );
 }

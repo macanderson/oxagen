@@ -12,6 +12,7 @@ import {
   POLL_INTERVAL_MS,
   type RunGetDeps,
 } from "./run.get";
+import type { SessionConfig } from "./lib/run-work";
 import { encodeRunCursor } from "./run.list";
 import {
   ctx,
@@ -48,11 +49,15 @@ type Over = {
   /** The title read rejects, as a ClickHouse outage would. */
   titleFails?: boolean;
   /** The effort and thinking the session's frames recorded; none by default. */
-  sessionConfig?: { effort: string | null; thinking: boolean | null };
+  sessionConfig?: SessionConfig;
   /** The settings read rejects, as a ClickHouse outage would. */
   configFails?: boolean;
   /** The frame read rejects, as ClickHouse over its memory cap does. */
   framesFail?: boolean;
+  /** The run's stored Model fit columns; none by default. */
+  storedFit?: Awaited<ReturnType<RunGetDeps["storedFit"]>>;
+  /** The fit read rejects. */
+  fitFails?: boolean;
   /** The connected repositories by remote digest; none by default. */
   repositories?: Record<string, PlaceRepository>;
   /** The repository read rejects, as a Postgres timeout would. */
@@ -77,6 +82,7 @@ function harness(over: Over = {}) {
   const log = over.events ?? [];
   let clock = 1_000_000;
   const sleeps: number[] = [];
+  const fitReads: Parameters<RunGetDeps["storedFit"]>[1][] = [];
   const deps: RunGetDeps = {
     queries: stores.queries,
     store: {
@@ -112,8 +118,14 @@ function harness(over: Over = {}) {
         : Promise.resolve(
             sessionUuid === SESSION_UUID && over.sessionConfig
               ? over.sessionConfig
-              : { effort: null, thinking: null },
+              : { effort: null, effortSource: null, thinking: null },
           ),
+    storedFit: (_scope, target) => {
+      fitReads.push(target);
+      return over.fitFails === true
+        ? Promise.reject(new Error("postgres unreachable"))
+        : Promise.resolve(over.storedFit ?? null);
+    },
     sessionRepository: (_scope, digest) => {
       over.repositoryAsked?.push(digest);
       return over.repositoryFails === true
@@ -128,7 +140,7 @@ function harness(over: Over = {}) {
       return Promise.resolve();
     },
   };
-  return { get: createRunGetHandler(deps), log, sleeps, stores };
+  return { get: createRunGetHandler(deps), log, sleeps, stores, fitReads };
 }
 
 const input = (
@@ -306,6 +318,21 @@ describe("get_run", () => {
       digest: event(1).eventDigest,
       observedAt: "2026-09-11T10:00:01.000Z",
     });
+  });
+
+  // #3999: get_run shares list_runs' row, so it answers the stamped role too.
+  it("answers the operator's stamped workspace role, and null for a run from before the stamp", async () => {
+    const stamped = ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID });
+    const { get } = harness({
+      ledger: [{ ...stamped, run: { ...stamped.run, operatorRole: "Admin" } }],
+      tacho: [tachoSession({ publicId: TACHO_ID })],
+    });
+    const ledger = await get(input(), ctx());
+    expect(runGet.output.parse(ledger)).toEqual(ledger);
+    // Stored lowercased; a capitalized value still reads as the role.
+    expect(ledger.run.operatorRole).toBe("admin");
+    const wrapped = await get(input({ runId: TACHO_ID }), ctx());
+    expect(wrapped.run.operatorRole).toBeNull();
   });
 
   // ADR-182 rule 3: a fact is never written into a label for a client to
@@ -531,7 +558,12 @@ describe("get_run", () => {
       readWitnessFor: async () => null,
       tachoFrames,
       sessionTitle: async () => null,
-      sessionConfig: async () => ({ effort: null, thinking: null }),
+      sessionConfig: async () => ({
+        effort: null,
+        effortSource: null,
+        thinking: null,
+      }),
+      storedFit: async () => null,
       sessionRepository: async () => null,
       now: () => 0,
       sleep: () => Promise.resolve(),
@@ -673,29 +705,66 @@ describe("get_run witnessFor (ADR-064)", () => {
     expect(out.run.name).toBe(plain.run.name);
   });
 
-  it("answers the effort and thinking the session's frames recorded", async () => {
+  it("answers the effort and thinking the session's frames recorded, and where the effort was read", async () => {
     const { get } = harness({
-      sessionConfig: { effort: "high", thinking: true },
+      sessionConfig: { effort: "high", effortSource: "harness", thinking: true },
     });
     const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(runGet.output.parse(out)).toEqual(out);
     expect(out.run.effort).toBe("high");
+    expect(out.run.effortSource).toBe("harness");
     expect(out.run.thinking).toBe(true);
   });
 
-  it("keeps the session row's effort when no frame recorded one", async () => {
-    const plain = await harness().get(input({ runId: TACHO_ID }), ctx());
+  it("answers a gateway run's effort from the proxied request (#3891)", async () => {
     const { get } = harness({
-      sessionConfig: { effort: null, thinking: false },
+      tacho: [
+        tachoSession({
+          publicId: TACHO_ID,
+          session: { enforcementTier: "gateway", effort: "medium" },
+        }),
+      ],
+      sessionConfig: { effort: "low", effortSource: "request", thinking: null },
     });
     const out = await get(input({ runId: TACHO_ID }), ctx());
-    expect(out.run.effort).toBe(plain.run.effort ?? null);
-    expect(out.run.thinking).toBe(false);
+    // The request's own setting outranks the harness's report on the row.
+    expect(out.run).toMatchObject({ effort: "low", effortSource: "request" });
   });
 
-  it("still answers the run when its effort settings cannot be read", async () => {
-    const { get } = harness({ configFails: true });
+  it("keeps the session row's effort, as the harness's report, when no frame recorded one", async () => {
+    const { get } = harness({
+      tacho: [
+        tachoSession({ publicId: TACHO_ID, session: { effort: "medium" } }),
+      ],
+      sessionConfig: { effort: null, effortSource: null, thinking: false },
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run).toMatchObject({
+      effort: "medium",
+      effortSource: "harness",
+      thinking: false,
+    });
+  });
+
+  it("answers no effort and no source for an observe run that recorded none, and for a ledger run (negative)", async () => {
+    const observed = await harness().get(input({ runId: TACHO_ID }), ctx());
+    expect(observed.run.enforcementTier).toBe("observe");
+    expect(observed.run).toMatchObject({ effort: null, effortSource: null });
+    const ledger = await harness().get(input(), ctx());
+    expect(ledger.run).toMatchObject({ effort: null, effortSource: null });
+    expect(runGet.output.parse(ledger)).toEqual(ledger);
+  });
+
+  it("still answers the run when its effort settings cannot be read, on the row's effort", async () => {
+    const { get } = harness({
+      tacho: [
+        tachoSession({ publicId: TACHO_ID, session: { effort: "high" } }),
+      ],
+      configFails: true,
+    });
     const out = await get(input({ runId: TACHO_ID }), ctx());
     expect(out.run.thinking).toBeUndefined();
+    expect(out.run).toMatchObject({ effort: "high", effortSource: "harness" });
   });
 
   // ClickHouse refuses a read under its server-wide memory cap whichever query
@@ -789,5 +858,109 @@ describe("get_run witnessFor (ADR-064)", () => {
     expect(asked).toEqual([]);
     expect(tacho.run.place?.repository).toBeUndefined();
     expect(ledger.run.place).toBeNull();
+  });
+});
+
+describe("get_run fit (#3893)", () => {
+  /** The seal the default wrapped session carries. */
+  const SEALED = new Date("2026-09-11T09:05:00.000Z");
+  const READING = {
+    read: {
+      prompts: 1,
+      turns: 2,
+      steps: 7,
+      failed: 0,
+      outputTokens: 900,
+      reasoningTokens: 100,
+    },
+    model: { verdict: "over", tier: "sonnet", suggest: "haiku" },
+    effort: { verdict: "fit", effort: "medium", source: "request" },
+  };
+  const stored = (sealedAt: Date, over: Record<string, unknown> = {}) => ({
+    reading: READING,
+    method: "run-fit/v1",
+    readAt: new Date("2026-09-11T09:06:00.000Z"),
+    sealedAt,
+    ...over,
+  });
+
+  it("answers the stored reading for the seal it read, with its provenance", async () => {
+    const { get, fitReads } = harness({ storedFit: stored(SEALED) });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(runGet.output.parse(out)).toEqual(out);
+    expect(out.run.fit).toEqual({
+      ...READING,
+      method: "run-fit/v1",
+      readAt: "2026-09-11T09:06:00.000Z",
+      sealedAt: "2026-09-11T09:05:00.000Z",
+    });
+    expect(fitReads).toEqual([{ source: "tacho", publicId: TACHO_ID }]);
+  });
+
+  it("reads a sealed ledger run's reading by its row id", async () => {
+    const { get, fitReads } = harness({
+      ledger: [
+        ledgerRun({
+          publicId: LEDGER_ID,
+          runId: RUN_UUID,
+          cost: rollupCostRow(),
+          seal: seal(RUN_UUID),
+        }),
+      ],
+      storedFit: stored(new Date("2026-09-11T10:05:00.000Z")),
+    });
+    const out = await get(input(), ctx());
+    expect(fitReads).toEqual([{ source: "ledger", runId: RUN_UUID }]);
+    expect(out.run.fit).toMatchObject({
+      method: "run-fit/v1",
+      sealedAt: "2026-09-11T10:05:00.000Z",
+    });
+  });
+
+  it("answers no reading for a reading of an earlier seal, which a reopened run outlives (negative)", async () => {
+    const { get } = harness({
+      storedFit: stored(new Date("2026-09-11T08:00:00.000Z")),
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.fit).toBeNull();
+  });
+
+  it("answers no reading under a rule this build does not read, or a body it cannot parse (negative)", async () => {
+    for (const over of [
+      { method: "run-fit/v0" },
+      { reading: { read: null } },
+      { readAt: null },
+    ]) {
+      const { get } = harness({ storedFit: stored(SEALED, over) });
+      const out = await get(input({ runId: TACHO_ID }), ctx());
+      expect(out.run.fit).toBeNull();
+    }
+  });
+
+  it("reads no reading for a live run: the reading is of a seal (negative)", async () => {
+    const { get, fitReads } = harness({
+      tacho: [
+        tachoSession({
+          publicId: TACHO_ID,
+          session: { outcome: "running", sealedAt: null },
+        }),
+      ],
+      storedFit: stored(SEALED),
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.status).toBe("live");
+    expect(out.run.fit).toBeNull();
+    expect(fitReads).toEqual([]);
+  });
+
+  it("answers no reading for a run with none yet, and still answers the run when the read fails", async () => {
+    const none = await harness().get(input({ runId: TACHO_ID }), ctx());
+    expect(none.run.fit).toBeNull();
+    const failed = await harness({ fitFails: true }).get(
+      input({ runId: TACHO_ID }),
+      ctx(),
+    );
+    expect(failed.run.fit).toBeNull();
+    expect(failed.run.id).toBe(TACHO_ID);
   });
 });
