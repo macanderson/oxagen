@@ -13,12 +13,14 @@ const memberColumns = {
   id: schema.users.publicId,
   name: schema.users.displayName,
   email: schema.users.email,
+  avatarUrl: schema.users.avatarUrl,
 };
 
 type MemberRow = {
   id: string;
   name: string | null;
   email: string;
+  avatarUrl: string | null;
   role: string;
   joinedAt: Date;
 };
@@ -27,6 +29,9 @@ const toMember = (r: MemberRow) => ({
   id: r.id,
   name: r.name,
   email: r.email,
+  // `users.avatar_url` has no CHECK. A blank value would fail the contract's
+  // `min(1)` and refuse the whole roster, so it reads as none.
+  avatarUrl: r.avatarUrl?.trim() || null,
   role: r.role,
   joinedAt: r.joinedAt.toISOString(),
 });

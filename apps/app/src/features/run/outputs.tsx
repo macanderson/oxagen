@@ -284,6 +284,7 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
                 ? "font-medium text-muted-foreground"
                 : "font-mono font-semibold text-foreground"
             }`}
+            title={node.name}
           >
             {node.name}
           </b>
@@ -293,10 +294,14 @@ function Node({ node, place }: { node: RunOutputNode; place: Place }) {
         </div>
         <div className="mt-[3px] flex flex-wrap items-baseline gap-2 text-[11.5px] leading-normal">
           {node.where === null ? null : (
-            <span className="font-mono text-[11px] text-dim">{node.where}</span>
+            <span className="min-w-0 font-mono text-[11px] text-dim [overflow-wrap:anywhere]">
+              {node.where}
+            </span>
           )}
           {node.note === null ? null : (
-            <span className="min-w-0 text-muted-foreground">{node.note}</span>
+            <span className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">
+              {node.note}
+            </span>
           )}
           {/* The ledger records a change without its path. Saying so beats
               printing `rpl_…` where a reader expects a file name. */}
