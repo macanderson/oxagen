@@ -195,7 +195,8 @@ tauri-driver: the scan, Sign out, the start of Sign in, and the poll's `tacho
 status`, each through the sidecar allowlist, in a scratch HOME with a stand-in
 control plane. It also checks that the page cannot start `tacho daemon` or
 spawn a process through the shell plugin. The `webdriver` job in
-`desktop-rig.yml` runs it and keeps screenshots and each step as an artifact.
+`desktop-rig.yml` runs it and keeps each step, with the window's text at
+it, as an artifact.
 Run it under `xvfb-run -a` after `pnpm sidecars` and `pnpm tauri build --debug
 --no-bundle`.
 

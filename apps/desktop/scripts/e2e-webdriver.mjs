@@ -18,8 +18,8 @@
  *
  * Needs `tauri-driver` and `WebKitWebDriver` on PATH, and a build made with
  * `pnpm sidecars` and then `tauri build --debug --no-bundle`. E2E_EVIDENCE
- * names the directory for the record of the run: each step, screenshots, the
- * driver's log, and the stand-in's requests.
+ * names the directory for the record of the run: each step, the window's
+ * text and markup at each one, the driver's log, and the stand-in's requests.
  */
 import { spawn, spawnSync } from "node:child_process";
 import {
@@ -390,9 +390,16 @@ async function click(label) {
   }
 }
 
+/**
+ * What the window shows at this point: its text, and its markup. Not a
+ * screenshot: WebKitWebDriver under Xvfb never answered that command, and
+ * every command after it queued behind it.
+ */
 async function capture(name) {
-  const png = await wd("GET", `/session/${sessionId}/screenshot`);
-  writeFileSync(join(evidence, `${name}.png`), Buffer.from(png, "base64"));
+  const text = await pageText();
+  const html = await script("return document.documentElement.outerHTML");
+  writeFileSync(join(evidence, `${name}.txt`), `${text}\n`);
+  writeFileSync(join(evidence, `${name}.html`), `${html}\n`);
 }
 
 async function until(what, check, timeoutMs = 60_000) {
