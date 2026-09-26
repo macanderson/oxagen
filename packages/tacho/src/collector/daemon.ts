@@ -2472,6 +2472,8 @@ async function initializeDaemon(
     string,
     { calls: number; refused: number; lastSeenAt: string }
   >();
+  /** Tool use ids whose gateway frame waits on the serial queue. */
+  const queuedGatewayCalls = new Set<string>();
 
   /**
    * The hash of this daemon chain's first sealed event, which the gateway
@@ -2504,18 +2506,47 @@ async function initializeDaemon(
     seen.lastSeenAt = toProtocolTimestamp(now());
     connected.set(call.client, seen);
     const toolUseId = call.toolUseId;
-    if (toolUseId !== undefined && sessionAwaiting(toolUseId) !== undefined) {
+    // A second call naming an id whose first call is still queued is not the
+    // call the session waits on. It seals on the daemon's chain, as it would
+    // once the first had landed.
+    const target =
+      toolUseId === undefined || queuedGatewayCalls.has(toolUseId)
+        ? undefined
+        : sessionAwaiting(toolUseId);
+    if (toolUseId !== undefined && target !== undefined) {
       // A session chain is written on the serial queue, where that session's
       // hooks are handled too. Sealed off it, this frame could land while a
       // queued hook stands between its chain mark and its write, and that
       // hook's rollback after a failed write would take the chain back behind
       // a frame the WAL already holds. The client's answer does not wait for
-      // the queue. The frame still lands before the call's PostToolUse,
-      // because the queue runs in order and the harness sends that hook only
-      // once it has the answer. A failed write is logged, and the rollback
-      // leaves the call awaited, so the PostToolUse seals it instead.
+      // the queue. The frame lands before the call's PostToolUse, because the
+      // queue runs in order and the harness sends that hook only once it has
+      // the answer. A failed write is logged, and the rollback leaves the call
+      // awaited, so the PostToolUse seals it instead.
+      //
+      // The session is chosen here, once. A task already on the queue (a
+      // tick reading the transcript, an OTel record) can seal a sighting of
+      // this call before the frame is written, and the family ledger judges
+      // the frame against it there: a body the chain lacks is sealed stamped
+      // as a duplicate, and a repeat seals nothing. Looked up again inside the
+      // task, the call found no session waiting and sealed a second identity
+      // on the daemon's chain.
+      queuedGatewayCalls.add(toolUseId);
       serial
-        .run(async () => sealGatewayFrame(call, sessionAwaiting(toolUseId)))
+        .run(async () => {
+          try {
+            if (!target.sealed && !target.pendingTerminal) {
+              sealGatewayFrame(call, target);
+              return;
+            }
+            log(
+              `mcp gateway recorded ${call.toolName} (${toolUseId}) on the daemon's chain: session ${target.harnessSessionId} closed before the frame was written`,
+            );
+            sealGatewayFrame(call, undefined);
+          } finally {
+            queuedGatewayCalls.delete(toolUseId);
+          }
+        })
         .catch((error: unknown) =>
           log(
             `mcp gateway could not record ${call.toolName} (${toolUseId}): ${error instanceof Error ? error.message : String(error)}`,
