@@ -3412,6 +3412,9 @@ async function initializeDaemon(
         runtime: registry.agentOf(session).runtime,
         harness: registry.agentOf(session).harness,
         sealed: session.sealed,
+        // SessionEnd arrived and the chain seals once its final worktree
+        // read lands, so `tacho verify` waits longer instead of failing.
+        ending: pendingSessionEnds.has(session.recorder.sessionUuid),
         seq: session.recorder.chainCursor.seq,
       })),
     exportSession: (key: string, format: ExportFormat) => {
@@ -3889,6 +3892,14 @@ async function initializeDaemon(
   if (options.listen ?? true) {
     timer = setInterval(
       () => {
+        // A parked SessionEnd waits only for its final worktree read, and
+        // the tick starts that read at its end. On a first start the tick
+        // spent minutes shipping the backlog, so `tacho verify` gave up at
+        // fifteen seconds and said SessionEnd never arrived. Starting the
+        // read here, whether or not a tick is running, stops it waiting on
+        // the tick. It can still wait on a lane already running, and on the
+        // hook queue to apply its result.
+        if (pendingSessionEnds.size > 0) void startGitReads();
         if (ticking) return;
         ticking = true;
         // `controlTick`, not `tick`: the guard must be released as soon as the
