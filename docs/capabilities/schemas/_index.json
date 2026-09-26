@@ -64,7 +64,8 @@
       "domain": "agent",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -1646,7 +1647,8 @@
       "surfaces": [
         "api",
         "mcp",
-        "agent"
+        "agent",
+        "cli"
       ],
       "component": null,
       "produces": [],
@@ -1766,7 +1768,8 @@
       "domain": "run",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],

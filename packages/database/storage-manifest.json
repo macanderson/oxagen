@@ -59,6 +59,7 @@
       "reads": [],
       "surfaces": [
         "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -1499,6 +1500,7 @@
       "surfaces": [
         "agent",
         "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -1608,6 +1610,7 @@
       "reads": [],
       "surfaces": [
         "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -4174,7 +4177,7 @@
       "writes": []
     }
   ],
-  "contentHash": "0bb5ab01b22f329113bee1241d8fec72aa48546b08b9dc0f02f8e9060d066fc9",
+  "contentHash": "a78c8b4d634386742d79b45ed46ff3c1bd37ba36a810287c8a4d7cfa5d0030f1",
   "domains": [
     {
       "name": "agent",
@@ -9481,6 +9484,42 @@
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"
+        },
+        {
+          "name": "kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "raised_seq",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "body",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "repository",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "path",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "receipt_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "agent",

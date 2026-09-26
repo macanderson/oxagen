@@ -1,12 +1,13 @@
 {
   "name": "get_run",
   "domain": "run",
-  "description": "Read one run's header and one page of its frames, each with its body reference, from an opaque cursor, optionally waiting for a new frame.",
+  "description": "Read one run's header and one page of its frames, each with its body reference, from an opaque cursor, optionally waiting for a new frame. A wrapped run's read pages one chain, its own or a subagent's, and lists the head of every subagent chain.",
   "mode": "sync",
   "surfaces": [
     "api",
     "mcp",
-    "agent"
+    "agent",
+    "cli"
   ],
   "sensitivity": "medium",
   "agent": {
@@ -30,6 +31,14 @@
       "framesAfter": {
         "type": "string",
         "maxLength": 256
+      },
+      "sessionUuid": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "chainsAfter": {
+        "type": "string",
+        "maxLength": 64
       },
       "frameLimit": {
         "type": "integer",
@@ -71,6 +80,140 @@
           },
           "ingressPaused": {
             "type": "boolean"
+          },
+          "pause": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": [
+                      "pausing",
+                      "paused",
+                      "resuming"
+                    ]
+                  },
+                  "commandId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "resumeCommandId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "seq": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "turn": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "step": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "by": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "name": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "issuedAt": {
+                    "type": "string"
+                  },
+                  "appliedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "state",
+                  "commandId",
+                  "resumeCommandId",
+                  "seq",
+                  "turn",
+                  "step",
+                  "by",
+                  "issuedAt",
+                  "appliedAt",
+                  "reason"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "agentKey": {
             "anyOf": [
@@ -1227,6 +1370,10 @@
                 "seq": {
                   "type": "string"
                 },
+                "sessionUuid": {
+                  "type": "string",
+                  "format": "uuid"
+                },
                 "type": {
                   "type": "string"
                 },
@@ -1427,6 +1574,101 @@
         "required": [
           "code",
           "message"
+        ],
+        "additionalProperties": false
+      },
+      "chains": {
+        "type": "object",
+        "properties": {
+          "cursor": {
+            "type": "string"
+          },
+          "heads": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "sessionUuid": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "parentSessionUuid": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "subagentId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "subagentType": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "spawnCallId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "lastSeq": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "frameCount": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "sessionUuid",
+                "parentSessionUuid",
+                "subagentId",
+                "subagentType",
+                "spawnCallId",
+                "lastSeq",
+                "frameCount"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 200
+          },
+          "complete": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cursor",
+          "heads",
+          "complete"
         ],
         "additionalProperties": false
       }
