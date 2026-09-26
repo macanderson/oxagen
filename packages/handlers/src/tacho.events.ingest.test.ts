@@ -810,6 +810,7 @@ function wire(db: FakeDb): void {
                     orgId: row["orgId"],
                     workspaceId: row["workspaceId"],
                     deviceKeyFingerprint: row["deviceKeyFingerprint"],
+                    agentKey: row["agentKey"],
                   }))
                 : tableName(table) === "sessions"
                   ? // The ownership read before any body is written: which
@@ -2146,7 +2147,10 @@ describe("ingest_tacho_events", () => {
     }
 
     /** The session again, with each frame naming the enrollment `at` gives it. */
-    function resealed(at: (seq: number) => string): TachoEvent[] {
+    function resealed(
+      at: (seq: number) => string,
+      key: (seq: number) => string = () => "acme.core.cc-laptop",
+    ): TachoEvent[] {
       let cursor: ChainCursor = GENESIS_CURSOR;
       return session().map((event) => {
         const {
@@ -2159,7 +2163,11 @@ describe("ingest_tacho_events", () => {
         const sealed = sealEvent(
           {
             ...rest,
-            agent: { ...rest.agent, host_enrollment_id: at(seq) },
+            agent: {
+              ...rest.agent,
+              host_enrollment_id: at(seq),
+              agent_key: key(seq),
+            },
           } as UnsealedTachoEvent,
           cursor,
         );
@@ -2199,6 +2207,51 @@ describe("ingest_tacho_events", () => {
       expect(result.chain_breaks).toEqual([]);
       expect(db.sessions.get(SESSION)?.["hostId"]).toBe(HOST_ID);
       expect(mocks.insertTachoEvents).toHaveBeenCalled();
+    });
+
+    // A re-enrollment can mint the machine under another agent (`enroll
+    // --force` with a token for a different agent). The frames the old
+    // enrollment recorded carry its key, which is the one checked for them.
+    it("accepts a predecessor's frames under the predecessor's own agent key (negative)", async () => {
+      const db = withPredecessor({ agentKey: "acme.core.old-laptop" });
+      wire(db);
+      const events = resealed(
+        (seq) => (seq < 5 ? PREDECESSOR_PUBLIC : HOST_PUBLIC),
+        (seq) => (seq < 5 ? "acme.core.old-laptop" : "acme.core.cc-laptop"),
+      );
+      heldByPredecessor(db, events);
+      const result = await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: events.slice(3),
+        },
+        CONTEXT,
+      );
+      expect(result.chain_breaks).toEqual([]);
+      expect(mocks.insertTachoEvents).toHaveBeenCalled();
+    });
+
+    it("refuses a predecessor's frame that carries the successor's agent key", async () => {
+      const db = withPredecessor({ agentKey: "acme.core.old-laptop" });
+      wire(db);
+      const events = resealed((seq) =>
+        seq < 5 ? PREDECESSOR_PUBLIC : HOST_PUBLIC,
+      );
+      heldByPredecessor(db, events);
+      await expect(
+        tachoEventsIngestHandler(
+          {
+            schema: "tacho.batch.v1",
+            host_enrollment_id: HOST_PUBLIC,
+            events: events.slice(3),
+          },
+          CONTEXT,
+        ),
+      ).rejects.toThrow(
+        /its frames carry an agent key other than their host's/,
+      );
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -4188,7 +4241,10 @@ describe("proof.observed frames (ADR-064)", () => {
       });
     });
 
-    it("files a new session under the host's agent key, not the key its frames carry", async () => {
+    // ClickHouse keeps the key each frame carries, and the steering
+    // deliveries read it from there, so a forged key filed the frames under
+    // another agent even though the row took the host's.
+    it("refuses frames that carry an agent key other than their host's, and records none of them", async () => {
       const db = fakeDb();
       wire(db);
       const forged = sealEvent(
@@ -4209,7 +4265,20 @@ describe("proof.observed frames (ADR-064)", () => {
         ),
         GENESIS_CURSOR,
       ).event;
-      await tachoEventsIngestHandler(batch([forged]), CONTEXT);
+      await expect(
+        tachoEventsIngestHandler(batch([forged]), CONTEXT),
+      ).rejects.toThrow(
+        /session belongs to another host: its frames carry an agent key other than their host's/,
+      );
+      expect(db.sessions.has(SESSION)).toBe(false);
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+      expect(mocks.bodyPut).not.toHaveBeenCalled();
+    });
+
+    it("files a new session under the host's agent key (negative)", async () => {
+      const db = fakeDb();
+      wire(db);
+      await tachoEventsIngestHandler(batch(session()), CONTEXT);
       expect(db.sessions.get(SESSION)?.["agentKey"]).toBe(
         "acme.core.cc-laptop",
       );

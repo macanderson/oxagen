@@ -1178,6 +1178,17 @@ const LINEAGE_REFUSED =
   "Forbidden: session belongs to another host: its frames name a root or parent session its chain did not open with";
 
 /**
+ * The refusal for a frame whose agent key is not the one its host enrollment
+ * was minted for (#3944, S-09). A daemon stamps its own enrollment's key on
+ * every frame (`daemon.ts` in @oxagen/tacho), so such a frame is forged or
+ * comes from a broken daemon. It carries the phrase the shipper matches, as
+ * `LINEAGE_REFUSED` does, so the shipper sets the session aside and ships the
+ * host's other sessions.
+ */
+const AGENT_KEY_REFUSED =
+  "Forbidden: session belongs to another host: its frames carry an agent key other than their host's";
+
+/**
  * Whether any of one session's frames names a root or parent session other
  * than `lineage`.
  */
@@ -1270,6 +1281,8 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         ),
       ),
     ];
+    // The agent key each enrollment was minted for, by enrollment id.
+    const agentKeys = new Map<string, string>([[host.publicId, host.agentKey]]);
     if (foreign.length > 0) {
       const predecessors = await readSuccessionHosts(tx, "publicId", foreign);
       if (
@@ -1280,6 +1293,21 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       ) {
         throw tachoDenied(capability, "Forbidden: event names another host");
       }
+      for (const [id, predecessor] of predecessors)
+        agentKeys.set(id, predecessor.agentKey);
+    }
+    // Every frame carries the agent key of the enrollment it names (#3944,
+    // S-09). ClickHouse keeps the key each frame carries, and the steering
+    // deliveries read it from there, so a frame under another agent's key
+    // would file its work under that agent.
+    if (
+      input.events.some(
+        (event) =>
+          agentKeys.get(event.agent.host_enrollment_id ?? "") !==
+          event.agent.agent_key,
+      )
+    ) {
+      throw tachoDenied(capability, AGENT_KEY_REFUSED);
     }
     // A session another host opened is refused here, before any of this
     // batch's bodies reach the tenant's store. The same refusal inside the
