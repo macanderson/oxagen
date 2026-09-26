@@ -19,6 +19,7 @@ const ledgerRun: Run = {
   operatorKind: "human",
   operatorName: "Marcus Bell",
   operatorAttribution: "initiator",
+  operatorAvatarUrl: "https://avatars.example.com/marcus.png",
   operatorRole: "member",
   status: "sealed",
   outcome: "completed",
@@ -54,6 +55,7 @@ const unpricedSession: Run = {
   operatorKind: null,
   operatorName: null,
   operatorAttribution: null,
+  operatorAvatarUrl: null,
   operatorRole: null,
   status: "live",
   outcome: "running",
@@ -102,6 +104,7 @@ describe("toRunPage", () => {
           operatorKind: "human",
           operatorName: "Marcus Bell",
           operatorAttribution: "initiator",
+          operatorAvatarUrl: "https://avatars.example.com/marcus.png",
           operatorRole: "member",
           status: "sealed",
           outcome: "completed",
@@ -163,6 +166,7 @@ describe("toRunPage", () => {
       operatorKind: null,
       operatorName: null,
       operatorAttribution: null,
+      operatorAvatarUrl: null,
       // No role was stamped, and the view says so rather than guessing one.
       operatorRole: null,
       // The session recorded both, so neither is dropped on the way to the view.

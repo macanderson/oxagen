@@ -7,6 +7,7 @@ const member = {
   id: "usr_alice",
   name: "Alice",
   email: "alice@example.com",
+  avatarUrl: "https://avatars.example.com/alice.png",
   role: "admin",
   joinedAt: "2024-01-15T08:00:00.000Z",
 };
@@ -97,6 +98,16 @@ describe("list_members contract", () => {
           .success,
       ).toBe(false);
     }
+  });
+
+  it("a member's avatar is nullable, never blank, and always present", () => {
+    const parse = (m: object) =>
+      listMembers.output.safeParse({ scope: "workspace", members: [m] })
+        .success;
+    expect(parse({ ...member, avatarUrl: null })).toBe(true);
+    expect(parse({ ...member, avatarUrl: "" })).toBe(false);
+    const { avatarUrl: _dropped, ...rest } = member;
+    expect(parse(rest)).toBe(false);
   });
 
   it("an invitation's expiresAt is nullable and its email, role and invitedAt are not", () => {

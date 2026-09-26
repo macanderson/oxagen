@@ -61,6 +61,10 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "HOSTNAME",
   // no-color.org standard — set by the terminal/shell, not by operators
   "NO_COLOR",
+  // Hook-manager off switches that tools/scripts/install-git-hooks.mjs reads.
+  // A developer's shell sets them. No deployed service reads them.
+  "LEFTHOOK",
+  "HUSKY",
   // Oxagen internal platform version tag
   "PLATFORM_VERSION",
   // Turborepo remote-cache credentials (set via GitHub Actions Secrets, not app env)

@@ -31,6 +31,7 @@ A discriminated union on `scope`.
 | --- | --- | --- |
 | members[].id | string | The member's public user id (`usr_…`). |
 | members[].name | string \| null | Display name; null when never set. |
+| members[].avatarUrl | string \| null | An https URL or a designed `avatar:v1:` value; null when never set. A blank stored value reads as null. |
 | members[].email | string | |
 | members[].role | string | The stored org role, as written (both casings exist in rows). |
 | members[].joinedAt | string | ISO 8601. |
