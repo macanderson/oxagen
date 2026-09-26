@@ -87,10 +87,42 @@ describe("Rules that fired", () => {
     expect(within(kernel).getByTestId("policy-rules")).toHaveTextContent(
       "refund-cap",
     );
-    // A rule lives in a bundle or in the workspace's settings, not as a record
-    // with a page, so nothing links to one.
+    // A permission pattern lives in a bundle and a decision rule in the
+    // workspace's settings, not as a record with a page, so neither links.
     expect(within(listed).queryByRole("link")).toBeNull();
+    expect(
+      within(within(kernel).getByTestId("policy-rules")).queryByRole("link"),
+    ).toBeNull();
     await expectNoAxe(container);
+  });
+
+  it("links a rule that names a mandate gate to the mandate's page", async () => {
+    const gate = "mandate:mnd_7k2m9q4r8t1v3x5z0b2d6h:always_human_for:payments";
+    const { container, rows } = renderRows([
+      decided("7", "kernel", [gate, "refund-cap"], null),
+    ]);
+    const [row] = rows;
+    if (row === undefined) throw new Error("a row");
+    const listed = within(row).getByTestId("policy-rules");
+    const link = within(listed).getByRole("link", { name: gate });
+    expect(link.getAttribute("href")).toBe(
+      "/acme/core-platform/mandates/mnd_7k2m9q4r8t1v3x5z0b2d6h",
+    );
+    // The rule after it names no record, so it prints without a link.
+    expect(within(listed).getAllByRole("link")).toHaveLength(1);
+    expect(listed).toHaveTextContent("refund-cap");
+    await expectNoAxe(container);
+  });
+
+  it("links nothing for a rule that only looks like a mandate gate (negative)", () => {
+    const { rows } = renderRows([
+      decided("8", "bundle", ["mandate:not-a-mandate", "Bash(mandate:*)"], null),
+    ]);
+    const [row] = rows;
+    if (row === undefined) throw new Error("a row");
+    expect(
+      within(within(row).getByTestId("policy-rules")).queryByRole("link"),
+    ).toBeNull();
   });
 
   it("says none for a decision that named no rule (negative)", () => {

@@ -1,4 +1,4 @@
-# ADR-194: A run's fit reading is computed from the record, and its effort is read from the request
+# ADR-194: A run's fit reading is computed from the record and its effort is read from the request
 
 - **Status:** Accepted
 - **Date:** 2026-09-26
@@ -63,7 +63,7 @@ together by a CHECK. `get_run` answers `run.fit` only when `fit_sealed_at`
 equals the run's `sealedAt` and the method is one this build reads. A live
 run, a run with no reading, and a reading of an earlier seal all answer null.
 
-### 3. A durable job writes it, through a runner seam
+### 3. A durable job writes it through a runner seam
 
 `cost.run-rollup` sends `run/fit.requested` once the run's `cost.run_totals`
 row lands, because the reading reads that row's tokens. The `run.fit` job
@@ -124,7 +124,7 @@ the batches (ADR-182). A batch is the fold's reading, with Claude Code's
 recorded `batch_index`. A rollup column arrives only with a reader that needs
 it across runs, and it is computed by calling `transcriptFigures`.
 
-### 7. A decision names its rules in evaluation order, and taint is not assessed
+### 7. A decision names its rules in evaluation order and leaves taint unassessed
 
 A decision frame carries `policy_rules`, the rules that decided in
 evaluation order: one for a deny or an ask, and each shell segment's rule,
@@ -132,6 +132,11 @@ once, for a compound allow. `policy_rule` keeps the joined form for older
 readers and `tacho.session_commands`. A row sealed before the list reads its
 joined rule as a list of one, kept whole, because " and " can sit inside a
 rule's own pattern.
+
+The Policy tab prints each rule in mono. A mandate gate cites itself as
+`mandate:<publicId>:<gate>`, and that rule links to the mandate's page. A
+permission pattern and a workspace decision rule have no page of their own,
+so they print without a link.
 
 `TranscriptDecision.taint` is null, which means no producer assessed taint.
 An empty list would mean one assessed the inputs as clean. Nothing records
@@ -143,6 +148,11 @@ reads that shape now. The control plane cannot answer it yet: xmcp turns
 every error a tool throws into an `isError` result, and rethrows only
 `UrlElicitationRequired`, so a tool cannot produce `-32002`. The producer is a
 follow-up.
+
+The daemon writes a gateway refusal's reason as `policy_reason_code` and
+`policy_reason_digest`, which the envelope declares (`gatewayFrameBody`). It
+used to write `policy_reason`, which no body declares, so the recorder moved
+it into `attrs`, where no reader of a decision looked.
 
 ## Consequences
 
