@@ -2036,6 +2036,29 @@ describe("tabs", () => {
     expect(calls.turns).toHaveLength(0);
   });
 
+  it("reads one page at steps before it draws, though a full page with a cursor has more behind it (#4420)", async () => {
+    // Every page refolds the whole run on the server, so reading the run to
+    // its end held the page for one read per page. The Transcript tab reads
+    // the rest once it draws. The Issues tab draws no transcript.
+    const { calls } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(
+          runTranscript({
+            entries: Array.from({ length: 500 }, (_, i) =>
+              transcriptEntry({ seq: String(i + 1), endSeq: String(i + 1) }),
+            ),
+            cursor: "cGFnZTE",
+          }),
+        ),
+      },
+      { tab: "issues" },
+    );
+    expect(calls.transcript).toEqual([
+      [ctx, "tse_7k2m9q", "steps", { kinds: [], limit: 500, text: "full" }],
+    ]);
+  });
+
   it("opens Transcript for a tab that is not a section, and Cost for the retired proof tab (negative)", async () => {
     const { calls } = await renderRun(
       { detail: ok(runDetail()), transcript: ok(runTranscript()) },

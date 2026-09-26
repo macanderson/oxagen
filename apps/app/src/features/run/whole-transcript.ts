@@ -1,10 +1,11 @@
-// A transcript read to its end. The Run page reads it at `steps` with whole
-// bodies for the Transcript tab, and at `everything` for the tabs that list
-// frames (Governed actions, Policy, Context). The first page carries the
-// whole run's counts and figures, counted on the server (ADR-182). A page read
-// from a cursor may carry them too, newer on a live run, or carry none. The
-// read answers the last page's when it carried them, and the first page's
-// otherwise.
+// A transcript read to its end. The Run page reads it at `everything` for the
+// tabs that list frames (Governed actions, Policy, Context). The Transcript
+// tab reads its first page only and pages in the rest after it draws, since
+// every page costs a whole refold on the server (#4420). The first page
+// carries the whole run's counts and figures, counted on the server
+// (ADR-182). A page read from a cursor may carry them too, newer on a live
+// run, or carry none. The read answers the last page's when it carried them,
+// and the first page's otherwise.
 //
 // `get_run_transcript` answers one page of entries and a cursor. The tabs
 // used to take the first page and call it the run, and they said the list

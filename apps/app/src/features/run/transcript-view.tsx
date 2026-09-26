@@ -44,7 +44,7 @@ import {
 import { type Cost, ratioOfMicros } from "@/data/contracts/money";
 import {
   type RunTranscript,
-  TRANSCRIPT_ENTRY_DEFAULT,
+  TRANSCRIPT_ENTRY_MAX,
   TRANSCRIPT_QUERY_MAX,
   type TranscriptCounts,
   type TranscriptSearch,
@@ -1487,7 +1487,7 @@ export function TranscriptView({
     RunTranscript,
     "complete" | "cursor" | "counts" | "frameCursor"
   >;
-  /** The whole-run transcript's entries at `steps`, at least one. */
+  /** The first page's entries at `steps`, at least one. */
   entries: Frames;
   run: TranscriptRun;
   /** The URL's `?kinds=`, which sets the chips a link opens with. */
@@ -1670,10 +1670,13 @@ export function TranscriptView({
         // the next page.
         if (cursorRef.current === null) return;
         // The chips show and hide rows already read, so every page is read
-        // whole, at the zoom and text the page read.
+        // whole, at the zoom and text the page read. It is read at the most
+        // a page holds: every page costs a whole refold on the server
+        // (#4340), so fewer, larger pages drain a run sooner.
         const read = await readTranscriptPage(org, ws, runId, "steps", {
           after: cursorRef.current,
           text: "full",
+          limit: TRANSCRIPT_ENTRY_MAX,
         });
         if (!read.ok) {
           setPageFailure(read);
@@ -1700,7 +1703,7 @@ export function TranscriptView({
         // Full page with a resume cursor means more history is waiting.
         // Drain it now. A short page or a null cursor ends the drain.
         drainMore =
-          pageEntries.length === TRANSCRIPT_ENTRY_DEFAULT &&
+          pageEntries.length >= TRANSCRIPT_ENTRY_MAX &&
           cursorRef.current !== null;
         // Read through a function rather than the ref directly: the ref can
         // flip true from the early-return branch above while this `await`
@@ -1725,6 +1728,22 @@ export function TranscriptView({
   useEffect(() => {
     loadMoreRef.current = loadMore;
   }, [loadMore]);
+
+  // The page reads one page of the run before it draws, because every page
+  // costs a whole refold on the server (#4420). A full first page with a
+  // cursor has more behind it, so the view reads the rest once it is on
+  // screen. It cannot wait for a click: a live run past the frame cap hides
+  // the "more" control while it follows. The timer keeps the read out of the
+  // effect's own pass, as the search's does.
+  const firstFull = first.length >= TRANSCRIPT_ENTRY_MAX;
+  const firstCursor = transcript.cursor;
+  useEffect(() => {
+    if (!firstFull || firstCursor === null) return;
+    const timer = setTimeout(() => {
+      void loadMore();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [firstFull, firstCursor, loadMore]);
 
   /**
    * The next page of a search's matches. The server pages matches on the

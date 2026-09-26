@@ -23,7 +23,7 @@ import {
 } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TRANSCRIPT_ENTRY_DEFAULT, RunTranscript } from "@/data/contracts/run";
+import { TRANSCRIPT_ENTRY_MAX, RunTranscript } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { readError, readOk } from "@/data/read";
@@ -1243,7 +1243,7 @@ describe("paging past the cursor", () => {
       "core-platform",
       "tse_7k2m9q",
       "steps",
-      { after: "ZjoxMQ", text: "full" },
+      { after: "ZjoxMQ", text: "full", limit: TRANSCRIPT_ENTRY_MAX },
     );
     // The release call is now one row carrying the answer that landed with the
     // appended page.
@@ -1538,15 +1538,7 @@ describe("following a live run", () => {
       pageOk(
         runTranscript({
           zoom: "everything",
-          entries: Array.from({ length: TRANSCRIPT_ENTRY_DEFAULT }, (_, i) =>
-            transcriptEntry({
-              seq: String(seqFrom + i),
-              endSeq: String(seqFrom + i),
-              turn: null,
-              request: null,
-              response: null,
-            }),
-          ),
+          entries: bareEntries(seqFrom, TRANSCRIPT_ENTRY_MAX),
           cursor,
           complete: false,
         }),
@@ -1554,22 +1546,14 @@ describe("following a live run", () => {
     const shortPage = pageOk(
       runTranscript({
         zoom: "everything",
-        entries: [
-          transcriptEntry({
-            seq: "450",
-            endSeq: "450",
-            turn: null,
-            request: null,
-            response: null,
-          }),
-        ],
+        entries: bareEntries(1100, 1),
         cursor: null,
         complete: true,
       }),
     );
     readTranscriptPage
       .mockResolvedValueOnce(fullPage("page2", 100))
-      .mockResolvedValueOnce(fullPage("page3", 300))
+      .mockResolvedValueOnce(fullPage("page3", 600))
       .mockResolvedValueOnce(shortPage);
     vi.useFakeTimers();
     try {
@@ -1587,9 +1571,88 @@ describe("following a live run", () => {
       expect(
         readTranscriptPage.mock.calls.map((call) => call[4].after),
       ).toEqual(["page1", "page2", "page3"]);
+      // Every page past the first is read at the most a page holds, since
+      // each one costs a whole refold on the server (#4340).
+      expect(
+        readTranscriptPage.mock.calls.map((call) => call[4].limit),
+      ).toEqual([
+        TRANSCRIPT_ENTRY_MAX,
+        TRANSCRIPT_ENTRY_MAX,
+        TRANSCRIPT_ENTRY_MAX,
+      ]);
     } finally {
       vi.useRealTimers();
       vi.unstubAllGlobals();
+    }
+  });
+});
+
+/**
+ * `count` steps from `seqFrom` on, one seq each, with no turn or bodies: a
+ * page's worth of rows that differ only by seq.
+ */
+function bareEntries(seqFrom: number, count: number) {
+  return Array.from({ length: count }, (_, i) =>
+    transcriptEntry({
+      seq: String(seqFrom + i),
+      endSeq: String(seqFrom + i),
+      turn: null,
+      request: null,
+      response: null,
+    }),
+  );
+}
+
+describe("reading the run past the first page (#4420)", () => {
+  // The page reads one page before it draws. The view reads the rest.
+  it("reads the rest of a full first page once it draws, with no click and no stream signal", async () => {
+    readTranscriptPage.mockResolvedValueOnce(
+      pageOk(
+        runTranscript({
+          entries: bareEntries(600, 3),
+          cursor: null,
+          complete: true,
+        }),
+      ),
+    );
+    renderSection({
+      read: readOk(
+        runTranscript({
+          entries: bareEntries(100, TRANSCRIPT_ENTRY_MAX),
+          cursor: "page1",
+          complete: true,
+        }),
+      ),
+    });
+    // The first page draws with more behind it, before any read.
+    expect(screen.getByTestId("transcript-more")).toBeInTheDocument();
+    expect(readTranscriptPage).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(readTranscriptPage).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("transcript-more")).toBeNull();
+    });
+    expect(readTranscriptPage).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "tse_7k2m9q",
+      "steps",
+      { after: "page1", text: "full", limit: TRANSCRIPT_ENTRY_MAX },
+    );
+  });
+
+  it("reads nothing on its own when the first page is short, since nothing lies past it yet (negative)", () => {
+    vi.useFakeTimers();
+    try {
+      renderSection({
+        read: readOk(releaseTranscript({ cursor: "ZjoxMQ", complete: true })),
+      });
+      vi.advanceTimersByTime(1000);
+      expect(readTranscriptPage).not.toHaveBeenCalled();
+      expect(screen.getByTestId("transcript-more")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

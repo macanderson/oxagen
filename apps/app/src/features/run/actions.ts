@@ -28,13 +28,14 @@ import { runExportGet } from "@oxagen/oxagen/contracts/run.export.get";
 import { runSeal } from "@oxagen/oxagen/contracts/run.seal";
 import { runFork } from "@oxagen/oxagen/contracts/run.fork";
 import { runSummarize } from "@oxagen/oxagen/contracts/run.summarize";
-import { TRANSCRIPT_ENTRY_DEFAULT } from "@oxagen/oxagen/contracts/run.transcript.get";
 import { z } from "zod";
-import type {
-  RunTranscript,
-  TranscriptKind,
-  TranscriptText,
-  TranscriptZoom,
+import {
+  type RunTranscript,
+  TRANSCRIPT_ENTRY_DEFAULT,
+  TRANSCRIPT_ENTRY_MAX,
+  type TranscriptKind,
+  type TranscriptText,
+  type TranscriptZoom,
 } from "@/data/contracts/run";
 import { type CommandReport, DeliveryMode } from "@/data/contracts/runs";
 import { dataSource } from "@/data/source";
@@ -259,12 +260,19 @@ export async function readTranscriptPage(
     after?: string;
     text?: TranscriptText;
     query?: string;
+    /**
+     * Entries on the page, at most the contract's `TRANSCRIPT_ENTRY_MAX`. The
+     * player reads the run past its first page at the most a page holds,
+     * since every page costs a whole refold on the server (#4340). A search
+     * reads the default.
+     */
+    limit?: number;
   },
 ): Promise<ActionResult<RunTranscript>> {
   const ctx = await requireViewer(org, ws);
   const read = await dataSource().runs.transcript(ctx, runId, zoom, {
     kinds: [...(q.kinds ?? [])],
-    limit: TRANSCRIPT_ENTRY_DEFAULT,
+    limit: Math.min(q.limit ?? TRANSCRIPT_ENTRY_DEFAULT, TRANSCRIPT_ENTRY_MAX),
     ...(q.after === undefined ? {} : { after: q.after }),
     ...(q.text === undefined ? {} : { text: q.text }),
     ...(q.query === undefined ? {} : { query: q.query }),

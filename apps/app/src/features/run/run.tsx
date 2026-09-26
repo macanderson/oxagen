@@ -3,21 +3,27 @@
 // generated summary, the six figures and the tabs with Transcript open; the
 // side column, "The work", holds the Changes panel and the Outputs spine.
 //
-// The page makes the reads every part shares (the run, the whole-run
+// The page makes the reads every part shares (the run, the first page of the
 // transcript at `steps`, the cost rollup, the outputs, the work, the issues,
 // the agent and the approvals parked on the run), shapes the figures once
 // (`runMetrics`), and hands the open tab the whole bundle. The transcript is
 // folded and counted on the server (ADR-182): the tab counts are its
-// `counts`, and the figures its `figures`. The run at `everything`, one entry
-// per frame, is read to its end only for a tab that lists frames. The badges
-// of those tabs count frames, and the `steps` read carries those counts too
-// (`counts.frames`), so no other tab reads the run a second time. A tab's own
-// heavy read (the chain, a frame body) happens only when that tab is open.
+// `counts`, and the figures its `figures`. The first page carries both for
+// the whole run (#3823, D6), so the page draws from it, and the Transcript
+// tab reads the rest once it is on screen (#4420). The run at `everything`,
+// one entry per frame, is read to its end only for a tab that lists frames.
+// The badges of those tabs count frames, and the `steps` read carries those
+// counts too (`counts.frames`), so no other tab reads the run a second time.
+// A tab's own heavy read (the chain, a frame body) happens only when that tab
+// is open.
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, type ReactNode } from "react";
 import type { DataSource } from "@/data/ports";
-import type { TranscriptCounts } from "@/data/contracts/run";
+import {
+  TRANSCRIPT_ENTRY_MAX,
+  type TranscriptCounts,
+} from "@/data/contracts/run";
 import { PAGE_FAILURES, readError } from "@/data/read";
 import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
@@ -314,7 +320,15 @@ export async function Run({
             PAGE_FAILURES.run.error.status,
           ),
         ),
-      readWholeTranscript(source, ctx, run.id, "steps", { text: "full" }),
+      // One page, not the run to its end: every page rereads and refolds the
+      // whole run on the server (#4340), so a run of 15 pages held the page
+      // for 15 reads in a row (#4420). The page's head `frameCursor` is where
+      // the stream opens, and the tab pages the rest in after it draws.
+      source.runs.transcript(ctx, run.id, "steps", {
+        kinds: [],
+        limit: TRANSCRIPT_ENTRY_MAX,
+        text: "full",
+      }),
       listsFrames
         ? readWholeTranscript(source, ctx, run.id, "everything")
         : null,
