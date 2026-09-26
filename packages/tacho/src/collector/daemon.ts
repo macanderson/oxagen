@@ -103,6 +103,7 @@ import {
 } from "../wire";
 import { Detector } from "./detector";
 import { createGitLane } from "./git-lane";
+import { removeCopiesOutside } from "./session-changes";
 import { exportSession, type ExportFormat } from "./exporters";
 import {
   handleHookEvent,
@@ -1793,6 +1794,7 @@ async function initializeDaemon(
       persistPendingEnds();
     },
     record,
+    preSessionCopies: paths.preSessionCopies,
   });
   const requestGitRead = gitReads.requestGitRead;
   for (const id of pendingSessionEnds.keys())
@@ -3302,6 +3304,14 @@ async function initializeDaemon(
             registry.settleSwept(candidate);
           }
           registry.forgetSealed(timers.walRetainMs);
+          // A forgotten session reconciles no more, so its pre-session
+          // copies go. So do any a crash left behind.
+          await removeCopiesOutside(
+            paths.preSessionCopies,
+            new Set(
+              registry.list().map((session) => session.recorder.sessionUuid),
+            ),
+          );
           if (failure !== undefined) throw failure.error;
         }
         if (t - lastCheckpoint >= timers.checkpointMs) {

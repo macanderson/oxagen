@@ -21,10 +21,79 @@ export interface WorktreeSnapshot {
   /**
    * On the session basis, what the hunks in `patch` were taken against
    * (ADR-188 decision 5). The paths in `baseline_paths` against `baseline`,
-   * and every other path against `head_ref`, or against nothing when
-   * untracked. Absent on a snapshot of every change since `baseline`.
+   * the paths in `pre_session_paths` against what they held at the session's
+   * first read, and every other path against `head_ref`, or against nothing
+   * when untracked. Absent on a snapshot of every change since `baseline`.
    */
-  bases?: { head_ref: string; baseline_paths: string[] };
+  bases?: {
+    head_ref: string;
+    baseline_paths: string[];
+    pre_session_paths: string[];
+  };
+}
+
+/** A path as git prints it in a patch header, quoted when git would quote it. */
+function headerPath(prefix: string, path: string): string {
+  const name = `${prefix}${path}`;
+  // Git quotes a name holding a control byte, a quote, or a backslash, even
+  // with `core.quotePath=false`.
+  let quoted = false;
+  let out = "";
+  for (const ch of name) {
+    const code = ch.charCodeAt(0);
+    if (ch === '"' || ch === "\\") out += `\\${ch}`;
+    else if (ch === "\t") out += "\\t";
+    else if (ch === "\n") out += "\\n";
+    else if (code < 0x20 || code === 0x7f)
+      out += `\\${code.toString(8).padStart(3, "0")}`;
+    else {
+      out += ch;
+      continue;
+    }
+    quoted = true;
+  }
+  return quoted ? `"${out}"` : name;
+}
+
+/**
+ * A `git diff --no-index` patch from a pre-session copy, with its header
+ * naming the repo-relative path on both sides. Git names the copy by its
+ * path in Tacho's state directory, which would put that directory into the
+ * record. The hunks are left as git wrote them.
+ */
+export function relabelPreSessionPatch(
+  patch: string,
+  path: string,
+  sides: { before: boolean; after: boolean },
+): string {
+  if (patch.length === 0) return patch;
+  const lines = patch.split("\n");
+  const firstHunk = lines.findIndex(
+    (line) =>
+      line.startsWith("@@") ||
+      line.startsWith("Binary files ") ||
+      line.startsWith("GIT binary patch"),
+  );
+  const header = firstHunk === -1 ? lines : lines.slice(0, firstHunk);
+  const body = firstHunk === -1 ? [] : lines.slice(firstHunk);
+  const before = sides.before ? headerPath("a/", path) : "/dev/null";
+  const after = sides.after ? headerPath("b/", path) : "/dev/null";
+  const out = [
+    `diff --git ${headerPath("a/", path)} ${headerPath("b/", path)}`,
+  ];
+  for (const line of header) {
+    if (line.startsWith("--- ")) out.push(`--- ${before}`);
+    else if (line.startsWith("+++ ")) out.push(`+++ ${after}`);
+    else if (
+      /^(?:index |new file mode |deleted file mode |old mode |new mode )/.test(
+        line,
+      )
+    )
+      out.push(line);
+  }
+  if (body[0]?.startsWith("Binary files "))
+    body[0] = `Binary files ${before} and ${after} differ`;
+  return [...out, ...body].join("\n");
 }
 
 /** Keep only a forge host and repository path. Never retain remote credentials. */
@@ -207,6 +276,40 @@ export async function readWorktreeSnapshot(
       if (!HASH.test(measured.headRef)) limitations.push("diff_read_failed");
       else append(await trackedDiff(measured.headRef, measured.fromHead));
     }
+    // Each against what it held at the session's first read, as its row
+    // was counted: the copy, or nothing for a path that was absent then.
+    for (const { path, copy } of measured.fromPreSession) {
+      let present: boolean;
+      try {
+        present = (await lstat(join(root, path))).isFile();
+      } catch {
+        present = false;
+      }
+      if (copy === null && !present) continue;
+      const raw = await read(
+        [
+          "diff",
+          "--no-index",
+          "--no-ext-diff",
+          "--no-textconv",
+          "--no-color",
+          "--src-prefix=a/",
+          "--dst-prefix=b/",
+          "--",
+          copy ?? "/dev/null",
+          present ? path : "/dev/null",
+        ],
+        [0, 1],
+      );
+      append(
+        raw === undefined
+          ? undefined
+          : relabelPreSessionPatch(raw, path, {
+              before: copy !== null,
+              after: present,
+            }),
+      );
+    }
     // The rows were counted against the HEAD the reconciliation read. A
     // commit since then moved the tree those counts describe.
     if (head !== undefined && HASH.test(head) && head !== measured.headRef)
@@ -266,6 +369,9 @@ export async function readWorktreeSnapshot(
           bases: {
             head_ref: measured.headRef,
             baseline_paths: [...measured.fromBaseline],
+            pre_session_paths: measured.fromPreSession.map(
+              (entry) => entry.path,
+            ),
           },
         }),
   };

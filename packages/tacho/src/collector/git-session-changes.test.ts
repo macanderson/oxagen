@@ -9,7 +9,13 @@
  * never against a checkout.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { TachoEvent } from "../envelope";
@@ -66,15 +72,28 @@ function squashMergeAndPull(r: Rig, file: string, content: string): void {
 }
 
 /** What the lane records at a session's first read of `work`. */
-async function firstRead(r: Rig): Promise<WorktreeAttribution> {
+async function firstRead(
+  r: Rig,
+  copies?: { dir: string; capBytes: number },
+): Promise<WorktreeAttribution> {
   const startedAt = Date.now();
   // Past the start, so a file the session writes has a later time than it.
   await new Promise((resolve) => setTimeout(resolve, 20));
   return {
     baseline: r.git(r.work, ["rev-parse", "HEAD"]).trim(),
     firstReadAt: startedAt,
-    preexisting: await readPreexistingPaths(r.exec, r.work, startedAt),
+    preexisting: await readPreexistingPaths(r.exec, r.work, startedAt, copies),
   };
+}
+
+/** Everything git sees in `work`, ignored files included. */
+function everything(r: Rig): string {
+  return r.git(r.work, [
+    "status",
+    "--porcelain",
+    "--ignored",
+    "--untracked-files=all",
+  ]);
 }
 
 function paths(changes: { repo_relative_path: string }[] | undefined) {
@@ -360,6 +379,124 @@ describe("readSessionChanges against a real repository", () => {
     ).toEqual(["new.txt", "notes.txt"]);
   });
 
+  it("counts only the session's lines in a file that already held edits", async () => {
+    const r = rig();
+    // A person's uncommitted work: one line added to a tracked file, and an
+    // untracked draft.
+    writeFileSync(join(r.work, "a.txt"), "one\ntwo\nthree\nperson\n");
+    writeFileSync(join(r.work, "notes.txt"), "a draft\n");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const before = everything(r);
+    const copies = join(r.root, "tacho", "pre-session", "session");
+    const start = await firstRead(r, { dir: copies, capBytes: 1024 });
+
+    // The session adds one line to each.
+    writeFileSync(join(r.work, "a.txt"), "one\ntwo\nthree\nperson\nsession\n");
+    writeFileSync(join(r.work, "notes.txt"), "a draft\nfinished\n");
+    const read = await readSessionChanges(r.exec, r.work, start, copies);
+    expect(read?.changes).toEqual([
+      {
+        path: join(r.work, "a.txt"),
+        repo_relative_path: "a.txt",
+        status: "modified",
+        lines_added: 1,
+        lines_removed: 0,
+      },
+      {
+        path: join(r.work, "notes.txt"),
+        repo_relative_path: "notes.txt",
+        status: "modified",
+        lines_added: 1,
+        lines_removed: 0,
+      },
+    ]);
+    expect(read?.preSessionCounts).toBe("session_only");
+    // The copies live in Tacho's directory, readable by its owner alone. The
+    // repository gained nothing.
+    expect(statSync(copies).mode & 0o777).toBe(0o700);
+    const kept = readdirSync(copies);
+    expect(kept).toHaveLength(2);
+    for (const name of kept)
+      expect(statSync(join(copies, name)).mode & 0o777).toBe(0o600);
+    writeFileSync(join(r.work, "a.txt"), "one\ntwo\nthree\nperson\n");
+    writeFileSync(join(r.work, "notes.txt"), "a draft\n");
+    expect(everything(r)).toBe(before);
+  });
+
+  it("measures a revert, a deletion, and a re-creation of a file that already held edits", async () => {
+    const r = rig();
+    writeFileSync(join(r.work, "a.txt"), "one\ntwo\nthree\nperson\n");
+    writeFileSync(join(r.work, "notes.txt"), "a draft\nsecond line\n");
+    unlinkSync(join(r.work, "shared.txt"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const copies = join(r.root, "tacho", "pre-session", "session");
+    const start = await firstRead(r, { dir: copies, capBytes: 1024 });
+
+    // The session puts a.txt back as HEAD has it, deletes the draft, and
+    // writes shared.txt again with new content.
+    r.git(r.work, ["checkout", "-q", "--", "a.txt"]);
+    unlinkSync(join(r.work, "notes.txt"));
+    writeFileSync(join(r.work, "shared.txt"), "rewritten\n");
+    const read = await readSessionChanges(r.exec, r.work, start, copies);
+    expect(
+      [...(read?.changes ?? [])].sort((x, y) =>
+        x.repo_relative_path < y.repo_relative_path ? -1 : 1,
+      ),
+    ).toMatchObject([
+      {
+        repo_relative_path: "a.txt",
+        status: "modified",
+        lines_added: 0,
+        lines_removed: 1,
+      },
+      {
+        repo_relative_path: "notes.txt",
+        status: "deleted",
+        lines_added: 0,
+        lines_removed: 2,
+      },
+      {
+        repo_relative_path: "shared.txt",
+        status: "added",
+        lines_added: 1,
+        lines_removed: 0,
+      },
+    ]);
+  });
+
+  it("counts the whole file, and says so, when the copy would pass the session's cap", async () => {
+    const r = rig();
+    writeFileSync(join(r.work, "a.txt"), "one\ntwo\nthree\nperson\n");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const copies = join(r.root, "tacho", "pre-session", "session");
+    // Fewer bytes than the file holds, so no copy is kept.
+    const start = await firstRead(r, { dir: copies, capBytes: 8 });
+    expect(Object.keys(start.preexisting?.paths ?? {})).toEqual(["a.txt"]);
+
+    writeFileSync(join(r.work, "a.txt"), "one\ntwo\nthree\nperson\nsession\n");
+    const read = await readSessionChanges(r.exec, r.work, start, copies);
+    // Against HEAD: the person's line and the session's.
+    expect(read?.changes).toMatchObject([
+      { repo_relative_path: "a.txt", lines_added: 2, lines_removed: 0 },
+    ]);
+    expect(read?.preSessionCounts).toBe("whole_file");
+  });
+
+  it("reports a path whose entry in the state file has the wrong shape", async () => {
+    const r = rig();
+    const start = await firstRead(r);
+    writeFileSync(join(r.work, "a.txt"), "one\ntwo\nthree\nfour\n");
+    // daemon.json is checked only as far as the record being an object.
+    const read = await readSessionChanges(r.exec, r.work, {
+      ...start,
+      preexisting: {
+        paths: { "a.txt": 5 } as unknown as Record<string, null>,
+        complete: true,
+      },
+    });
+    expect(paths(read?.changes)).toEqual(["a.txt"]);
+  });
+
   it("does not record an edit made after the session started as already there", async () => {
     const r = rig();
     const startedAt = Date.now();
@@ -504,6 +641,41 @@ describe("the daemon's reconciliation against a real repository", () => {
     await handle.api.handleHook(hook("Stop", r.work));
     await handle.tick();
     expect(listed(handle)).toEqual([["agent.txt"]]);
+  });
+
+  it("counts only the session's lines in a file that already held edits, and drops the copy with the session", async () => {
+    const r = rig();
+    writeFileSync(join(r.work, "a.txt"), "one\ntwo\nthree\nperson\n");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const paths = scratchPaths();
+    const handle = await boot(r.exec, paths);
+    await handle.api.handleHook(hook("SessionStart", r.work));
+    await handle.tick();
+    writeFileSync(join(r.work, "a.txt"), "one\ntwo\nthree\nperson\nsession\n");
+    await handle.api.handleHook(hook("Stop", r.work));
+    await handle.tick();
+
+    const [frame] = reconciliations(handle);
+    expect(
+      (frame?.body as { observed_changes: unknown[] }).observed_changes,
+    ).toMatchObject([
+      { repo_relative_path: "a.txt", lines_added: 1, lines_removed: 0 },
+    ]);
+    expect(frame?.attrs).toMatchObject({
+      pre_session_changes: "excluded",
+      pre_session_edit_counts: "session_only",
+    });
+    const uuid = handle.registry.get(SESSION)?.recorder.sessionUuid ?? "";
+    const copies = join(paths.preSessionCopies, uuid);
+    expect(readdirSync(copies)).toHaveLength(1);
+
+    // Once the daemon forgets the sealed session, its copy goes too.
+    await handle.api.handleHook(hook("SessionEnd", r.work));
+    await handle.tick();
+    await handle.tick();
+    expect(handle.registry.forgetSealed(-1)).toEqual([SESSION]);
+    await handle.tick();
+    expect(existsSync(copies)).toBe(false);
   });
 
   it("reports a file written before a replayed SessionStart reached the daemon", async () => {

@@ -1,7 +1,8 @@
 # ADR-188: A reconciliation reports what the session changed
 
-- **Status:** Accepted. Amended 2026-09-25 (#4320): the commit rule and the
-  captured diff. See the amendment at the end.
+- **Status:** Accepted. Amended 2026-09-25: the commit rule and the captured
+  diff (#4320), and the count for a file that already held edits (#3384).
+  See the amendments at the end.
 - **Date:** 2026-09-25
 - **Owners:** tacho, evidence
 - **Related:** issue #4104, issue #3384 (finding 29), ADR-095 (observed and
@@ -56,11 +57,18 @@ A path is in a reconciliation when the session changed it. The rule lives in
    root, the lane records the dirty paths with a content hash
    (`preexistingPaths`). A recorded path stays out of later reports until its
    content changes. A path the session committed is reported whatever it held
-   before.
+   before. Once a recorded path changes, its row counts the session's lines
+   alone, measured from a copy of what it held at the first read.
+
+   > Amended 2026-09-25 (#3384). As first decided, a recorded path that
+   > changed was reported whole against `HEAD`, the person's lines with the
+   > session's. See the amendment at the end.
 4. **The frame says which measure it used.** `changes_basis` is `session` or
    `baseline`. `pre_session_changes` is `excluded`, `partly_excluded` (a bound
    cut the record short), or `included` (no record was taken for the
-   worktree).
+   worktree). `pre_session_edit_counts`, present when the list holds a path
+   that already held edits, is `session_only` or `whole_file` (at least one
+   such row counts the whole file, because no copy was kept).
 5. **The captured diff describes the same change as the rows.** The patch
    sealed beside a reconciliation covers the reported paths and no others,
    and takes each path against the state its row's line counts came from. A
@@ -179,7 +187,11 @@ each case as named.
 - **A person's edit made while the session runs** is reported as the
   session's.
 - **Bounds.** The record holds 256 paths per worktree and hashes files up to
-  16 MiB, comparing larger ones by size and modification time. One read lists
+  16 MiB, comparing larger ones by size and modification time. A session
+  keeps at most 8 MiB of copies across its worktrees, chosen in path order.
+  A changed file with no copy (past that bound, past 16 MiB, or a symbolic
+  link) counts the whole file against `HEAD`, and the frame says
+  `pre_session_edit_counts: whole_file`. One read lists
   at most 1,024 of the session's commits from `baseline..HEAD`, filtered by
   committer email inside git. A session carries 128 commits from one read to
   the next and keeps records for 16 worktrees. A commit still in the range is
@@ -198,7 +210,9 @@ each case as named.
   a `git log` of the range less every remote-tracking ref, and one `git log`
   of the counted commits.
 - `daemon.json` holds the record and the counted commits with the session,
-  within the bounds above.
+  within the bounds above. `pre-session/<session uuid>/` under the Tacho
+  state directory holds the copies, and the daemon removes it when it
+  forgets the session.
 - The captured diff after a pull no longer carries the upstream files.
 
 ## Amendment 2026-09-25: a commit no remote holds is the session's (#4320)
@@ -246,3 +260,51 @@ frame keeps one `diff_base_sha`, the baseline. The snapshot body gains
 paths (`baseline_paths`), so a reader can tell which base each hunk used
 without the frame changing shape. `run-work.ts` reads only the frame's
 attrs and the Run page shows the patch's metadata, so neither changes.
+
+## Amendment 2026-09-25: a file that already held edits counts the session's lines (#3384)
+
+The rule as first decided left a person's uncommitted edit out of the list
+until its content changed, then reported the file whole against `HEAD`. A
+file with forty lines of a person's work and one line of the session's read
+as forty-one lines of the session's.
+
+At the session's first read of a worktree, the lane now copies each
+recorded file into `pre-session/<session uuid>/` under the Tacho state
+directory, named by the hash the record already holds. The copy is written
+in the same pass that hashes the file, under a temporary name renamed once
+whole. Nothing is written into the repository or its `.git`. Once a
+recorded path changes, its row is measured from what it held then to what
+it holds now:
+
+- A file the session edited is `modified`, with the session's lines. That
+  holds for a file a person created and never committed as well.
+- A file the session deleted is `deleted`, with the lines it held at the
+  first read.
+- A file the session put back as `HEAD` has it is reported `modified`, with
+  the lines the revert took out. As first decided, it dropped out of the
+  list, because it no longer differs from `HEAD`.
+- A path that was deleted at the first read and that the session wrote
+  again is `added`, with everything it holds, and needs no copy.
+
+The captured patch takes the same paths against the same copies, with the
+header rewritten to the repo-relative path so the state directory never
+reaches the record, and the snapshot lists them in
+`bases.pre_session_paths`.
+
+A session keeps at most 8 MiB of copies (`MAX_PRE_SESSION_COPY_BYTES`).
+Past that, a symbolic link, or a file past 16 MiB gets no copy. Its row
+falls back to the whole file against `HEAD`, and the frame says
+`pre_session_edit_counts: whole_file`, so a reader can tell those counts
+include lines the session did not write. A session restored from a state
+file written before this change has no copies and takes the same fallback.
+
+The copies are the person's own worktree content, which the worktree still
+holds. They are never shipped, and a narrowing of the retention mandate
+does not reach them. The daemon removes a session's directory when it
+forgets the session, and removes any directory no session in its registry
+owns on the same sweep, which covers a crash.
+
+- **Rejected: a copy of every dirty file with no bound.** Its cost grows
+  with the dirty files, and a build directory can hold gigabytes.
+- **Rejected: storing the copies as git objects.** `git hash-object -w`
+  writes into the repository's object store, which is the person's.

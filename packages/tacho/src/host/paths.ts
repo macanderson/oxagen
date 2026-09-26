@@ -48,6 +48,13 @@ export interface TachoPaths {
   hookIdJournal: string;
   /** Transcript byte cursors, so a restart does not re-read every transcript. */
   transcriptTailState: string;
+  /**
+   * Copies of the files that held uncommitted edits when a session first
+   * read a worktree, one directory per session, so a reconciliation can
+   * count only the session's lines in them (ADR-188). Never shipped, and
+   * removed when the daemon forgets the session.
+   */
+  preSessionCopies: string;
   /** The daemon's pid file. */
   pid: string;
   /** Daemon stdout/stderr when run as a service. */
@@ -145,6 +152,7 @@ export function tachoPaths(
     pendingEnds: join(root, "pending-session-ends.json"),
     hookIdJournal: join(root, "hook-ids.jsonl"),
     transcriptTailState: join(root, "transcript-tail.json"),
+    preSessionCopies: join(root, "pre-session"),
     pid: join(root, "tachod.pid"),
     log: join(root, "tachod.log"),
     claudeSettings: join(claudeConfigDir, "settings.json"),

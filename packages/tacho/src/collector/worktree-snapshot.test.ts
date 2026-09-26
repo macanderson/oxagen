@@ -1,4 +1,10 @@
-import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  rmSync,
+  unlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +17,7 @@ import {
 import { readPreexistingPaths, readSessionChanges } from "./session-changes";
 import {
   readWorktreeSnapshot,
+  relabelPreSessionPatch,
   safeRepositoryUrl,
   WORKTREE_PATCH_MAX_BYTES,
 } from "./worktree-snapshot";
@@ -69,6 +76,53 @@ describe("the patch beside a session-basis reconciliation", () => {
     expect(patched(snapshot?.patch)).toEqual(["shared.txt"]);
     // One added line, as the row counts. The upstream hunk is not in it.
     expect(hunkLines(snapshot?.patch)).toEqual(["+session line"]);
+    expect(snapshot?.complete).toBe(true);
+  });
+
+  it("takes a file that already held edits against what it held then, as its row counts it", async () => {
+    const r = rig();
+    // A person's uncommitted edits, from before the session started.
+    writeFileSync(join(r.work, "a.txt"), "one\ntwo\nthree\nperson\n");
+    writeFileSync(join(r.work, "notes.txt"), "a draft\n");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const startedAt = Date.now();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const baseline = r.git(r.work, ["rev-parse", "HEAD"]).trim();
+    const copies = join(r.root, "tacho", "pre-session", "session");
+    const start = {
+      baseline,
+      firstReadAt: startedAt,
+      preexisting: await readPreexistingPaths(r.exec, r.work, startedAt, {
+        dir: copies,
+        capBytes: 1024,
+      }),
+    };
+    // The session adds a line to one and deletes the other.
+    writeFileSync(join(r.work, "a.txt"), "one\ntwo\nthree\nperson\nsession\n");
+    unlinkSync(join(r.work, "notes.txt"));
+
+    const reading = await readSessionChanges(r.exec, r.work, start, copies);
+    expect(reading?.changes).toMatchObject([
+      { repo_relative_path: "a.txt", lines_added: 1, lines_removed: 0 },
+      { repo_relative_path: "notes.txt", status: "deleted", lines_removed: 1 },
+    ]);
+    const snapshot = await readWorktreeSnapshot(
+      r.exec,
+      r.work,
+      baseline,
+      reading?.measured,
+    );
+    expect(patched(snapshot?.patch)).toEqual(["a.txt", "notes.txt"]);
+    // The session's line and the draft it deleted. Not the person's line.
+    expect(hunkLines(snapshot?.patch)).toEqual(["+session", "-a draft"]);
+    expect(snapshot?.patch).toContain("--- a/notes.txt\n+++ /dev/null\n");
+    // The copies' directory never reaches the record.
+    expect(snapshot?.patch).not.toContain(copies.slice(1));
+    expect(snapshot?.bases).toEqual({
+      head_ref: r.git(r.work, ["rev-parse", "HEAD"]).trim(),
+      baseline_paths: [],
+      pre_session_paths: ["a.txt", "notes.txt"],
+    });
     expect(snapshot?.complete).toBe(true);
   });
 
@@ -188,6 +242,7 @@ describe("worktree snapshots", () => {
       headRef: "a".repeat(40),
       fromBaseline: ["mine.ts"],
       fromHead: ["new.ts", "odd*name.ts"],
+      fromPreSession: [],
     });
     const diffs = exec.mock.calls
       .map(([, args]) => args)
@@ -209,6 +264,7 @@ describe("worktree snapshots", () => {
     expect(result?.bases).toEqual({
       head_ref: "a".repeat(40),
       baseline_paths: ["mine.ts"],
+      pre_session_paths: [],
     });
     expect(result?.complete).toBe(true);
   });
@@ -218,6 +274,7 @@ describe("worktree snapshots", () => {
       headRef: "a".repeat(40),
       fromBaseline: [],
       fromHead: [],
+      fromPreSession: [],
     });
     expect(result?.patch).toBe("");
     expect(exec.mock.calls.some(([, args]) => args.includes("diff"))).toBe(
@@ -229,9 +286,50 @@ describe("worktree snapshots", () => {
       fake("diff --git a/a b/a\n"),
       "/repo",
       "c".repeat(40),
-      { headRef: "d".repeat(40), fromBaseline: [], fromHead: ["a"] },
+      {
+        headRef: "d".repeat(40),
+        fromBaseline: [],
+        fromHead: ["a"],
+        fromPreSession: [],
+      },
     );
     expect(result?.limitations).toEqual(["head_changed_during_capture"]);
+  });
+  it("names a pre-session hunk by its path, quoted where git quotes it", () => {
+    const raw = [
+      'diff --git a/state/pre-session/s/0123 b/odd"name.txt',
+      "index 94b3599..00c1a01 100644",
+      "--- a/state/pre-session/s/0123",
+      '+++ "b/odd\\"name.txt"',
+      "@@ -1 +1,2 @@",
+      " one",
+      "+two",
+      "",
+    ].join("\n");
+    expect(
+      relabelPreSessionPatch(raw, 'odd"name.txt', {
+        before: true,
+        after: true,
+      }).split("\n"),
+    ).toEqual([
+      'diff --git "a/odd\\"name.txt" "b/odd\\"name.txt"',
+      "index 94b3599..00c1a01 100644",
+      '--- "a/odd\\"name.txt"',
+      '+++ "b/odd\\"name.txt"',
+      "@@ -1 +1,2 @@",
+      " one",
+      "+two",
+      "",
+    ]);
+    expect(
+      relabelPreSessionPatch(
+        "diff --git a/state/x b/bin.dat\nindex 1..2 100644\nBinary files a/state/x and b/bin.dat differ\n",
+        "bin.dat",
+        { before: true, after: true },
+      ),
+    ).toBe(
+      "diff --git a/bin.dat b/bin.dat\nindex 1..2 100644\nBinary files a/bin.dat and b/bin.dat differ\n",
+    );
   });
   it("returns no invented snapshot when git cannot read the directory", async () => {
     const exec = vi.fn().mockRejectedValue(new Error("git unavailable"));

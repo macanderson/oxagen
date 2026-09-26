@@ -13,11 +13,24 @@
  * times, and hash of a file that was dirty before a session started, use
  * `node:fs/promises` and a stream, so a large file costs time and not
  * memory, and the daemon's event loop is never blocked on one.
+ *
+ * The one write is a copy of such a file, into a directory the caller names
+ * in Tacho's own state directory, never into the repository or its `.git`.
  */
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { lstat, readlink } from "node:fs/promises";
-import { dirname } from "node:path";
+import {
+  type FileHandle,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  readlink,
+  rename,
+  rm,
+  unlink,
+} from "node:fs/promises";
+import { dirname, join } from "node:path";
 import type { ExecAsync } from "../host/service";
 import {
   absoluteIn,
@@ -54,6 +67,18 @@ export const MAX_PREEXISTING_PATHS = 256;
  * a change to the file.
  */
 export const MAX_HASHED_FILE_BYTES = 16 * 1024 * 1024;
+
+/**
+ * The most bytes of copies one session keeps, across every worktree it reads.
+ *
+ * A file that held uncommitted edits at the session's first read is copied
+ * into Tacho's state directory, so that once the session changes it a
+ * reconciliation counts only the session's lines rather than everything the
+ * file holds against `HEAD`. A file that would pass this bound is not
+ * copied. Its row then counts the whole file against `HEAD`, and the frame
+ * says so (`SessionChanges.preSessionCounts`).
+ */
+export const MAX_PRE_SESSION_COPY_BYTES = 8 * 1024 * 1024;
 
 /**
  * The most commits one session carries from one read of a worktree to the
@@ -120,6 +145,22 @@ export interface MeasuredPaths {
   fromBaseline: string[];
   /** Paths measured against `headRef`, or against nothing when untracked. */
   fromHead: string[];
+  /**
+   * Paths that held uncommitted edits at the session's first read, measured
+   * against what they held then: the copy at `copy`, or nothing when the
+   * path was absent then.
+   */
+  fromPreSession: { path: string; copy: string | null }[];
+}
+
+/**
+ * Where a session keeps its copies (`MAX_PRE_SESSION_COPY_BYTES`): a
+ * directory of its own under Tacho's state directory, and how many bytes the
+ * session may keep there.
+ */
+export interface PreSessionCopies {
+  dir: string;
+  capBytes: number;
 }
 
 /** One reconciliation's answer, and what the next one starts from. */
@@ -145,6 +186,15 @@ export interface SessionChanges {
    * bound), or `none` (no record was taken for this worktree).
    */
   preexisting: "complete" | "partial" | "none";
+  /**
+   * How the rows of paths that held uncommitted edits before the session
+   * were counted, once the session changed them. `session_only`: each row
+   * counts the session's lines alone. `whole_file`: at least one counts the
+   * file against `HEAD`, because no copy of what it held was kept (past the
+   * cap, a symbolic link, or a file past `MAX_HASHED_FILE_BYTES`). Absent
+   * when the list holds no such path.
+   */
+  preSessionCounts?: "session_only" | "whole_file";
 }
 
 /** A full commit name, sha-1 or sha-256. */
@@ -197,25 +247,121 @@ async function directoryChangedAt(path: string): Promise<number | undefined> {
   }
 }
 
+/** A copy's name: the first 32 hex digits of the sha256 of its bytes. */
+const COPY_NAME = /^[0-9a-f]{32}$/;
+
 /**
  * The first 32 hex digits of the sha256 of a file's bytes, or of a link's
  * target. Read as a stream, so a large file costs time and not memory.
  * Undefined when the read fails.
+ *
+ * With `keep`, the same pass writes the file's bytes into `keep.dir` under a
+ * temporary name, then renames it to the hash, so a copy is whole or absent
+ * and its name says what it holds. A file that grew past `keep.bytes` since
+ * it was measured, or a write that fails, leaves no copy and still answers
+ * the hash.
  */
 async function contentHash(
   absolutePath: string,
   kind: "file" | "link",
+  keep?: { dir: string; bytes: number },
 ): Promise<string | undefined> {
+  const hash = createHash("sha256");
+  if (kind === "link") {
+    try {
+      hash.update(await readlink(absolutePath));
+      return hash.digest("hex").slice(0, 32);
+    } catch {
+      return undefined;
+    }
+  }
+  let copy: { temp: string; handle: FileHandle } | null = null;
+  if (keep !== undefined) {
+    try {
+      await mkdir(keep.dir, { recursive: true, mode: 0o700 });
+      const temp = join(keep.dir, `.partial-${randomUUID()}`);
+      copy = { temp, handle: await open(temp, "wx", 0o600) };
+    } catch {
+      copy = null;
+    }
+  }
+  const drop = async () => {
+    if (copy === null) return;
+    const { temp, handle } = copy;
+    copy = null;
+    await handle.close().catch(() => undefined);
+    await unlink(temp).catch(() => undefined);
+  };
+  let written = 0;
   try {
-    const hash = createHash("sha256");
-    if (kind === "link") hash.update(await readlink(absolutePath));
-    else
-      for await (const chunk of createReadStream(absolutePath))
-        hash.update(chunk as Buffer);
-    return hash.digest("hex").slice(0, 32);
+    for await (const chunk of createReadStream(absolutePath)) {
+      hash.update(chunk as Buffer);
+      if (copy === null) continue;
+      written += (chunk as Buffer).length;
+      if (keep === undefined || written > keep.bytes) await drop();
+      else await copy.handle.write(chunk as Buffer).catch(async () => drop());
+    }
   } catch {
+    await drop();
     return undefined;
   }
+  const digest = hash.digest("hex").slice(0, 32);
+  if (copy !== null && keep !== undefined) {
+    const { temp, handle } = copy;
+    try {
+      await handle.close();
+      await rename(temp, join(keep.dir, digest));
+    } catch {
+      await unlink(temp).catch(() => undefined);
+    }
+  }
+  return digest;
+}
+
+/** The bytes a session's copies already take, or 0 when there are none. */
+async function copiedBytes(dir: string): Promise<number> {
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return 0;
+  }
+  let total = 0;
+  for (const name of names) {
+    try {
+      total += (await lstat(join(dir, name))).size;
+    } catch {
+      // Gone since the listing, so it takes nothing.
+    }
+  }
+  return total;
+}
+
+/**
+ * Remove the copies of every session not in `keep`, by the directory name
+ * the lane gives each session. The daemon calls this after it forgets
+ * sealed sessions, which also clears the directories of sessions a crash
+ * left behind.
+ */
+export async function removeCopiesOutside(
+  root: string,
+  keep: ReadonlySet<string>,
+): Promise<void> {
+  let names: string[];
+  try {
+    names = await readdir(root);
+  } catch {
+    return;
+  }
+  await Promise.all(
+    names
+      .filter((name) => !keep.has(name))
+      .map((name) =>
+        rm(join(root, name), { recursive: true, force: true }).catch(
+          () => undefined,
+        ),
+      ),
+  );
 }
 
 /** Whether a porcelain v1 code says the path is gone from the worktree. */
@@ -239,18 +385,29 @@ function deletedIn(code: string): boolean {
  * Undefined when the status read fails. A path that cannot be measured is
  * not recorded, so it is reported, which is the direction of error a
  * record of what the session did can explain.
+ *
+ * With `copies`, each recorded file is also copied into `copies.dir` while
+ * it is hashed, in path order until the session's copies would pass
+ * `copies.capBytes`. A later reconciliation counts the session's lines in a
+ * copied file against the copy (`readSessionChanges`).
  */
 export async function readPreexistingPaths(
   exec: ExecAsync,
   root: string,
   startedAtMs: number,
+  copies?: PreSessionCopies,
 ): Promise<PreexistingPaths | undefined> {
   const status = await git(exec, root, STATUS_ARGS);
   if (status === undefined) return undefined;
-  const listed = parsePorcelainZ(status).sort((a, b) =>
-    a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
-  );
+  const byPath = (a: { path: string }, b: { path: string }) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
+  const listed = parsePorcelainZ(status).sort(byPath);
   const paths: Record<string, PreexistingEntry | null> = {};
+  const present: {
+    path: string;
+    absolute: string;
+    found: { size: number; mtimeMs: number; kind: "file" | "link" };
+  }[] = [];
   await pooled(
     listed.slice(0, MAX_PREEXISTING_PATHS).map((entry) => async () => {
       const absolute = absoluteIn(root, entry.path);
@@ -266,12 +423,41 @@ export async function readPreexistingPaths(
         return;
       }
       if (found.changedAtMs >= startedAtMs) return;
-      const hash =
-        found.kind === "file" && found.size > MAX_HASHED_FILE_BYTES
-          ? ""
-          : await contentHash(absolute, found.kind);
+      present.push({ path: entry.path, absolute, found });
+    }),
+    UNTRACKED_COUNT_CONCURRENCY,
+  );
+  // The copies are chosen in path order, so the same files get one whatever
+  // order the reads above finished in.
+  let room =
+    copies === undefined
+      ? 0
+      : copies.capBytes - (await copiedBytes(copies.dir));
+  const planned = present.sort(byPath).map((file) => {
+    const hashed = !(
+      file.found.kind === "file" && file.found.size > MAX_HASHED_FILE_BYTES
+    );
+    const copied =
+      copies !== undefined &&
+      hashed &&
+      file.found.kind === "file" &&
+      file.found.size <= room;
+    if (copied) room -= file.found.size;
+    return { ...file, hashed, copied };
+  });
+  await pooled(
+    planned.map((file) => async () => {
+      const hash = !file.hashed
+        ? ""
+        : await contentHash(
+            file.absolute,
+            file.found.kind,
+            file.copied && copies !== undefined
+              ? { dir: copies.dir, bytes: file.found.size }
+              : undefined,
+          );
       if (hash === undefined) return;
-      paths[entry.path] = [hash, found.size, found.mtimeMs];
+      paths[file.path] = [hash, file.found.size, file.found.mtimeMs];
     }),
     UNTRACKED_COUNT_CONCURRENCY,
   );
@@ -281,6 +467,25 @@ export async function readPreexistingPaths(
       listed.length <= MAX_PREEXISTING_PATHS &&
       listed.length < MAX_CHANGED_PATHS,
   };
+}
+
+/**
+ * One recorded entry as the state file gave it back: an entry, null for a
+ * path that was absent, or undefined for anything else. `daemon.json` is
+ * checked only as far as the record being an object, and an entry of the
+ * wrong shape threw where it was taken apart.
+ */
+function entryOf(value: unknown): PreexistingEntry | null | undefined {
+  if (value === null) return null;
+  if (
+    Array.isArray(value) &&
+    value.length === 3 &&
+    typeof value[0] === "string" &&
+    typeof value[1] === "number" &&
+    typeof value[2] === "number"
+  )
+    return [value[0], value[1], value[2]];
+  return undefined;
 }
 
 /** Whether a recorded path still holds what it held at the session's first read. */
@@ -297,6 +502,83 @@ async function unchangedSince(
   if (found.size === size && found.mtimeMs === mtimeMs) return true;
   if (hash === "" || found.size > MAX_HASHED_FILE_BYTES) return false;
   return (await contentHash(absolute, found.kind)) === hash;
+}
+
+/** What the session did to one path that held edits before it. */
+interface Contribution {
+  /** A two-letter code, for `rowsOf`. */
+  code: string;
+  count: { added: number; removed: number };
+  /** The copy it was measured against, or null for a path absent then. */
+  copy: string | null;
+}
+
+/** Lines added and removed from `from` to `to`, two paths on disk. */
+async function lineDelta(
+  exec: ExecAsync,
+  cwd: string,
+  from: string,
+  to: string,
+): Promise<{ added: number; removed: number } | undefined> {
+  const stdout = await git(
+    exec,
+    cwd,
+    ["diff", "--numstat", "--no-index", "-z", "--", from, to],
+    [0, 1],
+  );
+  if (stdout === undefined) return undefined;
+  for (const value of parseNumstat(stdout).values()) return value;
+  return undefined;
+}
+
+/**
+ * The session's own change to a path that held uncommitted edits at its
+ * first read, measured from what the path held then to what it holds now.
+ *
+ * A path that was absent then needs no copy: everything it holds now is the
+ * session's. A path that held content needs the copy `readPreexistingPaths`
+ * kept. The status describes the session's change, not the file against
+ * `HEAD`: a file a person created and the session edited is `modified`, and
+ * a file a person edited and the session put back as `HEAD` has it is
+ * `modified` too, with the lines it took out.
+ *
+ * Undefined when there is no copy or either side cannot be read. The caller
+ * then counts the file against `HEAD`, and the frame says so.
+ */
+async function contributionOf(
+  exec: ExecAsync,
+  cwd: string,
+  root: string,
+  repoRelative: string,
+  entry: PreexistingEntry | null,
+  copies: string | undefined,
+): Promise<Contribution | undefined> {
+  const absolute = absoluteIn(root, repoRelative);
+  const now = await statOf(absolute);
+  if (now === undefined || (now !== "absent" && now.kind !== "file"))
+    return undefined;
+  let copy: string | null = null;
+  if (entry !== null) {
+    // The name comes back from the state file, so it is checked before it
+    // becomes a path.
+    if (copies === undefined || !COPY_NAME.test(entry[0])) return undefined;
+    copy = join(copies, entry[0]);
+    const kept = await statOf(copy);
+    if (kept === undefined || kept === "absent" || kept.kind !== "file")
+      return undefined;
+  } else if (now === "absent") return undefined;
+  const count = await lineDelta(
+    exec,
+    cwd,
+    copy ?? "/dev/null",
+    now === "absent" ? "/dev/null" : absolute,
+  );
+  if (count === undefined) return undefined;
+  return {
+    code: copy === null ? "A " : now === "absent" ? "D " : "M ",
+    count,
+    copy,
+  };
 }
 
 /**
@@ -520,7 +802,7 @@ async function filesOfCommits(
  * And a commit counted once stays counted, so work a squash merge brought
  * back through a pull is still reported, measured against the baseline. A
  * person's uncommitted edit that was there first is left out until its
- * content changes.
+ * content changes, and then only the session's lines in it count.
  *
  * The ADR names what the rule cannot tell apart: a commit made after the
  * session's first read by anything else that reaches this worktree before
@@ -541,6 +823,7 @@ export async function readSessionChanges(
   exec: ExecAsync,
   cwd: string,
   start: WorktreeAttribution,
+  copies?: string,
 ): Promise<SessionChanges | undefined> {
   // Both come back from the state file, and both end up as git arguments,
   // so anything that is not a commit name is dropped rather than passed on.
@@ -631,25 +914,45 @@ export async function readSessionChanges(
     if (entry.code === "??" && !rows.has(entry.path))
       rows.set(entry.path, entry.code);
 
-  // Left out: what the worktree held before the session, still unchanged. A
-  // path the session committed is its own whatever it held before.
+  // What the worktree held before the session. A path still holding it is
+  // left out. A path changed since is counted from what it held then, when
+  // that can be read, and against `HEAD` otherwise. A path the session
+  // committed is its own whatever it held before.
   const preexisting =
     typeof start.preexisting?.paths === "object" &&
     start.preexisting.paths !== null
       ? start.preexisting
       : undefined;
+  const fromPreSession = new Map<string, string | null>();
+  let wholeFile = false;
   if (preexisting !== undefined && root !== undefined) {
-    const recorded = [...rows.keys()].filter(
-      (path) =>
-        !touched.paths.has(path) && Object.hasOwn(preexisting.paths, path),
-    );
+    const recorded = Object.keys(preexisting.paths)
+      .filter((path) => !touched.paths.has(path))
+      .sort();
+    const found = new Map<string, Contribution | "unchanged" | undefined>();
     await pooled(
       recorded.map((path) => async () => {
-        if (await unchangedSince(root, path, preexisting.paths[path] ?? null))
-          rows.delete(path);
+        const entry = entryOf(preexisting.paths[path]);
+        if (entry === undefined) return;
+        found.set(
+          path,
+          (await unchangedSince(root, path, entry))
+            ? "unchanged"
+            : await contributionOf(exec, cwd, root, path, entry, copies),
+        );
       }),
       UNTRACKED_COUNT_CONCURRENCY,
     );
+    // Applied in path order, so the rows come out the same on every read.
+    for (const path of recorded) {
+      const own = found.get(path);
+      if (own === "unchanged") rows.delete(path);
+      else if (own !== undefined) {
+        rows.set(path, own.code);
+        counts.set(path, own.count);
+        fromPreSession.set(path, own.copy);
+      } else if (found.has(path) && rows.has(path)) wholeFile = true;
+    }
   }
 
   const entries = [...rows].map(([path, code]) => ({ code, path }));
@@ -664,7 +967,13 @@ export async function readSessionChanges(
         .filter((path) => baselinePaths.has(path)),
       fromHead: entries
         .map((entry) => entry.path)
-        .filter((path) => !baselinePaths.has(path)),
+        .filter(
+          (path) => !baselinePaths.has(path) && !fromPreSession.has(path),
+        ),
+      fromPreSession: [...fromPreSession].map(([path, copy]) => ({
+        path,
+        copy,
+      })),
     },
     ownCommits: own.slice(-MAX_SESSION_COMMITS),
     basis: "session",
@@ -674,5 +983,10 @@ export async function readSessionChanges(
         : preexisting.complete
           ? "complete"
           : "partial",
+    ...(wholeFile
+      ? { preSessionCounts: "whole_file" as const }
+      : fromPreSession.size > 0
+        ? { preSessionCounts: "session_only" as const }
+        : {}),
   };
 }
