@@ -10,6 +10,8 @@
 //      opens a transaction on the shared plane.
 //   4. withSystemDb always uses the shared plane and never consults the
 //      resolver (it is how the resolver reads its own table).
+//   5. withSharedPlaneTenantDb opens the shared plane for a dedicated
+//      organisation and sets the tenant GUCs (#4315).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -49,7 +51,7 @@ import {
   setDataPlaneResolver,
   type DataPlaneStatus,
 } from "@oxagen/tenancy";
-import { withTenantDb, withSystemDb } from "./tenant";
+import { withSharedPlaneTenantDb, withSystemDb, withTenantDb } from "./tenant";
 
 const ORG = "00000000-0000-0000-0000-00000000a111";
 const WS = "00000000-0000-0000-0000-00000000b222";
@@ -222,5 +224,44 @@ describe("withSystemDb — always the shared plane", () => {
     }));
     await expect(withSystemDb(async () => "ok")).resolves.toBe("ok");
     expect(mocks.sharedTransaction).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("withSharedPlaneTenantDb", () => {
+  it("opens the shared plane for a dedicated organisation", async () => {
+    const resolver = vi.fn(async (orgId: string, kind: never) => ({
+      orgId,
+      kind,
+      mode: "dedicated" as const,
+      status: "active" as const,
+      config: DEDICATED_CONFIG,
+    }));
+    setDataPlaneResolver(resolver as never);
+    const out = await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      withSharedPlaneTenantDb(async () => "billing-ok"),
+    );
+    expect(out).toBe("billing-ok");
+    expect(resolver).not.toHaveBeenCalled();
+    expect(mocks.sharedTransaction).toHaveBeenCalledTimes(1);
+    expect(mocks.dedicatedDb).not.toHaveBeenCalled();
+  });
+
+  it("sets the tenant GUCs, so RLS still fences the rows", async () => {
+    await runInTenantScope({ orgId: ORG, workspaceId: WS }, () =>
+      withSharedPlaneTenantDb(async () => null),
+    );
+    const text = gucText();
+    expect(text).toContain("app.current_org_id");
+    expect(text).toContain("app.current_workspace_id");
+    expect(text).toContain("app.rls_bypass");
+    expect(text).toContain(ORG);
+    expect(text).toContain(WS);
+    expect(text).toContain("off");
+    expect(mocks.recordIfUnscoped).not.toHaveBeenCalled();
+  });
+
+  it("refuses to run without a tenant scope", async () => {
+    await expect(withSharedPlaneTenantDb(async () => null)).rejects.toThrow();
+    expect(mocks.sharedTransaction).not.toHaveBeenCalled();
   });
 });
