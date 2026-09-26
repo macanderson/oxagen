@@ -672,8 +672,16 @@ async function unenrollLocked(
   }
   // The Stella identity cache holds pids and start times and nothing else. A
   // later enrollment rebuilds it, so it goes whether or not `--purge` was
-  // given, and an emptied root can then be removed.
-  rmSync(deps.paths.stellaIdentity, { recursive: true, force: true });
+  // given, and an emptied root can then be removed. A cache left behind does
+  // no harm, so a failure here becomes a warning. A throw would stop the
+  // unenroll after the keys are gone and before it deals with host.json.
+  try {
+    rmSync(deps.paths.stellaIdentity, { recursive: true, force: true });
+  } catch (error) {
+    warnings.push(
+      `could not remove the Stella identity cache: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   // A harness file that could not be cleaned still needs the enrollment id
   // and the displaced values to be cleaned later, so host.json outlives it.
   if (
