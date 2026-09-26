@@ -44,7 +44,11 @@ import {
   type Tx,
   withTenantDb,
 } from "@oxagen/database";
-import { GRADE_ENFORCEMENT_TIERS, REPLAY_GRADES } from "@oxagen/tacho";
+import {
+  GRADE_ENFORCEMENT_TIERS,
+  REPLAY_GRADES,
+  TACHO_METERING_OBSERVED,
+} from "@oxagen/tacho";
 import {
   and,
   desc,
@@ -473,8 +477,9 @@ function tachoBranch(db: IndexDb, scope: RunScope, req: RunIndexRequest) {
     agentKey: sql`nullif(${sessions.agentKey}, '')`,
     operatorName,
     // The rollup's figure, else what the agent reported, the fallback the
-    // Fleet row shows (`shownCost`).
-    cost: sql`coalesce(${rollupCost}, case when ${sessions.totalCostMicros} > 0 or ${sessions.costBasis} is not null then ${sessions.totalCostMicros} end)`,
+    // Fleet row shows (`shownCost`). A zero total counts only when the
+    // gateway observed it, as `toTachoRunItem` reads `reportedCost`.
+    cost: sql`coalesce(${rollupCost}, case when ${sessions.totalCostMicros} > 0 or ${sessions.costBasis} = ${TACHO_METERING_OBSERVED} then ${sessions.totalCostMicros} end)`,
     searched: [
       sql`${sessions.publicId}`,
       sql`${sessions.harnessTitle}`,

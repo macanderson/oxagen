@@ -313,6 +313,62 @@ describe("list_runs", () => {
     expect(out.runs[0]?.startedAt).toBe("2026-09-11T11:00:00.000Z");
   });
 
+  it("shows a reported zero only when the gateway observed it, whatever basis the session reported", async () => {
+    // Ingest now carries a self-reported basis to the session row (#2951).
+    // Before that the row held `observed` or nothing, and the reader took any
+    // basis for `observed`.
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_observed_zero",
+          session: { totalCostMicros: 0, costBasis: "observed" },
+        }),
+        tachoSession({
+          publicId: "tse_unpriced_zero",
+          session: {
+            startedAt: at("2026-09-11T09:01:00.000Z"),
+            totalCostMicros: 0,
+            costBasis: "observed_unpriced",
+          },
+        }),
+        tachoSession({
+          publicId: "tse_unknown_zero",
+          session: {
+            startedAt: at("2026-09-11T09:02:00.000Z"),
+            totalCostMicros: 0,
+            costBasis: "unknown",
+          },
+        }),
+        tachoSession({
+          publicId: "tse_list_priced",
+          session: {
+            startedAt: at("2026-09-11T09:03:00.000Z"),
+            totalCostMicros: 5_000,
+            costBasis: "list",
+          },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(runList.output.parse(out)).toEqual(out);
+    const reported = Object.fromEntries(
+      out.runs.map((r) => [r.id, r.reportedCost]),
+    );
+    expect(reported["tse_observed_zero"]).toEqual({
+      micros: "0",
+      currency: "USD",
+      basis: "client_attested",
+    });
+    expect(reported["tse_unpriced_zero"]).toBeNull();
+    expect(reported["tse_unknown_zero"]).toBeNull();
+    expect(reported["tse_list_priced"]).toEqual({
+      micros: "5000",
+      currency: "USD",
+      basis: "client_attested",
+    });
+  });
+
   it("leaves the operator and the agent key null when the row recorded neither", async () => {
     const { list } = handlerOver(
       [

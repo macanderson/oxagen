@@ -17,6 +17,7 @@ import {
   isCompletenessGapKind,
   isGradeEnforcementTier,
   isReplayGrade,
+  TACHO_METERING_OBSERVED,
 } from "@oxagen/tacho";
 import { modelFactsOf } from "./model-facts";
 import { compactedField } from "./run-list-status";
@@ -169,6 +170,10 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
   modelInitial: string | null;
   modelFinal: string | null;
   totalCostMicros?: number;
+  /**
+   * `observed` when the gateway saw a model call, else the basis the
+   * session's own calls reported (`list`, `estimated`, `unknown` and more).
+   */
   costBasis?: string | null;
   /** The effort level the harness reported in its context frames. */
   effort?: string | null;
@@ -716,9 +721,13 @@ export function toTachoRunItem(
     cost: rollupCost(totals),
     costIsEstimate: costIsEstimate(session.sealedAt, totals),
     ...rollupTokenFields(totals),
+    // A zero total is a cost only when the gateway observed it. A session
+    // that reported `unknown` or `observed_unpriced` with no figure has no
+    // cost to show, so it reads as none, not as $0.
     reportedCost:
       Number.isSafeInteger(session.totalCostMicros) &&
-      ((session.totalCostMicros ?? 0) > 0 || session.costBasis != null)
+      ((session.totalCostMicros ?? 0) > 0 ||
+        session.costBasis === TACHO_METERING_OBSERVED)
         ? {
             micros: microsString(session.totalCostMicros ?? 0),
             currency: "USD",
