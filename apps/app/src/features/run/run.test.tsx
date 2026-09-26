@@ -1097,6 +1097,31 @@ describe("header", () => {
     );
   });
 
+  it("draws the operator's avatar in the line and in the hover card, and their initials when they set none", async () => {
+    const url = "https://avatars.example.com/marcus.png";
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ operatorAvatarUrl: url }) })),
+      transcript: ok(runTranscript()),
+    });
+    const avatar = screen.getByTestId("run-operator-avatar");
+    expect(avatar).toHaveAttribute("data-avatar", "image");
+    expect(avatar).toHaveAttribute("src", url);
+    await userEvent.hover(screen.getByTestId("run-operator-name"));
+    const card = screen.getByTestId("operator-card");
+    expect(card.querySelector('[data-avatar="image"]')).toHaveAttribute(
+      "src",
+      url,
+    );
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ operatorAvatarUrl: null }) })),
+      transcript: ok(runTranscript()),
+    });
+    const initials = screen.getByTestId("run-operator-avatar");
+    expect(initials).toHaveAttribute("data-avatar", "initials");
+    expect(initials).toHaveTextContent("MB");
+  });
+
   it("omits witness details from the operator view", async () => {
     await renderRun({
       detail: ok(runDetail({ witnessed: true })),
@@ -1782,6 +1807,23 @@ describe("the outputs spine", () => {
     // column, so a phone reads the tabs first.
     expect(tabs.compareDocumentPosition(work) & 4).toBe(4);
     await expectNoAxe(container);
+  });
+
+  it("holds the side column to its track, so a long output path cannot push it past the page", async () => {
+    const path =
+      "/Users/dev/Projects/.worktrees/oxagen/s0-steering-repo-contract/packages/oxagen/src/steering/contract.ts";
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      outputs: ok(runOutputs([runOutputNode({ name: path })])),
+    });
+    const work = screen.getByRole("complementary", { name: "The work" });
+    // jsdom lays nothing out, so the class is the evidence. Without a
+    // `minmax(0,1fr)` column the grid's implicit `auto` column grows to the
+    // unwrapped path, and the title's `truncate` never cuts it.
+    expect(work.className).toContain("grid-cols-1");
+    const spine = within(work).getByTestId("run-outputs");
+    expect(within(spine).getByText(path).className).toContain("truncate");
   });
 
   it("folds an outputs read that throws to the run's read error, and the page still renders", async () => {
@@ -3696,8 +3738,12 @@ describe("what the session recorded", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-effort")).toHaveTextContent("effort medium");
-    // A recorded value carries no "why it is missing" reading.
-    expect(screen.getByTestId("run-effort")).not.toHaveAttribute("title");
+    // A recorded value is titled with where it was read, and a row that names
+    // no source reads as the harness's (#3891).
+    expect(screen.getByTestId("run-effort")).toHaveAttribute(
+      "title",
+      "Reported by the harness.",
+    );
     expect(screen.getByTestId("run-thinking")).toHaveTextContent("thinking on");
     expect(screen.getByTestId("run-permission-mode")).toHaveTextContent(
       "mode acceptEdits",

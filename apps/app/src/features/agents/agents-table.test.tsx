@@ -107,6 +107,27 @@ describe("AgentsTable › missing values", () => {
     expect(blank).toHaveTextContent("?");
   });
 
+  it("draws the owner's avatar when they set one, and their initials when they did not", () => {
+    renderTable([
+      row("pictured", {
+        operatorAvatarUrl: "https://avatars.example.com/marcus.png",
+      }),
+      row("plain", { operatorAvatarUrl: null }),
+    ]);
+    const [pictured, plain] = rows();
+    if (pictured === undefined || plain === undefined)
+      throw new Error("rows not drawn");
+    const image = within(pictured).getByTestId("operator-avatar");
+    expect(image).toHaveAttribute("data-avatar", "image");
+    expect(image).toHaveAttribute(
+      "src",
+      "https://avatars.example.com/marcus.png",
+    );
+    const initials = within(plain).getByTestId("operator-avatar");
+    expect(initials).toHaveAttribute("data-avatar", "initials");
+    expect(initials).toHaveTextContent("MB");
+  });
+
   it("names a keyless row by its slug in the list and in its actions", () => {
     renderTable([
       row("keyless", { agentKey: null, mandates: null, description: null }),

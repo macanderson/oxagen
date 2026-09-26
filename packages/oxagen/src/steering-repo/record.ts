@@ -287,20 +287,23 @@ export function parseFrontmatter(
     message: error.message.split("\n", 1)[0] as string,
   }));
   issues.push(...strictSubsetIssues(doc, lineOf));
-  if (issues.length === 0 && !isMap(doc.contents)) {
-    issues.push({
-      line: firstLine,
-      field: null,
-      message: "the frontmatter is not a mapping of fields",
-    });
-  }
   if (issues.length > 0) return { ok: false, issues };
+  if (!isMap(doc.contents)) {
+    return {
+      ok: false,
+      issues: [
+        {
+          line: firstLine,
+          field: null,
+          message: "the frontmatter is not a mapping of fields",
+        },
+      ],
+    };
+  }
   const key_lines = new Map<string, number>();
-  if (isMap(doc.contents)) {
-    for (const pair of doc.contents.items) {
-      if (isScalar(pair.key) && pair.key.range) {
-        key_lines.set(String(pair.key.value), lineOf(pair.key.range[0]));
-      }
+  for (const pair of doc.contents.items) {
+    if (isScalar(pair.key) && pair.key.range) {
+      key_lines.set(String(pair.key.value), lineOf(pair.key.range[0]));
     }
   }
   return {
