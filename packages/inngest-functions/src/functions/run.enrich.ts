@@ -757,13 +757,20 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
         // Only a run the model will read keeps its chunks, as scratch
         // objects the job deletes when it ends (#3784). `scratch` is how many
         // chunk names the job's manifest holds, from this attempt or an
-        // earlier one of this step.
+        // earlier one of this step. `chunkDigests` is what each later read
+        // checks its chunk against: it lives in this step's record, where
+        // nothing that can write scratch objects can change it.
         const kept = unchanged || facts.retained === 0 ? [] : chunks;
-        const scratch = await keepEnrichmentChunks(scope, jobRunId(), kept);
+        const { scratch, digests } = await keepEnrichmentChunks(
+          scope,
+          jobRunId(),
+          kept,
+        );
         return {
           ...facts,
           revision: previous.revision ?? null,
           chunkChars: kept.map((text) => text.length),
+          chunkDigests: digests,
           scratch,
           unchanged,
         };
@@ -813,10 +820,19 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
         chunks.push(portionOf(new TextDecoder().decode(body.bytes)));
       }
     } else {
+      // A read step recorded before it returned digests has none, so each of
+      // its chunks fails its read for good and the failure handler deletes
+      // them. The sweep brings the run back.
+      const digests =
+        "chunkDigests" in collected && Array.isArray(collected.chunkDigests)
+          ? collected.chunkDigests
+          : [];
       chunks = collected.chunkChars.map((chars, index) => ({
         chars,
         text: () =>
-          inScope(() => readEnrichmentChunk(scope, jobRunId(), index)),
+          inScope(() =>
+            readEnrichmentChunk(scope, jobRunId(), index, digests.at(index)),
+          ),
       }));
     }
     let level = 0;

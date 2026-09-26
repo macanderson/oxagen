@@ -13,11 +13,15 @@
 // failure keeps the larger of the two counts, so a first attempt that wrote
 // more chunks than the second leaves none behind.
 //
-// The manifest also records the sha256 of each chunk it names, and a read
-// checks the chunk against it. A scratch envelope names no path, and every
-// job's scratch is sealed under the same KEK, so any scratch object at a
-// chunk's key would decrypt. A chunk whose bytes do not match is a failed
-// read, like a chunk that is not there.
+// The read step returns the sha256 of each chunk it kept, and Inngest keeps
+// that output in the step's record. A later read checks the chunk against
+// the digest it is handed from that record. A scratch envelope names no
+// path, and every job's scratch is sealed under the same KEK, so any scratch
+// object at a chunk's key would decrypt. The digest does not come from the
+// manifest, which is a scratch object at a key anyone who can write scratch
+// can predict. A chunk whose bytes do not match, or one with no digest to
+// check, is a failed read that no retry can pass.
+import { NonRetriableError } from "@oxagen/functions";
 import { evidenceStore } from "@oxagen/run-ledger/evidence-store";
 import { digestBytes } from "@oxagen/tacho";
 import { z } from "zod";
@@ -43,14 +47,11 @@ export function enrichmentChunkName(index: number): string {
   return `chunk-${index}`;
 }
 
+// A manifest written before the digests moved to the read step's output
+// also names them. The schema drops them, since no read trusts them.
 const manifestSchema = z.object({
   /** How many chunk names the job may have written, over every attempt. */
   chunks: z.number().int().min(0),
-  /**
-   * The `digestBytes` of each chunk the latest write kept, by index. A
-   * chunk with no digest here is one no read can check, so none reads it.
-   */
-  digests: z.array(z.string()).default([]),
 });
 type Manifest = z.infer<typeof manifestSchema>;
 const encoder = new TextEncoder();
@@ -106,27 +107,36 @@ export async function enrichmentScratchCount(
   return manifest === "unreadable" ? ENRICHMENT_MAX_CHUNKS : manifest.chunks;
 }
 
+/** What `keepEnrichmentChunks` kept, for the read step's output. */
+export interface KeptEnrichmentChunks {
+  /** How many chunk names the job's manifest now holds, over every attempt. */
+  scratch: number;
+  /**
+   * The `digestBytes` of each chunk this attempt kept, by index. The read
+   * step returns them, so each later read checks its chunk against the
+   * step's record rather than against anything in the bucket.
+   */
+  digests: string[];
+}
+
 /**
  * Keep a job's transcript chunks for its later steps, and answer how many
- * chunks its manifest now names. The manifest is written first, so a job
- * that fails part way still names every chunk it wrote. It is written again
- * on every attempt that keeps chunks, because a retry can keep other text
- * under the same names, and it records each chunk's digest.
+ * chunks its manifest now names and the digest of each chunk kept. The
+ * manifest is written first, so a job that fails part way still names every
+ * chunk it wrote. It is written again on every attempt that keeps chunks,
+ * because a retry can keep more names than the attempt before it.
  */
 export async function keepEnrichmentChunks(
   scope: RunScope,
   jobRunId: string,
   chunks: readonly string[],
-): Promise<number> {
+): Promise<KeptEnrichmentChunks> {
   const store = evidenceStore();
   const prior = await enrichmentScratchCount(scope, jobRunId);
   const named = Math.max(prior, chunks.length);
-  if (chunks.length === 0) return named;
+  if (chunks.length === 0) return { scratch: named, digests: [] };
   const bodies = chunks.map((text) => encoder.encode(text));
-  const manifest: Manifest = {
-    chunks: named,
-    digests: bodies.map((bytes) => digestBytes(bytes)),
-  };
+  const manifest: Manifest = { chunks: named };
   await store.putScratch({
     scope,
     jobRunId,
@@ -143,29 +153,29 @@ export async function keepEnrichmentChunks(
       bytes,
     });
   }
-  return named;
+  return {
+    scratch: named,
+    digests: bodies.map((bytes) => digestBytes(bytes)),
+  };
 }
 
 /**
- * One chunk a job kept, as text, once its bytes match the digest the
- * manifest recorded for it. Throws when the chunk is gone, when the manifest
- * records no digest for it, or when its bytes do not match. Each is a failed
- * read: the step fails and is retried, and the job's failure handler deletes
- * its chunks if the retries fail too.
+ * One chunk a job kept, as text, once its bytes match `digest`, the digest
+ * the read step returned for it. A chunk that is gone throws a storage
+ * error, which the step retries. A chunk with no digest (a read step
+ * recorded before the step returned them), or whose bytes do not match,
+ * throws `NonRetriableError`: the same read fails the same way on every
+ * retry. The job then fails, and its failure handler deletes its chunks.
  */
 export async function readEnrichmentChunk(
   scope: RunScope,
   jobRunId: string,
   index: number,
+  digest: string | undefined,
 ): Promise<string> {
-  const manifest = await readManifest(scope, jobRunId);
-  const digest =
-    manifest === null || manifest === "unreadable"
-      ? undefined
-      : manifest.digests.at(index);
   if (digest === undefined)
-    throw new Error(
-      `Enrichment chunk ${String(index)} of job ${jobRunId} has no digest in its manifest to check it against`,
+    throw new NonRetriableError(
+      `Enrichment chunk ${String(index)} of job ${jobRunId} has no digest in its read step's output to check it against`,
     );
   const { bytes } = await evidenceStore().getScratch(
     scope,
@@ -173,8 +183,8 @@ export async function readEnrichmentChunk(
     enrichmentChunkName(index),
   );
   if (digestBytes(bytes) !== digest)
-    throw new Error(
-      `Enrichment chunk ${String(index)} of job ${jobRunId} does not match the digest its manifest recorded`,
+    throw new NonRetriableError(
+      `Enrichment chunk ${String(index)} of job ${jobRunId} does not match the digest its read step recorded`,
     );
   return decoder.decode(bytes);
 }

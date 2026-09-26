@@ -1,7 +1,8 @@
 /**
  * The transcript chunks one run-enrichment job keeps as scratch objects
- * (#3784): what the manifest names, what a cleanup deletes, and what a read
- * step that runs again leaves behind.
+ * (#3784): what the manifest names, what a cleanup deletes, what a read
+ * step that runs again leaves behind, and what a read checks a chunk
+ * against.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -49,6 +50,7 @@ vi.mock("@oxagen/run-ledger/evidence-store", () => ({
 }));
 vi.mock("@oxagen/agent", () => ({ runGovernedTurn: vi.fn() }));
 
+import { NonRetriableError } from "@oxagen/functions";
 import { digestBytes } from "@oxagen/tacho";
 import {
   discardEnrichmentChunks,
@@ -77,11 +79,12 @@ beforeEach(() => {
 
 describe("the chunks one enrichment job keeps", () => {
   it("writes the manifest before the chunks, and reads each chunk back", async () => {
-    expect(await keepEnrichmentChunks(SCOPE, JOB, ["first", "second"])).toBe(
-      2,
-    );
+    const kept = await keepEnrichmentChunks(SCOPE, JOB, ["first", "second"]);
+    expect(kept.scratch).toBe(2);
     expect(store.written).toEqual(["manifest", "chunk-0", "chunk-1"]);
-    expect(await readEnrichmentChunk(SCOPE, JOB, 1)).toBe("second");
+    expect(await readEnrichmentChunk(SCOPE, JOB, 1, kept.digests[1])).toBe(
+      "second",
+    );
     expect(await enrichmentScratchCount(SCOPE, JOB)).toBe(2);
   });
 
@@ -89,14 +92,17 @@ describe("the chunks one enrichment job keeps", () => {
     await keepEnrichmentChunks(SCOPE, JOB, ["a", "b", "c"]);
     // The second attempt wrote one chunk; the first attempt's other two
     // are still named, so the cleanup deletes them too.
-    expect(await keepEnrichmentChunks(SCOPE, JOB, ["a"])).toBe(3);
+    expect((await keepEnrichmentChunks(SCOPE, JOB, ["a"])).scratch).toBe(3);
     await discardEnrichmentChunks(SCOPE, JOB);
     expect(store.objects.size).toBe(0);
     expect(store.deleted).toEqual(["chunk-0", "chunk-1", "chunk-2", "manifest"]);
   });
 
   it("writes nothing for a job with no chunks to keep (negative)", async () => {
-    expect(await keepEnrichmentChunks(SCOPE, JOB, [])).toBe(0);
+    expect(await keepEnrichmentChunks(SCOPE, JOB, [])).toEqual({
+      scratch: 0,
+      digests: [],
+    });
     expect(store.written).toEqual([]);
   });
 
@@ -132,54 +138,92 @@ describe("the chunks one enrichment job keeps", () => {
     expect(store.deleted).toEqual([]);
   });
 
-  it("records each chunk's digest in the manifest, and reads back a chunk that matches it", async () => {
-    await keepEnrichmentChunks(SCOPE, JOB, ["first", "second"]);
+  it("answers each chunk's digest for the read step, and reads back a chunk that matches it", async () => {
+    const kept = await keepEnrichmentChunks(SCOPE, JOB, ["first", "second"]);
+    expect(kept.digests).toEqual([
+      digestBytes("first"),
+      digestBytes("second"),
+    ]);
+    expect(await readEnrichmentChunk(SCOPE, JOB, 0, kept.digests[0])).toBe(
+      "first",
+    );
+  });
+
+  // Review round 2 on #4382: the digest a read checked came from the
+  // manifest, a scratch object at a key anyone who writes scratch can name.
+  // The manifest now holds the count alone, and a read neither fetches nor
+  // trusts it: the digest comes from the read step's output.
+  it("keeps no digest in the manifest, and reads a chunk without fetching the manifest (negative)", async () => {
+    const kept = await keepEnrichmentChunks(SCOPE, JOB, ["first", "second"]);
     const manifest = store.objects.get(`${JOB}/manifest`);
     expect(JSON.parse(new TextDecoder().decode(manifest?.bytes))).toEqual({
       chunks: 2,
-      digests: [digestBytes("first"), digestBytes("second")],
     });
-    expect(await readEnrichmentChunk(SCOPE, JOB, 0)).toBe("first");
+    // A manifest rewritten to vouch for other bytes changes nothing.
+    store.objects.set(`${JOB}/manifest`, {
+      bytes: new TextEncoder().encode(
+        JSON.stringify({ chunks: 2, digests: [digestBytes("forged")] }),
+      ),
+      contentType: "application/json",
+    });
+    store.objects.set(`${JOB}/chunk-0`, {
+      bytes: new TextEncoder().encode("forged"),
+      contentType: "text/plain",
+    });
+    await expect(
+      readEnrichmentChunk(SCOPE, JOB, 0, kept.digests[0]),
+    ).rejects.toThrow("does not match the digest its read step recorded");
+    // With the manifest gone, a chunk that matches still reads.
+    store.objects.delete(`${JOB}/manifest`);
+    expect(await readEnrichmentChunk(SCOPE, JOB, 1, kept.digests[1])).toBe(
+      "second",
+    );
   });
 
   // Review round 1 on #4382: a read decrypted whatever scratch object sat at
   // a chunk's key. Every job's scratch is sealed under one KEK and the
   // envelope names no path, so another job's chunk read as this one's.
-  it("fails the read of a chunk whose bytes do not match the digest its manifest recorded (negative)", async () => {
-    await keepEnrichmentChunks(SCOPE, JOB, ["first", "second"]);
+  // Review round 2 on #4382: the mismatch fails the same way on every retry,
+  // so it ends the job rather than spending its retries.
+  it("fails the read of a chunk whose bytes do not match its digest, for good (negative)", async () => {
+    const kept = await keepEnrichmentChunks(SCOPE, JOB, ["first", "second"]);
     store.objects.set(`${JOB}/chunk-1`, {
       bytes: new TextEncoder().encode("another job's transcript"),
       contentType: "text/plain",
     });
-    await expect(readEnrichmentChunk(SCOPE, JOB, 1)).rejects.toThrow(
-      "does not match the digest its manifest recorded",
+    const read = readEnrichmentChunk(SCOPE, JOB, 1, kept.digests[1]);
+    await expect(read).rejects.toBeInstanceOf(NonRetriableError);
+    await expect(read).rejects.toThrow(
+      "does not match the digest its read step recorded",
     );
     // The chunk that matches still reads.
-    expect(await readEnrichmentChunk(SCOPE, JOB, 0)).toBe("first");
+    expect(await readEnrichmentChunk(SCOPE, JOB, 0, kept.digests[0])).toBe(
+      "first",
+    );
   });
 
-  it("fails the read of a chunk its manifest records no digest for (negative)", async () => {
-    store.objects.set(`${JOB}/manifest`, {
-      bytes: new TextEncoder().encode(JSON.stringify({ chunks: 1 })),
-      contentType: "application/json",
-    });
-    store.objects.set(`${JOB}/chunk-0`, {
-      bytes: new TextEncoder().encode("first"),
-      contentType: "text/plain",
-    });
-    await expect(readEnrichmentChunk(SCOPE, JOB, 0)).rejects.toThrow(
-      "has no digest in its manifest",
+  it("fails the read of a chunk with no digest to check, for good, before it fetches the chunk (negative)", async () => {
+    await keepEnrichmentChunks(SCOPE, JOB, ["first"]);
+    store.outage = true;
+    const read = readEnrichmentChunk(SCOPE, JOB, 0, undefined);
+    await expect(read).rejects.toBeInstanceOf(NonRetriableError);
+    await expect(read).rejects.toThrow(
+      "has no digest in its read step's output",
     );
   });
 
   it("checks a retried read step's chunks against the retry's digests", async () => {
     await keepEnrichmentChunks(SCOPE, JOB, ["a", "b", "c"]);
-    expect(await keepEnrichmentChunks(SCOPE, JOB, ["A"])).toBe(3);
-    expect(await readEnrichmentChunk(SCOPE, JOB, 0)).toBe("A");
-    // Chunk 1 is the first attempt's, named only so the cleanup deletes it.
-    await expect(readEnrichmentChunk(SCOPE, JOB, 1)).rejects.toThrow(
-      "has no digest in its manifest",
+    const retry = await keepEnrichmentChunks(SCOPE, JOB, ["A"]);
+    expect(retry.scratch).toBe(3);
+    expect(retry.digests).toHaveLength(1);
+    expect(await readEnrichmentChunk(SCOPE, JOB, 0, retry.digests[0])).toBe(
+      "A",
     );
+    // Chunk 1 is the first attempt's, named only so the cleanup deletes it.
+    await expect(
+      readEnrichmentChunk(SCOPE, JOB, 1, retry.digests[1]),
+    ).rejects.toThrow("has no digest in its read step's output");
   });
 
   it("names one chunk past the text ceiling, for the note that says where it stops", () => {
