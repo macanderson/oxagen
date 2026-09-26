@@ -1,15 +1,19 @@
 # The install and uninstall rig for the desktop app and Tacho.
 #
-# Two halves, both against a scratch HOME and a fake launchctl / systemctl,
-# never the runner's own home directory:
+# Two halves, both against a scratch HOME, never the runner's own home
+# directory:
 #   - packages/tacho/src/cli/install-rig.test.ts: enroll, enroll again,
 #     unenroll, unenroll again, the tree compared byte for byte, plus the
 #     failure variants (malformed settings, a read-only file, a symlinked
-#     settings file, an offline revoke, the process dying at each step).
+#     settings file, an offline revoke, the process dying at each step). It
+#     drives a fake launchctl, systemctl and schtasks, and builds POSIX paths
+#     for every platform branch, so it runs on the Linux and macOS legs only.
 #   - apps/desktop/src-tauri (cargo test): Link into PATH and Uninstall over
-#     injected roots, the same comparison.
-# It also runs cargo fmt --check and clippy, which no other workflow does:
-# desktop.yml only builds on a tag.
+#     injected roots, the same comparison. On the Windows leg it also runs
+#     the user PATH scripts against the runner's real HKCU\Environment and
+#     the `.cmd` shim ownership test (#4318).
+# It also runs cargo fmt --check and clippy on every OS, which no other
+# workflow does: desktop.yml only builds on a tag or a dispatch.
 name: Desktop install rig
 
 on:
@@ -33,15 +37,20 @@ permissions:
 
 jobs:
   rig:
-    name: Install, reinstall, uninstall, compare
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    name: Install, reinstall, uninstall, compare (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v5
 
       - uses: ./.github/actions/pnpm-install
 
       - name: Tacho rig (enroll and unenroll against a snapshot)
+        if: runner.os != 'Windows'
         run: pnpm --filter @oxagen/tacho exec vitest run src/cli/install-rig.test.ts src/host/install-hardening.test.ts
 
       - name: Install Rust
@@ -56,6 +65,7 @@ jobs:
           workspaces: apps/desktop/src-tauri
 
       - name: WebKit, for the Tauri crate to compile
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
@@ -66,6 +76,7 @@ jobs:
         run: node apps/desktop/scripts/rig-stubs.mjs
 
       - name: cargo fmt
+        if: runner.os == 'Linux'
         working-directory: apps/desktop/src-tauri
         run: cargo fmt --check
 
