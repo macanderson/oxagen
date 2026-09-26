@@ -503,9 +503,10 @@ function RunRowView({
             ) : (
               <span className="inline-flex items-center gap-[7px]">
                 <Avatar
-                  value={null}
+                  value={run.operatorAvatarUrl}
                   initials={initialsOf(run.operatorName ?? operatorLabel)}
                   size={22}
+                  testId="operator-avatar"
                 />
                 <span
                   className={

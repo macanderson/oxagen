@@ -38,6 +38,7 @@ const marcus = {
   id: "usr_7k2m9q4x8r1t5v3w6y0z2a",
   name: "Marcus Bell",
   email: "marcus.bell@acme.example",
+  avatarUrl: "https://avatars.example.com/marcus.png",
   role: "owner",
   joinedAt: "2026-03-02T09:15:00.000Z",
 };
@@ -45,6 +46,7 @@ const unnamed = {
   id: "usr_0a1b2c3d4e5f6g7h8j9k0m",
   name: null,
   email: "ops@acme.example",
+  avatarUrl: null,
   role: "Member",
   joinedAt: "2026-05-11T16:40:00.000Z",
 };

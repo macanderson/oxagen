@@ -269,6 +269,7 @@ const ledgerColumns = {
     operatorPublicId: schema.principals.publicId,
     operatorKind: schema.principals.kind,
     operatorUserName: schema.users.displayName,
+    operatorUserAvatarUrl: schema.users.avatarUrl,
     // One character past the label cap is enough for `runLabel` to cut the
     // same label, so a goal of several kilobytes never leaves Postgres whole.
     goal: sql<string | null>`left(${runs.spec}->>'goal', ${sql.raw(String(RUN_LABEL_MAX + 1))})`,
@@ -665,6 +666,7 @@ const tachoColumns = {
   operatorPublicId: schema.principals.publicId,
   operatorKind: schema.principals.kind,
   operatorUserName: schema.users.displayName,
+  operatorUserAvatarUrl: schema.users.avatarUrl,
   host: {
     hostname: hosts.hostname,
     platform: hosts.platform,

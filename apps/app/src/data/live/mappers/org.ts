@@ -40,6 +40,7 @@ export function toMemberList(out: OrgRoster): z.input<typeof MemberList> {
       id: member.id,
       name: member.name,
       email: member.email,
+      avatarUrl: member.avatarUrl,
       role: member.role,
       joinedAt: member.joinedAt,
     })),

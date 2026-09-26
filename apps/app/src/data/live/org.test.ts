@@ -53,6 +53,7 @@ const member = {
   id: "usr_7k2m9q4x8r1t5v3w6y0z2a",
   name: "Marcus Bell",
   email: "marcus.bell@acme.example",
+  avatarUrl: "https://avatars.example.com/marcus.png",
   role: "Owner",
   joinedAt: "2026-03-02T09:15:00.000Z",
 };

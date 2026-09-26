@@ -142,12 +142,18 @@ function Owner({ row }: { row: AgentRow }) {
   return (
     <span className="inline-flex items-center gap-[7px] whitespace-nowrap">
       <Avatar
-        value={null}
+        value={row.operatorAvatarUrl}
         initials={initialsOf(row.operatorName ?? row.operatorId)}
         size={22}
+        testId="operator-avatar"
       />
       <OperatorName
-        operator={{ id: row.operatorId, name: row.operatorName, kind: "human" }}
+        operator={{
+          id: row.operatorId,
+          name: row.operatorName,
+          kind: "human",
+          avatarUrl: row.operatorAvatarUrl,
+        }}
       />
     </span>
   );

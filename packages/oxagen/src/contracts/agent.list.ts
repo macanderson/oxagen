@@ -88,6 +88,12 @@ export const agentListItem = z
     operatorId: z.string().nullable(),
     /** The operator's display name (`auth.users.display_name`); null when there is no operator. */
     operatorName: z.string().nullable(),
+    /**
+     * The operator's avatar (`auth.users.avatar_url`): an https URL or a
+     * designed `avatar:v1:` value. Null when there is no operator or the
+     * operator set none, and never blank.
+     */
+    operatorAvatarUrl: z.string().min(1).nullable(),
     status: agentIdentityStatusSchema,
     /** The model tier the definition names. No store records it on the identity row: null. */
     tier: z.string().nullable(),

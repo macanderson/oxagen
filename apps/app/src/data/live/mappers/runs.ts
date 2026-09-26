@@ -40,6 +40,7 @@ export function toRunRow(
     operatorKind: run.operatorKind,
     operatorName: run.operatorName,
     operatorAttribution: run.operatorAttribution,
+    operatorAvatarUrl: run.operatorAvatarUrl,
     // The role stamped when the run opened (#3999). A server that predates
     // the field says nothing, which reads as not recorded.
     operatorRole: run.operatorRole ?? null,

@@ -789,6 +789,28 @@ describe("One runtime", () => {
     );
   });
 
+  it("draws the operator's avatar from the roster in the hover card", async () => {
+    await renderDetail({
+      list: runtimeList([enrollment()]),
+      members: memberList([
+        {
+          id: "usr_marcusbell",
+          name: "Marcus Bell",
+          email: "marcus@acme.test",
+          avatarUrl: "https://avatars.example.com/marcus.png",
+          role: "owner",
+          joinedAt: "2026-01-05T09:00:00.000Z",
+        },
+      ]),
+    });
+    fireEvent.mouseEnter(screen.getByTestId("runtime-operator"));
+    expect(
+      screen
+        .getByTestId("operator-card")
+        .querySelector('[data-avatar="image"]'),
+    ).toHaveAttribute("src", "https://avatars.example.com/marcus.png");
+  });
+
   it("lists the five command hooks when the collector read them back", async () => {
     await renderDetail({
       list: runtimeList([enrollment({ hooksOk: true })]),

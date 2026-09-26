@@ -101,6 +101,7 @@ export function memberList(
       id: "usr_marcusbell",
       name: "Marcus Bell",
       email: "marcus@acme.test",
+      avatarUrl: null,
       role: "owner",
       joinedAt: "2026-01-05T09:00:00.000Z",
     },

@@ -67,6 +67,7 @@ describe("get_run contract", () => {
       // from a field the shape never had.
       operatorKind: "human",
       operatorName: "Marcus Bell",
+      operatorAvatarUrl: "https://avatars.example.com/marcus.png",
       operatorAttribution: "initiator",
       operatorRole: "member",
       status: "live",

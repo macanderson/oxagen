@@ -97,6 +97,7 @@ export function agentPageRow(
     managed: false,
     operatorId: null,
     operatorName: null,
+    operatorAvatarUrl: null,
     principalId: null,
     credentials: 0,
     hosts: 0,

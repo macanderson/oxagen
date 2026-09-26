@@ -191,6 +191,17 @@
                 }
               ]
             },
+            "operatorAvatarUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "status": {
               "type": "string",
               "enum": [
@@ -391,6 +402,7 @@
             "principalId",
             "operatorId",
             "operatorName",
+            "operatorAvatarUrl",
             "status",
             "tier",
             "enforcementTier",

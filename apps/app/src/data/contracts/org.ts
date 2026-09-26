@@ -15,6 +15,8 @@ const Member = z.object({
   id: PublicId,
   name: z.string().nullable(),
   email: z.string().min(1),
+  /** An https URL or a designed `avatar:v1:` value; null when none is set. */
+  avatarUrl: z.string().min(1).nullable(),
   role: StoredOrgRole,
   joinedAt: z.iso.datetime(),
 });
