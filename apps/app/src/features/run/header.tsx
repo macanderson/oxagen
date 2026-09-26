@@ -565,7 +565,7 @@ function WhereFromWork({
           ))}
           {recordedOnly.map((node) => (
             <PullChip
-              key={`${node.seq ?? ""}${node.name}`}
+              key={`${node.chainRef ?? ""}:${node.seq ?? ""}:${node.name}`}
               url={node.note}
               label={recordedPullLabel(node)}
               state={null}
