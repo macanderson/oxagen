@@ -13,7 +13,7 @@ type RunListInput = (typeof runList)["input"]["_input"];
  * Fleet names one (its page-size choice); the agents page and the choice
  * dialogs read the ceiling.
  */
-export const RUN_PAGE = 100;
+const RUN_PAGE = 100;
 
 export function toRunListInput(q: RunListQuery): RunListInput {
   const query = q.query?.trim() ?? "";

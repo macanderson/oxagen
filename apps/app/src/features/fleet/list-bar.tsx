@@ -22,7 +22,12 @@ import {
 } from "./list-query";
 import { PAGE_SIZES, type PageSize, pageSizeOf } from "./prefs";
 
-/** How long typing must pause before the search is sent. */
+/**
+ * How long typing must pause before the search is sent. Exported for its
+ * test.
+ *
+ * @internal
+ */
 export const SEARCH_PAUSE_MS = 400;
 
 const PR_FILTERS: readonly PullRequestFilter[] = ["any", "with", "without"];

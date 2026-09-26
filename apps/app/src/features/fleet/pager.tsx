@@ -26,7 +26,7 @@ import {
 const WINDOW = 1;
 
 /** A page button, or a gap after the page it follows. */
-export type PageButton = { page: number } | { gapAfter: number };
+type PageButton = { page: number } | { gapAfter: number };
 
 /**
  * The buttons a pager draws: the first page, the pages around the current

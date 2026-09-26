@@ -32,7 +32,7 @@ export const TIER_FACET: readonly EnforcementTier[] = EnforcementTier.options;
 export const REPLAY_FACET: readonly RunReplayFilter[] = RunReplayFilter.options;
 
 /** The most rows the read skips (`RUN_LIST_TOTAL_BOUND` on the contract). */
-export const OFFSET_BOUND = 10_000;
+const OFFSET_BOUND = 10_000;
 
 /** What the Runs panel lists, beside the cursor and the pull-request filter. */
 export type FleetListQuery = {
@@ -58,7 +58,7 @@ export const DEFAULT_LIST_QUERY: FleetListQuery = {
 };
 
 /** Search params as a route receives them. */
-export type ListParams = Record<string, string | string[] | undefined>;
+type ListParams = Record<string, string | string[] | undefined>;
 
 const first = (value: string | string[] | undefined): string | undefined =>
   Array.isArray(value) ? value[0] : value;
@@ -97,7 +97,7 @@ export function parseListQuery(params: ListParams): FleetListQuery {
 }
 
 /** Whether the list is in the newest-first order a cursor pages. */
-export function isNewestFirst(list: FleetListQuery): boolean {
+function isNewestFirst(list: FleetListQuery): boolean {
   return list.sort === "started" && list.dir === "desc";
 }
 

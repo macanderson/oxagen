@@ -58,7 +58,10 @@ export function decidedByOf(err: unknown): DecidedBy | null {
  * This runs while the seam handles a failure, so it must not become a second
  * one: a trace read that throws (a tracer misconfigured, or a test double of
  * @oxagen/telemetry that leaves the function out) reads as not recorded, and
- * the page still renders the refusal it was classifying.
+ * the page still renders the refusal it was classifying. Exported for its
+ * test.
+ *
+ * @internal
  */
 export function activeTraceId(): string | null {
   let id: string;
