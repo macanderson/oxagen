@@ -94,6 +94,11 @@ export function RunsPager({
     // neither a start nor a total: a later page read "1–12 of 12" before, a
     // figure nothing counted.
     const range = t("shown", { n: rows });
+    // Both links open page 1 of the same list, so the search and the facets
+    // stay. The read sends a cursor only on page 1 (`toRunsListQuery`), so an
+    // Older link that kept page 3 read page 3 again by offset, and a Newest
+    // link that kept it stayed on page 3 (#4381).
+    const firstPage = listQueryToRoute({ ...list, page: 1 }, pullRequests);
     return (
       <nav
         aria-label={t("label")}
@@ -103,11 +108,9 @@ export function RunsPager({
           {range}
         </span>
         <span className="ms-auto flex flex-wrap items-center gap-3">
-          {cursor === null ? null : (
-            // Back to the newest page of the same list: the search and the
-            // facets stay, and only the cursor goes.
+          {cursor === null && list.page === 1 ? null : (
             <SafeLink
-              to={routes.fleet(org, ws, listQueryToRoute(list, pullRequests))}
+              to={routes.fleet(org, ws, firstPage)}
               data-touch-target=""
               className={`${linkText} inline-flex items-center`}
             >
@@ -116,10 +119,7 @@ export function RunsPager({
           )}
           {nextCursor === null ? null : (
             <SafeLink
-              to={routes.fleet(org, ws, {
-                ...listQueryToRoute(list, pullRequests),
-                cursor: nextCursor,
-              })}
+              to={routes.fleet(org, ws, { ...firstPage, cursor: nextCursor })}
               data-touch-target=""
               className={`${linkText} inline-flex items-center`}
             >
