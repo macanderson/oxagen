@@ -393,8 +393,15 @@ describe("readModelCallFrames", () => {
     });
     const { query } = lastQuery();
     expect(query).toContain(
-      "toInt64(coalesce(c.web_search_requests, 0)) AS server_tool_request",
+      "toInt64(greatest(coalesce(c.web_search_requests, 0), greatest(coalesce(t.searches, 0), coalesce(m.searches, 0)))) AS server_tool_request",
     );
+    // An OTel or proxy sighting priced as the call carries no search count,
+    // so both transcript joins bring the transcript row's count back.
+    expect(
+      query.match(
+        /toInt64\(max\(coalesce\(web_search_requests, 0\)\)\) AS searches/g,
+      ),
+    ).toHaveLength(2);
     // The priced row selects the search column so the outer read can use it.
     const priced = query.slice(query.indexOf("FROM ("), query.indexOf(") AS c"));
     expect(priced).toContain("web_search_requests");
@@ -934,7 +941,7 @@ describe("readObservedModels", () => {
     ]);
   });
 
-  it("scopes the transcript-split joins by session_uuid so a parent and its subagent sharing a request or message id cannot merge figures", async () => {
+  it("keys the transcript-split joins on the session family so a subagent call's root and child sightings meet", async () => {
     answerBoth([
       {
         model: "claude-sonnet-5",
@@ -948,23 +955,22 @@ describe("readObservedModels", () => {
     await readObservedModels({ orgId: ORG, since: SINCE });
     const classCall = queryMock.mock.calls[1]![0];
 
-    // The priced row carries its own session key so the joins below can be
-    // scoped by it.
-    expect(classCall.query).toContain("session_uuid");
-    // Both transcript-split joins (on the vendor request id and on the
-    // message id) must key on the SESSION, not on the id alone and not on
-    // the root. A recorder's `LlmCallLedger` is its own and a subagent
-    // session has its own `session_uuid` under the parent's root, so a root
-    // key would take max() across parent and subagent and credit one call's
-    // thinking and one-hour cache split to both.
-    expect(classCall.query).toContain("GROUP BY call_key, session_uuid");
+    // One ledger serves a session and its subagents (ADR-168). When the
+    // proxy saw a subagent's call first, the priced row sits on the root
+    // chain and the transcript row on the child chain. A session_uuid key
+    // missed that pair and dropped the call's thinking, one-hour cache
+    // split, and searches. The family key joins them and still keeps one
+    // run's ids apart from another run's.
     expect(classCall.query).toContain(
-      "t.call_key = c.request_id AND t.session_uuid = c.session_uuid",
+      "GROUP BY call_key, root_session_uuid",
     );
     expect(classCall.query).toContain(
-      "m.call_key = c.message_id AND m.session_uuid = c.session_uuid",
+      "t.call_key = c.request_id AND t.root_session_uuid = c.root_session_uuid",
     );
-    expect(classCall.query).not.toContain("root_session_uuid");
+    expect(classCall.query).toContain(
+      "m.call_key = c.message_id AND m.root_session_uuid = c.root_session_uuid",
+    );
+    expect(classCall.query).not.toContain("session_uuid = c.session_uuid");
   });
 
   // #3281. The unpriced-model report compares the class-bucket read against
@@ -1037,7 +1043,7 @@ describe("readObservedModels", () => {
     // model whose calls only fetched as missing a request rate, and a model
     // priced for every class it used must not be reported.
     expect(classCall.query).toMatch(
-      /toInt64\(coalesce\(c\.web_search_requests, 0\)\)\s+AS server_tool_request/,
+      /toInt64\(greatest\(coalesce\(c\.web_search_requests, 0\), greatest\(coalesce\(t\.searches, 0\), coalesce\(m\.searches, 0\)\)\)\)\s+AS server_tool_request/,
     );
     expect(classCall.query).not.toContain("web_fetch_requests");
     expect(classCall.query).toContain(

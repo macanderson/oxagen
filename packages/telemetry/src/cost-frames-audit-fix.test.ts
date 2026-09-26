@@ -81,15 +81,14 @@ describe("readModelCallFrames", () => {
       );
     }
     expect(query_params.sessionUuids).toEqual([RUN, CHILD]);
-    // A parent and its subagent can reuse a request or message id, so both
-    // transcript joins key on the session as well as the id.
-    expect(query).toContain(
-      "ON t.call_key = c.request_id AND t.session_uuid = c.session_uuid",
-    );
-    expect(query).toContain(
-      "ON m.call_key = c.message_id AND m.session_uuid = c.session_uuid",
-    );
-    expect(query.match(/GROUP BY call_key, session_uuid/g)).toHaveLength(2);
+    // One ledger serves a session and its subagents (ADR-168). The proxy
+    // seals a subagent's call on the root chain and its transcript row sits
+    // on the child's, so the joins key on the call id alone. The session
+    // predicate above already keeps them inside this run's family.
+    expect(query).toMatch(/ON t\.call_key = c\.request_id\s+LEFT JOIN/);
+    expect(query).toMatch(/ON m\.call_key = c\.message_id\s+ORDER BY/);
+    expect(query).not.toContain("session_uuid = c.session_uuid");
+    expect(query.match(/GROUP BY call_key\s+HAVING/g)).toHaveLength(2);
   });
 
   it("still reads the root chain when the session list leaves the root out", async () => {

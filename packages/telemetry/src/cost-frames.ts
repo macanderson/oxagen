@@ -175,6 +175,14 @@ const TRANSCRIPT_CACHE_1H =
   "greatest(coalesce(t.cache_1h, 0), coalesce(m.cache_1h, 0))";
 
 /**
+ * The web-search count from the same transcript joins. The OTel and proxy
+ * sources do not record it, so when one of them is the priced sighting, only
+ * the call's transcript row carries its searches.
+ */
+const TRANSCRIPT_SEARCHES =
+  "greatest(coalesce(t.searches, 0), coalesce(m.searches, 0))";
+
+/**
  * The rows that carry a call's thinking and cache-TTL split, which is
  * `countsLlmCallSplit` in @oxagen/tacho spelled for the store: a transcript
  * row counts whether it was the first sighting of its call or the duplicate
@@ -216,12 +224,15 @@ const FRAME_CACHE_5M = `toInt64(greatest(0, ${FRAME_CACHE_WRITE} - ${FRAME_CACHE
  * out. Adding it priced requests nobody billed, and made a model whose calls
  * only fetched look unpriced in `list_unpriced_models` (#3281, #3721).
  *
- * No transcript join: the column sits on the priced row itself, and the
- * duplicate stamp has already left exactly one row per call. The frame read
- * and the class-bucket read both use this, so they cannot count differently.
+ * The priced row's own count wins when it has one. When an OTel or proxy
+ * sighting is the priced row, it carries no search count, so the figure comes
+ * from the call's transcript row through the joins that carry thinking
+ * ({@link TRANSCRIPT_SEARCHES}). Both sightings describe one call, so
+ * `greatest` picks the one figure there is. The frame read and the
+ * class-bucket read both use this, so they cannot count differently.
  */
 function classBucketServerToolRequests(rowAlias: string): string {
-  return `toInt64(coalesce(${rowAlias}.web_search_requests, 0))`;
+  return `toInt64(greatest(coalesce(${rowAlias}.web_search_requests, 0), ${TRANSCRIPT_SEARCHES}))`;
 }
 const FRAME_SERVER_TOOL_REQUESTS = classBucketServerToolRequests("c");
 
@@ -350,7 +361,7 @@ export async function readModelCallFrames(args: {
           ts, seq, model, provider, input_tokens, output_tokens,
           cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
           thinking_tokens, web_search_requests, cost_usd_micros, request_id,
-          message_id, session_uuid
+          message_id
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -364,9 +375,9 @@ export async function readModelCallFrames(args: {
       LEFT JOIN (
         SELECT
           request_id AS call_key,
-          session_uuid AS session_uuid,
           toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
-          toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
+          toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h,
+          toInt64(max(coalesce(web_search_requests, 0))) AS searches
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -374,15 +385,15 @@ export async function readModelCallFrames(args: {
           AND ${RUN_SESSIONS}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
-        GROUP BY call_key, session_uuid
+        GROUP BY call_key
         HAVING call_key != ''
-      ) AS t ON t.call_key = c.request_id AND t.session_uuid = c.session_uuid
+      ) AS t ON t.call_key = c.request_id
       LEFT JOIN (
         SELECT
           message_id AS call_key,
-          session_uuid AS session_uuid,
           toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
-          toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
+          toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h,
+          toInt64(max(coalesce(web_search_requests, 0))) AS searches
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -390,9 +401,9 @@ export async function readModelCallFrames(args: {
           AND ${RUN_SESSIONS}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
-        GROUP BY call_key, session_uuid
+        GROUP BY call_key
         HAVING call_key != ''
-      ) AS m ON m.call_key = c.message_id AND m.session_uuid = c.session_uuid
+      ) AS m ON m.call_key = c.message_id
       ORDER BY c.ts, c.seq
     `,
     query_params: {
@@ -956,13 +967,13 @@ export async function readObservedModels(args: {
   const tachoReasoning = classBucketReasoning("c");
   const tachoServerToolRequests = classBucketServerToolRequests("c");
 
-  // The wrapped agents' transcript-split joins key on `session_uuid`, not on
-  // `root_session_uuid`. A recorder's `LlmCallLedger` is its own, and a
-  // subagent session records under its own `session_uuid` while sharing the
-  // parent's root, so a request or message id reused across a parent and its
-  // subagent would otherwise take `max()` over both and credit ONE call's
-  // thinking and one-hour cache split to both. The id is unique within the
-  // recorder that issued it, which is the session, so the session is the key.
+  // The wrapped agents' transcript-split joins key on the call id and the
+  // session family, `root_session_uuid`. One ledger serves a session and its
+  // subagents (ADR-168), and it seals a subagent's call on the root chain
+  // when the proxy saw it first while the transcript row sits on the child
+  // chain. A `session_uuid` key would miss that pair and drop the call's
+  // thinking, one-hour cache split, and searches. The family key still keeps
+  // one run's ids apart from every other run's in the organization.
   const tachoClassCte = `,
       tc AS (
         SELECT
@@ -983,7 +994,7 @@ export async function readObservedModels(args: {
             toDateTime64(ts, 3, 'UTC') AS ts, input_tokens, output_tokens,
             cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
             thinking_tokens, web_search_requests,
-            request_id, message_id, session_uuid
+            request_id, message_id, root_session_uuid
           FROM tacho_events FINAL
           WHERE ${tachoWhere}
             AND model IN {models:Array(String)}
@@ -991,9 +1002,10 @@ export async function readObservedModels(args: {
         LEFT JOIN (
           SELECT
             request_id AS call_key,
-            session_uuid AS session_uuid,
+            root_session_uuid AS root_session_uuid,
             toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
-            toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
+            toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h,
+            toInt64(max(coalesce(web_search_requests, 0))) AS searches
           FROM tacho_events FINAL
           WHERE org_id = {orgId:UUID}
             AND ts >= {since:DateTime64(3)}
@@ -1001,15 +1013,16 @@ export async function readObservedModels(args: {
             AND ${TACHO_RECEIVED_SINCE}
             AND kind = 'llm_call'
             AND ${TRANSCRIPT_SPLIT_ROW}
-          GROUP BY call_key, session_uuid
+          GROUP BY call_key, root_session_uuid
           HAVING call_key != ''
-        ) AS t ON t.call_key = c.request_id AND t.session_uuid = c.session_uuid
+        ) AS t ON t.call_key = c.request_id AND t.root_session_uuid = c.root_session_uuid
         LEFT JOIN (
           SELECT
             message_id AS call_key,
-            session_uuid AS session_uuid,
+            root_session_uuid AS root_session_uuid,
             toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
-            toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
+            toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h,
+            toInt64(max(coalesce(web_search_requests, 0))) AS searches
           FROM tacho_events FINAL
           WHERE org_id = {orgId:UUID}
             AND ts >= {since:DateTime64(3)}
@@ -1017,9 +1030,9 @@ export async function readObservedModels(args: {
             AND ${TACHO_RECEIVED_SINCE}
             AND kind = 'llm_call'
             AND ${TRANSCRIPT_SPLIT_ROW}
-          GROUP BY call_key, session_uuid
+          GROUP BY call_key, root_session_uuid
           HAVING call_key != ''
-        ) AS m ON m.call_key = c.message_id AND m.session_uuid = c.session_uuid
+        ) AS m ON m.call_key = c.message_id AND m.root_session_uuid = c.root_session_uuid
       )`;
 
   const classResult = await ch.query({
