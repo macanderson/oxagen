@@ -18,26 +18,17 @@
 //  3. **Pure.** No React, no formatting, no i18n. It is tested without a
 //     render, and the view decides how much of what it returns to show.
 
+import type { ToolFamily } from "@/data/contracts/run";
 import { buildDiff, type LineDiff } from "@/shared/line-diff";
 
 /**
- * The family a tool belongs to. It decides the colour of the row's name
- * (`inspect`, `mutate`, `execute`, `delegate` in the design), and only that.
+ * The family a tool belongs to, as the server reads it from the tool's name
+ * (`family` on a transcript entry and on a `tool_use` block, ADR-182). It
+ * decides the colour of the row's name (`inspect`, `mutate`, `execute`,
+ * `delegate` in the design), the icon beside it, and which reading of the
+ * body below applies. Nothing here reads a family from a name.
  */
-export type ToolGroup =
-  | "shell"
-  | "read"
-  | "edit"
-  | "create"
-  | "delete"
-  | "search"
-  | "web"
-  | "skill"
-  | "agent"
-  | "plan"
-  | "notebook"
-  | "mcp"
-  | "tool";
+export type ToolGroup = ToolFamily;
 
 /** One change a call made to a file, as a diff of the two halves it recorded. */
 export type ToolDiff = {
@@ -195,78 +186,17 @@ function pretty(value: unknown): string | null {
 
 // ── Naming ──────────────────────────────────────────────────────────────────
 
-const GROUPS: Readonly<Record<string, ToolGroup>> = {
-  bash: "shell",
-  bashoutput: "shell",
-  killshell: "shell",
-  shell: "shell",
-  run_command: "shell",
-  terminal: "shell",
-  read: "read",
-  readfile: "read",
-  read_file: "read",
-  view: "read",
-  cat: "read",
-  get_file_contents: "read",
-  edit: "edit",
-  edit_file: "edit",
-  multiedit: "edit",
-  str_replace: "edit",
-  str_replace_editor: "edit",
-  applypatch: "edit",
-  write: "create",
-  writefile: "create",
-  write_file: "create",
-  create: "create",
-  createfile: "create",
-  delete: "delete",
-  remove: "delete",
-  rm: "delete",
-  grep: "search",
-  glob: "search",
-  search: "search",
-  ls: "search",
-  find: "search",
-  codebase_search: "search",
-  webfetch: "web",
-  websearch: "web",
-  fetch: "web",
-  skill: "skill",
-  task: "agent",
-  agent: "agent",
-  subagent: "agent",
-  todowrite: "plan",
-  todoread: "plan",
-  exitplanmode: "plan",
-  notebookedit: "notebook",
-  notebookread: "notebook",
-};
-
-/** The harnesses whose tool names a gateway records with a prefix (`claude_code__Bash`). */
-const HARNESS_PREFIX = /^(claude_code|codex|stella|cursor)__/;
-
 /**
- * A tool's name as a reader knows it (mockup `txToolName`): the harness
- * prefix and a trailing `@version` dropped, and an MCP tool named by its
- * server and tool (`mcp__github__create_release` reads `github__create_release`).
+ * A tool's name as the row prints it (mockup `txToolName`): an MCP tool by
+ * its server and tool (`mcp__github__create_release` reads
+ * `github__create_release`). The server has already dropped a gateway's
+ * harness prefix and a trailing `@version` (the entry's `tool`, ADR-182), so
+ * this cuts nothing else.
  *
  * @internal Exported for its unit test; nothing outside this module imports it.
  */
 export function shortName(name: string): string {
-  const bare = name.replace(HARNESS_PREFIX, "").replace(/@[\d.]+$/, "");
-  return bare.startsWith("mcp__") ? bare.slice("mcp__".length) : bare;
-}
-
-/**
- * The family a tool name belongs to; `mcp__server__tool` is always `mcp`, and
- * an MCP tool whose own name has a shape (`github__get_file_contents`) takes it.
- *
- * @internal Exported for its unit test and the Run page's metrics.
- */
-export function groupOf(name: string): ToolGroup {
-  if (name.startsWith("mcp__")) return "mcp";
-  const bare = name.replace(HARNESS_PREFIX, "").replace(/@[\d.]+$/, "");
-  return GROUPS[bare.toLowerCase()] ?? "tool";
+  return name.startsWith("mcp__") ? name.slice("mcp__".length) : name;
 }
 
 /**
@@ -552,44 +482,100 @@ function readingOf(group: ToolGroup, input: Json | null): Reading {
   }
 }
 
-/**
- * What the call did, read from the tool's name and the body the recorder
- * kept. `name` is the tool the frame identified; the body may name it again,
- * and the body wins only when the frame named nothing.
- *
- * @internal Exported for its unit test; the transcript reads a body it has
- * already parsed, through `toolDetailOf`.
- */
-export function toolDetail(
-  name: string | null,
-  body: string | null,
-): ToolDetail | null {
-  return toolDetailOf(name, parseBody(body));
-}
+/** What a call was made with and what came back, each already read. */
+type Call = {
+  /** The tool the record named; null when it named none. */
+  name: string | null;
+  family: ToolGroup;
+  input: unknown;
+  output: unknown;
+};
 
 /**
- * `toolDetail` over a value already parsed: a model's `tool_use` block, whose
- * input arrives as an object and was never a body of its own.
+ * What the call did, from the tool's name and family and the input and
+ * output the record kept. A name the record left out is taken from the body
+ * when the body names the tool.
  */
-export function toolDetailOf(
-  name: string | null,
-  parsed: unknown,
-): ToolDetail | null {
-  const { input, output, name: bodyName } = splitBody(parsed);
-  const tool = name ?? bodyName;
+function detailOf(call: Call, bodyName: string | null): ToolDetail | null {
+  const tool = call.name ?? bodyName;
   if (tool === null) return null;
-  const group = groupOf(tool);
-  const { raw, ...reading } = readingOf(group, input);
+  const input = isObject(call.input) ? call.input : null;
+  const { raw, ...reading } = readingOf(call.family, input);
   // A reading that found nothing it knows (a tool whose every argument is an
   // object, a read with no path) still has the arguments the record kept.
   const headline = reading.headline ?? compactArgs(input);
   return {
     name: shortName(tool),
-    group,
+    group: call.family,
     ...reading,
     headline,
     multiline: reading.headline === null ? false : reading.multiline,
     raw: raw ?? pretty(input),
-    output: outputText(output),
+    output: outputText(call.output),
   };
+}
+
+/**
+ * What the call did, read from one body the recorder kept in any of the call
+ * shapes `splitBody` reads.
+ *
+ * @internal Exported for its unit test; the transcript reads a call through
+ * `callDetail` and a model's `tool_use` block through `toolDetailOf`.
+ */
+export function toolDetail(
+  name: string | null,
+  family: ToolGroup,
+  body: string | null,
+): ToolDetail | null {
+  const { input, output, name: bodyName } = splitBody(parseBody(body));
+  return detailOf({ name, family, input, output }, bodyName);
+}
+
+/**
+ * A model's `tool_use` block: its input arrives as an object and was never a
+ * body of its own, and its result, when the reply kept one, is a summary.
+ */
+export function toolDetailOf(
+  name: string,
+  family: ToolGroup,
+  input: unknown,
+  output: string | null,
+): ToolDetail | null {
+  return detailOf({ name, family, input, output }, null);
+}
+
+/**
+ * What a tool entry did, from its two halves read by name (#3375): `request`
+ * is the body of what the call was made with, `response` the body of what
+ * came back. A response kept as the whole exchange (`{input, output}`, what a
+ * wrapped `tool_call` writes) gives its output as the result, and its input
+ * only where no request kept one. A result that is not JSON is the result's
+ * text as it was kept.
+ *
+ * A request is never read as the result, nor a result as the input: a tool's
+ * input drawn where its output belongs looks like an answer and is not one.
+ */
+export function callDetail(call: {
+  name: string | null;
+  family: ToolGroup;
+  request: string | null;
+  response: string | null;
+}): ToolDetail | null {
+  const sent = parseBody(call.request);
+  const asked = sent === null ? null : splitBody(sent);
+  const back = parseBody(call.response);
+  const exchange =
+    isObject(back) &&
+    ("input" in back || "output" in back || "tool_use" in back)
+      ? splitBody(back)
+      : null;
+  return detailOf(
+    {
+      name: call.name,
+      family: call.family,
+      input: asked?.input ?? exchange?.input ?? null,
+      output: exchange === null ? (back ?? call.response) : exchange.output,
+    },
+    asked?.name ?? exchange?.name ?? null,
+  );
 }

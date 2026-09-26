@@ -41,8 +41,10 @@ export async function requireAgentIdentity(
   return row;
 }
 
-/** A retired identity accepts no further identity write. */
-export function assertNotRetired(row: AgentIdentityRow): void {
+/** A retired identity accepts no further identity write, and no new host. */
+export function assertNotRetired(
+  row: Pick<AgentIdentityRow, "slug" | "status">,
+): void {
   if (row.status === "archived") {
     throw new HandlerError({
       code: "conflict",

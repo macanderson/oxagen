@@ -18,6 +18,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { RunTranscript, TranscriptZoom } from "@/data/contracts/run";
 import type { PriceBook } from "@/data/contracts/spend";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -41,8 +42,24 @@ import {
   runTranscript,
   runTurns,
   runWork,
+  transcriptCounts,
   transcriptEntry,
+  transcriptFigures,
 } from "./run.builders";
+import { releaseTranscript } from "./transcript.builders";
+
+/**
+ * The page's two transcript reads, told apart by zoom: the run at `steps`,
+ * which the Transcript tab draws and whose counts and figures the page
+ * shows, and the run's frames at `everything`, which the frame tabs list.
+ */
+function byZoom(
+  steps: RunTranscript,
+  everything: RunTranscript = mockupTranscript(),
+) {
+  return (zoom: TranscriptZoom) =>
+    ok(zoom === "everything" ? everything : steps);
+}
 
 const notFound = vi.fn();
 const refresh = vi.fn();
@@ -1285,16 +1302,17 @@ describe("the outputs spine", () => {
 });
 
 describe("tabs", () => {
-  it("opens Transcript by default and reads the whole-run transcript once", async () => {
+  it("opens Transcript by default, and reads the run once, at steps, whole", async () => {
     const { calls } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-tab-transcript")).toBeTruthy();
-    // The stat row, the tab counts, Policy, Context and the Transcript tab
-    // share one read.
+    // The Transcript tab, the stat row and every tab count share the steps
+    // read, with whole bodies. No open tab lists frames, and the counts of
+    // the frames ride the steps read, so the run is not read at everything.
     expect(calls.transcript).toEqual([
-      [ctx, "tse_7k2m9q", "everything", { kinds: [] }],
+      [ctx, "tse_7k2m9q", "steps", { kinds: [], limit: 500, text: "full" }],
     ]);
     expect(calls.cost).toHaveLength(1);
     expect(calls.chain).toHaveLength(0);
@@ -1346,9 +1364,9 @@ describe("tabs", () => {
       "true",
     );
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent("1");
-    // Transcript counts the rows its feed opens with, the entries its header
-    // line names, not the run's steps.
-    const entries = /(\d+) entries/.exec(
+    // Transcript counts the entries the server counted, which its header
+    // line names too, not the run's steps.
+    const entries = /(\d+) entr(?:y|ies)/.exec(
       screen.getByTestId("transcript").textContent,
     )?.[1];
     expect(entries).toBeDefined();
@@ -1372,14 +1390,14 @@ describe("tabs", () => {
   });
 
   it("names the tab Governed actions and marks it when a call is parked on the run", async () => {
-    const entries = mockupTranscript().entries.map((entry) =>
-      entry.type === "policy_decision"
-        ? { ...entry, kinds: [...entry.kinds, "policy" as const] }
-        : entry,
-    );
+    // The server counted two decisions among the run's frames.
     await renderRun({
       detail: ok(runDetail()),
-      transcript: ok(mockupTranscript({ entries })),
+      transcript: ok(
+        mockupTranscript({
+          counts: transcriptCounts({ kinds: { policy: 2 }, policy: 2 }),
+        }),
+      ),
       approvals: ok({ items: [approval()], more: false }),
     });
     expect(screen.getByRole("tab", { name: /Governed actions/ })).toBeTruthy();
@@ -1425,10 +1443,58 @@ describe("tabs", () => {
     expect(screen.queryByText("A call is parked for approval")).toBeNull();
   });
 
-  it("marks a count read from a transcript that stopped short as a floor", async () => {
+  it("counts the frame tabs from the frames' counts the steps read carries, not its step counts", async () => {
+    // One call with three decisions is one step at `steps` and three frames.
+    const { calls } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(
+          runTranscript({
+            counts: transcriptCounts({
+              kinds: { policy: 1, recall: 1 },
+              policy: 1,
+              frames: { kinds: { policy: 3, recall: 2 }, policy: 2 },
+            }),
+          }),
+        ),
+      },
+      { tab: "cost" },
+    );
+    expect(calls.transcript.map((call) => call[2])).toEqual(["steps"]);
+    expect(screen.getByTestId("run-tab-count-actions")).toHaveTextContent(
+      /^3$/,
+    );
+    expect(screen.getByTestId("run-tab-count-policy")).toHaveTextContent(/^2$/);
+    expect(screen.getByTestId("run-tab-count-context")).toHaveTextContent(
+      /^2$/,
+    );
+  });
+
+  it("draws no frame tab count when the read carried no frames' counts, rather than a zero (negative)", async () => {
     await renderRun({
       detail: ok(runDetail()),
-      transcript: ok(runTranscript({ complete: false })),
+      transcript: ok(
+        runTranscript({
+          counts: { ...transcriptCounts({ policy: 1 }), frames: null },
+        }),
+      ),
+    });
+    // With no decisions counted the tab is the frame player.
+    expect(screen.getByRole("tab", { name: /Player/ })).toBeTruthy();
+    expect(screen.queryByTestId("run-tab-count-policy")).toBeNull();
+    expect(screen.queryByTestId("run-tab-count-context")).toBeNull();
+  });
+
+  it("marks a count read from a transcript that stopped short as a floor", async () => {
+    // The run passed the read's frame cap, so the server counted a prefix.
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(
+        runTranscript({
+          complete: false,
+          counts: transcriptCounts({ kinds: { policy: 1 }, policy: 1 }),
+        }),
+      ),
     });
     expect(screen.getByTestId("run-tab-count-policy")).toHaveTextContent(/\+$/);
   });
@@ -1449,14 +1515,14 @@ describe("tabs", () => {
 });
 
 describe("transcript", () => {
-  it("draws the header line, the seven chips and the feed from the page's one whole-run read", async () => {
+  it("draws the header line, the seven chips and the feed from the page's one read at steps", async () => {
     const { container, calls } = await renderRun(
-      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { detail: ok(runDetail()), transcript: byZoom(releaseTranscript()) },
       { tab: "transcript" },
     );
-    // The tab makes no read of its own: the figures and the feed come from
-    // the same read, so a chip's count is the count of the rows it shows.
-    expect(calls.transcript).toHaveLength(1);
+    // The tab makes no read of its own: the figures, the counts and the feed
+    // come from the page's one read at steps.
+    expect(calls.transcript.map((call) => call[2])).toEqual(["steps"]);
     const tab = screen.getByRole("region", { name: "Transcript" });
     const chips = within(screen.getByTestId("transcript-chips"))
       .getAllByRole("button", { pressed: true })
@@ -1471,8 +1537,9 @@ describe("transcript", () => {
       "chip-seal",
     ]);
     expect(within(tab).getByTestId("transcript-you")).toHaveTextContent(
-      "Cut the 2026.9.2 release candidate.",
+      "Cut the 4.11.0 release notes",
     );
+    expect(screen.getByTestId("chip-tools-count")).toHaveTextContent("6");
     expect(within(tab).getAllByTestId("tx-row").length).toBeGreaterThan(1);
     expect(within(tab).getAllByTestId("tx-tool-name").length).toBeGreaterThan(
       0,
@@ -1925,14 +1992,18 @@ describe("failures", () => {
 });
 
 describe("chips", () => {
-  it("opens with the chips an older link's filter named, and still reads the whole run once", async () => {
+  it("opens with the chips an older link's filter named, and still reads the whole run", async () => {
     const { calls } = await renderRun(
-      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { detail: ok(runDetail()), transcript: byZoom(releaseTranscript()) },
       { tab: "transcript", kinds: "errors,tools" },
     );
-    expect(calls.transcript).toHaveLength(1);
-    expect(calls.transcript[0]?.[2]).toBe("everything");
-    expect(calls.transcript[0]?.[3]).toEqual({ kinds: [] });
+    // The chips show and hide rows; the read keeps every entry.
+    expect(calls.transcript[0]?.[2]).toBe("steps");
+    expect(calls.transcript[0]?.[3]).toEqual({
+      kinds: [],
+      limit: 500,
+      text: "full",
+    });
     expect(screen.getByTestId("chip-tools")).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -1964,16 +2035,15 @@ describe("chips", () => {
   });
 
   // Carried from #4026: turning every chip off reads nothing more and says
-  // how to get the run back. The chips filter the one read in the browser.
+  // how to get the run back. The chips show and hide the rows already read.
   it("reads nothing more when every chip is off, and says how to get the run back", async () => {
     const { calls } = await renderRun(
-      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { detail: ok(runDetail()), transcript: byZoom(releaseTranscript()) },
       { tab: "transcript" },
     );
+    const before = calls.transcript.length;
     fireEvent.click(screen.getByTestId("chip-all"));
-    expect(calls.transcript).toEqual([
-      [ctx, "tse_7k2m9q", "everything", { kinds: [] }],
-    ]);
+    expect(calls.transcript).toHaveLength(before);
     expect(screen.getByTestId("transcript-empty")).toHaveTextContent(
       "Nothing to show with these filters.",
     );
@@ -1983,11 +2053,14 @@ describe("chips", () => {
 
   it("opens every chip off from a link that says none, and keeps none on the tab's link", async () => {
     const { calls } = await renderRun(
-      { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
+      { detail: ok(runDetail()), transcript: byZoom(releaseTranscript()) },
       { tab: "transcript", kinds: "none" },
     );
-    expect(calls.transcript).toHaveLength(1);
-    expect(calls.transcript[0]?.[3]).toEqual({ kinds: [] });
+    expect(calls.transcript[0]?.[3]).toEqual({
+      kinds: [],
+      limit: 500,
+      text: "full",
+    });
     expect(screen.getByTestId("chip-tools")).toHaveAttribute(
       "aria-pressed",
       "false",
@@ -2229,8 +2302,8 @@ describe("cost", () => {
       { tab: "cost" },
     );
     expect(calls.cost).toHaveLength(1);
-    // The page's figures read the one transcript, at no other zoom.
-    expect(calls.transcript.map((call) => call[2])).toEqual(["everything"]);
+    // The page's figures and every tab count are the steps read's.
+    expect(calls.transcript.map((call) => call[2])).toEqual(["steps"]);
     expect(calls.turns).toEqual([[ctx, "tse_7k2m9q"]]);
     // Two turns; the second carries no cost, so it draws no bar.
     expect(screen.getAllByTestId("waterfall-row")).toHaveLength(2);
@@ -2243,18 +2316,7 @@ describe("figures", () => {
     const { container } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(
-        runTranscript({
-          entries: [
-            transcriptEntry({
-              seq: "1",
-              endSeq: "1",
-              type: "turn_start",
-              kind: "frame",
-              kinds: [],
-            }),
-            transcriptEntry(),
-          ],
-        }),
+        runTranscript({ figures: transcriptFigures({ prompts: 1 }) }),
       ),
     });
     const stat = (id: string) => within(screen.getByTestId(`run-stat-${id}`));
@@ -2282,17 +2344,7 @@ describe("figures", () => {
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(
-        runTranscript({
-          entries: ["1", "2", "3"].map((seq) =>
-            transcriptEntry({
-              seq,
-              endSeq: seq,
-              type: "turn_start",
-              kind: "frame",
-              kinds: [],
-            }),
-          ),
-        }),
+        runTranscript({ figures: transcriptFigures({ prompts: 3 }) }),
       ),
     });
     const prompts = screen.getByTestId("run-stat-prompts");
@@ -2302,14 +2354,13 @@ describe("figures", () => {
   });
 
   it("marks a prompt count from a transcript that stopped short as a floor (negative)", async () => {
+    // The run passed the read's frame cap, so the server counted a prefix.
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(
         runTranscript({
           complete: false,
-          entries: [
-            transcriptEntry({ type: "turn_start", kind: "frame", kinds: [] }),
-          ],
+          figures: transcriptFigures({ prompts: 1 }),
         }),
       ),
     });
@@ -2918,11 +2969,15 @@ describe("policy and context", () => {
     endSeq: "41",
     kind: "tool_call",
     label: "Bash",
+    node: "tool",
+    subject: "Bash",
+    outcome: "denied",
     kinds: ["tools", "policy"],
     decision: {
       seq: "41",
       decision: "deny",
       type: "policy.denied",
+      harness: false,
       at: "2026-09-20T00:00:00Z",
     },
   });
@@ -2937,14 +2992,24 @@ describe("policy and context", () => {
     const { calls, container } = await renderRun(
       {
         detail: ok(runDetail()),
-        transcript: ok(runTranscript({ entries: [recalled, decided] })),
+        transcript: ok(
+          runTranscript({
+            entries: [recalled, decided],
+            counts: transcriptCounts({
+              kinds: { policy: 1, recall: 1 },
+              policy: 1,
+            }),
+          }),
+        ),
       },
       { tab: "policy" },
     );
-    // The tab lists from the page's one whole-run read and makes none of
-    // its own, so its rows and the tab's count cannot disagree.
+    // The tab lists the run's frames, read to their end with the page, and
+    // makes no read of its own. Its count is the server's count of what it
+    // lists.
     expect(calls.transcript).toEqual([
-      [ctx, "tse_7k2m9q", "everything", { kinds: [] }],
+      [ctx, "tse_7k2m9q", "steps", { kinds: [], limit: 500, text: "full" }],
+      [ctx, "tse_7k2m9q", "everything", { kinds: [], limit: 500 }],
     ]);
     const policy = within(
       screen.getByRole("region", { name: "Policy decisions" }),
@@ -2974,12 +3039,20 @@ describe("policy and context", () => {
         type: "permission",
         at: "2026-09-20T00:00:00Z",
         source: "harness",
+        harness: true,
       },
     });
+    // The server counts the two decisions under the policy chip, and only
+    // the one a rule made as the Policy tab's.
     await renderRun(
       {
         detail: ok(runDetail()),
-        transcript: ok(runTranscript({ entries: [decided, check] })),
+        transcript: ok(
+          runTranscript({
+            entries: [decided, check],
+            counts: transcriptCounts({ kinds: { policy: 2 }, policy: 1 }),
+          }),
+        ),
       },
       { tab: "policy" },
     );

@@ -134,6 +134,7 @@ function props({
     place: { org: "acme", ws: "core-platform", runId: run.id },
     view: { kinds: [], frames: null, body: null },
     metrics: runMetrics({ run, cost, transcript }),
+    transcript,
     everything: transcript,
     cost,
     outputs: readOk(runOutputs()),
@@ -791,6 +792,27 @@ describe("CostTab", () => {
       );
       // No bar is drawn for a turn with no cost to scale.
       expect(column.querySelector("i")).toBeNull();
+    }
+  });
+
+  it("marks the last turn live only on a live run, never on a halted run with no seal (#3375)", async () => {
+    await renderTab(props());
+    expect(screen.getByTestId("inst-cost")).toHaveTextContent("turn 7 · live");
+    cleanup();
+    await renderTab(
+      props({
+        run: runRow({
+          ...RELEASE_RUN,
+          status: "halted",
+          outcome: "cancelled",
+          sealedAt: null,
+        }),
+      }),
+    );
+    for (const id of ["inst-cost", "inst-shape"]) {
+      const tile = screen.getByTestId(id);
+      expect(tile).toHaveTextContent("turn 7");
+      expect(tile).not.toHaveTextContent("live");
     }
   });
 

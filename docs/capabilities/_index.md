@@ -283,6 +283,7 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
+| [author_graph_rule](graph.rule.author.md) | [graph.rule.author.ts](../../packages/oxagen/src/contracts/graph.rule.author.ts) | api, mcp |
 | [get_graph_stats](graph.stats.md) | [graph.stats.ts](../../packages/oxagen/src/contracts/graph.stats.ts) | api, mcp, agent |
 | [get_node](graph.node.get.md) | [graph.node.get.ts](../../packages/oxagen/src/contracts/graph.node.get.ts) | api, mcp, agent, cli |
 | [get_node_labels](graph.node_label.get.md) | [graph.node_label.get.ts](../../packages/oxagen/src/contracts/graph.node_label.get.ts) | agent |

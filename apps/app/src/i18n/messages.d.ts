@@ -146,6 +146,7 @@ type Messages = {
         tokensBasis: string;
         wrappedOnly: string;
         spendBasis: string;
+        deregistered: string;
       };
       health: {
         tamper: string;
@@ -173,6 +174,8 @@ type Messages = {
         sortBy: string;
         noMatch: string;
         cursor: string;
+        showDeregistered: string;
+        hideDeregistered: string;
       };
       basisNotRecorded: string;
       edit: string;
@@ -5887,6 +5890,9 @@ type Messages = {
       searchLabel: string;
       searchPlaceholder: string;
       matches: string;
+      searching: string;
+      searchFailed: string;
+      unsearched: string;
       chipsLabel: string;
       chip: {
         prompt: string;
@@ -5940,6 +5946,8 @@ type Messages = {
       you: string;
       agent: string;
       answer: string;
+      calledTools: string;
+      saidNothing: string;
       operator: string;
       task: string;
       firstPrompt: string;
@@ -6247,6 +6255,7 @@ type Messages = {
         byCalls: string;
         noTools: string;
         toolsNotRead: string;
+        unnamedTool: string;
         note: string;
         noteNotRolledUp: string;
       };
@@ -7366,8 +7375,6 @@ type Messages = {
       orgMetaNotBacked: string;
       wsMetaNotBacked: string;
       createWorkspace: string;
-      orgTileNotBacked: string;
-      wsTileNotBacked: string;
     };
     topbar: {
       label: string;

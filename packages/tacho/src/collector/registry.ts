@@ -17,6 +17,7 @@ import type { ClaudeCodeContext } from "../claude-code/context";
 import { type RecorderState, SessionRecorder } from "../claude-code/recorder";
 import { isSha256Digest } from "../digest";
 import type { TachoEvent, TachoRuntime } from "../envelope";
+import type { PreexistingPaths } from "./session-changes";
 import { COMMAND_HOOK_TIMEOUTS_S } from "../host/settings-writer";
 import { toProtocolTimestamp } from "../timestamp";
 import {
@@ -147,8 +148,9 @@ export interface SessionFacts {
    */
   lastHookEvent?: string;
   /**
-   * The commit this session was first observed at in its current worktree,
-   * and the ref every later reconciliation measures from.
+   * The commit this session was first observed at in its current worktree.
+   * A reconciliation counts the session's own commits after it and measures
+   * the files they touched against it (`readSessionChanges`).
    *
    * Without it a reconciliation compares the worktree with the current
    * `HEAD`, which answers what is uncommitted now rather than what this
@@ -182,6 +184,28 @@ export interface SessionFacts {
    * another root and back finds the first one again (see `rememberBaseline`).
    */
   baselines?: Record<string, string>;
+  /**
+   * When the git lane first read a worktree for this session, in epoch ms. A
+   * commit made before it is not the session's (see `readSessionChanges`).
+   *
+   * Absent on a session restored from a state file written before it was
+   * kept. Such a session keeps the old measure, every change since its
+   * baseline commit, for the rest of its life: setting this on its next read
+   * would call every commit it made before the upgrade someone else's.
+   */
+  gitFirstReadAt?: number;
+  /**
+   * The uncommitted edits each repository root held at this session's first
+   * read of it, which a reconciliation leaves out until their content
+   * changes (see `readPreexistingPaths`). Bounded like `baselines`.
+   */
+  preexistingPaths?: Record<string, PreexistingPaths>;
+  /**
+   * The commits a reconciliation counted as this session's, per repository
+   * root. Kept so a commit stays counted after `HEAD` moves off it, as when
+   * a squash merge comes back through a pull. Bounded like `baselines`.
+   */
+  sessionCommits?: Record<string, string[]>;
   /**
    * The directory of the file the agent last wrote. The session's `cwd` is
    * where it started. An agent working in a git worktree often keeps that
@@ -638,6 +662,14 @@ export class SessionRegistry {
       const seenAt = facts.seenAt ?? now;
       if (Date.parse(seenAt) > Date.parse(existing.lastSeenAt))
         existing.lastSeenAt = seenAt;
+      // The same replay moves the start back. OTel or the transcript reader
+      // can open the record before the spooled SessionStart arrives, and the
+      // git lane dates the edits already in a worktree against this.
+      if (
+        facts.seenAt !== undefined &&
+        Date.parse(facts.seenAt) < Date.parse(existing.startedAt)
+      )
+        existing.startedAt = facts.seenAt;
       this.noteAgent(existing, false);
       return reopened
         ? { record: existing, created: false, reopened: true }
@@ -647,7 +679,12 @@ export class SessionRegistry {
       harnessSessionId,
       recorder: this.openRecorder(harnessSessionId, facts),
       control: { paused: null, cancelled: null, messages: [] },
-      startedAt: now,
+      // A session first seen through a replay started when the hook was
+      // received, not when the daemon came back. The git lane leaves out an
+      // edit made before the start as someone else's, so dating the start
+      // at the restart left out the agent's own edits made while the daemon
+      // was down. `lastSeenAt` keeps its own rule (#4024).
+      startedAt: earlierOf(facts.seenAt, now),
       lastSeenAt: now,
       sealed: false,
       lastCheckpointSeq: -1,
@@ -751,6 +788,38 @@ export class SessionRegistry {
     // Bounded for a daemon that never drains it.
     const over = this.expiredOnSeal.length - MAX_EXPIRED_ON_SEAL;
     if (over > 0) this.expiredOnSeal.splice(0, over);
+  }
+
+  /**
+   * Withdraw every prompt still queued for a boundary, on every session, and
+   * hand each to `takeExpiredOnSeal` as `failed` with `detail`. Answers how
+   * many went.
+   *
+   * A queued message or steer is prompt content, the class the
+   * `oxagen:message` frame that delivers it carries, and the queue is
+   * persisted in `daemon.json`. The daemon calls this when a verified
+   * mandate stops retaining that class, so the text leaves the disk with the
+   * bodies of that class. A prompt that is withdrawn is never delivered, and
+   * the acknowledgement tells the operator so.
+   */
+  withdrawQueuedPrompts(detail: string): number {
+    let withdrawn = 0;
+    for (const record of this.sessions.values()) {
+      for (const message of record.control.messages.splice(0)) {
+        withdrawn += 1;
+        if (this.expiredOnSeal.some((ack) => ack.command_id === message.id))
+          continue;
+        this.expiredOnSeal.push({
+          command_id: message.id,
+          status: "failed",
+          session_uuid: record.recorder.sessionUuid,
+          detail,
+        });
+      }
+    }
+    const over = this.expiredOnSeal.length - MAX_EXPIRED_ON_SEAL;
+    if (over > 0) this.expiredOnSeal.splice(0, over);
+    return withdrawn;
   }
 
   /**
@@ -1150,6 +1219,16 @@ function optionalFacts(facts: SessionFacts): SessionFacts {
     ...(facts.baselines !== undefined
       ? { baselines: { ...facts.baselines } }
       : {}),
+    ...(typeof facts.gitFirstReadAt === "number" &&
+    Number.isFinite(facts.gitFirstReadAt)
+      ? { gitFirstReadAt: facts.gitFirstReadAt }
+      : {}),
+    ...(isRecord(facts.preexistingPaths)
+      ? { preexistingPaths: { ...facts.preexistingPaths } }
+      : {}),
+    ...(isRecord(facts.sessionCommits)
+      ? { sessionCommits: { ...facts.sessionCommits } }
+      : {}),
     ...(facts.workDir !== undefined ? { workDir: facts.workDir } : {}),
     ...(facts.closedIdle === true ? { closedIdle: true } : {}),
   };
@@ -1193,6 +1272,40 @@ function isTombstone(value: unknown): value is ChainTombstone {
 
 /** The most repositories one session keeps a baseline for. */
 export const MAX_SESSION_BASELINES = 16;
+
+/** A plain object, as a hand-edited or older state file may not hold one. */
+/** The earlier of a replay's receipt time and now, or now when it does not parse. */
+function earlierOf(seenAt: string | undefined, now: string): string {
+  return seenAt !== undefined && Date.parse(seenAt) < Date.parse(now)
+    ? seenAt
+    : now;
+}
+
+function isRecord(value: unknown): boolean {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * A copy of `map` with `value` under `root`, keeping the
+ * `MAX_SESSION_BASELINES` roots set most recently. The same bound as
+ * `rememberBaseline`, for the facts a session keeps beside its baselines.
+ */
+export function rememberForRoot<T>(
+  map: Readonly<Record<string, T>> | undefined,
+  root: string,
+  value: T,
+): Record<string, T> {
+  const next = { ...map };
+  delete next[root];
+  next[root] = value;
+  const roots = Object.keys(next);
+  for (const old of roots.slice(
+    0,
+    Math.max(0, roots.length - MAX_SESSION_BASELINES),
+  ))
+    delete next[old];
+  return next;
+}
 
 /**
  * Make the baseline for the repository root `repoRoot` the session's

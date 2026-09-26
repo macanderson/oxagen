@@ -8,7 +8,7 @@
 
 ## Intent
 
-Full-text entity search for the Command Menu. Accepts an optional entity-kind filter and a query string, and returns up to 8 typed rows (label, scope, contextLine, href) composed from the ontology graph and operational Postgres tables, filtered to the caller's tenant grants. Each row carries a ready-to-navigate href so the client can push the route on selection without an additional data fetch.
+Full-text entity search for the Command Menu. Accepts an optional entity-kind filter and a query string, and returns up to 8 typed rows (label, scope, contextLine, href) composed from the ontology graph and operational Postgres tables, filtered to the caller's tenant grants. Each row carries a ready-to-navigate href so the client can push the route on selection without an additional data fetch. Agent rows leave out a retired (`archived`) or deleted agent.
 
 ## Input
 

@@ -12,6 +12,9 @@ export const schema = {
   cursor: agentList.input.shape.cursor.describe(
     "The nextCursor of the previous page",
   ),
+  includeRetired: agentList.input.shape.includeRetired.describe(
+    "List retired (deregistered) agents too; default false. A retired agent takes no new work",
+  ),
 };
 
 export const metadata: ToolMetadata = {

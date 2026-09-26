@@ -86,13 +86,13 @@ Every assignment runs these checks, in order, inside the same transaction that w
 <Mermaid
   chart={`
 flowchart TD
-  A["assign_agent_role<br/>agentId, roleName"] --> R{{"Role exists in this org?"}}
+  A["assign_agent_role<br/>agentId, roleName"] --> T{{"Agent retired?"}}
+  T -- yes --> E0["agent_retired"]
+  T -- no --> R{{"Role exists in this org?"}}
   R -- no --> E1["agent_role_not_found"]
   R -- yes --> H{{"A human system role?<br/>Owner, Admin, ..."}}
   H -- yes --> E2["agent_role_not_assignable"]
-  H -- no --> C{{"Custom role on a plan<br/>below Enterprise?"}}
-  C -- yes --> E3["TIER_DENIED"]
-  C -- no --> L{{"Enterprise org?"}}
+  H -- no --> L{{"Enterprise org?"}}
   L -- no --> OK["Role attached and audited"]
   L -- yes --> X{{"Does the role grant anything<br/>more permissive than you hold?"}}:::accent
   X -- yes --> E4["agent_role_ceiling_exceeded<br/>lists the capabilities"]
@@ -100,7 +100,7 @@ flowchart TD
 `}
 />
 
-Human system roles are never assignable, because the system org Owner role allows everything not explicitly denied. Attaching it to an unattended agent would widen that agent by construction. The per-capability comparison runs on Enterprise organizations, the only plan where the resolver decides a person's grants capability by capability. On other plans the IAM layer does not restrict people, so there is nothing for an agent to exceed. When the call comes from an Oxagen API key, "you" is the person who created the key.
+A retired agent takes no new role. `revoke_agent_role` still removes one it holds. Human system roles are never assignable, because the system org Owner role allows everything not explicitly denied. Attaching it to an unattended agent would widen that agent by construction. The per-capability comparison runs on Enterprise organizations, the only plan where the resolver decides a person's grants capability by capability. On other plans the IAM layer does not restrict people, so there is nothing for an agent to exceed. When the call comes from an Oxagen API key, "you" is the person who created the key.
 
 ## Choosing a role
 
@@ -114,7 +114,7 @@ Step 2 hinges on who is present. A high-risk agent someone runs by hand does **n
 
 ## Custom agent roles
 
-Enterprise organizations can attach their own IAM roles to agents instead of the three built-ins, for an agent that needs a precise, hand-built capability set. Custom roles are subject to every rule on this page, including the delegation ceiling.
+You can attach your own IAM roles to agents instead of the three built-ins, for an agent that needs a precise, hand-built capability set. Custom roles are subject to every rule on this page, including the delegation ceiling. Every plan can create and assign them (ADR-069). Your plan decides whether the kernel enforces a role's grants, and `list_iam_roles` reports that as `enforcement`.
 
 The three system agent roles are available on every plan.
 

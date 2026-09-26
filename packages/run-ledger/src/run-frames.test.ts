@@ -19,6 +19,7 @@ import {
   filterFoldsByKind,
   foldTranscript,
   frameFolds,
+  stepFolds,
 } from "./transcript-steps";
 import type { AttemptEventReadRecord } from "./run-store";
 
@@ -302,6 +303,85 @@ describe("turnOrdinals", () => {
     ).toEqual([1, 1, 1, 1]);
     expect(turnOrdinals([])).toEqual([]);
   });
+
+  const staged = (
+    runSeq: number,
+    eventType: string,
+    payload: Record<string, unknown> | null = null,
+  ) => ledgerFrame(event(runSeq, eventType, payload));
+
+  it("puts the frames that lead up to an indexed model call in that call's turn, and the tools the previous call asked for in the previous one (#3375)", () => {
+    const run = [
+      staged(1, "admission.run_admitted"),
+      staged(2, "model.engine_call_started"),
+      staged(3, "model.engine_call_completed"),
+      staged(4, "model.call_completed", { turn_index: 0 }),
+      staged(5, "tool.engine_call_started"),
+      staged(6, "tool.approval_recorded"),
+      staged(7, "tool.engine_call_completed"),
+      staged(8, "change.recorded"),
+      staged(9, "context.history_summarized"),
+      staged(10, "steering.manifest"),
+      staged(11, "model.engine_call_started"),
+      staged(12, "model.engine_call_completed"),
+      staged(13, "model.call_completed", { turn_index: 1 }),
+      staged(14, "tool.call_completed"),
+      staged(15, "terminal.attempt_terminated"),
+    ];
+    expect(turnOrdinals(run)).toEqual([
+      1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2,
+    ]);
+    // The steps fold reads the same numbering: the second model call's
+    // exchange is one step in turn 2, and the tool call before it is in 1.
+    const steps = stepFolds(run);
+    const at = (seq: string) =>
+      steps.find((fold) => fold.opening.seq === seq)?.turn;
+    expect(at("5")).toBe(1);
+    expect(at("11")).toBe(2);
+    // And the turns zoom opens turn 2 on the context the call was handed.
+    expect(
+      foldTranscript(run, "turns").map((fold) => [fold.key, fold.endSeq]),
+    ).toEqual([
+      ["1", "8"],
+      ["9", "15"],
+    ]);
+  });
+
+  it("carries a model call's lead-in back only as far as the previous call's last tool frame (#3375)", () => {
+    const run = [
+      staged(1, "model.call_completed", { turn_index: 0 }),
+      staged(2, "context.frames_selected"),
+      staged(3, "tool.call_completed"),
+      staged(4, "context.frames_selected"),
+      staged(5, "model.call_completed", { turn_index: 1 }),
+    ];
+    expect(turnOrdinals(run)).toEqual([1, 1, 1, 2, 2]);
+    // An indexed call straight after another carries nothing back.
+    expect(
+      turnOrdinals([
+        staged(1, "model.call_completed", { turn_index: 0 }),
+        staged(2, "model.call_completed", { turn_index: 1 }),
+      ]),
+    ).toEqual([1, 2]);
+    // Frames before the first indexed call stay in the first turn.
+    expect(
+      turnOrdinals([
+        staged(1, "context.frames_selected"),
+        staged(2, "model.engine_call_started"),
+        staged(3, "model.call_completed", { turn_index: 4 }),
+      ]),
+    ).toEqual([1, 1, 1]);
+  });
+
+  it("leaves a wrapped run's unindexed model frame in the turn before it, where ClickHouse counts it", () => {
+    const wrapped = [
+      tachoFrame(tachoRow(0, "llm_call", { turnSeq: 1 })),
+      tachoFrame(tachoRow(1, "context.assembled")),
+      tachoFrame(tachoRow(2, "llm_call")),
+      tachoFrame(tachoRow(3, "llm_call", { turnSeq: 2 })),
+    ];
+    expect(turnOrdinals(wrapped)).toEqual([1, 1, 1, 2]);
+  });
 });
 
 describe("the engine's own call halves", () => {
@@ -347,10 +427,11 @@ describe("the engine's own call halves", () => {
         duration_ms: 4,
       }),
     );
-    // The third word is the approval the Run page pairs the card on.
-    expect(parked.summary).toBe(
-      "create_workspace parked apr_0a1b2c3d4e5f6g7h8j9k0m",
-    );
+    // The approval is a field of the frame, never a word of its label: a
+    // client pairs on the field and has nothing to parse (ADR-182 rule 3).
+    expect(parked.summary).toBe("create_workspace parked");
+    expect(parked.summary).not.toContain("apr_");
+    expect(parked.identity.approvalId).toBe("apr_0a1b2c3d4e5f6g7h8j9k0m");
     expect(parked.identity.toolStatus).toBe("parked");
     // Waiting on a person is not a failure: the errors chip leaves it out.
     expect(frameKinds(parked)).toContain("tools");
@@ -366,6 +447,7 @@ describe("the engine's own call halves", () => {
       }),
     );
     expect(unnamed.summary).toBe("create_workspace parked");
+    expect(unnamed.identity.approvalId).toBeUndefined();
     // A denied call is still an error, and names no approval.
     const denied = ledgerFrame(
       event(4, "tool.engine_call_completed", {
@@ -395,7 +477,12 @@ describe("frameKinds and the chips an entry answers", () => {
     tachoRow(2, "tool_call", { toolName: "Read", toolStatus: "failed" }),
   );
   const usage = tachoFrame(
-    tachoRow(3, "llm_call", { model: "m", costUsdMicros: 9 }),
+    tachoRow(3, "llm_call", {
+      model: "m",
+      costUsdMicros: 9,
+      contentDigest: `sha256:${"d".repeat(64)}`,
+      bytesRef: "evidence://stream",
+    }),
   );
   const policy = tachoFrame(
     tachoRow(4, "policy_decision", { policyDecision: "deny" }),
@@ -405,7 +492,9 @@ describe("frameKinds and the chips an entry answers", () => {
   );
 
   it("derives every chip a frame answers to", () => {
-    expect(frameKinds(model)).toEqual(["prompt"]);
+    // The request half of a model call is the context the model was sent,
+    // not a prompt a person typed, so it answers no chip (ADR-182).
+    expect(frameKinds(model)).toEqual([]);
     expect(frameKinds(tool).sort()).toEqual(["errors", "tools"]);
     expect(frameKinds(usage).sort()).toEqual(["responses", "usage"]);
     expect(frameKinds(policy)).toEqual(["policy"]);
@@ -493,10 +582,69 @@ describe("frameKinds and the chips an entry answers", () => {
       "usage",
     ]);
     expect(frameKinds(plain)).not.toContain("thinking");
-    expect(frameKinds(checkpoint)).toEqual(["seal"]);
-    expect(frameKinds(gap)).toEqual(["seal"]);
+    // The seal chip is the run's own stop, which the Transcript tab draws.
+    // A checkpoint and a gap are the chain's, and read on the Chain tab.
+    const stopped = tachoFrame(tachoRow(14, "agent_stop"));
+    const subagentStopped = tachoFrame(
+      tachoRow(15, "agent_stop", {
+        sessionUuid: "sub",
+        rootSessionUuid: "root",
+      }),
+    );
+    expect(frameKinds(checkpoint)).toEqual([]);
+    expect(frameKinds(gap)).toEqual([]);
     expect(frameKinds(terminated)).toEqual(["seal"]);
+    expect(frameKinds(stopped)).toEqual(["seal"]);
+    expect(frameKinds(subagentStopped)).toEqual([]);
     expect(frameKinds(tool)).not.toContain("seal");
+  });
+
+  it("answers responses for a reply whose words were kept, and usage for tokens without a cost", () => {
+    const kept = {
+      contentDigest: `sha256:${"c".repeat(64)}`,
+      bytesRef: "evidence://reply",
+    };
+    const reply = tachoFrame(tachoRow(16, "turn_end", kept));
+    const unkept = tachoFrame(tachoRow(17, "turn_end"));
+    expect(frameKinds(reply)).toEqual(["responses"]);
+    expect(frameKinds(unkept)).toEqual([]);
+    const counted = {
+      ...model,
+      usage: {
+        inputUncached: 10,
+        cacheRead: null,
+        cacheWrite: null,
+        output: 4,
+        reasoning: null,
+      },
+    };
+    expect(frameKinds(counted)).toEqual(["usage"]);
+  });
+
+  // Finding P2 of the ADR-182 re-review: every model response answered
+  // `responses`, so a response kept as a digest alone counted under a chip
+  // that draws nothing for it. What it carried still answers `usage`, which
+  // draws its usage row, and the effort a call ran at is on that row too.
+  it("answers responses only for a model response whose body was kept (negative)", () => {
+    const digestOnly = tachoFrame(
+      tachoRow(18, "llm_call", {
+        model: "m",
+        costUsdMicros: 9,
+        contentDigest: `sha256:${"e".repeat(64)}`,
+      }),
+    );
+    const bare = tachoFrame(tachoRow(19, "llm_call", { model: "m" }));
+    const effort = tachoFrame(
+      tachoRow(20, "llm_call", { model: "m", effort: "high" }),
+    );
+    expect(frameKinds(digestOnly)).toEqual(["usage"]);
+    expect(frameKinds(bare)).toEqual([]);
+    expect(frameKinds(effort)).toEqual(["usage"]);
+    // Effort is a model call's; a tool frame that named one answers no usage.
+    const toolEffort = tachoFrame(
+      tachoRow(21, "tool_call", { toolName: "Read", effort: "high" }),
+    );
+    expect(frameKinds(toolEffort)).toEqual(["tools"]);
   });
 
   it("keeps everything for an empty selection, and only the chips pressed otherwise", () => {
@@ -504,8 +652,8 @@ describe("frameKinds and the chips an entry answers", () => {
     const seqs = (kept: typeof folds) => kept.map((f) => f.opening.seq);
     expect(filterFoldsByKind(folds, [])).toHaveLength(5);
     expect(seqs(filterFoldsByKind(folds, ["errors"]))).toEqual(["2"]);
-    expect(seqs(filterFoldsByKind(folds, ["prompt", "recall"]))).toEqual([
-      "1",
+    expect(seqs(filterFoldsByKind(folds, ["responses", "recall"]))).toEqual([
+      "3",
       "5",
     ]);
   });
@@ -857,9 +1005,21 @@ describe("one model call reported by several sources", () => {
       duplicateOf: null,
       keys: ["request:req_1"],
       source: "otel_log",
+      partial: false,
     });
     expect(copy.costMicros).toBeNull();
     expect(copy.llmCall?.duplicateOf).toBe("otel_log");
+  });
+
+  it("marks a body the proxy kept one half of", () => {
+    const half = tachoFrame(
+      tachoRow(1, "llm_call", {
+        body,
+        source: "collector",
+        attrs: { "oxagen.response_body_omitted": "too_large" },
+      }),
+    );
+    expect(half.llmCall?.partial).toBe(true);
   });
 
   it("hides a copy with no body, keeps the richer body, and moves the counted spend onto the frame kept", () => {

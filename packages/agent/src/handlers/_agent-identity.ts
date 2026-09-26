@@ -12,7 +12,7 @@ import { agentCreatorUserJoin, schema, type Tx } from "@oxagen/database";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
 import type { AgentIdentityStatus } from "@oxagen/oxagen/contracts/agent.list";
 import { TAMPER_INCIDENT_KINDS } from "@oxagen/oxagen/contracts/tacho.incident.list";
-import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import {
   composeAgentKey,
   isUuid,
@@ -111,11 +111,20 @@ export async function resolveAgentIdentity(
   return row ?? null;
 }
 
-/** A page of live agents by slug, after `afterSlug` when given. */
+/**
+ * A page of agents by slug, after `afterSlug` when given. A retired
+ * (`archived`) agent is left out unless `includeRetired` is set, because a
+ * deregistered agent is a deleted record everywhere but the view that asks
+ * for it.
+ */
 export async function listAgentIdentities(
   tx: Tx,
   scope: { orgId: string; workspaceId: string },
-  page: { limit: number; afterSlug: string | undefined },
+  page: {
+    limit: number;
+    afterSlug: string | undefined;
+    includeRetired?: boolean;
+  },
 ): Promise<AgentIdentityRow[]> {
   return identitySelect(tx)
     .where(
@@ -123,6 +132,9 @@ export async function listAgentIdentities(
         eq(schema.agents.orgId, scope.orgId),
         eq(schema.agents.workspaceId, scope.workspaceId),
         isNull(schema.agents.deletedAt),
+        page.includeRetired === true
+          ? undefined
+          : ne(schema.agents.status, "archived"),
         page.afterSlug === undefined
           ? undefined
           : gt(schema.agents.slug, page.afterSlug),

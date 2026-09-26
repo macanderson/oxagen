@@ -828,6 +828,36 @@
                 "summary": {
                   "type": "string"
                 },
+                "tool": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "toolStatus": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "approvalId": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "body": {
                   "type": "object",
                   "properties": {
@@ -933,6 +963,9 @@
                 "observedAt",
                 "digest",
                 "summary",
+                "tool",
+                "toolStatus",
+                "approvalId",
                 "body",
                 "cost"
               ],
