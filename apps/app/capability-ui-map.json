@@ -540,10 +540,10 @@
     "get_run_chain": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=chain \u2014 the Chain and seal tab reads get_run_chain: the hash rule, the Merkle root, the checkpoints, the gaps and the replay ladder (data/live/runs.ts, features/run/chain.tsx)",
+      "entry": "/[org]/[ws]/runs/[run]?tab=chain \u2014 the Chain and seal tab reads get_run_chain: the hash rule, the Merkle root, the seal's attestation (the key, the signature and the fields it signs), the checkpoints, the gaps and the replay ladder, under the Compacted note on a run read from its archive segment (data/live/runs.ts, features/run/chain.tsx)",
       "proof": "apps/app/src/features/run/chain.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-replay-ui"
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "run-evidence-tabs-archive-and-replay"
     },
     "get_run_cost": {
       "route": "/[org]/[ws]/runs/[run]",

@@ -38,6 +38,7 @@ import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
 import { invoke } from "@oxagen/oxagen/kernel";
 import {
   createPostgresRunStore,
+  deferredAttester,
   digestOfCanonicalJson,
   parseRunSpecV2,
   TERMINAL_EVENT_TYPE,
@@ -428,8 +429,13 @@ async function seedRun(scope: Scope, userId: string): Promise<string> {
   // it, so a sealing store needs an archive; `createPostgresRunStore()` with
   // none refuses. `ledgerStore()` in @oxagen/inngest-functions is the same
   // wiring for the durable jobs. The read paths (the live adapter, run.fork,
-  // run-read) construct without one because they never seal.
-  const store = createPostgresRunStore({ archive: evidenceStore() });
+  // run-read) construct without one because they never seal. The attester
+  // signs the seal when the environment has a key and seals unsigned when
+  // it has none (ADR-195), as production does.
+  const store = createPostgresRunStore({
+    archive: evidenceStore(),
+    attester: deferredAttester,
+  });
   const run = await store.createRun({
     ...scope,
     surface: "external",

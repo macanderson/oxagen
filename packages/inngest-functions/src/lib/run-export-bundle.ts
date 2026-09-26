@@ -17,6 +17,7 @@
 import { zipSync } from "fflate";
 import {
   type Attestation,
+  type AttestationPayload,
   type AttesterKey,
   digestBytes,
   jcs,
@@ -40,10 +41,19 @@ interface RunExportBundle {
 const encoder = new TextEncoder();
 
 /**
- * The attestation payload of one sealed attempt. A wrapped session has no
- * archive segment: its root is computed here over the chain hashes and its
- * segment digest is the digest of the NDJSON lines the bundle carries, so
- * the attestation still names the bytes a verifier holds.
+ * The attestation of one sealed attempt. A wrapped session has no archive
+ * segment: its root is computed here over the chain hashes and its segment
+ * digest is the digest of the NDJSON lines the bundle carries, so the
+ * attestation still names the bytes a verifier holds.
+ *
+ * A ledger seal signed its figures when it was written (ADR-195). When the
+ * seal's key is the deployment's key, the bundle ships that signature over
+ * the figures the export recomputed, and signs nothing new. Ed25519 is
+ * deterministic, so a signature that does not verify means the stored
+ * segment or the seal row changed after the seal. Re-signing would hide
+ * that, so the export never does: the verifier reports it. A seal signed by
+ * a key the deployment has since rotated away from, or not signed at all, is
+ * signed here with the current key, as before.
  */
 function attestSegment(
   runId: string,
@@ -57,19 +67,21 @@ function attestSegment(
   const segmentDigest =
     segment.archiveSegmentDigest ??
     digestBytes(encoder.encode(segment.envelopes.map(jcs).join("\n")));
-  const attestation = signAttestation(
-    {
-      run_id: runId,
-      attempt_id: segment.attemptPublicId,
-      frame_count: segment.frameCount,
-      merkle_root: root,
-      archive_segment_digest: segmentDigest,
-      enforcement_tier: segment.enforcementTier,
-      completeness_gaps: [...segment.completenessGaps],
-      replay_grade: segment.replayGrade,
-    },
-    key,
-  );
+  const payload: AttestationPayload = {
+    run_id: runId,
+    attempt_id: segment.attemptPublicId,
+    frame_count: segment.frameCount,
+    merkle_root: root,
+    archive_segment_digest: segmentDigest,
+    enforcement_tier: segment.enforcementTier,
+    completeness_gaps: [...segment.completenessGaps],
+    replay_grade: segment.replayGrade,
+  };
+  const stored = segment.sealAttestation;
+  const attestation: Attestation =
+    stored !== null && stored.keyId === key.keyId
+      ? { payload, key_id: stored.keyId, alg: "ed25519", sig: stored.sig }
+      : signAttestation(payload, key);
   return { attestation, merkleRoot: root, segmentDigest };
 }
 

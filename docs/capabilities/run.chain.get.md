@@ -58,7 +58,11 @@ Each seal carries two fields for the run attestation (spec §8.3, #4000):
 | `archiveSegmentDigest` | string or null | `sha256:` over the archive segment's bytes as stored, the digest the attestation signs. Null on a seal written before the digest was recorded, and on a wrapped session's seal |
 | `attestation` | object or null | `{ alg, keyId, sig, signsOver }`. `alg` is `ed25519`, `keyId` names the attester key, and `sig` is base64 over the RFC 8785 canonical JSON of the signed payload. The payload's values are the seal's own fields, so `signsOver` carries only their names: `run_id`, `attempt_id`, `frame_count`, `merkle_root`, `archive_segment_digest`, `enforcement_tier`, `completeness_gaps` and `replay_grade`. Null on a seal written before attestation, on a seal written with no attester key configured, and on a wrapped session's seal |
 
-Oxagen signs a seal once, when it writes it, and never signs an older seal after the fact.
+Oxagen signs a seal once, when it writes it, and never signs an older seal after the fact (ADR-195). The key is the deployment's attester key, `TACHO_BUNDLE_SIGNING_PRIVATE_KEY`, the one `export_run` signs with. A deployment with no key, or a value that is not an Ed25519 key, writes the seal with no signature, and the seal still commits.
+
+To check a signature, export the run with `export_run`. The bundle carries each attempt's payload beside the signature the seal wrote when the seal's key is the deployment's current key, and `oxagen verify` or the bundled `verify.mjs` checks it offline. This read names the fields only, because a retried run's earlier attempts carry gaps and a grade this read does not repeat per seal.
+
+`oxagen run chain` prints one line per seal: `Attestation: ed25519 key <keyId> over <fields>`, or `Attestation: not recorded`. A retried run numbers the lines by attempt.
 
 ### The ladder's reasons
 

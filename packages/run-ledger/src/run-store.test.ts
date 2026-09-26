@@ -7,6 +7,7 @@
  * compiled to `{ sql, params }` with the real PgDialect, so assertions are
  * robust to drizzle internals.
  */
+import { generateKeyPairSync } from "node:crypto";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
@@ -88,10 +89,14 @@ import {
   type SealedFrameRow,
 } from "./frame-body";
 import {
+  attesterKeyFromPem,
+  type AttesterKey,
   buildArchiveSegment,
   digestBytes,
   readArchiveSegment,
+  verifyAttestation,
 } from "@oxagen/tacho";
+import { sealAttestationPayload } from "./attester";
 import {
   EMPTY_EVENT_STREAM_DIGEST,
   EVENT_SCHEMA_VERSION,
@@ -152,9 +157,11 @@ const UUID_F = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 const SHA_1 = `sha256:${"1".repeat(64)}`;
 const SHA_2 = `sha256:${"2".repeat(64)}`;
 const SHA_3 = `sha256:${"3".repeat(64)}`;
+const SEGMENT_DIGEST = `sha256:${"9".repeat(64)}`;
 const COMMIT_SHA = "a".repeat(40);
 const TREE_SHA = "b".repeat(40);
 const ATTEMPT_PUBLIC_ID = "arat_0123456789abcdef0123";
+const RUN_PUBLIC_ID = "arun_0123456789abcdef012345";
 const PRIOR_ATTEMPT_PUBLIC_ID = "arat_fedcba98765432100000";
 const BLOB_REF = "evb_0123456789abcdef0123";
 const DECISION_REF = "azd_0123456789abcdef0123";
@@ -274,6 +281,7 @@ function makeAttemptRow(
     attempt_id: UUID_ATTEMPT,
     attempt_public_id: ATTEMPT_PUBLIC_ID,
     run_id: UUID_RUN,
+    run_public_id: RUN_PUBLIC_ID,
     org_id: UUID_ORG,
     workspace_id: UUID_WS,
     attempt_number: 1,
@@ -561,6 +569,9 @@ describe("mapAttemptRow", () => {
     tool_calls: null,
     turns: null,
     enforcement_tier: null,
+    archive_segment_digest: null,
+    attestation_key_id: null,
+    attestation_sig: null,
   };
 
   it("projects an open attempt with no seal and no provenance", () => {
@@ -620,6 +631,34 @@ describe("mapAttemptRow", () => {
       finalAttemptSeq: 2,
       finalEventDigest: SHA_2,
       eventStreamDigest: SHA_3,
+    });
+  });
+
+  it("projects the seal's segment digest and attestation, and nulls on an older seal (ADR-195)", () => {
+    const sealed = {
+      ...base,
+      seal_id: "seal-1",
+      terminal_status: "completed",
+      event_count: "2",
+      event_stream_digest: SHA_3,
+      sealed_at: "2026-07-21T12:05:00.000Z",
+    };
+    expect(
+      mapAttemptRow({
+        ...sealed,
+        archive_segment_digest: SEGMENT_DIGEST,
+        attestation_key_id: "0123456789abcdef",
+        attestation_sig: "c2lnbmF0dXJl",
+      }).seal,
+    ).toMatchObject({
+      archiveSegmentDigest: SEGMENT_DIGEST,
+      attestationKeyId: "0123456789abcdef",
+      attestationSig: "c2lnbmF0dXJl",
+    });
+    expect(mapAttemptRow(sealed).seal).toMatchObject({
+      archiveSegmentDigest: null,
+      attestationKeyId: null,
+      attestationSig: null,
     });
   });
 
@@ -1313,9 +1352,21 @@ describe("SQL builders", () => {
         toolCalls: 1,
         turns: 0,
         enforcementTier: "harness",
+        archiveSegmentDigest: SEGMENT_DIGEST,
+        attestationKeyId: "0123456789abcdef",
+        attestationSig: "c2lnbmF0dXJl",
       }),
     );
     expect(text).toContain("INSERT INTO agent.agent_run_attempt_seals");
+    // The attestation is written with the row, once (ADR-195).
+    expect(text).toContain(
+      "archive_segment_digest, attestation_key_id, attestation_sig",
+    );
+    expect(params.slice(-3)).toEqual([
+      SEGMENT_DIGEST,
+      "0123456789abcdef",
+      "c2lnbmF0dXJl",
+    ]);
     // ADR-043: evidence ingress stamps the seal. The CHECK still admits the
     // retired runtime's 'worker'/'reclaimer' for historical rows, but no code
     // path may write either one again.
@@ -2920,6 +2971,115 @@ describe("sealAttempt: replay evidence", () => {
     ).rejects.toThrow(/no archive store/);
     expect(ranSql(executed, INSERT_SEAL)).toBe(false);
   });
+});
+
+describe("sealAttempt: the run attestation (ADR-195)", () => {
+  /** A tool call with its body and the terminal event: a `view` seal. */
+  function viewRows(): AttemptEventStateRow[] {
+    return [
+      prepareAttemptEvent(toolEvent(1)),
+      prepareAttemptEvent(terminalEvent(2)),
+    ].map((p, i) => ({
+      ...durableRow(p, `event-${i + 1}`, String(i + 5)),
+      body_ref: "evb:v1:test:abc",
+      body_digest: SHA_1,
+      body_bytes: 3,
+      redactions: [],
+      fidelity: "full",
+    }));
+  }
+
+  function attesterKey(): AttesterKey {
+    return attesterKeyFromPem(
+      generateKeyPairSync("ed25519")
+        .privateKey.export({ type: "pkcs8", format: "pem" })
+        .toString(),
+    );
+  }
+
+  async function seal(attester?: () => AttesterKey | null) {
+    const rows = viewRows();
+    const archive = fakeArchiveStore();
+    const { tx, executed } = makeRoutingTx([
+      { match: LOCK_ATTEMPT, rows: [makeAttemptRow()] },
+      { match: ATTEMPT_STATE, rows },
+      ...SEAL_ROUTES,
+    ]);
+    useTx(tx);
+    await createPostgresRunStore({
+      archive: archive.store,
+      ...(attester === undefined ? {} : { attester }),
+    }).sealAttempt({
+      attemptId: UUID_ATTEMPT,
+      terminalStatus: "completed",
+      sealerId: "drain-1",
+    });
+    const insert = executed.find((e) => INSERT_SEAL.test(e.sql));
+    if (insert === undefined) throw new Error("no seal insert");
+    return { rows, archive, executed, insert };
+  }
+
+  it("signs the figures it writes, and the signature verifies with the key's public half", async () => {
+    const key = attesterKey();
+    const { rows, archive, insert } = await seal(() => key);
+    const [digest, keyId, sig] = insert.params.slice(-3);
+    const segmentDigest = archive.segments[0]?.digest;
+    expect(digest).toBe(segmentDigest);
+    expect(keyId).toBe(key.keyId);
+    expect(typeof sig).toBe("string");
+    const payload = sealAttestationPayload({
+      runPublicId: RUN_PUBLIC_ID,
+      attemptPublicId: ATTEMPT_PUBLIC_ID,
+      frameCount: rows.length,
+      merkleRoot: buildArchiveSegment(rows.map(archiveFrameOf)).merkleRoot,
+      archiveSegmentDigest: String(segmentDigest),
+      enforcementTier: "harness",
+      completenessGaps: [],
+      replayGrade: "view",
+    });
+    const signed = {
+      payload,
+      key_id: key.keyId,
+      alg: "ed25519" as const,
+      sig: String(sig),
+    };
+    expect(verifyAttestation(signed, key.publicKeyPem)).toBe(true);
+    // The run's public id is what it signs, the id `export_run` signs.
+    expect(
+      verifyAttestation(
+        { ...signed, payload: { ...payload, run_id: UUID_RUN } },
+        key.publicKeyPem,
+      ),
+    ).toBe(false);
+  });
+
+  it("reads the key when it seals, not when the store is built", async () => {
+    const key = attesterKey();
+    const attester = vi.fn(() => key);
+    const { tx } = makeRoutingTx([]);
+    useTx(tx);
+    createPostgresRunStore({ archive: fakeArchiveStore().store, attester });
+    expect(attester).not.toHaveBeenCalled();
+    await seal(attester);
+    expect(attester).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["an attester that answers null", () => null],
+    ["no attester", undefined],
+  ] as const)(
+    "still seals with %s, writing the segment digest and no signature (negative)",
+    async (_label, attester) => {
+      const { archive, executed, insert } = await seal(attester);
+      expect(insert.params.slice(-3)).toEqual([
+        archive.segments[0]?.digest,
+        null,
+        null,
+      ]);
+      // The seal committed: the grant and the obligation were written.
+      expect(ranSql(executed, INSERT_GRANT)).toBe(true);
+    },
+  );
 });
 
 // ── Compaction (spec §13.3; ADR-058) ─────────────────────────────────────────

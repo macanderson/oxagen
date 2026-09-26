@@ -442,3 +442,13 @@ export {
   type AttemptRejectionReason,
   type RunNotWritableReason,
 } from "./run-errors";
+
+// The run attestation a seal signs and stores (#4000, ADR-195).
+export {
+  ATTESTER_KEY_ENV,
+  deferredAttester,
+  sealAttestationPayload,
+  signSealAttestation,
+  type SealAttestationColumns,
+  type SealAttestationFigures,
+} from "./attester";

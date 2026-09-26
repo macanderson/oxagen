@@ -461,6 +461,103 @@ describe("get_run_chain", () => {
     expect(out.recordedGrade).toBe("view");
   });
 
+  describe("the seal's attestation (ADR-195)", () => {
+    const KEY_ID = "0123456789abcdef";
+    const SIG = "c2lnbmVkIGF0IHNlYWwgdGltZQ==";
+    const SEGMENT = `sha256:${"9".repeat(64)}`;
+
+    it("a signed seal answers its key id, signature and the eight fields it signs, beside its segment digest", async () => {
+      const chain = ledgerHarness({
+        archiveSegmentDigest: SEGMENT,
+        attestationKeyId: KEY_ID,
+        attestationSig: SIG,
+      });
+      const out = await chain({ runId: LEDGER_ID }, ctx());
+      expect(runChainGet.output.parse(out)).toEqual(out);
+      expect(out.seals[0]?.archiveSegmentDigest).toBe(SEGMENT);
+      expect(out.seals[0]?.attestation).toEqual({
+        alg: "ed25519",
+        keyId: KEY_ID,
+        sig: SIG,
+        signsOver: [
+          "run_id",
+          "attempt_id",
+          "frame_count",
+          "merkle_root",
+          "archive_segment_digest",
+          "enforcement_tier",
+          "completeness_gaps",
+          "replay_grade",
+        ],
+      });
+    });
+
+    it("an unsigned seal answers no attestation, and keeps its segment digest (negative)", async () => {
+      const chain = ledgerHarness({
+        archiveSegmentDigest: SEGMENT,
+        attestationKeyId: null,
+        attestationSig: null,
+      });
+      const out = await chain({ runId: LEDGER_ID }, ctx());
+      expect(out.seals[0]?.attestation).toBeNull();
+      expect(out.seals[0]?.archiveSegmentDigest).toBe(SEGMENT);
+    });
+
+    it("a seal from before the columns answers null for both (negative)", async () => {
+      const chain = ledgerHarness({
+        archiveSegmentDigest: null,
+        attestationKeyId: null,
+        attestationSig: null,
+      });
+      const out = await chain({ runId: LEDGER_ID }, ctx());
+      expect(runChainGet.output.parse(out)).toEqual(out);
+      expect(out.seals[0]).toMatchObject({
+        archiveSegmentDigest: null,
+        attestation: null,
+      });
+    });
+
+    it("never answers a key id without its signature (negative)", async () => {
+      const chain = ledgerHarness({
+        attestationKeyId: KEY_ID,
+        attestationSig: null,
+      });
+      const out = await chain({ runId: LEDGER_ID }, ctx());
+      expect(out.seals[0]?.attestation).toBeNull();
+    });
+
+    it("a retried run answers each attempt's own attestation: the first unsigned, the second signed", async () => {
+      const unsigned = seal(RUN_UUID, {
+        attemptId: "0192d4a8-7c1e-7a00-8000-0000000000b1",
+        sealedAt: new Date("2026-09-11T10:01:00.000Z"),
+        terminalStatus: "abandoned",
+      });
+      const signed = seal(RUN_UUID, {
+        attemptId: "0192d4a8-7c1e-7a00-8000-0000000000b2",
+        sealedAt: new Date("2026-09-11T10:05:00.000Z"),
+        attestationKeyId: KEY_ID,
+        attestationSig: SIG,
+      });
+      const chain = ledgerHarness({}, [unsigned, signed]);
+      const out = await chain({ runId: LEDGER_ID }, ctx());
+      expect(runChainGet.output.parse(out)).toEqual(out);
+      expect(out.seals.map((s) => s.attestation?.keyId ?? null)).toEqual([
+        null,
+        KEY_ID,
+      ]);
+    });
+
+    it("a wrapped session's seal answers no attestation and no segment digest (negative)", async () => {
+      const chain = tachoHarness([tachoRow(0), tachoRow(1), tachoRow(2)]);
+      const out = await chain({ runId: TACHO_ID }, ctx());
+      expect(out.seals).toHaveLength(1);
+      expect(out.seals[0]).toMatchObject({
+        archiveSegmentDigest: null,
+        attestation: null,
+      });
+    });
+  });
+
   it("is not_found for a run outside the workspace (negative)", async () => {
     const chain = tachoHarness([]);
     await expect(chain({ runId: "tse_nope" }, ctx())).rejects.toSatisfy(
