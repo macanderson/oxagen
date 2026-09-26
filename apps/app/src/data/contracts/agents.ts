@@ -72,6 +72,8 @@ const AgentRow = z.object({
   managed: z.boolean(),
   operatorId: PublicId.nullable(),
   operatorName: z.string().nullable(),
+  /** The operator's avatar value; null when there is no operator or they set none. */
+  operatorAvatarUrl: z.string().min(1).nullable(),
   principalId: PublicId.nullable(),
   credentials: Count,
   hosts: Count,

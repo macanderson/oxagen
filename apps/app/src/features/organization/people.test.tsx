@@ -40,6 +40,7 @@ const roster: MemberList = {
       id: "usr_7k2m9q4x8r1t5v3w6y0z2a",
       name: "Marcus Bell",
       email: "marcus.bell@acme.example",
+      avatarUrl: "https://avatars.example.com/marcus.png",
       role: "owner",
       joinedAt: "2026-03-02T09:15:00.000Z",
     },
@@ -47,6 +48,7 @@ const roster: MemberList = {
       id: "usr_0a1b2c3d4e5f6g7h8j9k0m",
       name: null,
       email: "ops@acme.example",
+      avatarUrl: null,
       role: "admin",
       joinedAt: "2026-05-11T16:40:00.000Z",
     },
@@ -54,6 +56,7 @@ const roster: MemberList = {
       id: "usr_1a1b2c3d4e5f6g7h8j9k0m",
       name: "Dana Okafor",
       email: "dana@acme.example",
+      avatarUrl: null,
       role: "admin",
       joinedAt: "2026-05-12T16:40:00.000Z",
     },
@@ -207,6 +210,24 @@ describe("People", () => {
         .getAllByRole("button")
         .map((b) => b.textContent),
     ).toEqual(["Open", "Change role", "Remove"]);
+  });
+
+  it("leads each Person cell with the member's avatar, or their initials when they set none", async () => {
+    await renderPeople();
+    const marcus = within(rowOf("usr_7k2m9q4x8r1t5v3w6y0z2a")).getByTestId(
+      "member-avatar",
+    );
+    expect(marcus).toHaveAttribute("data-avatar", "image");
+    expect(marcus).toHaveAttribute(
+      "src",
+      "https://avatars.example.com/marcus.png",
+    );
+    // An unnamed member's initials come from the email the cell prints.
+    const ops = within(rowOf("usr_0a1b2c3d4e5f6g7h8j9k0m")).getByTestId(
+      "member-avatar",
+    );
+    expect(ops).toHaveAttribute("data-avatar", "initials");
+    expect(ops).toHaveTextContent("O");
   });
 
   it("opens a member's facts from Open", async () => {
