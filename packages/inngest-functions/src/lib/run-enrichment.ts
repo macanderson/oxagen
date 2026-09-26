@@ -43,8 +43,10 @@ export const ENRICHMENT_RUN_BUDGET_USD = 1;
  * step adds nothing. A job starts with what the run has left, and stops
  * reducing when that is spent, as it does at the per-job budget: the account
  * is written from the part it has read and says it covers only the start.
- * That last call can take the run past the cap by one call over at most one
- * chunk. Once the run's total reaches the cap, the sweep no longer queues the
+ * The budget is checked before each reduction call and not before the
+ * account call, so a job can take the run past the cap by at most two calls:
+ * the reduction call that crossed it and the account call, each over at most
+ * one chunk. Once the run's total reaches the cap, the sweep no longer queues the
  * run, a job asked for it anyway makes no model call, and the last account
  * stays.
  */
