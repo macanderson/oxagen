@@ -88,4 +88,29 @@ describe("the drill", () => {
     expect(screen.getByText("No open finding names this key.")).toBeTruthy();
     expect(screen.getByText("none identified")).toBeTruthy();
   });
+
+  // #3304. A key whose runs include some that reported no usage has a total
+  // that leaves their cost out, and the drill says so beside the counts.
+  it("says how many of the key's runs reported no usage", () => {
+    render(
+      <IntlProvider>
+        <DrillSection
+          drill={drill({
+            kind: "agent",
+            key: "a-intel.core.codex-ci",
+            unmeteredRuns: {
+              total: 1,
+              byHarness: [{ harness: "codex", runs: 1 }],
+            },
+          })}
+          findings={[]}
+          operator={null}
+          at={AT}
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("spend-drill-unmetered")).toHaveTextContent(
+      "1 run reported no usage and is not in this total: codex 1",
+    );
+  });
 });

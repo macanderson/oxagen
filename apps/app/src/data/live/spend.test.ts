@@ -318,6 +318,7 @@ describe("the findings the Spend page leads with", () => {
             firstSeen: "2026-08-20T00:00:00.000Z",
             lastSeen: "2026-09-15T00:00:00.000Z",
             missingClasses: ["input_uncached", "output"],
+            missingClassWindows: [],
             fullyUnpriced: true,
           },
         ],

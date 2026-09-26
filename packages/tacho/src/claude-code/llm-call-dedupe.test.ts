@@ -5,6 +5,8 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  countsLlmCallUsage,
+  LLM_CALL_DUPLICATE_OF_ATTR,
   LLM_CALL_LEDGER_CAPACITY,
   LlmCallLedger,
   llmCallKeys,
@@ -183,5 +185,70 @@ describe("LlmCallLedger", () => {
         "otel_log",
       ),
     ).toEqual({ kind: "duplicate", of: "transcript" });
+  });
+});
+
+/**
+ * Seal each sighting the way the recorder does: a duplicate is stamped with
+ * the source it duplicates and a repeat is dropped. Answers the request ids
+ * of the rows the usage fold counts, one per counted row.
+ */
+function counted(
+  sightings: readonly { source: string; body: Record<string, unknown> }[],
+): string[] {
+  const ledger = new LlmCallLedger();
+  const rows: {
+    kind: string;
+    source: string;
+    attrs: Record<string, string>;
+    id: string;
+  }[] = [];
+  for (const { source, body } of sightings) {
+    const verdict = ledger.note(body, source);
+    if (verdict.kind === "repeat") continue;
+    rows.push({
+      kind: "llm_call",
+      source,
+      attrs:
+        verdict.kind === "duplicate"
+          ? { [LLM_CALL_DUPLICATE_OF_ATTR]: verdict.of }
+          : {},
+      id: String(body.request_id),
+    });
+  }
+  return rows.filter(countsLlmCallUsage).map((row) => row.id);
+}
+
+// #3281. The stamp is written per call, on the vendor's ids, so the fold
+// counts each call once whatever mix of sources saw it. A per-turn rule that
+// kept one source per (session, turn) dropped a call only the lower-authority
+// source saw, along with its turn.
+describe("one turn seen by two sources", () => {
+  const first = call({ request_id: "req_a", message_id: "msg_a" });
+  const second = call({
+    request_id: "req_b",
+    message_id: "msg_b",
+    input_tokens: 20,
+  });
+
+  it("counts both calls once when OTel holds the first and the collector holds both", () => {
+    expect(
+      counted([
+        { source: "otel_log", body: first },
+        { source: "collector", body: first },
+        { source: "collector", body: second },
+      ]),
+    ).toEqual(["req_a", "req_b"]);
+  });
+
+  it("counts a turn both sources recorded completely once, not twice", () => {
+    expect(
+      counted([
+        { source: "otel_log", body: first },
+        { source: "otel_log", body: second },
+        { source: "collector", body: first },
+        { source: "collector", body: second },
+      ]),
+    ).toEqual(["req_a", "req_b"]);
   });
 });

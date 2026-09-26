@@ -88,6 +88,7 @@ describe("readModelCallFrames", () => {
         cache_write_1h: "0",
         output: "50",
         reasoning: "0",
+        server_tool_request: "0",
         cost_micros: "4125",
       },
       {
@@ -100,13 +101,14 @@ describe("readModelCallFrames", () => {
         cache_write_1h: "0",
         output: "5",
         reasoning: "0",
+        server_tool_request: "0",
         cost_micros: null,
       },
     ]);
     const frames = await readModelCallFrames({
       orgId: ORG,
       workspaceId: WS,
-      run: { kind: "tacho", rootSessionUuid: RUN },
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
     });
 
     const { query, query_params } = lastQuery();
@@ -125,12 +127,14 @@ describe("readModelCallFrames", () => {
       "cache_write_1h",
       "output",
       "reasoning",
+      "server_tool_request",
       "cost_micros",
     ]);
     expect(query_params).toEqual({
       orgId: ORG,
       workspaceId: WS,
       rootSessionUuid: RUN,
+      sessionUuids: [RUN],
       sources: ["otel_log", "collector", "hook", "transcript"],
       duplicateAttr: "oxagen.llm_call_duplicate_of",
     });
@@ -201,13 +205,14 @@ describe("readModelCallFrames", () => {
         // the output rate and 400 at the reasoning rate.
         output: "500",
         reasoning: "400",
+        server_tool_request: "0",
         cost_micros: null,
       },
     ]);
     const frames = await readModelCallFrames({
       orgId: ORG,
       workspaceId: WS,
-      run: { kind: "tacho", rootSessionUuid: RUN },
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
     });
 
     const { query } = lastQuery();
@@ -235,7 +240,7 @@ describe("readModelCallFrames", () => {
     await readModelCallFrames({
       orgId: ORG,
       workspaceId: WS,
-      run: { kind: "tacho", rootSessionUuid: RUN },
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
     });
     const { query } = lastQuery();
 
@@ -299,13 +304,14 @@ describe("readModelCallFrames", () => {
         cache_write_1h: "1200",
         output: "50",
         reasoning: "0",
+        server_tool_request: "0",
         cost_micros: null,
       },
     ]);
     const frames = await readModelCallFrames({
       orgId: ORG,
       workspaceId: WS,
-      run: { kind: "tacho", rootSessionUuid: RUN },
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
     });
     const { query } = lastQuery();
     expect(query).toContain(`${CACHE_5M} AS cache_write_5m`);
@@ -333,13 +339,14 @@ describe("readModelCallFrames", () => {
         // the transcript row the filter dropped reported 400 of thinking.
         output: "500",
         reasoning: "400",
+        server_tool_request: "0",
         cost_micros: "4125",
       },
     ]);
     const frames = await readModelCallFrames({
       orgId: ORG,
       workspaceId: WS,
-      run: { kind: "tacho", rootSessionUuid: RUN },
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
     });
     expect(frames).toEqual([
       {
@@ -357,6 +364,42 @@ describe("readModelCallFrames", () => {
         basis: "client_attested",
       },
     ]);
+  });
+
+  // #3721. A wrapped call's web searches are billed per request, and the
+  // rollup priced none of them: the read never selected the column, so a run
+  // that searched came back cheaper than its invoice. Fetches carry no
+  // per-request charge and stay out.
+  it("carries a wrapped call's web searches, and not its fetches, as server tool requests", async () => {
+    answer([
+      {
+        at: "2026-09-14T10:00:00.000Z",
+        model: "claude-sonnet-5",
+        provider: "firstParty",
+        input_uncached: "1000",
+        cache_read: "0",
+        cache_write_5m: "0",
+        cache_write_1h: "0",
+        output: "200",
+        reasoning: "0",
+        server_tool_request: "3",
+        cost_micros: null,
+      },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+    });
+    const { query } = lastQuery();
+    expect(query).toContain(
+      "toInt64(coalesce(c.web_search_requests, 0)) AS server_tool_request",
+    );
+    // The priced row selects the search column so the outer read can use it.
+    const priced = query.slice(query.indexOf("FROM ("), query.indexOf(") AS c"));
+    expect(priced).toContain("web_search_requests");
+    expect(query).not.toContain("web_fetch_requests");
+    expect(frames[0]).toMatchObject({ serverToolRequests: 3 });
   });
 
   it("reads a ledger run's gateway-metered rows as gateway_observed", async () => {
@@ -463,6 +506,7 @@ describe("readTachoToolCallFrames", () => {
       orgId: ORG,
       workspaceId: WS,
       rootSessionUuid: RUN,
+      sessionUuids: [RUN],
     });
     const { query, query_params } = lastQuery();
     expect(query).toContain("kind = 'tool_call'");
@@ -471,6 +515,7 @@ describe("readTachoToolCallFrames", () => {
       orgId: ORG,
       workspaceId: WS,
       rootSessionUuid: RUN,
+      sessionUuids: [RUN],
     });
     expect(frames).toEqual([{ name: "Bash" }, { name: null }]);
   });
@@ -922,10 +967,38 @@ describe("readObservedModels", () => {
     expect(classCall.query).not.toContain("root_session_uuid");
   });
 
-  it("counts a wrapped call's provider-side searches and fetches as server_tool_request usage", async () => {
-    // #3281. `tacho_events` records the provider-side tool calls a model made
-    // (`web_search_requests`, `web_fetch_requests`) and the book prices them
-    // as `server_tool_request` at one rate per request. The class-bucket read
+  // #3281. The unpriced-model report compares the class-bucket read against
+  // the book, so it must count each wrapped call once, by the same stamp the
+  // frame read and the summary read drop. The transcript joins are the one
+  // place the stamped row is wanted, and they add no call.
+  it("drops stamped duplicate rows from the class-bucket read's priced rows", async () => {
+    answerBoth([
+      {
+        model: "claude-sonnet-5",
+        provider: "",
+        calls: "1",
+        tokens: "10",
+        first_seen: "2026-09-10T00:00:00.000Z",
+        last_seen: "2026-09-10T00:00:00.000Z",
+      },
+    ]);
+    await readObservedModels({ orgId: ORG, since: SINCE });
+    const classCall = queryMock.mock.calls[1]![0];
+    const tc = classCall.query.slice(classCall.query.indexOf("tc AS ("));
+    const priced = tc.slice(0, tc.indexOf("LEFT JOIN"));
+    expect(priced).toContain("attrs[{duplicateAttr:String}] = ''");
+    expect(
+      classCall.query.match(/attrs\[\{duplicateAttr:String\}\] = ''/g),
+    ).toHaveLength(1);
+    expect(classCall.query_params).toMatchObject({
+      duplicateAttr: "oxagen.llm_call_duplicate_of",
+    });
+  });
+
+  it("counts a wrapped call's provider-side web searches as server_tool_request usage", async () => {
+    // #3281. `tacho_events` records the web searches a model made
+    // (`web_search_requests`) and the book prices them as
+    // `server_tool_request` at one rate per request. The class-bucket read
     // used to report six token classes and nothing else, so this usage was
     // observed by the recorder, stored in ClickHouse, and then dropped on the
     // floor: a model whose search rate nobody had stated was never named by
@@ -959,11 +1032,14 @@ describe("readObservedModels", () => {
     const rows = await readObservedModels({ orgId: ORG, since: SINCE });
     const classCall = queryMock.mock.calls[1]![0];
 
-    // Both columns are one class: the vendors bill a server-side search and a
-    // server-side fetch at the same per-request rate.
-    expect(classCall.query).toContain(
-      "toInt64(coalesce(c.web_search_requests, 0) + coalesce(c.web_fetch_requests, 0))",
+    // Searches only. Anthropic bills a web search per request and does not
+    // bill a web fetch per request, so a fetch counted here would report a
+    // model whose calls only fetched as missing a request rate, and a model
+    // priced for every class it used must not be reported.
+    expect(classCall.query).toMatch(
+      /toInt64\(coalesce\(c\.web_search_requests, 0\)\)\s+AS server_tool_request/,
     );
+    expect(classCall.query).not.toContain("web_fetch_requests");
     expect(classCall.query).toContain(
       "('server_tool_request', server_tool_request)",
     );

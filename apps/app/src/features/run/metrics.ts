@@ -200,10 +200,23 @@ export type TurnFigure = {
   seq: string;
 };
 
+/**
+ * The web searches the run's calls ran and what the rollup recorded for them
+ * (#3721). The book prices a search per request, so these are requests, and
+ * no token figure counts them.
+ */
+export type RunSearches = {
+  requests: number;
+  /** Null when a model that searched has no recorded split. */
+  cost: Money | null;
+};
+
 export type RunMetrics = {
   /** The transcript was read to its end, so counts are totals rather than floors. */
   whole: boolean;
   tokens: TokenFigures | null;
+  /** Null with no rollup, and for a run that ran no web search. */
+  searches: RunSearches | null;
   /**
    * The session's own sums over its `llm_call` frames, which stand in for the
    * Tokens figure until the rollup rebuilds the run, labelled provisional.
@@ -365,6 +378,21 @@ function recordedClasses(rollup: RunCostRollup): PricedClasses | null {
     cacheSaved: savedKnown ? sumMoney(saved) : null,
     hasUnpriced: rollup.byModel.some((row) => row.hasUnpriced),
   };
+}
+
+/** The run's searches from its rollup; null when it recorded none. */
+function searchesOf(rollup: RunCostRollup): RunSearches | null {
+  const requests = rollup.searchRequests ?? 0;
+  if (requests === 0) return null;
+  const parts: Money[] = [];
+  for (const row of rollup.byModel) {
+    if ((row.searchRequests ?? 0) === 0) continue;
+    const part = row.searchCost ?? null;
+    // A partial sum is never shown as the whole (INV-09).
+    if (part === null) return { requests, cost: null };
+    parts.push(part);
+  }
+  return { requests, cost: sumMoney(parts) };
 }
 
 function tokenFigures(rollup: RunCostRollup): TokenFigures {
@@ -533,6 +561,7 @@ export function runMetrics({
     // the whole run's unless the run passed the read's frame cap.
     whole: read?.complete === true,
     tokens,
+    searches: rollup === null ? null : searchesOf(rollup),
     reportedTokens,
     priced: rollup === null ? null : recordedClasses(rollup),
     cost: runCost,

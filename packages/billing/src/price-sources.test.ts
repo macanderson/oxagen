@@ -37,6 +37,7 @@ function published(
     cacheWrite5mPer1M: null,
     cacheWrite1hPer1M: null,
     reasoningPer1M: null,
+    serverToolRequestPer1M: null,
     source: "in_code_card",
     ...overrides,
   };
@@ -113,6 +114,8 @@ describe("inCodeCardPrices", () => {
       cacheWrite5mPer1M: 3.75,
       cacheWrite1hPer1M: 6,
       reasoningPer1M: 15,
+      // Anthropic's web search rate, $10 per 1,000 requests (#3721).
+      serverToolRequestPer1M: 10_000,
       source: "in_code_card",
     });
     // A bare id has no prefix to strip, so it carries no alias — and an
@@ -120,6 +123,8 @@ describe("inCodeCardPrices", () => {
     expect(gpt.aliases).toEqual([]);
     expect(gpt.provider).toBe("openai");
     expect(gpt.cacheWrite1hPer1M).toBeNull();
+    // No source states OpenAI's search rate, so none is invented.
+    expect(gpt.serverToolRequestPer1M).toBeNull();
   });
 
   it("aliases a hyphenated Anthropic release to its dotted and gateway forms", () => {
@@ -198,6 +203,7 @@ describe("parseOpenRouterCatalog", () => {
     })[0]!;
     expect(price.cacheWrite5mPer1M).toBe(3.75);
     expect(price.cacheWrite1hPer1M).toBeNull();
+    expect(price.serverToolRequestPer1M).toBeNull();
   });
 
   it("scales per-token USD strings up to USD per million tokens", () => {
@@ -209,6 +215,7 @@ describe("parseOpenRouterCatalog", () => {
     expect(price.cacheWrite1hPer1M).toBeCloseTo(6, 10);
     // No `internal_reasoning` published, so reasoning falls to the output rate.
     expect(price.reasoningPer1M).toBe(15);
+    expect(price.serverToolRequestPer1M).toBe(10_000);
     expect(price.provider).toBe("anthropic");
     expect(price.source).toBe("openrouter");
   });
@@ -299,6 +306,7 @@ describe("parseModelsDevCatalog", () => {
     })[0]!;
     expect(price.cacheWrite5mPer1M).toBe(3.75);
     expect(price.cacheWrite1hPer1M).toBeNull();
+    expect(price.serverToolRequestPer1M).toBeNull();
   });
 
   it("takes models.dev costs as already-per-million and scales nothing", () => {
@@ -309,6 +317,7 @@ describe("parseModelsDevCatalog", () => {
     expect(price.cacheWrite5mPer1M).toBe(3.75);
     expect(price.cacheWrite1hPer1M).toBeCloseTo(6, 10);
     expect(price.reasoningPer1M).toBe(15);
+    expect(price.serverToolRequestPer1M).toBe(10_000);
     expect(price.source).toBe("models_dev");
   });
 
@@ -964,6 +973,34 @@ describe("seedsFromPublishedPrices", () => {
   it("writes nothing for an empty set of prices", () => {
     expect(seedsFromPublishedPrices([], FROM)).toEqual([]);
   });
+
+  // #3721. A web search is billed per request. The seed wrote every class at
+  // `token` units and had no search rate at all, so every call that searched
+  // read `estimated` and its search charge was never priced.
+  it("writes a search rate at request units", () => {
+    const rows = seedsFromPublishedPrices(
+      [
+        published({
+          model: "claude-sonnet-5",
+          inputPer1M: 3,
+          outputPer1M: 15,
+          serverToolRequestPer1M: 10_000,
+        }),
+      ],
+      FROM,
+    );
+    const search = rows.find((r) => r.tokenClass === "server_tool_request");
+    expect(search).toMatchObject({
+      unit: "request",
+      // $10 per 1,000 requests.
+      microsPerMillion: 10_000_000_000n,
+    });
+    expect(
+      rows
+        .filter((r) => r.tokenClass !== "server_tool_request")
+        .every((r) => r.unit === "token"),
+    ).toBe(true);
+  });
 });
 
 describe("seedsFromPublishedPrices, provenance", () => {
@@ -979,6 +1016,7 @@ describe("seedsFromPublishedPrices, provenance", () => {
       cacheWrite5mPer1M: null,
       cacheWrite1hPer1M: null,
       reasoningPer1M: null,
+      serverToolRequestPer1M: null,
       source,
     });
     const sources = seedsFromPublishedPrices(

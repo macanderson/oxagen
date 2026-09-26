@@ -92,6 +92,40 @@ describe("Tokens", () => {
     expect(agent?.textContent).toContain("not recorded");
   });
 
+  // #3721. A web search is billed per request, so the month's searches are
+  // counted beside the token classes and never inside their total or share.
+  it("counts the month's web search requests apart from its tokens", () => {
+    const row = (key: string, searches: number) => ({
+      key,
+      cost: null,
+      calls: 1,
+      runs: 1,
+      proven: null,
+      accepted: null,
+      productiveRatio: null,
+      tokens: { ...NO_TOKENS, input_uncached: 100, server_tool_request: searches },
+      provider: "anthropic",
+      operator: null,
+    });
+    render(
+      <IntlProvider>
+        <TokensSection
+          month={report([row("claude-sonnet-5", 3), row("claude-haiku-5", 2)])}
+          agents={readOk(report([]))}
+          at={AT}
+        />
+      </IntlProvider>,
+    );
+    expect(screen.getByTestId("spend-searches")).toHaveTextContent(
+      "5 requests, priced per request and kept out of the token total",
+    );
+    // The class total is the 200 input tokens alone.
+    expect(document.body).toHaveTextContent("200 tokens");
+    expect(
+      document.querySelector('tr[data-token-class="server_tool_request"]'),
+    ).toBeNull();
+  });
+
   it("says the agents read failed in its own panel (negative)", () => {
     render(
       <IntlProvider>

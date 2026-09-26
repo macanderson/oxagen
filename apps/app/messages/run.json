@@ -475,7 +475,8 @@
         "unpriced": "The rollup recorded no cost for a model this run used, so the classes that model spent in have no cost here.",
         "incomplete": "The rollup could not price some of this run's calls, so each cost covers only the calls it priced.",
         "recorded": "The run recorded <cost></cost> {basis}.",
-        "entries": "It was priced with <entries></entries>."
+        "entries": "It was priced with <entries></entries>.",
+        "searchRequests": "{count, plural, one {# search request} other {# search requests}}"
       },
       "composition": {
         "title": "Prompt composition",

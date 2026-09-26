@@ -35,7 +35,11 @@ import {
   type RateCard,
 } from "./pricing";
 import { isSameModelIdentity } from "./model-identity";
-import { usdPerMillionToMicros, type PriceEntrySeed } from "./price-book";
+import {
+  PRICE_UNIT_BY_TOKEN_CLASS,
+  usdPerMillionToMicros,
+  type PriceEntrySeed,
+} from "./price-book";
 import type { PriceTokenClass } from "@oxagen/database/schema";
 
 /** A catalog we can read published prices from. */
@@ -63,6 +67,12 @@ export interface PublishedModelPrice {
   cacheWrite5mPer1M: number | null;
   cacheWrite1hPer1M: number | null;
   reasoningPer1M: number | null;
+  /**
+   * USD per one million server tool requests: the web searches a call ran on
+   * the vendor's side, the `server_tool_request` class. Null when the source
+   * states no such rate.
+   */
+  serverToolRequestPer1M: number | null;
   source: PriceSourceId;
 }
 
@@ -93,6 +103,20 @@ export function deriveCacheWrite1h(
 ): number | null {
   if (provider !== "anthropic" || cacheWrite5mPer1M === null) return null;
   return inputPer1M * 2;
+}
+
+/**
+ * Anthropic bills a server-side web search at $10 per 1,000 requests, which
+ * is $10,000 per one million, whatever the model. It does not bill a web
+ * fetch per request, so the class counts searches alone (`cost-frames.ts` in
+ * @oxagen/telemetry). Other vendors stay unpriced for the class unless a
+ * source states a rate, so a search on one of them reads `estimated` and
+ * `list_unpriced_models` names the missing rate.
+ */
+const ANTHROPIC_WEB_SEARCH_PER_1M = 10_000;
+
+export function deriveServerToolRequest(provider: string): number | null {
+  return provider === "anthropic" ? ANTHROPIC_WEB_SEARCH_PER_1M : null;
 }
 
 // ── The in-code card as a source ──────────────────────────────────────────────
@@ -226,6 +250,7 @@ function rateToPublished(
     // them separately; pricing them explicitly keeps a frame that reports them
     // from falling to `estimated` for want of an entry.
     reasoningPer1M: rate.outputPer1M,
+    serverToolRequestPer1M: deriveServerToolRequest(rate.provider),
     source: "in_code_card",
   };
 }
@@ -321,6 +346,7 @@ export function parseOpenRouterCatalog(body: unknown): PublishedModelPrice[] {
       ),
       reasoningPer1M:
         perTokenToPerMillion(row.pricing.internal_reasoning) ?? output,
+      serverToolRequestPer1M: deriveServerToolRequest(vendorOf(row.id)),
       source: "openrouter",
     });
   }
@@ -385,6 +411,7 @@ export function parseModelsDevCatalog(body: unknown): PublishedModelPrice[] {
         cacheWrite5mPer1M: cacheWrite5m,
         cacheWrite1hPer1M: deriveCacheWrite1h(vendor, input, cacheWrite5m),
         reasoningPer1M: finiteOrNull(model.cost?.reasoning) ?? output,
+        serverToolRequestPer1M: deriveServerToolRequest(vendor),
         source: "models_dev",
       });
     }
@@ -581,6 +608,7 @@ const SEED_CLASSES: readonly (readonly [
   ["cache_write_1h", "cacheWrite1hPer1M"],
   ["output", "outputPer1M"],
   ["reasoning", "reasoningPer1M"],
+  ["server_tool_request", "serverToolRequestPer1M"],
 ];
 
 /**
@@ -603,7 +631,8 @@ export function seedsFromPublishedPrices(
         modelAliases: price.aliases,
         region: null,
         tokenClass,
-        unit: "token",
+        // A request class is priced per request, not per token.
+        unit: PRICE_UNIT_BY_TOKEN_CLASS[tokenClass],
         currency: "USD",
         microsPerMillion: usdPerMillionToMicros(usd),
         effectiveFrom,

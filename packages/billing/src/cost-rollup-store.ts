@@ -23,6 +23,7 @@ import {
 } from "@oxagen/telemetry";
 import {
   MODEL_CALL_EVENT_TYPES,
+  subagentSessionsQuery,
   TOOL_CALL_EVENT_TYPES,
 } from "@oxagen/run-ledger";
 import {
@@ -248,9 +249,10 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
   if (publicId.startsWith("tse_")) {
     // tenancy: the scheduled rollup job runs outside a tenant scope and finds
     // the session by its globally unique public id; the agent join and the
-    // cost-center subquery are filtered by the session's own orgId.
-    const rows = await withSystemDb((tx) =>
-      tx
+    // cost-center subquery are filtered by the session's own orgId, and the
+    // subagent list by its orgId and workspaceId.
+    const found = await withSystemDb(async (tx) => {
+      const rows = await tx
         .select({
           sessionUuid: sessions.sessionUuid,
           orgId: sessions.orgId,
@@ -298,10 +300,31 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
             isNull(sessions.parentSessionUuid),
           ),
         )
-        .limit(1),
-    );
-    const row = rows[0];
-    if (!row) return null;
+        .limit(1);
+      const root = rows[0];
+      if (!root) return null;
+      // The run's chains: the root, then every subagent session under it in
+      // the run's own workspace. The frame reads name this list so they read
+      // the run's chains by the table's sort key rather than every chain the
+      // workspace holds (#4103). A chain that registers after this read is
+      // picked up by the next `cost.run-progress` rollup, or by the nightly
+      // sweep, which lists a run whose tree landed a batch after its row was
+      // written (`listRunsAwaitingRollup`).
+      const children = await subagentSessionsQuery(
+        tx,
+        { orgId: root.orgId, workspaceId: root.workspaceId },
+        root.sessionUuid,
+      );
+      return {
+        row: root,
+        sessionUuids: [
+          root.sessionUuid,
+          ...children.map((child) => child.sessionUuid),
+        ],
+      };
+    });
+    if (!found) return null;
+    const { row, sessionUuids } = found;
     return {
       meta: {
         runId: publicId,
@@ -321,7 +344,7 @@ async function loadRunSource(publicId: string): Promise<RunSource | null> {
         enforcementTier: tier(row.enforcementTier),
         replayGrade: grade(row.replayGrade),
       },
-      frames: { kind: "tacho", rootSessionUuid: row.sessionUuid },
+      frames: { kind: "tacho", rootSessionUuid: row.sessionUuid, sessionUuids },
     };
   }
   return null;
@@ -715,6 +738,7 @@ const productionRunRollupDeps: RunRollupDeps = {
           orgId: source.meta.orgId,
           workspaceId: source.meta.workspaceId,
           rootSessionUuid: source.frames.rootSessionUuid,
+          sessionUuids: source.frames.sessionUuids,
         }),
   loadPriceBook: loadPriceBookSlice,
   readCarried,

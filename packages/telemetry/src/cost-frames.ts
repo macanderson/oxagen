@@ -74,8 +74,11 @@ export interface ModelCallFrameRow {
   output: number;
   reasoning: number;
   /**
-   * Provider-side tool requests the call made (`web_search_requests`). A
-   * ledger frame has no such column, so it is 0 there.
+   * Provider-side web searches the call made (`web_search_requests`), which
+   * the book prices per request as `server_tool_request`. Web fetches are
+   * left out: the vendor does not charge per fetch, so counting them would
+   * price requests nobody billed. A ledger frame has no such column, so it
+   * is 0 there.
    */
   serverToolRequests: number;
   /** The micro-USD the frame's own record carries; null when it carries none. */
@@ -89,8 +92,8 @@ interface ToolCallFrameRow {
 }
 
 /**
- * The run a frame read is keyed on: the ledger run uuid or the tacho root
- * session uuid.
+ * The run a frame read is keyed on: the ledger run uuid, or the tacho root
+ * session uuid with the session of every chain in the run.
  *
  * A ledger run may also name the message that asked for it
  * (`agent_runs.origin_message_id`). The in-app assistant meters every call of
@@ -98,10 +101,21 @@ interface ToolCallFrameRow {
  * run is admitted and the turn's recall, approvals and credit debits all name
  * it. Its `token_usage` rows carry that id rather than the run's, so the read
  * matches either (#4167).
+ *
+ * A wrapped run's `sessionUuids` lists the root session first and then each
+ * subagent chain under it, as `tacho.sessions` records them. `tacho_events`
+ * is ordered by `(org_id, workspace_id, session_uuid, seq)` and has no index
+ * on `root_session_uuid`, so a read that names the root alone scans every
+ * chain in the workspace. The list lets it read only this run's chains
+ * (#4103). It is required, so no caller can read a run unscoped.
  */
 export type FrameRunRef =
   | { kind: "ledger"; runUuid: string; originMessageId?: string | null }
-  | { kind: "tacho"; rootSessionUuid: string };
+  | {
+      kind: "tacho";
+      rootSessionUuid: string;
+      sessionUuids: readonly string[];
+    };
 
 /**
  * The rollup prices each model call once, by the rule the ingest fold uses
@@ -194,6 +208,44 @@ const FRAME_CACHE_1H = `toInt64(least(${FRAME_CACHE_WRITE}, if(${TRANSCRIPT_CACH
 const FRAME_CACHE_5M = `toInt64(greatest(0, ${FRAME_CACHE_WRITE} - ${FRAME_CACHE_1H}))`;
 
 /**
+ * The provider-side requests one wrapped model call is priced for, as the
+ * book's `server_tool_request` class: its web searches. Anthropic bills a
+ * server-side web search at $10 per 1,000 requests. It does not bill a
+ * server-side web fetch per request (its usage report carries
+ * `web_fetch_requests` as information only), so `web_fetch_requests` is left
+ * out. Adding it priced requests nobody billed, and made a model whose calls
+ * only fetched look unpriced in `list_unpriced_models` (#3281, #3721).
+ *
+ * No transcript join: the column sits on the priced row itself, and the
+ * duplicate stamp has already left exactly one row per call. The frame read
+ * and the class-bucket read both use this, so they cannot count differently.
+ */
+function classBucketServerToolRequests(rowAlias: string): string {
+  return `toInt64(coalesce(${rowAlias}.web_search_requests, 0))`;
+}
+const FRAME_SERVER_TOOL_REQUESTS = classBucketServerToolRequests("c");
+
+/**
+ * The predicate that limits a wrapped run's read to its own chains, by the
+ * table's sort key ({@link FrameRunRef}).
+ */
+const RUN_SESSIONS = "session_uuid IN {sessionUuids:Array(UUID)}";
+
+/**
+ * The sessions a wrapped run's reads name: the list the caller loaded, with
+ * the root always in it, so a run whose list came back without its own
+ * session still reads the root chain.
+ */
+function runSessions(run: {
+  rootSessionUuid: string;
+  sessionUuids: readonly string[];
+}): string[] {
+  return run.sessionUuids.includes(run.rootSessionUuid)
+    ? [...run.sessionUuids]
+    : [run.rootSessionUuid, ...run.sessionUuids];
+}
+
+/**
  * Every model-call frame of one run, oldest first. Throws on a degraded
  * store: the rollup job retries rather than writing a row from missing frames.
  *
@@ -201,6 +253,21 @@ const FRAME_CACHE_5M = `toInt64(greatest(0, ${FRAME_CACHE_WRITE} - ${FRAME_CACHE
  * names `root_session_uuid`, so a host in another workspace of the same
  * organization can stamp its frames with this run's root; without the
  * workspace predicate they were priced into this run.
+ *
+ * Each of the three reads also names the run's sessions
+ * ({@link FrameRunRef}), so it reads the run's own chains through the table's
+ * sort key instead of every chain the workspace holds (#4103). The root and
+ * workspace predicates stay: a session list does not stop a host in another
+ * workspace from naming one of these sessions.
+ *
+ * The transcript joins key on the session as well as the call id, as
+ * {@link readObservedModels} does. A parent and its subagent can reuse a
+ * request or message id, and a join on the id alone took `max()` over both
+ * sessions and credited one call's thinking and one-hour cache split to both.
+ *
+ * A wrapped frame carries the call's web searches as `server_tool_request`,
+ * priced per request. Web fetches are not counted: the vendor does not charge
+ * per fetch (#3721).
  */
 export async function readModelCallFrames(args: {
   orgId: string;
@@ -276,16 +343,19 @@ export async function readModelCallFrames(args: {
         ${FRAME_CACHE_1H} AS cache_write_1h,
         toInt64(greatest(0, toInt64(coalesce(c.output_tokens, 0)) - ${FRAME_REASONING})) AS output,
         ${FRAME_REASONING} AS reasoning,
+        ${FRAME_SERVER_TOOL_REQUESTS} AS server_tool_request,
         c.cost_usd_micros AS cost_micros
       FROM (
         SELECT
           ts, seq, model, provider, input_tokens, output_tokens,
           cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
-          thinking_tokens, cost_usd_micros, request_id, message_id
+          thinking_tokens, web_search_requests, cost_usd_micros, request_id,
+          message_id, session_uuid
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
+          AND ${RUN_SESSIONS}
           AND kind = 'llm_call'
           AND source IN {sources:Array(String)}
           AND ${NOT_A_DUPLICATE}
@@ -294,37 +364,42 @@ export async function readModelCallFrames(args: {
       LEFT JOIN (
         SELECT
           request_id AS call_key,
+          session_uuid AS session_uuid,
           toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
           toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
+          AND ${RUN_SESSIONS}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
-        GROUP BY call_key
+        GROUP BY call_key, session_uuid
         HAVING call_key != ''
-      ) AS t ON t.call_key = c.request_id
+      ) AS t ON t.call_key = c.request_id AND t.session_uuid = c.session_uuid
       LEFT JOIN (
         SELECT
           message_id AS call_key,
+          session_uuid AS session_uuid,
           toInt64(max(coalesce(thinking_tokens, 0))) AS thinking,
           toInt64(max(coalesce(cache_creation_1h_tokens, 0))) AS cache_1h
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
           AND root_session_uuid = {rootSessionUuid:UUID}
+          AND ${RUN_SESSIONS}
           AND kind = 'llm_call'
           AND ${TRANSCRIPT_SPLIT_ROW}
-        GROUP BY call_key
+        GROUP BY call_key, session_uuid
         HAVING call_key != ''
-      ) AS m ON m.call_key = c.message_id
+      ) AS m ON m.call_key = c.message_id AND m.session_uuid = c.session_uuid
       ORDER BY c.ts, c.seq
     `,
     query_params: {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
       rootSessionUuid: run.rootSessionUuid,
+      sessionUuids: runSessions(run),
       sources: TACHO_TOKEN_SOURCES,
       duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
     },
@@ -340,6 +415,7 @@ export async function readModelCallFrames(args: {
     cache_write_1h: string;
     output: string;
     reasoning: string;
+    server_tool_request: string;
     cost_micros: string | null;
   };
   const rows = (await result.json()) as Row[];
@@ -353,7 +429,7 @@ export async function readModelCallFrames(args: {
     cacheWrite1h: Number(r.cache_write_1h),
     output: Number(r.output),
     reasoning: Number(r.reasoning),
-    serverToolRequests: 0,
+    serverToolRequests: Number(r.server_tool_request),
     reportedCostMicros: r.cost_micros,
     basis: "client_attested",
   }));
@@ -361,15 +437,17 @@ export async function readModelCallFrames(args: {
 
 /**
  * Every tool-call frame of one wrapped run, read in the run's own workspace
- * for the reason {@link readModelCallFrames} gives. The hook source is the one
- * that carries a tool call once (the ingest handler's `numToolCalls` rule); a
- * ledger run's tool calls are its `tool.call_completed` events in Postgres,
- * which the rollup store reads.
+ * and its own sessions for the reasons {@link readModelCallFrames} gives. The
+ * hook source is the one that carries a tool call once (the ingest handler's
+ * `numToolCalls` rule); a ledger run's tool calls are its
+ * `tool.call_completed` events in Postgres, which the rollup store reads.
  */
 export async function readTachoToolCallFrames(args: {
   orgId: string;
   workspaceId: string;
   rootSessionUuid: string;
+  /** The run's sessions, root first ({@link FrameRunRef}). */
+  sessionUuids: readonly string[];
 }): Promise<ToolCallFrameRow[]> {
   const ch = clickhouse();
   const result = await ch.query({
@@ -379,6 +457,7 @@ export async function readTachoToolCallFrames(args: {
       WHERE org_id = {orgId:UUID}
         AND workspace_id = {workspaceId:UUID}
         AND root_session_uuid = {rootSessionUuid:UUID}
+        AND ${RUN_SESSIONS}
         AND kind = 'tool_call'
         AND source = 'hook'
       ORDER BY ts, seq
@@ -387,6 +466,7 @@ export async function readTachoToolCallFrames(args: {
       orgId: args.orgId,
       workspaceId: args.workspaceId,
       rootSessionUuid: args.rootSessionUuid,
+      sessionUuids: runSessions(args),
     },
     format: "JSONEachRow",
   });
@@ -510,13 +590,14 @@ export async function readTachoToolCallObservations(args: {
  * frame stores.
  *
  * `server_tool_request` is on this list because a wrapped agent's model-call
- * row DOES report it: `tacho_events.web_search_requests` and
- * `web_fetch_requests` count the provider-side tool calls the vendor bills
- * per request, and the book prices them as one class at `request` units
- * ({@link import("@oxagen/billing").PRICE_UNIT_BY_TOKEN_CLASS}). Leaving it
- * off meant a model whose search requests nobody had priced was never named
- * by `list_unpriced_models`, so the one rate that made its runs incomplete
- * was the one rate the report stayed silent about (#3281).
+ * row DOES report it: `tacho_events.web_search_requests` counts the web
+ * searches the vendor bills per request, and the book prices them at
+ * `request` units ({@link import("@oxagen/billing").PRICE_UNIT_BY_TOKEN_CLASS}).
+ * Leaving it off meant a model whose search requests nobody had priced was
+ * never named by `list_unpriced_models`, so the one rate that made its runs
+ * incomplete was the one rate the report stayed silent about (#3281). The
+ * table's `web_fetch_requests` column is not part of the class, because the
+ * vendor does not bill a fetch per request ({@link classBucketServerToolRequests}).
  *
  * `PriceTokenClass` (@oxagen/database/schema) also carries `image`,
  * `video_second`, `embedding_input` and `rerank`. No observation source in
@@ -658,18 +739,6 @@ function classBucketCache1h(rowAlias: string, cacheWriteExpr: string): string {
 }
 
 /**
- * The provider-side tool calls one wrapped model call made, which the book
- * prices as `server_tool_request` at one rate per request. The vendors bill a
- * server-side web search and a server-side fetch the same way and the class is
- * one class, so the two columns are one figure. No transcript join: both
- * columns sit on the priced row itself, and the duplicate stamp has already
- * left exactly one row per call.
- */
-function classBucketServerToolRequests(rowAlias: string): string {
-  return `toInt64(coalesce(${rowAlias}.web_search_requests, 0) + coalesce(${rowAlias}.web_fetch_requests, 0))`;
-}
-
-/**
  * The distinct models an organization has run since `since`, heaviest first
  * (Mission Control spec §12.2; ADR-060 §1). Both frame stores are read and
  * folded by model id: a model reached through the gateway and the same model
@@ -706,7 +775,7 @@ function classBucketServerToolRequests(rowAlias: string): string {
  * and is scoped to exactly the models the summary named, so a book holding
  * boundaries for unrelated models never widens it. It reports every class of
  * {@link OBSERVED_TOKEN_CLASSES}, `server_tool_request` included, so a model
- * billed per provider-side search or fetch is compared against the rate that
+ * billed per provider-side web search is compared against the rate that
  * prices those requests and not only against its token rates.
  */
 export async function readObservedModels(args: {
@@ -911,7 +980,7 @@ export async function readObservedModels(args: {
             toString(model) AS model, toString(provider) AS provider,
             toDateTime64(ts, 3, 'UTC') AS ts, input_tokens, output_tokens,
             cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
-            thinking_tokens, web_search_requests, web_fetch_requests,
+            thinking_tokens, web_search_requests,
             request_id, message_id, session_uuid
           FROM tacho_events FINAL
           WHERE ${tachoWhere}

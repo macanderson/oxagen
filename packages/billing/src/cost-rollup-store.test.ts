@@ -62,7 +62,14 @@ function deps(over: {
     loadRunSource: async (publicId) => {
       const m = over.runs[publicId];
       return m
-        ? { meta: m, frames: { kind: "tacho", rootSessionUuid: publicId } }
+        ? {
+            meta: m,
+            frames: {
+              kind: "tacho",
+              rootSessionUuid: publicId,
+              sessionUuids: [publicId],
+            },
+          }
         : null;
     },
     readModelCalls: async () => over.modelCalls ?? [],
