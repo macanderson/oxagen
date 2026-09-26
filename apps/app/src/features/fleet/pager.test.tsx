@@ -173,6 +173,80 @@ describe("RunsPager", () => {
     await expectNoAxe(container);
   });
 
+  // #4381: the count failed on page 3, and both links kept `page=3`. The read
+  // sends a cursor only on page 1, so Older runs read page 3 again by offset,
+  // and Newest runs stayed on page 3. Newest runs was not drawn at all, since
+  // page 3 by offset carries no cursor.
+  it("sends both links to page 1 of the same list when a later page could not count (negative)", async () => {
+    const { container } = renderPager({
+      rows: 10,
+      cursor: null,
+      nextCursor: "c9",
+      pullRequests: "any",
+      list: list({ q: "deploy", status: ["sealed"], page: 3 }),
+    });
+    expect(screen.getByRole("link", { name: "Newest runs" })).toHaveAttribute(
+      "href",
+      "/acme/core?q=deploy&status=sealed",
+    );
+    expect(screen.getByRole("link", { name: "Older runs" })).toHaveAttribute(
+      "href",
+      "/acme/core?q=deploy&status=sealed&cursor=c9",
+    );
+    await expectNoAxe(container);
+  });
+
+  // #4386 review: in another order, page 1 is not the newest runs, so the
+  // link that opens it says first page.
+  it("names the link First page when the list is in another order", () => {
+    renderPager({
+      rows: 10,
+      cursor: null,
+      nextCursor: null,
+      list: list({ sort: "cost", dir: "desc", page: 3 }),
+    });
+    expect(screen.queryByRole("link", { name: "Newest runs" })).toBeNull();
+    expect(screen.getByRole("link", { name: "First page" })).toHaveAttribute(
+      "href",
+      "/acme/core?sort=cost&dir=desc",
+    );
+  });
+
+  // #4386 review: after Older runs, the page is a cursor page. If the count
+  // came back on that read, the counted pager labelled page-4 rows "1–10 of
+  // 279" and its buttons paged from the wrong base.
+  it("keeps the cursor links on a cursor page even when the read counted (negative)", () => {
+    renderPager({
+      rows: 10,
+      total: 279,
+      totalBound: 10_000,
+      cursor: "c9",
+      nextCursor: "c10",
+      list: list(),
+    });
+    const range = screen.getByTestId("pager-range");
+    expect(range).toHaveTextContent("10 runs on this page");
+    expect(range).not.toHaveTextContent("of 279");
+    expect(screen.queryByTestId("pager-pages")).toBeNull();
+    expect(screen.getByRole("link", { name: "Newest runs" })).toHaveAttribute(
+      "href",
+      "/acme/core",
+    );
+    expect(screen.getByRole("link", { name: "Older runs" })).toHaveAttribute(
+      "href",
+      "/acme/core?cursor=c10",
+    );
+  });
+
+  it("draws no Newest runs link on the newest page itself", () => {
+    renderPager({ rows: 10, cursor: null, nextCursor: "c9", list: list() });
+    expect(screen.queryByRole("link", { name: "Newest runs" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Older runs" })).toHaveAttribute(
+      "href",
+      "/acme/core?cursor=c9",
+    );
+  });
+
   // #4370 review: a cursor page with no rows printed "0 of 0", a total
   // nothing counted, beside a link to older runs.
   it("says an empty cursor page holds no runs, without a total (negative)", async () => {

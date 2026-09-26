@@ -200,6 +200,7 @@
         "none": "0 of 0",
         "older": "Older runs",
         "newest": "Newest runs",
+        "first": "First page",
         "rangeEmpty": "0 of {total}",
         "rangeEmptyMore": "0 of {total}+",
         "previous": "Previous",

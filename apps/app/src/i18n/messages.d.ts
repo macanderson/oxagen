@@ -2726,6 +2726,7 @@ type Messages = {
         none: string;
         older: string;
         newest: string;
+        first: string;
         rangeEmpty: string;
         rangeEmptyMore: string;
         previous: string;

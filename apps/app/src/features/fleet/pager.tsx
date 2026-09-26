@@ -6,9 +6,10 @@
 // page an offset can reach.
 //
 // A read that did not count (a pull-request filter, which only the frames
-// answer, or a count that failed) has no total to page against, so the pager
-// falls back to the cursor: how many rows this read returned, and a link to
-// older runs when more follow.
+// answer, or a count that failed) has no total to page against, and a page
+// read by cursor has no position in one, so the pager falls back to the
+// cursor: how many rows this read returned, and a link to older runs when
+// more follow.
 import { useLocale, useTranslations } from "next-intl";
 import type { PullRequestFilter } from "@/data/contracts/runs";
 import { routes } from "@/shared/safe-path";
@@ -17,6 +18,7 @@ import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import {
   type FleetListQuery,
+  isNewestFirst,
   lastReachablePage,
   listQueryToRoute,
   pageRange,
@@ -88,12 +90,20 @@ export function RunsPager({
     routes.fleet(org, ws, listQueryToRoute({ ...list, page }, pullRequests));
   const { from, to } = pageRange(list, pageSize, rows);
 
-  if (total === undefined) {
-    // No count: how many rows this read returned, and the cursor to the next.
-    // A cursor page has no position in a counted list, so the range names
-    // neither a start nor a total: a later page read "1–12 of 12" before, a
-    // figure nothing counted.
+  // A page read by cursor has no position in the counted list, even when a
+  // count came back with it: the cursor page after page 3 is not rows 1 to 10,
+  // and page buttons would jump from the wrong base (#4386 review). So a
+  // cursor page draws the cursor links, as a read with no count does.
+  if (total === undefined || cursor !== null) {
+    // No position: how many rows this read returned, and the cursor to the
+    // next. The range names neither a start nor a total: a later page read
+    // "1–12 of 12" before, a figure nothing counted.
     const range = t("shown", { n: rows });
+    // Both links open page 1 of the same list, so the search and the facets
+    // stay. The read sends a cursor only on page 1 (`toRunsListQuery`), so an
+    // Older link that kept page 3 read page 3 again by offset, and a Newest
+    // link that kept it stayed on page 3 (#4381).
+    const firstPage = listQueryToRoute({ ...list, page: 1 }, pullRequests);
     return (
       <nav
         aria-label={t("label")}
@@ -103,23 +113,21 @@ export function RunsPager({
           {range}
         </span>
         <span className="ms-auto flex flex-wrap items-center gap-3">
-          {cursor === null ? null : (
-            // Back to the newest page of the same list: the search and the
-            // facets stay, and only the cursor goes.
+          {cursor === null && list.page === 1 ? null : (
+            // Page 1 of the list in its own order. That is the newest runs
+            // only in the newest-first order; in another order it may hold
+            // the oldest or the costliest, so the link says first page.
             <SafeLink
-              to={routes.fleet(org, ws, listQueryToRoute(list, pullRequests))}
+              to={routes.fleet(org, ws, firstPage)}
               data-touch-target=""
               className={`${linkText} inline-flex items-center`}
             >
-              {t("newest")}
+              {isNewestFirst(list) ? t("newest") : t("first")}
             </SafeLink>
           )}
           {nextCursor === null ? null : (
             <SafeLink
-              to={routes.fleet(org, ws, {
-                ...listQueryToRoute(list, pullRequests),
-                cursor: nextCursor,
-              })}
+              to={routes.fleet(org, ws, { ...firstPage, cursor: nextCursor })}
               data-touch-target=""
               className={`${linkText} inline-flex items-center`}
             >
