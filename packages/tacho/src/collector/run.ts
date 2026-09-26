@@ -11,12 +11,12 @@ import { startDaemon } from "./daemon";
 
 /**
  * How long the daemon waits for `stop()` after SIGTERM or SIGINT before it
- * exits anyway. `stop()` awaits the git reconciliation lane, which can run
- * for minutes. A re-enroll boots the old daemon out of launchd and waits for
+ * exits anyway. A re-enroll boots the old daemon out of launchd and waits for
  * it to go before it loads the new one, so a slow stop there holds up the
  * enroll, and launchd's and systemd's own kill timeouts are 10 s
- * (`host/service.ts`). `stop()` persists `state.json` before that wait, so
- * exiting early loses the final seal of the host chain and nothing else.
+ * (`host/service.ts`). `stop()` bounds its own waits inside this: at most
+ * `stopLaneMs` for the git reconciliation lane, which can run for minutes,
+ * and `stopDrainMs` for shipping, so it seals the host chain first.
  */
 export const STOP_GRACE_MS = 5_000;
 

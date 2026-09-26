@@ -175,6 +175,10 @@ export interface DaemonTimers {
   sweepMs: number;
   idleSessionMs: number;
   walRetainMs: number;
+  /** The longest `stop` waits for the git lane before it seals the host chain. */
+  stopLaneMs: number;
+  /** The longest `stop` spends shipping the WAL once the host chain is sealed. */
+  stopDrainMs: number;
 }
 
 export const DEFAULT_TIMERS: DaemonTimers = {
@@ -186,6 +190,10 @@ export const DEFAULT_TIMERS: DaemonTimers = {
   sweepMs: 30_000,
   idleSessionMs: 6 * 60 * 60_000,
   walRetainMs: 7 * 24 * 60 * 60_000,
+  // The two add up to 3.5 s, inside the 5 s `STOP_GRACE_MS` the process
+  // gives `stop` (run.ts), which leaves time to seal and persist between them.
+  stopLaneMs: 1_500,
+  stopDrainMs: 2_000,
 };
 
 /** How often the daemon looks at Codex's static run token. */
@@ -355,6 +363,26 @@ function defaultKill(pid: number, signal: "SIGTERM" | "SIGKILL"): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Wait for `work` to settle, or for `ms` to pass, whichever comes first.
+ * Answers whether it settled. The timer does not hold the process open.
+ */
+function settleWithin(
+  work: Promise<unknown> | undefined,
+  ms: number,
+): Promise<boolean> {
+  if (work === undefined) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), ms);
+    timer.unref();
+    const done = () => {
+      clearTimeout(timer);
+      resolve(true);
+    };
+    work.then(done, done);
+  });
 }
 
 /** A serial queue: hook handling for one daemon never interleaves. */
@@ -3549,17 +3577,23 @@ async function initializeDaemon(
       if (stopped) return;
       stopped = true;
       if (timer) clearInterval(timer);
-      // Persist now, before the potentially long wait below. `gitLane` can
-      // run for minutes (`startGitReads`'s own comment has the arithmetic),
-      // and a stop timeout that SIGKILLs this process mid-wait must not leave
-      // `state.json` any further behind the WAL than the last ordinary tick
-      // already left it. The finalize below persists again once the wait and
-      // the shutdown sequence after it are done.
+      // Persist now, before the waits below. A stop timeout that kills this
+      // process mid-wait must not leave `state.json` any further behind the
+      // WAL than the last ordinary tick already left it. The finalize below
+      // persists again.
       persistState();
-      // The lane may be mid-spawn. Its results are applied through `serial`, so
-      // shutting down without waiting would race the finalize below and could
-      // append a reconciliation after the host chain was sealed.
-      await gitLane;
+      // Every wait here is bounded, so the host chain is sealed and persisted
+      // inside the process's own `STOP_GRACE_MS` (C-10). The git lane can run
+      // for minutes (`startGitReads` has the arithmetic), and waiting it out
+      // meant the process exited before the finalize ran. A read abandoned
+      // here is lost with nothing owed: a pending SessionEnd stays in
+      // `pending-session-ends.json`, and the next start reads its worktree
+      // again. A read that lands after this applies through `serial` to its
+      // own session's chain, never to the host's.
+      if (!(await settleWithin(gitLane, timers.stopLaneMs)))
+        log(
+          `stop: left a git read unfinished after ${timers.stopLaneMs} ms; a pending SessionEnd is read again at the next start`,
+        );
       modelProxy.close();
       await modelProxyListener.close();
       await server.close();
@@ -3568,7 +3602,12 @@ async function initializeDaemon(
         hostRecord.sealed = true;
         persistState();
       });
-      await shipper.drain();
+      // Shipping stops at its budget. A batch in flight is marked shipped only
+      // once its response lands, so what did not ship leaves at the next start.
+      if (!(await settleWithin(shipper.drain(), timers.stopDrainMs)))
+        log(
+          `stop: stopped shipping after ${timers.stopDrainMs} ms; the rest of the WAL ships at the next start`,
+        );
     },
   };
 }

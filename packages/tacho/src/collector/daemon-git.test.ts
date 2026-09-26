@@ -23,7 +23,7 @@ import {
 import { unsignedBundle } from "../host/test-support";
 import type { Exec, ExecAsync } from "../host/service";
 import type { TachoEvent } from "../envelope";
-import { type DaemonHandle, startDaemon } from "./daemon";
+import { type DaemonHandle, type DaemonTimers, startDaemon } from "./daemon";
 
 const SESSION = "11111111-2222-3333-4444-555555555555";
 /** A second live session, for the cases about one tick's batch of sessions. */
@@ -107,6 +107,7 @@ describe("the daemon's git seam", () => {
     // `ticking` guard rather than about the order inside a single tick.
     driver?: { shipMs: number },
     existingPaths?: ReturnType<typeof scratchPaths>,
+    timers?: Partial<DaemonTimers>,
   ) {
     const paths = existingPaths ?? scratchPaths();
     const signer = bundleSigner();
@@ -151,6 +152,7 @@ describe("the daemon's git seam", () => {
         commandsPollMs: 0,
         ...(driver ?? {}),
         ...(driver !== undefined ? { bundleRefreshMs: 0 } : {}),
+        ...timers,
       },
     });
     handles.push(handle);
@@ -899,6 +901,66 @@ describe("the daemon's git seam", () => {
     expect(polls).toBeGreaterThanOrEqual(3);
 
     release();
+  });
+
+  it("seals the host chain and returns inside its budget while a worktree read is stuck", async () => {
+    // The process gives `stop` five seconds (`STOP_GRACE_MS`) and then exits.
+    // Waiting out a read that will not answer ran past that every time, so
+    // the host chain never got its `agent_stop`.
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let probeStarted = false;
+    const stuck: ExecAsync = async () => {
+      probeStarted = true;
+      await held;
+      return { status: 1, stdout: "", stderr: "released" };
+    };
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+      stuck,
+      undefined,
+      undefined,
+      undefined,
+      { stopLaneMs: 50, stopDrainMs: 50 },
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    void handle.flushGitReads();
+    const probing = Date.now() + 2_000;
+    while (!probeStarted && Date.now() < probing)
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(probeStarted).toBe(true);
+
+    const started = Date.now();
+    await handle.stop();
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(handle.wal.read(handle.hostRecorder.sessionUuid).at(-1)?.kind).toBe(
+      "agent_stop",
+    );
+    release();
+  });
+
+  it("stops shipping at its budget", async () => {
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { stopLaneMs: 50, stopDrainMs: 50 },
+    );
+    // A control plane that takes the batch and never answers.
+    handle.shipper.drain = () => new Promise(() => undefined);
+    const started = Date.now();
+    await handle.stop();
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(handle.wal.read(handle.hostRecorder.sessionUuid).at(-1)?.kind).toBe(
+      "agent_stop",
+    );
   });
 
   it("does not reconcile on a tool call or a prompt", async () => {
