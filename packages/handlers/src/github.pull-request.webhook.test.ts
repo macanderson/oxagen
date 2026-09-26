@@ -273,6 +273,32 @@ describe("recordGithubPullRequestState", () => {
     expect(out).toEqual({ outcome: "recorded", rows: 2 });
   });
 
+  it("still writes the other workspaces when one write fails, then throws (negative)", async () => {
+    const rows: Row[] = [
+      {
+        orgId: ORG_B.orgId,
+        key: KEY,
+        state: null,
+        draft: false,
+        sourceUpdatedAt: null,
+      },
+    ];
+    const deps = fakeDeps(rows, [ORG_A, ORG_B]);
+    const write = deps.apply;
+    deps.apply = vi.fn((scope, key, forge, seenAt) =>
+      scope.orgId === ORG_A.orgId
+        ? Promise.reject(new Error("plane unreachable"))
+        : write(scope, key, forge, seenAt),
+    );
+    await expect(
+      recordGithubPullRequestState(deps, {
+        installationId: "555",
+        body: delivery({ state: "closed", merged: true }),
+      }),
+    ).rejects.toThrow("1 of 2 workspaces could not store the state");
+    expect(rows[0]?.state).toBe("merged");
+  });
+
   it("reads nothing when no workspace holds a connection (negative)", async () => {
     const deps = fakeDeps([], []);
     expect(

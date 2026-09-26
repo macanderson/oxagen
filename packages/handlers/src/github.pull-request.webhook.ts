@@ -94,6 +94,9 @@ export function pullRequestDeliveryOf(
 /**
  * Record the state a `pull_request` delivery reports. The route calls this
  * once per delivery and never lets it fail the delivery.
+ *
+ * One workspace's failed write does not stop the others: each workspace is
+ * written, and then the failures are thrown together so the route logs them.
  */
 export async function recordGithubPullRequestState(
   deps: GithubPullRequestStateDeps,
@@ -105,8 +108,19 @@ export async function recordGithubPullRequestState(
   if (scopes.length === 0) return { outcome: "no_connection", rows: 0 };
   const seenAt = deps.now();
   let rows = 0;
-  for (const scope of scopes)
-    rows += await deps.apply(scope, delivery.key, delivery.forge, seenAt);
+  const failures: unknown[] = [];
+  for (const scope of scopes) {
+    try {
+      rows += await deps.apply(scope, delivery.key, delivery.forge, seenAt);
+    } catch (err) {
+      failures.push(err);
+    }
+  }
+  if (failures.length > 0)
+    throw new AggregateError(
+      failures,
+      `github.pull-request.webhook: ${failures.length} of ${scopes.length} workspaces could not store the state; ${rows} rows were written`,
+    );
   return { outcome: "recorded", rows };
 }
 
