@@ -1125,4 +1125,31 @@ describe("a command frame's inspector", () => {
     expect(screen.queryByTestId("control-inspector")).toBeNull();
     expect(calls.commands).toEqual([]);
   });
+
+  it("reads no report for a subagent's frame whose seq a command frame holds on the run's chain (negative, #3823)", async () => {
+    // A subagent's chain numbers its frames from 0, so its frame 2 is not the
+    // run's frame 2, the steer. A command is applied on the run's own chain.
+    const chain = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    const { calls } = await renderTab({
+      frames,
+      everything,
+      body: `${chain}:2`,
+      frameBody: ok(
+        runFrameBody({
+          seq: "2",
+          chainRef: chain,
+          contentType: "text/plain",
+          text: "a.test.ts",
+          bytes: 9,
+        }),
+      ),
+      commands: ok({ commands: [row] }),
+    });
+    expect(calls.frameBody).toEqual([[ctx, "tse_7k2m9q", "2", chain]]);
+    expect(screen.queryByTestId("control-inspector")).toBeNull();
+    expect(screen.getByTestId("frame-open")).not.toHaveTextContent(
+      "control.steer",
+    );
+    expect(calls.commands).toEqual([]);
+  });
 });

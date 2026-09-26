@@ -108,13 +108,15 @@ async function readBody(
 /**
  * The operator's command the open frame records, or null for any other frame
  * (`controlOf`). A frame off this page is read by the type its transcript
- * entry carries.
+ * entry carries. A command is applied on the run's own chain, so a
+ * subagent's frame records none, even where its seq matches a command frame
+ * on the run's chain (#3823).
  */
 function openCommand(
   open: OpenFrame | null,
   entries: ReadonlyMap<string, TranscriptEntry>,
 ): ControlCommand | null {
-  if (open === null) return null;
+  if (open === null || open.chainRef !== undefined) return null;
   const entry = entries.get(open.seq);
   const type = open.frame?.type ?? entry?.type ?? null;
   return type === null ? null : controlOf(type, entry);
