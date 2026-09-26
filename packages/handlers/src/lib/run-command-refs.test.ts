@@ -6,6 +6,7 @@ import {
   issueRefsOfFrame,
   readRunCommandRefFrames,
   releaseRefsOfCommand,
+  releaseRefsOfFrame,
   type CommandRefFrameRow,
 } from "./run-command-refs";
 
@@ -173,6 +174,54 @@ describe("releaseRefsOfCommand (#3890)", () => {
   });
 });
 
+describe("releaseRefsOfFrame", () => {
+  const row = (over: Partial<CommandRefFrameRow>): CommandRefFrameRow => ({
+    seq: 7,
+    command: "",
+    path: "/work/app",
+    observed_at: "2026-09-26 10:00:00.000",
+    issue_repository: "",
+    issue_number: "",
+    issue_url: "",
+    issue_action: "",
+    release_repository: "",
+    release_tag: "",
+    ...over,
+  });
+
+  it("reads the release a GitHub MCP call created from the recorder's attrs", () => {
+    expect(
+      releaseRefsOfFrame(
+        row({
+          command: "api.githubcopilot.com",
+          release_repository: "acme/app",
+          release_tag: "v4.11.0",
+        }),
+      ),
+    ).toEqual([{ repository: acme, tag: "v4.11.0" }]);
+  });
+
+  it("counts a tag the attrs and the command both name once", () => {
+    expect(
+      releaseRefsOfFrame(
+        row({
+          command: "gh release create v1 --draft",
+          release_repository: "acme/app",
+          release_tag: "v1",
+        }),
+      ),
+    ).toEqual([{ repository: acme, tag: "v1" }]);
+  });
+
+  it("reads no release from an attr whose repository it cannot read (negative)", () => {
+    expect(
+      releaseRefsOfFrame(
+        row({ release_repository: "acme", release_tag: "v1" }),
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("issueRefOfAttrs", () => {
   it("reads the recorder's issue attrs, the repository attr first", () => {
     expect(
@@ -216,6 +265,8 @@ describe("issueRefsOfFrame", () => {
     issue_number: "",
     issue_url: "",
     issue_action: "",
+    release_repository: "",
+    release_tag: "",
     ...over,
   });
 

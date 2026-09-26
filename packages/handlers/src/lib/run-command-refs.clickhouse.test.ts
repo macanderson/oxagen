@@ -59,6 +59,11 @@ const FRAMES = [
       "issue.action": "created",
     },
   }),
+  frame(8, false, {
+    kind: "network",
+    tool_target: "api.githubcopilot.com",
+    attrs: { "release.repository": "acme/app", "release.tag": "v4.11.0" },
+  }),
 ];
 
 const read = <T>(fn: () => Promise<T>) => runInTenantScope(scope, fn);
@@ -111,7 +116,18 @@ describe.skipIf(!reachable)("the command ref frame read on ClickHouse", () => {
         issue_number: "44",
         issue_action: "created",
       },
+      {
+        seq: "8",
+        command: "api.githubcopilot.com",
+        path: "/work/app",
+        issue_number: "",
+        issue_action: "",
+      },
     ]);
+    expect(rows[3]).toMatchObject({
+      release_repository: "acme/app",
+      release_tag: "v4.11.0",
+    });
     expect(rows[0]?.observed_at).toBe("2026-09-26 10:00:00.000");
   });
 });

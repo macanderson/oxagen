@@ -79,8 +79,9 @@ loads, and the answer says when it was read or why it was not.
    `read_limit`. A missing state stays null, and the tab says so rather than
    guessing one.
 5. **A release is read on load by its tag.** `get_run_work` reads the run's
-   `gh release create <tag>` command frames, resolves the repository by rule
-   3, and reads the repository's releases from GitHub to find the tag. The
+   `gh release create <tag>` command frames and the `release.*` attrs the
+   recorder writes on a GitHub MCP release call, resolves the repository by
+   rule 3, and reads the repository's releases from GitHub to find the tag. The
    state is `draft`, `prerelease`, or `published`, and null with
    `release_not_found` or `release_read_failed` when GitHub has no answer. A
    release whose repository the record cannot resolve is left out with
@@ -89,8 +90,9 @@ loads, and the answer says when it was read or why it was not.
 6. **The server read does not wait for the recorder.** The recorder writes
    `issue.repository`, `issue.number`, `issue.url`, and `issue.action` on the
    effect frame of a GitHub MCP issue tool and of `gh issue create`
-   (`issueAttrs` in `packages/tacho/src/claude-code/tools.ts`). Those reach a
-   host with the next desktop release. The server parses command heads, so a
+   (`issueAttrs` in `packages/tacho/src/claude-code/tools.ts`), and
+   `release.repository` and `release.tag` on a GitHub MCP release call
+   (`releaseAttrs`). Those reach a host with the next desktop release. The server parses command heads, so a
    frame recorded before that release still yields its issues.
 
 ## Consequences

@@ -23,6 +23,7 @@ import {
   type EffectKind,
   issueAttrs,
   pullRequestAttrs,
+  releaseAttrs,
 } from "./tools";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -652,22 +653,25 @@ export function normalizeHook(
         // response, which the frame keeps as a digest. So is the issue a
         // GitHub MCP call acted on, and the one `gh issue create` made
         // (#3970), which get_run_issues reads from these attrs.
-        const issue = issueAttrs(
-          input.tool_name ?? "",
-          input.tool_input,
-          input.tool_response,
-        );
+        // The release a GitHub MCP call created is named only in its input,
+        // which the frame keeps as a digest too (#3890).
+        const tool = input.tool_name ?? "";
+        const issued = {
+          ...issueAttrs(tool, input.tool_input, input.tool_response),
+          ...releaseAttrs(tool, input.tool_input),
+        };
         const named = {
           ...(facts["effect_kind"] === "pr_open"
             ? pullRequestAttrs(input.tool_response)
             : {}),
-          ...issue,
+          ...issued,
         };
         drafts.push(
           draft(
             effectFrame,
             { ...facts, tool_status: "ok" },
-            facts["effect_kind"] === "pr_open" || Object.keys(issue).length > 0
+            facts["effect_kind"] === "pr_open" ||
+              Object.keys(issued).length > 0
               ? { attrs: { ...base.attrs, ...named } }
               : {},
           ),

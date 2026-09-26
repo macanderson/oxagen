@@ -612,6 +612,49 @@ export function issueAttrs(
   });
 }
 
+/**
+ * The release a GitHub MCP call created, as the frame attrs
+ * `release.repository` (`owner/repo`) and `release.tag`, or `{}` when the
+ * call created none (#3890). `get_run_work` reads the tag of a `gh release
+ * create` from the command head, and these attrs for the MCP call, whose
+ * input the frame keeps only as a digest. The tool name is read by its
+ * words, so `create_release`, `github_create_release` and `createRelease`
+ * read alike.
+ */
+export function releaseAttrs(
+  toolName: string,
+  input: unknown,
+): Record<string, string> {
+  const mcp = /^mcp__[^_]+(?:_[^_]+)*?__(.+)$/.exec(toolName);
+  const cursor = mcp === null ? /^MCP:(.+)$/.exec(toolName) : null;
+  const tool = mcp?.[1] ?? cursor?.[1];
+  if (tool === undefined) return {};
+  const name = tool
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 0)
+    .join("_");
+  if (!/(^|_)(create_release|release_create)$/.test(name)) return {};
+  const fields =
+    typeof input === "object" && input !== null
+      ? (input as Record<string, unknown>)
+      : {};
+  const owner = fields["owner"];
+  const repo = fields["repo"];
+  const tag = fields["tag_name"] ?? fields["tagName"] ?? fields["tag"];
+  if (
+    typeof owner !== "string" ||
+    typeof repo !== "string" ||
+    typeof tag !== "string" ||
+    !REPO_SEGMENT.test(owner) ||
+    !REPO_SEGMENT.test(repo) ||
+    !/^[^\s-][^\s]{0,254}$/.test(tag)
+  )
+    return {};
+  return { "release.repository": `${owner}/${repo}`, "release.tag": tag };
+}
+
 /** An issue's page on github.com: owner, repository and number. */
 const ISSUE_URL =
   /https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/(\d+)\b/;

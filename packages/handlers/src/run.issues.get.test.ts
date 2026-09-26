@@ -53,6 +53,8 @@ function commandFrame(seq: number, command: string): CommandRefFrameRow {
     issue_number: "",
     issue_url: "",
     issue_action: "",
+    release_repository: "",
+    release_tag: "",
   };
 }
 

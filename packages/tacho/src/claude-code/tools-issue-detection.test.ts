@@ -4,7 +4,7 @@
 // `gh issue create`, whose number exists only once it has run.
 import { describe, expect, it } from "vitest";
 import { normalizeHook } from "./hooks";
-import { issueAttrs } from "./tools";
+import { issueAttrs, releaseAttrs } from "./tools";
 
 const acme = (number: number, action: string) => ({
   "issue.repository": "acme/app",
@@ -105,6 +105,30 @@ describe("issueAttrs from gh issue create", () => {
   });
 });
 
+// #3890: the release a GitHub MCP call created is named only in its input.
+describe("releaseAttrs", () => {
+  it("names the repository and tag a GitHub MCP release call created", () => {
+    for (const tool of [
+      "mcp__github__create_release",
+      "mcp__gh__githubCreateRelease",
+      "MCP:release_create",
+    ])
+      expect(
+        releaseAttrs(tool, { owner: "acme", repo: "app", tag_name: "v4.11.0" }),
+        tool,
+      ).toEqual({ "release.repository": "acme/app", "release.tag": "v4.11.0" });
+  });
+
+  it.each([
+    ["a list creates nothing", "mcp__github__list_releases", { owner: "acme", repo: "app" }],
+    ["no tag was given", "mcp__github__create_release", { owner: "acme", repo: "app" }],
+    ["a shell call names its tag in the command head", "Bash", { command: "gh release create v1" }],
+    ["a repository it cannot read", "mcp__github__create_release", { owner: "a/b", repo: "app", tag_name: "v1" }],
+  ])("names nothing when %s (negative)", (_why, tool, input) => {
+    expect(releaseAttrs(tool, input)).toEqual({});
+  });
+});
+
 describe("the effect frame carries the issue attrs", () => {
   const hook = (payload: Record<string, unknown>) =>
     normalizeHook(
@@ -141,6 +165,20 @@ describe("the effect frame carries the issue attrs", () => {
     });
     expect(drafts.map((d) => d.kind)).toEqual(["tool_call", "command"]);
     expect(drafts[1]?.attrs).toMatchObject(acme(77, "created"));
+  });
+
+  it("writes the release attrs on a GitHub MCP release call's network frame", () => {
+    const drafts = hook({
+      tool_name: "mcp__github__create_release",
+      tool_input: { owner: "acme", repo: "app", tag_name: "v4.11.0", draft: true },
+      tool_use_id: "toolu_release_1",
+      tool_response: { id: 1 },
+    });
+    expect(drafts.map((d) => d.kind)).toEqual(["tool_call", "network"]);
+    expect(drafts[1]?.attrs).toMatchObject({
+      "release.repository": "acme/app",
+      "release.tag": "v4.11.0",
+    });
   });
 
   it("leaves a call that names no issue as it was (negative)", () => {

@@ -2,8 +2,9 @@
 // get_run_work's `releases` and the Changes panel's Release row (#3890,
 // ADR-197).
 //
-// A release is recorded by the command frame that created it: `gh release
-// create <tag>` in the frame's command head (`releaseRefsOfCommand`). Its
+// A release is recorded by the frame that created it: `gh release create
+// <tag>` in a command frame's head, or the `release.*` attrs the recorder
+// writes on a GitHub MCP release call (`releaseRefsOfFrame`). Its
 // state is GitHub's, read when the page loads through the workspace's
 // connection for the repository, because a draft is published later by a
 // person and a stamped state would go stale. A tag GitHub has no release for
@@ -24,7 +25,7 @@ import {
   COMMAND_REF_FRAME_CAP,
   type CommandRefFrameRow,
   connectionOf,
-  releaseRefsOfCommand,
+  releaseRefsOfFrame,
   resolveFrameRepository,
 } from "./run-command-refs";
 import type { ConnectedRunRepository } from "./run-work";
@@ -79,7 +80,7 @@ export async function readWorkReleases(
   const releases: RunRelease[] = [];
   const seen = new Set<string>();
   for (const row of frames.slice(0, COMMAND_REF_FRAME_CAP)) {
-    for (const ref of releaseRefsOfCommand(row.command)) {
+    for (const ref of releaseRefsOfFrame(row)) {
       const repository = resolveFrameRepository(
         ref.repository,
         row.path,

@@ -568,6 +568,9 @@ export interface CommandRefFrameRow {
   issue_number: string;
   issue_url: string;
   issue_action: string;
+  /** The recorder's `release.*` attrs on a GitHub MCP release call (`releaseAttrs`, tacho). */
+  release_repository: string;
+  release_tag: string;
 }
 
 /** The most frames one read returns; one more says the cap was hit. */
@@ -581,7 +584,7 @@ const PATH =
 /**
  * The session's command and network effect frames that could name an issue
  * or a release, in frame order: a command head that contains "issue" or
- * "release", or a frame the recorder gave `issue.*` attrs. The parse is done
+ * "release", or a frame the recorder gave `issue.*` or `release.*` attrs. The parse is done
  * here, in code, so the query stays a plain filter. It reads every frame the
  * control plane accepted, whatever its chain verdict (ADR-171), and filters on
  * the same organization, workspace and session as every other work read.
@@ -595,18 +598,41 @@ export async function readRunCommandRefFrames(
       attrs['issue.repository'] AS issue_repository,
       attrs['issue.number'] AS issue_number,
       attrs['issue.url'] AS issue_url,
-      attrs['issue.action'] AS issue_action
+      attrs['issue.action'] AS issue_action,
+      attrs['release.repository'] AS release_repository,
+      attrs['release.tag'] AS release_tag
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
         AND session_uuid = {sessionUuid:UUID}
         AND kind IN ('command', 'network')
         AND (positionCaseInsensitive(tool_target, 'issue') > 0
           OR positionCaseInsensitive(tool_target, 'release') > 0
-          OR attrs['issue.number'] != '')
+          OR attrs['issue.number'] != ''
+          OR attrs['release.tag'] != '')
       ORDER BY seq ASC LIMIT {limit:UInt32}`,
     params: { sessionUuid, limit: COMMAND_REF_FRAME_CAP + 1 },
   });
   return result.data;
+}
+
+/**
+ * One frame's releases: the one the recorder named on a GitHub MCP release
+ * call (`release.*` attrs), then each `gh release create` in its command
+ * head, each tag once.
+ */
+export function releaseRefsOfFrame(row: CommandRefFrameRow): ReleaseRef[] {
+  const refs: ReleaseRef[] = [];
+  const tag = row.release_tag;
+  if (tag !== "" && TAG.test(tag)) {
+    const repository = repositoryOf(row.release_repository);
+    // An attr that names a repository this parser cannot read is not a
+    // release with no repository.
+    if (row.release_repository === "" || repository !== null)
+      refs.push({ repository, tag });
+  }
+  for (const ref of releaseRefsOfCommand(row.command))
+    if (!refs.some((seen) => seen.tag === ref.tag)) refs.push(ref);
+  return refs;
 }
 
 /** A ClickHouse `DateTime64` rendered by `toString`, as RFC 3339; null when it does not parse. */

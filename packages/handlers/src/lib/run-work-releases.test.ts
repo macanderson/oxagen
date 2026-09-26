@@ -28,6 +28,8 @@ function frame(seq: number, command: string): CommandRefFrameRow {
     issue_number: "",
     issue_url: "",
     issue_action: "",
+    release_repository: "",
+    release_tag: "",
   };
 }
 
@@ -69,6 +71,26 @@ describe("readWorkReleases (#3890)", () => {
     expect(github.listReleases).toHaveBeenCalledOnce();
     // Read through the repository's own connection.
     expect(github.client).toHaveBeenCalledWith(scope, acme);
+  });
+
+  it("reads a release a GitHub MCP call created, from the recorder's attrs", async () => {
+    const github = over([{ ...release("v2.0.0"), draft: true }]);
+    const result = await readWorkReleases(
+      scope,
+      [
+        {
+          ...frame(4, "api.githubcopilot.com"),
+          release_repository: "acme/app",
+          release_tag: "v2.0.0",
+        },
+      ],
+      [],
+      [acme],
+      github.deps,
+    );
+    expect(result.releases).toEqual([
+      expect.objectContaining({ tag: "v2.0.0", state: "draft", frameSeq: "4" }),
+    ]);
   });
 
   it("does not call a tag GitHub did not list missing when the list was a full page (negative)", async () => {
