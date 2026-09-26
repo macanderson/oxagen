@@ -304,8 +304,8 @@ describe("ChainSection", () => {
   });
 
   describe("the seal's attestation (ADR-195)", () => {
-    const SIGNED = {
-      alg: "ed25519" as const,
+    const SIGNED: NonNullable<RunChain["seals"][number]["attestation"]> = {
+      alg: "ed25519",
       keyRef: "3f9a0c21d4e8b765",
       sig: "c2lnbmVkIGF0IHNlYWwgdGltZQ==",
       signsOver: [
