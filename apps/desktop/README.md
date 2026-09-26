@@ -29,9 +29,10 @@ to, add or drop a wrapper, and unenroll. Spec: `docs/specs/oxagen-desktop/spec.h
 
 | Seam | Kind | Source | Wired by |
 |---|---|---|---|
-| Sidecar bridge (`Command.sidecar`) | boundary | `apps/desktop/src/bridge.ts` | Every panel action. `externalBin` in `src-tauri/tauri.conf.json` lists `binaries/tacho` and `binaries/oxagen` |
+| Sidecar bridge (`run_sidecar`) | boundary | `apps/desktop/src/bridge.ts`, `apps/desktop/src-tauri/src/sidecar.rs` | Every panel action. The Rust shell runs only the commands on its allowlist, with an environment it sets. `src-tauri/sidecar-calls.json` lists one of each argv `commands.ts` builds, and both test suites read it. `externalBin` in `src-tauri/tauri.conf.json` lists `binaries/tacho` and `binaries/oxagen` |
 | Panel-to-argv mapping and the `Harness` union | boundary | `apps/desktop/src/commands.ts` | `apps/desktop/src/app.tsx`. The union must track `WRAPPED_HARNESSES` in `packages/tacho/src/wire.ts` plus `claude-desktop` (ADR-101) |
-| Sidecar and updater permissions | boundary | `apps/desktop/src-tauri/capabilities/default.json` | Tauri, at runtime |
+| Opener and updater permissions | boundary | `apps/desktop/src-tauri/capabilities/default.json` | Tauri, at runtime. The page holds no shell permission |
+| Close guard | boundary | `apps/desktop/src-tauri/src/activity.rs` | A close or a Quit while a command that writes files runs hides the window, and the app exits when the work ends. A second Quit exits at once. Sign-in and a first run hold nothing. On macOS the Dock's Quit and a logout skip it |
 | User-scoped API calls (`USER_ROUTES`) | boundary | `apps/desktop/src-tauri/src/lib.rs` | The Workspace panel. Served by `apps/api/src/app.ts` |
 | Release feed (`latest.json`) | boundary | `apps/desktop/src-tauri/tauri.conf.json` (`plugins.updater.endpoints`) | `apps/desktop/src/updater.ts` |
 
@@ -189,6 +190,16 @@ pickers, `tacho detect`, and with `--enroll` the enroll, `tacho status` and a
 recorded first run per agent. It writes `oxagen-e2e-smoke-<host>.json`.
 Without `--enroll` it changes nothing on the machine.
 
+`scripts/e2e-webdriver.mjs` clicks through the built app on Linux with
+tauri-driver: the scan, Sign out, the start of Sign in, and the poll's `tacho
+status`, each through the sidecar allowlist, in a scratch HOME with a stand-in
+control plane. It also checks that the page cannot start `tacho daemon` or
+spawn a process through the shell plugin. The `webdriver` job in
+`desktop-rig.yml` runs it and keeps each step, with the window's text at
+it, as an artifact.
+Run it under `xvfb-run -a` after `pnpm sidecars` and `pnpm tauri build --debug
+--no-bundle`.
+
 Needs Rust (stable), a Node built with single-executable support, and, on
 Linux, `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`. The
 sidecars are Node SEAs, so `sidecars` fails before `tauri build` ever runs on a
@@ -307,12 +318,15 @@ src/            React UI (app.tsx), the sidecar bridge (bridge.ts, tested with
 src-tauri/      Rust shell: state reads, the two user-scoped API calls, tray;
                 cli_install.rs (PATH install: automatic on launch, and the
                 "Link into PATH" / "Remove links" commands, with unit-tested
-                decision functions); capabilities/default.json scopes the
-                sidecars and the updater; tauri.unsigned.conf.json is the
-                no-key overlay
+                decision functions); sidecar.rs (the sidecar allowlist and
+                run_sidecar); activity.rs (the close guard);
+                capabilities/default.json scopes the opener and the updater;
+                tauri.unsigned.conf.json is the no-key overlay
 scripts/        sidecars.mjs (stage binaries), icons.mjs, publish-downloads.mjs
                 and check-latest.mjs (the downloads host), e2e-smoke.mjs (an
                 installed app against the live control plane),
+                e2e-webdriver.mjs (the built app's session-free panel
+                actions through tauri-driver),
                 smoke-macos-bundle.sh (CI: start the signed bundle's sidecars
                 and app under the hardened runtime), rig-stubs.mjs
 ```
