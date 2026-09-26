@@ -1,6 +1,6 @@
 /**
- * `oxagen run export`, `export-status`, `download`, `chain` and `turns` output
- * discipline: --json emits the exact contract payload, pretty mode prints
+ * `oxagen run export`, `export-status`, `download`, `chain`, `turns` and
+ * `transcript` output discipline: --json emits the exact contract payload, pretty mode prints
  * what to do next, and an API failure goes to stderr. The shared API client,
  * the configured API origin and `fetch` are mocked; no network is needed.
  */
@@ -33,6 +33,8 @@ import {
   runDownload,
   runExport,
   runExportStatus,
+  runTranscript,
+  type RunTranscriptOptions,
   runTurns,
 } from "../run.js";
 import { apiPostOrThrow } from "../../lib/api.js";
@@ -302,6 +304,298 @@ describe("oxagen run turns", () => {
     await runTurns("tse_nope", {}, writer);
     expect(out).toEqual([]);
     expect(err.join("\n")).toMatch(/run_not_found/);
+  });
+});
+
+/** One `get_run_transcript` entry, as the handler sends it. */
+function entry(over: Record<string, unknown>) {
+  return {
+    seq: "0",
+    endSeq: "0",
+    key: "0",
+    at: "2026-09-11T09:00:00.000Z",
+    elapsedMs: 0,
+    kind: "frame",
+    type: "turn_start",
+    label: "turn_start",
+    callId: null,
+    kinds: [],
+    request: null,
+    response: null,
+    decision: null,
+    frames: 1,
+    turn: 1,
+    cost: null,
+    cumulativeCost: null,
+    node: "prompt",
+    quiet: false,
+    outcome: null,
+    tool: null,
+    model: null,
+    ...over,
+  };
+}
+
+const TRANSCRIPT_PAGE = {
+  zoom: "steps",
+  kinds: [],
+  entries: [
+    entry({ kinds: ["prompt"] }),
+    entry({
+      seq: "4",
+      endSeq: "4",
+      key: "4",
+      kind: "model_call",
+      type: "llm_call",
+      label: "anthropic/claude-opus-5",
+      kinds: ["responses", "thinking", "usage"],
+      node: "model",
+      outcome: "ok",
+      model: "anthropic/claude-opus-5",
+    }),
+    entry({
+      seq: "5",
+      endSeq: "6",
+      key: "5",
+      kind: "tool_call",
+      type: "tool_requested",
+      label: "Bash",
+      kinds: ["tools", "errors"],
+      node: "tool",
+      outcome: "failed",
+      tool: "Bash",
+    }),
+    // A reply that repeats the prompt: nothing to show, so no row.
+    entry({
+      seq: "8",
+      endSeq: "8",
+      key: "8",
+      type: "turn_end",
+      label: "turn_end",
+      node: "reply",
+      quiet: true,
+    }),
+    entry({
+      seq: "9",
+      endSeq: "9",
+      key: "9",
+      type: "agent_stop",
+      label: "agent_stop",
+      kinds: ["seal"],
+      turn: null,
+      node: "seal",
+    }),
+  ],
+  cursor: null,
+  complete: true,
+};
+
+const TRANSCRIPT_COUNTS = {
+  kinds: {
+    prompt: 1,
+    responses: 1,
+    thinking: 1,
+    tools: 1,
+    policy: 0,
+    usage: 1,
+    recall: 0,
+    seal: 1,
+    errors: 1,
+  },
+  entries: 4,
+  errors: 1,
+  policy: 0,
+};
+
+/** A read from the run's start, which carries the whole run's counts. */
+const TRANSCRIPT = { ...TRANSCRIPT_PAGE, counts: TRANSCRIPT_COUNTS };
+
+/** A printed table row, split on the two-space gutter. */
+const cells = (line: string | undefined) => (line ?? "").split(/\s{2,}/);
+
+describe("oxagen run transcript", () => {
+  beforeEach(() => {
+    post.mockReset();
+    process.exitCode = undefined;
+  });
+  afterEach(() => {
+    process.exitCode = undefined;
+  });
+
+  it("posts the run id, zoom, chips, query and page to runs/transcript and emits the exact payload as JSON", async () => {
+    post.mockResolvedValue(TRANSCRIPT);
+    const { writer, out, err } = memoryWriter();
+    await runTranscript(
+      "tse_0a1b2c",
+      {
+        zoom: "everything",
+        kinds: " thinking, seal,,thinking ",
+        query: "  retry ",
+        after: "c1",
+        limit: 50,
+        text: "full",
+        json: true,
+      },
+      writer,
+    );
+    expect(post).toHaveBeenCalledWith("runs/transcript", {
+      runId: "tse_0a1b2c",
+      zoom: "everything",
+      kinds: ["thinking", "seal"],
+      query: "retry",
+      after: "c1",
+      limit: 50,
+      text: "full",
+    });
+    expect(JSON.parse(out[0] as string)).toEqual(TRANSCRIPT);
+    expect(err).toEqual([]);
+  });
+
+  it("sends the run id and the steps zoom alone when nothing else is asked", async () => {
+    post.mockResolvedValue(TRANSCRIPT);
+    const { writer } = memoryWriter();
+    await runTranscript("tse_0a1b2c", {}, writer);
+    expect(post).toHaveBeenCalledWith("runs/transcript", {
+      runId: "tse_0a1b2c",
+      zoom: "steps",
+    });
+  });
+
+  it("prints each entry with something to show, and the count per chip over the whole run", async () => {
+    post.mockResolvedValue(TRANSCRIPT);
+    const { writer, out } = memoryWriter();
+    await runTranscript("tse_0a1b2c", {}, writer);
+    expect(out[0]).toBe(
+      "tse_0a1b2c at steps: 4 entries on this page, 4 in the run",
+    );
+    expect(out[1]).toBe(
+      "Counts: prompt 1, responses 1, thinking 1, tools 1, policy 0, usage 1, recall 0, seal 1, errors 1",
+    );
+    expect(out[2]).toBe("");
+    expect(cells(out[3])).toEqual(["Turn", "Key", "Row", "Name", "Outcome"]);
+    expect(out.slice(4, 8).map(cells)).toEqual([
+      ["1", "0", "prompt", "turn_start", "-"],
+      ["1", "4", "model", "anthropic/claude-opus-5", "ok"],
+      ["1", "5", "tool", "Bash", "failed"],
+      ["-", "9", "seal", "agent_stop", "-"],
+    ]);
+    // The quiet reply draws no row, and the reader is told where it went.
+    expect(out.some((line) => cells(line)[1] === "8")).toBe(false);
+    expect(out[8]).toBe(
+      "1 entry with nothing to show is left out. --json lists them.",
+    );
+    expect(out).toHaveLength(9);
+  });
+
+  it("marks counts from a read that stopped short as floors, and names the next page", async () => {
+    post.mockResolvedValue({ ...TRANSCRIPT, complete: false, cursor: "c2" });
+    const { writer, out } = memoryWriter();
+    await runTranscript("tse_0a1b2c", {}, writer);
+    expect(out[0]).toBe(
+      "tse_0a1b2c at steps: 4 entries on this page, 4+ in the run",
+    );
+    expect(out[1]).toContain("thinking 1+, tools 1+");
+    expect(out[1]).toContain("seal 1+, errors 1+");
+    expect(out.slice(-2)).toEqual([
+      "More entries: pass --after c2 for the next page.",
+      "The run is longer than one read carries. These entries cover its first part.",
+    ]);
+  });
+
+  it("prints no counts for a page read from a cursor, which carries none (negative)", async () => {
+    post.mockResolvedValue({ ...TRANSCRIPT_PAGE, cursor: "c3" });
+    const { writer, out } = memoryWriter();
+    await runTranscript("tse_0a1b2c", { after: "c2" }, writer);
+    expect(out[0]).toBe("tse_0a1b2c at steps: 4 entries on this page");
+    expect(out.join("\n")).not.toContain("Counts:");
+    expect(out.join("\n")).not.toContain("in the run");
+  });
+
+  it("says what the search found, where each entry matched, and when the search was partial", async () => {
+    post.mockResolvedValue({
+      ...TRANSCRIPT,
+      entries: [
+        { ...TRANSCRIPT.entries[1], matches: ["response"] },
+        { ...TRANSCRIPT.entries[2], matches: ["label", "subject"] },
+      ],
+      search: { query: "retry", matched: 2, unsearched: 1 },
+    });
+    const { writer, out } = memoryWriter();
+    await runTranscript("tse_0a1b2c", { query: "Retry" }, writer);
+    expect(out[0]).toBe(
+      "tse_0a1b2c at steps: 2 entries on this page, 4 in the run",
+    );
+    expect(out[2]).toBe('Search "retry": 2 matched');
+    expect(out[3]).toBe(
+      "The search is partial: it could not look inside 1 kept body.",
+    );
+    expect(cells(out[5])).toEqual([
+      "Turn",
+      "Key",
+      "Row",
+      "Name",
+      "Outcome",
+      "Matched in",
+    ]);
+    expect(cells(out[6]).at(-1)).toBe("response");
+    expect(cells(out[7]).at(-1)).toBe("label, subject");
+  });
+
+  it("says a search that found nothing found nothing, and claims no partial search it did not make (negative)", async () => {
+    post.mockResolvedValue({
+      ...TRANSCRIPT,
+      entries: [],
+      search: { query: "nowhere", matched: 0, unsearched: 0 },
+    });
+    const { writer, out } = memoryWriter();
+    await runTranscript("tse_0a1b2c", { query: "nowhere" }, writer);
+    expect(out).toContain('Search "nowhere": 0 matched');
+    expect(out).toContain("No entries on this page.");
+    expect(out.join("\n")).not.toContain("partial");
+  });
+
+  it("never emits an em dash or en dash separator (clear-prose, negative)", async () => {
+    post.mockResolvedValue({
+      ...TRANSCRIPT,
+      complete: false,
+      cursor: "c2",
+      search: { query: "retry", matched: 4, unsearched: 3 },
+    });
+    const { writer, out } = memoryWriter();
+    await runTranscript("tse_0a1b2c", { query: "retry" }, writer);
+    const text = out.join("\n");
+    expect(text).not.toContain("\u2014");
+    expect(text).not.toContain("\u2013");
+  });
+
+  it.each<[RunTranscriptOptions, string]>([
+    [{ zoom: "all" }, '--zoom takes turns, steps, or everything, not "all".'],
+    [{ kinds: "thinking,thoughts" }, 'No chip is named "thoughts".'],
+    [{ text: "whole" }, '--text takes excerpt or full, not "whole".'],
+    [{ limit: 0 }, "--limit takes a whole number from 1 to 500."],
+    [{ limit: 501 }, "--limit takes a whole number from 1 to 500."],
+    [{ limit: Number.NaN }, "--limit takes a whole number from 1 to 500."],
+    [{ query: "   " }, "--query takes 1 to 200 characters"],
+    [{ query: "x".repeat(201) }, "--query takes 1 to 200 characters"],
+  ])(
+    "refuses %o before it sends anything (negative)",
+    async (opts, message) => {
+      const { writer, out, err } = memoryWriter();
+      await runTranscript("tse_0a1b2c", opts, writer);
+      expect(post).not.toHaveBeenCalled();
+      expect(out).toEqual([]);
+      expect(err.join("\n")).toContain(message);
+      expect(process.exitCode).toBe(1);
+    },
+  );
+
+  it("routes an API failure to stderr and writes nothing to stdout (negative)", async () => {
+    post.mockRejectedValue(new Error("400 invalid_input: invalid_cursor"));
+    const { writer, out, err } = memoryWriter();
+    await runTranscript("tse_0a1b2c", { after: "stale" }, writer);
+    expect(out).toEqual([]);
+    expect(err.join("\n")).toMatch(/invalid_cursor/);
+    expect(process.exitCode).toBe(1);
   });
 });
 
