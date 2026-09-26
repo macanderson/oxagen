@@ -1320,8 +1320,11 @@ describe("the Runs panel", () => {
     expect(await screen.findByTestId("pause-failure")).toBeInTheDocument();
     expect(screen.queryByTestId("ledger-applied")).toBeNull();
     // The confirm step stays, so the person can send it again or go back.
+    // The refusal is set after the action's await, which React renders
+    // before the transition ends, so the button keeps its in-flight name
+    // for one more render.
     expect(
-      within(dialog).getByRole("button", {
+      await within(dialog).findByRole("button", {
         name: "Revoke evidence ingress for good",
       }),
     ).toBeEnabled();

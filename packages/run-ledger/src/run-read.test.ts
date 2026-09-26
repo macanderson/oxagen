@@ -645,7 +645,7 @@ describe("listSubagentChains", () => {
     expect(query?.sql).toMatch(/"sessions"\."root_session_uuid" = \$\d+/);
     expect(query?.sql).toMatch(/"sessions"\."session_uuid" <> \$\d+/);
     expect(query?.sql).toMatch(
-      /order by "sessions"\."started_at" asc, "sessions"\."id" asc/,
+      /order by "tacho"\."sessions"\."started_at" asc, "tacho"\."sessions"\."id" asc/,
     );
     // Unnarrowed and uncapped: every chain the root holds.
     expect(query?.sql).not.toMatch(/ in \(/);

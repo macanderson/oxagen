@@ -3846,7 +3846,7 @@ describe("policy and context", () => {
     expect(screen.getByText("This run recorded no recall.")).toBeTruthy();
   });
 
-  it("says a list is missing later decisions when a page lies past the one read, and names a subagent's frame without a link (negative)", async () => {
+  it("says a list is missing later decisions when a page lies past the one read, and links a subagent's frame by its chain (negative)", async () => {
     // `complete` is the read's frame cap. The list used to claim it was whole
     // whenever the cap held, however many pages were left.
     await renderRun(
@@ -3881,12 +3881,16 @@ describe("policy and context", () => {
         "The transcript read stopped short, so later decisions are missing here.",
       ),
     ).toBeTruthy();
-    // The Frames tab reads the run's own chain: seq 41 there is another frame.
+    // Seq 41 on the run's own chain is another frame, so the link names the
+    // subagent's chain beside the seq, and the Governed actions tab reads
+    // the frame on that chain (#3823).
     const policy = within(
       screen.getByRole("region", { name: "Policy decisions" }),
     );
-    expect(policy.queryByRole("link", { name: "41" })).toBeNull();
-    expect(policy.getByText("41")).toBeTruthy();
+    expect(policy.getByRole("link", { name: "41" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=0192d4a8-7c1e-7a00-8000-0000000000c1%3A41",
+    );
   });
 
   it("says a list from a transcript that stopped short is missing later decisions (negative)", async () => {

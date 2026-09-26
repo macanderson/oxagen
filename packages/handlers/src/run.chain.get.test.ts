@@ -911,7 +911,7 @@ describe("get_run_chain subagent chains (#3823)", () => {
       /"checkpoints"\."session_id" in \(\$\d+, \$\d+\)/,
     );
     expect(query.sql).toMatch(
-      /order by "checkpoints"\."session_id" asc, "checkpoints"\."seq" asc/,
+      /order by "tacho"\."checkpoints"\."session_id" asc, "tacho"\."checkpoints"\."seq" asc/,
     );
     expect(query.params).toEqual([SCOPE.orgId, SCOPE.workspaceId, ...ids]);
   });

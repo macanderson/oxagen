@@ -58,11 +58,16 @@ describe("the bound digests match what the host computes from its remote", () =>
   });
 
   it("matches a remote typed in another case through the folded digest", () => {
-    // GitHub serves Acme/Repo and acme/repo from one repository. The host's
-    // canonical digest of the lowercase remote differs, the folded one not.
-    const host = hostDigests("git@github.com:acme/repo.git");
+    // GitHub serves Acme/Repo and ACME/REPO from one repository. The host's
+    // canonical digest keeps the path's case, so it differs from both bound
+    // digests, and only the folded one matches. An all-lowercase remote is
+    // not this case: its canonical form is the binding's folded form.
+    const host = hostDigests("git@github.com:ACME/REPO.git");
     expect(digests).not.toContain(host.canonical);
     expect(digests).toContain(host.folded);
+    expect(digests).toContain(
+      hostDigests("git@github.com:acme/repo.git").canonical,
+    );
   });
 
   it("digests a GitLab project on gitlab.com, subgroups included", () => {

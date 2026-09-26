@@ -189,7 +189,14 @@ const CASES: ToolCase[] = [
     handler: runGetTool,
     schema: getSchema,
     metadata: getMetadata,
-    fields: ["runId", "framesAfter", "frameLimit", "waitMs"],
+    fields: [
+      "runId",
+      "framesAfter",
+      "frameLimit",
+      "waitMs",
+      "sessionUuid",
+      "chainsAfter",
+    ],
     readOnly: true,
     args: { runId: LEDGER_ID, frameLimit: 100, waitMs: 0 },
     validOutput: {

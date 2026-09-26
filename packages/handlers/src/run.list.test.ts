@@ -400,11 +400,11 @@ describe("list_runs", () => {
       [],
       [
         tachoSession({
-          publicId: "tse_observed_zero",
+          publicId: "tse_observedzero",
           session: { totalCostMicros: 0, costBasis: "observed" },
         }),
         tachoSession({
-          publicId: "tse_unpriced_zero",
+          publicId: "tse_unpricedzero",
           session: {
             startedAt: at("2026-09-11T09:01:00.000Z"),
             totalCostMicros: 0,
@@ -412,7 +412,7 @@ describe("list_runs", () => {
           },
         }),
         tachoSession({
-          publicId: "tse_unknown_zero",
+          publicId: "tse_unknownzero",
           session: {
             startedAt: at("2026-09-11T09:02:00.000Z"),
             totalCostMicros: 0,
@@ -420,7 +420,7 @@ describe("list_runs", () => {
           },
         }),
         tachoSession({
-          publicId: "tse_list_priced",
+          publicId: "tse_listpriced",
           session: {
             startedAt: at("2026-09-11T09:03:00.000Z"),
             totalCostMicros: 5_000,
@@ -434,14 +434,14 @@ describe("list_runs", () => {
     const reported = Object.fromEntries(
       out.runs.map((r) => [r.id, r.reportedCost]),
     );
-    expect(reported["tse_observed_zero"]).toEqual({
+    expect(reported["tse_observedzero"]).toEqual({
       micros: "0",
       currency: "USD",
       basis: "client_attested",
     });
-    expect(reported["tse_unpriced_zero"]).toBeNull();
-    expect(reported["tse_unknown_zero"]).toBeNull();
-    expect(reported["tse_list_priced"]).toEqual({
+    expect(reported["tse_unpricedzero"]).toBeNull();
+    expect(reported["tse_unknownzero"]).toBeNull();
+    expect(reported["tse_listpriced"]).toEqual({
       micros: "5000",
       currency: "USD",
       basis: "client_attested",

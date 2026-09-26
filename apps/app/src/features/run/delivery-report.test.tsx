@@ -150,9 +150,12 @@ describe("delivery report", () => {
       "Nothing on the run's path can cut a call in flight.",
     );
     expect(steer).toHaveTextContent("Ada Park");
-    expect(steer).toHaveTextContent(
-      "“Run the migration tests before you push.”",
-    );
+    // The steer's text is quoted by its `<q>` element, whose marks the
+    // browser draws and the DOM text does not carry.
+    expect(
+      within(steer).getByText("Run the migration tests before you push.")
+        .tagName,
+    ).toBe("Q");
     expect(
       within(within(steer).getByTestId("report-frame")).getByRole("link"),
     ).toHaveAttribute(
