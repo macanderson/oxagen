@@ -435,8 +435,9 @@ describe("Agents, loaded", () => {
     );
     const pending = rows()[1];
     if (pending === undefined) throw new Error("no row");
-    // No host, so no runtime kind: the line under the dash is the tier alone.
-    expect(cellsOf(pending)[5]).toBe("—not recorded");
+    // No host, so no runtime kind: the cell names the runtime the agent is
+    // bound to (ADR-198), and the line under the dash is the tier alone.
+    expect(cellsOf(pending)[5]).toBe("Build box—not recorded");
     expect(
       pending.querySelector('[data-gap="runtimeKind"]'),
     ).not.toBeInTheDocument();
@@ -475,7 +476,7 @@ describe("Agents, loaded", () => {
     });
     const [row] = rows();
     if (row === undefined) throw new Error("no row");
-    expect(cellsOf(row)[5]).toBe("—gateway");
+    expect(cellsOf(row)[5]).toBe("Build box—gateway");
     expect(
       row.querySelector('[data-gap="runtimeKind"]'),
     ).not.toBeInTheDocument();
