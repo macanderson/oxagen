@@ -58,7 +58,7 @@ A run is attributed to the operator, agent and task it names; a run that names n
 
 ## Runs with no usage
 
-A harness whose model calls pass through neither the Oxagen gateway nor the local proxy records tool calls and no usage. Cursor is one, and so are Stella on a provider other than Anthropic and a Stella session with its own Anthropic base URL. The rollup counts such a run and prices none of it. `unmeteredRuns` counts the period's runs whose `cost.run_totals` row holds no model call, grouped by the session's `harness`, so a reader can see what the total leaves out. A run not yet rolled up has no row and is not counted. A ledger run meters every call through the gateway, so it is never counted. The count is read from Postgres, like the rest of this answer.
+A harness whose model calls pass through neither the Oxagen gateway nor the local proxy records tool calls and no usage. Cursor is one, and so are Stella on a provider other than Anthropic and a Stella session with its own Anthropic base URL. The rollup counts such a run and prices none of it. `unmeteredRuns` counts the period's runs whose `cost.run_totals` row holds no model call, grouped by the session's `harness`, so a reader can see what the total leaves out. An open run counts once it has made a tool call, since the rollup writes a row on a run's first batch, before its first model call can land. A run not yet rolled up has no row and is not counted. A ledger run meters every call through the gateway, so it is never counted. The count is read from Postgres, like the rest of this answer.
 
 ## Cost center
 

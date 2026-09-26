@@ -111,6 +111,10 @@ describe("readUnmeteredRuns", () => {
     expect(where).toMatch(/"run_totals"\."workspace_id" = \$\d+/);
     expect(where).toMatch(/"run_totals"\."run_source" = \$\d+/);
     expect(where).toMatch(/"run_totals"\."model_calls" = \$\d+/);
+    // A run that just opened holds no model call yet, so an open run counts
+    // only once it has made a tool call.
+    expect(where).toMatch(/"run_totals"\."sealed_at" is not null/);
+    expect(where).toMatch(/"run_totals"\."tool_calls" > \$\d+/);
     expect(where).toMatch(/"run_totals"\."started_at" >= \$\d+/);
     expect(where).toMatch(/"run_totals"\."started_at" < \$\d+/);
     // The harness is the session's, joined on the run's public id in the

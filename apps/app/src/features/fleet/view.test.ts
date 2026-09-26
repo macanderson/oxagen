@@ -228,6 +228,15 @@ describe("tile figures", () => {
             cost: null,
             harness: harness("codex"),
           }),
+          // Rolled up on its first batch, before its first model call landed.
+          runRow({
+            id: "tse_opening",
+            source: "tacho",
+            status: "live",
+            cost: null,
+            tokens: none,
+            harness: harness("claude-code"),
+          }),
           // Tokens with no price is an unpriced model, not missing usage.
           runRow({
             id: "tse_unpriced",
@@ -246,7 +255,7 @@ describe("tile figures", () => {
       { harness: "codex", runs: 2 },
       { harness: "cursor", runs: 1 },
     ]);
-    expect(spend.unpriced).toBe(2);
+    expect(spend.unpriced).toBe(3);
     expect(spend.total).toMatchObject({ micros: "2000000" });
   });
 

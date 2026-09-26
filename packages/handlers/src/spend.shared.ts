@@ -27,7 +27,19 @@ import {
   type SpendGroupKind,
   ZERO_TOKENS,
 } from "@oxagen/billing";
-import { and, asc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  lt,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 
 export type SpendScope = { orgId: string; workspaceId: string };
 
@@ -245,11 +257,15 @@ export async function readRunTotals(
  * its own base URL) records tool calls and no usage. The count is what lets
  * a page say so instead of printing a total that reads complete.
  *
- * A run is counted when its `cost.run_totals` row holds no model call. A run
- * that has not been rolled up yet has no row, and a ledger run meters every
- * call through the gateway, so neither is counted. `filter` is the same one
- * {@link readRunTotals} takes, so a drill counts the runs its own total
- * covers. A session row that names no harness is grouped as `unknown`.
+ * A run is counted when its `cost.run_totals` row holds no model call and the
+ * run has either sealed or made a tool call. An open run that has done
+ * neither is left out: `cost.run-progress` writes a row on a run's first
+ * batch, before its first model call can land, so for a moment every new run
+ * holds none. A run that has not been rolled up yet has no row, and a ledger
+ * run meters every call through the gateway, so neither is counted. `filter`
+ * is the same one {@link readRunTotals} takes, so a drill counts the runs its
+ * own total covers. A session row that names no harness is grouped as
+ * `unknown`.
  */
 export async function readUnmeteredRuns(
   scope: SpendScope,
@@ -279,6 +295,7 @@ export async function readUnmeteredRuns(
           eq(totals.workspaceId, scope.workspaceId),
           eq(totals.runSource, "tacho"),
           eq(totals.modelCalls, 0),
+          or(isNotNull(totals.sealedAt), gt(totals.toolCalls, 0)),
           gte(totals.startedAt, start),
           lt(totals.startedAt, next),
           runFilterPredicate(q.filter),

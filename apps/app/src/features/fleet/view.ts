@@ -113,14 +113,17 @@ export function shownCost(run: RunRow): ShownCost | null {
 }
 
 /**
- * Whether a wrapped run's rollup found no model call and its agent reported
- * no usage either (#3304). Its harness's model calls passed through neither
- * the gateway nor the local proxy, so no total can carry its cost. A run
- * with no rollup row yet is not one of these: it may simply not have been
- * rolled up, so it reads as no cost recorded.
+ * Whether a sealed wrapped run's rollup found no model call and its agent
+ * reported no usage either (#3304). Its harness's model calls passed through
+ * neither the gateway nor the local proxy, so no total can carry its cost. A
+ * run with no rollup row yet is not one of these: it may simply not have been
+ * rolled up, so it reads as no cost recorded. Neither is an open run: the
+ * rollup writes a row on a run's first batch, before its first model call
+ * can land, so every new run briefly holds no usage.
  */
 export function reportedNoUsage(run: RunRow): boolean {
-  if (run.source !== "tacho" || shownCost(run) !== null) return false;
+  if (run.source !== "tacho" || run.status === "live") return false;
+  if (shownCost(run) !== null) return false;
   const rolled = run.tokens ?? null;
   if (rolled === null) return false;
   const counted =
