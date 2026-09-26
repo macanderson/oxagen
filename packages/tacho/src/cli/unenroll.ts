@@ -18,7 +18,7 @@ import {
   rmSync,
   unlinkSync,
 } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { acquireInstallLock } from "../host/install-lock";
 import { stripClaudeDesktopConfig } from "../host/claude-desktop-writer";
 import { untrustCodexHooks } from "../host/codex-hook-trust";
@@ -32,8 +32,10 @@ import {
   type HostFile,
   modelProxyPortFor,
   readHostFileLenient,
+  withRecordedHarnessFiles,
   writeHostFile,
 } from "../host/host-file";
+import type { TachoPaths } from "../host/paths";
 import { restoreGithubRepositories } from "./github";
 import { harnessDirsOf, restoreCredentials } from "./credential";
 import {
@@ -42,10 +44,21 @@ import {
   type ModelBaseUrlHarness,
 } from "../host/model-base-url";
 import { stripTachoSettings } from "../host/settings-writer";
-import { harnessesHeldElsewhere } from "../host/slots";
+import {
+  describeSlot,
+  enrolledSlots,
+  harnessesHeldElsewhere,
+  listSlots,
+  otherLiveSlots,
+  SLOTS_DIR,
+  type Slot,
+  slotForHarness,
+  slotIsLive,
+} from "../host/slots";
 import { stripStellaHooks } from "../host/stella-writer";
 import { toProtocolTimestamp } from "../timestamp";
-import { MODEL_ROUTED_HARNESSES } from "../wire";
+import { MODEL_ROUTED_HARNESSES, type TachoHarness } from "../wire";
+import { daemonServiceSpec } from "./daemon-service";
 import {
   type CliDeps,
   type CredentialOptions,
@@ -56,6 +69,11 @@ import { rootPathsOf, slotDeps } from "./slot-deps";
 export interface UnenrollOptions extends CredentialOptions {
   purge?: boolean;
   reason?: string;
+  /**
+   * The harness whose agent to unenroll, on a machine that holds more than
+   * one enrollment (ADR-202). Every other agent's enrollment is kept.
+   */
+  harness?: TachoHarness;
 }
 
 export interface UnenrollResult {
@@ -340,7 +358,7 @@ export async function stripEnrollmentHooks(
       cursorChanged: [],
       stellaChanged: [],
       failed: [
-        `${deps.paths.hostFile}: it names no enrollment and another agent is enrolled on this machine, so no hook entry could be told apart as this one's`,
+        `${deps.paths.hostFile}: no enrollment id could be read for this agent, and another agent is enrolled on this machine, so its hook entries cannot be told apart from the other agent's`,
       ],
     };
   let settingsChanged = false;
@@ -496,13 +514,116 @@ export async function unenroll(
       warnings: [warning],
     };
   }
+  let slotRoot: string | undefined;
   try {
-    return await unenrollLocked(options, deps);
+    const target = unenrollTarget(deps.paths, options.harness);
+    if ("refused" in target) {
+      deps.err(`error: ${target.refused}`);
+      return {
+        ok: false,
+        settingsChanged: false,
+        revoked: false,
+        warnings: [target.refused],
+      };
+    }
+    if (enrolledSlots(deps.paths).length > 1 && target.host !== undefined)
+      deps.out(`Unenrolling ${describeSlot(target)}`);
+    const installed = serviceInstalled(deps);
+    let result: UnenrollResult;
+    if (target.harness === undefined) {
+      result = await unenrollLocked(options, deps);
+    } else {
+      slotRoot = target.paths.root;
+      // The harness files this slot's enroll recorded, as `recordedCliDeps`
+      // does for the root.
+      const read = readHostFileLenient(target.paths.hostFile);
+      result = await unenrollLocked(
+        options,
+        slotDeps(
+          deps,
+          withRecordedHarnessFiles(target.paths, read.host ?? read.salvaged),
+        ),
+      );
+    }
+    return restartForRemaining(installed, result, deps);
   } finally {
     lock.release();
     // Nothing of ours left in it: the directory goes too, so a machine that
     // was enrolled and purged looks like one that never was.
+    if (slotRoot !== undefined) {
+      removeIfEmpty(slotRoot);
+      removeIfEmpty(join(deps.paths.root, SLOTS_DIR));
+    }
     removeIfEmpty(deps.paths.root);
+  }
+}
+
+/**
+ * The slot an unenroll acts on (ADR-202). With a harness named, the slot
+ * that hooks it (`slotForHarness`). With none named, the one enrollment on
+ * the machine, or the root when there is none, whose unenroll then clears
+ * whatever an enrollment lost part way left behind. With more than one
+ * enrollment and no harness named it refuses, and lists them: taking every
+ * agent off the machine for a command that named none is the defect #4371
+ * describes.
+ */
+export function unenrollTarget(
+  root: TachoPaths,
+  harness: TachoHarness | undefined,
+): Slot | { refused: string } {
+  const rootSlot: Slot = { harness: undefined, paths: root, host: undefined };
+  const present = enrolledSlots(root);
+  const listed = present.map(describeSlot).join("; ");
+  if (harness !== undefined) {
+    const slot = slotForHarness(root, harness);
+    if (slot !== undefined) return slot;
+    if (present.length === 0) return rootSlot;
+    return {
+      refused: `no enrollment on this machine hooks ${harness}. It holds ${listed}`,
+    };
+  }
+  if (present.length <= 1) return present[0] ?? rootSlot;
+  return {
+    refused: `this machine holds ${present.length} enrollments: ${listed}. Pass --harness to name the one to remove, and run \`tacho unenroll --harness <name>\` once for each agent to remove them all`,
+  };
+}
+
+function serviceInstalled(deps: CliDeps): boolean {
+  try {
+    return deps.serviceManager.status().installed;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Put the service back for the agents that are still enrolled. One tachod
+ * serves every slot (ADR-202), so the unenroll above stopped the other
+ * agents' collectors and model proxies with its own, and they are down
+ * until this starts it again. The command is this binary's, as `enroll`
+ * installs it.
+ */
+function restartForRemaining(
+  installed: boolean,
+  result: UnenrollResult,
+  deps: CliDeps,
+): UnenrollResult {
+  const remaining = listSlots(deps.paths).filter(slotIsLive);
+  if (!installed || remaining.length === 0 || serviceInstalled(deps))
+    return result;
+  const agents = remaining.map((slot) => slot.host.agent_key).join(", ");
+  deps.out(
+    `Starting the ${deps.serviceManager.kind} service again for ${agents}`,
+  );
+  try {
+    deps.serviceManager.install(
+      daemonServiceSpec(deps.runtime.daemonCommand, deps),
+    );
+    return result;
+  } catch (error) {
+    const warning = `the service could not be started again, so ${agents} ${remaining.length === 1 ? "has" : "have"} no collector or model proxy: ${error instanceof Error ? error.message : String(error)}. Run \`tacho enroll\` for one of them to install it again`;
+    deps.err(`warning: ${warning}`);
+    return { ...result, ok: false, warnings: [...result.warnings, warning] };
   }
 }
 
@@ -755,11 +876,20 @@ async function unenrollLocked(
     // one file most likely to name a repository path or a prompt. The
     // pending session ends hold sealed terminal batches, bodies included,
     // that never reached the WAL, so they go with it (ADR-139).
-    rmSync(deps.paths.log, { force: true });
     rmSync(deps.paths.pendingEnds, { force: true });
-    deps.out(
-      "      WAL, spool, quarantine, pending session ends and the collector log purged",
-    );
+    // One tachod writes one log for every slot (ADR-202), so it stays while
+    // another agent on this machine is enrolled.
+    const root = rootPathsOf(deps);
+    if (otherLiveSlots(root, deps.paths.root).length === 0) {
+      rmSync(root.log, { force: true });
+      deps.out(
+        "      WAL, spool, quarantine, pending session ends and the collector log purged",
+      );
+    } else {
+      deps.out(
+        `      WAL, spool, quarantine and pending session ends purged; the collector log at ${root.log} is kept for the other agents on this machine`,
+      );
+    }
   } else {
     deps.out(`      WAL kept at ${deps.paths.wal} (pass --purge to delete)`);
   }

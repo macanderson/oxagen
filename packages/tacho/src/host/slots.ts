@@ -149,6 +149,53 @@ export function slotHolding(
 }
 
 /**
+ * The slot a command that names `harness` acts on: the live slot that hooks
+ * it, else a retired slot that did (its revoke still pending), else the slot
+ * made for it whose `host.json` cannot be read.
+ */
+export function slotForHarness(
+  root: TachoPaths,
+  harness: TachoHarness,
+): Slot | undefined {
+  const slots = listSlots(root);
+  return (
+    slots.find(
+      (slot) => slotIsLive(slot) && slot.host.harnesses.includes(harness),
+    ) ??
+    slots.find((slot) => slot.host?.harnesses.includes(harness) === true) ??
+    slots.find((slot) => slot.harness === harness)
+  );
+}
+
+/**
+ * The slots that hold an enrollment, live or not: the root when it has a
+ * `host.json`, and every slot after it.
+ */
+export function enrolledSlots(root: TachoPaths): Slot[] {
+  return listSlots(root).filter(
+    (slot) => slot.harness !== undefined || existsSync(root.hostFile),
+  );
+}
+
+/** The live slots other than the one at `self`. */
+export function otherLiveSlots(root: TachoPaths, self: string): Slot[] {
+  return listSlots(root).filter(
+    (slot) => slotIsLive(slot) && slot.paths.root !== self,
+  );
+}
+
+/** A slot as a message names it: its harnesses and its agent. */
+export function describeSlot(slot: Slot): string {
+  if (slot.host === undefined)
+    return `an unreadable enrollment in ${slot.paths.root}`;
+  const what = `${slot.host.harnesses.join(", ")} as ${slot.host.agent_key}`;
+  if (slot.host.revoked_at !== null) return `${what} (retired on this machine)`;
+  if (slot.host.host_status === "revoked")
+    return `${what} (revoked on the fleet page)`;
+  return what;
+}
+
+/**
  * The paths of the slot whose enrollment is `enrollmentId`, live or retired,
  * so a hook entry left behind by a retired slot is still answered by that
  * slot's stale-entry check. The root's paths when no slot after the root has

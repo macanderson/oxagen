@@ -3,6 +3,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import type { CliDeps } from "./deps";
 import { shellQuote } from "./deps";
+import { depsForHarness } from "./slot-deps";
 import { type HostFile, readHostFile, writeHostFile } from "../host/host-file";
 import { isWrappedHarness } from "../wire";
 
@@ -62,8 +63,10 @@ export function githubConfigure(
     repository: string;
     remove?: boolean;
   },
-  deps: CliDeps,
+  rootDeps: CliDeps,
 ): void {
+  // The repository's proxy belongs to the agent that hooks this harness.
+  const deps = depsForHarness(rootDeps, options.harness);
   const host = readHostFile(deps.paths.hostFile);
   if (!host)
     throw new Error("Enroll this host before configuring GitHub custody");
@@ -180,9 +183,10 @@ export function githubConfigure(
 
 export async function githubCredential(
   options: { harness: string; cwd: string; operation: string; input: string },
-  deps: CliDeps,
+  rootDeps: CliDeps,
 ): Promise<void> {
   if (options.operation !== "get") return;
+  const deps = depsForHarness(rootDeps, options.harness);
   const host = readHostFile(deps.paths.hostFile);
   if (!host) throw new Error("This host is not enrolled");
   const fields = Object.fromEntries(

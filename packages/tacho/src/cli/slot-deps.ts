@@ -5,7 +5,9 @@
  * and its install receipts. The service and the terminal stay the root's,
  * since one `tachod` serves every slot and one person is reading.
  */
+import { withRecordedHarnessFiles } from "../host/host-file";
 import type { TachoPaths } from "../host/paths";
+import { slotHolding } from "../host/slots";
 import type { CliDeps } from "./deps";
 
 export function slotDeps<D extends CliDeps>(deps: D, paths: TachoPaths): D {
@@ -21,6 +23,20 @@ export function slotDeps<D extends CliDeps>(deps: D, paths: TachoPaths): D {
     out: deps.out,
     err: deps.err,
   };
+}
+
+/**
+ * `deps` bound to the live slot that hooks `harness`, with the harness files
+ * its enroll recorded. A command a harness runs (its credential helper, its
+ * Git credential helper) names only the harness, and this is how it reaches
+ * the enrollment that owns it. `deps` unchanged when no slot hooks it, so
+ * the root answers as it always has.
+ */
+export function depsForHarness<D extends CliDeps>(deps: D, harness: string): D {
+  const slot = slotHolding(rootPathsOf(deps), harness);
+  return slot === undefined
+    ? deps
+    : slotDeps(deps, withRecordedHarnessFiles(slot.paths, slot.host));
 }
 
 /** The root's paths, whichever slot `deps` acts on. */

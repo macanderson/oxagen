@@ -12,6 +12,7 @@ import {
   withRecordedHarnessFiles,
 } from "../host/host-file";
 import { tachoPaths } from "../host/paths";
+import type { TachoHarness } from "../wire";
 import {
   githubConfigure,
   githubCredential,
@@ -46,6 +47,22 @@ export function parsePort(value: string): number {
       "expected a whole number from 1024 to 65535",
     );
   return port;
+}
+
+/** `--harness` where it names one agent: exactly one known harness. */
+export function parseOneHarness(value: string): TachoHarness {
+  let harnesses: TachoHarness[];
+  try {
+    harnesses = parseHarnesses(value);
+  } catch (error) {
+    throw new InvalidArgumentError(
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  const [harness] = harnesses;
+  if (harness === undefined || harnesses.length !== 1)
+    throw new InvalidArgumentError("name one harness");
+  return harness;
 }
 
 /**
@@ -308,7 +325,13 @@ export function buildTachoProgram(): Command {
     .option("--workspace <slug>")
     .option("--purge", "Also delete the local WAL, spool, and quarantine")
     .option("--reason <text>", "Reason recorded with the revoke")
+    .option(
+      "--harness <name>",
+      "The agent to unenroll, by the harness it hooks, when this machine holds more than one enrollment",
+      parseOneHarness,
+    )
     .action(async (opts: Record<string, unknown>) => {
+      const harness = opts["harness"] as TachoHarness | undefined;
       const result = await unenroll(
         {
           token: tokenOption(opts, deps.err),
@@ -316,6 +339,7 @@ export function buildTachoProgram(): Command {
           workspace: opts["workspace"] as string | undefined,
           purge: opts["purge"] as boolean | undefined,
           reason: opts["reason"] as string | undefined,
+          ...(harness !== undefined ? { harness } : {}),
         },
         recordedCliDeps(),
       );
