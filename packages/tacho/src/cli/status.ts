@@ -307,30 +307,27 @@ export async function status(
   // More than one agent on this machine (ADR-202): one report per slot. The
   // top level repeats the first live one, so a reader that knows only one
   // enrollment, the desktop app among them, still reads a working agent.
-  const enrollments: EnrollmentStatus[] = [];
-  for (const { slot, deps: bound } of slots)
-    enrollments.push({ slot: slot.paths.root, ...(await slotStatus(bound)) });
+  const reports: StatusReport[] = [];
+  for (const { deps: bound } of slots) reports.push(await slotStatus(bound));
   const primary =
-    enrollments.find((entry) => entry.enrolled) ??
-    (enrollments[0] as EnrollmentStatus);
-  const report: StatusReport = { ...withoutSlot(primary), enrollments };
+    reports.find((entry) => entry.enrolled) ?? (reports[0] as StatusReport);
+  const report: StatusReport = {
+    ...primary,
+    enrollments: reports.map((entry, index) => ({
+      slot: slots[index]?.slot.paths.root ?? "",
+      ...entry,
+    })),
+  };
   if (options.json === true) {
     deps.out(JSON.stringify(report, null, 2));
     return report;
   }
   deps.out(`This machine holds ${slots.length} enrollments.`);
-  slots.forEach(({ slot, deps: bound }, index) => {
+  for (const [index, { slot, deps: bound }] of slots.entries()) {
     deps.out("");
     deps.out(`Agent       ${describeSlot(slot)} in ${slot.paths.root}`);
-    printStatus(enrollments[index] as EnrollmentStatus, bound);
-  });
-  return report;
-}
-
-/** A report without the slot it came from, for the top level. */
-function withoutSlot(entry: EnrollmentStatus): StatusReport {
-  const report: StatusReport & { slot?: string } = { ...entry };
-  delete report.slot;
+    printStatus(reports[index] as StatusReport, bound);
+  }
   return report;
 }
 

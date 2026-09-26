@@ -12,7 +12,7 @@ import {
   withRecordedHarnessFiles,
 } from "../host/host-file";
 import { tachoPaths } from "../host/paths";
-import type { TachoHarness } from "../wire";
+import { isWrappedHarness, type TachoHarness } from "../wire";
 import {
   githubConfigure,
   githubCredential,
@@ -204,7 +204,15 @@ export function buildTachoProgram(): Command {
         return;
       }
       if (opts["verify"] === true) {
-        const verified = await verify({}, deps);
+        // Drive a harness this enrollment hooks, so the turn lands in the
+        // collector just enrolled and not in another agent's (ADR-202).
+        const verifyHarness = (
+          harness !== undefined ? parseHarnesses(harness) : []
+        ).find(isWrappedHarness);
+        const verified = await verify(
+          verifyHarness !== undefined ? { harness: verifyHarness } : {},
+          deps,
+        );
         deps.out(
           verified.ok
             ? `Verified: ${verified.detail}`
