@@ -61,6 +61,18 @@ else
     codesign --force --options runtime --entitlements "$plist" -s - "$target/Contents/MacOS/$bin"
   done
   codesign --force --options runtime --entitlements "$plist" -s - "$target"
+  # The re-sign proves nothing unless every binary now carries the flag.
+  for bin in "${binaries[@]}"; do
+    now="$(flags "$target/Contents/MacOS/$bin")"
+    echo "$bin in the copy: flags=$now"
+    case "$now" in
+      *runtime*) ;;
+      *)
+        echo "::error::$bin in the re-signed copy still lacks the hardened runtime (flags=$now)"
+        exit 1
+        ;;
+    esac
+  done
 fi
 
 echo

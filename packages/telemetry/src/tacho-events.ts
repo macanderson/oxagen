@@ -79,6 +79,15 @@ export const TACHO_EVENTS_INSERT_MAX_MEMORY_BYTES = 512 * 1024 * 1024;
  * of JSON (`TACHO_MAX_REQUEST_BYTES`), and 512 MiB is a third of the cap. An
  * insert that passes the bound fails with code 241, which ingest answers 503
  * with Retry-After.
+ *
+ * Measured (#4316), on ClickHouse 24.8 as CI runs it: a full request of the
+ * smallest frames, 5,692 frames in 4 MiB of JSON, peaks at 76 MiB once
+ * migration 0033 keeps every insert in the compact part layout. Before 0033
+ * the same batch wrote a wide part and failed at the 512 MiB bound every
+ * time. `tacho-events-insert.integration.test.ts` repeats the measurement on
+ * every CI run and prints it. Production's own week of inserts is not
+ * recorded here: its ClickHouse logs reach CloudWatch at warning level, with
+ * no per-query memory, and the table held no rows on 2026-09-25.
  */
 export const TACHO_EVENTS_INSERT_SETTINGS: ClickHouseSettings = {
   max_memory_usage: String(TACHO_EVENTS_INSERT_MAX_MEMORY_BYTES),
@@ -487,6 +496,14 @@ export async function selectTachoStoredFrames(args: {
  * in, which is the day the host charged it to. `FINAL` collapses a
  * redelivered frame so it is counted once.
  *
+ * The table partitions by the month of `received_at` (#4297), so the `ts`
+ * filter alone reads every month the workspace holds. The `received_at`
+ * bound keeps the read to the months around the day. It does not change
+ * which frames count: a frame stamped on the day reached the control plane
+ * no earlier than the day's start less the host clock's lead, and the bound
+ * allows a lead of one day. A host whose clock runs further ahead stamps its
+ * frames with a day that has not begun.
+ *
  * `hostEnrollmentIds` are the agent's hosts, every status included: a host
  * revoked at noon still spent its morning. Returns micro-USD by host
  * enrollment id; a host with no priced call that day is absent.
@@ -515,6 +532,7 @@ export async function selectAgentDaySpend(args: {
         AND cost_usd_micros IS NOT NULL
         AND ts >= toDateTime64({start:String}, 3, 'UTC')
         AND ts < toDateTime64({start:String}, 3, 'UTC') + INTERVAL 1 DAY
+        AND received_at >= toDateTime64({start:String}, 3, 'UTC') - INTERVAL 1 DAY
       GROUP BY host_enrollment_id
     `,
     params: {

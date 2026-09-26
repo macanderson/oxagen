@@ -1,6 +1,11 @@
+import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  addHarnessArgs,
   ago,
+  busyHoldsClose,
+  drivable,
+  withoutCommandLine,
   collectorText,
   deregisterNeedsSession,
   HARNESS_TIER,
@@ -23,10 +28,18 @@ import {
   needsWorkspacePick,
   pendingChange,
   primaryAction,
+  reapplyArgs,
   reassignArgs,
   sessionLanded,
+  type SidecarCall,
+  detectArgs,
+  detectedMeta,
+  logoutArgs,
+  registrable,
+  statusArgs,
   toggleHarness,
   unenrollArgs,
+  verifyArgs,
 } from "./commands";
 
 const HOST = {
@@ -506,5 +519,226 @@ describe("describeCliInstall", () => {
         note: "see the log",
       }),
     ).toBe("see the log");
+  });
+});
+
+/**
+ * One of each argv the panels send, from the builders above. The Rust shell
+ * runs a sidecar only when its allowlist accepts the argv
+ * (`src-tauri/src/sidecar.rs`), and its test reads this list from
+ * `src-tauri/sidecar-calls.json`. Here the file is checked against the
+ * builders, there against the allowlist, so a builder that starts sending a
+ * new argv fails one of the two until the allowlist takes it (#4318, D-12).
+ */
+function everyCall(): SidecarCall[] {
+  const tacho = (args: string[]): SidecarCall => ({ sidecar: "tacho", args });
+  const oxagen = (args: string[]): SidecarCall => ({ sidecar: "oxagen", args });
+  return [
+    oxagen(loginArgs()),
+    oxagen(loginArgs({ signup: true })),
+    oxagen(logoutArgs()),
+    tacho(statusArgs()),
+    tacho(detectArgs()),
+    ...verifiable(HARNESSES).map((h) => tacho(verifyArgs(h))),
+    tacho(
+      enrollArgs({
+        org: "acme",
+        workspace: "core",
+        harnesses: ["claude-code", "codex"],
+      }),
+    ),
+    tacho(enrollArgs({ org: null, workspace: "core", harnesses: HARNESSES })),
+    tacho(enrollArgs({ org: null, workspace: null, harnesses: ["cursor"] })),
+    reassignArgs(HOST, { org: "globex", workspace: "ops", harnesses: null }),
+    reassignArgs(HOST, { org: null, workspace: "ops", harnesses: null }),
+    reassignArgs(
+      HOST,
+      { org: "globex", workspace: "ops", harnesses: null },
+      true,
+    ),
+    reassignArgs(HOST, { org: null, workspace: "ops", harnesses: null }, true),
+    reassignArgs(HOST, {
+      org: null,
+      workspace: null,
+      harnesses: ["claude-code", "stella"],
+    }),
+    deregisterArgs(["claude-code", "codex"], "codex"),
+    deregisterArgs(["claude-code"], "claude-code"),
+    addHarnessArgs(["claude-code"], "claude-desktop"),
+    tacho(reapplyArgs()),
+    tacho(unenrollArgs(false)),
+    tacho(unenrollArgs(true)),
+  ];
+}
+
+describe("the sidecar allowlist's fixture", () => {
+  const fixture = new URL("../src-tauri/sidecar-calls.json", import.meta.url);
+
+  it("holds one of each argv the builders make", () => {
+    // UPDATE_SIDECAR_CALLS=1 rewrites the file from the builders.
+    if (process.env.UPDATE_SIDECAR_CALLS === "1")
+      writeFileSync(fixture, `${JSON.stringify(everyCall(), null, 2)}\n`);
+    expect(JSON.parse(readFileSync(fixture, "utf8"))).toEqual(everyCall());
+  });
+
+  // The fixture covers only what the builders make, so an argv written
+  // inline at a call site reaches the allowlist untested. Re-apply sent a
+  // bare `tacho enroll` that way, and the allowlist refused it.
+  it("takes every argv a panel sends from a builder", () => {
+    const inline = [
+      // act("name", sidecar, [ ... ]
+      /\bact\(\s*"[^"]*"\s*,\s*[^,()]+,\s*\[/g,
+      // runSidecar(sidecar, [ ... ]
+      /\brunSidecar\(\s*[^,()]+,\s*\[/g,
+    ];
+    for (const file of ["app.tsx", "bridge.ts"]) {
+      const source = readFileSync(new URL(file, import.meta.url), "utf8");
+      for (const pattern of inline)
+        expect(source.match(pattern) ?? [], file).toEqual([]);
+    }
+  });
+
+  it("re-applies with a bare enroll, which keeps the enrolled list", () => {
+    expect(reapplyArgs()).toEqual(["enroll"]);
+  });
+
+  it("builds the argv the Rust allowlist names", () => {
+    expect(statusArgs()).toEqual(["status", "--json"]);
+    expect(detectArgs()).toEqual(["detect", "--json"]);
+    expect(verifyArgs("codex")).toEqual([
+      "verify",
+      "--harness",
+      "codex",
+      "--json",
+    ]);
+    expect(logoutArgs()).toEqual(["logout"]);
+    expect(addHarnessArgs(["claude-code", "codex"], "cursor")).toEqual({
+      sidecar: "tacho",
+      args: ["reassign", "--harness", "claude-code,codex,cursor"],
+    });
+  });
+});
+
+// #3367: a Cursor the scan did not find is still coverable, since
+// ~/.cursor/hooks.json governs the editor and the CLI alike, and the scan
+// cannot see a Linux editor installed as an AppImage (ADR-141).
+describe("step 3's rows", () => {
+  const note =
+    "enrollment writes ~/.cursor/hooks.json, which governs the Cursor editor and the cursor-agent CLI alike";
+
+  it("offers a Cursor the scan did not find, with the coverage note", () => {
+    const cursor = { installed: false, coverableWhenAbsent: note };
+    expect(registrable(cursor)).toBe(true);
+    expect(detectedMeta(cursor)).toBe(`not found by the scan · ${note}`);
+  });
+
+  it("offers a Cursor found as the editor, and says so", () => {
+    const editor = {
+      installed: true,
+      foundVia: "app" as const,
+      path: "/Applications/Cursor.app",
+      coverableWhenAbsent: note,
+    };
+    expect(registrable(editor)).toBe(true);
+    expect(detectedMeta(editor)).toBe("the editor · /Applications/Cursor.app");
+  });
+
+  it("still refuses an agent that is absent and not coverable, or has no build here", () => {
+    expect(registrable({ installed: false })).toBe(false);
+    expect(detectedMeta({ installed: false })).toBe(
+      "not found on this machine",
+    );
+    const linuxDesktop = {
+      installed: false,
+      unavailableReason: "Claude Desktop has no Linux build",
+    };
+    expect(registrable(linuxDesktop)).toBe(false);
+    expect(detectedMeta(linuxDesktop)).toBe(
+      "Claude Desktop has no Linux build",
+    );
+  });
+
+  it("reads a CLI the way it always did", () => {
+    const cli = {
+      installed: true,
+      foundVia: "cli" as const,
+      path: "/usr/local/bin/claude",
+      version: "2.1.263",
+    };
+    expect(registrable(cli)).toBe(true);
+    expect(detectedMeta(cli)).toBe("2.1.263 · /usr/local/bin/claude");
+    expect(detectedMeta({ installed: true })).toBe("installed");
+  });
+
+  it("leaves a Cursor the scan did not find unticked by default", () => {
+    expect(
+      defaultRegistration([
+        { harness: "claude-code", installed: true },
+        { harness: "cursor", installed: false },
+      ]),
+    ).toEqual(["claude-code"]);
+  });
+});
+
+// #3367 review: registering a Cursor the scan found only as the editor, or
+// not at all, handed it to `tacho verify`, which runs `cursor-agent -p` and
+// failed with "cursor-agent is not on PATH". That failure was the first thing
+// the person saw after registering it.
+describe("step 5's first run", () => {
+  const scan = [
+    { harness: "claude-code", foundVia: "cli" as const },
+    { harness: "codex", foundVia: "cli" as const },
+    { harness: "cursor" },
+    { harness: "claude-desktop", foundVia: "app" as const },
+  ];
+
+  it("drives only the agents the scan found as a command line", () => {
+    expect(drivable(["claude-code", "cursor", "claude-desktop"], scan)).toEqual(
+      ["claude-code"],
+    );
+    expect(withoutCommandLine("cursor", scan)).toBe(true);
+    const editor = [{ harness: "cursor", foundVia: "app" as const }];
+    expect(drivable(["cursor"], editor)).toEqual([]);
+    expect(withoutCommandLine("cursor", editor)).toBe(true);
+    const cli = [{ harness: "cursor", foundVia: "cli" as const }];
+    expect(drivable(["cursor"], cli)).toEqual(["cursor"]);
+    expect(withoutCommandLine("cursor", cli)).toBe(false);
+  });
+
+  it("keeps every wrapped agent when there is no scan to read", () => {
+    // A relaunch lands on step 5 with no scan. A failed run then says what
+    // is missing.
+    expect(drivable(["claude-code", "cursor", "claude-desktop"], null)).toEqual(
+      ["claude-code", "cursor"],
+    );
+    expect(withoutCommandLine("cursor", null)).toBe(false);
+    // A connected app is never "without a command line": it has its own row.
+    expect(withoutCommandLine("claude-desktop", scan)).toBe(false);
+  });
+});
+
+// Audit D-11 review: the page reported busy for every action, so a Quit
+// during a sign-in hid the window and left the app running for up to the
+// five minutes `oxagen login` waits for the browser.
+describe("which busy state holds a close", () => {
+  it("holds a close while an action changes the machine", () => {
+    for (const busy of [
+      "enroll",
+      "reapply",
+      "apply",
+      "add",
+      "deregister",
+      "uninstall",
+      "signout",
+      "cli",
+      "cli-remove",
+      "update",
+    ])
+      expect(busyHoldsClose(busy), busy).toBe(true);
+  });
+
+  it("holds none while a sign-in or a first run waits, or while idle", () => {
+    for (const busy of ["signin", "signup", "connect", null])
+      expect(busyHoldsClose(busy), String(busy)).toBe(false);
   });
 });

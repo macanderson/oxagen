@@ -2,6 +2,14 @@
  * The app's contract with the CLIs: the argv each panel action hands to a
  * sidecar, as pure functions of UI state. Kept apart from the React tree so
  * the mapping is testable without a webview.
+ *
+ * Every argv the app sends is built here, and nowhere else. The Rust shell
+ * runs a sidecar only for the commands on its allowlist
+ * (`src-tauri/src/sidecar.rs`), and `src-tauri/sidecar-calls.json` holds one
+ * of each command these builders make. `commands.test.ts` fails when a
+ * builder and that file disagree, and the Rust test fails when the file holds
+ * a command the allowlist refuses, so a new argv cannot break a panel
+ * without breaking a test first.
  */
 export type Harness =
   | "claude-code"
@@ -97,6 +105,45 @@ export function isWrapped(harness: Harness): boolean {
  */
 export function verifiable(harnesses: readonly Harness[]): Harness[] {
   return harnesses.filter(isWrapped);
+}
+
+/**
+ * Whether the scan found this wrapped agent without a command line to prompt.
+ * `tacho verify` runs the agent's CLI headless, so a Cursor found only as the
+ * editor, or registered although the scan did not find it (`registrable`),
+ * has nothing to drive: verify fails with "cursor-agent is not on PATH". Its
+ * hooks file still records every session the editor runs, so it reports the
+ * first time the person uses it. False with no scan to read, after a
+ * relaunch: a failed first run then says what is missing.
+ */
+export function withoutCommandLine(
+  harness: Harness,
+  detected: ReadonlyArray<{ harness: string; foundVia?: "cli" | "app" }> | null,
+): boolean {
+  const row = detected?.find((d) => d.harness === harness);
+  return isWrapped(harness) && row !== undefined && row.foundVia !== "cli";
+}
+
+/**
+ * The agents a first run can drive: the wrapped ones (`verifiable`) that the
+ * last scan found as a command line.
+ */
+export function drivable(
+  harnesses: readonly Harness[],
+  detected: ReadonlyArray<{ harness: string; foundVia?: "cli" | "app" }> | null,
+): Harness[] {
+  return verifiable(harnesses).filter((h) => !withoutCommandLine(h, detected));
+}
+
+/**
+ * Whether the page's busy state holds a close or a Quit until the action
+ * ends (see `reportBusy`). An action that changes the machine does. Signing
+ * in and a first run do not: `oxagen login` writes one file with a rename and
+ * `tacho verify` writes none, so stopping either leaves nothing half written,
+ * and a sign-in can wait five minutes for the browser.
+ */
+export function busyHoldsClose(busy: string | null): boolean {
+  return busy !== null && !["signin", "signup", "connect"].includes(busy);
 }
 
 /** Whether a harness is connected through the local MCP gateway. */
@@ -247,9 +294,52 @@ export function reassignArgs(
     : { sidecar: "tacho", args };
 }
 
+/**
+ * `tacho enroll` with no flags: Re-apply, on a machine that is already
+ * enrolled. With no `--harness`, tacho keeps the enrolled list and writes
+ * the hooks and the collector again from this app's copy.
+ */
+export function reapplyArgs(): string[] {
+  return ["enroll"];
+}
+
 /** `tacho unenroll`, with `--purge` when the operator also drops the WAL. */
 export function unenrollArgs(purge: boolean): string[] {
   return ["unenroll", ...(purge ? ["--purge"] : [])];
+}
+
+/** `oxagen logout`: Sign out. */
+export function logoutArgs(): string[] {
+  return ["logout"];
+}
+
+/** `tacho status --json`: the poll's read of the hooks and the service. */
+export function statusArgs(): string[] {
+  return ["status", "--json"];
+}
+
+/** `tacho detect --json`: the wizard's scan for agents. */
+export function detectArgs(): string[] {
+  return ["detect", "--json"];
+}
+
+/** `tacho verify --harness <h> --json`: one recorded turn on that agent. */
+export function verifyArgs(harness: Harness): string[] {
+  return ["verify", "--harness", harness, "--json"];
+}
+
+/**
+ * Wrap one more agent: `tacho reassign` with the enrolled list plus this one.
+ * Reassign keeps the device key and re-writes every hook.
+ */
+export function addHarnessArgs(
+  enrolled: readonly string[],
+  harness: Harness,
+): SidecarCall {
+  return {
+    sidecar: "tacho",
+    args: ["reassign", "--harness", [...enrolled, harness].join(",")],
+  };
 }
 
 /** Toggle a harness in a list; the list never empties. */
@@ -367,11 +457,56 @@ export function wizardStep(input: {
   return input.outcomeSeen ? 5 : 4;
 }
 
-/** Default selection for step 3: every installed harness, none of the absent ones. */
+/**
+ * Default selection for step 3: every installed harness, none of the absent
+ * ones. A harness the scan did not find stays unticked even when it can be
+ * covered anyway (see `registrable`): the person may not have it, so they
+ * tick it themselves.
+ */
 export function defaultRegistration(
   detected: ReadonlyArray<{ harness: Harness; installed: boolean }>,
 ): Harness[] {
   return detected.filter((d) => d.installed).map((d) => d.harness);
+}
+
+/** What the wizard reads from one `tacho detect` entry. */
+export interface DetectedRow {
+  installed: boolean;
+  path?: string;
+  version?: string;
+  foundVia?: "cli" | "app";
+  coverableWhenAbsent?: string;
+  unavailableReason?: string;
+}
+
+/**
+ * Whether step 3 lets the person tick this agent. A found agent can be
+ * ticked, and so can one that registering covers whether or not the scan
+ * found it: Cursor on Linux, whose editor ships as an AppImage the scan
+ * cannot see, or wherever neither probe answered (ADR-141). The row used to
+ * be disabled whenever `installed` was false, so a machine with only the
+ * Cursor editor on Linux could not register it (#3367). An app with no build
+ * for this platform never can.
+ */
+export function registrable(detected: DetectedRow): boolean {
+  if (detected.unavailableReason !== undefined) return false;
+  return detected.installed || detected.coverableWhenAbsent !== undefined;
+}
+
+/** The line beside an agent in step 3: what the scan found, and where. */
+export function detectedMeta(detected: DetectedRow): string {
+  if (detected.installed) {
+    const found =
+      detected.foundVia === "app"
+        ? "the editor"
+        : (detected.version ?? "installed");
+    return detected.path ? `${found} · ${detected.path}` : found;
+  }
+  if (detected.unavailableReason !== undefined)
+    return detected.unavailableReason;
+  if (detected.coverableWhenAbsent !== undefined)
+    return `not found by the scan · ${detected.coverableWhenAbsent}`;
+  return "not found on this machine";
 }
 
 /** What `DesktopState.cli_install` reports about the launch-time PATH link. */
