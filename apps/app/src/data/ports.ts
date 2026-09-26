@@ -62,6 +62,7 @@ import type {
 import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
 import type { InterjectionQueue } from "./contracts/interjections";
 import type {
+  CommandReport,
   EnforcementTier,
   PullRequestFilter,
   RunPage,
@@ -210,9 +211,12 @@ export interface DataSource {
    * and `transcript` is `get_run_transcript` at one zoom level, each read by
    * its own tab, so a tab nobody opened makes no read. `frameBody` is
    * `get_run_frame_body`, one frame's bytes on demand (§3.5), read only when
-   * the Frames tab has a frame open, caller features/run/run.tsx. `chain` is
-   * `get_run_chain`, read only when the Chain and seal tab is open, because it
-   * walks the recording to find its gaps.
+   * the Frames tab has a frame open, caller features/run/run.tsx; `chainRef`
+   * names the subagent chain a frame was recorded on, and is omitted for the
+   * run's own chain (#3823). `chain` is `get_run_chain`, read only when the
+   * Chain and seal tab is open, because it walks the recording to find its
+   * gaps. `commands` is `list_commands`, the delivery report: one run's
+   * commands, or the commands one broadcast queued (#2953).
    */
   runs: {
     list(
@@ -253,7 +257,12 @@ export interface DataSource {
       ctx: WsCtx,
       runId: string,
       seq: string,
+      chainRef?: string,
     ): Promise<Read<RunFrameBody>>;
+    commands(
+      ctx: WsCtx,
+      q: { runId: string } | { commandIds: string[] },
+    ): Promise<Read<CommandReport>>;
     cost(ctx: WsCtx, runId: string): Promise<Read<RunCost>>;
     /**
      * `get_run_turns`, the run's per-turn ledger over every frame, read only
@@ -325,16 +334,24 @@ export interface DataSource {
     ): Promise<Read<{ items: ResolvedApprovalItem[]; more: boolean }>>;
   };
   /**
-   * list_interjections with `open: true`: the questions agents paused to ask
-   * that nobody has answered, walked to the end of the cursor under a bound,
-   * with `more` set when the bound stopped the walk (#3839); callers:
-   * features/fleet/fleet.tsx and features/shell/source.ts.
+   * list_interjections. `open` reads with `open: true`: the questions agents
+   * paused to ask that nobody has answered, walked to the end of the cursor
+   * under a bound, with `more` set when the bound stopped the walk (#3839);
+   * callers: features/fleet/fleet.tsx and features/shell/source.ts.
    */
   interjections: {
     open(
       ctx: WsCtx,
       q: { runId: string | null },
     ): Promise<Read<InterjectionQueue>>;
+    /**
+     * list_interjections with `open: false` for one run: its questions,
+     * answered or not, with each answer's path and receipt, so the Run page
+     * renders the question a host held the run on and how it was settled
+     * (#3941); caller: features/run/run.tsx. The answer itself is a write and
+     * goes through the Run page's server action, not a port.
+     */
+    forRun(ctx: WsCtx, runId: string): Promise<Read<InterjectionQueue>>;
   };
   /**
    * The Agents pages (#2956), each read by the agent's public id or slug:

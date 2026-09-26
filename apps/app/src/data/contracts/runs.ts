@@ -334,6 +334,37 @@ export const RunReplayFilter = z.enum([
 ]);
 export type RunReplayFilter = z.infer<typeof RunReplayFilter>;
 
+/**
+ * The pause in force on a run, mirrored from `get_run`'s `pause` (#3972).
+ * `pausing` is queued and not yet applied, `paused` is applied, and
+ * `resuming` is paused with a resume queued behind it. The position is the
+ * `oxagen:command_applied` frame on the run's own chain. It is null while
+ * `pausing` and for a ledger run, whose pause seals no frame.
+ */
+const RunPause = z.object({
+  state: z.enum(["pausing", "paused", "resuming"]),
+  /** The pause command. */
+  commandId: PublicId,
+  /** The resume queued behind it; set only while `resuming`. */
+  resumeCommandId: PublicId.nullable(),
+  seq: z.string().regex(/^\d+$/).nullable(),
+  /** 1-based; null when the position was not read. */
+  turn: z.number().int().positive().nullable(),
+  step: z.number().int().positive().nullable(),
+  /** The person who paused the run; null when the record names none. */
+  by: z
+    .object({
+      id: PublicId,
+      /** Null when the person's record holds no name. */
+      name: z.string().min(1).nullable(),
+    })
+    .nullable(),
+  issuedAt: z.iso.datetime({ offset: true }),
+  /** Null while `pausing`. */
+  appliedAt: z.iso.datetime({ offset: true }).nullable(),
+  reason: z.string().nullable(),
+});
+
 const RunTokens = z.object({
   input: z.number().int().nonnegative(),
   output: z.number().int().nonnegative(),
@@ -450,6 +481,12 @@ export const RunRow = z.object({
    */
   ingressPaused: z.boolean().optional(),
   /**
+   * The pause in force, with where it took hold, who asked and why. Null
+   * when none is in force. `get_run` answers it; a Fleet row leaves it out,
+   * which reads as not read.
+   */
+  pause: RunPause.nullable().optional(),
+  /**
    * True when the run has ended and frame compaction moved its latest sealed
    * attempt's frames to the archive segment (ADR-058). False for a ledger run
    * that has not been compacted. Absent for a wrapped session, whose store
@@ -510,3 +547,70 @@ export const RunPage = z.object({
   totalBound: z.number().int().positive().optional(),
 });
 export type RunPage = z.infer<typeof RunPage>;
+
+/**
+ * One row of the delivery report, mirrored from `list_commands` (#2953): the
+ * command, its run, who issued it, what a steer said, its status, and the
+ * frame an applied command landed on. The requested mode and the mode
+ * achieved are separate fields, never one (INV-10).
+ */
+const CommandReportItem = z.object({
+  id: PublicId,
+  /** The run the command is addressed to. */
+  runId: PublicId,
+  command: z.enum([
+    "pause",
+    "resume",
+    "cancel",
+    "steer",
+    "message",
+    "revoke",
+    "refresh_bundle",
+    "kill",
+  ]),
+  status: z.enum([
+    "draft",
+    "queued",
+    "sent",
+    "received",
+    "acknowledged",
+    "applied",
+    "cancelled",
+    "expired",
+    "failed",
+  ]),
+  /** Null for a command that carries no prompt content. */
+  requestedMode: DeliveryMode.nullable(),
+  /** The mode achieved, at or below the one requested; null until resolved. */
+  deliveryMode: DeliveryMode.nullable(),
+  degradedReason: z.string().nullable(),
+  reason: z.string().nullable(),
+  issuedAt: z.iso.datetime({ offset: true }),
+  expiresAt: z.iso.datetime({ offset: true }).nullable(),
+  sentAt: z.iso.datetime({ offset: true }).nullable(),
+  acknowledgedAt: z.iso.datetime({ offset: true }).nullable(),
+  appliedAt: z.iso.datetime({ offset: true }).nullable(),
+  /** The frame the effect landed on; null until `applied`. */
+  appliedAtSeq: z.number().int().nonnegative().nullable(),
+  /** The host's detail on `failed`, or the supersession note on `cancelled`. */
+  detail: z.string().nullable(),
+  /** The person who issued the command; null when the record names none. */
+  issuedBy: z
+    .object({
+      id: PublicId,
+      /** Null when the person's record holds no name. */
+      name: z.string().min(1).nullable(),
+    })
+    .nullable(),
+  /** What a steer or message said; null on every other command. */
+  text: z.string().nullable(),
+});
+
+/**
+ * `list_commands` for one run, or for the commands one broadcast queued,
+ * newest first.
+ */
+export const CommandReport = z.object({
+  commands: z.array(CommandReportItem),
+});
+export type CommandReport = z.infer<typeof CommandReport>;

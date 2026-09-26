@@ -51,6 +51,12 @@ export const RunFrame = z.object({
   cursor: z.string(),
   /** The ledger's run-global `run_seq` or a wrapped session's dense `seq`. */
   seq: z.string().regex(/^\d+$/),
+  /**
+   * The subagent chain the frame was recorded on, as that chain's session
+   * uuid; absent on the run's own chain. A subagent chain numbers its frames
+   * from 0, so `seq` names a frame only together with this.
+   */
+  chainRef: z.string().optional(),
   /** The recorded event type, e.g. `model.call_completed`. */
   type: z.string(),
   /** The evidence stage the event belongs to. */
@@ -98,6 +104,8 @@ export type RunFramePage = z.infer<typeof RunFramePage>;
  */
 export const RunFrameBody = z.object({
   seq: z.string().regex(/^\d+$/),
+  /** The subagent chain the frame was read from; absent on the run's own chain. */
+  chainRef: z.string().optional(),
   /** Null exactly when no bytes were retained. */
   contentType: z.string().nullable(),
   /** The redacted body as text; null when no bytes were retained or they are not UTF-8. */
@@ -421,8 +429,8 @@ export const TranscriptBody = z.object({
   /**
    * The subagent chain the frame was recorded on; absent on the run's own
    * chain. A subagent's chain is numbered from 0 like the run's, so `seq`
-   * names a frame only together with this, and `get_run_frame_body`, which
-   * reads the run's own chain, cannot open it.
+   * names a frame only together with this. `get_run_frame_body` opens the
+   * frame when passed both.
    */
   chainRef: z.string().optional(),
   type: z.string(),
@@ -801,6 +809,34 @@ const ChainSeal = z.object({
   archiveSegmentRef: z.string().nullable(),
 });
 
+/**
+ * One subagent chain of a wrapped run, walked on its own (#3823). Its gaps are
+ * numbered on its own `seq`, which starts at 0 like the run's.
+ */
+const ChainSubagent = z.object({
+  /** The chain's session uuid. */
+  chainRef: z.string(),
+  /** The chain that spawned this one; null when none was recorded. */
+  parentChainRef: z.string().nullable(),
+  /**
+   * The harness's name for the subagent; null when none was recorded. A
+   * harness identifier, not a public id, so it is carried as a reference.
+   */
+  subagentRef: z.string().nullable(),
+  /** The subagent's type (`Explore`, `general-purpose`); null when none was recorded. */
+  subagentType: z.string().nullable(),
+  frameCount: Count,
+  firstSeq: z.string().regex(/^\d+$/).nullable(),
+  lastSeq: z.string().regex(/^\d+$/).nullable(),
+  gaps: ChainGaps.omit({ recorded: true }),
+  checkpoints: z.array(ChainCheckpoint),
+  /** The chain's last hash at its seal; null while it is unsealed. */
+  finalHash: z.string().nullable(),
+  sealedAt: z.iso.datetime({ offset: true }).nullable(),
+  /** False when the walk stopped before the chain's last frame. */
+  complete: z.boolean(),
+});
+
 /** One rung of the replay ladder, and the machine-readable reason it stands where it does. */
 const ReplayLadderRung = z.object({
   grade: ReplayGrade,
@@ -830,6 +866,11 @@ export const RunChain = z.object({
   ladder: z.array(ReplayLadderRung),
   /** False when the run has more frames than the walk read, so these are a prefix's gaps. */
   complete: z.boolean(),
+  /**
+   * Each subagent chain of a wrapped run, walked on its own. Absent on a
+   * ledger run. The figures above describe the run's own chain only.
+   */
+  chains: z.array(ChainSubagent).optional(),
 });
 export type RunChain = z.infer<typeof RunChain>;
 
@@ -869,6 +910,11 @@ const RunOutputState = z.enum([
 export const RunOutputNode = z.object({
   /** The frame that produced it, for the `fr N` chip; null on a gate, which the record gives no frame. */
   seq: z.string().regex(/^\d+$/).nullable(),
+  /**
+   * The subagent chain that produced the node, as its session uuid; absent
+   * on the run's own chain. `seq` names a frame only together with this.
+   */
+  chainRef: z.string().optional(),
   kind: RunOutputKind,
   /** The mono name: a path, a commit sha, `#482`, a capability, or a path locator. */
   name: z.string().min(1),
