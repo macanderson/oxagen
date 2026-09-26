@@ -13,6 +13,7 @@ import type {
   Cost,
   SpendFigure,
   TokenCounts,
+  UnmeteredRuns,
 } from "@oxagen/oxagen/contracts/spend.shared";
 import { schema, withTenantDb } from "@oxagen/database";
 import {
@@ -32,6 +33,7 @@ export type SpendScope = { orgId: string; workspaceId: string };
 
 const daily = schema.dailyTotals;
 const totals = schema.runTotals;
+const sessions = schema.tachoSessions;
 
 // ── Money ─────────────────────────────────────────────────────────────────────
 
@@ -232,6 +234,77 @@ export async function readRunTotals(
       .orderBy(asc(totals.startedAt)),
   );
   return rows.map(runTotalsRowToRecord);
+}
+
+/**
+ * The wrapped runs in an inclusive day range whose rollup found no model
+ * call, by the harness that ran them (#3304). Every spend total leaves their
+ * cost out, because no frame reported what they spent: a harness whose model
+ * calls do not pass through the Oxagen gateway or the local proxy (Cursor,
+ * Stella on a provider other than Anthropic, a Codex or Stella session with
+ * its own base URL) records tool calls and no usage. The count is what lets
+ * a page say so instead of printing a total that reads complete.
+ *
+ * A run is counted when its `cost.run_totals` row holds no model call. A run
+ * that has not been rolled up yet has no row, and a ledger run meters every
+ * call through the gateway, so neither is counted. `filter` is the same one
+ * {@link readRunTotals} takes, so a drill counts the runs its own total
+ * covers. A session row that names no harness is grouped as `unknown`.
+ */
+export async function readUnmeteredRuns(
+  scope: SpendScope,
+  q: { from: string; to: string; filter: RunFilter },
+): Promise<UnmeteredRuns> {
+  const { start } = dayBounds(q.from);
+  const { next } = dayBounds(q.to);
+  const harness = sql<string>`coalesce(${sessions.harness}, 'unknown')`;
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({
+        harness,
+        runs: sql<number>`count(*)::int`.mapWith(Number),
+      })
+      .from(totals)
+      .leftJoin(
+        sessions,
+        and(
+          eq(sessions.publicId, totals.runId),
+          eq(sessions.orgId, totals.orgId),
+          eq(sessions.workspaceId, totals.workspaceId),
+        ),
+      )
+      .where(
+        and(
+          eq(totals.orgId, scope.orgId),
+          eq(totals.workspaceId, scope.workspaceId),
+          eq(totals.runSource, "tacho"),
+          eq(totals.modelCalls, 0),
+          gte(totals.startedAt, start),
+          lt(totals.startedAt, next),
+          runFilterPredicate(q.filter),
+        ),
+      )
+      .groupBy(harness),
+  );
+  return unmeteredRunsOf(rows);
+}
+
+/** Harness counts as the contract carries them: most runs first, then by name. */
+function unmeteredRunsOf(
+  rows: readonly { harness: string; runs: number }[],
+): UnmeteredRuns {
+  const byHarness = rows
+    .filter((row) => row.runs > 0)
+    .map((row) => ({ harness: row.harness, runs: row.runs }))
+    .sort(
+      (a, b) =>
+        b.runs - a.runs ||
+        (a.harness < b.harness ? -1 : a.harness > b.harness ? 1 : 0),
+    );
+  return {
+    total: byHarness.reduce((sum, row) => sum + row.runs, 0),
+    byHarness,
+  };
 }
 
 /** The run rows for a set of public ids, keyed by id; a run with no row is absent. */
