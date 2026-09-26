@@ -43,6 +43,11 @@ const nav = vi.hoisted(() => ({
 vi.mock("./command-actions", () => ({
   searchCommands: () => Promise.resolve({ ok: true, value: { rows: [] } }),
 }));
+// The command menu's pause_workspace_runs write is never sent here;
+// pause-workspace-dialog.test.tsx and shell-client.test.tsx cover it.
+vi.mock("./pause-workspace-actions", () => ({
+  pauseWorkspaceRunsAction: () => new Promise(() => undefined),
+}));
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
   useSearchParams: () => new URLSearchParams(),
