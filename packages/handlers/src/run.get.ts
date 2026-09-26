@@ -180,22 +180,18 @@ export function chainsCursor(
 
 /**
  * Every subagent chain under a wrapped run with its head: Postgres lists the
- * chains, and ClickHouse answers each one's last frame, so a head names a
- * frame a read can return. A chain holds its frames from seq 0 without
- * holes, so its count is its last seq plus one. The list stops at
- * RUN_CHAIN_HEADS_MAX chains and says so.
+ * chains (`listed`, one more than RUN_CHAIN_HEADS_MAX), and ClickHouse
+ * answers each one's last frame, so a head names a frame a read can return.
+ * A chain holds its frames from seq 0 without holes, so its count is its last
+ * seq plus one. The list stops at RUN_CHAIN_HEADS_MAX chains and says so.
  */
 async function readChainHeads(
-  deps: Pick<RunGetDeps, "tachoChains" | "chainHeads">,
+  chainHeads: typeof selectTachoChainHeads,
   rootSessionUuid: string,
-): Promise<RunChains | undefined> {
-  if (deps.tachoChains === undefined || deps.chainHeads === undefined)
-    return undefined;
-  const listed = await deps.tachoChains(rootSessionUuid, {
-    limit: RUN_CHAIN_HEADS_MAX + 1,
-  });
+  listed: readonly SubagentChainRow[],
+): Promise<RunChains> {
   const rows = listed.slice(0, RUN_CHAIN_HEADS_MAX);
-  const read = await deps.chainHeads({
+  const read = await chainHeads({
     rootSessionUuid,
     sessionUuids: rows.map((row) => row.sessionUuid),
   });
@@ -222,29 +218,39 @@ async function readChainHeads(
 }
 
 /**
- * The chain heads one invoke answers. A read that fails is logged once and
- * leaves `chains` out, so the page stands and a caller keeps its own
- * `chainsAfter`; the long poll then waits on frames alone.
+ * The chain heads one invoke answers. Postgres lists the chains once per
+ * invoke, and each read asks ClickHouse for their heads again. A chain that
+ * starts during a wait is spawned by a frame on a chain already listed, which
+ * wakes the wait itself, and the next invoke lists it. A read that fails is
+ * logged once and leaves `chains` out, so the page stands and a caller keeps
+ * its own `chainsAfter`; the long poll then waits on frames alone.
  */
 function chainWatch(
   deps: Pick<RunGetDeps, "tachoChains" | "chainHeads">,
   run: ResolvedRun,
   runId: string,
 ) {
-  if (run.source !== "tacho") return undefined;
+  const list = deps.tachoChains;
+  const heads = deps.chainHeads;
+  if (run.source !== "tacho" || list === undefined || heads === undefined)
+    return undefined;
   const root = run.sessionUuid;
+  let listing: Promise<SubagentChainRow[]> | undefined;
   let failed = false;
   let last: Promise<RunChains | undefined> | undefined;
   const read = (): Promise<RunChains | undefined> => {
     if (failed) return Promise.resolve(undefined);
-    last = readChainHeads(deps, root).catch((err: unknown) => {
-      failed = true;
-      logger.warn(
-        { err, runId },
-        "get_run: the subagent chain heads could not be read; the page carries none",
-      );
-      return undefined;
-    });
+    listing ??= list(root, { limit: RUN_CHAIN_HEADS_MAX + 1 });
+    last = listing
+      .then((listed) => readChainHeads(heads, root, listed))
+      .catch((err: unknown) => {
+        failed = true;
+        logger.warn(
+          { err, runId },
+          "get_run: the subagent chain heads could not be read; the page carries none",
+        );
+        return undefined;
+      });
     return last;
   };
   return { read, latest: () => last ?? read() };
