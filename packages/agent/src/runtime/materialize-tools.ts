@@ -1519,7 +1519,13 @@ export async function materializeTools(
                           orgId: ctx.orgId,
                           workspaceId: ctx.workspaceId,
                           messageId: ctx.messageId!,
-                          runId: callAgentRun?.runId ?? null,
+                          // Read at call time, as the capability approval
+                          // above reads it, so the consent lists on the run
+                          // that raised it (#3370 finding 11).
+                          runId:
+                            opts.runIdRef?.current ??
+                            callAgentRun?.runId ??
+                            null,
                           capabilityName: capturedKey,
                           inputPreview: input,
                           riskLevel: EXTERNAL_TOOL_RISK_LEVEL,
@@ -1644,6 +1650,13 @@ export async function materializeTools(
                         orgId: ctx.orgId,
                         workspaceId: ctx.workspaceId,
                         messageId: ctx.messageId!,
+                        // The in-app assistant reaches this path with no
+                        // `ctx.agentRun` (ADR-053), so its run comes from
+                        // `runIdRef`, read at call time (#3370 finding 11).
+                        runId:
+                          opts.runIdRef?.current ??
+                          ctx.agentRun?.runId ??
+                          null,
                         capabilityName: capturedKey,
                         inputPreview: input,
                         riskLevel: EXTERNAL_TOOL_RISK_LEVEL,

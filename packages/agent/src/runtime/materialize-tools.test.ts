@@ -2032,6 +2032,36 @@ describe("materializeTools — first-use consent gate", () => {
     expect(fakeExecute).toHaveBeenCalledTimes(1);
   });
 
+  // #3370 finding 11: the in-app assistant opens its run after it
+  // materializes tools, and its context never carries `ctx.agentRun`, so the
+  // consent approval wrote `run_public_id` null and the Run page's Policy tab
+  // never listed it.
+  it("writes a first-use consent approval against the run set on runIdRef after materialization (negative)", async () => {
+    const runIdRef: { current: string | null } = { current: null };
+    const { tools } = await materializeTools(CHAT_CTX, { runIdRef });
+    runIdRef.current = "0192d4a8-7c1e-7a00-8000-0000000000a1";
+    const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "consent",
+        runId: "0192d4a8-7c1e-7a00-8000-0000000000a1",
+      }),
+    );
+  });
+
+  it("writes a first-use consent approval with no run when neither a ref nor an agent run names one (negative)", async () => {
+    const { tools } = await materializeTools(CHAT_CTX);
+    const alias = `mcp_${MCP_SERVER.id}_list_pull_requests`;
+    await (tools[alias] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "consent", runId: null }),
+    );
+  });
+
   it("skips the consent gate entirely on the direct (no-messageId) path", async () => {
     // CTX has messageId:null — direct API/MCP caller. The gate must not fire.
     const { tools } = await materializeTools(CTX);
@@ -2926,6 +2956,42 @@ describe("materializeTools — agent RBAC MCP rules (Phase 4a, spec §3.7)", () 
     // Approved → the transport ran.
     expect(fakeExecute).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ data: "result" });
+  });
+
+  // #3370 finding 11: the ask path read only the agent run captured in the
+  // context, never the run the caller set on `runIdRef`.
+  it("ask: writes the consent approval against the run on runIdRef, read at call time (negative)", async () => {
+    const runIdRef: { current: string | null } = { current: null };
+    const ctx = {
+      ...CTX,
+      messageId: "msg_ask_run",
+      agentRun: makeMcpAgentRun([{ pattern: "github:*", effect: "ask" }]),
+    };
+    const { tools } = await materializeTools(ctx, { runIdRef });
+    runIdRef.current = "0192d4a8-7c1e-7a00-8000-0000000000b2";
+    await (tools[ALIAS] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "consent",
+        runId: "0192d4a8-7c1e-7a00-8000-0000000000b2",
+      }),
+    );
+  });
+
+  it("ask: falls back to the agent run's id when the caller passes no runIdRef", async () => {
+    const ctx = {
+      ...CTX,
+      messageId: "msg_ask_norun",
+      agentRun: makeMcpAgentRun([{ pattern: "github:*", effect: "ask" }]),
+    };
+    const { tools } = await materializeTools(ctx);
+    await (tools[ALIAS] as { execute?: (i: unknown) => Promise<unknown> })
+      .execute!({});
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "consent", runId: "run_test_1" }),
+    );
   });
 
   it("ask: the consent card carries the risk level the engine is told", async () => {
