@@ -335,28 +335,33 @@ function pathOnly(row: WorkContextRow): boolean {
 }
 
 /**
- * The Git context a path-only row belongs to: the first one recorded at the
- * same path after it, which is the Git read the daemon ran right after that
- * hook. When every Git context at the path began earlier, the row belongs to
- * the latest of them, the one in effect when the frame was sealed.
+ * The Git context a path-only frame at `seq` belongs to, among `others`,
+ * every context the read returned but the path-only row the frame is in.
+ * First choice is the context that starts next after the frame, when it is
+ * a Git context at `path`: the Git read the daemon ran right after that
+ * hook. Failing that, it is the context that started last before the frame,
+ * when that is a Git context at `path`: the one in effect when the frame was
+ * sealed. When another context starts in between, it separates the frame
+ * from that Git context, and the frame folds into neither.
  */
 function foldTarget(
-  row: WorkContextRow,
-  located: readonly WorkContextRow[],
+  path: string,
+  seq: number,
+  others: readonly WorkContextRow[],
 ): WorkContextRow | undefined {
-  const start = Number(row.first_seq);
-  let after: WorkContextRow | undefined;
-  let before: WorkContextRow | undefined;
-  for (const candidate of located) {
-    if (candidate.path !== row.path) continue;
-    const seq = Number(candidate.first_seq);
-    if (seq >= start) {
-      if (after === undefined || seq < Number(after.first_seq))
-        after = candidate;
-    } else if (before === undefined || seq > Number(before.first_seq))
-      before = candidate;
+  let next: WorkContextRow | undefined;
+  let previous: WorkContextRow | undefined;
+  for (const candidate of others) {
+    const start = Number(candidate.first_seq);
+    if (start > seq) {
+      if (next === undefined || start < Number(next.first_seq))
+        next = candidate;
+    } else if (previous === undefined || start > Number(previous.first_seq))
+      previous = candidate;
   }
-  return after ?? before;
+  const gitAt = (row: WorkContextRow | undefined) =>
+    row !== undefined && row.path === path && !pathOnly(row) ? row : undefined;
+  return gitAt(next) ?? gitAt(previous);
 }
 
 /**
@@ -368,30 +373,54 @@ function foldTarget(
  * second repository stays its own checkout. A path-only row with no Git
  * context at its path stays too: a directory outside Git is a real location.
  *
- * `alias` maps each folded row's checkout id to the id it folded into, so a
- * captured diff never points at a checkout the read no longer returns.
+ * The read groups every path-only frame at a path into one row, which can
+ * cover frames seen at different times: a first hook, and a later one after
+ * the session moved elsewhere. So the row's first and last frames, the two
+ * it knows, each fold on their own (`foldTarget`), and neither stretches a
+ * Git context past the start of another context. A frame that folds into
+ * nothing stays a path-only checkout. Every decision reads the starts the
+ * read returned, never a span an earlier fold widened.
+ *
+ * `alias` maps a row that folded whole to the checkout id its first frame
+ * folded into, so a captured diff never points at a checkout the read no
+ * longer returns. A row that stays in part keeps its own id.
  */
 export function foldProvisionalContexts(rows: readonly WorkContextRow[]): {
   rows: WorkContextRow[];
   alias: Map<string, string>;
 } {
   const alias = new Map<string, string>();
-  const located = rows
-    .filter((row) => !pathOnly(row))
-    .map((row) => ({ ...row }));
-  const folded: WorkContextRow[] = [...located];
+  // Each Git context's merged copy, by the row the read returned.
+  const merged = new Map<WorkContextRow, WorkContextRow>();
+  for (const row of rows) if (!pathOnly(row)) merged.set(row, { ...row });
+  const folded: WorkContextRow[] = [...merged.values()];
   for (const row of rows) {
     if (!pathOnly(row)) continue;
-    const target = foldTarget(row, located);
-    if (target === undefined) {
-      folded.push(row);
+    const others = rows.filter((other) => other !== row);
+    // Fold the frame at `seq` into its Git context's merged copy, and answer
+    // that copy, or undefined when the frame stays.
+    const place = (seq: number | string): WorkContextRow | undefined => {
+      const target = foldTarget(row.path, Number(seq), others);
+      const copy = target === undefined ? undefined : merged.get(target);
+      if (copy === undefined) return undefined;
+      if (Number(seq) < Number(copy.first_seq)) copy.first_seq = seq;
+      if (Number(seq) > Number(copy.last_seq)) copy.last_seq = seq;
+      return copy;
+    };
+    const first = place(row.first_seq);
+    const last =
+      Number(row.last_seq) === Number(row.first_seq)
+        ? first
+        : place(row.last_seq);
+    if (first !== undefined && last !== undefined) {
+      alias.set(checkoutId(row), checkoutId(first));
       continue;
     }
-    if (Number(row.first_seq) < Number(target.first_seq))
-      target.first_seq = row.first_seq;
-    if (Number(row.last_seq) > Number(target.last_seq))
-      target.last_seq = row.last_seq;
-    alias.set(checkoutId(row), checkoutId(target));
+    folded.push({
+      ...row,
+      first_seq: first === undefined ? row.first_seq : row.last_seq,
+      last_seq: last === undefined ? row.last_seq : row.first_seq,
+    });
   }
   folded.sort((a, b) => Number(a.first_seq) - Number(b.first_seq));
   return { rows: folded, alias };

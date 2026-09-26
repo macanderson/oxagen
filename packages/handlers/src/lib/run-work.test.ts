@@ -268,6 +268,77 @@ describe("foldProvisionalContexts", () => {
     expect(rows).toEqual([detached, located]);
     expect(alias.size).toBe(0);
   });
+
+  // Review round 1 on #4382: the read groups every path-only frame at a path
+  // into one row. That row folded whole into the Git context after its first
+  // frame, so a path-only frame seen later stretched that context over a
+  // later branch's checkout.
+  describe("a path-only row seen at two times", () => {
+    const early: WorkContextRow = { ...located, last_seq: 10 };
+    const elsewhere: WorkContextRow = {
+      ...context,
+      path: "/work/other",
+      remote: workDigest("github.com/acme/other"),
+      first_seq: 11,
+      last_seq: 29,
+    };
+
+    it("folds each end into its own neighbour, so no folded span overlaps a later branch (negative)", () => {
+      const second: WorkContextRow = {
+        ...context,
+        branch: "fix/two",
+        head: "d".repeat(40),
+        first_seq: 13,
+        last_seq: 20,
+      };
+      const twice: WorkContextRow = { ...pathOnly, first_seq: 1, last_seq: 25 };
+      const { rows, alias } = foldProvisionalContexts([twice, early, second]);
+      // fix/one keeps 1 to 10, and fix/two takes the frame seen at 25.
+      expect(rows).toEqual([
+        { ...early, first_seq: 1 },
+        { ...second, last_seq: 25 },
+      ]);
+      expect(alias.get(checkoutOf(twice, []).id)).toBe(
+        checkoutOf(early, []).id,
+      );
+    });
+
+    it("keeps a path-only frame that another checkout separates from the Git context before it (negative)", () => {
+      const late: WorkContextRow = { ...pathOnly, first_seq: 30, last_seq: 30 };
+      const { rows, alias } = foldProvisionalContexts([
+        early,
+        elsewhere,
+        late,
+      ]);
+      expect(rows).toEqual([early, elsewhere, late]);
+      expect(alias.size).toBe(0);
+    });
+
+    it("folds the first frame and keeps the later one when another checkout separates them (negative)", () => {
+      const twice: WorkContextRow = { ...pathOnly, first_seq: 1, last_seq: 30 };
+      const { rows, alias } = foldProvisionalContexts([
+        twice,
+        early,
+        elsewhere,
+      ]);
+      expect(rows).toEqual([
+        { ...early, first_seq: 1 },
+        elsewhere,
+        { ...pathOnly, first_seq: 30, last_seq: 30 },
+      ]);
+      // The row stays in part, so a diff on it keeps its own checkout.
+      expect(alias.size).toBe(0);
+    });
+
+    it("folds a frame into the Git context after it only when no other context starts first (negative)", () => {
+      const hook: WorkContextRow = { ...pathOnly, first_seq: 10, last_seq: 10 };
+      const later: WorkContextRow = { ...located, first_seq: 30, last_seq: 40 };
+      const between: WorkContextRow = { ...elsewhere, first_seq: 20 };
+      const { rows, alias } = foldProvisionalContexts([hook, between, later]);
+      expect(rows).toEqual([hook, between, later]);
+      expect(alias.size).toBe(0);
+    });
+  });
 });
 
 // Every ClickHouse read the Run page's work and header come from.
