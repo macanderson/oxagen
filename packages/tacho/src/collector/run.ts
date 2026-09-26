@@ -16,7 +16,8 @@ import { startDaemon } from "./daemon";
  * enroll, and launchd's and systemd's own kill timeouts are 10 s
  * (`host/service.ts`). `stop()` bounds its own waits inside this: at most
  * `stopLaneMs` for the git reconciliation lane, which can run for minutes,
- * and `stopDrainMs` for shipping, so it seals the host chain first.
+ * `stopQueueMs` for the hook queue to reach the host chain's seal, and
+ * `stopDrainMs` for shipping.
  */
 export const STOP_GRACE_MS = 5_000;
 

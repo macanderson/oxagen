@@ -181,6 +181,8 @@ export interface DaemonTimers {
   walRetainMs: number;
   /** The longest `stop` waits for the git lane before it seals the host chain. */
   stopLaneMs: number;
+  /** The longest `stop` waits for the queue to reach the host chain's seal. */
+  stopQueueMs: number;
   /** The longest `stop` spends shipping the WAL once the host chain is sealed. */
   stopDrainMs: number;
   /**
@@ -199,10 +201,12 @@ export const DEFAULT_TIMERS: DaemonTimers = {
   sweepMs: 30_000,
   idleSessionMs: 6 * 60 * 60_000,
   walRetainMs: 7 * 24 * 60 * 60_000,
-  // The two add up to 3.5 s, inside the 5 s `STOP_GRACE_MS` the process
-  // gives `stop` (run.ts), which leaves time to seal and persist between them.
+  // The three add up to 4 s, inside the 5 s `STOP_GRACE_MS` the process
+  // gives `stop` (run.ts), which leaves time to close the listeners and
+  // persist between them.
   stopLaneMs: 1_500,
-  stopDrainMs: 2_000,
+  stopQueueMs: 1_000,
+  stopDrainMs: 1_500,
   hookBundleWaitMs: 2_000,
 };
 
@@ -409,6 +413,10 @@ export function olderBundle(
     !(Date.parse(candidate.issued_at) > Date.parse(held.issued_at))
   );
 }
+
+/** What a hook or OTLP post that reaches the queue after `stop` began is told. */
+const STOPPING =
+  "tachod is stopping; tacho-hook spools this hook for the next start";
 
 /** A serial queue: hook handling for one daemon never interleaves. */
 class Serial {
@@ -3083,13 +3091,20 @@ async function initializeDaemon(
         now,
         log,
       }),
+    // Once `stop` began, a hook or an OTLP post still waiting for the queue
+    // is refused rather than run. `stop` seals the host chain behind them
+    // within `stopQueueMs`, and each one queued ahead of that seal was time
+    // it did not have. A refused hook is answered locally and spooled by
+    // `tacho-hook`, and the next start replays it.
     handleHook: (envelope) =>
       serial.run(async () => {
+        if (stopped) throw new Error(STOPPING);
         await drainSpool();
         return handleHookInner(envelope);
       }),
     handleOtlp: (signal, payload) =>
       serial.run(async () => {
+        if (stopped) throw new Error(STOPPING);
         lastOtlpAt = now();
         if (signal === "traces") return;
         const { drafts, metrics } = normalizeOtlp(payload as OtlpPayload);
@@ -3757,11 +3772,19 @@ async function initializeDaemon(
       modelProxy.close();
       await modelProxyListener.close();
       await server.close();
-      await serial.run(async () => {
+      // Behind at most the task running now: a hook or OTLP post queued
+      // after it is refused. That task can wait on a git read for up to ten
+      // seconds, so the seal waits `stopQueueMs` for it. Past that the seal
+      // stays queued, and lands if the process lives long enough.
+      const sealed = serial.run(async () => {
         record(hostRecorder.finalize("completed", toProtocolTimestamp(now())));
         hostRecord.sealed = true;
         persistState();
       });
+      if (!(await settleWithin(sealed, timers.stopQueueMs)))
+        log(
+          `stop: a task held the queue for ${timers.stopQueueMs} ms; the host chain seals when it finishes`,
+        );
       // Shipping stops at its budget. A batch in flight is marked shipped only
       // once its response lands, so what did not ship leaves at the next start.
       if (!(await settleWithin(shipper.drain(), timers.stopDrainMs)))
