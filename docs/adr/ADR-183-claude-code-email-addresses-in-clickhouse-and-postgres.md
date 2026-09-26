@@ -72,8 +72,11 @@ which runs:
 ALTER TABLE claude_sessions DELETE WHERE user_email = {email:String}
 ```
 
-with `mutations_sync = 2`, so the step returns only after the rows are gone.
-The step runs before `execute-erasure`, because that step overwrites the
+and then reads `system.mutations` until no mutation on the table is left, for
+up to 15 minutes, so the step returns only after the rows are gone. The first
+version waited inside the statement (`mutations_sync = 2`), and the shared
+client gives up on a request after 30 seconds, so an erase over a large table
+failed every time (#4316). The step runs before `execute-erasure`, because that step overwrites the
 address in `auth.users`. The address never leaves the step: Inngest stores a
 step's return value, so the step returns only whether it erased anything.
 
