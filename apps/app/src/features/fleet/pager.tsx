@@ -93,7 +93,7 @@ export function RunsPager({
     // A cursor page has no position in a counted list, so the range names
     // neither a start nor a total: a later page read "1–12 of 12" before, a
     // figure nothing counted.
-    const range = rows === 0 ? t("none") : t("shown", { n: rows });
+    const range = t("shown", { n: rows });
     return (
       <nav
         aria-label={t("label")}
@@ -104,8 +104,10 @@ export function RunsPager({
         </span>
         <span className="ms-auto flex flex-wrap items-center gap-3">
           {cursor === null ? null : (
+            // Back to the newest page of the same list: the search and the
+            // facets stay, and only the cursor goes.
             <SafeLink
-              to={routes.fleet(org, ws, { prs: pullRequests })}
+              to={routes.fleet(org, ws, listQueryToRoute(list, pullRequests))}
               data-touch-target=""
               className={`${linkText} inline-flex items-center`}
             >

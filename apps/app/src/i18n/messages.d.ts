@@ -10537,6 +10537,7 @@ type Messages = {
     };
     readFailure: {
       denied: string;
+      deniedByRule: string;
       pendingApproval: string;
       error: string;
     };

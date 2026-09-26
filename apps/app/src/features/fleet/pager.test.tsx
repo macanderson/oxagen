@@ -159,15 +159,33 @@ describe("RunsPager", () => {
     expect(screen.getByTestId("pager-range")).toHaveTextContent(
       "10 runs on this page",
     );
+    // Newest runs keeps the list and drops only the cursor (#4370 review: it
+    // dropped the search and the facets while Older runs kept them).
     expect(screen.getByRole("link", { name: "Newest runs" })).toHaveAttribute(
       "href",
-      "/acme/core?prs=with",
+      "/acme/core?prs=with&status=sealed",
     );
     expect(screen.getByRole("link", { name: "Older runs" })).toHaveAttribute(
       "href",
       "/acme/core?prs=with&status=sealed&cursor=c2",
     );
     expect(screen.queryByTestId("pager-pages")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  // #4370 review: a cursor page with no rows printed "0 of 0", a total
+  // nothing counted, beside a link to older runs.
+  it("says an empty cursor page holds no runs, without a total (negative)", async () => {
+    const { container } = renderPager({
+      rows: 0,
+      cursor: "c1",
+      nextCursor: "c2",
+      pullRequests: "with",
+      list: list({}),
+    });
+    const range = screen.getByTestId("pager-range");
+    expect(range).toHaveTextContent("0 runs on this page");
+    expect(range).not.toHaveTextContent("of");
     await expectNoAxe(container);
   });
 });
