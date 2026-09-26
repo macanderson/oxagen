@@ -3197,8 +3197,17 @@ describe("the seal's rollup", () => {
       "model_calls, tool_calls, turns, enforcement_tier",
     );
     // One tool call, no model call, zero turns, and no model call observed at
-    // the gateway — so the attempt is graded at the `harness` tier.
-    expect(seal?.params.slice(-4)).toEqual([0, 1, 0, "harness"]);
+    // the gateway, so the attempt is graded at the `harness` tier. The archive
+    // segment's digest and an unsigned attestation follow the tier (ADR-195).
+    expect(seal?.params.slice(-7)).toEqual([
+      0,
+      1,
+      0,
+      "harness",
+      expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      null,
+      null,
+    ]);
   });
 });
 

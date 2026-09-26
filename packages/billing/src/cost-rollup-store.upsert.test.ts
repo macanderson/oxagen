@@ -4,27 +4,22 @@
  * out, so a run's first ratio stood for good however its frames changed. The
  * graded columns belong to the rollup now and are in the update.
  *
- * The transaction is a fake that records the insert it was handed; the same
- * write against Postgres is in cost-rollup-store.pg.test.ts.
+ * `writeRunTotals` is handed a fake transaction that records the insert, so
+ * no module is mocked. The same write against Postgres, through
+ * `upsertRunTotals`, is in cost-rollup-store.pg.test.ts.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Tx } from "@oxagen/database";
+import { describe, expect, it } from "vitest";
 import type { RunTotalsRecord } from "./cost-rollup";
-import { upsertRunTotals } from "./cost-rollup-store";
-
-const mocks = vi.hoisted(() => ({ withSystemDb: vi.fn() }));
-
-vi.mock("@oxagen/database", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@oxagen/database")>()),
-  withSystemDb: mocks.withSystemDb,
-}));
+import { writeRunTotals } from "./cost-rollup-store";
 
 type Written = {
   values: Record<string, unknown>;
   set: Record<string, unknown>;
 };
 
-/** Records the insert's values and its conflict update, and answers nothing. */
-function recordWrites(): Written[] {
+/** A transaction that records the insert's values and its conflict update. */
+function recordingTx(): { tx: Tx; written: Written[] } {
   const written: Written[] = [];
   const tx = {
     insert: () => ({
@@ -36,8 +31,15 @@ function recordWrites(): Written[] {
       }),
     }),
   };
-  mocks.withSystemDb.mockImplementation((fn: (t: typeof tx) => unknown) =>
-    fn(tx),
+  return { tx: tx as unknown as Tx, written };
+}
+
+async function write(over: Partial<RunTotalsRecord> = {}): Promise<Written[]> {
+  const { tx, written } = recordingTx();
+  await writeRunTotals(
+    tx,
+    { ...record, ...over },
+    new Date("2026-09-15T10:00:00.000Z"),
   );
   return written;
 }
@@ -88,25 +90,20 @@ const record: RunTotalsRecord = {
   unproductiveSteps: 1,
 };
 
-beforeEach(() => mocks.withSystemDb.mockReset());
-
-describe("upsertRunTotals", () => {
+describe("writeRunTotals", () => {
   it("rewrites the productive ratio and step counts on a rebuild of an existing row", async () => {
-    const written = recordWrites();
-    await upsertRunTotals(record, new Date("2026-09-15T10:00:00.000Z"));
+    const written = await write();
     expect(written).toHaveLength(1);
     const [{ set }] = written as [Written];
-    // On main the update carried none of the three, so a rebuild kept the
-    // ratio its first rollup wrote.
+    // Before #3984 the update carried none of the three, so a rebuild kept
+    // the ratio its first rollup wrote.
     expect(set.productiveRatio).toBe("0.75000000");
     expect(set.advancedSteps).toBe(3);
     expect(set.unproductiveSteps).toBe(1);
   });
 
   it("writes the graded columns on the first insert too", async () => {
-    const written = recordWrites();
-    await upsertRunTotals(record, new Date("2026-09-15T10:00:00.000Z"));
-    const [{ values }] = written as [Written];
+    const [{ values }] = (await write()) as [Written];
     expect(values).toMatchObject({
       productiveRatio: "0.75000000",
       advancedSteps: 3,
@@ -116,48 +113,34 @@ describe("upsertRunTotals", () => {
   });
 
   it("leaves a person's acceptance out of the rebuild, where another lane owns it", async () => {
-    const written = recordWrites();
-    await upsertRunTotals(record, new Date("2026-09-15T10:00:00.000Z"));
-    const [{ set }] = written as [Written];
+    const [{ set }] = (await write()) as [Written];
     expect(Object.keys(set)).not.toContain("accepted");
   });
 
   it("writes a run with no graded steps as null in all three", async () => {
-    const written = recordWrites();
-    await upsertRunTotals(
-      {
-        ...record,
-        steps: 0,
-        modelCalls: 0,
-        toolCalls: 0,
-        breakdown: { models: [], tools: [], steps: null },
-        productiveRatio: null,
-        advancedSteps: null,
-        unproductiveSteps: null,
-      },
-      new Date("2026-09-15T10:00:00.000Z"),
-    );
-    const [{ set }] = written as [Written];
+    const [{ set }] = (await write({
+      steps: 0,
+      modelCalls: 0,
+      toolCalls: 0,
+      breakdown: { models: [], tools: [], steps: null },
+      productiveRatio: null,
+      advancedSteps: null,
+      unproductiveSteps: null,
+    })) as [Written];
     expect(set.productiveRatio).toBeNull();
     expect(set.advancedSteps).toBeNull();
     expect(set.unproductiveSteps).toBeNull();
   });
 
   it("stores each tool's result cost as a decimal string and the step causes as they are", async () => {
-    const written = recordWrites();
-    await upsertRunTotals(
-      {
-        ...record,
-        breakdown: {
-          ...record.breakdown,
-          tools: [
-            { name: "Read", calls: 2, resultTokens: 900, costMicros: 2_700n },
-          ],
-        },
+    const [{ set }] = (await write({
+      breakdown: {
+        ...record.breakdown,
+        tools: [
+          { name: "Read", calls: 2, resultTokens: 900, costMicros: 2_700n },
+        ],
       },
-      new Date("2026-09-15T10:00:00.000Z"),
-    );
-    const [{ set }] = written as [Written];
+    })) as [Written];
     expect(set.breakdown).toEqual({
       models: [],
       tools: [

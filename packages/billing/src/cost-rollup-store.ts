@@ -710,6 +710,21 @@ export async function upsertRunTotals(
   record: RunTotalsRecord,
   rolledUpAt: Date,
 ): Promise<void> {
+  // tenancy: the scheduled rollup job writes outside a tenant scope; the row
+  // carries the run's own orgId and workspaceId, and the conflict target is the
+  // run's globally unique public id, so no other organization's row is written.
+  await withSystemDb((tx) => writeRunTotals(tx, record, rolledUpAt));
+}
+
+/**
+ * The upsert itself, on the transaction it is handed. Exported for the unit
+ * test, which hands it a fake that records the insert.
+ */
+export async function writeRunTotals(
+  tx: Tx,
+  record: RunTotalsRecord,
+  rolledUpAt: Date,
+): Promise<void> {
   const values = {
     orgId: record.orgId,
     workspaceId: record.workspaceId,
@@ -755,26 +770,21 @@ export async function upsertRunTotals(
   // rather than replaying a stale read. The verdict is rebuilt with the rest,
   // from the run's verdict rows (ADR-064).
   const carried = { accepted: record.accepted };
-  // tenancy: the scheduled rollup job writes outside a tenant scope; the row
-  // carries the run's own orgId and workspaceId, and the conflict target is the
-  // run's globally unique public id, so no other organization's row is written.
-  await withSystemDb((tx) =>
-    tx
-      .insert(totals)
-      .values({ ...values, ...carried })
-      .onConflictDoUpdate({
-        target: totals.runId,
-        // A run keeps the cost center it was first charged to (ADR-142): a
-        // reprice or a stale-seal rebuild of a closed month must not move its
-        // spend to the label the agent carries today. A null is filled, which
-        // is what the backfill relies on.
-        set: {
-          ...values,
-          costCenter: sql`coalesce(${totals.costCenter}, excluded.cost_center)`,
-        },
-        setWhere: sql`NOT ${regressesToIncomplete()} AND NOT ${reopensSealed()}`,
-      }),
-  );
+  await tx
+    .insert(totals)
+    .values({ ...values, ...carried })
+    .onConflictDoUpdate({
+      target: totals.runId,
+      // A run keeps the cost center it was first charged to (ADR-142): a
+      // reprice or a stale-seal rebuild of a closed month must not move its
+      // spend to the label the agent carries today. A null is filled, which
+      // is what the backfill relies on.
+      set: {
+        ...values,
+        costCenter: sql`coalesce(${totals.costCenter}, excluded.cost_center)`,
+      },
+      setWhere: sql`NOT ${regressesToIncomplete()} AND NOT ${reopensSealed()}`,
+    });
 }
 
 async function readCarried(runId: string) {

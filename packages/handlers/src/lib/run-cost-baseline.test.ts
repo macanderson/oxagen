@@ -72,19 +72,28 @@ describe("baselineQuery", () => {
     );
   });
 
+  // A single-table select renders a column placed straight in a select field
+  // by its bare name, and one inside a nested fragment by its full name.
+  const column = (name: string) => `(?:"cost"\\."run_totals"\\.)?"${name}"`;
+  const graded = '"cost"\\."run_totals"\\."advanced_steps" is not null';
+
   it("weighs the ratio by steps: the sums over graded runs, not a mean of ratios", () => {
-    expect(sql).toContain(
-      'sum("cost"."run_totals"."advanced_steps") filter (where "cost"."run_totals"."advanced_steps" is not null)',
+    expect(sql).toMatch(
+      new RegExp(
+        `sum\\(${column("advanced_steps")}\\) filter \\(where ${graded}\\)`,
+      ),
     );
-    expect(sql).toContain(
-      'sum("cost"."run_totals"."steps") filter (where "cost"."run_totals"."advanced_steps" is not null)',
+    expect(sql).toMatch(
+      new RegExp(`sum\\(${column("steps")}\\) filter \\(where ${graded}\\)`),
     );
     expect(sql).not.toMatch(/avg\(/);
   });
 
   it("takes the median of the runs priced in the run's currency", () => {
-    expect(sql).toContain(
-      'percentile_cont(0.5) within group (order by "cost"."run_totals"."cost_micros")',
+    expect(sql).toMatch(
+      new RegExp(
+        `percentile_cont\\(0\\.5\\) within group \\(order by ${column("cost_micros")}\\)`,
+      ),
     );
     expect(sql).toMatch(/"run_totals"\."currency" = \$\d+/);
   });
