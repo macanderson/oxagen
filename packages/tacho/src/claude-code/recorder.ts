@@ -1023,7 +1023,9 @@ export class SessionRecorder {
    * its `SubagentStart` arrives, and the tailer knows neither. `seal` stamps
    * each frame's `subagent` block from these options, and `state` persists
    * the spawning call from them, so the hook that names them fills them in
-   * here. A value already set stays.
+   * here. A value already set stays. The captured `SubagentStart` (Claude
+   * Code 2.1.263) names the type and no spawning call, so on such a chain
+   * the spawning call stays unset until a hook names one.
    */
   private nameSubagent(
     subagentType: string | undefined,
