@@ -596,14 +596,19 @@ neo_cypher() {
 # vector indexes, and `migrateEveryGraphDatabase` resizes each one. A pooled
 # database that is current beside an organisation database that is not must
 # read as behind, or the gate would never apply the rest. The organisation
-# databases are listed the way `listOrgGraphDatabases` lists them, from
-# SHOW DATABASES on `system`. Community Edition holds none.
+# databases are listed the way `listOrgGraphDatabases` lists them: SHOW
+# DATABASES on `system`, kept only where the name is one `orgGraphDatabaseName`
+# can produce (`org-` and a 2 to 6 character lowercase namespace). A database
+# someone else named under the prefix is not one the migrator touches, so it is
+# not one this check may call behind. Community Edition holds none.
 #
 # The size is returned under the column name `name` so neo_result_names reads
 # it the way it reads every other result here.
 neo_cypher_on() {
+  # stdin from /dev/null, so cypher-shell cannot read the database list the
+  # loop below feeds through stdin.
   cypher-shell -a "$NEO4J_URI" -d "$1" \
-    --format plain --non-interactive "$2"
+    --format plain --non-interactive "$2" < /dev/null
 }
 
 check_neo4j_vector_sizes() {
@@ -626,9 +631,12 @@ check_neo4j_vector_sizes() {
 
   : > "$WORK/neo-vec-declared.txt"
   : > "$WORK/neo-vec-present.txt"
-  local db org_dbs=()
-  mapfile -t org_dbs < "$WORK/neo-org-dbs.txt"
-  for db in "$pooled" "${org_dbs[@]}"; do
+  # A plain read loop rather than mapfile, which Bash 3.2 (stock macOS) lacks.
+  echo "$pooled" > "$WORK/neo-all-dbs.txt"
+  grep -E '^org-[a-z0-9]{2,6}$' "$WORK/neo-org-dbs.txt" >> "$WORK/neo-all-dbs.txt" || true
+  local db
+  while IFS= read -r db; do
+    [[ -n $db ]] || continue
     prefix_lines "$db" "$WORK/neo-vec-schema.txt" >> "$WORK/neo-vec-declared.txt"
     if neo_cypher_on "$db" "SHOW INDEXES YIELD name, type, options WHERE type = 'VECTOR' RETURN name + ' ' + toString(options.indexConfig['vector.dimensions']) AS name" \
          > "$WORK/neo-vec.txt" 2>"$WORK/neo-vec-err.txt" &&
@@ -641,7 +649,7 @@ check_neo4j_vector_sizes() {
       bump_status 2
       return
     fi
-  done
+  done < "$WORK/neo-all-dbs.txt"
 
   report_drift "Neo4j vector sizes" "$WORK/neo-vec-declared.txt" "$WORK/neo-vec-present.txt"
   bump_status $?

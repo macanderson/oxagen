@@ -349,7 +349,7 @@ export const [ingestionPipeline] = createFunction(
           orgId,
           connectionId,
         },
-        "ingestion-pipeline: embedding backend unavailable — entity written without similarity dedup; re-resolve nodes where n.embedding IS NULL once it recovers",
+        "ingestion-pipeline: embedding backend unavailable — entity written without similarity dedup; re-resolve nodes where n.similarityDeferredAt IS NOT NULL once it recovers",
       );
     }
 
