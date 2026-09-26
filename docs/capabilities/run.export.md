@@ -42,6 +42,18 @@ A zip written to `evidence/<org>/<workspace>/exports/<export id>/<sha256 hex>.zi
 
 When the job cannot build the bundle (no attester key configured, a segment missing) the export row records `status: failed` with the reason.
 
+## The repeated body
+
+A carried wrapped frame shows `body` at its top level and again inside `event`. Format 3 keeps both copies (#3814), for these reasons:
+
+- Every wrapped frame has the same top-level fields, carried or not. A frame the export cannot carry is the row's projection, and `body` is part of it.
+- The verifier rebuilds the top level from the carried event (`wrappedFrameOf`) and requires the shown `body` to equal `event.body`, so the copy cannot drift from the hashed event.
+- `body` holds the event's facts (tool, model, cost and token totals), not content bytes, which stay behind `content.bytes_ref`. Both copies sit in one line of `frames.ndjson`, inside deflate's 32 KiB window, so the zip stores the second copy as back-references. `run-export-bundle.test.ts` pins that the copy grows a zipped bundle by less than 5 percent.
+
+Bundles in format 3 have shipped since #3810 on 2026-09-23. Dropping the copy would need format 4, accepted beside 3 by `oxagen verify` and by `verify.mjs`, to save a few bytes per frame.
+
+The export rebuilds each wrapped event by trying the readings its row leaves open until one hashes to the row's `hash`. The rows of one session mostly share a reading, so the export tries the reading that rebuilt the previous row first (`unflattenEventReading` with `first`). A row that shares the previous row's reading costs one candidate. A row that no reading rebuilds still costs every reading it leaves open, up to 256.
+
 ## Errors
 
 - `forbidden` (403): the actor is not an org Owner or Admin.

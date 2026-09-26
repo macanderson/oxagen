@@ -1,6 +1,6 @@
 // run.handlers.test.ts — handler invocation tests for the run recorder tools
-// (#2952, ADR-058): get_run_frame_body, get_run_transcript, get_run_turns,
-// get_run_context (ADR-200),
+// (#2952, ADR-058): list_runs, get_run, get_run_frame_body,
+// get_run_transcript, get_run_turns, get_run_context (ADR-200),
 // get_run_chain, bisect_runs, get_run_export, seal_run (#4073, ADR-169), and
 // get_run_issues (#3970).
 // fork_run, export_run and summarize_run check an org role in the handler and
@@ -29,6 +29,14 @@ vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
 vi.mock("../context", () => ({ buildContext: mocks.buildContext }));
 vi.mock("xmcp/headers", () => ({ headers: mocks.headers }));
 
+import runListTool, {
+  schema as listSchema,
+  metadata as listMetadata,
+} from "./run.list";
+import runGetTool, {
+  schema as getSchema,
+  metadata as getMetadata,
+} from "./run.get";
 import runFrameBodyGetTool, {
   schema as frameBodySchema,
   metadata as frameBodyMetadata,
@@ -82,6 +90,53 @@ const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const DIGEST = `sha256:${"a".repeat(64)}`;
 const EXPORT_ID = "rexp_0a1b2c3d";
 
+/**
+ * A ledger run's row. The ledger records no harness, so the key is present
+ * and null (#3790).
+ */
+const LEDGER_ROW = {
+  id: LEDGER_ID,
+  source: "ledger",
+  agentKey: "acme.core.release-bot",
+  operatorId: null,
+  operatorKind: null,
+  operatorName: null,
+  operatorAttribution: null,
+  operatorRole: null,
+  status: "sealed",
+  outcome: "completed",
+  turns: 2,
+  steps: 7,
+  frames: 40,
+  cost: null,
+  model: null,
+  machine: null,
+  harness: null,
+  taskRef: null,
+  startedAt: "2026-09-08T10:06:03.000Z",
+  sealedAt: "2026-09-08T10:06:30.000Z",
+  endedAt: "2026-09-08T10:06:30.000Z",
+  replayGrade: null,
+  verdict: null,
+  enforcementTier: "harness",
+  completenessGaps: [],
+  canSummarize: true,
+  name: null,
+  summary: null,
+};
+
+/** A wrapped session's row, which names the harness it recorded. */
+const WRAPPED_ROW = {
+  ...LEDGER_ROW,
+  id: TACHO_ID,
+  source: "tacho",
+  enforcementTier: "observe",
+  harness: { name: "Claude Code", version: "2.1.0", runtime: "claude-code" },
+};
+
+/** A row with no harness key, which the contract refuses (#3790). */
+const { harness: _harness, ...ROW_WITHOUT_HARNESS } = LEDGER_ROW;
+
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.buildContext.mockResolvedValue(fakeCtx);
@@ -105,6 +160,48 @@ interface ToolCase {
 }
 
 const CASES: ToolCase[] = [
+  {
+    name: "list_runs",
+    handler: runListTool,
+    schema: listSchema,
+    metadata: listMetadata,
+    fields: [
+      "limit",
+      "cursor",
+      "pullRequests",
+      "status",
+      "tier",
+      "replayGrade",
+      "query",
+      "sort",
+      "offset",
+      "count",
+      "countLive",
+    ],
+    readOnly: true,
+    args: { limit: 50 },
+    validOutput: { runs: [LEDGER_ROW, WRAPPED_ROW], nextCursor: null },
+    invalidOutput: { runs: [ROW_WITHOUT_HARNESS], nextCursor: null },
+  },
+  {
+    name: "get_run",
+    handler: runGetTool,
+    schema: getSchema,
+    metadata: getMetadata,
+    fields: ["runId", "framesAfter", "frameLimit", "waitMs"],
+    readOnly: true,
+    args: { runId: LEDGER_ID, frameLimit: 100, waitMs: 0 },
+    validOutput: {
+      run: LEDGER_ROW,
+      frames: { frames: [], cursor: null },
+      witnessFor: null,
+    },
+    invalidOutput: {
+      run: ROW_WITHOUT_HARNESS,
+      frames: { frames: [], cursor: null },
+      witnessFor: null,
+    },
+  },
   {
     name: "get_run_frame_body",
     handler: runFrameBodyGetTool,

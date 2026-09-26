@@ -77,6 +77,7 @@ describe("get_run contract", () => {
       cost: null,
       model: null,
       machine: null,
+      harness: null,
       taskRef: "fix the flaky test",
       startedAt: "2026-09-08T10:06:03.000Z",
       sealedAt: null,
@@ -113,6 +114,15 @@ describe("get_run contract", () => {
     ).toBe(false);
     expect(runGet.output.safeParse({ run, frames: null }).success).toBe(false);
     expect(runGet.output.safeParse({ run, frames: [] }).success).toBe(false);
+    // The harness key is required too: a ledger run answers it null (#3790).
+    const { harness: _h, ...withoutHarness } = run;
+    expect(
+      runGet.output.safeParse({
+        run: withoutHarness,
+        frames: { frames: [], cursor: null },
+        witnessFor: null,
+      }).success,
+    ).toBe(false);
   });
 
   it("carries every frame's body reference and never its bytes", () => {

@@ -35,6 +35,7 @@
           "canSummarize": false,
           "model": null,
           "machine": null,
+          "harness": null,
           "name": "Release notes",
           "summary": null
         },
@@ -68,6 +69,7 @@
           "canSummarize": false,
           "model": null,
           "machine": null,
+          "harness": null,
           "name": "Release notes",
           "summary": null
         }

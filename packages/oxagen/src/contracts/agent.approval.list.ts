@@ -30,7 +30,7 @@ export const approvalListItem = z
     /**
      * The public id of the run the call was parked in (`arun_…` or `tse_…`);
      * null when no run was in scope, or when the writer records none yet (the
-     * mandate gate and the MCP consent path do not thread a run through).
+     * mandate gate does not thread a run through).
      */
     runId: z.string().nullable(),
     /** The capability the parked call asked for (`approval_requests.capability_name`). */

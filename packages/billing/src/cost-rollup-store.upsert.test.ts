@@ -69,6 +69,7 @@ const record: RunTotalsRecord = {
     cache_write_1h: 0,
     output: 0,
     reasoning: 0,
+    server_tool_request: 0,
   },
   costMicros: null,
   currency: "USD",

@@ -86,6 +86,7 @@ const run = {
   cost: null,
   model: wireModel,
   machine,
+  harness: null,
   taskRef: null,
   name: null,
   summary: null,

@@ -92,7 +92,7 @@ export function toRunRow(
       : { cacheHitRate: run.cacheHitRate }),
     machine: run.machine,
     place: run.place ?? null,
-    harness: run.harness ?? null,
+    harness: run.harness,
     taskRef: run.taskRef,
     name: run.name,
     enrichmentEnabled: run.enrichmentEnabled ?? true,

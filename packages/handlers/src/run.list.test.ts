@@ -1933,6 +1933,31 @@ describe("a run row names who ran it, on what, with which model", () => {
     ).toBeNull();
   });
 
+  it("answers every row's harness key, null where none was recorded (#3790)", async () => {
+    const { list } = handlerOver(
+      [ledgerRun({ publicId: "arun_ledger", runId: RUN_A })],
+      [
+        tachoSession({ publicId: "tse_wrapped" }),
+        tachoSession({
+          publicId: "tse_unrecorded",
+          session: { harness: "", harnessVersion: null },
+        }),
+      ],
+    );
+    const out = runList.output.parse(await list({ limit: 50 }, ctx()));
+    const byId = new Map(out.runs.map((run) => [run.id, run]));
+    // The key is present on each row, so an API or MCP reader sees null
+    // rather than a missing field.
+    for (const run of out.runs) expect(run).toHaveProperty("harness");
+    expect(byId.get("arun_ledger")?.harness).toBeNull();
+    expect(byId.get("tse_unrecorded")?.harness).toBeNull();
+    expect(byId.get("tse_wrapped")?.harness).toEqual({
+      name: "Claude Code",
+      version: "2.1.0",
+      runtime: "claude-code",
+    });
+  });
+
   it("answers a null machine when the session names no host (negative)", async () => {
     const { list } = handlerOver(
       [],

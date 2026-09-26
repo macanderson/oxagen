@@ -387,19 +387,74 @@ function tsSpellings(value: unknown): string[] {
   return spellings;
 }
 
-/** Every subset of `count` flags, fewest set first. */
-function* subsetsBySize(count: number): Generator<boolean[]> {
+/** Every subset of `count` flags as a bit mask, fewest set first. */
+function* subsetsBySize(count: number): Generator<number> {
   const masks = Array.from({ length: 2 ** count }, (_, mask) => mask);
   const bits = (mask: number) => mask.toString(2).replace(/0/g, "").length;
   masks.sort((a, b) => bits(a) - bits(b) || a - b);
-  for (const mask of masks) {
-    yield Array.from({ length: count }, (_, i) => (mask & (1 << i)) !== 0);
-  }
+  yield* masks;
+}
+
+/**
+ * One reading a row leaves open, named for what it flips away from the
+ * likelier spelling:
+ *
+ * - `group:<name>`: the envelope group with no members was sent as `{}`.
+ * - `content:empty`: `content` was sent as `{ redactions: [] }`.
+ * - `subagent:spawn_depth_absent`: `spawn_depth` was unset, not 0.
+ * - `ts:whole_second`: `ts` was written without a fraction.
+ */
+export type UnflattenFlag =
+  | `group:${GroupName}`
+  | "content:empty"
+  | "subagent:spawn_depth_absent"
+  | "ts:whole_second";
+
+/**
+ * The flags a matched row flipped. An empty list is the likeliest reading.
+ * A flag means the same thing on every row, even where two rows leave
+ * different readings open, so a caller can carry one row's reading to the
+ * next as a hint. It is a plain array, so a step output can carry it too.
+ */
+export type UnflattenReading = readonly UnflattenFlag[];
+
+/** What `unflattenEventReading` found for one row. */
+export interface UnflattenResult {
+  /** The sealed event, or null when no reading hashes to the row's hash. */
+  event: TachoEvent | null;
+  /** The flags the matching reading flipped; null when none matched. */
+  reading: UnflattenReading | null;
+  /**
+   * How many candidate readings were built and hash-checked. A row that
+   * matches none costs one per reading it leaves open, up to 256.
+   */
+  tried: number;
+}
+
+export interface UnflattenOptions {
+  /**
+   * The reading to try first, usually the previous row's. Flags this row
+   * does not leave open are ignored. A wrong hint costs one candidate: the
+   * search then tries every other reading, fewest flags first.
+   */
+  first?: UnflattenReading | null;
 }
 
 /**
  * Rebuild the sealed event a `tacho_events` row was flattened from, or null
- * when the row does not determine it.
+ * when the row does not determine it. `unflattenEventReading` does the work
+ * and also answers which reading matched.
+ */
+export function unflattenEvent(
+  row: TachoEventRow,
+  options?: UnflattenOptions,
+): TachoEvent | null {
+  return unflattenEventReading(row, options).event;
+}
+
+/**
+ * Rebuild the sealed event a `tacho_events` row was flattened from, with the
+ * reading that matched and the number of candidates it took.
  *
  * A row loses a little of its event. An envelope group whose members are all
  * absent may have been sent as `{}` or left out; `content` with no digest and
@@ -416,9 +471,15 @@ function* subsetsBySize(count: number): Generator<boolean[]> {
  * the control plane overwrites the stored column with where it kept the body
  * (`tachoEventRow`), so a reader of the stored row drops that column first.
  */
-export function unflattenEvent(row: TachoEventRow): TachoEvent | null {
+export function unflattenEventReading(
+  row: TachoEventRow,
+  options: UnflattenOptions = {},
+): UnflattenResult {
+  const unread: UnflattenResult = { event: null, reading: null, tried: 0 };
   const hash = row["hash"];
-  if (typeof hash !== "string" || typeof row["body"] !== "string") return null;
+  if (typeof hash !== "string" || typeof row["body"] !== "string") {
+    return unread;
+  }
   let body: unknown;
   let redactions: unknown;
   try {
@@ -428,7 +489,7 @@ export function unflattenEvent(row: TachoEventRow): TachoEvent | null {
         ? JSON.parse(row["redactions"])
         : [];
   } catch {
-    return null;
+    return unread;
   }
 
   const agent: Record<string, unknown> = {
@@ -478,31 +539,46 @@ export function unflattenEvent(row: TachoEventRow): TachoEvent | null {
 
   // The readings the row leaves open. Each flag flips one away from the
   // likelier spelling.
-  const open: Array<(event: Record<string, unknown>) => void> = [];
+  const open: Array<{
+    flag: UnflattenFlag;
+    flip: (event: Record<string, unknown>) => void;
+  }> = [];
   for (const name of Object.keys(GROUP_COLUMNS) as GroupName[]) {
     if (Object.keys(groups[name]).length === 0) {
-      open.push((event) => {
-        event[name] = {};
+      open.push({
+        flag: `group:${name}`,
+        flip: (event) => {
+          event[name] = {};
+        },
       });
     }
   }
   if (contentIsEmpty) {
-    open.push((event) => {
-      event["content"] = { redactions: [] };
+    open.push({
+      flag: "content:empty",
+      flip: (event) => {
+        event["content"] = { redactions: [] };
+      },
     });
   }
   if (subagent !== undefined && subagent["spawn_depth"] === 0) {
-    open.push((event) => {
-      delete (event["subagent"] as Record<string, unknown>)["spawn_depth"];
+    open.push({
+      flag: "subagent:spawn_depth_absent",
+      flip: (event) => {
+        delete (event["subagent"] as Record<string, unknown>)["spawn_depth"];
+      },
     });
   }
   const spellings = tsSpellings(row["ts"]);
   if (spellings.length > 1) {
-    open.push((event) => {
-      event["ts"] = spellings[1];
+    open.push({
+      flag: "ts:whole_second",
+      flip: (event) => {
+        event["ts"] = spellings[1];
+      },
     });
   }
-  if (2 ** open.length > MAX_CANDIDATES) return null;
+  if (2 ** open.length > MAX_CANDIDATES) return unread;
 
   const base = (): Record<string, unknown> => {
     const event: Record<string, unknown> = {
@@ -541,21 +617,48 @@ export function unflattenEvent(row: TachoEventRow): TachoEvent | null {
     return event;
   };
 
-  for (const flags of subsetsBySize(open.length)) {
+  let tried = 0;
+  const attempt = (mask: number): UnflattenResult | null => {
+    tried += 1;
     const candidate = base();
-    flags.forEach((flip, i) => {
-      if (flip) open[i]?.(candidate);
+    open.forEach(({ flip }, i) => {
+      if ((mask & (1 << i)) !== 0) flip(candidate);
     });
-    if (!eventHashHolds(candidate, hash)) continue;
+    if (!eventHashHolds(candidate, hash)) return null;
     // The hash matched the reading; parsing it is the schema's word that the
     // reading is an event, and parsing must not change what was hashed.
     const parsed = tachoEventSchema.safeParse(candidate);
     if (
-      parsed.success &&
-      eventHashHolds(parsed.data as unknown as Record<string, unknown>, hash)
+      !parsed.success ||
+      !eventHashHolds(parsed.data as unknown as Record<string, unknown>, hash)
     ) {
-      return parsed.data;
+      return null;
     }
+    return {
+      event: parsed.data,
+      reading: open
+        .filter((_, i) => (mask & (1 << i)) !== 0)
+        .map(({ flag }) => flag),
+      tried,
+    };
+  };
+
+  // A session's rows mostly share one reading, so the caller's hint usually
+  // matches at once and the search below never runs.
+  let hinted: number | null = null;
+  if (options.first) {
+    const wanted = new Set<string>(options.first);
+    hinted = open.reduce(
+      (mask, { flag }, i) => (wanted.has(flag) ? mask | (1 << i) : mask),
+      0,
+    );
+    const found = attempt(hinted);
+    if (found) return found;
   }
-  return null;
+  for (const mask of subsetsBySize(open.length)) {
+    if (mask === hinted) continue;
+    const found = attempt(mask);
+    if (found) return found;
+  }
+  return { event: null, reading: null, tried };
 }

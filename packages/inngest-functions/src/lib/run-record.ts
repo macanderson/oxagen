@@ -26,7 +26,8 @@ import {
   digestBytes,
   type JsonValue,
   readArchiveSegment,
-  unflattenEvent,
+  type UnflattenReading,
+  unflattenEventReading,
   wrappedFrameOf,
 } from "@oxagen/tacho";
 import {
@@ -151,7 +152,9 @@ export async function resolveRunRecord(
 const PAGE = 500;
 
 /**
- * Every `tacho_events` row of a session, in sequence order.
+ * The `tacho_events` rows of a session, one read at a time, in sequence
+ * order. Nothing is read until the caller asks for the next page, so a
+ * caller that stops early reads no more.
  *
  * Each page is bounded above, as `readFrames` in the handlers' run-read.ts is.
  * `tacho_events` is read with `FINAL`, and a read with no upper bound scans
@@ -163,15 +166,10 @@ const PAGE = 500;
  * recorded break. One read past the window, unbounded, tells the two apart.
  * It returns nothing at the end of the chain, and the rows after the break
  * otherwise.
- *
- * The read stops once it holds more than `upTo` rows, so a capped reader
- * can tell a chain that fits from one that does not.
  */
-async function allTachoRows(
+async function* tachoRowPages(
   sessionUuid: string,
-  upTo = Number.POSITIVE_INFINITY,
-): Promise<TachoFrameRow[]> {
-  const rows: TachoFrameRow[] = [];
+): AsyncGenerator<TachoFrameRow[]> {
   let after = -1;
   for (;;) {
     const through = after + PAGE;
@@ -181,8 +179,7 @@ async function allTachoRows(
       throughSeq: through,
       limit: PAGE,
     });
-    rows.push(...page);
-    if (rows.length > upTo) return rows;
+    if (page.length > 0) yield page;
     if (page.length === PAGE) {
       after = through;
       continue;
@@ -192,9 +189,9 @@ async function allTachoRows(
       afterSeq: through,
       limit: PAGE,
     });
-    rows.push(...rest);
+    if (rest.length > 0) yield rest;
     const last = rest.at(-1);
-    if (!last || rest.length < PAGE || rows.length > upTo) return rows;
+    if (!last || rest.length < PAGE) return;
     after = last.seq;
   }
 }
@@ -220,22 +217,51 @@ async function allTachoRecords(
 
 /**
  * A wrapped frame as the export writes it. When the stored row rebuilds the
- * sealed event, proven by its hash (`unflattenEvent`), the frame is
+ * sealed event, proven by its hash (`unflattenEventReading`), the frame is
  * `wrappedFrameOf` that event and carries it, so a verifier recomputes the
  * hash (#3733). Otherwise it is the row's projection with no event, and the
  * verifier prints the frame's digest as not carried.
+ *
+ * `first` is the reading that rebuilt an earlier row of the session. The
+ * rows of one session mostly share a reading, so trying it first saves the
+ * search on most rows (#3814). The answer carries the reading this row
+ * matched, or null when none did.
  */
-function tachoExportFrame(record: TachoEventRecord): JsonValue {
-  const event = unflattenEvent(record.envelope);
+function tachoExportFrame(
+  record: TachoEventRecord,
+  first: UnflattenReading | null,
+): { frame: JsonValue; reading: UnflattenReading | null } {
+  const { event, reading } = unflattenEventReading(record.envelope, {
+    first,
+  });
   if (event !== null) {
     const bytesRef =
       record.frame.bytesRef === "" ? null : record.frame.bytesRef;
-    return wrappedFrameOf(
-      event as unknown as Record<string, JsonValue>,
-      bytesRef,
-    );
+    return {
+      frame: wrappedFrameOf(
+        event as unknown as Record<string, JsonValue>,
+        bytesRef,
+      ),
+      reading,
+    };
   }
-  return tachoEnvelope(record.frame);
+  return { frame: tachoEnvelope(record.frame), reading: null };
+}
+
+/**
+ * Every row of a session as the export writes it, in order. The last reading
+ * that rebuilt a row is tried first on the next one. A row that no reading
+ * rebuilds leaves the carried reading as it was.
+ */
+function tachoExportFrames(records: readonly TachoEventRecord[]): JsonValue[] {
+  const frames: JsonValue[] = [];
+  let reading: UnflattenReading | null = null;
+  for (const record of records) {
+    const built = tachoExportFrame(record, reading);
+    frames.push(built.frame);
+    if (built.reading !== null) reading = built.reading;
+  }
+  return frames;
 }
 
 /** A wrapped frame's projection from its row, without the event. */
@@ -290,7 +316,7 @@ export async function readSealedSegments(
           enforcementTier: record.enforcementTier,
           completenessGaps: record.completenessGaps,
           replayGrade: record.replayGrade,
-          envelopes: records.map(tachoExportFrame),
+          envelopes: tachoExportFrames(records),
           digests: records.map((r) => r.frame.hash),
           sealAttestation: null,
         },
@@ -344,38 +370,64 @@ export async function readSealedSegments(
 }
 
 /**
- * The run's own chain up to `upTo` frames and past it by at most a page:
- * a wrapped session's `tacho_events` rows, or a ledger run's events.
+ * The run's own chain as the projection reads it, a page at a time: a
+ * wrapped session's `tacho_events` rows, or a ledger run's events. The
+ * caller runs it inside the run's tenant scope.
  */
-async function ownFrames(
-  record: RunRecord,
-  upTo = Number.POSITIVE_INFINITY,
-): Promise<RunFrame[]> {
+async function* ownFramePages(record: RunRecord): AsyncGenerator<RunFrame[]> {
   if (record.source === "tacho") {
-    return (await allTachoRows(record.sessionUuid, upTo)).map(tachoFrame);
+    for await (const rows of tachoRowPages(record.sessionUuid))
+      yield rows.map(tachoFrame);
+    return;
   }
   const store = ledgerStore();
-  const frames: RunFrame[] = [];
   let after = "0";
   for (;;) {
     const page = await store.readAttemptEventsSince(record.runId, after, PAGE);
-    frames.push(...page.map(ledgerFrame));
+    if (page.length > 0) yield page.map(ledgerFrame);
     const last = page.at(-1);
-    if (!last || page.length < PAGE || frames.length > upTo) return frames;
+    if (!last || page.length < PAGE) return;
     after = last.runSeq;
   }
 }
 
 /**
- * Every frame of the run's own chain as the projection reads it, in sequence
- * order. The enrichment job reads the record this way; a reader that folds
- * the run's steps reads `readTranscriptFramesOf`.
+ * The run's own chain up to `upTo` frames and past it by at most a page:
+ * a wrapped session's `tacho_events` rows, or a ledger run's events.
  */
-export async function readRunFrames(
+async function ownFrames(
+  record: RunRecord,
+  upTo: number,
+): Promise<RunFrame[]> {
+  const frames: RunFrame[] = [];
+  for await (const page of ownFramePages(record)) {
+    frames.push(...page);
+    if (frames.length > upTo) return frames;
+  }
+  return frames;
+}
+
+/**
+ * The run's own chain a page at a time, in sequence order, each page read
+ * inside the run's tenant scope. A page holds at most 500 frames. Nothing is
+ * read until the caller asks for the next page, so a reader that stops
+ * early, as the enrichment job does at its text ceiling, holds one page in
+ * memory and reads no more (#3784).
+ */
+export async function* runFramePages(
   scope: RunScope,
   record: RunRecord,
-): Promise<RunFrame[]> {
-  return runInTenantScope(scope, () => ownFrames(record));
+): AsyncGenerator<RunFrame[]> {
+  const pages = ownFramePages(record);
+  try {
+    for (;;) {
+      const next = await runInTenantScope(scope, () => pages.next());
+      if (next.done === true) return;
+      yield next.value;
+    }
+  } finally {
+    await pages.return(undefined);
+  }
 }
 
 /**

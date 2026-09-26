@@ -21,8 +21,10 @@ import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
   type SyntheticEvent,
+  useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react";
@@ -47,6 +49,7 @@ import {
   useActionFailure,
 } from "@/ui/command-failure";
 import {
+  buttonDanger,
   buttonPrimary,
   buttonSecondary,
   inputBase,
@@ -670,22 +673,54 @@ function RunRowView({
 
 type PauseRefusal =
   | `blocked.${(typeof COMMAND_BLOCK_COPY)[CommandBlock]}`
-  | "ledgerReason"
+  | "ledgerRevoked"
   | "roleReason";
 
 /**
- * Why a live run cannot take a pause from Oxagen, or null when it can. The
- * enforcement tier plays no part (ADR-163): the row's `commandBlock` says
- * whether the run's host can collect a command.
+ * Why a live run cannot take a command from its row, or null when it can, in
+ * the Run page's order (run-controls.tsx). The enforcement tier plays no part
+ * (ADR-163): a wrapped row's `commandBlock` says whether the run's host can
+ * collect a command. A ledger run has no host. Its controls act on its
+ * evidence ingress, and a cancel revokes that ingress for good (#3665).
  */
 function pauseRefusal(run: RunRow, canCommand: boolean): PauseRefusal | null {
-  if (run.source === "ledger") return "ledgerReason";
-  const block = commandBlockOf(run);
-  if (block !== null) return `blocked.${COMMAND_BLOCK_COPY[block]}`;
+  if (run.source !== "ledger") {
+    const block = commandBlockOf(run);
+    if (block !== null) return `blocked.${COMMAND_BLOCK_COPY[block]}`;
+  }
   if (!canCommand) return "roleReason";
+  if (run.source === "ledger" && run.ingressRevoked === true)
+    return "ledgerRevoked";
   return null;
 }
 
+/** The `run.commands` copy of each command a ledger run's dialog sends. */
+const LEDGER_COPY = {
+  pause: "ledgerPause",
+  cancel: "ledgerCancel",
+} as const;
+type LedgerCommand = keyof typeof LEDGER_COPY;
+
+/**
+ * The dialog a live row's Pause opens. A wrapped run takes a pause through
+ * its host, and the toast says it was queued. A ledger run offers Pause of
+ * its evidence ingress, and Cancel. A ledger row whose ingress is paused
+ * reads `paused` and links to its Run page, where Resume is (`rowState`), so
+ * this dialog never opens on one. The ledger applies each command at once,
+ * so the dialog says what changed and re-reads the page when it closes.
+ *
+ * A cancel revokes the run's evidence ingress for good, so it takes two
+ * clicks: "Cancel evidence ingress" shows what cannot be undone, with Back,
+ * and only the second button sends the command.
+ *
+ * The board mounts one dialog per run it opens on (`key`), so nothing one
+ * run's dialog showed carries into the next, and closing it unmounts it. So
+ * the dialog cannot close while a command is in flight: Close, the header
+ * close, Escape, and a click outside all wait for the answer. A failure then
+ * lands in the dialog that sent the command, and a second click on the row
+ * cannot send the command again. An answer that arrives after the board
+ * itself went away is not drawn.
+ */
 function PauseDialog({
   run,
   canCommand,
@@ -697,26 +732,66 @@ function PauseDialog({
   run: RunRow | null;
   canCommand: boolean;
   onClose: () => void;
+  /**
+   * A wrapped run's pause was queued for its host. The board says so and
+   * reads the page again. The dialog closes itself first, since it cannot
+   * close while the pause is in flight.
+   */
   onQueued: (run: RunRow) => void;
 } & Place) {
   const t = useTranslations("fleet.pause");
   const command = useTranslations("run.commands");
   const failureText = useActionFailure();
+  const navigate = useNavigate();
   const formId = useId();
   const fieldId = useId();
   const [reason, setReason] = useState("");
   const [failure, setFailure] = useState<string | null>(null);
+  const [applied, setApplied] = useState<string | null>(null);
+  // A ledger cancel's second step: the first click shows what it cannot
+  // undo, and only the next one sends it.
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [pending, startTransition] = useTransition();
+  const warningId = useId();
+  const backRef = useRef<HTMLButtonElement>(null);
+  const cancelRunRef = useRef<HTMLButtonElement>(null);
   const refusal = run === null ? null : pauseRefusal(run, canCommand);
+  const ledger = run?.source === "ledger";
+  // The run this dialog shows while it is mounted, and null once it has
+  // gone, so a command's answer can tell whether its dialog is still there.
+  const showingRef = useRef<string | null>(null);
+  const runId = run?.id ?? null;
+  useEffect(() => {
+    showingRef.current = runId;
+    return () => {
+      showingRef.current = null;
+    };
+  }, [runId]);
+  // Set by Back, so the first step it draws again takes focus back to Cancel.
+  // Closing the dialog also leaves the confirm step, and takes no focus.
+  const backedOutRef = useRef(false);
+  // Each step replaces the button that opened it, so focus moves to that
+  // step's button rather than falling to the page behind the dialog.
+  useEffect(() => {
+    if (confirmingCancel) backRef.current?.focus();
+    else if (backedOutRef.current) {
+      backedOutRef.current = false;
+      cancelRunRef.current?.focus();
+    }
+  }, [confirmingCancel]);
 
   function close() {
+    const changed = applied !== null;
+    showingRef.current = null;
     setReason("");
     setFailure(null);
+    setApplied(null);
+    setConfirmingCancel(false);
     onClose();
+    if (changed) navigate.refresh();
   }
 
-  function submit(event: SyntheticEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function send(sent: LedgerCommand) {
     if (run === null || refusal !== null || pending) return;
     setFailure(null);
     startTransition(async () => {
@@ -725,14 +800,25 @@ function PauseDialog({
           org,
           ws,
           run.id,
-          "pause",
+          sent,
           reason,
         );
+        const open = showingRef.current === run.id;
         if (!result.ok) setFailure(failureText(result));
         else if (result.value.commandIds.length === 0)
           setFailure(command("noRecipient"));
-        else {
+        else if (!open) {
+          // The dialog cannot close while a command is in flight, so this is
+          // a board that went away before the answer came. Read the page
+          // again, so the row shows what the command changed.
+          if (ledger) navigate.refresh();
+          else onQueued(run);
+        } else if (ledger) {
           setReason("");
+          setApplied(command(`${LEDGER_COPY[sent]}.applied`));
+        } else {
+          setReason("");
+          onClose();
           onQueued(run);
         }
       } catch {
@@ -741,34 +827,154 @@ function PauseDialog({
     });
   }
 
+  function submit(event: SyntheticEvent<HTMLFormElement>) {
+    event.preventDefault();
+    send("pause");
+  }
+
+  const blocked = refusal !== null || pending;
+  // Each step's buttons are keyed apart, so the confirm step draws buttons of
+  // its own rather than relabelling the ones the first step drew. The layout
+  // decides what sits under the pointer for a double click's second click, so
+  // the confirm button refuses that click itself (`event.detail`).
+  const actions = ledger ? (
+    applied !== null ? null : confirmingCancel ? (
+      <>
+        <button
+          key="cancel-back"
+          ref={backRef}
+          type="button"
+          data-touch-target=""
+          data-testid="pause-cancel-back"
+          disabled={pending}
+          onClick={() => {
+            // Back removes itself, so focus would fall to the popup. The
+            // effect above gives it to Cancel once the first step is drawn.
+            // A refusal the cancel came back with goes too, since the person
+            // has stepped back from that cancel.
+            backedOutRef.current = true;
+            setFailure(null);
+            setConfirmingCancel(false);
+          }}
+          className={buttonSecondary}
+        >
+          {t("ledgerCancelBack")}
+        </button>
+        <button
+          key="cancel-confirm"
+          type="button"
+          data-touch-target=""
+          data-testid="pause-cancel-confirm"
+          aria-describedby={warningId}
+          disabled={blocked}
+          onClick={(event) => {
+            // A double click's second click counts 2 wherever it lands, and
+            // never sends the cancel. Enter and Space click with a count of
+            // 0, so the keyboard still sends it.
+            if (event.detail > 1) return;
+            send("cancel");
+          }}
+          className={buttonDanger}
+        >
+          {pending ? command("cancel.pending") : t("ledgerCancelConfirm")}
+        </button>
+      </>
+    ) : (
+      <>
+        <button
+          key="cancel-run"
+          ref={cancelRunRef}
+          type="button"
+          data-touch-target=""
+          data-testid="pause-cancel-run"
+          disabled={blocked}
+          onClick={() => {
+            setFailure(null);
+            setConfirmingCancel(true);
+          }}
+          className={buttonDanger}
+        >
+          {command("ledgerCancel.confirm")}
+        </button>
+        <button
+          key="pause-run"
+          type="submit"
+          form={formId}
+          data-touch-target=""
+          disabled={blocked}
+          className={buttonPrimary}
+        >
+          {pending ? command("pause.pending") : command("ledgerPause.confirm")}
+        </button>
+      </>
+    )
+  ) : (
+    <button
+      type="submit"
+      form={formId}
+      data-touch-target=""
+      disabled={blocked}
+      className={buttonPrimary}
+    >
+      {pending ? t("pending") : t("confirm")}
+    </button>
+  );
+
   return (
     <SheetDialog
       open={run !== null}
       onOpenChange={(open) => {
         if (!open) close();
       }}
-      title={t("title")}
-      closeLabel={t("cancel")}
-      headerClose
+      title={ledger ? t("ledgerTitle") : t("title")}
+      // A ledger dialog carries its own Cancel, so the dismiss button keeps
+      // the name Close.
+      closeLabel={ledger ? undefined : t("cancel")}
+      headerClose={!ledger}
+      // Closing unmounts the dialog (`key`), so it waits for the answer.
+      dismissible={!pending}
       testId="pause-dialog"
-      footerNote={t.rich("footer", {
-        mono: (chunks) => <span className={mono}>{chunks}</span>,
-      })}
-      footer={
-        <button
-          type="submit"
-          form={formId}
-          data-touch-target=""
-          disabled={refusal !== null || pending}
-          className={buttonPrimary}
-        >
-          {pending ? t("pending") : t("confirm")}
-        </button>
+      footerNote={
+        ledger
+          ? undefined
+          : t.rich("footer", {
+              mono: (chunks) => <span className={mono}>{chunks}</span>,
+            })
       }
+      footer={actions}
     >
-      {run === null ? null : (
+      {run === null ? null : applied !== null ? (
+        <p
+          role="status"
+          data-testid="ledger-applied"
+          className="text-[12.5px] text-muted-foreground"
+        >
+          {applied}
+        </p>
+      ) : (
         <form id={formId} onSubmit={submit} className="flex flex-col gap-3">
-          <p className="text-[12.5px] text-muted-foreground">{t("body")}</p>
+          {confirmingCancel ? (
+            <p
+              id={warningId}
+              role="alert"
+              data-testid="pause-cancel-warning"
+              className="rounded-lg border border-border bg-hl px-3 py-2 text-xs font-medium"
+            >
+              {t("ledgerCancelWarning")}
+            </p>
+          ) : null}
+          {ledger ? (
+            <>
+              <p className="text-[12.5px] text-muted-foreground">
+                {command("ledgerPause.body")}
+              </p>
+              <p className="text-[12.5px] text-muted-foreground">
+                {command("ledgerCancel.body")}
+              </p>
+            </>
+          ) : (
+            <p className="text-[12.5px] text-muted-foreground">{t("body")}</p>
+          )}
           <dl className="grid grid-cols-[auto_1fr] items-baseline gap-x-4 gap-y-[7px] text-[12.5px]">
             <dt className="text-dim">{t("run")}</dt>
             <dd className={mono}>{run.id}</dd>
@@ -782,12 +988,16 @@ function PauseDialog({
                     frames: run.frames,
                   })}
             </dd>
-            <dt className="text-dim">{t("recordedAs")}</dt>
-            <dd>
-              {t.rich("recordedValue", {
-                mono: (chunks) => <span className={mono}>{chunks}</span>,
-              })}
-            </dd>
+            {ledger ? null : (
+              <>
+                <dt className="text-dim">{t("recordedAs")}</dt>
+                <dd>
+                  {t.rich("recordedValue", {
+                    mono: (chunks) => <span className={mono}>{chunks}</span>,
+                  })}
+                </dd>
+              </>
+            )}
           </dl>
           {refusal === null ? null : (
             <p
@@ -798,7 +1008,7 @@ function PauseDialog({
             </p>
           )}
           <label htmlFor={fieldId} className="text-xs font-medium">
-            {t("reason")}
+            {ledger ? command("reasonLabel") : t("reason")}
           </label>
           <textarea
             id={fieldId}
@@ -811,7 +1021,9 @@ function PauseDialog({
             }}
             className={`${inputBase} resize-y max-md:text-base`}
           />
-          <p className="text-xs text-muted-foreground">{t("note")}</p>
+          <p className="text-xs text-muted-foreground">
+            {ledger ? command("ledgerReasonHelp") : t("note")}
+          </p>
           {failure === null ? null : (
             <FormAlert testId="pause-failure">{failure}</FormAlert>
           )}
@@ -1148,7 +1360,10 @@ export function FleetBoard({
       />
       {/* The design confirms an export or a queued pause with a toast. */}
       <ToastStack toasts={toasts} testId="runs-toasts" />
+      {/* One dialog per run it opens on, so nothing one run's dialog showed
+          carries into the next. */}
       <PauseDialog
+        key={pausing?.id ?? "none"}
         run={pausing}
         canCommand={canCommand}
         org={org}
@@ -1157,7 +1372,6 @@ export function FleetBoard({
           setPausing(null);
         }}
         onQueued={(run) => {
-          setPausing(null);
           toast(pauseT("queued", { run: run.id }), "approval");
           navigate.refresh();
         }}

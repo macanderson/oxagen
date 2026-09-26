@@ -19,6 +19,7 @@ import {
   enrichmentFailureReason,
   fallbackRunTitle,
   runNarrativeTurn,
+  ENRICHMENT_BODY_READ_CEILING,
   ENRICHMENT_CHUNK_CHARS,
   ENRICHMENT_TEXT_CEILING_CHARS,
   uniqueRunName,
@@ -166,8 +167,8 @@ describe("the text ceiling", () => {
     );
     expect(text).toContain("The transcript stops here.");
     expect(text).not.toContain(`body-${count - 1}:`);
-    expect(got.truncated).toBeGreaterThan(0);
-    expect(got.frames + got.truncated).toBe(count);
+    expect(got.truncated).toBe(true);
+    expect(got.frames).toBeLessThan(count);
     // A left-out frame is not missing evidence: it must not mark the account partial.
     expect(got).toMatchObject({ missing: 0, unavailable: 0 });
     expect(got.chunks.every((c) => c.length <= ENRICHMENT_CHUNK_CHARS)).toBe(
@@ -180,7 +181,159 @@ describe("the text ceiling", () => {
     const after = await collectRunText(scope, frames, read);
 
     expect(after.digest).toBe(before.digest);
-    expect(after.truncated).toBe(before.truncated + 1);
+    expect(after.truncated).toBe(true);
+    expect(after.frames).toBe(before.frames);
+  });
+});
+
+// #3784: the job read every frame of a run into one array before any of its
+// text, and opened every body in series inside one durable step.
+describe("a paged read", () => {
+  const PAGE = 10;
+  /** `frames` as pages of ten, counting the pages a reader pulls. */
+  function paged(frames: ReturnType<typeof frame>[]) {
+    const seen = { pulled: 0, closed: false };
+    async function* pages() {
+      try {
+        for (let at = 0; at < frames.length; at += PAGE) {
+          seen.pulled += 1;
+          yield frames.slice(at, at + PAGE);
+        }
+      } finally {
+        seen.closed = true;
+      }
+    }
+    return { pages: pages(), seen };
+  }
+  const readOf =
+    (bodies: readonly string[]) => async (_scope: unknown, ref: string) => ({
+      bytes: new TextEncoder().encode(bodies[Number(ref.slice(5))]!),
+    });
+
+  it("stops pulling pages one frame past the text ceiling", async () => {
+    const bodies = Array.from(
+      { length: 100 },
+      (_, i) => `body-${i}:${"x".repeat(ENRICHMENT_CHUNK_CHARS - 12)}`,
+    );
+    const frames = bodies.map((text, i) => frame(i, text));
+    const { pages, seen } = paged(frames);
+    const got = await collectRunText(scope, pages, readOf(bodies));
+    expect(got.truncated).toBe(true);
+    // The page that holds the first frame past the text, and none after it.
+    expect(seen.pulled).toBe(Math.floor(got.frames / PAGE) + 1);
+    expect(seen.pulled).toBeLessThan(100 / PAGE);
+    expect(seen.closed).toBe(true);
+    // Paged or listed, the run reads the same.
+    const listed = await collectRunText(scope, frames, readOf(bodies));
+    expect(got.digest).toBe(listed.digest);
+    expect(got.chunks).toEqual(listed.chunks);
+  });
+
+  it("reads a run under the ceiling to its end and fingerprints it as a list does (negative)", async () => {
+    const bodies = Array.from({ length: 25 }, (_, i) => `turn-${i}: a reply`);
+    const frames = bodies.map((text, i) => frame(i, text));
+    const { pages, seen } = paged(frames);
+    const got = await collectRunText(scope, pages, readOf(bodies));
+    expect(seen.pulled).toBe(3);
+    expect(got).toMatchObject({ truncated: false, frames: 25, retained: 25 });
+    const listed = await collectRunText(scope, frames, readOf(bodies));
+    expect(got.digest).toBe(listed.digest);
+  });
+
+  it("opens at most the body-read ceiling, and the text says it stops", async () => {
+    const bodies = Array.from(
+      { length: ENRICHMENT_BODY_READ_CEILING + 5 },
+      (_, i) => `short reply ${i}`,
+    );
+    const frames = bodies.map((text, i) => frame(i, text));
+    const get = vi.fn(readOf(bodies));
+    const { pages } = paged(frames);
+    const got = await collectRunText(scope, pages, get);
+    expect(get).toHaveBeenCalledTimes(ENRICHMENT_BODY_READ_CEILING);
+    expect(got).toMatchObject({
+      truncated: true,
+      frames: ENRICHMENT_BODY_READ_CEILING,
+      retained: ENRICHMENT_BODY_READ_CEILING,
+    });
+    expect(got.chunks.join("")).toContain("The transcript stops here.");
+    expect(got.chunks.join("")).not.toContain(
+      `short reply ${ENRICHMENT_BODY_READ_CEILING}`,
+    );
+  });
+
+  it("reads every body of a run that opens exactly the ceiling (negative)", async () => {
+    const bodies = Array.from(
+      { length: ENRICHMENT_BODY_READ_CEILING },
+      (_, i) => `short reply ${i}`,
+    );
+    const get = vi.fn(readOf(bodies));
+    const got = await collectRunText(
+      scope,
+      bodies.map((text, i) => frame(i, text)),
+      get,
+    );
+    expect(get).toHaveBeenCalledTimes(ENRICHMENT_BODY_READ_CEILING);
+    expect(got.truncated).toBe(false);
+    expect(got.chunks.join("")).not.toContain("The transcript stops here.");
+  });
+
+  it("cuts the text at the first frame past the body-read ceiling that would open a body, not at a frame that opens none", async () => {
+    const ceiling = ENRICHMENT_BODY_READ_CEILING;
+    /** A frame that kept no body, such as a tool call's. */
+    const bare = (seq: number) =>
+      tachoFrame({
+        seq,
+        ts: "2026-09-22 00:00:00.000",
+        kind: "tool_call",
+        hash: digestBytes(new TextEncoder().encode(`bare-${seq}`)),
+        contentDigest: "",
+        bytesRef: "",
+        redactions: "",
+        toolName: "Read",
+        toolStatus: "ok",
+        toolUseId: `toolu_${seq}`,
+        model: "",
+        provider: "",
+        policyDecision: "",
+        costUsdMicros: null,
+        turnSeq: seq,
+      });
+    const bodies = Array.from(
+      { length: ceiling + 2 },
+      (_, i) => `short reply ${i}`,
+    );
+    const read = bodies
+      .slice(0, ceiling)
+      .map((text, i) => frame(i, text));
+    // A frame that opens no body costs no read, so the read ceiling leaves
+    // it in, and nothing was cut.
+    const toolAfter = await collectRunText(
+      scope,
+      [...read, bare(ceiling)],
+      readOf(bodies),
+    );
+    expect(toolAfter).toMatchObject({
+      truncated: false,
+      frames: ceiling + 1,
+      retained: ceiling,
+    });
+    expect(toolAfter.chunks.join("")).not.toContain(
+      "The transcript stops here.",
+    );
+    // The next frame that would open a body is where the text stops.
+    const get = vi.fn(readOf(bodies));
+    const bodyAfter = await collectRunText(
+      scope,
+      [...read, bare(ceiling), frame(ceiling + 1, bodies[ceiling + 1]!)],
+      get,
+    );
+    expect(bodyAfter).toMatchObject({
+      truncated: true,
+      frames: ceiling + 1,
+      retained: ceiling,
+    });
+    expect(get).toHaveBeenCalledTimes(ceiling);
+    expect(bodyAfter.chunks.join("")).toContain("The transcript stops here.");
   });
 });
 

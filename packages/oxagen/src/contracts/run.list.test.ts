@@ -25,6 +25,7 @@ const item = {
   cost: null,
   model: null,
   machine: null,
+  harness: null,
   taskRef: null,
   startedAt: "2026-09-08T10:06:03.000Z",
   sealedAt: "2026-09-08T10:06:30.000Z",
@@ -151,6 +152,29 @@ describe("list_runs run row: who ran it, on what, with which model", () => {
     expect(runItemSchema.safeParse(withoutKind).success).toBe(false);
     const { model: _m, ...withoutModel } = item;
     expect(runItemSchema.safeParse(withoutModel).success).toBe(false);
+  });
+
+  it("carries the recorded harness, or null for a ledger run and a session that recorded none (#3790)", () => {
+    const wrapped = {
+      ...item,
+      harness: { name: "Claude Code", version: "2.1.0", runtime: null },
+    };
+    expect(runItemSchema.parse(wrapped)).toEqual(wrapped);
+    const ledger = {
+      ...item,
+      id: "arun_5f0c2e9a1b7d4c3e8f6a02",
+      source: "ledger",
+    };
+    expect(runItemSchema.parse(ledger).harness).toBeNull();
+  });
+
+  it("refuses a row with no harness key, so a reader never sees the field vanish (negative)", () => {
+    const { harness: _h, ...withoutHarness } = item;
+    expect(runItemSchema.safeParse(withoutHarness).success).toBe(false);
+    expect(
+      runList.output.safeParse({ runs: [withoutHarness], nextCursor: null })
+        .success,
+    ).toBe(false);
   });
 });
 

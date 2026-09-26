@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  capturedDiffOf,
   readSessionConfig,
   readSessionTitle,
   readWorkContexts,
@@ -83,11 +84,21 @@ const FRAMES = [
     git_remote_digest: "sha256:remote",
     content_digest: "sha256:diff",
     bytes_ref: "blob",
+    // The seal took a token out of the patch after the collector called the
+    // snapshot complete (#3791).
+    redactions: JSON.stringify([
+      {
+        path: "bytes:10-50",
+        reason: "github_token",
+        original_digest: `sha256:${"d".repeat(64)}`,
+      },
+    ]),
     attrs: {
       repository_url: REPOSITORY,
       diff_head_sha: "b".repeat(40),
       diff_base_sha: "c".repeat(40),
       diff_complete: "true",
+      "oxagen.content_redactions_total": "2",
     },
   }),
   frame(14, false, {
@@ -175,7 +186,7 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
     ]);
   });
 
-  it("reads the captured diff with its observed time", async () => {
+  it("reads the captured diff with its observed time and its redactions", async () => {
     const diffs = await read(() => readWorkDiffs(session));
     expect(
       diffs.map((row) => ({
@@ -183,6 +194,7 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
         observed_at: row.observed_at,
         path: row.path,
         head: row.head,
+        redaction_count: Number(row.redaction_count),
       })),
     ).toEqual([
       {
@@ -190,7 +202,11 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
         observed_at: "2026-09-24 10:00:13.000",
         path: "/work/app-wt",
         head: "b".repeat(40),
+        redaction_count: 2,
       },
+    ]);
+    expect(diffs.map(capturedDiffOf)).toMatchObject([
+      { completeness: "partial", limitations: ["content_redacted"] },
     ]);
   });
 
