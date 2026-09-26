@@ -73,6 +73,20 @@ const FRAME_PAGE = FRAME_LIMIT_DEFAULT;
  */
 const RUN_REPORT_LIMIT = 100;
 
+/**
+ * Orders commands newest first, then by id descending: the order the
+ * list_commands handler reads in, so a report merged from several reads keeps
+ * the order one read would give.
+ */
+function newestFirst(
+  a: { issuedAt: string; id: string },
+  b: { issuedAt: string; id: string },
+): number {
+  if (a.issuedAt !== b.issuedAt) return a.issuedAt < b.issuedAt ? 1 : -1;
+  if (a.id === b.id) return 0;
+  return a.id < b.id ? 1 : -1;
+}
+
 /** The mapped value parsed at the boundary; a record the view refuses is `record_unmappable`, reported once. */
 function view<S extends z.ZodType>(
   orgId: string,
@@ -240,27 +254,48 @@ export const runs: DataSource["runs"] = {
     );
   },
   async commands(ctx, q) {
-    // A read by ids asks for one row per id: the contract's default of 50
-    // would cut a broadcast to more recipients short.
-    const read = await kernelRead(ctx, {
-      contract: tachoCommandList,
-      input:
-        "runId" in q
-          ? { runId: q.runId, limit: RUN_REPORT_LIMIT }
-          : {
-              commandIds: q.commandIds,
-              limit: Math.min(
-                LIST_COMMANDS_IDS_MAX,
-                Math.max(1, q.commandIds.length),
-              ),
-            },
-      page: "run",
-    });
-    if (!read.ok) return read;
+    if ("runId" in q) {
+      const read = await kernelRead(ctx, {
+        contract: tachoCommandList,
+        input: { runId: q.runId, limit: RUN_REPORT_LIMIT },
+        page: "run",
+      });
+      if (!read.ok) return read;
+      return view(
+        ctx.orgId,
+        CommandReport,
+        toCommandReport(read.value),
+        "runs.commands",
+      );
+    }
+    // A broadcast can queue more commands than one read may name: up to 100
+    // agents, each with any number of runs in flight. So the ids are read in
+    // slices of the contract's ceiling, each asking for one row per id (the
+    // contract's default of 50 would cut a slice short), and the first
+    // refusal answers for the report.
+    const slices: string[][] = [];
+    for (let at = 0; at < q.commandIds.length; at += LIST_COMMANDS_IDS_MAX)
+      slices.push(q.commandIds.slice(at, at + LIST_COMMANDS_IDS_MAX));
+    const reads = await Promise.all(
+      slices.map((commandIds) =>
+        kernelRead(ctx, {
+          contract: tachoCommandList,
+          input: { commandIds, limit: commandIds.length },
+          page: "run",
+        }),
+      ),
+    );
+    for (const read of reads) if (!read.ok) return read;
+    // Each slice answers newest first, then by id descending, and the report
+    // keeps that order across slices. One broadcast issues its commands in one
+    // write, so ties on issuedAt are common.
+    const commands = reads
+      .flatMap((read) => (read.ok ? read.value.commands : []))
+      .sort(newestFirst);
     return view(
       ctx.orgId,
       CommandReport,
-      toCommandReport(read.value),
+      toCommandReport({ commands }),
       "runs.commands",
     );
   },

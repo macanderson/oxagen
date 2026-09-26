@@ -1303,6 +1303,7 @@
       "pending": "Pending",
       "undelivered": "Undelivered",
       "command": "control.{command}",
+      "heldForNextRun": "Held for this agent's next run.",
       "status": {
         "draft": "draft",
         "queued": "queued",

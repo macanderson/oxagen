@@ -499,6 +499,7 @@ export function toCommandReport(
     commands: out.commands.map((command) => ({
       id: command.id,
       runId: command.runId,
+      agentKey: command.agentKey,
       command: command.command,
       status: command.status,
       requestedMode: command.requestedMode,

@@ -40,6 +40,7 @@ function command(over: Partial<Row> = {}): Row {
   return {
     id: "tcm_s",
     runId: RUN,
+    agentKey: null,
     command: "steer",
     status: "applied",
     requestedMode: "interrupt",
@@ -204,6 +205,47 @@ describe("delivery report", () => {
       commandIds: ["tcm_s", "tcm_t"],
     });
     expect(dialog).toHaveTextContent("tse_other1");
+    // Both commands reached a run, so neither reads as held.
+    expect(within(dialog).queryByTestId("report-held")).toBeNull();
+  });
+
+  it("names the agent a held steer waits on, and links no frame before its run opens", async () => {
+    readDeliveryReport.mockResolvedValue({
+      ok: true,
+      value: {
+        commands: [
+          command({
+            id: "tcm_h",
+            runId: null,
+            agentKey: "acme.core.reviewer",
+            status: "queued",
+            deliveryMode: null,
+            degradedReason: null,
+            sentAt: null,
+            acknowledgedAt: null,
+            appliedAt: null,
+            appliedAtSeq: null,
+          }),
+        ],
+      },
+    });
+    renderReport({ commandIds: ["tcm_h"] });
+    const { dialog } = await openReport();
+    const row = await within(dialog).findByTestId("report-command");
+    expect(row).toHaveTextContent("acme.core.reviewer");
+    expect(within(row).getByTestId("report-held")).toHaveTextContent(
+      "Held for this agent's next run.",
+    );
+    expect(within(row).getByTestId("report-delivered")).toHaveTextContent(
+      "not resolved yet",
+    );
+    expect(within(row).getByTestId("report-frame")).toHaveTextContent(
+      "none yet",
+    );
+    expect(within(dialog).getByTestId("report-pending")).toHaveTextContent(
+      "1",
+    );
+    await expectNoAxe(dialog);
   });
 
   it("names a refused read and shows no command (negative)", async () => {

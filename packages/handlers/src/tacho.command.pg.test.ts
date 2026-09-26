@@ -680,6 +680,18 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
     expect(early.control.commands).toEqual([]);
     expect((await heldFor())[0]).toMatchObject({ outcome: "queued" });
 
+    //    The broadcast's ids read the held steer with its agent in place of
+    //    a run, so the receipt's report shows it waiting.
+    expect((await reportByIds([heldId])).commands).toEqual([
+      expect.objectContaining({
+        id: heldId,
+        runId: null,
+        agentKey: idleAgentKey,
+        status: "queued",
+        text: "skip the mobile repo",
+      }),
+    ]);
+
     // 3. A held steer past its expiry, and one for another agent, stay out of
     //    the next run.
     const [expired, other] = await withSystemDb((tx) =>
@@ -749,6 +761,14 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
       targetKind: "agent",
       outcome: "expired",
     });
+    //    The same id now reads with its run, and no agent.
+    expect((await reportByIds([heldId])).commands).toEqual([
+      expect.objectContaining({
+        id: heldId,
+        runId: next.publicId,
+        agentKey: null,
+      }),
+    ]);
     expect(await byId(other?.publicId ?? "")).toMatchObject({
       targetKind: "agent",
       outcome: "queued",

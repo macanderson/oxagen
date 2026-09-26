@@ -961,6 +961,7 @@ describe("a command frame's inspector", () => {
   const row: CommandReport["commands"][number] = {
     id: "tcm_s",
     runId: "tse_7k2m9q",
+    agentKey: null,
     command: "steer",
     status: "applied",
     requestedMode: "interrupt",

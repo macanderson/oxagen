@@ -1573,6 +1573,7 @@ describe("runs.commands", () => {
   const command = {
     id: "tcm_0s",
     runId: "tse_4f0a",
+    agentKey: null,
     command: "steer",
     status: "applied",
     requestedMode: "interrupt",
@@ -1624,6 +1625,65 @@ describe("runs.commands", () => {
       input: { commandIds: ["tcm_0s", "tcm_0t", "tcm_0u"], limit: 3 },
       page: "run",
     });
+  });
+
+  it("reads a broadcast of more ids than one read may name in slices, and keeps the report newest first", async () => {
+    const ids = Array.from({ length: 101 }, (_, i) => `tcm_${i}`);
+    const older = {
+      ...command,
+      id: "tcm_0",
+      issuedAt: "2026-09-15T08:56:00.000Z",
+    };
+    const newer = {
+      ...command,
+      id: "tcm_100",
+      issuedAt: "2026-09-15T08:57:00.000Z",
+    };
+    kernelRead
+      .mockResolvedValueOnce(readOk({ commands: [older] }))
+      .mockResolvedValueOnce(readOk({ commands: [newer] }));
+    const read = await runs.commands(ctx, { commandIds: ids });
+    expect(read.ok && read.value.commands.map((row) => row.id)).toEqual([
+      "tcm_100",
+      "tcm_0",
+    ]);
+    expect(kernelRead).toHaveBeenCalledTimes(2);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: tachoCommandList,
+      input: { commandIds: ids.slice(0, 100), limit: 100 },
+      page: "run",
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: tachoCommandList,
+      input: { commandIds: ["tcm_100"], limit: 1 },
+      page: "run",
+    });
+  });
+
+  it("orders commands issued at the same instant by id across slices, as one read would", async () => {
+    const ids = Array.from({ length: 101 }, (_, i) => `tcm_${i}`);
+    const at = "2026-09-15T08:57:00.000Z";
+    kernelRead
+      .mockResolvedValueOnce(
+        readOk({ commands: [{ ...command, id: "tcm_a", issuedAt: at }] }),
+      )
+      .mockResolvedValueOnce(
+        readOk({ commands: [{ ...command, id: "tcm_b", issuedAt: at }] }),
+      );
+    const read = await runs.commands(ctx, { commandIds: ids });
+    expect(read.ok && read.value.commands.map((row) => row.id)).toEqual([
+      "tcm_b",
+      "tcm_a",
+    ]);
+  });
+
+  it("answers a refusal in any slice for the whole broadcast (negative)", async () => {
+    const denied = readError("forbidden", 403);
+    kernelRead
+      .mockResolvedValueOnce(readOk({ commands: [command] }))
+      .mockResolvedValueOnce(denied);
+    const ids = Array.from({ length: 101 }, (_, i) => `tcm_${i}`);
+    expect(await runs.commands(ctx, { commandIds: ids })).toEqual(denied);
   });
 
   it("passes a refusal through, and answers record_unmappable once for a row the view refuses (negative)", async () => {

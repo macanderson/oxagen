@@ -1005,6 +1005,7 @@ describe("readDeliveryReport", () => {
   const command = {
     id: "tcm_1",
     runId: RUN,
+    agentKey: null,
     command: "steer",
     status: "applied",
     requestedMode: "interrupt",
@@ -1044,6 +1045,19 @@ describe("readDeliveryReport", () => {
       { commandIds: ["tcm_1", "tcm_2"], limit: 2 },
       expect.objectContaining(TENANT),
     );
+  });
+
+  it("refuses more command ids than one report reads, before any read (negative)", async () => {
+    const commandIds = Array.from({ length: 1_001 }, (_, i) => `tcm_${i}`);
+    expect(
+      await readDeliveryReport("acme", "core-platform", { commandIds }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "report_query",
+      field: "q",
+    });
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("refuses a query that names neither a run nor a command, before any read (negative)", async () => {

@@ -4,7 +4,7 @@ The delivery report for one run, or for the commands one broadcast queued (Missi
 
 The status shown is the recorded one, with one derivation: a `queued` command whose expiry has passed reads `expired`, which is what the host's next poll writes under the same predicate. A command the host holds (`sent`, `received`, `acknowledged`) reads as recorded until the host reports what the boundary did (`applied` with the frame, or `expired` with `expired before a boundary`), and carries `expiresAt`, from which an interface shows it as past expiry and awaiting the host. The status shown never contradicts the run's chain and is never one the host can overturn.
 
-Each command names its run, the person who issued it, and, for a `steer` or a `message`, the text it carried. A read by `commandIds` returns rows addressed to a run in the caller's workspace. An id from another workspace, an id that names no command, and a host-addressed command are left out rather than refused.
+Each command names its run, the person who issued it, and, for a `steer` or a `message`, the text it carried. A read by `commandIds` returns the rows in the caller's workspace that are addressed to a run, or held for an agent's next run. A broadcast `dispatch_command` holds a steer for an agent with no run in flight, so its row names the agent in `agentKey`, with `runId` null, until the agent's next run opens and ingest re-addresses it. The same id then reads with its run. An id from another workspace, an id that names no command, and a host-addressed command are left out rather than refused. A read by `runId` returns only the rows addressed to that run.
 
 ## Mode
 
@@ -14,7 +14,7 @@ Each command names its run, the person who issued it, and, for a `steer` or a `m
 
 - API: `POST /v1/:org_slug/:workspace_slug/commands/list`
 - MCP: `list_commands`
-- App: the Run page's Delivery report, and the inspector of an open command frame on the Governed actions tab
+- App: the Run page's Delivery report, the inspector of an open command frame on the Governed actions tab, and the receipt of Fleet's Steer the fleet, which reads the command ids its broadcast returned
 - Authentication: session (org Owner, Admin, or Member; workspace Owner or Member)
 - Capability name: `list_commands`
 - Not billed (`noBillingGate: true`): a console read is never a governed action (ADR-052 exclusion 2). IAM default-deny; medium sensitivity.
@@ -35,7 +35,8 @@ Send `runId` or `commandIds`. A read with both, or with neither, is refused as `
 |---|---|---|
 | `commands` | object[] | newest first |
 | `commands[].id` | string | `tcm_…` |
-| `commands[].runId` | string | the run the command is addressed to, `arun_…` or `tse_…` |
+| `commands[].runId` | string or null | the run the command is addressed to, `arun_…` or `tse_…`; null on a steer held for an agent's next run |
+| `commands[].agentKey` | string or null | the agent key a held steer waits on; null on a command addressed to a run |
 | `commands[].command` | enum | the wire vocabulary: `pause`, `resume`, `cancel`, `steer`, `message`, `revoke`, `refresh_bundle`, `kill` |
 | `commands[].status` | enum | `draft`, `queued`, `sent`, `received`, `acknowledged`, `applied`, `cancelled`, `expired`, `failed` |
 | `commands[].requestedMode` | enum or null | `next_step`, `interrupt`, `turn_boundary`; null for a command with no prompt content |

@@ -15,6 +15,10 @@
 // model calls pass through the host's proxy, which can cut a call in flight:
 // the `gateway` and `contained` tiers (ADR-094, ADR-095). With none, the
 // switch stays disabled and says why.
+//
+// The receipt opens the delivery report for the command ids the send
+// returned (mockup `deliveryreport`): the Run page's dialog, read through the
+// Run lane's client entry.
 import { STEER_TEXT_MAX } from "@oxagen/oxagen/tacho/command-limits";
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState, useTransition } from "react";
@@ -23,6 +27,7 @@ import {
   type EnforcementTier,
   type RunRow,
 } from "@/data/contracts/runs";
+import { DeliveryReport } from "@/features/run/client";
 import { UNANSWERED, useActionFailure } from "@/ui/command-failure";
 import {
   buttonDanger,
@@ -259,6 +264,17 @@ export function SteerFleetDialog({
                   .join(", "),
               })}
             </p>
+          )}
+          {receipt.commandIds.length === 0 ? null : (
+            // A report of no ids has nothing to read, and the read refuses one.
+            <div>
+              <DeliveryReport
+                org={org}
+                ws={ws}
+                query={{ commandIds: receipt.commandIds }}
+                testId="steer-report"
+              />
+            </div>
           )}
         </div>
       ) : (

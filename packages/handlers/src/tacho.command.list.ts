@@ -18,8 +18,11 @@
 // identity query; an id neither resolves is `not_found`. A read by
 // `commandIds` is fenced by the same workspace predicate the run read uses,
 // so an id from another workspace, or one that names no command, is left out
-// rather than refused. It reads rows addressed to a run only: the report
-// names each row's run, and a host-addressed row has none.
+// rather than refused. A run read returns rows addressed to the run. A read by
+// ids also returns a steer held for an idle agent's next run (`target_kind`
+// `agent`), which a broadcast's ids name: the row carries the agent key in
+// place of a run until ingest re-addresses it at that run's genesis. Neither
+// read returns a host-addressed row, which names no run and no agent.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
@@ -41,6 +44,7 @@ import {
 export type CommandRow = Pick<
   typeof schema.tachoControlCommands.$inferSelect,
   | "publicId"
+  | "targetKind"
   | "targetId"
   | "command"
   | "outcome"
@@ -90,7 +94,9 @@ const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
 export function toReportItem(row: CommandRow, now: Date): CommandReportItem {
   return {
     id: row.publicId,
-    runId: row.targetId,
+    // A held steer names its agent until its run exists.
+    runId: row.targetKind === "agent" ? null : row.targetId,
+    agentKey: row.targetKind === "agent" ? row.targetId : null,
     command: row.command as CommandReportItem["command"],
     status: reportedStatus(row, now),
     requestedMode: row.requestedMode as CommandReportItem["requestedMode"],
@@ -121,7 +127,10 @@ type ListCommandsDeps = {
     runPublicId: string,
     limit: number,
   ) => Promise<CommandRow[]>;
-  /** The run-addressed rows among `commandIds` in the scope's workspace, newest first. */
+  /**
+   * The rows among `commandIds` in the scope's workspace that are addressed
+   * to a run, or held for an agent's next run, newest first.
+   */
   commandsByIds: (
     scope: RunScope,
     commandIds: readonly string[],
@@ -176,9 +185,12 @@ export function createListCommandsHandler(
 const commands = schema.tachoControlCommands;
 const users = schema.users;
 
+type TargetKind = (typeof schema.TACHO_COMMAND_TARGET_KINDS)[number];
+
 /** The report's columns, the issuer's public id and name among them. */
 const reportColumns = {
   publicId: commands.publicId,
+  targetKind: commands.targetKind,
   targetId: commands.targetId,
   command: commands.command,
   outcome: commands.outcome,
@@ -198,9 +210,19 @@ const reportColumns = {
   issuedByName: users.displayName,
 };
 
+/**
+ * The target kinds each read returns. A run's report holds the rows addressed
+ * to it. A broadcast's ids also name the steers it held for idle agents.
+ */
+const REPORT_TARGET_KINDS = {
+  run: ["run"],
+  ids: ["run", "agent"],
+} as const satisfies Record<string, readonly TargetKind[]>;
+
 /** The report's rows matching `where` in the scope's workspace, newest first. */
 function readReport(
   scope: RunScope,
+  kinds: readonly TargetKind[],
   where: SQL | undefined,
   limit: number,
 ): Promise<CommandRow[]> {
@@ -213,7 +235,7 @@ function readReport(
         and(
           eq(commands.orgId, scope.orgId),
           eq(commands.workspaceId, scope.workspaceId),
-          eq(commands.targetKind, "run"),
+          inArray(commands.targetKind, [...kinds]),
           where,
         ),
       )
@@ -229,9 +251,19 @@ function defaultListCommandsDeps(): ListCommandsDeps {
     queries: postgresRunQueries,
     store: { getRunByPublicId: (id) => ledger.getRunByPublicId(id) },
     commandsForRun: (scope, runPublicId, limit) =>
-      readReport(scope, eq(commands.targetId, runPublicId), limit),
+      readReport(
+        scope,
+        REPORT_TARGET_KINDS.run,
+        eq(commands.targetId, runPublicId),
+        limit,
+      ),
     commandsByIds: (scope, commandIds, limit) =>
-      readReport(scope, inArray(commands.publicId, [...commandIds]), limit),
+      readReport(
+        scope,
+        REPORT_TARGET_KINDS.ids,
+        inArray(commands.publicId, [...commandIds]),
+        limit,
+      ),
     now: () => new Date(),
   };
 }

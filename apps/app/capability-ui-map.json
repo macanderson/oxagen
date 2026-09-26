@@ -750,6 +750,13 @@
           "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
           "entry": "/[org]/[ws]/runs/[run]?tab=actions&body=<seq> \u2014 an open oxagen:command_applied frame reads list_commands and shows its command's status, modes, issuer, text and carrier (features/run/actions-tab.tsx, features/run/control-inspector.tsx)",
           "proof": "apps/app/src/features/run/actions-tab.test.tsx"
+        },
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+          "entry": "/[org]/[ws] \u2014 Steer the fleet's receipt opens the delivery report for the command ids the send returned, through the dialog and read the Run page uses (features/fleet/steer-fleet.tsx, features/run/client.ts)",
+          "testid": "steer-report-open",
+          "proof": "apps/app/src/features/fleet/steer-fleet.test.tsx"
         }
       ]
     },

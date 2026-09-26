@@ -9,6 +9,9 @@
 //
 // The report is read when the dialog opens (`readDeliveryReport`), so a
 // report nobody opens costs no read, and each opening reads it again.
+//
+// A broadcast's steer to an idle agent is held for that agent's next run, so
+// its row names the agent in place of a run until the run opens.
 import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 import type { CommandReport, DeliveryMode } from "@/data/contracts/runs";
@@ -80,9 +83,14 @@ function CommandRow({
           {t(`status.${command.status}`)}
         </Badge>
         <span className={`${mono} break-all text-xs text-muted-foreground`}>
-          {command.runId}
+          {command.runId ?? command.agentKey}
         </span>
       </p>
+      {command.runId === null ? (
+        <p data-testid="report-held" className="text-sm text-muted-foreground">
+          {t("heldForNextRun")}
+        </p>
+      ) : null}
       <dl className={kvList}>
         <dt className={kvTerm}>{t("requested")}</dt>
         <dd data-testid="report-requested" className={kvValue}>
@@ -129,7 +137,7 @@ function CommandRow({
         </dd>
         <dt className={kvTerm}>{t("frame")}</dt>
         <dd data-testid="report-frame" className={kvValue}>
-          {command.appliedAtSeq === null ? (
+          {command.appliedAtSeq === null || command.runId === null ? (
             t("noFrame")
           ) : (
             <SafeLink

@@ -68,6 +68,10 @@ vi.mock("@/server/session", () => ({
   ),
 }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+// Steer the fleet opens the Run lane's delivery report from its receipt. Its
+// own test covers that path, so here the report is a stub and the Run lane's
+// server actions never load.
+vi.mock("@/features/run/client", () => ({ DeliveryReport: () => null }));
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");

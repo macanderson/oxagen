@@ -142,9 +142,11 @@ const ALLOWED: Record<
     // A lane's `client` entry is its public surface for client components in
     // another lane, which may not import a barrel (INV-21). Fleet's carries
     // the approval decision the assistant flyout's parked cards make (#4162).
+    // Run's carries the delivery report Fleet's steer receipt opens (#2953).
     if (
       isFeatureBarrel(target) ||
       target === "features/fleet/client" ||
+      target === "features/run/client" ||
       target === "features/shell/client"
     )
       return true;

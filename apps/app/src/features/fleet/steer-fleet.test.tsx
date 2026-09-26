@@ -18,14 +18,27 @@ import { IntlProvider } from "@/test/intl";
 import type { RunRow } from "@/data/contracts/runs";
 import { runRow } from "./fleet.builders";
 
-const { steerFleet, refresh } = vi.hoisted(() => ({
+const { steerFleet, refresh, deliveryReport } = vi.hoisted(() => ({
   steerFleet: vi.fn(),
   refresh: vi.fn(),
+  deliveryReport: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
 }));
 vi.mock("./actions", () => ({ steerFleet }));
+// The delivery report is the Run page's dialog, tested in its own file. Here
+// the receipt is checked for the query it hands the report.
+vi.mock("@/features/run/client", () => ({
+  DeliveryReport: (props: { query: unknown; testId?: string }) => {
+    deliveryReport(props);
+    return (
+      <button type="button" data-testid={`${props.testId}-open`}>
+        Delivery report
+      </button>
+    );
+  },
+}));
 
 const { SteerFleetDialog } = await import("./steer-fleet");
 
@@ -103,6 +116,7 @@ const send = () => screen.getByRole("button", { name: "Steer" });
 beforeEach(() => {
   steerFleet.mockReset();
   refresh.mockReset();
+  deliveryReport.mockReset();
 });
 
 afterEach(async () => {
@@ -346,7 +360,30 @@ describe("Steer the fleet", () => {
     ).toBeNull();
   });
 
-  it("says when nothing took the steer", async () => {
+  it("opens the delivery report for the command ids the send returned", async () => {
+    steerFleet.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_1", "tcm_2"], refused: [] },
+    });
+    renderDialog();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Steering text"), "Hold.");
+    await user.click(send());
+    const receipt = await screen.findByTestId("steer-receipt");
+    expect(within(receipt).getByTestId("steer-report-open")).toHaveTextContent(
+      "Delivery report",
+    );
+    expect(deliveryReport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        org: "acme",
+        ws: "core-platform",
+        query: { commandIds: ["tcm_1", "tcm_2"] },
+        testId: "steer-report",
+      }),
+    );
+  });
+
+  it("says when nothing took the steer, and offers no report of nothing (negative)", async () => {
     steerFleet.mockResolvedValue({
       ok: true,
       value: { commandIds: [], refused: [] },
@@ -361,6 +398,8 @@ describe("Steer the fleet", () => {
       "No selected agent has a run in flight or an enrolled host.",
     );
     expect(receipt).not.toHaveTextContent("An idle agent's command");
+    expect(within(receipt).queryByTestId("steer-report-open")).toBeNull();
+    expect(deliveryReport).not.toHaveBeenCalled();
   });
 
   it("names the refusal, not a missing host, when nothing took the steer because an agent refused it", async () => {

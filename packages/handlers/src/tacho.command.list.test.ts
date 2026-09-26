@@ -32,6 +32,7 @@ const ISSUER = "usr_0123456789abcdefghjkmn";
 function row(over: Partial<CommandRow> = {}): CommandRow {
   return {
     publicId: "tcm_1",
+    targetKind: "run",
     targetId: RUN,
     command: "steer",
     outcome: "applied",
@@ -94,6 +95,7 @@ describe("toReportItem", () => {
     expect(item).toEqual({
       id: "tcm_1",
       runId: RUN,
+      agentKey: null,
       command: "steer",
       status: "applied",
       requestedMode: "interrupt",
@@ -137,6 +139,32 @@ describe("toReportItem", () => {
       appliedAtSeq: null,
       text: null,
     });
+  });
+
+  it("names the agent of a steer held for its next run in place of a run, and validates against the contract", () => {
+    const held = toReportItem(
+      row({
+        targetKind: "agent",
+        targetId: "acme.core.reviewer",
+        outcome: "queued",
+        deliveryMode: null,
+        degradedReason: null,
+        deliveredAt: null,
+        acknowledgedAt: null,
+        appliedAt: null,
+        appliedAtSeq: null,
+      }),
+      new Date("2026-09-14T09:30:00.000Z"),
+    );
+    expect(held).toMatchObject({
+      runId: null,
+      agentKey: "acme.core.reviewer",
+      status: "queued",
+      text: "Run the migration tests before you push.",
+    });
+    expect(
+      tachoCommandList.output.safeParse({ commands: [held] }).success,
+    ).toBe(true);
   });
 
   it("names the issuer, and reads a blank name as none and a row with no user as no issuer", () => {

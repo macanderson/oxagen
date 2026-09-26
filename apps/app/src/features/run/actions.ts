@@ -283,6 +283,13 @@ export async function readTranscriptPage(
 /** Which commands a delivery report reads: one run's, or the ids a broadcast returned. */
 export type ReportQuery = { runId: string } | { commandIds: string[] };
 
+/**
+ * The most command ids one report reads. The port reads them 100 at a time,
+ * so this bounds a report at ten reads. A broadcast reaches at most 100
+ * agents, and 1,000 ids leaves each of them ten runs in flight.
+ */
+const REPORT_IDS_MAX = 1_000;
+
 /** The query as the report reads it, or null for anything else a caller sent. */
 function reportQueryOf(q: unknown): ReportQuery | null {
   if (typeof q !== "object" || q === null) return null;
@@ -293,6 +300,7 @@ function reportQueryOf(q: unknown): ReportQuery | null {
     !("runId" in q) &&
     Array.isArray(q.commandIds) &&
     q.commandIds.length > 0 &&
+    q.commandIds.length <= REPORT_IDS_MAX &&
     q.commandIds.every((id: unknown) => typeof id === "string")
   )
     return { commandIds: q.commandIds as string[] };
