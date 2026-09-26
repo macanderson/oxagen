@@ -3713,8 +3713,12 @@ describe("what the session recorded", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-effort")).toHaveTextContent("effort medium");
-    // A recorded value carries no "why it is missing" reading.
-    expect(screen.getByTestId("run-effort")).not.toHaveAttribute("title");
+    // A recorded value is titled with where it was read, and a row that names
+    // no source reads as the harness's (#3891).
+    expect(screen.getByTestId("run-effort")).toHaveAttribute(
+      "title",
+      "Reported by the harness.",
+    );
     expect(screen.getByTestId("run-thinking")).toHaveTextContent("thinking on");
     expect(screen.getByTestId("run-permission-mode")).toHaveTextContent(
       "mode acceptEdits",
