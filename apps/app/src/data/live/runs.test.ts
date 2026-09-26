@@ -118,6 +118,8 @@ describe("runs.list", () => {
             operatorKind: "human",
             operatorName: "Ada Lovelace",
             operatorAttribution: "host_enroller",
+            // Not stamped on this row, so not recorded (#3999).
+            operatorRole: null,
             status: "live",
             outcome: "running",
             turns: null,

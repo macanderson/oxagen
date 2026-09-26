@@ -1278,6 +1278,14 @@ export function runStatusForTerminal(
  * join IS the verification: it turns "the caller says this uuid is that public
  * id" into "the database agrees", which `assertRunRowMatchesSpec` then checks
  * against the spec.
+ *
+ * `operator_role` is stamped here, once (#3999, ADR-197): the initiating
+ * person's role in the run's workspace as `workspace_users` holds it at
+ * insert, lowercased. A principal that is not a person, or a person with no
+ * membership in the workspace, stamps null. Nothing updates the column, so a
+ * role changed after the run opened does not rewrite what the record says.
+ * It is a scalar subselect in the statement rather than a read before it, so
+ * every caller of `createRun` stamps it and none can pass a different value.
  */
 export function buildCreateRunSql(
   publicId: string,
@@ -1299,6 +1307,7 @@ export function buildCreateRunSql(
         repository_connection_id, configured_default_ref,
         base_commit_sha, base_tree_sha,
         retention_policy_id, retention_policy_digest, max_attempts,
+        operator_role,
         origin_message_id
       )
       VALUES (
@@ -1328,6 +1337,16 @@ export function buildCreateRunSql(
         ${input.retentionPolicyRowId}::uuid,
         ${spec.context_policy.retention_policy_digest},
         ${spec.engine_policy.max_attempts},
+        (
+          SELECT lower(wu.role)
+          FROM workspace.workspace_users wu
+          JOIN iam.principals p ON p.parent_user_id = wu.user_id
+          WHERE p.id = ${spec.actor_binding.initiating_principal_id}::uuid
+            AND p.org_id = ${input.orgId}::uuid
+            AND p.kind = 'human'
+            AND wu.workspace_id = ${input.workspaceId}::uuid
+          LIMIT 1
+        ),
         ${input.originMessageId ?? null}::uuid
       )
       RETURNING *

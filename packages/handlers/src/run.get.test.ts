@@ -293,6 +293,21 @@ describe("get_run", () => {
     });
   });
 
+  // #3999: get_run shares list_runs' row, so it answers the stamped role too.
+  it("answers the operator's stamped workspace role, and null for a run from before the stamp", async () => {
+    const stamped = ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID });
+    const { get } = harness({
+      ledger: [{ ...stamped, run: { ...stamped.run, operatorRole: "Admin" } }],
+      tacho: [tachoSession({ publicId: TACHO_ID })],
+    });
+    const ledger = await get(input(), ctx());
+    expect(runGet.output.parse(ledger)).toEqual(ledger);
+    // Stored lowercased; a capitalized value still reads as the role.
+    expect(ledger.run.operatorRole).toBe("admin");
+    const wrapped = await get(input({ runId: TACHO_ID }), ctx());
+    expect(wrapped.run.operatorRole).toBeNull();
+  });
+
   // ADR-182 rule 3: a fact is never written into a label for a client to
   // parse. The Run page pairs a parked receipt with its approval on
   // `approvalId`, and reads the tool and how it ended from their own fields.

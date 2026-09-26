@@ -93,6 +93,7 @@ import {
   promotedTier,
 } from "./lib/tacho-containment";
 import { machineSnapshotOf } from "./lib/machine-facts";
+import { operatorRoleOf, type RunOperatorRole } from "./lib/operator-role";
 import { rollupFiles, sessionChangedFilesWhere } from "./lib/file-facts-rollup";
 import { latestHarnessTitle } from "./lib/harness-title";
 import { unlockOnboardingGate } from "./lib/onboarding";
@@ -843,19 +844,34 @@ export function enforcementTierOf(
   return host.mode === "enforce" ? "harness" : "observe";
 }
 
+/** The operator a new session is stamped with (#3999). */
+interface EnrollingOperator {
+  principalId: string | null;
+  /** The operator's workspace role, lowercased; null when there is none. */
+  role: RunOperatorRole | null;
+}
+
 /**
- * The human principal behind the host's enrollment: the row IAM resolves for
- * the host's API key (its creator, `packages/iam/src/fetch-authz.ts`) and the
- * operator the Run header prints (spec section 5.2: the human at the keyboard
- * is the `initiating_principal`). A host row with no recorded enroller, or an
- * enroller with no principal in this organization, attributes to nobody.
+ * The human principal behind the host's enrollment, and that person's role in
+ * this workspace. The principal is the row IAM resolves for the host's API key
+ * (its creator, `packages/iam/src/fetch-authz.ts`) and the operator the Run
+ * header prints (spec section 5.2: the human at the keyboard is the
+ * `initiating_principal`). A host row with no recorded enroller, or an
+ * enroller with no principal in this organization, attributes to nobody and
+ * so has no role.
+ *
+ * The role is read once, here, when the session opens, and stamped on the row
+ * (`tacho.sessions.operator_role`, ADR-197). Nothing reads `workspace_users`
+ * for a run again, so a role changed later does not rewrite what the record
+ * says the operator held when the run happened. An enroller with no
+ * membership in the session's workspace stamps null.
  */
-async function enrollingPrincipalId(
+async function enrollingOperator(
   tx: Tx,
   ctx: Scope,
   host: TachoHostRow,
-): Promise<string | null> {
-  if (!host.createdById) return null;
+): Promise<EnrollingOperator> {
+  if (!host.createdById) return { principalId: null, role: null };
   const principal = await tx.query.principals.findFirst({
     where: and(
       eq(schema.principals.orgId, ctx.orgId),
@@ -864,14 +880,22 @@ async function enrollingPrincipalId(
     ),
     columns: { id: true },
   });
-  return principal?.id ?? null;
+  if (!principal) return { principalId: null, role: null };
+  const membership = await tx.query.workspaceUsers.findFirst({
+    where: and(
+      eq(schema.workspaceUsers.workspaceId, ctx.workspaceId),
+      eq(schema.workspaceUsers.userId, host.createdById),
+    ),
+    columns: { role: true },
+  });
+  return { principalId: principal.id, role: operatorRoleOf(membership?.role) };
 }
 
 /** The insert values for a session row seen for the first time. */
 function genesisRow(
   host: TachoHostRow,
   ctx: Scope,
-  initiatingPrincipalId: string | null,
+  operator: EnrollingOperator,
   events: TachoEvent[],
   now: Date,
   // Whether `tacho.sessions.gateway_observed_at` exists yet. Naming a column
@@ -917,7 +941,10 @@ function genesisRow(
     // for an operator-enrolled host.
     agentId: host.agentId,
     agentPrincipalId: host.agentPrincipalId,
-    initiatingPrincipalId,
+    initiatingPrincipalId: operator.principalId,
+    // Stamped here and nowhere else: the existing-session path never writes
+    // it, so the role the operator held when the session opened stands.
+    operatorRole: operator.role,
     rootSessionUuid: first.root_session_uuid,
     parentSessionUuid: first.parent_session_uuid ?? null,
     subagentId: subagent?.subagent_id ?? null,
@@ -1428,7 +1455,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     let firstOpenedRunId: string | null = null;
     // Resolved on the first genesis row of the batch; every session a host
     // opens has the same operator, and a batch of continuations never asks.
-    let initiatingPrincipalId: string | null | undefined;
+    let operator: EnrollingOperator | undefined;
     // Asked once for the whole batch rather than per session: the answer is
     // per-process and cached, and a batch cannot straddle a migration it holds
     // a transaction across.
@@ -1957,12 +1984,12 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           .returning({ id: schema.tachoSessions.id });
         accepted = written.length > 0;
       } else {
-        if (initiatingPrincipalId === undefined)
-          initiatingPrincipalId = await enrollingPrincipalId(tx, ctx, host);
+        if (operator === undefined)
+          operator = await enrollingOperator(tx, ctx, host);
         const row = genesisRow(
           host,
           ctx,
-          initiatingPrincipalId,
+          operator,
           events,
           now,
           sessionGatewayColumn,

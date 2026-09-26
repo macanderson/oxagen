@@ -70,6 +70,7 @@ import {
 } from "@oxagen/run-ledger";
 import { modelCallHidesTurn } from "@oxagen/billing";
 import { modelFactsOf } from "./lib/model-facts";
+import { operatorRoleOf } from "./lib/operator-role";
 import {
   matchesPullRequestFilter,
   postgresRunGitDiffs,
@@ -235,6 +236,10 @@ const ledgerColumns = {
     summaryGeneratedAt: runs.summaryGeneratedAt,
     summaryModel: runs.summaryModel,
     summaryError: runs.summaryError,
+    // Stamped by `buildCreateRunSql` when the run was created (#3999). The
+    // read takes the stamp and never joins `workspace_users`, so a role
+    // changed after the run opened does not change what the run says.
+    operatorRole: runs.operatorRole,
   },
   identity: {
     orgNamespace: schema.organizations.namespace,
@@ -598,6 +603,9 @@ const tachoColumns = {
     pullRequests: sessions.pullRequests,
     linesAdded: sessions.linesAdded,
     linesRemoved: sessions.linesRemoved,
+    // Stamped by ingest's genesis row when the session opened (#3999), and
+    // read as stamped: nothing here consults `workspace_users`.
+    operatorRole: sessions.operatorRole,
   },
   operatorPublicId: schema.principals.publicId,
   operatorKind: schema.principals.kind,
@@ -694,6 +702,12 @@ type LedgerRunCore = GeneratedSummaryColumns & {
   ingressPaused?: boolean;
   createdAt: Date;
   startedAt: Date | null;
+  /**
+   * `agent_runs.operator_role`, stamped at insert (#3999). Absent where a
+   * reader did not select it, which reads the same as a run from before the
+   * stamp: not recorded.
+   */
+  operatorRole?: string | null;
 };
 
 export type LedgerRunIdentity = {
@@ -833,6 +847,11 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
    * reader did not select it.
    */
   paused?: boolean;
+  /**
+   * `tacho.sessions.operator_role`, stamped by the genesis row (#3999).
+   * Absent where a reader did not select it, which reads as not recorded.
+   */
+  operatorRole?: string | null;
 };
 
 /**
@@ -1102,9 +1121,11 @@ export function toLedgerRunItem(
     operatorKind: principalKind(identity.operatorKind),
     operatorName: blankToNull(identity.operatorUserName),
     operatorAttribution: identity.operatorPublicId ? "initiator" : null,
-    // Placeholder until the Repository and issues lane reads the stamped
-    // `agent_runs.operator_role` (#3999): null reads "not recorded".
-    operatorRole: null,
+    // The role stamped when the run was created (#3999), never read live.
+    // Only a person holds one, so any other operator reads null whatever the
+    // column says.
+    operatorRole:
+      identity.operatorKind === "human" ? operatorRoleOf(run.operatorRole) : null,
     status,
     outcome,
     turns: rollup.opaqueModelCalls === 0 ? rollup.turnIndexes : null,
@@ -1292,9 +1313,10 @@ export function toTachoRunItem(
     // Ingest attributes a wrapped session to the host's enroller
     // (`enrollingPrincipalId`), not to whoever ran it.
     operatorAttribution: row.operatorPublicId ? "host_enroller" : null,
-    // Placeholder until the Repository and issues lane reads the stamped
-    // `tacho.sessions.operator_role` (#3999): null reads "not recorded".
-    operatorRole: null,
+    // The enroller's role stamped when the session opened (#3999), never
+    // read live, and only for a person.
+    operatorRole:
+      row.operatorKind === "human" ? operatorRoleOf(session.operatorRole) : null,
     status,
     outcome,
     turns: session.numTurns,
