@@ -381,11 +381,16 @@ export async function Run({
   );
 }
 
-/** `.run-side`: the work the run touched, beside the main column. */
+/**
+ * `.run-side`: the work the run touched, beside the main column. The column
+ * template is `minmax(0,1fr)` on purpose: an implicit `auto` column grows to
+ * its widest child's unwrapped width, so one long output path pushed both
+ * panels past the page and its `truncate` never cut it.
+ */
 function RunSide({ children }: { children: ReactNode }) {
   const t = useTranslations("run.work");
   return (
-    <aside aria-label={t("label")} className="grid min-w-0 gap-3">
+    <aside aria-label={t("label")} className="grid min-w-0 grid-cols-1 gap-3">
       {children}
     </aside>
   );
