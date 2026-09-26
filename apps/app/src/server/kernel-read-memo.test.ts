@@ -98,6 +98,7 @@ const members = {
       id: "usr_marcusbell",
       name: null,
       email: "marcus.bell@acme.example",
+      avatarUrl: null,
       role: "member",
       joinedAt: "2026-09-01T00:00:00.000Z",
     },

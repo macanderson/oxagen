@@ -5,9 +5,10 @@
 // People: Person, Role, Workspaces, Two-factor, Last seen and Status, with
 // Open, Change role and Remove on each row, then Roles in use, which counts
 // the People table by role and takes each role's description from the role
-// catalogue. `list_members` records a member's name, email, role and join
-// date. It records no per-member workspaces, two-factor method or last sign-in,
-// so those cells say "not recorded" rather than a guess (#3932). The badge
+// catalogue. `list_members` records a member's name, email, avatar, role and
+// join date. It records no per-member workspaces, two-factor method or last
+// sign-in, so those cells say "not recorded" rather than a guess (#3932).
+// Each Person cell leads with the member's avatar. The badge
 // states the organization's two-factor policy, which the frame reads from the
 // record the MFA gate enforces (security.org_security_policy).
 // Every member on the roster holds a membership row, so Status reads "active".
@@ -19,6 +20,8 @@
 import { useTranslations } from "next-intl";
 import type { MemberList, RoleCatalog } from "@/data/contracts/org";
 import { routes } from "@/shared/safe-path";
+import { Avatar } from "@/ui/avatar";
+import { initialsOf } from "@/ui/avatar-spec";
 import { Badge } from "@/ui/badge";
 import {
   buttonSecondary,
@@ -41,12 +44,20 @@ type Member = MemberList["members"][number];
 
 function PersonCell({ member }: { member: Member }) {
   return (
-    <>
-      <div className="font-semibold text-foreground">
-        {member.name ?? member.email}
+    <div className="flex items-start gap-2.5">
+      <Avatar
+        value={member.avatarUrl}
+        initials={initialsOf(member.name ?? member.email)}
+        size={28}
+        testId="member-avatar"
+      />
+      <div className="min-w-0">
+        <div className="font-semibold text-foreground">
+          {member.name ?? member.email}
+        </div>
+        <div className={`${mono} text-[11px] text-dim`}>{member.email}</div>
       </div>
-      <div className={`${mono} text-[11px] text-dim`}>{member.email}</div>
-    </>
+    </div>
   );
 }
 

@@ -123,6 +123,7 @@ describe("workspace.member.list route (list_members)", () => {
           id: "usr_1",
           name: "Alice",
           email: "alice@test.com",
+          avatarUrl: null,
           role: "admin",
           joinedAt: "2026-01-01T00:00:00.000Z",
         },
