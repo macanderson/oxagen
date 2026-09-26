@@ -1,6 +1,6 @@
 # ADR-185: A failed WAL body write rolls back the seal
 
-Status: Accepted
+Status: Accepted; the Limits section and the model proxy clause of Decision 3 superseded by [ADR-190](ADR-190-a-failed-wal-write-leaves-every-file-as-it-found-it.md) (2026-09-25)
 
 Date: 2026-09-25
 
