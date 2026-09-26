@@ -56,9 +56,18 @@ import { GitHubApiError } from "@oxagen/github";
 import { GitLabApiError } from "@oxagen/gitlab";
 import {
   backfillRunPullRequest,
+  githubConnectionOf,
+  type GithubConnectionRow,
   type PullRequestBackfillDeps,
   pullRequestBackfillDeps,
 } from "./run-pull-request-backfill";
+
+/** A legacy source that names its owner, as the sources wizard wrote it. */
+const CONNECTION: GithubConnectionRow = {
+  id: "conn-1",
+  deliveryConfig: { owner: "Acme", repo: "api", installationId: "777" },
+  oauthAccountId: null,
+};
 
 const SCOPE = {
   orgId: "0192d4a8-7c1e-7a00-8000-00000000ac3e",
@@ -191,7 +200,7 @@ describe("pullRequestBackfillDeps", () => {
   });
 
   it("reads a GitHub pull request with the workspace connection for its owner", async () => {
-    mocks.answers = [[{ id: "conn-1" }]];
+    mocks.answers = [[CONNECTION]];
     mocks.resolveGitHubToken.mockResolvedValue("ghs_token");
     mocks.getPullRequest.mockResolvedValue({
       state: "open",
@@ -214,8 +223,32 @@ describe("pullRequestBackfillDeps", () => {
       number: 42,
     });
     expect(mocks.statements[0]?.params).toEqual(
-      expect.arrayContaining(["github", "connected", "acme"]),
+      expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId, "github"]),
     );
+  });
+
+  // Regression: the sources `workspace.create` and `bind_main_repository`
+  // make carry only `{ installationId }`. A read that required a stored
+  // owner found none of them, so no modern workspace ever got a state.
+  it("reads through a source that records only its installation", async () => {
+    mocks.answers = [
+      [
+        {
+          id: "conn-modern",
+          deliveryConfig: { installationId: 12345 },
+          oauthAccountId: null,
+        },
+      ],
+    ];
+    mocks.resolveGitHubToken.mockResolvedValue("ghs_token");
+    mocks.getPullRequest.mockResolvedValue({ state: "closed", merged: true });
+    expect(await pullRequestBackfillDeps.readForge(SCOPE, GH_KEY)).toEqual(
+      expect.objectContaining({ state: "merged" }),
+    );
+    expect(mocks.resolveGitHubToken).toHaveBeenCalledWith({
+      ...SCOPE,
+      connectionId: "conn-modern",
+    });
   });
 
   it("answers no_connection with no GitHub connection for the owner (negative)", async () => {
@@ -229,7 +262,7 @@ describe("pullRequestBackfillDeps", () => {
   it.each([403, 404, 410])(
     "answers unreadable when GitHub answers %i (negative)",
     async (status) => {
-      mocks.answers = [[{ id: "conn-1" }]];
+      mocks.answers = [[CONNECTION]];
       mocks.resolveGitHubToken.mockResolvedValue("ghs_token");
       mocks.getPullRequest.mockRejectedValue(new GitHubApiError(status, "no"));
       expect(await pullRequestBackfillDeps.readForge(SCOPE, GH_KEY)).toBe(
@@ -239,7 +272,7 @@ describe("pullRequestBackfillDeps", () => {
   );
 
   it("throws on any other GitHub failure, so the function retries (negative)", async () => {
-    mocks.answers = [[{ id: "conn-1" }]];
+    mocks.answers = [[CONNECTION]];
     mocks.resolveGitHubToken.mockResolvedValue("ghs_token");
     mocks.getPullRequest.mockRejectedValue(new GitHubApiError(502, "bad"));
     await expect(
@@ -324,5 +357,46 @@ describe("pullRequestBackfillDeps", () => {
     expect(update?.params).toEqual(
       expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId]),
     );
+  });
+});
+
+describe("githubConnectionOf", () => {
+  const modern: GithubConnectionRow = {
+    id: "modern",
+    deliveryConfig: { installationId: "12345" },
+    oauthAccountId: null,
+  };
+
+  it("prefers a source that names the owner over a newer one that names none", () => {
+    expect(githubConnectionOf([modern, CONNECTION], "acme")).toBe("conn-1");
+  });
+
+  it("falls back to the newest source that names no owner and holds a credential", () => {
+    const oauth: GithubConnectionRow = {
+      id: "oauth",
+      deliveryConfig: {},
+      oauthAccountId: "acct",
+    };
+    expect(githubConnectionOf([modern, oauth], "acme")).toBe("modern");
+    expect(githubConnectionOf([oauth], "acme")).toBe("oauth");
+  });
+
+  it("never tries a source that names another owner (negative)", () => {
+    const other: GithubConnectionRow = {
+      id: "other",
+      deliveryConfig: { owner: "globex", installationId: "9" },
+      oauthAccountId: null,
+    };
+    expect(githubConnectionOf([other], "acme")).toBeNull();
+  });
+
+  it("never tries a source with no credential at all (negative)", () => {
+    const bare: GithubConnectionRow = {
+      id: "bare",
+      deliveryConfig: null,
+      oauthAccountId: null,
+    };
+    expect(githubConnectionOf([bare], "acme")).toBeNull();
+    expect(githubConnectionOf([], "acme")).toBeNull();
   });
 });

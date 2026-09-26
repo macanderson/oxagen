@@ -20,8 +20,9 @@ import { createGitHubClient, GitHubApiError } from "@oxagen/github";
 import { resolveGitHubToken } from "@oxagen/github/workspace-token";
 import { createGitLabClient, GitLabApiError } from "@oxagen/gitlab";
 import type { PullRequestBackfillRequest } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { logger } from "../logger";
+import { installationIdOf } from "../repository.github-connection";
 import { findWorkspaceGitLabConnection } from "../repository.gitlab-connection";
 import { resolveGitLabCredential } from "./gitlab-credential";
 import {
@@ -96,18 +97,56 @@ function unreadableStatus(status: number): boolean {
 
 const connections = schema.sourceConnections;
 
+/** A connected GitHub source, as `githubConnectionOf` weighs it. */
+export type GithubConnectionRow = {
+  id: string;
+  deliveryConfig: unknown;
+  oauthAccountId: string | null;
+};
+
+function ownerOf(row: GithubConnectionRow): string | null {
+  const config = row.deliveryConfig;
+  if (typeof config !== "object" || config === null) return null;
+  const owner = (config as { owner?: unknown }).owner;
+  return typeof owner === "string" && owner !== "" ? owner.toLowerCase() : null;
+}
+
 /**
- * The workspace's connected GitHub source for the repository's owner. An
- * installation belongs to one account, so the owner is what decides whether
- * its token can read the repository; GitHub answers 404 when it cannot.
+ * Which of the workspace's connected GitHub sources, newest first, reads a
+ * repository of `owner`. A source that names the owner wins. Next comes the
+ * newest source that names no owner and carries a credential: the sources
+ * `workspace.create` and `bind_main_repository` make record only the
+ * installation, whose account is the owner, and GitHub answers 404 when the
+ * installation cannot see the repository. A source that names another owner
+ * reads another account, so it is never tried. Null when none fits.
  */
+export function githubConnectionOf(
+  rows: readonly GithubConnectionRow[],
+  owner: string,
+): string | null {
+  const named = rows.find((row) => ownerOf(row) === owner);
+  if (named) return named.id;
+  const unnamed = rows.find(
+    (row) =>
+      ownerOf(row) === null &&
+      (installationIdOf(row.deliveryConfig) !== null ||
+        row.oauthAccountId !== null),
+  );
+  return unnamed?.id ?? null;
+}
+
+/** The workspace's connected GitHub source that reads `owner`'s repositories. */
 async function githubConnectionFor(
   scope: Scope,
   owner: string,
 ): Promise<string | null> {
-  const [row] = await withTenantDb((tx) =>
+  const rows = await withTenantDb((tx) =>
     tx
-      .select({ id: connections.id })
+      .select({
+        id: connections.id,
+        deliveryConfig: connections.deliveryConfig,
+        oauthAccountId: connections.oauthAccountId,
+      })
       .from(connections)
       .where(
         and(
@@ -116,13 +155,11 @@ async function githubConnectionFor(
           eq(connections.connectorId, "github"),
           eq(connections.status, "connected"),
           isNull(connections.deletedAt),
-          sql`lower(${connections.deliveryConfig} ->> 'owner') = ${owner}`,
         ),
       )
-      .orderBy(desc(connections.createdAt))
-      .limit(1),
+      .orderBy(desc(connections.createdAt)),
   );
-  return row?.id ?? null;
+  return githubConnectionOf(rows, owner);
 }
 
 async function readGithub(scope: Scope, key: ForgeKey): Promise<ForgeRead> {
