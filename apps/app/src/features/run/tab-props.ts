@@ -53,8 +53,9 @@ export type RunTabProps = {
   view: RunView;
   metrics: RunMetrics;
   /**
-   * The whole-run transcript at `steps` with whole bodies, read to its end:
-   * the Transcript tab's rows, and the counts and figures the page draws.
+   * The first page of the transcript at `steps` with whole bodies: the
+   * Transcript tab's first rows, and the whole run's counts and figures,
+   * which every page carries. The tab reads the pages past it (#4420).
    */
   transcript: Read<RunTranscript>;
   /**
