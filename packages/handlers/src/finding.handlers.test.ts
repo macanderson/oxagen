@@ -417,6 +417,26 @@ describe("list_findings for one run (#4001)", () => {
     });
     expect(() => findingList.output.parse(out)).not.toThrow();
   });
+
+  it("answers no total for an older finding's run its evidence did not itemise", async () => {
+    // The evidence itemises ten runs. The eleventh is cited but uncounted,
+    // and its calls are not known to be zero.
+    const eleventh = "tse_0000000000000000000011";
+    const handler = createFindingListHandler({
+      readFindings: async () => [
+        findingRow({ citedRuns: ["tse_0000000000000000000001", eleventh] }),
+      ],
+      readPricedSpend: spend,
+    });
+    const out = await handler({ status: "open", runId: eleventh }, ctx());
+    expect(out.findings[0]?.citation).toEqual({
+      runId: eleventh,
+      runLevel: false,
+      frames: null,
+      framesTotal: null,
+    });
+    expect(() => findingList.output.parse(out)).not.toThrow();
+  });
 });
 
 describe("get_finding_evidence", () => {

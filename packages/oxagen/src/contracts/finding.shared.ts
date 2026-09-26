@@ -119,8 +119,13 @@ export const findingRunCitationSchema = z
       .array(findingCitedFrameSchema)
       .max(FINDING_FRAMES_PER_RUN)
       .nullable(),
-    /** Every call the finding cites in the run, including any past the cap. */
-    framesTotal: z.number().int().nonnegative(),
+    /**
+     * Every call the finding cites in the run, including any past the cap.
+     * On a finding written before frames were cited, the calls its evidence
+     * counted in the run. Null when that evidence did not itemise the run,
+     * which it does for the ten runs with the largest saving.
+     */
+    framesTotal: z.number().int().nonnegative().nullable(),
   })
   .strict();
 export type FindingRunCitation = z.output<typeof findingRunCitationSchema>;

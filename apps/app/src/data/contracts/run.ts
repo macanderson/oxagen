@@ -321,8 +321,11 @@ export const RunFindings = z.object({
             }),
           )
           .nullable(),
-        /** Every call the finding cites in the run, including any past the cap. */
-        framesTotal: Count,
+        /**
+         * Every call the finding cites in the run, including any past the
+         * cap. Null on an older finding whose evidence did not count the run.
+         */
+        framesTotal: Count.nullable(),
       }),
     }),
   ),

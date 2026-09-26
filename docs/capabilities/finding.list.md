@@ -46,7 +46,7 @@ A read that names `runId` adds `citation` to each finding: what it cites in that
 | `runId` | string | the run asked for |
 | `runLevel` | boolean | true for a finding that cites the run as a whole (`cache_writes_never_read`); it pins no turn, `frames` is empty, and `framesTotal` is 0 |
 | `frames` | object[] or null | `{ seq, sessionUuid? }` for each cited call, seqs ascending, at most 50. `sessionUuid` names a subagent chain and is absent on the run's own chain, because a seq counts on its own chain. Null when the finding was written before frames were cited, until the findings job's next pass |
-| `framesTotal` | integer | every call the finding cites in the run, including any past the 50. On a finding written before frames were cited, the calls its evidence counted in the run |
+| `framesTotal` | integer or null | every call the finding cites in the run, including any past the 50. On a finding written before frames were cited, the calls its evidence counted in the run, and null when that evidence did not itemise the run (it itemises the ten runs with the largest saving) |
 
 `oxagen findings list` prints the findings as a table. With `--run`, its last column names the frames each finding cites (`#14, #3 (subagent 0192d4a8) and 7 more`), or `the whole run`. `--json` prints the contract payload.
 

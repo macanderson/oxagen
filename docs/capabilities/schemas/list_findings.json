@@ -369,8 +369,15 @@
                   ]
                 },
                 "framesTotal": {
-                  "type": "integer",
-                  "minimum": 0
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "required": [

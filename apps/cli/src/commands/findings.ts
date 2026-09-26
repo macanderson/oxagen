@@ -42,7 +42,7 @@ export interface FindingListResult {
       runId: string;
       runLevel: boolean;
       frames: { seq: string; sessionUuid?: string }[] | null;
-      framesTotal: number;
+      framesTotal: number | null;
     };
   }[];
 }
@@ -73,7 +73,7 @@ function citedOf(
         ? `#${f.seq}`
         : `#${f.seq} (subagent ${f.sessionUuid.slice(0, 8)})`,
     );
-  const more = citation.framesTotal - shown.length;
+  const more = (citation.framesTotal ?? shown.length) - shown.length;
   return more > 0 ? `${shown.join(", ")} and ${more} more` : shown.join(", ");
 }
 

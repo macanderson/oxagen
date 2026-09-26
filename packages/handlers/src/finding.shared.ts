@@ -93,8 +93,9 @@ export function operatorKeysOf(row: FindingRow): readonly string[] {
  * What a finding cites in one run (#4001). A finding about a run's cache use
  * cites the run as a whole and pins no turn. A tool-call finding answers the
  * frames the findings job stored for the run, or null frames on a row written
- * before frames were stored; its total then falls back to the run's cited
- * calls, which the evidence always carried.
+ * before frames were stored. Its total then falls back to the calls the
+ * evidence counted in the run. That evidence itemises only the ten runs with
+ * the largest saving, so a run past them has no total and answers null.
  */
 export function citationOf(row: FindingRow, runId: string): FindingRunCitation {
   if (row.kind === "cache_writes_never_read")
@@ -106,7 +107,8 @@ export function citationOf(row: FindingRow, runId: string): FindingRunCitation {
       runId,
       runLevel: false,
       frames: null,
-      framesTotal: evidence.runs.find((r) => r.runId === runId)?.calls ?? 0,
+      framesTotal:
+        evidence.runs.find((r) => r.runId === runId)?.calls ?? null,
     };
   return {
     runId,
