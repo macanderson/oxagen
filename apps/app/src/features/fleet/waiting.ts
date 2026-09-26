@@ -18,7 +18,7 @@ import type { Read } from "@/data/read";
 import { oldestApproval } from "./view";
 
 /** The wait the basis line names, with the window it runs against. */
-export type OldestWait = {
+type OldestWait = {
   kind: "approval" | "interjection";
   /** Epoch milliseconds the wait began. */
   since: number;
@@ -26,7 +26,7 @@ export type OldestWait = {
   windowSeconds: number;
 };
 
-export type Waiting = {
+type Waiting = {
   /** Approvals plus open interjections, or null when the approvals were not read. */
   count: number | null;
   /** True when the figure is a floor: a queue ran past its read, or the interjections were not read. */
@@ -45,7 +45,12 @@ export type Waiting = {
   oldest: OldestWait | null;
 };
 
-/** The code a failed read names: the permission a refusal needed, the error code, or the access request. */
+/**
+ * The code a failed read names: the permission a refusal needed, the error
+ * code, or the access request.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function unreadCode<T>(read: Read<T>): string | null {
   if (read.ok) return null;
   switch (read.reason) {
@@ -58,7 +63,12 @@ export function unreadCode<T>(read: Read<T>): string | null {
   }
 }
 
-/** The interjection that has waited longest, and its window from raise to expiry. */
+/**
+ * The interjection that has waited longest, and its window from raise to
+ * expiry.
+ *
+ * @internal Exported for its unit test; nothing outside this module imports it.
+ */
 export function oldestInterjection(
   items: readonly InterjectionItem[],
 ): { since: number; windowSeconds: number } | null {
