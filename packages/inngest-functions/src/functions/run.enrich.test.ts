@@ -142,8 +142,10 @@ vi.mock("@oxagen/run-ledger/evidence-store", () => ({
 }));
 vi.mock("../lib/run-record", () => ({
   resolveRunRecord: async () => ({ source: "tacho", sessionUuid: "session" }),
-  readRunFrames: async () =>
-    state.frames ?? [
+  // Every chain the run recorded, as the Run page folds them (#3823).
+  readTranscriptFramesOf: async () => ({
+    complete: true,
+    frames: state.frames ?? [
       tachoFrame({
         seq: 1,
         ts: "2026-09-22 00:00:00.000",
@@ -166,6 +168,7 @@ vi.mock("../lib/run-record", () => ({
         turnSeq: 1,
       }),
     ],
+  }),
 }));
 const {
   ENRICHMENT_BUDGET_NOTE,
@@ -259,6 +262,62 @@ describe("automatic run enrichment", () => {
     state.call.mockRejectedValue(new Error("credit gate refused"));
     await expect(run()).rejects.toThrow("credit gate refused");
     expect(state.writes).toHaveLength(0);
+  });
+});
+
+// #3823: a subagent records on a chain of its own. The account is written
+// from every chain the run recorded, as the Run page folds them, so a
+// subagent's work is in it.
+describe("a run's subagent chains", () => {
+  it("reads a subagent's retained body into the text the account is written from", async () => {
+    const ROOT = "0192d4a8-7c1e-7a00-8000-00000000c0de";
+    const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    const prompt = new TextEncoder().encode("Please repair authentication.");
+    const found = new TextEncoder().encode(
+      "The subagent traced the redirect to the OAuth callback.",
+    );
+    state.bodies.set("prompt-body", prompt);
+    state.bodies.set("child-body", found);
+    const row = {
+      ts: "2026-09-22 00:00:00.000",
+      redactions: "",
+      toolName: "",
+      toolStatus: "",
+      toolUseId: "",
+      model: "",
+      provider: "",
+      policyDecision: "",
+      costUsdMicros: null,
+      turnSeq: 1,
+    };
+    state.frames = [
+      tachoFrame({
+        ...row,
+        seq: 0,
+        kind: "turn_start",
+        hash: `sha256:${"a".repeat(64)}`,
+        contentDigest: digestBytes(prompt),
+        bytesRef: "prompt-body",
+      }),
+      tachoFrame({
+        ...row,
+        seq: 0,
+        kind: "tool_call",
+        toolName: "Grep",
+        toolStatus: "ok",
+        hash: `sha256:${"c".repeat(64)}`,
+        contentDigest: digestBytes(found),
+        bytesRef: "child-body",
+        sessionUuid: CHILD,
+        rootSessionUuid: ROOT,
+        parentSessionUuid: ROOT,
+      }),
+    ];
+    expect(await run()).toMatchObject({ status: "generated" });
+    const sent = state.call.mock.calls.map((call) => String(call[1]));
+    expect(sent.join("\n")).toContain(
+      "The subagent traced the redirect to the OAuth callback.",
+    );
   });
 });
 

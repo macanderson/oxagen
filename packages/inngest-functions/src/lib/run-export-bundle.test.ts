@@ -14,6 +14,7 @@ import {
 import {
   attesterKeyFromPem,
   type ChainCursor,
+  type RunExportAttemptChain,
   digestBytes,
   GENESIS_CURSOR,
   hashEvent,
@@ -166,9 +167,15 @@ function carriedTachoSegment(
     attempt?: string;
     /** Hash each event the way a build before tacho's own `jcs` did. */
     olderHost?: boolean;
+    /**
+     * A subagent chain under the run's session: its events name this session
+     * and the run's as their root, and the segment is that chain's attempt.
+     */
+    subagent?: RunExportAttemptChain;
   } = {},
 ): SealedSegment {
-  const session = "0a1b2c3d-0000-4000-8000-000000000000";
+  const root = "0a1b2c3d-0000-4000-8000-000000000000";
+  const session = over.subagent?.session_uuid ?? root;
   const unsealed = (
     kind: string,
     body: Record<string, unknown>,
@@ -178,7 +185,7 @@ function carriedTachoSegment(
       event_id: `ev_${kind}`,
       session_id: "harness-session",
       session_uuid: session,
-      root_session_uuid: session,
+      root_session_uuid: root,
       ts: "2026-09-14T12:00:00.000Z",
       fidelity: "sdk",
       source: "hook",
@@ -217,6 +224,13 @@ function carriedTachoSegment(
   );
   return {
     ...tachoSegment(),
+    ...(over.subagent === undefined
+      ? {}
+      : {
+          attemptId: session,
+          attemptPublicId: session,
+          chain: over.subagent,
+        }),
     ...(over.attempt === undefined ? {} : { attemptPublicId: over.attempt }),
     envelopes,
     digests: events.map((event) => event.hash),
@@ -621,6 +635,83 @@ describe("the run export bundle", () => {
     ]);
     expect(script.ok).toBe(false);
     expect(script.output).toContain(`frame 1 (${other} #0) broken: ${reason}`);
+  });
+
+  // #3823: a subagent records on a hash chain of its own from genesis at its
+  // own seq 0, so the export ships it as an attempt of its own.
+  it("verifies a run with a subagent chain as one attempt per chain, each from genesis, in both verifiers", () => {
+    const CHILD = "0a1b2c3d-0000-4000-8000-00000000c1d0";
+    const chain: RunExportAttemptChain = {
+      session_uuid: CHILD,
+      parent_session_uuid: "0a1b2c3d-0000-4000-8000-000000000000",
+      subagent_id: "agent-1",
+      subagent_type: "Explore",
+      spawn_tool_use_id: "toolu_A",
+    };
+    const own = carriedTachoSegment();
+    const child = carriedTachoSegment({ subagent: chain });
+    const bundle = buildRunExportBundle({
+      runId: "tse_0a1b2c",
+      source: "tacho",
+      segments: [own, child],
+      key,
+      now: new Date(),
+    });
+    expect(bundle.manifest.format).toBe("oxagen.run-export/3");
+    expect(bundle.manifest.frame_count).toBe(6);
+    expect(bundle.manifest.attempts.map((a) => a.attempt_id)).toEqual([
+      own.attemptPublicId,
+      CHILD,
+    ]);
+    expect(bundle.manifest.attempts[0]?.chain).toBeUndefined();
+    expect(bundle.manifest.attempts[1]?.chain).toEqual(chain);
+    const files = unpack(bundle.bytes);
+    expect(JSON.parse(files["manifest.json"]!).attempts[1].chain).toEqual(
+      chain,
+    );
+    const { cli, script } = bothVerdicts(files);
+    expect(cli.ok).toBe(true);
+    expect(script.ok).toBe(true);
+    // The child's first frame opens at genesis on its own chain.
+    expect(cli.frames[3]).toMatchObject({
+      attempt_id: CHILD,
+      seq: 0,
+      status: "held",
+      link: "held",
+      digest: "held",
+    });
+    expect(script.output).toContain(`frame 4 (${CHILD} #0) held`);
+  });
+
+  it("breaks a subagent chain's frames shipped as a continuation of the run's own chain (negative)", () => {
+    const own = carriedTachoSegment();
+    const child = carriedTachoSegment({
+      subagent: {
+        session_uuid: "0a1b2c3d-0000-4000-8000-00000000c1d0",
+        parent_session_uuid: own.attemptPublicId,
+        subagent_id: "agent-1",
+        subagent_type: null,
+        spawn_tool_use_id: null,
+      },
+    });
+    const merged: SealedSegment = {
+      ...own,
+      frameCount: 6,
+      envelopes: [...own.envelopes, ...child.envelopes],
+      digests: [...own.digests, ...child.digests],
+    };
+    const bundle = buildRunExportBundle({
+      runId: "tse_0a1b2c",
+      source: "tacho",
+      segments: [merged],
+      key,
+      now: new Date(),
+    });
+    const { cli, script } = bothVerdicts(unpack(bundle.bytes));
+    expect(cli.ok).toBe(false);
+    expect(cli.frames[3]?.status).toBe("broken");
+    expect(cli.frames[3]?.reasons).toContain("seq 0 where 3 was due");
+    expect(script.ok).toBe(false);
   });
 
   it("says a wrapped frame without its event is not carried, in the shipped verifier", () => {

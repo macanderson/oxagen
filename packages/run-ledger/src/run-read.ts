@@ -2,8 +2,8 @@
 // once (ADR-182).
 //
 // Two readers fold a run's steps: `get_run_transcript`, which the Run page
-// draws, and the `run.summarize` job, which writes the run's account from
-// them. Each reaches the stores its own way, so each passes the reads it has.
+// draws, and the `run.enrich` job behind `summarize_run`, which writes the
+// run's account from them. Each reaches the stores its own way, so each passes the reads it has.
 // What the reads are composed into is decided here and nowhere else:
 //
 //   1. the run's own chain, with each subagent chain spliced in where it was

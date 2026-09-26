@@ -12,6 +12,7 @@ import {
   createPostgresRunStore,
   type FrameRead,
   ledgerFrame,
+  listSubagentChains,
   listSubagentSessions,
   readTranscriptFrames,
   type RunFrame,
@@ -25,6 +26,7 @@ import {
   digestBytes,
   type JsonValue,
   readArchiveSegment,
+  type RunExportAttemptChain,
   unflattenEvent,
   wrappedFrameOf,
 } from "@oxagen/tacho";
@@ -60,6 +62,11 @@ export interface SealedSegment {
   envelopes: JsonValue[];
   /** The frames' own digests, in the same order, for the Merkle root. */
   digests: string[];
+  /**
+   * Set on a wrapped run's subagent chain: where the chain sits in the run.
+   * Absent on the run's own chain and on every ledger attempt.
+   */
+  chain?: RunExportAttemptChain;
 }
 
 type RunRecord =
@@ -248,12 +255,41 @@ function tachoEnvelope(row: TachoFrameRow): JsonValue {
   };
 }
 
+/** A wrapped chain's segment, built from its stored rows. */
+function tachoSegment(
+  sessionUuid: string,
+  records: readonly TachoEventRecord[],
+  seal: {
+    enforcementTier: string;
+    completenessGaps: string[];
+    replayGrade: string | null;
+  },
+): SealedSegment {
+  return {
+    attemptId: sessionUuid,
+    attemptPublicId: sessionUuid,
+    frameCount: records.length,
+    merkleRoot: "",
+    archiveSegmentDigest: null,
+    eventStreamDigest: null,
+    enforcementTier: seal.enforcementTier,
+    completenessGaps: seal.completenessGaps,
+    replayGrade: seal.replayGrade,
+    envelopes: records.map(tachoExportFrame),
+    digests: records.map((r) => r.frame.hash),
+  };
+}
+
 /**
  * The sealed segments of a run: one per sealed ledger attempt, read from the
- * attempt's archive segment; one for a wrapped session, built from its rows.
- * A ledger attempt sealed before the recorder (no segment) fails the read:
- * an export attests what the seal committed to, and that seal committed to
- * nothing.
+ * attempt's archive segment. A wrapped run has one for its own chain, built
+ * from its rows, and one more per subagent chain (#3823): a subagent records
+ * on a hash chain of its own, from genesis at its own seq 0, so each chain is
+ * attested and verified as an attempt of its own, with the chain's session
+ * uuid as its id and its tier, gaps and grade from the chain's own row. A
+ * chain with no stored frame has nothing to attest and is left out. A ledger
+ * attempt sealed before the recorder (no segment) fails the read: an export
+ * attests what the seal committed to, and that seal committed to nothing.
  */
 export async function readSealedSegments(
   scope: RunScope,
@@ -261,22 +297,33 @@ export async function readSealedSegments(
 ): Promise<SealedSegment[]> {
   return runInTenantScope(scope, async () => {
     if (record.source === "tacho") {
-      const records = await allTachoRecords(record.sessionUuid);
-      return [
-        {
-          attemptId: record.sessionUuid,
-          attemptPublicId: record.sessionUuid,
-          frameCount: records.length,
-          merkleRoot: "",
-          archiveSegmentDigest: null,
-          eventStreamDigest: null,
-          enforcementTier: record.enforcementTier,
-          completenessGaps: record.completenessGaps,
-          replayGrade: record.replayGrade,
-          envelopes: records.map(tachoExportFrame),
-          digests: records.map((r) => r.frame.hash),
-        },
+      const segments = [
+        tachoSegment(
+          record.sessionUuid,
+          await allTachoRecords(record.sessionUuid),
+          record,
+        ),
       ];
+      const chains = await listSubagentChains(scope, record.sessionUuid);
+      for (const chain of chains) {
+        const records = await allTachoRecords(chain.sessionUuid);
+        if (records.length === 0) continue;
+        segments.push({
+          ...tachoSegment(chain.sessionUuid, records, {
+            enforcementTier: chain.enforcementTier,
+            completenessGaps: gapsOf(chain.completenessGaps),
+            replayGrade: chain.replayGrade,
+          }),
+          chain: {
+            session_uuid: chain.sessionUuid,
+            parent_session_uuid: chain.parentSessionUuid,
+            subagent_id: chain.subagentId,
+            subagent_type: chain.subagentType,
+            spawn_tool_use_id: chain.spawnToolUseId,
+          },
+        });
+      }
+      return segments;
     }
     const store = evidenceStore();
     const segments: SealedSegment[] = [];
@@ -342,23 +389,12 @@ async function ownFrames(
 }
 
 /**
- * Every frame of the run's own chain as the projection reads it, in sequence
- * order. The enrichment job reads the record this way; a reader that folds
- * the run's steps reads `readTranscriptFramesOf`.
- */
-export async function readRunFrames(
-  scope: RunScope,
-  record: RunRecord,
-): Promise<RunFrame[]> {
-  return runInTenantScope(scope, () => ownFrames(record));
-}
-
-/**
  * The frames the Run page folds for this run, read the same way
  * (`readTranscriptFrames` in `@oxagen/run-ledger`): every subagent chain
  * spliced in where it was spawned, late harness reports uncounted, each model
- * call once, to `TRANSCRIPT_FRAME_CAP` frames. `run.summarize` folds these,
- * so the account it writes covers the steps the page draws.
+ * call once, to `TRANSCRIPT_FRAME_CAP` frames. The enrichment job behind
+ * `summarize_run` (`run.enrich`) reads these, so the account it writes covers
+ * a subagent's work as the page draws it (#3823).
  */
 export async function readTranscriptFramesOf(
   scope: RunScope,
