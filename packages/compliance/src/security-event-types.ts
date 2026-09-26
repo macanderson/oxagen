@@ -573,6 +573,21 @@ export interface WorkspaceRunsPausedDetail {
   }[];
 }
 
+/**
+ * Evidence recorded when `update_runtime` changes whether a runtime requires
+ * the contained launcher (ADR-204). `runtimeId` is the runtime's public id.
+ * `previous` is the value the change replaced, so a reader sees a switch
+ * turned on apart from one turned off.
+ */
+export interface RuntimeContainmentChangeDetail {
+  feature: "runtime_containment";
+  change: "containment_required";
+  runtimeId: string;
+  previous: boolean;
+  enabled: boolean;
+  reason: string | null;
+}
+
 export type SecurityEventDetail =
   | WorkspaceRunsPausedDetail
   | PasswordChangeDetail
@@ -584,6 +599,7 @@ export type SecurityEventDetail =
   | CredentialRevocationDetail
   | RunIssueAuthorizationDetail
   | RunOutcomesPolicyChangeDetail
+  | RuntimeContainmentChangeDetail
   | ApprovalRuleInvalidationDetail
   | GovernanceChangeDetail
   | SsoProviderChangeDetail

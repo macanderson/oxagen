@@ -17,6 +17,7 @@ const item = {
   ],
   liveHosts: 1,
   lastSeenAt: null,
+  containmentRequired: true,
 };
 
 describe("list_runtimes contract", () => {
@@ -44,6 +45,16 @@ describe("list_runtimes contract", () => {
         ...item,
         agents: [{ ...item.agents[0], harness: "langchain" }],
       }).success,
+    ).toBe(false);
+  });
+
+  it("says whether each runtime requires the contained launcher (ADR-204)", () => {
+    const withoutContainment: Partial<typeof item> = { ...item };
+    delete withoutContainment.containmentRequired;
+    expect(runtimeListItem.safeParse(withoutContainment).success).toBe(false);
+    expect(
+      runtimeListItem.parse({ ...item, containmentRequired: false })
+        .containmentRequired,
     ).toBe(false);
   });
 });

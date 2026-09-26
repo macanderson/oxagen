@@ -37,6 +37,8 @@ export const runtimeListItem = runtimeRefSchema
     liveHosts: z.number().int().nonnegative(),
     /** The newest `last_seen_at` among its hosts; null when none has reported. */
     lastSeenAt: instant.nullable(),
+    /** Whether every agent on this runtime must run under the contained launcher (ADR-152, ADR-204). */
+    containmentRequired: z.boolean(),
   })
   .strict();
 export type RuntimeListItem = z.output<typeof runtimeListItem>;
@@ -45,7 +47,7 @@ export const runtimeList = registerCapability({
   name: "list_runtimes",
   domain: "runtime",
   description:
-    "List the runtimes named in this workspace, each with the live agents on it and their harness, the live host enrollments bound to it, and when a host last reported.",
+    "List the runtimes named in this workspace, each with the live agents on it and their harness, the live host enrollments bound to it, when a host last reported, and whether it requires the contained launcher.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   // `app`: the Runtimes page and the register form's runtime picker.

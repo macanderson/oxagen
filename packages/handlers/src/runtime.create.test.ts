@@ -1,5 +1,6 @@
 // create_runtime and list_runtimes (ADR-198, #4369), and the runtime a host
-// enrollment binds.
+// enrollment binds. Both carry whether the runtime requires the contained
+// launcher (ADR-204, #4372).
 //
 // The role gate is proven with a tx double, the way agent.identity.test.ts
 // proves its own. The writes and reads are proven against a real Postgres;
@@ -170,6 +171,41 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(typed.runtime.slug).toBe("macs-laptop-2");
     });
 
+    it("create_runtime records whether the runtime requires containment, false when left out", async () => {
+      const contained = await inScope(() =>
+        runtimeCreateHandler(
+          { name: "Locked box", containmentRequired: true },
+          ctx(),
+        ),
+      );
+      const open = await inScope(() =>
+        runtimeCreateHandler({ name: "Open box" }, ctx()),
+      );
+      const rows = await withSystemDb((tx) =>
+        tx
+          .select({
+            publicId: schema.runtimes.publicId,
+            containmentRequired: schema.runtimes.containmentRequired,
+          })
+          .from(schema.runtimes)
+          .where(eq(schema.runtimes.orgId, tenant.orgId)),
+      );
+      const byId = new Map(rows.map((r) => [r.publicId, r]));
+      expect(byId.get(contained.runtime.id)?.containmentRequired).toBe(true);
+      expect(byId.get(open.runtime.id)?.containmentRequired).toBe(false);
+
+      const listed = runtimeList.output.parse(
+        await inScope(() => runtimeListHandler({}, ctx())),
+      );
+      expect(
+        listed.items.find((i) => i.id === contained.runtime.id)
+          ?.containmentRequired,
+      ).toBe(true);
+      expect(
+        listed.items.find((i) => i.id === open.runtime.id)?.containmentRequired,
+      ).toBe(false);
+    });
+
     it("list_runtimes names each runtime's live agents and host enrollments", async () => {
       const created = await inScope(() =>
         runtimeCreateHandler({ name: "GPU box" }, ctx()),
@@ -210,6 +246,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         name: "GPU box",
         slug: "gpu-box",
         liveHosts: 1,
+        containmentRequired: false,
         agents: [
           {
             id: agent.publicId,

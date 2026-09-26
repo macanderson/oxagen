@@ -1,9 +1,10 @@
 // audit-exempt: read-only — lists runtimes and the agents on them; the kernel capability.invoke_* audit covers access.
 //
 // runtime.list.ts — the runtimes named in this workspace, each with its live
-// agents and their harness, its live host enrollments and when a host last
-// reported (ADR-198, #4369). The register form reads the agents to disable a
-// runtime and harness pair a live agent already holds.
+// agents and their harness, its live host enrollments, when a host last
+// reported (ADR-198, #4369) and whether it requires the contained launcher
+// (ADR-204). The register form reads the agents to disable a runtime and
+// harness pair a live agent already holds.
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import type { AgentHarness } from "@oxagen/oxagen/contracts/agent.list";
@@ -28,6 +29,7 @@ export const runtimeListHandler: CapabilityHandler<typeof runtimeList> = async (
         name: schema.runtimes.name,
         slug: schema.runtimes.slug,
         createdAt: schema.runtimes.createdAt,
+        containmentRequired: schema.runtimes.containmentRequired,
       })
       .from(schema.runtimes)
       .where(
@@ -108,6 +110,7 @@ export const runtimeListHandler: CapabilityHandler<typeof runtimeList> = async (
           // drivers, so it is read through Date either way.
           lastSeenAt:
             lastSeen === null ? null : new Date(lastSeen).toISOString(),
+          containmentRequired: runtime.containmentRequired,
         };
       }),
     };

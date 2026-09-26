@@ -4,10 +4,7 @@
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
-import {
-  agentVersionBudget,
-  agentVersionContainment,
-} from "@oxagen/oxagen/agent-version-config";
+import { agentVersionBudget } from "@oxagen/oxagen/agent-version-config";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
 import { isManagedAgentType } from "@oxagen/oxagen/interactive-agent";
 import type {
@@ -220,16 +217,41 @@ function usd(micros: number | undefined): AgentGetOutput["limits"]["perRun"] {
 }
 
 /**
- * The limits the active version's config sets (ADR-198), read by the same
- * functions the host bundle reads them with (`resolveHostMandate`), so the
- * agent page shows the ceilings the host enforces. A config those functions
- * refuse is reported as invalid, the state in which the host suspends
- * governed actions.
+ * Whether the agent's current runtime requires the contained launcher
+ * (ADR-204). The host bundle reads the same column for a host bound to this
+ * runtime, and for a host that binds none. Like the bundle's read, this one
+ * keeps a deleted runtime's setting, because a host still bound to it keeps
+ * enforcing it.
+ */
+async function runtimeContainmentFor(
+  tx: Tx,
+  runtimeId: string | null,
+): Promise<boolean> {
+  if (runtimeId === null) return false;
+  const [runtime] = await tx
+    .select({ containmentRequired: schema.runtimes.containmentRequired })
+    .from(schema.runtimes)
+    .where(eq(schema.runtimes.id, runtimeId))
+    .limit(1);
+  return runtime?.containmentRequired === true;
+}
+
+/**
+ * The limits the host bundle signs for this agent: the budget from the
+ * active version's config (ADR-198), read by the function the bundle reads
+ * it with (`resolveHostMandate`), and containment from the agent's current
+ * runtime (ADR-204). A budget that function refuses is reported as invalid,
+ * the state in which the host suspends governed actions. Containment is
+ * read apart from the budget, so an invalid budget does not hide it.
  */
 async function limitsFor(
   tx: Tx,
-  agentId: string,
+  agent: { id: string; runtimeId: string | null },
 ): Promise<AgentGetOutput["limits"]> {
+  const containmentRequired = await runtimeContainmentFor(
+    tx,
+    agent.runtimeId,
+  );
   const [active] = await tx
     .select({ config: schema.agentVersions.config })
     .from(schema.agents)
@@ -237,21 +259,20 @@ async function limitsFor(
       schema.agentVersions,
       eq(schema.agentVersions.id, schema.agents.activeVersionId),
     )
-    .where(eq(schema.agents.id, agentId))
+    .where(eq(schema.agents.id, agent.id))
     .limit(1);
-  if (!active) return NO_LIMITS;
+  if (!active) return { ...NO_LIMITS, containmentRequired };
   try {
     const budget = agentVersionBudget(active.config);
-    const containment = agentVersionContainment(active.config);
     return {
       perRun: usd(budget?.perRunMicros),
       perDay: usd(budget?.perDayMicros),
-      containmentRequired: containment?.required === true,
+      containmentRequired,
       invalid: false,
     };
   } catch (error) {
     if (isHandlerError(error) && error.reason === "invalid_agent_config")
-      return { ...NO_LIMITS, invalid: true };
+      return { ...NO_LIMITS, containmentRequired, invalid: true };
     throw error;
   }
 }
@@ -362,7 +383,7 @@ export async function agentGetHandler(
           : bindings.toolbelts.get(row.toolbeltId),
       ),
       versions,
-      limits: await limitsFor(tx, row.id),
+      limits: await limitsFor(tx, row),
       credentials,
       roles,
       hosts,

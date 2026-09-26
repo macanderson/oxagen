@@ -31,7 +31,7 @@ An agent is one operator on one runtime with one harness. The principal, the ope
 | `runtime` | object \| null | `id` (`rtm_…`), `name`, `slug`. Null for an agent that runs on no named runtime, such as stella's in-app assistant. |
 | `toolbelt` | object \| null | `id` (`tbt_…`), `name`, `slug`, `kind`. An agent that names no belt reads as the workspace's All tools belt; null only before any toolbelt path has touched the workspace. |
 | `versions[]` | object | `version`, `changeKind` (`registered`, `runtime_changed`, `toolbelt_changed`, `legacy`), `runtime`, `toolbelt`, `createdBy` (`usr_…`), `createdAt`. Newest first, at most 100. A `legacy` version, written before ADR-198, names no runtime or toolbelt. |
-| `limits` | object | The ceilings the active version's config sets, read the way the host bundle reads them: `perRun` and `perDay` (`{ micros, currency }`, null when unset), `containmentRequired`, and `invalid`, true when the config cannot be read and the host suspends governed actions. |
+| `limits` | object | What the host bundle signs for the agent. `perRun` and `perDay` (`{ micros, currency }`, null when unset) are the ceilings the active version's config sets. `containmentRequired` is the setting of the agent's current runtime (ADR-204), false when the agent runs on no named runtime. `invalid` is true when the budget in the config cannot be read and the host suspends governed actions; `containmentRequired` still reads the runtime then. |
 
 ## Roles
 
