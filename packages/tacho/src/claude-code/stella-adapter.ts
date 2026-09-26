@@ -110,12 +110,22 @@ export interface StellaIdentity {
 }
 
 /**
- * The most time all the `ps` calls behind one Stella identity may take
- * together. Each call's timeout is what is left of it, so a hung `ps` costs
- * this long at most, not two seconds a call. A Stella telemetry hook has five
- * seconds in all, and stdin, the daemon and the spool write need the rest.
+ * The time the `ps` calls behind one Stella identity share. Each call's
+ * timeout is what is left of it, but never less than `STELLA_PS_FLOOR_MS`.
+ * One identity makes at most three calls, so a hung `ps` costs 1.5 s at
+ * most, where it cost two seconds a call before. A Stella telemetry hook has
+ * five seconds in all, and the hook takes the time spent here off its wait
+ * for the daemon.
  */
 export const STELLA_PS_BUDGET_MS = 1_000;
+
+/**
+ * The least time any one `ps` call gets. Without it a slow parent lookup
+ * left the start-time read a few milliseconds, `spawnSync` killed it, and a
+ * run's first hook took the bare pid form while the next took the full one:
+ * the chain split that the cache exists to prevent.
+ */
+export const STELLA_PS_FLOOR_MS = 250;
 
 /**
  * How long a cached identity is used with no `ps` call at all. A hook past
@@ -124,6 +134,16 @@ export const STELLA_PS_BUDGET_MS = 1_000;
  * hand out every other pid first, which takes far longer than a minute.
  */
 export const STELLA_IDENTITY_FRESH_MS = 60_000;
+
+/**
+ * How long after its last check the hook keeps a cached identity when the
+ * start-time read fails. Inside it, the hook takes the failure as transient
+ * and the run keeps its chain. Past it, the hook looks the process up as if
+ * nothing were cached, because another process may hold the pid by then. A
+ * Stella run checks its entry on every hook past the fresh window, so a live
+ * run whose hooks come less than five minutes apart stays inside it.
+ */
+export const STELLA_IDENTITY_TRUST_MS = 5 * 60_000;
 
 const identityCacheSchema = z.object({
   schema: z.literal("tacho.stella-identity.v1"),
@@ -249,13 +269,24 @@ export type StartInstanceLookup = (
  *   file the new run on the old run's chain as a resume. An entry that read
  *   does not confirm, because it failed or found another start time, is
  *   removed, so the hooks after it do not return to the old chain either.
- * - Any other `ps` failure with an entry on hand keeps the cached identity:
- *   the parent is alive, since it ran this hook, and its chain is the one to
- *   continue.
+ * - Any other failed start-time read keeps the cached identity when the
+ *   entry was checked within `STELLA_IDENTITY_TRUST_MS`: the parent is
+ *   alive, since it ran this hook, and its chain is the one to continue. An
+ *   older entry is looked up afresh, as below.
  * - With no entry, the hook does what it did before the cache: two `ps`
  *   calls, and the parent pid and the bare form when they fail.
  *
- * All the `ps` calls share `STELLA_PS_BUDGET_MS`.
+ * All the `ps` calls share `STELLA_PS_BUDGET_MS`, and each gets at least
+ * `STELLA_PS_FLOOR_MS`.
+ *
+ * The cache cannot tell a reused pid from its Stella without `ps`. Suppose
+ * Stella exits and its pid goes to another process that runs a hook, such as
+ * a shell forked for another Stella. Inside the fresh window the cache files
+ * that hook on the old run's chain and sends the old pid as the harness pid.
+ * Past the fresh window the start-time read catches it, unless that read
+ * fails inside the trust window. A reused pid needs the system to hand out
+ * every other pid first, so both cases need pid reuse within minutes.
+ * Entries for exited Stellas stay until the next new entry prunes them.
  *
  * Only a parent that is Stella itself is cached. When bash forks the hook
  * instead of exec'ing it, the parent is a new shell on every hook, so an
@@ -269,21 +300,13 @@ export function resolveStellaIdentity(
   if (platform === "win32") return { pid: parentPid };
   const clock = options.clock ?? Date.now;
   const deadline = clock() + STELLA_PS_BUDGET_MS;
-  // Read before each call: a timeout of 0 would mean no timeout to `spawnSync`.
-  const left = (): number | undefined => {
-    const ms = deadline - clock();
-    return ms > 0 ? ms : undefined;
-  };
-  const lookup = (pid: number): ProcessInfo | undefined => {
-    const ms = left();
-    return ms === undefined ? undefined : (options.lookup ?? psLookup)(pid, ms);
-  };
-  const startInstance = (pid: number): string | undefined => {
-    const ms = left();
-    return ms === undefined
-      ? undefined
-      : (options.startInstance ?? psStartInstance)(pid, ms);
-  };
+  // Read before each call. The floor also keeps the timeout above 0, which
+  // `spawnSync` would read as no timeout at all.
+  const left = (): number => Math.max(STELLA_PS_FLOOR_MS, deadline - clock());
+  const lookup = (pid: number): ProcessInfo | undefined =>
+    (options.lookup ?? psLookup)(pid, left());
+  const startInstance = (pid: number): string | undefined =>
+    (options.startInstance ?? psStartInstance)(pid, left());
   const starting = options.event === "SessionStart";
   const cached = readCachedIdentity(cacheDir, parentPid);
   let parentInstance: string | undefined;
@@ -293,7 +316,13 @@ export function resolveStellaIdentity(
     if (!starting && age >= 0 && age < STELLA_IDENTITY_FRESH_MS)
       return identity;
     parentInstance = startInstance(parentPid);
-    if (parentInstance === undefined && !starting) return identity;
+    if (
+      parentInstance === undefined &&
+      !starting &&
+      age >= 0 &&
+      age < STELLA_IDENTITY_TRUST_MS
+    )
+      return identity;
     if (parentInstance === cached.instance) {
       writeCachedIdentity(cacheDir, { ...cached, confirmed_at: now });
       return identity;

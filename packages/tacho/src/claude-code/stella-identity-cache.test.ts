@@ -21,7 +21,9 @@ import {
   type ProcessInfo,
   resolveStellaIdentity,
   STELLA_IDENTITY_FRESH_MS,
+  STELLA_IDENTITY_TRUST_MS,
   STELLA_PS_BUDGET_MS,
+  STELLA_PS_FLOOR_MS,
 } from "./stella-adapter";
 
 /** A `ps` double that counts its calls and can be told to fail. */
@@ -117,10 +119,33 @@ describe("resolveStellaIdentity", () => {
     const ctx = setup();
     resolve(ctx, T0);
     ctx.ps.failing.startInstance = true;
-    expect(resolve(ctx, T0 + STELLA_IDENTITY_FRESH_MS * 5)).toEqual({
+    expect(resolve(ctx, T0 + STELLA_IDENTITY_FRESH_MS * 3)).toEqual({
       pid: 4242,
       instance: "aaaa11112222",
     });
+  });
+
+  it("looks up afresh when the start-time read fails on an entry past the trust window", () => {
+    const ctx = setup();
+    resolve(ctx, T0);
+    // Stella exited, and its pid went to a shell forked for another Stella.
+    Object.assign(ctx.tree, {
+      4242: { ppid: 9000, comm: "bash", start: "bbbb33334444" },
+      9000: { ppid: 1, comm: "stella", start: "9999aaaabbbb" },
+    });
+    // The shell's start-time read fails. The other reads answer.
+    const identity = resolveStellaIdentity({
+      parentPid: 4242,
+      platform: "darwin",
+      cacheDir: ctx.cacheDir,
+      now: T0 + STELLA_IDENTITY_TRUST_MS + 1,
+      lookup: ctx.ps.lookup,
+      startInstance: (pid) =>
+        pid === 4242 ? undefined : ctx.ps.startInstance(pid),
+      isAlive: () => true,
+    });
+    // The cached identity would have filed the hook on the old run's chain.
+    expect(identity).toEqual({ pid: 9000, instance: "9999aaaabbbb" });
   });
 
   it("keeps the cached identity when the parent lookup fails", () => {
@@ -225,7 +250,7 @@ describe("resolveStellaIdentity", () => {
     expect(ctx.ps.calls.lookup).toBe(1);
   });
 
-  it("gives every ps call only what is left of one shared budget", () => {
+  it("gives a ps call at least the floor after a slow one used the shared budget", () => {
     const ctx = setup();
     let clock = 0;
     const timeouts: number[] = [];
@@ -247,9 +272,10 @@ describe("resolveStellaIdentity", () => {
       },
       isAlive: () => true,
     });
-    // The lookup got the whole budget, and the start-time read was skipped.
-    expect(timeouts).toEqual([STELLA_PS_BUDGET_MS]);
-    expect(identity).toEqual({ pid: 4242 });
+    // The lookup got the whole budget, and the start-time read still ran
+    // with the floor, so the first hook takes the same id as the next.
+    expect(timeouts).toEqual([STELLA_PS_BUDGET_MS, STELLA_PS_FLOOR_MS]);
+    expect(identity).toEqual({ pid: 4242, instance: "aaaa11112222" });
   });
 
   it("removes the entries of Stella processes that have exited", () => {
