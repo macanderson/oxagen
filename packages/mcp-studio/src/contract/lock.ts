@@ -1,0 +1,160 @@
+// lock.ts: `mcp-tools-lock/v1`, the schema of tools/servers/<name>/tools.lock.json
+// (mcp-studio-spec, Lock file).
+//
+// The lock pins the upstream definition of every imported tool as a person
+// reviewed it. The gateway serves only locked definitions, so what the model
+// reads changes only through a steering PR. Oxagen writes it, and nobody
+// edits it by hand.
+//
+// An MCP server's lock pins the tools/list entry. A server built from a
+// definition pins the UpstreamTool compiled from it before tools.toml
+// applies, so a changed document shows as a change per tool.
+import { z } from "zod";
+import { gitObjectIdSchema, repoPathSchema, sha256Schema } from "@oxagen/oxagen/steering-repo/common";
+import { securitySchemeSchema } from "../model/security-scheme";
+import { upstreamToolSchema } from "../model/upstream-tool";
+import { withChecks } from "./checks";
+import { lockedMcpToolSchema } from "./mcp-tool";
+import { httpUrlSchema, serverNameSchema, toolKeySchema } from "./primitives";
+import { gitRefSchema, sourceRepoSchema } from "./server";
+
+/** A lock file is at most 5 MB. */
+export const LOCK_BYTES_MAX = 5 * 1024 * 1024;
+
+const serverVersionSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .optional()
+  .describe("The version the server reported in initialize, when it reported one.");
+
+/** A local server's package, pinned. The local gateway refuses to start anything else. */
+export const lockPackageSchema = z
+  .object({
+    name: z.string().min(1).max(214).describe("The package or binary: @modelcontextprotocol/server-filesystem."),
+    version: z.string().min(1).max(64),
+    digest: sha256Schema.describe("SHA-256 of the package or binary."),
+  })
+  .strict();
+export type LockPackage = z.output<typeof lockPackageSchema>;
+
+export const remoteLockSourceSchema = z
+  .object({
+    type: z.literal("remote"),
+    url: httpUrlSchema,
+    server_version: serverVersionSchema,
+  })
+  .strict();
+
+export const registryLockSourceSchema = z
+  .object({
+    type: z.literal("registry"),
+    registry: httpUrlSchema,
+    server: z.string().min(3).max(200),
+    version: z.string().min(1).max(64),
+    url: httpUrlSchema.optional().describe("The endpoint the catalog entry named, for a remote entry."),
+    package: lockPackageSchema.optional().describe("The package the catalog entry named, for a local entry."),
+    server_version: serverVersionSchema,
+  })
+  .strict();
+
+export const localLockSourceSchema = z
+  .object({
+    type: z.literal("local"),
+    command: z.string().min(1).max(1024),
+    package: lockPackageSchema,
+    server_version: serverVersionSchema,
+  })
+  .strict();
+
+/** Where an MCP server's tools came from when the lock was written. */
+export const mcpLockSourceSchema = z.union([
+  remoteLockSourceSchema,
+  registryLockSourceSchema,
+  localLockSourceSchema,
+]);
+export type McpLockSource = z.output<typeof mcpLockSourceSchema>;
+
+/** Where a definition came from when the lock was written, and the hash of its bytes. */
+export const definitionLockSourceSchema = withChecks(
+  z
+    .object({
+      type: z.enum(["openapi", "graphql", "grpc"]),
+      from: z.enum(["repository", "url", "upload", "introspection", "reflection"]),
+      document_hash: sha256Schema.describe(
+        "SHA-256 of the definition's bytes as committed, or of the bundle for many files.",
+      ),
+      repo: sourceRepoSchema.optional(),
+      path: repoPathSchema.optional(),
+      ref: gitRefSchema.optional(),
+      commit: gitObjectIdSchema.optional().describe("The commit ref resolved to when the lock was written."),
+      url: httpUrlSchema.optional(),
+      security_schemes: z
+        .record(z.string().regex(/^[A-Za-z0-9_.-]{1,64}$/, "not a scheme name"), securitySchemeSchema)
+        .optional()
+        .describe(
+          "OpenAPI only: components.securitySchemes as import read them, so compile resolves auth.scheme without the document.",
+        ),
+    })
+    .strict(),
+  [
+    { kind: "require", when: { field: "from", is: "repository" }, fields: ["repo", "path", "ref", "commit"] },
+    { kind: "require", when: { field: "from", is: "url" }, fields: ["url"] },
+  ],
+);
+export type DefinitionLockSource = z.output<typeof definitionLockSourceSchema>;
+
+const versionSchema = z
+  .number()
+  .int()
+  .min(1)
+  .describe("Rises by one when definition_hash changes. Never for a classification change.");
+
+const definitionHashSchema = sha256Schema.describe(
+  "SHA-256 over the RFC 8785 form of the effective name, description, and schemas.",
+);
+const upstreamHashSchema = sha256Schema.describe("SHA-256 over the RFC 8785 form of upstream.");
+
+export const mcpLockedToolSchema = z
+  .object({
+    definition_hash: definitionHashSchema,
+    upstream: lockedMcpToolSchema,
+    upstream_hash: upstreamHashSchema,
+    version: versionSchema,
+  })
+  .strict();
+
+export const definitionLockedToolSchema = z
+  .object({
+    definition_hash: definitionHashSchema,
+    upstream: upstreamToolSchema,
+    upstream_hash: upstreamHashSchema,
+    version: versionSchema,
+  })
+  .strict();
+
+export const mcpLockSchema = z
+  .object({
+    schema: z.literal("mcp-tools-lock/v1"),
+    server: serverNameSchema,
+    source: mcpLockSourceSchema,
+    tools: z.record(toolKeySchema, mcpLockedToolSchema),
+  })
+  .strict()
+  .describe("The lock of an MCP server: remote, registry, or local.");
+
+export const definitionLockSchema = z
+  .object({
+    schema: z.literal("mcp-tools-lock/v1"),
+    server: serverNameSchema,
+    source: definitionLockSourceSchema,
+    tools: z.record(toolKeySchema, definitionLockedToolSchema),
+  })
+  .strict()
+  .describe("The lock of a server built from an OpenAPI, GraphQL, or gRPC definition.");
+
+export const mcpToolsLockSchema = z.union([mcpLockSchema, definitionLockSchema]);
+export type McpToolsLock = z.output<typeof mcpToolsLockSchema>;
+export type McpLock = z.output<typeof mcpLockSchema>;
+export type DefinitionLock = z.output<typeof definitionLockSchema>;
+export type LockedTool = McpToolsLock["tools"][string];

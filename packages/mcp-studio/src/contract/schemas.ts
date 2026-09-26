@@ -11,8 +11,12 @@ import { fileURLToPath } from "node:url";
 import type { z } from "zod";
 import { toJsonSchema } from "@oxagen/oxagen/steering-repo/json-schema";
 import { localCallEnvelopeSchema } from "./local-call-envelope";
+import { mcpToolsLockSchema } from "./lock";
+import { toolManifestSchema } from "./manifest";
 import { relayEnvelopeSchema } from "./relay-envelope";
 import { mcpStudioSchemaUrl, type McpStudioSchemaId } from "./schema-ids";
+import { mcpServerSchema } from "./server";
+import { mcpToolsSchema } from "./tools";
 
 export interface McpStudioSchemaEntry {
   id: McpStudioSchemaId;
@@ -23,6 +27,34 @@ export interface McpStudioSchemaEntry {
 
 /** Every published schema, in the order the generator writes them. */
 export const MCP_STUDIO_SCHEMAS: readonly McpStudioSchemaEntry[] = [
+  {
+    id: "mcp-server/v1",
+    title: "MCP server",
+    description:
+      "tools/servers/<name>/server.toml: where a server's tools come from, how each environment reaches it, and how its tools are exposed.",
+    schema: mcpServerSchema,
+  },
+  {
+    id: "mcp-tools/v1",
+    title: "MCP tools",
+    description:
+      "tools/servers/<name>/tools.toml: the imported tools, with each one's classification and shaping.",
+    schema: mcpToolsSchema,
+  },
+  {
+    id: "mcp-tools-lock/v1",
+    title: "MCP tools lock",
+    description:
+      "tools/servers/<name>/tools.lock.json: the upstream definition of every imported tool as a person reviewed it. Oxagen writes it.",
+    schema: mcpToolsLockSchema,
+  },
+  {
+    id: "tool-manifest/v1",
+    title: "Tool manifest",
+    description:
+      "The compiled tools of one published steering version, which the bundle carries and the cloud gateway serves.",
+    schema: toolManifestSchema,
+  },
   {
     id: "relay-envelope/v1",
     title: "Relay envelope",

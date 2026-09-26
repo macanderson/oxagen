@@ -1,0 +1,1164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/mcp-server/v1.json",
+  "title": "MCP server",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "mcp-server/v1"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,23}$",
+      "description": "Matches the folder name. Unique in the workspace.",
+      "not": {
+        "const": "builtin"
+      }
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "description": "The server's name on every surface."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "One sentence about the server."
+    },
+    "source": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "remote"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https?:\\/\\/",
+              "description": "The MCP endpoint."
+            },
+            "transport": {
+              "type": "string",
+              "enum": [
+                "http",
+                "sse"
+              ],
+              "description": "http (streamable HTTP) or sse, which today's connect flow still offers."
+            },
+            "network": {
+              "type": "string",
+              "pattern": "^(?:cloud|relay:[a-z0-9][a-z0-9-]{0,62})$",
+              "description": "cloud by default, or relay:<name> for a server inside a private network."
+            }
+          },
+          "required": [
+            "type",
+            "url",
+            "transport"
+          ],
+          "additionalProperties": false,
+          "description": "A remote MCP server."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "registry"
+            },
+            "registry": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https?:\\/\\/",
+              "description": "The registry's URL."
+            },
+            "server": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 200,
+              "pattern": "^[A-Za-z0-9.-]+\\/[A-Za-z0-9._-]+$",
+              "description": "The server's registry name."
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "description": "The catalog version. The entry supplies the endpoint or the package."
+            },
+            "network": {
+              "type": "string",
+              "pattern": "^(?:cloud|relay:[a-z0-9][a-z0-9-]{0,62})$",
+              "description": "cloud by default, or relay:<name> for a server inside a private network."
+            }
+          },
+          "required": [
+            "type",
+            "registry",
+            "server",
+            "version"
+          ],
+          "additionalProperties": false,
+          "description": "An MCP server from a registry catalog."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "local"
+            },
+            "command": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "description": "The command the local gateway runs."
+            },
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 4096
+              },
+              "maxItems": 256
+            },
+            "env": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+              },
+              "maxItems": 128,
+              "uniqueItems": true,
+              "description": "Environment variables the local gateway passes from the machine. Only names, never values."
+            },
+            "machines": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+              },
+              "maxItems": 64,
+              "uniqueItems": true,
+              "description": "The machine groups that may run the server. Empty by default, so it runs nowhere."
+            }
+          },
+          "required": [
+            "type",
+            "command"
+          ],
+          "additionalProperties": false,
+          "description": "A local MCP server the local gateway runs on an enrolled machine."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "openapi"
+            },
+            "from": {
+              "type": "string",
+              "enum": [
+                "repository",
+                "url",
+                "upload"
+              ]
+            },
+            "repo": {
+              "type": "string",
+              "pattern": "^(?:github\\.com|gitlab\\.com)\\/[A-Za-z0-9_.-]+(?:\\/[A-Za-z0-9_.-]+)+$"
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^(?!\\/)(?!.*\\/$)(?!.*\\/\\/)(?!(?:.*\\/)?\\.\\.?(?:\\/|$)).+$",
+              "description": "The definition's path in repo."
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[^\\s~^:?*[\\\\]+$",
+              "description": "The branch, tag, or commit to read."
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https?:\\/\\/",
+              "description": "Where Oxagen fetches the definition."
+            },
+            "network": {
+              "type": "string",
+              "pattern": "^(?:cloud|relay:[a-z0-9][a-z0-9-]{0,62})$",
+              "description": "cloud by default, or relay:<name> for a server inside a private network."
+            }
+          },
+          "required": [
+            "type",
+            "from"
+          ],
+          "additionalProperties": false,
+          "description": "An OpenAPI 3.0 or 3.1 document, or Swagger 2.0.",
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "repository"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "required": [
+                  "repo",
+                  "path",
+                  "ref"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "repository"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "url"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "required": [
+                  "url"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "url"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "repo"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "ref"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "upload"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "repo"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "ref"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "graphql"
+            },
+            "from": {
+              "type": "string",
+              "enum": [
+                "repository",
+                "url",
+                "upload",
+                "introspection"
+              ]
+            },
+            "repo": {
+              "type": "string",
+              "pattern": "^(?:github\\.com|gitlab\\.com)\\/[A-Za-z0-9_.-]+(?:\\/[A-Za-z0-9_.-]+)+$"
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^(?!\\/)(?!.*\\/$)(?!.*\\/\\/)(?!(?:.*\\/)?\\.\\.?(?:\\/|$)).+$",
+              "description": "The definition's path in repo."
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[^\\s~^:?*[\\\\]+$",
+              "description": "The branch, tag, or commit to read."
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https?:\\/\\/",
+              "description": "Where Oxagen fetches the definition."
+            },
+            "network": {
+              "type": "string",
+              "pattern": "^(?:cloud|relay:[a-z0-9][a-z0-9-]{0,62})$",
+              "description": "cloud by default, or relay:<name> for a server inside a private network."
+            }
+          },
+          "required": [
+            "type",
+            "from"
+          ],
+          "additionalProperties": false,
+          "description": "A GraphQL schema. introspection reads it from the first environment's endpoint.",
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "repository"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "required": [
+                  "repo",
+                  "path",
+                  "ref"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "repository"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "url"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "required": [
+                  "url"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "url"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "repo"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "ref"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "upload"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "repo"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "ref"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "introspection"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "repo"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "ref"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "grpc"
+            },
+            "from": {
+              "type": "string",
+              "enum": [
+                "repository",
+                "url",
+                "upload",
+                "reflection"
+              ]
+            },
+            "repo": {
+              "type": "string",
+              "pattern": "^(?:github\\.com|gitlab\\.com)\\/[A-Za-z0-9_.-]+(?:\\/[A-Za-z0-9_.-]+)+$"
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^(?!\\/)(?!.*\\/$)(?!.*\\/\\/)(?!(?:.*\\/)?\\.\\.?(?:\\/|$)).+$",
+              "description": "The definition's path in repo."
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[^\\s~^:?*[\\\\]+$",
+              "description": "The branch, tag, or commit to read."
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https?:\\/\\/",
+              "description": "Where Oxagen fetches the definition."
+            },
+            "network": {
+              "type": "string",
+              "pattern": "^(?:cloud|relay:[a-z0-9][a-z0-9-]{0,62})$",
+              "description": "cloud by default, or relay:<name> for a server inside a private network."
+            }
+          },
+          "required": [
+            "type",
+            "from"
+          ],
+          "additionalProperties": false,
+          "description": "A protobuf package. reflection reads it from the first environment's endpoint.",
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "repository"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "required": [
+                  "repo",
+                  "path",
+                  "ref"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "repository"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "url"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "required": [
+                  "url"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "url"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "repo"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "ref"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "upload"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "repo"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "ref"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "reflection"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "repo"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "ref"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "auth": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "none",
+            "service",
+            "operator-oauth"
+          ],
+          "description": "none, service (one credential for every run), or operator-oauth (the operator's own token)."
+        },
+        "scheme": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]{1,64}$",
+          "description": "For OpenAPI, a key of components.securitySchemes. For every other source, oauth, bearer, basic, or header."
+        },
+        "header": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,128}$",
+          "description": "The header that carries the credential when scheme is header."
+        },
+        "credential": {
+          "type": "string",
+          "pattern": "^oxagen:credential\\/[a-z0-9][a-z0-9-]{0,62}$",
+          "description": "oxagen:credential/<name>. Required unless the mode is none or every environment names one."
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "none"
+              }
+            },
+            "required": [
+              "mode"
+            ]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "scheme"
+                  ]
+                },
+                {
+                  "required": [
+                    "header"
+                  ]
+                },
+                {
+                  "required": [
+                    "credential"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "properties": {
+                "mode": {
+                  "const": "none"
+                }
+              },
+              "required": [
+                "mode"
+              ]
+            }
+          },
+          "then": {
+            "required": [
+              "scheme"
+            ]
+          }
+        }
+      ],
+      "description": "Required unless the source is local."
+    },
+    "environments": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{0,31}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "sandbox": {
+            "type": "boolean",
+            "description": "Marks the environment every agent's calls go to. Exactly one environment is the sandbox when a server has two or more."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https?:\\/\\/",
+            "description": "The endpoint in this environment."
+          },
+          "network": {
+            "type": "string",
+            "pattern": "^(?:cloud|relay:[a-z0-9][a-z0-9-]{0,62})$"
+          },
+          "credential": {
+            "type": "string",
+            "pattern": "^oxagen:credential\\/[a-z0-9][a-z0-9-]{0,62}$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Overrides of url, network, and credential. A server with none has one environment, default."
+    },
+    "exposure": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "direct",
+            "search"
+          ],
+          "description": "direct lists every tool. search exposes <server>__search, <server>__describe, and <server>__call."
+        },
+        "definition_budget": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Tokens for every tool definition together. 8000 when omitted."
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "additionalProperties": false
+    },
+    "sync": {
+      "type": "object",
+      "properties": {
+        "schedule": {
+          "type": "string",
+          "enum": [
+            "on-change",
+            "daily",
+            "manual"
+          ],
+          "description": "on-change (a definition in a linked repository), daily, or manual."
+        }
+      },
+      "required": [
+        "schedule"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema",
+    "name",
+    "label",
+    "description",
+    "source",
+    "exposure",
+    "sync"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "local"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "auth"
+              ]
+            },
+            {
+              "required": [
+                "environments"
+              ]
+            }
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "auth"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "openapi",
+                  "graphql",
+                  "grpc"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "environments"
+        ],
+        "properties": {
+          "environments": {
+            "minProperties": 1,
+            "additionalProperties": {
+              "required": [
+                "url"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "openapi"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "auth": {
+            "not": {
+              "required": [
+                "header"
+              ]
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "auth": {
+            "properties": {
+              "scheme": {
+                "enum": [
+                  "oauth",
+                  "bearer",
+                  "basic",
+                  "header"
+                ]
+              }
+            },
+            "if": {
+              "properties": {
+                "scheme": {
+                  "const": "header"
+                }
+              },
+              "required": [
+                "scheme"
+              ]
+            },
+            "then": {
+              "required": [
+                "header"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "header"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "auth"
+        ],
+        "properties": {
+          "auth": {
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "not": {
+                  "const": "none"
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "auth": {
+                "required": [
+                  "credential"
+                ]
+              }
+            }
+          },
+          {
+            "required": [
+              "environments"
+            ],
+            "properties": {
+              "environments": {
+                "minProperties": 1,
+                "additionalProperties": {
+                  "required": [
+                    "credential"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "environments"
+        ],
+        "properties": {
+          "environments": {
+            "minProperties": 2
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "environments": {
+            "not": {
+              "additionalProperties": {
+                "not": {
+                  "required": [
+                    "sandbox"
+                  ],
+                  "properties": {
+                    "sandbox": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "description": "tools/servers/<name>/server.toml: where a server's tools come from, how each environment reaches it, and how its tools are exposed."
+}
