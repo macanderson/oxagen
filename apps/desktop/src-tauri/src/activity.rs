@@ -8,8 +8,9 @@
 //! hides the window instead, and the app exits once the work ends.
 //!
 //! Work in progress is either kind:
-//! - a sidecar `sidecar::run_sidecar` started, counted until it exits, and a
-//!   Rust command that writes to the machine (`Job`);
+//! - a sidecar command that changes the machine, which `sidecar::run_sidecar`
+//!   counts until it exits (a read such as `tacho status` does not count),
+//!   and a Rust command that writes to the machine (`Job`);
 //! - the page's own busy state, which `set_busy` reports. It covers the gap
 //!   between two steps of one action, such as `tacho unenroll` and the removal
 //!   of the app's own files after it, and an update being installed.

@@ -58,12 +58,15 @@ impl Flag {
 }
 
 /// One command the app runs: the sidecar, the subcommand words, the flags
-/// it may carry in any order, each at most once, and the flags it must carry.
+/// it may carry in any order, each at most once, the flags it must carry,
+/// and whether it changes the machine. Only a command that does holds a
+/// close until it ends (see `activity`): stopping a read changes nothing.
 struct Allowed {
     sidecar: Sidecar,
     command: &'static [&'static str],
     flags: &'static [Flag],
     required: &'static [&'static str],
+    writes: bool,
 }
 
 /// The harnesses `tacho` wraps, as `src/commands.ts` names them.
@@ -106,6 +109,7 @@ const ALLOWED: &[Allowed] = &[
         command: &["status"],
         flags: &[Flag::Switch("--json")],
         required: &["--json"],
+        writes: false,
     },
     // `tacho detect --json`, the wizard's scan.
     Allowed {
@@ -113,6 +117,7 @@ const ALLOWED: &[Allowed] = &[
         command: &["detect"],
         flags: &[Flag::Switch("--json")],
         required: &["--json"],
+        writes: false,
     },
     // `tacho verify --harness <h> --json`, a first run.
     Allowed {
@@ -120,6 +125,7 @@ const ALLOWED: &[Allowed] = &[
         command: &["verify"],
         flags: &[Flag::Value("--harness", is_harness), Flag::Switch("--json")],
         required: &["--harness", "--json"],
+        writes: true,
     },
     // `tacho enroll`, the wizard's register step.
     Allowed {
@@ -127,6 +133,7 @@ const ALLOWED: &[Allowed] = &[
         command: &["enroll"],
         flags: &TARGET_FLAGS,
         required: &["--harness"],
+        writes: true,
     },
     // `tacho reassign`: a workspace change, adding or removing a harness.
     Allowed {
@@ -134,6 +141,7 @@ const ALLOWED: &[Allowed] = &[
         command: &["reassign"],
         flags: &TARGET_FLAGS,
         required: &[],
+        writes: true,
     },
     // `tacho unenroll`, the last de-register and Uninstall.
     Allowed {
@@ -141,6 +149,7 @@ const ALLOWED: &[Allowed] = &[
         command: &["unenroll"],
         flags: &[Flag::Switch("--purge")],
         required: &[],
+        writes: true,
     },
     // `oxagen login --browser`, Sign in and Create an account.
     Allowed {
@@ -148,6 +157,7 @@ const ALLOWED: &[Allowed] = &[
         command: &["login"],
         flags: &[Flag::Switch("--browser"), Flag::Switch("--signup")],
         required: &["--browser"],
+        writes: true,
     },
     // `oxagen logout`, Sign out.
     Allowed {
@@ -155,6 +165,7 @@ const ALLOWED: &[Allowed] = &[
         command: &["logout"],
         flags: &[],
         required: &[],
+        writes: true,
     },
     // `oxagen tacho reassign ... --default`, a workspace change that also
     // becomes the CLI's default.
@@ -168,11 +179,13 @@ const ALLOWED: &[Allowed] = &[
             Flag::Switch("--default"),
         ],
         required: &["--default"],
+        writes: true,
     },
 ];
 
-/// Whether the app runs `args` on `sidecar`. `Err` names why not.
-pub fn check_call(sidecar: Sidecar, args: &[String]) -> Result<(), String> {
+/// Whether the app runs `args` on `sidecar`: `Ok(true)` for a command that
+/// changes the machine, `Ok(false)` for a read. `Err` names why not.
+pub fn check_call(sidecar: Sidecar, args: &[String]) -> Result<bool, String> {
     let refused = |why: &str| {
         Err(format!(
             "Oxagen does not run `{} {}`: {why}",
@@ -212,7 +225,7 @@ pub fn check_call(sidecar: Sidecar, args: &[String]) -> Result<(), String> {
     if let Some(missing) = allowed.required.iter().find(|flag| !seen.contains(flag)) {
         return refused(&format!("{missing} is missing"));
     }
-    Ok(())
+    Ok(allowed.writes)
 }
 
 /// What a running sidecar reports to the page, one line at a time.
@@ -238,9 +251,9 @@ fn line_text(bytes: Vec<u8>) -> String {
 pub struct Running(Mutex<HashMap<u32, CommandChild>>);
 
 /// Start `args` on `sidecar` once `check_call` allows it, and stream its
-/// output to `on_event`. Returns the process id `kill_sidecar` takes. Every
-/// running sidecar counts as work in progress for the close guard: see
-/// `activity::Activity`.
+/// output to `on_event`. Returns the process id `kill_sidecar` takes. A
+/// running command that changes the machine counts as work in progress for
+/// the close guard: see `activity::Activity`.
 #[tauri::command]
 pub fn run_sidecar(
     app: tauri::AppHandle,
@@ -250,18 +263,22 @@ pub fn run_sidecar(
     args: Vec<String>,
     on_event: Channel<SidecarEvent>,
 ) -> Result<u32, String> {
-    check_call(sidecar, &args)?;
+    let writes = check_call(sidecar, &args)?;
     let command = app
         .shell()
         .sidecar(sidecar.name())
         .map_err(|e| e.to_string())?
         .args(&args)
         .envs(crate::cli_install::sidecar_env());
-    activity.begin();
+    if writes {
+        activity.begin();
+    }
     let (mut events, child) = match command.spawn() {
         Ok(spawned) => spawned,
         Err(e) => {
-            crate::activity::end_job(&app);
+            if writes {
+                crate::activity::end_job(&app);
+            }
             return Err(e.to_string());
         }
     };
@@ -288,7 +305,9 @@ pub fn run_sidecar(
         if let Some(running) = app.try_state::<Running>() {
             running.0.lock().unwrap_or_else(|e| e.into_inner()).remove(&pid);
         }
-        crate::activity::end_job(&app);
+        if writes {
+            crate::activity::end_job(&app);
+        }
     });
     Ok(pid)
 }
@@ -308,7 +327,7 @@ pub fn kill_sidecar(running: tauri::State<Running>, id: u32) -> Result<(), Strin
 mod tests {
     use super::*;
 
-    fn call(sidecar: Sidecar, args: &[&str]) -> Result<(), String> {
+    fn call(sidecar: Sidecar, args: &[&str]) -> Result<bool, String> {
         check_call(sidecar, &args.iter().map(|a| a.to_string()).collect::<Vec<_>>())
     }
 
@@ -325,7 +344,7 @@ mod tests {
         let calls: Vec<Call> = serde_json::from_str(include_str!("../sidecar-calls.json")).unwrap();
         assert!(calls.len() >= 20, "{} calls", calls.len());
         for call in calls {
-            assert_eq!(check_call(call.sidecar, &call.args), Ok(()), "{:?}", call.args);
+            assert!(check_call(call.sidecar, &call.args).is_ok(), "{:?}", call.args);
         }
     }
 
@@ -376,17 +395,27 @@ mod tests {
 
     #[test]
     fn flags_may_come_in_any_order() {
+        assert!(call(Sidecar::Tacho, &["verify", "--json", "--harness", "codex"]).is_ok());
+        assert!(call(
+            Sidecar::Tacho,
+            &["enroll", "--harness", "codex", "--workspace", "core", "--org", "acme"]
+        )
+        .is_ok());
+    }
+
+    /// A read holds no close: stopping `tacho status` or a scan changes
+    /// nothing on the machine. Everything else is a write.
+    #[test]
+    fn only_the_two_reads_leave_a_close_alone() {
+        assert_eq!(call(Sidecar::Tacho, &["status", "--json"]), Ok(false));
+        assert_eq!(call(Sidecar::Tacho, &["detect", "--json"]), Ok(false));
         assert_eq!(
-            call(Sidecar::Tacho, &["verify", "--json", "--harness", "codex"]),
-            Ok(())
+            call(Sidecar::Tacho, &["verify", "--harness", "codex", "--json"]),
+            Ok(true)
         );
-        assert_eq!(
-            call(
-                Sidecar::Tacho,
-                &["enroll", "--harness", "codex", "--workspace", "core", "--org", "acme"]
-            ),
-            Ok(())
-        );
+        assert_eq!(call(Sidecar::Tacho, &["enroll", "--harness", "codex"]), Ok(true));
+        assert_eq!(call(Sidecar::Tacho, &["unenroll", "--purge"]), Ok(true));
+        assert_eq!(call(Sidecar::Oxagen, &["login", "--browser"]), Ok(true));
     }
 
     #[test]
