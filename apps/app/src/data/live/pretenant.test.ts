@@ -44,7 +44,7 @@ describe("pretenant.orgs", () => {
       }),
     );
     expect(await pretenant.orgs(ctx)).toEqual(
-      readOk([{ slug: "acme", name: "Acme Robotics" }]),
+      readOk([{ slug: "acme", name: "Acme Robotics", avatarUrl: null }]),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: orgList,
@@ -95,7 +95,7 @@ describe("pretenant.workspaces", () => {
       }),
     );
     expect(await pretenant.workspaces(ctx, "acme")).toEqual(
-      readOk([{ slug: "core", name: "Core platform" }]),
+      readOk([{ slug: "core", name: "Core platform", avatarUrl: null }]),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: workspaceList,

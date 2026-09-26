@@ -138,13 +138,17 @@ describe("loadConsentChoices", () => {
   it("pairs each organization with the workspaces the person is a member of, leaving out one with none", async () => {
     orgs.mockResolvedValue(
       readOk([
-        { slug: "acme", name: "Acme" },
-        { slug: "empty", name: "Empty" },
+        { slug: "acme", name: "Acme", avatarUrl: null },
+        { slug: "empty", name: "Empty", avatarUrl: null },
       ]),
     );
     workspaces.mockImplementation((_ctx: unknown, slug: string) =>
       Promise.resolve(
-        readOk(slug === "acme" ? [{ slug: "core", name: "Core" }] : []),
+        readOk(
+          slug === "acme"
+            ? [{ slug: "core", name: "Core", avatarUrl: null }]
+            : [],
+        ),
       ),
     );
     expect(await loadConsentChoices(ctx, source)).toEqual(
@@ -152,7 +156,8 @@ describe("loadConsentChoices", () => {
         {
           slug: "acme",
           name: "Acme",
-          workspaces: [{ slug: "core", name: "Core" }],
+          avatarUrl: null,
+          workspaces: [{ slug: "core", name: "Core", avatarUrl: null }],
         },
       ]),
     );
@@ -170,7 +175,9 @@ describe("loadConsentChoices", () => {
 
   it("answers a denied workspaces read (negative)", async () => {
     const denied = { ok: false, reason: "denied", permission: "org.read" };
-    orgs.mockResolvedValue(readOk([{ slug: "acme", name: "Acme" }]));
+    orgs.mockResolvedValue(
+      readOk([{ slug: "acme", name: "Acme", avatarUrl: null }]),
+    );
     workspaces.mockResolvedValue(denied);
     expect(await loadConsentChoices(ctx, source)).toEqual(denied);
   });
@@ -188,14 +195,16 @@ describe("CliConsentForm", () => {
     {
       slug: "acme",
       name: "Acme",
-      workspaces: [{ slug: "core", name: "core" }],
+      avatarUrl: null,
+      workspaces: [{ slug: "core", name: "core", avatarUrl: null }],
     },
     {
       slug: "globex",
       name: "Globex",
+      avatarUrl: null,
       workspaces: [
-        { slug: "labs", name: "labs" },
-        { slug: "ops", name: "ops" },
+        { slug: "labs", name: "labs", avatarUrl: null },
+        { slug: "ops", name: "ops", avatarUrl: null },
       ],
     },
   ];
