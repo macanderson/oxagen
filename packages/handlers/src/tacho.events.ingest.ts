@@ -1154,6 +1154,44 @@ export function sessionTotalCost(
   return { kind: "add", micros: deltaMicros };
 }
 
+/** The root and parent session a chain opened with, as its row records them. */
+interface ChainLineage {
+  root: string;
+  parent: string | null;
+}
+
+/**
+ * The refusal for frames that name a root or parent session other than the
+ * ones their chain opened with (#3944, S-09). A recorder fixes both once per
+ * session (`recorder.ts` in @oxagen/tacho), so such a frame is forged or comes
+ * from a broken daemon. It cannot be recorded as sent: ClickHouse keeps the
+ * root each frame names, and the run cost rollup reads model and tool calls
+ * by that root (`cost-frames.ts` in @oxagen/telemetry), so an accepted frame
+ * would price its calls into another host's run.
+ *
+ * The message carries the phrase the shipper matches
+ * (`SESSION_OWNED_ELSEWHERE` in spool.ts). Shippers already in the field set
+ * the session aside on it and ship every other session. A new phrase would
+ * make them back off the whole host.
+ */
+const LINEAGE_REFUSED =
+  "Forbidden: session belongs to another host: its frames name a root or parent session its chain did not open with";
+
+/**
+ * Whether any of one session's frames names a root or parent session other
+ * than `lineage`.
+ */
+export function namesOtherLineage(
+  events: readonly TachoEvent[],
+  lineage: ChainLineage,
+): boolean {
+  return events.some(
+    (event) =>
+      event.root_session_uuid !== lineage.root ||
+      (event.parent_session_uuid ?? null) !== lineage.parent,
+  );
+}
+
 // A batch whose own values Postgres refuses fails the same way on every retry,
 // so it is answered as a refused input the shipper can bisect, never as a 500
 // it retries for ever (`unstorableBatch` in ./lib/tacho-host.ts).
@@ -1254,6 +1292,8 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         hostId: schema.tachoSessions.hostId,
         seqCount: schema.tachoSessions.seqCount,
         lastHash: schema.tachoSessions.lastHash,
+        rootSessionUuid: schema.tachoSessions.rootSessionUuid,
+        parentSessionUuid: schema.tachoSessions.parentSessionUuid,
       })
       .from(schema.tachoSessions)
       .where(inArray(schema.tachoSessions.sessionUuid, named))) as Array<{
@@ -1261,7 +1301,31 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       hostId?: string | null;
       seqCount?: number;
       lastHash?: string | null;
+      rootSessionUuid?: string;
+      parentSessionUuid?: string | null;
     }>;
+    // Every frame of a session names the root and parent its chain opened
+    // with: the row's, or for a new chain its lowest frame's. The same check
+    // inside the write transaction is the guard of record (#3944, S-09).
+    for (const sessionUuid of named) {
+      const events = input.events.filter(
+        (event) => event.session_uuid === sessionUuid,
+      );
+      const recorded = owners.find((row) => row.sessionUuid === sessionUuid);
+      const lowest = events.reduce((a, b) => (b.seq < a.seq ? b : a));
+      const lineage: ChainLineage =
+        recorded?.rootSessionUuid !== undefined
+          ? {
+              root: recorded.rootSessionUuid,
+              parent: recorded.parentSessionUuid ?? null,
+            }
+          : {
+              root: lowest.root_session_uuid,
+              parent: lowest.parent_session_uuid ?? null,
+            };
+      if (namesOtherLineage(events, lineage))
+        throw tachoDenied(capability, LINEAGE_REFUSED);
+    }
     const held = owners.filter(
       (row) =>
         row.sessionUuid !== undefined &&
@@ -1579,9 +1643,11 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       // root and parent on every frame, and ingest used to route proof
       // frames, reopens and rollups by whatever the batch said, so a later
       // batch could attach frames to another host's run. The row's values,
-      // fixed at genesis, decide now. A batch that names others is still
-      // recorded, since its frames are hashed as sent, and is logged.
-      const lineage = existing
+      // fixed at genesis, decide now, and a batch whose frames name others
+      // is refused: its frames reach ClickHouse as sent, where the cost
+      // rollup reads them by the root they name (`LINEAGE_REFUSED`). This is
+      // the guard of record for the check before the bodies are written.
+      const lineage: ChainLineage = existing
         ? {
             root: existing.rootSessionUuid,
             parent: existing.parentSessionUuid ?? null,
@@ -1590,23 +1656,8 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
             root: first.root_session_uuid,
             parent: first.parent_session_uuid ?? null,
           };
-      if (
-        events.some(
-          (event) =>
-            event.root_session_uuid !== lineage.root ||
-            (event.parent_session_uuid ?? null) !== lineage.parent,
-        )
-      ) {
-        logger.warn(
-          {
-            orgId: ctx.orgId,
-            workspaceId: ctx.workspaceId,
-            hostId: host.id,
-            sessionUuid,
-          },
-          "tacho.events.ingest: a batch named a root or parent session its chain did not open with; the recorded ones stand",
-        );
-      }
+      if (namesOtherLineage(events, lineage))
+        throw tachoDenied(capability, LINEAGE_REFUSED);
       // A new chain may name a root or parent this workspace has recorded
       // only when this host, or a predecessor it succeeds, holds it. The
       // shipper matches the message and sets the session aside.

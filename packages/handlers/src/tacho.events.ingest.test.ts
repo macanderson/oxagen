@@ -827,6 +827,8 @@ function wire(db: FakeDb): void {
                         hostId: row["hostId"],
                         seqCount: row["seqCount"],
                         lastHash: row["lastHash"],
+                        rootSessionUuid: row["rootSessionUuid"],
+                        parentSessionUuid: row["parentSessionUuid"],
                       }))
                   : tableName(table) === "contained_launches"
                     ? db.containedLaunches
@@ -1792,6 +1794,8 @@ describe("ingest_tacho_events", () => {
     const db = fakeDb();
     const events = session();
     db.sessions.set(SESSION, {
+      rootSessionUuid: SESSION,
+      parentSessionUuid: null,
       id: "s1",
       publicId: "tse_s1",
       seqCount: 3,
@@ -1843,6 +1847,8 @@ describe("ingest_tacho_events", () => {
     const db = fakeDb();
     const events = session();
     db.sessions.set(SESSION, {
+      rootSessionUuid: SESSION,
+      parentSessionUuid: null,
       id: "s1",
       seqCount: 3,
       lastHash: events[2]?.hash,
@@ -1862,6 +1868,8 @@ describe("ingest_tacho_events", () => {
     expect(good.chain_breaks).toEqual([]);
 
     db.sessions.set(SESSION, {
+      rootSessionUuid: SESSION,
+      parentSessionUuid: null,
       id: "s1",
       seqCount: 3,
       lastHash: `sha256:${"f".repeat(64)}`,
@@ -1918,6 +1926,8 @@ describe("ingest_tacho_events", () => {
     const events = session();
     const recorded = "44444444-4444-4444-8444-444444444444";
     db.sessions.set(SESSION, {
+      rootSessionUuid: SESSION,
+      parentSessionUuid: null,
       id: "s1",
       seqCount: 3,
       lastHash: events[2]?.hash,
@@ -4049,15 +4059,77 @@ describe("proof.observed frames (ADR-064)", () => {
       });
     }
 
-    it("records a proof frame under the run its chain opened with, whatever root the frame names", async () => {
+    // The frames reach ClickHouse as sent, and the run cost rollup reads
+    // model and tool calls by the root each frame names, so a model call
+    // recorded under another host's root was priced into that host's run.
+    it("refuses a later batch whose frames name another host's root, and records none of it", async () => {
       const db = fakeDb();
       wire(db);
       otherHostsRoot(db);
       const cursor = recordedChain(db, SESSION, null);
-      const proof = sealEvent(
-        { ...unsealed("proof.observed", FLIP), root_session_uuid: OTHER_ROOT },
+      const call = sealEvent(
+        {
+          ...unsealed("llm_call", { input_tokens: 100, output_tokens: 50 }),
+          root_session_uuid: OTHER_ROOT,
+        },
         cursor,
       ).event;
+      await expect(
+        tachoEventsIngestHandler(batch([call]), CONTEXT),
+      ).rejects.toThrow(
+        /session belongs to another host: its frames name a root or parent session its chain did not open with/,
+      );
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+      expect(mocks.bodyPut).not.toHaveBeenCalled();
+      expect(db.sessions.get(SESSION)?.["seqCount"]).toBe(1);
+    });
+
+    it("refuses a later batch whose frames name another parent, even with the recorded root", async () => {
+      const db = fakeDb();
+      wire(db);
+      const cursor = recordedChain(db, SESSION, null);
+      const proof = sealEvent(
+        {
+          ...unsealed("proof.observed", FLIP),
+          parent_session_uuid: OTHER_ROOT,
+        },
+        cursor,
+      ).event;
+      await expect(
+        tachoEventsIngestHandler(batch([proof]), CONTEXT),
+      ).rejects.toThrow(/session belongs to another host/);
+      expect(mocks.recordProofFrames).not.toHaveBeenCalled();
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    });
+
+    it("refuses a new chain whose later frames name another root than its first", async () => {
+      const db = fakeDb();
+      wire(db);
+      otherHostsRoot(db);
+      let cursor: ChainCursor = GENESIS_CURSOR;
+      const events = [
+        unsealed("agent_start", { session_start_source: "startup" }),
+        {
+          ...unsealed("llm_call", { input_tokens: 100, output_tokens: 50 }),
+          root_session_uuid: OTHER_ROOT,
+        },
+      ].map((draft) => {
+        const sealed = sealEvent(draft, cursor);
+        cursor = sealed.next;
+        return sealed.event;
+      });
+      await expect(
+        tachoEventsIngestHandler(batch(events), CONTEXT),
+      ).rejects.toThrow(/session belongs to another host/);
+      expect(db.sessions.has(SESSION)).toBe(false);
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    });
+
+    it("records a later batch whose frames name the recorded root and parent (negative)", async () => {
+      const db = fakeDb();
+      wire(db);
+      const cursor = recordedChain(db, SESSION, null);
+      const proof = sealEvent(unsealed("proof.observed", FLIP), cursor).event;
       mocks.recordProofFrames.mockResolvedValue({
         written: 1,
         witnessRunIds: [],
@@ -4065,6 +4137,7 @@ describe("proof.observed frames (ADR-064)", () => {
       await tachoEventsIngestHandler(batch([proof]), CONTEXT);
       expect(mocks.recordProofFrames).toHaveBeenCalledOnce();
       expect(mocks.recordProofFrames.mock.calls[0]?.[2]).toBe(RUN);
+      expect(mocks.insertTachoEvents).toHaveBeenCalledOnce();
     });
 
     it("refuses a proof frame whose chain's root another host holds", async () => {
