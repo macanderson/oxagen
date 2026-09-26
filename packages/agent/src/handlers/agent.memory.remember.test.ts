@@ -44,7 +44,7 @@ const PERSISTED_RECORD = {
 
 mocks.writeMemoryMock.mockResolvedValue({ memoryId: "m_new", edgesCreated: 0 });
 mocks.getMemoryByIdMock.mockResolvedValue(PERSISTED_RECORD);
-mocks.embedTextMock.mockImplementation(async () => new Array(1536).fill(0.05));
+mocks.embedTextMock.mockImplementation(async () => new Array(1024).fill(0.05));
 // Default: KG enabled so tests that don't override it work correctly.
 mocks.isKnowledgeGraphEnabledMock.mockReturnValue(true);
 // Default: classifier succeeds and returns constraint/OBSERVATION
@@ -83,7 +83,7 @@ describe("agent.memory.remember handler", () => {
     });
     mocks.getMemoryByIdMock.mockResolvedValue(PERSISTED_RECORD);
     mocks.embedTextMock.mockImplementation(async () =>
-      new Array(1536).fill(0.05),
+      new Array(1024).fill(0.05),
     );
     mocks.generateObjectForMock.mockResolvedValue({
       object: { memoryClass: "OBSERVATION", memoryKind: "constraint" },
@@ -116,6 +116,42 @@ describe("agent.memory.remember handler", () => {
     );
     expect(mocks.writeMemoryMock).toHaveBeenCalledTimes(1);
     expect(mocks.getMemoryByIdMock).toHaveBeenCalledWith("m_new");
+  });
+
+  it("passes a typed embedding failure through unchanged and writes nothing (#4148)", async () => {
+    // The API maps this code to a 503. Before #4148 the provider's upgrade
+    // text reached the caller as an unhandled 500.
+    const unavailable = Object.assign(
+      new Error("Embeddings are unavailable: Voyage answered 401"),
+      { code: "embedding_unavailable" as const, statusCode: 401 },
+    );
+    mocks.embedTextMock.mockRejectedValueOnce(unavailable);
+    await expect(
+      agentMemoryRememberHandler(
+        {
+          text: "A captured lesson",
+          memoryClass: "OBSERVATION",
+          memoryKind: "constraint",
+        },
+        CTX,
+      ),
+    ).rejects.toBe(unavailable);
+    expect(mocks.writeMemoryMock).not.toHaveBeenCalled();
+  });
+
+  it("embeds the lesson as a document", async () => {
+    await agentMemoryRememberHandler(
+      {
+        text: "A captured lesson",
+        memoryClass: "OBSERVATION",
+        memoryKind: "constraint",
+      },
+      CTX,
+    );
+    const opts = mocks.embedTextMock.mock.calls[0]?.[1] as {
+      inputType?: string;
+    };
+    expect(opts.inputType).toBe("document");
   });
 
   it("when memoryClass is omitted, classifies and sets classified: true", async () => {

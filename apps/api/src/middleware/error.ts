@@ -106,6 +106,25 @@ function isStoreOverloadedError(err: unknown): err is StoreOverloadedError {
   );
 }
 
+// Embeddings the platform cannot produce (`EmbeddingUnavailableError`,
+// @oxagen/ai, #4148): the Voyage key is missing or refused, or Voyage stayed
+// down through the SDK's retries. The request was fine and the service cannot
+// answer it, so a 503. Duck-typed on the stable `code` like the errors above.
+// Voyage's own words go to the log, where the next funding or key lapse shows
+// up in one line, and never to the caller.
+interface EmbeddingUnavailableError extends Error {
+  readonly code: "embedding_unavailable";
+  readonly statusCode?: number;
+  readonly providerMessage?: string;
+}
+
+function isEmbeddingUnavailableError(
+  err: unknown,
+): err is EmbeddingUnavailableError {
+  if (!(err instanceof Error)) return false;
+  return (err as { code?: unknown }).code === "embedding_unavailable";
+}
+
 function assistantTurnFailure(
   err: unknown,
 ): { code: string; status: 402 | 409 | 502 | 503 } | null {
@@ -312,6 +331,23 @@ export const errorMiddleware: ErrorHandler<AppEnv> = (err, c) => {
       },
       503,
       { "Retry-After": String(retryAfterSeconds) },
+    );
+  }
+
+  if (isEmbeddingUnavailableError(err)) {
+    logger.error(
+      {
+        requestId,
+        code: err.code,
+        providerStatus: err.statusCode,
+        providerMessage: err.providerMessage,
+        message: err.message,
+      },
+      "embeddings unavailable",
+    );
+    return c.json(
+      { error: { code: err.code, message: err.message }, requestId },
+      503,
     );
   }
 
