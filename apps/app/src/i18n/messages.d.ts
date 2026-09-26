@@ -146,6 +146,7 @@ type Messages = {
         tokensBasis: string;
         wrappedOnly: string;
         spendBasis: string;
+        deregistered: string;
       };
       health: {
         tamper: string;
@@ -173,6 +174,8 @@ type Messages = {
         sortBy: string;
         noMatch: string;
         cursor: string;
+        showDeregistered: string;
+        hideDeregistered: string;
       };
       basisNotRecorded: string;
       edit: string;
