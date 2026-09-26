@@ -58,14 +58,28 @@ export function schemaIssues(
   error: z.ZodError,
   lineOf: (field: string) => number | null = () => null,
 ): FileIssue[] {
-  return error.issues.map((issue) => {
-    const field = issue.path.length > 0 ? issue.path.join(".") : null;
+  return error.issues.flatMap((issue) => {
     const top = issue.path[0];
-    return {
-      line: typeof top === "string" ? lineOf(top) : null,
-      field,
-      message: issue.message,
-    };
+    // zod reports unknown keys once, on the object that holds them, and names
+    // them in `keys`. Each one becomes its own issue on its own field. A key
+    // at the top level points at its own line, and a nested key at the line
+    // of the top-level field that holds it.
+    if (issue.code === "unrecognized_keys") {
+      const holder =
+        top === undefined ? null : typeof top === "string" ? lineOf(top) : null;
+      return issue.keys.map((key) => ({
+        line: top === undefined ? lineOf(key) : holder,
+        field: [...issue.path, key].join("."),
+        message: `${key} is not a known field. Remove it or check its spelling.`,
+      }));
+    }
+    return [
+      {
+        line: typeof top === "string" ? lineOf(top) : null,
+        field: issue.path.length > 0 ? issue.path.join(".") : null,
+        message: issue.message,
+      },
+    ];
   });
 }
 

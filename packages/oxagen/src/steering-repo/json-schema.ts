@@ -291,7 +291,11 @@ function objectJson(schema: z.AnyZodObject): JsonSchema {
 
 function arrayJson(schema: z.ZodArray<z.ZodTypeAny>): JsonSchema {
   const out: JsonSchema = { type: "array", items: convert(schema.element) };
-  const { minLength, maxLength } = schema._def;
+  const { exactLength, minLength, maxLength } = schema._def;
+  if (exactLength) {
+    out.minItems = exactLength.value;
+    out.maxItems = exactLength.value;
+  }
   if (minLength) out.minItems = minLength.value;
   if (maxLength) out.maxItems = maxLength.value;
   return out;
