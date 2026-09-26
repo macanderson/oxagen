@@ -1558,6 +1558,7 @@ async function _invokeCoreInner(
                   ".",
                 accessRequestId ?? undefined,
                 authorizationDecision ?? undefined,
+                iamResult.decidedBy ?? undefined,
               );
             }
             emitSecurityEvent({
@@ -1577,6 +1578,8 @@ async function _invokeCoreInner(
               `IAM denied "${name}" for principal: ${iamResult.reason ?? iamResult.outcome}`,
               undefined,
               authorizationDecision ?? undefined,
+              // The rule that decided (#3841), so a page can name it.
+              iamResult.decidedBy ?? undefined,
             );
           } else {
             // Enforcement off: log would-deny and continue.
