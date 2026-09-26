@@ -858,6 +858,8 @@ describe("get_run subagent chains (#3823)", () => {
     let clock = 1_000_000;
     const sleeps: number[] = [];
     const headReads: string[][] = [];
+    const listed = memorySubagentChains(chains);
+    const lists: string[] = [];
     const heads = memoryChainHeads(children);
     const deps: RunGetDeps = {
       queries: stores.queries,
@@ -871,7 +873,10 @@ describe("get_run subagent chains (#3823)", () => {
       tachoFrames: memoryTachoFrames(SESSION_UUID, over.root ?? []),
       tachoSubagentFrames: (args) =>
         memorySubagentFrames(children)(args),
-      tachoChains: memorySubagentChains(chains),
+      tachoChains: (root, options) => {
+        lists.push(root);
+        return listed(root, options);
+      },
       chainHeads: (args) => {
         headReads.push([...args.sessionUuids]);
         return over.headsFail === true
@@ -889,7 +894,7 @@ describe("get_run subagent chains (#3823)", () => {
         return Promise.resolve();
       },
     };
-    return { get: createRunGetHandler(deps), sleeps, headReads };
+    return { get: createRunGetHandler(deps), sleeps, headReads, lists };
   }
 
   it("pages a subagent chain by its session, from its seq 0, and names the chain on each frame and cursor", async () => {
@@ -989,7 +994,7 @@ describe("get_run subagent chains (#3823)", () => {
   });
 
   it("wakes a long poll on the run's own chain when only a subagent chain records a frame", async () => {
-    const { get, sleeps } = chainHarness({
+    const { get, sleeps, headReads, lists } = chainHarness({
       status: "running",
       root: [tachoRow(0)],
       children: [onChain(CHILD, 0)],
@@ -1015,6 +1020,10 @@ describe("get_run subagent chains (#3823)", () => {
       sessionUuid: CHILD,
       lastSeq: "1",
     });
+    // Postgres lists the chains once per invoke; each tick asks ClickHouse
+    // for their heads again.
+    expect(lists).toEqual([SESSION_UUID, SESSION_UUID]);
+    expect(headReads).toHaveLength(1 + 3);
   });
 
   it("waits out the budget when no chain moves, and never waits on chains without chainsAfter (negative)", async () => {
