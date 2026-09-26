@@ -1977,10 +1977,12 @@ export function App() {
         <span className="spacer" />
         <span className="version">
           <span className={`dot ${dotClass}`} aria-hidden="true" />
+          {/* "Connected" is a tier (ADR-078), so collector health says
+              "collector running" rather than "connected" (#4318). */}
           {!host
             ? "not set up"
             : daemonUp
-              ? `connected · ${host.host_status}`
+              ? `collector running · ${host.host_status}`
               : "enrolled · collector not answering"}
           {state ? ` · v${state.app_version}` : ""}
         </span>
