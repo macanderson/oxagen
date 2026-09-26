@@ -265,6 +265,21 @@ describe("run frame projection", () => {
       "2026-09-11T09:00:00.250Z",
     );
   });
+
+  it("carries when the control plane received a wrapped frame, and no receipt where the row names none (#4083)", () => {
+    const frame = tachoFrame(
+      tachoRow(14, "tool_call", { receivedAt: "2026-09-11 09:00:03.125" }),
+    );
+    expect(frame.receivedAt?.toISOString()).toBe("2026-09-11T09:00:03.125Z");
+    // Negative: a row read without the column, and every ledger frame, carry
+    // no receipt, not a made-up one.
+    expect(tachoFrame(tachoRow(15, "tool_call"))).not.toHaveProperty(
+      "receivedAt",
+    );
+    expect(ledgerFrame(event(6, "tool.call_completed", null))).not.toHaveProperty(
+      "receivedAt",
+    );
+  });
 });
 
 describe("bisect", () => {

@@ -1,0 +1,56 @@
+#:schema https://oxagen.sh/schemas/mcp-tools/v1.json
+schema = "mcp-tools/v1"
+
+[tools.list_charges]
+operation = "listCharges"
+description = "List one customer's charges, newest first. Amounts are in cents."
+risk = "low"
+side_effect = "read"
+egress = "org_tenant"
+paginate = "cursor"
+
+[tools.get_charge]
+operation = "getCharge"
+description = "Read one charge by its id. Amounts are in cents."
+risk = "low"
+side_effect = "read"
+egress = "org_tenant"
+
+[tools.create_refund]
+operation = "createRefund"
+description = "Refund part or all of a captured charge. amount is in cents and defaults to the whole charge."
+risk = "high"
+side_effect = "irreversible"
+egress = "org_tenant"
+impacts = ["moves_money"]
+hide = ["X-Request-Source"]
+fixed = { "X-Request-Source" = "oxagen" }
+idempotency_header = "Idempotency-Key"
+
+[tools.get_refund]
+operation = "getRefund"
+description = "Read one refund by its id."
+risk = "low"
+side_effect = "read"
+egress = "org_tenant"
+
+[tools.list_refunds]
+operation = "listRefunds"
+description = "List the refunds of one charge."
+risk = "low"
+side_effect = "read"
+egress = "org_tenant"
+
+[tools.cancel_refund]
+operation = "cancelRefund"
+description = "Cancel a pending refund."
+risk = "medium"
+side_effect = "write"
+egress = "org_tenant"
+
+[tools.void_invoice]
+operation = "voidInvoice"
+description = "Void an open invoice."
+risk = "high"
+side_effect = "irreversible"
+egress = "org_tenant"

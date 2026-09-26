@@ -1,0 +1,26 @@
+#:schema https://oxagen.sh/schemas/workspace/v1.json
+schema = "workspace/v1"
+organization = "a-intel"
+workspace = "core-platform"
+main_branch = "main"
+
+[[repositories]]
+url = "github.com/a-intel/platform"
+
+[[repositories]]
+url = "github.com/a-intel/billing-service"
+
+[budget]
+per_month_micros = 12000000000                # $12,000.00
+
+[code_checks]
+block_merge = false                           # true: a finding fails the Oxagen check
+
+[tools]
+definition_budget = 20000                     # warn past this many tokens of direct-mode definitions
+
+[embeddings]
+provider = "custom"                           # oxagen (the default), custom, or keyword
+url = "https://embeddings.a-intel.com/v1/embeddings"
+model = "bge-large-en-v1.5"
+credential = "oxagen:credential/embeddings"

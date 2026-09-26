@@ -54,6 +54,18 @@ export function sumClasses(rows: readonly { tokens: Tokens }[]): TokenClasses {
   return total;
 }
 
+/**
+ * The web search requests the rows ran, summed over one level (#3721). The
+ * book prices them per request, so they sit beside the token classes and
+ * never inside {@link totalOf}.
+ */
+export function searchRequestsOf(rows: readonly { tokens: Tokens }[]): number {
+  return rows.reduce(
+    (sum, { tokens }) => sum + (tokens.server_tool_request ?? 0),
+    0,
+  );
+}
+
 export function totalOf(classes: TokenClasses): number {
   return TOKEN_CLASSES.reduce((sum, key) => sum + classes[key], 0);
 }

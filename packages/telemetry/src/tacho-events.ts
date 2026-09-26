@@ -150,6 +150,12 @@ export interface TachoFrameRow {
   /** The reasoning effort the harness ran a model call at; empty when unrecorded. */
   effort?: string;
   /**
+   * When the control plane received the frame, as ClickHouse DateTime64(3)
+   * text in UTC (`YYYY-MM-DD HH:MM:SS.mmm`). Unset on a read that does not
+   * project it.
+   */
+  receivedAt?: string;
+  /**
    * The chain the frame was recorded on, and where that chain sits in the
    * run. Set only by {@link selectTachoSubagentEvents}, which reads frames
    * from more than one chain; a read of one session's chain leaves them unset.
@@ -191,6 +197,7 @@ interface RawTachoFrameRow {
   ttft_ms: string | number | null;
   api_duration_ms: string | number | null;
   effort?: string;
+  received_at: string;
 }
 
 interface RawTachoChainFrameRow extends RawTachoFrameRow {
@@ -207,7 +214,8 @@ interface RawTachoChainFrameRow extends RawTachoFrameRow {
 const FRAME_COLUMNS = `
         seq, toString(ts) AS ts, event_id, kind, prev_hash, hash, content_digest, bytes_ref,
         redactions, body, source, fidelity, attrs, tool_name, tool_status, tool_use_id, model, provider,
-        policy_decision, cost_usd_micros, turn_seq, ttft_ms, api_duration_ms, effort`;
+        policy_decision, cost_usd_micros, turn_seq, ttft_ms, api_duration_ms, effort,
+        toString(received_at) AS received_at`;
 
 /**
  * A wrapped session's frames past `afterSeq`, in sequence order. The table is
@@ -294,6 +302,7 @@ function frameRowOf(r: RawTachoFrameRow): TachoFrameRow {
     apiDurationMs: nullableCount(r.api_duration_ms),
     // The reasoning effort the harness ran the call at; empty when unrecorded.
     effort: r.effort ?? "",
+    receivedAt: r.received_at,
   };
 }
 

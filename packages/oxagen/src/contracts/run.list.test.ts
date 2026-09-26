@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canSummarizeRun,
+  RUN_LABEL_MAX,
   RUN_LIST_TOTAL_BOUND,
   RUN_REPLAY_FILTERS,
   runItemSchema,
@@ -227,6 +228,24 @@ describe("list_runs contract", () => {
     ).toBe(false);
   });
 
+  // #4224: a harness title and a ledger run's goal have no bound where they
+  // are written, and the reads cut both to the display cap.
+  it("holds the name and the task reference to the display cap (negative)", () => {
+    expect(RUN_LABEL_MAX).toBe(256);
+    const within = "x".repeat(RUN_LABEL_MAX);
+    const over = "x".repeat(RUN_LABEL_MAX + 1);
+    expect(
+      runItemSchema.safeParse({ ...item, name: within, taskRef: within })
+        .success,
+    ).toBe(true);
+    expect(runItemSchema.safeParse({ ...item, name: over }).success).toBe(
+      false,
+    );
+    expect(runItemSchema.safeParse({ ...item, taskRef: over }).success).toBe(
+      false,
+    );
+  });
+
   it("refuses an id neither store mints and a status outside the three", () => {
     expect(runItemSchema.safeParse({ ...item, id: "run_abc" }).success).toBe(
       false,
@@ -358,6 +377,7 @@ describe("list_runs tokens, cache hit rate and compaction (#3834, #3835)", () =>
     cache_write_1h: 0,
     output: 900,
     reasoning: 0,
+    server_tool_request: 0,
   };
 
   it("carries the rollup's token counts and cache hit rate, or null for a run with no rollup row", () => {

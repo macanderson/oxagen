@@ -21,11 +21,15 @@
 // units: `noBillingGate: true` (ARCHITECTURE.md §1.5).
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import {
+  LEGACY_SKILLS_CONFIG_PATH,
+  LEGACY_SKILLS_DIR,
+} from "../steering-repo/paths";
 
 /** Where governed skills live in the main repository (MC spec §10.2). */
-export const SKILL_DIR = ".oxagen/skills";
+export const SKILL_DIR = LEGACY_SKILLS_DIR;
 /** The workspace's skills config; `[search] budget` caps a skill's load cost. */
-export const SKILLS_CONFIG_PATH = ".oxagen/skills.toml";
+export const SKILLS_CONFIG_PATH = LEGACY_SKILLS_CONFIG_PATH;
 /**
  * The search budget when `.oxagen/skills.toml` names none, in tokens. The
  * mockup's config (`sk-cfg.json`) carries 6,000, and a workspace that has not

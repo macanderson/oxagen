@@ -1,0 +1,45 @@
+{
+  "note": "The choices the v0.1 to v1 conversion made for this input. A rule record's kind is a person's choice; the lineage drops ctx.<org>. and takes the set id as its prefix, as the steering record spec's example does.",
+  "set_id": "a-intel.core-platform",
+  "folder": "steering/imported",
+  "records": [
+    {
+      "from": ".oxagen/rules/ctx.a-intel.refunds-over-100.toml",
+      "old_lineage": "ctx.a-intel.refunds-over-100",
+      "old_id": "rec_a_intel_refunds_over_100_ec4ece819896",
+      "to": "steering/imported/a-intel.core-platform.refunds-over-100.md",
+      "lineage": "a-intel.core-platform.refunds-over-100",
+      "kind": "business-rule",
+      "id": "rec_a_intel_core_platform_refunds_over_100_f7e8bb90125e"
+    },
+    {
+      "from": ".oxagen/rules/ctx.a-intel.no-push-to-main.toml",
+      "old_lineage": "ctx.a-intel.no-push-to-main",
+      "old_id": "rec_a_intel_no_push_to_main_27e708fab014",
+      "to": "steering/imported/a-intel.core-platform.no-push-to-main.md",
+      "lineage": "a-intel.core-platform.no-push-to-main",
+      "kind": "constraint",
+      "id": "rec_a_intel_core_platform_no_push_to_main_ee6662e1048b"
+    },
+    {
+      "from": ".oxagen/rules/ctx.a-intel.production-branch.toml",
+      "old_lineage": "ctx.a-intel.production-branch",
+      "old_id": "rec_a_intel_production_branch_2362a00369a8",
+      "to": "steering/imported/a-intel.core-platform.production-branch.md",
+      "lineage": "a-intel.core-platform.production-branch",
+      "kind": "fact",
+      "id": "rec_a_intel_core_platform_production_branch_05529f43b1f7"
+    }
+  ],
+  "dropped": {
+    ".oxagen/rules/governance.toml": [
+      "separation_of_duties"
+    ],
+    ".oxagen/workspace.toml": [
+      "workspace.name",
+      "repository.role",
+      "repository.production_branch"
+    ]
+  },
+  "relinked": "github.com/a-intel/platform"
+}

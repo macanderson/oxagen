@@ -26,6 +26,10 @@ export const missingClassWindowSchema = z
     tokenClass: priceTokenClassSchema,
     unpricedFrom: z.string().datetime(),
     unpricedTo: z.string().datetime(),
+    /** Calls in the unpriced buckets of this class. */
+    calls: z.number().int().nonnegative(),
+    /** Tokens in the unpriced buckets, or requests for server_tool_request. */
+    units: z.number().int().nonnegative(),
   })
   .strict();
 

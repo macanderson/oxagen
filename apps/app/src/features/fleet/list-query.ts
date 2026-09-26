@@ -97,7 +97,7 @@ export function parseListQuery(params: ListParams): FleetListQuery {
 }
 
 /** Whether the list is in the newest-first order a cursor pages. */
-function isNewestFirst(list: FleetListQuery): boolean {
+export function isNewestFirst(list: FleetListQuery): boolean {
   return list.sort === "started" && list.dir === "desc";
 }
 

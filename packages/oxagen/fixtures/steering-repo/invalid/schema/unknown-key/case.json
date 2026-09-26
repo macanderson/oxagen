@@ -1,0 +1,18 @@
+{
+  "check": "schema",
+  "rule": "unknown-key",
+  "severity": "error",
+  "description": "workspace.toml carries a key workspace/v1 does not define.",
+  "refused_by_reader": true,
+  "changed": [
+    "workspace.toml"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "workspace.toml",
+      "line": 5,
+      "field": "main_branch"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/toolbelt/v1.json",
+  "title": "Toolbelt",
+  "description": "A named toolbelt in tools/toolbelts/: tools across servers that an agent or a run may use.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "toolbelt/v1"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "The toolbelt's name and the file's name: tools/toolbelts/<name>.toml."
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^(?=[a-z0-9_*]{4,64}$)[a-z][a-z0-9_]{0,23}__(?:\\*|[a-z][a-z0-9_]*)$"
+      },
+      "minItems": 1,
+      "description": "Tool names across servers, and <server>__* for every imported tool of one server.",
+      "uniqueItems": true
+    },
+    "side_effects": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "read",
+          "write",
+          "irreversible"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Keep only tools whose side effect is one of these."
+    }
+  },
+  "required": [
+    "schema",
+    "name",
+    "label",
+    "tools"
+  ],
+  "additionalProperties": false
+}

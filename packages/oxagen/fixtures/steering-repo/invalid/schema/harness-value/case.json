@@ -1,0 +1,18 @@
+{
+  "check": "schema",
+  "rule": "enum-value",
+  "severity": "error",
+  "description": "An agent names a harness Oxagen does not support.",
+  "refused_by_reader": true,
+  "changed": [
+    "agents/a-intel.core.ci-reviewer.toml"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "agents/a-intel.core.ci-reviewer.toml",
+      "line": 7,
+      "field": "harness"
+    }
+  ]
+}

@@ -65,6 +65,7 @@
         "noBasis": "no basis recorded",
         "unbased": "basis not recorded",
         "unpriced": "{count, plural, one {# run has no cost recorded} other {# runs have no cost recorded}}",
+        "noUsage": "{count, plural, one {# run reported no usage} other {# runs reported no usage}} ({harnesses})",
         "estimated": "{count, plural, one {includes # estimate} other {includes # estimates}}",
         "notRecorded": "not recorded",
         "mixed": "more than one currency"
@@ -181,6 +182,7 @@
       },
       "parked": "parked for approval",
       "notRecorded": "not recorded",
+      "noUsage": "no usage reported",
       "basisNotRecorded": "basis not recorded",
       "estimate": "estimate",
       "source": {
@@ -200,6 +202,7 @@
         "none": "0 of 0",
         "older": "Older runs",
         "newest": "Newest runs",
+        "first": "First page",
         "rangeEmpty": "0 of {total}",
         "rangeEmptyMore": "0 of {total}+",
         "previous": "Previous",

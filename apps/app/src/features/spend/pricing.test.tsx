@@ -181,6 +181,7 @@ const model = (
   firstSeen: "2026-08-20T00:00:00.000Z",
   lastSeen: "2026-09-15T00:00:00.000Z",
   missingClasses: ["input_uncached", "output"],
+  missingClassWindows: [],
   fullyUnpriced: true,
   ...over,
 });
@@ -281,6 +282,45 @@ describe("Pricing › Models the book cannot price", () => {
     expect(within(row).getByText("9,400,000")).toBeInTheDocument();
     expect(within(row).getByText("Input")).toBeInTheDocument();
     expect(within(row).getByText("Output")).toBeInTheDocument();
+  });
+
+  // #3281. A rate added after a model's first calls leaves those calls
+  // unpriced, and the tab named the class without saying how much of it, or
+  // when. It now says both, in tokens for a token class and in requests for
+  // web searches.
+  it("says how many calls and units of each class are still unpriced, and over which days", async () => {
+    priceBook.mockResolvedValue(book([]));
+    unpricedModels.mockResolvedValue(
+      unpriced([
+        model({
+          missingClasses: ["input_uncached", "server_tool_request"],
+          missingClassWindows: [
+            {
+              tokenClass: "input_uncached",
+              calls: 2,
+              units: 500,
+              from: "2026-08-20T00:00:00.000Z",
+              to: "2026-08-21T00:00:00.000Z",
+            },
+            {
+              tokenClass: "server_tool_request",
+              calls: 1,
+              units: 3,
+              from: "2026-08-20T00:00:00.000Z",
+              to: "2026-08-20T00:00:00.000Z",
+            },
+          ],
+        }),
+      ]),
+    );
+    await renderPricing();
+    const row = rowOf(panelOf("spend-unpriced"), "acme-internal-7b");
+    expect(
+      row.querySelector('[data-window="input_uncached"]'),
+    ).toHaveTextContent("2 calls and 500 tokens from Aug 20, 2026 to Aug 21, 2026");
+    expect(
+      row.querySelector('[data-window="server_tool_request"]'),
+    ).toHaveTextContent("1 call and 3 requests from Aug 20, 2026 to Aug 20, 2026");
   });
 
   it("never prints an unpriced model as a zero price", async () => {

@@ -17,6 +17,11 @@ import {
   ZERO_TOKENS,
 } from "./cost-rollup";
 import type { PriceEntry } from "./price-book";
+import {
+  inCodeCardPrices,
+  mergePublishedPrices,
+  seedsFromPublishedPrices,
+} from "./price-sources";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const WS = "00000000-0000-4000-8000-000000000002";
@@ -270,6 +275,7 @@ describe("rollupRun", () => {
       cache_write_1h: 0n,
       output: 1500n,
       reasoning: 0n,
+      server_tool_request: 0n,
     });
     expect(sonnet.costMicros).toBe(8250n);
   });
@@ -577,6 +583,58 @@ describe("each tool's result cost (#3892, ADR-199)", () => {
     expect(price === null ? null : priceInputTokens(price, 7)).toBe(
       record.breakdown.tools[0]?.costMicros,
     );
+  });
+});
+
+describe("provider-side web searches (#3721)", () => {
+  // A wrapped call reports the web searches it ran, and the vendor bills each
+  // one: Anthropic charges $10 per 1,000, which is 10_000_000_000 micros per
+  // million requests.
+  const search = entry({
+    id: "pe_search",
+    tokenClass: "server_tool_request",
+    unit: "request",
+    microsPerMillion: 10_000_000_000n,
+  });
+  const searching = frame({
+    tokens: tokens({ input_uncached: 1000, output: 200, server_tool_request: 3 }),
+    reportedCostMicros: null,
+    basis: "client_attested",
+  });
+
+  it("prices a run's searches into its cost and its search class", () => {
+    const record = rollupRun({
+      meta,
+      book: [...BOOK, search],
+      toolCalls: [],
+      modelCalls: [searching],
+    });
+    const model = record.breakdown.models[0]!;
+    // 3 requests at $0.01 each.
+    expect(model.costByClass.server_tool_request).toBe(30_000n);
+    // 1000 input at $3 and 200 output at $15 a million, plus the searches.
+    expect(record.costMicros).toBe(3_000n + 3_000n + 30_000n);
+    expect(record.costBasis).toBe("client_attested");
+    expect(record.tokens.server_tool_request).toBe(3);
+    expect(record.priceEntryIds).toContain("pe_search");
+  });
+
+  it("prices them from the in-code card's seeded rate, so a searching run stays client_attested", () => {
+    // Before the card seeded a search rate, every call that searched missed
+    // the class and read `estimated`, and its search charge was never priced.
+    // The sync's own path: merge the sources, then seed the winners.
+    const book: PriceEntry[] = seedsFromPublishedPrices(
+      mergePublishedPrices([inCodeCardPrices()]).prices,
+      new Date("2026-01-01T00:00:00.000Z"),
+    ).map((seed, i) => ({
+      ...seed,
+      id: `pe_${i}`,
+      orgId: null,
+      source: seed.source ?? "list",
+    }));
+    const p = priceFrame(book, ORG, searching);
+    expect(p.basis).toBe("client_attested");
+    expect(p.scaledByClass.server_tool_request).toBe(30_000_000_000n);
   });
 });
 

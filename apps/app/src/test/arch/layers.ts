@@ -398,6 +398,12 @@ const PLATFORM_NAMED_ROWS: Readonly<
   "src/features/create/record-file.ts": {
     "@oxagen/oxagen/context-record-label": ["CONTEXT_RECORD_LINEAGE"],
   },
+  // The On disk panel strips the steering tree's folder from each path, and
+  // reads the folder's name from the one module that names every steering
+  // path, which imports nothing (lane S0, #4387).
+  "src/data/live/mappers/steering.ts": {
+    "@oxagen/oxagen/steering-repo/paths": ["LEGACY_OXAGEN_DIR"],
+  },
   // A failed read carries the trace id active when it failed, so a person can
   // hand support one handle (#3841). The kernel seam reads it from the tracer
   // at classification, through this one named export.

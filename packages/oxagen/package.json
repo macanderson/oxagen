@@ -37,7 +37,9 @@
     "./context-record-label": "./src/context-record-label.ts",
     "./agent-version-config": "./src/agent-version-config.ts",
     "./run-enrichment": "./src/run-enrichment.ts",
-    "./run-fit": "./src/run-fit.ts"
+    "./run-fit": "./src/run-fit.ts",
+    "./steering-repo": "./src/steering-repo/index.ts",
+    "./steering-repo/*": "./src/steering-repo/*.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

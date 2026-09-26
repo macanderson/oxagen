@@ -1,0 +1,18 @@
+{
+  "check": "schema",
+  "rule": "description-length",
+  "severity": "error",
+  "description": "A description on a kind other than skill passes 200 characters (237).",
+  "refused_by_reader": true,
+  "changed": [
+    "steering/brand/a-intel.brand.long-description.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/brand/a-intel.brand.long-description.md",
+      "line": 3,
+      "field": "description"
+    }
+  ]
+}

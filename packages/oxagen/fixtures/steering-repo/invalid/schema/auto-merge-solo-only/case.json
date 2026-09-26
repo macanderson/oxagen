@@ -1,0 +1,18 @@
+{
+  "check": "schema",
+  "rule": "auto-merge-solo-only",
+  "severity": "error",
+  "description": "auto_merge is true outside solo mode.",
+  "refused_by_reader": true,
+  "changed": [
+    "steering/governance.toml"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/governance.toml",
+      "line": 16,
+      "field": "memory.auto_merge"
+    }
+  ]
+}

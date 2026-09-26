@@ -1,0 +1,17 @@
+{
+  "check": "compile",
+  "rule": "lock-matches",
+  "severity": "error",
+  "description": "tools.toml imports a tool the lock does not hold, and the OpenAPI document has no such operation.",
+  "refused_by_reader": false,
+  "changed": [
+    "tools/servers/billing/tools.toml"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "tools/servers/billing/tools.toml",
+      "line": 51
+    }
+  ]
+}

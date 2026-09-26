@@ -92,8 +92,8 @@ describe("shell.context", () => {
     scripted(orgsRead, workspacesRead);
     expect(await shell.context(ctx)).toEqual(
       readOk({
-        orgs: [{ slug: "acme", name: "Acme Robotics" }],
-        workspaces: [{ slug: "core", name: "Core platform" }],
+        orgs: [{ slug: "acme", name: "Acme Robotics", avatarUrl: null }],
+        workspaces: [{ slug: "core", name: "Core platform", avatarUrl: null }],
       }),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {

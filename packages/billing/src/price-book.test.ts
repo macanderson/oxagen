@@ -41,7 +41,6 @@ import {
   closeNegotiatedPriceEntry,
   listPriceEntries,
   loadPriceBook,
-  loadPriceBookInTenantScope,
   loadPriceBookSlice,
   loadPriceBookSliceInTenantScope,
   priceBookNames,
@@ -412,7 +411,7 @@ const syncPriceBook: typeof syncPriceBookLive = (args) => {
   return syncPriceBookLive({ now, ...args });
 };
 
-describe("loading the whole book", () => {
+describe("reading one organization's book", () => {
   let fake: FakePriceStore;
 
   beforeEach(() => {
@@ -440,20 +439,25 @@ describe("loading the whole book", () => {
   /** The list rows and this organization's own, whichever seam is used. */
   const ids = (rows: readonly PriceEntry[]) => rows.map((r) => r.id).sort();
 
-  it("reads one organization's book inside its own tenant scope", async () => {
+  it("reads one organization's slice inside its own tenant scope", async () => {
     // #3526. `get_run_transcript` is a scoped capability serving one
     // organization, and it priced every nonempty page through the system
     // connection: an ordinary console read registered as unscoped access and
     // asked the policy nothing.
-    const rows = await loadPriceBookInTenantScope({ orgId: ORG });
+    const rows = await loadPriceBookSliceInTenantScope({
+      orgId: ORG,
+      models: ["claude-sonnet-5"],
+      from: new Date("2026-09-20T10:00:00.000Z"),
+      to: new Date("2026-09-20T12:00:00.000Z"),
+    });
 
     expect(store.seams).toEqual(["tenant"]);
     expect(ids(rows)).toEqual(["list-row", "own-row"]);
   });
 
   it("keeps the system read for the jobs that have no tenant scope to run in", async () => {
-    // The rollup runs outside any scope and names the organization itself, so
-    // it must stay on the system connection with its explicit predicate.
+    // A job that runs outside any scope names the organization itself, so it
+    // must stay on the system connection with its explicit predicate.
     const rows = await loadPriceBook({ orgId: ORG });
 
     expect(store.seams).toEqual(["system"]);
@@ -461,9 +465,9 @@ describe("loading the whole book", () => {
   });
 
   it("carries the whole history, not one instant's rows", async () => {
-    // A transcript prices each block at the instant its own frame ran, so a
-    // window that has since closed is exactly the row it needs. An `at`
-    // filter here would silently price older blocks at today's rate.
+    // A caller prices each call at the instant it ran, so a window that has
+    // since closed is exactly the row it needs. An `at` filter here would
+    // silently price older calls at today's rate.
     fake.rows.push(
       priceRow({
         id: "closed-row",
@@ -475,9 +479,7 @@ describe("loading the whole book", () => {
       }),
     );
 
-    expect(ids(await loadPriceBookInTenantScope({ orgId: ORG }))).toContain(
-      "closed-row",
-    );
+    expect(ids(await loadPriceBook({ orgId: ORG }))).toContain("closed-row");
   });
 });
 
@@ -579,6 +581,43 @@ describe("loading one read's slice of the book", () => {
       await loadPriceBookSliceInTenantScope({ orgId: ORG, models: [], ...SPAN }),
     ).toEqual([]);
     expect(store.seams).toEqual([]);
+  });
+
+  it("reads a long model list in chunks of 5,000 ids and returns a shared row once", async () => {
+    // #4202. `inArray` binds one parameter per name, and Postgres refuses a
+    // statement with more than 65,535 of them. A window that ran enough
+    // distinct model ids got an error from one select, so the read is split.
+    // The two stamped ids sit in the first and the last chunk, and the one
+    // `gpt-4o` row prices both.
+    fake.rows.push(
+      priceRow({ id: "family", model: "gpt-4o", provider: "openai" }),
+    );
+    // `m-00000` and its siblings claim no name but their own.
+    const filler = (count: number) =>
+      Array.from(
+        { length: count },
+        (_, i) => `m-${String(i).padStart(5, "0")}`,
+      );
+    const selects = () => fake.log.filter((l) => l.op === "select").length;
+
+    await loadPriceBookSlice({ orgId: ORG, models: filler(5_000), ...SPAN });
+    expect(selects()).toBe(1);
+
+    fake.log.length = 0;
+    await loadPriceBookSlice({ orgId: ORG, models: filler(5_001), ...SPAN });
+    expect(selects()).toBe(2);
+
+    fake.log.length = 0;
+    store.seams = [];
+    const rows = await loadPriceBookSliceInTenantScope({
+      orgId: ORG,
+      models: ["gpt-4o-2026-08-01", ...filler(11_998), "gpt-4o-2026-09-01"],
+      ...SPAN,
+    });
+    expect(selects()).toBe(3);
+    // One connection holds all three selects.
+    expect(store.seams).toEqual(["tenant"]);
+    expect(ids(rows)).toEqual(["family"]);
   });
 
   it("asks for every name the resolver would accept as the same model", () => {

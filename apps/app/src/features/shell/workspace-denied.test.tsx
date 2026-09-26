@@ -81,7 +81,9 @@ describe("WorkspaceDenied", () => {
       sourceWith(
         readOk({
           orgs: [],
-          workspaces: [{ slug: "core-platform", name: "Core platform" }],
+          workspaces: [
+            { slug: "core-platform", name: "Core platform", avatarUrl: null },
+          ],
         }),
       ),
     );

@@ -25,8 +25,10 @@ import {
   encodeTranscriptCursor,
   planTranscriptPage,
   readWords,
+  RECEIPT_OVERLAP_MS,
   type RunTranscriptGetDeps,
   toolResultsOf,
+  unsentFolds,
   withToolUseFacts,
 } from "./run.transcript.get";
 import {
@@ -1004,6 +1006,60 @@ describe("planTranscriptPage", () => {
       high: 9,
     });
   });
+
+  it("sends a late fold ahead of the new ones, and a late fold that also grew once (#4083)", () => {
+    const folds = [span(0, 0), span(1, 1), span(2, 2), span(3, 3), span(4, 4)];
+    expect(planTranscriptPage(folds, { through: 3, high: 3 }, 5, [1])).toEqual(
+      { indexes: [1, 4], through: 4, high: 4 },
+    );
+    // A late index past `through` is a new fold, sent once in its place.
+    expect(planTranscriptPage(folds, { through: 3, high: 3 }, 5, [4])).toEqual(
+      { indexes: [4], through: 4, high: 4 },
+    );
+    const grew = [span(0, 5), span(1, 1)];
+    expect(planTranscriptPage(grew, { through: 1, high: 1 }, 5, [0])).toEqual({
+      indexes: [0],
+      through: 1,
+      high: 5,
+    });
+  });
+
+  it("rewinds to the first late fold when more are late than one page holds, and stops (#4083)", () => {
+    const folds = Array.from({ length: 10 }, (_, i) => span(i, i));
+    const first = planTranscriptPage(
+      folds,
+      { through: 9, high: 9 },
+      3,
+      [2, 3, 4, 5],
+    );
+    expect(first).toEqual({ indexes: [2, 3, 4], through: 4, high: 9 });
+    // The cursor after it carries the whole read's receipt, so the pages
+    // that follow find no late fold and page on by position.
+    const pages = [first.indexes];
+    let cursor = first;
+    for (let read = 0; read < 5; read += 1) {
+      cursor = planTranscriptPage(folds, cursor, 3);
+      pages.push(cursor.indexes);
+      if (cursor.indexes.length === 0) break;
+    }
+    expect(pages).toEqual([[2, 3, 4], [5, 6, 7], [8, 9], []]);
+  });
+
+  it("rewinds from a grown fold before the first late one, so the page cannot pass its end (negative)", () => {
+    // f0 and f1 grew to 10 and 11, f3 is late, and f4 opens at 12. Rewound
+    // from f3, the page would send f3 and f4 and raise `high` to 12, past
+    // both grown folds, and no later read would send them.
+    const folds = [span(0, 10), span(1, 11), span(2, 2), span(3, 3), span(12, 12)];
+    const first = planTranscriptPage(folds, { through: 3, high: 3 }, 2, [3]);
+    expect(first).toEqual({ indexes: [0, 1], through: 1, high: 11 });
+    const second = planTranscriptPage(folds, first, 2);
+    expect(second).toEqual({ indexes: [2, 3], through: 3, high: 11 });
+    expect(planTranscriptPage(folds, second, 2)).toEqual({
+      indexes: [4],
+      through: 4,
+      high: 12,
+    });
+  });
 });
 
 // ── Reassembly (spec §14) ───────────────────────────────────────────────────
@@ -1540,13 +1596,52 @@ describe("get_run_transcript and subagent chains", () => {
         encodeTranscriptCursor({ through: "not-a-uuid:2", high: "2" }),
       ),
     ).toBeNull();
-    // The longest cursor, two subagent keys at the largest seq, fits the
-    // contract's 256-character bound.
+    // The longest cursor, two subagent keys at the largest seq and a receipt
+    // at the largest time, fits the contract's 256-character bound.
     const longest = encodeTranscriptCursor({
       through: `${CHILD}:${"9".repeat(19)}`,
       high: `${CHILD}:${"9".repeat(19)}`,
+      seen: { at: Number("9".repeat(15)), window: "f".repeat(12) },
     });
     expect(longest.length).toBeLessThanOrEqual(256);
+    expect(input({ zoom: "steps", after: longest }).after).toBe(longest);
+    expect(decodeTranscriptCursor(longest)?.seen).toEqual({
+      at: 999_999_999_999_999,
+      window: "ffffffffffff",
+    });
+  });
+
+  it("reads a cursor with a receipt, and still reads the two forms written before it (#4083)", () => {
+    const seen = { at: 1_789_117_265_000, window: "0123456789ab" };
+    expect(
+      decodeTranscriptCursor(
+        encodeTranscriptCursor({ through: `${CHILD}:2`, high: "4", seen }),
+      ),
+    ).toEqual({ through: `${CHILD}:2`, high: "4", seen });
+    // A cursor written before the receipt carries none, and reads as the
+    // positions alone.
+    const twoPart = Buffer.from("t:7,9", "utf8").toString("base64url");
+    expect(decodeTranscriptCursor(twoPart)).toEqual({
+      through: "7",
+      high: "9",
+    });
+    expect(decodeTranscriptCursor(twoPart)).not.toHaveProperty("seen");
+    const onePart = Buffer.from("t:7", "utf8").toString("base64url");
+    expect(decodeTranscriptCursor(onePart)).not.toHaveProperty("seen");
+    // Negative: a receipt this handler did not write is refused, not read as
+    // no receipt.
+    for (const text of [
+      "t:7,9,1789117265000",
+      "t:7,9,1789117265000,0123456789ab,1",
+      "t:7,9,soon,0123456789ab",
+      "t:7,9,1789117265000,0123456789AB",
+      "t:7,9,1789117265000,0123",
+      `t:7,9,${"9".repeat(16)},0123456789ab`,
+    ]) {
+      expect(
+        decodeTranscriptCursor(Buffer.from(text, "utf8").toString("base64url")),
+      ).toBeNull();
+    }
   });
 
   it("resumes a cursor whose frame is no longer shown before the next frame of its chain", () => {
@@ -1557,6 +1652,221 @@ describe("get_run_transcript and subagent chains", () => {
     expect(cursorPosition(frames, "3")).toBe(2);
     expect(cursorPosition(frames, "-1")).toBe(-1);
     expect(cursorPosition(frames, "9")).toBe(2);
+  });
+});
+
+describe("get_run_transcript and a subagent frame received late (#4083)", () => {
+  // The run spawns subagents A and B in parallel. Each chain is placed right
+  // after the `subagent_start` that spawned it, so the run reads
+  // 0, 1, 2, A:0, 3, 4, B:0, and a frame A records after B:0 was sent lands
+  // before the cursor.
+  const A = "0192d4a8-7c1e-7a00-8000-00000000a0a0";
+  const B = "0192d4a8-7c1e-7a00-8000-00000000b0b0";
+  const live = { outcome: "running", sealedAt: null };
+  /**
+   * When the control plane received a frame: `tick` tenths of the receipt
+   * overlap past 09:01, so each case keeps its shape if the overlap changes.
+   */
+  const receivedMs = (tick: number) =>
+    Date.parse("2026-09-11T09:01:00.000Z") + (tick * RECEIPT_OVERLAP_MS) / 10;
+  const received = (tick: number) =>
+    new Date(receivedMs(tick)).toISOString().replace("T", " ").replace("Z", "");
+  const root = [
+    tachoRow(0, {
+      kind: "turn_start",
+      toolName: "",
+      toolStatus: "",
+      turnSeq: 1,
+      receivedAt: received(0),
+    }),
+    tachoRow(1, {
+      kind: "tool_requested",
+      toolName: "Task",
+      toolUseId: "toolu_A",
+      turnSeq: 1,
+      receivedAt: received(1),
+    }),
+    tachoRow(2, {
+      kind: "subagent_start",
+      toolName: "",
+      toolStatus: "",
+      toolUseId: "toolu_A",
+      turnSeq: 1,
+      receivedAt: received(2),
+    }),
+    tachoRow(3, {
+      kind: "tool_requested",
+      toolName: "Task",
+      toolUseId: "toolu_B",
+      turnSeq: 1,
+      receivedAt: received(3),
+    }),
+    tachoRow(4, {
+      kind: "subagent_start",
+      toolName: "",
+      toolStatus: "",
+      toolUseId: "toolu_B",
+      turnSeq: 1,
+      receivedAt: received(4),
+    }),
+  ];
+  const sub = (
+    session: string,
+    seq: number,
+    tick: number,
+    over: Partial<TachoFrameRow>,
+  ): TachoFrameRow =>
+    tachoRow(seq, {
+      sessionUuid: session,
+      rootSessionUuid: SESSION_UUID,
+      parentSessionUuid: SESSION_UUID,
+      subagentId: session === A ? "agent-a" : "agent-b",
+      subagentType: "Explore",
+      spawnToolUseId: session === A ? "toolu_A" : "toolu_B",
+      ts: `2026-09-11 09:00:${String(20 + seq).padStart(2, "0")}.000`,
+      receivedAt: received(tick),
+      ...over,
+    });
+  /** A's Grep call: requested at frame 0, and its result at every frame after. */
+  const a = (seq: number, tick: number) =>
+    sub(A, seq, tick, {
+      kind: seq === 0 ? "tool_requested" : "tool_call",
+      toolName: "Grep",
+      toolUseId: "toolu_g",
+    });
+  const b0 = (tick: number) =>
+    sub(B, 0, tick, {
+      kind: "tool_requested",
+      toolName: "Read",
+      toolUseId: "toolu_r",
+    });
+  const key = (e: { seq: string; subagent?: { sessionUuid: string } }) =>
+    e.subagent === undefined ? e.seq : `${e.subagent.sessionUuid}:${e.seq}`;
+
+  it.each(["everything", "steps", "turns"] as const)(
+    "%s: sends A's frame on the next read, then nothing again while idle",
+    async (zoom) => {
+      const before = harness(root, live, [a(0, 10), b0(20)]);
+      const first = await before.transcript(input({ zoom }), ctx());
+      if (zoom === "everything")
+        expect(first.entries.map(key)).toEqual([
+          "0",
+          "1",
+          "2",
+          `${A}:0`,
+          "3",
+          "4",
+          `${B}:0`,
+        ]);
+      const after = harness(root, live, [a(0, 10), a(1, 30), b0(20)]);
+      const second = await after.transcript(
+        input({ zoom, after: first.cursor as string }),
+        ctx(),
+      );
+      // The positions alone answered an empty page here at every zoom: A:1's
+      // entry neither opens after the cursor's `through` nor ends past its
+      // `high`. The receipt names it: A:1 was received after B:0.
+      expect(second.entries).toHaveLength(1);
+      const [entry] = second.entries;
+      if (zoom === "turns") expect(entry?.frames).toBe(8);
+      else
+        expect([entry?.subagent?.sessionUuid, entry?.endSeq]).toEqual([A, "1"]);
+      // An idle read sends no entry again (#4048).
+      let cursor = second.cursor as string;
+      for (let poll = 0; poll < 3; poll += 1) {
+        const idle = await after.transcript(
+          input({ zoom, after: cursor }),
+          ctx(),
+        );
+        expect(idle.entries).toEqual([]);
+        cursor = idle.cursor as string;
+      }
+    },
+  );
+
+  it("sends a frame received inside the window that was not readable yet, and the window's other entries once", async () => {
+    // B:0 is the latest receipt the first read saw. A:1 was received half
+    // an overlap before it, but its insert had not landed when the page was
+    // read.
+    const before = harness(root, live, [a(0, 10), b0(30)]);
+    const first = await before.transcript(input({ zoom: "everything" }), ctx());
+    expect(first.entries).toHaveLength(7);
+    const after = harness(root, live, [a(0, 10), a(1, 25), b0(30)]);
+    const second = await after.transcript(
+      input({ zoom: "everything", after: first.cursor as string }),
+      ctx(),
+    );
+    // A:1 lies before the receipt, so only the window catches it. B:0, the
+    // window's other frame, goes again with it: the documented overlap.
+    expect(second.entries.map(key)).toEqual([`${A}:1`, `${B}:0`]);
+    let cursor = second.cursor as string;
+    for (let poll = 0; poll < 2; poll += 1) {
+      const idle = await after.transcript(
+        input({ zoom: "everything", after: cursor }),
+        ctx(),
+      );
+      expect(idle.entries).toEqual([]);
+      cursor = idle.cursor as string;
+    }
+  });
+
+  it("pages late frames past the limit in fold order, and stops (negative)", async () => {
+    // Two late entries and a page of one. A receipt held back until both
+    // were sent would find A:1 first on every read, and send it forever.
+    const before = harness(root, live, [a(0, 10), b0(20)]);
+    const first = await before.transcript(input({ zoom: "everything" }), ctx());
+    const after = harness(root, live, [a(0, 10), a(1, 30), a(2, 31), b0(20)]);
+    const sent: string[] = [];
+    let cursor = first.cursor as string;
+    for (let read = 0; read < 10; read += 1) {
+      const page = await after.transcript(
+        input({ zoom: "everything", limit: 1, after: cursor }),
+        ctx(),
+      );
+      sent.push(...page.entries.map(key));
+      cursor = page.cursor as string;
+      if (page.entries.length === 0) break;
+    }
+    // From A:1 on in fold order: 3, 4 and B:0 go again, and nothing loops.
+    expect(sent).toEqual([`${A}:1`, `${A}:2`, "3", "4", `${B}:0`]);
+  });
+
+  it("reads a cursor written before the receipt, and answers one that carries it", async () => {
+    const before = harness(root, live, [a(0, 10), b0(20)]);
+    const first = await before.transcript(input({ zoom: "everything" }), ctx());
+    const decoded = decodeTranscriptCursor(first.cursor as string);
+    expect(decoded?.seen?.at).toBe(receivedMs(20));
+    const legacy = encodeTranscriptCursor({
+      through: decoded?.through as string,
+      high: decoded?.high as string,
+    });
+    const after = harness(root, live, [a(0, 10), a(1, 30), b0(20)]);
+    const second = await after.transcript(
+      input({ zoom: "everything", after: legacy }),
+      ctx(),
+    );
+    // With no receipt, the read sends what the positions say, and the
+    // cursor it answers carries the receipt from then on.
+    expect(second.entries).toEqual([]);
+    expect(decodeTranscriptCursor(second.cursor as string)?.seen?.at).toBe(
+      receivedMs(30),
+    );
+  });
+});
+
+describe("unsentFolds", () => {
+  it("keeps a fold at or before the cursor that holds a frame received late (#4083)", () => {
+    const fold = (open: number, late: boolean) => ({
+      span: { open, end: open },
+      late,
+    });
+    const folds = [fold(0, false), fold(1, true), fold(2, false), fold(3, false)];
+    const cursor = { throughAt: 2, highAt: 2 };
+    expect(unsentFolds(folds, cursor).map((f) => f.span.open)).toEqual([3]);
+    expect(
+      unsentFolds(folds, cursor, (f) => f.late).map((f) => f.span.open),
+    ).toEqual([1, 3]);
+    expect(unsentFolds(folds, null)).toBe(folds);
   });
 });
 

@@ -150,6 +150,13 @@ const RunCostByModel = RunCostModel.extend({
   /** `cost` by token class; null exactly when `cost` is. */
   costByClass: CostByClass.nullable(),
   /**
+   * The web searches the model's calls ran, which the book prices per
+   * request (#3721). Requests, not tokens, so no token figure counts them.
+   */
+  searchRequests: Count.optional(),
+  /** What those searches cost, as recorded; null exactly when `costByClass` is. */
+  searchCost: Cost.nullable().optional(),
+  /**
    * What the model's cache reads saved against uncached input, as the rollup
    * recorded it. Null when it was not recorded, including a row rolled up
    * before the rollup recorded savings: never a zero standing in for that.
@@ -174,6 +181,8 @@ const RunCostByTool = z.object({
 const RunCostRollup = z.object({
   cost: Cost.nullable(),
   tokens: RunTokenCounts,
+  /** Every model's web search requests, summed (#3721). */
+  searchRequests: Count.optional(),
   /** cache_read ÷ (input_uncached + cache_read), spend-weighted. */
   cacheHitRate: Ratio.nullable(),
   turns: Count.nullable(),

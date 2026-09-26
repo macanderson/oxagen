@@ -1360,10 +1360,31 @@ describe("following a live run", () => {
     fakeEventSource(1);
     try {
       renderSection({
-        read: readOk(mockupTranscript({ cursor: "ZjoxMQ", complete: false })),
+        read: readOk(mockupTranscript({ cursor: "ZjoxMQ", complete: true })),
         status: "live",
       });
       expect(screen.queryByTestId("transcript-count")).toBeNull();
+      expect(readout()).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("says a live run past the read's frame cap stops here, rather than drawing it as the live head (#3375)", () => {
+    // The read hit its frame cap, so every tail read folds the same first
+    // frames. The footer was empty while following, and the page read as
+    // the run's head.
+    fakeEventSource(1);
+    try {
+      renderSection({
+        read: readOk(mockupTranscript({ cursor: "ZjoxMQ", complete: false })),
+        status: "live",
+      });
+      expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+        "this view stops here. The run is still recording.",
+      );
+      // A tail read reaches nothing past the cap, so no control offers one.
+      expect(screen.queryByTestId("transcript-more")).toBeNull();
       expect(readout()).toBeInTheDocument();
     } finally {
       vi.unstubAllGlobals();

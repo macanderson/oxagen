@@ -108,6 +108,11 @@ describe("get_run_cost", () => {
               currency: "USD",
               basis: "gateway_observed",
             },
+            server_tool_request: {
+              micros: "0",
+              currency: "USD",
+              basis: "gateway_observed",
+            },
           },
           cacheSaving: {
             micros: "0",

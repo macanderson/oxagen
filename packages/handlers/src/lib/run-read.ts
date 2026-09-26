@@ -50,6 +50,7 @@ import {
 } from "../run.list";
 import { requireScope } from "@oxagen/tenancy";
 import { readWitnessFor } from "./proof";
+import { runLabel } from "./run-item";
 
 /** The most frames one read of either store returns. */
 const FRAME_READ_MAX = 500;
@@ -137,7 +138,7 @@ export async function resolveRun(
           // title the harness gave the session.
           name:
             run.source === "tacho"
-              ? (run.row.session.harnessTitle ?? null)
+              ? runLabel(run.row.session.harnessTitle)
               : null,
           summary: null,
           canSummarize: false,
