@@ -35,6 +35,11 @@ type RunView = {
   frames: string | null;
   /** `?body=`, the seq of the open frame; null when none is open. */
   body: string | null;
+  /**
+   * `?finding=`, the finding whose evidence is open over the Cost tab
+   * (#4001). Absent or null when none is open.
+   */
+  finding?: string | null;
 };
 
 export type RunTabProps = {

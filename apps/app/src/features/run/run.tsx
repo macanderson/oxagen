@@ -193,6 +193,7 @@ export async function Run({
   kinds,
   frames,
   body,
+  finding,
   reads,
   spine,
   now,
@@ -209,6 +210,8 @@ export async function Run({
   frames: string | null;
   /** `?body=`, the seq of the frame whose body is open; anything but a seq opens none. */
   body: string | null;
+  /** `?finding=`, the finding whose evidence is open over the Cost tab; absent opens none. */
+  finding?: string | null;
   /** `?reads=hide` folds the spine's read marks away. */
   reads: string | null;
   /** `?spine=`, the spine groups a person opened, comma-separated. */
@@ -221,6 +224,7 @@ export async function Run({
     kinds: parseKinds(kinds),
     frames,
     body,
+    finding: finding ?? null,
   };
   const { read, at } = await readRun(source, ctx, runId, frames, now);
   if (!read.ok) {

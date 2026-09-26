@@ -9,8 +9,9 @@
 // zero-height bar would read as "this turn cost nothing", a measurement nobody
 // made. The total row is the sum of the rows, set against the recorded cost.
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
-import type { RunTurns } from "@/data/contracts/run";
+import type { ReactNode } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { RunFindings, RunTurns } from "@/data/contracts/run";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -24,7 +25,16 @@ import { type RunMetrics, runMetrics, type TurnFigure } from "./metrics";
 import { runRow } from "./run.builders";
 import { WaterfallPanel } from "./waterfall";
 
+vi.mock("next/link", () => ({
+  default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
+    <a {...rest}>{children}</a>
+  ),
+}));
+
 afterEach(cleanup);
+
+const PLACE = { org: "acme", ws: "core-platform", runId: "tse_7k2m9q" };
+const NO_FINDINGS: Read<RunFindings> = readOk({ findings: [] });
 
 const usd = (micros: string) => ({
   micros,
@@ -70,9 +80,12 @@ function renderPanel(
   {
     read = readOk<RunTurns>({ turns: [], complete: true, chains: [] }),
     overrides = {},
+    findings = NO_FINDINGS,
   }: {
     read?: Read<RunTurns>;
     overrides?: Partial<RunMetrics>;
+    /** `list_findings` for the run; a run no finding cites when absent. */
+    findings?: Read<RunFindings>;
   } = {},
 ) {
   const m = metrics(overrides);
@@ -82,9 +95,15 @@ function renderPanel(
         metrics={m}
         turns={
           read.ok
-            ? readOk({ ledger: ledgerOf(turns), complete: read.value.complete })
+            ? readOk({
+                ledger: ledgerOf(turns),
+                complete: read.value.complete,
+                chains: read.value.chains,
+              })
             : read
         }
+        findings={findings}
+        place={PLACE}
       />
     </IntlProvider>,
   );
@@ -302,5 +321,165 @@ describe("WaterfallPanel", () => {
     });
     expect(screen.getAllByTestId("waterfall-row")).toHaveLength(1);
     expect(screen.queryByTestId("waterfall-cut")).toBeNull();
+  });
+});
+
+describe("WaterfallPanel's finding pins (#4001)", () => {
+  const SUBAGENT = "0192d4a8-7c1e-7a00-8000-0000000000bb";
+  const THREE = [
+    turn({ turn: 1, seq: "1", cost: usd("400000") }),
+    turn({ turn: 2, seq: "10", cost: usd("800000") }),
+    turn({ turn: 3, seq: "20", cost: usd("200000") }),
+  ];
+  type Finding = RunFindings["findings"][number];
+  const finding = (
+    id: string,
+    kind: Finding["kind"],
+    citation: Finding["citation"],
+  ): Finding => ({
+    id,
+    kind,
+    subject: "Bash",
+    saving: { micros: "60000", currency: "USD", basis: "estimated" },
+    confidence: "high",
+    citation,
+  });
+  const cited = (...findings: Finding[]) => readOk({ findings });
+  const pinnedIn = (row: HTMLElement | undefined) =>
+    row === undefined
+      ? []
+      : within(row)
+          .queryAllByTestId("waterfall-pinned")
+          .map((link) => link.getAttribute("data-finding"));
+
+  it("pins a finding to the turn its root frame falls in, and names it in the Pinned column", async () => {
+    const { container } = renderPanel(THREE, {
+      findings: cited(
+        finding("fnd_shell", "repeated_shell_commands", {
+          runLevel: false,
+          // Seq 14 falls in turn 2, which opens at seq 10.
+          frames: [{ seq: "14" }],
+          framesTotal: 1,
+        }),
+      ),
+    });
+    const pins = screen.getAllByTestId("waterfall-pin");
+    expect(pins.map((pin) => pin.getAttribute("data-turn"))).toEqual(["2"]);
+    const rows = screen.getAllByTestId("waterfall-row");
+    expect(pinnedIn(rows[0])).toEqual([]);
+    expect(pinnedIn(rows[1])).toEqual(["fnd_shell"]);
+    expect(pinnedIn(rows[2])).toEqual([]);
+    expect(rows[1]).toHaveTextContent("Repeated shell commands");
+    await expectNoAxe(container);
+  });
+
+  it("links a pin to the finding's evidence over the Cost tab", () => {
+    renderPanel(THREE, {
+      findings: cited(
+        finding("fnd_shell", "repeated_shell_commands", {
+          runLevel: false,
+          frames: [{ seq: "1" }],
+          framesTotal: 1,
+        }),
+      ),
+    });
+    const link = screen.getByRole("link", { name: "Repeated shell commands" });
+    expect(link.getAttribute("href")).toBe(
+      "/acme/core-platform/runs/tse_7k2m9q?tab=cost&finding=fnd_shell",
+    );
+    expect(link.getAttribute("title")).toBe(
+      "Repeated shell commands: $0.06 to save. Open its evidence.",
+    );
+  });
+
+  it("places a subagent's frame at the turn its chain counts toward, not by its seq", () => {
+    renderPanel(THREE, {
+      read: readOk({
+        turns: [],
+        complete: true,
+        chains: [{ sessionUuid: SUBAGENT, turn: 3 }],
+      }),
+      findings: cited(
+        finding("fnd_dup", "duplicate_tool_calls", {
+          runLevel: false,
+          // Seq 2 on the root would be turn 1; on the subagent it is turn 3.
+          frames: [{ seq: "2", sessionUuid: SUBAGENT }],
+          framesTotal: 1,
+        }),
+      ),
+    });
+    expect(
+      screen
+        .getAllByTestId("waterfall-pin")
+        .map((pin) => pin.getAttribute("data-turn")),
+    ).toEqual(["3"]);
+  });
+
+  it("pins a finding citing two turns to both, and a run-level finding to the total row only", () => {
+    renderPanel(THREE, {
+      findings: cited(
+        finding("fnd_shell", "repeated_shell_commands", {
+          runLevel: false,
+          frames: [{ seq: "3" }, { seq: "22" }],
+          framesTotal: 2,
+        }),
+        finding("fnd_cache", "cache_writes_never_read", {
+          runLevel: true,
+          frames: [],
+          framesTotal: 0,
+        }),
+      ),
+    });
+    const rows = screen.getAllByTestId("waterfall-row");
+    expect(pinnedIn(rows[0])).toEqual(["fnd_shell"]);
+    expect(pinnedIn(rows[2])).toEqual(["fnd_shell"]);
+    expect(pinnedIn(screen.getByTestId("waterfall-total"))).toEqual([
+      "fnd_cache",
+    ]);
+    // The run-level finding draws no diamond over any turn.
+    expect(
+      screen
+        .getAllByTestId("waterfall-pin")
+        .map((pin) => pin.getAttribute("data-turn")),
+    ).toEqual(["1", "3"]);
+  });
+
+  it("pins a finding whose frames were not recorded to the total row, never a guessed turn (negative)", () => {
+    renderPanel(THREE, {
+      findings: cited(
+        finding("fnd_old", "unpaged_results", {
+          runLevel: false,
+          frames: null,
+          framesTotal: 4,
+        }),
+      ),
+    });
+    expect(screen.queryByTestId("waterfall-pin")).toBeNull();
+    expect(pinnedIn(screen.getByTestId("waterfall-total"))).toEqual([
+      "fnd_old",
+    ]);
+  });
+
+  it("draws no pin and leaves the Pinned cells empty for a run no finding cites (negative)", () => {
+    renderPanel(THREE);
+    expect(screen.queryByTestId("waterfall-pin")).toBeNull();
+    for (const row of screen.getAllByTestId("waterfall-row"))
+      expect(row.lastElementChild?.textContent).toBe("");
+    // The chart no longer says the pins are not recorded.
+    expect(screen.getByTestId("waterfall-caption")).not.toHaveTextContent(
+      "not recorded",
+    );
+  });
+
+  it("says the pins are not recorded when the findings read fails (negative)", () => {
+    renderPanel(THREE, {
+      findings: readError("findings_unreachable", 502),
+    });
+    expect(screen.queryByTestId("waterfall-pin")).toBeNull();
+    for (const row of screen.getAllByTestId("waterfall-row"))
+      expect(row.lastElementChild).toHaveTextContent("not recorded");
+    expect(screen.getByTestId("waterfall-panel")).toHaveTextContent(
+      "findings_unreachable",
+    );
   });
 });

@@ -755,7 +755,7 @@
     "list_findings": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
-      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes list_findings (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes list_findings (data/live/mappers/spend.ts, data/live/spend.ts). The Run page's Cost tab also reads it for one run, /[org]/[ws]/runs/[run]?tab=cost, and pins each finding to the turns it cites (data/live/runs.ts, features/run/cost.tsx, features/run/waterfall.tsx; proof features/run/waterfall.test.tsx)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
