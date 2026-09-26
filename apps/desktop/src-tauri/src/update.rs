@@ -9,7 +9,7 @@
 //! password prompt, and a rename across volumes fails the install, so the
 //! gates here are the conditions under which neither happens.
 
-use crate::cli_install::{read_json_object, write_desktop_config};
+use crate::cli_install::{install_guard, read_json_object, write_desktop_config};
 use crate::machine::Roots;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -28,8 +28,13 @@ pub fn auto_update_enabled(config: &Map<String, Value>) -> bool {
     }
 }
 
-/// Write `autoUpdate` into `desktop.json`, keeping every other key.
+/// Write `autoUpdate` into `desktop.json`, keeping every other key. It holds
+/// the CLI installer's lock for the read and the write, because the launch-time
+/// install also rewrites this file: without the lock, a checkbox click during
+/// that install could drop the installer's `created` list, or the installer
+/// could put back the old `autoUpdate`.
 pub(crate) fn write_auto_update(roots: &Roots, enabled: bool) -> Result<(), String> {
+    let _guard = install_guard();
     let mut config = read_json_object(&roots.desktop_config_path());
     config.insert(AUTO_UPDATE.to_string(), Value::Bool(enabled));
     write_desktop_config(roots, &config)

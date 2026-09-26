@@ -845,10 +845,13 @@ impl Default for CliInstallView {
 /// window is undone the moment the probe returns.
 static INSTALL_LOCK: Mutex<()> = Mutex::new(());
 
-/// The guard every install/uninstall pass holds. A panic in an earlier pass
-/// must not lock out every later one, and there is no state to be poisoned:
-/// the lock guards `()`, not data.
-fn install_guard() -> std::sync::MutexGuard<'static, ()> {
+/// The guard every install/uninstall pass holds, and every other writer of
+/// `desktop.json` (`update::write_auto_update`), so no read-modify-write of
+/// that file lands on top of another's. A panic in an earlier pass must not
+/// lock out every later one, and there is no state to be poisoned: the lock
+/// guards `()`, not data. It is not reentrant, so a caller that already holds
+/// it must not call a function that takes it.
+pub(crate) fn install_guard() -> std::sync::MutexGuard<'static, ()> {
     INSTALL_LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
