@@ -325,7 +325,16 @@ async function wd(method, path, body) {
     throw new Error(`${method} ${path}: ${error.message}`);
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok || json?.value?.error !== undefined)
+  // A driver error is a value with an `error` code. A script's own answer can
+  // carry `error` too (`{ ok: false, error }` from `invokeSidecar`), so a
+  // value with an `ok` member is the script's result, not a driver error.
+  const value = json?.value;
+  const driverError =
+    value !== null &&
+    typeof value === "object" &&
+    value.error !== undefined &&
+    !("ok" in value);
+  if (!res.ok || driverError)
     throw new Error(
       `${method} ${path}: ${res.status} ${JSON.stringify(json.value ?? json).slice(0, 400)}`,
     );
