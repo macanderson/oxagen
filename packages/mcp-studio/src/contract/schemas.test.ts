@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { schemaUrl } from "@oxagen/oxagen/steering-repo/schema-ids";
@@ -12,6 +13,7 @@ import {
   renderSchemaFile,
   schemaFilePath,
   SCHEMAS_DIR,
+  writeSchemaFiles,
 } from "./schemas";
 
 function filesUnder(dir: string): string[] {
@@ -44,5 +46,20 @@ describe("published schemas", () => {
     }
     const published = new Set(MCP_STUDIO_SCHEMAS.map((entry) => entry.id));
     for (const id of MCP_STUDIO_WIRE_SCHEMA_IDS) expect(published.has(id)).toBe(true);
+  });
+});
+
+describe("writeSchemaFiles", () => {
+  it("writes every schema under the folder it is given, in the published form", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mcp-studio-schemas-"));
+    try {
+      const written = writeSchemaFiles(dir);
+      expect(written).toStrictEqual(MCP_STUDIO_SCHEMAS.map((entry) => join(dir, schemaFilePath(entry))));
+      for (const entry of MCP_STUDIO_SCHEMAS) {
+        expect(readFileSync(join(dir, schemaFilePath(entry)), "utf8")).toBe(renderSchemaFile(entry));
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
