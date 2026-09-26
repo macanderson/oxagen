@@ -511,11 +511,17 @@ describe("selectAgentDaySpend (ADR-160)", () => {
       ["tch_b", 2_500],
     ]);
     const [call] = chSelect.mock.calls[0] ?? [];
-    // The frame's timestamp decides the day, never when it was received.
+    // The frame's timestamp decides the day. When it was received only
+    // bounds the read to the partitions around the day (#4297), a day wide so
+    // a host whose clock runs ahead still counts.
     expect(call?.query).toContain(
       "ts >= toDateTime64({start:String}, 3, 'UTC')",
     );
-    expect(call?.query).not.toContain("received_at");
+    expect(
+      call?.query.match(/received_at[^\n]*/g)?.map((line) => line.trim()),
+    ).toEqual([
+      "received_at >= toDateTime64({start:String}, 3, 'UTC') - INTERVAL 1 DAY",
+    ]);
     for (const predicate of [
       "kind = 'llm_call'",
       "source = 'collector'",

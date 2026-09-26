@@ -61,6 +61,13 @@ describe("steering delivery counts", () => {
     expect(query).toContain("workspace_id = {workspaceId:UUID}");
     expect(query).toContain("chain_verified = 1");
     expect(query).toContain("argMax(body, seq)");
+    // The table partitions by the month of received_at (#4297): the window's
+    // lower bound on it keeps the read to the months around the window, a
+    // day wide for a host clock that runs ahead, with no upper bound for a
+    // manifest shipped late.
+    expect(
+      query.match(/received_at[^\n]*/g)?.map((line: string) => line.trim()),
+    ).toEqual(["received_at >= {since:DateTime64(3)} - INTERVAL 1 DAY"]);
   });
   it("excludes any included record and counts a cut record once per run", async () => {
     select.mockResolvedValue({

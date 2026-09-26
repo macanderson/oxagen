@@ -394,6 +394,17 @@ describe("tableStatements", () => {
       ),
     ).toEqual([{ verb: "create", table: "events" }]);
   });
+
+  it("reads a rebuild directive as an ALTER of its table (#4297)", () => {
+    // The rebuild keeps the table and changes its layout. Naming the table
+    // lets a replay of the table's files include the rebuild, which does
+    // nothing once the table has come back with the new key.
+    expect(
+      tableStatements(
+        "-- move the key\nREBUILD TABLE tacho_events PARTITION BY toYYYYMM(received_at);",
+      ),
+    ).toEqual([{ verb: "alter", table: "tacho_events" }]);
+  });
 });
 
 describe("declaredMigrationTables", () => {
@@ -499,6 +510,29 @@ describe("the tables this repository declares", () => {
       "0020_error_events.sql",
       "0022_error_events_execution_id.sql",
     ]);
+  });
+
+  it("replays the tacho_events rebuild with the files that create the table", () => {
+    // A lost tacho_events comes back from 0027 with the new key, so 0034 runs
+    // after it and finds nothing to do. The shadow table the rebuild uses is
+    // never declared: no file creates it, so the repair never waits for it.
+    const recorded = new Set(migrations.map(({ file }) => file));
+    const present = declaredMigrationTables(migrations);
+    present.delete("tacho_events");
+    expect(filesToReplay(migrations, recorded, present)).toEqual({
+      files: [
+        "0027_tacho_events.sql",
+        "0028_tacho_observed_changes.sql",
+        "0031_drop_tacho_events_anthropic_user_email.sql",
+        "0032_tacho_events_ttl.sql",
+        "0033_tacho_events_part_settings.sql",
+        "0034_tacho_events_partition_received_at.sql",
+      ],
+      missing: ["tacho_events"],
+    });
+    expect(
+      declaredMigrationTables(migrations).has("tacho_events_rebuild"),
+    ).toBe(false);
   });
 
   it("does not declare a table a later migration drops", () => {
