@@ -399,6 +399,96 @@ describe("tachod and frame bodies", () => {
     );
   });
 
+  it("leaves a gateway call to its PostToolUse when the session chain write fails", async () => {
+    // ADR-189 decision 5: the gateway's frame is written on the serial queue
+    // after the client has its answer. A failed write is logged and rolled
+    // back, the call stays claimed, and the hook seals the call's one frame.
+    const { fetch, batches } = plane();
+    const { handle, host, log } = await boot(fetch, {
+      mode: "content_exact",
+      classes: ["tool_call"],
+    });
+    const port = handle.port as number;
+    const hooked = "sess-gateway-rollback";
+    const toolUseId = "toolu_01GatewayRollback";
+    const tool = {
+      session_id: hooked,
+      tool_name: "mcp__oxagen__query_ontology",
+      tool_input: MCP_ARGUMENTS,
+      tool_use_id: toolUseId,
+    };
+    for (const hook of [
+      { session_id: hooked, hook_event_name: "SessionStart", cwd: "/repo" },
+      { session_id: hooked, hook_event_name: "UserPromptSubmit", prompt: "q" },
+      { ...tool, hook_event_name: "PreToolUse" },
+    ])
+      expect(await post(port, host.local_token, hook)).toBe(200);
+    const append = handle.wal.append.bind(handle.wal);
+    let failed = false;
+    const fault = vi
+      .spyOn(handle.wal, "append")
+      .mockImplementation((events, bodies) => {
+        if (
+          !failed &&
+          events.some(
+            (event) =>
+              event.kind === "tool_call" &&
+              event.attrs["oxagen.enforcement_tier"] === "gateway",
+          )
+        ) {
+          failed = true;
+          throw Object.assign(new Error("event disk full"), {
+            code: "ENOSPC",
+          });
+        }
+        append(events, bodies);
+      });
+    const answer = await handle.api.mcp?.(
+      {
+        jsonrpc: "2.0",
+        id: 11,
+        method: "tools/call",
+        params: {
+          name: "query_ontology",
+          arguments: MCP_ARGUMENTS,
+          _meta: { "claudecode/toolUseId": toolUseId },
+        },
+      },
+      { sessionId: "mcp-sess-4" },
+    );
+    expect(answer?.status).toBe(200);
+    // The hook runs on the same queue, after the gateway's write.
+    expect(
+      await post(port, host.local_token, {
+        ...tool,
+        hook_event_name: "PostToolUse",
+        tool_response: MCP_RESULT,
+      }),
+    ).toBe(200);
+    fault.mockRestore();
+    await handle.tick();
+
+    expect(failed).toBe(true);
+    expect(
+      log.some((line) =>
+        line.includes(
+          `mcp gateway could not record query_ontology (${toolUseId}): event disk full`,
+        ),
+      ),
+    ).toBe(true);
+    const session = handle.registry.get(hooked)?.recorder.sessionUuid;
+    const frames = batches
+      .flatMap((b) => b.events)
+      .filter((event) => event.kind === "tool_call");
+    expect(frames).toHaveLength(1);
+    expect(frames[0]?.session_uuid).toBe(session);
+    expect(frames[0]?.body).toMatchObject({ tool_use_id: toolUseId });
+    expect(frames[0]?.attrs["oxagen.enforcement_tier"]).not.toBe("gateway");
+    // The rollback left no hole in the session's chain.
+    const seqs = handle.wal.read(session as string).map((event) => event.seq);
+    expect(seqs).toEqual(seqs.map((_, index) => index));
+  });
+
   it("seals a gateway call on the daemon's chain when no session is waiting on its id", async () => {
     const { fetch, batches } = plane();
     const { handle } = await boot(fetch, {
