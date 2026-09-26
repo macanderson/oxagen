@@ -7,6 +7,7 @@ import {
   createRunChainGetHandler,
   missingBodies,
   type RunChainGetDeps,
+  framesMayHaveExpired,
   sequenceGaps,
 } from "./run.chain.get";
 import {
@@ -28,6 +29,11 @@ const SESSION_ROW_ID = "0192d4a8-7c1e-7000-8000-00000000c0de";
 const LEDGER_ID = "arun_0123456789abcdefghjkmn";
 const RUN_UUID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
 const HEAD = `sha256:${"a".repeat(64)}`;
+/**
+ * The clock every harness reads, two weeks after the fixture sessions start,
+ * so no case depends on the day it runs.
+ */
+const NOW = new Date("2026-09-25T12:00:00.000Z");
 
 function checkpoint(over: Partial<CheckpointRow> = {}): CheckpointRow {
   return {
@@ -50,6 +56,7 @@ function tachoHarness(
     checkpoints?: CheckpointRow[];
     session?: Record<string, unknown>;
     onCheckpoints?: (sessionId: string) => void;
+    now?: Date;
   } = {},
 ) {
   // seqCount is the next expected sequence (last.seq + 1). Default it to the
@@ -81,6 +88,7 @@ function tachoHarness(
     },
     ledgerSeals: () =>
       Promise.reject(new Error("a wrapped session reads no ledger seals")),
+    now: () => over.now ?? NOW,
   };
   return createRunChainGetHandler(deps);
 }
@@ -341,6 +349,74 @@ describe("get_run_chain", () => {
     ]);
     expect(out.gaps.missingFrameCount).toBe(2);
     expect(out.ladder[1]?.reason).toContain("chain_break");
+  });
+
+  // #4316: tacho_events keeps a frame 13 months after receipt (0032), and a
+  // wrapped session has no archive, so an old session's first frames are gone.
+  describe("frames past the tacho_events retention window", () => {
+    /** A sealed session whose first three frames expired. */
+    const expiredHead = (startedAt: Date) =>
+      tachoHarness([tachoRow(3), tachoRow(4)], {
+        session: { seqCount: 5, completenessGaps: [], startedAt },
+      });
+
+    it("reports no chain break and keeps the grade for a session older than the window", async () => {
+      const out = await expiredHead(new Date("2025-08-01T00:00:00.000Z"))(
+        { runId: TACHO_ID },
+        ctx(),
+      );
+      expect(out.gaps.missingSequences).toEqual([]);
+      expect(out.gaps.missingFrameCount).toBe(0);
+      expect(out.ladder.some((r) => r.reason?.includes("chain_break"))).toBe(
+        false,
+      );
+      // The same ladder as the session with every frame still held.
+      const dense = await tachoHarness(
+        [0, 1, 2, 3, 4].map((seq) => tachoRow(seq)),
+        {
+          session: { seqCount: 5, completenessGaps: [] },
+        },
+      )({ runId: TACHO_ID }, ctx());
+      expect(out.ladder).toEqual(dense.ladder);
+    });
+
+    it("still reports the missing head of a session inside the window (negative)", async () => {
+      const out = await expiredHead(new Date("2026-09-01T00:00:00.000Z"))(
+        { runId: TACHO_ID },
+        ctx(),
+      );
+      expect(out.gaps.missingSequences).toEqual([{ from: "0", to: "2" }]);
+      expect(out.ladder[1]?.reason).toContain("chain_break");
+    });
+
+    it("still reports an interior gap in a session older than the window (negative)", async () => {
+      const out = await tachoHarness([tachoRow(3), tachoRow(6)], {
+        session: {
+          seqCount: 7,
+          completenessGaps: [],
+          startedAt: new Date("2025-08-01T00:00:00.000Z"),
+        },
+      })({ runId: TACHO_ID }, ctx());
+      expect(out.gaps.missingSequences).toEqual([{ from: "4", to: "5" }]);
+      expect(out.ladder[1]?.reason).toContain("chain_break");
+    });
+
+    it("counts the window in calendar months, with a week of slack for a fast host clock", () => {
+      const now = new Date("2026-09-25T12:00:00.000Z");
+      // 13 months before now is 2025-08-25T12:00Z.
+      expect(
+        framesMayHaveExpired(new Date("2025-08-25T11:59:00.000Z"), now),
+      ).toBe(true);
+      expect(
+        framesMayHaveExpired(new Date("2025-08-31T12:00:00.000Z"), now),
+      ).toBe(true);
+      expect(
+        framesMayHaveExpired(new Date("2025-09-02T00:00:00.000Z"), now),
+      ).toBe(false);
+      expect(
+        framesMayHaveExpired(new Date("2026-09-11T10:00:01.000Z"), now),
+      ).toBe(false);
+    });
   });
 
   it("does not treat the unread capped tail as a chain break (finding 4052307524)", async () => {
