@@ -190,6 +190,15 @@ pickers, `tacho detect`, and with `--enroll` the enroll, `tacho status` and a
 recorded first run per agent. It writes `oxagen-e2e-smoke-<host>.json`.
 Without `--enroll` it changes nothing on the machine.
 
+`scripts/e2e-webdriver.mjs` clicks through the built app on Linux with
+tauri-driver: the scan, Sign out, the start of Sign in, and the poll's `tacho
+status`, each through the sidecar allowlist, in a scratch HOME with a stand-in
+control plane. It also checks that the page cannot start `tacho daemon` or
+spawn a process through the shell plugin. The `webdriver` job in
+`desktop-rig.yml` runs it and keeps screenshots and each step as an artifact.
+Run it under `xvfb-run -a` after `pnpm sidecars` and `pnpm tauri build --debug
+--no-bundle`.
+
 Needs Rust (stable), a Node built with single-executable support, and, on
 Linux, `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`. The
 sidecars are Node SEAs, so `sidecars` fails before `tauri build` ever runs on a
@@ -315,6 +324,8 @@ src-tauri/      Rust shell: state reads, the two user-scoped API calls, tray;
 scripts/        sidecars.mjs (stage binaries), icons.mjs, publish-downloads.mjs
                 and check-latest.mjs (the downloads host), e2e-smoke.mjs (an
                 installed app against the live control plane),
+                e2e-webdriver.mjs (the built app's session-free panel
+                actions through tauri-driver),
                 smoke-macos-bundle.sh (CI: start the signed bundle's sidecars
                 and app under the hardened runtime), rig-stubs.mjs
 ```

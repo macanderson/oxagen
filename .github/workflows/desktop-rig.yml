@@ -17,6 +17,11 @@
 #     the `.cmd` shim ownership test (#4318).
 # It also runs cargo fmt --check and clippy on every OS, which no other
 # workflow does: desktop.yml only builds on a tag or a dispatch.
+#
+# The webdriver job builds the app with its real sidecars and clicks through
+# every panel action that needs no Oxagen session (the scan, Sign out, the
+# start of Sign in, and the poll's `tacho status`) through tauri-driver, in a
+# scratch HOME with a stand-in control plane (#4318 item 6).
 name: Desktop install rig
 
 on:
@@ -135,4 +140,57 @@ jobs:
         with:
           name: rig-real-services-${{ matrix.os }}
           path: ${{ runner.temp }}/rig-evidence
+          if-no-files-found: ignore
+
+  webdriver:
+    name: Panel actions in the built app (ubuntu-22.04)
+    # Linux only: tauri-driver drives WebKitWebDriver there, and macOS has no
+    # WebDriver for WKWebView.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: ./.github/actions/pnpm-install
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable branch
+        with:
+          toolchain: stable
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: webdriver
+
+      - name: WebKit, its WebDriver, and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev webkit2gtk-driver xvfb
+
+      - name: tauri-driver
+        run: cargo install tauri-driver --locked
+
+      - name: Build sidecars
+        run: pnpm --filter @oxagen/desktop sidecars
+
+      # A debug build with the frontend embedded, and no installers or
+      # updater artifacts, which need the signing key.
+      - name: Build the app
+        working-directory: apps/desktop
+        run: pnpm tauri build --debug --no-bundle --config src-tauri/tauri.unsigned.conf.json
+
+      - name: Click through the panel actions
+        working-directory: apps/desktop
+        env:
+          E2E_EVIDENCE: ${{ runner.temp }}/webdriver-evidence
+        run: xvfb-run -a node scripts/e2e-webdriver.mjs
+
+      - name: Keep the record of the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webdriver-panel-actions
+          path: ${{ runner.temp }}/webdriver-evidence
           if-no-files-found: ignore
