@@ -23,7 +23,7 @@
  */
 import {
   indexPriceBookByClass,
-  loadPriceBook,
+  loadPriceBookSlice,
   priceBookBoundaries,
   resolvePriceEntryFromClassBook,
   type PriceBook,
@@ -256,23 +256,22 @@ export const UNPRICED_MODEL_READ_PAGE_SIZE = 1_000;
  * not fully price when they ran, or cannot at `at`, worst first.
  *
  * Reads the book through the system connection with an explicit org
- * predicate, the same way {@link loadPriceBook}'s other callers do: this is a
- * derived read over the list rows plus the organization's own, not a read of
- * a tenant's rows, and it must answer the same way whether or not a tenant
- * scope happens to be open.
+ * predicate ({@link loadPriceBookSlice}): this is a derived read over the
+ * list rows plus the organization's own, not a read of a tenant's rows, and
+ * it must answer the same way whether or not a tenant scope happens to be
+ * open.
  *
  * The frame read is a ClickHouse read that throws on a degraded store rather
- * than answering off half the frames — a model missing from the observation
+ * than answering off half the frames. A model missing from the observation
  * would read as a model nobody needs a price for.
  *
- * The book is loaded first, not in parallel with the observation: its
- * boundaries ({@link priceBookBoundaries}) are what the observed-usage read
- * buckets calls by, so the book must be in hand before that read is made.
- * Which boundaries, though, is decided inside that read, once its summary
- * query has named the models this organization actually ran: only the rows
- * that could price one of those models, in a class a token read can even
- * observe, contribute one. The whole book's history would make every frame
- * scan every rate change any model has ever had.
+ * Each page gets its own slice of the book: the rows that could price the
+ * models that page holds, from `since` to `at`. The slice is loaded inside
+ * the frame read's `boundariesFor`, once the page's summary query has named
+ * its models, because the class-bucket query that follows buckets calls by
+ * that slice's boundaries ({@link priceBookBoundaries}). The whole book is
+ * every list row's full history, 28,246 rows in production on 2026-09-24,
+ * and the report used to hold all of it across every page (#4202).
  */
 export async function readUnpricedModels(args: {
   orgId: string;
@@ -280,7 +279,6 @@ export async function readUnpricedModels(args: {
   since: Date;
   at: Date;
 }): Promise<UnpricedModel[]> {
-  const book = await loadPriceBook({ orgId: args.orgId });
   // Every model the window holds is compared, not the heaviest N. The ranked
   // read stops at a volume bound, and a low-volume unpriced model past it
   // would never reach the comparison (#3281). The pages are walked in model-id
@@ -289,6 +287,10 @@ export async function readUnpricedModels(args: {
   let report: UnpricedModel[] = [];
   let afterModel: string | undefined;
   for (;;) {
+    // The rows that could price this page's models. The frame read returns
+    // no rows without calling `boundariesFor`, so an empty page leaves it
+    // empty and judges nothing against it.
+    let book: PriceBook = [];
     // Bounded above by `at` as well as below by `since`: the book is judged
     // as of `at`, so a model first run after `at` (and every later call and
     // token) would otherwise be reported against a snapshot from before it
@@ -299,19 +301,23 @@ export async function readUnpricedModels(args: {
       since: args.since,
       until: args.at,
       page: { afterModel, size: UNPRICED_MODEL_READ_PAGE_SIZE },
-      // The boundaries are chosen from the models the page actually holds,
-      // not from the whole book: `loadPriceBook` returns every list row's
-      // full history plus the organization's own, and that array is rescanned
-      // for every frame. An organization that ran one model paid for every
-      // other model's rate changes, and had its one model's report split into
-      // buckets whose price answer is identical on both sides of the split.
-      boundariesFor: (models) =>
-        priceBookBoundaries(book, {
+      // The boundaries come from the rows that could price the models the
+      // page holds, so an unrelated model's rate change never splits this
+      // page's buckets. The same rows judge the page below.
+      boundariesFor: async (models) => {
+        book = await loadPriceBookSlice({
+          orgId: args.orgId,
+          models,
+          from: args.since,
+          to: args.at,
+        });
+        return priceBookBoundaries(book, {
           models,
           tokenClasses: OBSERVED_TOKEN_CLASSES,
           since: args.since,
           until: args.at,
-        }).map((t) => new Date(t)),
+        }).map((t) => new Date(t));
+      },
     });
     const unpriced = findUnpricedModels({
       observed: observed.map((row) => ({

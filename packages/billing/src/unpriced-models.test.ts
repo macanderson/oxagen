@@ -651,31 +651,35 @@ describe("readUnpricedModels", () => {
   const LATER = new Date("2026-09-05T00:00:00.000Z");
   const LATEST = new Date("2026-09-07T00:00:00.000Z");
 
-  // `loadPriceBook` returns every list row's full history plus the
-  // organization's own. Handing all of it to the frame read makes every frame
-  // scan every rate change any model has ever had — O(frames × all history),
-  // which times out as the catalog grows — and splits the report into buckets
+  // A slice can still hold rows the page's models never use, such as another
+  // class's rate changes. Handing every boundary to the frame read makes every
+  // frame scan every rate change in the book, O(frames × all history), which
+  // times out as the catalog grows. It also splits the report into buckets
   // whose price answer is identical on both sides, so an unrelated model's
   // price change fragments a report about a model the org never ran.
   it("hands the frame read only the boundaries the observed models could actually be repriced at", async () => {
-    const loadSpy = vi.spyOn(priceBook, "loadPriceBook").mockResolvedValue([
-      // The observed model's own token rows: one boundary, at FROM.
-      ...fullyPriced("watched"),
-      // A model this organization never ran, repriced twice.
-      entry({ model: "unrelated", effectiveFrom: LATER, effectiveTo: LATEST }),
-      // The observed model, in a class no token frame can ever report.
-      entry({
-        model: "watched",
-        tokenClass: "image",
-        effectiveFrom: LATEST,
-      }),
-    ]);
+    const loadSpy = vi
+      .spyOn(priceBook, "loadPriceBookSlice")
+      .mockResolvedValue([
+        // The observed model's own token rows: one boundary, at FROM.
+        ...fullyPriced("watched"),
+        // A model this organization never ran, repriced twice.
+        entry({ model: "unrelated", effectiveFrom: LATER, effectiveTo: LATEST }),
+        // The observed model, in a class no token frame can ever report.
+        entry({
+          model: "watched",
+          tokenClass: "image",
+          effectiveFrom: LATEST,
+        }),
+      ]);
     let handed: Date[] | null = null;
     readObservedModelsMock.mockImplementation(async (args) => {
       const typed = args as {
-        boundariesFor: (models: readonly string[]) => readonly Date[];
+        boundariesFor: (
+          models: readonly string[],
+        ) => Promise<readonly Date[]>;
       };
-      handed = [...typed.boundariesFor(["watched"])];
+      handed = [...(await typed.boundariesFor(["watched"]))];
       return [];
     });
 
@@ -693,28 +697,32 @@ describe("readUnpricedModels", () => {
     const before = new Date(SINCE.getTime() - 1);
     const inside = new Date("2026-09-07T00:00:00.000Z");
     const after = new Date(AT.getTime() + 1);
-    const loadSpy = vi.spyOn(priceBook, "loadPriceBook").mockResolvedValue([
-      entry({ model: "watched", effectiveFrom: before, effectiveTo: SINCE }),
-      entry({ model: "watched", effectiveFrom: SINCE, effectiveTo: inside }),
-      entry({ model: "watched", effectiveFrom: inside, effectiveTo: AT }),
-      entry({ model: "watched", effectiveFrom: AT, effectiveTo: after }),
-      entry({ model: "watched", effectiveFrom: after }),
-      entry({
-        model: "unrelated",
-        effectiveFrom: new Date(inside.getTime() + 1),
-      }),
-      entry({
-        model: "watched",
-        tokenClass: "image",
-        effectiveFrom: new Date(inside.getTime() + 2),
-      }),
-    ]);
+    const loadSpy = vi
+      .spyOn(priceBook, "loadPriceBookSlice")
+      .mockResolvedValue([
+        entry({ model: "watched", effectiveFrom: before, effectiveTo: SINCE }),
+        entry({ model: "watched", effectiveFrom: SINCE, effectiveTo: inside }),
+        entry({ model: "watched", effectiveFrom: inside, effectiveTo: AT }),
+        entry({ model: "watched", effectiveFrom: AT, effectiveTo: after }),
+        entry({ model: "watched", effectiveFrom: after }),
+        entry({
+          model: "unrelated",
+          effectiveFrom: new Date(inside.getTime() + 1),
+        }),
+        entry({
+          model: "watched",
+          tokenClass: "image",
+          effectiveFrom: new Date(inside.getTime() + 2),
+        }),
+      ]);
     let handed: readonly Date[] = [];
     readObservedModelsMock.mockImplementation(async (args) => {
       const typed = args as {
-        boundariesFor: (models: readonly string[]) => readonly Date[];
+        boundariesFor: (
+          models: readonly string[],
+        ) => Promise<readonly Date[]>;
       };
-      handed = typed.boundariesFor(["watched"]);
+      handed = await typed.boundariesFor(["watched"]);
       return [];
     });
     try {
@@ -727,13 +735,15 @@ describe("readUnpricedModels", () => {
 
   it("reports what the frame read observed, judged against the book", async () => {
     const loadSpy = vi
-      .spyOn(priceBook, "loadPriceBook")
+      .spyOn(priceBook, "loadPriceBookSlice")
       .mockResolvedValue(fullyPriced("priced"));
     readObservedModelsMock.mockImplementation(async (args) => {
       const typed = args as {
-        boundariesFor: (models: readonly string[]) => readonly Date[];
+        boundariesFor: (
+          models: readonly string[],
+        ) => Promise<readonly Date[]>;
       };
-      typed.boundariesFor(["priced", "nameless"]);
+      await typed.boundariesFor(["priced", "nameless"]);
       return [
         {
           model: "nameless",
@@ -786,7 +796,9 @@ describe("readUnpricedModels", () => {
   // an unpriced model with little usage past it never reached the comparison.
   // The report now walks every page in model-id order.
   it("reports an unpriced model that only the second page of the frame read holds", async () => {
-    const loadSpy = vi.spyOn(priceBook, "loadPriceBook").mockResolvedValue([]);
+    const loadSpy = vi
+      .spyOn(priceBook, "loadPriceBookSlice")
+      .mockResolvedValue([]);
     const row = (model: string, tokens: number) => ({
       model,
       provider: "vendor",
@@ -814,12 +826,14 @@ describe("readUnpricedModels", () => {
     readObservedModelsMock.mockImplementation(async (args) => {
       const typed = args as {
         page: { afterModel?: string; size: number };
-        boundariesFor: (models: readonly string[]) => readonly Date[];
+        boundariesFor: (
+          models: readonly string[],
+        ) => Promise<readonly Date[]>;
       };
       pages.push(typed.page);
       const rows =
         typed.page.afterModel === undefined ? firstPage : [row("z-light", 1)];
-      typed.boundariesFor(rows.map((r) => r.model));
+      await typed.boundariesFor(rows.map((r) => r.model));
       return rows;
     });
     try {
@@ -857,7 +871,7 @@ describe("readUnpricedModels", () => {
       (_, index) => `a-${String(index).padStart(5, "0")}`,
     );
     const loadSpy = vi
-      .spyOn(priceBook, "loadPriceBook")
+      .spyOn(priceBook, "loadPriceBookSlice")
       .mockResolvedValue(heavy.flatMap((m) => fullyPriced(m)));
     const row = (model: string, tokens: number) => ({
       model,
@@ -877,11 +891,19 @@ describe("readUnpricedModels", () => {
       ],
     });
     readObservedModelsMock.mockImplementation(async (args) => {
-      const typed = args as { page: { afterModel?: string; size: number } };
+      const typed = args as {
+        page: { afterModel?: string; size: number };
+        boundariesFor: (
+          models: readonly string[],
+        ) => Promise<readonly Date[]>;
+      };
       expect(typed.page.size).toBe(UNPRICED_MODEL_READ_PAGE_SIZE);
-      return typed.page.afterModel === undefined
-        ? heavy.map((m) => row(m, 1_000_000))
-        : [row("z-light", 1)];
+      const rows =
+        typed.page.afterModel === undefined
+          ? heavy.map((m) => row(m, 1_000_000))
+          : [row("z-light", 1)];
+      await typed.boundariesFor(rows.map((r) => r.model));
+      return rows;
     });
     try {
       const out = await readUnpricedModels({
@@ -896,12 +918,82 @@ describe("readUnpricedModels", () => {
     }
   });
 
+  // #4202. The report loaded the whole book, every list row's full history,
+  // and held it across every page. Each page now loads only the rows that
+  // could price its own models over the report window.
+  it("loads one slice of the book per page, for that page's models", async () => {
+    const firstPage = Array.from(
+      { length: UNPRICED_MODEL_READ_PAGE_SIZE },
+      (_, index) => `a-${String(index).padStart(5, "0")}`,
+    );
+    const secondPage = ["b-priced", "c-unpriced"];
+    const wholeBook = vi
+      .spyOn(priceBook, "loadPriceBook")
+      .mockResolvedValue([]);
+    // The slice prices every model it is asked for except `c-unpriced`.
+    const sliceSpy = vi
+      .spyOn(priceBook, "loadPriceBookSlice")
+      .mockImplementation(async (slice) =>
+        slice.models
+          .filter((m) => m !== "c-unpriced")
+          .flatMap((m) => fullyPriced(m)),
+      );
+    const row = (model: string) => ({
+      model,
+      provider: "vendor",
+      calls: 1,
+      tokens: 10,
+      firstSeen: "2026-09-02T00:00:00.000Z",
+      lastSeen: "2026-09-02T00:00:00.000Z",
+      classes: [
+        {
+          tokenClass: "output",
+          calls: 1,
+          tokens: 10,
+          firstSeen: "2026-09-02T00:00:00.000Z",
+          lastSeen: "2026-09-02T00:00:00.000Z",
+        },
+      ],
+    });
+    readObservedModelsMock.mockImplementation(async (args) => {
+      const typed = args as {
+        page: { afterModel?: string; size: number };
+        boundariesFor: (
+          models: readonly string[],
+        ) => Promise<readonly Date[]>;
+      };
+      const models =
+        typed.page.afterModel === undefined ? firstPage : secondPage;
+      await typed.boundariesFor(models);
+      return models.map(row);
+    });
+    try {
+      const out = await readUnpricedModels({
+        orgId: ORG,
+        since: SINCE,
+        at: AT,
+      });
+      expect(wholeBook).not.toHaveBeenCalled();
+      expect(sliceSpy.mock.calls.map(([slice]) => slice)).toEqual([
+        { orgId: ORG, models: firstPage, from: SINCE, to: AT },
+        { orgId: ORG, models: secondPage, from: SINCE, to: AT },
+      ]);
+      // Page two is judged against its own slice.
+      expect(out.map((m) => m.model)).toEqual(["c-unpriced"]);
+    } finally {
+      wholeBook.mockRestore();
+      sliceSpy.mockRestore();
+    }
+  });
+
   // #3641. ClickHouse orders a String by its UTF-8 bytes, and JavaScript's
   // `>` orders by UTF-16 code units. An emoji sorts after U+FF5E in the store
   // and before it in JavaScript, so a cursor check written with `>` read a
   // page that did advance as stuck and failed the whole report.
   it("walks pages whose ids cross from the BMP past U+FFFF in store order", async () => {
-    const loadSpy = vi.spyOn(priceBook, "loadPriceBook").mockResolvedValue([]);
+    const loadSpy = vi
+      .spyOn(priceBook, "loadPriceBookSlice")
+      .mockResolvedValue([]);
     const row = (model: string) => ({
       model,
       provider: null,
@@ -950,7 +1042,9 @@ describe("readUnpricedModels", () => {
   });
 
   it("stops when a page does not move the cursor forward", async () => {
-    const loadSpy = vi.spyOn(priceBook, "loadPriceBook").mockResolvedValue([]);
+    const loadSpy = vi
+      .spyOn(priceBook, "loadPriceBookSlice")
+      .mockResolvedValue([]);
     const stuck = Array.from({ length: UNPRICED_MODEL_READ_PAGE_SIZE }, () => ({
       model: "same",
       provider: null,
