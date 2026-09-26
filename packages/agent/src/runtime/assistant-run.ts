@@ -171,6 +171,7 @@ export const ASSISTANT_MAX_CONTEXT_TOKENS = 8192;
 
 export type AssistantRunNotRecordedReason =
   | "assistant_agent_missing"
+  | "assistant_agent_inactive"
   | "operator_principal_missing"
   | "ledger_refused";
 
@@ -358,6 +359,7 @@ export async function resolveAssistantRunIdentity(
   const [agent] = await tx
     .select({
       id: schema.agents.id,
+      status: schema.agents.status,
       principalId: schema.agents.principalId,
       activeVersionId: schema.agents.activeVersionId,
     })
@@ -376,6 +378,28 @@ export async function resolveAssistantRunIdentity(
       "assistant_agent_missing",
       `the workspace has no published ${INTERACTIVE_AGENT_SLUG} agent`,
     );
+  }
+  // A retired assistant, or one whose principal is suspended, would pass the
+  // reads below and fail inside the authorization snapshot, which refuses a
+  // non-active principal. Name the cause here instead (#4350).
+  if (agent.status === "archived") {
+    throw new AssistantRunNotRecordedError(
+      "assistant_agent_inactive",
+      `the workspace's ${INTERACTIVE_AGENT_SLUG} agent is retired`,
+    );
+  }
+  if (agent.principalId !== null) {
+    const [principal] = await tx
+      .select({ status: schema.principals.status })
+      .from(schema.principals)
+      .where(eq(schema.principals.id, agent.principalId))
+      .limit(1);
+    if (principal?.status !== "active") {
+      throw new AssistantRunNotRecordedError(
+        "assistant_agent_inactive",
+        `the ${INTERACTIVE_AGENT_SLUG} agent's ${ASSISTANT_PRINCIPAL_NAME} principal is ${principal?.status ?? "missing"}`,
+      );
+    }
   }
 
   const [version] = await tx
@@ -560,13 +584,16 @@ export async function openAssistantRun(
       withTenantDb((tx) => resolveAssistantRunIdentity(tx, scope, args.userId)),
     );
   } catch (err) {
-    throw err instanceof AssistantRunNotRecordedError
-      ? err
-      : new AssistantRunNotRecordedError(
-          "ledger_refused",
-          errorMessage(err),
-          err,
-        );
+    throw loggedRefusal(
+      scope,
+      err instanceof AssistantRunNotRecordedError
+        ? err
+        : new AssistantRunNotRecordedError(
+            "ledger_refused",
+            errorMessage(err),
+            err,
+          ),
+    );
   }
 
   try {
@@ -709,12 +736,37 @@ export async function openAssistantRun(
     }
     return recorder;
   } catch (err) {
-    throw new AssistantRunNotRecordedError(
-      "ledger_refused",
-      errorMessage(err),
-      err,
+    throw loggedRefusal(
+      scope,
+      new AssistantRunNotRecordedError(
+        "ledger_refused",
+        errorMessage(err),
+        err,
+      ),
     );
   }
+}
+
+/**
+ * Log a refused admission and hand the error back to throw. The flyout shows
+ * one sentence for every refusal, so this line is the only place the cause is
+ * written down: a retired assistant agent refused every turn in a workspace
+ * for over an hour on 2026-09-25 and left nothing in the logs (#4350).
+ */
+function loggedRefusal(
+  scope: AssistantRunScope,
+  err: AssistantRunNotRecordedError,
+): AssistantRunNotRecordedError {
+  logger.warn(
+    {
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      reason: err.reason,
+      err,
+    },
+    "assistant turn not admitted: the run could not be recorded",
+  );
+  return err;
 }
 
 /**

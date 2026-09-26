@@ -31,15 +31,10 @@
     "chooser": {
       "title": "Create",
       "lead": "One shape for everything you create here: you describe it, Oxagen drafts the file, you read it, and a pull request publishes it.",
-      "note": "None of these writes a row. Each one ends on a pull request against {repository}, where a reviewer decides whether to merge the files. Register a new agent after merge to create its identity.",
-      "noteUnknown": "None of these writes a row. Each one ends on a pull request against the workspace’s main repository, where a reviewer decides whether to merge the files. Register a new agent after merge to create its identity."
+      "note": "None of these writes a row. Each one ends on a pull request against {repository}, where a reviewer decides whether to merge the files.",
+      "noteUnknown": "None of these writes a row. Each one ends on a pull request against the workspace’s main repository, where a reviewer decides whether to merge the files."
     },
     "kinds": {
-      "agent": {
-        "label": "Agent",
-        "body": "A principal that does work here, with a definition, a toolbelt and a budget.",
-        "file": ".oxagen/agents/*.toml"
-      },
       "tool": {
         "label": "Tool",
         "body": "A capability an agent can be granted. Imported from an MCP server, or built here.",
@@ -225,7 +220,6 @@
       "title": "Clone configuration",
       "lead": "Review a copy under a new name. This opens a proposal and leaves the original in place. It copies no credentials or access grants.",
       "loading": "Reading published configuration…",
-      "name": "Display name",
       "label": "Label",
       "slug": "Source identifier",
       "source": "Configuration source",

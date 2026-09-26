@@ -14,7 +14,7 @@
 import { z } from "zod";
 import { PublicId } from "./common";
 import { Cost } from "./money";
-import { EnforcementTier, ReplayGrade, RunRow } from "./runs";
+import { EnforcementTier, ReplayGrade, RunRow, RunTokenCounts } from "./runs";
 
 const Count = z.number().int().nonnegative();
 const Ratio = z.number().min(0).max(1);
@@ -122,14 +122,6 @@ export const RunDetail = z.object({
 });
 export type RunDetail = z.infer<typeof RunDetail>;
 
-const TokenCounts = z.object({
-  inputUncached: Count,
-  cacheRead: Count,
-  cacheWrite5m: Count,
-  cacheWrite1h: Count,
-  output: Count,
-  reasoning: Count,
-});
 /**
  * A model's recorded cost split by token class. The rollup priced each frame
  * from the price book at the frame's instant (ADR-060), so these are the
@@ -154,7 +146,7 @@ const RunCostModel = z.object({
 });
 
 const RunCostByModel = RunCostModel.extend({
-  tokens: TokenCounts,
+  tokens: RunTokenCounts,
   /** `cost` by token class; null exactly when `cost` is. */
   costByClass: CostByClass.nullable(),
   /**
@@ -181,7 +173,7 @@ const RunCostByTool = z.object({
 
 const RunCostRollup = z.object({
   cost: Cost.nullable(),
-  tokens: TokenCounts,
+  tokens: RunTokenCounts,
   /** cache_read ÷ (input_uncached + cache_read), spend-weighted. */
   cacheHitRate: Ratio.nullable(),
   turns: Count.nullable(),
@@ -687,6 +679,12 @@ export const TranscriptEntry = z.object({
   quiet: z.boolean(),
   /** How the entry's call ended; null for an entry that records no call. */
   outcome: TranscriptOutcome.nullable(),
+  /**
+   * The server counts the entry under `counts.errors`: it failed, it was
+   * refused, or it answers the errors chip. The page marks its rows failed
+   * by this and by no rule of its own (ADR-182).
+   */
+  error: z.boolean(),
   /** The approval a parked call waits on (`apr_…`); null otherwise. */
   approvalId: PublicId.nullable(),
   /** Every decision folded into the entry, in the order recorded. */
@@ -804,6 +802,13 @@ export const RunTranscript = z.object({
   cursor: z.string().nullable(),
   /** False when the run has more frames than one transcript could carry. */
   complete: z.boolean(),
+  /**
+   * Where the run's stream opens for a reader holding this transcript: the
+   * cursor of the last frame on the run's own chain the read folded. Null or
+   * absent when the read folded none, and the stream then opens at the run's
+   * first frame.
+   */
+  frameCursor: z.string().nullable().optional(),
   /** The run's entries counted at this zoom; null when the answer carried none. */
   counts: TranscriptCounts.nullable(),
   /** The run's figures; null when the answer carried none. */

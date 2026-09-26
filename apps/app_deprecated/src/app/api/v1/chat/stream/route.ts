@@ -69,10 +69,6 @@ import {
   resolveGroundingCitations,
 } from "./recall-context";
 import { buildPageContextMessage } from "./page-context";
-import {
-  applyAgentBinding,
-  type AgentBindingDefinition,
-} from "./apply-agent-binding";
 // Per-turn dollar budget (OXA — turn-budget). The gate itself (policy shape,
 // modes, the pure evaluator, createTurnBudgetGuard) lives in @oxagen/billing —
 // this route only resolves the effective policy and wires the three hooks to
@@ -171,10 +167,8 @@ const BodySchema = z.object({
   // Selected/bound agent (OXA app-agent-selector + Workbench chat↔agent binding) —
   // the publicId (`agt_…`) of the agent chosen in the composer (or threaded
   // from the Ask page's `?agent=<publicId>` URL param), or null/omitted for the
-  // default (generic chat) agent. When present, this turn is BOUND to that
-  // agent: its instructions ride the system prompt and its equipped MCP servers
-  // extend the toolset. Absent `agentId`, every downstream value is untouched
-  // (byte-for-byte the pre-binding behavior).
+  // default (generic chat) agent. ADR-198 removed agent definitions, so the
+  // field is still accepted from older clients and changes nothing.
   agentId: z.string().min(1).max(64).nullable().default(null),
   // ADR-043: the pinned repo/environment chat context (`pinnedContext`) went
   // with the code target it named.
@@ -246,7 +240,6 @@ export async function POST(request: NextRequest): Promise<Response> {
     effort,
     newConversation,
     activeServerIds,
-    agentId,
     pageContext,
     attachments,
     budget: requestBudget,
@@ -721,43 +714,12 @@ export async function POST(request: NextRequest): Promise<Response> {
           clientIp,
         };
 
-        // ── Optional agent binding (launch a published agent into this session) ─
-        // When the request carries an `agentId`, load that agent's definition ONCE
-        // and merge its config into THIS turn BEFORE tools + prompt are assembled:
-        //   • instructions → appended to the system-prompt baseline (below),
-        //   • mcp_server agentTools → unioned into the MCP server allowlist.
-        // Absent an agent, every effective value is exactly the request value.
-        //
-        // FAIL-OPEN: a failed/denied agent.definition.get must NEVER break the
-        // turn — log and fall through to the normal (unbound) behavior, exactly
-        // like the budget-governance read below. Runs in a tenant scope because
-        // the handler reads through withTenantDb. { surface: "agent" } — the
-        // contract's `surfaces` list is ["api","mcp","agent"], not "app".
-        let boundInstructions = "";
-        let effectiveServerIds = activeServerIds;
-        const effectiveAgentId = agentId;
-        if (effectiveAgentId) {
-          try {
-            const def = await runInTenantScope(
-              { orgId: tenant.id, workspaceId: workspace.id },
-              () =>
-                invoke("get_agent_def", { agentId: effectiveAgentId }, capCtx, {
-                  surface: "agent",
-                }),
-            );
-            const binding = applyAgentBinding({
-              def: def as AgentBindingDefinition,
-              serverAllowlist: activeServerIds,
-            });
-            boundInstructions = binding.instructions;
-            effectiveServerIds = binding.serverAllowlist;
-          } catch (err) {
-            logger.warn(
-              { err, agentId: effectiveAgentId, requestId },
-              "[chat/stream] agent binding failed — running unbound turn",
-            );
-          }
-        }
+        // ── Agent binding, retired by ADR-198 ─────────────────────────────────
+        // A turn bound to an agent merged that agent's definition (instructions
+        // and MCP servers) into the turn. ADR-198 removed agent definitions, so
+        // an `agentId` on the request no longer changes the turn: the MCP
+        // allowlist is exactly the request's.
+        const effectiveServerIds = activeServerIds;
 
         const [
           {
@@ -1123,16 +1085,12 @@ export async function POST(request: NextRequest): Promise<Response> {
         // volatile per-turn context rides as USER messages (ADR-021 §2).
         const systemPrompt = resolvePrompt({
           key: "chat.system",
-          baseline:
-            buildChatSystemPrompt({
-              orgSlug,
-              workspaceSlug,
-              orgName: tenant.name,
-              workspaceName: workspace.name,
-            }) +
-            (boundInstructions
-              ? `\n\n---\n\n## Agent instructions\n\n${boundInstructions}`
-              : ""),
+          baseline: buildChatSystemPrompt({
+            orgSlug,
+            workspaceSlug,
+            orgName: tenant.name,
+            workspaceName: workspace.name,
+          }),
           config: promptConfig,
         });
 

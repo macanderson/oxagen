@@ -60,14 +60,8 @@ import {
   toRunTurns,
 } from "./mappers/run";
 import { toRunContext } from "./mappers/run-context";
+import { toRunListInput } from "./mappers/run-list-input";
 import { toRunPage } from "./mappers/runs";
-
-/**
- * Runs per read when the caller names no page size: the contract's ceiling.
- * Fleet names one (its page-size choice); the agents page and the choice
- * dialogs read the ceiling.
- */
-const RUN_PAGE = 100;
 
 /** Frames per page of the Frames tab: the contract's own default, named so the mapper can see it. */
 const FRAME_PAGE = FRAME_LIMIT_DEFAULT;
@@ -181,13 +175,7 @@ export const runs: DataSource["runs"] = {
   async list(ctx, q) {
     const read = await kernelRead(ctx, {
       contract: runList,
-      input: {
-        limit: q.limit ?? RUN_PAGE,
-        ...(q.cursor === null ? {} : { cursor: q.cursor }),
-        ...(q.pullRequests === undefined || q.pullRequests === "any"
-          ? {}
-          : { pullRequests: q.pullRequests }),
-      },
+      input: toRunListInput(q),
       page: "fleet",
     });
     if (!read.ok) return read;

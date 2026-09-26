@@ -47,9 +47,19 @@ export const RUN_PROGRESSED_EVENT = "cost/run.progressed";
 export const RUN_ENRICH_EVENT = "run/enrich";
 
 /**
- * Asks `run.fit` for a sealed run's Model fit reading (#3893, ADR-194). Sent
+ * Asks `run.fit` for a sealed run's Model fit reading (#3893, ADR-201). Sent
  * by `cost.run-rollup` once the run's `cost.run_totals` row lands, because the
  * reading reads that row's output and reasoning tokens. Data is
  * `{ orgId, workspaceId, runId }`, where `runId` is the run's public id.
  */
 export const RUN_FIT_REQUESTED_EVENT = "run/fit.requested";
+
+/**
+ * Asks `run.pull-request-backfill` to store a row for one pull request link
+ * a run recorded, and to read its state once from the forge (ADR-192). Sent
+ * by the tacho ingest handler for each root session and URL a batch's
+ * `oxagen:pr_link` or `pr.url` frames name, with an id that holds for that
+ * pair, so a re-sent batch asks once. Data is
+ * `{ orgId, workspaceId, rootSessionUuid, url }`.
+ */
+export const RUN_PULL_REQUEST_LINKED_EVENT = "run/pull-request.linked";

@@ -160,7 +160,7 @@ describe("pull requests on a Fleet row", () => {
       name: "Open acme/platform/web!9 on GitLab",
     });
     expect(gitlab).toHaveAttribute("href", GITLAB.url);
-    // No store records a pull request's state: each says so, never "open".
+    // No forge has reported either state: each says so, never "open".
     const states = within(row).getAllByTestId("row-pr-state");
     expect(states.map((s) => s.textContent)).toEqual([
       "status unknown",
@@ -168,7 +168,7 @@ describe("pull requests on a Fleet row", () => {
     ]);
     expect(states[0]).toHaveAttribute(
       "title",
-      "Oxagen does not record pull request status yet. Open the run to read it from GitHub.",
+      "No forge has reported this pull request's status to Oxagen. Open the run to read it from GitHub.",
     );
   });
 
@@ -308,27 +308,20 @@ describe("lines changed and the summary on a Fleet row", () => {
     expect(rowOf("arun_nosummary")).toHaveTextContent("No summary yet");
   });
 
-  it("sorts on the lines changed, with rows that recorded none last", async () => {
+  // #3837: a header sorts only when the read can order the whole workspace
+  // by it. Lines changed has no single order across both stores, and sorting
+  // the rows of one page would put page 2's largest change out of reach.
+  it("draws the Lines header without a sort, since the read cannot order by it", async () => {
     await renderFleet([
       runRow({
         id: "tse_small",
         diff: { added: 1, removed: 0, basis: "git_observed" },
       }),
-      runRow({ id: "tse_none", diff: null }),
-      runRow({
-        id: "tse_big",
-        diff: { added: 90, removed: 10, basis: "harness_reported" },
-      }),
     ]);
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Sort by Lines" }));
-    const order = () =>
-      within(runsPanel())
-        .getAllByTestId("run-row")
-        .map((r) => within(r).getAllByRole("link")[0]?.textContent);
-    expect(order()).toEqual(["tse_small", "tse_big", "tse_none"]);
-    await user.click(screen.getByRole("button", { name: "Sort by Lines" }));
-    expect(order()).toEqual(["tse_big", "tse_small", "tse_none"]);
+    expect(screen.queryByRole("button", { name: "Sort by Lines" })).toBeNull();
+    expect(
+      screen.getByRole("columnheader", { name: "Lines" }),
+    ).not.toHaveAttribute("aria-sort");
   });
 });
 
@@ -339,7 +332,16 @@ describe("the pull-request filter", () => {
       { pullRequests: "with", nextCursor: "c9" },
     );
     expect(calls.runs).toEqual([
-      [ctx, { cursor: null, limit: 25, pullRequests: "with" }],
+      [
+        ctx,
+        {
+          cursor: null,
+          limit: 25,
+          pullRequests: "with",
+          count: true,
+          countLive: true,
+        },
+      ],
     ]);
     expect(screen.getByTestId("pr-filter")).toHaveValue("with");
     expect(screen.getByTestId("pr-filter-note")).toHaveTextContent(

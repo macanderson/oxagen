@@ -19,7 +19,11 @@
 import { digestText } from "../claude-code/context";
 import type { SessionRecorder } from "../claude-code/recorder";
 import type { TachoEvent } from "../envelope";
-import type { CommandAcknowledgement, DeliveredCommand } from "../wire";
+import {
+  type CommandAcknowledgement,
+  commandAcknowledgementSchema,
+  type DeliveredCommand,
+} from "../wire";
 import {
   isInternalSession,
   type SessionRecord,
@@ -32,6 +36,12 @@ export interface InboxDeps {
   hostRecorder: () => SessionRecorder;
   /** Send a signal; returns false when the process is gone or refuses. */
   kill: (pid: number, signal: "SIGTERM" | "SIGKILL") => boolean;
+  /**
+   * When the process holding this pid started, in the form the registry
+   * recorded it (`SessionFacts.pidInstance`), or undefined when that cannot
+   * be read. Absent, nothing is compared.
+   */
+  processStart?: (pid: number) => string | undefined;
   refreshBundle: () => Promise<void>;
   onHostSuspended: (reason: string) => void;
   now: () => number;
@@ -50,13 +60,25 @@ export const HANDLED_COMMANDS_KEPT = 1024;
  * plane delivers a `sent` command again until an acknowledgement for it
  * lands, so an acknowledgement lost on the way back brings the same steer or
  * kill round a second time. A command found here is not applied again: its
- * first acknowledgement is queued once more instead. Held in memory, so a
- * restart forgets it.
+ * first acknowledgement is queued once more instead.
+ *
+ * The daemon writes it to the sealed-state file beside the released
+ * sessions (`list` and `restore`), in the state write that lands before the
+ * acknowledgements leave, and only when `generation` moved. Held in memory
+ * alone, a restart forgot it, and a steer the agent had already read was
+ * queued and read a second time when the lost acknowledgement brought it
+ * back.
  */
 export class HandledCommands {
   private readonly acks = new Map<string, CommandAcknowledgement>();
+  private changes = 0;
 
   constructor(private readonly limit = HANDLED_COMMANDS_KEPT) {}
+
+  /** Moves on every change, so a writer knows when the file is behind. */
+  get generation(): number {
+    return this.changes;
+  }
 
   get(commandId: string): CommandAcknowledgement | undefined {
     const ack = this.acks.get(commandId);
@@ -64,11 +86,29 @@ export class HandledCommands {
   }
 
   remember(ack: CommandAcknowledgement): void {
+    this.changes += 1;
     this.acks.delete(ack.command_id);
     this.acks.set(ack.command_id, { ...ack });
     for (const id of this.acks.keys()) {
       if (this.acks.size <= this.limit) break;
       this.acks.delete(id);
+    }
+  }
+
+  /** Every remembered acknowledgement, oldest first, for the state file. */
+  list(): CommandAcknowledgement[] {
+    return [...this.acks.values()].map((ack) => ({ ...ack }));
+  }
+
+  /**
+   * Take back the acknowledgements a state file held, oldest first. An entry
+   * that is not an acknowledgement is skipped: the file is on the operator's
+   * machine, and a bad entry must not stop the daemon from starting.
+   */
+  restore(entries: readonly unknown[]): void {
+    for (const entry of entries) {
+      const parsed = commandAcknowledgementSchema.safeParse(entry);
+      if (parsed.success) this.remember(parsed.data);
     }
   }
 }
@@ -132,17 +172,40 @@ function applied(
 
 type KillOutcome = "sent" | "failed" | "no_pid";
 
+/**
+ * Whether the pid now names a process that started at another time than
+ * the one the session recorded: the harness exited and the OS gave its pid
+ * to something else. Only a start time read now and different from the
+ * recorded one counts. With none recorded (Windows has no `ps`, and a record
+ * from an older state file has none) the bare pid stands, as it always has
+ * on Windows; the sweep's `STALE_PID_SESSION_MS` bound is what limits that
+ * exposure there. With none read now, the pid names no process, or `ps`
+ * did not answer, and the signal itself reports a pid that is gone.
+ */
+function pidReused(record: SessionRecord, deps: InboxDeps): boolean {
+  if (record.pid === undefined || record.pidInstance === undefined)
+    return false;
+  const now = deps.processStart?.(record.pid);
+  return now !== undefined && now !== record.pidInstance;
+}
+
 function killAttempt(
   record: SessionRecord,
   command: DeliveredCommand,
   signal: "SIGTERM" | "SIGKILL",
   deps: InboxDeps,
-): { event: TachoEvent; outcome: KillOutcome } {
+): { event: TachoEvent; outcome: KillOutcome; reused: boolean } {
   let outcome: KillOutcome;
+  let reused = false;
   if (record.pid === undefined) outcome = "no_pid";
   // The daemon never signals itself, whatever pid a record carries.
   else if (record.pid === process.pid) outcome = "failed";
-  else outcome = deps.kill(record.pid, signal) ? "sent" : "failed";
+  // The session's own process is gone, so it has no pid to signal. The
+  // process holding the number now is not the agent's.
+  else if (pidReused(record, deps)) {
+    outcome = "no_pid";
+    reused = true;
+  } else outcome = deps.kill(record.pid, signal) ? "sent" : "failed";
   const event = record.recorder.sealCollectorEvent(
     "oxagen:kill_attempted",
     { kill_signal: signal, kill_outcome: outcome },
@@ -152,10 +215,11 @@ function killAttempt(
         ...(record.pid !== undefined
           ? { "process.pid": String(record.pid) }
           : {}),
+        ...(reused ? { "process.pid_reused": "1" } : {}),
       },
     },
   );
-  return { event, outcome };
+  return { event, outcome, reused };
 }
 
 function applyToSession(
@@ -224,7 +288,9 @@ function applyToSession(
       return {
         events,
         status: "failed",
-        detail: `${signal} was not delivered (${attempt.outcome})`,
+        detail: attempt.reused
+          ? `${signal} was not delivered (${attempt.outcome}: pid ${record.pid} now names another process)`
+          : `${signal} was not delivered (${attempt.outcome})`,
       };
     }
     case "message":
@@ -236,6 +302,11 @@ function applyToSession(
           status: "failed",
           detail: `${command.command} payload has no text`,
         };
+      // Queued once. The ledger answers a redelivery before it gets here, but
+      // a ledger past its bound no longer holds an old command, and the
+      // queue itself still does until a boundary takes it.
+      if (record.control.messages.some((queued) => queued.id === command.id))
+        return { events, status: "received" };
       record.control.messages.push({
         id: command.id,
         text,

@@ -546,6 +546,16 @@ function WallTile({ metrics }: { metrics: RunMetrics }) {
   );
 }
 
+/**
+ * A share above zero never prints as 0%. `formatRatio` keeps one decimal, so
+ * a share under 0.05% would round to "0%" while the run did write.
+ */
+function formatShare(share: number, locale: string): string {
+  return share > 0 && share < 0.0005
+    ? `<${formatRatio(0.001, locale)}`
+    : formatRatio(share, locale);
+}
+
 function TokensTile({
   metrics,
   prices,
@@ -658,13 +668,11 @@ function TokensTile({
             // The hit rate leaves cache writes out, so a rebuilt cache shows
             // here as the share of input written to it (A-08).
             writes:
-              writes === 0
+              writes === 0 || rebuilt === null
                 ? t("nothingWritten")
-                : rebuilt === null
-                  ? null
-                  : t.rich("written", {
-                      share: () => <b>{formatRatio(rebuilt, locale)}</b>,
-                    }),
+                : t.rich("written", {
+                    share: () => <b>{formatShare(rebuilt, locale)}</b>,
+                  }),
           }}
         />
       }

@@ -38,7 +38,6 @@ const {
   Run,
   Agents,
   Agent,
-  AgentSource,
   Steering,
   Spend,
   Organization,
@@ -76,7 +75,6 @@ const {
     // stub draws the header it is handed.
     Agents: vi.fn((props: { header?: ReactNode }) => <>{props.header}</>),
     Agent: vi.fn((_props: Record<string, unknown>) => null),
-    AgentSource: vi.fn((_props: Record<string, unknown>) => null),
     Steering: vi.fn(
       (props: {
         view: { tab: string };
@@ -148,11 +146,15 @@ vi.mock("@/features/fleet", async () => {
   const prefs = await vi.importActual<Record<string, unknown>>(
     "@/features/fleet/prefs",
   );
+  const listQuery = await vi.importActual<Record<string, unknown>>(
+    "@/features/fleet/list-query",
+  );
   return {
     Fleet,
     FLEET_PREFS_COOKIE: prefs.FLEET_PREFS_COOKIE,
     readFleetPrefs: prefs.readFleetPrefs,
     pullRequestFilterOf: prefs.pullRequestFilterOf,
+    parseListQuery: listQuery.parseListQuery,
   };
 });
 vi.mock("next/headers", () => ({
@@ -174,7 +176,6 @@ vi.mock("@/features/agents", () => ({
   Agents,
   AgentsLoading: () => null,
   Agent,
-  AgentSource,
   AgentsCreate: () => null,
 }));
 // The view parser and link builder stay real: the route redirects a legacy
@@ -279,7 +280,6 @@ const STEERING_VIEW = () => import("./[ws]/steering/[...view]/page");
 const FLEET: Load = () => import("./[ws]/(fleet)/page");
 const AGENTS: Load = () => import("./[ws]/agents/page");
 const AGENT: Load = () => import("./[ws]/agents/[agent]/page");
-const AGENT_SOURCE: Load = () => import("./[ws]/agents/[agent]/source/page");
 /** The agent page with its tab as a path segment; its params carry `tab`. */
 const AGENT_TAB = () => import("./[ws]/agents/[agent]/[tab]/page");
 const SPEND: Load = () => import("./[ws]/spend/[[...tab]]/page");
@@ -684,6 +684,16 @@ describe("the Fleet page", () => {
       cursor: "c2",
       prefs: { pageSize: 25, hidden: new Set() },
       pullRequests: "any",
+      // No search, facet, order or page on the URL: the default list (#3837).
+      list: {
+        q: "",
+        status: [],
+        tier: [],
+        replay: [],
+        sort: "started",
+        dir: "desc",
+        page: 1,
+      },
       banners: <OnboardingGate ctx={ctx} source={source} />,
     });
     expect(screen.getByTestId("onboarding-gate")).toBeInTheDocument();
@@ -827,20 +837,6 @@ describe("the Agents pages", () => {
     expect(Agent.mock.calls.at(-1)?.[0]).toMatchObject({
       tab: "identity",
       cursor: null,
-    });
-  });
-
-  it("the source page hands the agent to AgentSource", async () => {
-    await expectBodyTitled(
-      await AGENT_SOURCE(),
-      routeProps(SEGMENTS),
-      title("agentSource"),
-    );
-    expect(requireViewer).toHaveBeenCalledWith(...WS);
-    expect(AgentSource.mock.calls.at(-1)?.[0]).toEqual({
-      ctx,
-      source,
-      agent: "release-bot",
     });
   });
 });
@@ -1097,7 +1093,6 @@ describe("a person requireViewer refuses", () => {
     ["fleet", FLEET] as const,
     ["agents", AGENTS] as const,
     ["agent", AGENT] as const,
-    ["agentSource", AGENT_SOURCE] as const,
     ["spend", SPEND] as const,
     ["runtimes", RUNTIMES] as const,
     ["run", RUN] as const,

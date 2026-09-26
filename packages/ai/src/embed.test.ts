@@ -1,18 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-// Mock at the gateway + telemetry seam — embedText routes 100% through the
-// Vercel AI Gateway (@ai-sdk/gateway) and must not expose vendor SDKs or
+// Mock at the Voyage model + telemetry seam. embedText sends every embedding to
+// Voyage on the platform key (#4148) and must not expose vendor details or
 // ClickHouse internals to callers.
 const mocks = vi.hoisted(() => ({
   voidUsage: vi.fn(async () => true),
   recordSpend: vi.fn(),
   embed: vi.fn(),
   embedMany: vi.fn(),
-  embeddingModel: vi.fn(),
-  // A customer's own GATEWAY key builds its own client (ADR-053 §2); its
-  // embeddingModel is a separate spy so a test can tell whose key answered.
-  createGateway: vi.fn(),
-  orgEmbeddingModel: vi.fn(),
+  createVoyageEmbeddingModel: vi.fn(),
   insertTokenUsage: vi.fn(),
   hashPrompt: vi.fn(),
   providerCostUsdMicros: vi.fn(),
@@ -22,27 +18,23 @@ const mocks = vi.hoisted(() => ({
 
 // Stub the AI SDK embed call.
 mocks.embed.mockImplementation(async () => ({
-  embedding: new Array(1536).fill(0).map((_, i) => i / 1536),
+  embedding: new Array(1024).fill(0).map((_, i) => i / 1024),
   usage: { tokens: 7 },
 }));
 mocks.embedMany.mockImplementation(
   async ({ values }: { values: string[] }) => ({
     embeddings: values.map((_, n) =>
-      new Array(1536).fill(0).map((_v, i) => (i + n) / 1536),
+      new Array(1024).fill(0).map((_v, i) => (i + n) / 1024),
     ),
     usage: { tokens: 7 * values.length },
   }),
 );
-mocks.embeddingModel.mockReturnValue({
-  modelId: "openai/text-embedding-3-small",
-});
-mocks.orgEmbeddingModel.mockReturnValue({
-  modelId: "openai/text-embedding-3-small",
-  client: "org-gateway",
-});
-mocks.createGateway.mockReturnValue({
-  embeddingModel: mocks.orgEmbeddingModel,
-});
+mocks.createVoyageEmbeddingModel.mockImplementation(
+  (options: { modelId: string }) => ({
+    modelId: options.modelId,
+    provider: "voyage",
+  }),
+);
 // Telemetry stubs.
 mocks.insertTokenUsage.mockResolvedValue(undefined);
 mocks.hashPrompt.mockResolvedValue("deadbeefdeadbeef");
@@ -57,9 +49,8 @@ mocks.chargeUsageCredits.mockResolvedValue({
 });
 
 vi.mock("ai", () => ({ embed: mocks.embed, embedMany: mocks.embedMany }));
-vi.mock("@ai-sdk/gateway", () => ({
-  gateway: { embeddingModel: mocks.embeddingModel },
-  createGateway: mocks.createGateway,
+vi.mock("./voyage", () => ({
+  createVoyageEmbeddingModel: mocks.createVoyageEmbeddingModel,
 }));
 // Stub pino so the usage-absent warning is observable.
 vi.mock("pino", () => ({
@@ -90,13 +81,20 @@ vi.mock("@oxagen/telemetry", async (importOriginal) => {
     hashPrompt: mocks.hashPrompt,
     providerFromModelId: (id: string) => {
       const head = id.split(":")[0] ?? "";
-      return head === "openai" ? "openai" : "";
+      return head === "voyage" ? "voyage" : "";
     },
   };
 });
 
+import { APICallError } from "@ai-sdk/provider";
 import { requireScope, runInTenantScope } from "@oxagen/tenancy";
-import { embedText } from "./embed";
+import { embedText, EmbeddingUnavailableError } from "./embed";
+
+// The platform key the Voyage model is built with. Stubbed per test so a
+// missing key can be tested too.
+beforeEach(() => {
+  vi.stubEnv("VOYAGE_API_KEY", "pa-test");
+});
 
 const BASE_TELEMETRY = {
   orgId: "00000000-0000-4000-8000-000000000001",
@@ -113,19 +111,23 @@ describe("embedText (@oxagen/ai)", () => {
     mocks.providerCostUsdMicros.mockClear();
     mocks.chargeUsageCredits.mockClear();
     mocks.warn.mockClear();
+    mocks.createVoyageEmbeddingModel.mockClear();
     // Restore the default healthy embed response (some tests override it).
     mocks.embed.mockImplementation(async () => ({
-      embedding: new Array(1536).fill(0).map((_, i) => i / 1536),
+      embedding: new Array(1024).fill(0).map((_, i) => i / 1024),
       usage: { tokens: 7 },
     }));
   });
 
-  it("calls the gateway embedding model with the correct model id and returns a 1536-d vector", async () => {
+  it("embeds with voyage-4-large at 1,024 dimensions on the platform key", async () => {
     const v = await embedText("hello", { telemetry: BASE_TELEMETRY });
-    expect(v).toHaveLength(1536);
-    expect(mocks.embeddingModel).toHaveBeenCalledWith(
-      "openai/text-embedding-3-small",
-    );
+    expect(v).toHaveLength(1024);
+    expect(mocks.createVoyageEmbeddingModel).toHaveBeenCalledWith({
+      apiKey: "pa-test",
+      modelId: "voyage-4-large",
+      outputDimension: 1024,
+      inputType: undefined,
+    });
     expect(mocks.embed).toHaveBeenCalledTimes(1);
     const args = mocks.embed.mock.calls[0]?.[0] as { value: string };
     expect(args.value).toBe("hello");
@@ -157,8 +159,8 @@ describe("embedText (@oxagen/ai)", () => {
     expect(row.workspace_id).toBe("00000000-0000-4000-8000-000000000002");
     expect(row.surface).toBe("runner");
     expect(row.execution_step_id).toBe("req_abc");
-    expect(row.model).toBe("text-embedding-3-small");
-    expect(row.provider).toBe("openai");
+    expect(row.model).toBe("voyage-4-large");
+    expect(row.provider).toBe("voyage");
     expect(row.input_tokens).toBe(7);
     expect(row.output_tokens).toBe(0);
   });
@@ -177,11 +179,18 @@ describe("embedText (@oxagen/ai)", () => {
     ).rejects.toThrow("clickhouse down");
   });
 
-  it("voids the admission and rethrows when the provider call fails", async () => {
-    mocks.embed.mockRejectedValueOnce(new Error("gateway 502"));
-    await expect(
-      embedText("resilient", { telemetry: BASE_TELEMETRY }),
-    ).rejects.toThrow("gateway 502");
+  it("voids the admission and throws EmbeddingUnavailableError when the provider call fails", async () => {
+    mocks.embed.mockRejectedValueOnce(new Error("voyage 502"));
+    const err = await embedText("resilient", {
+      telemetry: BASE_TELEMETRY,
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(EmbeddingUnavailableError);
+    expect((err as EmbeddingUnavailableError).code).toBe(
+      "embedding_unavailable",
+    );
+    expect((err as EmbeddingUnavailableError).providerMessage).toBe(
+      "voyage 502",
+    );
     expect(mocks.voidUsage).toHaveBeenCalledWith({
       id: "00000000-0000-4000-8000-000000000099",
       orgId: BASE_TELEMETRY.orgId,
@@ -197,7 +206,7 @@ describe("embedText (@oxagen/ai)", () => {
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
     expect(mocks.chargeUsageCredits).toHaveBeenCalledWith({
       orgId: "00000000-0000-4000-8000-000000000001",
-      model: "text-embedding-3-small",
+      model: "voyage-4-large",
       referenceId: "req_abc",
       inputTokens: 7,
       outputTokens: 0,
@@ -307,11 +316,11 @@ describe("embedText (@oxagen/ai)", () => {
 
   it("warns and bills zero tokens when the embed() response omits usage", async () => {
     mocks.embed.mockImplementationOnce(async () => ({
-      embedding: new Array(1536).fill(0),
+      embedding: new Array(1024).fill(0),
       usage: undefined,
     }));
     const v = await embedText("no usage", { telemetry: BASE_TELEMETRY });
-    expect(v).toHaveLength(1536);
+    expect(v).toHaveLength(1024);
     // The missing-usage gap must be logged, not silently zeroed.
     expect(mocks.warn).toHaveBeenCalledTimes(1);
     const [meta, msg] = mocks.warn.mock.calls[0] as [
@@ -320,7 +329,7 @@ describe("embedText (@oxagen/ai)", () => {
     ];
     expect(msg).toContain("usage field absent");
     expect(meta).toMatchObject({
-      model: "text-embedding-3-small",
+      model: "voyage-4-large",
       executionStepId: "req_abc",
     });
     // token_usage row and credit charge still recorded, with zero input tokens.
@@ -335,14 +344,14 @@ describe("embedText (@oxagen/ai)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// ADR-053: whose key serves an embedding decides whether it is billed
+// #4148: one platform Voyage key for every organisation, and a typed failure
 // ---------------------------------------------------------------------------
 
-describe("embedText under an organisation credential (ADR-053)", () => {
+describe("embedText on the platform Voyage key (#4148)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.embed.mockImplementation(async () => ({
-      embedding: new Array(1536).fill(0).map((_, i) => i / 1536),
+      embedding: new Array(1024).fill(0).map((_, i) => i / 1024),
       usage: { tokens: 7 },
     }));
     mocks.hashPrompt.mockResolvedValue("deadbeefdeadbeef");
@@ -356,67 +365,83 @@ describe("embedText under an organisation credential (ADR-053)", () => {
     });
   });
 
-  const GATEWAY_CREDENTIAL = {
-    provider: "gateway" as const,
-    apiKey: "vck_customer",
-    digest: "sha256:gw",
-  };
-  const OPENROUTER_CREDENTIAL = {
-    provider: "openrouter" as const,
-    apiKey: "sk-or-v1-customer",
-    digest: "sha256:or",
-  };
-
-  it("a gateway credential serves the embedding on the organisation's key and charges nothing", async () => {
-    const v = await embedText("theirs", {
+  it("passes the input type to Voyage", async () => {
+    await embedText("what did the agent change", {
       telemetry: BASE_TELEMETRY,
-      credential: GATEWAY_CREDENTIAL,
+      inputType: "query",
     });
-    expect(v).toHaveLength(1536);
-    expect(mocks.createGateway).toHaveBeenCalledWith({
-      apiKey: "vck_customer",
-    });
-    expect(mocks.orgEmbeddingModel).toHaveBeenCalledWith(
-      "openai/text-embedding-3-small",
+    expect(mocks.createVoyageEmbeddingModel).toHaveBeenCalledWith(
+      expect.objectContaining({ inputType: "query" }),
     );
-    expect(mocks.embeddingModel).not.toHaveBeenCalled();
-    const embedArg = mocks.embed.mock.calls[0]?.[0] as {
-      model: { client?: string };
-    };
-    expect(embedArg.model.client).toBe("org-gateway");
-    // Reported in full, billed at zero.
-    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
-    expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
   });
 
-  it("an OpenRouter credential cannot serve embeddings: the platform gateway answers and the call is billed", async () => {
-    await embedText("no embeddings there", {
-      telemetry: BASE_TELEMETRY,
-      credential: OPENROUTER_CREDENTIAL,
-    });
-    expect(mocks.createGateway).not.toHaveBeenCalled();
-    expect(mocks.embeddingModel).toHaveBeenCalledWith(
-      "openai/text-embedding-3-small",
-    );
-    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
-    expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
-  });
-
-  it("no credential: the platform gateway answers and the call is billed", async () => {
+  it("charges every embedding, since Oxagen's key serves it", async () => {
     await embedText("platform", { telemetry: BASE_TELEMETRY });
-    expect(mocks.createGateway).not.toHaveBeenCalled();
+    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
     expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
   });
 
-  it("embedMany on a gateway credential is one telemetry row and no charge", async () => {
-    const { embedMany } = await import("./embed");
-    await embedMany(["a", "b"], {
-      telemetry: BASE_TELEMETRY,
-      credential: GATEWAY_CREDENTIAL,
-    });
-    expect(mocks.embedMany).toHaveBeenCalledTimes(1);
-    expect(mocks.insertTokenUsage).toHaveBeenCalledTimes(1);
+  it("throws EmbeddingUnavailableError before admitting usage when VOYAGE_API_KEY is unset", async () => {
+    // The top-level beforeEach stubs it again for the next test.
+    delete process.env.VOYAGE_API_KEY;
+    const err = await embedText("no key", { telemetry: BASE_TELEMETRY }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(EmbeddingUnavailableError);
+    expect(mocks.embed).not.toHaveBeenCalled();
+    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
+  });
+
+  it("throws EmbeddingUnavailableError, not a config error, when VOYAGE_API_KEY is empty", async () => {
+    vi.stubEnv("VOYAGE_API_KEY", "");
+    const err = await embedText("no key", { telemetry: BASE_TELEMETRY }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(EmbeddingUnavailableError);
+    expect((err as Error).message).toContain("VOYAGE_API_KEY is not set");
+    expect(mocks.embed).not.toHaveBeenCalled();
+    expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
     expect(mocks.chargeUsageCredits).not.toHaveBeenCalled();
+  });
+
+  it("carries Voyage's status and message when it refuses the key", async () => {
+    mocks.embed.mockRejectedValueOnce(
+      new APICallError({
+        message: "Voyage embeddings returned 401",
+        url: "https://api.voyageai.com/v1/embeddings",
+        requestBodyValues: {},
+        statusCode: 401,
+        responseBody: '{"detail":"Provided API key is invalid."}',
+        isRetryable: false,
+      }),
+    );
+    const err = (await embedText("refused", {
+      telemetry: BASE_TELEMETRY,
+    }).catch((e: unknown) => e)) as EmbeddingUnavailableError;
+    expect(err).toBeInstanceOf(EmbeddingUnavailableError);
+    expect(err.statusCode).toBe(401);
+    expect(err.providerMessage).toContain("Provided API key is invalid");
+    expect(err.message).toContain("Voyage answered 401");
+  });
+
+  it("reads the last attempt when the SDK gives up after its retries", async () => {
+    mocks.embed.mockRejectedValueOnce(
+      Object.assign(new Error("Failed after 3 attempts"), {
+        lastError: new APICallError({
+          message: "Voyage embeddings returned 503",
+          url: "https://api.voyageai.com/v1/embeddings",
+          requestBodyValues: {},
+          statusCode: 503,
+          responseBody: "upstream unavailable",
+          isRetryable: true,
+        }),
+      }),
+    );
+    const err = (await embedText("retried", {
+      telemetry: BASE_TELEMETRY,
+    }).catch((e: unknown) => e)) as EmbeddingUnavailableError;
+    expect(err.statusCode).toBe(503);
+    expect(err.providerMessage).toBe("upstream unavailable");
   });
 });
 
@@ -445,7 +470,15 @@ describe("embedMany", () => {
     executionStepId: null,
   };
 
-  it("embeds a batch in ONE gateway call and charges ONE time", async () => {
+  it("builds the model with the batch's input type", async () => {
+    const { embedMany } = await import("./embed");
+    await embedMany(["a", "b"], { telemetry, inputType: "document" });
+    expect(mocks.createVoyageEmbeddingModel).toHaveBeenCalledWith(
+      expect.objectContaining({ inputType: "document" }),
+    );
+  });
+
+  it("embeds a batch in ONE provider call and charges ONE time", async () => {
     const { embedMany } = await import("./embed");
 
     const vectors = await embedMany(["alpha", "beta", "gamma"], { telemetry });

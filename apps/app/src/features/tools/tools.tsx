@@ -210,8 +210,17 @@ async function TabBody({
         />
       );
     }
-    case "toolbelts":
-      return <Toolbelts at={at} canCreate={admin} />;
+    case "toolbelts": {
+      // The list, and the belt the URL opens below it. A refusal of the one
+      // leaves the other readable.
+      const [list, open] = await Promise.all([
+        source.tools.toolbelts(ctx),
+        view.belt === null
+          ? Promise.resolve(null)
+          : source.tools.toolbelt(ctx, view.belt),
+      ]);
+      return <Toolbelts at={at} canEdit={admin} list={list} open={open} />;
+    }
     case "providers": {
       // Three reads, each answered on its own: a refusal of the grants log
       // leaves the roster readable, and the other way round.
@@ -309,7 +318,7 @@ export async function Tools({
   source: DataSource;
   /** The tab the route resolved from its path segment or a legacy `?tab=`. */
   tab: ToolsTab;
-  /** The query the URL carried: `category`, `provider`, `names`, `cursor`. */
+  /** The query the URL carried: `category`, `provider`, `names`, `cursor`, `belt`. */
   searchParams: Readonly<Record<string, string | string[] | undefined>>;
 }) {
   const view = parseToolsView(tab, searchParams);

@@ -217,6 +217,21 @@ const TOOL_GATE: ReadonlySet<string> = new Set(
   [...POLICY_TYPES].filter((type) => type !== COMMAND_APPLIED),
 );
 /**
+ * Rule 3's vocabulary, for the grouped SQL behind a wrapped run's per-turn
+ * ledger (`selectTachoTurnGroups`, ADR-191). That query cannot call this
+ * fold, so it counts an unkeyed tool call by the same rule, spelled for the
+ * store: a request pairs with the receipt of its own spelling when nothing
+ * but these gates sits between them on its chain. It builds that rule from
+ * this object, so the two cannot name different kinds.
+ */
+export const UNKEYED_TOOL_PAIRING: {
+  readonly closes: ReadonlyArray<readonly [request: string, receipt: string]>;
+  readonly gates: readonly string[];
+} = {
+  closes: Object.entries(TOOL_CLOSE),
+  gates: [...TOOL_GATE],
+};
+/**
  * The effect frames the recorder writes about a tool call: the command it
  * ran, the file it touched, the host it reached (tacho spec §6.1). They are
  * more evidence for the call beside them, not steps of their own.
@@ -604,10 +619,12 @@ function modelFacts(
   return {
     node: "model",
     // A model step draws a row under `responses` when its reply was kept,
-    // and a usage row when it carried a cost, tokens or an effort. One that
-    // did neither draws nothing: a call still waiting on its reply, or one
-    // kept as a digest with no figures. So it is quiet, and counts nowhere.
-    quiet: !kinds.has("responses") && !kinds.has("usage"),
+    // a usage row when it carried a cost, tokens or an effort, and a failed
+    // row when it failed with neither. One that did none of these draws
+    // nothing: a call still waiting on its reply, or one kept as a digest
+    // with no figures. So it is quiet, and counts nowhere.
+    quiet:
+      !kinds.has("responses") && !kinds.has("usage") && !kinds.has("errors"),
     outcome: kinds.has("errors")
       ? "failed"
       : halves.response === null
@@ -1072,6 +1089,22 @@ export interface TranscriptCounts {
   policy: number;
 }
 
+/**
+ * Whether the entry is an error of the run: it failed, it was refused, or a
+ * frame in it answers the errors chip. `counts.errors` counts these, and
+ * each entry states it (`error`), so a reader marks a row failed by the same
+ * rule and keeps none of its own (ADR-182).
+ */
+export function countsAsError(
+  fold: Pick<TranscriptFold, "outcome" | "kinds">,
+): boolean {
+  return (
+    fold.outcome === "failed" ||
+    fold.outcome === "denied" ||
+    fold.kinds.has("errors")
+  );
+}
+
 export function transcriptCounts(
   folds: readonly TranscriptFold[],
   vocabulary: readonly TranscriptKind[],
@@ -1086,12 +1119,7 @@ export function transcriptCounts(
     if (fold.quiet) continue;
     for (const kind of fold.kinds) kinds[kind] = (kinds[kind] ?? 0) + 1;
     entries += 1;
-    if (
-      fold.outcome === "failed" ||
-      fold.outcome === "denied" ||
-      fold.kinds.has("errors")
-    )
-      errors += 1;
+    if (countsAsError(fold)) errors += 1;
     if (fold.kinds.has("policy") && fold.decision?.harness !== true)
       policy += 1;
   }

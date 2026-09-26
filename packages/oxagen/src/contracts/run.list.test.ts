@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { canSummarizeRun, runItemSchema, runList } from "./run.list";
+import {
+  canSummarizeRun,
+  RUN_LIST_TOTAL_BOUND,
+  RUN_REPLAY_FILTERS,
+  runItemSchema,
+  runList,
+} from "./run.list";
 
 const item = {
   id: "tse_4q8r1t6v3x5z0b2d7h2k9m",
@@ -157,7 +163,8 @@ describe("list_runs contract", () => {
   });
 
   it("is a low-risk read the in-app agent may call without approval", () => {
-    expect(runList.surfaces).toEqual(["api", "mcp", "agent"]);
+    expect(runList.surfaces).toEqual(["api", "mcp", "agent", "cli"]);
+    expect(runList.layers).toContain("cli");
     expect(runList.agent).toEqual({
       requiresApproval: false,
       riskLevel: "low",
@@ -340,5 +347,120 @@ describe("run outcome", () => {
     const failed = runItemSchema.parse({ ...item, outcome: "failed" });
     expect(completed.status).toBe(failed.status);
     expect(completed.outcome).not.toBe(failed.outcome);
+  });
+});
+
+describe("list_runs tokens, cache hit rate and compaction (#3834, #3835)", () => {
+  const tokens = {
+    input_uncached: 1200,
+    cache_read: 48_000,
+    cache_write_5m: 3000,
+    cache_write_1h: 0,
+    output: 900,
+    reasoning: 0,
+  };
+
+  it("carries the rollup's token counts and cache hit rate, or null for a run with no rollup row", () => {
+    const priced = { ...item, tokens, cacheHitRate: 0.97, compacted: true };
+    expect(runItemSchema.parse(priced)).toEqual(priced);
+    const unpriced = { ...item, tokens: null, cacheHitRate: null };
+    expect(runItemSchema.parse(unpriced)).toEqual(unpriced);
+    expect(runItemSchema.parse(item)).toEqual(item);
+  });
+
+  it("refuses a rate outside 0..1 and a token class the rollup does not keep (negative)", () => {
+    expect(
+      runItemSchema.safeParse({ ...item, cacheHitRate: 1.2 }).success,
+    ).toBe(false);
+    expect(
+      runItemSchema.safeParse({ ...item, tokens: { ...tokens, extra: 1 } })
+        .success,
+    ).toBe(false);
+  });
+
+  it("keeps paused and compacted out of the status (ADR-193, negative)", () => {
+    expect(runItemSchema.safeParse({ ...item, status: "paused" }).success).toBe(
+      false,
+    );
+    expect(
+      runItemSchema.safeParse({ ...item, status: "compacted" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("list_runs pull request state (#4129)", () => {
+  it("carries when the state was last read, or null when it never was", () => {
+    const row = {
+      ...item,
+      pullRequests: [
+        {
+          url: "https://github.com/acme/api/pull/7",
+          number: 7,
+          repository: "acme/api",
+          state: "merged",
+          stateSeenAt: "2026-09-25T10:00:00.000Z",
+        },
+        {
+          url: "https://github.com/acme/api/pull/8",
+          number: 8,
+          repository: "acme/api",
+          state: null,
+          stateSeenAt: null,
+        },
+      ],
+    };
+    expect(runItemSchema.parse(row)).toEqual(row);
+  });
+});
+
+describe("list_runs filters, search, sort and total (#3837)", () => {
+  it("lists exactly as before when a call sends none of them", () => {
+    expect(runList.input.parse({ limit: 25 })).toEqual({ limit: 25 });
+  });
+
+  it("accepts every filter, the search, a sort and an offset", () => {
+    const input = {
+      limit: 25,
+      status: ["live", "halted"],
+      tier: ["gateway", "observe"],
+      replayGrade: ["fork", "not_recorded"],
+      query: "  mac-studio  ",
+      sort: { key: "cost", dir: "asc" },
+      offset: 50,
+    };
+    expect(runList.input.parse(input)).toEqual({
+      ...input,
+      query: "mac-studio",
+    });
+    expect(RUN_REPLAY_FILTERS).toContain("not_recorded");
+  });
+
+  it("refuses an empty filter, a paused status, an unknown sort key and an offset past the bound (negative)", () => {
+    const bad = [
+      { status: [] },
+      { status: ["paused"] },
+      { tier: ["cloud"] },
+      { replayGrade: ["replay"] },
+      { query: "   " },
+      { sort: { key: "tokens", dir: "asc" } },
+      { sort: { key: "cost", dir: "up" } },
+      { offset: -1 },
+      { offset: RUN_LIST_TOTAL_BOUND + 1 },
+    ];
+    for (const input of bad) {
+      expect(runList.input.safeParse(input).success).toBe(false);
+    }
+  });
+
+  it("carries a bounded total, null past the bound, or none when not counted", () => {
+    const base = { runs: [], nextCursor: null };
+    expect(runList.output.parse(base)).toEqual(base);
+    const counted = { ...base, total: 42, totalBound: RUN_LIST_TOTAL_BOUND };
+    expect(runList.output.parse(counted)).toEqual(counted);
+    const past = { ...base, total: null, totalBound: RUN_LIST_TOTAL_BOUND };
+    expect(runList.output.parse(past)).toEqual(past);
+    expect(runList.output.safeParse({ ...base, total: -1 }).success).toBe(
+      false,
+    );
   });
 });

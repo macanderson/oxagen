@@ -5,16 +5,19 @@
 // state, with an axe check in every case. Each tile figure is recomputed from
 // the rows the table draws, so a tile that disagreed with its table fails.
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
   within,
 } from "@testing-library/react";
+import { HOST_POLL_WINDOW_MS } from "@oxagen/oxagen/contracts/run.list";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readError } from "@/data/read";
+import { STALE_REREAD_MS } from "@/data/contracts/runs";
+import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
@@ -22,6 +25,8 @@ import {
   approvalItem,
   approvalQueue,
   fleetSource,
+  interjectionItem,
+  interjectionQueue,
   NOW,
   runPage,
   runRow,
@@ -149,6 +154,7 @@ async function renderFleet(
   view: {
     prefs?: Parameters<typeof Fleet>[0]["prefs"];
     pullRequests?: Parameters<typeof Fleet>[0]["pullRequests"];
+    list?: Parameters<typeof Fleet>[0]["list"];
   } = {},
 ) {
   const { source, calls } = fleetSource(reads);
@@ -157,9 +163,15 @@ async function renderFleet(
   return { container, calls };
 }
 
+/**
+ * The workspace's live runs as `list_runs` counts them: more than the two
+ * open runs on the page, since the tile counts the workspace.
+ */
+const WORKSPACE_LIVE = 5;
+
 const loaded = (over: Partial<Parameters<typeof fleetSource>[0]> = {}) =>
   renderFleet({
-    runs: runPage(RUNS),
+    runs: runPage(RUNS, null, WORKSPACE_LIVE),
     approvals: approvalQueue([PARKED]),
     agents: agentPage(["acme.core.release-bot", "acme.core.docs"], 64),
     ...over,
@@ -204,11 +216,24 @@ describe("Fleet reads", () => {
       "c1",
     );
     // The page size is the read's own limit (25 until the person picks
-    // another), and every run is listed until a filter is chosen.
+    // another), and every run is listed until a filter is chosen. Fleet
+    // asks for the total, because its pager prints one, and for the
+    // workspace's live count, since the Live runs tile sits above every page.
     expect(calls.runs).toEqual([
-      [ctx, { cursor: "c1", limit: 25, pullRequests: "any" }],
+      [
+        ctx,
+        {
+          cursor: "c1",
+          limit: 25,
+          pullRequests: "any",
+          count: true,
+          countLive: true,
+        },
+      ],
     ]);
     expect(calls.approvals).toEqual([[ctx, { runId: null }]]);
+    // The open questions, for the waiting tile (#3839).
+    expect(calls.interjections).toEqual([[ctx, { runId: null }]]);
     expect(calls.agents).toEqual([[ctx, { cursor: null }]]);
   });
 
@@ -333,9 +358,9 @@ describe("summary tiles", () => {
       "Spend shown",
       "Tokens shown",
     ]);
-    // One live run: the other open run has a call parked, so it is waiting.
+    // The workspace's count, not the page's two open rows (A-04).
     expect(tile("Live runs")).toHaveTextContent(
-      "Live runs1of 64 agents in this workspace",
+      "Live runs5of 64 agents in this workspace",
     );
     // 4.13 + 0.61 + 2.87; the halted run recorded no cost.
     expect(tile("Spend shown")).toHaveTextContent("$7.61");
@@ -345,9 +370,10 @@ describe("summary tiles", () => {
     expect(tile("Tokens shown")).toHaveTextContent(
       "Tokens shownnot recordedno cache figure recorded",
     );
-    // No token figure is typed or zeroed: both lines carry the gap they wait on.
-    for (const part of tile("Tokens shown").querySelectorAll("[data-recorded]"))
-      expect(part).toHaveAttribute("data-gap", "G3");
+    // No row carries a token figure, so none is typed or zeroed (#3834).
+    expect(
+      within(tile("Tokens shown")).getByTestId("tokens-not-recorded"),
+    ).toHaveAttribute("data-recorded", "false");
   });
 
   it("marks an open run's cost as an estimate, in its cell and in Spend shown (#3980)", async () => {
@@ -425,17 +451,45 @@ describe("summary tiles", () => {
     window.addEventListener("oxagen:open-approvals", opened);
     await loaded();
     expect(waitingTile()).toHaveTextContent(
-      "Waiting on a human1oldest approval has waited 2:30 of 10m · interjections not recorded · open the drawer",
+      "Waiting on a human1oldest approval has waited 2:30 of 10m · open the drawer",
     );
     fireEvent.click(waitingTile());
     expect(opened).toHaveBeenCalledOnce();
     window.removeEventListener("oxagen:open-approvals", opened);
   });
 
-  it("says nothing is parked on an empty queue", async () => {
+  it("says nothing is waiting on an empty queue", async () => {
     await loaded({ approvals: NO_APPROVALS });
     expect(waitingTile()).toHaveTextContent(
-      "0nothing is parked · interjections not recorded · open the drawer",
+      "0nothing is waiting · open the drawer",
+    );
+  });
+
+  // #3839: the tile counted approvals alone and said interjections were not
+  // recorded. It now adds the open questions and names them.
+  it("adds an open interjection to the approvals and names it beside the oldest approval", async () => {
+    await loaded({ interjections: interjectionQueue([interjectionItem()]) });
+    expect(waitingTile()).toHaveTextContent(
+      "Waiting on a human2oldest approval has waited 2:30 of 10m · 1 interjection · open the drawer",
+    );
+    expect(screen.queryByTestId("interjections-not-recorded")).toBeNull();
+  });
+
+  it("names the interjection's own wait against its 30-minute window when no approval waits", async () => {
+    await loaded({
+      approvals: NO_APPROVALS,
+      interjections: interjectionQueue([interjectionItem()]),
+    });
+    expect(waitingTile()).toHaveTextContent(
+      "1an interjection has waited 3:36 of 30m · open the drawer",
+    );
+  });
+
+  it("counts the approvals as a floor and says the interjections were not read (negative)", async () => {
+    await loaded({ interjections: readError("record_unmappable", 502) });
+    expect(waitingTile()).toHaveTextContent("1+");
+    expect(screen.getByTestId("interjections-unread")).toHaveTextContent(
+      "interjections not read: record_unmappable",
     );
   });
 
@@ -447,20 +501,28 @@ describe("summary tiles", () => {
     );
   });
 
+  it("says the live runs were not counted when the read carried no count, never the page's figure (negative)", async () => {
+    await loaded({ runs: runPage(RUNS) });
+    expect(tile("Live runs")).toHaveTextContent(
+      "Live runsnot countedof 64 agents in this workspace",
+    );
+    expect(screen.getByTestId("live-not-counted")).toBeTruthy();
+  });
+
   it("names what the waiting and live tiles could not read, never a zero (negative)", async () => {
     await loaded({
       approvals: DENIED,
       agents: { ok: false, reason: "denied", permission: "agent.read" },
     });
     expect(waitingTile()).toHaveTextContent(
-      "approvals not read: workspace.read · interjections not recorded",
+      "Waiting on a human—approvals not read: workspace.read",
     );
     expect(tile("Live runs")).toHaveTextContent(
       "the workspace's agents were not read",
     );
   });
 
-  it("changes Spend shown and Live runs with the filter chips", async () => {
+  it("changes Spend shown with the filter chips, and keeps Live runs on the workspace's count (A-04)", async () => {
     await loaded();
     const user = userEvent.setup();
     await user.click(screen.getByTestId("chip-sealed"));
@@ -472,7 +534,8 @@ describe("summary tiles", () => {
     expect(screen.getByTestId("spend-basis")).toHaveTextContent(
       "gateway_observed · USD",
     );
-    expect(tile("Live runs")).toHaveTextContent("Live runs0");
+    // The tile says "in this workspace", so no chip and no page changes it.
+    expect(tile("Live runs")).toHaveTextContent("Live runs5");
     expect(rows()).toHaveLength(1);
     await user.click(screen.getByTestId("chip-parked"));
     expect(rows().map((r) => r.dataset.state)).toEqual(["parked"]);
@@ -526,7 +589,7 @@ describe("the Runs panel", () => {
     expect(row("arun_sealed")).toHaveTextContent("retry");
     expect(
       within(row("arun_halted")).getByTestId("row-tokens"),
-    ).toHaveAttribute("data-gap", "G3");
+    ).toHaveAttribute("data-recorded", "false");
     expect(row("arun_halted")).toHaveTextContent("not recorded");
   });
 
@@ -569,12 +632,99 @@ describe("the Runs panel", () => {
         .getAllByRole("option")
         .map((o) => o.textContent),
     ).toEqual([
+      // The lifecycle words the record holds (#3837). Parked comes from the
+      // approvals read, so the chips find it and the read cannot filter on it.
       "All · Status",
-      "halted",
       "live",
-      "parked for approval",
       "sealed",
+      "halted",
     ]);
+  });
+
+  it("says stale, with a still dot, on a live row whose host has not checked in for five minutes (A-02)", async () => {
+    await loaded({
+      runs: runPage([
+        runRow({
+          id: "tse_quiet",
+          source: "tacho",
+          status: "live",
+          commandBlock: "host_offline",
+        }),
+        runRow({ id: "tse_heard", source: "tacho", status: "live" }),
+      ]),
+      approvals: approvalQueue([
+        approvalItem({ id: "apr_quiet", runId: "tse_quiet" }),
+      ]),
+    });
+    const quiet = row("tse_quiet");
+    const badge = quiet.querySelector<HTMLElement>("span[data-status]");
+    expect(badge).toHaveTextContent(/^stale$/);
+    expect(badge).toHaveAttribute("data-stale", "true");
+    expect(quiet.querySelector("[data-pulse]")).toBeNull();
+    // Stale wins over the parked call: the host that holds it went quiet.
+    expect(quiet).not.toHaveTextContent("parked for approval");
+    // Negative: a live run whose host checks in still pulses live.
+    const heard = row("tse_heard");
+    expect(heard.querySelector("span[data-status]")).toHaveTextContent(
+      /^live$/,
+    );
+    expect(heard.querySelector("[data-pulse]")).not.toBeNull();
+  });
+
+  describe("reading a live wrapped run's light again (A-02, #4343 review)", () => {
+    // Fleet read a run's stale light once, when it loaded, so a Fleet left
+    // open kept pulsing live after the host went quiet. With no stream to
+    // say so, it reads itself again once per host poll window.
+    let visibility: DocumentVisibilityState = "visible";
+    beforeEach(() => {
+      vi.useFakeTimers({
+        now: NOW,
+        toFake: ["Date", "setInterval", "clearInterval"],
+      });
+      visibility = "visible";
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => visibility,
+      });
+    });
+    afterEach(() => {
+      Reflect.deleteProperty(document, "visibilityState");
+    });
+    const advance = (ms: number) => {
+      act(() => {
+        vi.advanceTimersByTime(ms);
+      });
+    };
+
+    it("reads the page again once per host poll window while it lists a live wrapped run", async () => {
+      await loaded({
+        runs: runPage([
+          runRow({ id: "tse_open", source: "tacho", status: "live" }),
+          runRow({ id: "tse_done", source: "tacho", status: "sealed" }),
+        ]),
+      });
+      // The window is the one the row's stale reading uses.
+      expect(STALE_REREAD_MS).toBe(HOST_POLL_WINDOW_MS);
+      advance(STALE_REREAD_MS - 1);
+      expect(refresh).not.toHaveBeenCalled();
+      advance(1);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      // Negative: a hidden tab is not read.
+      visibility = "hidden";
+      advance(STALE_REREAD_MS);
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it("reads nothing again when no listed run can go stale (negative)", async () => {
+      await loaded({
+        runs: runPage([
+          runRow({ id: "arun_open", source: "ledger", status: "live" }),
+          runRow({ id: "tse_done", source: "tacho", status: "sealed" }),
+        ]),
+      });
+      advance(STALE_REREAD_MS * 3);
+      expect(refresh).not.toHaveBeenCalled();
+    });
   });
 
   it("marks the chips, the pager and the row actions as 44px touch targets on a phone", async () => {
@@ -607,15 +757,12 @@ describe("the Runs panel", () => {
     );
   });
 
-  it("draws the Tokens sort where the design has it, disabled until runs carry tokens (G3)", async () => {
+  it("draws the Tokens header with no sort while the server cannot order by tokens (#3834, #3837)", async () => {
     await loaded();
-    const sort = screen.getByTestId("sort-tokens");
-    expect(sort).toBeDisabled();
-    expect(sort).toHaveAccessibleName("Sort by Tokens");
-    expect(sort).toHaveAttribute(
-      "title",
-      "Runs carry no token figure yet, so there is nothing to sort.",
-    );
+    expect(screen.queryByRole("button", { name: /Sort by Tokens/ })).toBeNull();
+    expect(
+      screen.getByRole("columnheader", { name: /^Tokens/ }),
+    ).toBeInTheDocument();
   });
 
   it("reads a live run with a parked call as parked for approval, and resolves it on the Run page", async () => {
@@ -805,7 +952,9 @@ describe("list controls", () => {
   it("lists every run the read returned, and says when the read stopped before the oldest run", async () => {
     await loaded({ runs: runPage(many, "c2"), approvals: NO_APPROVALS });
     expect(rows()).toHaveLength(12);
-    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–12 of 12+");
+    expect(screen.getByTestId("pager-range")).toHaveTextContent(
+      "12 runs on this page",
+    );
     expect(screen.getByRole("link", { name: "Older runs" })).toHaveAttribute(
       "href",
       "/acme/core-platform?cursor=c2",
@@ -850,38 +999,152 @@ describe("list controls", () => {
       "href",
       "/acme/core-platform",
     );
-    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–12 of 12");
+    // A later cursor page is not rows 1–12 of 12: nothing counted it (#4370
+    // review). It says how many rows it holds and nothing more.
+    const range = screen.getByTestId("pager-range");
+    expect(range).toHaveTextContent("12 runs on this page");
+    expect(range).not.toHaveTextContent("1–12");
   });
 
-  it("searches, filters on a facet and sorts on a column", async () => {
+  // #3837: the search, the facets, the order and the page are the read's.
+  it("sends a search, a facet and a column's order to the read as a navigation", async () => {
     await loaded({ runs: runPage(many), approvals: NO_APPROVALS });
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText("Search this list"), "arun_07");
-    expect(rows()).toHaveLength(1);
-    await user.clear(screen.getByLabelText("Search this list"));
+    await user.type(screen.getByRole("searchbox"), "arun_07{Enter}");
+    expect(push).toHaveBeenLastCalledWith("/acme/core-platform?q=arun_07");
+    // The rows are the read's: typing filters nothing on this page.
+    expect(rows()).toHaveLength(12);
     await user.selectOptions(screen.getByTestId("facet-tier"), "gateway");
-    expect(rows()).toHaveLength(4);
-    expect(
-      within(screen.getByTestId("facet-status"))
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["All · Status", "sealed"]);
-    await user.selectOptions(screen.getByTestId("facet-tier"), "");
-    const frames = screen.getByRole("button", { name: "Sort by Frames" });
-    await user.click(frames);
-    expect(frames.closest("th")).toHaveAttribute("aria-sort", "ascending");
-    expect(rows()[0]).toHaveTextContent("arun_00");
-    await user.click(frames);
-    expect(frames.closest("th")).toHaveAttribute("aria-sort", "descending");
-    expect(rows()[0]).toHaveTextContent("arun_11");
+    expect(push).toHaveBeenLastCalledWith("/acme/core-platform?tier=gateway");
+    await user.click(screen.getByRole("button", { name: "Sort by Cost" }));
+    expect(push).toHaveBeenLastCalledWith(
+      "/acme/core-platform?sort=cost&dir=asc",
+    );
   });
 
-  it("says no rows match when a search finds none (negative)", async () => {
-    await loaded({ runs: runPage(many), approvals: NO_APPROVALS });
+  it("sorts only the columns the read can order, and marks the order the URL asked for", async () => {
+    const { calls } = await renderFleet(
+      { runs: runPage(many), approvals: NO_APPROVALS },
+      null,
+      undefined,
+      {
+        list: {
+          q: "",
+          status: [],
+          tier: [],
+          replay: [],
+          sort: "cost",
+          dir: "desc",
+          page: 1,
+        },
+      },
+    );
+    expect(calls.runs[0]?.[1]).toMatchObject({
+      sort: { key: "cost", dir: "desc" },
+    });
+    const cost = screen.getByRole("button", { name: "Sort by Cost" });
+    expect(cost.closest("th")).toHaveAttribute("aria-sort", "descending");
+    // Frames, Run, Pull requests and Lines have no single order in both
+    // stores, so their headers do not sort.
+    for (const column of ["Frames", "Run", "Lines"])
+      expect(
+        screen.queryByRole("button", { name: `Sort by ${column}` }),
+      ).toBeNull();
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText("Search this list"), "zzz");
+    await user.click(cost);
+    expect(push).toHaveBeenLastCalledWith("/acme/core-platform");
+  });
+
+  it("reads the pager from the read's total, with page buttons to the last page", async () => {
+    const { container } = await loaded({
+      runs: readOk({
+        runs: many,
+        nextCursor: null,
+        total: 279,
+        totalBound: 10_000,
+      }),
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–12 of 279");
+    expect(screen.getByRole("link", { name: "Page 12" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform?page=12",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("reads page N at its offset and keeps the list on the pager's links", async () => {
+    const { calls } = await renderFleet(
+      {
+        runs: readOk({
+          runs: many,
+          nextCursor: null,
+          total: 279,
+          totalBound: 10_000,
+        }),
+        approvals: NO_APPROVALS,
+      },
+      null,
+      undefined,
+      {
+        list: {
+          q: "deploy",
+          status: ["sealed"],
+          tier: [],
+          replay: [],
+          sort: "started",
+          dir: "desc",
+          page: 3,
+        },
+      },
+    );
+    expect(calls.runs[0]?.[1]).toEqual({
+      cursor: null,
+      limit: 25,
+      pullRequests: "any",
+      status: ["sealed"],
+      query: "deploy",
+      offset: 50,
+      count: true,
+      countLive: true,
+    });
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("51–62 of 279");
+    expect(screen.getByRole("link", { name: "Previous" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform?q=deploy&status=sealed&page=2",
+    );
+  });
+
+  it("keeps the table and says no rows match when a search finds none (negative)", async () => {
+    const { calls } = await renderFleet(
+      {
+        runs: readOk({
+          runs: [],
+          nextCursor: null,
+          total: 0,
+          totalBound: 10_000,
+        }),
+        approvals: NO_APPROVALS,
+      },
+      null,
+      undefined,
+      {
+        list: {
+          q: "zzz",
+          status: [],
+          tier: [],
+          replay: [],
+          sort: "started",
+          dir: "desc",
+          page: 1,
+        },
+      },
+    );
+    expect(calls.runs[0]?.[1]).toMatchObject({ query: "zzz" });
+    expect(screen.queryByTestId("fleet-empty")).toBeNull();
     expect(runsPanel()).toHaveTextContent("No rows match.");
     expect(screen.getByTestId("pager-range")).toHaveTextContent("0 of 0");
+    expect(screen.getByRole("searchbox")).toHaveValue("zzz");
   });
 });
 
@@ -903,6 +1166,14 @@ describe("not-loaded states", () => {
     expect(
       within(empty).getByRole("link", { name: "Open Agents" }),
     ).toHaveAttribute("href", "/acme/core-platform/agents");
+    // The CLI path to a first run (#2950): the enroll command, set as code.
+    const enroll = within(empty).getByTestId("fleet-empty-enroll");
+    expect(enroll).toHaveTextContent(
+      "To record an agent that already runs on a machine, run oxagen agent enroll on that machine.",
+    );
+    expect(within(enroll).getByText("oxagen agent enroll").tagName).toBe(
+      "CODE",
+    );
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
   });
@@ -924,11 +1195,20 @@ describe("not-loaded states", () => {
     expect(error).toHaveTextContent(
       "The control plane answered 503 run_index_unavailable. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
     );
-    // A failed read records no trace id or region (#3841); the instant is
-    // the design's UTC form.
+    // This read recorded no trace id or region (#3841), and each part says
+    // so; the instant is the design's UTC form.
     expect(screen.getByTestId("fleet-error-trace").textContent).toMatch(
-      /^trace and region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
+      /^trace not recorded · region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
     );
+    expect(screen.getByTestId("fleet-error-trace-id")).toHaveAttribute(
+      "data-recorded",
+      "false",
+    );
+    expect(screen.getByTestId("fleet-error-region")).toHaveAttribute(
+      "data-recorded",
+      "false",
+    );
+    expect(screen.queryByTestId("fleet-error-request")).toBeNull();
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     // The design's errorState glyph: a circle with an exclamation mark, in
     // the failed tone alone.
@@ -1009,6 +1289,108 @@ describe("not-loaded states", () => {
     expect(
       screen.getByRole("button", { name: "Send the request" }),
     ).toBeDisabled();
+  });
+
+  // #3841: the error line and Decided by read from the record.
+  it("error: prints the trace, the region and the request the seam recorded, and attaches them to an incident", async () => {
+    const { container } = await renderFleet({
+      runs: readError("run_index_unavailable", 503, {
+        traceId: "01K5RSXQ7F2E",
+        region: "us-east-1",
+        requestId: "0192f1c4-0000-7000-8000-00000000c0de",
+      }),
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getByTestId("fleet-error-trace").textContent).toMatch(
+      /^trace 01K5RSXQ7F2E · us-east-1 · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z · request 0192f1c4-0000-7000-8000-00000000c0de$/,
+    );
+    for (const id of ["fleet-error-trace-id", "fleet-error-region"])
+      expect(screen.getByTestId(id)).toHaveAttribute("data-recorded", "true");
+    await expectNoAxe(container);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Open an incident" }));
+    const attach = within(
+      screen.getByRole("dialog", { name: "Open an incident" }),
+    ).getByRole("list", { name: "Attach" });
+    expect(
+      within(attach)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "503 run_index_unavailable",
+      "core-platform",
+      expect.stringMatching(/Z$/),
+      "trace 01K5RSXQ7F2E",
+      "request 0192f1c4-0000-7000-8000-00000000c0de",
+    ]);
+  });
+
+  it("error: says which part was not recorded when only some were", async () => {
+    await renderFleet({
+      runs: readError("run_index_unavailable", 503, {
+        traceId: null,
+        region: "us-east-1",
+      }),
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getByTestId("fleet-error-trace").textContent).toMatch(
+      /^trace not recorded · us-east-1 · /,
+    );
+    expect(screen.getByTestId("fleet-error-trace-id")).toHaveAttribute(
+      "data-recorded",
+      "false",
+    );
+  });
+
+  it("access denied: names the IAM rule that decided", async () => {
+    const { container } = await renderFleet({
+      runs: {
+        ...DENIED,
+        decidedBy: { source: "iam", id: "8:default" },
+        traceId: null,
+        region: null,
+      },
+      approvals: NO_APPROVALS,
+    });
+    const decided = screen.getByTestId("fleet-decided-by");
+    expect(decided).toHaveTextContent("IAM rule 8:default");
+    // 8:default means no grant matched. No deny beat an allow, so the line
+    // does not say one did (#4370 review).
+    expect(decided).not.toHaveTextContent("deny wins");
+    expect(decided).toHaveAttribute("data-recorded", "true");
+    expect(within(decided).getByText("8:default").tagName).toBe("CODE");
+    expect(screen.getByTestId("fleet-denied")).toHaveTextContent(
+      "do not include workspace.read on core-platform",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("access denied: names the decision rule that refused the read, and says a rule refused it", async () => {
+    await renderFleet({
+      runs: {
+        ...DENIED,
+        decidedBy: { source: "decision_rule", id: "rul_no_weekend_reads" },
+      },
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getByTestId("fleet-decided-by")).toHaveTextContent(
+      "decision rule rul_no_weekend_reads",
+    );
+    expect(screen.getByTestId("fleet-denied")).toHaveTextContent(
+      "A decision rule on Acme Robotics refused this read.",
+    );
+  });
+
+  it("access denied: says the rule was not recorded when the record names none", async () => {
+    await renderFleet({
+      runs: { ...DENIED, decidedBy: null },
+      approvals: NO_APPROVALS,
+    });
+    const decided = screen.getByTestId("fleet-decided-by");
+    expect(decided).toHaveTextContent(
+      "policy not recorded · deny wins over every allow",
+    );
+    expect(decided).toHaveAttribute("data-recorded", "false");
   });
 
   it("pending: carries the id of the access request still waiting", async () => {

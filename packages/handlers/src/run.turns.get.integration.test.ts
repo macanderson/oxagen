@@ -2,16 +2,18 @@
 // must equal the rows the same run's frames add up to when read the way the
 // transcript reads them (every chain spliced in where it was spawned, the
 // proxy's late-report rule applied), with steps counted by the transcript's
-// own step fold (`framesTurns`, ADR-182). The SQL counts steps by a rule of
-// its own, so this is what keeps the two definitions answering alike. A
-// mocked client accepts any SQL, so only a live server can tell a query that
-// counts right from one that does not.
+// own step fold (`framesTurns`, ADR-182). The SQL counts steps by the fold's
+// rules spelled for the store, reading the fold's rule 3 vocabulary
+// (ADR-191), so this is what keeps the two answering alike. A mocked client
+// accepts any SQL, so only a live server can tell a query that counts right
+// from one that does not.
 //
 // The fixture is one wrapped run built to exercise every rule the contract
 // states: a model call three sources reported and a transcript message's
 // further block, a harness report after the proxy began observing, parallel
-// and duplicated tool results, unkeyed tool frames, a turn with no cost, cost
-// recorded before the first turn, and subagent chains placed by tool call id,
+// and duplicated tool results, unkeyed tool frames adjacent and apart, a
+// turn with no cost, cost recorded before the first turn, and subagent chains
+// placed by tool call id,
 // by agent id, by when they began, and inside another subagent. One subagent
 // chain is observed by the proxy partway through, so the late-report rule is
 // held per chain. A second run records no `turn_start`, opens its turns on the
@@ -66,8 +68,10 @@ const CHILD_LOOSE = randomUUID();
 const NESTED = randomUUID();
 const INDEXED = randomUUID();
 const INDEXED_EARLY = randomUUID();
+const SPLIT = randomUUID();
 const RUN_ID = "tse_turnsintegration0000001";
 const INDEXED_ID = "tse_turnsintegration0000002";
+const SPLIT_ID = "tse_turnsintegration0000003";
 
 const BASE = Date.parse("2026-09-11T09:00:00.000Z");
 /** ClickHouse DateTime64 text, `at` seconds after the run began. */
@@ -97,12 +101,15 @@ function row(
     cacheRead?: number;
     requestId?: string;
     bytesRef?: string;
+    policySource?: string;
   } = {},
 ): Row {
   const body: Record<string, unknown> = {};
   if (over.input !== undefined) body["input_tokens"] = over.input;
   if (over.cacheRead !== undefined) body["cache_read_tokens"] = over.cacheRead;
   if (over.requestId !== undefined) body["request_id"] = over.requestId;
+  if (over.policySource !== undefined)
+    body["policy_source"] = over.policySource;
   const root = over.root ?? ROOT;
   return {
     org_id: SCOPE.orgId,
@@ -222,6 +229,35 @@ const ROWS: Row[] = [
     cacheRead: 27,
     requestId: "req_4",
   }),
+  // Turn 4 (#4308): unkeyed tool frames whose halves are not adjacent. The
+  // fold pairs a request only with the receipt right after it, with nothing
+  // but gates between, so a model call between them makes two calls, and so
+  // does Claude Code's own permission check, in its own kind and in the
+  // legacy OTel spelling. A gate between them does not, and nor does a later
+  // sighting of a model call, which the fold hides before it pairs.
+  row(ROOT, 25, 70, "turn_start"),
+  row(ROOT, 26, 71, "tool_requested"),
+  row(ROOT, 27, 72, "llm_call", { source: "otel_log", requestId: "req_5" }),
+  row(ROOT, 28, 73, "tool_call"),
+  row(ROOT, 29, 74, "tool_requested"),
+  row(ROOT, 30, 75, "harness_permission"),
+  row(ROOT, 31, 76, "tool_call"),
+  row(ROOT, 32, 77, "tool_requested"),
+  row(ROOT, 33, 78, "policy_decision"),
+  row(ROOT, 34, 79, "tool_call"),
+  row(ROOT, 35, 80, "tool_requested"),
+  row(ROOT, 36, 81, "llm_call", {
+    source: "transcript",
+    attrs: { [DUP]: "otel_log" },
+    requestId: "req_5",
+  }),
+  row(ROOT, 37, 82, "tool_call"),
+  row(ROOT, 38, 83, "tool_requested"),
+  row(ROOT, 39, 84, "policy_decision", {
+    source: "otel_log",
+    policySource: "harness",
+  }),
+  row(ROOT, 40, 85, "tool_call"),
   // Subagent A, spawned by tu_task in turn 1.
   row(CHILD_A, 0, 7, "turn_start", {
     subagentId: "agent_a",
@@ -331,6 +367,30 @@ const INDEXED_ROWS: Row[] = [
   }),
 ];
 
+/**
+ * A run whose one reply was written as two transcript blocks, the second
+ * between an unkeyed tool request and its receipt, with no proxy sighting.
+ * The fold keeps the further block as a model step of its own and a frame
+ * that parts the request from its receipt. The query leaves it out of both.
+ * ADR-191 names the case, and #4351 carries the decision it needs.
+ */
+const SPLIT_ROWS: Row[] = [
+  row(SPLIT, 0, 0, "turn_start", { root: SPLIT }),
+  row(SPLIT, 1, 1, "llm_call", {
+    root: SPLIT,
+    source: "transcript",
+    requestId: "req_split",
+  }),
+  row(SPLIT, 2, 2, "tool_requested", { root: SPLIT }),
+  row(SPLIT, 3, 3, "llm_call", {
+    root: SPLIT,
+    source: "transcript",
+    attrs: { [DUP]: "transcript" },
+    requestId: "req_split",
+  }),
+  row(SPLIT, 4, 4, "tool_call", { root: SPLIT }),
+];
+
 const CHILDREN: Record<string, string[]> = {
   [ROOT]: [CHILD_A, CHILD_B, CHILD_LOOSE, NESTED],
   [INDEXED]: [INDEXED_EARLY],
@@ -359,6 +419,15 @@ async function harness() {
           sessionUuid: INDEXED,
           seqCount: INDEXED_ROWS.filter((r) => r["session_uuid"] === INDEXED)
             .length,
+        },
+      }),
+      tachoSession({
+        scope: SCOPE,
+        publicId: SPLIT_ID,
+        session: {
+          id: "0192d4a8-7c1e-7000-8000-00000000c0e0",
+          sessionUuid: SPLIT,
+          seqCount: SPLIT_ROWS.length,
         },
       }),
     ],
@@ -401,7 +470,7 @@ describe.skipIf(!chUp)("get_run_turns against ClickHouse", () => {
     await clickhouse().insert({
       table: "tacho_events",
       format: "JSONEachRow",
-      values: [...ROWS, ...INDEXED_ROWS],
+      values: [...ROWS, ...INDEXED_ROWS, ...SPLIT_ROWS],
     });
   }, 120_000);
 
@@ -410,63 +479,110 @@ describe.skipIf(!chUp)("get_run_turns against ClickHouse", () => {
     await closeClickhouse();
   });
 
-  it("answers what the run's frames add up to, read as the transcript reads them", async () => {
-    const { turns } = await harness();
-    const { ctx } = await import("./run.test-support");
-    const out = await runInTenantScope(SCOPE, () =>
-      turns(runTurnsGet.input.parse({ runId: RUN_ID }), ctx(SCOPE)),
-    );
-    const expected = await runInTenantScope(SCOPE, () => reference(RUN_ID));
-    expect(runTurnsGet.output.parse(out)).toEqual(out);
-    expect(out.turns).toEqual(expected.turns);
-    expect(out.complete).toBe(true);
+  // Each case reads the run twice from a real ClickHouse, the query and the
+  // fold. The first case also loads the handler and the fold for the file,
+  // under coverage. On #4370's CI runner that case took 5012 ms and failed
+  // the default 5 s, while the next two took under 1.8 s together.
+  const READS_TIMEOUT_MS = 30_000;
 
-    // The fixture exercises what it claims to.
-    expect(
-      out.turns.map((t) => [
-        t.turn,
-        t.frames,
-        t.modelSteps,
-        t.toolSteps,
-        t.cost?.micros ?? null,
-      ]),
-    ).toEqual([
-      // Root 16 frames, subagent A 7, the nested chain 1. One model call on
-      // the root however many sighted it, and the late report, then A's three
-      // and the nested chain's. Tool calls: tu_a, tu_b, tu_task, and A's
-      // tu_a1. Cost: the proxy's 100, A's 20 and 9, and the nested 1. The two
-      // late reports (the root's 60, A's second 9) and the sightings' copies
-      // count for nothing.
-      [1, 24, 6, 4, "130"],
-      // Root 5 frames and the loose subagent's 2. The unkeyed request and its
-      // two results pair as two calls; the loose chain's tool call is a third.
-      [2, 7, 2, 3, "3"],
-      [3, 4, 2, 0, "37"],
-    ]);
-    expect(out.turns[0]?.cumulativeCost?.micros).toBe("135");
-    expect(out.turns[0]?.tokens).toEqual({ inputUncached: 18, cacheRead: 105 });
-    expect(out.turns[1]?.tokens).toEqual({
-      inputUncached: null,
-      cacheRead: null,
-    });
-    expect(out.turns[2]?.cumulativeCost?.micros).toBe("175");
-  });
+  it(
+    "answers what the run's frames add up to, read as the transcript reads them",
+    async () => {
+      const { turns } = await harness();
+      const { ctx } = await import("./run.test-support");
+      const out = await runInTenantScope(SCOPE, () =>
+        turns(runTurnsGet.input.parse({ runId: RUN_ID }), ctx(SCOPE)),
+      );
+      const expected = await runInTenantScope(SCOPE, () => reference(RUN_ID));
+      expect(runTurnsGet.output.parse(out)).toEqual(out);
+      expect(out.turns).toEqual(expected.turns);
+      expect(out.complete).toBe(true);
 
-  it("opens the turns on the turn index for a recording with no turn_start", async () => {
-    const { turns } = await harness();
-    const { ctx } = await import("./run.test-support");
-    const out = await runInTenantScope(SCOPE, () =>
-      turns(runTurnsGet.input.parse({ runId: INDEXED_ID }), ctx(SCOPE)),
-    );
-    const expected = await runInTenantScope(SCOPE, () => reference(INDEXED_ID));
-    expect(out.turns).toEqual(expected.turns);
-    // The subagent that began before the run's first frame is in turn 1, and
-    // the turn still opens on the run's own first frame.
-    expect(out.turns.map((t) => [t.turn, t.seq, t.at, t.frames])).toEqual([
-      [1, "0", "2026-09-11T09:00:00.000Z", 4],
-      [2, "3", "2026-09-11T09:00:03.000Z", 2],
-      [3, "5", "2026-09-11T09:00:05.000Z", 1],
-    ]);
-    expect(out.turns[0]?.cost?.micros).toBe("14");
-  });
+      // The fixture exercises what it claims to.
+      expect(
+        out.turns.map((t) => [
+          t.turn,
+          t.frames,
+          t.modelSteps,
+          t.toolSteps,
+          t.cost?.micros ?? null,
+        ]),
+      ).toEqual([
+        // Root 16 frames, subagent A 7, the nested chain 1. One model call on
+        // the root however many sighted it, and the late report, then A's three
+        // and the nested chain's. Tool calls: tu_a, tu_b, tu_task, and A's
+        // tu_a1. Cost: the proxy's 100, A's 20 and 9, and the nested 1. The two
+        // late reports (the root's 60, A's second 9) and the sightings' copies
+        // count for nothing.
+        [1, 24, 6, 4, "130"],
+        // Root 5 frames and the loose subagent's 2. The unkeyed request and its
+        // two results pair as two calls; the loose chain's tool call is a third.
+        [2, 7, 2, 3, "3"],
+        [3, 4, 2, 0, "37"],
+        // Two calls around the model call, two around the harness check, one
+        // through the gate, one around the hidden sighting, and two around the
+        // harness check in its legacy OTel spelling. The query on main paired
+        // by count and answered 5.
+        [4, 16, 1, 8, null],
+      ]);
+      expect(out.turns[0]?.cumulativeCost?.micros).toBe("135");
+      expect(out.turns[0]?.tokens).toEqual({
+        inputUncached: 18,
+        cacheRead: 105,
+      });
+      expect(out.turns[1]?.tokens).toEqual({
+        inputUncached: null,
+        cacheRead: null,
+      });
+      expect(out.turns[2]?.cumulativeCost?.micros).toBe("175");
+    },
+    READS_TIMEOUT_MS,
+  );
+
+  it(
+    "opens the turns on the turn index for a recording with no turn_start",
+    async () => {
+      const { turns } = await harness();
+      const { ctx } = await import("./run.test-support");
+      const out = await runInTenantScope(SCOPE, () =>
+        turns(runTurnsGet.input.parse({ runId: INDEXED_ID }), ctx(SCOPE)),
+      );
+      const expected = await runInTenantScope(SCOPE, () =>
+        reference(INDEXED_ID),
+      );
+      expect(out.turns).toEqual(expected.turns);
+      // The subagent that began before the run's first frame is in turn 1, and
+      // the turn still opens on the run's own first frame.
+      expect(out.turns.map((t) => [t.turn, t.seq, t.at, t.frames])).toEqual([
+        [1, "0", "2026-09-11T09:00:00.000Z", 4],
+        [2, "3", "2026-09-11T09:00:03.000Z", 2],
+        [3, "5", "2026-09-11T09:00:05.000Z", 1],
+      ]);
+      expect(out.turns[0]?.cost?.micros).toBe("14");
+    },
+    READS_TIMEOUT_MS,
+  );
+
+  // Where the query does not yet answer as the fold does. A reply's further
+  // transcript block is its own model step in the fold, and it parts an
+  // unkeyed request from its receipt, so the fold draws two model steps and
+  // two tool calls. The query leaves the block out and answers one of each.
+  // ADR-191 names the case and #4351 carries the decision. When #4351 lands,
+  // this becomes an equality like the tests above.
+  it(
+    "differs from the fold on a reply split into blocks around an unkeyed tool call (#4351)",
+    async () => {
+      const { turns } = await harness();
+      const { ctx } = await import("./run.test-support");
+      const out = await runInTenantScope(SCOPE, () =>
+        turns(runTurnsGet.input.parse({ runId: SPLIT_ID }), ctx(SCOPE)),
+      );
+      const expected = await runInTenantScope(SCOPE, () => reference(SPLIT_ID));
+      const counts = (list: typeof out.turns) =>
+        list.map((t) => [t.frames, t.modelSteps, t.toolSteps]);
+      expect(counts(expected.turns)).toEqual([[5, 2, 2]]);
+      expect(counts(out.turns)).toEqual([[5, 1, 1]]);
+    },
+    READS_TIMEOUT_MS,
+  );
 });

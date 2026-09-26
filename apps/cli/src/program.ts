@@ -722,6 +722,15 @@ export function buildProgram(): Command {
       },
     );
   runCmd
+    .command("list")
+    .description("List the workspace's runs, newest first")
+    .option("--limit <n>", "Page size, 1 to 100", (v) => Number.parseInt(v, 10))
+    .option("--cursor <cursor>", "The cursor the previous page printed")
+    .option("--json", "Output the raw contract payload as JSON")
+    .action(async (opts: { limit?: number; cursor?: string; json?: boolean }) =>
+      (await import("./commands/run.js")).runList(opts),
+    );
+  runCmd
     .command("chain")
     .description(
       "Show what makes a run's record tamper-evident: the hash rule, the root, the checkpoints, the gaps, and the replay ladder",
@@ -799,6 +808,17 @@ export function buildProgram(): Command {
         await runDownload(exportId, opts);
       },
     );
+  runCmd
+    .command("pause-all")
+    .description(
+      "Pause every live wrapped run in the workspace as one recorded decision. Org Owner or Admin, or workspace Owner",
+    )
+    .requiredOption("--reason <text>", "Why the runs are paused (recorded)")
+    .option("--json", "Output JSON")
+    .action(async (opts: { reason: string; json?: boolean }) => {
+      const { runPauseAll } = await import("./commands/run.js");
+      await runPauseAll(opts);
+    });
 
   // ── verify: check a run export offline ──────────────────────────────────────
 
@@ -1487,8 +1507,8 @@ export function buildProgram(): Command {
   // ── agent env: bind agents to environments ──────────────────────────────────
   //
   // Server-scoped: the <agent> arg is an agent's public id (agt_…), slug, or
-  // agent-key, resolved against the workspace's agent definitions. Environments
-  // are governed configuration records — binding one does not run anything.
+  // agent key, resolved against the workspace's registered agents. Environments
+  // are governed configuration records: binding one does not run anything.
 
   const agent = program
     .command("agent")
@@ -1499,22 +1519,32 @@ export function buildProgram(): Command {
   agent
     .command("register")
     .description(
-      "Register an agent identity and print its credential once — Owner/Admin only",
+      "Register an agent: one harness on one runtime, carrying a toolbelt. Prints its credential once. Owner or Admin only",
     )
-    .requiredOption("--slug <slug>", "Lowercase words joined by hyphens")
     .requiredOption("--name <name>", "Display name")
     .requiredOption(
       "--harness <harness>",
       "stella | claude-code | codex | cursor | claude-agent-sdk | custom",
     )
+    .requiredOption("--runtime <rtm_id>", "The runtime it runs on (rtm_…)")
+    .option(
+      "--slug <slug>",
+      "Lowercase words joined by hyphens; derived from --name when omitted",
+    )
+    .option(
+      "--toolbelt <tbt_id>",
+      "The toolbelt it carries (tbt_…); the All tools belt when omitted",
+    )
     .option("--description <text>", "What the agent is for")
-    .option("--validity-days <n>", "Credential lifetime in days (1–365)")
+    .option("--validity-days <n>", "Credential lifetime in days (1 to 365)")
     .option("--json", "Output JSON")
     .action(
       async (opts: {
         slug?: string;
         name?: string;
         harness?: string;
+        runtime?: string;
+        toolbelt?: string;
         description?: string;
         validityDays?: string;
         json?: boolean;
@@ -1530,7 +1560,7 @@ export function buildProgram(): Command {
       "An agent id or slug. Omit it to report this machine instead",
     )
     .description(
-      "With an agent: its identity, credentials, roles, hosts and definition of record. Without one: this machine's enrollment, daemon, hooks, bundle and spool",
+      "With an agent: its identity, runtime, toolbelt, versions, credentials, roles and hosts. Without one: this machine's enrollment, daemon, hooks, bundle and spool",
     )
     .option("--json", "Output JSON")
     .action(

@@ -29,6 +29,14 @@ const recorded: Item = {
   description: "Cuts releases and opens their pull requests.",
   agentKey: "acme.core.release-bot",
   harness: "claude-code",
+  runtime: { id: "rtm_buildbox", name: "Build box", slug: "build-box" },
+  toolbelt: {
+    id: "tbt_alltools",
+    name: "All tools",
+    slug: "all-tools",
+    kind: "all_tools",
+  },
+  managed: false,
   principalId: "prn_91",
   operatorId: "usr_marcusbell",
   operatorName: "Marcus Bell",
@@ -62,6 +70,8 @@ const bare: Item = {
   slug: "legacy",
   description: null,
   agentKey: null,
+  runtime: null,
+  toolbelt: null,
   operatorId: null,
   operatorName: null,
   status: "unenrolled",
@@ -110,6 +120,14 @@ describe("toAgentPage", () => {
           description: "Cuts releases and opens their pull requests.",
           agentKey: "acme.core.release-bot",
           harness: "claude-code",
+          runtime: { id: "rtm_buildbox", name: "Build box", slug: "build-box" },
+          toolbelt: {
+            id: "tbt_alltools",
+            name: "All tools",
+            slug: "all-tools",
+            kind: "all_tools",
+          },
+          managed: false,
           operatorId: "usr_marcusbell",
           operatorName: "Marcus Bell",
           principalId: "prn_91",
@@ -137,6 +155,9 @@ describe("toAgentPage", () => {
           description: null,
           agentKey: null,
           harness: "claude-code",
+          runtime: null,
+          toolbelt: null,
+          managed: false,
           operatorId: null,
           operatorName: null,
           principalId: "prn_91",
@@ -168,6 +189,32 @@ describe("toAgentPage", () => {
     });
     expect(AgentPage.safeParse(page).success).toBe(true);
   });
+
+  // #4350: the flag is what hides every identity action on stella's agent,
+  // so a mapper that dropped it would offer Deregister again.
+  it("carries the managed flag of the built-in assistant", () => {
+    const page = toAgentPage({
+      items: [{ ...recorded, slug: "qa-chat", managed: true }],
+      nextCursor: null,
+      totals: {
+        identities: 1,
+        retired: 0,
+        enrolled: 0,
+        unenrolled: 1,
+        holdingMandate: null,
+        mandateHolders: [],
+        tamperIncidents: 0,
+        tamper: { recorded: 0, open: 0, newest: null },
+      },
+    });
+    expect(page.agents.map((agent) => agent.managed)).toEqual([true]);
+    expect(
+      toAgentDetail({
+        ...detail,
+        identity: { ...detail.identity, managed: true },
+      }).identity.managed,
+    ).toBe(true);
+  });
 });
 
 const detail: ContractOutput<typeof agentGet> = {
@@ -178,6 +225,7 @@ const detail: ContractOutput<typeof agentGet> = {
     description: null,
     agentKey: "acme.core.release-bot",
     harness: "claude-code",
+    managed: false,
     principalId: null,
     operatorId: "usr_marcusbell",
     status: "suspended",
@@ -223,7 +271,15 @@ const detail: ContractOutput<typeof agentGet> = {
       revokedAt: null,
     },
   ],
-  definition: null,
+  runtime: null,
+  toolbelt: null,
+  versions: [],
+  limits: {
+    perRun: { micros: "2500000", currency: "USD" },
+    perDay: null,
+    containmentRequired: true,
+    invalid: false,
+  },
 };
 
 describe("toAgentDetail", () => {
@@ -236,6 +292,7 @@ describe("toAgentDetail", () => {
       description: null,
       agentKey: "acme.core.release-bot",
       harness: "claude-code",
+      managed: false,
       principalId: null,
       operatorId: "usr_marcusbell",
       status: "suspended",
@@ -259,33 +316,59 @@ describe("toAgentDetail", () => {
       bundleVersionServed: null,
       lastSeenAt: null,
     });
-    expect(view.definition).toBeNull();
+    expect(view.runtime).toBeNull();
+    expect(view.versions).toEqual([]);
+    expect(view.limits).toEqual({
+      perRun: { micros: "2500000", currency: "USD" },
+      perDay: null,
+      containmentRequired: true,
+      invalid: false,
+    });
     expect(AgentDetail.safeParse(view).success).toBe(true);
   });
 
-  it("carries a committed definition with its source, commit and pull request", () => {
+  it("carries the runtime, the toolbelt and each version newest first (ADR-198)", () => {
+    const runtime = {
+      id: "rtm_laptop",
+      name: "Mac's laptop",
+      slug: "macs-laptop",
+    };
+    const belt = {
+      id: "tbt_review",
+      name: "Review belt",
+      slug: "review-belt",
+      kind: "custom" as const,
+    };
     const view = toAgentDetail({
       ...detail,
-      definition: {
-        version: 3,
-        path: ".oxagen/agents/release-bot.toml",
-        digest: "a".repeat(64),
-        commitSha: "9c1e2f0",
-        branch: "agents/release-bot",
-        pullRequestUrl: "https://github.com/acme/core/pull/12",
-        source: 'slug = "release-bot"\n',
-        committedAt: "2026-09-03T10:00:00.000Z",
-      },
+      runtime,
+      toolbelt: belt,
+      versions: [
+        {
+          version: 2,
+          changeKind: "toolbelt_changed",
+          runtime,
+          toolbelt: belt,
+          createdBy: "usr_marcusbell",
+          createdAt: "2026-09-04T10:00:00.000Z",
+        },
+        {
+          version: 1,
+          changeKind: "registered",
+          runtime,
+          toolbelt: null,
+          createdBy: null,
+          createdAt: "2026-09-01T10:00:00.000Z",
+        },
+      ],
     });
-    expect(view.definition).toEqual({
-      path: ".oxagen/agents/release-bot.toml",
-      digest: "a".repeat(64),
-      commitSha: "9c1e2f0",
-      branch: "agents/release-bot",
-      pullRequestUrl: "https://github.com/acme/core/pull/12",
-      source: 'slug = "release-bot"\n',
-      committedAt: "2026-09-03T10:00:00.000Z",
-    });
+    expect(view.runtime).toEqual(runtime);
+    expect(view.toolbelt).toEqual(belt);
+    expect(view.versions.map((v) => [v.version, v.changeKind])).toEqual([
+      [2, "toolbelt_changed"],
+      [1, "registered"],
+    ]);
+    expect(AgentDetail.safeParse(view).success).toBe(true);
   });
 });
 

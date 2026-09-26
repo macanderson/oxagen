@@ -61,6 +61,13 @@ const CONSOLE_CONTRACTS = [
   "get_run_issues",
   // #3894: the context window the Run page draws, read from the frames.
   "get_run_context",
+  // #3862: pausing every live run in a workspace is a control command, and a
+  // lapsed bucket must not leave agents unstoppable.
+  "pause_workspace_runs",
+  // #3839: the questions agents paused to ask, and a person's answer. ADR-055
+  // makes resolve_approval the only billable decision.
+  "list_interjections",
+  "answer_interjection",
   "authorize_cli",
   "change_member_role",
   "remove_org_member",

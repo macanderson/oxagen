@@ -16,7 +16,14 @@ vi.mock("./tenant", () => ({
     chSelect(q),
 }));
 
-import { selectTachoTurnFacts, selectTachoTurnGroups } from "./tacho-turns";
+import {
+  selectTachoTurnFacts,
+  selectTachoTurnGroups,
+  type UnkeyedToolPairing,
+  RULE3_GATE_LETTER,
+  RULE3_OTHER_LETTER,
+  unkeyedToolPattern,
+} from "./tacho-turns";
 
 const ROOT = "0b0e0000-0000-4000-8000-0000000000aa";
 const CHILD = "0b0e0000-0000-4000-8000-000000000100";
@@ -133,11 +140,8 @@ const group = (over: Record<string, unknown> = {}) => ({
   first_at: "2026-09-20 09:00:00.000",
   frames: "62",
   model_calls: "20",
-  model_requests: "0",
-  model_responses: "0",
   keyed_tools: "20",
-  unkeyed_requests: "0",
-  unkeyed_calls: "0",
+  unkeyed_tools: "0",
   cost_micros: "30000",
   priced: "20",
   input_uncached: "1834",
@@ -157,6 +161,13 @@ describe("selectTachoTurnGroups", () => {
     sessionUuids: [ROOT, CHILD],
     turnStarts: [0, 62],
     observedFrom: [{ sessionUuid: CHILD, seq: 3 }],
+    pairing: {
+      closes: [
+        ["tool_requested", "tool_call"],
+        ["tool.engine_call_started", "tool.engine_call_completed"],
+      ],
+      gates: ["policy_decision", "approval_request"],
+    } satisfies UnkeyedToolPairing as UnkeyedToolPairing,
   };
 
   it("sends no query when the run has no chain or no turn", async () => {
@@ -244,10 +255,7 @@ describe("selectTachoTurnGroups", () => {
       firstAt: "2026-09-20 09:00:00.000",
       frames: 62,
       modelCalls: 20,
-      modelRequests: 0,
-      modelResponses: 0,
       keyedToolCalls: 20,
-      unkeyedToolRequests: 0,
       unkeyedToolCalls: 0,
       costMicros: 30000,
       inputUncached: 1834,
@@ -275,6 +283,75 @@ describe("selectTachoTurnGroups", () => {
       subagentId: "agent_1",
       spawnToolUseId: "toolu_sub_1",
     });
+  });
+
+  // #4308. The fold pairs an unkeyed request only with the receipt that
+  // follows it with nothing but gates between. The query used to pair the
+  // two halves by count, so a request and a receipt with a model call between
+  // them read as one call where the transcript draws two.
+  it("counts unkeyed tool calls by the fold's rule 3, read in seq order", async () => {
+    await selectTachoTurnGroups(args);
+    const { query, params } = lastQuery();
+    expect(params).toMatchObject({
+      toolRequests: ["tool_requested", "tool.engine_call_started"],
+      toolReceipts: ["tool_call", "tool.engine_call_completed"],
+      gates: ["policy_decision", "approval_request"],
+      pattern: "A-*a|B-*b",
+    });
+    expect(query).toContain("arraySort(f -> f.1");
+    expect(query).toContain("{pattern:String}) AS unkeyed_tools");
+    // A later sighting is out of the reading, as the fold hides it first.
+    expect(query).toMatch(
+      /groupArrayIf\(\(seq, multiIf\([\s\S]*\), NOT \(kind = 'llm_call' AND attrs\[\{duplicateAttr:String\}\] != ''\)\)/,
+    );
+    // The legacy OTel spelling of Claude Code's own check is not a gate.
+    expect(query).toContain(
+      "JSONExtractString(body, 'policy_source') = 'harness'",
+    );
+    // The model halves are not tacho kinds, so the query no longer asks.
+    expect(query).not.toContain("model.request");
+  });
+
+  it("spells one letter pair per request spelling", () => {
+    expect(
+      unkeyedToolPattern({
+        closes: [["tool_requested", "tool_call"]],
+        gates: [],
+      }),
+    ).toBe("A-*a");
+    expect(() => unkeyedToolPattern({ closes: [], gates: [] })).toThrow(
+      /between 1 and 26/,
+    );
+  });
+
+  // #4354 review. Gates and other frames were `g` and `x`, which are also
+  // the 7th and 24th receipts. With seven spellings or more, a lone request
+  // followed by a gate or another frame read as a request and its receipt.
+  it("reads a gate or another frame as neither a request nor a receipt, at every number of spellings", () => {
+    for (let n = 1; n <= 26; n += 1) {
+      const closes = Array.from(
+        { length: n },
+        (_, k) => [`request_${k}`, `receipt_${k}`] as const,
+      );
+      const pattern = new RegExp(
+        `^(?:${unkeyedToolPattern({ closes, gates: [] })})$`,
+      );
+      for (let k = 0; k < n; k += 1) {
+        const request = String.fromCharCode(65 + k);
+        const receipt = request.toLowerCase();
+        const gate = RULE3_GATE_LETTER;
+        expect(pattern.test(`${request}${receipt}`)).toBe(true);
+        expect(pattern.test(`${request}${gate}${gate}${receipt}`)).toBe(true);
+        expect(pattern.test(`${request}${gate}`)).toBe(false);
+        expect(pattern.test(`${request}${RULE3_OTHER_LETTER}`)).toBe(false);
+        expect(pattern.test(`${request}${RULE3_OTHER_LETTER}${receipt}`)).toBe(
+          false,
+        );
+      }
+    }
+    expect(RULE3_GATE_LETTER).not.toMatch(/[A-Za-z]/);
+    expect(RULE3_OTHER_LETTER).not.toMatch(/[A-Za-z]/);
+    expect(RULE3_GATE_LETTER).not.toBe(RULE3_OTHER_LETTER);
   });
 
   it("reads a spawn that recorded no tool call or agent id as null", async () => {

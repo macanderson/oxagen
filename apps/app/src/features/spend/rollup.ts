@@ -67,6 +67,18 @@ export function cacheHitRate(classes: TokenClasses): number | null {
   return input === 0 ? null : classes.cache_read / input;
 }
 
+/**
+ * cache_write ÷ (input_uncached + cache_read + cache_write): the share of input
+ * written to the cache. The hit rate leaves writes out of its denominator, so a
+ * month that rebuilt its cache can read a high hit rate beside a high share
+ * here (A-08). Null when no input token was read.
+ */
+export function cacheWriteShare(classes: TokenClasses): number | null {
+  const input =
+    classes.input_uncached + classes.cache_read + classes.cache_write;
+  return input === 0 ? null : classes.cache_write / input;
+}
+
 /** The share of completion tokens that were reasoning; null with no completion. */
 export function reasoningShare(classes: TokenClasses): number | null {
   const completion = classes.output + classes.reasoning;

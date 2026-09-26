@@ -87,6 +87,8 @@ import { agentMemoryCitationStatsRoute } from "./routes/v1/agent.memory_citation
 import { agentApprovalListRoute } from "./routes/v1/agent.approval.list";
 import { agentApprovalListResolvedRoute } from "./routes/v1/agent.approval.list_resolved";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
+import { agentInterjectionAnswerRoute } from "./routes/v1/agent.interjection.answer";
+import { agentInterjectionListRoute } from "./routes/v1/agent.interjection.list";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
 import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
@@ -219,24 +221,14 @@ import { contextProposalDismissRoute } from "./routes/v1/context.proposal.dismis
 import { contextPrOpenRoute } from "./routes/v1/context.pr.open";
 import { contextPrGetRoute } from "./routes/v1/context.pr.get";
 import { contextPrMergeRoute } from "./routes/v1/context.pr.merge";
-import { agentDefinitionCreateRoute } from "./routes/v1/agent.definition.create";
-import { agentDefinitionDeleteRoute } from "./routes/v1/agent.definition.delete";
-import { agentDefinitionUpdateRoute } from "./routes/v1/agent.definition.update";
-import { agentDefinitionPublishRoute } from "./routes/v1/agent.definition.publish";
-import { agentDefinitionGetRoute } from "./routes/v1/agent.definition.get";
-import { agentDefinitionListRoute } from "./routes/v1/agent.definition.list";
 import { agentRoleAssignRoute } from "./routes/v1/agent.role.assign";
 import { agentRoleRevokeRoute } from "./routes/v1/agent.role.revoke";
 import { agentRoleListRoute } from "./routes/v1/agent.role.list";
 import { agentRoleGetRoute } from "./routes/v1/agent.role.get";
-import { agentDefinitionSuggestRoute } from "./routes/v1/agent.definition.suggest";
-import { agentDefinitionReviseRoute } from "./routes/v1/agent.definition.revise";
-import { agentDefinitionSummarizeRoute } from "./routes/v1/agent.definition.summarize";
 import { routerPolicyGetRoute } from "./routes/v1/router.policy.get";
 import { routerPolicySetRoute } from "./routes/v1/router.policy.set";
 import { routerStatsListRoute } from "./routes/v1/router.stats.list";
 import { routerDecisionPreviewRoute } from "./routes/v1/router.decision.preview";
-import { agentDeployRoute } from "./routes/v1/agent.deploy";
 import { privacyDataExportRoute } from "./routes/v1/privacy.data.export";
 import { privacyDataEraseRoute } from "./routes/v1/privacy.data.erase";
 import { connectionRoute } from "./routes/v1/connection";
@@ -274,6 +266,7 @@ import { tachoContainedLaunchRegisterRoute } from "./routes/v1/tacho.contained_l
 import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
 import { tachoGithubTokenIssueRoute } from "./routes/v1/tacho.github_token.issue";
 import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
+import { tachoWorkspaceRunsPauseRoute } from "./routes/v1/tacho.workspace_runs.pause";
 import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
 import { tachoCommandListRoute } from "./routes/v1/tacho.command.list";
 import { tachoEnrollmentCreateRoute } from "./routes/v1/tacho.enrollment.create";
@@ -323,9 +316,17 @@ import { agentRegisterRoute } from "./routes/v1/agent.register";
 import { agentCredentialRotateRoute } from "./routes/v1/agent.credential.rotate";
 import { agentSuspendRoute } from "./routes/v1/agent.suspend";
 import { agentRetireRoute } from "./routes/v1/agent.retire";
-import { agentDefinitionCommitRoute } from "./routes/v1/agent.definition.commit";
-import { agentProposeRoute } from "./routes/v1/agent.propose";
 import { agentToolbeltGetRoute } from "./routes/v1/agent.toolbelt.get";
+import { agentMoveRoute } from "./routes/v1/agent.move";
+import { agentToolbeltAssignRoute } from "./routes/v1/agent.toolbelt.assign";
+import { runtimeCreateRoute } from "./routes/v1/runtime.create";
+import { runtimeListRoute } from "./routes/v1/runtime.list";
+import { toolbeltListRoute } from "./routes/v1/toolbelt.list";
+import { toolbeltGetRoute } from "./routes/v1/toolbelt.get";
+import { toolbeltCloneRoute } from "./routes/v1/toolbelt.clone";
+import { toolbeltUpdateRoute } from "./routes/v1/toolbelt.update";
+import { toolbeltDeleteRoute } from "./routes/v1/toolbelt.delete";
+import { toolStateSetRoute } from "./routes/v1/tool.state.set";
 import { tachoIncidentListRoute } from "./routes/v1/tacho.incident.list";
 import { spendGetRoute } from "./routes/v1/spend.get";
 import { spendDrillRoute } from "./routes/v1/spend.drill";
@@ -761,6 +762,8 @@ orgScoped.route("/repository/gitlab/attach", repositoryGitlabAttachRoute);
 // and the workspace rather than to a host, so they sit beside /runs.
 orgScoped.route("/commands", tachoCommandDispatchRoute);
 orgScoped.route("/commands/list", tachoCommandListRoute);
+// pause_workspace_runs: every live run in the workspace, one decision (#3862).
+orgScoped.route("/commands/pause-workspace", tachoWorkspaceRunsPauseRoute);
 orgScoped.route("/tacho/hosts", tachoHostListRoute);
 orgScoped.route("/tacho/session-policy", tachoSessionPolicyReadRoute);
 orgScoped.route("/tacho/session-policy", tachoSessionPolicyWriteRoute);
@@ -944,6 +947,8 @@ orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/list", agentApprovalListRoute);
 orgScoped.route("/agent/approvals/resolved", agentApprovalListResolvedRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
+orgScoped.route("/agent/interjections/list", agentInterjectionListRoute);
+orgScoped.route("/agent/interjections/answer", agentInterjectionAnswerRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
 // Agent run-trace span tree: one execution plus its steps and tool calls. The
 // list route backs the Activity index.
@@ -958,18 +963,6 @@ orgScoped.route("/telemetry/error/cluster", telemetryErrorClusterRoute);
 // supports (cache opt-in vs implicit, reasoning control, structured output,
 // attachments) before work is routed to it.
 orgScoped.route("/model/capabilities", modelCapabilityListRoute);
-// Agent lifecycle: definitions, deployment, triggers. The /update and /publish
-// sub-paths are mounted before the get route so they are not swallowed by its
-// GET /:agentId param match.
-orgScoped.route("/agent/definitions/update", agentDefinitionUpdateRoute);
-orgScoped.route("/agent/definitions/publish", agentDefinitionPublishRoute);
-orgScoped.route("/agent/definitions/suggest", agentDefinitionSuggestRoute);
-orgScoped.route("/agent/definitions/revise", agentDefinitionReviseRoute);
-orgScoped.route("/agent/definitions/summarize", agentDefinitionSummarizeRoute);
-orgScoped.route("/agent/definitions/delete", agentDefinitionDeleteRoute);
-orgScoped.route("/agent/definitions", agentDefinitionCreateRoute);
-orgScoped.route("/agent/definitions", agentDefinitionListRoute);
-orgScoped.route("/agent/definitions", agentDefinitionGetRoute);
 // Agent RBAC role assignment (docs/specs/agent-rbac/spec.md §3.2): attach/
 // detach/inspect IAM roles on an agent's delegated principal. The /assign,
 // /revoke and /get sub-paths are mounted before the base list route so its
@@ -978,21 +971,31 @@ orgScoped.route("/agent/roles/assign", agentRoleAssignRoute);
 orgScoped.route("/agent/roles/revoke", agentRoleRevokeRoute);
 orgScoped.route("/agent/roles/get", agentRoleGetRoute);
 orgScoped.route("/agent/roles", agentRoleListRoute);
-orgScoped.route("/agent/deploy", agentDeployRoute);
-// Agent identity (MC spec §6.2, #2956): the identities table, one identity
-// with its credentials, roles, hosts and definition of record, the identity
-// writes (register, rotate, suspend, retire), the definition commit and the
+// Agent identity (ADR-198, MC spec §6.2, #2956): the identities table, one
+// identity with its credentials, roles, hosts, runtime, toolbelt and
+// versions, the identity writes (register, rotate, suspend, retire) and the
 // computed belt. Session auth; the org role is checked in each write handler.
 orgScoped.route("/agents/get", agentGetRoute);
 orgScoped.route("/agents/register", agentRegisterRoute);
 orgScoped.route("/agents/credential/rotate", agentCredentialRotateRoute);
 orgScoped.route("/agents/suspend", agentSuspendRoute);
 orgScoped.route("/agents/retire", agentRetireRoute);
-orgScoped.route("/agents/definition/commit", agentDefinitionCommitRoute);
-// New agent: the definition as a pull request against the main repository, never a row.
-orgScoped.route("/agents/propose", agentProposeRoute);
+// The two writes that make a new agent version (ADR-198): another runtime,
+// another toolbelt. Mounted before the base paths they share.
+orgScoped.route("/agents/move", agentMoveRoute);
+orgScoped.route("/agents/toolbelt/assign", agentToolbeltAssignRoute);
 orgScoped.route("/agents/toolbelt", agentToolbeltGetRoute);
 orgScoped.route("/agents", agentListRoute);
+// Runtimes, toolbelts and tool state (ADR-198). Session auth; the role is
+// checked in each write handler.
+orgScoped.route("/runtimes/create", runtimeCreateRoute);
+orgScoped.route("/runtimes", runtimeListRoute);
+orgScoped.route("/toolbelts/get", toolbeltGetRoute);
+orgScoped.route("/toolbelts/clone", toolbeltCloneRoute);
+orgScoped.route("/toolbelts/update", toolbeltUpdateRoute);
+orgScoped.route("/toolbelts/delete", toolbeltDeleteRoute);
+orgScoped.route("/toolbelts", toolbeltListRoute);
+orgScoped.route("/tools/state", toolStateSetRoute);
 // Tamper and integrity incidents on the workspace's hosts.
 orgScoped.route("/tacho/incidents", tachoIncidentListRoute);
 // Verified-Outcome Market Router governance + inspection.

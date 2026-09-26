@@ -46,6 +46,7 @@ import { type DeviceKey, loadOrCreateDeviceKey } from "../host/device-key";
 import {
   ensureDir,
   readJsonFileIfExists,
+  readJsonStateFile,
   writeSensitiveFileAtomic,
 } from "../host/fs";
 import {
@@ -75,7 +76,12 @@ import {
   verifyRunToken,
 } from "../host/run-token";
 import type { TachoPaths } from "../host/paths";
-import { isProcessAlive, listClaudeProcesses } from "../host/process-scan";
+import {
+  isProcessAlive,
+  listClaudeProcesses,
+  readProcessStarts,
+  readProcessStartsAsync,
+} from "../host/process-scan";
 import type { Exec, ExecAsync, ExecResult } from "../host/service";
 import {
   HOST_RETENTION_CLASSES,
@@ -98,12 +104,14 @@ import {
   type ControlEnvelope,
   type DaemonHealth,
   type ModelBaseUrlReport,
+  type PolicyBundle,
   TACHO_BUNDLE_FEATURES,
   TACHO_CREDENTIAL_GATEWAY_BROKERED,
   TACHO_CREDENTIAL_HARNESS_HELD,
 } from "../wire";
 import { Detector } from "./detector";
 import { createGitLane } from "./git-lane";
+import { removeCopiesOutside } from "./session-changes";
 import { exportSession, type ExportFormat } from "./exporters";
 import {
   handleHookEvent,
@@ -142,8 +150,11 @@ import {
 import {
   forgetHookId,
   HOOK_ID_REPLAY_WINDOW_MS,
+  isInternalSession,
   parseRegistryState,
+  parseSealedState,
   pruneHookIds,
+  SEALED_STATE_SCHEMA,
   sessionMapKey,
   type SessionRecord,
   type RegistryState,
@@ -178,6 +189,17 @@ export interface DaemonTimers {
    */
   cursorIdleSessionMs: number;
   walRetainMs: number;
+  /** The longest `stop` waits for the git lane before it seals the host chain. */
+  stopLaneMs: number;
+  /** The longest `stop` waits for the queue to reach the host chain's seal. */
+  stopQueueMs: number;
+  /** The longest `stop` spends shipping the WAL once the host chain is sealed. */
+  stopDrainMs: number;
+  /**
+   * The longest a hook waits for a bundle refresh it asked for. A hook holds
+   * the queue every wrapped agent on the host waits on.
+   */
+  hookBundleWaitMs: number;
 }
 
 export const DEFAULT_TIMERS: DaemonTimers = {
@@ -193,6 +215,13 @@ export const DEFAULT_TIMERS: DaemonTimers = {
   // by this bound reopens on its next hook (ADR-172). ADR-141 records why.
   cursorIdleSessionMs: 60 * 60_000,
   walRetainMs: 7 * 24 * 60 * 60_000,
+  // The three add up to 4 s, inside the 5 s `STOP_GRACE_MS` the process
+  // gives `stop` (run.ts), which leaves time to close the listeners and
+  // persist between them.
+  stopLaneMs: 1_500,
+  stopQueueMs: 1_000,
+  stopDrainMs: 1_500,
+  hookBundleWaitMs: 2_000,
 };
 
 /** How often the daemon looks at Codex's static run token. */
@@ -218,6 +247,13 @@ export interface DaemonOptions {
   /** `win32` listens on loopback TCP only (no Unix socket). */
   platform?: NodeJS.Platform;
   kill?: (pid: number, signal: "SIGTERM" | "SIGKILL") => boolean;
+  /**
+   * When each pid's process started (`readProcessStarts`). Defaults to `ps`
+   * through the injected `exec`, or to a real `ps` when none is injected.
+   */
+  processStarts?: (
+    pids: readonly number[],
+  ) => ReadonlyMap<number, string> | undefined;
   transcriptRoots?: string[];
   /** Override the model proxy's port from the host file (0 = ephemeral). */
   modelProxyPort?: number;
@@ -357,6 +393,45 @@ function defaultKill(pid: number, signal: "SIGTERM" | "SIGKILL"): boolean {
   }
 }
 
+/**
+ * Wait for `work` to settle, or for `ms` to pass, whichever comes first.
+ * Answers whether it settled. The timer does not hold the process open.
+ */
+function settleWithin(
+  work: Promise<unknown> | undefined,
+  ms: number,
+): Promise<boolean> {
+  if (work === undefined) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), ms);
+    timer.unref();
+    const done = () => {
+      clearTimeout(timer);
+      resolve(true);
+    };
+    work.then(done, done);
+  });
+}
+
+/**
+ * Whether `candidate` is an older mandate than `held`: a lower version and
+ * no later `issued_at`. Both, so a control plane whose version count started
+ * over still reaches a host with a bundle it issues now.
+ */
+export function olderBundle(
+  candidate: Pick<PolicyBundle, "version" | "issued_at">,
+  held: Pick<PolicyBundle, "version" | "issued_at">,
+): boolean {
+  return (
+    candidate.version < held.version &&
+    !(Date.parse(candidate.issued_at) > Date.parse(held.issued_at))
+  );
+}
+
+/** What a hook or OTLP post that reaches the queue after `stop` began is told. */
+const STOPPING =
+  "tachod is stopping; tacho-hook spools this hook for the next start";
+
 /** A serial queue: hook handling for one daemon never interleaves. */
 class Serial {
   private tail: Promise<unknown> = Promise.resolve();
@@ -481,6 +556,27 @@ async function initializeDaemon(
       ? async (command, args) => exec(command, args)
       : defaultExecAsync);
   const kill = options.kill ?? defaultKill;
+  // A session records when its harness started, and the kill path and the
+  // sweep compare that with the pid's start time now, so a pid the OS has
+  // handed to another process is neither signalled nor kept open (#4314).
+  // Windows has no `ps`, so there this answers nothing and the bare pid
+  // stands, as `pidReused` in inbox.ts says. Linux reads `/proc` and spawns
+  // nothing (`readProcessStarts` says why).
+  const platform = options.platform ?? process.platform;
+  const injectedStarts = options.processStarts;
+  const processStarts =
+    injectedStarts ??
+    ((pids: readonly number[]) =>
+      readProcessStarts(pids, options.exec, platform));
+  // The sweep's read, which runs before the sweep takes the hook queue.
+  const processStartsAsync = async (
+    pids: readonly number[],
+  ): Promise<ReadonlyMap<number, string> | undefined> =>
+    injectedStarts !== undefined
+      ? injectedStarts(pids)
+      : options.exec !== undefined
+        ? readProcessStarts(pids, options.exec, platform)
+        : readProcessStartsAsync(pids, undefined, platform);
   const loaded = options.host ?? readHostFile(paths.hostFile);
   if (loaded === undefined) {
     throw new Error(
@@ -505,6 +601,16 @@ async function initializeDaemon(
     host: { hostname_digest: digestText(host.hostname || osHostname()) },
     now,
   };
+  /**
+   * A state file that did not parse at startup was set aside, and the daemon
+   * starts without what it held (W-05). Said once, with where the bytes went.
+   */
+  const logSetAside = (what: string, movedTo: string | undefined): void =>
+    log(
+      movedTo === undefined
+        ? `${what} did not parse and could not be moved aside; starting without it`
+        : `${what} did not parse; moved it to ${movedTo} and started without it`,
+    );
   const wal = new Wal(
     paths.wal,
     (failure) => {
@@ -522,6 +628,7 @@ async function initializeDaemon(
         `WAL event line unparseable for session ${failure.session_uuid}: ${failure.reason}`,
       );
     },
+    (movedTo) => logSetAside("WAL cursor", movedTo),
   );
   // Only the daemon repairs a torn tail, and only once, before anything else
   // touches the WAL: a reader building its own `Wal` (`tacho status`, `tacho
@@ -560,6 +667,7 @@ async function initializeDaemon(
     context,
     scope: sessionScopeOf(host),
     now,
+    processStarts,
   });
   // Read before anything in this startup touches the file, so it names the
   // previous process's last write — the moment its record of a live session
@@ -568,7 +676,27 @@ async function initializeDaemon(
   const priorStateWrittenAt = existsSync(paths.daemonState)
     ? statSync(paths.daemonState).mtimeMs
     : undefined;
-  const persisted = parseRegistryState(readJsonFileIfExists(paths.daemonState));
+  // The released sessions first: `daemon.json` holds a session a release
+  // or a resume moved since the sealed-state file was written, and its copy
+  // replaces the older one.
+  const sealedState = parseSealedState(
+    readJsonStateFile(paths.daemonSealedState, (movedTo) =>
+      logSetAside("daemon sealed state", movedTo),
+    ),
+  );
+  if (sealedState !== undefined) {
+    for (const session of sealedState.sessions)
+      reconcileRestoredCursor(session.recorder, wal, log);
+    registry.restore(
+      { schema: "tacho.daemon-state.v1", sessions: sealedState.sessions },
+      { sealedFile: true },
+    );
+  }
+  const persisted = parseRegistryState(
+    readJsonStateFile(paths.daemonState, (movedTo) =>
+      logSetAside("daemon state", movedTo),
+    ),
+  );
   if (persisted !== undefined) {
     for (const session of persisted.sessions)
       reconcileRestoredCursor(session.recorder, wal, log);
@@ -703,9 +831,13 @@ async function initializeDaemon(
   // The control plane delivers a `sent` command again until its
   // acknowledgement lands. Every delivery goes through this daemon's record
   // of the commands it already answered, so a steer is queued once and a kill
-  // signalled once however often it arrives. In memory only: `daemon.json` is
-  // the registry's state and has no place for it.
+  // signalled once however often it arrives. `persistState` writes it into
+  // the sealed-state file, so a redelivery after a restart is answered from
+  // it too.
   const handledCommands = new HandledCommands();
+  handledCommands.restore(sealedState?.handled ?? []);
+  /** The `handledCommands.generation` the sealed-state file holds. */
+  let handledWritten = handledCommands.generation;
   const applyCommands: typeof applyDeliveredCommands = (commands, deps) =>
     applyDeliveredCommands(commands, { ...deps, handled: handledCommands });
   const serial = new Serial();
@@ -755,7 +887,16 @@ async function initializeDaemon(
     onRateLimit: (hint) => rateLimitSink.notify?.(hint),
   });
 
-  function persistState(): void {
+  /**
+   * Write the registry's state: `daemon.json` on every call, and the
+   * sealed-state file when the released sessions or the answered commands
+   * changed, or when `sealedFile` asks for it. `daemon.json` goes first. A
+   * session released since the last write stays in it until the sealed-state
+   * file holds it, and a session taken back from that file is in it before
+   * that file drops it, so a crash between the two writes loses neither
+   * (C-02).
+   */
+  function persistState(options: { sealedFile?: boolean } = {}): void {
     // Commit the WAL bytes this cursor answers for before the cursor itself
     // lands durably. `state.json` is read back at the next startup as a claim
     // about where each session's chain stood; writing that claim before the
@@ -767,8 +908,20 @@ async function initializeDaemon(
     wal.flush();
     writeSensitiveFileAtomic(
       paths.daemonState,
-      JSON.stringify(registry.state()),
+      JSON.stringify(registry.hotState()),
     );
+    const generation = handledCommands.generation;
+    const cold = registry.coldState(
+      options.sealedFile === true || generation !== handledWritten,
+    );
+    if (cold !== undefined) {
+      writeSensitiveFileAtomic(
+        paths.daemonSealedState,
+        `{"schema":${JSON.stringify(SEALED_STATE_SCHEMA)},"handled":${JSON.stringify(handledCommands.list())},"sessions":${cold.json}}`,
+      );
+      cold.written();
+      handledWritten = generation;
+    }
     // The state file now holds every ledger entry the journal did. A crash
     // between the write and this removal restores those entries twice,
     // which is harmless: remembering a key the ledger holds is a no-op.
@@ -1228,7 +1381,7 @@ async function initializeDaemon(
     // already gone from memory, so the retry finds nothing to withdraw, and
     // it clears the debt once this returns.
     persistPendingEnds();
-    persistState();
+    persistState({ sealedFile: true });
     if (withdrawn > 0)
       log(
         `mandate narrowed: withdrew ${withdrawn} queued prompt(s) from ${paths.daemonState}`,
@@ -1283,7 +1436,15 @@ async function initializeDaemon(
     }
   }
 
-  async function refreshBundle(): Promise<boolean> {
+  /**
+   * One bundle request, and what came of it: `cached` for a verified
+   * replacement written to `host.json`, `confirmed` for `not_modified`, and
+   * `refused` for anything that left the mandate unconfirmed (no answer, no
+   * bundle, one that does not verify or is older than the one held, or a
+   * narrowing this host could not honour). Callers go through
+   * `refreshBundle`.
+   */
+  async function fetchBundle(): Promise<"cached" | "confirmed" | "refused"> {
     try {
       // Past half its signed window the poll sends no etag, so an unchanged
       // mandate comes back freshly signed and the copy on disk stays fresh
@@ -1310,9 +1471,9 @@ async function initializeDaemon(
         mandateConfirmedAt = now();
         // The branch a narrowing whose sweep failed returns through for ever.
         retryOwedBodyPurge();
-        return false;
+        return "confirmed";
       }
-      if (response.bundle === null) return false;
+      if (response.bundle === null) return "refused";
       const verification = verifyBundle(
         response.bundle,
         host.bundle_public_key_pem,
@@ -1322,7 +1483,18 @@ async function initializeDaemon(
         log(
           `refused a bundle that does not verify: ${verification.reason ?? "unknown"}`,
         );
-        return false;
+        return "refused";
+      }
+      // A response that left before a newer bundle was cached must not
+      // replace it. The version counts mandate changes and a copy signed
+      // again keeps it, so an older mandate has a lower version and an
+      // earlier `issued_at`. A copy that fails to verify can be replaced by
+      // anything that does.
+      if (bundleVerified && olderBundle(response.bundle, host.bundle)) {
+        log(
+          `refused bundle ${response.bundle.version}: this host holds bundle ${host.bundle.version}, issued later`,
+        );
+        return "refused";
       }
       // A verified replacement is the control plane's own word on what may be
       // kept, which is the one thing that authorises erasing what is already
@@ -1344,7 +1516,7 @@ async function initializeDaemon(
         log(
           "refusing to cache a narrowed bundle this host can neither enforce on disk nor remember owing; the old etag stands so the next poll retries",
         );
-        return false;
+        return "refused";
       }
       host = applyControlFacts(paths.hostFile, host, {
         bundle: response.bundle,
@@ -1354,13 +1526,58 @@ async function initializeDaemon(
       // The replacement verified, so this response is a confirmation.
       mandateConfirmedAt = now();
       log(`bundle ${response.bundle.version} (${response.bundle.etag}) cached`);
-      return true;
+      return "cached";
     } catch (error) {
       log(
         `bundle refresh failed: ${error instanceof Error ? error.message : String(error)}`,
       );
-      return false;
+      return "refused";
     }
+  }
+
+  // One bundle request in flight at a time, and a pause after one that came
+  // to nothing (C-11). Every ingest batch and command poll whose envelope
+  // names another etag asks for a refresh, and so do the hooks and the tick.
+  // Each used to send its own request and wait up to the client's 15 s
+  // timeout for it, so a failing bundle endpoint held every batch that long,
+  // and two requests in flight could cache whichever verified last.
+  const BUNDLE_REFRESH_MIN_BACKOFF_MS = 2_000;
+  const BUNDLE_REFRESH_MAX_BACKOFF_MS = 60_000;
+  let bundleFetch: Promise<boolean> | undefined;
+  let bundleBackoffMs = 0;
+  let bundleRetryAt = 0;
+
+  /**
+   * Refresh the bundle, and answer whether a new one was cached. A caller
+   * that arrives while a request is in flight shares it. After a request
+   * that came to nothing, callers get `false` without a request until the
+   * backoff passes (2 s, doubling to 60 s). `force` skips the backoff, for
+   * the callers that ask on purpose: an operator's `refresh_bundle`, SIGHUP,
+   * and the tick, which has its own `bundleRefreshMs` cadence.
+   */
+  function refreshBundle(options: { force?: boolean } = {}): Promise<boolean> {
+    if (bundleFetch !== undefined) return bundleFetch;
+    if (options.force !== true && now() < bundleRetryAt)
+      return Promise.resolve(false);
+    const run = fetchBundle()
+      .then((outcome) => {
+        if (outcome === "refused") {
+          bundleBackoffMs = Math.min(
+            Math.max(bundleBackoffMs * 2, BUNDLE_REFRESH_MIN_BACKOFF_MS),
+            BUNDLE_REFRESH_MAX_BACKOFF_MS,
+          );
+          bundleRetryAt = now() + bundleBackoffMs;
+        } else {
+          bundleBackoffMs = 0;
+          bundleRetryAt = 0;
+        }
+        return outcome === "cached";
+      })
+      .finally(() => {
+        if (bundleFetch === run) bundleFetch = undefined;
+      });
+    bundleFetch = run;
+    return run;
   }
 
   async function onControl(control: ControlEnvelope): Promise<void> {
@@ -1388,8 +1605,9 @@ async function initializeDaemon(
             registry,
             hostRecorder: () => hostRecorder,
             kill,
+            processStart: (pid) => processStarts([pid])?.get(pid),
             refreshBundle: async () => {
-              await refreshBundle();
+              await refreshBundle({ force: true });
             },
             onHostSuspended: (reason) => {
               host = applyControlFacts(paths.hostFile, host, {
@@ -1512,8 +1730,10 @@ async function initializeDaemon(
   // --- transcript tailer -------------------------------------------------
   // The detector above only stats a transcript's mtime. The tailer reads it:
   // every session that reported a `transcript_path` has its file tailed on
-  // the tick, and a subagent's finished transcript is fed once when its
-  // SubagentStop arrives. See transcript-tailer.ts for why this exists.
+  // the tick, and so has each subagent transcript in that session's
+  // `subagents/` directory. A SubagentStop feeds what the tick has not read
+  // yet and retires that subagent's cursor. See transcript-tailer.ts for why
+  // this exists.
   const transcriptTailer = new TranscriptTailer({
     sessions: () => registry.list(),
     session: (id) => registry.get(id),
@@ -1525,8 +1745,9 @@ async function initializeDaemon(
   /**
    * What the tailer does before a hook is sealed: a `Stop` or `SessionEnd`
    * drains the session's transcript so the turn's model calls sit on the
-   * chain before the frame that closes it, and a `SubagentStop` feeds the
-   * subagent's transcript to the child chain before that chain is finalized.
+   * chain before the frame that closes it, and `SessionEnd` drains its
+   * subagents' too. A `SubagentStop` feeds the rest of the subagent's
+   * transcript to the child chain before that chain is finalized.
    */
   async function tailBeforeHook(payload: unknown): Promise<void> {
     if (payload === null || typeof payload !== "object") return;
@@ -1549,7 +1770,7 @@ async function initializeDaemon(
         }
       }
       if (hookName === "Stop" || hookName === "SessionEnd")
-        await transcriptTailer.drain(sessionId);
+        await transcriptTailer.drain(sessionId, hookName);
     } catch (error) {
       // The hook must still be answered; a transcript that cannot be read
       // is a gap in the record, not a reason to stall the agent.
@@ -1751,7 +1972,9 @@ async function initializeDaemon(
     }),
   ]);
   try {
-    const saved = readJsonFileIfExists(pendingEndsPath);
+    const saved = readJsonStateFile(pendingEndsPath, (movedTo) =>
+      logSetAside("pending session ends", movedTo),
+    );
     if (saved !== undefined && !Array.isArray(saved))
       throw new Error("expected a list of pending session ends");
     for (const value of (saved as unknown[] | undefined) ?? []) {
@@ -1805,6 +2028,7 @@ async function initializeDaemon(
       persistPendingEnds();
     },
     record,
+    preSessionCopies: paths.preSessionCopies,
   });
   const requestGitRead = gitReads.requestGitRead;
   for (const id of pendingSessionEnds.keys())
@@ -1945,7 +2169,7 @@ async function initializeDaemon(
         : pendingSessionEnds.get(pendingUuid);
     if (pendingUuid !== undefined && pending?.terminal !== undefined) {
       try {
-        flushPendingTerminal(pending.terminal);
+        await flushJournaledTerminal(pending);
         return {};
       } catch (error) {
         if (!(error instanceof WalRecoveryConflict)) throw error;
@@ -1978,8 +2202,11 @@ async function initializeDaemon(
         {
           registry,
           policy,
+          // A hook waits a bounded time for a refresh and none during a
+          // backoff. It holds the hook queue, and past the wait it decides
+          // on the bundle it has, which is what a failed refresh left it.
           refreshBundle: async () => {
-            await refreshBundle();
+            await settleWithin(refreshBundle(), timers.hookBundleWaitMs);
           },
           acknowledge: (ack) => {
             acks.push(ack);
@@ -2054,7 +2281,7 @@ async function initializeDaemon(
         outcome.record.sealed = false;
         outcome.record.pendingTerminal = true;
       }
-      flushPendingTerminal(pending.terminal);
+      await flushJournaledTerminal(pending);
     } else {
       try {
         record(outcome.events, outcome.bodies);
@@ -2154,6 +2381,33 @@ async function initializeDaemon(
     log(
       `session end for ${uuid} conflicts with the WAL at ${conflict.sessionUuid}:${conflict.seq}; its sealed terminal is in quarantine/${name}, and the end is sealed again on the chain the WAL holds`,
     );
+  }
+
+  /**
+   * Flush a journaled terminal once the body indexes it consults are built
+   * off the synchronous path.
+   *
+   * `appendRecovered` asks each body file which of the terminal's bodies it
+   * already stores, so a retried batch writes none twice (ADR-139). A body
+   * file with no sidecar was answered by reading it end to end on the event
+   * loop, about 0.8 seconds per GB, while no hook, `/status` request, or
+   * model call was answered (#4299). `Wal.withBodiesIndexed` builds those
+   * indexes with awaited reads first. The flush itself stays one
+   * synchronous step, run in the same turn as the check that the indexes
+   * cover their files.
+   */
+  async function flushJournaledTerminal(
+    pending: PendingSessionEnd,
+  ): Promise<void> {
+    const sessions = (pending.terminal?.bodies ?? []).map(
+      (body) => body.session_uuid,
+    );
+    await wal.withBodiesIndexed(sessions, () => {
+      // Read after the build. A mandate that narrowed while it ran has taken
+      // bodies out of the journal (`purgePendingEndBodies`).
+      if (pending.terminal !== undefined)
+        flushPendingTerminal(pending.terminal);
+    });
   }
 
   function flushPendingTerminal(
@@ -2470,11 +2724,19 @@ async function initializeDaemon(
    * Calls land on the daemon's own chain, not a session chain: a connected
    * app has no agent session — no prompt, no model, no turn — and inventing
    * one would put a step in the ledger that nobody took.
+   *
+   * The exception is a hooked session that uses the gateway as one of its
+   * MCP servers. Claude Code names each call's `tool_use_id` in the request,
+   * and when a live session's `PreToolUse` requested that call, the gateway's
+   * frame lands on that session's chain as the call's one `tool_call`, so the
+   * `PostToolUse` for it seals nothing (ADR-189).
    */
   const connected = new Map<
     string,
     { calls: number; refused: number; lastSeenAt: string }
   >();
+  /** Tool use ids whose gateway frame waits on the serial queue. */
+  const queuedGatewayCalls = new Set<string>();
 
   /**
    * The hash of this daemon chain's first sealed event, which the gateway
@@ -2506,46 +2768,138 @@ async function initializeDaemon(
     if (call.status === "rejected") seen.refused += 1;
     seen.lastSeenAt = toProtocolTimestamp(now());
     connected.set(call.client, seen);
-    // Only the host chain, not `markEveryChain`: this is the forward path a
-    // connected app waits on, and the comment above this function already
-    // explains why nothing here may cost more than the one chain it touches.
-    const mark = hostRecorder.markChain();
+    const toolUseId = call.toolUseId;
+    // A second call naming an id whose first call is still queued is not the
+    // call the session waits on. It seals on the daemon's chain, as it would
+    // once the first had landed.
+    const target =
+      toolUseId === undefined || queuedGatewayCalls.has(toolUseId)
+        ? undefined
+        : sessionAwaiting(toolUseId);
+    if (toolUseId !== undefined && target !== undefined) {
+      // A session chain is written on the serial queue, where that session's
+      // hooks are handled too. Sealed off it, this frame could land while a
+      // queued hook stands between its chain mark and its write, and that
+      // hook's rollback after a failed write would take the chain back behind
+      // a frame the WAL already holds. The client's answer does not wait for
+      // the queue. The frame lands before the call's PostToolUse, because the
+      // queue runs in order and the harness sends that hook only once it has
+      // the answer. A failed write is logged, and the rollback leaves the call
+      // awaited, so the PostToolUse seals it instead.
+      //
+      // The session is chosen here, once. A task already on the queue (a
+      // tick reading the transcript, an OTel record) can seal a sighting of
+      // this call before the frame is written, and the family ledger judges
+      // the frame against it there: a body the chain lacks is sealed stamped
+      // as a duplicate, and a repeat seals nothing. Looked up again inside the
+      // task, the call found no session waiting and sealed a second identity
+      // on the daemon's chain.
+      queuedGatewayCalls.add(toolUseId);
+      serial
+        .run(async () => {
+          try {
+            if (!target.sealed && !target.pendingTerminal) {
+              sealGatewayFrame(call, target);
+              return;
+            }
+            log(
+              `mcp gateway recorded ${call.toolName} (${toolUseId}) on the daemon's chain: session ${target.harnessSessionId} closed before the frame was written`,
+            );
+            sealGatewayFrame(call, undefined);
+          } finally {
+            queuedGatewayCalls.delete(toolUseId);
+          }
+        })
+        .catch((error: unknown) =>
+          log(
+            `mcp gateway could not record ${call.toolName} (${toolUseId}): ${error instanceof Error ? error.message : String(error)}`,
+          ),
+        );
+      return;
+    }
+    sealGatewayFrame(call, undefined);
+  }
+
+  /**
+   * Seal one gateway call on the session chain that is waiting on it, or on
+   * the daemon's own chain when none is, and write it in the same
+   * synchronous stretch.
+   */
+  function sealGatewayFrame(
+    call: GatewayCallRecord,
+    session: SessionRecord | undefined,
+  ): void {
+    // One chain only, not `markEveryChain`: the daemon's chain is written on
+    // the forward path a connected app waits on, and the comment above
+    // `recordGatewayCall` explains why nothing there may cost more than the
+    // one chain it touches.
+    const recorder = session?.recorder ?? hostRecorder;
+    const mark = recorder.markChain();
     try {
-      recordHostGatewayEvent(call);
+      const { kind, body, fields } = gatewayFrame(call);
+      if (session !== undefined && call.toolUseId !== undefined)
+        record(
+          session.recorder.sealGatewayCall(
+            kind,
+            { ...body, tool_use_id: call.toolUseId },
+            fields,
+          ),
+          session.recorder.takeBodies(),
+        );
+      else
+        record(
+          [hostRecorder.sealCollectorEvent(kind, body, fields)],
+          hostRecorder.takeBodies(),
+        );
     } catch (error) {
-      hostRecorder.rollbackChain(mark);
+      recorder.rollbackChain(mark);
       throw error;
     }
   }
 
-  function recordHostGatewayEvent(call: GatewayCallRecord): void {
+  /**
+   * The live session whose hook requested this call and is still waiting on
+   * it, or undefined. A session that already holds a frame for the id is not
+   * waiting, so a second call naming the same id seals on the daemon's chain
+   * rather than vanishing as a repeat.
+   */
+  function sessionAwaiting(toolUseId: string): SessionRecord | undefined {
+    return registry
+      .list()
+      .find(
+        (candidate) =>
+          !candidate.sealed &&
+          !candidate.pendingTerminal &&
+          candidate.recorder.awaitsToolCall(toolUseId),
+      );
+  }
+
+  /** The frame one gateway call seals, on whichever chain it lands. */
+  function gatewayFrame(call: GatewayCallRecord): {
+    kind: "tool_call" | "policy_decision";
+    body: Record<string, unknown>;
+    fields: Parameters<SessionRecorder["sealCollectorEvent"]>[2];
+  } {
     // The body holds only members the strict envelope declares: a refusal's
     // reason as a code and a digest, and the rules that refused the call
-    // (#3971, ADR-194).
-    const { kind, body } = gatewayFrameBody(call);
-    record(
-      [
-        hostRecorder.sealCollectorEvent(
-          kind,
-          body,
-          {
-            attrs: {
-              "oxagen.connected_app": call.client,
-              "oxagen.mcp_session": call.sessionId,
-              [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
-            },
-            // The gateway hands over the arguments and the result; the
-            // recorder redacts them, digests what is left and buffers the
-            // body for the WAL. A rejected call chains the digest the same
-            // way, but `contentClassOf` gives `policy_decision` no retention
-            // class, so its bytes are never kept: the record says what was
-            // attempted, not what it would have said.
-            ...(call.content === undefined ? {} : { content: call.content }),
-          },
-        ),
-      ],
-      hostRecorder.takeBodies(),
-    );
+    // (#3971, ADR-201).
+    return {
+      ...gatewayFrameBody(call),
+      fields: {
+        attrs: {
+          "oxagen.connected_app": call.client,
+          "oxagen.mcp_session": call.sessionId,
+          [TACHO_ENFORCEMENT_TIER_ATTR]: TACHO_GATEWAY_TIER,
+        },
+        // The gateway hands over the arguments and the result; the
+        // recorder redacts them, digests what is left and buffers the
+        // body for the WAL. A rejected call chains the digest the same
+        // way, but `contentClassOf` gives `policy_decision` no retention
+        // class, so its bytes are never kept: the record says what was
+        // attempted, not what it would have said.
+        ...(call.content === undefined ? {} : { content: call.content }),
+      },
+    };
   }
 
   const gateway = createMcpGateway({
@@ -2866,7 +3220,10 @@ async function initializeDaemon(
     // synchronous end to end — `sealCollectorEvent` advances the chain and
     // `wal.append` appends, neither with an await inside — so it cannot
     // interleave with a queued task however many forwards are in flight. The
-    // queue was never protecting the forward; it was only ever costing.
+    // queue was never protecting the forward; it was only ever costing. A
+    // call a hooked session is waiting on is the one exception: its frame is
+    // sealed on the session's chain, through the queue, and the forward's
+    // answer does not wait for it (ADR-189).
     mcp: (body, context) => gateway.handle(body, context),
     mcpClose: (sessionId) => gateway.forget(sessionId),
     issueRunToken: (input) =>
@@ -2905,13 +3262,20 @@ async function initializeDaemon(
         });
         return Promise.reject(readable.error);
       }
+      // Once `stop` began, a hook or an OTLP post still waiting for the queue
+      // is refused rather than run. `stop` seals the host chain behind them
+      // within `stopQueueMs`, and each one queued ahead of that seal was time
+      // it did not have. A refused hook is answered locally and spooled by
+      // `tacho-hook`, and the next start replays it.
       return serial.run(async () => {
+        if (stopped) throw new Error(STOPPING);
         await drainSpool();
         return handleHookInner(envelope);
       });
     },
     handleOtlp: (signal, payload) =>
       serial.run(async () => {
+        if (stopped) throw new Error(STOPPING);
         lastOtlpAt = now();
         if (signal === "traces") return;
         const { drafts, metrics } = normalizeOtlp(payload as OtlpPayload);
@@ -3155,6 +3519,8 @@ async function initializeDaemon(
   let lastCheckpoint = 0;
   let lastSweep = 0;
   let lastCompact = 0;
+  const COMPACT_EVERY_MS = 60 * 60_000;
+  const COMPACT_RETRY_MS = 60_000;
 
   // A narrowing this host owed when it last exited. Run here rather than left
   // to the first poll: a poll can be a bundle refresh interval away, or an
@@ -3257,6 +3623,50 @@ async function initializeDaemon(
     }
   }
 
+  /**
+   * The start time of every live pid a session recorded one for, in one
+   * read (one `ps` call off Linux). It runs before the sweep takes the hook
+   * queue and does not hold the event loop, because a hook waits on that
+   * queue. Undefined when nothing needs reading or nothing answered.
+   */
+  async function sweepStarts(): Promise<
+    ReadonlyMap<number, string> | undefined
+  > {
+    const pids = registry
+      .live()
+      .filter(
+        (session) =>
+          session.pid !== undefined &&
+          session.pidInstance !== undefined &&
+          !isInternalSession(session.harnessSessionId),
+      )
+      .map((session) => session.pid as number)
+      .filter(isProcessAlive);
+    if (pids.length === 0) return undefined;
+    try {
+      return await processStartsAsync(pids);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * The sweep's test of a session's pid: the process answers, and it is the
+   * one the session recorded. A pid whose start time now differs from the
+   * recorded one names another process, so its session seals on this sweep
+   * rather than after `STALE_PID_SESSION_MS`. A pid with no start time read
+   * keeps the plain liveness answer.
+   */
+  function sweepLiveness(
+    started: ReadonlyMap<number, string> | undefined,
+  ): (pid: number, instance?: string) => boolean {
+    return (pid, instance) => {
+      if (!isProcessAlive(pid)) return false;
+      const now = instance === undefined ? undefined : started?.get(pid);
+      return now === undefined || now === instance;
+    };
+  }
+
   async function controlTick(): Promise<void> {
     if (stopped) return;
     for (const session of registry.list()) {
@@ -3284,6 +3694,10 @@ async function initializeDaemon(
         }
       }
     });
+    // Read before the queue is taken: `ps` is a process spawn.
+    const started =
+      now() - lastSweep >= timers.sweepMs ? await sweepStarts() : undefined;
+    let swept = false;
     await stage("spool, transcripts, sweep, checkpoint", () =>
       serial.run(async () => {
         const t = now();
@@ -3299,7 +3713,7 @@ async function initializeDaemon(
           // disk, and `forgetSealed` then dropped it (#3719).
           let failure: { error: unknown } | undefined;
           const candidates = registry.sweepCandidates(
-            isProcessAlive,
+            sweepLiveness(started),
             (session) =>
               session.harness === "cursor"
                 ? Math.min(timers.idleSessionMs, timers.cursorIdleSessionMs)
@@ -3321,6 +3735,11 @@ async function initializeDaemon(
             registry.settleSwept(candidate);
           }
           registry.forgetSealed(timers.walRetainMs);
+          // A sealed session is kept for a week; what only a running chain
+          // needs is dropped an hour after it went quiet, so `daemon.json`
+          // stays bounded however many sessions that week held (C-02).
+          if (registry.releaseSealedState() > 0) stateDirty = true;
+          swept = true;
           if (failure !== undefined) throw failure.error;
         }
         if (t - lastCheckpoint >= timers.checkpointMs) {
@@ -3330,6 +3749,16 @@ async function initializeDaemon(
         if (stateDirty) persistState();
       }),
     );
+    // A forgotten session reconciles no more, so its pre-session copies go.
+    // So do any a crash left behind. A sealed session keeps its copies until
+    // then, because a `SessionStart` resume reopens it and it reconciles
+    // again. Off the hook queue, since removing files is not a hook's work.
+    if (swept)
+      await stage("pre-session copies", () =>
+        removeCopiesOutside(paths.preSessionCopies, () =>
+          registry.list().map((session) => session.recorder.sessionUuid),
+        ),
+      );
     // Refresh before draining, so a batch carrying bodies leaves under the
     // mandate the control plane holds now rather than the one cached before
     // an outage.
@@ -3338,7 +3767,7 @@ async function initializeDaemon(
       if (shipper.hostRevoked) return;
       if (now() - lastRefresh >= timers.bundleRefreshMs) {
         lastRefresh = now();
-        await refreshBundle();
+        await refreshBundle({ force: true });
         await refreshUpstreams();
       }
     });
@@ -3361,11 +3790,22 @@ async function initializeDaemon(
     // and already land a batch or more after the tool frames they belong with.
     void startGitReads();
     await stage("compact", () => {
-      if (now() - lastCompact >= 60 * 60_000) {
-        lastCompact = now();
+      if (now() - lastCompact < COMPACT_EVERY_MS) return;
+      lastCompact = now();
+      // A failed pass is tried again in a minute, not an hour, and does not
+      // take the quarantine sweep down with it (W-08). `Wal.compact` reports
+      // a file it cannot remove and goes on, so what throws here is the
+      // pass as a whole: the WAL directory could not be listed, or the
+      // cursor could not be written.
+      let failure: unknown;
+      try {
         wal.compact(now(), timers.walRetainMs);
-        sweepQuarantine(now(), timers.walRetainMs);
+      } catch (error) {
+        failure = error;
+        lastCompact = now() - COMPACT_EVERY_MS + COMPACT_RETRY_MS;
       }
+      sweepQuarantine(now(), timers.walRetainMs);
+      if (failure !== undefined) throw failure;
     });
     // The WAL is the record; a recorder's in-memory list of what it sealed is
     // only read inside one synchronous ingest (`everySealed`). Kept whole, it
@@ -3506,31 +3946,50 @@ async function initializeDaemon(
      */
     flushGitReads: () => startGitReads(),
     drainSpool: () => serial.run(drainSpool),
-    refreshBundle,
+    refreshBundle: () => refreshBundle({ force: true }),
     stop: async () => {
       if (stopped) return;
       stopped = true;
       if (timer) clearInterval(timer);
-      // Persist now, before the potentially long wait below. `gitLane` can
-      // run for minutes (`startGitReads`'s own comment has the arithmetic),
-      // and a stop timeout that SIGKILLs this process mid-wait must not leave
-      // `state.json` any further behind the WAL than the last ordinary tick
-      // already left it. The finalize below persists again once the wait and
-      // the shutdown sequence after it are done.
+      // Persist now, before the waits below. A stop timeout that kills this
+      // process mid-wait must not leave `state.json` any further behind the
+      // WAL than the last ordinary tick already left it. The finalize below
+      // persists again.
       persistState();
-      // The lane may be mid-spawn. Its results are applied through `serial`, so
-      // shutting down without waiting would race the finalize below and could
-      // append a reconciliation after the host chain was sealed.
-      await gitLane;
+      // Every wait here is bounded, so the host chain is sealed and persisted
+      // inside the process's own `STOP_GRACE_MS` (C-10). The git lane can run
+      // for minutes (`startGitReads` has the arithmetic), and waiting it out
+      // meant the process exited before the finalize ran. A read abandoned
+      // here is lost with nothing owed: a pending SessionEnd stays in
+      // `pending-session-ends.json`, and the next start reads its worktree
+      // again. A read that lands after this applies through `serial` to its
+      // own session's chain, never to the host's.
+      if (!(await settleWithin(gitLane, timers.stopLaneMs)))
+        log(
+          `stop: left a git read unfinished after ${timers.stopLaneMs} ms; a pending SessionEnd is read again at the next start`,
+        );
       modelProxy.close();
       await modelProxyListener.close();
       await server.close();
-      await serial.run(async () => {
+      // Behind at most the task running now: a hook or OTLP post queued
+      // after it is refused. That task can wait on a git read for up to ten
+      // seconds, so the seal waits `stopQueueMs` for it. Past that the seal
+      // stays queued, and lands if the process lives long enough.
+      const sealed = serial.run(async () => {
         record(hostRecorder.finalize("completed", toProtocolTimestamp(now())));
         hostRecord.sealed = true;
         persistState();
       });
-      await shipper.drain();
+      if (!(await settleWithin(sealed, timers.stopQueueMs)))
+        log(
+          `stop: a task held the queue for ${timers.stopQueueMs} ms; the host chain seals when it finishes`,
+        );
+      // Shipping stops at its budget. A batch in flight is marked shipped only
+      // once its response lands, so what did not ship leaves at the next start.
+      if (!(await settleWithin(shipper.drain(), timers.stopDrainMs)))
+        log(
+          `stop: stopped shipping after ${timers.stopDrainMs} ms; the rest of the WAL ships at the next start`,
+        );
     },
   };
 }

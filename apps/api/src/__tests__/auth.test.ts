@@ -247,6 +247,7 @@ describe("authMiddleware — API key success", () => {
           slug: "release-manager",
           name: "Release manager",
           harness: "stella",
+          runtimeId: "rtm_0123456789abcdefghjkmn",
         }),
       }),
     );

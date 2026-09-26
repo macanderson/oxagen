@@ -571,6 +571,8 @@ describe("readTranscriptPage", () => {
       entries: [],
       cursor: null,
       complete: true,
+      // Where a live reader's stream opens (A-06); it maps through as is.
+      frameCursor: "Zjo0",
     });
     const read = await readTranscriptPage(
       "acme",
@@ -587,6 +589,7 @@ describe("readTranscriptPage", () => {
         entries: [],
         cursor: null,
         complete: true,
+        frameCursor: "Zjo0",
         counts: null,
         figures: null,
         search: null,

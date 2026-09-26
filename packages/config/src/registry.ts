@@ -245,6 +245,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "oxagen",
   },
+  OXAGEN_REGION: {
+    group: "OpenTelemetry",
+    description:
+      "The region this process answers from, printed beside the trace id on a page's " +
+      "error line (#3841). Every deployed node runs in us-east-1, and the node manifest " +
+      "(tools/scripts/package-for-node.sh) sets it too. Unset locally, where the page " +
+      "says the region was not recorded.",
+    secret: false,
+    clientExposed: false,
+    services: ["app"],
+    requiredIn: [],
+    valueOrigin: "static",
+    staticValue: { preview: "us-east-1", production: "us-east-1" },
+  },
 
   // ── Circuit breaker (shared thresholds for every per-dependency breaker —
   //    Neo4j scopedSession, Stripe BillingProvider, ClickHouse insertRows) ────
@@ -1142,10 +1156,9 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   AI_GATEWAY_API_KEY: {
     group: "AI providers",
     description:
-      "Vercel AI Gateway token — the platform's default AI auth. @oxagen/ai routes " +
-      "image, embeddings and video through the gateway always, and text too unless " +
-      "OXAGEN_MODEL_PROVIDER opts that deployment out, so this is required " +
-      "wherever AI runs.",
+      "Vercel AI Gateway token for language models. @oxagen/ai routes text through " +
+      "the gateway unless OXAGEN_MODEL_PROVIDER opts that deployment out. " +
+      "Embeddings use VOYAGE_API_KEY instead.",
     secret: true,
     clientExposed: false,
     services: ["api", "app", "mcp"],
@@ -1158,8 +1171,8 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
       "Which provider serves language models: the gateway (default, and the metered " +
       "path) or 'openrouter' for a deployment that cannot reach the gateway. Never " +
       "an automatic fallback — an operator opts out explicitly, because a silent " +
-      "failover would move spend to another vendor's bill and skip metering. Image, " +
-      "video and embeddings stay on the gateway either way. The per-organisation " +
+      "failover would move spend to another vendor's bill and skip metering. " +
+      "Embeddings use Voyage either way. The per-organisation " +
       "keys ADR-131 mints are OpenRouter keys, so they are minted and consulted " +
       "only when this is 'openrouter' (ADR-131 §9).",
     secret: false,
@@ -1179,6 +1192,19 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     clientExposed: false,
     services: ["api", "app", "mcp"],
     requiredIn: [],
+    valueOrigin: "manual",
+  },
+  VOYAGE_API_KEY: {
+    group: "AI providers",
+    description:
+      "Voyage AI key for every embedding (voyage-4-large, 1,024 dimensions). One " +
+      "platform key serves every organisation, and every embedding is billed. " +
+      "Without it, embedding calls answer 503 and ingestion stores records " +
+      "without vectors.",
+    secret: true,
+    clientExposed: false,
+    services: ["api", "app", "mcp"],
+    requiredIn: ["production"],
     valueOrigin: "manual",
   },
   OPENROUTER_MANAGEMENT_KEY: {

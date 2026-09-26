@@ -125,7 +125,7 @@ const findingEvidence = vi.fn<DataSource["spend"]["findingEvidence"]>();
 const priceBook = vi.fn<DataSource["spend"]["priceBook"]>();
 const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
 const source: DataSource = {
-  runtimes: { list: vi.fn(), agents: vi.fn() },
+  runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
   conversations: { latest: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: {
@@ -159,6 +159,7 @@ const source: DataSource = {
     findings: vi.fn(),
   },
   approvals: { pending: vi.fn(), resolved: vi.fn(), resolvedSince: vi.fn() },
+  interjections: { open: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),
@@ -215,6 +216,8 @@ const source: DataSource = {
     approvalRules: vi.fn(),
     connections: vi.fn(),
     mcpServers: vi.fn(),
+    toolbelts: vi.fn(),
+    toolbelt: vi.fn(),
   },
 };
 
@@ -702,6 +705,10 @@ describe("Spend › Tokens", () => {
     expect(
       screen.getByText("Cache hit rate").nextElementSibling,
     ).toHaveTextContent("50%");
+    // 50 of 750 input tokens were written to the cache (A-08).
+    expect(
+      screen.getByText("Written to cache").nextElementSibling,
+    ).toHaveTextContent("6.7%");
     for (const heading of ["Prompt composition", "By harness"]) {
       const panel = screen
         .getByRole("heading", { name: heading })

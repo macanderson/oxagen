@@ -4,17 +4,19 @@
 //
 // One client component holds both, because the filter chips change what the
 // tiles add up: Spend shown and Tokens shown are sums over the rows listed,
-// and the labels say "shown" for that reason. Every figure here comes from
-// `view.ts` over the same rows the table draws.
+// and the labels say "shown" for that reason. Those figures come from
+// `view.ts` over the same rows the table draws. Live runs is the workspace's,
+// counted by `list_runs` whatever the page or the chips, as its label says.
 //
-// The page size is the read's own limit, and the pull-request filter is the
-// read's own filter, so both change what `list_runs` returns rather than
-// slicing a fixed page. The page size and the columns shown are the person's
-// saved choice (`prefs.ts`), kept in a cookie the page reads on the server.
-// Search, facets and sort run over the rows the read returned. The pager says
-// so: its total carries a `+` when the read stopped before the oldest run, and
-// a link opens the next read.
-import { ArrowUpDown, Columns3, GitPullRequest } from "lucide-react";
+// The page size is the read's own limit, and the search, the facets, the order,
+// the page and the pull-request filter are the read's own inputs, values on
+// the URL that `list_runs` applies across the workspace (#3837). A change to
+// any of them is a navigation (`list-bar.tsx`, the headers), never a filter
+// over the rows one read returned. The pager (`pager.tsx`) reads the read's
+// total. The page size and the columns shown are the person's saved choice
+// (`prefs.ts`), kept in a cookie the page reads on the server. The chips
+// filter the rows of the page, because parked comes from the approvals read.
+import { ArrowUpDown } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
@@ -25,21 +27,20 @@ import {
   useTransition,
 } from "react";
 import type { ApprovalQueue } from "@/data/contracts/approvals";
+import type { InterjectionQueue } from "@/data/contracts/interjections";
 import {
   type CommandBlock,
+  canGoStale,
   commandBlockOf,
   type PullRequestFilter,
-  type RunDiff,
-  type RunPullRequest,
   type RunRow,
+  STALE_REREAD_MS,
 } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
-import { openApprovals } from "@/features/shell/client";
-import { parsePullRequestUrl } from "@/shared/pull-request-url";
 import { routes } from "@/shared/safe-path";
 import { AgentCard } from "@/ui/agent-card";
 import { Avatar } from "@/ui/avatar";
-import { Badge, type BadgeTone } from "@/ui/badge";
+import { Badge } from "@/ui/badge";
 import {
   COMMAND_BLOCK_COPY,
   UNANSWERED,
@@ -49,7 +50,6 @@ import {
   buttonPrimary,
   buttonSecondary,
   inputBase,
-  linkText,
   mono,
   panel,
   panelHeader,
@@ -64,14 +64,21 @@ import { FormAlert } from "@/ui/form-feedback";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
-import { PullRequestLink, SafeLink, useNavigate } from "@/ui/navigation";
+import { SafeLink, useNavigate } from "@/ui/navigation";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { StatusBadge } from "@/ui/status-badge";
 import { cell, headCell, numericCell } from "@/ui/table";
+import { LiveRefresh } from "@/ui/live-refresh";
 import { ToastStack, useToasts } from "@/ui/toast";
 import { dispatchRunCommand, exportFleetRun } from "./actions";
-import { Clock } from "@/ui/clock";
+import {
+  DiffCell,
+  PullRequestsCell,
+  RowStatusBadge,
+  SummaryCell,
+  TokensCell,
+  TokensTile,
+} from "./run-cells";
 import {
   DEFAULT_FLEET_PREFS,
   FIXED_COLUMN,
@@ -79,33 +86,31 @@ import {
   type FleetColumn,
   type FleetPrefs,
   fleetPrefsCookieString,
-  PAGE_SIZES,
   type PageSize,
-  pageSizeOf,
   shownColumns,
   withColumn,
 } from "./prefs";
+import { RunsListBar } from "./list-bar";
 import {
-  applyList,
+  effectiveListQuery,
+  type FleetListQuery,
+  listQueryToRoute,
+  nextSort,
+  SORTABLE_COLUMNS,
+  withList,
+} from "./list-query";
+import { RunsPager } from "./pager";
+import {
   chipRows,
-  type Facets,
-  facetValues,
-  forgeOf,
   type ListedRun,
-  type ListQuery,
   listRuns,
-  liveCount,
-  oldestApproval,
   parkedRunIds,
-  pullRequestLabel,
   RUN_CHIPS,
-  type RowWords,
   type RunChip,
-  type SortKey,
   shownCost,
   spendShown,
-  windowParts,
 } from "./view";
+import { WaitingTile } from "./waiting-tile";
 
 /** An agent the steer dialog can address. */
 export type FleetAgent = { agentKey: string };
@@ -134,92 +139,20 @@ function Tile({
   );
 }
 
-function WaitingTile({
-  approvals,
-  now,
-}: {
-  approvals: Read<ApprovalQueue>;
-  now: number;
-}) {
-  const t = useTranslations("fleet.stats.waiting");
-  const locale = useLocale();
-  const drawer = t("drawer");
-  // The design counts an open interjection in this tile. No store records
-  // one yet (#3839), so the tile counts approvals and says interjections are
-  // missing rather than letting the count read as the whole of what waits.
-  const interjections = (
-    <span data-recorded="false" data-testid="interjections-not-recorded">
-      {t("interjections")}
-    </span>
-  );
-  let value: ReactNode;
-  let note: ReactNode;
-  if (!approvals.ok) {
-    value = <span className="text-muted-foreground">—</span>;
-    note = (
-      <>
-        {t("unread", {
-          code:
-            approvals.reason === "denied"
-              ? approvals.permission
-              : approvals.reason === "error"
-                ? approvals.code
-                : approvals.accessRequestId,
-        })}
-        {" · "}
-        {interjections}
-      </>
-    );
-  } else {
-    const { items, more } = approvals.value;
-    const count = formatCount(items.length, locale);
-    value = more ? t("more", { count }) : count;
-    const oldest = oldestApproval(items);
-    const limit = oldest === null ? null : windowParts(oldest.windowSeconds);
-    note = (
-      <>
-        {oldest === null || limit === null
-          ? t("none")
-          : t.rich("oldest", {
-              clock: () => (
-                <Clock at={oldest.createdAt} now={now} direction="since" />
-              ),
-              window:
-                limit.seconds === 0
-                  ? t("window", { minutes: limit.minutes })
-                  : t("windowSeconds", limit),
-            })}
-        {more ? ` · ${t("moreBasis")}` : null}
-        {" · "}
-        {interjections}
-        {` · ${drawer}`}
-      </>
-    );
-  }
-  return (
-    <button
-      type="button"
-      data-testid="tile"
-      aria-label={t("open")}
-      onClick={openApprovals}
-      className={`${statTile} cursor-pointer text-left transition-colors hover:border-rule focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring`}
-    >
-      <span className={statTerm}>{t("title")}</span>
-      <span className={`${statValue} text-info`}>{value}</span>
-      <span className={statNote}>{note}</span>
-    </button>
-  );
-}
-
 function Tiles({
   listed,
   approvals,
+  interjections,
   agentTotal,
+  liveRuns,
   now,
 }: {
   listed: readonly ListedRun[];
   approvals: Read<ApprovalQueue>;
+  interjections: Read<InterjectionQueue>;
   agentTotal: number | null;
+  /** The workspace's live runs, as `list_runs` counted them; null when it could not. */
+  liveRuns: number | null;
   now: number;
 }) {
   const t = useTranslations("fleet.stats");
@@ -241,16 +174,35 @@ function Tiles({
   ].join(" · ");
   return (
     <section aria-label={t("label")} className={`${statStrip} mb-4`}>
+      {/* Every live run in the workspace, parked ones included, as the Live
+          chip lists them. A page of rows could not say how many the
+          workspace holds, so a missing count is said, never taken from the
+          page. */}
       <Tile
         term={t("live.title")}
-        value={formatCount(liveCount(listed), locale)}
+        value={
+          liveRuns === null ? (
+            <span
+              data-testid="live-not-counted"
+              className="text-base font-medium text-muted-foreground"
+            >
+              {t("live.notCounted")}
+            </span>
+          ) : (
+            formatCount(liveRuns, locale)
+          )
+        }
         note={
           agentTotal === null
             ? t("live.basisUnread")
             : t("live.basis", { count: agentTotal })
         }
       />
-      <WaitingTile approvals={approvals} now={now} />
+      <WaitingTile
+        approvals={approvals}
+        interjections={interjections}
+        now={now}
+      />
       <Tile
         term={t("spend.title")}
         value={
@@ -264,31 +216,12 @@ function Tiles({
         }
         note={<span data-testid="spend-basis">{spendNote}</span>}
       />
-      {/* list_runs carries no token figures yet, so there is no sum to take:
-          the tile says so rather than printing a zero (fleet.md, G3; #3834). */}
-      <Tile
-        term={t("tokens.title")}
-        value={
-          <span
-            data-testid="tokens-not-recorded"
-            data-recorded="false"
-            data-gap="G3"
-            className="text-base font-medium text-muted-foreground"
-          >
-            {t("tokens.notRecorded")}
-          </span>
-        }
-        note={
-          <span data-recorded="false" data-gap="G3">
-            {t("tokens.noCache")}
-          </span>
-        }
-      />
+      <TokensTile listed={listed} />
     </section>
   );
 }
 
-// ── Row words and cells ──────────────────────────────────────────────────
+// ── Cells ────────────────────────────────────────────────────────────────
 
 // A run's second line: its name (the harness title, else the generated one),
 // else its task reference, the same fallback the Run page's header reads.
@@ -296,50 +229,6 @@ function Tiles({
 // title the harness recorded. A run with neither shows only its id.
 function runTitle(run: RunRow): string | null {
   return run.name ?? run.taskRef;
-}
-
-function useRowWords(listed: readonly ListedRun[]): RowWords[] {
-  const t = useTranslations("fleet.runs");
-  const status = useTranslations("ui.runStatus");
-  const grade = useTranslations("ui.replayGrade");
-  return useMemo(
-    () =>
-      listed.map(({ run, state }) => {
-        // The design's lifecycle word (live, sealed, halted, parked for
-        // approval), which the Status facet lists too. The outcome stays on
-        // the badge's hover text.
-        const statusWord =
-          state === "parked" ? t("parked") : status(run.status);
-        const operator =
-          run.operatorName ??
-          (run.operatorKind === null
-            ? (run.operatorId ?? t("notRecorded"))
-            : t(`operatorKind.${run.operatorKind}`));
-        const words = {
-          run: run.id,
-          agent: run.agentKey ?? t("notRecorded"),
-          operator,
-          status: statusWord,
-          tier: run.enforcementTier,
-          replay:
-            run.replayGrade === null
-              ? t("notRecorded")
-              : grade(`${run.replayGrade}.label`),
-        };
-        const text = [
-          ...Object.values(words),
-          runTitle(run) ?? "",
-          run.enrichmentEnabled === false ? "" : (run.summary?.text ?? ""),
-          ...(run.pullRequests ?? []).map(
-            (pull) => pullRequestLabel(pull) ?? "",
-          ),
-          run.harness?.name ?? "",
-          run.cost?.basis ?? "",
-        ].join(" ");
-        return { ...words, text };
-      }),
-    [listed, t, status, grade],
-  );
 }
 
 /**
@@ -395,221 +284,15 @@ function Started({ at, now }: { at: string; now: number }) {
   );
 }
 
-// ── Summary, pull requests and lines ─────────────────────────────────────
-
-/**
- * The generated summary, two lines at most with the whole text on hover. A
- * workspace that turned summaries off reads so, rather than "none yet".
- */
-function SummaryCell({ run }: { run: RunRow }) {
-  const t = useTranslations("fleet.runs");
-  const off = run.enrichmentEnabled === false;
-  const summary = off ? null : run.summary;
-  if (summary === null)
-    return (
-      <span className="text-muted-foreground">
-        {off ? t("summaryOff") : t("summaryNone")}
-      </span>
-    );
-  return (
-    <p
-      data-testid="row-summary"
-      title={summary.text}
-      className="line-clamp-2 text-[12px] leading-snug text-muted-foreground"
-    >
-      {summary.text}
-    </p>
-  );
-}
-
-/** The tone a recorded pull-request state reads in; the Run page uses the same ladder. */
-const PR_STATE_TONE: Record<NonNullable<RunPullRequest["state"]>, BadgeTone> = {
-  open: "approval",
-  draft: "quiet",
-  merged: "allowed",
-  closed: "quiet",
-};
-
-/**
- * One pull request: a link that opens it on GitHub or GitLab in a new tab
- * when the URL names a page Oxagen recognises, else its label alone, and its
- * state. No store records the state yet, so it reads "status unknown" and
- * says on hover where the live state is.
- */
-function PullRequestItem({ pull }: { pull: RunPullRequest }) {
-  const t = useTranslations("fleet.runs.prs");
-  const url = parsePullRequestUrl(pull.url);
-  const label = pullRequestLabel(pull) ?? t("unnamed");
-  const forge = forgeOf(pull.url);
-  return (
-    <li className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-      {url === null ? (
-        <span className={`${mono} text-[11.5px]`} title={pull.url}>
-          {label}
-        </span>
-      ) : (
-        <PullRequestLink
-          to={url}
-          data-testid="row-pr-link"
-          data-forge={forge ?? undefined}
-          data-touch-target=""
-          aria-label={
-            forge === "gitlab"
-              ? t("openOnGitLab", { pr: label })
-              : t("openOnGitHub", { pr: label })
-          }
-          onClick={(event) => {
-            event.stopPropagation();
-          }}
-          className={`${linkText} inline-flex items-center gap-1 whitespace-nowrap font-mono text-[11.5px]`}
-        >
-          <GitPullRequest aria-hidden className="size-3 flex-none" />
-          {label}
-        </PullRequestLink>
-      )}
-      {pull.state === null ? (
-        <span
-          data-testid="row-pr-state"
-          data-state="unknown"
-          title={t("stateUnknownHint")}
-          className="whitespace-nowrap text-[10.5px] text-muted-foreground"
-        >
-          {t("stateUnknown")}
-        </span>
-      ) : (
-        <Badge
-          tone={PR_STATE_TONE[pull.state]}
-          data-testid="row-pr-state"
-          data-state={pull.state}
-        >
-          {t(`state.${pull.state}`)}
-        </Badge>
-      )}
-    </li>
-  );
-}
-
-/** The most pull requests a row lists before it says how many more there are. */
-const PRS_SHOWN = 2;
-
-function PullRequestsCell({ run }: { run: RunRow }) {
-  const t = useTranslations("fleet.runs.prs");
-  const pulls = run.pullRequests;
-  const opened = run.pullRequestsOpened ?? 0;
-  if (pulls === undefined) {
-    // Not read: a ledger run's pull requests are receipts the Run page reads,
-    // and a wrapped session's read failed (the panel says so above the table).
-    if (run.source === "ledger")
-      return (
-        <span
-          data-testid="row-prs-elsewhere"
-          title={t("ledgerHint")}
-          className="text-muted-foreground"
-        >
-          {t("onRunPage")}
-        </span>
-      );
-    return (
-      <span data-testid="row-prs-unread" className="text-muted-foreground">
-        {opened > 0 ? t("openedNoLink", { count: opened }) : t("notRead")}
-      </span>
-    );
-  }
-  if (pulls.length === 0)
-    return opened > 0 ? (
-      <span data-testid="row-prs-nolink" title={t("noLinkHint")}>
-        {t("openedNoLink", { count: opened })}
-      </span>
-    ) : (
-      <span data-testid="row-prs-none" className="text-muted-foreground">
-        {t("none")}
-      </span>
-    );
-  const shown = pulls.slice(0, PRS_SHOWN);
-  return (
-    <ul data-testid="row-prs" className="flex min-w-36 flex-col gap-1">
-      {shown.map((pull) => (
-        <PullRequestItem key={pull.url} pull={pull} />
-      ))}
-      {pulls.length > shown.length ? (
-        <li className="text-[11px] text-muted-foreground">
-          {t("more", { count: pulls.length - shown.length })}
-        </li>
-      ) : null}
-    </ul>
-  );
-}
-
-/**
- * Lines added and removed, green and red, with what the figure is on hover
- * and in words for a screen reader. Git's figure counts only what was not yet
- * committed, and the cell says "uncommitted" under it.
- */
-function DiffCell({ diff }: { diff: RunDiff | null | undefined }) {
-  const t = useTranslations("fleet.runs.diff");
-  const locale = useLocale();
-  if (diff === null || diff === undefined)
-    return <span className="text-muted-foreground">{t("none")}</span>;
-  return (
-    <span
-      data-testid="row-diff"
-      data-basis={diff.basis}
-      title={t(`basis.${diff.basis}`)}
-      className="whitespace-nowrap font-mono tabular-nums"
-    >
-      <span aria-hidden="true">
-        <span className="text-success">+{formatCount(diff.added, locale)}</span>{" "}
-        <span className="text-error-ink">
-          −{formatCount(diff.removed, locale)}
-        </span>
-      </span>
-      <span className="sr-only">
-        {t("spoken", {
-          added: formatCount(diff.added, locale),
-          removed: formatCount(diff.removed, locale),
-        })}
-      </span>
-      {diff.basis === "git_observed" ? (
-        <span className="block text-[10px] text-muted-foreground">
-          {t("uncommitted")}
-        </span>
-      ) : null}
-    </span>
-  );
-}
-
 // ── The Runs panel ───────────────────────────────────────────────────────
 
-/**
- * How each column heads the table. `sort` names what a header click sorts
- * on. `tokens` has no figure to sort yet, and `summary` is prose with no
- * order a reader would use, so neither sorts.
- */
-const COLUMN_HEAD: Record<
-  FleetColumn,
-  { sort: SortKey | "tokens" | null; numeric?: boolean }
-> = {
-  run: { sort: "run" },
-  summary: { sort: null },
-  agent: { sort: "agent" },
-  operator: { sort: "operator" },
-  status: { sort: "status" },
-  pullRequests: { sort: "pullRequests" },
-  diff: { sort: "diff", numeric: true },
-  tier: { sort: "tier" },
-  replay: { sort: "replay" },
-  tokens: { sort: "tokens", numeric: true },
-  cost: { sort: "cost", numeric: true },
-  frames: { sort: "frames", numeric: true },
-  started: { sort: "started" },
-};
-
-const FACETS = ["tier", "replay", "status"] as const;
-
-const PR_FILTERS: readonly PullRequestFilter[] = ["any", "with", "without"];
-
-const selectBase =
-  "rounded-lg border border-input-border bg-input-bg px-2 py-[5px] text-xs text-input-fg max-md:min-h-11 max-md:text-base focus-visible:outline-2 focus-visible:outline-input-ring";
+/** Which columns right-align their figures. */
+const NUMERIC_COLUMNS: ReadonlySet<FleetColumn> = new Set([
+  "diff",
+  "tokens",
+  "cost",
+  "frames",
+]);
 
 function Chips({
   chip,
@@ -636,125 +319,6 @@ function Chips({
           {t(`chips.${name}`)}
         </button>
       ))}
-    </div>
-  );
-}
-
-function ListBar({
-  query,
-  setQuery,
-  words,
-  pageSize,
-  onPageSize,
-  pullRequests,
-  onPullRequests,
-  onColumns,
-}: {
-  query: ListQuery;
-  setQuery: (next: ListQuery) => void;
-  words: readonly RowWords[];
-  pageSize: PageSize;
-  onPageSize: (size: PageSize) => void;
-  pullRequests: PullRequestFilter;
-  onPullRequests: (filter: PullRequestFilter) => void;
-  onColumns: () => void;
-}) {
-  const t = useTranslations("fleet.runs");
-  const rowsId = useId();
-  return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-[9px]">
-      <input
-        type="search"
-        value={query.search}
-        placeholder={t("search")}
-        aria-label={t("search")}
-        onChange={(event) => {
-          setQuery({ ...query, search: event.target.value, page: 1 });
-        }}
-        className={`${inputBase} min-w-36 flex-[1_1_200px] py-1.5 max-md:min-h-11 max-md:text-base`}
-      />
-      {FACETS.map((facet) => {
-        const label = t(`columns.${facet}`);
-        return (
-          <select
-            key={facet}
-            aria-label={t("facetLabel", { facet: label })}
-            data-testid={`facet-${facet}`}
-            value={query.facets[facet] ?? ""}
-            onChange={(event) => {
-              const value = event.target.value;
-              const facets: Facets = {
-                ...query.facets,
-                [facet]: value === "" ? null : value,
-              };
-              setQuery({ ...query, facets, page: 1 });
-            }}
-            className={selectBase}
-          >
-            <option value="">{t("facetAll", { facet: label })}</option>
-            {facetValues(words, facet).map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-        );
-      })}
-      <select
-        aria-label={t("prFilter.label")}
-        data-testid="pr-filter"
-        value={pullRequests}
-        onChange={(event) => {
-          const next = PR_FILTERS.find((f) => f === event.target.value);
-          if (next !== undefined) onPullRequests(next);
-        }}
-        className={selectBase}
-      >
-        {PR_FILTERS.map((filter) => (
-          <option key={filter} value={filter}>
-            {t(`prFilter.${filter}`)}
-          </option>
-        ))}
-      </select>
-      <button
-        type="button"
-        data-testid="columns-open"
-        data-touch-target=""
-        onClick={onColumns}
-        className={`${buttonSecondary} inline-flex items-center gap-1.5 px-2.5 py-1 text-xs`}
-      >
-        <Columns3 aria-hidden className="size-3.5" />
-        {t("columnsPicker.open")}
-      </button>
-      <label
-        htmlFor={rowsId}
-        className="ms-auto inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px] text-muted-foreground"
-      >
-        {t("rows")}
-        <select
-          id={rowsId}
-          data-testid="rows-per-page"
-          value={String(pageSize)}
-          onChange={(event) => {
-            onPageSize(pageSizeOf(event.target.value));
-          }}
-          className={selectBase}
-        >
-          {PAGE_SIZES.map((size) => (
-            <option key={size} value={String(size)}>
-              {String(size)}
-            </option>
-          ))}
-        </select>
-      </label>
-      {pullRequests === "any" ? null : (
-        <p
-          data-testid="pr-filter-note"
-          className="basis-full text-[11.5px] text-muted-foreground"
-        >
-          {t("prFilter.note")}
-        </p>
-      )}
     </div>
   );
 }
@@ -833,71 +397,6 @@ function ColumnPicker({
   );
 }
 
-function Pager({
-  from,
-  to,
-  total,
-  more,
-  org,
-  ws,
-  cursor,
-  nextCursor,
-  pullRequests,
-}: {
-  from: number;
-  to: number;
-  total: number;
-  /** True when the read stopped before the oldest run. */
-  more: boolean;
-  cursor: string | null;
-  nextCursor: string | null;
-  pullRequests: PullRequestFilter;
-} & Place) {
-  const t = useTranslations("fleet.runs.pager");
-  const locale = useLocale();
-  const range =
-    total === 0
-      ? t("none")
-      : t(more ? "rangeMore" : "range", {
-          from: formatCount(from, locale),
-          to: formatCount(to, locale),
-          total: formatCount(total, locale),
-        });
-  return (
-    <nav
-      aria-label={t("label")}
-      className="flex flex-wrap items-center gap-2 px-3 py-2 text-[11.5px] text-muted-foreground"
-    >
-      <span data-testid="pager-range" className="font-mono tabular-nums">
-        {range}
-      </span>
-      <span className="ms-auto flex flex-wrap items-center gap-3">
-        {cursor === null ? null : (
-          <SafeLink
-            to={routes.fleet(org, ws, { prs: pullRequests })}
-            data-touch-target=""
-            className={`${linkText} inline-flex items-center`}
-          >
-            {t("newest")}
-          </SafeLink>
-        )}
-        {nextCursor === null ? null : (
-          <SafeLink
-            to={routes.fleet(org, ws, {
-              cursor: nextCursor,
-              prs: pullRequests,
-            })}
-            data-touch-target=""
-            className={`${linkText} inline-flex items-center`}
-          >
-            {t("older")}
-          </SafeLink>
-        )}
-      </span>
-    </nav>
-  );
-}
-
 function RunRowView({
   listed,
   columns,
@@ -930,8 +429,16 @@ function RunRowView({
   const notRecorded = (
     <span className="text-muted-foreground">{t("notRecorded")}</span>
   );
+  // A paused run is resumed on its Run page, and an export refuses an open
+  // run, so its row links there.
   const action =
-    state === "live" ? "pause" : state === "parked" ? "resolve" : "export";
+    state === "live"
+      ? "pause"
+      : state === "parked"
+        ? "resolve"
+        : state === "paused"
+          ? "open"
+          : "export";
 
   function cellOf(column: FleetColumn): ReactNode {
     switch (column) {
@@ -1003,17 +510,7 @@ function RunRowView({
       case "status":
         return (
           <td key={column} className={cell}>
-            {state === "parked" ? (
-              <Badge tone="approval" data-status="parked">
-                {t("parked")}
-              </Badge>
-            ) : (
-              <StatusBadge
-                status={run.status}
-                outcome={run.outcome}
-                vocabulary="lifecycle"
-              />
-            )}
+            <RowStatusBadge run={run} state={state} />
           </td>
         );
       case "pullRequests":
@@ -1047,15 +544,7 @@ function RunRowView({
       case "tokens":
         return (
           <td key={column} className={numericCell}>
-            {/* Tokens are not on list_runs yet (G3, #3834); the cell says so. */}
-            <span
-              data-testid="row-tokens"
-              data-recorded="false"
-              data-gap="G3"
-              className="text-muted-foreground"
-            >
-              {t("notRecorded")}
-            </span>
+            <TokensCell run={run} />
           </td>
         );
       case "cost":
@@ -1121,15 +610,15 @@ function RunRowView({
           event.stopPropagation();
         }}
       >
-        {action === "resolve" ? (
+        {action === "resolve" || action === "open" ? (
           <SafeLink
             to={to}
-            data-testid="row-resolve"
+            data-testid={`row-${action}`}
             data-touch-target=""
-            aria-label={t("rowAction", { action: t("resolve"), run: run.id })}
+            aria-label={t("rowAction", { action: t(action), run: run.id })}
             className={`${buttonSecondary} px-2.5 py-1 text-xs`}
           >
-            {t("resolve")}
+            {t(action)}
           </SafeLink>
         ) : (
           <button
@@ -1317,12 +806,17 @@ export function FleetBoard({
   nextCursor,
   cursor,
   approvals,
+  interjections,
   agentTotal,
+  liveRuns = null,
   now,
   canCommand,
   prefs: savedPrefs = DEFAULT_FLEET_PREFS,
   pullRequests = "any",
   pullRequestsUnread = false,
+  list: askedList,
+  total,
+  totalBound,
   org,
   ws,
 }: {
@@ -1330,8 +824,12 @@ export function FleetBoard({
   nextCursor: string | null;
   cursor: string | null;
   approvals: Read<ApprovalQueue>;
+  /** The open questions agents paused to ask, which the waiting tile adds to the approvals. */
+  interjections: Read<InterjectionQueue>;
   /** Identities in the workspace; null when the agents read failed. */
   agentTotal: number | null;
+  /** The workspace's live runs (`list_runs`' `liveRuns`); null when not counted. */
+  liveRuns?: number | null;
   /** Epoch milliseconds the reads returned at. */
   now: number;
   /** Whether `dispatch_command` admits this viewer. */
@@ -1342,21 +840,20 @@ export function FleetBoard({
   pullRequests?: PullRequestFilter;
   /** The read could not see this page's pull requests. */
   pullRequestsUnread?: boolean;
+  /** The search, facets, order and page the URL asked for (#3837). */
+  list: FleetListQuery;
+  /** The runs that match, across the workspace; null past `totalBound`; absent when not counted. */
+  total?: number | null;
+  totalBound?: number;
 } & Place) {
   const t = useTranslations("fleet.runs");
   const pauseT = useTranslations("fleet.pause");
+  const tokensWhyId = useId();
   const navigate = useNavigate();
   const failureText = useActionFailure();
   const [chip, setChip] = useState<RunChip>("all");
-  const [query, setQuery] = useState<ListQuery>({
-    search: "",
-    facets: { tier: null, replay: null, status: null },
-    sort: null,
-    // The read already holds one page, of the size the person chose; the
-    // table lists all of it.
-    perPage: 0,
-    page: 1,
-  });
+  // What the read served: a pull-request filter pages newest first.
+  const list = effectiveListQuery(askedList, pullRequests);
   const [prefs, setPrefs] = useState<FleetPrefs>(savedPrefs);
   const [picking, setPicking] = useState(false);
   const [reading, startReading] = useTransition();
@@ -1372,8 +869,19 @@ export function FleetBoard({
     [runs, approvals],
   );
   const listed = useMemo(() => chipRows(all, chip), [all, chip]);
-  const words = useRowWords(listed);
-  const page = applyList(listed, words, query);
+
+  /** Read the list again with a new query: a navigation to its URL. */
+  function readList(next: FleetListQuery, filter = pullRequests) {
+    startReading(() => {
+      navigate.push(
+        routes.fleet(
+          org,
+          ws,
+          listQueryToRoute(effectiveListQuery(next, filter), filter),
+        ),
+      );
+    });
+  }
 
   /** Apply a choice now and remember it in this browser for a year. */
   function save(next: FleetPrefs) {
@@ -1384,35 +892,23 @@ export function FleetBoard({
     );
   }
 
-  // The page size is the read's limit, so a new size reads again from the
-  // newest run: the page re-renders on the server with the saved cookie.
+  // The page size is the read's limit, so a new size reads page 1 again:
+  // the page re-renders on the server with the saved cookie.
   function changePageSize(size: PageSize) {
     if (size === prefs.pageSize) return;
     save({ ...prefs, pageSize: size });
-    startReading(() => {
-      if (cursor === null) navigate.refresh();
-      else navigate.push(routes.fleet(org, ws, { prs: pullRequests }));
-    });
+    if (cursor === null && list.page === 1)
+      startReading(() => {
+        navigate.refresh();
+      });
+    else readList(withList(list, {}));
   }
 
   // The filter is the read's filter and lives in the URL, so a filtered
-  // Fleet can be linked, and a new filter starts from the newest run.
+  // Fleet can be linked, and a new filter starts from page 1.
   function changeFilter(next: PullRequestFilter) {
     if (next === pullRequests) return;
-    startReading(() => {
-      navigate.push(routes.fleet(org, ws, { prs: next }));
-    });
-  }
-
-  function sortBy(key: SortKey) {
-    const current = query.sort;
-    const sort =
-      current?.key !== key
-        ? { key, dir: 1 as const }
-        : current.dir === 1
-          ? { key, dir: -1 as const }
-          : null;
-    setQuery({ ...query, sort, page: 1 });
+    readList(withList(list, {}), next);
   }
 
   function exportRow(run: RunRow) {
@@ -1449,10 +945,19 @@ export function FleetBoard({
 
   return (
     <>
+      {/* A live wrapped run's stale light is as of this read. With no stream
+          to say the host went quiet, Fleet reads itself again once per host
+          poll window while it lists one (A-02). */}
+      <LiveRefresh
+        active={runs.some(canGoStale)}
+        intervalMs={STALE_REREAD_MS}
+      />
       <Tiles
         listed={listed}
         approvals={approvals}
+        interjections={interjections}
         agentTotal={agentTotal}
+        liveRuns={liveRuns}
         now={now}
       />
       <section aria-labelledby="fleet-runs" className={panel}>
@@ -1460,18 +965,13 @@ export function FleetBoard({
           <h2 id="fleet-runs" className={panelTitle}>
             {t("title")}
           </h2>
-          <Chips
-            chip={chip}
-            onChip={(next) => {
-              setChip(next);
-              setQuery({ ...query, page: 1 });
-            }}
-          />
+          <Chips chip={chip} onChip={setChip} />
         </div>
-        <ListBar
-          query={query}
-          setQuery={setQuery}
-          words={words}
+        <RunsListBar
+          list={list}
+          onList={(next) => {
+            readList(next);
+          }}
           pageSize={prefs.pageSize}
           onPageSize={changePageSize}
           pullRequests={pullRequests}
@@ -1499,12 +999,17 @@ export function FleetBoard({
             <thead>
               <tr className="border-b border-border">
                 {columns.map((key) => {
-                  const head = COLUMN_HEAD[key];
                   const label = t(`columns.${key}`);
-                  const align =
-                    head.numeric === true ? "text-right" : "text-left";
-                  const sortKey = head.sort;
-                  if (sortKey === null)
+                  const align = NUMERIC_COLUMNS.has(key)
+                    ? "text-right"
+                    : "text-left";
+                  // The read orders by these columns across the workspace.
+                  // The others have no single order in both stores, so they
+                  // do not sort. Under a pull-request filter the read pages
+                  // newest first, so no header sorts.
+                  const sortKey =
+                    pullRequests === "any" ? SORTABLE_COLUMNS[key] : undefined;
+                  if (sortKey === undefined && key !== "tokens")
                     return (
                       <th
                         key={key}
@@ -1514,42 +1019,34 @@ export function FleetBoard({
                         {label}
                       </th>
                     );
-                  // The design's Tokens header sorts. list_runs carries no
-                  // token figure yet (G3, #3834), so every cell reads "not
-                  // recorded" and there is no order to put them in. The
-                  // control is drawn where the design has it, disabled, and
-                  // its hover says why.
-                  if (sortKey === "tokens")
+                  // The design's Tokens header sorts. list_runs orders on the
+                  // server (#3837), and its sort keys do not include tokens,
+                  // so the header is plain text. The reason is on hover and
+                  // in the header's description for a screen reader: a
+                  // disabled button cannot take focus, so its title reached
+                  // no one using a keyboard.
+                  if (sortKey === undefined)
                     return (
                       <th
                         key={key}
                         scope="col"
-                        aria-sort="none"
+                        data-testid="head-tokens"
+                        title={t("tokensUnsorted")}
+                        aria-describedby={tokensWhyId}
                         className={`${headCell} ${align}`}
                       >
-                        <button
-                          type="button"
-                          disabled
-                          data-testid="sort-tokens"
-                          aria-label={t("sortBy", { column: label })}
-                          title={t("tokensUnsorted")}
-                          className="inline-flex cursor-not-allowed items-center gap-1 uppercase tracking-[inherit]"
-                        >
-                          {label}
-                          <ArrowUpDown aria-hidden className="size-3" />
-                        </button>
+                        {label}
                       </th>
                     );
-                  const sorted =
-                    query.sort?.key === sortKey ? query.sort.dir : 0;
+                  const sorted = list.sort === sortKey ? list.dir : null;
                   return (
                     <th
                       key={key}
                       scope="col"
                       aria-sort={
-                        sorted === 1
+                        sorted === "asc"
                           ? "ascending"
-                          : sorted === -1
+                          : sorted === "desc"
                             ? "descending"
                             : "none"
                       }
@@ -1559,7 +1056,7 @@ export function FleetBoard({
                         type="button"
                         aria-label={t("sortBy", { column: label })}
                         onClick={() => {
-                          sortBy(sortKey);
+                          readList(nextSort(list, sortKey));
                         }}
                         className="inline-flex items-center gap-1 uppercase tracking-[inherit] hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                       >
@@ -1575,7 +1072,7 @@ export function FleetBoard({
               </tr>
             </thead>
             <tbody className="divide-y divide-border [&>tr]:transition-colors [&>tr:hover]:bg-hl">
-              {page.rows.length === 0 ? (
+              {listed.length === 0 ? (
                 <tr>
                   <td
                     colSpan={columns.length + 1}
@@ -1586,38 +1083,39 @@ export function FleetBoard({
                   </td>
                 </tr>
               ) : (
-                page.rows.map((index) => {
-                  const row = listed[index];
-                  return row === undefined ? null : (
-                    <RunRowView
-                      key={row.run.id}
-                      listed={row}
-                      columns={columns}
-                      now={now}
-                      org={org}
-                      ws={ws}
-                      exporting={exportingId === row.run.id}
-                      onPause={(run) => {
-                        setPausing(run);
-                      }}
-                      onExport={exportRow}
-                    />
-                  );
-                })
+                listed.map((row) => (
+                  <RunRowView
+                    key={row.run.id}
+                    listed={row}
+                    columns={columns}
+                    now={now}
+                    org={org}
+                    ws={ws}
+                    exporting={exportingId === row.run.id}
+                    onPause={(run) => {
+                      setPausing(run);
+                    }}
+                    onExport={exportRow}
+                  />
+                ))
               )}
             </tbody>
           </table>
+          <p id={tokensWhyId} className="sr-only">
+            {t("tokensUnsorted")}
+          </p>
         </div>
-        <Pager
-          from={page.from}
-          to={page.to}
-          total={page.total}
-          more={nextCursor !== null}
-          org={org}
-          ws={ws}
+        <RunsPager
+          list={list}
+          pageSize={prefs.pageSize}
+          rows={runs.length}
+          {...(total === undefined ? {} : { total })}
+          {...(totalBound === undefined ? {} : { totalBound })}
           cursor={cursor}
           nextCursor={nextCursor}
           pullRequests={pullRequests}
+          org={org}
+          ws={ws}
         />
       </section>
       <ColumnPicker

@@ -22,7 +22,7 @@ import {
 import { connect } from "node:net";
 import { join } from "node:path";
 import { deflateSync, gzipSync, zstdCompressSync } from "node:zlib";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyChain } from "../chain";
 import type { TachoEvent } from "../envelope";
 import { bodyIsPartial } from "../evidence/replay-grade";
@@ -741,6 +741,152 @@ describe("the loopback model proxy", () => {
     expect(two!.content?.digest).toBe(
       sha(Buffer.from(body!.bytes_base64, "base64")),
     );
+  });
+
+  it("gives a call's seq to the next call when its frame never reached the WAL, with no gap and no fold against the lost body", async () => {
+    // #4311 item 2: the proxy sealed with no chain mark. A write that failed
+    // left the recorder one seq past the WAL's tail, so the next frame
+    // sealed a gap the control plane refuses the chain over. The next call
+    // also folded against the lost call's request, and pointed at a body
+    // nothing stored.
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, session, frames, log } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-lost-frame");
+    const before = handle.registry.get("sess-lost-frame")!.recorder.chainCursor;
+    const append = handle.wal.append.bind(handle.wal);
+    let failed = 0;
+    const fault = vi
+      .spyOn(handle.wal, "append")
+      .mockImplementation((events, bodies) => {
+        if (failed === 0 && events.some((event) => event.kind === "llm_call")) {
+          failed += 1;
+          throw Object.assign(new Error("ENOSPC: no space left on device"), {
+            code: "ENOSPC",
+          });
+        }
+        append(events, bodies);
+      });
+    const headers = [
+      "X-Api-Key",
+      FAKE_KEY,
+      "X-Claude-Code-Session-Id",
+      "sess-lost-frame",
+    ];
+    // A system prompt long enough that the second call would fold.
+    const system = [
+      {
+        type: "text",
+        text: `You are careful. ${"Read before you write. ".repeat(40)}`,
+      },
+    ];
+    const first = JSON.stringify({
+      model: "claude-sonnet-5",
+      stream: true,
+      system,
+      messages: [{ role: "user", content: PROMPT }],
+    });
+    expect(
+      (
+        await call(port, {
+          path: "/anthropic/v1/messages",
+          headers,
+          body: first,
+        })
+      ).status,
+    ).toBe(200);
+    await until(() => failed === 1);
+    await until(() =>
+      log.some((line) => line.includes("sealing the call's frame failed")),
+    );
+    expect(
+      handle.registry.get("sess-lost-frame")!.recorder.chainCursor,
+    ).toEqual(before);
+    const second = JSON.stringify({
+      model: "claude-sonnet-5",
+      stream: true,
+      system,
+      messages: [
+        { role: "user", content: PROMPT },
+        { role: "assistant", content: COMPLETION },
+        { role: "user", content: "and then?" },
+      ],
+    });
+    expect(
+      (
+        await call(port, {
+          path: "/anthropic/v1/messages",
+          headers,
+          body: second,
+        })
+      ).status,
+    ).toBe(200);
+    await until(() => frames(uuid).length === 1);
+    fault.mockRestore();
+
+    const [frame] = frames(uuid);
+    expect(frame!.seq).toBe(before.seq);
+    expect(verifyChain(handle.wal.read(uuid))).toMatchObject({ ok: true });
+    const [body] = handle.wal.bodiesFor([frame!]);
+    const exchange = JSON.parse(
+      Buffer.from(body!.bytes_base64, "base64").toString("utf8"),
+    ) as { request: string };
+    const stored = JSON.parse(exchange.request) as Record<string, unknown>;
+    expect(stored).not.toHaveProperty("$oxagen_prior");
+    expect(stored["messages"]).toHaveLength(3);
+    expect(stored).toHaveProperty("system");
+  });
+
+  it("gives a refusal's seq to the next frame when its frame never reached the WAL", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, session, frames } = await boot(fake.url, {
+      bundle: {
+        budget: { mode: "enforced" as const },
+        models: { allow: ["claude-opus-*"], deny: [] },
+      },
+    });
+    const uuid = await session("sess-lost-refusal");
+    const before =
+      handle.registry.get("sess-lost-refusal")!.recorder.chainCursor;
+    const append = handle.wal.append.bind(handle.wal);
+    let failed = 0;
+    const fault = vi
+      .spyOn(handle.wal, "append")
+      .mockImplementation((events, bodies) => {
+        if (
+          failed === 0 &&
+          events.some((event) => event.kind === "policy_decision")
+        ) {
+          failed += 1;
+          throw Object.assign(new Error("ENOSPC: no space left on device"), {
+            code: "ENOSPC",
+          });
+        }
+        append(events, bodies);
+      });
+    const ask = () =>
+      call(port, {
+        path: "/anthropic/v1/messages",
+        headers: [
+          "X-Api-Key",
+          FAKE_KEY,
+          "X-Claude-Code-Session-Id",
+          "sess-lost-refusal",
+        ],
+        body: JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+      });
+    expect((await ask()).status).toBe(502);
+    expect(failed).toBe(1);
+    expect(
+      handle.registry.get("sess-lost-refusal")!.recorder.chainCursor,
+    ).toEqual(before);
+    expect((await ask()).status).toBe(403);
+    fault.mockRestore();
+    const [decision] = frames(uuid, "policy_decision");
+    expect(decision!.seq).toBe(before.seq);
+    expect(verifyChain(handle.wal.read(uuid))).toMatchObject({ ok: true });
+    expect(fake.requests).toHaveLength(0);
   });
 
   it("records the decoded request and the buffered stream as one frame body", async () => {

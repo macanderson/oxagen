@@ -65,6 +65,11 @@ function selectedColumns(sql: string): string[] {
   );
 }
 
+/** Each line of `sql` that bounds `received_at`, trimmed. */
+function receivedBounds(sql: string): string[] {
+  return (sql.match(/received_at[^\n]*/g) ?? []).map((line) => line.trim());
+}
+
 beforeEach(() => queryMock.mockReset());
 
 describe("readModelCallFrames", () => {
@@ -613,6 +618,13 @@ describe("readTachoToolCallObservations", () => {
     // The chain a call was recorded on, which its seq counts on (#4001).
     expect(selectedColumns(query)).toContain("session_uuid");
     expect(query).toContain("toString(h.session_uuid)");
+    // The table partitions by the month of received_at (#4297). Each read
+    // bounds it below, a day before the window for a host clock that runs
+    // ahead, so it reads the months around the window, not every month.
+    expect(receivedBounds(query)).toEqual([
+      "received_at >= {from:DateTime64(3)} - INTERVAL 1 DAY",
+      "received_at >= {from:DateTime64(3)} - INTERVAL 1 DAY",
+    ]);
     expect(rows).toEqual([
       {
         rootSessionUuid: RUN,
@@ -705,6 +717,15 @@ describe("readObservedModels", () => {
       expect(sql).toContain("UNION ALL");
     }
     expect(classes).toContain("FROM tc");
+    // Every read of tacho_events bounds received_at below as well as ts
+    // (#4297): the summary once, the class read and its two joins once each.
+    const since = "received_at >= {since:DateTime64(3)} - INTERVAL 1 DAY";
+    expect(receivedBounds(summary!)).toEqual([since]);
+    expect(receivedBounds(classes!)).toEqual([since, since, since]);
+    for (const sql of [summary!, classes!])
+      expect(sql.match(/FROM tacho_events FINAL/g)).toHaveLength(
+        receivedBounds(sql).length,
+      );
   });
 
   it("keeps low-volume models beyond 5000 for the price comparison", async () => {

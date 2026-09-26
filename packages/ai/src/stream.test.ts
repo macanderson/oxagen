@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   defaultModel: vi.fn(),
   providerCostUsdMicros: vi.fn(),
   chargeUsageCredits: vi.fn(),
+  loggerError: vi.fn(),
 }));
 
 // "streamText" returns an object that has the stream shape; tests call
@@ -42,6 +43,19 @@ mocks.chargeUsageCredits.mockResolvedValue({
 });
 
 vi.mock("ai", () => ({ streamText: mocks.streamText }));
+// Observe the provider-error log line (#4148).
+vi.mock("pino", () => {
+  const logger = {
+    error: mocks.loggerError,
+    fatal: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    child: () => logger,
+  };
+  return { default: vi.fn(() => logger) };
+});
 vi.mock("@oxagen/telemetry", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/telemetry")>();
   return {
@@ -74,7 +88,11 @@ vi.mock("./models", () => ({
     typeof m === "string" ? m : m.modelId,
 }));
 
-import { streamAgentReply, reasoningRequestConfig } from "./stream";
+import {
+  providerErrorFields,
+  streamAgentReply,
+  reasoningRequestConfig,
+} from "./stream";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -962,6 +980,33 @@ describe("stream durable lifecycle", () => {
     expect(mocks.insertTokenUsage).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith(error);
   });
+  it("logs what the provider said when it fails before the first step (#4148)", async () => {
+    mocks.loggerError.mockClear();
+    streamAgentReply({
+      fundedBy: "platform",
+      chargeReason: CREDIT_REASONS.CONSUME_ASSISTANT_TOKENS,
+      messages: MESSAGES,
+      telemetry: TELEMETRY,
+    });
+    const options = mocks.streamText.mock.calls.at(-1)![0];
+    await options.prepareStep();
+    await options.onError({
+      error: Object.assign(new Error("Gateway request failed"), {
+        statusCode: 403,
+        responseBody:
+          "Free tier users do not have access to this model. Upgrade to paid credits",
+      }),
+    });
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "provider_error_before_first_step",
+        providerStatus: 403,
+        providerMessage:
+          "Free tier users do not have access to this model. Upgrade to paid credits",
+      }),
+      "Provider call ended before complete usage was reported",
+    );
+  });
   it("does not void an admission it settled", async () => {
     streamAgentReply({
       fundedBy: "platform",
@@ -1017,4 +1062,48 @@ it("settles known earlier steps when a later provider step errors", async () => 
   );
   expect(mocks.chargeUsageCredits).toHaveBeenCalledTimes(1);
   expect(onError).toHaveBeenCalledWith(error);
+});
+
+describe("providerErrorFields (#4148)", () => {
+  it("reads the status and body of a provider error", () => {
+    expect(
+      providerErrorFields(
+        Object.assign(new Error("failed"), {
+          statusCode: 401,
+          responseBody: "invalid key",
+        }),
+      ),
+    ).toEqual({ providerStatus: 401, providerMessage: "invalid key" });
+  });
+
+  it("reads the last attempt of a retried call", () => {
+    expect(
+      providerErrorFields(
+        Object.assign(new Error("Failed after 3 attempts"), {
+          lastError: Object.assign(new Error("upstream"), {
+            statusCode: 503,
+            responseBody: "overloaded",
+          }),
+        }),
+      ),
+    ).toEqual({ providerStatus: 503, providerMessage: "overloaded" });
+  });
+
+  it("falls back to the message when there is no body", () => {
+    expect(providerErrorFields(new Error("socket hang up"))).toEqual({
+      providerMessage: "socket hang up",
+    });
+  });
+
+  it("caps the message at 500 characters", () => {
+    const long = "x".repeat(2000);
+    expect(
+      providerErrorFields(Object.assign(new Error("e"), { responseBody: long }))
+        .providerMessage,
+    ).toHaveLength(500);
+  });
+
+  it("reports nothing for an absent error", () => {
+    expect(providerErrorFields(undefined)).toEqual({});
+  });
 });

@@ -12,8 +12,8 @@
  *   - Every table carries org_id + workspace_id NOT NULL -> standard
  *     tenant_isolation RLS (tenant-policy.manifest.ts).
  *   - Public id prefixes: tch_ hosts, tse_ sessions, tsm_ session models,
- *     tsf_ session files, tsc_ session commands, tcm_ control commands,
- *     tin_ incidents, tck_ checkpoints.
+ *     tsf_ session files, trp_ run pull requests, tsc_ session commands,
+ *     tcm_ control commands, tin_ incidents, tck_ checkpoints.
  */
 import { sql } from "drizzle-orm";
 import {
@@ -181,6 +181,10 @@ export const tachoHosts = tachoSchema.table(
     agentId: uuid("agent_id"),
     agentPrincipalId: uuid("agent_principal_id"),
     apiKeyId: uuid("api_key_id").notNull(),
+    // The runtime this enrollment binds (agent.runtimes, app-enforced; ADR-198).
+    // A token enrollment takes the agent's runtime; an operator enrollment
+    // finds or creates the runtime its hostname names.
+    runtimeId: uuid("runtime_id"),
     // Host facts (the readable forms live here under RLS; ClickHouse gets digests)
     hostname: text("hostname").notNull(),
     hostnameDigest: text("hostname_digest").notNull(),
@@ -301,6 +305,9 @@ export const tachoHosts = tachoSchema.table(
   },
   (t) => ({
     orgIdx: index("tacho_hosts_org_idx").on(t.orgId, t.workspaceId),
+    runtimeIdx: index("tacho_hosts_runtime_idx")
+      .on(t.runtimeId)
+      .where(sql`${t.runtimeId} IS NOT NULL`),
     apiKeyUniq: uniqueIndex("tacho_hosts_api_key_uniq").on(t.apiKeyId),
     // One live host per agent key; a revoked host gives its key up.
     agentKeyUniq: uniqueIndex("tacho_hosts_agent_key_uniq")
@@ -511,6 +518,13 @@ export const tachoSessions = tachoSchema.table(
     totalCostMicros: bigint("total_cost_micros", { mode: "number" })
       .notNull()
       .default(0),
+    // The total the harness reported for itself at `agent_stop`
+    // (`total_cost_usd_micros`), kept apart from `total_cost_micros`. A
+    // session the host's model proxy metered keeps its observed total, and
+    // this column holds what the harness claimed beside it (#3944, S-07).
+    harnessReportedCostMicros: bigint("harness_reported_cost_micros", {
+      mode: "number",
+    }),
     costBasis: text("cost_basis"),
     hasUnknownModelCost: boolean("has_unknown_model_cost"),
     durationMs: bigint("duration_ms", { mode: "number" }),
@@ -648,6 +662,14 @@ export const tachoSessions = tachoSchema.table(
     // Why the last automatic account failed, as a short reason code; null
     // once an account is written or the run is no longer due.
     summaryError: text("summary_error"),
+    // What enrichment has spent on this run's accounts across every job, in
+    // micro-dollars. `run.enrich` adds each model call's price and stops at
+    // `ENRICHMENT_RUN_TOTAL_BUDGET_USD` (#4312).
+    summarySpentUsdMicros: bigint("summary_spent_usd_micros", {
+      mode: "number",
+    })
+      .notNull()
+      .default(0),
     // The title the harness gave the session itself (Claude Code's
     // `ai-title`), and the frame time it carried. It outranks `name` and
     // `title` on the Run page, and an older frame never replaces it.
@@ -792,8 +814,12 @@ export const tachoSessionFiles = tachoSchema.table(
     bytesWritten: bigint("bytes_written", { mode: "number" })
       .notNull()
       .default(0),
-    linesAdded: integer("lines_added").notNull().default(0),
-    linesRemoved: integer("lines_removed").notNull().default(0),
+    // bigint: git reconciliation assigns these from the envelope's u32, which
+    // passes the int4 limit (#3944, S-02).
+    linesAdded: bigint("lines_added", { mode: "number" }).notNull().default(0),
+    linesRemoved: bigint("lines_removed", { mode: "number" })
+      .notNull()
+      .default(0),
     /**
      * What git said about this path at the last reconciliation: added,
      * modified, deleted or renamed. Null means no current changed-file
@@ -813,6 +839,74 @@ export const tachoSessionFiles = tachoSchema.table(
       t.path,
     ),
     orgIdx: index("tacho_session_files_org_idx").on(t.orgId, t.workspaceId),
+  }),
+);
+
+// ── run_pull_requests ────────────────────────────────────────────────────────
+// One row per pull request (or GitLab merge request) a root session's record
+// names, with the state a forge last reported for it (#4129, ADR-192). Forge
+// webhooks keep the state current, and one read when the link lands fills it
+// before the first delivery. The link itself stays in the session's frames:
+// this row holds only what the frames cannot, the state.
+export const tachoRunPullRequests = tachoSchema.table(
+  "run_pull_requests",
+  {
+    ...idMixin("trp"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    /** The root `tacho.sessions.id` whose record names the pull request. */
+    sessionId: uuid("session_id").notNull(),
+    /** The https URL as the frame recorded it. */
+    url: text("url").notNull(),
+    provider: text("provider").notNull(),
+    /**
+     * Lower-cased `owner/name`, or the GitLab project path. A match key for
+     * webhook deliveries only, never shown.
+     */
+    repository: text("repository").notNull(),
+    /** The pull request number, or the GitLab merge request iid. */
+    number: integer("number").notNull(),
+    /** `open`, `merged` or `closed`; null until a forge reported one. */
+    state: text("state"),
+    /** Only an open pull request can be a draft. */
+    draft: boolean("draft").notNull().default(false),
+    /** When Oxagen last read the state; null when it never has. */
+    stateSeenAt: ts("state_seen_at"),
+    /**
+     * The forge's `updated_at` for the state held here. A delivery older than
+     * it never overwrites the row, because forges deliver out of order.
+     */
+    sourceUpdatedAt: ts("source_updated_at"),
+  },
+  (t) => ({
+    sessionUrlUniq: uniqueIndex("tacho_run_pull_requests_uniq").on(
+      t.sessionId,
+      t.url,
+    ),
+    // The webhook lookup: every row one delivery updates.
+    forgeIdx: index("tacho_run_pull_requests_forge_idx").on(
+      t.orgId,
+      t.provider,
+      t.repository,
+      t.number,
+    ),
+    orgIdx: index("tacho_run_pull_requests_org_idx").on(t.orgId, t.workspaceId),
+    providerCheck: check(
+      "tacho_run_pull_requests_provider_check",
+      sql`${t.provider} IN ('github', 'gitlab')`,
+    ),
+    stateCheck: check(
+      "tacho_run_pull_requests_state_check",
+      sql`${t.state} IS NULL OR ${t.state} IN ('open', 'merged', 'closed')`,
+    ),
+    numberCheck: check(
+      "tacho_run_pull_requests_number_check",
+      sql`${t.number} > 0`,
+    ),
+    draftCheck: check(
+      "tacho_run_pull_requests_draft_check",
+      sql`NOT ${t.draft} OR ${t.state} IS NULL OR ${t.state} = 'open'`,
+    ),
   }),
 );
 

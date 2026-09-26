@@ -21,6 +21,7 @@ const row = {
   name: "Release bot",
   description: null,
   harness: "stella",
+  agentType: "custom",
   status: "draft",
   createdAt: new Date("2026-09-13T10:00:00.000Z"),
   // A draft agent nothing has written since it was registered, which is what
@@ -33,6 +34,8 @@ const row = {
   operatorPublicId: "usr_0123456789abcdefghjkmn",
   operatorName: "Marcus Bell",
   costCenter: null,
+  runtimeId: null,
+  toolbeltId: null,
 };
 
 const none = {
@@ -74,6 +77,54 @@ describe("list_agents row", () => {
     expect(item.tamperIncidentsRecorded).toBe(0);
     expect(item.runs30d).toBe(0);
     expect(item.status).toBe("unenrolled");
+    expect(item.runtime).toBeNull();
+    expect(item.toolbelt).toBeNull();
+    expect(item.managed).toBe(false);
+    expect(agentList.output.shape.items.element.parse(item)).toEqual(item);
+  });
+
+  it("names the runtime and toolbelt it is given (ADR-198)", () => {
+    const runtime = {
+      id: "rtm_0123456789abcdefghjkmn",
+      name: "Mac's laptop",
+      slug: "macs-laptop",
+    };
+    const toolbelt = {
+      id: "tbt_0123456789abcdefghjkmn",
+      name: "All tools",
+      slug: "all-tools",
+      kind: "all_tools" as const,
+    };
+    const item = toAgentListItem(row, {
+      agentKey: null,
+      credentials: 0,
+      hosts: 0,
+      incidents: 0,
+      ...none,
+      figures: undefined,
+      runtime,
+      toolbelt,
+    });
+    expect(item.runtime).toEqual(runtime);
+    expect(item.toolbelt).toEqual(toolbelt);
+    expect(agentList.output.shape.items.element.parse(item)).toEqual(item);
+  });
+
+  // #4350: the Agents page read no flag, offered Deregister on the built-in
+  // assistant, and deregistering it stopped stella in the workspace.
+  it("marks the built-in assistant managed", () => {
+    const item = toAgentListItem(
+      { ...row, slug: "qa-chat", agentType: "interactive_chat" },
+      {
+        agentKey: null,
+        credentials: 0,
+        hosts: 0,
+        incidents: 0,
+        ...none,
+        figures: undefined,
+      },
+    );
+    expect(item.managed).toBe(true);
     expect(agentList.output.shape.items.element.parse(item)).toEqual(item);
   });
 
@@ -297,11 +348,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       // alpha: enrolled by an active credential; two runs in the window (one
       // priced, one unpriced), one older than 30 days, one child session;
-      // one open incident and one resolved.
+      // one open incident and one resolved. It runs on a named runtime and
+      // names no toolbelt, so it carries the All tools belt (ADR-198).
+      const laptop = await support.seedRuntime(tenant, {
+        name: "Build laptop",
+        slug: "build-laptop",
+      });
+      await support.seedToolbelt(tenant);
       const alpha = await support.seedAgent(tenant, {
         slug: "alpha",
         harness: "claude-code",
         status: "active",
+        runtimeId: laptop.id,
       });
       await support.seedCredential(tenant, alpha);
       await support.seedCredential(tenant, alpha, { expired: true });
@@ -401,6 +459,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ]);
       const alpha = out.items[0]!;
       expect(alpha.harness).toBe("claude-code");
+      expect(alpha.runtime).toMatchObject({
+        name: "Build laptop",
+        slug: "build-laptop",
+      });
+      expect(alpha.toolbelt).toMatchObject({
+        name: "All tools",
+        kind: "all_tools",
+      });
+      expect(out.items.find((i) => i.slug === "bravo")!.runtime).toBeNull();
       expect(alpha.agentKey).toBe(
         `${tenant.orgNamespace}.${tenant.workspaceNamespace}.alpha`,
       );

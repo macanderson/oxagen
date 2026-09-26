@@ -123,6 +123,7 @@ describe("toRunPage", () => {
           model: null,
           harness: null,
           machine: null,
+          place: null,
           taskRef: "ENG-4121",
           name: "Cut the 3.2 release branch",
           summary: {
@@ -305,5 +306,113 @@ describe("toRunPage", () => {
       runs: [],
       nextCursor: null,
     });
+  });
+
+  it("carries the workspace's live count, and leaves it out when the read had none (A-04)", () => {
+    const counted = toRunPage({ runs: [], nextCursor: null, liveRuns: 3 });
+    expect(counted.liveRuns).toBe(3);
+    expect(RunPage.safeParse(counted).success).toBe(true);
+    expect(toRunPage({ runs: [], nextCursor: null })).not.toHaveProperty(
+      "liveRuns",
+    );
+  });
+
+  it("carries where a wrapped session ran, and null where the row says nothing (A-05)", () => {
+    const place = { path: "/Users/mb/src/platform", branch: "fix/tags" };
+    const page = toRunPage({
+      runs: [{ ...ledgerRun, place }, ledgerRun],
+      nextCursor: null,
+    });
+    expect(page.runs[0]?.place).toEqual(place);
+    expect(page.runs[1]?.place).toBeNull();
+    expect(RunPage.safeParse(page).success).toBe(true);
+  });
+});
+
+describe("toRunPage: tokens, compaction and pull request state", () => {
+  const tokens = {
+    input_uncached: 1_200,
+    cache_read: 3_600,
+    cache_write_5m: 400,
+    cache_write_1h: 0,
+    output: 900,
+    reasoning: 100,
+  };
+
+  it("carries the rollup's token classes in the view's names, and its cache rate (#3834)", () => {
+    const page = toRunPage({
+      runs: [{ ...ledgerRun, tokens, cacheHitRate: 0.75 }],
+      nextCursor: null,
+    });
+    expect(RunPage.parse(page).runs[0]).toMatchObject({
+      tokens: {
+        inputUncached: 1_200,
+        cacheRead: 3_600,
+        cacheWrite5m: 400,
+        cacheWrite1h: 0,
+        output: 900,
+        reasoning: 100,
+      },
+      cacheHitRate: 0.75,
+    });
+  });
+
+  it("keeps no rollup row null and an unread field absent (negative)", () => {
+    const [none, unread] = toRunPage({
+      runs: [{ ...ledgerRun, tokens: null, cacheHitRate: null }, ledgerRun],
+      nextCursor: null,
+    }).runs;
+    expect(none).toMatchObject({ tokens: null, cacheHitRate: null });
+    expect(unread).not.toHaveProperty("tokens");
+    expect(unread).not.toHaveProperty("cacheHitRate");
+  });
+
+  it("carries compacted as the ledger recorded it, and leaves it out for a wrapped session (#3835)", () => {
+    const [compacted, wrapped] = toRunPage({
+      runs: [{ ...ledgerRun, compacted: true }, unpricedSession],
+      nextCursor: null,
+    }).runs;
+    expect(compacted).toMatchObject({ status: "sealed", compacted: true });
+    expect(wrapped).not.toHaveProperty("compacted");
+  });
+
+  it("carries when Oxagen last read each pull request's state (#4129)", () => {
+    const page = toRunPage({
+      runs: [
+        {
+          ...unpricedSession,
+          pullRequests: [
+            {
+              url: "https://github.com/acme/api/pull/42",
+              number: 42,
+              repository: "acme/api",
+              state: "merged",
+              stateSeenAt: "2026-09-25T10:00:00.000Z",
+            },
+            {
+              url: "https://github.com/acme/api/pull/43",
+              number: 43,
+              repository: "acme/api",
+              state: null,
+              stateSeenAt: null,
+            },
+            {
+              url: "https://github.com/acme/api/pull/44",
+              number: 44,
+              repository: "acme/api",
+              state: null,
+            },
+          ],
+        },
+      ],
+      nextCursor: null,
+    });
+    const pulls = RunPage.parse(page).runs[0]?.pullRequests;
+    expect(pulls?.[0]).toMatchObject({
+      state: "merged",
+      stateSeenAt: "2026-09-25T10:00:00.000Z",
+    });
+    expect(pulls?.[1]).toMatchObject({ state: null, stateSeenAt: null });
+    expect(pulls?.[2]).not.toHaveProperty("stateSeenAt");
   });
 });

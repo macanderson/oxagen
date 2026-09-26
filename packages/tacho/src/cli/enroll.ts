@@ -1506,6 +1506,24 @@ async function enrollSteps(
                   `      ${provider} credential taken into the gateway's custody (${deps.paths.credentials})`,
                 );
               warnings.push(...outcome.warnings);
+              // A harness an earlier enroll brokered, whose calls no longer
+              // reach the proxy (a managed file now overrides its base URL,
+              // or the base URL is not ours), still holds a run token that
+              // the URL it calls refuses. It gets its own key back. The
+              // routed harnesses stay brokered: the restore is per harness,
+              // and each brokerable harness has its own provider (#4318).
+              const unrouted = writable.filter((h) => !reaching.includes(h));
+              if (unrouted.length > 0) {
+                const given = await restoreCredentials(
+                  host,
+                  deps,
+                  "passthrough",
+                  unrouted,
+                );
+                for (const file of given.restored)
+                  deps.out(`      credential given back to ${file}`);
+                warnings.push(...given.failed, ...given.warnings);
+              }
             } else {
               const outcome = await restoreCredentials(
                 host,

@@ -6,11 +6,13 @@
  * `register_agent` and `revoke_tacho_enrollment` see the same person the
  * console does.
  *
- *   oxagen agent register --slug <slug> --name <name> --harness <harness>
+ *   oxagen agent register --name <name> --harness <harness> --runtime <rtm_id>
+ *                         [--slug <slug>] [--toolbelt <tbt_id>]
  *                         [--description <text>] [--validity-days <n>]
- *       register_agent: mints the identity and prints the credential once
+ *       register_agent: one harness on one runtime, carrying a toolbelt
+ *       (ADR-198); mints the identity and prints the credential once
  *   oxagen agent status <agent>
- *       get_agent: identity, credentials, roles, hosts, the definition of record
+ *       get_agent: identity, runtime, toolbelt, versions, credentials, roles, hosts
  *   oxagen agent unenroll <agent> [--host <tch_id>] [--reason <text>]
  *       revoke_tacho_enrollment for the named host, or every live host of the agent
  *
@@ -34,11 +36,27 @@ const AGENT_HARNESSES = [
 ] as const;
 type AgentHarness = (typeof AGENT_HARNESSES)[number];
 
+interface RuntimeRef {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+interface ToolbeltRef {
+  id: string;
+  name: string;
+  slug: string;
+  kind: "all_tools" | "custom";
+}
+
 export interface AgentRegisterResult {
   agentId: string;
   slug: string;
   agentKey: string | null;
   principalId: string;
+  runtime: RuntimeRef;
+  toolbelt: ToolbeltRef;
+  version: number;
   credential: { id: string; secret: string; expiresAt: string };
 }
 
@@ -87,15 +105,15 @@ export interface AgentGetResult {
     expiresAt: string | null;
   }[];
   hosts: AgentHost[];
-  definition: {
+  runtime: RuntimeRef | null;
+  toolbelt: ToolbeltRef | null;
+  versions: {
     version: number;
-    path: string;
-    digest: string;
-    commitSha: string;
-    branch: string;
-    pullRequestUrl: string;
-    committedAt: string;
-  } | null;
+    changeKind: string;
+    runtime: RuntimeRef | null;
+    toolbelt: ToolbeltRef | null;
+    createdAt: string;
+  }[];
 }
 
 interface TachoRevokeResult {
@@ -116,6 +134,8 @@ export interface AgentRegisterCliOptions {
   slug?: string;
   name?: string;
   harness?: string;
+  runtime?: string;
+  toolbelt?: string;
   description?: string;
   validityDays?: string;
   json?: boolean;
@@ -127,13 +147,12 @@ export async function agentRegister(
 ): Promise<void> {
   const out = createOutput({ json: opts.json }, writer);
   if (
-    !opts.slug ||
-    !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(opts.slug) ||
-    opts.slug.length > 18
+    opts.slug !== undefined &&
+    (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(opts.slug) || opts.slug.length > 18)
   ) {
     process.exitCode = 2;
     out.error(
-      `Invalid --slug "${opts.slug ?? ""}". Use up to 18 lowercase letters, digits and hyphens.`,
+      `Invalid --slug "${opts.slug}". Use up to 18 lowercase letters, digits and hyphens, or omit it to derive one from --name.`,
       "usage",
     );
     return;
@@ -147,6 +166,22 @@ export async function agentRegister(
     process.exitCode = 2;
     out.error(
       `Invalid --harness "${opts.harness ?? ""}". Use one of ${AGENT_HARNESSES.join(", ")}.`,
+      "usage",
+    );
+    return;
+  }
+  if (!opts.runtime || !/^rtm_[0-9a-z]+$/.test(opts.runtime)) {
+    process.exitCode = 2;
+    out.error(
+      `Invalid --runtime "${opts.runtime ?? ""}". Use the runtime's id (rtm_…) from the Runtimes page.`,
+      "usage",
+    );
+    return;
+  }
+  if (opts.toolbelt !== undefined && !/^tbt_[0-9a-z]+$/.test(opts.toolbelt)) {
+    process.exitCode = 2;
+    out.error(
+      `Invalid --toolbelt "${opts.toolbelt}". Use the toolbelt's id (tbt_…), or omit it for the All tools belt.`,
       "usage",
     );
     return;
@@ -171,9 +206,11 @@ export async function agentRegister(
   let result: AgentRegisterResult;
   try {
     result = await apiPostOrThrow<AgentRegisterResult>("agents/register", {
-      slug: opts.slug,
       name: opts.name,
       harness: opts.harness,
+      runtimeId: opts.runtime,
+      ...(opts.slug !== undefined ? { slug: opts.slug } : {}),
+      ...(opts.toolbelt !== undefined ? { toolbeltId: opts.toolbelt } : {}),
       ...(opts.description ? { description: opts.description } : {}),
       ...(validityDays !== undefined ? { validityDays } : {}),
     });
@@ -188,14 +225,16 @@ export async function agentRegister(
   writer.write(`Registered ${result.slug} (${result.agentId}).`);
   writer.write(`  principal   ${result.principalId}`);
   writer.write(`  agent key   ${result.agentKey ?? "—"}`);
+  writer.write(`  runtime     ${result.runtime.name} (${result.runtime.slug})`);
+  writer.write(`  toolbelt    ${result.toolbelt.name}`);
+  writer.write(`  version     ${result.version}`);
   writer.write("");
   writer.write("Credential (shown once; it cannot be recovered):");
   writer.write(`  ${result.credential.secret}`);
   writer.write(`  expires ${result.credential.expiresAt}`);
   writer.write("");
   writer.write(
-    "Commit the definition to .oxagen/agents/" +
-      `${result.slug}.toml and enroll a host with: oxagen tacho enroll`,
+    `Next: run the one-time enroll command from the agent's Enrollment tab on ${result.runtime.name}.`,
   );
 }
 
@@ -225,6 +264,10 @@ export async function agentStatus(
   writer.write(`  id          ${identity.id}`);
   writer.write(`  agent key   ${identity.agentKey ?? "—"}`);
   writer.write(`  harness     ${identity.harness}`);
+  writer.write(
+    `  runtime     ${result.runtime ? `${result.runtime.name} (${result.runtime.slug})` : "—"}`,
+  );
+  writer.write(`  toolbelt    ${result.toolbelt?.name ?? "—"}`);
   writer.write(`  principal   ${identity.principalId ?? "—"}`);
   writer.write(`  operator    ${identity.operatorId ?? "—"}`);
   writer.write(`  registered  ${identity.registeredAt}`);
@@ -271,15 +314,20 @@ export async function agentStatus(
       writer,
     );
   writer.write("");
-  if (result.definition === null) {
-    writer.write("Definition: none committed");
-  } else {
-    const d = result.definition;
-    writer.write(
-      `Definition: ${d.path} @ ${d.commitSha.slice(0, 12)} on ${d.branch} (v${d.version})`,
+  writer.write("Versions:");
+  if (result.versions.length === 0) writer.write("  none");
+  else
+    printTable(
+      ["VERSION", "CHANGE", "RUNTIME", "TOOLBELT", "AT"],
+      result.versions.map((v) => [
+        String(v.version),
+        v.changeKind,
+        v.runtime?.slug ?? "—",
+        v.toolbelt?.slug ?? "—",
+        v.createdAt,
+      ]),
+      writer,
     );
-    writer.write(`  ${d.pullRequestUrl}`);
-  }
 }
 
 // ── agent unenroll ────────────────────────────────────────────────────────

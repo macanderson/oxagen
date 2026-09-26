@@ -9,7 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { WorkspaceActivitySync } from "./activity-store";
-import { approvalItem, shellData, shellWorkspace } from "./shell.builders";
+import {
+  approvalItem,
+  interjectionItem,
+  shellData,
+  shellWorkspace,
+} from "./shell.builders";
+import type { WorkspaceApprovals } from "./shell-data";
 import { orgWaiting, useShellCounts } from "./use-activity";
 
 const nav = vi.hoisted(() => ({ pathname: "/acme/core-platform" }));
@@ -114,9 +120,130 @@ describe("orgWaiting", () => {
     });
     expect(orgWaiting(data)).toEqual({ count: 1, partial: true });
   });
+
+  // #4370 review: a workspace whose approvals failed and whose questions
+  // loaded left its questions out of the badge while the drawer's heading
+  // counted them ("3+" against "5+ waiting on you").
+  it("counts a workspace's questions when its approvals failed, as the drawer does", () => {
+    const data = shellData({
+      approvals: {
+        workspaces: [
+          shellWorkspace({
+            pending: readOk({
+              items: [
+                approvalItem(),
+                approvalItem({ id: "apr_02K5RS8F3J" }),
+                approvalItem({ id: "apr_03K5RS8F3J" }),
+              ],
+              more: false,
+            }),
+          }),
+          shellWorkspace({
+            slug: "finops",
+            pending: readError("run_index_unavailable", 503),
+            interjections: readOk({
+              items: [
+                interjectionItem(),
+                interjectionItem({ id: "inj_02K5RSA4TW" }),
+              ],
+              more: false,
+            }),
+          }),
+        ],
+        truncated: false,
+        readAt: 0,
+      },
+    });
+    expect(orgWaiting(data)).toEqual({ count: 5, partial: true });
+  });
+
+  // #3839: the badge counted parked calls only while an agent could sit
+  // paused on a question the drawer never listed.
+  it("adds each workspace's open interjections to its parked calls", () => {
+    const data = shellData({
+      approvals: {
+        workspaces: [
+          shellWorkspace({
+            pending: readOk({ items: [approvalItem()], more: false }),
+            interjections: readOk({
+              items: [interjectionItem()],
+              more: false,
+            }),
+          }),
+          shellWorkspace({
+            slug: "finops",
+            interjections: readOk({
+              items: [interjectionItem({ id: "inj_02K5RSA4TW" })],
+              more: false,
+            }),
+          }),
+        ],
+        truncated: false,
+        readAt: 0,
+      },
+    });
+    expect(orgWaiting(data)).toEqual({ count: 3, partial: false });
+  });
+
+  it("is partial when a workspace's questions were not read or ran past the read (negative)", () => {
+    const one = (interjections: WorkspaceApprovals["interjections"]) =>
+      orgWaiting(
+        shellData({
+          approvals: {
+            workspaces: [
+              shellWorkspace({
+                pending: readOk({ items: [approvalItem()], more: false }),
+                interjections,
+              }),
+            ],
+            truncated: false,
+            readAt: 0,
+          },
+        }),
+      );
+    expect(one(readError("record_unmappable", 502))).toEqual({
+      count: 1,
+      partial: true,
+    });
+    expect(one(readOk({ items: [interjectionItem()], more: true }))).toEqual({
+      count: 2,
+      partial: true,
+    });
+  });
 });
 
 describe("useShellCounts", () => {
+  it("adds this workspace's open interjections to the Fleet count, and marks it + when they were not all read", () => {
+    const withQuestion = shellData({
+      approvals: {
+        workspaces: [
+          shellWorkspace({
+            pending: readOk({ items: [approvalItem()], more: false }),
+            interjections: readOk({
+              items: [interjectionItem()],
+              more: false,
+            }),
+          }),
+        ],
+        truncated: false,
+        readAt: 0,
+      },
+    });
+    const { result } = renderHook(() => useShellCounts(withQuestion));
+    expect(result.current.fleet).toBe(2);
+    expect(result.current.fleetMore).toBe(false);
+    const unread = shellData({
+      approvals: {
+        workspaces: [shellWorkspace({ interjections: readError("down", 503) })],
+        truncated: false,
+        readAt: 0,
+      },
+    });
+    const second = renderHook(() => useShellCounts(unread));
+    expect(second.result.current.fleet).toBe(0);
+    expect(second.result.current.fleetMore).toBe(true);
+  });
+
   it("counts Fleet from this workspace's queue, with its + when the queue ran past the read", () => {
     const data = shellData({
       approvals: {
@@ -180,7 +307,12 @@ describe("useShellCounts", () => {
         shellData({
           counts: {
             slug: "core-platform",
-            read: readOk({ approvals: 0, proposals: 5, incidents: 0 }),
+            read: readOk({
+              approvals: 0,
+              interjections: null,
+              proposals: 5,
+              incidents: 0,
+            }),
           },
         }),
       ),
@@ -211,7 +343,12 @@ describe("useShellCounts", () => {
         shellData({
           counts: {
             slug: "finops",
-            read: readOk({ approvals: 0, proposals: 5, incidents: 2 }),
+            read: readOk({
+              approvals: 0,
+              interjections: null,
+              proposals: 5,
+              incidents: 2,
+            }),
           },
         }),
       ),
@@ -228,7 +365,12 @@ describe("useShellCounts", () => {
       feed: orgFeed,
       counts: {
         slug: "core-platform",
-        read: readOk({ approvals: 0, proposals: 1, incidents: 1 }),
+        read: readOk({
+          approvals: 0,
+          interjections: null,
+          proposals: 1,
+          incidents: 1,
+        }),
       },
     });
     const { result } = renderHook(() => useShellCounts(data));
@@ -238,7 +380,12 @@ describe("useShellCounts", () => {
         <WorkspaceActivitySync
           activity={{
             slug: "core-platform",
-            counts: readOk({ approvals: 0, proposals: 4, incidents: 2 }),
+            counts: readOk({
+              approvals: 0,
+              interjections: null,
+              proposals: 4,
+              incidents: 2,
+            }),
             feed: wsFeed,
           }}
         />,

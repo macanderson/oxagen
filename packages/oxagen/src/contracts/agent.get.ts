@@ -1,15 +1,14 @@
-// get_agent — one agent identity with its credentials, roles, enrollment and
-// the definition of record, in one read (MC spec §6.2, App. E; #2956). The
-// read behind the Agents detail page's identity, definition and enrollment
-// tabs.
+// get_agent — one agent with its credentials, roles, enrollment, the runtime
+// and toolbelt it is bound to, and its versions, in one read (ADR-198; MC
+// spec §6.2, App. E; #2956). The read behind the Agents detail page.
 //
 // `noBillingGate: true`, `mutates: false`: a console read (INV-28).
 //
-// The identity lives in Postgres and the definition in git (ADR-057
-// decision 1). `definition` is the cache the last `commit_agent_definition`
-// left on the version row, or null when the agent has no committed
-// definition. No secret leaves this read: a credential shows its prefix and
-// dates, a host its key fingerprint.
+// An agent is one operator on one runtime with one harness (ADR-198). The
+// principal, the operator and the harness never change; `versions` records
+// each runtime and toolbelt the agent has had, newest first. No secret leaves
+// this read: a credential shows its prefix and dates, a host its key
+// fingerprint.
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import {
@@ -20,6 +19,9 @@ import {
 } from "../tacho/schemas";
 import { agentHarnessSchema, agentIdentityStatusSchema } from "./agent.list";
 import { costCenterLabelSchema } from "./cost_center.shared";
+import { runtimeRefSchema } from "./runtime.shared";
+import { moneySchema } from "./spend.shared";
+import { toolbeltRefSchema } from "./toolbelt.shared";
 
 const instant = z.string().datetime({ offset: true });
 
@@ -72,27 +74,53 @@ export const agentHostSchema = z
   })
   .strict();
 
-export const agentDefinitionRecordSchema = z
+/** Why a version exists (`agent_versions.change_kind`). */
+export const agentVersionChangeKindSchema = z.enum([
+  "registered",
+  "runtime_changed",
+  "toolbelt_changed",
+  "legacy",
+]);
+
+/** One agent version: what the agent was bound to from that version on. */
+export const agentVersionSchema = z
   .object({
-    /** The `agent_versions.version` that cached the commit. */
     version: z.number().int().positive(),
-    path: z.string().min(1),
-    /** sha256 hex of the file at `commitSha`. */
-    digest: z.string().regex(/^[0-9a-f]{64}$/),
-    commitSha: z.string().min(1),
-    branch: z.string().min(1),
-    pullRequestUrl: z.string().url(),
-    /** The file text as committed. */
-    source: z.string(),
-    committedAt: instant,
+    changeKind: agentVersionChangeKindSchema,
+    /** Null on a legacy version and on an agent that runs on no named runtime. */
+    runtime: runtimeRefSchema.nullable(),
+    /** Null on a legacy version. */
+    toolbelt: toolbeltRefSchema.nullable(),
+    /** `usr_…` of the person who wrote the version. */
+    createdBy: z.string().nullable(),
+    createdAt: instant,
   })
   .strict();
+export type AgentVersion = z.output<typeof agentVersionSchema>;
+
+/**
+ * The limits the agent's active version sets in its config (ADR-198): the
+ * per-run and per-day spend ceilings the host bundle enforces, and whether the
+ * agent must run under the contained launcher (ADR-152). A ceiling the config
+ * does not name is null. `invalid` is true when the config cannot be read,
+ * which is the state in which the host suspends governed actions; every other
+ * field then names nothing.
+ */
+export const agentLimitsSchema = z
+  .object({
+    perRun: moneySchema.nullable(),
+    perDay: moneySchema.nullable(),
+    containmentRequired: z.boolean(),
+    invalid: z.boolean(),
+  })
+  .strict();
+export type AgentLimits = z.output<typeof agentLimitsSchema>;
 
 export const agentGet = registerCapability({
   name: "get_agent",
   domain: "agent",
   description:
-    "Read one agent identity: principal, harness, operator and status; its long-lived credentials; the roles on its principal; the hosts enrolled under it; and the definition of record the last commit cached.",
+    "Read one agent: principal, harness, operator and status; the runtime it runs on and the toolbelt it carries; its versions; its long-lived credentials; the roles on its principal; and the hosts enrolled under it.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent", "cli"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -126,6 +154,8 @@ export const agentGet = registerCapability({
           description: z.string().nullable(),
           agentKey: z.string().nullable(),
           harness: agentHarnessSchema,
+          /** True for the built-in assistant (`qa-chat`), which no identity write accepts. */
+          managed: z.boolean(),
           principalId: z.string().nullable(),
           operatorId: z.string().nullable(),
           status: agentIdentityStatusSchema,
@@ -136,10 +166,17 @@ export const agentGet = registerCapability({
           costCenter: costCenterLabelSchema.nullable(),
         })
         .strict(),
+      /** The runtime the agent runs on now; null when it runs on no named runtime. */
+      runtime: runtimeRefSchema.nullable(),
+      /** The toolbelt the agent carries now. */
+      toolbelt: toolbeltRefSchema.nullable(),
+      /** Every version, newest first, at most 100. */
+      versions: z.array(agentVersionSchema).max(100),
+      /** The limits the active version's config sets. */
+      limits: agentLimitsSchema,
       credentials: z.array(agentCredentialSchema),
       roles: z.array(agentRoleAssignmentSchema),
       hosts: z.array(agentHostSchema),
-      definition: agentDefinitionRecordSchema.nullable(),
     })
     .strict(),
 });

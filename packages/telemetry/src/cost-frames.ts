@@ -147,6 +147,20 @@ const TACHO_TOKEN_SOURCES: readonly string[] = LLM_CALL_TOKEN_SOURCES;
 const NOT_A_DUPLICATE = "attrs[{duplicateAttr:String}] = ''";
 
 /**
+ * A lower bound on `received_at` for a read of `tacho_events` whose `ts`
+ * window opens at the named parameter. The table partitions by the month of
+ * `received_at` (#4297), so a `ts` filter alone reads every month the
+ * organization holds, with FINAL, on the node every organization shares. A
+ * frame stamped at or after the window's start reached the control plane no
+ * earlier than that start less the host clock's lead, and the bound allows a
+ * lead of one day. There is no upper bound, because a host ships buffered
+ * frames late. `selectAgentDaySpend` bounds its day the same way.
+ */
+const receivedFrom = (param: "since" | "from") =>
+  `received_at >= {${param}:DateTime64(3)} - INTERVAL 1 DAY`;
+const TACHO_RECEIVED_SINCE = receivedFrom("since");
+
+/**
  * A transcript row's thinking figure, joined back once per id the host's
  * ledger matches two sightings on: `t` on the vendor request id, `m` on the
  * message id (`llmCallKeys` in @oxagen/tacho). They are separate joins, not
@@ -515,6 +529,7 @@ export async function readTachoToolCallObservations(args: {
           AND source = 'hook'
           AND ts >= {from:DateTime64(3)}
           AND ts < {to:DateTime64(3)}
+          AND ${receivedFrom("from")}
           AND tool_name != ''
           AND tool_input_digest != ''
         ORDER BY ts DESC, seq DESC
@@ -529,6 +544,7 @@ export async function readTachoToolCallObservations(args: {
           AND source = 'otel_span'
           AND ts >= {from:DateTime64(3)}
           AND ts < {to:DateTime64(3)}
+          AND ${receivedFrom("from")}
           AND tool_use_id != ''
           AND tool_result_tokens IS NOT NULL
         GROUP BY tool_use_id
@@ -837,6 +853,7 @@ export async function readObservedModels(args: {
   const tachoWhere = `org_id = {orgId:UUID}
           AND ts >= {since:DateTime64(3)}
           ${until.replace("{col}", "ts")}
+          AND ${TACHO_RECEIVED_SINCE}
           AND kind = 'llm_call'
           AND source IN {sources:Array(String)}
           AND ${NOT_A_DUPLICATE}
@@ -990,6 +1007,7 @@ export async function readObservedModels(args: {
           WHERE org_id = {orgId:UUID}
             AND ts >= {since:DateTime64(3)}
             ${until.replace("{col}", "ts")}
+            AND ${TACHO_RECEIVED_SINCE}
             AND kind = 'llm_call'
             AND ${TRANSCRIPT_SPLIT_ROW}
           GROUP BY call_key, session_uuid
@@ -1005,6 +1023,7 @@ export async function readObservedModels(args: {
           WHERE org_id = {orgId:UUID}
             AND ts >= {since:DateTime64(3)}
             ${until.replace("{col}", "ts")}
+            AND ${TACHO_RECEIVED_SINCE}
             AND kind = 'llm_call'
             AND ${TRANSCRIPT_SPLIT_ROW}
           GROUP BY call_key, session_uuid

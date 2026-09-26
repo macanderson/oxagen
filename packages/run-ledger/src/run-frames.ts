@@ -50,6 +50,12 @@ import {
 /** What a frame did, as far as its receipt says. Null where it says nothing. */
 export interface FrameIdentity {
   tool: string | null;
+  /**
+   * How the call ended, as its receipt words it: a tool call's outcome, and
+   * a ledger model call's (`completed`, `failed`, `cancelled`). Any word in
+   * `FAILED_OUTCOMES`, a cancelled or timed-out call included, answers the
+   * errors chip (`frameKinds`).
+   */
   toolStatus: string | null;
   model: string | null;
   policy: string | null;
@@ -422,6 +428,9 @@ function ledgerIdentity(event: AttemptEventReadRecord): FrameIdentity {
     return {
       ...NO_IDENTITY,
       model: provider && model ? `${provider}/${model}` : model,
+      // A receipt says how the call ended, as a tool call's does, so a model
+      // call that failed answers the errors chip.
+      toolStatus: field(p, "outcome"),
       callId: field(p, "model_call_id"),
     };
   }

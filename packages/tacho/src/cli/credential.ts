@@ -475,11 +475,15 @@ export type RestoreMode = "unenroll" | "passthrough";
  * token for a gateway that is about to stop. Custody is released only once
  * the file says the key landed; a key with nowhere to go stays in custody
  * under `passthrough` and is discarded with a warning under `unenroll`.
+ *
+ * `only` limits the sweep to those harnesses, so `enroll` can give one
+ * harness its key back and leave the others brokered.
  */
 export async function restoreCredentials(
   host: Pick<HostFile, "harnesses"> | undefined,
   deps: CliDeps,
   mode: RestoreMode = "unenroll",
+  only?: readonly string[],
 ): Promise<RestoreOutcome> {
   const restored: string[] = [];
   const failed: string[] = [];
@@ -491,6 +495,7 @@ export async function restoreCredentials(
     return { restored, failed, warnings, custodyUnreadable };
   const helperCommand = deps.runtime.credentialHelperCommand;
   for (const harness of MODEL_CREDENTIAL_HARNESSES) {
+    if (only !== undefined && !only.includes(harness)) continue;
     try {
       if (host !== undefined && !host.harnesses.includes(harness)) {
         const dirs = harnessDirsOf(deps);

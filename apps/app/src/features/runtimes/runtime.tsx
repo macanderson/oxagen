@@ -41,7 +41,7 @@ import {
   Panel,
   Sub,
 } from "./parts";
-import { RuntimesHeader } from "./runtimes";
+import { mayAddRuntime, RuntimesHeader } from "./runtimes";
 import { RuntimesFailure } from "./states";
 
 function HostPanel({
@@ -520,7 +520,12 @@ export async function Runtime({
         id={read.host.id}
         label={read.host.hostname}
       />
-      <RuntimesHeader org={org} ws={ws} wsName={ctx.wsName} />
+      <RuntimesHeader
+        org={org}
+        ws={ws}
+        wsName={ctx.wsName}
+        canAdd={mayAddRuntime(ctx)}
+      />
       <RuntimeLoaded
         host={read.host}
         agents={read.agents}

@@ -67,3 +67,22 @@ export const tenancySeamRestrictedImports = {
     },
   ],
 };
+
+// `withTenantDb` and `withOrgDb` take a second argument, `{ plane: "shared" }`,
+// that opens the transaction on the shared plane whatever plane the
+// organisation's tenant data lives on (#4338). Only billing tables belong
+// there, so only packages/billing/src/internal/platform-db.ts passes it. A
+// tenant-data read on the shared plane finds none of a dedicated-plane
+// organisation's rows and answers as if it had none. The root config turns
+// this rule off for that one file.
+export const tenancySeamRestrictedSyntax = [
+  {
+    selector:
+      "CallExpression[callee.name=/^with(Tenant|Org)Db$/][arguments.length>1]",
+    message:
+      "Only packages/billing/src/internal/platform-db.ts passes a plane option to " +
+      "withTenantDb or withOrgDb. The shared plane holds none of a dedicated-plane " +
+      "organisation's tenant data. For a billing table, call withBillingDb or " +
+      "withBillingOrgDb from that file. (#4338)",
+  },
+];

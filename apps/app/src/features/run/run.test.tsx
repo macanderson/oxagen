@@ -94,7 +94,6 @@ vi.mock("./actions", () => ({
   readRunExport: vi.fn(),
   sealRun: vi.fn(),
 }));
-vi.mock("./fit-actions", () => ({ openFitChange: vi.fn() }));
 vi.mock("next-intl/server", async () => {
   const { translator } = await import("@/test/intl");
   return { getTranslations: (namespace?: string) => translator(namespace) };
@@ -903,6 +902,117 @@ describe("header", () => {
     expect(status).not.toHaveTextContent("parked");
   });
 
+  it("says stale, with a still dot, once a live run's host has not checked in for five minutes (A-02)", async () => {
+    // A lost laptop or a killed daemon stops polling. The run stays open
+    // until Oxagen closes it after 12 hours with no event, and its light
+    // used to pulse live for all of them.
+    const { container } = await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "tacho",
+            commandBlock: "host_offline",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [], more: false }),
+    });
+    const status = screen.getByTestId("run-status");
+    expect(status).toHaveTextContent(/^stale$/);
+    expect(status.querySelector("[data-pulse]")).toBeNull();
+    expect(status.querySelector("[data-stale='true']")).toHaveAttribute(
+      "title",
+      expect.stringContaining("has not heard from this run's host"),
+    );
+    await expectNoAxe(container);
+  });
+
+  it("says stale over parked and paused, since the host that held them went quiet", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "tacho",
+            ingressPaused: true,
+            commandBlock: "host_offline",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [approval()], more: false }),
+    });
+    expect(screen.getByTestId("run-status")).toHaveTextContent(/^stale$/);
+  });
+
+  it("says stale on a live run whose host was revoked, and says why (#4343 review)", async () => {
+    // A revoked host's polls and events are refused, so its run is as
+    // unreachable as an offline one. It pulsed live until the 12-hour close.
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "tacho",
+            commandBlock: "host_revoked",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [], more: false }),
+    });
+    const status = screen.getByTestId("run-status");
+    expect(status).toHaveTextContent(/^stale$/);
+    expect(status.querySelector("[data-pulse]")).toBeNull();
+    const badge = status.querySelector("[data-stale='true']");
+    expect(badge).toHaveAttribute(
+      "title",
+      expect.stringContaining("This run's host was revoked"),
+    );
+    // Negative: not the offline host's reason.
+    expect(badge?.getAttribute("title")).not.toContain("five minutes");
+  });
+
+  it("pulses live while the host checks in, and on a run with no host to check in (negative)", async () => {
+    for (const commandBlock of [null, "no_host"] as const) {
+      await renderRun({
+        detail: ok(
+          runDetail({
+            run: runRow({
+              status: "live",
+              sealedAt: null,
+              source: "tacho",
+              commandBlock,
+            }),
+          }),
+        ),
+        transcript: ok(runTranscript()),
+        approvals: ok({ items: [], more: false }),
+      });
+      const status = screen.getByTestId("run-status");
+      expect(status).toHaveTextContent(/^live$/);
+      expect(status.querySelector("[data-pulse]")).not.toBeNull();
+      cleanup();
+    }
+  });
+
+  it("reads an ended run's outcome, not stale, whatever its host last did (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ commandBlock: "host_offline" }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-status")).toHaveTextContent(/^completed$/);
+  });
+
   it("reads live on a live run with nothing parked and ingress open (negative)", async () => {
     await renderRun({
       detail: ok(
@@ -1013,7 +1123,7 @@ describe("header", () => {
     expect(chips).not.toHaveTextContent("$612.48");
   });
 
-  it("draws the pull requests the outputs recorded when the work read fails, and says the repository was not captured (negative)", async () => {
+  it("draws the pull requests the outputs recorded when the work read fails, and says the read failed, not that nothing was captured (A-05)", async () => {
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
@@ -1027,17 +1137,229 @@ describe("header", () => {
       ),
     });
     const checkout = within(await screen.findByTestId("run-checkout"));
-    expect(
-      checkout.getByText("repository and branch not captured"),
-    ).toBeTruthy();
+    const unread = checkout.getByTestId("run-work-unread");
+    expect(unread).toHaveTextContent("repository not read");
+    expect(unread.getAttribute("title")).toContain(
+      "The read of this run's work failed",
+    );
+    // A failed read is not a gap in the recording.
+    expect(checkout.queryByText(/not captured/)).toBeNull();
     expect(checkout.getByText("acme/platform#482")).toBeTruthy();
     expect(checkout.getByText("acme/docs#17")).toBeTruthy();
     expect(checkout.queryByText("no pull request")).toBeNull();
-    // No checkout was read, so no path is offered to copy.
+    // The row holds no directory, so no path is offered to copy.
     expect(checkout.queryByTestId("run-checkout-path")).toBeNull();
     expect(checkout.getByTestId("run-machine")).toHaveTextContent(
-      "mac-studio.local",
+      /^mac-studio\.local$/,
     );
+  });
+
+  it("draws the branch and the directory the session recorded when the work read fails (A-05)", async () => {
+    // tacho.sessions holds the session's cwd and git branch. The strip said
+    // "repository and branch not captured" and "path not captured" over them
+    // whenever the ClickHouse work read failed.
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      work: readError("clickhouse_unavailable", 503),
+    });
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    expect(checkout.getByTestId("run-branch")).toHaveTextContent("fix/tags");
+    const path = checkout.getByTestId("run-checkout-path");
+    expect(path).toHaveTextContent("mac-studio.local:/Users/mb/src/platform");
+    expect(path.getAttribute("title")).toContain(
+      "The session recorded this working directory on mac-studio.local.",
+    );
+    expect(checkout.getByTestId("run-work-unread")).toBeTruthy();
+    expect(checkout.queryByText(/not captured/)).toBeNull();
+  });
+
+  it("claims nothing about the checkout while the work read is in flight (A-05)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      // Never answers, so the strip stays on its fallback.
+      work: () => new Promise(() => {}),
+    });
+    const checkout = within(screen.getByTestId("run-checkout"));
+    expect(checkout.getByTestId("run-branch")).toHaveTextContent("fix/tags");
+    expect(checkout.getByTestId("run-checkout-path")).toHaveTextContent(
+      "mac-studio.local:/Users/mb/src/platform",
+    );
+    // Negative: neither a gap in the recording nor a failure is claimed, and
+    // no pull request is said to be missing before the read answers.
+    expect(checkout.queryByText(/not captured/)).toBeNull();
+    expect(checkout.queryByTestId("run-work-unread")).toBeNull();
+    expect(checkout.queryByText("no pull request")).toBeNull();
+  });
+
+  it("draws the session's branch and directory when the host enrolled no checkout (A-05)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    // The branch is recorded, so only the repository is named as missing.
+    expect(checkout.getByText("repository not captured")).toBeTruthy();
+    expect(checkout.getByText("fix/tags")).toBeTruthy();
+    expect(checkout.getByTestId("run-checkout-path")).toHaveTextContent(
+      "mac-studio.local:/Users/mb/src/platform",
+    );
+    expect(checkout.queryByText("path not captured")).toBeNull();
+  });
+
+  it("names the repository the session's remote matches while the work read is pending or failed (A-05)", async () => {
+    const place = {
+      path: "/Users/mb/src/platform",
+      branch: "fix/tags",
+      repository: {
+        host: "github.com",
+        owner: "acme",
+        name: "platform",
+        url: "https://github.com/acme/platform",
+      },
+    };
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ place }) })),
+      transcript: ok(runTranscript()),
+      work: readError("clickhouse_unavailable", 503),
+    });
+    const failed = within(await screen.findByTestId("run-checkout"));
+    expect(
+      failed.getByRole("link", { name: "acme/platform" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform");
+    // The branch is the session's, on the session's repository.
+    expect(
+      failed.getByRole("link", { name: "fix/tags" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform/tree/fix/tags");
+    // The read still says it failed, and no longer that the repository is unread.
+    const unread = failed.getByTestId("run-work-unread");
+    expect(unread).toHaveTextContent(/^work not read$/);
+    expect(unread.getAttribute("title")).not.toContain("its repository");
+    expect(failed.queryByText("repository not read")).toBeNull();
+    cleanup();
+
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ place }) })),
+      transcript: ok(runTranscript()),
+      work: () => new Promise(() => {}),
+    });
+    const pending = within(screen.getByTestId("run-checkout"));
+    expect(pending.getByRole("link", { name: "acme/platform" })).toBeTruthy();
+    expect(pending.queryByTestId("run-work-unread")).toBeNull();
+  });
+
+  it("links the session's branch into the session's repository when no checkout was enrolled (A-05)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: {
+              path: "/Users/mb/src/platform",
+              branch: "fix/tags",
+              repository: {
+                host: "github.com",
+                owner: "acme",
+                name: "platform",
+                url: "https://github.com/acme/platform",
+              },
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    expect(strip.getByRole("link", { name: "acme/platform" })).toBeTruthy();
+    expect(
+      strip.getByRole("link", { name: "fix/tags" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform/tree/fix/tags");
+    expect(strip.queryByText(/not captured/)).toBeNull();
+  });
+
+  it("never links the session's branch into a pull request's repository (negative, #4343 review)", async () => {
+    // With no checkout enrolled, the repository came from the first pull
+    // request, and the session's branch was linked into it: a session whose
+    // first pull request went to another repository linked a branch that
+    // does not exist there.
+    const docs = {
+      host: "github.com",
+      owner: "acme",
+      name: "docs",
+      url: "https://github.com/acme/docs",
+      connected: true,
+    };
+    const [pr] = runWork().pullRequests;
+    if (pr === undefined) throw new Error("the builder holds a pull request");
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          checkouts: [],
+          pullRequests: [
+            {
+              ...pr,
+              repository: docs,
+              number: 17,
+              url: "https://github.com/acme/docs/pull/17",
+              headRef: "docs/tags",
+              checkoutRefs: [],
+            },
+          ],
+        }),
+      ),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    expect(strip.getByTestId("run-branch")).toHaveTextContent("fix/tags");
+    expect(strip.queryByRole("link", { name: "fix/tags" })).toBeNull();
+    expect(screen.getByTestId("run-checkout").innerHTML).not.toContain(
+      "/tree/fix/tags",
+    );
+  });
+
+  it("names no branch for an enrolled checkout on a detached HEAD, whatever the session's start named (negative, #4343 review)", async () => {
+    const [checkout] = runWork().checkouts;
+    if (checkout === undefined) throw new Error("the builder holds a checkout");
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      work: ok(runWork({ checkouts: [{ ...checkout, branch: null }] })),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    // The checkout is the newer fact: it says the HEAD named no branch.
+    expect(strip.queryByText("fix/tags")).toBeNull();
+    expect(strip.queryByTestId("run-branch")).toBeNull();
   });
 
   it("links a branch that heads no pull request to its tree on the forge", async () => {

@@ -1,68 +1,62 @@
 /**
- * The bridge against fakes of the two Tauri modules: every Rust command is
- * one `invoke`, the picker calls unwrap their envelopes, and a sidecar run
- * streams lines as they arrive and settles on close or error.
+ * The bridge against a fake of Tauri's core module: every Rust command is one
+ * `invoke`, the picker calls unwrap their envelopes, and a sidecar run goes
+ * through the shell's `run_sidecar`, streams lines as they arrive over its
+ * channel, and settles on the exit or an error.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const invoked: Array<{ cmd: string; args: unknown }> = [];
-const answers = new Map<string, unknown>();
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: async (cmd: string, args?: unknown) => {
-    invoked.push({ cmd, args });
-    return answers.get(cmd);
-  },
-}));
+type SidecarMessage =
+  | { event: "stdout" | "stderr" | "error"; data: string }
+  | { event: "terminated"; data: { code: number | null } };
 
-type Listener = (payload: never) => void;
-interface FakeCommand {
+interface FakeChannel {
+  onmessage: (message: SidecarMessage) => void;
+}
+
+interface FakeSidecar {
   program: string;
   args: string[];
-  options?: { env?: Record<string, string> };
-  stdout: { on: (event: string, fn: Listener) => void };
-  stderr: { on: (event: string, fn: Listener) => void };
-  on: (event: string, fn: Listener) => void;
-  spawn: () => Promise<void>;
+  id: number;
   emit: (
-    channel: "stdout" | "stderr" | "close" | "error",
+    kind: "stdout" | "stderr" | "close" | "error",
     payload: unknown,
   ) => void;
 }
-const spawned: FakeCommand[] = [];
+
+const invoked: Array<{ cmd: string; args: unknown }> = [];
+const answers = new Map<string, unknown>();
+const spawned: FakeSidecar[] = [];
 let spawnFails: Error | undefined;
-vi.mock("@tauri-apps/plugin-shell", () => ({
-  Command: {
-    sidecar: (
-      program: string,
-      args: string[],
-      options?: { env?: Record<string, string> },
-    ) => {
-      const listeners = new Map<string, Listener[]>();
-      const on = (channel: string) => (event: string, fn: Listener) => {
-        const key = `${channel}:${event}`;
-        listeners.set(key, [...(listeners.get(key) ?? []), fn]);
-      };
-      const command: FakeCommand = {
-        program,
-        args,
-        options,
-        stdout: { on: on("stdout") },
-        stderr: { on: on("stderr") },
-        on: on("command"),
-        spawn: async () => {
-          if (spawnFails !== undefined) throw spawnFails;
-        },
-        emit: (channel, payload) => {
-          const key =
-            channel === "stdout" || channel === "stderr"
-              ? `${channel}:data`
-              : `command:${channel}`;
-          for (const fn of listeners.get(key) ?? []) fn(payload as never);
-        },
-      };
-      spawned.push(command);
-      return command;
-    },
+vi.mock("@tauri-apps/api/core", () => ({
+  Channel: class {
+    onmessage: (message: SidecarMessage) => void = () => undefined;
+  },
+  invoke: async (cmd: string, args?: Record<string, unknown>) => {
+    invoked.push({ cmd, args });
+    if (cmd === "run_sidecar") {
+      const channel = args?.onEvent as FakeChannel;
+      const id = 1000 + spawned.length;
+      spawned.push({
+        program: String(args?.sidecar),
+        args: args?.args as string[],
+        id,
+        emit: (kind, payload) =>
+          channel.onmessage(
+            kind === "close"
+              ? {
+                  event: "terminated",
+                  data: payload as { code: number | null },
+                }
+              : { event: kind, data: String(payload) },
+          ),
+      });
+      if (spawnFails !== undefined) throw spawnFails;
+      return id;
+    }
+    if (!answers.has(cmd) && cmd === "set_busy")
+      throw new Error("command set_busy not found");
+    return answers.get(cmd);
   },
 }));
 
@@ -78,8 +72,8 @@ import {
   listOrganizations,
   listWorkspaces,
   logTail,
-  sidecarEnv,
   readState,
+  reportBusy,
   removeLocalData,
   runSidecar,
   tachoStatus,
@@ -161,9 +155,9 @@ describe("runSidecar", () => {
     );
     const command = spawned[0];
     if (command === undefined) throw new Error("no sidecar spawned");
-    expect(command.program).toBe("binaries/tacho");
+    expect(command.program).toBe("tacho");
     expect(command.args).toEqual(["enroll", "--org", "acme"]);
-    // Let spawn() settle before emitting, as the real plugin does.
+    // Let the invoke settle before emitting, as the real shell does.
     await Promise.resolve();
     command.emit("stdout", "[1/6] Minting the device key");
     command.emit("stderr", "warning: no claude on PATH");
@@ -181,17 +175,34 @@ describe("runSidecar", () => {
     });
   });
 
-  it("rejects when the process errors or cannot be spawned, as an Error either way", async () => {
-    const failing = runSidecar("oxagen", ["login"]);
+  it("rejects when the process errors or the shell refuses it, as an Error either way", async () => {
+    const failing = runSidecar("oxagen", ["login", "--browser"]);
     await Promise.resolve();
     spawned[0]?.emit("error", "sidecar not found");
     await expect(failing).rejects.toThrow("sidecar not found");
-    const typed = runSidecar("oxagen", ["logout"]);
+    spawnFails = new Error(
+      "Oxagen does not run `tacho daemon`: not a command the app sends",
+    );
+    await expect(runSidecar("tacho", ["daemon"])).rejects.toThrow(
+      "Oxagen does not run `tacho daemon`",
+    );
+  });
+
+  // Audit D-12: the page named any environment the sidecar ran with. It now
+  // hands over the sidecar and the argv only, and the Rust shell adds what
+  // it needs (TACHO_BIN_DIR) itself.
+  it("asks the Rust shell to run it and passes no environment of its own", async () => {
+    const pending = runSidecar("tacho", ["unenroll", "--purge"]);
+    const call = invoked.find((c) => c.cmd === "run_sidecar");
+    expect(call?.args).toEqual({
+      sidecar: "tacho",
+      args: ["unenroll", "--purge"],
+      onEvent: expect.anything(),
+    });
     await Promise.resolve();
-    spawned[1]?.emit("error", new Error("killed"));
-    await expect(typed).rejects.toThrow("killed");
-    spawnFails = new Error("EACCES");
-    await expect(runSidecar("tacho", ["status"])).rejects.toThrow("EACCES");
+    spawned[0]?.emit("close", { code: 0 });
+    await pending;
+    expect(invoked.map((c) => c.cmd)).toEqual(["run_sidecar"]);
   });
 
   it("gives a bounded probe a deadline instead of waiting on a close that never comes", async () => {
@@ -207,6 +218,11 @@ describe("runSidecar", () => {
       await expect(pending).rejects.toThrow(
         "tacho detect --json did not finish within 5s",
       );
+      // The late process is stopped by the id the shell gave it.
+      expect(invoked.at(-1)).toEqual({
+        cmd: "kill_sidecar",
+        args: { id: spawned[0]?.id },
+      });
       // A close inside the deadline clears it and resolves normally.
       const quick = runSidecar("tacho", ["status", "--json"], undefined, {
         timeoutMs: 5_000,
@@ -389,32 +405,18 @@ describe("the session check before a reassign", () => {
   });
 });
 
-describe("the sidecar environment", () => {
-  it("passes the durable tools directory to a sidecar the app spawns", async () => {
-    answers.set("sidecar_env", { TACHO_BIN_DIR: "/Users/m/.oxagen/bin" });
-    const env = await sidecarEnv();
-    const pending = runSidecar("tacho", ["enroll"], undefined, { env });
-    await Promise.resolve();
-    expect(spawned.at(-1)?.options).toEqual({
-      env: { TACHO_BIN_DIR: "/Users/m/.oxagen/bin" },
-    });
-    spawned.at(-1)?.emit("close", { code: 0 });
-    await pending;
+describe("the close guard", () => {
+  it("tells the Rust shell when an action starts and ends", async () => {
+    answers.set("set_busy", null);
+    await reportBusy(true);
+    await reportBusy(false);
+    expect(invoked).toEqual([
+      { cmd: "set_busy", args: { busy: true } },
+      { cmd: "set_busy", args: { busy: false } },
+    ]);
   });
 
-  it("inherits the app's environment when there is nothing to add", async () => {
-    answers.set("sidecar_env", {});
-    const pending = runSidecar("tacho", ["enroll"], undefined, {
-      env: await sidecarEnv(),
-    });
-    await Promise.resolve();
-    expect(spawned.at(-1)?.options).toBeUndefined();
-    spawned.at(-1)?.emit("close", { code: 0 });
-    await pending;
-  });
-
-  it("reads an older shell with no sidecar_env command as nothing to add", async () => {
-    answers.delete("sidecar_env");
-    expect(await sidecarEnv()).toEqual({});
+  it("changes nothing on a shell that predates the command", async () => {
+    await expect(reportBusy(true)).resolves.toBeUndefined();
   });
 });

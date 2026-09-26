@@ -11,17 +11,38 @@ import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const command = vi.hoisted(() => vi.fn(async () => ({ query_id: "q" })));
+type Unfinished = { mutation_id: string; latest_fail_reason: string };
+/**
+ * What each read of `system.mutations` answers, in order: the unfinished
+ * mutations on the table. Once the list runs out, none is unfinished.
+ */
+const reads = vi.hoisted(() => [] as Unfinished[][]);
+const query = vi.hoisted(() =>
+  vi.fn(async () => ({
+    json: async () => reads.shift() ?? [],
+  })),
+);
 
 vi.mock("./clickhouse", () => ({
-  clickhouse: () => ({ command }),
+  clickhouse: () => ({ command, query }),
 }));
 
 import {
   CLAUDE_SESSIONS_EMAIL_COLUMN,
   CLAUDE_SESSIONS_TABLE,
   ERASE_CLAUDE_SESSIONS_QUERY,
+  ERASE_CLAUDE_SESSIONS_WAIT_MS,
+  UNFINISHED_CLAUDE_SESSIONS_MUTATIONS_QUERY,
+  claudeSessionsEraseRemaining,
   eraseClaudeSessionRows,
+  submitClaudeSessionsErase,
 } from "./claude-telemetry";
+
+/** An unfinished mutation, failing when `reason` is given. */
+const running = (id: string, reason = ""): Unfinished => ({
+  mutation_id: id,
+  latest_fail_reason: reason,
+});
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migration0007 = readFileSync(
@@ -29,7 +50,25 @@ const migration0007 = readFileSync(
   "utf8",
 );
 
-beforeEach(() => command.mockClear());
+beforeEach(() => {
+  command.mockClear();
+  query.mockClear();
+  reads.length = 0;
+});
+
+/** A clock that moves only when the erase sleeps. */
+function fakeClock() {
+  let at = 0;
+  const slept: number[] = [];
+  return {
+    slept,
+    now: () => at,
+    sleep: async (ms: number) => {
+      slept.push(ms);
+      at += ms;
+    },
+  };
+}
 
 describe("claude_sessions as 0007 creates it", () => {
   it("creates the table the erasure deletes from", () => {
@@ -78,7 +117,7 @@ describe("eraseClaudeSessionRows", () => {
     expect(command).toHaveBeenCalledWith({
       query: ERASE_CLAUDE_SESSIONS_QUERY,
       query_params: { email: "person@example.test" },
-      clickhouse_settings: { mutations_sync: "2" },
+      clickhouse_settings: { mutations_sync: "0" },
     });
     expect(ERASE_CLAUDE_SESSIONS_QUERY).toBe(
       "ALTER TABLE claude_sessions DELETE WHERE user_email = {email:String}",
@@ -91,10 +130,101 @@ describe("eraseClaudeSessionRows", () => {
     expect(command).not.toHaveBeenCalled();
   });
 
+  // #4316: the statement used to wait for the mutation itself, and the shared
+  // client gives up on a request after 30 seconds, so an erase over a large
+  // table failed on every attempt.
+  it("waits past 30 seconds for a long mutation, one short read at a time", async () => {
+    const clock = fakeClock();
+    reads.push([], [running("m2")]);
+    for (let i = 0; i < 6; i += 1) reads.push([running("m2")]);
+    await eraseClaudeSessionRows("person@example.test", clock);
+    expect(clock.now()).toBeGreaterThan(30_000);
+    expect(clock.slept).toEqual([1_000, 2_000, 4_000, 8_000, 15_000, 15_000]);
+    expect(query).toHaveBeenCalledWith({
+      query: UNFINISHED_CLAUDE_SESSIONS_MUTATIONS_QUERY,
+      query_params: { table: CLAUDE_SESSIONS_TABLE },
+      format: "JSONEachRow",
+    });
+    expect(UNFINISHED_CLAUDE_SESSIONS_MUTATIONS_QUERY).toContain(
+      "system.mutations",
+    );
+    expect(UNFINISHED_CLAUDE_SESSIONS_MUTATIONS_QUERY).toContain("is_done = 0");
+  });
+
+  it("returns at once when the mutation is already done (negative)", async () => {
+    const clock = fakeClock();
+    await eraseClaudeSessionRows("person@example.test", clock);
+    expect(clock.slept).toEqual([]);
+  });
+
+  it("throws once the wait runs out", async () => {
+    const clock = fakeClock();
+    reads.push([]);
+    for (let i = 0; i < 200; i += 1) reads.push([running("m2")]);
+    await expect(
+      eraseClaudeSessionRows("person@example.test", clock),
+    ).rejects.toThrow(/did not finish within 900 seconds/);
+    expect(clock.now()).toBeGreaterThanOrEqual(ERASE_CLAUDE_SESSIONS_WAIT_MS);
+  });
+
+  // The wait used to count every unfinished mutation on the table, so one
+  // that never finished made every later erase run out its wait and fail.
+  it("returns once its own mutation finishes while an older one stays unfinished", async () => {
+    const clock = fakeClock();
+    reads.push(
+      [running("m1", "Memory limit exceeded")],
+      [running("m1", "Memory limit exceeded"), running("m2")],
+      [running("m1", "Memory limit exceeded"), running("m2")],
+      [running("m1", "Memory limit exceeded")],
+    );
+    await eraseClaudeSessionRows("person@example.test", clock);
+    expect(clock.slept).toEqual([1_000]);
+  });
+
+  it("throws at once when its own mutation fails, without naming the reason", async () => {
+    const clock = fakeClock();
+    reads.push([], [running("m2")], [running("m2", "while DELETE WHERE ...")]);
+    const error = await eraseClaudeSessionRows(
+      "person@example.test",
+      clock,
+    ).then(
+      () => undefined,
+      (err: unknown) => err as Error,
+    );
+    expect(error?.message).toMatch(/mutation m2 failing/);
+    expect(error?.message).not.toContain("DELETE WHERE");
+    expect(clock.slept).toEqual([]);
+  });
+
   it("passes a ClickHouse refusal to the caller", async () => {
     command.mockRejectedValueOnce(new Error("TOO_MANY_MUTATIONS"));
     await expect(eraseClaudeSessionRows("person@example.test")).rejects.toThrow(
       "TOO_MANY_MUTATIONS",
     );
+  });
+});
+
+describe("the erase in two halves", () => {
+  it("names only the mutation its own statement queued", async () => {
+    reads.push([running("m1")], [running("m1"), running("m2")]);
+    await expect(
+      submitClaudeSessionsErase("person@example.test"),
+    ).resolves.toEqual(["m2"]);
+    expect(command).toHaveBeenCalledOnce();
+  });
+
+  it("names nothing when its mutation finished before the second read", async () => {
+    reads.push([running("m1")], [running("m1")]);
+    await expect(
+      submitClaudeSessionsErase("person@example.test"),
+    ).resolves.toEqual([]);
+  });
+
+  it("counts only the erase's own mutations, and none once they are gone", async () => {
+    reads.push([running("m1", "stuck"), running("m2")], [running("m1")]);
+    await expect(claudeSessionsEraseRemaining(["m2"])).resolves.toBe(1);
+    await expect(claudeSessionsEraseRemaining(["m2"])).resolves.toBe(0);
+    await expect(claudeSessionsEraseRemaining([])).resolves.toBe(0);
+    expect(query).toHaveBeenCalledTimes(2);
   });
 });

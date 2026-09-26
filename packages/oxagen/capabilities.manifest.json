@@ -92,210 +92,6 @@
       }
     },
     {
-      "name": "commit_agent_definition",
-      "file": "agent.definition.commit.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "api"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "unit": true,
-        "docs": true,
-        "app": true
-      }
-    },
-    {
-      "name": "create_agent_def",
-      "file": "agent.definition.create.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "delete_agent_def",
-      "file": "agent.definition.delete.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "get_agent_def",
-      "file": "agent.definition.get.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "list_agent_defs",
-      "file": "agent.definition.list.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "publish_agent_def",
-      "file": "agent.definition.publish.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "revise_agent_def",
-      "file": "agent.definition.revise.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "suggest_agent_def",
-      "file": "agent.definition.suggest.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "docs": true
-      }
-    },
-    {
-      "name": "summarize_agent_def",
-      "file": "agent.definition.summarize.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "update_agent_def",
-      "file": "agent.definition.update.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
-      "name": "deploy_agent",
-      "file": "agent.deploy.ts",
-      "domain": "agent",
-      "mode": "sync",
-      "surfaces": [
-        "api",
-        "mcp",
-        "agent"
-      ],
-      "layers": {
-        "schema": true,
-        "api": true,
-        "mcp": true,
-        "unit": true,
-        "e2e": false,
-        "docs": true
-      }
-    },
-    {
       "name": "bind_agent_environment",
       "file": "agent.environment.bind.ts",
       "domain": "agent",
@@ -393,6 +189,42 @@
         "mcp",
         "agent",
         "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "answer_interjection",
+      "file": "agent.interjection.answer.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_interjections",
+      "file": "agent.interjection.list.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent"
       ],
       "layers": {
         "schema": true,
@@ -947,16 +779,18 @@
       }
     },
     {
-      "name": "propose_agent",
-      "file": "agent.propose.ts",
+      "name": "move_agent",
+      "file": "agent.move.ts",
       "domain": "agent",
       "mode": "sync",
       "surfaces": [
-        "api"
+        "api",
+        "mcp"
       ],
       "layers": {
         "schema": true,
         "api": true,
+        "mcp": true,
         "unit": true,
         "docs": true,
         "app": true
@@ -1099,6 +933,24 @@
         "unit": true,
         "e2e": false,
         "docs": true
+      }
+    },
+    {
+      "name": "assign_agent_toolbelt",
+      "file": "agent.toolbelt.assign.ts",
+      "domain": "agent",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -5270,12 +5122,14 @@
       "surfaces": [
         "api",
         "mcp",
-        "agent"
+        "agent",
+        "cli"
       ],
       "layers": {
         "schema": true,
         "api": true,
         "mcp": true,
+        "cli": true,
         "unit": true,
         "docs": true,
         "app": true
@@ -5475,6 +5329,42 @@
         "app": true,
         "unit": false,
         "docs": true
+      }
+    },
+    {
+      "name": "create_runtime",
+      "file": "runtime.create.ts",
+      "domain": "runtime",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "list_runtimes",
+      "file": "runtime.list.ts",
+      "domain": "runtime",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
       }
     },
     {
@@ -6547,6 +6437,27 @@
       }
     },
     {
+      "name": "pause_workspace_runs",
+      "file": "tacho.workspace_runs.pause.ts",
+      "domain": "control",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp",
+        "agent",
+        "cli"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "cli": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "list_error_clusters",
       "file": "telemetry.error.cluster.ts",
       "domain": "telemetry",
@@ -6664,9 +6575,117 @@
       }
     },
     {
+      "name": "set_tool_state",
+      "file": "tool.state.set.ts",
+      "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "list_tool_versions",
       "file": "tool.version.list.ts",
       "domain": "tool",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "clone_toolbelt",
+      "file": "toolbelt.clone.ts",
+      "domain": "toolbelt",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "delete_toolbelt",
+      "file": "toolbelt.delete.ts",
+      "domain": "toolbelt",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "get_toolbelt",
+      "file": "toolbelt.get.ts",
+      "domain": "toolbelt",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "list_toolbelts",
+      "file": "toolbelt.list.ts",
+      "domain": "toolbelt",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
+      "name": "update_toolbelt",
+      "file": "toolbelt.update.ts",
+      "domain": "toolbelt",
       "mode": "sync",
       "surfaces": [
         "api",

@@ -63,8 +63,20 @@ import type {
 import type { RunContext } from "./contracts/run-context";
 import type { RunIssues } from "./contracts/run-issues";
 import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
-import type { PullRequestFilter, RunPage } from "./contracts/runs";
-import type { RuntimeAgents, RuntimeList } from "./contracts/runtimes";
+import type { InterjectionQueue } from "./contracts/interjections";
+import type {
+  EnforcementTier,
+  PullRequestFilter,
+  RunPage,
+  RunReplayFilter,
+  RunSortKey,
+  RunStatus,
+} from "./contracts/runs";
+import type {
+  NamedRuntimeList,
+  RuntimeAgents,
+  RuntimeList,
+} from "./contracts/runtimes";
 import type {
   AssistantEngine,
   OrgChoice,
@@ -111,6 +123,7 @@ import type {
   McpServerList,
   ToolVersionPage,
 } from "./contracts/tools";
+import type { ToolbeltDetail, ToolbeltList } from "./contracts/toolbelts";
 import type { Read } from "./read";
 
 export interface DataSource {
@@ -218,6 +231,25 @@ export interface DataSource {
         limit?: number;
         /** Runs with or without pull requests; absent is every run. */
         pullRequests?: PullRequestFilter;
+        /** Only runs in these statuses; absent is every status. */
+        status?: RunStatus[];
+        /** Only runs published at these tiers; absent is every tier. */
+        tier?: EnforcementTier[];
+        /** Only runs with these grades; `not_recorded` is a run with none. */
+        replayGrade?: RunReplayFilter[];
+        /** A substring searched on the server; absent lists every run. */
+        query?: string;
+        /** The order; absent is newest first. */
+        sort?: { key: RunSortKey; dir: "asc" | "desc" };
+        /** Rows to skip in the filtered, sorted list. Never sent with a cursor. */
+        offset?: number;
+        /** Answer the page's `total`. Only a caller that draws a pager asks. */
+        count?: boolean;
+        /**
+         * Ask for the workspace's live count (`RunPage.liveRuns`). It reads
+         * every root session the workspace holds, so only Fleet's tile asks.
+         */
+        countLive?: boolean;
       },
     ): Promise<Read<RunPage>>;
     get(
@@ -319,13 +351,25 @@ export interface DataSource {
     ): Promise<Read<{ items: ResolvedApprovalItem[]; more: boolean }>>;
   };
   /**
+   * list_interjections with `open: true`: the questions agents paused to ask
+   * that nobody has answered, walked to the end of the cursor under a bound,
+   * with `more` set when the bound stopped the walk (#3839); callers:
+   * features/fleet/fleet.tsx and features/shell/source.ts.
+   */
+  interjections: {
+    open(
+      ctx: WsCtx,
+      q: { runId: string | null },
+    ): Promise<Read<InterjectionQueue>>;
+  };
+  /**
    * The Agents pages (#2956), each read by the agent's public id or slug:
    * list_agents, one cursor page of the workspace's identities, callers
    * features/agents/agents.tsx, features/tools/tools.tsx (the grant
    * dialog's agent picker) and features/fleet/fleet.tsx (the steer dialog's
    * agents and the Live runs tile's workspace total); get_agent, the identity with its credentials,
-   * roles, hosts and cached definition, callers features/agents/agent.tsx and
-   * agent-source.tsx; get_agent_toolbelt, the computed belt, and
+   * roles, hosts, runtime, toolbelt and versions (ADR-198), callers
+   * features/agents/agent.tsx and the register flow; get_agent_toolbelt, the computed belt, and
    * list_incidents narrowed to the agent, one cursor page, caller
    * features/agents/agent.tsx.
    */
@@ -611,6 +655,14 @@ export interface DataSource {
     ): Promise<Read<ConnectionList>>;
     /** list_mcp_servers: every registered MCP server in the workspace; no filter, no cursor */
     mcpServers(ctx: WsCtx): Promise<Read<McpServerList>>;
+    /**
+     * list_toolbelts (ADR-198): the All tools belt first, then its clones, and
+     * how many tools the workspace made available. Callers: the Toolbelts tab,
+     * the register flow's toolbelt step and the agent page's toolbelt control.
+     */
+    toolbelts(ctx: WsCtx): Promise<Read<ToolbeltList>>;
+    /** get_toolbelt: one belt's tools grouped by server, for the Toolbelts tab. */
+    toolbelt(ctx: WsCtx, toolbeltId: string): Promise<Read<ToolbeltDetail>>;
   };
   /**
    * The Runtimes page (roadmap mockups/pages/runtimes.md); caller:
@@ -618,10 +670,13 @@ export interface DataSource {
    * end of its cursor under a bound: one row per host enrollment, which is one
    * agent on one machine, because no host row exists. `agents` is
    * `list_agents` walked until every named key is found, for the Agents on
-   * this host table.
+   * this host table. `named` is `list_runtimes` (ADR-198): the runtimes the
+   * workspace named, each with its live agents by harness; callers: the
+   * Runtimes page, the register flow and the agent page's Move control.
    */
   runtimes: {
     list(ctx: WsCtx): Promise<Read<RuntimeList>>;
     agents(ctx: WsCtx, keys: readonly string[]): Promise<Read<RuntimeAgents>>;
+    named(ctx: WsCtx): Promise<Read<NamedRuntimeList>>;
   };
 }

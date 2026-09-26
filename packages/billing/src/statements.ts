@@ -774,8 +774,8 @@ export async function assembleBillingStatement(
   const first = days[0] as string;
   const last = days[days.length - 1] as string;
 
-  // Sequential on purpose: the Postgres reads share one transaction, which
-  // runs one statement at a time whatever the caller does.
+  // Sequential on purpose: each Postgres transaction behind these reads runs
+  // one statement at a time whatever the caller does.
   const org = await reads.org(orgId);
   if (!org) throw new Error(`billing statement: no organization ${orgId}`);
   const entitlement = await reads.entitlement(orgId, asOf);

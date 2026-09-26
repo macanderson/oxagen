@@ -35,6 +35,14 @@ vi.mock("@oxagen/iam/machine-key-scope", () => ({
   gatewayMandateTools: () => gatewayMandateTools(),
 }));
 
+// The agent's toolbelt (ADR-198), read through tables this file's fake
+// transaction does not carry. Its rule is covered in `toolbelts.test.ts`;
+// here it only has to reach the bundle's deny list.
+const agentBeltDenyPatterns = vi.hoisted(() =>
+  vi.fn(async (): Promise<string[]> => []),
+);
+vi.mock("./toolbelts", () => ({ agentBeltDenyPatterns }));
+
 const { agentDaySpend, resolveHostMandate, signBundle, unsignedBundle } =
   await import("./tacho-host");
 const { policyBundleSchema } = await import("@oxagen/oxagen/tacho/schemas");
@@ -405,14 +413,17 @@ describe("the wrapped-session policy on the bundle", () => {
   });
 });
 
-describe("the active definition budget on the signed bundle", () => {
+describe("the active version's budget on the signed bundle", () => {
+  // The version's config is the one source of the budget and containment
+  // tables (ADR-198): the migration that removed the definition file copied
+  // them there.
   function budgetTransaction(
-    definitionSource: string,
+    config: unknown,
     activeVersionId: string | null = "version-active",
   ) {
     const findVersion = vi.fn(async (args: unknown) => {
       const { columns } = args as { columns: Record<string, boolean> };
-      const row: Record<string, unknown> = { config: {}, definitionSource };
+      const row: Record<string, unknown> = { config };
       return Object.fromEntries(
         Object.keys(columns).map((key) => [key, row[key]]),
       );
@@ -434,12 +445,10 @@ describe("the active definition budget on the signed bundle", () => {
     agentPrincipalId: null,
   });
 
-  it("signs the editor's TOML budget from the selected active version", async () => {
-    // The form writes this inline table. The commit handler preserves config
-    // and stores the text as definitionSource; publishing selects this row.
-    const { tx, findVersion } = budgetTransaction(
-      'schema = "agent-definition/v0.1"\nslug = "review"\nbudget = { per_run_micros = 2500000 }\n[instructions]\nbody = "Review."\n',
-    );
+  it("signs the budget from the selected active version's config", async () => {
+    const { tx, findVersion } = budgetTransaction({
+      budget: { per_run_micros: 2_500_000 },
+    });
     const mandate = await resolveHostMandate(tx, ctx, governedHost());
     const lookup = findVersion.mock.calls[0]?.[0] as { where: SQL };
     expect(new PgDialect().sqlToQuery(lookup.where).params).toEqual([
@@ -474,13 +483,13 @@ describe("the active definition budget on the signed bundle", () => {
   });
 
   it.each([
-    "[budget",
-    "budget = { per_run_micros = nan }",
-    "budget = { per_run_micros = 1.5 }",
+    { budget: "none" },
+    { budget: { per_run_micros: Number.NaN } },
+    { budget: { per_run_micros: 1.5 } },
   ])(
-    "signs a suspension for an invalid persisted definition: %s",
-    async (source) => {
-      const { tx } = budgetTransaction(source);
+    "signs a suspension for an invalid persisted config: %j",
+    async (config) => {
+      const { tx } = budgetTransaction(config);
       const mandate = await resolveHostMandate(tx, ctx, governedHost());
       const { privateKey } = generateKeyPairSync("ed25519");
       const signer = bundleSignerFromPem(
@@ -518,9 +527,9 @@ describe("the active definition budget on the signed bundle", () => {
     },
   );
 
-  it("does not arm an unpublished definition when there is no active version", async () => {
+  it("does not arm a budget when there is no active version", async () => {
     const { tx, findVersion } = budgetTransaction(
-      "budget = { per_run_micros = 2500000 }",
+      { budget: { per_run_micros: 2_500_000 } },
       null,
     );
     expect((await resolveHostMandate(tx, ctx, governedHost())).budget).toEqual({
@@ -530,14 +539,18 @@ describe("the active definition budget on the signed bundle", () => {
   });
 
   it("keeps a daily-only declaration observed for a host that does not enforce a day (negative)", async () => {
-    const { tx } = budgetTransaction("budget = { per_day_micros = 20000000 }");
+    const { tx } = budgetTransaction({
+      budget: { per_day_micros: 20_000_000 },
+    });
     expect((await resolveHostMandate(tx, ctx, governedHost())).budget).toEqual({
       mode: "observed",
     });
   });
 
   it("signs a daily-only declaration, enforced, to a host that advertises daily_budget (ADR-160)", async () => {
-    const { tx } = budgetTransaction("budget = { per_day_micros = 20000000 }");
+    const { tx } = budgetTransaction({
+      budget: { per_day_micros: 20_000_000 },
+    });
     const dailyHost = {
       ...governedHost(),
       bundleFeatures: [BUNDLE_FEATURE_DAILY_BUDGET],
@@ -560,49 +573,69 @@ describe("the active definition budget on the signed bundle", () => {
       ...governedHost(),
       bundleFeatures: [BUNDLE_FEATURE_DAILY_BUDGET],
     };
-    const both = budgetTransaction(
-      "budget = { per_run_micros = 2500000, per_day_micros = 20000000 }",
-    );
+    const both = budgetTransaction({
+      budget: { per_run_micros: 2_500_000, per_day_micros: 20_000_000 },
+    });
     expect((await resolveHostMandate(both.tx, ctx, dailyHost)).budget).toEqual({
       mode: "enforced",
       session_limit_usd: 2.5,
       daily_limit_usd: 20,
     });
-    const zero = budgetTransaction("budget = { per_day_micros = 0 }");
+    const zero = budgetTransaction({ budget: { per_day_micros: 0 } });
     expect((await resolveHostMandate(zero.tx, ctx, dailyHost)).budget).toEqual({
       mode: "observed",
     });
   });
 
-  it("reads a containment requirement from the active definition", async () => {
-    const { tx } = budgetTransaction(
-      'slug = "review"\n[containment]\nrequired = true\n',
-    );
+  it("reads a containment requirement from the active version's config", async () => {
+    const { tx } = budgetTransaction({ containment: { required: true } });
     const mandate = await resolveHostMandate(tx, ctx, governedHost());
     expect(mandate.containment).toEqual({ required: true });
-    expect(mandate.invalidDefinition).toBeUndefined();
+    expect(mandate.invalidAgentConfig).toBeUndefined();
   });
 
   it("reads required = false as no requirement", async () => {
-    const { tx } = budgetTransaction("[containment]\nrequired = false\n");
+    const { tx } = budgetTransaction({ containment: { required: false } });
     expect(
       (await resolveHostMandate(tx, ctx, governedHost())).containment,
     ).toBeUndefined();
   });
 
   it.each([
-    '[containment]\nrequired = "yes"\n',
-    '[containment]\nrequired = true\ntier = "gateway"\n',
-    'containment = "required"\n',
+    { containment: { required: "yes" } },
+    { containment: { required: true, tier: "gateway" } },
+    { containment: "required" },
   ])(
-    "suspends governed actions for an invalid containment table: %s",
-    async (source) => {
-      const { tx } = budgetTransaction(source);
+    "suspends governed actions for an invalid containment table: %j",
+    async (config) => {
+      const { tx } = budgetTransaction(config);
       const mandate = await resolveHostMandate(tx, ctx, governedHost());
-      expect(mandate.invalidDefinition).toBe(true);
+      expect(mandate.invalidAgentConfig).toBe(true);
       expect(mandate.containment).toBeUndefined();
     },
   );
+
+  it("denies on the host every imported tool the agent's toolbelt leaves out (ADR-198)", async () => {
+    agentBeltDenyPatterns.mockResolvedValueOnce([
+      "github:delete_repo",
+      "linear:*",
+    ]);
+    const { tx } = budgetTransaction({});
+    const mandate = await resolveHostMandate(tx, ctx, governedHost());
+    expect(agentBeltDenyPatterns).toHaveBeenLastCalledWith(tx, ctx, "agent-1");
+    expect(mandate.permissions.deny).toEqual([
+      "mcp__github__delete_repo",
+      "mcp__linear__*",
+    ]);
+    expect(mandate.permissions.allow).toEqual([]);
+  });
+
+  it("reads no toolbelt for a host that names no agent", async () => {
+    agentBeltDenyPatterns.mockClear();
+    const { tx } = budgetTransaction({});
+    await resolveHostMandate(tx, ctx, { ...governedHost(), agentId: null });
+    expect(agentBeltDenyPatterns).not.toHaveBeenCalled();
+  });
 });
 
 describe("a mandate that requires the contained tier (ADR-152)", () => {

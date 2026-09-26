@@ -102,8 +102,15 @@ const AGENT = {
 };
 
 interface World {
-  agent: { principalId: string | null; activeVersionId: string | null } | null;
+  agent: {
+    principalId: string | null;
+    activeVersionId: string | null;
+    /** `agent.agents.status`; the identity read refuses `archived`. */
+    status?: string;
+  } | null;
   operatorPrincipalId: string | null;
+  /** The linked `oxagen.assistant` principal's status; null: no such row. */
+  assistantPrincipalStatus: string | null;
   retention: { id: string; publicId: string; digest: string } | null;
   /** Whether the principal link UPDATE matches (false: another turn won). */
   linkWins: boolean;
@@ -131,10 +138,17 @@ function makeTx(world: World, captured: Captured) {
     }
     if (table === schema.agentVersions)
       return [{ id: AGENT.versionId, config: { graph: { mode: "read" } } }];
-    if (table === schema.principals)
+    if (table === schema.principals) {
+      // The operator read pins the asking user; the assistant principal's
+      // status read pins the principal's id alone.
+      if (!/"parent_user_id" = \$/.test(sql))
+        return world.assistantPrincipalStatus
+          ? [{ status: world.assistantPrincipalStatus }]
+          : [];
       return world.operatorPrincipalId
         ? [{ id: world.operatorPrincipalId }]
         : [];
+    }
     if (table === schema.retentionPolicyVersions)
       return world.retention ? [world.retention] : [];
     throw new Error("unexpected table");
@@ -206,6 +220,7 @@ function setup(overrides: Partial<World> = {}): {
   const world: World = {
     agent: { principalId: "asst-principal", activeVersionId: AGENT.versionId },
     operatorPrincipalId: "human-principal",
+    assistantPrincipalStatus: "active",
     retention: {
       id: "rpv-row",
       publicId: "rpv_0123456789abcdef0123",
@@ -413,16 +428,19 @@ describe("resolveAssistantRunIdentity", () => {
       retention: { rowId: "rpv-row", publicId: "rpv_0123456789abcdef0123" },
     });
     expect(identity.agentVersionChecksum).toMatch(/^sha256:[0-9a-f]{64}$/);
-    // The agent read pins the workspace and the managed slug; the operator
-    // read pins the org, the user and kind = human.
+    // The agent read pins the workspace and the managed slug; the assistant
+    // principal's status read pins its id; the operator read pins the org,
+    // the user and kind = human.
     const agentRead = captured.selects.find((s) => s.table === schema.agents)!;
     expect(agentRead.where).toMatch(/"workspace_id" = \$/);
     expect(agentRead.where).toMatch(/"slug" = \$/);
-    const operatorRead = captured.selects.find(
+    const [assistantRead, operatorRead] = captured.selects.filter(
       (s) => s.table === schema.principals,
-    )!;
-    expect(operatorRead.where).toMatch(/"parent_user_id" = \$/);
-    expect(operatorRead.where).toMatch(/"kind" = \$/);
+    );
+    expect(assistantRead!.where).toMatch(/"id" = \$/);
+    expect(assistantRead!.where).not.toMatch(/"parent_user_id"/);
+    expect(operatorRead!.where).toMatch(/"parent_user_id" = \$/);
+    expect(operatorRead!.where).toMatch(/"kind" = \$/);
     expect(captured.inserts).toHaveLength(0);
   });
 
@@ -507,6 +525,57 @@ describe("resolveAssistantRunIdentity", () => {
     ).rejects.toMatchObject({
       name: "AssistantRunNotRecordedError",
       reason: "assistant_agent_missing",
+    });
+  });
+
+  // #4350: a person retired the assistant agent from the Agents page, which
+  // archived it and suspended its principal. Every turn then failed deep in
+  // the authorization snapshot as a bare `ledger_refused`. The identity read
+  // names the cause before anything is written.
+  it("refuses a retired assistant agent before it writes anything", async () => {
+    const { captured } = setup({
+      agent: {
+        principalId: "asst-principal",
+        activeVersionId: AGENT.versionId,
+        status: "archived",
+      },
+    });
+    await expect(
+      mocks.withTenantDb((tx: never) =>
+        resolveAssistantRunIdentity(tx, SCOPE, USER),
+      ),
+    ).rejects.toMatchObject({
+      name: "AssistantRunNotRecordedError",
+      reason: "assistant_agent_inactive",
+      message: expect.stringContaining("retired"),
+    });
+    expect(captured.inserts).toEqual([]);
+    expect(captured.updates).toEqual([]);
+  });
+
+  it("refuses when the assistant's principal is suspended", async () => {
+    const { captured } = setup({ assistantPrincipalStatus: "suspended" });
+    await expect(
+      mocks.withTenantDb((tx: never) =>
+        resolveAssistantRunIdentity(tx, SCOPE, USER),
+      ),
+    ).rejects.toMatchObject({
+      name: "AssistantRunNotRecordedError",
+      reason: "assistant_agent_inactive",
+      message: expect.stringContaining("suspended"),
+    });
+    expect(captured.inserts).toEqual([]);
+  });
+
+  it("refuses when the assistant's linked principal row is gone", async () => {
+    setup({ assistantPrincipalStatus: null });
+    await expect(
+      mocks.withTenantDb((tx: never) =>
+        resolveAssistantRunIdentity(tx, SCOPE, USER),
+      ),
+    ).rejects.toMatchObject({
+      reason: "assistant_agent_inactive",
+      message: expect.stringContaining("missing"),
     });
   });
 

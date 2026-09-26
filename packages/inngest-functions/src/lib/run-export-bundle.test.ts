@@ -20,6 +20,7 @@ import {
   GENESIS_CURSOR,
   hashEvent,
   type JsonValue,
+  legacyJcs,
   merkleRoot,
   sealEvent,
   signAttestation,
@@ -165,7 +166,12 @@ function tachoSegment(): SealedSegment {
  * the export builds them when the stored row rebuilds each event (#3733).
  */
 function carriedTachoSegment(
-  over: { attrs?: Record<string, string>; attempt?: string } = {},
+  over: {
+    attrs?: Record<string, string>;
+    attempt?: string;
+    /** Hash each event the way a build before tacho's own `jcs` did. */
+    olderHost?: boolean;
+  } = {},
 ): SealedSegment {
   const session = "0a1b2c3d-0000-4000-8000-000000000000";
   const unsealed = (
@@ -200,8 +206,16 @@ function carriedTachoSegment(
     unsealed("turn_end", {}),
   ].map((event) => {
     const sealed = sealEvent(event, cursor);
-    cursor = sealed.next;
-    return sealed.event;
+    if (over.olderHost !== true) {
+      cursor = sealed.next;
+      return sealed.event;
+    }
+    const { hash: _hash, ...rest } = sealed.event;
+    const hash = digestBytes(
+      legacyJcs(JSON.parse(JSON.stringify(rest)) as JsonValue),
+    );
+    cursor = { seq: cursor.seq + 1, prevHash: hash };
+    return { ...sealed.event, hash };
   });
   const envelopes = events.map((event) =>
     wrappedFrameOf(event as unknown as Record<string, JsonValue>, null),
@@ -605,13 +619,39 @@ describe("the run export bundle", () => {
     ).toMatch(/frame 3 .*broken: kind differs from the hashed event/);
   });
 
-  it("holds in both verifiers when a host names an attribute toJSON, which the platform hashes in insertion order", () => {
-    // canonicalize@1.0.8 writes an object with a toJSON member with
-    // JSON.stringify, keys unsorted. verify.mjs must reach the same bytes.
+  it("holds in both verifiers when a host names an attribute toJSON, with its keys sorted like any other object", () => {
+    // W-09: tacho's jcs follows RFC 8785 for a toJSON member too, so the
+    // frame's keys are sorted and verify.mjs reaches the same bytes.
     const bundle = buildRunExportBundle({
       runId: "tse_0a1b2c",
       source: "tacho",
       segments: [carriedTachoSegment({ attrs: { toJSON: "x", a: "y" } })],
+      key,
+      now: new Date(),
+    });
+    const files = unpack(bundle.bytes);
+    expect(files["frames.ndjson"]).toContain('"attrs":{"a":"y","toJSON":"x"}');
+    const { cli, script } = bothVerdicts(files);
+    expect(cli.ok).toBe(true);
+    expect(cli.frames.every((f) => f.digest === "held")).toBe(true);
+    expect(script.output).toMatch(/^HELD /m);
+    expect(script.ok).toBe(true);
+  });
+
+  it("holds in both verifiers for an older host's event that names an attribute toJSON, in the order it was sealed", () => {
+    // canonicalize@1.0.8 wrote an object with a toJSON member by
+    // JSON.stringify, keys unsorted, and an older host hashed that text. The
+    // frame keeps those keys in the order they were sealed in, and both
+    // verifiers accept the older form for such an event.
+    const bundle = buildRunExportBundle({
+      runId: "tse_0a1b2c",
+      source: "tacho",
+      segments: [
+        carriedTachoSegment({
+          attrs: { toJSON: "x", a: "y" },
+          olderHost: true,
+        }),
+      ],
       key,
       now: new Date(),
     });

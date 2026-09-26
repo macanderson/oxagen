@@ -1,6 +1,7 @@
 // audit-exempt: read-only billing/subscription fetch — no state mutation; the kernel capability.invoke_* audit covers access.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { billingSubscriptionRead } from "@oxagen/oxagen/contracts/billing.subscription.read";
+import { readBalanceMirror } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { sumTokenUsage } from "@oxagen/telemetry";
@@ -40,7 +41,9 @@ export const billingSubscriptionReadHandler: CapabilityHandler<
   // Two parallel round trips: subscription+plan (joined) and credit balance.
   // The plan join eliminates the sequential N+1 lookup; sub and balance are
   // always independent so they are fetched concurrently via Promise.all.
-  const [subWithPlan, balance] = await Promise.all([
+  // The balance comes from billing, which reads it on the shared plane where
+  // credits are granted and spent (#4338).
+  const [subWithPlan, balanceCents] = await Promise.all([
     withTenantDb(
       (tx) =>
         tx.query.subscriptions.findFirst({
@@ -65,12 +68,7 @@ export const billingSubscriptionReadHandler: CapabilityHandler<
           },
         }) as Promise<SubscriptionWithPlan | undefined>,
     ),
-    withTenantDb((tx) =>
-      tx.query.creditBalances.findFirst({
-        where: eq(schema.creditBalances.orgId, ctx.orgId),
-        columns: { balanceCents: true },
-      }),
-    ),
+    readBalanceMirror(ctx.orgId),
   ]);
 
   const sub = subWithPlan ?? null;
@@ -126,7 +124,7 @@ export const billingSubscriptionReadHandler: CapabilityHandler<
             seatCount: sub.seatCount,
           }
         : null,
-    creditBalanceCents: Number(balance?.balanceCents ?? 0n),
+    creditBalanceCents: Number(balanceCents),
     periodUsage,
   };
 };

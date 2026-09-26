@@ -16,6 +16,7 @@ import {
 } from "./run-frames";
 import type { AttemptEventReadRecord } from "./run-store";
 import {
+  countsAsError,
   filterFoldsByKind,
   foldTranscript,
   frameCounts,
@@ -1626,6 +1627,40 @@ describe("transcriptCounts", () => {
       tools: 1,
       usage: 2,
     });
+  });
+});
+
+// Finding P2-2 of the ADR-182 fourth review: a model call that failed with
+// no reply kept and no figures was quiet, so it drew nothing and
+// `counts.errors` left it out.
+describe("a failed model call with nothing kept", () => {
+  it("shows, and counts as an error, however little it kept", () => {
+    const folds = stepFolds([
+      ledger(1, "model.engine_call_started", { model_call_id: "m1" }),
+      ledger(2, "model.engine_call_completed", {
+        model_call_id: "m1",
+        outcome: "failed",
+      }),
+    ]);
+    const [step] = folds;
+    expect(step).toMatchObject({ node: "model", quiet: false });
+    expect(step?.outcome).toBe("failed");
+    expect([...(step?.kinds ?? [])]).toEqual(["errors"]);
+    expect(folds.map(countsAsError)).toEqual([true]);
+    const counts = transcriptCounts(folds, TRANSCRIPT_KINDS);
+    expect(counts.entries).toBe(1);
+    expect(counts.errors).toBe(1);
+  });
+
+  it("stays quiet when it neither failed nor kept anything (negative)", () => {
+    const folds = stepFolds([
+      ledger(1, "model.engine_call_started", { model_call_id: "m1" }),
+      ledger(2, "model.engine_call_completed", { model_call_id: "m1" }),
+    ]);
+    expect(folds.map((fold) => [fold.quiet, countsAsError(fold)])).toEqual([
+      [true, false],
+    ]);
+    expect(transcriptCounts(folds, TRANSCRIPT_KINDS).errors).toBe(0);
   });
 });
 

@@ -24,14 +24,25 @@ import { assetUpload } from "./asset.upload";
 import { authCliAuthorize } from "./auth.cli.authorize";
 import { agentApprovalList } from "./agent.approval.list";
 import { agentApprovalListResolved } from "./agent.approval.list_resolved";
+import { agentInterjectionList } from "./agent.interjection.list";
+import { agentInterjectionAnswer } from "./agent.interjection.answer";
 import { agentList } from "./agent.list";
 import { agentGet } from "./agent.get";
 import { agentRegister } from "./agent.register";
+// ADR-198 (#4369): runtimes, toolbelts, tool state, and the two version writes.
+import { agentMove } from "./agent.move";
+import { agentToolbeltAssign } from "./agent.toolbelt.assign";
+import { runtimeCreate } from "./runtime.create";
+import { runtimeList } from "./runtime.list";
+import { toolbeltList } from "./toolbelt.list";
+import { toolbeltGet } from "./toolbelt.get";
+import { toolbeltClone } from "./toolbelt.clone";
+import { toolbeltUpdate } from "./toolbelt.update";
+import { toolbeltDelete } from "./toolbelt.delete";
+import { toolStateSet } from "./tool.state.set";
 import { agentCredentialRotate } from "./agent.credential.rotate";
 import { agentSuspend } from "./agent.suspend";
 import { agentRetire } from "./agent.retire";
-import { agentDefinitionCommit } from "./agent.definition.commit";
-import { agentPropose } from "./agent.propose";
 import { agentToolbeltGet } from "./agent.toolbelt.get";
 import { tachoIncidentList } from "./tacho.incident.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
@@ -46,20 +57,10 @@ import { approvalRuleSet } from "./approval_rule.set";
 import { approvalRuleDelete } from "./approval_rule.delete";
 import { approvalRuleEnabledSet } from "./approval_rule.enabled.set";
 import { approvalAutoEligibilityGet } from "./approval.auto_eligibility.get";
-import { agentDefinitionCreate } from "./agent.definition.create";
-import { agentDefinitionDelete } from "./agent.definition.delete";
-import { agentDefinitionSuggest } from "./agent.definition.suggest";
-import { agentDefinitionRevise } from "./agent.definition.revise";
-import { agentDefinitionSummarize } from "./agent.definition.summarize";
-import { agentDefinitionUpdate } from "./agent.definition.update";
-import { agentDefinitionPublish } from "./agent.definition.publish";
-import { agentDefinitionGet } from "./agent.definition.get";
-import { agentDefinitionList } from "./agent.definition.list";
 import { agentRoleAssign } from "./agent.role.assign";
 import { agentRoleRevoke } from "./agent.role.revoke";
 import { agentRoleList } from "./agent.role.list";
 import { agentRoleGet } from "./agent.role.get";
-import { agentDeploy } from "./agent.deploy";
 import { agentExecutionList } from "./agent.execution.list";
 import { modelCapabilityList } from "./model.capability.list";
 import { agentExecutionRecord } from "./agent.execution.record";
@@ -75,6 +76,7 @@ import { tachoContainedLaunchRegister } from "./tacho.contained_launch.register"
 import { tachoBundleGet } from "./tacho.bundle.get";
 import { tachoGithubTokenIssue } from "./tacho.github_token.issue";
 import { tachoCommandDispatch } from "./tacho.command.dispatch";
+import { pauseWorkspaceRuns } from "./tacho.workspace_runs.pause";
 import { tachoCommandFetch } from "./tacho.command.fetch";
 import { tachoCommandList } from "./tacho.command.list";
 import { tachoHostList } from "./tacho.host.list";
@@ -452,6 +454,25 @@ export type {
   SpendGroupKind,
   TokenCounts,
 } from "./spend.shared";
+// Runtime and toolbelt vocabulary (ADR-198). Not capabilities, so exported
+// here to satisfy the file-coverage guard.
+export {
+  RUNTIME_SLUG_MAX,
+  runtimeIdSchema,
+  runtimeRefSchema,
+  runtimeSlugSchema,
+} from "./runtime.shared";
+export type { RuntimeRef } from "./runtime.shared";
+export {
+  TOOLBELT_SLUG_MAX,
+  toolIdSchema,
+  toolServerIdSchema,
+  toolbeltIdSchema,
+  toolbeltKindSchema,
+  toolbeltRefSchema,
+  toolbeltSlugSchema,
+} from "./toolbelt.shared";
+export type { ToolbeltKind, ToolbeltRef } from "./toolbelt.shared";
 // Who an operator is, shared by the rows that name one (get_spend). Not a
 // capability, so exported here to satisfy the file-coverage guard.
 export { operatorFactsSchema } from "./operator.shared";
@@ -650,14 +671,24 @@ export {
   assetUpload,
   agentApprovalList,
   agentApprovalListResolved,
+  agentInterjectionList,
+  agentInterjectionAnswer,
   agentList,
   agentGet,
   agentRegister,
+  agentMove,
+  agentToolbeltAssign,
+  runtimeCreate,
+  runtimeList,
+  toolbeltList,
+  toolbeltGet,
+  toolbeltClone,
+  toolbeltUpdate,
+  toolbeltDelete,
+  toolStateSet,
   agentCredentialRotate,
   agentSuspend,
   agentRetire,
-  agentDefinitionCommit,
-  agentPropose,
   agentToolbeltGet,
   tachoIncidentList,
   agentApprovalResolve,
@@ -672,20 +703,10 @@ export {
   approvalRuleDelete,
   approvalRuleEnabledSet,
   approvalAutoEligibilityGet,
-  agentDefinitionCreate,
-  agentDefinitionDelete,
-  agentDefinitionSuggest,
-  agentDefinitionRevise,
-  agentDefinitionSummarize,
-  agentDefinitionUpdate,
-  agentDefinitionPublish,
-  agentDefinitionGet,
-  agentDefinitionList,
   agentRoleAssign,
   agentRoleRevoke,
   agentRoleList,
   agentRoleGet,
-  agentDeploy,
   agentExecutionList,
   agentExecutionRecord,
   modelCapabilityList,
@@ -728,6 +749,7 @@ export {
   tachoGithubTokenIssue,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
+  pauseWorkspaceRuns,
   tachoCommandFetch,
   tachoCommandList,
   tachoHostList,
@@ -1063,14 +1085,24 @@ export const contracts: readonly CapabilityDeclaration[] = [
   assetUpload,
   agentApprovalList,
   agentApprovalListResolved,
+  agentInterjectionList,
+  agentInterjectionAnswer,
   agentList,
   agentGet,
   agentRegister,
+  agentMove,
+  agentToolbeltAssign,
+  runtimeCreate,
+  runtimeList,
+  toolbeltList,
+  toolbeltGet,
+  toolbeltClone,
+  toolbeltUpdate,
+  toolbeltDelete,
+  toolStateSet,
   agentCredentialRotate,
   agentSuspend,
   agentRetire,
-  agentDefinitionCommit,
-  agentPropose,
   agentToolbeltGet,
   tachoIncidentList,
   agentApprovalResolve,
@@ -1085,20 +1117,10 @@ export const contracts: readonly CapabilityDeclaration[] = [
   approvalRuleDelete,
   approvalRuleEnabledSet,
   approvalAutoEligibilityGet,
-  agentDefinitionCreate,
-  agentDefinitionDelete,
-  agentDefinitionSuggest,
-  agentDefinitionRevise,
-  agentDefinitionSummarize,
-  agentDefinitionUpdate,
-  agentDefinitionPublish,
-  agentDefinitionGet,
-  agentDefinitionList,
   agentRoleAssign,
   agentRoleRevoke,
   agentRoleList,
   agentRoleGet,
-  agentDeploy,
   agentMcpList,
   agentMcpResolve,
   agentMcpRegister,
@@ -1138,6 +1160,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoGithubTokenIssue,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
+  pauseWorkspaceRuns,
   tachoCommandFetch,
   tachoCommandList,
   tachoHostList,

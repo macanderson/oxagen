@@ -76,6 +76,7 @@ describe("agent.memory.recall handler", () => {
         // TEST_CTX carries no executionStepId, so the key is absent, not the request id.
         executionStepId: null,
       },
+      inputType: "query",
     });
     expect(mocks.recallMemoriesMock).toHaveBeenCalledTimes(1);
     const arg = mocks.recallMemoriesMock.mock.calls[0]?.[0] as Record<

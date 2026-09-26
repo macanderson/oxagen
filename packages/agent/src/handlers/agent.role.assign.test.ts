@@ -233,7 +233,7 @@ describe("agent.role.assign handler", () => {
     fake.enqueue(
       [AGENT_ROW], // agent select
       [CUSTOM_ROLE], // role select (custom, enterprise)
-      [{ capabilityId: "create_agent_def", effect: "allow" }], // target role grants
+      [{ capabilityId: "register_agent", effect: "allow" }], // target role grants
       [{ id: "prn-user" }], // assigner principal
       [], // org roles (assigner holds none)
       [], // assigner PRA rows
@@ -248,7 +248,7 @@ describe("agent.role.assign handler", () => {
       "agent_role_ceiling_exceeded",
     );
     expect((err as AgentRoleCeilingExceededError).capabilities).toEqual([
-      "create_agent_def",
+      "register_agent",
     ]);
     expect(fake.mutations.insert).toBe(0);
     expect(mocks.emitAudit).not.toHaveBeenCalled();
@@ -258,7 +258,7 @@ describe("agent.role.assign handler", () => {
     fake.enqueue(
       [AGENT_ROW],
       [CUSTOM_ROLE],
-      [{ capabilityId: "create_agent_def", effect: "allow" }], // target role grants
+      [{ capabilityId: "register_agent", effect: "allow" }], // target role grants
       [{ id: "prn-user" }], // assigner principal
       [
         {
@@ -273,7 +273,7 @@ describe("agent.role.assign handler", () => {
       [
         {
           roleId: "role-admin",
-          capabilityId: "create_agent_def",
+          capabilityId: "register_agent",
           effect: "allow",
         },
       ], // assigner role grants → resolver rule 7 allow
@@ -292,7 +292,7 @@ describe("agent.role.assign handler", () => {
     fake.enqueue(
       [AGENT_ROW],
       [CUSTOM_ROLE],
-      [{ capabilityId: "create_agent_def", effect: "allow" }],
+      [{ capabilityId: "register_agent", effect: "allow" }],
       [{ id: "prn-user" }],
       [
         {

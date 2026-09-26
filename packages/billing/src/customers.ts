@@ -1,4 +1,5 @@
-import { withSystemDb, withTenantDb, schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
+import { withBillingDb } from "./internal/platform-db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
@@ -44,7 +45,7 @@ export async function ensureStripeCustomer(
   orgId: string,
   opts?: { system?: boolean },
 ): Promise<string> {
-  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const runner = opts?.system ? withSystemDb : withBillingDb;
   const { tenant, settingsCustomerId, subscriptionCustomerId } = await runner(
     async (tx) => {
       const [t, settings, sub] = await Promise.all([
@@ -115,7 +116,7 @@ function uniqueIds(
   return out;
 }
 
-type DbRunner = typeof withTenantDb | typeof withSystemDb;
+type DbRunner = typeof withBillingDb | typeof withSystemDb;
 
 /**
  * Persist the org's Stripe customer id with a compare-and-swap on

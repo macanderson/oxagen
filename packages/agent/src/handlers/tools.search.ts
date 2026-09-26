@@ -55,9 +55,8 @@ export async function toolsSearchHandler(
   // Per-kind authorization. This handler reads the run, agent and approval
   // tables directly instead of invoking the capabilities that own them, so
   // its own (broader) roles were the only gate: a workspace Viewer is allowed
-  // search_tools and denied list_runs, and an org Member is allowed
-  // search_tools and denied list_agent_defs. Each kind is now answered only
-  // to an actor the SOURCE capability's contract admits.
+  // search_tools and denied list_runs and list_agents. Each kind is now
+  // answered only to an actor the SOURCE capability's contract admits.
   const kinds = await permittedKinds(asked, ctx);
   if (kinds.size === 0) {
     // Narrowing to nothing is only reachable when the caller named kinds and

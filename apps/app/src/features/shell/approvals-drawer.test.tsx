@@ -25,12 +25,17 @@ import {
   it,
   vi,
 } from "vitest";
-import { readOk } from "@/data/read";
+import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import en from "../../../messages/en.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
-import { approvalItem, shellData, shellWorkspace } from "./shell.builders";
+import {
+  approvalItem,
+  interjectionItem,
+  shellData,
+  shellWorkspace,
+} from "./shell.builders";
 import { ShellClient } from "./shell-client";
 import type { ShellData } from "./shell-data";
 
@@ -42,6 +47,11 @@ const nav = vi.hoisted(() => ({
 // The command menu's search_tools read answers nothing here; shell-client.test.tsx covers it.
 vi.mock("./command-actions", () => ({
   searchCommands: () => Promise.resolve({ ok: true, value: { rows: [] } }),
+}));
+// The command menu's pause_workspace_runs write is never sent here;
+// pause-workspace-dialog.test.tsx and shell-client.test.tsx cover it.
+vi.mock("./pause-workspace-actions", () => ({
+  pauseWorkspaceRunsAction: () => new Promise(() => undefined),
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => nav.pathname,
@@ -405,13 +415,9 @@ describe("the drawer", () => {
     expect(within(aside).getByTestId("resolved-row")).toHaveTextContent(
       "support-bot · Core platform",
     );
-    // No interjection is recorded, and the list says so rather than implying none is open.
-    expect(
-      within(aside).getByTestId("interjection-not-backed"),
-    ).toHaveTextContent("An open interjection has no record yet.");
-    expect(
-      within(aside).getByTestId("interjection-not-backed"),
-    ).toHaveAttribute("data-gap");
+    // No question is open here, so no interjection row and no line about one.
+    expect(within(aside).queryByTestId("interjection-row")).toBeNull();
+    expect(within(aside).queryByTestId("interjection-not-backed")).toBeNull();
     expect(aside).toHaveTextContent(
       "A resolution mints a single-use approval token bound to the call digest, the agent, the run, and an expiry.",
     );
@@ -581,6 +587,110 @@ describe("the drawer", () => {
     ).toHaveTextContent(
       "Oxagen read the first 1 workspaces of this organization.",
     );
+  });
+
+  // #4370 review: with every approvals read empty and one workspace's
+  // questions unread, the drawer said "Nothing is waiting on a human." under
+  // that workspace's own read failure.
+  it("claims nothing waits only in the workspaces it read (negative)", async () => {
+    const user = userEvent.setup();
+    renderShell(
+      shellData({
+        approvals: {
+          workspaces: [
+            shellWorkspace({
+              interjections: readError("run_index_unavailable", 503),
+            }),
+          ],
+          truncated: false,
+          readAt: Date.now(),
+        },
+      }),
+    );
+    await user.click(button());
+    const empty = within(drawer()).getByTestId("apdrawer-empty");
+    expect(empty).toHaveTextContent(
+      "Nothing is waiting in the workspaces Oxagen could read.",
+    );
+    expect(drawer()).not.toHaveTextContent("Nothing is waiting on a human.");
+  });
+
+  // #3839: the drawer said an interjection had no record. It now lists each
+  // open question first, and counts it with the parked calls.
+  it("lists an open interjection first, counted with the parked calls, linking to its run", async () => {
+    const user = userEvent.setup();
+    const base = waiting();
+    const [first, ...rest] = base.approvals.workspaces;
+    if (first === undefined) throw new Error("no workspace");
+    renderShell(
+      {
+        ...base,
+        approvals: {
+          ...base.approvals,
+          workspaces: [
+            {
+              ...first,
+              interjections: readOk({
+                items: [
+                  interjectionItem({
+                    expiresAt: soon(20),
+                    raisedAt: soon(-10),
+                  }),
+                ],
+                more: false,
+              }),
+            },
+            ...rest,
+          ],
+        },
+      },
+      cards,
+    );
+    expect(button()).toHaveTextContent("4");
+    await user.click(button());
+    const aside = drawer();
+    expect(aside).toHaveTextContent("4 waiting on you");
+    const list = within(aside).getAllByRole("listitem");
+    expect(list[0]).toHaveAttribute("data-testid", "interjection-row");
+    const row = within(aside).getByTestId("interjection-row");
+    expect(row).toHaveTextContent("Interjection");
+    expect(row).toHaveTextContent("release-manager is paused");
+    expect(row).toHaveTextContent("Which branch should the release cut from?");
+    expect(row).toHaveTextContent("Core platform");
+    expect(row.querySelector("[data-countdown]")?.textContent).toMatch(
+      /^(19|20):\d{2}$/,
+    );
+    expect(
+      within(row).getByRole("link", {
+        name: "Open run tse_01K5RS9D3K, paused on this question",
+      }),
+    ).toHaveAttribute("href", "/acme/core-platform/runs/tse_01K5RS9D3K");
+  });
+
+  it("names a workspace whose questions it could not read, and marks the count partial (negative)", async () => {
+    const user = userEvent.setup();
+    renderShell(
+      shellData({
+        approvals: {
+          workspaces: [
+            shellWorkspace({
+              interjections: {
+                ok: false,
+                reason: "error",
+                code: "record_unmappable",
+                status: 502,
+              },
+            }),
+          ],
+          truncated: false,
+          readAt: Date.now(),
+        },
+      }),
+    );
+    await user.click(button());
+    expect(drawer().querySelector('[data-reason="error"]')).not.toBeNull();
+    expect(drawer()).toHaveTextContent("0+ waiting");
+    expect(within(drawer()).queryByTestId("interjection-row")).toBeNull();
   });
 });
 

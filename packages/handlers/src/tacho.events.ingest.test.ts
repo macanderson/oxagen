@@ -76,6 +76,15 @@ vi.mock("@oxagen/iam/fetch-agent-authz", async (importOriginal) => {
   return { ...original, fetchAgentRunAuthzIn: mocks.fetchAgentRunAuthzIn };
 });
 
+// The toolbelt half of the mandate (ADR-198) reads the workspace's tools and
+// belts, which this file's fake does not carry. It denies nothing here; the
+// rule is covered in `lib/toolbelts.test.ts` and its reach onto the bundle in
+// `lib/tacho-host-bundle.test.ts`.
+vi.mock("./lib/toolbelts", async (importOriginal) => {
+  const original = await importOriginal<typeof import("./lib/toolbelts")>();
+  return { ...original, agentBeltDenyPatterns: async () => [] };
+});
+
 // The recorders are mocked. The ledger helpers stay real, so the keys these
 // tests read are the keys production writes.
 vi.mock("@oxagen/billing", async (importOriginal) => {
@@ -330,7 +339,8 @@ function forgedGatewaySession(
 }
 
 interface FakeDb {
-  activeDefinition?: string;
+  /** The config of the agent's active version (ADR-198), when it has one. */
+  activeConfig?: unknown;
   /** The registered agent's public id, for the ledger's agent attribution. */
   agentPublicId?: string;
   /** Every `agents` lookup's arguments, so a test can pin the predicate. */
@@ -379,6 +389,13 @@ interface FakeDb {
    * the handler gets a `publicId` for a session it did not open.
    */
   hideSessionFromNextRead: boolean;
+  /**
+   * Sessions another workspace or organization holds. Row-level security
+   * hides them from every read this tenant makes, and the unique index on
+   * `session_uuid`, which spans tenants, still makes an INSERT of the same
+   * uuid conflict. The rows stay in `sessions` for that conflict to hit.
+   */
+  foreignTenantSessions: Set<string>;
   /**
    * A concurrent batch for the same session commits between this request's read
    * and its write, advancing the row's `seq_count` to this value. One-shot:
@@ -444,6 +461,9 @@ function fakeDb(): FakeDb {
         workspaceId: CONTEXT.workspaceId,
         status: "active",
         mode: "observe",
+        // The key the fixture's frames carry, as a real host's daemon stamps
+        // its own enrollment's key on every frame.
+        agentKey: "acme.core.cc-laptop",
         // No gateway call has ever been authorised for this host. The default,
         // because it is the honest one: a tier may only rise on evidence the
         // control plane holds, and by default it holds none.
@@ -496,6 +516,7 @@ function fakeDb(): FakeDb {
     hideSessionFromRead: false,
     promoteTierOnRead: undefined,
     hideSessionFromNextRead: false,
+    foreignTenantSessions: new Set<string>(),
     advanceSeqCountOnRead: undefined,
     moveHostOnRead: undefined,
     closeOnRead: false,
@@ -715,11 +736,19 @@ function wire(db: FakeDb): void {
               }
               const row = sessionNamed(db, args.where);
               if (!row) return undefined;
+              if (db.foreignTenantSessions.has(row["sessionUuid"] as string))
+                return undefined;
               // A read returns VALUES, not a live handle on the row — which is
               // the whole reason `existing` can be stale. Snapshotting here is
               // what lets the fixture model a concurrent commit landing
-              // between the read and the write.
-              const snapshot = { ...row };
+              // between the read and the write. A row the case seeded without
+              // a lineage is a root session, as ingest's genesis row for a
+              // root is.
+              const snapshot = {
+                rootSessionUuid: row["sessionUuid"],
+                parentSessionUuid: null,
+                ...row,
+              };
               if (db.advanceSeqCountOnRead !== undefined) {
                 row["seqCount"] = db.advanceSeqCountOnRead;
                 db.advanceSeqCountOnRead = undefined;
@@ -772,7 +801,7 @@ function wire(db: FakeDb): void {
           agents: {
             findFirst: async (args: unknown) => {
               db.agentLookups?.(args);
-              if (db.activeDefinition !== undefined)
+              if (db.activeConfig !== undefined)
                 return {
                   activeVersionId: "version-active",
                   publicId: db.agentPublicId,
@@ -784,9 +813,9 @@ function wire(db: FakeDb): void {
           },
           agentVersions: {
             findFirst: async () =>
-              db.activeDefinition === undefined
+              db.activeConfig === undefined
                 ? undefined
-                : { config: {}, definitionSource: db.activeDefinition },
+                : { config: db.activeConfig },
           },
           workspaces: { findFirst: async () => db.workspace },
         },
@@ -818,17 +847,27 @@ function wire(db: FakeDb): void {
                     orgId: row["orgId"],
                     workspaceId: row["workspaceId"],
                     deviceKeyFingerprint: row["deviceKeyFingerprint"],
+                    agentKey: row["agentKey"],
                   }))
                 : tableName(table) === "sessions"
                   ? // The ownership read before any body is written: which
                     // host opened each session the batch names, and its
                     // recorded head for a successor's chain test.
-                    [...db.sessions.values()].map((row) => ({
-                      sessionUuid: row["sessionUuid"],
-                      hostId: row["hostId"],
-                      seqCount: row["seqCount"],
-                      lastHash: row["lastHash"],
-                    }))
+                    [...db.sessions.values()]
+                      .filter(
+                        (row) =>
+                          !db.foreignTenantSessions.has(
+                            row["sessionUuid"] as string,
+                          ),
+                      )
+                      .map((row) => ({
+                        sessionUuid: row["sessionUuid"],
+                        hostId: row["hostId"],
+                        seqCount: row["seqCount"],
+                        lastHash: row["lastHash"],
+                        rootSessionUuid: row["rootSessionUuid"],
+                        parentSessionUuid: row["parentSessionUuid"],
+                      }))
                   : tableName(table) === "contained_launches"
                     ? db.containedLaunches
                     : tableName(table) === "context_promotions"
@@ -1092,12 +1131,12 @@ describe("ingest_tacho_events", () => {
     });
   });
 
-  it.each(["[budget", "budget = { per_run_micros = nan }"])(
-    "accepts evidence while an invalid active definition suspends actions: %s",
-    async (source) => {
+  it.each([{ budget: "none" }, { budget: { per_run_micros: Number.NaN } }])(
+    "accepts evidence while an invalid active config suspends actions: %j",
+    async (config) => {
       const db = fakeDb();
       db.hosts[0]!["agentId"] = "agent-budget";
-      db.activeDefinition = source;
+      db.activeConfig = config;
       wire(db);
       const events = session();
       const output = await tachoEventsIngestHandler(batch(events), CONTEXT);
@@ -1106,7 +1145,7 @@ describe("ingest_tacho_events", () => {
       expect(db.sessions.size).toBe(1);
       expect(mocks.insertTachoEvents).toHaveBeenCalled();
       expect(db.hosts[0]!["status"]).toBe("active");
-      db.activeDefinition = "budget = { per_run_micros = 2000000 }";
+      db.activeConfig = { budget: { per_run_micros: 2_000_000 } };
       const repaired = await tachoEventsIngestHandler(batch(events), CONTEXT);
       expect(repaired.control.host_status).toBe("active");
     },
@@ -1116,7 +1155,7 @@ describe("ingest_tacho_events", () => {
     const db = fakeDb();
     db.hosts[0]!["agentId"] = "agent-daily";
     db.hosts[0]!["bundleFeatures"] = ["daily_budget"];
-    db.activeDefinition = "budget = { per_day_micros = 20000000 }";
+    db.activeConfig = { budget: { per_day_micros: 20_000_000 } };
     wire(db);
     mocks.selectAgentDaySpend.mockReset();
     mocks.selectAgentDaySpend.mockResolvedValue(
@@ -1793,6 +1832,8 @@ describe("ingest_tacho_events", () => {
     const db = fakeDb();
     const events = session();
     db.sessions.set(SESSION, {
+      rootSessionUuid: SESSION,
+      parentSessionUuid: null,
       id: "s1",
       publicId: "tse_s1",
       seqCount: 3,
@@ -1844,6 +1885,8 @@ describe("ingest_tacho_events", () => {
     const db = fakeDb();
     const events = session();
     db.sessions.set(SESSION, {
+      rootSessionUuid: SESSION,
+      parentSessionUuid: null,
       id: "s1",
       seqCount: 3,
       lastHash: events[2]?.hash,
@@ -1863,6 +1906,8 @@ describe("ingest_tacho_events", () => {
     expect(good.chain_breaks).toEqual([]);
 
     db.sessions.set(SESSION, {
+      rootSessionUuid: SESSION,
+      parentSessionUuid: null,
       id: "s1",
       seqCount: 3,
       lastHash: `sha256:${"f".repeat(64)}`,
@@ -1919,6 +1964,8 @@ describe("ingest_tacho_events", () => {
     const events = session();
     const recorded = "44444444-4444-4444-8444-444444444444";
     db.sessions.set(SESSION, {
+      rootSessionUuid: SESSION,
+      parentSessionUuid: null,
       id: "s1",
       seqCount: 3,
       lastHash: events[2]?.hash,
@@ -2236,7 +2283,10 @@ describe("ingest_tacho_events", () => {
     }
 
     /** The session again, with each frame naming the enrollment `at` gives it. */
-    function resealed(at: (seq: number) => string): TachoEvent[] {
+    function resealed(
+      at: (seq: number) => string,
+      key: (seq: number) => string = () => "acme.core.cc-laptop",
+    ): TachoEvent[] {
       let cursor: ChainCursor = GENESIS_CURSOR;
       return session().map((event) => {
         const {
@@ -2249,7 +2299,11 @@ describe("ingest_tacho_events", () => {
         const sealed = sealEvent(
           {
             ...rest,
-            agent: { ...rest.agent, host_enrollment_id: at(seq) },
+            agent: {
+              ...rest.agent,
+              host_enrollment_id: at(seq),
+              agent_key: key(seq),
+            },
           } as UnsealedTachoEvent,
           cursor,
         );
@@ -2289,6 +2343,51 @@ describe("ingest_tacho_events", () => {
       expect(result.chain_breaks).toEqual([]);
       expect(db.sessions.get(SESSION)?.["hostId"]).toBe(HOST_ID);
       expect(mocks.insertTachoEvents).toHaveBeenCalled();
+    });
+
+    // A re-enrollment can mint the machine under another agent (`enroll
+    // --force` with a token for a different agent). The frames the old
+    // enrollment recorded carry its key, which is the one checked for them.
+    it("accepts a predecessor's frames under the predecessor's own agent key (negative)", async () => {
+      const db = withPredecessor({ agentKey: "acme.core.old-laptop" });
+      wire(db);
+      const events = resealed(
+        (seq) => (seq < 5 ? PREDECESSOR_PUBLIC : HOST_PUBLIC),
+        (seq) => (seq < 5 ? "acme.core.old-laptop" : "acme.core.cc-laptop"),
+      );
+      heldByPredecessor(db, events);
+      const result = await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: events.slice(3),
+        },
+        CONTEXT,
+      );
+      expect(result.chain_breaks).toEqual([]);
+      expect(mocks.insertTachoEvents).toHaveBeenCalled();
+    });
+
+    it("refuses a predecessor's frame that carries the successor's agent key", async () => {
+      const db = withPredecessor({ agentKey: "acme.core.old-laptop" });
+      wire(db);
+      const events = resealed((seq) =>
+        seq < 5 ? PREDECESSOR_PUBLIC : HOST_PUBLIC,
+      );
+      heldByPredecessor(db, events);
+      await expect(
+        tachoEventsIngestHandler(
+          {
+            schema: "tacho.batch.v1",
+            host_enrollment_id: HOST_PUBLIC,
+            events: events.slice(3),
+          },
+          CONTEXT,
+        ),
+      ).rejects.toThrow(
+        /its frames carry an agent key other than their host's/,
+      );
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -3398,8 +3497,9 @@ describe("ingest_tacho_events: bodies and the seal", () => {
       sealedAt: null,
       genesisHash: (events[0] as TachoEvent).hash,
     });
-    // Invisible to the read that precedes the INSERT: that is the race.
-    db.hideSessionFromRead = true;
+    // Invisible to the read that precedes the INSERT, and committed by the
+    // time the INSERT conflicts with it: that is the race.
+    db.hideSessionFromNextRead = true;
     wire(db);
 
     await expect(
@@ -3419,6 +3519,34 @@ describe("ingest_tacho_events: bodies and the seal", () => {
         (u) => u.table === "hosts" && "sessionsCount" in u.values,
       ),
     ).toBeUndefined();
+  });
+
+  // #3944, S-03: a session uuid another workspace or organization holds is
+  // hidden by row-level security, so every retry read nothing, inserted, and
+  // conflicted again. The 409 it answered was retried for ever.
+  it("refuses a session another tenant holds as owned elsewhere, not as a race", async () => {
+    const db = fakeDb();
+    const events = session();
+    db.sessions.set(SESSION, {
+      id: "s-elsewhere",
+      sessionUuid: SESSION,
+      hostId: "55555555-5555-4555-8555-555555555555",
+      seqCount: 3,
+      sealedAt: null,
+    });
+    db.foreignTenantSessions.add(SESSION);
+    wire(db);
+
+    const err = await tachoEventsIngestHandler(batch(events), CONTEXT).catch(
+      (e: unknown) => e,
+    );
+    // The message the host's shipper matches to set the session aside.
+    expect(err).toMatchObject({ code: "authz_denied" });
+    expect(String((err as Error).message)).toMatch(
+      /session belongs to another host/,
+    );
+    expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    expect(db.sessions.get(SESSION)?.["id"]).toBe("s-elsewhere");
   });
 
   it("refuses an update whose tier moved under the read", async () => {
@@ -3909,12 +4037,16 @@ describe("proof.observed frames (ADR-064)", () => {
       toolBodyFrames: 0,
       enforcementTier: "observe",
       sealedAt: new Date("2026-09-08T10:06:02.000Z"),
+      rootSessionUuid,
       parentSessionUuid,
     });
     return sealEvent(
       {
         ...unsealed("proof.observed", FLIP),
         root_session_uuid: rootSessionUuid,
+        ...(parentSessionUuid === null
+          ? {}
+          : { parent_session_uuid: parentSessionUuid }),
       },
       genesis.next,
     ).event;
@@ -4041,6 +4173,252 @@ describe("proof.observed frames (ADR-064)", () => {
     ]);
     expect(mocks.recordProofFrames).not.toHaveBeenCalled();
     expect(mocks.sendEvent).not.toHaveBeenCalled();
+  });
+
+  // #3944, S-09: the producer named the root, parent and agent key, and ingest
+  // routed proof frames, reopens and rollups by whatever a batch said.
+  describe("the run a chain belongs to (#3944, S-09)", () => {
+    const OTHER_HOST_ID = "66666666-6666-4666-8666-666666666666";
+    const OTHER_ROOT = "77777777-7777-4777-8777-777777777777";
+    const OTHER_RUN = "tse_fake0000000000000other";
+
+    /** A root session another live host in this workspace recorded. */
+    function otherHostsRoot(db: FakeDb, hostOverrides = {}) {
+      db.hosts.push({
+        ...(db.hosts[0] as Record<string, unknown>),
+        id: OTHER_HOST_ID,
+        publicId: "tch_otherhost0000000000000",
+        apiKeyId: "aky_other",
+        agentKey: "acme.core.other",
+        deviceKeyFingerprint: `sha256:${"f".repeat(64)}`,
+        ...hostOverrides,
+      });
+      db.sessions.set(OTHER_ROOT, {
+        id: "s-other",
+        publicId: OTHER_RUN,
+        sessionUuid: OTHER_ROOT,
+        hostId: OTHER_HOST_ID,
+        seqCount: 4,
+        sealedAt: new Date("2026-09-08T10:00:00.000Z"),
+        rootSessionUuid: OTHER_ROOT,
+        parentSessionUuid: null,
+      });
+    }
+
+    /** This host's session, one frame long, recorded under `root`. */
+    function recordedChain(db: FakeDb, root: string, parent: string | null) {
+      const genesis = sealEvent(
+        unsealed("agent_start", { session_start_source: "startup" }),
+        GENESIS_CURSOR,
+      );
+      db.sessions.set(SESSION, {
+        id: "s1",
+        publicId: RUN,
+        sessionUuid: SESSION,
+        hostId: HOST_ID,
+        seqCount: 1,
+        lastHash: genesis.event.hash,
+        chainVerified: true,
+        telemetryGapCount: 0,
+        numToolCalls: 0,
+        contentFrames: 0,
+        bodyFrames: 0,
+        toolBodyFrames: 0,
+        enforcementTier: "observe",
+        sealedAt: null,
+        rootSessionUuid: root,
+        parentSessionUuid: parent,
+      });
+      return genesis.next;
+    }
+
+    /** A new chain whose frames name `root` as both root and parent. */
+    function subagentOf(root: string): TachoEvent[] {
+      let cursor: ChainCursor = GENESIS_CURSOR;
+      return [
+        unsealed("agent_start", { session_start_source: "startup" }),
+        unsealed("turn_start", { prompt_length: 3 }),
+      ].map((draft) => {
+        const sealed = sealEvent(
+          { ...draft, root_session_uuid: root, parent_session_uuid: root },
+          cursor,
+        );
+        cursor = sealed.next;
+        return sealed.event;
+      });
+    }
+
+    // The frames reach ClickHouse as sent, and the run cost rollup reads
+    // model and tool calls by the root each frame names, so a model call
+    // recorded under another host's root was priced into that host's run.
+    it("refuses a later batch whose frames name another host's root, and records none of it", async () => {
+      const db = fakeDb();
+      wire(db);
+      otherHostsRoot(db);
+      const cursor = recordedChain(db, SESSION, null);
+      const call = sealEvent(
+        {
+          ...unsealed("llm_call", { input_tokens: 100, output_tokens: 50 }),
+          root_session_uuid: OTHER_ROOT,
+        },
+        cursor,
+      ).event;
+      await expect(
+        tachoEventsIngestHandler(batch([call]), CONTEXT),
+      ).rejects.toThrow(
+        /session belongs to another host: its frames name a root or parent session its chain did not open with/,
+      );
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+      expect(mocks.bodyPut).not.toHaveBeenCalled();
+      expect(db.sessions.get(SESSION)?.["seqCount"]).toBe(1);
+    });
+
+    it("refuses a later batch whose frames name another parent, even with the recorded root", async () => {
+      const db = fakeDb();
+      wire(db);
+      const cursor = recordedChain(db, SESSION, null);
+      const proof = sealEvent(
+        {
+          ...unsealed("proof.observed", FLIP),
+          parent_session_uuid: OTHER_ROOT,
+        },
+        cursor,
+      ).event;
+      await expect(
+        tachoEventsIngestHandler(batch([proof]), CONTEXT),
+      ).rejects.toThrow(/session belongs to another host/);
+      expect(mocks.recordProofFrames).not.toHaveBeenCalled();
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    });
+
+    it("refuses a new chain whose later frames name another root than its first", async () => {
+      const db = fakeDb();
+      wire(db);
+      otherHostsRoot(db);
+      let cursor: ChainCursor = GENESIS_CURSOR;
+      const events = [
+        unsealed("agent_start", { session_start_source: "startup" }),
+        {
+          ...unsealed("llm_call", { input_tokens: 100, output_tokens: 50 }),
+          root_session_uuid: OTHER_ROOT,
+        },
+      ].map((draft) => {
+        const sealed = sealEvent(draft, cursor);
+        cursor = sealed.next;
+        return sealed.event;
+      });
+      await expect(
+        tachoEventsIngestHandler(batch(events), CONTEXT),
+      ).rejects.toThrow(/session belongs to another host/);
+      expect(db.sessions.has(SESSION)).toBe(false);
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    });
+
+    it("records a later batch whose frames name the recorded root and parent (negative)", async () => {
+      const db = fakeDb();
+      wire(db);
+      const cursor = recordedChain(db, SESSION, null);
+      const proof = sealEvent(unsealed("proof.observed", FLIP), cursor).event;
+      mocks.recordProofFrames.mockResolvedValue({
+        written: 1,
+        witnessRunIds: [],
+      });
+      await tachoEventsIngestHandler(batch([proof]), CONTEXT);
+      expect(mocks.recordProofFrames).toHaveBeenCalledOnce();
+      expect(mocks.recordProofFrames.mock.calls[0]?.[2]).toBe(RUN);
+      expect(mocks.insertTachoEvents).toHaveBeenCalledOnce();
+    });
+
+    it("refuses a proof frame whose chain's root another host holds", async () => {
+      const db = fakeDb();
+      wire(db);
+      otherHostsRoot(db);
+      // This host's subagent chain landed first. Another host then recorded
+      // a root under the uuid the chain names.
+      const cursor = recordedChain(db, OTHER_ROOT, OTHER_ROOT);
+      const proof = sealEvent(
+        {
+          ...unsealed("proof.observed", FLIP),
+          root_session_uuid: OTHER_ROOT,
+          parent_session_uuid: OTHER_ROOT,
+        },
+        cursor,
+      ).event;
+      await expect(
+        tachoEventsIngestHandler(batch([proof]), CONTEXT),
+      ).rejects.toThrow(/session belongs to another host/);
+      expect(mocks.recordProofFrames).not.toHaveBeenCalled();
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    });
+
+    it("refuses a new chain whose root another host holds, and writes none of it", async () => {
+      const db = fakeDb();
+      wire(db);
+      otherHostsRoot(db);
+      await expect(
+        tachoEventsIngestHandler(batch(subagentOf(OTHER_ROOT)), CONTEXT),
+      ).rejects.toThrow(/session belongs to another host/);
+      expect(db.sessions.has(SESSION)).toBe(false);
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+    });
+
+    it("opens a chain whose root a revoked predecessor of this host holds (negative)", async () => {
+      const db = fakeDb();
+      wire(db);
+      // The same machine enrolled before in this workspace, and was revoked.
+      otherHostsRoot(db, {
+        status: "revoked",
+        deviceKeyFingerprint: DEVICE_KEY,
+      });
+      await tachoEventsIngestHandler(batch(subagentOf(OTHER_ROOT)), CONTEXT);
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        rootSessionUuid: OTHER_ROOT,
+        parentSessionUuid: OTHER_ROOT,
+      });
+    });
+
+    // ClickHouse keeps the key each frame carries, and the steering
+    // deliveries read it from there, so a forged key filed the frames under
+    // another agent even though the row took the host's.
+    it("refuses frames that carry an agent key other than their host's, and records none of them", async () => {
+      const db = fakeDb();
+      wire(db);
+      const forged = sealEvent(
+        unsealed(
+          "agent_start",
+          { session_start_source: "startup" },
+          "hook",
+          CLAUDE_CODE,
+          {
+            agent: {
+              agent_key: "acme.core.someone-else",
+              fleet_id: "wrk_1",
+              ...CLAUDE_CODE,
+              wrapper_version: "2.1.1",
+              host_enrollment_id: HOST_PUBLIC,
+            },
+          },
+        ),
+        GENESIS_CURSOR,
+      ).event;
+      await expect(
+        tachoEventsIngestHandler(batch([forged]), CONTEXT),
+      ).rejects.toThrow(
+        /session belongs to another host: its frames carry an agent key other than their host's/,
+      );
+      expect(db.sessions.has(SESSION)).toBe(false);
+      expect(mocks.insertTachoEvents).not.toHaveBeenCalled();
+      expect(mocks.bodyPut).not.toHaveBeenCalled();
+    });
+
+    it("files a new session under the host's agent key (negative)", async () => {
+      const db = fakeDb();
+      wire(db);
+      await tachoEventsIngestHandler(batch(session()), CONTEXT);
+      expect(db.sessions.get(SESSION)?.["agentKey"]).toBe(
+        "acme.core.cc-laptop",
+      );
+    });
   });
 
   it("records a frame whose proof body the schema refuses, skips only its verdict, and says so", async () => {
@@ -5028,6 +5406,77 @@ describe("observed metering from the model proxy", () => {
     expect(
       dialect.sqlToQuery(update?.values["numModelCalls"] as SQL).params,
     ).toEqual([0]);
+  });
+
+  describe("the harness's total at the seal (#3944, S-07)", () => {
+    const stop = (total: number) =>
+      unsealed("agent_stop", {
+        session_outcome: "completed",
+        session_end_reason: "other",
+        total_cost_usd_micros: total,
+      });
+
+    it("keeps an observed session's metered total and stores the harness's claim beside it", async () => {
+      const db = fakeDb();
+      wire(db);
+      const events = chain([start(), observedCall(), stop(99_000)]);
+      // The proxy metered the session in an earlier batch.
+      await tachoEventsIngestHandler(batch(events.slice(0, 2)), CONTEXT);
+      const row = db.sessions.get(SESSION) as Record<string, unknown>;
+      expect(row["costBasis"]).toBe("observed");
+      Object.assign(row, {
+        seqCount: 2,
+        lastHash: (events[1] as TachoEvent).hash,
+        chainVerified: true,
+      });
+      db.updates.length = 0;
+
+      await tachoEventsIngestHandler(batch(events.slice(2)), CONTEXT);
+
+      const sealed = db.updates.find(
+        (u) => u.table === "sessions" && u.values["sealedAt"] !== undefined,
+      );
+      // The seal adds the batch's observed cost (none) and never assigns the
+      // harness's figure over the metered one.
+      const total = sealed?.values["totalCostMicros"];
+      expect(total).toBeInstanceOf(SQL);
+      expect(new PgDialect().sqlToQuery(total as SQL).params).toEqual([0]);
+      expect(sealed?.values["harnessReportedCostMicros"]).toBe(99_000);
+    });
+
+    it("keeps an observed call's cost when the seal arrives in the same batch", async () => {
+      const db = fakeDb();
+      wire(db);
+      await tachoEventsIngestHandler(
+        batch(chain([start(), observedCall(), stop(99_000)])),
+        CONTEXT,
+      );
+      const increments = db.updates.find(
+        (u) => u.table === "sessions" && u.values["inputTokens"] !== undefined,
+      );
+      const total = increments?.values["totalCostMicros"];
+      expect(total).toBeInstanceOf(SQL);
+      expect(new PgDialect().sqlToQuery(total as SQL).params).toEqual([11_100]);
+      expect(db.sessions.get(SESSION)?.["harnessReportedCostMicros"]).toBe(
+        99_000,
+      );
+    });
+
+    it("takes the harness's total for a session the proxy never metered (negative)", async () => {
+      const db = fakeDb();
+      wire(db);
+      await tachoEventsIngestHandler(
+        batch(chain([start(), selfReported(), stop(12_345)])),
+        CONTEXT,
+      );
+      const increments = db.updates.find(
+        (u) => u.table === "sessions" && u.values["inputTokens"] !== undefined,
+      );
+      expect(increments?.values["totalCostMicros"]).toBe(12_345);
+      expect(db.sessions.get(SESSION)?.["harnessReportedCostMicros"]).toBe(
+        12_345,
+      );
+    });
   });
 });
 

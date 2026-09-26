@@ -736,6 +736,8 @@ describe("a frame's summary and identity on a run the assistant recorded", () =>
   it("names the model and the tool instead of falling through to the event type", () => {
     expect(modelFrame.summary).toBe("oxagen/anthropic/claude-sonnet-4");
     expect(modelFrame.identity.model).toBe("oxagen/anthropic/claude-sonnet-4");
+    // How the call ended, which the fold reads for the errors chip.
+    expect(modelFrame.identity.toolStatus).toBe("completed");
     // The engine event calls it `tool_name` where the ledger's own event
     // calls it `capability_name`; both read.
     expect(toolFrame.summary).toBe("search_tools completed");

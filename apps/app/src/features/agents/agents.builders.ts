@@ -6,11 +6,15 @@ import type {
   AgentDetail,
   AgentPage,
   IncidentPage,
+  RuntimeRef,
   Toolbelt,
+  ToolbeltRef,
 } from "@/data/contracts/agents";
 import type { MandateList } from "@/data/contracts/mandates";
 import type { RoleCatalog } from "@/data/contracts/org";
 import type { RunPage, RunRow } from "@/data/contracts/runs";
+import type { NamedRuntimeList } from "@/data/contracts/runtimes";
+import type { ToolbeltList } from "@/data/contracts/toolbelts";
 import type {
   SpendBudgets,
   SpendFindings,
@@ -22,6 +26,21 @@ import { type Read, readOk } from "@/data/read";
 
 type AgentRow = AgentPage["agents"][number];
 
+/** The runtime the sample agent runs on (ADR-198). */
+export const BUILD_BOX: RuntimeRef = {
+  id: "rtm_buildbox",
+  name: "Build box",
+  slug: "build-box",
+};
+
+/** The workspace's All tools belt, which the sample agent carries. */
+export const ALL_TOOLS: ToolbeltRef = {
+  id: "tbt_alltools",
+  name: "All tools",
+  slug: "all-tools",
+  kind: "all_tools",
+};
+
 export function agentRow(overrides: Partial<AgentRow> = {}): AgentRow {
   return {
     id: "agt_releasebot",
@@ -30,6 +49,9 @@ export function agentRow(overrides: Partial<AgentRow> = {}): AgentRow {
     description: "Cuts releases and opens their pull requests.",
     agentKey: "acme.core.release-bot",
     harness: "claude-code",
+    runtime: BUILD_BOX,
+    toolbelt: ALL_TOOLS,
+    managed: false,
     operatorId: "usr_marcusbell",
     operatorName: "Marcus Bell",
     principalId: "prn_91",
@@ -93,6 +115,7 @@ export function agentDetail(overrides: DetailOverrides = {}): AgentDetail {
       description: "Cuts releases and opens their pull requests.",
       agentKey: "acme.core.release-bot",
       harness: "claude-code",
+      managed: false,
       principalId: "prn_91",
       operatorId: "usr_marcusbell",
       status: "enrolled",
@@ -137,39 +160,24 @@ export function agentDetail(overrides: DetailOverrides = {}): AgentDetail {
         revokedAt: null,
       },
     ],
-    definition: null,
+    runtime: BUILD_BOX,
+    toolbelt: ALL_TOOLS,
+    versions: [
+      {
+        version: 1,
+        changeKind: "registered",
+        runtime: BUILD_BOX,
+        toolbelt: ALL_TOOLS,
+        createdAt: "2026-09-01T10:00:00.000Z",
+      },
+    ],
+    limits: {
+      perRun: null,
+      perDay: null,
+      containmentRequired: false,
+      invalid: false,
+    },
     ...rest,
-  };
-}
-
-export const DEFINITION_SOURCE = `schema = "agent-definition/v0.1"
-slug = "release-bot"
-name = "Release bot"
-model_tier = "complex"
-tools = ["github__*", "linear__get_issue"]
-side_effects = ["read", "write"]
-budget = { per_run_micros = 2500000 }
-
-[instructions]
-body = """
-You prepare releases.
-"""
-
-[harness.claude-code]
-color = "blue"
-`;
-
-export function committedDefinition(
-  source = DEFINITION_SOURCE,
-): NonNullable<AgentDetail["definition"]> {
-  return {
-    path: ".oxagen/agents/release-bot.toml",
-    digest: "a".repeat(64),
-    commitSha: "9c1e2f0",
-    branch: "agents/release-bot",
-    pullRequestUrl: "https://github.com/acme/core/pull/12",
-    source,
-    committedAt: "2026-09-03T10:00:00.000Z",
   };
 }
 
@@ -453,7 +461,90 @@ type AgentReads = {
   deliveries?: Read<SteeringDeliveries>;
   findings?: Read<SpendFindings>;
   roles?: Read<RoleCatalog>;
+  /** `list_toolbelts`, which the Toolbelt tab's belt picker reads; `beltList()` when absent. */
+  belts?: Read<ToolbeltList>;
+  /** `list_runtimes`, which the Runtime tab's Move control reads; `runtimeList()` when absent. */
+  runtimes?: Read<NamedRuntimeList>;
 };
+
+/** The workspace's belts: the All tools belt the sample agent carries and one clone. */
+export function beltList(): Read<ToolbeltList> {
+  const all = {
+    ...ALL_TOOLS,
+    description: null,
+    clonedFrom: null,
+    tools: 12,
+    activeTools: 12,
+    servers: 2,
+    agents: 1,
+    updatedAt: "2026-09-20T10:00:00.000Z",
+  };
+  return readOk({
+    belts: [
+      all,
+      {
+        ...all,
+        id: "tbt_reviewbelt",
+        name: "Review belt",
+        slug: "review-belt",
+        kind: "custom",
+        clonedFrom: ALL_TOOLS,
+        tools: 4,
+        activeTools: 3,
+        servers: 1,
+        agents: 0,
+      },
+    ],
+    availableTools: 12,
+  });
+}
+
+/** The build box the sample agent runs on, and a laptop that already runs Claude Code. */
+export function runtimeList(): Read<NamedRuntimeList> {
+  return readOk({
+    runtimes: [
+      {
+        ...BUILD_BOX,
+        createdAt: "2026-09-01T10:00:00.000Z",
+        agents: [
+          {
+            id: "agt_releasebot",
+            name: "Release bot",
+            slug: "release-bot",
+            harness: "claude-code",
+          },
+        ],
+        liveHosts: 1,
+        lastSeenAt: null,
+      },
+      {
+        id: "rtm_macslaptop",
+        name: "Mac's laptop",
+        slug: "macs-laptop",
+        createdAt: "2026-09-20T10:00:00.000Z",
+        agents: [
+          {
+            id: "agt_macclaude",
+            name: "Mac Claude",
+            slug: "mac-claude",
+            harness: "claude-code",
+          },
+        ],
+        liveHosts: 1,
+        lastSeenAt: null,
+      },
+      {
+        id: "rtm_gpubox",
+        name: "GPU box",
+        slug: "gpu-box",
+        createdAt: "2026-09-21T10:00:00.000Z",
+        agents: [],
+        liveHosts: 0,
+        lastSeenAt: null,
+      },
+    ],
+  });
+}
 
 /** A DataSource answering the agents reads it was handed; `calls` records each read's arguments. */
 export function agentsSource(reads: AgentReads) {
@@ -469,6 +560,8 @@ export function agentsSource(reads: AgentReads) {
     deliveries: [],
     findings: [],
     roles: [],
+    belts: [],
+    runtimes: [],
   };
   const refuse = () => Promise.reject(new Error("not an Agents read"));
   const answer =
@@ -480,7 +573,11 @@ export function agentsSource(reads: AgentReads) {
         : Promise.resolve(read);
     };
   const source: DataSource = {
-    runtimes: { list: refuse, agents: refuse },
+    runtimes: {
+      list: refuse,
+      agents: refuse,
+      named: answer(reads.runtimes ?? runtimeList(), "runtimes"),
+    },
     conversations: { latest: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
@@ -514,6 +611,7 @@ export function agentsSource(reads: AgentReads) {
       findings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+    interjections: { open: refuse },
     agents: {
       list: answer(reads.list, "list"),
       get: answer(reads.get, "get"),
@@ -570,6 +668,8 @@ export function agentsSource(reads: AgentReads) {
       approvalRules: refuse,
       connections: refuse,
       mcpServers: refuse,
+      toolbelts: answer(reads.belts ?? beltList(), "belts"),
+      toolbelt: refuse,
     },
   };
   return { source, calls };

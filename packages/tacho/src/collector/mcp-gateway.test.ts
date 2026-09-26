@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   ceilingOf,
+  CLAUDE_CODE_TOOL_USE_ID_META,
   createMcpGateway,
   filterToolsByMandate,
   gatewayToolsOf,
@@ -16,6 +17,7 @@ import {
   RPC_REFUSED,
   toolCountOf,
   tooManyToolsMessage,
+  toolUseIdOf,
 } from "./mcp-gateway";
 import { digestJcs, jcs, jsonByteLength } from "../digest";
 import { jsonContent } from "../evidence/frame-body";
@@ -372,6 +374,37 @@ describe("evidence", () => {
         ),
       },
     ]);
+  });
+
+  it("carries the tool-use id Claude Code names in _meta, and forwards the request untouched", async () => {
+    const { fetch, calls } = remote({ content: [] });
+    const { gw, records } = gateway({ fetch });
+    const call = {
+      ...CALL,
+      params: {
+        ...CALL.params,
+        _meta: { [CLAUDE_CODE_TOOL_USE_ID_META]: "toolu_01AbC" },
+      },
+    };
+    await gw.handle(call, CTX);
+    expect(records[0]?.toolUseId).toBe("toolu_01AbC");
+    expect(JSON.parse(calls[0]?.init.body ?? "{}")).toEqual(call);
+    // A call with no `_meta` names no id, and the record carries none.
+    await gw.handle(CALL, CTX);
+    expect(records[1]).not.toHaveProperty("toolUseId");
+  });
+
+  it("reads no tool-use id the envelope would refuse", () => {
+    const meta = (id: unknown) => ({
+      _meta: { [CLAUDE_CODE_TOOL_USE_ID_META]: id },
+    });
+    expect(toolUseIdOf(undefined)).toBeUndefined();
+    expect(toolUseIdOf({ _meta: null })).toBeUndefined();
+    expect(toolUseIdOf({ _meta: "toolu_1" })).toBeUndefined();
+    expect(toolUseIdOf(meta(7))).toBeUndefined();
+    expect(toolUseIdOf(meta(""))).toBeUndefined();
+    expect(toolUseIdOf(meta("t".repeat(513)))).toBeUndefined();
+    expect(toolUseIdOf(meta("t".repeat(512)))).toBe("t".repeat(512));
   });
 
   it("records the arguments and the result, so the call replays", async () => {

@@ -19,7 +19,10 @@ import {
 } from "vitest";
 import type { CommandWriter } from "../../lib/capture-writer.js";
 
-vi.mock("../../lib/api.js", () => ({ apiPostOrThrow: vi.fn() }));
+vi.mock("../../lib/api.js", () => ({
+  apiPostOrThrow: vi.fn(),
+  printTable: vi.fn(),
+}));
 vi.mock("../../lib/config.js", () => ({
   getApiUrl: () => "https://api.example.test",
 }));

@@ -7,6 +7,7 @@ import {
   RUN_TURNS_MAX,
   runTurnsGet,
 } from "@oxagen/oxagen/contracts/run.turns.get";
+import { UNKEYED_TOOL_PAIRING } from "@oxagen/run-ledger";
 import type { TachoChainTurnFacts, TachoTurnGroup } from "@oxagen/telemetry";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -48,10 +49,7 @@ const group = (over: Partial<TachoTurnGroup> = {}): TachoTurnGroup => ({
   firstAt: "2026-09-11 09:00:01.000",
   frames: 10,
   modelCalls: 2,
-  modelRequests: 0,
-  modelResponses: 0,
   keyedToolCalls: 3,
-  unkeyedToolRequests: 0,
   unkeyedToolCalls: 0,
   costMicros: 250,
   inputUncached: 40,
@@ -133,11 +131,13 @@ describe("get_run_turns on a wrapped run", () => {
       sessionUuids: [ROOT, CHILD],
     });
     // A subagent's own turn_start opens no turn of the run.
+    // The query pairs unkeyed tool halves by the fold's own rule 3 (#4308).
     expect(h.tachoTurnGroups).toHaveBeenCalledWith({
       rootSessionUuid: ROOT,
       sessionUuids: [ROOT, CHILD],
       turnStarts: [1, 40],
       observedFrom: [],
+      pairing: UNKEYED_TOOL_PAIRING,
     });
     expect(runTurnsGet.output.parse(out)).toEqual(out);
     expect(out.complete).toBe(true);

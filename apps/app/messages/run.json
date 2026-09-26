@@ -345,7 +345,8 @@
           "over": "Heavier than needed",
           "under": "Lighter than needed"
         },
-        "fileFallback": "the agent definition",
+        "move": "Move this agent to {suggest}",
+        "moveStub": "No contract changes an agent's model class from this page yet.",
         "effortTitle": {
           "not_proxied": "Effort not captured",
           "not_sent": "No effort setting"
@@ -368,33 +369,10 @@
         "effortFitSay": "Effort {effort}, {source}, fits this run. Nothing in the record argues for moving it either way.",
         "effortOverSay": "This run landed first try at effort {effort}, {source}, and still spent more than a fifth of its output reasoning. The reading argues for effort {suggest}, one level down.",
         "effortUnderSay": "This run was redone at effort {effort}, {source}: the operator prompted again or a tool call failed. The reading argues for effort {suggest}, one level up, where the model reasons before it acts.",
-        "change": {
-          "move": "Move this agent to {suggest}",
-          "setEffort": "Set effort to {suggest}",
-          "noAgent": "The agent was not read, so its definition file is not known.",
-          "roleReason": "Opening a pull request against an agent's definition needs an organization Owner, Admin or Member role.",
-          "why": {
-            "model": "A Model fit reading of {run} found the model class was the wrong size for the work.",
-            "effort": "A Model fit reading of {run} found the effort setting was the wrong size for the work."
-          },
-          "agent": "Agent",
-          "file": "File",
-          "today": "Today",
-          "proposed": "Proposed",
-          "effect": "Effect per run",
-          "effectNotRecorded": "not recorded",
-          "merge": "Nothing changes until somebody merges this pull request. Every sealed run keeps the model and effort it ran on.",
-          "open": "Open the pull request",
-          "pending": "Opening the pull request",
-          "opened": "Opened <pr></pr>. It changes nothing until somebody merges it.",
-          "close": "Close",
-          "message": {
-            "model": "{agent}: model {suggest}",
-            "effort": "{agent}: effort {suggest}"
-          }
-        },
-        "read": "Read from this run only: {prompts, plural, one {# prompt} other {# prompts}} · {turns, plural, one {# turn} other {# turns}} · {steps, plural, one {# step} other {# steps}} · {failed, plural, =0 {no tool call failed} one {# tool call failed} other {# tool calls failed}}. A reading is an argument. It changes nothing until somebody merges the change to <file></file>, and every run the agent has sealed keeps the model it ran on.",
-        "readNone": "There is no reading for this run. A reading argues for a change to <file></file> and changes nothing until somebody merges it."
+        "setEffort": "Set effort to {suggest}",
+        "effortStub": "No contract changes an agent's effort setting from this page yet.",
+        "read": "Read from this run only: {prompts, plural, one {# prompt} other {# prompts}} · {turns, plural, one {# turn} other {# turns}} · {steps, plural, one {# step} other {# steps}} · {failed, plural, =0 {no tool call failed} one {# tool call failed} other {# tool calls failed}}. A reading is an argument. It changes nothing on its own, and every run the agent has sealed keeps the model it ran on.",
+        "readNone": "There is no reading for this run. A reading is an argument and changes nothing on its own."
       },
       "inst": {
         "label": "Run instruments",
@@ -1030,6 +1008,10 @@
       "versionNotCaptured": "version not captured",
       "repoNotCaptured": "repository and branch not captured",
       "repoOnlyNotCaptured": "repository not captured",
+      "repoNotRead": "repository not read",
+      "workNotRead": "work not read",
+      "workUnreadWhy": "The read of this run's work failed, so its repository, pull request states, and enrolled checkout are not shown. Reload the page to read them again.",
+      "workUnreadRepoWhy": "The read of this run's work failed, so its pull request states and enrolled checkout are not shown. Reload the page to read them again.",
       "noPullRequest": "no pull request",
       "pullState": {
         "open": "open",
@@ -1080,6 +1062,7 @@
       },
       "pathNotEnrolled": "{machine} has no checkout of this repository enrolled, so Oxagen holds no path for it.",
       "pathRecorded": "Oxagen recorded this checkout on {machine}. Click to copy the path.",
+      "pathSession": "The session recorded this working directory on {machine}. Click to copy the path.",
       "withFacts": "{reading} {facts}",
       "pausedTitle": "Paused.",
       "statusPaused": "paused",

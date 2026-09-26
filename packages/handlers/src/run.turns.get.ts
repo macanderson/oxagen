@@ -15,6 +15,7 @@ import {
   runTurnsGet,
   type RunTurnsGetOutput,
 } from "@oxagen/oxagen/contracts/run.turns.get";
+import { UNKEYED_TOOL_PAIRING } from "@oxagen/run-ledger";
 import { selectTachoTurnFacts, selectTachoTurnGroups } from "@oxagen/telemetry";
 import {
   defaultRunReadDeps,
@@ -82,6 +83,9 @@ export function createRunTurnsGetHandler(
           ? []
           : [{ sessionUuid: f.sessionUuid, seq: f.firstObservedSeq }],
       ),
+      // The fold's rule 3, so the query pairs unkeyed tool halves as the
+      // transcript does (#4308, ADR-191).
+      pairing: UNKEYED_TOOL_PAIRING,
     });
     return {
       runId: input.runId,

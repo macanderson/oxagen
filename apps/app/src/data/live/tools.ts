@@ -1,7 +1,8 @@
 // The Tools ports on the kernel (ARCHITECTURE.md §3.3; #2958): the workspace
 // registry's tool versions, the credential broker's grants, the kill switches
 // reaching this workspace, the workspace's auto-approval rules, its data-source
-// connections and the MCP servers the registry imports from. The role gate on
+// connections, the MCP servers the registry imports from, and the workspace's
+// toolbelts (ADR-198), both noBillingGate reads. The role gate on
 // each of them lives in the handler or in IAM (INV-29), so a member without it
 // comes back as `denied` and the tab shows the access-denied state rather than
 // an empty table. An answer a view model refuses is reported once as
@@ -18,8 +19,11 @@ import { connectionList } from "@oxagen/oxagen/contracts/connection.list";
 import { credentialGrantList } from "@oxagen/oxagen/contracts/credential.grant.list";
 import { killSwitchList } from "@oxagen/oxagen/contracts/kill_switch.list";
 import { toolVersionList } from "@oxagen/oxagen/contracts/tool.version.list";
+import { toolbeltGet } from "@oxagen/oxagen/contracts/toolbelt.get";
+import { toolbeltList } from "@oxagen/oxagen/contracts/toolbelt.list";
 import { captureError } from "@oxagen/telemetry";
 import type { z } from "zod";
+import { ToolbeltDetail, ToolbeltList } from "@/data/contracts/toolbelts";
 import {
   ApprovalRuleSet,
   ConnectionList,
@@ -40,6 +44,7 @@ import {
   toMcpServerList,
   toToolVersionPage,
 } from "./mappers/tools";
+import { toToolbeltDetail, toToolbeltList } from "./mappers/toolbelts";
 
 /** The one place a mapped record is checked against its view model. */
 function mapped<T, I>(
@@ -163,6 +168,36 @@ export const tools: DataSource["tools"] = {
       McpServerList,
       toMcpServerList(read.value),
       "tools.mcpServers",
+      ctx.orgId,
+    );
+  },
+
+  async toolbelts(ctx) {
+    const read = await kernelRead(ctx, {
+      contract: toolbeltList,
+      input: {},
+      page: "tools",
+    });
+    if (!read.ok) return read;
+    return mapped(
+      ToolbeltList,
+      toToolbeltList(read.value),
+      "tools.toolbelts",
+      ctx.orgId,
+    );
+  },
+
+  async toolbelt(ctx, toolbeltId) {
+    const read = await kernelRead(ctx, {
+      contract: toolbeltGet,
+      input: { toolbeltId },
+      page: "tools",
+    });
+    if (!read.ok) return read;
+    return mapped(
+      ToolbeltDetail,
+      toToolbeltDetail(read.value),
+      "tools.toolbelt",
       ctx.orgId,
     );
   },

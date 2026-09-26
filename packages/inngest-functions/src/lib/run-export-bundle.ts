@@ -20,8 +20,10 @@ import {
   type AttestationPayload,
   type AttesterKey,
   digestBytes,
+  eventHashRule,
   jcs,
   type JsonValue,
+  legacyJcs,
   merkleRoot,
   RUN_EXPORT_FORMAT,
   type RunExportManifest,
@@ -39,6 +41,31 @@ interface RunExportBundle {
 }
 
 const encoder = new TextEncoder();
+
+/**
+ * One frame's line in `frames.ndjson`. Every frame is RFC 8785 (`jcs`) but
+ * one kind: an event an older host sealed while its content held a member
+ * named `toJSON`. That hash was taken over the text `canonicalize@1.0.8`
+ * wrote (`legacyJcs`), which keeps that object's keys in the order they were
+ * sealed in, so its frame is written the same way. A verifier parses the
+ * line, reads the keys in that order, and gets the hash back.
+ */
+function frameText(envelope: JsonValue): string {
+  const event =
+    typeof envelope === "object" &&
+    envelope !== null &&
+    !Array.isArray(envelope)
+      ? envelope["event"]
+      : undefined;
+  if (
+    typeof event === "object" &&
+    event !== null &&
+    !Array.isArray(event) &&
+    eventHashRule(event, event["hash"]) === "legacy"
+  )
+    return legacyJcs(envelope);
+  return jcs(envelope);
+}
 
 /**
  * The attestation of one sealed attempt. A wrapped session has no archive
@@ -66,7 +93,7 @@ function attestSegment(
       : segment.merkleRoot;
   const segmentDigest =
     segment.archiveSegmentDigest ??
-    digestBytes(encoder.encode(segment.envelopes.map(jcs).join("\n")));
+    digestBytes(encoder.encode(segment.envelopes.map(frameText).join("\n")));
   const payload: AttestationPayload = {
     run_id: runId,
     attempt_id: segment.attemptPublicId,
@@ -116,7 +143,7 @@ export function buildRunExportBundle(input: {
     })),
   };
   const envelopes = input.segments.flatMap((segment) => segment.envelopes);
-  const frames = envelopes.map((envelope) => jcs(envelope)).join("\n");
+  const frames = envelopes.map(frameText).join("\n");
   const redactions = summarizeRunExportRedactions(envelopes);
   const attestationFile: JsonValue = {
     public_key_pem: input.key.publicKeyPem,
@@ -173,16 +200,24 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest();
 const hex = (buf) => "sha256:" + buf.toString("hex");
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 
-// The same rule as canonicalize@1.0.8, which @oxagen/tacho hashes with. Its
-// first line matters: an object with a toJSON member is written by
-// JSON.stringify, keys unsorted, so a host that names an attribute toJSON
-// still gets the digest the platform sealed.
-function canonical(value) {
-  if (value === null || typeof value !== "object" || value.toJSON != null) return JSON.stringify(value);
-  if (Array.isArray(value)) return "[" + value.map((v) => canonical(v === undefined ? null : v)).join(",") + "]";
-  return "{" + Object.keys(value).sort().filter((k) => value[k] !== undefined).map((k) => JSON.stringify(k) + ":" + canonical(value[k])).join(",") + "}";
+// RFC 8785 (JCS), the rule @oxagen/tacho's jcs follows: keys sorted at every
+// depth, a member named toJSON included. canonicalize@1.0.8, which tacho used
+// before, wrote an object with a toJSON member by JSON.stringify, keys
+// unsorted. legacy keeps that rule, for an event an older host sealed.
+function canonical(value, legacy = false) {
+  if (value === null || typeof value !== "object" || typeof value.toJSON === "function" || (legacy && value.toJSON != null)) return JSON.stringify(value);
+  if (Array.isArray(value)) return "[" + value.map((v) => canonical(v === undefined ? null : v, legacy)).join(",") + "]";
+  return "{" + Object.keys(value).sort().filter((k) => value[k] !== undefined).map((k) => JSON.stringify(k) + ":" + canonical(value[k], legacy)).join(",") + "}";
 }
 const digestJcs = (value) => hex(sha256(Buffer.from(canonical(value), "utf8")));
+// The two rules differ only for a value holding a toJSON member.
+function hasToJson(value) {
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(hasToJson);
+  if (Object.hasOwn(value, "toJSON") && value.toJSON != null) return true;
+  return Object.values(value).some(hasToJson);
+}
+const eventHashHolds = (unhashed, hash) => digestJcs(unhashed) === hash || (hasToJson(unhashed) && hex(sha256(Buffer.from(canonical(unhashed, true), "utf8"))) === hash);
 // The ledger digests observed_at as Date.toISOString(); an older segment may
 // spell the same instant as Postgres text (2026-07-21 12:00:00.123+00).
 function instant(value) {
@@ -229,7 +264,7 @@ function checkWrapped(f, attemptId) {
   const why = [];
   if (f.event.session_uuid !== attemptId) why.push("the event belongs to session " + f.event.session_uuid + ", not " + attemptId);
   const { hash: _hash, ...unhashed } = f.event;
-  if (digestJcs(unhashed) !== f.hash) why.push("the event does not hash to hash");
+  if (!eventHashHolds(unhashed, f.hash)) why.push("the event does not hash to hash");
   const expected = wrappedFrameOf(f.event, typeof f.content?.bytes_ref === "string" ? f.content.bytes_ref : null);
   const differs = [...new Set([...Object.keys(expected), ...Object.keys(f)])].filter((k) => k !== "event")
     .filter((k) => canonical(f[k]) !== canonical(expected[k])).sort();

@@ -1,4 +1,4 @@
-// audit-exempt: an unauthenticated webhook receiver; the only writes are a proposal rejected because its merge request was closed on GitLab, a connection marked errored after GitLab rejected its token, a project path label, and a repository sync request. None is a privileged mutation a person makes.
+// audit-exempt: an unauthenticated webhook receiver; the only writes are a proposal rejected because its merge request was closed on GitLab, a connection marked errored after GitLab rejected its token, a project path label, a repository sync request, and the merge request state stored on the run rows that name it. None is a privileged mutation a person makes.
 //
 // gitlab.webhook.ts: what a GitLab project webhook delivery does (#3762).
 //
@@ -24,6 +24,7 @@ import {
   parseGitLabWebhookEvent,
   verifyGitLabWebhookToken,
   type GitLabClient,
+  type GitLabMergeRequestEvent,
 } from "@oxagen/gitlab";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
@@ -33,6 +34,12 @@ import {
   GITLAB_PROVIDER,
 } from "./lib/gitlab-credential";
 import { logger } from "./logger";
+import {
+  applyForgeState,
+  type ForgeKey,
+  type ForgeState,
+  gitlabForgeState,
+} from "./lib/run-pull-request-state";
 import { gitlabDeliveryConfigOf } from "./repository.gitlab-connection";
 import { postgresSteeringStore } from "./context.steering.store";
 
@@ -84,6 +91,16 @@ export interface GitLabWebhookDeps {
    * change the records in force, and the sync reads the branch itself.
    */
   requestSync?(scope: WebhookScope, reason: string): Promise<void>;
+  /**
+   * Store the state a merge request delivery reports on the workspace's run
+   * rows that name the merge request (ADR-192). Answers the rows written.
+   * Absent, nothing is stored.
+   */
+  recordPullRequestState?(
+    scope: WebhookScope,
+    key: ForgeKey,
+    forge: ForgeState,
+  ): Promise<number>;
 }
 
 export interface GitLabWebhookRequest {
@@ -126,6 +143,49 @@ function pushesDefaultBranch(body: unknown): boolean {
       ? b.project.default_branch
       : null;
   return ref === null || branch === null || ref === `refs/heads/${branch}`;
+}
+
+/**
+ * Store the state a merge request delivery reports, under the project path
+ * the payload names and, when the project moved, the path the connection was
+ * made under too: a run recorded the URL under whichever path it saw. The
+ * payload is GitLab's word, because the secret token authenticated it, and
+ * its `updated_at` keeps a late delivery from replacing a newer state. A
+ * failure is logged and never fails the delivery: GitLab disables a hook
+ * that keeps failing, and that would also stop the proposal rejections.
+ */
+async function recordMergeRequestState(
+  deps: GitLabWebhookDeps,
+  scope: WebhookScope,
+  connection: WebhookConnection,
+  event: GitLabMergeRequestEvent,
+): Promise<void> {
+  const record = deps.recordPullRequestState;
+  if (!record) return;
+  const forge = gitlabForgeState({
+    state: event.state,
+    ...(event.draft === undefined ? {} : { draft: event.draft }),
+    updatedAt: event.updatedAt,
+  });
+  if (forge === null) return;
+  const paths = new Set(
+    [event.projectPathWithNamespace, connection.projectPath].map((path) =>
+      path.toLowerCase(),
+    ),
+  );
+  try {
+    for (const repository of paths)
+      await record(
+        scope,
+        { provider: "gitlab", repository, number: event.iid },
+        forge,
+      );
+  } catch (err) {
+    logger.error(
+      { err, connectionId: connection.id, iid: event.iid },
+      "gitlab.webhook: could not store the merge request's state; runs show the last state stored",
+    );
+  }
 }
 
 /** Why a proposal is rejected when its merge request closes on GitLab. */
@@ -192,6 +252,9 @@ export async function handleGitLabWebhook(
       return { status: 202, outcome: "ignored_event" };
 
     return await deps.runInScope(scope, async () => {
+      // Every run row that names this merge request shows its state, whether
+      // or not a proposal is behind it (ADR-192).
+      await recordMergeRequestState(deps, scope, connection, event);
       // Any merge can change the production branch, whether or not Oxagen
       // opened the merge request. The payload's word is enough to ask: the
       // sync reads the branch, and finds nothing when nothing merged.
@@ -362,6 +425,14 @@ export function gitlabWebhookDeps(): GitLabWebhookDeps {
         if ((err as { code?: unknown }).code === "conflict") return false;
         throw err;
       }
+    },
+    async recordPullRequestState(scope, key, forge) {
+      // Runs inside the connection's tenant scope (`runInScope`), and the
+      // write names the connection's org and workspace.
+      const written = await withTenantDb((tx) =>
+        applyForgeState(tx, scope, key, forge, new Date()),
+      );
+      return written.length;
     },
     client: (token) => createGitLabClient({ token }),
     now: () => new Date(),

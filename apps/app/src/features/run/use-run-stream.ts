@@ -16,7 +16,17 @@
 // A frame arrives per event, and a busy run writes many per second, so the
 // signal is coalesced: the hook calls back once per `COALESCE_MS`, however
 // many frames landed in that window.
+//
+// The route also writes `event: run` with the run's row each time the stream
+// opens, and it reopens a quiet stream every few minutes. The hook hands the
+// row's status and command block to `onRun`, so a page can notice that the
+// run's host went quiet, or came back, without a reload.
 import { useEffect, useRef, useState } from "react";
+import { RunRow } from "@/data/contracts/runs";
+
+/** What `onRun` reads from the route's `event: run`: the fields a stale reading needs. */
+const StreamRun = RunRow.pick({ status: true, commandBlock: true });
+export type StreamRun = ReturnType<typeof StreamRun.parse>;
 
 /** How long frames are gathered before the player is told to read the tail. */
 const COALESCE_MS = 750;
@@ -64,19 +74,35 @@ export type StreamState =
  * Follow one run's frames. `onFrames` fires at most once per COALESCE_MS,
  * after at least one frame has arrived.
  *
+ * The stream opens after `after`, the last frame the reader already holds.
+ * Opened with none, the route sends every frame from the run's first, 200 to
+ * a read, and each batch is a signal to read a tail the reader already has.
+ *
  * The route closes an idle stream with `event: done` and a cursor to resume
  * from; this reopens at that cursor, so a quiet run costs one reconnect every
  * few minutes rather than a connection held open past the platform's ceiling.
  */
 export function useRunStream({
   url,
+  after = null,
   enabled,
   onFrames,
+  onRun,
 }: {
   /** The stream route, without a cursor; the hook appends `?after=` when it resumes. */
   url: string;
+  /**
+   * The frame cursor of the last frame the reader holds (a transcript's
+   * `frameCursor`). Null opens the stream at the run's first frame.
+   */
+  after?: string | null;
   enabled: boolean;
   onFrames: () => void;
+  /**
+   * The run's row as the route read it when the stream opened. A payload
+   * that is not a row is dropped.
+   */
+  onRun?: (run: StreamRun) => void;
 }): StreamState {
   const [state, setState] = useState<StreamState>(
     enabled ? "connecting" : "off",
@@ -85,6 +111,13 @@ export function useRunStream({
   // not tear the stream down and build it again.
   const latest = useRef(onFrames);
   latest.current = onFrames;
+  const latestRun = useRef(onRun);
+  latestRun.current = onRun;
+  // Read once, when the stream first opens. Once open, the stream keeps its
+  // own place, and a re-read of the page that moves the reader's cursor must
+  // not tear the connection down to open it again.
+  const openAfter = useRef(after);
+  openAfter.current = after;
 
   const deniedUrl = useRef<string | null>(null);
 
@@ -150,6 +183,21 @@ export function useRunStream({
         retries = 0;
         signal();
       };
+      es.addEventListener("run", (event: MessageEvent<string>) => {
+        if (stopped) return;
+        let row: unknown = null;
+        try {
+          const payload: unknown = JSON.parse(event.data);
+          if (payload !== null && typeof payload === "object") {
+            const opened: Record<string, unknown> = { ...payload };
+            row = opened.run;
+          }
+        } catch {
+          // Data, not instructions: a payload that does not parse is dropped.
+        }
+        const read = StreamRun.safeParse(row);
+        if (read.success) latestRun.current?.(read.data);
+      });
       es.addEventListener("done", (event: MessageEvent<string>) => {
         es.close();
         if (stopped) return;
@@ -227,7 +275,7 @@ export function useRunStream({
     }
 
     setState("connecting");
-    open(null);
+    open(openAfter.current);
     return () => {
       stopped = true;
       if (timer !== null) clearTimeout(timer);

@@ -34,7 +34,7 @@
  * Ed25519 signature and key id, each ledger attempt's `event_stream_digest`
  * fold, and the redaction summary against the frames it summarises.
  */
-import { hashEvent } from "../chain";
+import { eventHashHolds } from "../chain";
 import { digestBytes, digestJcs, jcs, type JsonValue } from "../digest";
 import { keyIdForPublicKey } from "../host/key-id";
 import { type Attestation, verifyAttestation } from "./attestation";
@@ -336,13 +336,13 @@ function checkWrappedFrame(
       `the event belongs to session ${String(event["session_uuid"])}, not ${attemptId}`,
     );
   }
-  let recomputed: string | null;
+  let holds: boolean;
   try {
-    recomputed = hashEvent(event);
+    holds = eventHashHolds(event, frame["hash"]);
   } catch {
-    recomputed = null;
+    holds = false;
   }
-  if (recomputed !== frame["hash"]) {
+  if (!holds) {
     reasons.push("the event does not hash to hash");
   }
   const content = asRecord(frame["content"]);

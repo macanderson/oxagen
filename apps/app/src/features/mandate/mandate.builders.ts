@@ -12,7 +12,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
   const calls: unknown[][] = [];
   const refuse = () => Promise.reject(new Error("not a Mandate read"));
   const source: DataSource = {
-    runtimes: { list: refuse, agents: refuse },
+    runtimes: { list: refuse, agents: refuse, named: refuse },
     conversations: { latest: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
@@ -46,6 +46,7 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       findings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+    interjections: { open: refuse },
     agents: {
       list: refuse,
       get: refuse,
@@ -101,6 +102,8 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       approvalRules: refuse,
       connections: refuse,
       mcpServers: refuse,
+      toolbelts: refuse,
+      toolbelt: refuse,
     },
     mandates: {
       list: refuse,

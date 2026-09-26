@@ -210,8 +210,8 @@ export const baseEnvSchema = z.object({
   // docs/guides/storage-driver-authoring.md.
   STORAGE_FS_ROOT: z.string().min(1).optional(),
 
-  // Vercel AI Gateway — the platform's default AI auth boundary.
-  // AI_GATEWAY_API_KEY authenticates every model call (text and embeddings).
+  // Vercel AI Gateway — the platform's default AI auth boundary for language
+  // models. Embeddings do not use it: they go to Voyage on VOYAGE_API_KEY.
   // The OXAGEN_LLM_* tiers are white-labeled model handles ("Oxagen
   // Fast/Balanced/Precise") resolving to concrete model ids in `creator/model`
   // form. Defaults mirror the registry staticValues so local dev and tests
@@ -226,12 +226,16 @@ export const baseEnvSchema = z.object({
   // here, because a silent failover would move spend to another vendor's bill
   // and skip the metering the gateway exists to provide.
   //
-  // Embeddings stay on the gateway either way — OpenRouter does not serve them.
-  // See packages/ai/src/models.ts.
+  // Embeddings never use this provider. See packages/ai/src/embed.ts.
   OXAGEN_MODEL_PROVIDER: z.enum(["gateway", "openrouter"]).default("gateway"),
   // Required only when OXAGEN_MODEL_PROVIDER=openrouter; optional here so every
   // other deployment stays valid without it.
   OPENROUTER_API_KEY: z.string().min(1).optional(),
+  // Voyage AI key for every embedding (#4148). One platform key serves every
+  // organisation, and every embedding is billed. Optional here so a process
+  // that never embeds starts without it; embedText throws a typed 503 when it
+  // is missing.
+  VOYAGE_API_KEY: z.string().min(1).optional(),
   // The OpenRouter PROVISIONING key (ADR-131) — not an inference key. It can
   // create, read, disable and delete every key in Oxagen's account, so it is
   // read in exactly one module (packages/ai/src/openrouter-provisioning.ts)
@@ -322,6 +326,8 @@ export const baseEnvSchema = z.object({
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   OTEL_EXPORTER_OTLP_HEADERS: z.string().optional(),
   OTEL_SERVICE_NAME: z.string().min(1).optional(),
+  // The region a failed read's error line prints beside the trace id (#3841).
+  OXAGEN_REGION: z.string().min(1).optional(),
 
   // ── Error alerting (vendor-neutral outbound webhook) ──
   // When set, high-severity/unhandled server errors captured by

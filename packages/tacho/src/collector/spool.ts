@@ -164,9 +164,11 @@ const MAX_SERVER_REQUESTED_WAIT_MS = 5 * 60_000;
  * Whether a refusal says the control plane holds this session under another
  * host. Re-enrolling mid-session does it: the live session keeps recording,
  * its new events carry the new enrollment id, and the session row still
- * names the old host. The ingest route answers 403 for the whole batch, and
- * no retry changes the owner. Matched on the route's message, which
- * `tacho.events.ingest.ts` keeps in step with this string.
+ * names the old host. So does a session uuid another workspace holds, and a
+ * chain whose root or parent session another host holds. The ingest route
+ * answers 403 for the whole batch, and no retry changes the owner. Matched
+ * on the route's message, which `tacho.events.ingest.ts` keeps in step with
+ * this string.
  */
 const SESSION_OWNED_ELSEWHERE = "session belongs to another host";
 function sessionOwnedElsewhere(error: ControlError): boolean {
@@ -201,15 +203,27 @@ export const HOST_REVOKED_MESSAGE =
   "an operator revoked this host's enrollment, so the collector stopped shipping. Recorded events stay in the local spool. Run `tacho unenroll` to remove the hooks and the service.";
 
 /**
- * Whether a refusal is about one session that cannot land yet: a subagent
- * chain whose root session the control plane has not recorded. The root is
- * usually further back in the queue, so the batch is not wrong, it is early,
- * and holding every other session behind it until the root arrives is the
- * stall this avoids.
+ * Whether a refusal is about one session that cannot land yet. Two 409s say
+ * so, and ingest keeps both reasons in step with these strings:
+ *
+ *  - `root_session_unrecorded`: a subagent chain whose root session the
+ *    control plane has not recorded. The root is usually further back in the
+ *    queue, so the batch is not wrong, it is early.
+ *  - `session_moved_under_read`: another batch for the session committed
+ *    between this batch's read and its write. The next read sees it.
+ *
+ * Either way, holding every other session behind this one is the stall this
+ * avoids.
  */
-const ROOT_SESSION_UNRECORDED = "root_session_unrecorded";
+const SESSION_NOT_READY_REASONS = [
+  "root_session_unrecorded",
+  "session_moved_under_read",
+] as const;
 function sessionNotReady(error: ControlError): boolean {
-  return error.status === 409 && error.body.includes(ROOT_SESSION_UNRECORDED);
+  return (
+    error.status === 409 &&
+    SESSION_NOT_READY_REASONS.some((reason) => error.body.includes(reason))
+  );
 }
 
 /**
@@ -223,6 +237,23 @@ export const MAX_CONSECUTIVE_QUARANTINES = 25;
 /** How long a session that cannot land yet is left out, doubling to the cap. */
 const PARKED_SESSION_MIN_MS = 5_000;
 const PARKED_SESSION_MAX_MS = 10 * 60_000;
+
+/**
+ * When a session that cannot land stops waiting (#3944, S-03). Its refused
+ * event goes to quarantine once both hold:
+ *
+ *  - The event is older than `PARKED_EVENT_MAX_AGE_MS`. The event's own time
+ *    survives a daemon restart, which in-memory parking does not. The bound
+ *    is past `MAX_BODY_AUTHORITY_WAIT_MS`, the longest this shipper holds a
+ *    root session's frames back itself.
+ *  - This shipper has kept the session parked for `PARKED_SESSION_MIN_WAIT_MS`
+ *    without it landing, so a backlog shipped after an outage gets its roots
+ *    in first.
+ *
+ * Before this, a root that never landed was retried for ever.
+ */
+export const PARKED_EVENT_MAX_AGE_MS = MAX_BODY_AUTHORITY_WAIT_MS + 60 * 60_000;
+export const PARKED_SESSION_MIN_WAIT_MS = 60 * 60_000;
 export function serverRequestedWaitMs(error: ControlError): number | undefined {
   if (error.status !== 429 && error.status !== 503) return undefined;
   const hint = error.rateLimit;
@@ -257,13 +288,18 @@ export class Shipper {
    */
   private readonly foreignSessions = new Set<string>();
   /**
-   * Sessions left out of batches until a time, with the wait that set it:
-   * a subagent chain whose root has not landed. In memory only; a restart
-   * finds each one again with one refusal.
+   * Sessions left out of batches until a time, with the wait that set it,
+   * when the session was first parked, and the event the control plane
+   * refused: a subagent chain whose root has not landed. An entry clears only
+   * when a batch holding that event is accepted. Frames of the session that
+   * ship around it, such as the accepted half of a bisection, leave it, so
+   * the session's next refused frame does not start a new hour's wait. After
+   * a quarantine the entry names no event and stays for the life of the
+   * process. In memory only; a restart finds each one again with one refusal.
    */
   private readonly parkedSessions = new Map<
     string,
-    { until: number; waitMs: number }
+    { until: number; waitMs: number; since: number; eventId?: string }
   >();
   /** Events quarantined since the last batch the control plane accepted. */
   private consecutiveQuarantines = 0;
@@ -711,8 +747,10 @@ export class Shipper {
       this.markShipped(batch);
       this.succeed();
       this.consecutiveQuarantines = 0;
-      for (const session of new Set(batch.map((e) => e.session_uuid)))
-        this.parkedSessions.delete(session);
+      const accepted = new Set(batch.map((e) => e.event_id_idem));
+      for (const [session, parked] of this.parkedSessions)
+        if (parked.eventId !== undefined && accepted.has(parked.eventId))
+          this.parkedSessions.delete(session);
       if (response.chain_breaks.length > 0)
         this.options.onChainBreak?.(response.chain_breaks);
       if (
@@ -793,22 +831,51 @@ export class Shipper {
         return this.bisect(batch, bodies);
       }
       if (error instanceof ControlError && sessionNotReady(error)) {
-        // One session is early, not wrong. Bisect to it, leave it out for a
-        // while, and ship every other session behind it now.
-        const sessions = new Set(batch.map((e) => e.session_uuid));
-        if (sessions.size > 1) return this.bisect(batch, bodies);
-        const session = (batch[0] as TachoEvent).session_uuid;
+        // One session is early, not wrong. Bisect to the one event the
+        // control plane refuses, so the session's frames before it ship now,
+        // leave the session out for a while, and ship every other session
+        // behind it now.
+        if (batch.length > 1) return this.bisect(batch, bodies);
+        const head = batch[0] as TachoEvent;
+        const session = head.session_uuid;
+        const now = this.options.now();
         const previous = this.parkedSessions.get(session);
+        const since = previous?.since ?? now;
+        const age = now - Date.parse(head.ts);
+        if (
+          now - since >= PARKED_SESSION_MIN_WAIT_MS &&
+          Number.isFinite(age) &&
+          age >= PARKED_EVENT_MAX_AGE_MS
+        ) {
+          // Waited past both bounds: a refusal that has not cleared by now
+          // is not going to. The event goes to quarantine with its body, and
+          // the session's later frames ship behind it. The session keeps
+          // when it was first parked, so its next refused frame past the age
+          // bound goes to quarantine without another hour's wait.
+          this.parkedSessions.set(session, {
+            until: now,
+            waitMs: previous?.waitMs ?? PARKED_SESSION_MIN_MS,
+            since,
+          });
+          this.quarantine(
+            head,
+            `refused for ${String(Math.round(age / 3_600_000))} hours: ${error.body.slice(0, 256)}`,
+            bodies.get(head.event_id_idem),
+          );
+          return { shipped: 0, quarantined: 1, reachable: true };
+        }
         const waitMs = Math.min(
           (previous?.waitMs ?? PARKED_SESSION_MIN_MS / 2) * 2,
           PARKED_SESSION_MAX_MS,
         );
         this.parkedSessions.set(session, {
-          until: this.options.now() + waitMs,
+          until: now + waitMs,
           waitMs,
+          since,
+          eventId: head.event_id_idem,
         });
         this.options.log(
-          `session ${session} waits ${String(Math.round(waitMs / 1000))}s for its root session to land; other sessions keep shipping`,
+          `session ${session} waits ${String(Math.round(waitMs / 1000))}s before it is sent again (${String(error.status)}); other sessions keep shipping`,
         );
         // Nothing moved in this batch; the caller's next pass leaves the
         // session out and ships the rest.

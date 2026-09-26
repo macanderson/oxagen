@@ -1,25 +1,24 @@
 // Model fit, first on the Cost tab (pages/run.md, Model fit; the mockup's
 // `runFitPanel`): whether the model class and the effort setting were the
 // right size for this run, one card each. Both cards draw `run.fit`, the
-// reading Oxagen computed from the record after the seal (ADR-194), the same
+// reading Oxagen computed from the record after the seal (ADR-201), the same
 // reading the rig strip's badges print, so the two cannot disagree.
 //
 // The panel is generated, not the record, and says so in its badge. A reading
 // names a capability class, never a model id, and changes nothing on its own:
-// a card that argues for a move offers it as a Context pull request against
-// the agent's definition file (`fit-change.tsx`), and a sealed run keeps the
-// model it ran on.
+// a sealed run keeps the model it ran on, and an agent carries no definition
+// file to change (ADR-198). No contract changes an agent's model class or
+// effort setting from this page yet, so a card that argues for a move draws
+// the move as a stub that says so, never a control that silently does
+// nothing.
 //
 // The effort card prints the effort the record holds, from the helper the rig
 // prints it from, and the reading's verdict beside it only where the reading
 // read that same value.
 import { useTranslations } from "next-intl";
-import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
-import type { Read } from "@/data/read";
-import type { OrgRole } from "@/server/viewer";
 import { Badge } from "@/ui/badge";
-import { mono } from "@/ui/control-styles";
+import { buttonSecondary } from "@/ui/control-styles";
 import {
   effortVerdict,
   fitOf,
@@ -27,45 +26,58 @@ import {
   type ModelFit,
   runEffort,
 } from "./fit";
-import { definitionPath, FitChange } from "./fit-change";
 import { Note, Panel, PanelBody } from "./parts";
-import type { Place } from "./tab-props";
+
+/** `.btn.sm { padding:4px 9px; font-size:12px; border-radius:7px }` */
+const buttonSmall = `${buttonSecondary} min-h-7 rounded-[7px] px-[9px] py-1 text-xs`;
 
 /** `.panel-b b` over `p.muted { margin:6px 0 0; font-size:12.5px }`: a card's title and its reading. */
 const cardTitle = "m-0 text-sm font-bold text-foreground";
 const cardReading = "mb-0 mt-1.5 text-[12.5px] text-muted-foreground";
-const cardAction = "mt-2.5";
 
 /**
- * The file a reading argues against: the path the agent's last committed
- * definition was recorded at, else `.oxagen/agents/<slug>.toml`, where a
- * definition is committed. Null when the agent was not read, and the note
- * says "the agent definition" rather than naming a path it cannot see.
+ * The move a card argues for, drawn as a stub. No contract makes it from
+ * this page yet, so the button is disabled and the line beside it says so.
  */
-function definitionFile(agent: Read<AgentDetail> | null): string | null {
-  if (agent === null || !agent.ok) return null;
-  return definitionPath(agent.value.identity, agent.value.definition);
+function MoveStub({
+  kind,
+  label,
+  why,
+}: {
+  kind: "model" | "effort";
+  label: string;
+  why: string;
+}) {
+  const whyId = `run-fit-${kind}-why`;
+  return (
+    <div className="mt-2.5 flex flex-wrap items-center gap-[9px]">
+      <button
+        type="button"
+        disabled
+        aria-describedby={whyId}
+        data-testid={`fit-move-${kind}`}
+        className={buttonSmall}
+      >
+        {label}
+      </button>
+      <span id={whyId} className="min-w-0 text-[11.5px] text-muted-foreground">
+        {why}
+      </span>
+    </div>
+  );
 }
-
-type Move = {
-  agent: Read<AgentDetail> | null;
-  place: Place;
-  orgRole: OrgRole;
-};
 
 function ModelCard({
   run,
   model,
   read,
   live,
-  move,
 }: {
   run: RunRow;
   model: ModelFit | null;
   read: FitRead | null;
   /** No reading exists for this run: it is live, or its reading is not stored yet. */
   live: boolean | null;
-  move: Move;
 }) {
   const t = useTranslations("run.cost.fit");
   const tier = run.model?.tier ?? null;
@@ -120,20 +132,17 @@ function ModelCard({
                 suggest: model.suggest,
               })}
         </p>
-        <div className={cardAction}>
-          <FitChange
-            kind="model"
-            today={run.model?.slug ?? model.tier}
-            suggest={model.suggest}
-            {...move}
-          />
-        </div>
+        <MoveStub
+          kind="model"
+          label={t("move", { suggest: model.suggest })}
+          why={t("moveStub")}
+        />
       </div>
     </PanelBody>
   );
 }
 
-function EffortCard({ run, move }: { run: RunRow; move: Move }) {
+function EffortCard({ run }: { run: RunRow }) {
   const t = useTranslations("run.cost.fit");
   const effort = runEffort(run);
   const verdict = effortVerdict(run);
@@ -187,38 +196,20 @@ function EffortCard({ run, move }: { run: RunRow; move: Move }) {
                 suggest: verdict.suggest,
               })}
         </p>
-        <div className={cardAction}>
-          <FitChange
-            kind="effort"
-            today={effort.value}
-            suggest={verdict.suggest}
-            {...move}
-          />
-        </div>
+        <MoveStub
+          kind="effort"
+          label={t("setEffort", { suggest: verdict.suggest })}
+          why={t("effortStub")}
+        />
       </div>
     </PanelBody>
   );
 }
 
-export function ModelFitPanel({
-  run,
-  agent,
-  place,
-  orgRole,
-}: {
-  run: RunRow;
-  agent: Read<AgentDetail> | null;
-  place: Place;
-  /** The viewer's organization role: the change is refused below Member. */
-  orgRole: OrgRole;
-}) {
+export function ModelFitPanel({ run }: { run: RunRow }) {
   const t = useTranslations("run.cost.fit");
   const tRun = useTranslations("run");
   const fit = fitOf(run);
-  const file = definitionFile(agent);
-  const fileNode = () =>
-    file === null ? t("fileFallback") : <span className={mono}>{file}</span>;
-  const move = { agent, place, orgRole };
   const read = fit?.read ?? null;
   return (
     <Panel
@@ -236,19 +227,17 @@ export function ModelFitPanel({
         model={fit?.model ?? null}
         read={read}
         live={fit === null ? run.status === "live" : null}
-        move={move}
       />
-      <EffortCard run={run} move={move} />
+      <EffortCard run={run} />
       <PanelBody>
         <Note testId="fit-read">
           {read === null
-            ? t.rich("readNone", { file: fileNode })
-            : t.rich("read", {
+            ? t("readNone")
+            : t("read", {
                 prompts: read.prompts,
                 turns: read.turns,
                 steps: read.steps,
                 failed: read.failed,
-                file: fileNode,
               })}
         </Note>
       </PanelBody>

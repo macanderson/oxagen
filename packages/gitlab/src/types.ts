@@ -66,6 +66,10 @@ export interface GitLabMergeRequest {
   mergedAt: string | null;
   detailedMergeStatus: string | null;
   projectId: string;
+  /** Whether it is a draft; absent when GitLab said neither way. */
+  draft?: boolean;
+  /** GitLab's `updated_at`; absent when the answer carried none. */
+  updatedAt?: string;
 }
 
 export interface GitLabChangedPath {

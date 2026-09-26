@@ -40,6 +40,7 @@
       "label": "Fleet summary",
       "live": {
         "title": "Live runs",
+        "notCounted": "not counted",
         "basis": "of {count, plural, one {# agent} other {# agents}} in this workspace",
         "basisUnread": "the workspace's agents were not read"
       },
@@ -47,13 +48,16 @@
         "title": "Waiting on a human",
         "open": "Open approvals",
         "oldest": "oldest approval has waited <clock></clock> of {window}",
-        "none": "nothing is parked",
+        "oldestInterjection": "{count, plural, one {an interjection has} other {the oldest of # interjections has}} waited <clock></clock> of {window}",
+        "none": "nothing is waiting",
         "drawer": "open the drawer",
         "more": "{count}+",
         "moreBasis": "more are parked than this page read",
+        "moreInterjections": "more questions wait than this page read",
         "window": "{minutes}m",
         "windowSeconds": "{minutes}m {seconds}s",
-        "interjections": "interjections not recorded",
+        "interjections": "{count, plural, one {# interjection} other {# interjections}}",
+        "interjectionsUnread": "interjections not read: {code}",
         "unread": "approvals not read: {code}"
       },
       "spend": {
@@ -68,7 +72,10 @@
       "tokens": {
         "title": "Tokens shown",
         "notRecorded": "not recorded",
-        "noCache": "no cache figure recorded"
+        "noCache": "no cache figure recorded",
+        "servedFromCache": "{ratio} served from cache",
+        "reported": "{count, plural, one {# row counted by its agent} other {# rows counted by their agents}}",
+        "unrecorded": "{count, plural, one {# row not recorded} other {# rows not recorded}}"
       }
     },
     "approvals": {
@@ -151,12 +158,12 @@
         "parked": "parked",
         "sealed": "sealed"
       },
-      "search": "Search this list",
+      "searchRuns": "Search runs",
       "facetAll": "All · {facet}",
       "facetLabel": "Filter by {facet}",
       "rows": "Runs per page",
       "sortBy": "Sort by {column}",
-      "tokensUnsorted": "Runs carry no token figure yet, so there is nothing to sort.",
+      "tokensUnsorted": "Runs are ordered on the server, which cannot order them by tokens yet.",
       "columns": {
         "run": "Run",
         "summary": "Summary",
@@ -192,7 +199,13 @@
         "rangeMore": "{from}–{to} of {total}+",
         "none": "0 of 0",
         "older": "Older runs",
-        "newest": "Newest runs"
+        "newest": "Newest runs",
+        "rangeEmpty": "0 of {total}",
+        "rangeEmptyMore": "0 of {total}+",
+        "previous": "Previous",
+        "next": "Next",
+        "page": "Page {page}",
+        "shown": "{n, plural, one {# run on this page} other {# runs on this page}}"
       },
       "pause": "Pause",
       "resolve": "Resolve",
@@ -232,7 +245,7 @@
         "more": "+{count} more",
         "unnamed": "Pull request",
         "stateUnknown": "status unknown",
-        "stateUnknownHint": "Oxagen does not record pull request status yet. Open the run to read it from GitHub.",
+        "stateUnknownHint": "No forge has reported this pull request's status to Oxagen. Open the run to read it from GitHub.",
         "state": {
           "open": "open",
           "draft": "draft",
@@ -240,7 +253,8 @@
           "closed": "closed"
         },
         "openOnGitHub": "Open {pr} on GitHub",
-        "openOnGitLab": "Open {pr} on GitLab"
+        "openOnGitLab": "Open {pr} on GitLab",
+        "stateSeen": "Status as of {when}"
       },
       "diff": {
         "none": "not recorded",
@@ -250,6 +264,16 @@
           "harness_reported": "Lines added and removed, as the harness reported at the end of the session.",
           "git_observed": "Uncommitted lines git reported at the last check. Committed work is not counted."
         }
+      },
+      "paused": "paused",
+      "pausedHint": "An operator paused this run. Open it to resume.",
+      "compacted": "compacted",
+      "compactedHint": "This run's frames were moved to its archive segment. The record is unchanged.",
+      "open": "Open",
+      "tokens": {
+        "cached": "{ratio} cached",
+        "reported": "reported",
+        "reportedHint": "The agent's own count. Oxagen has not rolled this run up yet."
       }
     },
     "pause": {
@@ -273,14 +297,18 @@
       "title": "No runs yet in {workspace}",
       "body": "Nothing has reached Oxagen from this workspace. A run appears the moment a registered agent makes its first model call. You do not create runs here. Agents do.",
       "register": "Register Agent",
-      "agents": "Open Agents"
+      "agents": "Open Agents",
+      "enroll": "To record an agent that already runs on a machine, run <code>oxagen agent enroll</code> on that machine."
     },
     "error": {
       "title": "Fleet could not be loaded",
       "body": "The control plane answered <c>{status} {code}</c>. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
       "retry": "Try again",
       "incident": "Open an incident",
-      "trace": "trace and region not recorded · {at}"
+      "traceId": "trace {id}",
+      "traceNotRecorded": "trace not recorded",
+      "regionNotRecorded": "region not recorded",
+      "requestId": "request {id}"
     },
     "denied": {
       "title": "You cannot see this workspace",
@@ -291,7 +319,10 @@
       "needed": "Needed",
       "neededValue": "{permission} on {ws}",
       "decidedBy": "Decided by",
-      "decidedByValue": "policy not recorded · deny wins over every allow"
+      "decidedByValue": "policy not recorded · deny wins over every allow",
+      "decidedByIam": "IAM rule <c>{rule}</c>",
+      "decidedByRule": "decision rule <c>{rule}</c>",
+      "bodyRule": "A decision rule on <b>{org}</b> refused this read. Your roles include <c>{permission} on {ws}</c>. A workspace admin can change the rule, and the change lands in the audit record."
     },
     "pending": {
       "title": "Your access request is waiting",
@@ -318,7 +349,9 @@
       "attach": "Attach",
       "raise": "Raise it",
       "cancel": "Cancel",
-      "unbacked": "Oxagen has no record to raise an incident in yet, so this cannot be sent. Report {status} {code} at {at} to whoever runs this deployment."
+      "unbacked": "Oxagen has no record to raise an incident in yet, so this cannot be sent. Report {status} {code} at {at} to whoever runs this deployment.",
+      "traceItem": "trace {id}",
+      "requestItem": "request {id}"
     }
   }
 }

@@ -25,27 +25,6 @@ export function clonedConfigurationText(
   slug: string,
   name: string,
 ) {
-  if (original.kind === "agent") {
-    const parsed = parseSource(original.source);
-    if (parsed.slug !== original.slug) return invalid();
-    const fields = [
-      "schema",
-      "description",
-      "model_tier",
-      "tools",
-      "deny_tools",
-      "side_effects",
-      "budget",
-      "instructions",
-      "harness",
-    ];
-    const doc = Object.fromEntries(
-      fields
-        .filter((key) => Object.hasOwn(parsed, key))
-        .map((key) => [key, parsed[key]]),
-    );
-    return stringify({ ...doc, slug, name });
-  }
   if (original.kind === "skill") {
     const frontmatter = readSkillFrontmatter(original.source);
     if (!frontmatter || frontmatter.fields.name !== original.slug)
@@ -108,10 +87,5 @@ export function applyCloneIdentity(
     return `---\n${String(header)}---\n${lines.slice(fm.bodyStart).join("\n")}`;
   }
   const doc = parseSource(input.source);
-  return stringify({
-    ...doc,
-    ...(input.kind === "agent"
-      ? { slug: input.slug, name: input.name }
-      : { lineageId: input.slug, label: input.name }),
-  });
+  return stringify({ ...doc, lineageId: input.slug, label: input.name });
 }
