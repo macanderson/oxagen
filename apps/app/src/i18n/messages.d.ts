@@ -5733,6 +5733,8 @@ type Messages = {
       cutLive: string;
       more: string;
       readingMore: string;
+      older: string;
+      readingOlder: string;
       loadedMore: string;
       badCursor: string;
       pageFailed: string;

@@ -22,23 +22,30 @@
 // The transport moves the viewer, never the run. Its position is a count of
 // rows shown; playback reveals the next row after the recorded gap to it,
 // compressed and divided by the speed (`txPaced`), and a search shows every
-// match at once. A sealed run opens at its end; a live run opens following
-// its head, and pausing stops following without touching the run.
+// match at once. A sealed run plays from its first row as the page opens; a
+// live run opens following its head, and pausing stops following without
+// touching the run.
+//
+// A run can record for days and hold hundreds of thousands of frames, so the
+// view reads a page at a time (`TRANSCRIPT_PAGE`, #4427). A sealed run opens
+// on its first page and reads the next once playback passes half of what it
+// holds. A live run opens on its last page and reads the page ahead of it
+// when the reader scrolls up.
 //
 // A live run follows its own head over the SSE route
 // (`GET /v1/:org/:ws/runs/:run_id/stream`, reached same-origin through the
 // `/api/v1/*` rewrite). The stream carries frames, and the transcript carries
 // entries the contract derives from them, so a frame landing is the signal to
-// read the tail rather than something to render. A run longer than one read
-// is paged rather than truncated: entries are appended, never replaced, and a
-// cursor this capability did not write is refused and said so. A live run
-// past the read's frame cap cannot be followed past it, and the footer says
-// so while the stream is open.
+// read the tail rather than something to render. A cursor this capability
+// did not write is refused and said so. A live run past the read's frame cap
+// cannot be followed past it, and the footer says so while the stream is
+// open.
 import { useLocale, useTranslations } from "next-intl";
 import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -73,8 +80,12 @@ import {
   type FeedRow,
   type Frames,
   type FrameRef,
+  entryKey,
   mergeEntries,
+  mergeTail,
+  prependEntries,
   rebaseEntries,
+  TRANSCRIPT_PAGE,
 } from "./transcript-rows";
 import { useRunStream } from "./use-run-stream";
 import { useStaleRefresh } from "./use-stale-refresh";
@@ -111,6 +122,18 @@ type Found = {
 
 /** How long the reader stops typing before the search goes to the server. */
 const SEARCH_DEBOUNCE_MS = 300;
+
+/**
+ * How close to the feed's foot the reader must be for new rows to keep it
+ * there (mockup `replay.js`, 60px).
+ */
+const FOLLOW_PX = 60;
+
+/** How close to the feed's top a live view reads the page ahead. */
+const OLDER_PX = 120;
+
+/** Where the page's read opened: the run's first entry, or its last page. */
+export type TranscriptFrom = "start" | "end";
 
 /**
  * The field's words as a query the contract takes: trimmed, and cut at its
@@ -406,6 +429,8 @@ const txRecall =
   "mt-[3px] mb-0.5 ml-5 grid grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-0.5 text-[11px]";
 /** `.tx-empty { padding:18px 16px; color:var(--dim) }` */
 const txEmpty = "px-4 py-[18px] text-dim";
+/** The control over a live view's first row that reads the page ahead. */
+const txOlder = "flex justify-center px-4 pt-1 pb-2";
 /** `.txs mark { background:var(--gold); color:var(--on-gold); border-radius:2px }` */
 const txMark = "rounded-[2px] bg-gold px-px text-on-gold";
 
@@ -1486,6 +1511,7 @@ function eachGroup<T>(value: (group: FeedGroup) => T): Record<FeedGroup, T> {
 export function TranscriptView({
   transcript,
   entries: first,
+  from,
   run,
   kinds,
   org,
@@ -1494,15 +1520,21 @@ export function TranscriptView({
 }: {
   /**
    * `cursor` is set when entries lie past this read: more can be paged in.
-   * `counts` is the whole run's, counted by the server. `frameCursor` is
+   * `before` is set on a read from the run's end while entries lie ahead of
+   * it. `counts` is the whole run's, counted by the server. `frameCursor` is
    * where the live stream opens.
    */
   transcript: Pick<
     RunTranscript,
-    "complete" | "cursor" | "counts" | "frameCursor"
+    "complete" | "cursor" | "before" | "counts" | "frameCursor"
   >;
-  /** The first page's entries at `steps`, at least one. */
+  /** The page's entries at `steps`, at least one. */
   entries: Frames;
+  /**
+   * Where the page's read opened: `start` for a run the view replays, `end`
+   * for a live run it follows. The view keeps the mode it opened in.
+   */
+  from: TranscriptFrom;
   run: TranscriptRun;
   /** The URL's `?kinds=`, which sets the chips a link opens with. */
   kinds: KindFilter;
@@ -1512,6 +1544,11 @@ export function TranscriptView({
   const navigate = useNavigate();
   const place = useMemo(() => ({ org, ws, runId }), [org, ws, runId]);
   const live = run.status === "live";
+  // Where the view reads from, fixed when it opens. A view that opened at
+  // the run's end pages up from there; one that opened at its first entry
+  // pages forward as it plays. A live view keeps its end once the run seals.
+  const [mode] = useState(from);
+  const tail = mode === "end";
   // The run's counts as the latest read left them: every page carries the
   // whole run's, so the chips follow a live run as its tail is read.
   const [counts, setCounts] = useState<TranscriptCounts | null>(
@@ -1537,22 +1574,53 @@ export function TranscriptView({
   const [complete, setComplete] = useState(transcript.complete);
   const [reading, setReading] = useState(false);
   const [pageFailure, setPageFailure] = useState<PageFailure | null>(null);
+  // The point to read the page ahead of the first entry held, for a view
+  // that opened at the run's end; null once it holds the run's first entry.
+  const firstBefore = tail ? (transcript.before ?? null) : null;
+  const beforeRef = useRef<string | null>(firstBefore);
+  const [before, setBefore] = useState<string | null>(firstBefore);
+  const olderRef = useRef(false);
+  const [readingOlder, setReadingOlder] = useState(false);
+  // The tail read a view that opened at the run's end makes once the seal
+  // re-reads the page from the run's first entry. A count, so each seal asks.
+  const [retail, setRetail] = useState(0);
 
   // The page read the run again: the seal refreshes it, and so do the run
   // controls. That read is the record as it stands, in the order the server
   // placed it, so it replaces what this view had paged in. A subagent frame
   // the tail read could not reach, because it landed before the cursor,
-  // arrives this way once the run seals (#4083). Entries this view read past
-  // the page's own bound stay, and so does the cursor that reached them.
+  // arrives this way once the run seals (#4083). Entries this view read
+  // outside the page's own bounds stay, and so do the cursors that reached
+  // them.
   const [readFrom, setReadFrom] = useState(first);
   if (readFrom !== first) {
     setReadFrom(first);
-    const rebased = rebaseEntries(first, entries);
-    setEntries(rebased);
     setCounts(transcript.counts);
-    if (rebased.length === first.length) {
-      setCursor(transcript.cursor);
+    if (from !== mode) {
+      // The seal re-read the run from its first entry, and this view holds
+      // its end. It reads its own end again instead (`retail` below).
       setComplete(transcript.complete);
+      setRetail((count) => count + 1);
+    } else {
+      const rebased = rebaseEntries(first, entries);
+      if (rebased === null) {
+        // A tail read that shares nothing with what the view holds: the run
+        // moved more than a page past it. The view takes the new tail.
+        setEntries(first);
+        setCursor(transcript.cursor);
+        setComplete(transcript.complete);
+        setBefore(firstBefore);
+      } else {
+        setEntries(rebased);
+        // The rebase places the fresh read's own entries, so a list that
+        // ends on the read's last entry holds nothing past it, and one that
+        // opens on its first holds nothing ahead of it.
+        if (rebased.at(-1) === first.at(-1)) {
+          setCursor(transcript.cursor);
+          setComplete(transcript.complete);
+        }
+        if (tail && rebased[0] === first[0]) setBefore(firstBefore);
+      }
     }
   }
   // The refs follow the state a rebase set. A page read sets both itself,
@@ -1563,6 +1631,9 @@ export function TranscriptView({
   useEffect(() => {
     cursorRef.current = cursor;
   }, [cursor]);
+  useEffect(() => {
+    beforeRef.current = before;
+  }, [before]);
 
   const [on, setOn] = useState(() => initialGroups(kinds));
   const [errorsOnly, setErrorsOnly] = useState(
@@ -1633,25 +1704,48 @@ export function TranscriptView({
   const total = visible.length;
 
   // The transport. `pos` is how many rows are shown; null holds the end, so
-  // a live run's new rows appear as they land.
-  const [pos, setPos] = useState<number | null>(null);
-  const [playing, setPlaying] = useState(live);
+  // a live run's new rows appear as they land. A view that opened at the
+  // run's first entry plays from its first row as the page opens (#4427).
+  const [pos, setPos] = useState<number | null>(tail ? null : 0);
+  const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState<Speed>(1);
   const at = paced ? Math.min(pos ?? total, total) : total;
-  // A sealed run stops at its last row; a live one waits there for more.
-  const isPlaying = playing && paced && (live || at < total);
-  const done = !isPlaying && at >= total && !live;
+  // A replay with pages still unread waits at the last row it holds while
+  // the next page is read, as a live view waits for the run.
+  const waits = live || (!tail && cursor !== null);
+  const isPlaying = playing && paced && (waits || at < total);
+  const done = !isPlaying && at >= total && !waits;
   const feedRef = useRef<HTMLDivElement>(null);
+  // True while the reader is at the feed's foot, so new rows keep it there.
+  const followRef = useRef(true);
+  // The distance from the feed's foot to its scroll position before a page
+  // was laid above the rows, so the rows the reader was on stay put.
+  const anchorRef = useRef<number | null>(null);
+
+  // Rows laid ahead of the first one shown (a page ahead, or a chip turned
+  // on) move a held position down by as many, so the rows shown stay shown.
+  // A search draws its own rows and holds no position, so it moves nothing.
+  const [shownFrom, setShownFrom] = useState(visible[0]?.key ?? null);
+  const firstKey = searching ? shownFrom : (visible[0]?.key ?? null);
+  if (shownFrom !== firstKey) {
+    setShownFrom(firstKey);
+    const moved =
+      shownFrom === null
+        ? -1
+        : visible.findIndex((row) => row.key === shownFrom);
+    if (pos !== null && moved > 0) setPos(pos + moved);
+  }
 
   /**
    * Read the page past the cursor and append it. Nothing already on screen is
    * replaced, so the scroll position and the playhead survive the read.
    *
-   * A coalesced stream signal is only "there is more to read", not a page
-   * count. When a page comes back full (entry count equals the request
-   * limit) and still carries a resume cursor, this drains the next page in
-   * the same call so a long live replay does not stall hundreds of entries
-   * behind the head until another frame lands.
+   * A replay reads one page ahead of its playhead. A live view catches up
+   * with the run: a coalesced stream signal is only "there is more to read",
+   * not a page count, so when a page comes back full and still carries a
+   * resume cursor, this drains the next page in the same call so the view
+   * does not stall hundreds of entries behind the head until another frame
+   * lands.
    */
   const readPending = () => pendingReadRef.current;
 
@@ -1681,13 +1775,13 @@ export function TranscriptView({
         // the next page.
         if (cursorRef.current === null) return;
         // The chips show and hide rows already read, so every page is read
-        // whole, at the zoom and text the page read. It is read at the most
-        // a page holds: every page costs a whole refold on the server
-        // (#4340), so fewer, larger pages drain a run sooner.
+        // whole, at the zoom and text the page read. A live view reads at
+        // the most a page holds: every page costs a whole refold on the
+        // server (#4340), so fewer, larger pages catch up sooner.
         const read = await readTranscriptPage(org, ws, runId, "steps", {
           after: cursorRef.current,
           text: "full",
-          limit: TRANSCRIPT_ENTRY_MAX,
+          limit: tail ? TRANSCRIPT_ENTRY_MAX : TRANSCRIPT_PAGE,
         });
         if (!read.ok) {
           setPageFailure(read);
@@ -1706,12 +1800,15 @@ export function TranscriptView({
         }
         // A page can send again an entry the view holds, grown since it was
         // sent; it replaces its row rather than drawing the step twice.
-        const next: Frames = mergeEntries(heldRef.current, pageEntries);
+        const next: Frames = tail
+          ? mergeTail(heldRef.current, pageEntries)
+          : mergeEntries(heldRef.current, pageEntries);
         heldRef.current = next;
         setEntries(next);
         // Full page with a resume cursor means more history is waiting.
         // Drain it now. A short page or a null cursor ends the drain.
         drainMore =
+          tail &&
           pageEntries.length >= TRANSCRIPT_ENTRY_MAX &&
           cursorRef.current !== null;
         // Read through a function rather than the ref directly: the ref can
@@ -1733,26 +1830,137 @@ export function TranscriptView({
         void loadMoreRef.current();
       }
     }
-  }, [org, runId, ws]);
+  }, [org, runId, ws, tail]);
   useEffect(() => {
     loadMoreRef.current = loadMore;
   }, [loadMore]);
 
-  // The page reads one page of the run before it draws, because every page
-  // costs a whole refold on the server (#4420). A full first page with a
-  // cursor has more behind it, so the view reads the rest once it is on
-  // screen. It cannot wait for a click: a live run past the frame cap hides
-  // the "more" control while it follows. The timer keeps the read out of the
-  // effect's own pass, as the search's does.
-  const firstFull = first.length >= TRANSCRIPT_ENTRY_MAX;
-  const firstCursor = transcript.cursor;
+  /**
+   * Read the page ahead of the first entry the view holds and lay it above.
+   * The rows the reader was looking at stay where they were on screen.
+   */
+  const loadOlder = useCallback(async (): Promise<void> => {
+    const ahead = beforeRef.current;
+    if (ahead === null || olderRef.current) return;
+    olderRef.current = true;
+    setReadingOlder(true);
+    try {
+      const read = await readTranscriptPage(org, ws, runId, "steps", {
+        before: ahead,
+        text: "full",
+        limit: TRANSCRIPT_PAGE,
+      });
+      if (!read.ok) {
+        setPageFailure(read);
+        return;
+      }
+      setPageFailure(null);
+      const feed = feedRef.current;
+      anchorRef.current =
+        feed === null ? null : feed.scrollHeight - feed.scrollTop;
+      const next = prependEntries(heldRef.current, read.value.entries);
+      heldRef.current = next;
+      setEntries(next);
+      beforeRef.current = read.value.before ?? null;
+      setBefore(read.value.before ?? null);
+      if (read.value.counts !== null) setCounts(read.value.counts);
+    } catch {
+      setPageFailure({ ok: false, reason: "unavailable", code: "unanswered" });
+    } finally {
+      olderRef.current = false;
+      setReadingOlder(false);
+    }
+  }, [org, runId, ws]);
+
+  // A page laid above the rows keeps the reader's place: the distance from
+  // the foot is what it was, so the rows on screen stay on screen.
+  useLayoutEffect(() => {
+    const anchor = anchorRef.current;
+    const feed = feedRef.current;
+    if (anchor === null || feed === null) return;
+    anchorRef.current = null;
+    feed.scrollTop = feed.scrollHeight - anchor;
+  }, [entries]);
+
+  /**
+   * The seal re-read the page from the run's first entry, and this view
+   * holds the run's end, so it reads its own end again, as many entries as
+   * it holds, and rebases onto that read. A subagent entry the tail reads
+   * could not reach lands under its call this way (#4083).
+   */
+  const readEnd = useCallback(async (): Promise<void> => {
+    const holding = heldRef.current.length;
+    try {
+      const read = await readTranscriptPage(org, ws, runId, "steps", {
+        from: "end",
+        text: "full",
+        limit: Math.min(
+          TRANSCRIPT_ENTRY_MAX,
+          Math.max(TRANSCRIPT_PAGE, holding),
+        ),
+      });
+      if (!read.ok) {
+        setPageFailure(read);
+        return;
+      }
+      const [lead, ...rest] = read.value.entries;
+      if (lead === undefined) return;
+      const fresh: Frames = [lead, ...rest];
+      const rebased = rebaseEntries(fresh, heldRef.current) ?? fresh;
+      heldRef.current = rebased;
+      setEntries(rebased);
+      if (read.value.counts !== null) setCounts(read.value.counts);
+      setComplete(read.value.complete);
+      if (rebased.at(-1) === fresh.at(-1)) {
+        cursorRef.current = read.value.cursor;
+        setCursor(read.value.cursor);
+      }
+      if (rebased[0] === fresh[0]) {
+        beforeRef.current = read.value.before ?? null;
+        setBefore(read.value.before ?? null);
+      }
+    } catch {
+      setPageFailure({ ok: false, reason: "unavailable", code: "unanswered" });
+    }
+  }, [org, runId, ws]);
   useEffect(() => {
-    if (!firstFull || firstCursor === null) return;
+    if (retail === 0) return;
     const timer = setTimeout(() => {
+      void readEnd();
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [retail, readEnd]);
+
+  // A replay reads the next page once playback passes half of what it
+  // holds, so the rows ahead are in before the playhead reaches them. The
+  // playhead is a row, so its place is the entry that row draws. Each length
+  // of the held list asks once; the "more" control retries a page that
+  // failed. The timer keeps the read out of the effect's own pass, as the
+  // search's does.
+  const entryIndex = useMemo(
+    () => new Map(entries.map((entry, index) => [entryKey(entry), index])),
+    [entries],
+  );
+  const playedTo =
+    at >= total
+      ? entries.length
+      : (entryIndex.get(visible[at]?.entry ?? "") ?? 0);
+  const halfway =
+    !tail && paced && cursor !== null && playedTo * 2 >= entries.length;
+  const askedRef = useRef(0);
+  const heldCount = entries.length;
+  useEffect(() => {
+    if (!halfway || askedRef.current >= heldCount) return;
+    const timer = setTimeout(() => {
+      askedRef.current = heldCount;
       void loadMore();
     }, 0);
-    return () => clearTimeout(timer);
-  }, [firstFull, firstCursor, loadMore]);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [halfway, heldCount, loadMore]);
 
   /**
    * The next page of a search's matches. The server pages matches on the
@@ -1821,7 +2029,9 @@ export function TranscriptView({
     if (stream === "sealed") navigate.refresh();
   }, [stream, navigate]);
 
-  // Playback reveals the next row after the recorded gap to it.
+  // Playback reveals the next row after the recorded gap to it. A live view
+  // that reaches the last row holds the end, so rows appear as they land; a
+  // replay holds a count, so a page read ahead does not show all at once.
   useEffect(() => {
     if (!isPlaying || at >= total) return;
     const next = visible[at];
@@ -1829,21 +2039,32 @@ export function TranscriptView({
     const gap = (next?.elapsedMs ?? previous) - previous;
     const timer = setTimeout(
       () => {
-        setPos(at + 1 >= total ? null : at + 1);
+        setPos(at + 1 >= total && tail ? null : at + 1);
       },
       paceMs(gap, speed),
     );
     return () => {
       clearTimeout(timer);
     };
-  }, [isPlaying, at, total, visible, speed]);
+  }, [isPlaying, at, total, visible, speed, tail]);
 
-  // Keep the newest row in view while playing or following.
+  // Keep the newest row in view while playing or following, unless the
+  // reader has scrolled away from the foot.
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying || !followRef.current) return;
     const feed = feedRef.current;
     if (feed !== null) feed.scrollTop = feed.scrollHeight;
   }, [isPlaying, at]);
+
+  // The reader's place: at the foot, new rows keep them there. Near the top
+  // of a view that opened at the run's end, the page ahead is read.
+  const onFeedScroll = () => {
+    const feed = feedRef.current;
+    if (feed === null) return;
+    followRef.current =
+      feed.scrollHeight - feed.scrollTop - feed.clientHeight <= FOLLOW_PX;
+    if (tail && !searching && feed.scrollTop <= OLDER_PX) void loadOlder();
+  };
 
   const toggle = useCallback((key: string) => {
     setOpen((prev) => {
@@ -1865,6 +2086,7 @@ export function TranscriptView({
   };
   const playPause = () => {
     if (done) {
+      followRef.current = true;
       setPos(0);
       setPlaying(true);
       return;
@@ -2176,7 +2398,27 @@ export function TranscriptView({
           </span>
           <Burn spent={spent} total={spentTotal} />
         </div>
-        <div ref={feedRef} data-testid="tx-feed" className={txFeed}>
+        <div
+          ref={feedRef}
+          data-testid="tx-feed"
+          className={txFeed}
+          onScroll={onFeedScroll}
+        >
+          {tail && before !== null && !searching ? (
+            <div className={txOlder}>
+              <button
+                type="button"
+                data-testid="transcript-older"
+                disabled={readingOlder}
+                onClick={() => {
+                  void loadOlder();
+                }}
+                className={txButton}
+              >
+                {readingOlder ? t("readingOlder") : t("older")}
+              </button>
+            </div>
+          ) : null}
           {total === 0 ? (
             <div data-testid="transcript-empty" className={txEmpty}>
               {empty}

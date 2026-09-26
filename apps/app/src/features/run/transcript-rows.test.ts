@@ -22,6 +22,8 @@ import {
   feedOf,
   LINE_CAP,
   mergeEntries,
+  mergeTail,
+  prependEntries,
   rebaseEntries,
   rowsOf,
   soleBody,
@@ -850,7 +852,7 @@ describe("rebaseEntries", () => {
       entry("1", { subagent: sub }),
       entry("3"),
     ] as const;
-    expect(rebaseEntries(fresh, held).map(entryKey)).toEqual([
+    expect(rebaseEntries(fresh, held)?.map(entryKey)).toEqual([
       "1",
       "2",
       `${CHAIN}:0`,
@@ -865,7 +867,7 @@ describe("rebaseEntries", () => {
     const held = [entry("1"), entry("2"), entry("3")] as const;
     const fresh = [entry("1"), entry("2", { frames: 2 })] as const;
     const rebased = rebaseEntries(fresh, held);
-    expect(rebased.map((e) => [e.seq, e.frames])).toEqual([
+    expect(rebased?.map((e) => [e.seq, e.frames])).toEqual([
       ["1", 1],
       ["2", 2],
       ["3", 1],
@@ -875,6 +877,78 @@ describe("rebaseEntries", () => {
   it("answers the fresh read itself when it holds everything (negative)", () => {
     const fresh = [entry("1"), entry("2")] as const;
     expect(rebaseEntries(fresh, [entry("1")])).toBe(fresh);
+  });
+
+  it("keeps the entries a reader paged in ahead of a fresh tail read, ahead of it", () => {
+    const held = [entry("1"), entry("2"), entry("3"), entry("4")] as const;
+    const fresh = [
+      entry("3", { frames: 2 }),
+      entry("4"),
+      entry("5"),
+    ] as const;
+    const rebased = rebaseEntries(fresh, held);
+    expect(rebased?.map((e) => [e.seq, e.frames])).toEqual([
+      ["1", 1],
+      ["2", 1],
+      ["3", 2],
+      ["4", 1],
+      ["5", 1],
+    ]);
+  });
+
+  it("answers null when the fresh read shares no entry with what the reader holds", () => {
+    const held = [entry("1"), entry("2")] as const;
+    const fresh = [entry("7"), entry("8")] as const;
+    expect(rebaseEntries(fresh, held)).toBeNull();
+  });
+});
+
+describe("prependEntries", () => {
+  const entry = (seq: string, over: Partial<TranscriptEntry> = {}) =>
+    transcriptEntry({ seq, endSeq: seq, frames: 1, ...over });
+
+  it("lays an older page ahead of what the reader holds, in the page's order", () => {
+    const held = [entry("5"), entry("6")] as const;
+    const page = [entry("3"), entry("4")];
+    expect(prependEntries(held, page).map((e) => e.seq)).toEqual([
+      "3",
+      "4",
+      "5",
+      "6",
+    ]);
+  });
+
+  it("replaces an entry the reader holds where it stands rather than drawing it twice", () => {
+    const held = [entry("4"), entry("5")] as const;
+    const page = [entry("3"), entry("4", { frames: 3 })];
+    const merged = prependEntries(held, page);
+    expect(merged.map((e) => [e.seq, e.frames])).toEqual([
+      ["3", 1],
+      ["4", 3],
+      ["5", 1],
+    ]);
+  });
+});
+
+describe("mergeTail", () => {
+  const entry = (seq: string, elapsedMs: number, frames = 1) =>
+    transcriptEntry({ seq, endSeq: seq, frames, elapsedMs });
+
+  it("leaves an entry ahead of the reader's first one for the page ahead", () => {
+    const held = [entry("5", 5_000), entry("6", 6_000)] as const;
+    const page = [entry("2", 2_000, 4), entry("7", 7_000)];
+    expect(mergeTail(held, page).map((e) => e.seq)).toEqual(["5", "6", "7"]);
+  });
+
+  it("replaces a held entry that grew, and appends the new ones", () => {
+    const held = [entry("5", 5_000), entry("6", 6_000)] as const;
+    const page = [entry("6", 6_000, 2), entry("7", 7_000)];
+    const merged = mergeTail(held, page);
+    expect(merged.map((e) => [e.seq, e.frames])).toEqual([
+      ["5", 1],
+      ["6", 2],
+      ["7", 1],
+    ]);
   });
 });
 

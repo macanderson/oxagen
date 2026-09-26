@@ -262,10 +262,10 @@ export async function readTranscriptPage(
     text?: TranscriptText;
     query?: string;
     /**
-     * Entries on the page, at most the contract's `TRANSCRIPT_ENTRY_MAX`. The
-     * player reads the run past its first page at the most a page holds,
-     * since every page costs a whole refold on the server (#4340). A search
-     * reads the default.
+     * Entries on the page, at most the contract's `TRANSCRIPT_ENTRY_MAX`. A
+     * live view catches up with the run at the most a page holds, since
+     * every page costs a whole refold on the server (#4340); a replay and a
+     * page ahead read `TRANSCRIPT_PAGE`. A search reads the default.
      */
     limit?: number;
   },

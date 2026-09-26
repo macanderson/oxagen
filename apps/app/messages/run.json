@@ -161,6 +161,8 @@
       "cutLive": "{count} entries. The run has more frames than one read carries, so this view stops here. The run is still recording.",
       "more": "Read more",
       "readingMore": "Reading",
+      "older": "Read earlier entries",
+      "readingOlder": "Reading earlier entries",
       "loadedMore": "{count} entries read so far. More lie past this page.",
       "badCursor": "That resume point is not one this read wrote, so the next page was refused. Everything above is still the record.",
       "pageFailed": "The next page could not be read. Everything above is still the record.",
