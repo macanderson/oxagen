@@ -59,7 +59,10 @@ import {
 import { codexHarnessPid } from "./harness-process";
 import { hookInputSchema } from "./hooks";
 import {
+  type PsLookup,
   psStartInstance,
+  resolveStellaIdentity,
+  type StellaIdentity,
   stellaAnswer,
   stellaHarnessPid,
   translateStellaPayload,
@@ -264,19 +267,33 @@ export interface HookRunDeps {
   agent?: string;
   /**
    * The harness process's pid, for a harness that exports none: Stella
-   * (whose payload names no session either) and Codex. Defaults to walking
-   * up from this process's parent with `ps` (`stellaHarnessPid`,
-   * `codexHarnessPid`). Undefined means no pid names this one session, and
-   * the daemon falls back to its idle bound. Codex asks only at
-   * `SessionStart` and `UserPromptSubmit`. Cursor never asks.
+   * (whose payload names no session either) and Codex. For Codex it defaults
+   * to walking up from this process's parent with `ps` (`codexHarnessPid`),
+   * and for Stella to the cached identity (`resolveStellaIdentity`).
+   * Undefined means no pid names this one session, and the daemon falls back
+   * to its idle bound. Codex asks only at `SessionStart` and
+   * `UserPromptSubmit`. Cursor never asks. Given for Stella, it and
+   * `harnessInstance` replace the cache.
    */
   harnessPid?: () => number | undefined;
   /**
    * The Stella process instance token (its start time), which keeps a reused
-   * pid off the previous run's chain. Defaults to one `ps` call; `undefined`
-   * from it means the session id falls back to the bare pid form.
+   * pid off the previous run's chain. `undefined` from it means the session
+   * id falls back to the bare pid form. Given, it replaces the cache the way
+   * `harnessPid` does.
    */
   harnessInstance?: (pid: number) => string | undefined;
+  /**
+   * The two `ps` reads behind a Stella identity when neither override above
+   * is given: the parent's parent and name, and a process's start time. The
+   * identity is cached under `TACHO_HOME` (`resolveStellaIdentity`), so most
+   * hooks call neither. A test injects them to count the calls or to fail
+   * one.
+   */
+  stellaPs?: {
+    lookup?: PsLookup;
+    startInstance?: (pid: number) => string | undefined;
+  };
   /** `win32` has no Unix socket, so the hook posts over loopback TCP. */
   platform?: NodeJS.Platform;
   /**
@@ -879,17 +896,49 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       path: "invalid",
     };
   }
+  // The enrollment is read before anything that spawns a process, so an
+  // unenrolled machine answers a Stella hook without running `ps` (H-14).
+  // What the read found is acted on further down, after the payload parse.
+  let host: HostFile | undefined;
+  let hostReadError: { error: unknown } | undefined;
+  try {
+    host = (deps.readHost ?? (() => readHostFile(deps.paths.hostFile)))();
+  } catch (error) {
+    hostReadError = { error };
+  }
   let harnessPid: number | undefined;
   if (stella) {
-    const pid = deps.harnessPid?.() ?? stellaHarnessPid(process.ppid, platform);
-    harnessPid = pid;
-    // Windows has no `ps`, so there the id stays the bare pid form.
-    const instance = (
-      deps.harnessInstance ??
-      ((pid: number) =>
-        platform === "win32" ? undefined : psStartInstance(pid))
-    )(pid);
-    raw = translateStellaPayload(raw, pid, instance);
+    let identity: StellaIdentity;
+    if (deps.harnessPid !== undefined || deps.harnessInstance !== undefined) {
+      const pid =
+        deps.harnessPid?.() ?? stellaHarnessPid(process.ppid, platform);
+      // Windows has no `ps`, so there the id stays the bare pid form.
+      const instance = (
+        deps.harnessInstance ??
+        ((pid: number) =>
+          platform === "win32" ? undefined : psStartInstance(pid))
+      )(pid);
+      identity = { pid, ...(instance !== undefined ? { instance } : {}) };
+    } else if (host === undefined && hostReadError === undefined) {
+      // Unenrolled: nothing is posted or spooled, so the id is never read.
+      identity = { pid: process.ppid };
+    } else {
+      identity = resolveStellaIdentity({
+        parentPid: process.ppid,
+        platform,
+        cacheDir: join(deps.paths.root, "stella-identity"),
+        now: now(),
+        ...(deps.stellaPs?.lookup !== undefined
+          ? { lookup: deps.stellaPs.lookup }
+          : {}),
+        ...(deps.stellaPs?.startInstance !== undefined
+          ? { startInstance: deps.stellaPs.startInstance }
+          : {}),
+      });
+    }
+    if (host !== undefined || hostReadError !== undefined)
+      harnessPid = identity.pid;
+    raw = translateStellaPayload(raw, identity.pid, identity.instance);
   }
   // Cursor issues both the session id and the tool-use id, so its adapter
   // only renames. It gets no harness pid, on purpose (#3989). In Cursor
@@ -1028,10 +1077,8 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
           path: "invalid",
         }
       : undefined;
-  let host: HostFile | undefined;
-  try {
-    host = (deps.readHost ?? (() => readHostFile(deps.paths.hostFile)))();
-  } catch (error) {
+  if (hostReadError !== undefined) {
+    const { error } = hostReadError;
     const problem = error instanceof Error ? error.message : String(error);
     // Forward on the routing fields alone when they read: the daemon that
     // wrote the file can decide, and only the offline fallback needs the
