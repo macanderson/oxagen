@@ -109,6 +109,12 @@ function agent(overrides: Partial<AgentDetail> = {}): Read<AgentDetail> {
     runtime: null,
     toolbelt: null,
     versions: [],
+    limits: {
+      perRun: null,
+      perDay: null,
+      containmentRequired: false,
+      invalid: false,
+    },
     ...overrides,
   });
 }

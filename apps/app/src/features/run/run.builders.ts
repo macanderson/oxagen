@@ -1109,6 +1109,8 @@ export function runRoster(
         agentKey: "acme.core.release-bot",
         harness: "claude-code",
         managed: false,
+        runtime: null,
+        toolbelt: null,
         operatorId: "usr_marcusbell",
         operatorName: "Marcus Bell",
         principalId: "prn_91",

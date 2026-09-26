@@ -243,6 +243,8 @@ export function enrolledAgent(
     agentKey: "acme.core-platform.release-manager",
     harness: "claude-code",
     managed: false,
+    runtime: null,
+    toolbelt: null,
     operatorId: null,
     operatorName: null,
     principalId: null,
