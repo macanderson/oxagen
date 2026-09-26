@@ -123,7 +123,11 @@ describe("readUnmeteredRuns", () => {
     expect(q!.sql).toMatch(
       /"sessions"\."public_id" = (?:"cost"\.)?"run_totals"\."run_id"/,
     );
-    expect(q!.sql).toMatch(/group by coalesce\((?:"tacho"\.)?"sessions"\."harness"/);
+    // A blank harness joins `unknown` rather than naming a harness with no
+    // name, which the Spend page's view schema refuses.
+    expect(q!.sql).toMatch(
+      /group by coalesce\(nullif\((?:"tacho"\.)?"sessions"\."harness", ''\), 'unknown'\)/,
+    );
     expect(q!.params).toEqual(
       expect.arrayContaining([
         SCOPE.orgId,

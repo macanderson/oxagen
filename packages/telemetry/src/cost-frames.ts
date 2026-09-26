@@ -224,10 +224,9 @@ const FRAME_CACHE_5M = `toInt64(greatest(0, ${FRAME_CACHE_WRITE} - ${FRAME_CACHE
  * out. Adding it priced requests nobody billed, and made a model whose calls
  * only fetched look unpriced in `list_unpriced_models` (#3281, #3721).
  *
- * The priced row's own count wins when it has one. When an OTel or proxy
- * sighting is the priced row, it carries no search count, so the figure comes
- * from the call's transcript row through the joins that carry thinking
- * ({@link TRANSCRIPT_SEARCHES}). Both sightings describe one call, so
+ * When an OTel or proxy sighting is the priced row, it carries no search
+ * count, so the figure comes from the call's transcript row through the joins
+ * that carry thinking ({@link TRANSCRIPT_SEARCHES}). Both sightings describe one call, so
  * `greatest` picks the one figure there is. The frame read and the
  * class-bucket read both use this, so they cannot count differently.
  */
@@ -271,10 +270,11 @@ function runSessions(run: {
  * workspace predicates stay: a session list does not stop a host in another
  * workspace from naming one of these sessions.
  *
- * The transcript joins key on the session as well as the call id, as
- * {@link readObservedModels} does. A parent and its subagent can reuse a
- * request or message id, and a join on the id alone took `max()` over both
- * sessions and credited one call's thinking and one-hour cache split to both.
+ * The transcript joins key on the call id alone, and the session predicate
+ * keeps them inside this run's family. One ledger serves a session and its
+ * subagents (ADR-168), so the proxy can seal a subagent's call on the root
+ * chain while its transcript row sits on the child chain. A `session_uuid`
+ * key would miss that pair.
  *
  * A wrapped frame carries the call's web searches as `server_tool_request`,
  * priced per request. Web fetches are not counted: the vendor does not charge

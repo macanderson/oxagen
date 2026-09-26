@@ -273,7 +273,7 @@ export async function readUnmeteredRuns(
 ): Promise<UnmeteredRuns> {
   const { start } = dayBounds(q.from);
   const { next } = dayBounds(q.to);
-  const harness = sql<string>`coalesce(${sessions.harness}, 'unknown')`;
+  const harness = sql<string>`coalesce(nullif(${sessions.harness}, ''), 'unknown')`;
   const rows = await withTenantDb((tx) =>
     tx
       .select({
