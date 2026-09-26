@@ -1249,6 +1249,35 @@ describe("paging past the cursor", () => {
     });
   });
 
+  // A page read from a cursor carries no counts: `get_run_transcript` counts
+  // the run only on a read that starts at its first frame. Every chip keeps
+  // the whole run's count the tab opened with (#3942).
+  it("keeps every chip's whole-run count after a page that carries none", async () => {
+    readTranscriptPage.mockResolvedValue(
+      pageOk({ ...tailPage, counts: null, cursor: null, complete: true }),
+    );
+    renderSection({ read: paged });
+    const chipCounts = () =>
+      [
+        "prompt",
+        "responses",
+        "thinking",
+        "tools",
+        "usage",
+        "recall",
+        "seal",
+      ].map((chip) => screen.getByTestId(`chip-${chip}-count`).textContent);
+    // releaseCounts(): the whole run's count per chip.
+    const whole = ["1", "5", "2", "6", "5", "1", "0"];
+    expect(chipCounts()).toEqual(whole);
+    fireEvent.click(screen.getByTestId("transcript-more"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("transcript-more")).toBeNull();
+    });
+    expect(chipCounts()).toEqual(whole);
+    expect(screen.getByTestId("chip-errors-count")).toHaveTextContent("1");
+  });
+
   it("names a cursor the capability did not write, and keeps every row already read (negative)", async () => {
     readTranscriptPage.mockResolvedValue({
       ok: false,
