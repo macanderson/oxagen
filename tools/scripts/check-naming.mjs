@@ -74,6 +74,10 @@ const ACTIONS = new Set([
   "publish",
   "snapshot",
   "fork",
+  // clone_toolbelt (ADR-192): copy a belt into a new one you can edit.
+  "clone",
+  // move_agent (ADR-192): put an agent on another runtime, same principal.
+  "move",
   // bisect_runs (#2952): align two recordings and find where they diverge.
   "bisect",
   "rename",
