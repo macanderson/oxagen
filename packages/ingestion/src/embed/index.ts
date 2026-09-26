@@ -23,6 +23,50 @@ export function renderEntityText(
   return parts.join("  ");
 }
 
+/** The fields `upsertEntityNode` stores that `renderEntityText` reads. */
+export interface StoredEntity {
+  entityType: string;
+  displayName: string | null;
+  naturalKey: string | null;
+  /** `n.properties`: the mutation's properties as a JSON string. */
+  properties: string | null;
+}
+
+/**
+ * The text ingestion embedded for an entity, rebuilt from the node it wrote.
+ *
+ * `upsertEntityNode` stores `displayName ?? naturalKey`, so a display name
+ * equal to the natural key means the record had none and `renderEntityText`
+ * saw `undefined`. Properties are stored as a JSON string. The embedding
+ * backfill (#4148) renders through this, so a vector it writes matches the one
+ * the pipeline writes for the same record.
+ */
+export function storedEntityText(node: StoredEntity): string {
+  const displayName =
+    node.displayName && node.displayName !== node.naturalKey
+      ? node.displayName
+      : undefined;
+  return renderEntityText(
+    node.entityType,
+    displayName,
+    parseStoredProperties(node.properties),
+  );
+}
+
+/** Stored properties that are absent or not a JSON object read as `{}`. */
+function parseStoredProperties(raw: string | null): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
 export async function embedEntity(req: EmbedRequest): Promise<void> {
   const vector = await embedText(req.text, {
     telemetry: {

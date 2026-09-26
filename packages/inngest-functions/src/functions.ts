@@ -45,6 +45,10 @@ import { mcpCredentialGrantRetention } from "./functions/mcp.credential-grant-re
 import { pluginCatalogSync } from "./functions/plugin.catalog-sync";
 import { schemaReconcile } from "./functions/schema.reconcile";
 import { memoryDecayPass } from "./functions/memory.decay-pass";
+import {
+  embeddingsBackfill,
+  embeddingsBackfillSchedule,
+} from "./functions/embeddings.backfill";
 import { observabilityCaptureFailure } from "./functions/observability.capture-failure";
 import {
   evidenceRunExport,
@@ -105,6 +109,8 @@ export const functions: any[] = [
   pluginCatalogSync,
   schemaReconcile,
   memoryDecayPass,
+  embeddingsBackfill,
+  embeddingsBackfillSchedule,
   observabilityCaptureFailure,
   evidenceRunExport,
   evidenceRunExportOnFailure,
