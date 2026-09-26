@@ -277,10 +277,14 @@ describe("resolveEntity — Pass B: alias path", () => {
     expect(mocks.createAliasEdge).toHaveBeenCalledOnce();
   });
 
-  it("writes a flagged principal when the vector index refuses the query (#4148)", async () => {
+  it("writes a marked principal when the vector index refuses the query (#4148)", async () => {
     // A vector index of the old size refuses a query vector of the new size.
-    // Ingestion must still store the entity, flagged for a later re-resolve.
+    // Ingestion must still store the entity, marked for a later re-resolve.
     const passASession = {
+      run: vi.fn().mockResolvedValue({ records: [] }),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    const markSession = {
       run: vi.fn().mockResolvedValue({ records: [] }),
       close: vi.fn().mockResolvedValue(undefined),
     };
@@ -297,7 +301,9 @@ describe("resolveEntity — Pass B: alias path", () => {
     let sessionCallCount = 0;
     mocks.scopedSession.mockImplementation(() => {
       sessionCallCount++;
-      return sessionCallCount === 1 ? passASession : passBSession;
+      if (sessionCallCount === 1) return passASession;
+      if (sessionCallCount === 2) return passBSession;
+      return markSession;
     });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -307,11 +313,45 @@ describe("resolveEntity — Pass B: alias path", () => {
     expect(result.similarityDeferred).toBe(true);
     expect(mocks.upsertEntityNode).toHaveBeenCalledOnce();
     expect(passBSession.close).toHaveBeenCalledOnce();
+    expect(String(markSession.run.mock.calls[0]?.[0])).toContain(
+      "SET n.similarityDeferredAt = datetime()",
+    );
     expect(warn).toHaveBeenCalledWith(
       "[ingestion] dedup: similarity search failed, deferring similarity match",
       expect.objectContaining({ orgId: "org-1" }),
     );
     warn.mockRestore();
+  });
+
+  it("lets a scoring fault surface instead of reading it as an unavailable index", async () => {
+    const passASession = {
+      run: vi.fn().mockResolvedValue({ records: [] }),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    const passBSession = {
+      run: vi.fn().mockResolvedValue({
+        records: [
+          {
+            get: (k: string) => {
+              if (k === "score") throw new Error("decode fault");
+              return k === "nodeId" ? "principal-id" : undefined;
+            },
+          },
+        ],
+      }),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    let sessionCallCount = 0;
+    mocks.scopedSession.mockImplementation(() => {
+      sessionCallCount++;
+      return sessionCallCount === 1 ? passASession : passBSession;
+    });
+
+    await expect(resolveEntity(makeMutation(), "org-1")).rejects.toThrow(
+      "decode fault",
+    );
+    expect(mocks.upsertEntityNode).not.toHaveBeenCalled();
+    expect(passBSession.close).toHaveBeenCalledOnce();
   });
 
   it("creates a new principal when combined score is below ALIAS_THRESHOLD", async () => {
@@ -528,9 +568,23 @@ describe("resolveEntity — Pass B when the embedder cannot answer", () => {
 
     await resolveEntity(makeMutation(), "org-1");
 
-    // One session for Pass A only. A second would mean the similarity query
-    // ran with no embedding to search on.
-    expect(mocks.scopedSession).toHaveBeenCalledTimes(1);
+    // Pass A and the deferred mark. No query may reach the vector index with
+    // no embedding to search on.
+    const queries = mocks.sessionRun.mock.calls.map((c) => String(c[0]));
+    expect(queries.some((q) => q.includes("db.index.vector.queryNodes"))).toBe(
+      false,
+    );
+  });
+
+  it("marks the node as written without similarity matching (#4148)", async () => {
+    mocks.embedText.mockRejectedValue(new Error("gateway down"));
+
+    await resolveEntity(makeMutation(), "org-1");
+
+    const mark = mocks.sessionRun.mock.calls.find((c) =>
+      String(c[0]).includes("similarityDeferredAt"),
+    );
+    expect(mark?.[1]).toEqual({ nodeId: "new-node-id", orgId: "org-1" });
   });
 
   it("still honours a strict-mode rejection", async () => {

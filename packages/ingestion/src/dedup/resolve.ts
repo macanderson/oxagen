@@ -275,6 +275,7 @@ export async function resolveEntity(
     if (deferred.rejected || deferred.nodeId == null) {
       return rejectedResult(deferred.conformanceScore);
     }
+    await markSimilarityDeferred(deferred.nodeId, orgId);
     return {
       principalNodeId: deferred.nodeId,
       action: "created_principal",
@@ -294,6 +295,9 @@ export async function resolveEntity(
     score: number;
   } | null = null;
   let similaritySearchFailed = false;
+  // Only the query sits in the try. A fault in scoring below is a defect to
+  // surface, not an unavailable index to degrade around.
+  let candidateRecords: Array<{ get: (key: string) => unknown }> = [];
   try {
     // The index returns the GLOBAL top-K by similarity, but we only keep nodes
     // matching this org + entityType. Over-fetch (K = limit x factor) so the
@@ -318,57 +322,12 @@ export async function resolveEntity(
         limit: BigInt(CANDIDATE_LIMIT),
       },
     );
-
-    for (const record of result.records) {
-      const candidateId = record.get("nodeId") as string;
-      const candidateDisplayName = record.get("displayName") as
-        | string
-        | undefined;
-      const rawProperties = record.get("properties") as string | null;
-      const embeddingSimilarity = record.get("score") as number;
-
-      let parsedProps: Record<string, unknown> = {};
-      if (rawProperties) {
-        try {
-          parsedProps = JSON.parse(rawProperties) as Record<string, unknown>;
-        } catch {
-          // malformed stored properties — skip property scoring
-        }
-      }
-
-      const candidate = {
-        displayName: candidateDisplayName,
-        email:
-          typeof parsedProps["email"] === "string"
-            ? parsedProps["email"]
-            : undefined,
-        url:
-          typeof parsedProps["url"] === "string"
-            ? parsedProps["url"]
-            : undefined,
-      };
-
-      const combinedScore = scoreCandidate(
-        mutation,
-        candidate,
-        embeddingSimilarity,
-      );
-
-      if (combinedScore >= ALIAS_THRESHOLD) {
-        if (!bestCandidate || combinedScore > bestCandidate.score) {
-          bestCandidate = {
-            nodeId: candidateId,
-            ...candidate,
-            score: combinedScore,
-          };
-        }
-      }
-    }
+    candidateRecords = result.records;
   } catch (err) {
     // An index the store cannot answer must not fail ingestion. A vector index
     // of another size than the embedding model's refuses every query until the
     // migration resizes it (#4148), and an index still populating can refuse
-    // too. The entity is written as its own principal and flagged, the same
+    // too. The entity is written as its own principal and marked, the same
     // way a failed embedding degrades above.
     console.warn(
       "[ingestion] dedup: similarity search failed, deferring similarity match",
@@ -382,6 +341,52 @@ export async function resolveEntity(
     similaritySearchFailed = true;
   } finally {
     await searchSession.close();
+  }
+
+  for (const record of candidateRecords) {
+    const candidateId = record.get("nodeId") as string;
+    const candidateDisplayName = record.get("displayName") as
+      | string
+      | undefined;
+    const rawProperties = record.get("properties") as string | null;
+    const embeddingSimilarity = record.get("score") as number;
+
+    let parsedProps: Record<string, unknown> = {};
+    if (rawProperties) {
+      try {
+        parsedProps = JSON.parse(rawProperties) as Record<string, unknown>;
+      } catch {
+        // malformed stored properties — skip property scoring
+      }
+    }
+
+    const candidate = {
+      displayName: candidateDisplayName,
+      email:
+        typeof parsedProps["email"] === "string"
+          ? parsedProps["email"]
+          : undefined,
+      url:
+        typeof parsedProps["url"] === "string"
+          ? parsedProps["url"]
+          : undefined,
+    };
+
+    const combinedScore = scoreCandidate(
+      mutation,
+      candidate,
+      embeddingSimilarity,
+    );
+
+    if (combinedScore >= ALIAS_THRESHOLD) {
+      if (!bestCandidate || combinedScore > bestCandidate.score) {
+        bestCandidate = {
+          nodeId: candidateId,
+          ...candidate,
+          score: combinedScore,
+        };
+      }
+    }
   }
 
   if (bestCandidate) {
@@ -417,6 +422,9 @@ export async function resolveEntity(
   if (created.rejected || created.nodeId == null) {
     return rejectedResult(created.conformanceScore);
   }
+  if (similaritySearchFailed) {
+    await markSimilarityDeferred(created.nodeId, orgId);
+  }
   return {
     principalNodeId: created.nodeId,
     action: "created_principal",
@@ -424,6 +432,37 @@ export async function resolveEntity(
     conformanceScore: created.conformanceScore,
     ...(similaritySearchFailed ? { similarityDeferred: true } : {}),
   };
+}
+
+/**
+ * Record on the node that it was written without similarity matching.
+ *
+ * The `similarityDeferred` flag on the result is gone once the pipeline logs
+ * it. When the vector query was refused, the node still receives an embedding
+ * later, so `n.embedding IS NULL` no longer finds it. `similarityDeferredAt`
+ * is the one durable set a later re-resolve can select, for both fallbacks.
+ * Best effort: a failed mark is logged and never fails the ingest.
+ */
+async function markSimilarityDeferred(
+  nodeId: string,
+  orgId: string,
+): Promise<void> {
+  const session = scopedSession();
+  try {
+    await session.run(
+      `MATCH (n:EntityNode {publicId: $nodeId, orgId: $orgId})
+       SET n.similarityDeferredAt = datetime()`,
+      { nodeId, orgId },
+    );
+  } catch (err) {
+    console.warn("[ingestion] dedup: could not mark a deferred node", {
+      err: err instanceof Error ? err.message : String(err),
+      orgId,
+      nodeId,
+    });
+  } finally {
+    await session.close();
+  }
 }
 
 /**

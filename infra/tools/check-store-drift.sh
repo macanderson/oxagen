@@ -167,6 +167,16 @@ neo4j_declared_vector_sizes() {
     sort -u
 }
 
+# prefix_lines PREFIX FILE
+#
+# FILE's lines with PREFIX and a space in front, so one database's `<name>
+# <size>` pairs can be told from another's once every database is compared in
+# one set. An empty FILE prints nothing.
+prefix_lines() {
+  local prefix=$1 file=$2
+  sed -e '/^$/d' -e "s|^|$prefix |" "$file"
+}
+
 # clickhouse_declared_tables SCHEMA_SQL
 #
 # Every table name `schema.sql` creates, one per line.
@@ -578,27 +588,63 @@ neo_cypher() {
     --format plain --non-interactive "$1"
 }
 
-# Vector index sizes, compared as `<name> <dimensions>` pairs. See
+# Vector index sizes, compared as `<database> <name> <dimensions>` triples. See
 # neo4j_declared_vector_sizes for why the name check alone passed a resize.
+#
+# Every graph database is checked, not only NEO4J_DATABASE: an organisation
+# provisioned into its own `org-<namespace>` database (ADR-098) holds its own
+# vector indexes, and `migrateEveryGraphDatabase` resizes each one. A pooled
+# database that is current beside an organisation database that is not must
+# read as behind, or the gate would never apply the rest. The organisation
+# databases are listed the way `listOrgGraphDatabases` lists them, from
+# SHOW DATABASES on `system`. Community Edition holds none.
+#
 # The size is returned under the column name `name` so neo_result_names reads
 # it the way it reads every other result here.
+neo_cypher_on() {
+  cypher-shell -a "$NEO4J_URI" -d "$1" \
+    --format plain --non-interactive "$2"
+}
+
 check_neo4j_vector_sizes() {
   echo
   echo "== Neo4j vector sizes =="
   neo4j_declared_vector_sizes "$REPO/packages/ontology/src/schema.cypher" \
-    > "$WORK/neo-vec-declared.txt" || { bump_status 2; return; }
-  require_declarations "Neo4j vector sizes" "$WORK/neo-vec-declared.txt" || return
-  if neo_cypher "SHOW INDEXES YIELD name, type, options WHERE type = 'VECTOR' RETURN name + ' ' + toString(options.indexConfig['vector.dimensions']) AS name" \
-       > "$WORK/neo-vec.txt" 2>"$WORK/neo-vec-err.txt" &&
-     neo_result_names "$WORK/neo-vec.txt" > "$WORK/neo-vec-present.txt"; then
-    report_drift "Neo4j vector sizes" "$WORK/neo-vec-declared.txt" "$WORK/neo-vec-present.txt"
-    bump_status $?
-  else
-    echo "::error::Neo4j vector index sizes could not be read. Their state is unknown, which is not the same as current."
-    cat "$WORK/neo-vec.txt" "$WORK/neo-vec-err.txt" 2>/dev/null |
+    > "$WORK/neo-vec-schema.txt" || { bump_status 2; return; }
+  require_declarations "Neo4j vector sizes" "$WORK/neo-vec-schema.txt" || return
+
+  local pooled=${NEO4J_DATABASE:-neo4j}
+  if ! neo_cypher_on system "SHOW DATABASES YIELD name WHERE name STARTS WITH 'org-' RETURN DISTINCT name" \
+       > "$WORK/neo-dbs.txt" 2>"$WORK/neo-dbs-err.txt" ||
+     ! neo_result_names "$WORK/neo-dbs.txt" > "$WORK/neo-org-dbs.txt"; then
+    echo "::error::The Neo4j databases could not be listed. Vector index sizes are unknown, which is not the same as current."
+    cat "$WORK/neo-dbs.txt" "$WORK/neo-dbs-err.txt" 2>/dev/null |
       sed '/^$/d' | sed 's/^/::error::  /' | head -5
     bump_status 2
+    return
   fi
+
+  : > "$WORK/neo-vec-declared.txt"
+  : > "$WORK/neo-vec-present.txt"
+  local db org_dbs=()
+  mapfile -t org_dbs < "$WORK/neo-org-dbs.txt"
+  for db in "$pooled" "${org_dbs[@]}"; do
+    prefix_lines "$db" "$WORK/neo-vec-schema.txt" >> "$WORK/neo-vec-declared.txt"
+    if neo_cypher_on "$db" "SHOW INDEXES YIELD name, type, options WHERE type = 'VECTOR' RETURN name + ' ' + toString(options.indexConfig['vector.dimensions']) AS name" \
+         > "$WORK/neo-vec.txt" 2>"$WORK/neo-vec-err.txt" &&
+       neo_result_names "$WORK/neo-vec.txt" > "$WORK/neo-vec-db.txt"; then
+      prefix_lines "$db" "$WORK/neo-vec-db.txt" >> "$WORK/neo-vec-present.txt"
+    else
+      echo "::error::Vector index sizes in Neo4j database $db could not be read. Their state is unknown, which is not the same as current."
+      cat "$WORK/neo-vec.txt" "$WORK/neo-vec-err.txt" 2>/dev/null |
+        sed '/^$/d' | sed 's/^/::error::  /' | head -5
+      bump_status 2
+      return
+    fi
+  done
+
+  report_drift "Neo4j vector sizes" "$WORK/neo-vec-declared.txt" "$WORK/neo-vec-present.txt"
+  bump_status $?
 }
 
 if ! command -v cypher-shell >/dev/null 2>&1; then

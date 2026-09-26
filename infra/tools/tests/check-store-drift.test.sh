@@ -173,6 +173,25 @@ esac
 neo4j_declared_vector_sizes "$WORK/nope.cypher" >/dev/null 2>&1
 expect_code 2 "$?" "vector sizes: an unreadable schema file is 'unknown', not 'nothing declared'"
 
+# Each database is compared on its own, so a pooled database that is current
+# cannot hide an organisation database at the old size.
+printf 'memory_embedding_index 1024\n' > "$WORK/one-index.txt"
+DECLARED=$( { prefix_lines neo4j "$WORK/one-index.txt"; prefix_lines org-acme "$WORK/one-index.txt"; } )
+contains "$DECLARED" "neo4j memory_embedding_index 1024" "vector sizes: declares the pooled database's indexes"
+contains "$DECLARED" "org-acme memory_embedding_index 1024" "vector sizes: declares each organisation database's indexes"
+printf '%s\n' "$DECLARED" > "$WORK/db-declared.txt"
+printf 'neo4j memory_embedding_index 1024\norg-acme memory_embedding_index 1536\n' > "$WORK/db-present.txt"
+DB_MISSING=$(missing_from "$WORK/db-declared.txt" "$WORK/db-present.txt")
+contains "$DB_MISSING" "org-acme memory_embedding_index 1024" "vector sizes: an organisation database at the old size reads as behind"
+case "$DB_MISSING" in
+  *"neo4j memory_embedding_index"*) fail "vector sizes: a current pooled database must not read as behind" ;;
+  *) pass ;;
+esac
+: > "$WORK/empty.txt"
+if [[ -z $(prefix_lines neo4j "$WORK/empty.txt") ]]; then pass; else
+  fail "vector sizes: an empty result must prefix to nothing"
+fi
+
 # --- the real declarations this ships against ------------------------------
 #
 # The fixtures above prove the parsing; these prove it is pointed at something.
