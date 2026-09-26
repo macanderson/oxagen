@@ -77,6 +77,7 @@ import {
   writeSensitiveFileAtomic,
 } from "./fs";
 import {
+  type BodyIndex,
   BodyIndexStore,
   parseStoredBody,
   readLinesFrom,
@@ -656,75 +657,112 @@ export class Wal {
    * disagreement is reported and the bodies are left out: the events still
    * ship, and the control plane records the frames with a `body_missing` gap,
    * which is what a lost body has always meant here.
+   *
+   * With `stale`, no index is built here from the top of the file. An index
+   * held for the session is extended over what was appended since its last
+   * scan, which the caller has just made a few lines at most. A session with
+   * no index held, or whose index turns out stale, is added to `stale` and
+   * answers nothing, and the caller builds its index off the synchronous
+   * path before it asks again (`bodiesForAsync`).
    */
   private bodiesOfSession(
     session: string,
     path: string,
     idems: ReadonlySet<string>,
+    stale?: Set<string>,
   ): Map<string, TachoBody> {
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const index = this.bodyIndexes.ensure(
-        session,
-        path,
-        () => this.reportInvalidBody(session),
-        (error) => this.bodyFailure(session, "read", error),
-      );
-      const found = new Map<string, TachoBody>();
-      let stale = false;
-      const fd = openSync(path, "r");
-      try {
-        for (const idem of idems) {
-          const at = index.entries.get(idem);
-          if (at === undefined) continue;
-          const buffer = Buffer.allocUnsafe(at.length);
-          let filled = 0;
-          while (filled < at.length) {
-            const size = readSync(
-              fd,
-              buffer,
-              filled,
-              at.length - filled,
-              at.offset + filled,
+      const index =
+        stale !== undefined &&
+        this.bodyIndexes.held(session, path) === undefined
+          ? undefined
+          : this.bodyIndexes.ensure(
+              session,
+              path,
+              () => this.reportInvalidBody(session),
+              (error) => this.bodyFailure(session, "read", error),
             );
-            if (size <= 0) break;
-            filled += size;
-          }
-          const stored =
-            filled === at.length
-              ? parseStoredBody(buffer.toString("utf8"))
-              : undefined;
-          if (stored === undefined || stored.event_id_idem !== idem) {
-            stale = true;
-            break;
-          }
-          found.set(idem, {
-            event_id_idem: stored.event_id_idem,
-            content_type: stored.content_type,
-            bytes_base64: stored.bytes_base64,
-          });
-        }
-      } finally {
-        closeSync(fd);
+      if (index === undefined) {
+        stale?.add(session);
+        return new Map();
       }
-      if (!stale) return found;
+      const found = this.readBodiesAt(path, idems, index);
+      if (found !== undefined) return found;
       this.bodyIndexes.invalidate(session);
+      if (stale !== undefined) {
+        stale.add(session);
+        return new Map();
+      }
     }
     this.bodyFailure(session, "read", { code: "body_index_unusable" });
     return new Map();
   }
 
   /**
+   * The bodies an index places in a file, or undefined when an entry points
+   * at bytes that are not the body it names.
+   */
+  private readBodiesAt(
+    path: string,
+    idems: ReadonlySet<string>,
+    index: BodyIndex,
+  ): Map<string, TachoBody> | undefined {
+    const found = new Map<string, TachoBody>();
+    const fd = openSync(path, "r");
+    try {
+      for (const idem of idems) {
+        const at = index.entries.get(idem);
+        if (at === undefined) continue;
+        const buffer = Buffer.allocUnsafe(at.length);
+        let filled = 0;
+        while (filled < at.length) {
+          const size = readSync(
+            fd,
+            buffer,
+            filled,
+            at.length - filled,
+            at.offset + filled,
+          );
+          if (size <= 0) break;
+          filled += size;
+        }
+        const stored =
+          filled === at.length
+            ? parseStoredBody(buffer.toString("utf8"))
+            : undefined;
+        if (stored === undefined || stored.event_id_idem !== idem)
+          return undefined;
+        found.set(idem, {
+          event_id_idem: stored.event_id_idem,
+          content_type: stored.content_type,
+          bytes_base64: stored.bytes_base64,
+        });
+      }
+    } finally {
+      closeSync(fd);
+    }
+    return found;
+  }
+
+  /**
    * The wire bodies of the given events, in the events' order, at most one
    * per event. Each session's bodies are read at the offsets its index holds,
    * so the read costs the batch rather than the session.
+   *
+   * `stale` is for `bodiesForAsync`. See `bodiesOfSession`.
    */
-  bodiesFor(events: readonly TachoEvent[]): TachoBody[] {
+  bodiesFor(events: readonly TachoEvent[], stale?: Set<string>): TachoBody[] {
     const found = new Map<string, TachoBody>();
     for (const [session, idems] of Wal.idemsBySession(events)) {
       const path = this.bodyFileFor(session);
       if (!existsSync(path)) continue;
       try {
-        for (const [idem, body] of this.bodiesOfSession(session, path, idems))
+        for (const [idem, body] of this.bodiesOfSession(
+          session,
+          path,
+          idems,
+          stale,
+        ))
           found.set(idem, body);
       } catch (error) {
         this.bodyFailure(session, "read", error);
@@ -742,37 +780,134 @@ export class Wal {
   /**
    * The same bodies, read without holding the event loop.
    *
-   * Two things here are not on the synchronous path. Indexing a body file the
-   * host already had costs one walk of it, and that walk awaits every read.
-   * The batch is then read in slices with a turn of the loop between them, so
-   * a `/status` request or a control-plane fetch waits for one slice.
+   * Indexing a body file costs one walk of it, and that walk awaits every
+   * read. The batch is read in slices with a turn of the loop between them,
+   * so a `/status` request or a control-plane fetch waits for one slice.
+   *
+   * Each slice has its sessions' indexes built before it reads, not only the
+   * first. A yield between slices lets other work run, and some of it drops
+   * an index: the sweep a narrowing mandate runs rewrites the body file
+   * (`purgeBodiesOutsideMandate`). An index can also stop matching its file.
+   * Either way the slice's read answers stale for that session, and the
+   * index is built again off the synchronous path before the slice is read
+   * once more. It used to be rebuilt by the next synchronous read, a walk of
+   * the whole body file on the daemon's only thread (#4299).
    *
    * The slices go through `bodiesFor`, which is the one place a body is read
    * and the one place a read failure is reported, so both paths fail the same
    * way and the shipper has a single error to handle.
    */
   async bodiesForAsync(events: readonly TachoEvent[]): Promise<TachoBody[]> {
-    for (const session of Wal.idemsBySession(events).keys()) {
-      const path = this.bodyFileFor(session);
-      if (!existsSync(path)) continue;
-      try {
-        await this.bodyIndexes.ensureAsync(
-          session,
-          path,
-          () => this.reportInvalidBody(session),
-          (error) => this.bodyFailure(session, "read", error),
-        );
-      } catch (error) {
-        this.bodyFailure(session, "read", error);
-        throw error;
-      }
-    }
-    const out: TachoBody[] = [];
+    const found = new Map<string, TachoBody>();
     for (let at = 0; at < events.length; at += BODY_READ_SLICE) {
       if (at > 0) await new Promise((resolve) => setImmediate(resolve));
-      out.push(...this.bodiesFor(events.slice(at, at + BODY_READ_SLICE)));
+      let slice = events.slice(at, at + BODY_READ_SLICE);
+      for (let attempt = 0; attempt < 2 && slice.length > 0; attempt += 1) {
+        const stale = new Set<string>();
+        const read = slice;
+        // A build that fails throws here, as a failed read does, so the
+        // shipper keeps the whole batch for a later drain.
+        const bodies = await this.indexedThen(
+          Wal.idemsBySession(read).keys(),
+          () => this.bodiesFor(read, stale),
+          "throw",
+        );
+        for (const body of bodies) found.set(body.event_id_idem, body);
+        slice = slice.filter((event) => stale.has(event.session_uuid));
+      }
+      // Stale twice running is the case `bodiesOfSession` reports after its
+      // own second attempt, and the answer is the same: the events ship, and
+      // their frames carry a `body_missing` gap.
+      for (const session of new Set(slice.map((event) => event.session_uuid)))
+        this.bodyFailure(session, "read", { code: "body_index_unusable" });
+    }
+    const out: TachoBody[] = [];
+    for (const event of events) {
+      const body = found.get(event.event_id_idem);
+      if (body !== undefined) out.push(body);
     }
     return out;
+  }
+
+  /**
+   * Run `use` once every body index these sessions' reads will consult
+   * accounts for its whole file, building each one off the synchronous path
+   * first.
+   *
+   * The check and `use` run in one synchronous turn, so nothing can drop an
+   * index between them. The build awaits its reads, and other work runs
+   * during it, some of which drops an index (`purgeBodiesOutsideMandate`
+   * during a bundle refresh). So the check comes after every build, and a
+   * failed check builds again. After three builds `use` runs anyway: a
+   * mandate that narrows on every turn of the loop is not a state to wait
+   * out, and `use` then reads the file on the synchronous path as it did
+   * before this existed.
+   *
+   * The daemon wraps a journaled terminal's flush in this, because
+   * `appendRecovered` asks the index which of the terminal's bodies are
+   * already stored. A body file with no sidecar (a session recorded before
+   * the index existed, or one a sweep just rewrote) was read end to end on
+   * the synchronous path, 2.2 seconds for a 2.7 GB file (#4299).
+   */
+  withBodiesIndexed<T>(
+    sessionUuids: Iterable<string>,
+    use: () => T,
+  ): Promise<T> {
+    return this.indexedThen(sessionUuids, use, "report");
+  }
+
+  private async indexedThen<T>(
+    sessionUuids: Iterable<string>,
+    use: () => T,
+    onBuildFailure: "report" | "throw",
+  ): Promise<T> {
+    const sessions = [...new Set(sessionUuids)];
+    for (let built = 0; ; built += 1) {
+      if (built >= 3 || this.bodiesIndexed(sessions)) return use();
+      for (const session of sessions)
+        await this.buildBodyIndex(session, onBuildFailure);
+    }
+  }
+
+  /** Whether each session's body index accounts for its whole file. */
+  private bodiesIndexed(sessions: readonly string[]): boolean {
+    return sessions.every((session) => {
+      const path = this.bodyFileFor(session);
+      if (!existsSync(path)) return true;
+      try {
+        return this.bodyIndexes.covering(session, path) !== undefined;
+      } catch {
+        // A read of this file fails the same way on the synchronous path,
+        // which reports it. Building again here would only fail again.
+        return true;
+      }
+    });
+  }
+
+  /**
+   * Build one session's body index off the synchronous path. A failure is
+   * reported, then thrown or not as the caller asks. A terminal flush does
+   * not want it thrown: the synchronous read that follows fails the same
+   * way, and `storedBodyIdems` answers a body file it cannot index by writing
+   * a body twice rather than losing it.
+   */
+  private async buildBodyIndex(
+    session: string,
+    onFailure: "report" | "throw",
+  ): Promise<void> {
+    const path = this.bodyFileFor(session);
+    if (!existsSync(path)) return;
+    try {
+      await this.bodyIndexes.ensureAsync(
+        session,
+        path,
+        () => this.reportInvalidBody(session),
+        (error) => this.bodyFailure(session, "read", error),
+      );
+    } catch (error) {
+      this.bodyFailure(session, "read", error);
+      if (onFailure === "throw") throw error;
+    }
   }
 
   /**

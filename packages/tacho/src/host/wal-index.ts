@@ -343,6 +343,14 @@ function collect(
  */
 export class BodyIndexStore {
   private readonly cached = new Map<string, BodyIndex>();
+  /**
+   * Bumped by every `invalidate`, so a scan that awaited its reads can tell
+   * the file was rewritten under it. Its entries then describe bytes that
+   * moved, and it keeps none of them.
+   */
+  private readonly generations = new Map<string, number>();
+  /** The scan `ensureAsync` has running for a session, shared by callers. */
+  private readonly building = new Map<string, Promise<BodyIndex>>();
 
   constructor(
     private readonly dir: string,
@@ -358,11 +366,23 @@ export class BodyIndexStore {
     return name.endsWith(SIDECAR_SUFFIX);
   }
 
-  /** Drop what is held for a session and remove its sidecar. */
+  /**
+   * Drop what is held for a session and remove its sidecar, because the body
+   * file was rewritten or cut. A scan running for it starts again.
+   */
   invalidate(sessionUuid: string): void {
+    this.generations.set(sessionUuid, this.generationOf(sessionUuid) + 1);
+    this.discard(sessionUuid);
+  }
+
+  private discard(sessionUuid: string): void {
     this.cached.delete(sessionUuid);
     const path = this.sidecarFor(sessionUuid);
     if (existsSync(path)) unlinkSync(path);
+  }
+
+  private generationOf(sessionUuid: string): number {
+    return this.generations.get(sessionUuid) ?? 0;
   }
 
   private remember(sessionUuid: string, index: BodyIndex): void {
@@ -384,7 +404,7 @@ export class BodyIndexStore {
     // is shorter than the index, which means a rewrite moved every offset.
     // Remove it, so the scan that follows writes a whole one rather than
     // appending to a file the next load will reject again.
-    this.invalidate(sessionUuid);
+    this.discard(sessionUuid);
     return { entries: new Map(), covered: 0 };
   }
 
@@ -481,6 +501,36 @@ export class BodyIndexStore {
     }
   }
 
+  /**
+   * The index of a body file when it already accounts for every byte of the
+   * file, from memory or from its sidecar, and undefined when answering
+   * would mean reading the body file. A caller that must not read a body file
+   * on the synchronous path checks this and awaits `ensureAsync` when it
+   * answers undefined.
+   */
+  covering(sessionUuid: string, bodiesPath: string): BodyIndex | undefined {
+    const size = statSync(bodiesPath).size;
+    const held = this.cached.get(sessionUuid) ?? this.load(sessionUuid);
+    if (held === undefined || held.covered !== size) return undefined;
+    this.remember(sessionUuid, held);
+    return held;
+  }
+
+  /**
+   * The index this store holds for a body file, from memory or from its
+   * sidecar, without reading the body file. It can stop short of the file's
+   * end, since a body appended after the last scan is not in it yet, and it
+   * is undefined when no index is held or the one held is longer than the
+   * file.
+   */
+  held(sessionUuid: string, bodiesPath: string): BodyIndex | undefined {
+    const size = statSync(bodiesPath).size;
+    const held = this.cached.get(sessionUuid) ?? this.load(sessionUuid);
+    if (held === undefined || held.covered > size) return undefined;
+    this.remember(sessionUuid, held);
+    return held;
+  }
+
   /** The index of a body file, built or extended to cover the whole file. */
   ensure(
     sessionUuid: string,
@@ -506,16 +556,60 @@ export class BodyIndexStore {
     return index;
   }
 
-  /** The same, with every read awaited. */
+  /**
+   * The same, with every read awaited.
+   *
+   * Two callers can ask for one session at once: the shipper reading a batch
+   * and the daemon warming the index before a terminal flush. They share one
+   * scan. Two scans of the same index would both be right, and both would
+   * append their entries to the sidecar.
+   */
   async ensureAsync(
     sessionUuid: string,
     bodiesPath: string,
     onInvalidRecord: () => void,
     onWriteFailure: (error: unknown) => void,
   ): Promise<BodyIndex> {
-    const index = this.base(sessionUuid, bodiesPath);
-    const size = statSync(bodiesPath).size;
-    if (index.covered < size) {
+    const running = this.building.get(sessionUuid);
+    if (running !== undefined) return running;
+    const build = this.buildAsync(
+      sessionUuid,
+      bodiesPath,
+      onInvalidRecord,
+      onWriteFailure,
+    );
+    this.building.set(sessionUuid, build);
+    try {
+      return await build;
+    } finally {
+      if (this.building.get(sessionUuid) === build)
+        this.building.delete(sessionUuid);
+    }
+  }
+
+  /**
+   * One awaited scan. A rewrite that lands while the scan awaits a read
+   * (`dropBodies`, or the sweep a narrowing mandate runs) moves every offset
+   * after the rewritten line, and its `invalidate` drops the index this scan
+   * is filling. That scan keeps nothing: it neither caches nor persists what
+   * it read, and it starts again from the rewritten file. It used to put the
+   * dropped index back in memory and write a sidecar that claimed to cover
+   * the whole file while holding only the entries it had read.
+   */
+  private async buildAsync(
+    sessionUuid: string,
+    bodiesPath: string,
+    onInvalidRecord: () => void,
+    onWriteFailure: (error: unknown) => void,
+  ): Promise<BodyIndex> {
+    for (let attempt = 0; ; attempt += 1) {
+      const generation = this.generationOf(sessionUuid);
+      const index = this.base(sessionUuid, bodiesPath);
+      const size = statSync(bodiesPath).size;
+      if (index.covered >= size) {
+        this.remember(sessionUuid, index);
+        return index;
+      }
       const result: ScanResult = {
         added: [],
         covered: index.covered,
@@ -523,11 +617,18 @@ export class BodyIndexStore {
       };
       for await (const line of readLinesFromAsync(bodiesPath, index.covered))
         collect(line, index, result);
+      if (this.generationOf(sessionUuid) !== generation) {
+        // Three rewrites in a row during scans is not a state to wait out.
+        // The caller reads through `covering`, which answers undefined for
+        // an index nothing kept, and handles it as a stale one.
+        if (attempt < 2) continue;
+        return index;
+      }
       index.covered = result.covered;
       this.persist(sessionUuid, result, onWriteFailure);
       if (result.invalid) onInvalidRecord();
+      this.remember(sessionUuid, index);
+      return index;
     }
-    this.remember(sessionUuid, index);
-    return index;
   }
 }

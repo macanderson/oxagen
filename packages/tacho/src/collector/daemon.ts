@@ -2240,7 +2240,7 @@ async function initializeDaemon(
         : pendingSessionEnds.get(pendingUuid);
     if (pendingUuid !== undefined && pending?.terminal !== undefined) {
       try {
-        flushPendingTerminal(pending.terminal);
+        await flushJournaledTerminal(pending);
         return {};
       } catch (error) {
         if (!(error instanceof WalRecoveryConflict)) throw error;
@@ -2349,7 +2349,7 @@ async function initializeDaemon(
         outcome.record.sealed = false;
         outcome.record.pendingTerminal = true;
       }
-      flushPendingTerminal(pending.terminal);
+      await flushJournaledTerminal(pending);
     } else {
       try {
         record(outcome.events, outcome.bodies);
@@ -2449,6 +2449,33 @@ async function initializeDaemon(
     log(
       `session end for ${uuid} conflicts with the WAL at ${conflict.sessionUuid}:${conflict.seq}; its sealed terminal is in quarantine/${name}, and the end is sealed again on the chain the WAL holds`,
     );
+  }
+
+  /**
+   * Flush a journaled terminal once the body indexes it consults are built
+   * off the synchronous path.
+   *
+   * `appendRecovered` asks each body file which of the terminal's bodies it
+   * already stores, so a retried batch writes none twice (ADR-139). A body
+   * file with no sidecar was answered by reading it end to end on the event
+   * loop, about 0.8 seconds per GB, while no hook, `/status` request, or
+   * model call was answered (#4299). `Wal.withBodiesIndexed` builds those
+   * indexes with awaited reads first. The flush itself stays one
+   * synchronous step, run in the same turn as the check that the indexes
+   * cover their files.
+   */
+  async function flushJournaledTerminal(
+    pending: PendingSessionEnd,
+  ): Promise<void> {
+    const sessions = (pending.terminal?.bodies ?? []).map(
+      (body) => body.session_uuid,
+    );
+    await wal.withBodiesIndexed(sessions, () => {
+      // Read after the build. A mandate that narrowed while it ran has taken
+      // bodies out of the journal (`purgePendingEndBodies`).
+      if (pending.terminal !== undefined)
+        flushPendingTerminal(pending.terminal);
+    });
   }
 
   function flushPendingTerminal(
