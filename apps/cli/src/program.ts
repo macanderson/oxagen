@@ -713,6 +713,17 @@ export function buildProgram(): Command {
       (await import("./commands/run.js")).runList(opts),
     );
   runCmd
+    .command("show")
+    .description(
+      "Show one run: its header, the pause in force, and the first page of its frames",
+    )
+    .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--json", "Output the raw contract payload as JSON")
+    .action(async (runId: string, opts: { json?: boolean }) => {
+      const { runShow } = await import("./commands/run.js");
+      await runShow(runId, opts);
+    });
+  runCmd
     .command("chain")
     .description(
       "Show what makes a run's record tamper-evident: the hash rule, the root, the checkpoints, the gaps, and the replay ladder",

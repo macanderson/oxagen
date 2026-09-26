@@ -224,3 +224,20 @@ describe("init and pull", () => {
     ]);
   });
 });
+
+// `get_run` declares the cli surface, so `oxagen run show <run-id>` must be on
+// the tree with the run id required and --json offered (#2951).
+describe("run show", () => {
+  const program = buildProgram();
+  const show = program.commands
+    .find((c) => c.name() === "run")
+    ?.commands.find((c) => c.name() === "show");
+
+  it("takes one required run id and offers --json", () => {
+    expect(show, "run show must be registered").toBeDefined();
+    const args = show?.registeredArguments ?? [];
+    expect(args.map((a) => a.name())).toEqual(["run-id"]);
+    expect(args[0]?.required).toBe(true);
+    expect(show?.options.map((o) => o.long)).toEqual(["--json"]);
+  });
+});
