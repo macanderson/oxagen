@@ -176,36 +176,56 @@ describe("a daemon that accepts the connection and never answers", () => {
     );
   });
 
-  it("lets a Codex PostToolUse spool before Codex's five-second timeout, counting the time already spent", async () => {
-    const socketPath = join(mkdtempSync("/tmp/tacho-"), "d.sock");
-    const server = createServer((socket) => {
-      // Read the request and never answer it.
-      sockets.push(socket);
-      socket.on("data", () => {});
-    });
-    servers.push(server);
-    await new Promise<void>((resolve) => server.listen(socketPath, resolve));
-    const paths = { ...enrolledPaths(), socket: socketPath };
-    // Node's start-up, stdin and a slow `ps` have already taken 2.3 s.
-    const spent = 2_300;
-    const started = Date.now();
-    const result = await runTachoHook({
-      paths,
-      env: {},
-      stdin: JSON.stringify({
-        session_id: "s",
-        hook_event_name: "PostToolUse",
-        tool_name: "Bash",
-        tool_input: { command: "ls" },
-      }),
-      harness: "codex",
-      platform: "linux",
-      elapsedMs: () => spent + (Date.now() - started),
-    });
-    const took = Date.now() - started;
-    expect(result.path).toBe("local");
-    expect(result.stderr).toContain("response timeout");
-    expect(readdirSync(paths.spool)).toHaveLength(1);
-    expect(spent + took).toBeLessThan(5_000);
+  /** The hooks whose five-second timeout the old fixed wait equalled. */
+  const stalled = writtenHooks().filter(
+    (c) =>
+      (c.harness === "codex" && c.event === "PostToolUse") ||
+      (c.harness === "cursor" &&
+        (c.event === "postToolUse" || c.event === "sessionEnd")) ||
+      (c.harness === "stella" &&
+        (c.event === "PostToolUse" || c.event === "SubagentStop")),
+  );
+
+  it("covers a telemetry hook and a session end on every harness with a five-second timeout", () => {
+    expect(stalled.map((c) => `${c.harness} ${c.event}`).sort()).toEqual([
+      "codex PostToolUse",
+      "cursor postToolUse",
+      "cursor sessionEnd",
+      "stella PostToolUse",
+      "stella SubagentStop",
+    ]);
+    expect(stalled.every((c) => c.killMs === 5_000)).toBe(true);
   });
+
+  it.each(stalled.map((c) => [c.harness, c.event, c] as const))(
+    "%s %s: spools before the harness timeout, counting the time already spent",
+    async (_harness, _event, c) => {
+      const socketPath = join(mkdtempSync("/tmp/tacho-"), "d.sock");
+      const server = createServer((socket) => {
+        // Read the request and never answer it.
+        sockets.push(socket);
+        socket.on("data", () => {});
+      });
+      servers.push(server);
+      await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+      const paths = { ...enrolledPaths(), socket: socketPath };
+      // Node's start-up, stdin and a slow `ps` have already taken 2.3 s.
+      const spent = 2_300;
+      const started = Date.now();
+      const result = await runTachoHook({
+        paths,
+        env: {},
+        stdin: c.stdin,
+        harness: c.harness,
+        platform: "linux",
+        ...(c.harness === "stella" ? STELLA_IDENTITY : {}),
+        elapsedMs: () => spent + (Date.now() - started),
+      });
+      const took = Date.now() - started;
+      expect(result.path).toBe("local");
+      expect(result.stderr).toContain("response timeout");
+      expect(readdirSync(paths.spool)).toHaveLength(1);
+      expect(spent + took).toBeLessThan(c.killMs);
+    },
+  );
 });
