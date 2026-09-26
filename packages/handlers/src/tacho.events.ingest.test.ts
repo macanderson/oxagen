@@ -348,6 +348,14 @@ interface FakeDb {
   hosts: Array<Record<string, unknown>>;
   principals: Array<Record<string, unknown>>;
   principalLookups: ReturnType<typeof vi.fn>;
+  /**
+   * `workspace.workspace_users`, the enroller's membership the genesis row
+   * stamps its role from (#3999). The enroller is a workspace `Owner` by
+   * default, in IAM's capitalized casing.
+   */
+  memberships: Array<{ workspaceId: string; userId: string; role: string }>;
+  /** Every membership lookup, so a test can pin that a later batch asks none. */
+  membershipLookups: ReturnType<typeof vi.fn>;
   sessions: Map<string, Record<string, unknown>>;
   models: Array<Record<string, unknown>>;
   files: Array<Record<string, unknown>>;
@@ -475,6 +483,14 @@ function fakeDb(): FakeDb {
       },
     ],
     principalLookups: vi.fn(),
+    memberships: [
+      {
+        workspaceId: CONTEXT.workspaceId ?? "",
+        userId: ENROLLER_USER_ID,
+        role: "Owner",
+      },
+    ],
+    membershipLookups: vi.fn(),
     sessions: new Map(),
     models: [],
     files: [],
@@ -698,6 +714,17 @@ function wire(db: FakeDb): void {
             findFirst: async () => {
               db.principalLookups();
               return db.principals[0];
+            },
+          },
+          workspaceUsers: {
+            findFirst: async () => {
+              db.membershipLookups();
+              const row = db.memberships.find(
+                (m) =>
+                  m.workspaceId === CONTEXT.workspaceId &&
+                  m.userId === ENROLLER_USER_ID,
+              );
+              return row ? { role: row.role } : undefined;
             },
           },
           tachoSessions: {
@@ -1964,6 +1991,105 @@ describe("ingest_tacho_events", () => {
     expect(sessionUpdates.length).toBeGreaterThan(0);
     for (const update of sessionUpdates)
       expect(update.values).not.toHaveProperty("initiatingPrincipalId");
+  });
+
+  // #3999: the operator's workspace role is stamped once, when the session
+  // opens, and never read again (ADR-197).
+  describe("operator role stamp", () => {
+    it("stamps a new session with the enroller's workspace role, lowercased", async () => {
+      const db = fakeDb();
+      wire(db);
+      await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: session(),
+        },
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        initiatingPrincipalId: ENROLLER_PRINCIPAL_ID,
+        operatorRole: "owner",
+      });
+      expect(db.membershipLookups).toHaveBeenCalledOnce();
+    });
+
+    it("stamps null for an enroller with no membership in the session's workspace", async () => {
+      const db = fakeDb();
+      db.memberships = [];
+      wire(db);
+      await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: session(),
+        },
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        initiatingPrincipalId: ENROLLER_PRINCIPAL_ID,
+        operatorRole: null,
+      });
+    });
+
+    it("stamps null, and reads no membership, when nobody is attributed", async () => {
+      const db = fakeDb();
+      db.principals = [];
+      wire(db);
+      await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: session(),
+        },
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        initiatingPrincipalId: null,
+        operatorRole: null,
+      });
+      expect(db.membershipLookups).not.toHaveBeenCalled();
+    });
+
+    it("keeps the first role when the membership changes before a later batch", async () => {
+      const db = fakeDb();
+      const events = session();
+      wire(db);
+      await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: events.slice(0, 3),
+        },
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)).toMatchObject({ operatorRole: "owner" });
+
+      // The enroller is demoted between the two batches.
+      db.memberships = [
+        {
+          workspaceId: CONTEXT.workspaceId ?? "",
+          userId: ENROLLER_USER_ID,
+          role: "viewer",
+        },
+      ];
+      db.membershipLookups.mockClear();
+      await tachoEventsIngestHandler(
+        {
+          schema: "tacho.batch.v1",
+          host_enrollment_id: HOST_PUBLIC,
+          events: events.slice(3),
+        },
+        CONTEXT,
+      );
+      expect(db.sessions.get(SESSION)).toMatchObject({
+        operatorRole: "owner",
+        outcome: "completed",
+      });
+      expect(db.membershipLookups).not.toHaveBeenCalled();
+      for (const update of db.updates.filter((u) => u.table === "sessions"))
+        expect(update.values).not.toHaveProperty("operatorRole");
+    });
   });
 
   it("denies a batch that names another host, a missing key, or a revoked host, and writes none of its bodies", async () => {

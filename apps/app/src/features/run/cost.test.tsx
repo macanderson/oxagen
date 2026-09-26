@@ -11,13 +11,27 @@
 // the total row of Spend by token class and the stat row to one number, and
 // the waterfall's total row to the Shape of the run instrument. The negative
 // tests hold every panel to "not recorded" where the record carries nothing.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentDetail } from "@/data/contracts/agents";
-import type { RunCost, RunTranscript, RunTurns } from "@/data/contracts/run";
+import type {
+  RunCost,
+  RunFindings,
+  RunTranscript,
+  RunTurns,
+} from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
+import type { SpendFindingEvidence } from "@/data/contracts/spend";
 import { type Read, readError, readOk } from "@/data/read";
+import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
@@ -27,7 +41,6 @@ import {
   RELEASE_RUN_CLASSES,
   releaseRunCost,
   releaseRunTurns,
-  type TurnSpec,
 } from "./cost.builders";
 import { runMetrics } from "./metrics";
 import { NOW, runDetail, runOutputs, runRow, runSource } from "./run.builders";
@@ -38,8 +51,15 @@ vi.mock("next/link", () => ({
     <a {...rest}>{children}</a>
   ),
 }));
+// One router for the file, so a test can read where the finding dialog's
+// Close button sends the reader.
+const nav = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  refresh: vi.fn(),
+}));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => nav,
   usePathname: () => "/acme/core-platform/runs/tse_7k2m9q",
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -125,6 +145,9 @@ function props({
   transcript = readOk(costTranscript(releaseRunTurns())),
   turns = readOk(costTurns(releaseRunTurns())),
   agentRead = null,
+  findings,
+  findingEvidence,
+  finding = null,
 }: {
   run?: RunRow;
   cost?: Read<RunCost>;
@@ -132,22 +155,34 @@ function props({
   /** The tab's own `get_run_turns` read. */
   turns?: Read<RunTurns>;
   agentRead?: Read<AgentDetail> | null;
+  /** The tab's own `list_findings` read; a run no finding cites when absent. */
+  findings?: Read<RunFindings>;
+  /** The evidence `?finding=` opens. */
+  findingEvidence?: Read<SpendFindingEvidence>;
+  /** `?finding=`. */
+  finding?: string | null;
 } = {}): RunTabProps {
   const detail = runDetail({ run });
-  const { source } = runSource({ detail: readOk(detail), turns });
+  const { source } = runSource({
+    detail: readOk(detail),
+    turns,
+    ...(findings === undefined ? {} : { findings }),
+    ...(findingEvidence === undefined ? {} : { findingEvidence }),
+  });
   return {
     ctx,
     source,
     run,
     detail,
     place: { org: "acme", ws: "core-platform", runId: run.id },
-    view: { kinds: [], frames: null, body: null },
+    view: { kinds: [], frames: null, body: null, finding },
     metrics: runMetrics({ run, cost, transcript }),
     transcript,
     everything: transcript,
     cost,
     outputs: readOk(runOutputs()),
     work: Promise.resolve(readError("not_found", 404)),
+    issues: Promise.resolve(readError("not_found", 404)),
     agent: agentRead,
     now: NOW,
   };
@@ -310,17 +345,43 @@ describe("CostTab", () => {
     expect(screen.getByTestId("inst-calls")).toHaveTextContent("1 failed");
   });
 
-  it("reads the model fit, names the effort's reason, and offers no action on a run that fits", async () => {
-    await renderTab(props({ agentRead: agent() }));
-    const fit = screen.getByTestId("model-fit");
-    expect(fit).toHaveTextContent("generated · not the record");
+  // The reading is Oxagen's, stored on the run after the seal (ADR-201); the
+  // tab draws it and computes nothing. model-fit.test.tsx holds each card.
+  it("draws the stored Model fit reading of a sealed run, and the effort the record holds", async () => {
+    const run = runRow({
+      ...RELEASE_RUN,
+      status: "sealed",
+      outcome: "completed",
+      sealedAt: new Date(NOW).toISOString(),
+      effort: "high",
+      effortSource: "request",
+      fit: {
+        method: "run-fit/v1",
+        readAt: new Date(NOW).toISOString(),
+        sealedAt: new Date(NOW).toISOString(),
+        read: {
+          prompts: 2,
+          turns: 7,
+          steps: 24,
+          failed: 1,
+          outputTokens: 12_000,
+          reasoningTokens: 900,
+        },
+        model: { verdict: "fit", tier: "opus" },
+        effort: { verdict: "fit", effort: "high", source: "request" },
+      },
+    });
+    await renderTab(props({ run, agentRead: agent() }));
+    expect(screen.getByTestId("model-fit")).toHaveTextContent(
+      "generated · not the record",
+    );
     expect(screen.getByTestId("fit-model-card")).toHaveTextContent(
       "The opus class matches this shape of work.",
     );
-    expect(screen.queryByTestId("fit-move")).toBeNull();
     expect(screen.getByTestId("fit-effort-card")).toHaveTextContent(
-      "no contract records the setting from the request body yet",
+      "Effort high, read from the model request, fits this run.",
     );
+    expect(screen.queryByTestId("fit-move-model")).toBeNull();
     const read = screen.getByTestId("fit-read");
     expect(read).toHaveTextContent(
       "2 prompts · 7 turns · 24 steps · 1 tool call failed",
@@ -329,106 +390,18 @@ describe("CostTab", () => {
     expect(read).not.toHaveTextContent(".oxagen/agents/");
   });
 
-  it("argues one rung down for a small first-try run, and draws the move as a stub that says what it would do", async () => {
-    const run = runRow({
-      ...RELEASE_RUN,
-      turns: 2,
-      steps: 5,
-      model: { slug: "claude-sonnet-5", provider: "anthropic", tier: "sonnet" },
-      enforcementTier: "harness",
-    });
-    const turns: TurnSpec[] = [
-      {
-        prompt: true,
-        steps: [
-          {
-            kind: "model",
-            micros: "120000",
-            ms: 4_000,
-            cacheRead: 10_000,
-            inputUncached: 2_000,
-          },
-          { kind: "tools", calls: [{ name: "Read", ms: 500 }] },
-        ],
-      },
-      {
-        prompt: false,
-        steps: [
-          {
-            kind: "model",
-            micros: "90000",
-            ms: 3_000,
-            cacheRead: 12_000,
-            inputUncached: 1_000,
-          },
-        ],
-      },
-    ];
-    await renderTab(
-      props({
-        run,
-        transcript: readOk(costTranscript(turns)),
-        agentRead: agent(),
-      }),
+  it("draws no reading for a live run, and says the gateway run's request carried no effort (negative)", async () => {
+    await renderTab(props());
+    expect(screen.getByTestId("fit-model-card")).toHaveTextContent(
+      "The run is still open. Oxagen reads it once it seals.",
     );
-    const card = screen.getByTestId("fit-model-card");
-    expect(card.dataset.verdict).toBe("over");
-    expect(card).toHaveTextContent("Wrong model tier");
-    expect(card).toHaveTextContent(
-      "This run landed in 2 turns and 5 steps, first try, with no tool call failing. The reading argues for the haiku class, one rung down the same family.",
-    );
-    const move = screen.getByRole("button", {
-      name: "Move this agent to haiku",
-    });
-    expect(move).toBeDisabled();
-    expect(move).toHaveAccessibleDescription(
-      "No contract changes an agent's model class from this page yet.",
-    );
-    // At the harness tier the call never passed through Oxagen.
     expect(screen.getByTestId("fit-effort-card")).toHaveTextContent(
-      "The model call did not go through Oxagen, so the request body was never read.",
-    );
-  });
-
-  it("argues one rung up for a run that took more than one prompt on a small class", async () => {
-    const run = runRow({
-      ...RELEASE_RUN,
-      model: { slug: "claude-haiku-4-5", provider: "anthropic", tier: "haiku" },
-    });
-    await renderTab(props({ run }));
-    const card = screen.getByTestId("fit-model-card");
-    expect(card.dataset.verdict).toBe("under");
-    expect(card).toHaveTextContent(
-      "This run took 2 prompts to land on the haiku class, and 1 tool call failed. The reading argues for the sonnet class, one rung up the same family.",
-    );
-    // The stub says what no contract does yet, agent read or not.
-    expect(
-      screen.getByRole("button", { name: "Move this agent to sonnet" }),
-    ).toHaveAccessibleDescription(
-      "No contract changes an agent's model class from this page yet.",
-    );
-  });
-
-  it("claims no rung for a model the ladder does not know, and no reading for a sealed run read short (negative)", async () => {
-    await renderTab(props({ run: runRow({ ...RELEASE_RUN, model: null }) }));
-    expect(screen.getByTestId("fit-model-card")).toHaveTextContent(
-      "The run records no model class",
-    );
-    cleanup();
-    const cut = costTranscript(releaseRunTurns());
-    await renderTab(
-      props({
-        run: runRow({ ...RELEASE_RUN, sealedAt: new Date(NOW).toISOString() }),
-        transcript: readOk({ ...cut, cursor: "next", complete: false }),
-      }),
-    );
-    expect(screen.getByTestId("fit-model-card")).toHaveTextContent(
-      "the record does not carry all four yet",
+      "This agent sent no effort setting, so the model used its own default.",
     );
     expect(screen.getByTestId("fit-read")).toHaveTextContent(
       "There is no reading for this run.",
     );
-    expect(screen.queryByTestId("fit-move")).toBeNull();
+    expect(screen.queryByTestId("fit-move-model")).toBeNull();
   });
 
   it("says not recorded wherever the record carries nothing, and never prints a figure for it (negative)", async () => {
@@ -459,8 +432,10 @@ describe("CostTab", () => {
       expect(part).toHaveTextContent("not recorded");
       expect(part.textContent).not.toMatch(/\d/);
     }
+    // No finding cites the run: no turn is pinned, and no cell claims one is.
+    expect(screen.queryByTestId("waterfall-pin")).toBeNull();
     for (const row of screen.getAllByTestId("waterfall-row"))
-      expect(row.lastElementChild).toHaveTextContent("not recorded");
+      expect(row.lastElementChild?.textContent).toBe("");
     expect(screen.getByTestId("inst-cost")).toHaveTextContent(
       "this agent's median run is not recorded",
     );
@@ -1051,6 +1026,368 @@ describe("CostTab", () => {
     );
     expect(screen.getAllByTestId("waterfall-row")).toHaveLength(7);
     expect(screen.queryByTestId("waterfall-cut")).toBeNull();
+  });
+});
+
+/** The release run's cost with its rollup and baseline changed as a test says. */
+function releaseCost(
+  over: Partial<NonNullable<RunCost["rollup"]>>,
+  baseline: RunCost["baseline"] = null,
+): RunCost {
+  const cost = releaseRunCost();
+  if (cost.rollup === null) throw new Error("the release run is rolled up");
+  return { ...cost, rollup: { ...cost.rollup, ...over }, baseline };
+}
+
+const usd = (micros: string, basis: "mixed" | "estimated" = "mixed") => ({
+  micros,
+  currency: "USD",
+  basis,
+});
+
+/** The agent's 30 days before the release run: a $2.89 median run, 62% advanced. */
+const BASELINE: NonNullable<RunCost["baseline"]> = {
+  windowDays: 30,
+  before: new Date(NOW - 780_000).toISOString(),
+  runs: 12,
+  medianCost: usd("2890000"),
+  productiveRatio: 0.62,
+};
+
+describe("CostTab against the agent's baseline (#3984)", () => {
+  it("prints the gap to the agent's median run and the points against its 30-day ratio", async () => {
+    const { container } = await renderTab(
+      props({ cost: readOk(releaseCost({}, BASELINE)) }),
+    );
+    // $4.13 against a $2.89 median; 71% against 62%.
+    expect(screen.getByTestId("inst-cost-median")).toHaveTextContent(
+      "+$1.24 vs this agent's median run $2.89",
+    );
+    expect(screen.getByTestId("inst-ratio-baseline")).toHaveTextContent(
+      "+9 pts vs 30-day 62%",
+    );
+    expect(screen.getByTestId("inst-cost")).not.toHaveTextContent(
+      "this agent's median run is not recorded",
+    );
+    expect(screen.getByTestId("inst-ratio")).not.toHaveTextContent(
+      "this agent's 30-day ratio is not recorded",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("prints a run below its baseline with a minus sign", async () => {
+    await renderTab(
+      props({
+        cost: readOk(
+          releaseCost(
+            { productiveRatio: 0.5 },
+            { ...BASELINE, medianCost: usd("5000000") },
+          ),
+        ),
+      }),
+    );
+    expect(screen.getByTestId("inst-cost-median")).toHaveTextContent(
+      "−$0.87 vs this agent's median run $5.00",
+    );
+    expect(screen.getByTestId("inst-ratio-baseline")).toHaveTextContent(
+      "−12 pts vs 30-day 62%",
+    );
+  });
+
+  it("says not recorded for a figure too few of the agent's runs carry (negative)", async () => {
+    const { container } = await renderTab(
+      props({
+        cost: readOk(
+          releaseCost(
+            {},
+            { ...BASELINE, medianCost: null, productiveRatio: null },
+          ),
+        ),
+      }),
+    );
+    expect(screen.getByTestId("inst-cost")).toHaveTextContent(
+      "this agent's median run is not recorded",
+    );
+    expect(screen.getByTestId("inst-ratio")).toHaveTextContent(
+      "this agent's 30-day ratio is not recorded",
+    );
+    expect(screen.queryByTestId("inst-cost-median")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("prints the agent's median and 30-day ratio alone for a run with no cost or ratio to set beside them (negative)", async () => {
+    const { container } = await renderTab(
+      props({
+        run: runRow({ ...RELEASE_RUN, cost: null }),
+        cost: readOk({ rollup: null, baseline: BASELINE }),
+      }),
+    );
+    // No gap is drawn against a cost the record does not hold.
+    expect(screen.getByTestId("inst-cost-median")).toHaveTextContent(
+      /^this agent's median run is \$2\.89$/,
+    );
+    expect(screen.getByTestId("inst-ratio-baseline")).toHaveTextContent(
+      /^this agent's 30-day ratio is 62%$/,
+    );
+    await expectNoAxe(container);
+  });
+
+  it("prints a run level with its baseline with no sign", async () => {
+    await renderTab(
+      props({
+        cost: readOk(
+          releaseCost(
+            { productiveRatio: 0.62 },
+            { ...BASELINE, medianCost: usd("4130000") },
+          ),
+        ),
+      }),
+    );
+    expect(screen.getByTestId("inst-cost-median")).toHaveTextContent(
+      /^\$0\.00 vs this agent's median run \$4\.13$/,
+    );
+    expect(screen.getByTestId("inst-ratio-baseline")).toHaveTextContent(
+      /^0 pts vs 30-day 62%$/,
+    );
+  });
+
+  it("names why the unproductive steps made no progress, and counts advanced against did not", async () => {
+    const { container } = await renderTab(
+      props({
+        cost: readOk(
+          releaseCost({
+            productiveRatio: 68 / 96,
+            advancedSteps: 68,
+            unproductiveSteps: 28,
+            unproductiveCauses: { failed: 4, repeated: 12, retried: 12 },
+          }),
+        ),
+      }),
+    );
+    const tile = screen.getByTestId("inst-ratio");
+    expect(screen.getByTestId("inst-ratio-causes")).toHaveTextContent(
+      "28 steps did not advance the task: 4 failed, 12 repeated an earlier call, 12 retried.",
+    );
+    expect(tile).toHaveTextContent("advanced68 steps");
+    expect(tile).toHaveTextContent("did not28 steps");
+    // The retries alone gave way to the causes.
+    expect(tile).not.toHaveTextContent("The rollup recorded");
+    expect(screen.getByTestId("prompt-composition")).toHaveTextContent(
+      "68 of 96 steps advanced the task",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("names only the causes the rollup recorded, and says so when every step advanced", async () => {
+    await renderTab(
+      props({
+        cost: readOk(
+          releaseCost({
+            productiveRatio: 1,
+            advancedSteps: 96,
+            unproductiveSteps: 0,
+            unproductiveCauses: { failed: 0, repeated: 0, retried: 0 },
+          }),
+        ),
+      }),
+    );
+    expect(screen.getByTestId("inst-ratio-causes")).toHaveTextContent(
+      "Every step the rollup graded advanced the task.",
+    );
+  });
+
+  it("keeps the retry count on a run rolled up before its steps were graded (negative)", async () => {
+    await renderTab(props());
+    expect(screen.queryByTestId("inst-ratio-causes")).toBeNull();
+    expect(screen.getByTestId("inst-ratio")).toHaveTextContent(
+      "The rollup recorded 2 retries.",
+    );
+  });
+});
+
+describe("CostTab's tool costs (#3892)", () => {
+  it("lists the most expensive tools with their estimated cost and fills the Tool calls area", async () => {
+    const { container } = await renderTab(
+      props({
+        cost: readOk(
+          releaseCost({
+            byTool: [
+              { name: "Grep", calls: 4, resultTokens: 800, cost: null },
+              {
+                name: "Read",
+                calls: 5,
+                resultTokens: 60_000,
+                cost: usd("300000", "estimated"),
+              },
+              {
+                name: "mcp__github__list_pull_requests",
+                calls: 1,
+                resultTokens: 90_000,
+                cost: usd("450000", "estimated"),
+              },
+            ],
+          }),
+        ),
+      }),
+    );
+    const tools = screen.getAllByTestId("dearest-tool");
+    expect(tools.map((row) => row.textContent)).toEqual([
+      "mcp__github__list_pull_requests1 call · $0.45",
+      "Read5 calls · $0.30",
+      "Grep4 calls · not recorded",
+    ]);
+    expect(screen.getByTestId("dearest-tools-note")).toHaveTextContent(
+      "Each tool's cost is an estimate",
+    );
+    const results = screen
+      .getAllByTestId("area-row")
+      .find((row) => row.dataset.area === "results");
+    expect(results).toHaveTextContent("$0.75");
+    expect(results).toHaveTextContent("estimate");
+    expect(screen.getByTestId("spend-by-area")).toHaveTextContent(
+      "Most expensive tools",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("lists the unpriced tools after the priced ones, most called first", async () => {
+    // The unpriced pair arrives in the reverse of its call order, so a sort
+    // that left them where they came would fail here.
+    await renderTab(
+      props({
+        cost: readOk(
+          releaseCost({
+            byTool: [
+              { name: "Grep", calls: 1, resultTokens: null, cost: null },
+              { name: "Glob", calls: 6, resultTokens: null, cost: null },
+              {
+                name: "Read",
+                calls: 5,
+                resultTokens: 60_000,
+                cost: usd("300000", "estimated"),
+              },
+            ],
+          }),
+        ),
+      }),
+    );
+    expect(
+      screen.getAllByTestId("dearest-tool").map((row) => row.textContent),
+    ).toEqual([
+      "Read5 calls · $0.30",
+      "Glob6 calls · not recorded",
+      "Grep1 call · not recorded",
+    ]);
+  });
+});
+
+describe("CostTab's finding pins (#4001)", () => {
+  const FINDING = "fnd_0123456789abcdefghjkmn";
+  const turns = costTurns(releaseRunTurns());
+  const fifth = turns.turns[4];
+  const findings = (
+    citation: RunFindings["findings"][number]["citation"],
+  ): Read<RunFindings> =>
+    readOk({
+      findings: [
+        {
+          id: FINDING,
+          kind: "repeated_shell_commands",
+          subject: "Bash",
+          saving: usd("60000", "estimated"),
+          confidence: "high",
+          citation,
+        },
+      ],
+    });
+
+  it("reads the run's findings beside its turns and pins one to the turn it cites", async () => {
+    if (fifth === undefined) throw new Error("the release run has seven turns");
+    const tab = props({
+      findings: findings({
+        runLevel: false,
+        frames: [{ seq: fifth.seq }],
+        framesTotal: 1,
+      }),
+    });
+    await renderTab(tab);
+    const pins = screen.getAllByTestId("waterfall-pin");
+    expect(pins.map((pin) => pin.getAttribute("data-turn"))).toEqual(["5"]);
+    const rows = screen.getAllByTestId("waterfall-row");
+    const link = within(rows[4] ?? document.body).getByRole("link", {
+      name: "Repeated shell commands",
+    });
+    expect(link.getAttribute("href")).toBe(
+      `/acme/core-platform/runs/${RELEASE_RUN.id}?tab=cost&finding=${FINDING}`,
+    );
+  });
+
+  it("opens the finding's evidence over the tab when the URL names it", async () => {
+    const tab = props({
+      finding: FINDING,
+      findingEvidence: readOk({
+        finding: {
+          id: FINDING,
+          kind: "repeated_shell_commands",
+          level: "tool",
+          subject: "Bash",
+          saving: usd("60000", "estimated"),
+          confidence: "high",
+          window: {
+            from: "2026-08-16T00:00:00.000Z",
+            to: "2026-09-15T00:00:00.000Z",
+          },
+          why: "Why.",
+          fix: "Fix.",
+          runs: 1,
+          calls: 2,
+        },
+        calls: 2,
+        coveredCalls: 2,
+        measuredTokens: 100,
+        counterfactualTokens: 0,
+        measured: { micros: "60000", currency: "USD" },
+        counterfactual: { micros: "0", currency: "USD" },
+        runs: [],
+      }),
+    });
+    await renderTab(tab);
+    const dialog = screen.getByTestId("spend-evidence-dialog");
+    expect(screen.getByTestId("cost-tab")).toBeTruthy();
+    // Closing returns to the Cost tab it opened over, not to Spend's
+    // Findings list, which is the dialog's own default.
+    nav.replace.mockClear();
+    await userEvent
+      .setup()
+      .click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(nav.replace).toHaveBeenCalledWith(
+        routes.run("acme", "core-platform", RELEASE_RUN.id, { tab: "cost" }),
+      );
+    });
+  });
+
+  it("reads no evidence for a value that is not a finding id (negative)", async () => {
+    // The source refuses an evidence read the test did not hand it, so a
+    // read here would fail the render.
+    await renderTab(props({ finding: "../spend" }));
+    expect(screen.queryByTestId("spend-evidence-dialog")).toBeNull();
+  });
+});
+
+describe("CostTab after a findings read fails", () => {
+  it("says the pins are not recorded rather than drawing none (negative)", async () => {
+    await renderTab(
+      props({ findings: readError("findings_unreachable", 502) }),
+    );
+    expect(screen.queryByTestId("waterfall-pin")).toBeNull();
+    for (const row of screen.getAllByTestId("waterfall-row"))
+      expect(row.lastElementChild).toHaveTextContent("not recorded");
+    expect(screen.getByTestId("waterfall-panel")).toHaveTextContent(
+      "findings_unreachable",
+    );
+    // The rest of the tab still draws.
+    expect(screen.getAllByTestId("waterfall-row")).toHaveLength(7);
   });
 });
 

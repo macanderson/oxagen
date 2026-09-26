@@ -2,134 +2,74 @@
 // tab): every issue the session touched, then the work it linked to, then
 // the run's follow-through settings.
 //
-// Two sources name an issue. The run's task reference is the one it was
-// started on, and no tracker read gives its status. The issues each pull
-// request the run opened closes come from GitHub's own record (#4024, #4029),
-// with GitHub's state. A pull request matched by head commit or branch name
-// adds nothing, because it does not show the run opened it. The table appears
-// once; Linked work below it lists repositories, pull requests and files,
-// never the issues again.
+// The table is `get_run_issues` (#3970, ADR-197), row for row: the task the
+// run was started on (stated), the issues its recorded pull requests close,
+// and the issues its frames name (observed), each with its status as GitHub
+// read it when the page loaded. A status the read could not take says so and
+// why, and carries `data-gap="tracker"`, never a guessed state. The table
+// appears once; Linked work below it lists repositories, pull requests and
+// files, never the issues again.
 import { useLocale, useTranslations } from "next-intl";
 import { type ReactNode, Suspense, use } from "react";
-import type {
-  RunOutcomesPolicy,
-  RunWork as RunWorkView,
-} from "@/data/contracts/run-work";
+import type { RunIssues } from "@/data/contracts/run-issues";
+import type { RunOutcomesPolicy } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import { PAGE_FAILURES, type Read, readError } from "@/data/read";
 import {
   RunIssueConnections,
   RunOutcomesConsent,
 } from "@/features/run-outcomes";
-import { type GitHubUrl, parseGitHubUrl } from "@/shared/github-url";
-import { Badge } from "@/ui/badge";
+import { parseGitHubUrl } from "@/shared/github-url";
+import { Badge, type BadgeTone } from "@/ui/badge";
 import { mono } from "@/ui/control-styles";
-import { type ListRow, ListTable } from "@/ui/list-table";
+import { useFormatter } from "@/ui/formatter";
 import { formatCount } from "@/ui/money-format";
 import { GitHubLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
+import { IssuesTable, type IssueTableRow } from "./issues-table";
 import { EdgeChip, LinkedWork, LinkedWorkLoading } from "./linked-work";
-import { Note, NoValue, Panel, PanelBody } from "./parts";
+import { Note, Panel, PanelBody } from "./parts";
 import type { Place, RunTabProps } from "./tab-props";
 
-/**
- * The tracker page a task reference names, when Oxagen can name it: a
- * GitHub issue written `owner/repo#N`, or a GitHub URL. A reference in any
- * other tracker's shape (`ENG-4121`) carries no host, so it is not linked.
- *
- * @internal Exported for its unit test; the tab calls it through ViewLink.
- */
-export function issueUrl(ref: string): GitHubUrl | null {
-  const github = /^([\w.-]+)\/([\w.-]+)#(\d+)$/.exec(ref);
-  if (github !== null) {
-    const [, owner = "", repo = "", n = ""] = github;
-    return parseGitHubUrl(`https://github.com/${owner}/${repo}/issues/${n}`);
-  }
-  return parseGitHubUrl(ref);
-}
+type Issue = RunIssues["issues"][number];
+type Status = NonNullable<Issue["status"]>;
+type Unread = Exclude<Issue["statusRead"], "read">;
 
-/** An issue a pull request the run opened closes, by GitHub's own record. */
-type ClosingIssue = {
-  ref: string;
-  url: string;
-  state: "open" | "closed";
-  pr: number;
+/** The dot and word a read status draws in. */
+const STATUS_TONE: Record<Status, BadgeTone> = {
+  open: "allowed",
+  in_progress: "approval",
+  blocked: "failed",
+  closed: "quiet",
 };
 
 /**
- * The issues the run's own pull requests close. Only a pull request the run
- * recorded opening counts. `unread` is true when GitHub's list for any of
- * those pull requests is missing or cut short, so an unread list never reads
- * as closing nothing.
- *
- * @internal Exported for its unit test; the panel calls it.
- */
-export function closingIssuesOf(work: RunWorkView): {
-  issues: ClosingIssue[];
-  unread: boolean;
-} {
-  const issues = new Map<string, ClosingIssue>();
-  let unread = false;
-  for (const pr of work.pullRequests) {
-    if (pr.association !== "recorded") continue;
-    if (pr.closingIssues === null) {
-      unread = true;
-      continue;
-    }
-    if (!pr.closingIssues.complete) unread = true;
-    for (const issue of pr.closingIssues.issues) {
-      const ref = `${issue.owner}/${issue.repo}#${String(issue.number)}`;
-      if (!issues.has(ref))
-        issues.set(ref, {
-          ref,
-          url: issue.url,
-          state: issue.state,
-          pr: pr.number,
-        });
-    }
-  }
-  return { issues: [...issues.values()], unread };
-}
-
-/** The closing issues the table adds under the task: every one but the task itself. */
-function beyondTask(
-  run: RunRow,
-  closing: { issues: ClosingIssue[] } | null,
-): ClosingIssue[] {
-  return (closing?.issues ?? []).filter((issue) => issue.ref !== run.taskRef);
-}
-
-/**
- * The Issues tab's count in the tab strip: the rows the table draws. When
- * GitHub did not return every closing list, or the pull requests could not
- * be read, the count is a floor.
+ * The Issues tab's count in the tab strip: the rows the table draws. When a
+ * limit cut the list, or the read failed, the count is a floor.
  */
 export function IssuesCount({
   run,
-  work,
+  issues,
 }: {
   run: RunRow;
-  work: Promise<Read<RunWorkView>>;
+  issues: Promise<Read<RunIssues>>;
 }) {
   const t = useTranslations("run.tabs");
-  const read = use(work);
-  const closing = read.ok ? closingIssuesOf(read.value) : null;
-  const count =
-    (run.taskRef === null ? 0 : 1) + beyondTask(run, closing).length;
-  return closing === null || closing.unread
-    ? t("atLeast", { count })
-    : String(count);
+  const read = use(issues);
+  if (!read.ok) return t("atLeast", { count: run.taskRef === null ? 0 : 1 });
+  const count = read.value.issues.length;
+  return read.value.complete ? String(count) : t("atLeast", { count });
 }
 
-function ViewLink({ refName, url }: { refName: string; url?: string }) {
+function ViewLink({ issue }: { issue: Issue }) {
   const t = useTranslations("run.issues");
-  const target = url === undefined ? issueUrl(refName) : parseGitHubUrl(url);
+  const target = parseGitHubUrl(issue.url);
   if (target === null)
     return <span className="text-[11.5px] text-dim">{t("noLink")}</span>;
   return (
     <GitHubLink
       to={target}
-      aria-label={t("viewLabel", { ref: refName })}
+      aria-label={t("viewLabel", { ref: issue.ref })}
       className="whitespace-nowrap text-link hover:underline"
     >
       {t("view")}
@@ -137,124 +77,165 @@ function ViewLink({ refName, url }: { refName: string; url?: string }) {
   );
 }
 
+/** The status as a dot and a word, or why none was read. */
+function StatusCell({ issue }: { issue: Issue }) {
+  const t = useTranslations("run.issues");
+  const format = useFormatter();
+  if (issue.statusRead === "read" && issue.status !== null)
+    return (
+      <span
+        title={
+          issue.readAt === null
+            ? undefined
+            : t("stateAt", {
+                at: format.dateTime(new Date(issue.readAt), {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                }),
+              })
+        }
+      >
+        <Badge tone={STATUS_TONE[issue.status]} dot>
+          {t(`state.${issue.status}`)}
+        </Badge>
+      </span>
+    );
+  const why: Unread =
+    issue.statusRead === "read" ? "read_failed" : issue.statusRead;
+  return (
+    <span
+      data-gap="tracker"
+      data-status-read={issue.statusRead}
+      title={t(`statusRead.${why}`)}
+      className="text-muted-foreground"
+    >
+      {t("statusUnknown")}
+    </span>
+  );
+}
+
+function RelationCell({ issue }: { issue: Issue }) {
+  const t = useTranslations("run.issues");
+  const label =
+    issue.relation === "task"
+      ? t("task")
+      : issue.relation === "resolves" && issue.resolvedBy.length > 0
+        ? t("closedBy", {
+            number: issue.resolvedBy
+              .map((pull) => String(pull.number))
+              .join(", #"),
+          })
+        : t("referenced");
+  return (
+    <Badge tone="quiet" dot={false}>
+      {label}
+    </Badge>
+  );
+}
+
+function issueRow(issue: Issue, place: Place): IssueTableRow {
+  return {
+    key: issue.ref,
+    status: issue.statusRead === "read" ? issue.status : null,
+    cells: [
+      <span key="ref" className="flex min-w-0 flex-col">
+        <span className={`${mono} text-xs`}>{issue.ref}</span>
+        {issue.title === null ? null : (
+          <span className="truncate text-[11.5px] text-muted-foreground">
+            {issue.title}
+          </span>
+        )}
+      </span>,
+      <StatusCell key="status" issue={issue} />,
+      <RelationCell key="relation" issue={issue} />,
+      <EdgeChip
+        key="edge"
+        edge={issue.edge}
+        frames={issue.frameSeqs}
+        place={place}
+      />,
+      <ViewLink key="view" issue={issue} />,
+    ],
+  };
+}
+
 /**
- * The Issues table. `read` is the run's work read, which carries the pull
- * requests; null while it is still being read, so the task row draws at once
- * and the closing issues join it when GitHub answers.
+ * The Issues table. `read` is `get_run_issues`; null while it is still being
+ * read, so the panel draws at once and the rows join it when GitHub answers.
  */
 function IssuesPanel({
-  run,
   place,
   read,
 }: {
-  run: RunRow;
   place: Place;
-  read: Read<RunWorkView> | null;
+  read: Read<RunIssues> | null;
 }) {
   const t = useTranslations("run.issues");
   const locale = useLocale();
-  const closing = read?.ok === true ? closingIssuesOf(read.value) : null;
-  const task: ListRow[] =
-    run.taskRef === null
-      ? []
-      : [
-          {
-            key: run.taskRef,
-            data: { "data-testid": "run-issue" },
-            cells: [
-              <span key="ref" className={`${mono} text-xs`}>
-                {run.taskRef}
-              </span>,
-              <span key="status" title={t("statusWhy")}>
-                <NoValue />
-              </span>,
-              <Badge key="relation" tone="quiet" dot={false}>
-                {t("task")}
-              </Badge>,
-              <EdgeChip key="edge" edge="stated" place={place} />,
-              <ViewLink key="view" refName={run.taskRef} />,
-            ],
-          },
-        ];
-  const closed: ListRow[] = beyondTask(run, closing).map((issue) => ({
-    key: issue.ref,
-    data: { "data-testid": "run-issue" },
-    cells: [
-      <span key="ref" className={`${mono} text-xs`}>
-        {issue.ref}
-      </span>,
-      <span key="status" title={t("stateWhy")}>
-        <Badge tone={issue.state === "open" ? "allowed" : "quiet"} dot>
-          {t(`state.${issue.state}`)}
-        </Badge>
-      </span>,
-      <Badge key="relation" tone="quiet" dot={false}>
-        {t("closedBy", { number: String(issue.pr) })}
-      </Badge>,
-      <EdgeChip key="edge" edge="observed" place={place} />,
-      <ViewLink key="view" refName={issue.ref} url={issue.url} />,
-    ],
-  }));
-  const rows = [...task, ...closed];
+  const answer = read?.ok === true ? read.value : null;
+  const rows = (answer?.issues ?? []).map((issue) => issueRow(issue, place));
+  const complete = answer?.complete ?? true;
+  const count = formatCount(rows.length, locale);
   return (
     <Panel
       title={t("title")}
       aside={
-        <Badge tone="quiet" dot={false}>
-          {t("count", { count: formatCount(rows.length, locale) })}
-        </Badge>
+        answer === null ? undefined : (
+          <Badge tone="quiet" dot={false}>
+            {complete ? t("count", { count }) : t("countAtLeast", { count })}
+          </Badge>
+        )
       }
       flush
       testId="run-issues"
     >
-      {rows.length === 0 ? (
+      {read === null ? (
+        <PanelBody>
+          <p className="text-sm text-muted-foreground">{t("loading")}</p>
+        </PanelBody>
+      ) : !read.ok ? (
+        <PanelBody>
+          <ReadFailure read={read} section={t("title")} />
+        </PanelBody>
+      ) : rows.length === 0 ? (
         <PanelBody>
           <p className="text-sm text-muted-foreground">
-            {read === null
-              ? t("loading")
-              : closing?.unread === true
-                ? t("emptyUnread")
-                : t("empty")}
+            {complete ? t("empty") : t("emptyIncomplete")}
           </p>
         </PanelBody>
       ) : (
-        <ListTable
-          label={t("title")}
-          columns={[
-            { label: t("issue") },
-            { label: t("status") },
-            { label: t("relation") },
-            { label: t("edge") },
-            { label: t("viewColumn"), hidden: true },
-          ]}
-          rows={rows}
-        />
+        <>
+          <IssuesTable
+            label={t("title")}
+            columns={[
+              { label: t("issue") },
+              { label: t("status") },
+              { label: t("relation") },
+              { label: t("edge") },
+              { label: t("viewColumn"), hidden: true },
+            ]}
+            rows={rows}
+          />
+          {complete ? null : (
+            <PanelBody rule>
+              <Note testId="run-issues-incomplete">{t("incomplete")}</Note>
+            </PanelBody>
+          )}
+        </>
       )}
-      <PanelBody rule={rows.length > 0}>
-        {read === null && rows.length > 0 ? (
-          <Note>{t("loading")}</Note>
-        ) : read !== null && !read.ok ? (
-          <ReadFailure read={read} section={t("pullRequests")} />
-        ) : closing?.unread === true && rows.length > 0 ? (
-          <Note>{t("closingUnread")}</Note>
-        ) : null}
-        <Note>{t("note")}</Note>
-      </PanelBody>
     </Panel>
   );
 }
 
-/** The Issues table once the work read answers. */
-function IssuesFromWork({
-  run,
+/** The Issues table once the issues read answers. */
+function IssuesFromRead({
   place,
-  work,
+  issues,
 }: {
-  run: RunRow;
   place: Place;
-  work: Promise<Read<RunWorkView>>;
+  issues: Promise<Read<RunIssues>>;
 }) {
-  return <IssuesPanel run={run} place={place} read={use(work)} />;
+  return <IssuesPanel place={place} read={use(issues)} />;
 }
 
 /** The run follow-through panels, which the page drew above its columns before the tabs owned them. */
@@ -283,11 +264,11 @@ function FollowThrough({
 
 /**
  * The Issues tab over the page's bundle. It makes one read of its own, the
- * organization's follow-through setting, and leaves the work read to stream
- * inside the Issues table's and Linked work's boundaries.
+ * organization's follow-through setting, and leaves the issues and work
+ * reads to stream inside the Issues table's and Linked work's boundaries.
  */
 export async function IssuesTab(props: RunTabProps): Promise<ReactNode> {
-  const { ctx, source, run, place, work, outputs } = props;
+  const { ctx, source, place, work, issues, outputs } = props;
   const outcomes = await source.runs
     .outcomesSettings(ctx)
     .catch(() =>
@@ -296,8 +277,8 @@ export async function IssuesTab(props: RunTabProps): Promise<ReactNode> {
   const canManage = ctx.orgRole === "owner" || ctx.orgRole === "admin";
   return (
     <>
-      <Suspense fallback={<IssuesPanel run={run} place={place} read={null} />}>
-        <IssuesFromWork run={run} place={place} work={work} />
+      <Suspense fallback={<IssuesPanel place={place} read={null} />}>
+        <IssuesFromRead place={place} issues={issues} />
       </Suspense>
       <Suspense fallback={<LinkedWorkLoading />}>
         <LinkedWork work={work} outputs={outputs} place={place} />

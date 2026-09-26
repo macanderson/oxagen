@@ -12,7 +12,7 @@ import { closeDatabase, withSystemDb } from "@oxagen/database";
 import { deriveSealRollup, type SealedFrameRow } from "@oxagen/run-ledger";
 import { type SQL, sql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
-import { rollupRun, type RunMeta } from "./cost-rollup";
+import { rollupRun, type RunMeta, type ToolCallFrame } from "./cost-rollup";
 import { modelCallHidesTurn, toolCallName } from "./cost-rollup-store";
 
 const enabled = Boolean(process.env.DATABASE_URL);
@@ -75,6 +75,18 @@ const META: RunMeta = {
   replayGrade: null,
 };
 
+/** A tool call that recorded its name and nothing else the grade reads. */
+function named(name: string | null): ToolCallFrame {
+  return {
+    name,
+    status: null,
+    inputDigest: null,
+    outputDigest: null,
+    isMutating: null,
+    resultTokens: null,
+  };
+}
+
 describe.skipIf(!enabled)("the ledger reads against Postgres", () => {
   afterAll(async () => {
     await closeDatabase();
@@ -116,13 +128,13 @@ describe.skipIf(!enabled)("the ledger reads against Postgres", () => {
     const record = rollupRun({
       meta: META,
       modelCalls: [],
-      toolCalls: [{ name: engine }, { name: ledger }, { name: encrypted }],
+      toolCalls: [named(engine), named(ledger), named(encrypted)],
       book: [],
     });
     expect(record.toolCalls).toBe(3);
     expect(record.breakdown.tools).toEqual([
-      { name: "run.list", calls: 1 },
-      { name: "search_tools", calls: 1 },
+      { name: "run.list", calls: 1, resultTokens: null, costMicros: null },
+      { name: "search_tools", calls: 1, resultTokens: null, costMicros: null },
     ]);
   });
 });

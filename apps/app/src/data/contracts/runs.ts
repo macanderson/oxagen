@@ -309,6 +309,62 @@ export type RunDiff = z.infer<typeof RunDiff>;
 export const PullRequestFilter = z.enum(["any", "with", "without"]);
 export type PullRequestFilter = z.infer<typeof PullRequestFilter>;
 
+/** Where an effort value was read, mirrored from `@oxagen/oxagen/run-fit`. */
+const EffortSource = z.enum(["request", "harness"]);
+
+const FitCount = z.number().int().nonnegative();
+
+/**
+ * The Model fit reading (`runFitSchema` in `@oxagen/oxagen/run-fit`): whether
+ * the model class and the effort setting were the right size for the sealed
+ * run, with the figures it read and the seal it read. Generated from the
+ * record, never the record itself.
+ */
+const RunFit = z.object({
+  method: z.literal("run-fit/v1"),
+  readAt: z.iso.datetime({ offset: true }),
+  sealedAt: z.iso.datetime({ offset: true }),
+  /** Null when the record lacks a figure the reading is keyed on. */
+  read: z
+    .object({
+      prompts: FitCount,
+      turns: FitCount,
+      steps: FitCount,
+      failed: FitCount,
+      outputTokens: FitCount.nullable(),
+      reasoningTokens: FitCount.nullable(),
+    })
+    .nullable(),
+  /** Null when `read` is null or the model's class sits on no known ladder. */
+  model: z
+    .discriminatedUnion("verdict", [
+      z.object({ verdict: z.literal("fit"), tier: z.string() }),
+      z.object({
+        verdict: z.enum(["over", "under"]),
+        tier: z.string(),
+        suggest: z.string(),
+      }),
+    ])
+    .nullable(),
+  effort: z.discriminatedUnion("verdict", [
+    z.object({
+      verdict: z.literal("fit"),
+      effort: z.string().max(32),
+      source: EffortSource,
+    }),
+    z.object({
+      verdict: z.enum(["over", "under"]),
+      effort: z.string().max(32),
+      source: EffortSource,
+      suggest: z.string().max(32),
+    }),
+    z.object({
+      verdict: z.literal("unseen"),
+      why: z.enum(["not_proxied", "not_sent"]),
+    }),
+  ]),
+});
+
 /** The columns `list_runs` orders by, mirrored from its `RUN_SORT_KEYS`. */
 export const RunSortKey = z.enum([
   "started",
@@ -492,6 +548,26 @@ export const RunRow = z.object({
    * for an agent or service principal and for a person who set none.
    */
   operatorAvatarUrl: z.string().min(1).nullable().optional(),
+   * The operator's workspace role when the run opened, stamped then and never
+   * read live. Null when it was not recorded: a run from before the stamp, an
+   * operator who is not a person, or a person with no membership here.
+   */
+  operatorRole: z
+    .enum(["owner", "admin", "member", "billing", "compliance", "viewer"])
+    .nullable()
+    .optional(),
+  /**
+   * Where `effort` was read: `request` from a proxied request body, which
+   * wins, or `harness` from the harness's own report. Null exactly when
+   * `effort` is.
+   */
+  effortSource: EffortSource.nullable().default(null),
+  /**
+   * The Model fit reading for the sealed run, computed from the record after
+   * the seal. Null for a live run, for a reading of an earlier seal, and for a
+   * run with no reading yet.
+   */
+  fit: RunFit.nullable().default(null),
 });
 export type RunRow = z.infer<typeof RunRow>;
 

@@ -257,6 +257,10 @@ const ledgerColumns = {
     summaryGeneratedAt: runs.summaryGeneratedAt,
     summaryModel: runs.summaryModel,
     summaryError: runs.summaryError,
+    // Stamped by `buildCreateRunSql` when the run was created (#3999). The
+    // read takes the stamp and never joins `workspace_users`, so a role
+    // changed after the run opened does not change what the run says.
+    operatorRole: runs.operatorRole,
   },
   identity: {
     orgNamespace: schema.organizations.namespace,
@@ -492,6 +496,10 @@ const chainSealColumns = {
   terminalStatus: seals.terminalStatus,
   finalEventDigest: seals.finalEventDigest,
   eventStreamDigest: seals.eventStreamDigest,
+  // The attestation the seal signed when it was written (ADR-195).
+  archiveSegmentDigest: seals.archiveSegmentDigest,
+  attestationKeyId: seals.attestationKeyId,
+  attestationSig: seals.attestationSig,
   // Whether compaction moved this attempt's frames to its archive (ADR-193).
   compacted: compactedProbe(),
 };
@@ -651,6 +659,9 @@ const tachoColumns = {
     pullRequests: sessions.pullRequests,
     linesAdded: sessions.linesAdded,
     linesRemoved: sessions.linesRemoved,
+    // Stamped by ingest's genesis row when the session opened (#3999), and
+    // read as stamped: nothing here consults `workspace_users`.
+    operatorRole: sessions.operatorRole,
   },
   operatorPublicId: schema.principals.publicId,
   operatorKind: schema.principals.kind,

@@ -270,11 +270,36 @@ interface RunChainResult {
     missingBodies: number;
     recorded: string[];
   };
-  seals: { sealedAt: string; terminalStatus: string }[];
+  seals: {
+    sealedAt: string;
+    terminalStatus: string;
+    /**
+     * The signature the seal wrote over its own figures (ADR-195). Null on a
+     * seal written with no attester key or before seals were signed, and on
+     * a wrapped session's seal.
+     */
+    attestation: {
+      alg: "ed25519";
+      keyId: string;
+      sig: string;
+      signsOver: string[];
+    } | null;
+  }[];
   enforcementTier: string;
   recordedGrade: string | null;
   ladder: { grade: string; met: boolean; reason: string }[];
   complete: boolean;
+}
+
+/**
+ * A seal's attestation as one line: the algorithm, the key and the fields it
+ * signs, or "not recorded" for a seal that was not signed.
+ */
+function attestationLine(
+  attestation: RunChainResult["seals"][number]["attestation"],
+): string {
+  if (attestation === null) return "not recorded";
+  return `${attestation.alg} key ${attestation.keyId} over ${attestation.signsOver.join(", ")}`;
 }
 
 /**
@@ -305,6 +330,14 @@ export async function runChain(
     `${result.runId}: ${result.frameCount} frames, ${result.hashRule}`,
   );
   writer.write(`Merkle root: ${result.merkleRoot ?? "not recorded"}`);
+  // One line per seal: a retried run has one per attempt, and each signed
+  // its own figures, or did not.
+  const many = result.seals.length > 1;
+  result.seals.forEach((seal, i) => {
+    writer.write(
+      `${many ? `Attempt ${i + 1} attestation` : "Attestation"}: ${attestationLine(seal.attestation)}`,
+    );
+  });
   writer.write(
     `Observed at: ${result.enforcementTier} · recorded grade: ${result.recordedGrade ?? "not recorded"}`,
   );

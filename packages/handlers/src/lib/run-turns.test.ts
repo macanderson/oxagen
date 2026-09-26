@@ -497,7 +497,7 @@ describe("placeChains", () => {
 
 describe("tachoTurns", () => {
   it("adds each chain's tallies to the turn it falls in", () => {
-    const { turns, complete } = tachoTurns({
+    const { turns, complete, chains } = tachoTurns({
       rootSessionUuid: ROOT,
       starts: [1, 40],
       boundaries: "turn_start",
@@ -568,10 +568,12 @@ describe("tachoTurns", () => {
         tokens: { inputUncached: null, cacheRead: null },
       },
     ]);
+    // The subagent the first turn spawned counts toward it (#4001).
+    expect(chains).toEqual([{ sessionUuid: CHILD_A, turn: 1 }]);
   });
 
   it("counts a subagent spawned before the first turn in the cost so far, in no turn's row", () => {
-    const { turns } = tachoTurns({
+    const { turns, chains } = tachoTurns({
       rootSessionUuid: ROOT,
       starts: [1],
       boundaries: "turn_start",
@@ -597,6 +599,40 @@ describe("tachoTurns", () => {
       cost: { micros: "100" },
       cumulativeCost: { micros: "125" },
     });
+    // A chain in no turn names none.
+    expect(chains).toEqual([]);
+  });
+
+  it("names each chain's turn in turn order, and leaves out a turn past the cap", () => {
+    const { chains } = tachoTurns({
+      rootSessionUuid: ROOT,
+      starts: [0, 10, 20],
+      boundaries: "turn_start",
+      cap: 2,
+      groups: [
+        group({
+          turnKey: 0,
+          spawns: [{ seq: 1, toolUseId: "tu_one", subagentId: null }],
+        }),
+        group({
+          turnKey: 10,
+          firstSeq: 10,
+          spawns: [{ seq: 11, toolUseId: "tu_two", subagentId: null }],
+        }),
+        group({
+          turnKey: 20,
+          firstSeq: 20,
+          spawns: [{ seq: 21, toolUseId: "tu_three", subagentId: null }],
+        }),
+        chain(CHILD_B, { spawnToolUseId: "tu_two" }),
+        chain(CHILD_A, { spawnToolUseId: "tu_one" }),
+        chain(NESTED, { spawnToolUseId: "tu_three" }),
+      ],
+    });
+    expect(chains).toEqual([
+      { sessionUuid: CHILD_A, turn: 1 },
+      { sessionUuid: CHILD_B, turn: 2 },
+    ]);
   });
 
   it("adds each chain's own calls, so halves on two chains stay two calls", () => {

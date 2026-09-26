@@ -15,15 +15,17 @@ export async function generateMetadata(): Promise<Metadata> {
 // design's header carries the eyebrow "Run", the run's id as the h1 in mono,
 // and the run's actions in one row, and a not-loaded state replaces all of
 // it. The tab, the transcript's filter chips, the frames cursor, the open
-// frame body, and the spine's read fold and open groups are query values, so
-// the run keeps one route.
+// frame body, the finding whose evidence is open over the Cost tab, and the
+// spine's read fold and open groups are query values, so the run keeps one
+// route.
 export default async function RunPage({
   params,
   searchParams,
 }: PageProps<"/[org]/[ws]/runs/[run]">) {
   const { org, ws, run } = await params;
   const ctx = await requireViewer(org, ws);
-  const { tab, kinds, frames, body, reads, spine } = await searchParams;
+  const { tab, kinds, frames, body, finding, reads, spine } =
+    await searchParams;
   return (
     <main
       id="main"
@@ -37,6 +39,7 @@ export default async function RunPage({
         kinds={firstParam(kinds) ?? null}
         frames={firstParam(frames) ?? null}
         body={firstParam(body) ?? null}
+        finding={firstParam(finding) ?? null}
         reads={firstParam(reads) ?? null}
         spine={firstParam(spine) ?? null}
       />

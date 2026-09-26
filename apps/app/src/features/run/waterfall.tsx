@@ -13,9 +13,14 @@
 //
 // A turn whose cost the recording did not carry draws no bar and says so in
 // its Cost cell: a zero-height bar would read as "this turn cost nothing", a
-// measurement nobody made. Finding pins are not recorded (no contract names
-// the turn a Spend finding points at), so the Pinned column says that in
-// every row rather than drawing a pin.
+// measurement nobody made.
+//
+// Each open finding that cites the run is pinned to the turns its cited frames
+// fall in (`finding-pins.ts`, #4001): a diamond over the turn's bar, and a
+// link in the turn's Pinned cell that opens the finding's evidence over this
+// tab. A finding about the run as a whole, and one whose frames were not
+// recorded, is pinned to the total row and never to a guessed turn. When the
+// findings read fails, every Pinned cell says not recorded.
 //
 // When the read stops short of the run's last turn (`complete` false), no
 // label calls the sum the total. The chart's accessible name, the caption and
@@ -29,16 +34,21 @@ import {
   ratioOfIntegers,
   shareOfMicros,
 } from "@/data/contracts/money";
+import type { RunFindings, RunTurns } from "@/data/contracts/run";
 import type { Read } from "@/data/read";
+import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
-import { mono } from "@/ui/control-styles";
+import { linkText, mono } from "@/ui/control-styles";
 import { Money as MoneyText } from "@/ui/money";
 import { formatCount, formatMoney, formatRatio } from "@/ui/money-format";
+import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
 import type { Ledger } from "./cost-figures";
+import { type FindingPins, type PinnedFinding, pinsOf } from "./finding-pins";
 import type { RunMetrics } from "./metrics";
 import { NoValue, Panel, PanelBody } from "./parts";
+import type { Place } from "./tab-props";
 
 /** `wfChart`'s frame: `W=760, H=264, pl=56, pr=64, pt=36, pb=44`. */
 const W = 760;
@@ -65,6 +75,61 @@ const swatch = "inline-block size-[9px] rounded-[2px] bg-info";
 const dashKey = "inline-block w-3.5 border-t-2 border-dashed border-foreground";
 /** `p.muted { font-size:11.5px; margin:10px 0 0 }`: how to read the chart. */
 const caption = "mb-0 mt-2.5 text-[11.5px] text-muted-foreground";
+/** A finding's diamond, `.pin { background:var(--st-denied) }`, in the legend and the Pinned cell. */
+const pinKey = "inline-block size-[7px] flex-none rotate-45 bg-warning";
+/** A Pinned cell's finding links, one per line. */
+const pinList = "m-0 grid list-none gap-1 p-0";
+const pinLink = `${linkText} inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px]`;
+/** Where a turn's diamonds sit: in the band above the tallest bar's label. */
+const PIN_Y = 14;
+const PIN_R = 4.5;
+
+/** One finding's link in a Pinned cell: it opens the finding's evidence over the Cost tab. */
+function PinLink({ finding, place }: { finding: PinnedFinding; place: Place }) {
+  const t = useTranslations("run.waterfall");
+  const kind = useTranslations("spend.findings.kind");
+  const locale = useLocale();
+  return (
+    <SafeLink
+      to={routes.run(place.org, place.ws, place.runId, {
+        tab: "cost",
+        finding: finding.id,
+      })}
+      data-testid="waterfall-pinned"
+      data-finding={finding.id}
+      className={pinLink}
+      title={t("pinTitle", {
+        finding: kind(finding.kind),
+        saving: formatMoney(finding.saving, { locale, precision: "cents" }),
+      })}
+    >
+      <i aria-hidden="true" className={pinKey} />
+      {kind(finding.kind)}
+    </SafeLink>
+  );
+}
+
+/** A Pinned cell: the findings pinned there, nothing when none is, not recorded when the read failed. */
+function PinnedCell({
+  findings,
+  place,
+}: {
+  /** Null when the findings read did not answer. */
+  findings: readonly PinnedFinding[] | null;
+  place: Place;
+}) {
+  if (findings === null) return <NoValue />;
+  if (findings.length === 0) return null;
+  return (
+    <ul className={pinList}>
+      {findings.map((finding) => (
+        <li key={finding.id}>
+          <PinLink finding={finding} place={place} />
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 /** One decimal place, for a coordinate: the chart's own `toFixed(1)`. */
 function at(value: number): number {
@@ -75,13 +140,17 @@ function Chart({
   ledger,
   total,
   complete,
+  pins,
 }: {
   ledger: Ledger;
   total: Money;
   /** The ledger reached the run's last turn, so `total` is the run's. */
   complete: boolean;
+  /** The findings pinned to each turn; null when the findings read failed. */
+  pins: FindingPins | null;
 }) {
   const t = useTranslations("run.waterfall");
+  const kind = useTranslations("spend.findings.kind");
   const locale = useLocale();
   const money = (value: Money) =>
     formatMoney(value, { locale, precision: "cents" });
@@ -158,8 +227,25 @@ function Chart({
       {ledger.rows.map((row, index) => {
         const top = barY(row.cost);
         const { turn } = row;
+        const pinned = pins?.byTurn.get(turn) ?? [];
+        const cx = at(x(index));
         return (
           <g key={row.seq}>
+            {pinned.length === 0 ? null : (
+              <path
+                data-testid="waterfall-pin"
+                data-turn={turn}
+                d={`M${String(cx)},${String(PIN_Y - PIN_R)}L${String(at(cx + PIN_R))},${String(PIN_Y)}L${String(cx)},${String(PIN_Y + PIN_R)}L${String(at(cx - PIN_R))},${String(PIN_Y)}Z`}
+                className="fill-warning"
+              >
+                <title>
+                  {t("pinChartTitle", {
+                    turn,
+                    findings: pinned.map((f) => kind(f.kind)).join(", "),
+                  })}
+                </title>
+              </path>
+            )}
             {top === null || row.cost === null ? null : (
               <>
                 <rect
@@ -260,11 +346,16 @@ function LedgerTable({
   metrics,
   ledger,
   complete,
+  pins,
+  place,
 }: {
   metrics: RunMetrics;
   ledger: Ledger;
   /** The ledger reached the run's last turn, so its total row is the run's. */
   complete: boolean;
+  /** The findings pinned to each turn and to the run; null when the read failed. */
+  pins: FindingPins | null;
+  place: Place;
 }) {
   const t = useTranslations("run.waterfall");
   const locale = useLocale();
@@ -308,8 +399,11 @@ function LedgerTable({
               t("running", { from: money(row.from), to: money(row.to) })
             )}
           </td>
-          <td className={cell}>
-            <NoValue />
+          <td className={cell} data-testid="waterfall-pinned-cell">
+            <PinnedCell
+              findings={pins === null ? null : (pins.byTurn.get(row.turn) ?? [])}
+              place={place}
+            />
           </td>
         </tr>
       ))}
@@ -342,7 +436,13 @@ function LedgerTable({
             t("ofRecorded", { cost: money(metrics.cost) })
           )}
         </td>
-        <td className={cell} />
+        {/* A finding about the run as a whole pins here, never to a turn. */}
+        <td
+          className={`${cell} font-normal`}
+          data-testid="waterfall-pinned-cell"
+        >
+          <PinnedCell findings={pins === null ? null : pins.run} place={place} />
+        </td>
       </tr>
     </Table>
   );
@@ -350,16 +450,27 @@ function LedgerTable({
 
 /**
  * The `get_run_turns` read as the panel draws it: the ledger `ledgerOf` summed
- * from its rows, and whether the rows reached the run's last turn.
+ * from its rows, whether the rows reached the run's last turn, and the turn
+ * each subagent chain counts toward, which places a finding's subagent frame.
  */
-export type TurnLedger = { ledger: Ledger; complete: boolean };
+export type TurnLedger = {
+  ledger: Ledger;
+  complete: boolean;
+  chains: RunTurns["chains"];
+};
 
 export function WaterfallPanel({
   metrics,
   turns,
+  findings,
+  place,
 }: {
   metrics: RunMetrics;
   turns: Read<TurnLedger>;
+  /** `list_findings` for the run: the open findings that cite it (#4001). */
+  findings: Read<RunFindings>;
+  /** Where the run lives: a pin links to its evidence on this page. */
+  place: Place;
 }) {
   const t = useTranslations("run.waterfall");
   const tCost = useTranslations("run.cost");
@@ -385,7 +496,12 @@ export function WaterfallPanel({
       }
     >
       {turns.ok ? (
-        <WaterfallBody metrics={metrics} {...turns.value} />
+        <WaterfallBody
+          metrics={metrics}
+          {...turns.value}
+          findings={findings}
+          place={place}
+        />
       ) : (
         <PanelBody>
           <ReadFailure read={turns} section={t("title")} />
@@ -400,9 +516,20 @@ function WaterfallBody({
   metrics,
   ledger,
   complete,
-}: TurnLedger & { metrics: RunMetrics }) {
+  chains,
+  findings,
+  place,
+}: TurnLedger & {
+  metrics: RunMetrics;
+  findings: Read<RunFindings>;
+  place: Place;
+}) {
   const t = useTranslations("run.waterfall");
   const locale = useLocale();
+  const pins = findings.ok
+    ? pinsOf(ledger.rows, chains, findings.value.findings)
+    : null;
+  const drawnPins = pins !== null && pins.byTurn.size > 0;
   if (ledger.rows.length === 0) {
     return (
       <PanelBody>
@@ -433,7 +560,12 @@ function WaterfallBody({
         ) : (
           <>
             <div className="overflow-x-auto">
-              <Chart ledger={ledger} total={ledger.cost} complete={complete} />
+              <Chart
+                ledger={ledger}
+                total={ledger.cost}
+                complete={complete}
+                pins={pins}
+              />
             </div>
             <div className={chartLegend}>
               <span className="inline-flex items-center gap-[5px]">
@@ -444,6 +576,12 @@ function WaterfallBody({
                 <i aria-hidden="true" className={dashKey} />
                 {t("soFar")}
               </span>
+              {drawnPins ? (
+                <span className="inline-flex items-center gap-[5px]">
+                  <i aria-hidden="true" className={pinKey} />
+                  {t("finding")}
+                </span>
+              ) : null}
             </div>
             <p data-testid="waterfall-caption" className={caption}>
               {complete
@@ -465,8 +603,19 @@ function WaterfallBody({
         )}
       </PanelBody>
       <div className="border-t border-border">
-        <LedgerTable metrics={metrics} ledger={ledger} complete={complete} />
+        <LedgerTable
+          metrics={metrics}
+          ledger={ledger}
+          complete={complete}
+          pins={pins}
+          place={place}
+        />
       </div>
+      {findings.ok ? null : (
+        <PanelBody rule>
+          <ReadFailure read={findings} section={t("findingsSection")} />
+        </PanelBody>
+      )}
       {complete ? null : (
         <PanelBody rule>
           <p

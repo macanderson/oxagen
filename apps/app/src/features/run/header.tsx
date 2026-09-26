@@ -32,8 +32,7 @@ import { GitHubLink, PullRequestLink } from "@/ui/navigation";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { CopyPath } from "./copy-text";
-import { runFit, type RunFit } from "./fit";
-import type { RunMetrics } from "./metrics";
+import { effortVerdict, fitOf, runEffort } from "./fit";
 import { ExportAction } from "./record-actions";
 import { ReplayActions } from "./replay-actions";
 import { RunControls } from "./run-controls";
@@ -88,19 +87,37 @@ export function useHarness(run: RunRow, agent: Read<AgentDetail> | null) {
   return { name: ta(`harness.${registered}`), version: null };
 }
 
-/** `fitBadge`: the reading's word as a state pill; nothing when it read fit or could not read. */
-function FitBadges({ fit }: { fit: RunFit }) {
+/**
+ * `fitBadge`: the stored reading's words as state pills (ADR-201), one for
+ * the model class and one for the effort. None on a live run or a run with no
+ * reading, none for a class the reading placed on no ladder, and none for an
+ * effort it did not see or whose value is not the one the rig prints.
+ */
+function FitBadges({ run }: { run: RunRow }) {
   const t = useTranslations("run.header.fit");
-  const model = fit.model;
-  if (model === null) return null;
-  return model.verdict === "fit" ? (
-    <Badge tone="allowed" data-testid="run-fit-model">
-      {t("fit")}
-    </Badge>
-  ) : (
-    <Badge tone="approval" data-testid="run-fit-model">
-      {t("wrongTier")}
-    </Badge>
+  const model = fitOf(run)?.model ?? null;
+  const effort = effortVerdict(run);
+  return (
+    <>
+      {model === null ? null : model.verdict === "fit" ? (
+        <Badge tone="allowed" data-testid="run-fit-model">
+          {t("fit")}
+        </Badge>
+      ) : (
+        <Badge tone="approval" data-testid="run-fit-model">
+          {t("wrongTier")}
+        </Badge>
+      )}
+      {effort === null ? null : effort.verdict === "fit" ? (
+        <Badge tone="allowed" data-testid="run-fit-effort">
+          {t("effortFit")}
+        </Badge>
+      ) : (
+        <Badge tone="approval" data-testid="run-fit-effort">
+          {t("wrongEffort")}
+        </Badge>
+      )}
+    </>
   );
 }
 
@@ -108,15 +125,14 @@ function FitBadges({ fit }: { fit: RunFit }) {
 function Rig({
   run,
   agent,
-  fit,
 }: {
   run: RunRow;
   agent: Read<AgentDetail> | null;
-  fit: RunFit;
 }) {
   const t = useTranslations("run.header");
   const harness = useHarness(run, agent);
   const model = run.model;
+  const effort = runEffort(run);
   return (
     <div
       data-testid="run-rig"
@@ -154,14 +170,16 @@ function Rig({
       >
         {model === null ? t("modelNotRecorded") : model.slug}
       </Chip>
-      {run.effort == null ? (
-        <Chip testId="run-effort" title={t(`effortWhy.${fit.effort.why}`)}>
-          {t("effort")}{" "}
-          <span className="font-normal text-dim">{t("notCaptured")}</span>
+      {/* The value only where the record holds it, titled with where it was
+          read; otherwise not captured, titled with why (#3891). */}
+      {effort.seen ? (
+        <Chip testId="run-effort" title={t(`effortSource.${effort.source}`)}>
+          {t("effort")} {t("effortValue", { value: effort.value })}
         </Chip>
       ) : (
-        <Chip testId="run-effort">
-          {t("effort")} {t("effortValue", { value: run.effort })}
+        <Chip testId="run-effort" title={t(`effortWhy.${effort.why}`)}>
+          {t("effort")}{" "}
+          <span className="font-normal text-dim">{t("notCaptured")}</span>
         </Chip>
       )}
       {run.thinking == null ? null : (
@@ -174,7 +192,7 @@ function Rig({
           {t("permissionMode", { value: run.permissionMode })}
         </Chip>
       )}
-      <FitBadges fit={fit} />
+      <FitBadges run={run} />
     </div>
   );
 }
@@ -841,7 +859,6 @@ export function RunHeader({
   roster,
   work,
   pulls,
-  metrics,
   orgRole,
   wsRole,
   place,
@@ -856,7 +873,6 @@ export function RunHeader({
   work: Promise<Read<RunWork>>;
   /** The pull requests the outputs recorded; null when the outputs read failed. */
   pulls: readonly RunOutputNode[] | null;
-  metrics: RunMetrics;
   /**
    * The viewer's two roles, because the writes gate on them differently:
    * `dispatch_command` admits an org Owner or Admin or a workspace Owner or
@@ -870,7 +886,6 @@ export function RunHeader({
   parked?: boolean;
 }) {
   const t = useTranslations("run");
-  const fit = runFit(run, metrics);
   const sealed = run.status !== "live";
   return (
     <>
@@ -908,7 +923,7 @@ export function RunHeader({
               </Chip>
             )}
           </div>
-          <Rig run={run} agent={agent} fit={fit} />
+          <Rig run={run} agent={agent} />
           <Suspense
             fallback={<WhereFromRow run={run} pulls={pulls} read="pending" />}
           >

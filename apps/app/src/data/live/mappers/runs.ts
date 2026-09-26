@@ -41,6 +41,9 @@ export function toRunRow(
     operatorName: run.operatorName,
     operatorAttribution: run.operatorAttribution,
     operatorAvatarUrl: run.operatorAvatarUrl,
+    // The role stamped when the run opened (#3999). A server that predates
+    // the field says nothing, which reads as not recorded.
+    operatorRole: run.operatorRole ?? null,
     status: run.status,
     reportedCost: run.reportedCost ?? null,
     outcome: run.outcome,
@@ -69,6 +72,12 @@ export function toRunRow(
             tier: run.model.tier,
           },
     effort: run.effort ?? null,
+    // get_run answers where the effort was read (#3891); list_runs leaves it
+    // out, and a row with no source says nothing about one.
+    effortSource: run.effortSource ?? null,
+    // The Model fit reading get_run stored for this seal (#3893); list_runs
+    // leaves it out, and a live run has none.
+    fit: run.fit ?? null,
     thinking: run.thinking ?? null,
     permissionMode: run.permissionMode ?? null,
     reportedTokens: run.reportedTokens ?? null,

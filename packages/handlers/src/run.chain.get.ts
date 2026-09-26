@@ -33,6 +33,7 @@ import {
   explainReplayGrade,
   frameOwesBody,
   isReplayGrade,
+  RUN_ATTESTATION_FIELDS,
 } from "@oxagen/tacho";
 import { TACHO_EVENTS_RETENTION_MONTHS } from "@oxagen/telemetry";
 import { and, asc, eq } from "drizzle-orm";
@@ -267,6 +268,30 @@ function toChainSeal(seal: LedgerSeal): RunChainGetOutput["seals"][number] {
     eventStreamDigest: seal.eventStreamDigest,
     merkleRoot: seal.merkleRoot,
     archiveSegmentRef: seal.archiveSegmentRef,
+    archiveSegmentDigest: seal.archiveSegmentDigest,
+    attestation: sealAttestation(seal),
+  };
+}
+
+/**
+ * The attestation the seal signed when it was written (ADR-195), or null
+ * for a seal written with no attester key or before the seal signed. It
+ * names the signed fields and carries no copy of their values. The entry
+ * lacks the attempt's public id and the seal's own tier, gaps and grade, so
+ * the export bundle is where a signature is checked (#4399). A key id
+ * without its signature is not an
+ * attestation, and the row's CHECK refuses one.
+ */
+function sealAttestation(
+  seal: LedgerSeal,
+): RunChainGetOutput["seals"][number]["attestation"] {
+  if (seal.attestationKeyId === null || seal.attestationSig === null)
+    return null;
+  return {
+    alg: "ed25519",
+    keyId: seal.attestationKeyId,
+    sig: seal.attestationSig,
+    signsOver: [...RUN_ATTESTATION_FIELDS],
   };
 }
 
@@ -311,6 +336,11 @@ function sealsOf(
       eventStreamDigest: null,
       merkleRoot: null,
       archiveSegmentRef: null,
+      // A wrapped session has no seal row, so nothing signed its figures at
+      // seal time. Its signed checkpoints are listed under `checkpoints`,
+      // and `export_run` attests its frames when the bundle is built.
+      archiveSegmentDigest: null,
+      attestation: null,
     },
   ];
 }

@@ -1,6 +1,8 @@
 // run.handlers.test.ts — handler invocation tests for the run recorder tools
 // (#2952, ADR-058): get_run_frame_body, get_run_transcript, get_run_turns,
-// get_run_chain, bisect_runs, get_run_export, and seal_run (#4073, ADR-169).
+// get_run_context (ADR-200),
+// get_run_chain, bisect_runs, get_run_export, seal_run (#4073, ADR-169), and
+// get_run_issues (#3970).
 // fork_run, export_run and summarize_run check an org role in the handler and
 // an MCP context carries no user, so they have no MCP tool. get_run_export and
 // seal_run check a role too but their contracts declare the mcp surface; the
@@ -43,6 +45,10 @@ import runTurnsGetTool, {
   schema as turnsSchema,
   metadata as turnsMetadata,
 } from "./run.turns.get";
+import runContextGetTool, {
+  schema as contextSchema,
+  metadata as contextMetadata,
+} from "./run.context.get";
 import runChainGetTool, {
   schema as chainSchema,
   metadata as chainMetadata,
@@ -55,6 +61,10 @@ import runSealTool, {
   schema as sealSchema,
   metadata as sealMetadata,
 } from "./run.seal";
+import runIssuesGetTool, {
+  schema as issuesSchema,
+  metadata as issuesMetadata,
+} from "./run.issues.get";
 
 const fakeCtx = {
   orgId: "org_test",
@@ -153,6 +163,58 @@ const CASES: ToolCase[] = [
     },
   },
   {
+    name: "get_run_context",
+    handler: runContextGetTool,
+    schema: contextSchema,
+    metadata: contextMetadata,
+    fields: ["runId"],
+    readOnly: true,
+    args: { runId: TACHO_ID },
+    validOutput: {
+      runId: TACHO_ID,
+      source: "wrapped",
+      windows: [
+        {
+          seq: "12",
+          responseSeq: "12",
+          modelCallId: "req_12",
+          provider: "anthropic",
+          model: "claude-opus-5",
+          promptTokens: 1000,
+          bytes: 2000,
+          blocks: [
+            { kind: "system", bytes: 200, items: 1, tokens: 100 },
+            { kind: "tools", bytes: 600, items: 18, tokens: 300 },
+            { kind: "conversation", bytes: 1200, items: 40, tokens: 600 },
+          ],
+        },
+      ],
+      unmeasured: 1,
+      assemblies: [],
+      complete: true,
+    },
+    // A block outside the window's five kinds.
+    invalidOutput: {
+      runId: TACHO_ID,
+      source: "wrapped",
+      windows: [
+        {
+          seq: "12",
+          responseSeq: "12",
+          modelCallId: null,
+          provider: null,
+          model: null,
+          promptTokens: null,
+          bytes: 1,
+          blocks: [{ kind: "memory", bytes: 1, items: 1, tokens: null }],
+        },
+      ],
+      unmeasured: 0,
+      assemblies: [],
+      complete: true,
+    },
+  },
+  {
     name: "get_run_turns",
     handler: runTurnsGetTool,
     schema: turnsSchema,
@@ -176,6 +238,7 @@ const CASES: ToolCase[] = [
         },
       ],
       complete: true,
+      chains: [],
     },
     // A turn numbered from 0: the transcript's turns are 1-based.
     invalidOutput: {
@@ -194,6 +257,7 @@ const CASES: ToolCase[] = [
         },
       ],
       complete: true,
+      chains: [],
     },
   },
   {
@@ -323,6 +387,67 @@ const CASES: ToolCase[] = [
       sealedAt: "2026-09-24T16:00:00.000Z",
       sessionsSealed: 0,
       kill: { status: "not_sent", reason: "host_offline" },
+    },
+  },
+  // #3970: the Run page's Issues tab, readable from MCP by an API key.
+  {
+    name: "get_run_issues",
+    handler: runIssuesGetTool,
+    schema: issuesSchema,
+    metadata: issuesMetadata,
+    fields: ["runId"],
+    readOnly: true,
+    args: { runId: TACHO_ID },
+    validOutput: {
+      runId: TACHO_ID,
+      issues: [
+        {
+          ref: "acme/app#482",
+          repository: {
+            host: "github.com",
+            owner: "acme",
+            name: "app",
+            url: "https://github.com/acme/app",
+            connected: true,
+          },
+          number: 482,
+          title: "Release notes for 4.11.0",
+          status: "open",
+          statusRead: "read",
+          readAt: "2026-09-26T10:00:00.000Z",
+          relation: "referenced",
+          resolvedBy: [],
+          actions: ["viewed", "commented"],
+          edge: "observed",
+          frameSeqs: ["12", "15"],
+          url: "https://github.com/acme/app/issues/482",
+        },
+      ],
+      complete: true,
+      warnings: [],
+    },
+    // An inferred edge: no producer writes one, and the contract refuses it.
+    invalidOutput: {
+      runId: TACHO_ID,
+      issues: [
+        {
+          ref: "acme/app#482",
+          repository: null,
+          number: 482,
+          title: null,
+          status: null,
+          statusRead: "repository_unknown",
+          readAt: null,
+          relation: "referenced",
+          resolvedBy: [],
+          actions: [],
+          edge: "inferred",
+          frameSeqs: [],
+          url: null,
+        },
+      ],
+      complete: true,
+      warnings: [],
     },
   },
 ];

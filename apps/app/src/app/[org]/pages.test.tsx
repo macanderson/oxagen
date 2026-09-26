@@ -861,13 +861,14 @@ describe("the Run page", () => {
     expect(metadata.title).toBe(title("run"));
   }
 
-  it("hands the run, the tab, the chips, the frames cursor and the spine's folds the URL names to Run, and drops an older link's zoom", async () => {
+  it("hands the run, the tab, the chips, the frames cursor, the open finding and the spine's folds the URL names to Run, and drops an older link's zoom", async () => {
     await expectRunTitle(
       routeProps(SEGMENTS, {
         tab: "frames",
         zoom: "turns",
         kinds: "tools,errors",
         frames: "ZjoyMA",
+        finding: "fnd_0123456789abcdefghjkmn",
         reads: "hide",
         spine: "0,3",
       }),
@@ -881,6 +882,7 @@ describe("the Run page", () => {
       kinds: "tools,errors",
       frames: "ZjoyMA",
       body: null,
+      finding: "fnd_0123456789abcdefghjkmn",
       reads: "hide",
       spine: "0,3",
     });
@@ -894,6 +896,7 @@ describe("the Run page", () => {
       kinds: null,
       frames: null,
       body: null,
+      finding: null,
       reads: null,
       spine: null,
     });

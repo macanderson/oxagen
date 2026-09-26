@@ -9,10 +9,14 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RunTranscript } from "@/data/contracts/run";
+import type { RunContext } from "@/data/contracts/run-context";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
+  contextAssembly,
+  contextWindow,
+  runContext,
   runDetail,
   runRow,
   runSource,
@@ -53,21 +57,26 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
-function renderContext({
+async function renderContext({
   everything = readOk(evidenceTranscript()),
   transcript = readOk(evidenceSteps()),
   run = runRow(),
+  context,
 }: {
   everything?: Read<RunTranscript>;
   /** The run at `steps`, where the first model step is one entry. */
   transcript?: Read<RunTranscript>;
   run?: ReturnType<typeof runRow>;
+  /** `get_run_context`; a run that recorded no window when absent. */
+  context?: Read<RunContext>;
 } = {}) {
-  // The tab makes no read of its own; `calls.frameBody` proves it.
+  // The tab's one read of its own is `get_run_context`; `calls.frameBody`
+  // proves it reads no body.
   const { source, calls } = runSource({
     detail: readOk(runDetail({ run })),
+    context,
   });
-  const body = ContextTab(
+  const body = await ContextTab(
     tabProps({ ctx, source, run, everything, transcript }),
   );
   const rendered = render(<IntlProvider>{body}</IntlProvider>);
@@ -78,7 +87,7 @@ const region = (name: string) => within(screen.getByRole("region", { name }));
 
 describe("ContextTab", () => {
   it("draws the prompt the operator wrote and the input the first request reported, with the split it does not have said so", async () => {
-    const { container } = renderContext();
+    const { container } = await renderContext();
     const prompt = region("Prompt");
     expect(prompt.getByText("Written by Marcus Bell")).toBeTruthy();
     expect(screen.getByTestId("run-context-first-prompt")).toHaveTextContent(
@@ -99,8 +108,8 @@ describe("ContextTab", () => {
     await expectNoAxe(container);
   });
 
-  it("draws the manifest frame as a spine: the tally, the rendered items, three cuts and the rest folded", () => {
-    renderContext();
+  it("draws the manifest frame as a spine: the tally, the rendered items, three cuts and the rest folded", async () => {
+    await renderContext();
     const manifest = region("Steering manifest");
     // The tally is the server's reading of the manifest (`recall`, ADR-182):
     // what it rendered, what it cut, and the tokens it spent.
@@ -132,14 +141,14 @@ describe("ContextTab", () => {
     expect(screen.queryByTestId("run-manifest-observe")).toBeNull();
   });
 
-  it("says an observe-tier run's manifest was assembled and not delivered", () => {
-    renderContext({ run: runRow({ enforcementTier: "observe" }) });
+  it("says an observe-tier run's manifest was assembled and not delivered", async () => {
+    await renderContext({ run: runRow({ enforcementTier: "observe" }) });
     expect(screen.getByTestId("run-manifest-observe")).toHaveTextContent(
       "Assembled, not delivered.",
     );
   });
 
-  it("draws a manifest the transcript cut at its ceiling from the server's reading, and reads no body of its own", () => {
+  it("draws a manifest the transcript cut at its ceiling from the server's reading, and reads no body of its own", async () => {
     // The server read the frame's whole body for `recall` (ADR-182); the
     // text the transcript carries is never parsed here.
     const cut = evidenceTranscript();
@@ -151,7 +160,7 @@ describe("ContextTab", () => {
           }
         : entry,
     );
-    const { calls } = renderContext({
+    const { calls } = await renderContext({
       everything: readOk({ ...cut, entries }),
     });
     expect(calls.frameBody).toEqual([]);
@@ -161,21 +170,21 @@ describe("ContextTab", () => {
     expect(screen.getAllByTestId("run-manifest-item")).toHaveLength(8);
   });
 
-  it("draws the items the server read even when the transcript carries no text for the frame", () => {
+  it("draws the items the server read even when the transcript carries no text for the frame", async () => {
     const base = evidenceTranscript();
     const entries = base.entries.map((entry) =>
       entry.type === "steering.manifest" && entry.response !== null
         ? { ...entry, response: { ...entry.response, text: null } }
         : entry,
     );
-    renderContext({ everything: readOk({ ...base, entries }) });
+    await renderContext({ everything: readOk({ ...base, entries }) });
     const items = screen.getAllByTestId("run-manifest-item");
     expect(items).toHaveLength(8);
     expect(items[0]).toHaveTextContent("ctx.release.never-merge");
     expect(items[0]).toHaveTextContent("must");
   });
 
-  it("says a manifest whose body was not retained has no items to show, and reads nothing more (negative)", () => {
+  it("says a manifest whose body was not retained has no items to show, and reads nothing more (negative)", async () => {
     const digestOnly = evidenceTranscript();
     // The server read no body either, so its recall is the frame count the
     // frame recorded, which here is none.
@@ -192,7 +201,7 @@ describe("ContextTab", () => {
           }
         : entry,
     );
-    const { calls } = renderContext({
+    const { calls } = await renderContext({
       everything: readOk({ ...digestOnly, entries }),
     });
     expect(calls.frameBody).toEqual([]);
@@ -204,14 +213,14 @@ describe("ContextTab", () => {
     expect(screen.queryByTestId("run-manifest-tally")).toBeNull();
   });
 
-  it("says the manifest could not be read when the server could not read its body (negative)", () => {
+  it("says the manifest could not be read when the server could not read its body (negative)", async () => {
     const base = evidenceTranscript();
     const entries = base.entries.map((entry) =>
       entry.type === "steering.manifest"
         ? { ...entry, recall: manifestRecall({ state: "unreadable" }) }
         : entry,
     );
-    const { calls } = renderContext({
+    const { calls } = await renderContext({
       everything: readOk({ ...base, entries }),
     });
     expect(calls.frameBody).toEqual([]);
@@ -223,8 +232,8 @@ describe("ContextTab", () => {
     ).toBeTruthy();
   });
 
-  it("says a body that is not a manifest is not one, never a list of guesses (negative)", () => {
-    renderContext({
+  it("says a body that is not a manifest is not one, never a list of guesses (negative)", async () => {
+    await renderContext({
       everything: readOk(evidenceTranscript({}, JSON.stringify({ items: 3 }))),
     });
     expect(
@@ -234,9 +243,9 @@ describe("ContextTab", () => {
     ).toBeTruthy();
   });
 
-  it("says no manifest frame is on the record when the run sealed none", () => {
+  it("says no manifest frame is on the record when the run sealed none", async () => {
     const without = evidenceTranscript();
-    renderContext({
+    await renderContext({
       everything: readOk({
         ...without,
         entries: without.entries.filter(
@@ -251,17 +260,17 @@ describe("ContextTab", () => {
     ).toBeTruthy();
   });
 
-  it("draws the first request's window total and says the blocks are not recorded", () => {
-    renderContext();
+  it("draws the first request's window total and says the blocks are not recorded", async () => {
+    await renderContext();
     const window = region("Prompt window");
     expect(window.getByText("model.request seq 4")).toBeTruthy();
     expect(window.getByText("15,368 tok in")).toBeTruthy();
     expect(window.getByText("not recorded block by block")).toBeTruthy();
   });
 
-  it("says there is no window on record when no model request is in view (negative)", () => {
+  it("says there is no window on record when no model request is in view (negative)", async () => {
     const quiet = evidenceSteps();
-    renderContext({
+    await renderContext({
       transcript: readOk({
         ...quiet,
         entries: quiet.entries.filter((entry) => entry.node !== "model"),
@@ -278,8 +287,8 @@ describe("ContextTab", () => {
     ).toBeTruthy();
   });
 
-  it("lists the context frames with the design's columns, and the tokens only where a frame counted them", () => {
-    renderContext();
+  it("lists the context frames with the design's columns, and the tokens only where a frame counted them", async () => {
+    await renderContext();
     const table = screen.getByRole("table", { name: "Context frames" });
     expect(
       within(table)
@@ -313,8 +322,8 @@ describe("ContextTab", () => {
     );
   });
 
-  it("walks the frames that fed the window, in the order they were recorded, each opening its frame", () => {
-    renderContext();
+  it("walks the frames that fed the window, in the order they were recorded, each opening its frame", async () => {
+    await renderContext();
     const walk = region("Walk the window");
     expect(walk.getAllByRole("link").map((link) => link.textContent)).toEqual([
       "steering.manifest seq 11,340 tok",
@@ -324,8 +333,8 @@ describe("ContextTab", () => {
     ]);
   });
 
-  it("draws the retrieval figures as not recorded and names where the context was assembled", () => {
-    renderContext();
+  it("draws the retrieval figures as not recorded and names where the context was assembled", async () => {
+    await renderContext();
     const stats = region("Retrieval stats");
     for (const label of [
       "Candidates scored",
@@ -345,16 +354,16 @@ describe("ContextTab", () => {
     ).toHaveAttribute("href", expect.stringContaining("tab=actions&body=2"));
   });
 
-  it("says the run recorded no recall when no frame answers the recall chip", () => {
-    renderContext({
+  it("says the run recorded no recall when no frame answers the recall chip", async () => {
+    await renderContext({
       everything: readOk(runTranscript({ entries: [transcriptEntry()] })),
     });
     expect(screen.getByText("This run recorded no recall.")).toBeTruthy();
     expect(screen.queryByRole("table", { name: "Context frames" })).toBeNull();
   });
 
-  it("names the transcript read's failure and reads no manifest (negative)", () => {
-    const { calls } = renderContext({
+  it("names the transcript read's failure and reads no manifest (negative)", async () => {
+    const { calls } = await renderContext({
       everything: readError("frame_store_unreachable", 502),
     });
     expect(calls.frameBody).toEqual([]);
@@ -364,39 +373,39 @@ describe("ContextTab", () => {
     expect(screen.queryByTestId("run-manifest")).toBeNull();
   });
 
-  it("names the operator by id when no name is recorded, and says so when neither is (negative)", () => {
-    renderContext({ run: runRow({ operatorName: null }) });
+  it("names the operator by id when no name is recorded, and says so when neither is (negative)", async () => {
+    await renderContext({ run: runRow({ operatorName: null }) });
     expect(
       region("Prompt").getByText("Written by prn_marcusbell"),
     ).toBeTruthy();
     cleanup();
-    renderContext({
+    await renderContext({
       run: runRow({ operatorName: null, operatorId: null }),
     });
     expect(region("Prompt").getByText("Operator not recorded")).toBeTruthy();
   });
 
-  it("says the first prompt's text was not retained rather than quoting nothing (negative)", () => {
+  it("says the first prompt's text was not retained rather than quoting nothing (negative)", async () => {
     const base = evidenceTranscript();
     const entries = base.entries.map((entry) =>
       entry.type === "turn_start" && entry.response !== null
         ? { ...entry, response: { ...entry.response, text: null } }
         : entry,
     );
-    renderContext({ everything: readOk({ ...base, entries }) });
+    await renderContext({ everything: readOk({ ...base, entries }) });
     expect(screen.getByTestId("run-context-first-prompt")).toHaveTextContent(
       "The first prompt's text was not retained.",
     );
   });
 
-  it("says how much came from cache when the request did not report every input class (negative)", () => {
+  it("says how much came from cache when the request did not report every input class (negative)", async () => {
     const base = evidenceSteps();
     const entries = base.entries.map((entry) =>
       entry.usage === null || entry.usage === undefined
         ? entry
         : { ...entry, usage: { ...entry.usage, cacheWrite: null } },
     );
-    renderContext({ transcript: readOk({ ...base, entries }) });
+    await renderContext({ transcript: readOk({ ...base, entries }) });
     const prompt = region("Prompt");
     expect(
       prompt.getByText(
@@ -406,7 +415,7 @@ describe("ContextTab", () => {
     expect(prompt.getByText(/tok sent not recorded/)).toBeTruthy();
   });
 
-  it("names a cut with no reason, draws no line for a reason it does not know, and folds nothing at three cuts or fewer", () => {
+  it("names a cut with no reason, draws no line for a reason it does not know, and folds nothing at three cuts or fewer", async () => {
     const item = (
       id: string,
       overrides: Record<string, unknown> = {},
@@ -418,7 +427,7 @@ describe("ContextTab", () => {
       outcome: "included",
       ...overrides,
     });
-    renderContext({
+    await renderContext({
       everything: readOk(
         evidenceTranscript(
           {},
@@ -450,5 +459,86 @@ describe("ContextTab", () => {
         /^Recorded once at frame 1\. A recorded frame never changes/,
       ),
     ).toBeTruthy();
+  });
+});
+
+describe("ContextTab with the window on record (ADR-200)", () => {
+  /** A first request whose blocks split its 15,368 reported tokens by bytes. */
+  const measured = contextWindow({
+    seq: "4",
+    promptTokens: 15_368,
+    bytes: 30_736,
+    blocks: [
+      { kind: "system", bytes: 3074, items: 1, tokens: 1537 },
+      { kind: "steering", bytes: 1536, items: 1, tokens: 768 },
+      { kind: "tools", bytes: 12_294, items: 14, tokens: 6147 },
+      { kind: "context", bytes: 3074, items: 2, tokens: 1537 },
+      { kind: "conversation", bytes: 10_758, items: 5, tokens: 5379 },
+    ],
+  });
+
+  it("draws the first request's blocks, and 'tok sent' is the window's total", async () => {
+    const { calls, container } = await renderContext({
+      context: readOk(
+        runContext({ windows: [measured], assemblies: [contextAssembly()] }),
+      ),
+    });
+    expect(calls.context).toHaveLength(1);
+    expect(calls.frameBody).toEqual([]);
+    const prompt = region("Prompt");
+    expect(prompt.getByText(/15,368 tok sent/)).toBeTruthy();
+    const bars = screen.getAllByTestId("run-context-bar");
+    expect(bars.map((bar) => bar.getAttribute("data-kind"))).toEqual([
+      "system",
+      "steering",
+      "tools",
+      "context",
+      "conversation",
+    ]);
+    expect(bars[2]).toHaveTextContent("Tool definitions6,147 tok");
+    expect(
+      prompt.getByText(/Each block is its share of the request's bytes\./),
+    ).toBeTruthy();
+    const window = region("Prompt window");
+    expect(window.getByText("frame 4")).toBeTruthy();
+    expect(window.getByText("15,368 tok in")).toBeTruthy();
+    expect(window.queryByText("not recorded block by block")).toBeNull();
+    expect(window.getAllByTestId("window-part")).toHaveLength(5);
+    // The parts add up to the total the header reads.
+    expect(
+      window
+        .getAllByTestId("window-part")
+        .map((part) => Number((part.textContent ?? "").replace(/\D/g, "")))
+        .reduce((sum, tokens) => sum + tokens, 0),
+    ).toBe(15_368);
+    await expectNoAxe(container);
+  });
+
+  it("fills the retrieval figures from the assembler's manifest, and leaves the floor it does not record", async () => {
+    const { container } = await renderContext({
+      context: readOk(runContext({ assemblies: [contextAssembly()] })),
+    });
+    const stats = region("Retrieval stats");
+    const value = (label: string) =>
+      stats.getByText(label).nextElementSibling?.textContent;
+    expect(value("Candidates scored")).toBe("9");
+    expect(value("Admitted")).toBe("4");
+    expect(value("Held back")).toBe("5");
+    expect(value("Below the floor")).toBe("not recorded");
+    expect(value("Headroom left")).toBe("1,400 tok");
+    expect(value("Composition digest")).toBe(`sha256:${"b".repeat(64)}`);
+    expect(stats.getByText("600 of 2,000 tok")).toBeTruthy();
+    await expectNoAxe(container);
+  });
+
+  it("names the context read's failure in the Prompt window and keeps the reported total (negative)", async () => {
+    const { container } = await renderContext({
+      context: readError("frame_store_unreachable", 502),
+    });
+    const window = region("Prompt window");
+    expect(window.getByText("15,368 tok in")).toBeTruthy();
+    expect(window.getByText(/frame_store_unreachable/)).toBeTruthy();
+    expect(region("Prompt").getByText(/15,368 tok sent/)).toBeTruthy();
+    await expectNoAxe(container);
   });
 });

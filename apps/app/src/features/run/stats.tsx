@@ -48,13 +48,23 @@ function initialsOf(name: string | null): string {
   return letters.join("").toUpperCase() || "?";
 }
 
-/** `.inv`: the agent that acted, carrying the operator's authority. */
+/**
+ * `.inv`: the agent that acted, carrying the operator's authority. The line
+ * under the operator's name reads "<operator | enrolled the host> ·
+ * workspace.<role> · <workspace>" (pages/run.md, Summary). The role is the
+ * one stamped when the run opened (#3999, ADR-197), so a later change to the
+ * person's membership does not rewrite it. Only a person holds one: a person's
+ * run from before the stamp reads "role not recorded", and an agent or
+ * service operator draws no role segment.
+ */
 function Involved({
   run,
   agent,
+  place,
 }: {
   run: RunRow;
   agent: Read<AgentDetail> | null;
+  place: Place;
 }) {
   const t = useTranslations("run");
   const harness = useHarness(run, agent);
@@ -114,9 +124,26 @@ function Involved({
                 {/* A wrapped session's operator can be the person who
                     enrolled the host rather than one who started the run,
                     and the record says which. */}
-                {run.operatorAttribution === "host_enroller"
-                  ? t("header.enrolledBy")
-                  : t("summary.operator")}
+                <span>
+                  {run.operatorAttribution === "host_enroller"
+                    ? t("header.enrolledBy")
+                    : t("summary.operator")}
+                </span>
+                {run.operatorKind === "human" ? (
+                  <>
+                    {" · "}
+                    <span data-testid="run-operator-role">
+                      {run.operatorRole === null ||
+                      run.operatorRole === undefined
+                        ? t("summary.roleNotRecorded")
+                        : t("summary.workspaceRole", {
+                            role: run.operatorRole,
+                          })}
+                    </span>
+                  </>
+                ) : null}
+                {" · "}
+                <span>{place.ws}</span>
               </span>
             </span>
           </OperatorName>
@@ -159,7 +186,7 @@ export function SummaryPanel({
           <span className="text-[10.5px]">{t("summary.generated")}</span>
         </Badge>
       </div>
-      <Involved run={run} agent={agent} />
+      <Involved run={run} agent={agent} place={place} />
       {summary === null ? (
         <p className="mb-2.5 mt-3 max-w-[78ch] text-sm text-muted-foreground">
           {t("noSummary")}

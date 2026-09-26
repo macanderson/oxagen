@@ -221,6 +221,11 @@ export const modelFacts = z.object({
   workflow_run_id: short.optional(),
   workflow_name: short.optional(),
   workspace_host_paths: z.array(short).max(64).optional(),
+  /**
+   * The reasoning effort the proxied request body carried, as sent (#3891).
+   * Absent when Oxagen did not proxy the call or the request carried none.
+   */
+  request_effort: short.optional(),
 });
 
 /** Prompt and response facts (data-model section 2.8). */
@@ -256,6 +261,11 @@ export const promptFacts = z.object({
 export const policyFacts = z.object({
   policy_decision: z.enum(POLICY_DECISIONS).optional(),
   policy_rule: short.optional(),
+  /**
+   * The rules that matched, in evaluation order (#3971). `policy_rule` stays
+   * beside it for readers of the joined form.
+   */
+  policy_rules: z.array(short).max(64).optional(),
   policy_source: z.enum(POLICY_SOURCES).optional(),
   policy_reason_code: short.optional(),
   policy_reason_digest: digest.optional(),

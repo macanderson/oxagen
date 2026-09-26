@@ -21,6 +21,7 @@ import {
   isReplayGrade,
 } from "@oxagen/tacho";
 import { modelFactsOf } from "./model-facts";
+import { operatorRoleOf } from "./operator-role";
 import { compactedField } from "./run-list-status";
 import { type RollupTokenColumns, rollupTokenFields } from "./run-list-tokens";
 
@@ -50,6 +51,12 @@ type LedgerRunCore = GeneratedSummaryColumns & {
   ingressPaused?: boolean;
   createdAt: Date;
   startedAt: Date | null;
+  /**
+   * `agent_runs.operator_role`, stamped at insert (#3999). Absent where a
+   * reader did not select it, which reads the same as a run from before the
+   * stamp: not recorded.
+   */
+  operatorRole?: string | null;
 };
 
 export type LedgerRunIdentity = {
@@ -112,6 +119,18 @@ export type LedgerSeal = {
   finalEventDigest: string | null;
   /** The fold of every frame digest in sequence; always written. */
   eventStreamDigest: string;
+  /**
+   * sha256 over the archive segment's bytes as stored (ADR-195). Null on a
+   * seal written before the digest was recorded.
+   */
+  archiveSegmentDigest: string | null;
+  /**
+   * The attester's key id and base64 Ed25519 signature over the seal's
+   * figures. Null together on a seal written with no attester key and on
+   * one written before the seal signed.
+   */
+  attestationKeyId: string | null;
+  attestationSig: string | null;
   /**
    * Whether frame compaction moved the attempt's frames to its archive
    * segment (`compactedProbe`, ADR-193). Absent when the read did not ask.
@@ -209,6 +228,11 @@ export type TachoSessionColumns = GeneratedSummaryColumns & {
    * reader did not select it.
    */
   paused?: boolean;
+  /**
+   * `tacho.sessions.operator_role`, stamped by the genesis row (#3999).
+   * Absent where a reader did not select it, which reads as not recorded.
+   */
+  operatorRole?: string | null;
 };
 
 /**
@@ -503,6 +527,11 @@ export function toLedgerRunItem(
     // A blank avatar would fail the contract's `min(1)` and refuse the list.
     operatorAvatarUrl: blankToNull(identity.operatorUserAvatarUrl),
     operatorAttribution: identity.operatorPublicId ? "initiator" : null,
+    // The role stamped when the run was created (#3999), never read live.
+    // Only a person holds one, so any other operator reads null whatever the
+    // column says.
+    operatorRole:
+      identity.operatorKind === "human" ? operatorRoleOf(run.operatorRole) : null,
     status,
     outcome,
     turns: rollup.opaqueModelCalls === 0 ? rollup.turnIndexes : null,
@@ -728,6 +757,10 @@ export function toTachoRunItem(
     // Ingest attributes a wrapped session to the host's enroller
     // (`enrollingPrincipalId`), not to whoever ran it.
     operatorAttribution: row.operatorPublicId ? "host_enroller" : null,
+    // The enroller's role stamped when the session opened (#3999), never
+    // read live, and only for a person.
+    operatorRole:
+      row.operatorKind === "human" ? operatorRoleOf(session.operatorRole) : null,
     status,
     outcome,
     turns: session.numTurns,
