@@ -704,6 +704,15 @@ export function buildProgram(): Command {
       },
     );
   runCmd
+    .command("list")
+    .description("List the workspace's runs, newest first")
+    .option("--limit <n>", "Page size, 1 to 100", (v) => Number.parseInt(v, 10))
+    .option("--cursor <cursor>", "The cursor the previous page printed")
+    .option("--json", "Output the raw contract payload as JSON")
+    .action(async (opts: { limit?: number; cursor?: string; json?: boolean }) =>
+      (await import("./commands/run.js")).runList(opts),
+    );
+  runCmd
     .command("chain")
     .description(
       "Show what makes a run's record tamper-evident: the hash rule, the root, the checkpoints, the gaps, and the replay ladder",
@@ -770,6 +779,17 @@ export function buildProgram(): Command {
         await runDownload(exportId, opts);
       },
     );
+  runCmd
+    .command("pause-all")
+    .description(
+      "Pause every live wrapped run in the workspace as one recorded decision. Org Owner or Admin, or workspace Owner",
+    )
+    .requiredOption("--reason <text>", "Why the runs are paused (recorded)")
+    .option("--json", "Output JSON")
+    .action(async (opts: { reason: string; json?: boolean }) => {
+      const { runPauseAll } = await import("./commands/run.js");
+      await runPauseAll(opts);
+    });
 
   // ── verify: check a run export offline ──────────────────────────────────────
 

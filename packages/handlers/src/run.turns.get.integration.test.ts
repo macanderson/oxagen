@@ -479,70 +479,89 @@ describe.skipIf(!chUp)("get_run_turns against ClickHouse", () => {
     await closeClickhouse();
   });
 
-  it("answers what the run's frames add up to, read as the transcript reads them", async () => {
-    const { turns } = await harness();
-    const { ctx } = await import("./run.test-support");
-    const out = await runInTenantScope(SCOPE, () =>
-      turns(runTurnsGet.input.parse({ runId: RUN_ID }), ctx(SCOPE)),
-    );
-    const expected = await runInTenantScope(SCOPE, () => reference(RUN_ID));
-    expect(runTurnsGet.output.parse(out)).toEqual(out);
-    expect(out.turns).toEqual(expected.turns);
-    expect(out.complete).toBe(true);
+  // Each case reads the run twice from a real ClickHouse, the query and the
+  // fold. The first case also loads the handler and the fold for the file,
+  // under coverage. On #4370's CI runner that case took 5012 ms and failed
+  // the default 5 s, while the next two took under 1.8 s together.
+  const READS_TIMEOUT_MS = 30_000;
 
-    // The fixture exercises what it claims to.
-    expect(
-      out.turns.map((t) => [
-        t.turn,
-        t.frames,
-        t.modelSteps,
-        t.toolSteps,
-        t.cost?.micros ?? null,
-      ]),
-    ).toEqual([
-      // Root 16 frames, subagent A 7, the nested chain 1. One model call on
-      // the root however many sighted it, and the late report, then A's three
-      // and the nested chain's. Tool calls: tu_a, tu_b, tu_task, and A's
-      // tu_a1. Cost: the proxy's 100, A's 20 and 9, and the nested 1. The two
-      // late reports (the root's 60, A's second 9) and the sightings' copies
-      // count for nothing.
-      [1, 24, 6, 4, "130"],
-      // Root 5 frames and the loose subagent's 2. The unkeyed request and its
-      // two results pair as two calls; the loose chain's tool call is a third.
-      [2, 7, 2, 3, "3"],
-      [3, 4, 2, 0, "37"],
-      // Two calls around the model call, two around the harness check, one
-      // through the gate, one around the hidden sighting, and two around the
-      // harness check in its legacy OTel spelling. The query on main paired
-      // by count and answered 5.
-      [4, 16, 1, 8, null],
-    ]);
-    expect(out.turns[0]?.cumulativeCost?.micros).toBe("135");
-    expect(out.turns[0]?.tokens).toEqual({ inputUncached: 18, cacheRead: 105 });
-    expect(out.turns[1]?.tokens).toEqual({
-      inputUncached: null,
-      cacheRead: null,
-    });
-    expect(out.turns[2]?.cumulativeCost?.micros).toBe("175");
-  });
+  it(
+    "answers what the run's frames add up to, read as the transcript reads them",
+    async () => {
+      const { turns } = await harness();
+      const { ctx } = await import("./run.test-support");
+      const out = await runInTenantScope(SCOPE, () =>
+        turns(runTurnsGet.input.parse({ runId: RUN_ID }), ctx(SCOPE)),
+      );
+      const expected = await runInTenantScope(SCOPE, () => reference(RUN_ID));
+      expect(runTurnsGet.output.parse(out)).toEqual(out);
+      expect(out.turns).toEqual(expected.turns);
+      expect(out.complete).toBe(true);
 
-  it("opens the turns on the turn index for a recording with no turn_start", async () => {
-    const { turns } = await harness();
-    const { ctx } = await import("./run.test-support");
-    const out = await runInTenantScope(SCOPE, () =>
-      turns(runTurnsGet.input.parse({ runId: INDEXED_ID }), ctx(SCOPE)),
-    );
-    const expected = await runInTenantScope(SCOPE, () => reference(INDEXED_ID));
-    expect(out.turns).toEqual(expected.turns);
-    // The subagent that began before the run's first frame is in turn 1, and
-    // the turn still opens on the run's own first frame.
-    expect(out.turns.map((t) => [t.turn, t.seq, t.at, t.frames])).toEqual([
-      [1, "0", "2026-09-11T09:00:00.000Z", 4],
-      [2, "3", "2026-09-11T09:00:03.000Z", 2],
-      [3, "5", "2026-09-11T09:00:05.000Z", 1],
-    ]);
-    expect(out.turns[0]?.cost?.micros).toBe("14");
-  });
+      // The fixture exercises what it claims to.
+      expect(
+        out.turns.map((t) => [
+          t.turn,
+          t.frames,
+          t.modelSteps,
+          t.toolSteps,
+          t.cost?.micros ?? null,
+        ]),
+      ).toEqual([
+        // Root 16 frames, subagent A 7, the nested chain 1. One model call on
+        // the root however many sighted it, and the late report, then A's three
+        // and the nested chain's. Tool calls: tu_a, tu_b, tu_task, and A's
+        // tu_a1. Cost: the proxy's 100, A's 20 and 9, and the nested 1. The two
+        // late reports (the root's 60, A's second 9) and the sightings' copies
+        // count for nothing.
+        [1, 24, 6, 4, "130"],
+        // Root 5 frames and the loose subagent's 2. The unkeyed request and its
+        // two results pair as two calls; the loose chain's tool call is a third.
+        [2, 7, 2, 3, "3"],
+        [3, 4, 2, 0, "37"],
+        // Two calls around the model call, two around the harness check, one
+        // through the gate, one around the hidden sighting, and two around the
+        // harness check in its legacy OTel spelling. The query on main paired
+        // by count and answered 5.
+        [4, 16, 1, 8, null],
+      ]);
+      expect(out.turns[0]?.cumulativeCost?.micros).toBe("135");
+      expect(out.turns[0]?.tokens).toEqual({
+        inputUncached: 18,
+        cacheRead: 105,
+      });
+      expect(out.turns[1]?.tokens).toEqual({
+        inputUncached: null,
+        cacheRead: null,
+      });
+      expect(out.turns[2]?.cumulativeCost?.micros).toBe("175");
+    },
+    READS_TIMEOUT_MS,
+  );
+
+  it(
+    "opens the turns on the turn index for a recording with no turn_start",
+    async () => {
+      const { turns } = await harness();
+      const { ctx } = await import("./run.test-support");
+      const out = await runInTenantScope(SCOPE, () =>
+        turns(runTurnsGet.input.parse({ runId: INDEXED_ID }), ctx(SCOPE)),
+      );
+      const expected = await runInTenantScope(SCOPE, () =>
+        reference(INDEXED_ID),
+      );
+      expect(out.turns).toEqual(expected.turns);
+      // The subagent that began before the run's first frame is in turn 1, and
+      // the turn still opens on the run's own first frame.
+      expect(out.turns.map((t) => [t.turn, t.seq, t.at, t.frames])).toEqual([
+        [1, "0", "2026-09-11T09:00:00.000Z", 4],
+        [2, "3", "2026-09-11T09:00:03.000Z", 2],
+        [3, "5", "2026-09-11T09:00:05.000Z", 1],
+      ]);
+      expect(out.turns[0]?.cost?.micros).toBe("14");
+    },
+    READS_TIMEOUT_MS,
+  );
 
   // Where the query does not yet answer as the fold does. A reply's further
   // transcript block is its own model step in the fold, and it parts an
@@ -550,16 +569,20 @@ describe.skipIf(!chUp)("get_run_turns against ClickHouse", () => {
   // two tool calls. The query leaves the block out and answers one of each.
   // ADR-191 names the case and #4351 carries the decision. When #4351 lands,
   // this becomes an equality like the tests above.
-  it("differs from the fold on a reply split into blocks around an unkeyed tool call (#4351)", async () => {
-    const { turns } = await harness();
-    const { ctx } = await import("./run.test-support");
-    const out = await runInTenantScope(SCOPE, () =>
-      turns(runTurnsGet.input.parse({ runId: SPLIT_ID }), ctx(SCOPE)),
-    );
-    const expected = await runInTenantScope(SCOPE, () => reference(SPLIT_ID));
-    const counts = (list: typeof out.turns) =>
-      list.map((t) => [t.frames, t.modelSteps, t.toolSteps]);
-    expect(counts(expected.turns)).toEqual([[5, 2, 2]]);
-    expect(counts(out.turns)).toEqual([[5, 1, 1]]);
-  });
+  it(
+    "differs from the fold on a reply split into blocks around an unkeyed tool call (#4351)",
+    async () => {
+      const { turns } = await harness();
+      const { ctx } = await import("./run.test-support");
+      const out = await runInTenantScope(SCOPE, () =>
+        turns(runTurnsGet.input.parse({ runId: SPLIT_ID }), ctx(SCOPE)),
+      );
+      const expected = await runInTenantScope(SCOPE, () => reference(SPLIT_ID));
+      const counts = (list: typeof out.turns) =>
+        list.map((t) => [t.frames, t.modelSteps, t.toolSteps]);
+      expect(counts(expected.turns)).toEqual([[5, 2, 2]]);
+      expect(counts(out.turns)).toEqual([[5, 1, 1]]);
+    },
+    READS_TIMEOUT_MS,
+  );
 });

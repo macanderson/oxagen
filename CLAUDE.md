@@ -4,6 +4,18 @@
 
 Read both files before changing the repository. `AGENTS.md` owns the repository map, capability conventions, storage boundaries, review rules, and standing decisions. This file adds operating instructions shared by all four harnesses.
 
+## Local execution
+
+Mac set this on 2026-09-26 for every repository on this machine. Local builds, test runs, dev servers, and git hooks ran the laptop out of memory and killed agent runs partway through, and every killed run costs money. CI is the only place code is built, checked, or tested.
+
+- Do not run the gate, a build, a typecheck, a lint, or any test, not even one test file. Push the branch and read the CI result. Read a failed job with `gh run view --job <id> --log-failed`.
+- Do not start a dev server: no `next dev`, `next start`, `pnpm dev`, a server under `cargo run`, or anything else that listens on a port.
+- Do not start Docker or Colima, and do not run anything that needs them.
+- Do not run Biome in any form.
+- Git hooks are off on this machine. `LEFTHOOK=0` and `HUSKY=0` are set for every shell and every Claude Code session. Do not reinstall a hook, turn one back on, or run a hook's commands by hand.
+- Code generators and small integrity scripts that only read and write files are allowed, such as regenerating a checksum, a schema index, or a message catalogue.
+- Put this rule, word for word, in the prompt of every subagent you start.
+
 ## Product and architecture
 
 Read `docs/VISION.md` for feature direction and `apps/app/ARCHITECTURE.md` for app invariants. Oxagen governs agents through a mandate and records governed activity. It does not run the agent workload (ADR-043). The product is workforce management for autonomous agents and the category is the agent control plane (ADR-113, superseding the product name in ADR-067). Do not write "Mission Control" in current prose or product copy. The record's operator-facing surface is the operator review: one page per person, read from the record, with spend by operator, agent and workspace, outcome per dollar for bounded tasks, prompt habits from the recorded turns, and one recommendation per habit worded as a rule the operator can adopt. It reports what the record shows and never grades the person. Check `DEREGISTERED.md` before removing a feature's files. An unreachable feature may have deliberately preserved code.
@@ -34,21 +46,15 @@ Stop the watcher when the PR merges or closes, and say which in your report.
 
 ## Verification policy
 
-CI is the build, lint, typecheck, coverage, and full test gate. Do not run those suites on this shared machine. The local test exception is one test file for code this task changed or created, run in isolation. Never run a package-wide suite. Restate this restriction when delegating work.
+CI is the build, lint, typecheck, coverage, and full test gate. None of it runs on this shared machine, not even one test file for code this task changed. Push the branch and read the CI result. Restate this restriction when delegating work.
 
-```bash
-pnpm --filter @oxagen/<package> test:unit path/to/changed.test.ts
-```
-
-Do not insert `--` before the test filename. That form can discard the filter and run the whole package.
-
-Lightweight file, link, contract, and prose integrity checks remain part of review. Run `pnpm check:prose` for published prose changes. Git hooks run their configured staged-file and integrity checks. Do not start or kill the shared dev stack to satisfy a merge checklist.
+Lightweight file, link, contract, and prose integrity checks remain part of review. Run `pnpm check:prose` for published prose changes. Git hooks are configured for other machines and are off on this one. The shared dev stack is not started or stopped on this machine. CI starts the databases its jobs need.
 
 - Add tests for changed behavior. Keep coverage thresholds at or above their current values, capped at 90, with 2.5 percentage points of headroom.
 - `apps/app/e2e/` contains exactly `login`, `pay`, and `page-load`. Prove other flows with component and action tests. See `apps/app/ARCHITECTURE.md` §6.3.
 - For code changes, ask the test-engineer agent to audit coverage before the finished commit. Documentation-only changes need source and link verification, not new behavior tests.
 - Save local verification artifacts under the gitignored `verifications/<session-id>/`. State what ran and what remains unverified.
-- For UI changes, capture a working page or run the relevant component test. For a deployment or database mutation, verify the resulting state with a health check, API response, or query.
+- For UI changes, cite the relevant component test from the CI run. A page capture needs a dev server, and no dev server runs on this machine. For a deployment or database mutation, verify the resulting state with a health check, API response, or query.
 - Watch every PR you open until it merges or closes, as set out in Pull request monitoring below. Do not report pending or failed checks as passed.
 
 ## Database and dependency changes

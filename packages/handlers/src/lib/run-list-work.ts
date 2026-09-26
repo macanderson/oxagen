@@ -14,10 +14,9 @@
 //                  totals from the session's end, and while those are absent
 //                  the uncommitted change git reported per path
 //                  (`tacho.session_files`, root and subagent chains).
-//
-// No store records a pull request's state (open, merged, closed, draft), so
-// every pull request here carries `state: null`. `get_run_work` reads the
-// live state from GitHub for one run; a list of a hundred runs does not.
+//   State          `tacho.run_pull_requests`: the state a forge last reported
+//                  for each link (ADR-192), read beside the frames. A link
+//                  with no row reads `state: null`.
 import { schema, withTenantDb } from "@oxagen/database";
 import type {
   RunDiff,
@@ -26,8 +25,14 @@ import type {
 } from "@oxagen/oxagen/contracts/run.list";
 import { RUN_PULL_REQUEST_MAX } from "@oxagen/oxagen/contracts/run.list";
 import { chSelect } from "@oxagen/telemetry";
+import { requireScope } from "@oxagen/tenancy";
 import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import type { RunScope } from "../run.list";
+import { logger } from "../logger";
+import {
+  readStoredPullRequestStates,
+  type StoredPullRequestStates,
+} from "./run-pull-request-state";
 import { prAttr } from "./run-work";
 
 /** One session's pull request as the ClickHouse read returns it. */
@@ -72,9 +77,9 @@ export function pullRequestOf(row: PullRequestLinkRow): RunPullRequest | null {
  * before any predicate here, and admits a single-table SELECT only, so the two
  * attr spellings are folded with `if()` (`prAttr`) rather than a UNION.
  * `LIMIT n BY` keeps one session's links from crowding the others out of the
- * page.
+ * page. Every link it returns carries `state: null`.
  */
-export const readRunPullRequests: ReadRunPullRequests = async (
+export const readRunPullRequestLinks: ReadRunPullRequests = async (
   sessionUuids,
 ) => {
   const out = new Map<string, RunPullRequest[]>();
@@ -106,6 +111,71 @@ export const readRunPullRequests: ReadRunPullRequests = async (
   }
   return out;
 };
+
+/** The reads `readRunPullRequests` joins: the frames and the stored states. */
+export type RunPullRequestReads = {
+  readLinks: ReadRunPullRequests;
+  readStates: (
+    scope: RunScope,
+    sessionUuids: readonly string[],
+  ) => Promise<StoredPullRequestStates>;
+  /** The tenant the kernel scoped this call to. */
+  scope: () => RunScope;
+};
+
+/**
+ * The links the frames name, each with the state stored for it. The two
+ * reads run side by side. A state read that fails leaves every link with
+ * `state: null` and no `stateSeenAt`, and logs a warning: the page then says
+ * "status unknown", which is true, and never loses a link.
+ */
+export function createReadRunPullRequests(
+  reads: RunPullRequestReads,
+): ReadRunPullRequests {
+  return async (sessionUuids) => {
+    if (sessionUuids.length === 0) return new Map();
+    const [links, states] = await Promise.all([
+      reads.readLinks(sessionUuids),
+      Promise.resolve()
+        .then(() => reads.readStates(reads.scope(), sessionUuids))
+        .catch((err: unknown) => {
+          logger.warn(
+            { err, sessions: sessionUuids.length },
+            "list_runs: the stored pull request states could not be read; links read status unknown",
+          );
+          return null;
+        }),
+    ]);
+    if (states === null) return links;
+    const out = new Map<string, RunPullRequest[]>();
+    for (const [session, list] of links) {
+      const stored = states.get(session);
+      out.set(
+        session,
+        list.map((pull) => {
+          const found = stored?.get(pull.url);
+          return {
+            ...pull,
+            state: found?.state ?? null,
+            stateSeenAt: found?.stateSeenAt ?? null,
+          };
+        }),
+      );
+    }
+    return out;
+  };
+}
+
+/** The pull requests a page of wrapped sessions names, with their states. */
+export const readRunPullRequests: ReadRunPullRequests =
+  createReadRunPullRequests({
+    readLinks: readRunPullRequestLinks,
+    readStates: readStoredPullRequestStates,
+    scope: () => {
+      const { orgId, workspaceId } = requireScope();
+      return { orgId, workspaceId };
+    },
+  });
 
 const files = schema.tachoSessionFiles;
 const sessions = schema.tachoSessions;

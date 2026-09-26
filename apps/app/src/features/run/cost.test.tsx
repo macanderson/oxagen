@@ -892,6 +892,42 @@ describe("CostTab", () => {
     expect(tokens).not.toHaveTextContent("nothing written to cache");
   });
 
+  it("prints a write share too small to round as under 0.1%, not 0%", async () => {
+    // 300 tokens written of 1,000,000 input: 0.03%, which one decimal rounds
+    // to 0%. The run did write, so the tile must not read as if it had not.
+    await renderTab(
+      props({
+        cost: readOk(
+          costRollup({
+            micros: "4130000",
+            tokens: {
+              inputUncached: 199_700,
+              cacheRead: 800_000,
+              cacheWrite5m: 300,
+              cacheWrite1h: 0,
+              output: 20_000,
+              reasoning: 0,
+            },
+            byClass: {
+              ...RELEASE_RUN_CLASSES,
+              cacheWrite5m: "1875",
+              cacheWrite1h: "0",
+              output: "2246106",
+              reasoning: "0",
+            },
+            cacheSaving: "3555000",
+            cacheHitRate: 0.8,
+            modelCalls: 8,
+          }),
+        ),
+      }),
+    );
+    const tokens = screen.getByTestId("inst-tokens");
+    expect(tokens).toHaveTextContent("<0.1% of input written to cache");
+    expect(tokens).not.toHaveTextContent(/(^|[^.\d])0% of input written/);
+    expect(tokens).not.toHaveTextContent("nothing written to cache");
+  });
+
   it("leaves the total without a cost when a model the run used has no recorded split, and names no recorded cost or price entry the record lacks (negative)", async () => {
     const rollup = releaseRunCost().rollup;
     if (rollup === null) throw new Error("the builder's rollup is present");

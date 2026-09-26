@@ -8,9 +8,9 @@
 //   every wizard ends on a pull request.
 // - Runs, Agents, Approvals and Tools on the belt: what `search_tools` answers
 //   for the query, built here from its rows (`fromSearchRows`).
-// - Actions: the governed actions, each opening the page that carries its
-//   write. One has no write behind it yet (pausing every live run, #3862), so
-//   it is listed disabled with the gap it waits on rather than left out.
+// - Actions: the governed actions. Pausing every live run opens its confirm
+//   dialog here, which sends `pause_workspace_runs` (#3862). Each other action
+//   opens the page that carries its write.
 //
 // The static entries filter in the browser; `search_tools` filters the rows it
 // returns, so the menu searches both with one query.
@@ -54,13 +54,6 @@ const SHORTCUT_PAGES: readonly WorkspaceNavKey[] = [
 /** The issue that owns a tool row's missing version, risk, side effect and decision. */
 export const TOOL_ROW_GAP = "#3969";
 
-/**
- * The issue that owns the one action with no write, carried as a data attribute only.
- *
- * @internal Exported for its unit test; nothing outside this module imports it.
- */
-export const PAUSE_ALL_GAP = "#3862";
-
 type Base = {
   id: string;
   label: string;
@@ -77,8 +70,8 @@ export type Command =
   | (Base & { assistant: string | null })
   /** Opens the approvals drawer. */
   | (Base & { approvals: true })
-  /** No write does this yet: listed, disabled, and tied to the issue it waits on. */
-  | (Base & { gap: string });
+  /** Opens the confirm dialog that pauses every live run in the workspace. */
+  | (Base & { pauseWorkspace: true });
 
 /** The copy the menu's own entries need, beyond the nav labels. */
 type CommandTextKey =
@@ -89,7 +82,6 @@ type CommandTextKey =
   | "assistant.askCostDraft"
   | "assistant.mintKey"
   | "actions.pauseAll"
-  | "actions.pauseAllNotBacked"
   | "actions.steer"
   | "actions.register"
   | "actions.grant"
@@ -188,8 +180,7 @@ export function buildCommands(
         id: "action:pause-all",
         label: labels.text("actions.pauseAll"),
         group: "actions",
-        detail: labels.text("actions.pauseAllNotBacked"),
-        gap: PAUSE_ALL_GAP,
+        pauseWorkspace: true,
       },
       {
         id: "action:steer",

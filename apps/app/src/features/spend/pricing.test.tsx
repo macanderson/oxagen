@@ -89,6 +89,7 @@ const source: DataSource = {
     outcomesSettings: vi.fn(),
   },
   approvals: { pending: vi.fn(), resolved: vi.fn(), resolvedSince: vi.fn() },
+  interjections: { open: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),

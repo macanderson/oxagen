@@ -170,6 +170,36 @@ async function tenantPlaneDb(
 }
 
 /**
+ * Which Postgres plane a tenant transaction opens on.
+ *
+ * `"tenant"`, the default, is the organisation's own data plane (ADR-042). The
+ * resolver picks it, and a degraded or disabled plane fails closed.
+ *
+ * `"shared"` is the platform's shared plane, whatever plane the organisation's
+ * tenant data lives on. ADR-042 §2 keeps platform tables (billing, IAM, auth,
+ * org) there, and ADR-134 settles a dedicated-plane organisation's model usage
+ * there. The tenant GUCs are set exactly as on the default plane, so RLS still
+ * fences every row. The resolver is not consulted, so a degraded dedicated
+ * plane does not stop a platform write.
+ *
+ * A tenant-data table read on the shared plane finds none of a dedicated-plane
+ * organisation's rows. So only `packages/billing/src/internal/platform-db.ts`
+ * passes this option, and the root ESLint config refuses a second argument to
+ * `withTenantDb` or `withOrgDb` anywhere else (#4338).
+ */
+export interface TenantDbOptions {
+  plane?: "tenant" | "shared";
+}
+
+async function transactionPlane(
+  orgId: string,
+  opts: TenantDbOptions | undefined,
+): Promise<{ database: Database; planeKey: string }> {
+  if (opts?.plane === "shared") return { database: db(), planeKey: "shared" };
+  return tenantPlaneDb(orgId);
+}
+
+/**
  * Run DB work in a tenant-scoped transaction. Sets the per-transaction GUCs
  * that the RLS policies read. When enforcement is OFF, also sets
  * app.rls_bypass='on' so policies don't yet filter (seeding window). When
@@ -178,44 +208,26 @@ async function tenantPlaneDb(
  * The bypass GUC is always set ('on'/'off') so the policy expression always
  * evaluates a known value rather than defaulting on missing GUC.
  *
+ * `opts.plane` picks the plane; see {@link TenantDbOptions}.
+ *
  * Keep the body focused — do not wrap long LLM/tool calls in one withTenantDb;
  * the transaction is held for the callback's lifetime.
  */
-export async function withTenantDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+export async function withTenantDb<T>(
+  fn: (tx: Tx) => Promise<T>,
+  opts?: TenantDbOptions,
+): Promise<T> {
   const scope = requireScope();
   // The SAME GUC/RLS setup runs on a dedicated plane as on the shared one — a
   // customer-controlled endpoint is a second place the policies are enforced,
   // never an excuse to skip them.
-  const { database, planeKey } = await tenantPlaneDb(scope.orgId);
+  const { database, planeKey } = await transactionPlane(scope.orgId, opts);
   return tenantTransaction(database, planeKey, scope, fn);
 }
 
 /**
- * Run DB work in a tenant-scoped transaction on the SHARED plane, whatever
- * plane the organisation's tenant data lives on.
- *
- * ADR-042 §2 keeps platform tables (billing, IAM, auth, org) on the shared
- * plane, and ADR-134 settles a dedicated-plane organisation's model usage
- * there. `withTenantDb` cannot reach those rows for such an organisation,
- * because it opens its transaction on the dedicated plane. `withSystemDb`
- * reaches the shared plane but turns RLS off. This seam sets the same GUCs as
- * `withTenantDb`, so the `tenant_isolation` policies still fence every row,
- * and opens the transaction on the shared plane (#4315).
- *
- * It never consults the plane resolver, so a degraded or disabled dedicated
- * plane does not stop a platform write. Use it for platform tables only. A
- * tenant-data table read through it reads the shared plane, which for a
- * dedicated-plane organisation holds none of its data.
- */
-export async function withSharedPlaneTenantDb<T>(
-  fn: (tx: Tx) => Promise<T>,
-): Promise<T> {
-  return tenantTransaction(db(), "shared", requireScope(), fn);
-}
-
-/**
- * Open the transaction both tenant seams share: set the org, workspace,
- * org-wide and bypass GUCs the policies read, then run `fn`.
+ * Open a workspace-scoped tenant transaction: set the org, workspace, org-wide
+ * and bypass GUCs the policies read, then run `fn`.
  */
 function tenantTransaction<T>(
   database: Database,
@@ -302,11 +314,17 @@ function tenantTransaction<T>(
  * organisation comes from. The workspace in that scope is ignored, which is the
  * point: a caller in a real workspace that asks for the organisation gets the
  * organisation.
+ *
+ * `opts.plane` picks the plane, as it does for `withTenantDb`; see
+ * {@link TenantDbOptions}.
  */
-export async function withOrgDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+export async function withOrgDb<T>(
+  fn: (tx: Tx) => Promise<T>,
+  opts?: TenantDbOptions,
+): Promise<T> {
   const { orgId } = requireScope();
   const bypass = rlsEnforced() ? "off" : "on";
-  const { database, planeKey } = await tenantPlaneDb(orgId);
+  const { database, planeKey } = await transactionPlane(orgId, opts);
   return runOnPlane(planeKey, () =>
     database.transaction(async (tx) => {
       // The workspace GUC is set to the EMPTY STRING, not to

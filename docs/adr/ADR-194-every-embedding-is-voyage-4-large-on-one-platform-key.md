@@ -1,4 +1,4 @@
-# ADR-192: Every embedding is voyage-4-large on one platform key
+# ADR-194: Every embedding is voyage-4-large on one platform key
 
 - **Status:** Accepted
 - **Date:** 2026-09-26

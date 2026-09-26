@@ -23,7 +23,6 @@ export * as relations from "./relations";
 export * from "./types";
 export {
   withTenantDb,
-  withSharedPlaneTenantDb,
   withOrgDb,
   withTransactionOrgScope,
   withSystemDb,
@@ -33,6 +32,7 @@ export {
   assertRlsEnforcedInProduction,
   isOrgOnlyWorkspaceReadRefusal,
   ORG_ONLY_WORKSPACE_GUC,
+  type TenantDbOptions,
   type Tx,
 } from "./tenant";
 export {

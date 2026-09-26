@@ -101,6 +101,16 @@ const searchCommands = vi.hoisted(() =>
   ),
 );
 vi.mock("./command-actions", () => ({ searchCommands }));
+// ⌘K's pause_workspace_runs write: one run queued, none skipped.
+const pauseWorkspaceRunsAction = vi.hoisted(() =>
+  vi.fn(() =>
+    Promise.resolve({
+      ok: true as const,
+      value: { queued: 1, commandIds: ["tcm_1"], skipped: [] },
+    }),
+  ),
+);
+vi.mock("./pause-workspace-actions", () => ({ pauseWorkspaceRunsAction }));
 vi.mock("./account-actions", () => ({
   updateProfile: vi.fn(),
   readPreferences: () =>
@@ -504,22 +514,39 @@ describe("command menu", () => {
     expect(nav.push).toHaveBeenCalledWith("/acme/core-platform");
   });
 
-  it("lists Pause every live run disabled, tied to its gap, and does nothing when chosen (negative)", async () => {
+  it("opens the pause dialog from Pause every live run, sends the reason and shows the receipt (#3862)", async () => {
+    pauseWorkspaceRunsAction.mockClear();
     const user = userEvent.setup();
     renderShell(shellData());
     await user.keyboard("{Meta>}k{/Meta}");
     const menu = await screen.findByTestId("command-menu");
     const pause = within(menu).getByRole("option", {
-      name: /^Pause every live run/,
+      name: "Pause every live run in this workspace",
     });
-    expect(pause).toHaveAttribute("aria-disabled", "true");
-    expect(pause).toHaveAttribute("data-gap", "#3862");
-    expect(pause).toHaveTextContent(
+    // The entry is backed now: enabled, with no gap and no not-backed line.
+    expect(pause).not.toHaveAttribute("aria-disabled");
+    expect(pause).not.toHaveAttribute("data-gap");
+    expect(menu).not.toHaveTextContent(
       "No capability pauses every live run at once yet.",
     );
     await user.click(pause);
+    const dialog = await screen.findByTestId("pause-workspace-dialog");
+    await waitFor(() => {
+      expect(screen.queryByTestId("command-menu")).toBeNull();
+    });
     expect(nav.push).not.toHaveBeenCalled();
-    expect(screen.getByTestId("command-menu")).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText("Reason"), "Incident 42");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Pause every live run" }),
+    );
+    expect(pauseWorkspaceRunsAction).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "Incident 42",
+    );
+    expect(
+      await screen.findByTestId("pause-workspace-queued"),
+    ).toHaveTextContent("Queued a pause for 1 live run.");
   });
 
   it("says when search_tools could not be read, and still lists the pages (negative)", async () => {

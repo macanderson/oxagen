@@ -4,13 +4,48 @@
 // ./unrecorded.ts. No `exhausted` variant exists: every contract the app reads
 // declares `noBillingGate`, so no read can be refused for lack of GAUs (§3.2).
 
+/**
+ * The rule that decided a denial (#3841). `iam` names the IAM step that
+ * decided, such as `7:role_grant` or `8:default`. `decision_rule` names the
+ * workspace decision rule by its id. Never a role id, and never a policy id:
+ * the store keeps no versioned policies.
+ */
+export type DecidedBy = { source: "iam" | "decision_rule"; id: string };
+
+/**
+ * What the app seam read about a failed invoke (#3841). `traceId` is the
+ * OpenTelemetry trace active when the read failed, null when no tracer
+ * recorded one. `region` is `OXAGEN_REGION` of the process that answered,
+ * null when it is unset. `requestId` is the id the kernel seam minted, which
+ * the kernel's security event records.
+ */
+export type ReadFailureFacts = {
+  traceId: string | null;
+  region: string | null;
+  requestId?: string;
+};
+
+// The failure facts on ReadError and Denied are optional. Absent means the
+// adapter did not read them (fakes, local failures). Null means it read them
+// and nothing was recorded.
 type ReadError = {
   ok: false;
   reason: "error";
   code: string;
   status: number;
+  traceId?: string | null;
+  region?: string | null;
+  requestId?: string;
 };
-type Denied = { ok: false; reason: "denied"; permission: string };
+type Denied = {
+  ok: false;
+  reason: "denied";
+  permission: string;
+  decidedBy?: DecidedBy | null;
+  traceId?: string | null;
+  region?: string | null;
+  requestId?: string;
+};
 type PendingApproval = {
   ok: false;
   reason: "pending_approval";
@@ -25,11 +60,16 @@ export type Read<T> =
 
 export const readOk = <T>(value: T): Read<T> => ({ ok: true, value });
 
-export const readError = (code: string, status: number): ReadError => ({
+export const readError = (
+  code: string,
+  status: number,
+  facts?: ReadFailureFacts,
+): ReadError => ({
   ok: false,
   reason: "error",
   code,
   status,
+  ...facts,
 });
 
 // Every page's named failure: the error code and HTTP status its read path

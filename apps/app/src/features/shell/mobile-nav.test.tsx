@@ -30,7 +30,12 @@ import en from "../../../messages/en.json";
 import createMessages from "../../../messages/create.json";
 import shellMessages from "../../../messages/shell.json";
 import uiMessages from "../../../messages/ui.json";
-import { approvalItem, shellData, shellWorkspace } from "./shell.builders";
+import {
+  approvalItem,
+  interjectionItem,
+  shellData,
+  shellWorkspace,
+} from "./shell.builders";
 import { ShellClient } from "./shell-client";
 import type { ShellData } from "./shell-data";
 
@@ -39,6 +44,11 @@ const nav = vi.hoisted(() => ({ pathname: "/acme/core-platform", query: "" }));
 // The command menu's search_tools read answers nothing here; shell-client.test.tsx covers it.
 vi.mock("./command-actions", () => ({
   searchCommands: () => Promise.resolve({ ok: true, value: { rows: [] } }),
+}));
+// The command menu's pause_workspace_runs write is never sent here;
+// pause-workspace-dialog.test.tsx and shell-client.test.tsx cover it.
+vi.mock("./pause-workspace-actions", () => ({
+  pauseWorkspaceRunsAction: () => new Promise(() => undefined),
 }));
 // Opening the assistant reads stella's engine. Here the read never answers,
 // and an unanswered read holds nothing
@@ -209,7 +219,7 @@ describe("thumb bar", () => {
   it("counts the approvals waiting in this workspace on the Fleet slot and nowhere else", () => {
     renderPhone(waitingIn(3));
     const [fleet, ...rest] = slots();
-    expect(fleet).toHaveAccessibleName("Fleet, 3 approvals waiting");
+    expect(fleet).toHaveAccessibleName("Fleet, 3 waiting on a person");
     expect(fleet?.querySelector("[data-count]")).toHaveAttribute(
       "data-count",
       "3",
@@ -221,6 +231,31 @@ describe("thumb bar", () => {
     // More carries Audit's critical incidents, which no store records yet.
     for (const slot of rest)
       expect(slot.querySelector("[data-count]")).toBeNull();
+  });
+
+  // #3839: the slot counted parked calls alone, so a run paused on a
+  // question never showed on the phone.
+  it("adds this workspace's open interjections to the Fleet slot", () => {
+    const base = waitingIn(2);
+    const [ws] = base.approvals.workspaces;
+    if (ws === undefined) throw new Error("no workspace");
+    renderPhone({
+      ...base,
+      approvals: {
+        ...base.approvals,
+        workspaces: [
+          {
+            ...ws,
+            interjections: readOk({ items: [interjectionItem()], more: false }),
+          },
+        ],
+      },
+    });
+    expect(slots()[0]).toHaveAccessibleName("Fleet, 3 waiting on a person");
+    expect(slots()[0]?.querySelector("[data-count]")).toHaveAttribute(
+      "data-count",
+      "3",
+    );
   });
 
   it('says "+" on the Fleet slot when the queue ran past the read', () => {
@@ -305,7 +340,12 @@ describe("thumb bar", () => {
       shellData({
         counts: {
           slug: "core-platform",
-          read: readOk({ approvals: 0, proposals: 10, incidents: 3 }),
+          read: readOk({
+            approvals: 0,
+            interjections: null,
+            proposals: 10,
+            incidents: 3,
+          }),
         },
       }),
     );

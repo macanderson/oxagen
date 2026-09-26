@@ -195,6 +195,7 @@ export function onboardingSource(reads: Reads): {
       resolved: refuse("approvals.resolved"),
       resolvedSince: refuse("approvals.resolvedSince"),
     },
+    interjections: { open: refuse("interjections.open") },
     billing: {
       plan: refuse("billing.plan"),
       usageCredits: refuse("billing.usageCredits"),

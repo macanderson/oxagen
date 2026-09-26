@@ -87,6 +87,8 @@ import { agentMemoryCitationStatsRoute } from "./routes/v1/agent.memory_citation
 import { agentApprovalListRoute } from "./routes/v1/agent.approval.list";
 import { agentApprovalListResolvedRoute } from "./routes/v1/agent.approval.list_resolved";
 import { agentApprovalResolveRoute } from "./routes/v1/agent.approval.resolve";
+import { agentInterjectionAnswerRoute } from "./routes/v1/agent.interjection.answer";
+import { agentInterjectionListRoute } from "./routes/v1/agent.interjection.list";
 import { agentExecutionRecordRoute } from "./routes/v1/agent.execution.record";
 import { agentTraceGetRoute } from "./routes/v1/agent.trace.get";
 import { agentDebugTraceRoute } from "./routes/v1/agent.debug.trace";
@@ -274,6 +276,7 @@ import { tachoContainedLaunchRegisterRoute } from "./routes/v1/tacho.contained_l
 import { tachoBundleGetRoute } from "./routes/v1/tacho.bundle.get";
 import { tachoGithubTokenIssueRoute } from "./routes/v1/tacho.github_token.issue";
 import { tachoCommandDispatchRoute } from "./routes/v1/tacho.command.dispatch";
+import { tachoWorkspaceRunsPauseRoute } from "./routes/v1/tacho.workspace_runs.pause";
 import { tachoCommandFetchRoute } from "./routes/v1/tacho.command.fetch";
 import { tachoCommandListRoute } from "./routes/v1/tacho.command.list";
 import { tachoEnrollmentCreateRoute } from "./routes/v1/tacho.enrollment.create";
@@ -759,6 +762,8 @@ orgScoped.route("/repository/gitlab/attach", repositoryGitlabAttachRoute);
 // and the workspace rather than to a host, so they sit beside /runs.
 orgScoped.route("/commands", tachoCommandDispatchRoute);
 orgScoped.route("/commands/list", tachoCommandListRoute);
+// pause_workspace_runs: every live run in the workspace, one decision (#3862).
+orgScoped.route("/commands/pause-workspace", tachoWorkspaceRunsPauseRoute);
 orgScoped.route("/tacho/hosts", tachoHostListRoute);
 orgScoped.route("/tacho/session-policy", tachoSessionPolicyReadRoute);
 orgScoped.route("/tacho/session-policy", tachoSessionPolicyWriteRoute);
@@ -940,6 +945,8 @@ orgScoped.route("/agent/memory", agentMemoryWriteRoute);
 orgScoped.route("/agent/approvals/list", agentApprovalListRoute);
 orgScoped.route("/agent/approvals/resolved", agentApprovalListResolvedRoute);
 orgScoped.route("/agent/approvals/resolve", agentApprovalResolveRoute);
+orgScoped.route("/agent/interjections/list", agentInterjectionListRoute);
+orgScoped.route("/agent/interjections/answer", agentInterjectionAnswerRoute);
 orgScoped.route("/agent/execution/record", agentExecutionRecordRoute);
 // Agent run-trace span tree: one execution plus its steps and tool calls. The
 // list route backs the Activity index.

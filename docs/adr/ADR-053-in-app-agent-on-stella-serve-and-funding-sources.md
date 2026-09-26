@@ -88,7 +88,7 @@ The source is resolved in one place in `@oxagen/ai`, and all three call
 paths honour it: streamed replies, structured objects, and embeddings. A
 call path that reads the process environment directly is a defect.
 
-Amended by ADR-192 (2026-09-26): embeddings no longer follow the source.
+Amended by ADR-194 (2026-09-26): embeddings no longer follow the source.
 Every embedding goes to Voyage on the platform key `VOYAGE_API_KEY` and is
 billed, whatever key the organisation holds.
 

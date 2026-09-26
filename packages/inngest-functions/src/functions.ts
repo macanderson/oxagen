@@ -61,6 +61,7 @@ import {
   runEnrichOnFailure,
   runEnrichmentSweep,
 } from "./functions/run.enrich";
+import { runPullRequestBackfill } from "./functions/run.pull-request-backfill";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -119,4 +120,5 @@ export const functions: any[] = [
   runEnrich,
   runEnrichOnFailure,
   runEnrichmentSweep,
+  runPullRequestBackfill,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

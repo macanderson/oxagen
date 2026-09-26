@@ -24,7 +24,7 @@ const logger = pino({
 // (packages/ontology/src/schema.cypher). Changing either constant means
 // resizing the indexes and embedding every stored text again, so both are
 // pinned here. Mac chose Voyage with one platform key for every organisation
-// on 2026-09-26 (#4148, ADR-192).
+// on 2026-09-26 (#4148, ADR-194).
 export const EMBEDDING_MODEL = "voyage-4-large";
 export const EMBEDDING_DIMENSIONS = 1024;
 const MODEL = EMBEDDING_MODEL;
