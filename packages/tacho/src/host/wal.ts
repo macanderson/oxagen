@@ -1370,9 +1370,13 @@ export class Wal {
       const through = this.shippedThrough(session);
       if (last <= through) continue;
       unshipped += last - through;
-      const first = this.eventsAfterShipped(session).next();
-      if (!first.done && (oldest === undefined || first.value.ts < oldest))
-        oldest = first.value.ts;
+      // A loop that breaks, not a bare `.next()`: leaving the break runs the
+      // walk's `finally`, so the file it opened is closed. A paused
+      // generator kept one descriptor per session open on every call.
+      for (const first of this.eventsAfterShipped(session)) {
+        if (oldest === undefined || first.ts < oldest) oldest = first.ts;
+        break;
+      }
     }
     return {
       sessions: sessions.length,

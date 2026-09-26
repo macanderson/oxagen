@@ -1,8 +1,10 @@
 import {
   appendFileSync,
+  closeSync,
   existsSync,
   fdatasyncSync,
   fsyncSync,
+  openSync,
   renameSync,
   readFileSync,
   readSync,
@@ -25,6 +27,8 @@ vi.mock("node:fs", async (importOriginal) => {
   return {
     ...actual,
     appendFileSync: vi.fn(actual.appendFileSync),
+    openSync: vi.fn(actual.openSync),
+    closeSync: vi.fn(actual.closeSync),
     readFileSync: vi.fn(actual.readFileSync),
     readSync: vi.fn(actual.readSync),
     writeSync: vi.fn(actual.writeSync),
@@ -389,6 +393,24 @@ describe("Wal", () => {
     expect(stats.oldestUnshippedAt).toBe(session[0]?.ts);
     expect(parse.mock.calls.length).toBeLessThanOrEqual(1);
     parse.mockRestore();
+  });
+
+  it("closes every file stats() opens to find the oldest unshipped event", () => {
+    // `stats()` took the first unshipped event with a bare `.next()`, which
+    // left the line reader paused inside its `try`, so its descriptor was
+    // never closed: one leaked per session with unshipped events, per call.
+    const paths = scratchPaths();
+    const wal = new Wal(paths.wal);
+    wal.append(minimalSession());
+    const opened = vi.mocked(openSync);
+    const closed = vi.mocked(closeSync);
+    opened.mockClear();
+    closed.mockClear();
+    for (let call = 0; call < 3; call++) {
+      expect(wal.stats().unshipped).toBeGreaterThan(0);
+    }
+    expect(opened.mock.calls.length).toBeGreaterThan(0);
+    expect(closed.mock.calls.length).toBe(opened.mock.calls.length);
   });
 
   it("keeps the index current as events arrive after it was filled", () => {
