@@ -176,25 +176,22 @@ describe("a daemon that accepts the connection and never answers", () => {
     );
   });
 
-  /** The hooks whose five-second timeout the old fixed wait equalled. */
-  const stalled = writtenHooks().filter(
-    (c) =>
-      (c.harness === "codex" && c.event === "PostToolUse") ||
-      (c.harness === "cursor" &&
-        (c.event === "postToolUse" || c.event === "sessionEnd")) ||
-      (c.harness === "stella" &&
-        (c.event === "PostToolUse" || c.event === "SubagentStop")),
-  );
+  /** Every hook whose five-second timeout the old fixed wait equalled. */
+  const stalled = writtenHooks().filter((c) => c.killMs === 5_000);
 
-  it("covers a telemetry hook and a session end on every harness with a five-second timeout", () => {
-    expect(stalled.map((c) => `${c.harness} ${c.event}`).sort()).toEqual([
-      "codex PostToolUse",
-      "cursor postToolUse",
-      "cursor sessionEnd",
-      "stella PostToolUse",
-      "stella SubagentStop",
-    ]);
-    expect(stalled.every((c) => c.killMs === 5_000)).toBe(true);
+  it("covers the telemetry hooks and session ends of every harness with a five-second timeout", () => {
+    expect(stalled.map((c) => `${c.harness} ${c.event}`)).toEqual(
+      expect.arrayContaining([
+        "codex PostToolUse",
+        "codex SubagentStop",
+        "codex SessionEnd",
+        "cursor postToolUse",
+        "cursor subagentStop",
+        "cursor sessionEnd",
+        "stella PostToolUse",
+        "stella SubagentStop",
+      ]),
+    );
   });
 
   it.each(stalled.map((c) => [c.harness, c.event, c] as const))(
