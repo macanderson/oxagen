@@ -3094,6 +3094,7 @@ type Messages = {
     };
     pause: {
       title: string;
+      ledgerTitle: string;
       body: string;
       run: string;
       position: string;
@@ -6669,6 +6670,7 @@ type Messages = {
       forkNeedsLedger: string;
       forkNoGrade: string;
       forkNeedsGrade: string;
+      forkNeedsRole: string;
       fork: {
         open: string;
         title: string;

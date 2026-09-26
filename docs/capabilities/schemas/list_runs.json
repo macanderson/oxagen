@@ -792,6 +792,7 @@
             "canSummarize",
             "model",
             "machine",
+            "harness",
             "name",
             "summary"
           ],

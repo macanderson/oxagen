@@ -1512,6 +1512,7 @@
       "reads": [],
       "surfaces": [
         "api",
+        "cli",
         "mcp"
       ],
       "writes": []
@@ -4146,7 +4147,7 @@
       "writes": []
     }
   ],
-  "contentHash": "e3a5bba1519777d4b9b0ce48348048e75466c22b07e03a8270ae4d6d60d04d25",
+  "contentHash": "f917e192a3ece5737d341430a63169b26f3313e003a30d8367aff363a31e7c6d",
   "domains": [
     {
       "name": "agent",
