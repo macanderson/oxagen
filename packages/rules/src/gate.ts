@@ -29,6 +29,15 @@ export class DecisionRuleDeniedError extends Error {
     );
     this.name = "DecisionRuleDeniedError";
   }
+
+  /**
+   * The rules that decided, in evaluation order (#3971). `evaluateRules` is
+   * first-match, so this holds the one `verdict.ruleId` today. An evaluator
+   * that reports every match fills it without changing the shape.
+   */
+  get ruleIds(): readonly string[] {
+    return [this.verdict.ruleId];
+  }
 }
 
 /**
@@ -44,6 +53,11 @@ export class DecisionRuleApprovalRequiredError extends Error {
       `decision rule "${verdict.ruleId}" requires approval: ${verdict.description}`,
     );
     this.name = "DecisionRuleApprovalRequiredError";
+  }
+
+  /** The rules that decided, in evaluation order (#3971); see `DecisionRuleDeniedError.ruleIds`. */
+  get ruleIds(): readonly string[] {
+    return [this.verdict.ruleId];
   }
 }
 

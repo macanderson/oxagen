@@ -22,6 +22,8 @@ Each pull request carries `closingIssues`, read from GitHub's `closingIssuesRefe
 
 `subagents` lists one entry per subagent the session started, keyed by the agent id on its `subagent_start` and `subagent_stop` hook frames. Each entry carries the agent type the frames recorded, the first and last sequence, and whether a stop frame arrived. A type the frames did not carry is null. Ledger runs return an empty list, because the ledger records no subagent frames. The read returns at most 200 subagents and warns with `subagent_limit` past that.
 
+`releases` lists the releases the session created (#3890), one per command frame that created one, at most 20. Each names its repository, its tag, and the frame, and carries the release's name, URL and state as GitHub reads it now: `draft`, `prerelease`, or `published`. A state is null when GitHub has no release with the tag, with the `release_not_found` warning, or when GitHub could not be read, with the `release_read_failed` warning. Ledger runs return an empty list.
+
 The read limits checkout groups and recorded diffs to 200 each, PRs and discovery requests to 20 each, and each PR patch response to 512 KiB. A collector snapshot holds at most 256 KiB and probes at most 32 untracked files. Limits do not turn missing evidence into an empty successful result.
 
 Checkouts, captured diffs, subagents and pull request receipts come from every frame the control plane accepted from the run's host, including frames past a chain break. When the session's hash chain broke, the read returns `complete: false` with the `chain_break` warning rather than dropping those frames (ADR-171). A sealed run also names the break in its completeness gaps.

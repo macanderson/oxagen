@@ -174,7 +174,12 @@ describe("get_run_turns on a wrapped run", () => {
   it("answers no turns, and makes no grouped read, for a run with no frames", async () => {
     const h = harness({ facts: [] });
     const out = await h.turns(input(TACHO_ID), ctx());
-    expect(out).toEqual({ runId: TACHO_ID, turns: [], complete: true });
+    expect(out).toEqual({
+      runId: TACHO_ID,
+      turns: [],
+      complete: true,
+      chains: [],
+    });
     expect(h.tachoTurnGroups).not.toHaveBeenCalled();
   });
 
@@ -185,7 +190,12 @@ describe("get_run_turns on a wrapped run", () => {
     });
     const out = await h.turns(input(TACHO_ID), ctx());
     // A run's turns are the root's. A subagent chain alone opens none.
-    expect(out).toEqual({ runId: TACHO_ID, turns: [], complete: true });
+    expect(out).toEqual({
+      runId: TACHO_ID,
+      turns: [],
+      complete: true,
+      chains: [],
+    });
     expect(h.tachoTurnGroups).not.toHaveBeenCalled();
   });
 

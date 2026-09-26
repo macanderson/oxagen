@@ -41,6 +41,8 @@ export function mandateSource(read: Read<MandateDetail> | undefined) {
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,
+      issues: refuse,
+      findings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
     agents: {

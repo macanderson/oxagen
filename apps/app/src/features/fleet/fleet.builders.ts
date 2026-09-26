@@ -48,6 +48,8 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
     enforcementTier: "harness",
     completenessGaps: [],
     canSummarize: false,
+    effortSource: null,
+    fit: null,
     startedAt: at(-3600),
     sealedAt: null,
     ...overrides,
@@ -183,6 +185,8 @@ export function fleetSource(reads: FleetReads) {
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,
+      issues: refuse,
+      findings: refuse,
       transcript: refuse,
     },
     approvals: {

@@ -99,6 +99,8 @@ export function createRunWorkGetHandler(
         diffs: [],
         pullRequests: prs.pullRequests,
         subagents: [],
+        // A ledger run records no release commands (#3890).
+        releases: [],
         complete: false,
         warnings: [
           "checkout_context_not_recorded",
@@ -170,6 +172,9 @@ export function createRunWorkGetHandler(
       diffs: diffs.slice(0, WORK_DIFF_CAP).map(capturedDiffOf),
       pullRequests: prs.pullRequests,
       subagents: subagents.slice(0, WORK_SUBAGENT_CAP).map(subagentOf),
+      // Placeholder until the Repository and issues lane reads the release
+      // frames and GitHub's releases (#3890).
+      releases: [],
       complete: warnings.length === 0,
       warnings,
     };

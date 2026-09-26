@@ -245,6 +245,8 @@ export function stepsOf(
       source: gate.source ?? null,
       harness: gate.harness ?? false,
       at,
+      rules: [],
+      taint: null,
     }));
     return {
       seq,

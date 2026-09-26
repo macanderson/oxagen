@@ -78,9 +78,21 @@ export interface ModelCallFrameRow {
   basis: CostFrameBasis;
 }
 
+/**
+ * One tool call as the rollup reads it. The members after `name` mirror
+ * billing's `ToolCallFrame` (#4001). They are optional until the Context and
+ * cost lane's reader selects them (`tool_status`, the two digests,
+ * `tool_is_mutating`, and the OTel span's result tokens); each is null where
+ * the frame recorded none.
+ */
 interface ToolCallFrameRow {
   /** Null when the frame names no tool. */
   name: string | null;
+  status?: "ok" | "error" | "rejected" | null;
+  inputDigest?: string | null;
+  outputDigest?: string | null;
+  isMutating?: boolean | null;
+  resultTokens?: number | null;
 }
 
 /**
@@ -376,6 +388,12 @@ export async function readTachoToolCallFrames(args: {
 /** One hook-recorded tool call of a wrapped run, as the findings job reads it. */
 export interface ToolCallObservationRow {
   rootSessionUuid: string;
+  /**
+   * The chain the call was recorded on (`toString(h.session_uuid)`), so a
+   * finding can cite a subagent's frame (#4001). Optional until the Context
+   * and cost lane's reader selects it.
+   */
+  sessionUuid?: string;
   /** RFC 3339. */
   at: string;
   seq: number;

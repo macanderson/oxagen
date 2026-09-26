@@ -30,6 +30,7 @@ The Run page's cost strip and Cost tab (Mission Control spec §12.6, §12.7; ADR
 | `runId` | string | as asked |
 | `rollup` | object or null | null until the rollup has built a row for the run, or for an id with no row in the caller's workspace |
 | `provisional` | object, null or absent | present only while `rollup` is null and the id names a wrapped session in the caller's workspace |
+| `baseline` | object or null | the agent's own recent runs, described below; null when the run names no agent, or the agent has fewer than 5 sealed runs in the window (#3984) |
 
 The rollup:
 
@@ -41,9 +42,11 @@ The rollup:
 | `turns` | integer or null | null for a ledger run whose model-call payloads are encrypted |
 | `steps`, `modelCalls`, `toolCalls` | integer | counts from the frames |
 | `retries` | integer or null | the harness's API retry count; null for a ledger run |
-| `productiveRatio` | number or null | null until the grading lane writes it |
+| `productiveRatio` | number or null | `advancedSteps ÷ steps`; null while the steps are not graded |
+| `advancedSteps`, `unproductiveSteps` | integer or null | the steps that moved the run forward and the steps that did not (#3984). Null together on a row rolled up before grading existed, until its next rollup, and on a run with no steps. When set, they sum to `steps` |
+| `unproductiveCauses` | object or null | `{ failed, repeated, retried }`: why the unproductive steps made no progress. The three sum to `unproductiveSteps`, and the object is null exactly when the counts are |
 | `byModel` | object[] | `{ model, provider, calls, cost, tokens, costByClass, cacheSaving, hasUnpriced }`, one per model the frames used; each `cost` carries its own basis, or is null when none of the model's frames was priced. The per-model fields are described below |
-| `byTool` | object[] | `{ name, calls }` |
+| `byTool` | object[] | `{ name, calls, resultTokens, cost }`. `resultTokens` is the tool-result tokens the OTel tool spans recorded for the tool's calls, summed, or null when no call recorded them. `cost` prices them at the run's uncached input rate, the rule the findings job uses. Its basis is always `estimated`, and it attributes input the run's `cost` already counts, so it never adds to it. It is null when `resultTokens` is null or the run has no input price (#3892) |
 | `priceEntryIds` | string[] | the `cost.price_entries` rows the frames were priced with (spec §12.2) |
 | `rolledUpAt` | string | RFC 3339; when the row was last rebuilt |
 | `isEstimate` | boolean | true when the row was rebuilt while the run was open: every figure covers the frames recorded so far, and the run may add more. False once the rollup has rebuilt the sealed run |
@@ -69,6 +72,16 @@ The provisional figures come from `tacho.session_models` and the root session's 
 | `asOf` | string | RFC 3339; the run's last recorded event |
 
 Subagent sessions are not included. They are separate sessions until the rollup folds them into the run.
+
+The baseline sets this run beside the agent's sealed runs in the 30 days before it started. This run is not in it.
+
+| Field | Type | Description |
+|---|---|---|
+| `windowDays` | integer | always 30 |
+| `before` | string | RFC 3339; this run's `startedAt`, the end of the window |
+| `runs` | integer | the agent's sealed runs in the window, at least 1 |
+| `medianCost` | object or null | the median cost of the priced runs in the window, with the fold of their bases; null when fewer than 5 of them were priced |
+| `productiveRatio` | number or null | `sum(advanced_steps) ÷ sum(steps)` over the graded runs in the window; null when fewer than 5 of them were graded |
 
 ## Honesty
 

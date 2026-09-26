@@ -57,6 +57,8 @@ const CONSOLE_CONTRACTS = [
   // console read by the same argument, so it belongs on this list too.
   "dispatch_command",
   "list_commands",
+  // #3970: the Run page's Issues tab. Reading a recording is a console read.
+  "get_run_issues",
   "authorize_cli",
   "change_member_role",
   "remove_org_member",

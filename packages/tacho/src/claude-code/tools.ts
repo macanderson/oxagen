@@ -554,3 +554,24 @@ export function pullRequestAttrs(response: unknown): Record<string, string> {
   }
   return {};
 }
+
+/**
+ * The issue a tool call acted on, as the frame attrs `issue.repository`
+ * (`owner/repo`), `issue.number`, `issue.url` and `issue.action` (one of
+ * `get_run_issues`' actions), or `{}` when the call names none (#3970). The
+ * sources are the GitHub MCP issue tools, keyed off the tool name after the
+ * server prefix with `owner`, `repo` and `issue_number` in their input, and
+ * the created issue's URL in a `gh issue create` or MCP create response.
+ * `hooks.ts` merges them into the effect frame's attrs beside
+ * `pullRequestAttrs`.
+ *
+ * The Repository and issues lane writes the reading. Until then it refuses,
+ * and no hook calls it.
+ */
+export function issueAttrs(
+  _toolName: string,
+  _input: unknown,
+  _response: unknown,
+): Record<string, string> {
+  throw new Error("issueAttrs: not implemented (#3970)");
+}

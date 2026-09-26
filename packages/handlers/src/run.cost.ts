@@ -157,16 +157,20 @@ export function createRunCostHandler(
     const row = (await deps.readRunTotalsByIds(scope, [input.runId])).get(
       input.runId,
     );
+    // Placeholder until the Context and cost lane reads the agent's baseline
+    // (#3984). Null is the contract's "no baseline" answer.
+    const baseline = null;
     if (!row) {
       const provisional = deps.readProvisional
         ? await deps.readProvisional(scope, input.runId)
         : null;
       return provisional === null
-        ? { runId: input.runId, rollup: null }
-        : { runId: input.runId, rollup: null, provisional };
+        ? { runId: input.runId, rollup: null, baseline }
+        : { runId: input.runId, rollup: null, provisional, baseline };
     }
     return {
       runId: input.runId,
+      baseline,
       rollup: {
         cost: cost(row.costMicros, row.currency, row.costBasis),
         tokens: row.tokens,
@@ -177,6 +181,11 @@ export function createRunCostHandler(
         toolCalls: row.toolCalls,
         retries: row.retries,
         productiveRatio: row.productiveRatio,
+        // Null until the Context and cost lane's rollup grades the steps
+        // (#3984): a row rolled up before grading answers null for all three.
+        advancedSteps: row.advancedSteps ?? null,
+        unproductiveSteps: row.unproductiveSteps ?? null,
+        unproductiveCauses: row.breakdown.steps ?? null,
         byModel: row.breakdown.models.map((m) => ({
           model: m.model,
           provider: m.provider,
@@ -189,7 +198,15 @@ export function createRunCostHandler(
           cacheSaving: cost(m.cacheSavingMicros, row.currency, m.basis),
           hasUnpriced: m.hasUnpriced,
         })),
-        byTool: row.breakdown.tools,
+        // A row rolled up before result tokens were recorded carries neither
+        // figure (#3892). Pricing them is the Context and cost lane's; until
+        // then `cost` is the contract's null.
+        byTool: row.breakdown.tools.map((t) => ({
+          name: t.name,
+          calls: t.calls,
+          resultTokens: t.resultTokens ?? null,
+          cost: null,
+        })),
         priceEntryIds: row.priceEntryIds,
         rolledUpAt: row.rolledUpAt.toISOString(),
         isEstimate: row.sealedAt === null,

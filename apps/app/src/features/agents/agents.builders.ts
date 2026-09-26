@@ -300,6 +300,8 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
     enforcementTier: "harness",
     completenessGaps: [],
     canSummarize: false,
+    effortSource: null,
+    fit: null,
     startedAt: "2026-09-15T08:00:00.000Z",
     sealedAt: "2026-09-15T08:40:00.000Z",
     ...overrides,
@@ -507,6 +509,8 @@ export function agentsSource(reads: AgentReads) {
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,
+      issues: refuse,
+      findings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
     agents: {

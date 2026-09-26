@@ -36,7 +36,8 @@
     "./run-outcomes": "./src/run-outcomes.ts",
     "./context-record-label": "./src/context-record-label.ts",
     "./agent-definition-source": "./src/agent-definition-source.ts",
-    "./run-enrichment": "./src/run-enrichment.ts"
+    "./run-enrichment": "./src/run-enrichment.ts",
+    "./run-fit": "./src/run-fit.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

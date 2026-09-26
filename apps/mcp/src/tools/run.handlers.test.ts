@@ -176,6 +176,7 @@ const CASES: ToolCase[] = [
         },
       ],
       complete: true,
+      chains: [],
     },
     // A turn numbered from 0: the transcript's turns are 1-based.
     invalidOutput: {
@@ -194,6 +195,7 @@ const CASES: ToolCase[] = [
         },
       ],
       complete: true,
+      chains: [],
     },
   },
   {

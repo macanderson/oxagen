@@ -43,11 +43,22 @@ No new store: the ledger's seal rows, the wrapped session's checkpoints and the 
 | `gaps.missingFrameCount` | integer | how many sequences those runs account for |
 | `gaps.missingBodies` | integer | frames that carried content and whose bytes were not retained |
 | `gaps.recorded` | string[] | the gaps the seal recorded, from the closed vocabulary (spec §13.1). A word the store holds that the vocabulary does not name is dropped rather than passed on |
-| `seals` | object[] | one entry per attempt, oldest first: `{ sealedAt, terminalStatus, eventCount, finalRunSeq, finalEventDigest, eventStreamDigest, merkleRoot, archiveSegmentRef }`. Empty while the run is unsealed. A retried ledger run carries one seal per attempt here, matching the frame count and gap analysis above, which already span every attempt |
+| `seals` | object[] | one entry per attempt, oldest first: `{ sealedAt, terminalStatus, eventCount, finalRunSeq, finalEventDigest, eventStreamDigest, merkleRoot, archiveSegmentRef, archiveSegmentDigest, attestation }`. Empty while the run is unsealed. A retried ledger run carries one seal per attempt here, matching the frame count and gap analysis above, which already span every attempt. `archiveSegmentDigest` and `attestation` are described below |
 | `enforcementTier` | `gateway` \| `harness` \| `observe` | where the run's actions were observed from (spec §8.4) |
 | `recordedGrade` | `inspect` \| `view` \| `fork` \| `retry`, or null | the grade the seal recorded; null while the run is live or its seal predates the recorder. Never recomputed on read |
 | `ladder` | object[] | `{ grade, met, reason }` per rung |
 | `complete` | boolean | false when the run has more than 10 000 frames, so the gaps are a prefix's |
+
+### The seal's attestation
+
+Each seal carries two fields for the run attestation (spec §8.3, #4000):
+
+| Field | Type | Description |
+|---|---|---|
+| `archiveSegmentDigest` | string or null | `sha256:` over the archive segment's bytes as stored, the digest the attestation signs. Null on a seal written before the digest was recorded, and on a wrapped session's seal |
+| `attestation` | object or null | `{ alg, keyId, sig, signsOver }`. `alg` is `ed25519`, `keyId` names the attester key, and `sig` is base64 over the RFC 8785 canonical JSON of the signed payload. The payload's values are the seal's own fields, so `signsOver` carries only their names: `run_id`, `attempt_id`, `frame_count`, `merkle_root`, `archive_segment_digest`, `enforcement_tier`, `completeness_gaps` and `replay_grade`. Null on a seal written before attestation, on a seal written with no attester key configured, and on a wrapped session's seal |
+
+Oxagen signs a seal once, when it writes it, and never signs an older seal after the fact.
 
 ### The ladder's reasons
 

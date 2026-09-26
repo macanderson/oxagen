@@ -34,6 +34,47 @@ export const runCostByClassSchema = z
   })
   .strict();
 
+/**
+ * Why a step made no progress (#3984): it failed, it repeated an earlier
+ * step's call, or it retried one. The three sum to `unproductiveSteps`.
+ */
+export const runCostUnproductiveCausesSchema = z
+  .object({
+    failed: z.number().int().nonnegative(),
+    repeated: z.number().int().nonnegative(),
+    retried: z.number().int().nonnegative(),
+  })
+  .strict();
+
+/** The fewest runs a baseline figure is computed over (#3984). */
+export const RUN_COST_BASELINE_MIN_RUNS = 5;
+
+/**
+ * The agent's own recent runs, for a reader to set this run's cost and
+ * productive share beside (#3984). The window is the 30 days before this run
+ * started, and this run is not in it.
+ */
+export const runCostBaselineSchema = z
+  .object({
+    windowDays: z.literal(30),
+    /** RFC 3339: this run's `startedAt`, the end of the window. */
+    before: z.string().datetime(),
+    /** The agent's sealed runs in the window, this run excluded. */
+    runs: z.number().int().positive(),
+    /**
+     * The median cost of the priced runs in the window
+     * (`percentile_cont(0.5)`), with the fold of their bases. Null when fewer
+     * than `RUN_COST_BASELINE_MIN_RUNS` of them were priced.
+     */
+    medianCost: costSchema.nullable(),
+    /**
+     * `sum(advanced_steps) / sum(steps)` over the graded runs in the window.
+     * Null when fewer than `RUN_COST_BASELINE_MIN_RUNS` of them were graded.
+     */
+    productiveRatio: ratioSchema.nullable(),
+  })
+  .strict();
+
 export const runCostRollupSchema = z
   .object({
     /** Null when no model frame was priced. */
@@ -46,7 +87,18 @@ export const runCostRollupSchema = z
     modelCalls: z.number().int().nonnegative(),
     toolCalls: z.number().int().nonnegative(),
     retries: z.number().int().nonnegative().nullable(),
+    /** `advancedSteps / steps`; null exactly when the steps are not graded. */
     productiveRatio: ratioSchema.nullable(),
+    /**
+     * Steps that moved the run forward, and steps that did not (#3984). The
+     * two are null together: on a row rolled up before grading existed (until
+     * its next rollup), and on a run with no steps. When set, they sum to
+     * `steps`.
+     */
+    advancedSteps: z.number().int().nonnegative().nullable(),
+    unproductiveSteps: z.number().int().nonnegative().nullable(),
+    /** Why the unproductive steps made no progress; null exactly when the counts are. */
+    unproductiveCauses: runCostUnproductiveCausesSchema.nullable(),
     byModel: z.array(
       z
         .object({
@@ -80,6 +132,20 @@ export const runCostRollupSchema = z
         .object({
           name: z.string(),
           calls: z.number().int().nonnegative(),
+          /**
+           * The tool-result tokens the OTel tool spans recorded for the
+           * tool's calls, summed (#3892). Null when no call of the tool
+           * recorded them.
+           */
+          resultTokens: z.number().int().nonnegative().nullable(),
+          /**
+           * `resultTokens` priced at the run's uncached input rate, the rule
+           * billing's findings job prices result tokens by. Its basis is
+           * always `estimated`. It attributes input the run's `cost` already
+           * counts and never adds to it. Null when `resultTokens` is null or
+           * the run has no input price.
+           */
+          cost: costSchema.nullable(),
         })
         .strict(),
     ),
@@ -124,7 +190,7 @@ export const runCostGet = registerCapability({
   name: "get_run_cost",
   domain: "run",
   description:
-    "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps, model and tool calls, and the per-model breakdown (cost by token class, cache saving, whether any call went unpriced) and per-tool breakdown, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime.",
+    "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps and how many of them advanced the run, model and tool calls, and the per-model breakdown (cost by token class, cache saving, whether any call went unpriced) and per-tool breakdown with each tool's result tokens and their estimated cost, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime. It also answers the agent's median cost and productive share over its runs in the 30 days before this one.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -145,6 +211,12 @@ export const runCostGet = registerCapability({
       rollup: runCostRollupSchema.nullable(),
       /** Present only while `rollup` is null and the run is a wrapped session. */
       provisional: runCostProvisionalSchema.nullable().optional(),
+      /**
+       * The agent's own recent runs (#3984). Null when the run names no
+       * agent, or the agent has fewer than `RUN_COST_BASELINE_MIN_RUNS` sealed
+       * runs in the window.
+       */
+      baseline: runCostBaselineSchema.nullable(),
     })
     .strict(),
 });
@@ -154,3 +226,7 @@ export type RunCostGetOutput = z.output<typeof runCostGet.output>;
 export type RunCostRollup = z.output<typeof runCostRollupSchema>;
 export type RunCostProvisional = z.output<typeof runCostProvisionalSchema>;
 export type RunCostByClass = z.output<typeof runCostByClassSchema>;
+export type RunCostBaseline = z.output<typeof runCostBaselineSchema>;
+export type RunCostUnproductiveCauses = z.output<
+  typeof runCostUnproductiveCausesSchema
+>;

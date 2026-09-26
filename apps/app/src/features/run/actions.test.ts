@@ -944,6 +944,8 @@ describe("readTranscriptPage", () => {
             decision: "allow",
             type: "policy_decision",
             harness: false,
+            rules: [],
+            taint: null,
             at: "2026-09-15T08:10:01.000Z",
           },
           frames: 2,

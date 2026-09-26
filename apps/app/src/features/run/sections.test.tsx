@@ -48,6 +48,8 @@ const policyEntry = (seq: string, chainRef?: string) =>
       decision: "deny",
       type: "policy_decision",
       harness: false,
+      rules: [],
+      taint: null,
       at: AT,
     },
     ...(chainRef === undefined
@@ -210,6 +212,8 @@ describe("PolicyDecisions", () => {
                   decision: word,
                   type: "policy_decision",
                   harness: false,
+                  rules: [],
+                  taint: null,
                   at: AT,
                 },
               }),
@@ -275,6 +279,8 @@ describe("PolicyDecisions by who decided", () => {
         type: source === "human" ? "command" : "policy_decision",
         at: AT,
         harness,
+        rules: [],
+        taint: null,
         ...(source === null ? {} : { source }),
       },
     });

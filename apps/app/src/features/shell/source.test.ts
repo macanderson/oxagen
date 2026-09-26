@@ -67,6 +67,8 @@ const source = {
     outputs: vi.fn(),
     work: vi.fn(),
     outcomesSettings: vi.fn(),
+    issues: vi.fn(),
+    findings: vi.fn(),
   },
   approvals: { pending, resolved: vi.fn(), resolvedSince },
   agents: {

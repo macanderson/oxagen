@@ -326,6 +326,12 @@ export const runTotals = costSchema.table(
     verdict: text("verdict"),
     accepted: boolean("accepted"),
     productiveRatio: numeric("productive_ratio", { precision: 9, scale: 8 }),
+    // The steps that advanced the run and the steps that did not (#3984).
+    // Null together until the rollup grades the run, and summing to `steps`
+    // once it has; `productive_ratio` is advanced_steps / steps. Why each
+    // unproductive step made no progress rides the breakdown jsonb.
+    advancedSteps: integer("advanced_steps"),
+    unproductiveSteps: integer("unproductive_steps"),
     enforcementTier: text("enforcement_tier"),
     replayGrade: text("replay_grade"),
     governedActions: integer("governed_actions"),
@@ -333,7 +339,10 @@ export const runTotals = costSchema.table(
     // Per-model and per-tool folds of the same frames, so the daily rollup and
     // the drill pages need no second read of the frame store:
     // { models: [{ model, provider, calls, tokens, costMicros, basis }],
-    //   tools:  [{ name, calls }] }
+    //   tools:  [{ name, calls, resultTokens, costMicros }],
+    //   steps:  { failed, repeated, retried } | null }
+    // A row written before `resultTokens`, `costMicros` or `steps` revives
+    // with them null.
     breakdown: jsonb("breakdown").notNull(),
     rolledUpAt: timestamp("rolled_up_at", {
       withTimezone: true,
@@ -343,6 +352,13 @@ export const runTotals = costSchema.table(
   (t) => ({
     workspaceStartedIdx: index("run_totals_workspace_started_idx").on(
       t.workspaceId,
+      t.startedAt,
+    ),
+    // The agent's baseline: its sealed runs in the 30 days before a run
+    // started (`get_run_cost`, #3984).
+    agentStartedIdx: index("run_totals_agent_started_idx").on(
+      t.workspaceId,
+      t.agentKey,
       t.startedAt,
     ),
     sourceCheck: check(
@@ -380,6 +396,10 @@ export const runTotals = costSchema.table(
     ratiosCheck: check(
       "run_totals_ratios_check",
       sql`(${t.cacheHitRate} IS NULL OR (${t.cacheHitRate} >= 0 AND ${t.cacheHitRate} <= 1)) AND (${t.productiveRatio} IS NULL OR (${t.productiveRatio} >= 0 AND ${t.productiveRatio} <= 1))`,
+    ),
+    stepsGradedCheck: check(
+      "run_totals_steps_graded_check",
+      sql`(${t.advancedSteps} IS NULL) = (${t.unproductiveSteps} IS NULL) AND (${t.advancedSteps} IS NULL OR (${t.advancedSteps} >= 0 AND ${t.unproductiveSteps} >= 0 AND ${t.advancedSteps} + ${t.unproductiveSteps} = ${t.steps}))`,
     ),
   }),
 );
@@ -531,7 +551,8 @@ export const findings = costSchema.table(
     citedRuns: text("cited_runs").array().notNull(),
     // The arithmetic behind the saving: the signal, the counterfactual, the
     // call counts and one entry per cited run (`FindingEvidence` on the
-    // contract).
+    // contract). Since #4001 it also holds `frames`, the cited calls per run;
+    // a row written before that has no `frames` key and reads as not cited.
     citedFrames: jsonb("cited_frames").notNull(),
     status: text("status").notNull().default("open"),
     detectedAt: timestamp("detected_at", {

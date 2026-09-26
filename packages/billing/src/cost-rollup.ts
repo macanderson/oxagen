@@ -69,9 +69,22 @@ export interface ModelCallFrame {
   basis: FrameBasis;
 }
 
-/** One tool call; `name` is null when the frame hides it (an encrypted payload). */
+/**
+ * One tool call; `name` is null when the frame hides it (an encrypted payload).
+ *
+ * The members after `name` grade the call and price its result (#3984). They
+ * are optional until the Context and cost lane's frame readers fill them;
+ * that lane makes them required when it does. Each is null where the frame
+ * recorded none.
+ */
 export interface ToolCallFrame {
   name: string | null;
+  status?: "ok" | "error" | "rejected" | null;
+  inputDigest?: string | null;
+  outputDigest?: string | null;
+  isMutating?: boolean | null;
+  /** The tool-result tokens the OTel tool span recorded for the call. */
+  resultTokens?: number | null;
 }
 
 /** What the run's own record says, independent of its frames. */
@@ -135,14 +148,40 @@ export interface ModelBreakdown {
   hasUnpriced: boolean;
 }
 
+/**
+ * One tool's calls in the run. `resultTokens` and `costMicros` are optional
+ * until the Context and cost lane's rollup writes them (#3892); a row stored
+ * before them revives with neither, which a reader treats as null.
+ * `costMicros` is serialized as a decimal string in the jsonb.
+ */
 export interface ToolBreakdown {
   name: string;
   calls: number;
+  /** The tool-result tokens its calls' spans recorded; null when none did. */
+  resultTokens?: number | null;
+  /**
+   * `resultTokens` priced at the run's uncached input rate. Null when
+   * `resultTokens` is null or the run has no input price.
+   */
+  costMicros?: bigint | null;
+}
+
+/** Why the unproductive steps made no progress; the three sum to `unproductiveSteps`. */
+export interface StepCauses {
+  failed: number;
+  repeated: number;
+  retried: number;
 }
 
 export interface RunBreakdown {
   models: ModelBreakdown[];
   tools: ToolBreakdown[];
+  /**
+   * The unproductive steps by cause (#3984), stored in the jsonb with no
+   * column. Null exactly when the run's steps are not graded. Optional until
+   * the Context and cost lane's rollup writes it; absent reads as null.
+   */
+  steps?: StepCauses | null;
 }
 
 /** The `cost.run_totals` row, as the store writes it. */
@@ -161,6 +200,14 @@ export interface RunTotalsRecord extends RunMeta {
   verdict: string | null;
   accepted: boolean | null;
   productiveRatio: number | null;
+  /**
+   * The steps that advanced the run and the steps that did not (#3984),
+   * null together, and summing to `steps` when set. Optional until the
+   * Context and cost lane's rollup grades the steps and computes
+   * `productiveRatio` from them; absent reads as null.
+   */
+  advancedSteps?: number | null;
+  unproductiveSteps?: number | null;
 }
 
 const MILLION = 1_000_000n;

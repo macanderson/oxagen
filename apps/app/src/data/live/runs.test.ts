@@ -1,6 +1,7 @@
 // The runs port: one list_runs page through the kernel seam at the asked
 // cursor, mapped into the Fleet view, with a refusal passed through and an
 // unmappable record reported once.
+import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
@@ -9,6 +10,7 @@ import { runList } from "@oxagen/oxagen/contracts/run.list";
 import { runOutcomesSettingsGet } from "@oxagen/oxagen/contracts/run.outcomes.settings.get";
 import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
+import { runIssuesGet } from "@oxagen/oxagen/contracts/run.issues.get";
 import { runTurnsGet } from "@oxagen/oxagen/contracts/run.turns.get";
 import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -74,6 +76,7 @@ const run = {
   operatorKind: "human",
   operatorName: "Ada Lovelace",
   operatorAttribution: "host_enroller",
+  operatorRole: null,
   status: "live",
   outcome: "running",
   turns: null,
@@ -149,6 +152,9 @@ describe("runs.list", () => {
             sealedAt: null,
             sealSource: null,
             endedAt: null,
+            // Read only by get_run; a list row answers neither.
+            effortSource: null,
+            fit: null,
           },
         ],
         nextCursor: "c2",
@@ -487,6 +493,7 @@ describe("runs.cost", () => {
     kernelRead.mockResolvedValue(
       readOk({
         runId: "tse_4f0a",
+        baseline: null,
         rollup: {
           cost: { micros: "500", currency: "USD", basis: "mixed" },
           tokens,
@@ -497,6 +504,9 @@ describe("runs.cost", () => {
           toolCalls: 3,
           retries: null,
           productiveRatio: null,
+          advancedSteps: null,
+          unproductiveSteps: null,
+          unproductiveCauses: null,
           byModel: [
             {
               model: "claude-opus-5",
@@ -509,7 +519,14 @@ describe("runs.cost", () => {
               hasUnpriced: true,
             },
           ],
-          byTool: [{ name: "create_release", calls: 3 }],
+          byTool: [
+            {
+              name: "create_release",
+              calls: 3,
+              resultTokens: null,
+              cost: null,
+            },
+          ],
           priceEntryIds: ["prc_1"],
           rolledUpAt: "2026-09-15T08:59:00.000Z",
           isEstimate: false,
@@ -548,6 +565,7 @@ describe("runs.cost", () => {
     kernelRead.mockResolvedValue(
       readOk({
         runId: "tse_4f0a",
+        baseline: null,
         rollup: {
           cost: cost("1000"),
           tokens,
@@ -558,6 +576,9 @@ describe("runs.cost", () => {
           toolCalls: 3,
           retries: 0,
           productiveRatio: 1,
+          advancedSteps: null,
+          unproductiveSteps: null,
+          unproductiveCauses: null,
           byModel: [
             {
               model: "claude-opus-5",
@@ -608,6 +629,7 @@ describe("runs.cost", () => {
     kernelRead.mockResolvedValue(
       readOk({
         runId: "tse_4f0a",
+        baseline: null,
         rollup: {
           cost: cost("1000"),
           tokens,
@@ -618,6 +640,9 @@ describe("runs.cost", () => {
           toolCalls: 3,
           retries: 0,
           productiveRatio: 1,
+          advancedSteps: null,
+          unproductiveSteps: null,
+          unproductiveCauses: null,
           byModel: [
             {
               model: "claude-opus-5",
@@ -652,9 +677,9 @@ describe("runs.cost", () => {
   });
 
   it("keeps a rollup that has not run as null, never as a zero (negative)", async () => {
-    kernelRead.mockResolvedValue(readOk({ runId: "tse_4f0a", rollup: null }));
+    kernelRead.mockResolvedValue(readOk({ runId: "tse_4f0a", rollup: null, baseline: null }));
     expect(await runs.cost(ctx, "tse_4f0a")).toEqual(
-      readOk({ rollup: null, provisional: null }),
+      readOk({ baseline: null, rollup: null, provisional: null }),
     );
   });
 
@@ -662,6 +687,7 @@ describe("runs.cost", () => {
     kernelRead.mockResolvedValue(
       readOk({
         runId: "tse_4f0a",
+        baseline: null,
         rollup: null,
         provisional: {
           byModel: [
@@ -728,6 +754,9 @@ describe("runs.turns", () => {
           },
         ],
         complete: false,
+        chains: [
+          { sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d0", turn: 2 },
+        ],
       }),
     );
     const read = await runs.turns(ctx, "tse_4f0a");
@@ -737,6 +766,10 @@ describe("runs.turns", () => {
       page: "run",
     });
     expect(read.ok && read.value.complete).toBe(false);
+    // A subagent chain keeps the turn that spawned it (#4001).
+    expect(read.ok && read.value.chains).toEqual([
+      { sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d0", turn: 2 },
+    ]);
     expect(read.ok && read.value.turns[0]).toEqual({
       turn: 1,
       seq: "1",
@@ -936,6 +969,8 @@ describe("runs.transcript", () => {
       type: "policy_decision",
       source: "bundle",
       harness: false,
+      rules: [],
+      taint: null,
       at: "2026-09-15T08:56:01.000Z",
     };
     kernelRead.mockResolvedValue(
@@ -1092,6 +1127,8 @@ describe("runs.transcript", () => {
           decision: "allow",
           source: "bundle",
           harness: false,
+          rules: [],
+          taint: null,
         },
       ],
     });
@@ -1231,6 +1268,8 @@ describe("runs.chain", () => {
             eventStreamDigest: `sha256:${"1".repeat(64)}`,
             merkleRoot: `sha256:${"1".repeat(64)}`,
             archiveSegmentRef: null,
+            archiveSegmentDigest: null,
+            attestation: null,
           },
           {
             sealedAt: "2026-09-11T10:05:00.000Z",
@@ -1241,6 +1280,8 @@ describe("runs.chain", () => {
             eventStreamDigest: `sha256:${"2".repeat(64)}`,
             merkleRoot: `sha256:${"2".repeat(64)}`,
             archiveSegmentRef: null,
+            archiveSegmentDigest: null,
+            attestation: null,
           },
         ],
         enforcementTier: "harness",
@@ -1301,6 +1342,8 @@ describe("a refused read passes through every run read (negative)", () => {
   const reads: [string, () => Promise<unknown>][] = [
     ["outcomesSettings", () => runs.outcomesSettings(ctx)],
     ["work", () => runs.work(ctx, "tse_4f0a")],
+    ["issues", () => runs.issues(ctx, "tse_4f0a")],
+    ["findings", () => runs.findings(ctx, "tse_4f0a")],
     ["get", () => runs.get(ctx, "tse_4f0a", { framesAfter: null })],
     ["cost", () => runs.cost(ctx, "tse_4f0a")],
     ["turns", () => runs.turns(ctx, "tse_4f0a")],
@@ -1316,6 +1359,181 @@ describe("a refused read passes through every run read (negative)", () => {
       }
       expect(captureError).not.toHaveBeenCalled();
     });
+});
+
+describe("runs.issues", () => {
+  const issues = {
+    runId: "tse_4f0a",
+    issues: [
+      {
+        ref: "acme/core#12",
+        repository: {
+          host: "github.com",
+          owner: "acme",
+          name: "core",
+          url: "https://github.com/acme/core",
+          connected: true,
+        },
+        number: 12,
+        title: "Retry the upload on a 503",
+        status: "open",
+        statusRead: "read",
+        readAt: "2026-09-15T08:59:00.000Z",
+        relation: "task",
+        resolvedBy: [],
+        actions: ["viewed"],
+        edge: "stated",
+        frameSeqs: ["4"],
+        url: "https://github.com/acme/core/issues/12",
+      },
+      {
+        ref: "#7",
+        repository: null,
+        number: 7,
+        title: null,
+        status: null,
+        statusRead: "repository_unknown",
+        readAt: null,
+        relation: "referenced",
+        resolvedBy: [],
+        actions: ["mentioned"],
+        edge: "observed",
+        frameSeqs: ["9"],
+        url: null,
+      },
+    ],
+    complete: false,
+    warnings: ["issue_frame_limit"],
+  };
+
+  it("reads get_run_issues for the run and carries each issue as the contract wrote it", async () => {
+    kernelRead.mockResolvedValue(readOk(issues));
+    expect(await runs.issues(ctx, "tse_4f0a")).toEqual(readOk(issues));
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runIssuesGet,
+      input: { runId: "tse_4f0a" },
+      page: "run",
+    });
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("answers record_unmappable and reports once for an issue the view refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ ...issues, issues: [{ ...issues.issues[0], edge: "inferred" }] }),
+    );
+    expect(await runs.issues(ctx, "tse_4f0a")).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("runs.findings", () => {
+  const finding = {
+    id: "fnd_7k2m9q",
+    kind: "repeated_shell_commands",
+    level: "tool",
+    subject: "Bash",
+    saving: { micros: "1250000", currency: "USD", basis: "gateway_observed" },
+    confidence: "high",
+    window: {
+      from: "2026-09-01T00:00:00.000Z",
+      to: "2026-09-15T00:00:00.000Z",
+    },
+    why: "The same command ran twice with the same result.",
+    fix: "Reuse the earlier result.",
+    runs: 1,
+    calls: 3,
+    status: "open",
+    detectedAt: "2026-09-15T01:00:00.000Z",
+    decidedAt: null,
+    appliedActionId: null,
+  };
+  const page = (findings: unknown[]) => ({
+    status: "open",
+    window: null,
+    saving: null,
+    spend: null,
+    share: null,
+    annualised: null,
+    counts: { findings: findings.length, high: 0, medium: 0, operators: 0 },
+    findings,
+  });
+
+  it("reads the open findings that cite the run, with the frames each cites there (#4001)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk(
+        page([
+          {
+            ...finding,
+            citation: {
+              runId: "tse_4f0a",
+              runLevel: false,
+              frames: [
+                { seq: "12" },
+                {
+                  seq: "4",
+                  sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d0",
+                },
+              ],
+              framesTotal: 3,
+            },
+          },
+        ]),
+      ),
+    );
+    const read = await runs.findings(ctx, "tse_4f0a");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: findingList,
+      input: { status: "open", runId: "tse_4f0a" },
+      page: "run",
+    });
+    if (!read.ok) throw new Error("expected an ok read");
+    expect(read.value.findings).toEqual([
+      {
+        id: "fnd_7k2m9q",
+        kind: "repeated_shell_commands",
+        subject: "Bash",
+        saving: {
+          micros: "1250000",
+          currency: "USD",
+          basis: "gateway_observed",
+        },
+        confidence: "high",
+        citation: {
+          runLevel: false,
+          frames: [
+            { seq: "12" },
+            { seq: "4", sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d0" },
+          ],
+          framesTotal: 3,
+        },
+      },
+    ]);
+  });
+
+  it("keeps a finding written before frames were cited as not cited, and leaves out one with no citation (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk(
+        page([
+          {
+            ...finding,
+            citation: {
+              runId: "tse_4f0a",
+              runLevel: false,
+              frames: null,
+              framesTotal: 0,
+            },
+          },
+          { ...finding, id: "fnd_uncited" },
+        ]),
+      ),
+    );
+    const read = await runs.findings(ctx, "tse_4f0a");
+    if (!read.ok) throw new Error("expected an ok read");
+    expect(read.value.findings).toHaveLength(1);
+    expect(read.value.findings[0]?.citation.frames).toBeNull();
+  });
 });
 
 describe("runs.outcomesSettings", () => {

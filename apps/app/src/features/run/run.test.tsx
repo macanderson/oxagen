@@ -2978,6 +2978,8 @@ describe("policy and context", () => {
       decision: "deny",
       type: "policy.denied",
       harness: false,
+      rules: [],
+      taint: null,
       at: "2026-09-20T00:00:00Z",
     },
   });
@@ -3040,6 +3042,8 @@ describe("policy and context", () => {
         at: "2026-09-20T00:00:00Z",
         source: "harness",
         harness: true,
+        rules: [],
+        taint: null,
       },
     });
     // The server counts the two decisions under the policy chip, and only

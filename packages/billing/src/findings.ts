@@ -28,6 +28,9 @@ import type {
 } from "@oxagen/database/schema";
 import { divideHalfEven, foldBasis, type RunTotalsRecord } from "./cost-rollup";
 
+/** The most cited frames a finding stores per run; the contract's own cap (#4001). */
+export { FINDING_FRAMES_PER_RUN } from "@oxagen/oxagen/contracts/finding.shared";
+
 /** The trailing window one pass reads. */
 export const FINDINGS_WINDOW_DAYS = 30;
 /** A result above this many tokens is unpaged. */
@@ -61,6 +64,18 @@ export interface ToolCallObservation {
   isMutating: boolean | null;
   /** The result tokens the span recorded; null when none did. */
   resultTokens: number | null;
+  /**
+   * The subagent chain the call was recorded on; null when it is on the run's
+   * own chain (#4001). Optional until the Context and cost lane's reader
+   * fills it; absent reads as null.
+   */
+  sessionUuid?: string | null;
+}
+
+/** One cited call, by its frame: `sessionUuid` is absent on the run's own chain. */
+interface FindingCitedFrame {
+  seq: string;
+  sessionUuid?: string;
 }
 
 interface FindingRunEvidence {
@@ -85,6 +100,14 @@ export interface FindingEvidence {
   /** The operators whose runs are cited (`prn_…`). */
   operatorKeys: string[];
   runs: FindingRunEvidence[];
+  /**
+   * The cited calls by run public id, for every run the tool-call detectors
+   * cited (#4001): seqs ascending, at most `FINDING_FRAMES_PER_RUN`, with
+   * `total` counting every cited call. Absent on `cache_writes_never_read`,
+   * which cites whole runs, and on a row written before this was stored; a
+   * reader then answers `frames: null`.
+   */
+  frames?: Record<string, { seqs: FindingCitedFrame[]; total: number }>;
 }
 
 export interface FindingDraft {

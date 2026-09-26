@@ -82,11 +82,28 @@ export interface FrameIdentity {
    */
   effort?: string;
   /**
+   * Where `effort` was read (#3891): `request` when an `llm_call` body
+   * carried the proxied request's `request_effort`, which wins over the
+   * row's context effort; `harness` otherwise. Absent where `effort` is.
+   */
+  effortSource?: "request" | "harness";
+  /**
    * The approval a tool call's receipt says it waits on (`apr_…`), as the
    * in-app assistant records a parked call. Absent where the receipt names
    * none.
    */
   approvalId?: string;
+  /**
+   * The rules that matched a policy decision, in evaluation order (#3971):
+   * the body's `policy_rules`, else `[policy_rule]` when that is non-empty.
+   * Absent where the frame names none.
+   */
+  rules?: string[];
+  /**
+   * The taint labels a producer assessed on the call's inputs (#3971).
+   * Always absent until a producer records taint.
+   */
+  taint?: string[] | null;
 }
 
 /**

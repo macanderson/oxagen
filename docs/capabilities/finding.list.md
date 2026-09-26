@@ -8,8 +8,11 @@ The workspace's costed findings ranked by the money at stake, with the totals th
 
 ## Surface
 
+**Surfaces:** api, mcp, cli
+
 - API: `POST /v1/:org_slug/:workspace_slug/spend/findings`
 - MCP: `list_findings`
+- CLI: `oxagen findings list [--run <id>] [--status <status>]`
 - Authentication: session (org Owner, Admin, Billing or Member; workspace Owner or Member)
 - Capability name: `list_findings`
 - Not billed (`noBillingGate: true`). IAM default-deny; medium sensitivity.
@@ -19,6 +22,7 @@ The workspace's costed findings ranked by the money at stake, with the totals th
 | Field | Type | Required | Constraint |
 |---|---|---|---|
 | `status` | enum | no | `open` (default), `applied` or `dismissed` |
+| `runId` | string | no | `arun_…` or `tse_…`. Lists only the findings that cite this run (`cited_runs @> [runId]`), and the totals cover those findings (#4001) |
 
 ## Output
 
@@ -34,6 +38,15 @@ The workspace's costed findings ranked by the money at stake, with the totals th
 | `findings` | object[] | at most 50; open findings largest saving first, decided findings most recent decision first |
 
 Each finding carries `id` (`fnd_…`), `kind`, `level`, `subject`, `saving` (cost), `confidence` (`high` or `medium`), `window`, `why`, `fix`, `runs` and `calls` (what it cites), `status`, `detectedAt`, `decidedAt` and `appliedActionId`.
+
+A read that names `runId` adds `citation` to each finding: what it cites in that run. A read without `runId` carries no `citation` key.
+
+| Field | Type | Description |
+|---|---|---|
+| `runId` | string | the run asked for |
+| `runLevel` | boolean | true for a finding that cites the run as a whole (`cache_writes_never_read`); it pins no turn, and `frames` is empty |
+| `frames` | object[] or null | `{ seq, sessionUuid? }` for each cited call, seqs ascending, at most 50. `sessionUuid` names a subagent chain and is absent on the run's own chain. Null when the finding was written before frames were cited, until the findings job's next pass |
+| `framesTotal` | integer | every call the finding cites in the run, including any past the 50 |
 
 ## Kinds
 

@@ -547,6 +547,18 @@ export const agentRuns = agentSchema.table(
     // Why the last automatic account failed, as a short reason code; null
     // once an account is written or the run is no longer due.
     summaryError: text("summary_error"),
+    // ── Model fit reading (#3893) ────────────────────────────────────────────
+    // Computed from the record after the seal: the reading without its
+    // provenance, the rule version, when it was read, and the seal it read.
+    // The four are set together. A reading whose `fit_sealed_at` is not the
+    // run's latest seal read an earlier one and is not answered.
+    fitReading: jsonb("fit_reading"),
+    fitMethod: text("fit_method"),
+    fitReadAt: timestamp("fit_read_at", { withTimezone: true, mode: "date" }),
+    fitSealedAt: timestamp("fit_sealed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
 
     // ── RunSpecV2 typed identity (docs/specs/run-evidence-ingress) ───────────
     //
@@ -569,6 +581,11 @@ export const agentRuns = agentSchema.table(
     // Actor binding: the authenticated human who delegated the run and the
     // deployed-agent principal acting for them. NOT agents.parentUserId.
     initiatingPrincipalId: uuid("initiating_principal_id"),
+    // The initiating person's workspace role when the run was created,
+    // lowercased (#3999). Written once at insert from workspace_users and
+    // never updated. Null on a run created before the column, for a principal
+    // that is not a person, and for a person with no membership here.
+    operatorRole: text("operator_role"),
     agentPrincipalId: uuid("agent_principal_id"),
     agentId: uuid("agent_id"),
     agentVersionId: uuid("agent_version_id"),
@@ -737,6 +754,14 @@ export const agentRuns = agentSchema.table(
     summaryCheck: check(
       "agent_runs_summary_check",
       sql`(${t.summary} IS NULL) = (${t.summaryGeneratedAt} IS NULL) AND (${t.summary} IS NULL) = (${t.summaryModel} IS NULL)`,
+    ),
+    fitCheck: check(
+      "agent_runs_fit_check",
+      sql`(${t.fitReading} IS NULL) = (${t.fitMethod} IS NULL) AND (${t.fitReading} IS NULL) = (${t.fitReadAt} IS NULL) AND (${t.fitReading} IS NULL) = (${t.fitSealedAt} IS NULL)`,
+    ),
+    operatorRoleCheck: check(
+      "agent_runs_operator_role_check",
+      sql`${t.operatorRole} IS NULL OR ${t.operatorRole} IN ('owner', 'admin', 'member', 'billing', 'compliance', 'viewer')`,
     ),
     // A run may not be its own parent — the cheapest half of cycle prevention
     // (deeper cycles are prevented by the snapshot-narrowing rule in IAM).
@@ -1056,6 +1081,14 @@ export const agentRunAttemptSeals = agentSchema.table(
     // storage key a compacted run reads from.
     merkleRoot: text("merkle_root"),
     archiveSegmentRef: text("archive_segment_ref"),
+    // The run attestation (spec §8.3, #4000): sha256 over the segment bytes as
+    // stored, and the attester's key id and base64 Ed25519 signature over the
+    // RFC 8785 payload. Written once at insert, never updated, so the row
+    // stays immutable and the app role keeps no UPDATE. No backfill: signing
+    // an old seal after the fact would attest something it never signed.
+    archiveSegmentDigest: text("archive_segment_digest"),
+    attestationKeyId: text("attestation_key_id"),
+    attestationSig: text("attestation_sig"),
     // The seal's rollup (spec §13.3): model calls, tool calls and distinct
     // turns folded from the rows at seal, so a run keeps its counts once
     // compaction (agent.compact_sealed_attempt_events) has removed its hot
@@ -1128,6 +1161,12 @@ export const agentRunAttemptSeals = agentSchema.table(
     replayEvidenceCheck: check(
       "agent_run_attempt_seals_replay_evidence_check",
       sql`(${t.replayGrade} IS NULL) = (${t.merkleRoot} IS NULL) AND (${t.replayGrade} IS NULL) = (${t.archiveSegmentRef} IS NULL) AND (${t.merkleRoot} IS NULL OR ${t.merkleRoot} ~ '^sha256:[0-9a-f]{64}$') AND jsonb_typeof(${t.completenessGaps}) = 'array'`,
+    ),
+    // A key id and a signature come together; a signature needs the digest it
+    // signs, the digest needs the segment it digests, and the digest is sha256.
+    attestationCheck: check(
+      "agent_run_attempt_seals_attestation_check",
+      sql`(${t.attestationKeyId} IS NULL) = (${t.attestationSig} IS NULL) AND (${t.attestationKeyId} IS NULL OR ${t.archiveSegmentDigest} IS NOT NULL) AND (${t.archiveSegmentDigest} IS NULL OR ${t.archiveSegmentRef} IS NOT NULL) AND (${t.archiveSegmentDigest} IS NULL OR ${t.archiveSegmentDigest} ~ '^sha256:[0-9a-f]{64}$')`,
     ),
   }),
 );

@@ -106,6 +106,7 @@ import { runList } from "./run.list";
 import { runCostGet } from "./run.cost";
 import { runTurnsGet } from "./run.turns.get";
 import { runWorkGet } from "./run.work.get";
+import { runIssuesGet } from "./run.issues.get";
 import { runOutputsGet } from "./run.outputs.get";
 import { runTokenIssue } from "./run.token.issue";
 import { runFramesIngest } from "./run.frames.ingest";
@@ -779,6 +780,7 @@ export {
   runTurnsGet,
   runOutputsGet,
   runWorkGet,
+  runIssuesGet,
   runProofGet,
   runTokenIssue,
   runFramesIngest,
@@ -1187,6 +1189,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   runTurnsGet,
   runOutputsGet,
   runWorkGet,
+  runIssuesGet,
   runProofGet,
   runTokenIssue,
   runFramesIngest,

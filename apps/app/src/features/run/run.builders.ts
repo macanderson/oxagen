@@ -83,6 +83,8 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
     enforcementTier: "harness",
     completenessGaps: [],
     canSummarize: true,
+    effortSource: null,
+    fit: null,
     startedAt: at(-3600),
     sealedAt: at(-300),
     ...overrides,
@@ -125,6 +127,8 @@ export function runChain(overrides: Partial<RunChain> = {}): RunChain {
         eventStreamDigest: `sha256:${"f".repeat(64)}`,
         merkleRoot: `sha256:${"c".repeat(64)}`,
         archiveSegmentRef: null,
+        archiveSegmentDigest: null,
+        attestation: null,
       },
     ],
     enforcementTier: "harness",
@@ -475,6 +479,8 @@ export function mockupTranscript(
               decision: spec.decision,
               type: spec.type,
               harness: false,
+              rules: [],
+              taint: null,
               at: at(-3600 + spec.seq * 2),
             },
       cost:
@@ -641,6 +647,7 @@ export function runTurns(overrides: Partial<RunTurns> = {}): RunTurns {
       },
     ],
     complete: true,
+    chains: [],
     ...overrides,
   };
 }
@@ -664,6 +671,10 @@ export function runCost(overrides: Partial<RunCost> = {}): RunCost {
       toolCalls: 42,
       retries: 2,
       productiveRatio: 0.71,
+      // Rolled up before the steps were graded.
+      advancedSteps: null,
+      unproductiveSteps: null,
+      unproductiveCauses: null,
       byModel: [
         {
           model: "claude-opus-5",
@@ -695,7 +706,9 @@ export function runCost(overrides: Partial<RunCost> = {}): RunCost {
           hasUnpriced: false,
         },
       ],
-      byTool: [{ name: "create_release", calls: 3 }],
+      byTool: [
+        { name: "create_release", calls: 3, resultTokens: null, cost: null },
+      ],
       priceEntryIds: ["prc_01k4qj9e"],
       rolledUpAt: at(-240),
     },
@@ -915,6 +928,10 @@ export function runSource(reads: RunReads) {
         );
       },
       chain: answer("chain", reads.chain),
+      // No Run tab reads these yet; the Repository and issues lane and the
+      // Context and cost lane add their reads (#3970, #4001).
+      issues: refuse,
+      findings: refuse,
       turns: answer("turns", reads.turns ?? readOk(runTurns())),
       outputs: (...args: unknown[]) => {
         calls.outputs.push(args);

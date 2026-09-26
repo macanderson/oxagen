@@ -29,7 +29,11 @@ describe("get_run_cost", () => {
   it("answers rollup: null for a run the rollup has not reached", async () => {
     const h = harness([]);
     const out = await h.handler({ runId: "tse_0000000000000000000001" }, ctx());
-    expect(out).toEqual({ runId: "tse_0000000000000000000001", rollup: null });
+    expect(out).toEqual({
+      runId: "tse_0000000000000000000001",
+      rollup: null,
+      baseline: null,
+    });
     expect(() => runCostGet.output.parse(out)).not.toThrow();
   });
 
@@ -52,6 +56,9 @@ describe("get_run_cost", () => {
       toolCalls: 2,
       retries: 0,
       productiveRatio: 0.5,
+      advancedSteps: null,
+      unproductiveSteps: null,
+      unproductiveCauses: null,
       byModel: [
         {
           model: "claude-sonnet-5",
@@ -95,7 +102,7 @@ describe("get_run_cost", () => {
           hasUnpriced: false,
         },
       ],
-      byTool: [{ name: "Read", calls: 2 }],
+      byTool: [{ name: "Read", calls: 2, resultTokens: null, cost: null }],
       priceEntryIds: ["0192d4a8-7c1e-7a00-8000-0000000000e1"],
       rolledUpAt: ROLLED_UP_AT.toISOString(),
       // The fixture's row was rebuilt after the run sealed.
@@ -201,7 +208,7 @@ describe("get_run_cost", () => {
     const runId = "tse_0000000000000000000002";
     const out = await handler({ runId }, ctx());
     expect(readProvisional).toHaveBeenCalledWith(SCOPE, runId);
-    expect(out).toEqual({ runId, rollup: null, provisional });
+    expect(out).toEqual({ runId, rollup: null, provisional, baseline: null });
     expect(() => runCostGet.output.parse(out)).not.toThrow();
   });
 
@@ -224,7 +231,11 @@ describe("get_run_cost", () => {
       readProvisional: async () => null,
     });
     const runId = "run_0000000000000000000003";
-    expect(await handler({ runId }, ctx())).toEqual({ runId, rollup: null });
+    expect(await handler({ runId }, ctx())).toEqual({
+      runId,
+      rollup: null,
+      baseline: null,
+    });
   });
 });
 
@@ -298,6 +309,7 @@ describe("provisionalOf", () => {
         runId: "tse_0000000000000000000004",
         rollup: null,
         provisional: out,
+        baseline: null,
       }),
     ).not.toThrow();
   });

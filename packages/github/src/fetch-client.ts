@@ -8,11 +8,13 @@ import type {
   GitHubInstallationRepo,
   GitHubInstallationRepositories,
   GitHubCommitStatus,
+  GitHubIssueStates,
   GitHubPrComment,
   GitHubPrComments,
   GitHubPathCommit,
   GitHubPrFile,
   GitHubPullRequest,
+  GitHubRelease,
   GitHubRepoInfo,
 } from "./types";
 
@@ -1291,6 +1293,23 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     );
   }
 
+  // The Repository and issues lane writes both reads (#3970, #3890). Until
+  // then they refuse, and nothing calls them.
+  async function getIssues(_args: {
+    owner: string;
+    repo: string;
+    numbers: readonly number[];
+  }): Promise<GitHubIssueStates> {
+    throw new Error("getIssues: not implemented (#3970)");
+  }
+
+  async function listReleases(_args: {
+    owner: string;
+    repo: string;
+  }): Promise<GitHubRelease[]> {
+    throw new Error("listReleases: not implemented (#3890)");
+  }
+
   return {
     getAuthenticatedUser,
     getRepoInfo,
@@ -1308,6 +1327,8 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     getBranch,
     getPullRequest,
     listClosingIssues,
+    getIssues,
+    listReleases,
     listPullRequestComments,
     listCiChecks,
     listPullRequestFiles,

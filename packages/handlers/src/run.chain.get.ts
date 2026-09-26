@@ -241,6 +241,11 @@ function toChainSeal(seal: LedgerSeal): RunChainGetOutput["seals"][number] {
     eventStreamDigest: seal.eventStreamDigest,
     merkleRoot: seal.merkleRoot,
     archiveSegmentRef: seal.archiveSegmentRef,
+    // Placeholder until the Archive and replay lane reads the seal's
+    // `archive_segment_digest` and attestation columns (#4000): null is a
+    // seal written before either was recorded.
+    archiveSegmentDigest: null,
+    attestation: null,
   };
 }
 
@@ -285,6 +290,9 @@ function sealsOf(
       eventStreamDigest: null,
       merkleRoot: null,
       archiveSegmentRef: null,
+      // A wrapped session's seal is neither archived nor attested (#4000).
+      archiveSegmentDigest: null,
+      attestation: null,
     },
   ];
 }

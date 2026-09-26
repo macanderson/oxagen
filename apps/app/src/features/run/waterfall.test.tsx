@@ -68,7 +68,7 @@ function turn(overrides: Partial<TurnFigure>): TurnFigure {
 function renderPanel(
   turns: TurnFigure[],
   {
-    read = readOk<RunTurns>({ turns: [], complete: true }),
+    read = readOk<RunTurns>({ turns: [], complete: true, chains: [] }),
     overrides = {},
   }: {
     read?: Read<RunTurns>;
@@ -245,7 +245,7 @@ describe("WaterfallPanel", () => {
 
   it("says the ledger shows the first turns when the run has more than one read carries (negative)", () => {
     renderPanel([turn({ turn: 1, seq: "1" }), turn({ turn: 2, seq: "10" })], {
-      read: readOk({ turns: [], complete: false }),
+      read: readOk({ turns: [], complete: false, chains: [] }),
     });
     expect(screen.getByTestId("waterfall-cut")).toHaveTextContent(
       "The run is longer than one read carries, so this shows its first 2 turns.",
@@ -260,7 +260,7 @@ describe("WaterfallPanel", () => {
         turn({ turn: 1, seq: "1", cost: usd("400000") }),
         turn({ turn: 2, seq: "10", cost: usd("800000") }),
       ],
-      { read: readOk({ turns: [], complete: false }) },
+      { read: readOk({ turns: [], complete: false, chains: [] }) },
     );
     const svg = screen.getByRole("img", {
       name: "Cost by turn over the first 2 turns, accumulating to $1.20",

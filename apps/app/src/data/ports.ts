@@ -51,6 +51,7 @@ import type {
   RunChain,
   RunCost,
   RunDetail,
+  RunFindings,
   RunFrameBody,
   RunOutputs,
   RunTranscript,
@@ -59,6 +60,7 @@ import type {
   TranscriptText,
   TranscriptZoom,
 } from "./contracts/run";
+import type { RunIssues } from "./contracts/run-issues";
 import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
 import type { PullRequestFilter, RunPage } from "./contracts/runs";
 import type { RuntimeAgents, RuntimeList } from "./contracts/runtimes";
@@ -262,6 +264,16 @@ export interface DataSource {
      */
     outputs(ctx: WsCtx, runId: string): Promise<Read<RunOutputs>>;
     work(ctx: WsCtx, runId: string): Promise<Read<RunWork>>;
+    /**
+     * `get_run_issues`, the issues the run worked on with their state as the
+     * forge reads it now, read by the Issues tab (#3970).
+     */
+    issues(ctx: WsCtx, runId: string): Promise<Read<RunIssues>>;
+    /**
+     * `list_findings` narrowed to the run: each open finding that cites it,
+     * with the frames it cites, read by the Cost tab (#4001).
+     */
+    findings(ctx: WsCtx, runId: string): Promise<Read<RunFindings>>;
     outcomesSettings(ctx: WsCtx): Promise<Read<RunOutcomesPolicy>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */

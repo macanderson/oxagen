@@ -65,6 +65,7 @@ import { withSystemDb, withTenantDb, type Tx } from "@oxagen/database";
 import {
   buildArchiveSegment,
   readArchiveSegment,
+  type AttesterKey,
   type Redaction,
 } from "@oxagen/tacho";
 import type { PlatformSurface } from "./surface";
@@ -432,6 +433,12 @@ export interface RunStoreOptions {
   bodies?: RunBodyStore;
   /** Where the seal's archive segment goes. Required to seal an attempt. */
   archive?: RunArchiveStore;
+  /**
+   * The attester key that signs a seal (#4000), resolved at seal time the way
+   * `archive` is. A null answer, or no resolver, seals with null attestation
+   * columns. `deferredAttester` in ./attester.ts is the process-wide one.
+   */
+  attester?: () => AttesterKey | null;
 }
 
 // ── Read projections ─────────────────────────────────────────────────────────
@@ -1187,6 +1194,12 @@ export interface LockedAttemptRow {
   attempt_id: string;
   attempt_public_id: string;
   run_id: string;
+  /**
+   * The run's public id (`arun_…`), the `run_id` a seal's attestation signs
+   * (#4000). Optional until the Archive and replay lane selects
+   * `r.public_id AS run_public_id` in the locked-attempt query.
+   */
+  run_public_id?: string;
   org_id: string;
   workspace_id: string;
   attempt_number: number | string;

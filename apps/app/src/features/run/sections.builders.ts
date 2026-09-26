@@ -336,6 +336,8 @@ export function evidenceTranscript(
               decision: spec.decision,
               type: spec.type,
               harness: false,
+              rules: [],
+              taint: null,
               at: at(-3600 + spec.seq * 2),
             },
       cost: null,

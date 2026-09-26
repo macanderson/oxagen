@@ -580,7 +580,15 @@ export interface Evaluation {
   /** What the rules said, before observe mode collapsed it to allow. */
   evaluated: PolicyDecisionValue;
   source: "bundle" | "harness" | "human";
+  /** The rules that decided, joined; `tacho.session_commands.policy_rule` stores it. */
   rule?: string;
+  /**
+   * The same rules as a list, the source of truth (#3971). A deny or ask
+   * names its one rule. An allow names the distinct rule that granted each
+   * shell segment, in segment order. Absent until the Effort and tools lane's
+   * `allowMatch` fills it.
+   */
+  rules?: string[];
   reason_code: string;
   reason: string;
   read_only: boolean;

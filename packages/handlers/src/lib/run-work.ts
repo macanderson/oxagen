@@ -220,8 +220,18 @@ export function prLinkOf(
     return null;
   return { owner, name, number, url: row.url };
 }
-/** The effort and thinking settings a wrapped session last recorded. */
-export type SessionConfig = { effort: string | null; thinking: boolean | null };
+/**
+ * The effort and thinking settings a wrapped session last recorded.
+ * `effortSource` says where `effort` was read (#3891): `request` from a
+ * proxied request body, which wins, or `harness`. It is null exactly when
+ * `effort` is, and optional until the Effort and tools lane's
+ * `readSessionConfig` reads `request_effort`.
+ */
+export type SessionConfig = {
+  effort: string | null;
+  effortSource?: "request" | "harness" | null;
+  thinking: boolean | null;
+};
 
 /**
  * The session's effort and thinking settings. Effort is the latest

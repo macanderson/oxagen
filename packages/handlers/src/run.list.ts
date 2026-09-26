@@ -1102,6 +1102,9 @@ export function toLedgerRunItem(
     operatorKind: principalKind(identity.operatorKind),
     operatorName: blankToNull(identity.operatorUserName),
     operatorAttribution: identity.operatorPublicId ? "initiator" : null,
+    // Placeholder until the Repository and issues lane reads the stamped
+    // `agent_runs.operator_role` (#3999): null reads "not recorded".
+    operatorRole: null,
     status,
     outcome,
     turns: rollup.opaqueModelCalls === 0 ? rollup.turnIndexes : null,
@@ -1289,6 +1292,9 @@ export function toTachoRunItem(
     // Ingest attributes a wrapped session to the host's enroller
     // (`enrollingPrincipalId`), not to whoever ran it.
     operatorAttribution: row.operatorPublicId ? "host_enroller" : null,
+    // Placeholder until the Repository and issues lane reads the stamped
+    // `tacho.sessions.operator_role` (#3999): null reads "not recorded".
+    operatorRole: null,
     status,
     outcome,
     turns: session.numTurns,

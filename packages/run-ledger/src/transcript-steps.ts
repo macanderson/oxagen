@@ -116,6 +116,17 @@ export interface TranscriptDecision {
    */
   harness: boolean;
   at: Date;
+  /**
+   * The rule ids or permission patterns that matched, in evaluation order
+   * (#3971). Optional until the Effort and tools lane's `decisionOf` fills it
+   * from `FrameIdentity.rules`; absent reads as none.
+   */
+  rules?: string[];
+  /**
+   * The taint labels a producer assessed; null when none assessed taint
+   * (#3971). Optional until `decisionOf` fills it; absent reads as null.
+   */
+  taint?: string[] | null;
 }
 
 /**

@@ -198,6 +198,12 @@ export interface GatewayCallRecord {
   durationMs: number;
   /** Set when the control plane refused the call. */
   refusedReason?: string;
+  /**
+   * The rules that refused it, from a -32002 refusal's `error.data.ruleIds`,
+   * at most 64 of at most 512 characters each (#3971). The daemon seals them
+   * as `policy_rules` on the `policy_decision` frame.
+   */
+  ruleIds?: string[];
   /** JCS digest of the call's arguments, for `tool_input_digest`. */
   inputDigest?: Sha256Digest;
   inputBytes?: number;
