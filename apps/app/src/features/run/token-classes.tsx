@@ -36,6 +36,9 @@ const pair =
   "grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(320px,1fr))]";
 /** `table.narrow { min-width:0 }`: a table that fits a half-width panel. */
 const narrowTable = "w-full min-w-0 border-collapse text-[13px]";
+
+/** The book's class for web searches, which are priced per request (#3721). */
+const SEARCH_CLASS = "server_tool_request";
 /** `.hr { height:1px; background:var(--border); margin:14px 0 }` */
 const rule = "my-3.5 h-px border-0 bg-border";
 
@@ -150,9 +153,9 @@ function TokenClasses({
                 {searches === null ? null : (
                   <tr
                     data-testid="token-class-searches"
-                    data-class="server_tool_request"
+                    data-class={SEARCH_CLASS}
                   >
-                    <td className={`${cell} ${mono}`}>server_tool_request</td>
+                    <td className={`${cell} ${mono}`}>{SEARCH_CLASS}</td>
                     <td className={numericCell}>
                       {t("classes.searchRequests", {
                         count: searches.requests,
