@@ -314,6 +314,52 @@ interface GHClosingIssuesResponse {
   } | null;
   errors?: { message?: string }[];
 }
+/** The most issues one `getIssues` call reads. */
+const ISSUES_PER_QUERY = 50;
+
+interface GHIssueOrPullRequest {
+  __typename: "Issue" | "PullRequest";
+  number: number;
+  title: string;
+  url: string;
+  state: string;
+  stateReason?: string | null;
+}
+
+interface GHIssuesResponse {
+  data?: {
+    repository?: Record<string, GHIssueOrPullRequest | null> | null;
+  } | null;
+  errors?: { message?: string }[];
+}
+
+/** GitHub's `IssueStateReason`, lowercased; null for one this client does not know. */
+function stateReasonOf(
+  reason: string | null | undefined,
+): GitHubIssueStates["issues"][number]["stateReason"] {
+  switch (reason) {
+    case "COMPLETED":
+      return "completed";
+    case "NOT_PLANNED":
+      return "not_planned";
+    case "REOPENED":
+      return "reopened";
+    case "DUPLICATE":
+      return "duplicate";
+    default:
+      return null;
+  }
+}
+
+interface GHRelease {
+  tag_name: string;
+  name: string | null;
+  html_url: string;
+  draft: boolean;
+  prerelease: boolean;
+  published_at: string | null;
+}
+
 /** Page size for the installation-repositories walk — GitHub's maximum. */
 const INSTALLATION_REPOS_PER_PAGE = 100;
 /**
@@ -1293,21 +1339,91 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     );
   }
 
-  // The Repository and issues lane writes both reads (#3970, #3890). Until
-  // then they refuse, and nothing calls them.
-  async function getIssues(_args: {
+  /**
+   * Each issue's title and state by number, in one GraphQL call that aliases
+   * `issueOrPullRequest(number:)` once per number (#3970). GitHub numbers
+   * issues and pull requests from one sequence, so a number can name a pull
+   * request: it is returned with `isPullRequest: true`, and the caller decides
+   * what to do with it. A number GitHub does not resolve is in `missing`. A
+   * refused query (no such repository, no access) throws, and never reads as
+   * every issue missing.
+   */
+  async function getIssues(args: {
     owner: string;
     repo: string;
     numbers: readonly number[];
   }): Promise<GitHubIssueStates> {
-    throw new Error("getIssues: not implemented (#3970)");
+    const numbers = [...new Set(args.numbers)].filter(
+      (n) => Number.isSafeInteger(n) && n > 0,
+    );
+    if (numbers.length > ISSUES_PER_QUERY) {
+      throw new RangeError(
+        `getIssues reads at most ${String(ISSUES_PER_QUERY)} issues per call, got ${String(numbers.length)}`,
+      );
+    }
+    if (numbers.length === 0) return { issues: [], missing: [] };
+    // The numbers are validated integers, so they are safe to inline; an
+    // alias cannot take a variable.
+    const fields = numbers
+      .map(
+        (n) =>
+          `n${String(n)}: issueOrPullRequest(number: ${String(n)}) { __typename ... on Issue { number title url state stateReason } ... on PullRequest { number title url state } }`,
+      )
+      .join("\n");
+    const data = await request<GHIssuesResponse>("POST", graphqlUrl, {
+      query: `query ($owner: String!, $repo: String!) {\n  repository(owner: $owner, name: $repo) {\n${fields}\n  }\n}`,
+      variables: { owner: args.owner, repo: args.repo },
+    });
+    const repository = data.data?.repository;
+    if (!repository) {
+      throw new GitHubApiError(
+        200,
+        data.errors?.[0]?.message ?? "repository was not returned",
+      );
+    }
+    const issues: GitHubIssueStates["issues"] = [];
+    const missing: number[] = [];
+    for (const n of numbers) {
+      const node = repository[`n${String(n)}`];
+      if (!node) {
+        missing.push(n);
+        continue;
+      }
+      const isPullRequest = node.__typename === "PullRequest";
+      issues.push({
+        number: node.number,
+        title: node.title,
+        state: node.state === "OPEN" ? "open" : "closed",
+        stateReason: isPullRequest ? null : stateReasonOf(node.stateReason),
+        url: node.url,
+        isPullRequest,
+      });
+    }
+    return { issues, missing };
   }
 
-  async function listReleases(_args: {
+  /**
+   * The repository's first 100 releases, newest first, drafts included for a
+   * token with push access (`GET /repos/{owner}/{repo}/releases`, #3890). A
+   * draft has no tag on the repository yet, which is why a release is found in
+   * this list rather than through `releases/tags/{tag}`.
+   */
+  async function listReleases(args: {
     owner: string;
     repo: string;
   }): Promise<GitHubRelease[]> {
-    throw new Error("listReleases: not implemented (#3890)");
+    const data = await request<GHRelease[]>(
+      "GET",
+      `/repos/${seg(args.owner)}/${seg(args.repo)}/releases?per_page=100`,
+    );
+    return data.map((release) => ({
+      tagName: release.tag_name,
+      name: release.name ? release.name : null,
+      htmlUrl: release.html_url,
+      draft: release.draft,
+      prerelease: release.prerelease,
+      publishedAt: release.published_at ?? null,
+    }));
   }
 
   return {

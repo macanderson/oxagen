@@ -4,6 +4,7 @@ import type {
   RunCheckout,
   RunWorkPr,
 } from "@oxagen/oxagen/contracts/run.work.get";
+import type { RunStore } from "@oxagen/run-ledger";
 import type { RunScope } from "../run.list";
 import { logger } from "../logger";
 import { buildCiSummary } from "./ci-status";
@@ -13,6 +14,59 @@ export interface RecordedRunPr {
   repositoryId: string;
   number: number;
   headSha: string | null;
+}
+
+/** The ledger events one page reads, and the pages one read walks. */
+const LEDGER_EVENT_PAGE = 500;
+const LEDGER_EVENT_PAGES = 20;
+
+/**
+ * The pull requests a ledger run recorded opening, from its
+ * `provider_publish.pull_request_opened` events, walked 500 at a time for at
+ * most 20 pages. `complete` is false when the walk stopped at that bound, so
+ * a caller says the list may be short (`ledger_event_limit`). Shared by
+ * `get_run_work` and `get_run_issues`, which read the same receipts.
+ */
+export async function readLedgerPrReceipts(
+  store: Pick<RunStore, "readAttemptEventsSince">,
+  runId: string,
+): Promise<{ receipts: RecordedRunPr[]; complete: boolean }> {
+  const receipts: RecordedRunPr[] = [];
+  let cursor = "0";
+  for (let page = 0; page < LEDGER_EVENT_PAGES; page++) {
+    const events = await store.readAttemptEventsSince(
+      runId,
+      cursor,
+      LEDGER_EVENT_PAGE,
+    );
+    for (const event of events) {
+      if (
+        event.eventType !== "provider_publish.pull_request_opened" ||
+        typeof event.payload !== "object" ||
+        event.payload === null
+      )
+        continue;
+      const payload = event.payload as Record<string, unknown>;
+      if (
+        typeof payload.provider_repository_id !== "string" ||
+        typeof payload.pull_request_number !== "number"
+      )
+        continue;
+      receipts.push({
+        repositoryId: payload.provider_repository_id,
+        number: payload.pull_request_number,
+        headSha:
+          typeof payload.head_commit_sha === "string"
+            ? payload.head_commit_sha
+            : null,
+      });
+    }
+    const last = events.at(-1);
+    if (events.length < LEDGER_EVENT_PAGE || last === undefined)
+      return { receipts, complete: true };
+    cursor = last.runSeq;
+  }
+  return { receipts, complete: false };
 }
 const PR_CAP = 20;
 const DIFF_BYTES_CAP = 512 * 1024;

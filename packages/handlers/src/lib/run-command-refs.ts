@@ -21,8 +21,13 @@ import {
   RUN_ISSUE_ACTIONS,
   type RunIssue,
 } from "@oxagen/oxagen/contracts/run.issues.get";
+import type {
+  RunCheckout,
+  RunRepository,
+} from "@oxagen/oxagen/contracts/run.work.get";
 import { splitCommandList, tokenizeSimpleCommand } from "@oxagen/tacho/claude-code";
 import { chSelect } from "@oxagen/telemetry";
+import type { ConnectedRunRepository } from "./run-work";
 
 export type RunIssueAction = RunIssue["actions"][number];
 
@@ -602,6 +607,89 @@ export async function readRunCommandRefFrames(
     params: { sessionUuid, limit: COMMAND_REF_FRAME_CAP + 1 },
   });
   return result.data;
+}
+
+/** A ClickHouse `DateTime64` rendered by `toString`, as RFC 3339; null when it does not parse. */
+export function chInstant(ts: string): string | null {
+  const parsed = new Date(`${ts.replace(" ", "T")}Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function sameRepository(a: RunRepository, b: RunRepository): boolean {
+  return a.url.toLowerCase() === b.url.toLowerCase();
+}
+
+/** The one repository in a list, or null when the list holds none or several. */
+function onlyRepository(
+  repositories: readonly (RunRepository | null)[],
+): RunRepository | null {
+  let only: RunRepository | null = null;
+  for (const repository of repositories) {
+    if (repository === null) continue;
+    if (only === null) only = repository;
+    else if (!sameRepository(only, repository)) return null;
+  }
+  return only;
+}
+
+/**
+ * The repository a frame's issue or release belongs to, by ADR-197 rule 3,
+ * from the record alone:
+ *
+ * 1. the repository the frame names (`-R`, `GH_REPO`, a URL, the recorder's
+ *    attr), connected when the workspace holds a connection for it;
+ * 2. otherwise the one repository recorded for the checkout at the frame's
+ *    path;
+ * 3. otherwise the run's only recorded repository.
+ *
+ * Null when none of these names exactly one, and the caller says the
+ * repository is unknown rather than guessing.
+ */
+export function resolveFrameRepository(
+  named: NamedRepository | null,
+  path: string,
+  checkouts: readonly RunCheckout[],
+  repositories: readonly ConnectedRunRepository[],
+): RunRepository | null {
+  if (named !== null) {
+    const connected = repositories.find(
+      (repo) =>
+        repo.host === "github.com" &&
+        repo.owner.toLowerCase() === named.owner.toLowerCase() &&
+        repo.name.toLowerCase() === named.name.toLowerCase(),
+    );
+    if (connected !== undefined)
+      return {
+        host: connected.host,
+        owner: connected.owner,
+        name: connected.name,
+        url: connected.url,
+        connected: true,
+      };
+    return {
+      host: "github.com",
+      owner: named.owner,
+      name: named.name,
+      url: `https://github.com/${named.owner}/${named.name}`,
+      connected: false,
+    };
+  }
+  const here = onlyRepository(
+    checkouts
+      .filter((checkout) => checkout.path === path)
+      .map((checkout) => checkout.repository),
+  );
+  if (here !== null) return here;
+  return onlyRepository(checkouts.map((checkout) => checkout.repository));
+}
+
+/** The connection a resolved repository is read through; undefined when it has none. */
+export function connectionOf(
+  repository: RunRepository,
+  repositories: readonly ConnectedRunRepository[],
+): ConnectedRunRepository | undefined {
+  if (!repository.connected) return undefined;
+  return repositories.find((repo) => sameRepository(repo, repository));
 }
 
 /**
