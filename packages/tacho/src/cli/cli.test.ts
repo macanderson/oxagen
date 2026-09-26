@@ -16,13 +16,13 @@ import {
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { agentHolding } from "../host/agents";
 import type { FetchLike } from "../host/control-client";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
 import { mcpEndpointFor, readHostFile, writeHostFile } from "../host/host-file";
-import { oxagenConfigPath, tachoPaths } from "../host/paths";
-import { slotHolding, slotPaths } from "../host/slots";
+import { agentPaths, oxagenConfigPath, tachoHome } from "../host/paths";
 import type { Exec, ServiceManager, ServiceSpec } from "../host/service";
 import {
   bundleSigner,
@@ -280,8 +280,8 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
   };
   const base: CliDeps = {
     paths,
-    env: { PATH: "/usr/bin", SHELL: "/bin/zsh", TACHO_HOME: paths.root },
-    home: join(paths.root, ".."),
+    env: { PATH: "/usr/bin", SHELL: "/bin/zsh", TACHO_HOME: paths.tachoDir },
+    home: join(paths.tachoDir, ".."),
     platform: "darwin",
     fetch,
     exec: (command, args) => {
@@ -424,7 +424,7 @@ async function seedTrustedCodexHooks(
 describe("credentials", () => {
   it("prefers flags, then env, then the CLI's config file", () => {
     const paths = scratchPaths();
-    const home = join(paths.root, "home");
+    const home = join(paths.tachoDir, "home");
     writeSensitiveFileAtomic(
       oxagenConfigPath(home),
       JSON.stringify({
@@ -452,7 +452,7 @@ describe("credentials", () => {
         apiUrl: "https://cfg.test",
       },
     });
-    expect(resolveCredentials({}, {}, join(paths.root, "nowhere"))).toEqual({
+    expect(resolveCredentials({}, {}, join(paths.tachoDir, "nowhere"))).toEqual({
       missing: ["--token (or `oxagen login`)", "--org", "--workspace"],
     });
     expect(shellQuote("/plain/path")).toBe("/plain/path");
@@ -547,7 +547,7 @@ describe("enroll → status → unenroll", () => {
     ).toMatch(/^ed25519:/);
     expect(d.service.installed).toMatchObject({
       command: ["node", "/opt/tacho/tachod.mjs"],
-      env: { TACHO_HOME: d.paths.root, HOME: d.home },
+      env: { TACHO_HOME: d.paths.tachoDir, HOME: d.home },
     });
     const settings = readJsonFileIfExists(d.paths.claudeSettings) as {
       hooks: Record<string, unknown[]>;
@@ -684,7 +684,7 @@ describe("enroll → status → unenroll", () => {
       env: {
         PATH: "/usr/bin",
         SHELL: "/bin/zsh",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -740,7 +740,7 @@ describe("enroll → status → unenroll", () => {
     const bad = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "4100",
       },
     });
@@ -898,7 +898,7 @@ describe("enroll → status → unenroll", () => {
     const d = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -984,7 +984,7 @@ describe("enroll → status → unenroll", () => {
     const pinned = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -1007,7 +1007,7 @@ describe("enroll → status → unenroll", () => {
 
     const forced = deps({
       paths: pinned.paths,
-      env: { PATH: "/usr/bin", TACHO_HOME: pinned.paths.root },
+      env: { PATH: "/usr/bin", TACHO_HOME: pinned.paths.tachoDir },
       fetch: signedMcpClaimFetch("https://mcp.other.test/mcp"),
     });
     const result = await enroll(
@@ -1035,7 +1035,7 @@ describe("enroll → status → unenroll", () => {
     const pinned = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -1087,7 +1087,7 @@ describe("enroll → status → unenroll", () => {
     const d = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -1140,7 +1140,7 @@ describe("enroll → status → unenroll", () => {
     const d = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -1185,7 +1185,7 @@ describe("enroll → status → unenroll", () => {
     const d = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -1230,7 +1230,7 @@ describe("enroll → status → unenroll", () => {
     const pinned = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -1250,7 +1250,7 @@ describe("enroll → status → unenroll", () => {
 
     const repair = deps({
       paths: pinned.paths,
-      env: { PATH: "/usr/bin", TACHO_HOME: pinned.paths.root },
+      env: { PATH: "/usr/bin", TACHO_HOME: pinned.paths.tachoDir },
     });
     expect(
       (
@@ -1358,7 +1358,7 @@ describe("enroll → status → unenroll", () => {
   });
 
   it("fails clearly without credentials, on a refusal, and on a bad bundle", async () => {
-    const none = deps({ env: {}, home: join(scratchPaths().root, "empty") });
+    const none = deps({ env: {}, home: join(scratchPaths().tachoDir, "empty") });
     expect((await enroll({}, none)).ok).toBe(false);
     expect(none.errors[0]).toContain("Not logged in");
     const refused = deps({
@@ -1527,7 +1527,7 @@ describe("enroll → status → unenroll", () => {
   });
 
   it("keeps the host file when the revoke cannot be made, and purges on request", async () => {
-    const d = deps({ env: {}, home: join(scratchPaths().root, "nohome") });
+    const d = deps({ env: {}, home: join(scratchPaths().tachoDir, "nohome") });
     const signer = bundleSigner();
     writeHostFile(
       d.paths.hostFile,
@@ -1564,7 +1564,8 @@ describe("enroll → status → unenroll", () => {
     expect(existsSync(d.paths.daemonSealedState)).toBe(false);
     expect(existsSync(d.paths.stellaIdentity)).toBe(false);
     // Nothing is left, so the machine looks like one that was never enrolled.
-    expect(existsSync(d.paths.root)).toBe(false);
+    expect(existsSync(d.paths.dir)).toBe(false);
+    expect(existsSync(d.paths.tachoDir)).toBe(false);
     expect(d.lines.join("\n")).toContain("pending session ends");
     expect(d.requests.map((r) => r.url)).toEqual([
       "https://api.example.test/v1/acme/core/tacho/enrollments/revoke",
@@ -1839,7 +1840,7 @@ describe("harnesses and reassign", () => {
     // Without a token the addition is refused before anything is revoked.
     const offline = deps({
       env: {},
-      home: join(scratchPaths().root, "nohome"),
+      home: join(scratchPaths().tachoDir, "nohome"),
     });
     await enroll(
       {
@@ -2462,7 +2463,7 @@ describe("export and verify", () => {
       await exportCommand({ session: sessionId, format: "trace" }, d),
     ).toBe(true);
     expect(d.lines.at(-1)).toContain("session_start");
-    const out = join(d.paths.root, "out.json");
+    const out = join(d.paths.dir, "out.json");
     expect(await exportCommand({ session: uuid, format: "otlp", out }, d)).toBe(
       true,
     );
@@ -2879,11 +2880,14 @@ describe("defaultCliDeps", () => {
         return { status: 0, stdout: "tool 9.8.7\n", stderr: "" };
       },
     });
-    // The platform has to travel here too. `tachoPaths` resolves the Claude
+    // The platform has to travel here too. `tachoHome` resolves the Claude
     // Desktop config from it (there is none on Linux), so an expectation that
     // omits it asserts the host OS's answer against a deps object built for
-    // another one -- the same disagreement `defaultCliDeps` itself had.
-    expect(d.paths).toEqual(tachoPaths(env, home, "linux"));
+    // another one -- the same disagreement `defaultCliDeps` itself had. With
+    // no agent enrolled, the command gets a new agent's directory.
+    const machine = tachoHome(env, home, "linux");
+    expect(dirname(d.paths.dir)).toBe(machine.agents);
+    expect(d.paths).toEqual(agentPaths(machine, basename(d.paths.dir)));
     expect(d.home).toBe(home);
     expect(d.platform).toBe("linux");
     expect(d.serviceManager.kind).toBe("systemd");
@@ -4257,7 +4261,7 @@ describe("brokered credentials (ADR-143)", () => {
       staticTokenStillGood(undefined, host, d.paths.runTokenKey, d.now()),
     ).toBe(false);
     expect(
-      staticTokenStillGood(token, host, join(d.paths.root, "none"), d.now()),
+      staticTokenStillGood(token, host, join(d.paths.dir, "none"), d.now()),
     ).toBe(false);
 
     // A re-enroll well before the window leaves the token alone; one a day
@@ -4304,10 +4308,10 @@ describe("two agents on one machine (ADR-202)", () => {
     "claude-code as acme.core.cc-laptop; codex as acme.core.codex-agent";
 
   /**
-   * Claude Code enrolled at the root by an operator, then Codex enrolled by
-   * a one-time token for a second agent. The fake control plane answers the
-   * token with an enrollment of its own, and the OS hands out the next port
-   * on each ask.
+   * Claude Code enrolled by an operator, then Codex enrolled a minute later
+   * by a one-time token for a second agent. The fake control plane answers
+   * the token with an enrollment of its own, and the OS hands out the next
+   * port on each ask.
    */
   async function twoAgents(findFreePort?: () => Promise<number>) {
     const d = deps();
@@ -4323,6 +4327,7 @@ describe("two agents on one machine (ADR-202)", () => {
       d,
     );
     expect(first.ok, d.errors.join("\n")).toBe(true);
+    d.now = () => Date.parse("2026-09-10T12:01:00.000Z");
     const signer = bundleSigner();
     const controlPlane = d.fetch;
     d.fetch = async (url, init) => {
@@ -4357,7 +4362,9 @@ describe("two agents on one machine (ADR-202)", () => {
       d,
     );
     expect(second.ok, d.errors.join("\n")).toBe(true);
-    return { d, codex: slotPaths(d.paths, "codex") };
+    const codex = agentHolding(d.paths, "codex")?.paths;
+    if (codex === undefined) throw new Error("Codex did not enroll");
+    return { d, codex };
   }
 
   /** The enrollment ids the fake control plane was asked to revoke. */
@@ -4373,9 +4380,14 @@ describe("two agents on one machine (ADR-202)", () => {
       | undefined;
   }
 
-  it("enrolls a second agent in a slot of its own and revokes nothing", async () => {
+  it("enrolls a second agent in a directory of its own and revokes nothing", async () => {
     const { d, codex } = await twoAgents();
     expect(revoked(d)).toEqual([]);
+    // Both agents keep their files the same way, side by side under agents/.
+    expect(dirname(d.paths.dir)).toBe(d.paths.agents);
+    expect(dirname(codex.dir)).toBe(d.paths.agents);
+    expect(codex.dir).not.toBe(d.paths.dir);
+    expect(existsSync(join(d.paths.tachoDir, "host.json"))).toBe(false);
 
     const first = readHostFile(d.paths.hostFile);
     const second = readHostFile(codex.hostFile);
@@ -4416,7 +4428,7 @@ describe("two agents on one machine (ADR-202)", () => {
     expect(settings?.hooks?.SessionEnd).toHaveLength(1);
     expect(d.service.running).toBe(true);
 
-    // Enrolling Codex again re-applies its slot and mints nothing.
+    // Enrolling Codex again re-applies its agent and mints nothing.
     d.requests.length = 0;
     expect((await enroll({ harnesses: ["codex"] }, d)).ok).toBe(true);
     expect(d.requests).toEqual([]);
@@ -4431,12 +4443,13 @@ describe("two agents on one machine (ADR-202)", () => {
     const report = await status({ json: true }, d);
     expect(
       report.enrollments?.map((entry) => [
-        entry.slot,
+        entry.id,
+        entry.dir,
         entry.host?.host_enrollment_id,
       ]),
     ).toEqual([
-      [d.paths.root, TEST_ENROLLMENT],
-      [codex.root, OTHER_ENROLLMENT],
+      [basename(d.paths.dir), d.paths.dir, TEST_ENROLLMENT],
+      [basename(codex.dir), codex.dir, OTHER_ENROLLMENT],
     ]);
     expect(report.host?.host_enrollment_id).toBe(TEST_ENROLLMENT);
 
@@ -4444,8 +4457,55 @@ describe("two agents on one machine (ADR-202)", () => {
     await status({}, d);
     expect(d.lines[0]).toBe("This machine holds 2 enrollments.");
     expect(d.lines).toContain(
-      `Agent       codex as acme.core.codex-agent in ${codex.root}`,
+      `Agent       codex as acme.core.codex-agent in ${codex.dir}`,
     );
+  });
+
+  it("lists a lone agent in status with its directory", async () => {
+    const d = deps();
+    const first = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(first.ok, d.errors.join("\n")).toBe(true);
+    const report = await status({ json: true }, d);
+    expect(
+      report.enrollments?.map((entry) => [entry.id, entry.dir]),
+    ).toEqual([[basename(d.paths.dir), d.paths.dir]]);
+  });
+
+  it("removes a new agent's directory when its enroll fails, and keeps the first agent", async () => {
+    const d = deps();
+    const first = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(first.ok, d.errors.join("\n")).toBe(true);
+    d.newAgentId = () => "c0dec0de";
+    const failed = await enroll(
+      {
+        enrollmentToken: "oxe_1time_zyxwvutsrqpnmkjhgfedcba987",
+        harnesses: ["codex"],
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(failed.ok).toBe(false);
+    expect(existsSync(agentPaths(d.paths, "c0dec0de").dir)).toBe(false);
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: TEST_ENROLLMENT,
+      revoked_at: null,
+    });
   });
 
   it("steps a new agent's ports past the first agent's when the OS keeps offering them", async () => {
@@ -4470,7 +4530,7 @@ describe("two agents on one machine (ADR-202)", () => {
     const result = await unenroll({ token: "tok", harness: "codex" }, d);
     expect(result.ok, d.errors.join("\n")).toBe(true);
     expect(revoked(d)).toEqual([OTHER_ENROLLMENT]);
-    expect(slotHolding(d.paths, "codex")).toBeUndefined();
+    expect(agentHolding(d.paths, "codex")).toBeUndefined();
     expect(JSON.stringify(d.readCodexHooks() ?? {})).not.toContain(
       OTHER_ENROLLMENT,
     );
@@ -4500,9 +4560,10 @@ describe("two agents on one machine (ADR-202)", () => {
 
     const result = await unenroll({ token: "tok", all: true }, d);
     expect(result.ok, d.errors.join("\n")).toBe(true);
-    expect(revoked(d)).toEqual([OTHER_ENROLLMENT, TEST_ENROLLMENT]);
-    expect(slotHolding(d.paths, "codex")).toBeUndefined();
-    expect(slotHolding(d.paths, "claude-code")).toBeUndefined();
+    // Oldest first.
+    expect(revoked(d)).toEqual([TEST_ENROLLMENT, OTHER_ENROLLMENT]);
+    expect(agentHolding(d.paths, "codex")).toBeUndefined();
+    expect(agentHolding(d.paths, "claude-code")).toBeUndefined();
     expect(JSON.stringify(d.readCodexHooks() ?? {})).not.toContain(
       OTHER_ENROLLMENT,
     );
@@ -4554,7 +4615,7 @@ describe("two agents on one machine (ADR-202)", () => {
       "acme.core.codex-agent was enrolled with a one-time token from the Agents page. A reassign enrolls it again with your CLI session, which links the new enrollment to no agent, so its sessions stop reaching that agent's page (#4410). To keep the link, run `tacho unenroll --harness codex`, register the agent in acme/edge, and run the command its page shows.";
     expect(beforeRevoke).toContain(`warning: ${warning}`);
 
-    // The operator's own enrollment at the root has no agent to lose.
+    // The operator's own enrollment has no agent to lose.
     d.errors.length = 0;
     await reassign(
       {
@@ -4583,10 +4644,10 @@ describe("two agents on one machine (ADR-202)", () => {
       d,
     );
     expect(failed.ok).toBe(false);
-    // Only a token opens a slot, so an enroll command would re-enroll the
-    // first agent at the root. The advice names the Agents page instead.
+    // An enroll through the CLI session would unlink it from its agent
+    // (#4410), so the advice names the Agents page instead.
     expect(d.errors).toContain(
-      "Reassign failed after revoking the old enrollment; acme.core.codex-agent is now unenrolled (host.json kept, marked retired). Only a one-time token enrolls a second agent on this machine, so once the cause is fixed, register the agent in acme/edge on the Agents page and run the command its page shows.",
+      "Reassign failed after revoking the old enrollment; acme.core.codex-agent is now unenrolled (host.json kept, marked retired). It was enrolled with a one-time token, so once the cause is fixed, register the agent in acme/edge on the Agents page and run the command its page shows.",
     );
     expect(d.errors.join("\n")).not.toContain("tacho enroll --force");
     expect(revoked(d)).toEqual([OTHER_ENROLLMENT]);

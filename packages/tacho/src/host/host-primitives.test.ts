@@ -16,7 +16,7 @@ import {
 } from "./device-key";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "./fs";
 import { applyControlFacts, readHostFile, writeHostFile } from "./host-file";
-import { oxagenConfigPath, tachoPaths } from "./paths";
+import { agentPaths, oxagenConfigPath, tachoHome } from "./paths";
 import {
   isProcessAlive,
   listClaudeProcesses,
@@ -31,20 +31,26 @@ import {
 
 describe("paths", () => {
   it("derives every path from TACHO_HOME and CLAUDE_CONFIG_DIR", () => {
-    const paths = tachoPaths(
-      { TACHO_HOME: "/t", CLAUDE_CONFIG_DIR: "/c" },
-      "/home/x",
+    const paths = agentPaths(
+      tachoHome({ TACHO_HOME: "/t", CLAUDE_CONFIG_DIR: "/c" }, "/home/x"),
+      "a1",
     );
-    expect(paths.hostFile).toBe("/t/host.json");
-    expect(paths.socket).toBe("/t/tachod.sock");
+    // Every agent's files sit in its own directory under agents/ (ADR-202).
+    expect(paths.dir).toBe("/t/agents/a1");
+    expect(paths.hostFile).toBe("/t/agents/a1/host.json");
+    expect(paths.socket).toBe("/t/agents/a1/tachod.sock");
+    // The one tachod's files stay in the tacho directory.
+    expect(paths.pid).toBe("/t/tachod.pid");
+    expect(paths.log).toBe("/t/tachod.log");
     expect(paths.claudeSettings).toBe("/c/settings.json");
     expect(paths.claudeProjects).toBe("/c/projects");
     // The terminal journal can hold a run's content, so it is named here and
     // purged with the WAL rather than left under an ad-hoc path (ADR-139).
-    expect(paths.pendingEnds).toBe("/t/pending-session-ends.json");
-    expect(paths.hookIdJournal).toBe("/t/hook-ids.jsonl");
-    const defaults = tachoPaths({}, "/home/x");
-    expect(defaults.root).toBe("/home/x/.config/oxagen/tacho");
+    expect(paths.pendingEnds).toBe("/t/agents/a1/pending-session-ends.json");
+    expect(paths.hookIdJournal).toBe("/t/agents/a1/hook-ids.jsonl");
+    const defaults = tachoHome({}, "/home/x");
+    expect(defaults.tachoDir).toBe("/home/x/.config/oxagen/tacho");
+    expect(defaults.agents).toBe("/home/x/.config/oxagen/tacho/agents");
     expect(defaults.claudeSettings).toBe("/home/x/.claude/settings.json");
     expect(defaults.codexHooks).toBe("/home/x/.codex/hooks.json");
     expect(defaults.daemonLauncher).toBe(
@@ -56,7 +62,7 @@ describe("paths", () => {
   });
 
   it("honours CODEX_HOME for the Codex hooks file, independent of CLAUDE_CONFIG_DIR", () => {
-    const paths = tachoPaths(
+    const paths = tachoHome(
       { CODEX_HOME: "/codex-elsewhere", CLAUDE_CONFIG_DIR: "/c" },
       "/home/x",
     );
@@ -64,11 +70,11 @@ describe("paths", () => {
     expect(paths.claudeSettings).toBe("/c/settings.json");
     // The Windows launcher lives with the rest of the host state so
     // `unenroll` removes it with the directory.
-    const win = tachoPaths(
+    const win = tachoHome(
       { TACHO_HOME: "C:\\Users\\dev\\.config\\oxagen\\tacho" },
       "C:\\Users\\dev",
     );
-    expect(win.daemonLauncher.startsWith(win.root)).toBe(true);
+    expect(win.daemonLauncher.startsWith(win.tachoDir)).toBe(true);
     expect(win.daemonLauncher.endsWith("tachod.cmd")).toBe(true);
   });
 });
@@ -76,12 +82,12 @@ describe("paths", () => {
 describe("fs", () => {
   it("writes sensitive files atomically with mode 0600 and reads JSON back", () => {
     const paths = scratchPaths();
-    const file = join(paths.root, "nested", "secret.json");
+    const file = join(paths.dir, "nested", "secret.json");
     writeSensitiveFileAtomic(file, JSON.stringify({ a: 1 }));
     expect(statSync(file).mode & 0o777).toBe(0o600);
     expect(readJsonFileIfExists(file)).toEqual({ a: 1 });
     expect(
-      readJsonFileIfExists(join(paths.root, "missing.json")),
+      readJsonFileIfExists(join(paths.dir, "missing.json")),
     ).toBeUndefined();
     writeSensitiveFileAtomic(file, "not json");
     expect(() => readJsonFileIfExists(file)).toThrow();
@@ -126,8 +132,8 @@ describe("device key", () => {
         "-----BEGIN PRIVATE KEY-----\nMA==\n-----END PRIVATE KEY-----",
       ),
     ).toThrow();
-    writeSensitiveFileAtomic(join(paths.root, "rsa.key"), "garbage");
-    expect(() => loadOrCreateDeviceKey(join(paths.root, "rsa.key"))).toThrow();
+    writeSensitiveFileAtomic(join(paths.dir, "rsa.key"), "garbage");
+    expect(() => loadOrCreateDeviceKey(join(paths.dir, "rsa.key"))).toThrow();
   });
 });
 

@@ -52,7 +52,7 @@ describe("the daemon's hook route", () => {
       exec: () => ({ status: 128, stdout: "", stderr: "not a repository" }),
       log: () => {},
       listen: false,
-      transcriptRoots: [`${paths.root}/no-transcripts`],
+      transcriptRoots: [`${paths.tachoDir}/no-transcripts`],
       timers: {
         detectorMs: 60 * 60_000,
         sweepMs: 60 * 60_000,
@@ -126,7 +126,7 @@ describe("the daemon's hook route", () => {
     expect(files).toHaveLength(1);
     expect(files[0]).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}\.hook-payload\.json$/);
     // The request could not steer the write out of quarantine/.
-    expect(existsSync(join(paths.root, "x.hook-payload.json"))).toBe(false);
+    expect(existsSync(join(paths.dir, "x.hook-payload.json"))).toBe(false);
     const kept = JSON.parse(
       readFileSync(join(paths.quarantine, files[0] as string), "utf8"),
     ) as { hook_id: string };

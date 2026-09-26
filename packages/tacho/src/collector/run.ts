@@ -158,8 +158,9 @@ export interface DaemonAgent {
 
 /**
  * The agents this process serves (ADR-202): every agent that has not been
- * retired on this machine (`agentServes`). When every agent is retired, the first one runs as a lone enrollment always has: its
- * revoke may still be pending. Beside a live agent, a retired one waits for
+ * retired on this machine (`agentServes`). When every agent is retired, the
+ * first one runs as a lone enrollment always has: its revoke may still be
+ * pending. Beside a live agent, a retired one waits for
  * its revoke without a collector, since it would otherwise run on a key its
  * unenroll gave up, on ports it no longer holds. None when the machine holds
  * no agent.

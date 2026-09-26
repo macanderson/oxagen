@@ -30,7 +30,7 @@ function cursorHost(
 ): { deps: CliDeps; lines: string[] } {
   const paths = scratchPaths();
   const signer = bundleSigner();
-  const cli = execpath(paths.root);
+  const cli = execpath(paths.tachoDir);
   writeHostFile(
     paths.hostFile,
     testHostFile(signer, signer.sign(unsignedBundle()), {
@@ -42,14 +42,14 @@ function cursorHost(
   const lines: string[] = [];
   const deps = {
     paths,
-    home: join(paths.root, ".."),
+    home: join(paths.tachoDir, ".."),
     platform: "linux",
     env: {},
     now: () => Date.parse("2026-09-23T12:00:00Z"),
     out: (line: string) => lines.push(line),
     serviceManager: {
       kind: "systemd",
-      unitPath: join(paths.root, "tachod.service"),
+      unitPath: join(paths.tachoDir, "tachod.service"),
       install: () => undefined,
       uninstall: () => undefined,
       status: () => ({ installed: true, running: true }),
@@ -87,7 +87,7 @@ describe("the Cursor install line", () => {
       path: "/Applications/Cursor.app",
     });
     const report = await status({}, deps);
-    const cli = join(deps.paths.root, "bin", "cursor-agent");
+    const cli = join(deps.paths.tachoDir, "bin", "cursor-agent");
     expect(report.cursorInstall).toEqual({ foundVia: "cli", path: cli });
     expect(cursorLine(lines)).toBe(
       `Cursor      installed as the cursor-agent CLI at ${cli}`,

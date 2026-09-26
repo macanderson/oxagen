@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // `run.ts` starts the daemon; these tests drive only its stop path.
 vi.mock("./daemon", () => ({ startDaemon: vi.fn() }));
 
+import { writeFileSync } from "node:fs";
 import { type HostFile, writeHostFile } from "../host/host-file";
-import type { TachoPaths } from "../host/paths";
-import { slotPaths } from "../host/slots";
+import { agentPaths, type TachoPaths } from "../host/paths";
 import {
   bundleSigner,
   scratchPaths,
@@ -15,9 +15,9 @@ import {
 import type { TachoHarness } from "../wire";
 import type { DaemonHandle, DaemonOptions } from "./daemon";
 import {
-  daemonSlots,
+  daemonAgents,
   STOP_GRACE_MS,
-  startSlots,
+  startAgents,
   stopAll,
   stopWithin,
 } from "./run";
@@ -70,140 +70,187 @@ describe("stopWithin", () => {
 });
 
 const RETIRED = { revoked_at: "2026-09-20T00:00:00.000Z" };
+const FLEET_REVOKED = { host_status: "revoked" } as const;
 
 /**
- * Enroll `harnesses` in `slot`'s directory, or at the root when `slot` is
- * undefined, and return that slot's paths.
+ * Enroll `harnesses` as agent `id` on the machine `home` belongs to, the
+ * `day`th of September, and return that agent's paths.
  */
 function enrollIn(
-  root: TachoPaths,
-  slot: TachoHarness | undefined,
+  home: TachoPaths,
+  id: string,
   harnesses: TachoHarness[],
+  day: number,
   overrides: Partial<HostFile> = {},
 ): TachoPaths {
-  const paths = slot === undefined ? root : slotPaths(root, slot);
+  const paths = agentPaths(home, id);
   const signer = bundleSigner();
   writeHostFile(
     paths.hostFile,
     testHostFile(signer, signer.sign(unsignedBundle()), {
-      host_enrollment_id: `tch_${slot ?? "root"}`,
+      host_enrollment_id: `tch_${id}`,
       harnesses,
+      port: 47000 + day * 10,
+      enrolled_at: `2026-09-${String(day).padStart(2, "0")}T00:00:00.000Z`,
       ...overrides,
     }),
   );
   return paths;
 }
 
-/** The slot's directory, harness and whether it watches transcripts. */
-function served(root: TachoPaths) {
-  return daemonSlots(root).map((slot) => [
-    slot.paths.root,
-    slot.harness,
-    slot.watchesTranscripts,
+/** Each served agent's directory and whether it watches transcripts. */
+function served(home: TachoPaths) {
+  return daemonAgents(home).map((agent) => [
+    agent.paths.dir,
+    agent.watchesTranscripts,
   ]);
 }
 
-describe("daemonSlots (ADR-202)", () => {
-  it("runs the root alone, enrolled, retired or empty, and it watches transcripts", () => {
-    const empty = scratchPaths();
-    expect(served(empty)).toEqual([[empty.root, undefined, true]]);
+describe("daemonAgents (ADR-202)", () => {
+  it("serves no agent on a machine that holds none", () => {
+    expect(daemonAgents(scratchPaths())).toEqual([]);
+  });
 
+  it("runs a lone agent whether it is live or retired, and it watches transcripts", () => {
+    const home = scratchPaths();
+    const codex = enrollIn(home, "c0dec000", ["codex"], 10);
+    expect(served(home)).toEqual([[codex.dir, true]]);
+
+    // A lone retired agent still runs: its revoke may still be pending.
     const retired = scratchPaths();
-    enrollIn(retired, undefined, ["claude-code"], RETIRED);
-    expect(served(retired)).toEqual([[retired.root, undefined, true]]);
+    const claude = enrollIn(retired, "c1a0de00", ["claude-code"], 10, RETIRED);
+    expect(served(retired)).toEqual([[claude.dir, true]]);
+    expect(daemonAgents(retired)[0]?.id).toBe("c1a0de00");
   });
 
   it("runs every live agent, and the one that hooks Claude Code watches transcripts", () => {
-    const root = scratchPaths();
-    enrollIn(root, undefined, ["claude-code"]);
-    const codex = enrollIn(root, "codex", ["codex"]);
-    expect(served(root)).toEqual([
-      [root.root, undefined, true],
-      [codex.root, "codex", false],
+    const home = scratchPaths();
+    const codex = enrollIn(home, "c0dec000", ["codex"], 10);
+    const claude = enrollIn(home, "c1a0de00", ["claude-code"], 11);
+    expect(served(home)).toEqual([
+      [codex.dir, false],
+      [claude.dir, true],
     ]);
 
-    // Claude Code enrolled second, beside a root that hooks Codex.
+    // With no agent hooking Claude Code, the first one watches.
     const other = scratchPaths();
-    enrollIn(other, undefined, ["codex"]);
-    const claude = enrollIn(other, "claude-code", ["claude-code"]);
+    const first = enrollIn(other, "c0dec000", ["codex"], 10);
+    const cursor = enrollIn(other, "c0c0c0c0", ["cursor"], 11);
     expect(served(other)).toEqual([
-      [other.root, undefined, false],
-      [claude.root, "claude-code", true],
+      [first.dir, true],
+      [cursor.dir, false],
     ]);
   });
 
-  it("drops a retired agent beside a live one, and a root with no host.json", () => {
-    const root = scratchPaths();
-    enrollIn(root, undefined, ["claude-code"]);
-    enrollIn(root, "codex", ["codex"], RETIRED);
-    expect(served(root)).toEqual([[root.root, undefined, true]]);
+  it("drops a retired agent beside a live one, and keeps a fleet-revoked one", () => {
+    const home = scratchPaths();
+    enrollIn(home, "c1a0de00", ["claude-code"], 10, RETIRED);
+    const codex = enrollIn(home, "c0dec000", ["codex"], 11);
+    expect(served(home)).toEqual([[codex.dir, true]]);
 
-    const retiredRoot = scratchPaths();
-    enrollIn(retiredRoot, undefined, ["claude-code"], RETIRED);
-    const codex = enrollIn(retiredRoot, "codex", ["codex"]);
-    expect(served(retiredRoot)).toEqual([[codex.root, "codex", false]]);
+    // The fleet revoked this one, but the machine did not retire it, so it
+    // keeps its collector and its transcript watch.
+    const fleet = scratchPaths();
+    const revoked = enrollIn(
+      fleet,
+      "c1a0de00",
+      ["claude-code"],
+      10,
+      FLEET_REVOKED,
+    );
+    const cursor = enrollIn(fleet, "c0c0c0c0", ["cursor"], 11);
+    expect(served(fleet)).toEqual([
+      [revoked.dir, true],
+      [cursor.dir, false],
+    ]);
+  });
 
-    const bareRoot = scratchPaths();
-    const cursor = enrollIn(bareRoot, "cursor", ["cursor"]);
-    expect(served(bareRoot)).toEqual([[cursor.root, "cursor", false]]);
+  it("serves an agent whose host.json it cannot read, so the collector reports it", () => {
+    const home = scratchPaths();
+    const claude = enrollIn(home, "c1a0de00", ["claude-code"], 10);
+    const broken = agentPaths(home, "b0b0b0b0");
+    enrollIn(home, "b0b0b0b0", ["codex"], 11);
+    writeFileSync(broken.hostFile, "{ not json");
+    expect(served(home)).toEqual([
+      [claude.dir, true],
+      [broken.dir, false],
+    ]);
   });
 });
 
-describe("startSlots", () => {
+describe("startAgents", () => {
   function fakeHandle(): DaemonHandle {
     return { stop: vi.fn(async () => undefined) } as unknown as DaemonHandle;
   }
 
-  it("starts a collector per slot, and only the watcher tails transcripts", async () => {
-    const root = scratchPaths();
-    enrollIn(root, undefined, ["claude-code"]);
-    const codex = enrollIn(root, "codex", ["codex"]);
+  /** A Claude Code agent and a Codex agent on one machine. */
+  function twoAgents(): { home: TachoPaths; claude: TachoPaths } {
+    const home = scratchPaths();
+    const claude = enrollIn(home, "c1a0de00", ["claude-code"], 10);
+    enrollIn(home, "c0dec000", ["codex"], 11);
+    return { home, claude };
+  }
+
+  it("starts one collector for a lone agent, on the shared log", async () => {
+    const home = scratchPaths();
+    const codex = enrollIn(home, "c0dec000", ["codex"], 10);
     const options: DaemonOptions[] = [];
     const started: DaemonHandle[] = [];
-    await startSlots(daemonSlots(root), started, vi.fn(), async (o) => {
+    await startAgents(daemonAgents(home), started, vi.fn(), async (o) => {
+      options.push(o);
+      return fakeHandle();
+    });
+    expect(started).toHaveLength(1);
+    expect(options).toEqual([{ paths: codex }]);
+  });
+
+  it("starts a collector per agent, and only the watcher tails transcripts", async () => {
+    const { home, claude } = twoAgents();
+    const codex = agentPaths(home, "c0dec000");
+    const options: DaemonOptions[] = [];
+    const started: DaemonHandle[] = [];
+    await startAgents(daemonAgents(home), started, vi.fn(), async (o) => {
       options.push(o);
       return fakeHandle();
     });
     expect(started).toHaveLength(2);
-    expect(options[0]).toEqual({ paths: root });
+    expect(options[0]).toMatchObject({ paths: claude });
+    expect(options[0]).not.toHaveProperty("transcriptRoots");
     expect(options[1]).toMatchObject({ paths: codex, transcriptRoots: [] });
-    // The Codex collector's lines name its harness in the shared log.
+    // Each collector's lines name its agent in the shared log.
+    expect(options[0]?.log).toBeTypeOf("function");
     expect(options[1]?.log).toBeTypeOf("function");
   });
 
   it("starts the rest when one agent's collector fails", async () => {
-    const root = scratchPaths();
-    enrollIn(root, undefined, ["claude-code"]);
-    enrollIn(root, "codex", ["codex"]);
+    const { home, claude } = twoAgents();
     const log = vi.fn();
     const started: DaemonHandle[] = [];
-    await startSlots(daemonSlots(root), started, log, async (o) => {
-      if (o.paths.root !== root.root) throw new Error("host.json is corrupt");
+    await startAgents(daemonAgents(home), started, log, async (o) => {
+      if (o.paths.dir !== claude.dir) throw new Error("host.json is corrupt");
       return fakeHandle();
     });
     expect(started).toHaveLength(1);
     expect(log).toHaveBeenCalledWith(
-      "tachod: the codex enrollment did not start: host.json is corrupt\n",
+      "tachod: agent c0dec000 did not start: host.json is corrupt\n",
     );
   });
 
   it("throws the first failure when no collector started", async () => {
-    const root = scratchPaths();
-    enrollIn(root, undefined, ["claude-code"]);
-    enrollIn(root, "codex", ["codex"]);
+    const { home } = twoAgents();
     const log = vi.fn();
     let calls = 0;
     await expect(
-      startSlots(daemonSlots(root), [], log, async () => {
+      startAgents(daemonAgents(home), [], log, async () => {
         calls += 1;
         throw new Error(`failure ${calls}`);
       }),
     ).rejects.toThrow("failure 1");
     expect(log).toHaveBeenCalledTimes(2);
     expect(log).toHaveBeenCalledWith(
-      "tachod: the first enrollment did not start: failure 1\n",
+      "tachod: agent c1a0de00 did not start: failure 1\n",
     );
-    await expect(startSlots([], [], log, vi.fn())).rejects.toThrow(
+    await expect(startAgents([], [], log, vi.fn())).rejects.toThrow(
       "no enrollment on this machine",
     );
   });
