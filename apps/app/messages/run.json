@@ -716,7 +716,7 @@
         "created": "Created the workspace {slug}."
       },
       "timeout": {
-        "title": "If nobody answers",
+        "title": "Timeout",
         "body": "At {minutes, plural, one {# minute} other {# minutes}} this times out to deny. The run continues with no skills, and the agent is told why.",
         "closes": "The window closes at {at}."
       },

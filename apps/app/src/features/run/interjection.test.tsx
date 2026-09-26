@@ -297,8 +297,13 @@ describe("the waiting question", () => {
     expect(screen.getByTestId("interjection-repository")).toHaveTextContent(
       "acme/edge-proxy matches no workspace in this organization.",
     );
-    expect(screen.getByTestId("interjection-timeout")).toHaveTextContent(
-      "If nobody answersAt 30 minutes this times out to deny. The run continues with no skills, and the agent is told why.The window closes at 09:29:00Z.",
+    // The timeout's heading is a plain noun, as every heading on the page is.
+    const timeout = screen.getByTestId("interjection-timeout");
+    expect(
+      within(timeout).getByRole("heading", { level: 3, name: "Timeout" }),
+    ).toBeInTheDocument();
+    expect(timeout).toHaveTextContent(
+      "TimeoutAt 30 minutes this times out to deny. The run continues with no skills, and the agent is told why.The window closes at 09:29:00Z.",
     );
     expect(screen.queryByTestId("interjection-answer")).toBeNull();
 
