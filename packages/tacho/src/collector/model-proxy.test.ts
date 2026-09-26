@@ -656,7 +656,9 @@ describe("the loopback model proxy", () => {
         body: JSON.stringify({ model: "claude-sonnet-5", stream: true, ...body }),
       });
     await send({ messages: [], output_config: { effort: "high" } });
+    await until(() => frames(uuid).length === 1);
     await send({ messages: [] });
+    await until(() => frames(uuid).length === 2);
     const [asked, unasked] = frames(uuid);
     expect(asked!.body).toMatchObject({ request_effort: "high" });
     // A request that named no effort seals no member: the reader says the
