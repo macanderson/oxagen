@@ -5,8 +5,8 @@
  * the settings writers install `tacho hook --enrollment ... [--harness ...]`;
  * a custom agent runs `tacho hook --agent <name>`).
  */
-import { tachoPaths } from "../host/paths";
-import { slotPathsForEnrollment } from "../host/slots";
+import { agentPathsForEnrollment } from "../host/agents";
+import { tachoHome } from "../host/paths";
 import { ulid } from "../ids";
 import {
   agentFromArgv,
@@ -101,9 +101,10 @@ export async function runHookProcess(
     const result = await runTachoHook({
       // A machine can hold one enrollment per agent (ADR-202), and the hook
       // entry names the one it was written for.
-      paths: slotPathsForEnrollment(
-        tachoPaths(process.env),
+      paths: agentPathsForEnrollment(
+        tachoHome(process.env),
         enrollmentFromArgv(argv),
+        harnessFromArgv(argv),
       ),
       env: process.env,
       stdin,

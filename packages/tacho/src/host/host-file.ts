@@ -195,6 +195,15 @@ export const hostFileSchema = z
      * existed has none, and unenroll falls back to the paths it resolves.
      */
     harness_files: harnessFilesRecordSchema.optional(),
+    /**
+     * How the enrollment was made: `token` when a one-time token from the
+     * Agents page linked it to a registered agent, `session` when the
+     * operator's own login made it. Absent means `session`: every host
+     * enrolled before the field existed was, or reads the same way. A
+     * reassign and a fallback enroll write `session`, since neither carries
+     * the token's agent link (#4410).
+     */
+    enrollment_source: z.enum(["token", "session"]).optional(),
     enrolled_at: z.string(),
     expires_at: z.string(),
     revoked_at: z.string().nullable().default(null),

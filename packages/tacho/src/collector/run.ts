@@ -4,16 +4,15 @@
  * by the `tachod` executable and `tacho daemon` (the compiled single binary
  * is multi-call, so the service unit runs `tacho daemon`).
  *
- * One process serves every enrollment on the machine (ADR-202): a collector
- * per slot, each on its own ports and with its own state, under one service,
+ * One process serves every agent on the machine (ADR-202): a collector per
+ * agent, each on its own ports and with its own state, under one service,
  * one pid file and one log.
  */
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
-import type { TachoPaths } from "../host/paths";
-import { tachoPaths } from "../host/paths";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { listAgents, migrateLegacyLayout } from "../host/agents";
+import type { TachoHome, TachoPaths } from "../host/paths";
+import { tachoHome } from "../host/paths";
 import { formatDaemonPid, parseDaemonPid } from "../host/process-scan";
-import { listSlots } from "../host/slots";
-import type { TachoHarness } from "../wire";
 import { type DaemonHandle, type DaemonOptions, startDaemon } from "./daemon";
 
 /**
@@ -144,92 +143,92 @@ export function releaseDaemonPid(path: string): void {
   }
 }
 
-/** One slot this process runs a collector for. */
-export interface DaemonSlot {
+/** One agent this process runs a collector for. */
+export interface DaemonAgent {
+  /** The agent's directory name under `agents/`. */
+  id: string;
   paths: TachoPaths;
-  /** The harness the slot was made for; undefined for the root slot. */
-  harness: TachoHarness | undefined;
-  /** Whether this slot's detector watches Claude Code's transcripts. */
+  /** Whether this agent's detector watches Claude Code's transcripts. */
   watchesTranscripts: boolean;
 }
 
 /**
- * The slots this process serves (ADR-202): each slot after the root that
- * has not been retired on this machine, and the root whenever it has a
- * `host.json` that is not retired. Alone, the root runs as it always has,
- * retired or not, and a machine with no enrollment at all still gets it, so
- * its collector fails with the error that says to enroll. Beside another
- * agent, a retired root waits for its revoke without a collector: it would
- * otherwise run on a key its unenroll gave up, on ports it no longer holds.
+ * The agents this process serves (ADR-202): every agent that has not been
+ * retired on this machine. An agent whose `host.json` does not read is
+ * among them, so its collector fails and the log says why. When every agent
+ * is retired, the first one runs as a lone enrollment always has: its
+ * revoke may still be pending. Beside a live agent, a retired one waits for
+ * its revoke without a collector, since it would otherwise run on a key its
+ * unenroll gave up, on ports it no longer holds. None when the machine holds
+ * no agent.
  *
- * One slot watches Claude Code's transcripts: the one that hooks Claude
- * Code, else the root. Two watchers would each report the same unhooked
+ * One agent watches Claude Code's transcripts: the one that hooks Claude
+ * Code, else the first. Two watchers would each report the same unhooked
  * session, and each would list processes on every tick.
  */
-export function daemonSlots(root: TachoPaths): DaemonSlot[] {
-  const [first, ...rest] = listSlots(root);
-  const later = rest.filter(
-    (slot) => slot.host !== undefined && slot.host.revoked_at === null,
+export function daemonAgents(home: TachoHome): DaemonAgent[] {
+  const agents = listAgents(home);
+  const running = agents.filter(
+    (agent) => agent.host === undefined || agent.host.revoked_at === null,
   );
-  const rootRuns =
-    later.length === 0 ||
-    (existsSync(root.hostFile) &&
-      (first?.host === undefined || first.host.revoked_at === null));
-  const slots = first !== undefined && rootRuns ? [first, ...later] : later;
+  const serving = running.length > 0 ? running : agents.slice(0, 1);
   const watcher =
-    slots.find(
-      (slot) =>
-        slot.host !== undefined &&
-        slot.host.revoked_at === null &&
-        slot.host.harnesses.includes("claude-code"),
-    ) ?? slots.find((slot) => slot.harness === undefined);
-  return slots.map((slot) => ({
-    paths: slot.paths,
-    harness: slot.harness,
-    watchesTranscripts: slot === watcher,
+    serving.find(
+      (agent) =>
+        agent.host?.revoked_at === null &&
+        agent.host.harnesses.includes("claude-code"),
+    ) ?? serving[0];
+  return serving.map((agent) => ({
+    id: agent.id,
+    paths: agent.paths,
+    watchesTranscripts: agent === watcher,
   }));
 }
 
 /**
- * Start a collector for each slot, pushing each onto `started` as it comes
- * up so a stop reaches it. A slot that fails is logged and the rest still
+ * Start a collector for each agent, pushing each onto `started` as it comes
+ * up so a stop reaches it. An agent that fails is logged and the rest still
  * start, because one agent's broken `host.json` must not take the others'
- * hooks down. Throws the first failure when no slot started.
+ * hooks down. Throws the first failure when no agent started.
  */
-export async function startSlots(
-  slots: readonly DaemonSlot[],
+export async function startAgents(
+  agents: readonly DaemonAgent[],
   started: DaemonHandle[],
   log: (line: string) => void,
   start: (options: DaemonOptions) => Promise<DaemonHandle> = startDaemon,
 ): Promise<void> {
   let firstError: unknown;
-  for (const slot of slots) {
+  for (const agent of agents) {
     try {
       started.push(
         await start({
-          paths: slot.paths,
-          ...(slot.watchesTranscripts ? {} : { transcriptRoots: [] }),
-          ...(slot.harness !== undefined
-            ? { log: slotLog(slot.harness) }
-            : {}),
+          paths: agent.paths,
+          ...(agent.watchesTranscripts ? {} : { transcriptRoots: [] }),
+          ...(agents.length > 1 ? { log: agentLog(agent.id) } : {}),
         }),
       );
     } catch (error) {
       firstError ??= error;
       log(
-        `tachod: the ${slot.harness ?? "first"} enrollment did not start: ${error instanceof Error ? error.message : String(error)}\n`,
+        `tachod: agent ${agent.id} did not start: ${error instanceof Error ? error.message : String(error)}\n`,
       );
     }
   }
   if (started.length === 0)
-    throw firstError ?? new Error("no enrollment on this machine");
+    throw (
+      firstError ??
+      new Error("no enrollment on this machine; run `tacho enroll` first")
+    );
 }
 
-/** A later slot's log lines name its harness, since the log is shared. */
-function slotLog(harness: TachoHarness): (line: string) => void {
+/**
+ * A log whose lines name the agent, for a process that serves more than
+ * one: the log is shared.
+ */
+function agentLog(id: string): (line: string) => void {
   return (line) => {
     process.stderr.write(
-      `${new Date().toISOString()} tachod [${harness}] ${line}\n`,
+      `${new Date().toISOString()} tachod [${id}] ${line}\n`,
     );
   };
 }
@@ -244,7 +243,7 @@ export async function stopAll(daemons: readonly DaemonHandle[]): Promise<void> {
 }
 
 export async function runDaemonProcess(): Promise<void> {
-  const paths = tachoPaths(process.env);
+  const paths = tachoHome(process.env);
   const daemons: DaemonHandle[] = [];
   let stopping: Promise<void> | undefined;
   const stopOnce = () => (stopping ??= stopAll(daemons));
@@ -256,7 +255,19 @@ export async function runDaemonProcess(): Promise<void> {
     process.stderr.write(line);
   };
   guardDaemonProcess({ stop: stopOnce, exit, log });
-  await startSlots(daemonSlots(paths), daemons, log);
+  // A machine enrolled before ADR-202 keeps its enrollment in the tacho
+  // directory. It moves into `agents/` here, before any collector reads it.
+  // A move that fails part way is finished by the next start.
+  try {
+    const moved = migrateLegacyLayout(paths);
+    if (moved !== undefined)
+      log(`tachod: moved this machine's enrollment into agents/${moved}\n`);
+  } catch (error) {
+    log(
+      `tachod: could not move the enrollment into agents/: ${error instanceof Error ? error.message : String(error)}\n`,
+    );
+  }
+  await startAgents(daemonAgents(paths), daemons, log);
   writeDaemonPid(paths.pid);
   const stop = (signal: string) => {
     if (stopping !== undefined) return;

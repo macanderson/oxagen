@@ -2,8 +2,17 @@
  * `tacho enroll` (spec section 5.1): the one command that puts a machine
  * under Oxagen control. Each step is idempotent and printed as it runs.
  */
-import { existsSync, lstatSync } from "node:fs";
+import { existsSync, lstatSync, rmSync } from "node:fs";
 import { dirname } from "node:path";
+import {
+  type Agent,
+  agentHolding,
+  agentIsLive,
+  describeAgent,
+  freshAgentPaths,
+  listAgents,
+  portsInUse,
+} from "../host/agents";
 import { verifyBundle } from "../host/bundle";
 import {
   CLAUDE_DESKTOP_RESTART_NOTE,
@@ -29,14 +38,6 @@ import { acquireInstallLock } from "../host/install-lock";
 import { modelBaseUrlFile } from "../host/model-base-url";
 import { mcpConfigShapeProblem } from "../host/mcp-config-writer";
 import type { TachoPaths } from "../host/paths";
-import {
-  listSlots,
-  portsInUse,
-  type Slot,
-  slotHolding,
-  slotIsLive,
-  slotPaths,
-} from "../host/slots";
 import { mergeStellaHooks, stellaHookPresence } from "../host/stella-writer";
 import { Wal } from "../host/wal";
 import {
@@ -80,8 +81,8 @@ import {
   restoreCredentials,
 } from "./credential";
 import { restoreGithubRepositories } from "./github";
+import { agentDeps } from "./agent-deps";
 import { daemonServiceSpec } from "./daemon-service";
-import { rootPathsOf, slotDeps } from "./slot-deps";
 import { shippingHealth, type ShippingHealth } from "./status";
 import {
   disarmGateway,
@@ -471,12 +472,12 @@ export function harnessFileProblems(
 
 /**
  * A free loopback port whose model proxy port (the next one) is free too,
- * and neither of them held by another slot's enrollment (ADR-202). The OS
- * hands out a port nothing is bound to now, but a slot whose daemon is down
- * binds nothing, and the port after it was never asked about.
+ * and neither of them held by another agent's enrollment (ADR-202). The OS
+ * hands out a port nothing is bound to now, but an agent whose collector is
+ * down binds nothing, and the port after it was never asked about.
  */
-async function portClearOfSlots(deps: CliDeps): Promise<number> {
-  const taken = portsInUse(rootPathsOf(deps), deps.paths.root);
+async function portClearOfAgents(deps: CliDeps): Promise<number> {
+  const taken = portsInUse(deps.paths, deps.paths.dir);
   const clear = (port: number) =>
     !taken.has(port) && !taken.has(modelProxyPortFor({ port }));
   let port = await deps.findFreePort();
@@ -485,7 +486,7 @@ async function portClearOfSlots(deps: CliDeps): Promise<number> {
     port = await deps.findFreePort();
   }
   // The OS kept offering ports another agent holds. Returning the last one
-  // put two agents on one port. Step past them instead: each slot holds two
+  // put two agents on one port. Step past them instead: each agent holds two
   // ports, so a clear pair is a few ports away. The OS answer was only a
   // hint anyway, since nothing reserves a port until tachod listens on it.
   while (!clear(port)) port = port < 65535 ? port + 1 : 1024;
@@ -493,41 +494,52 @@ async function portClearOfSlots(deps: CliDeps): Promise<number> {
 }
 
 /**
- * Which slot an enroll goes into (ADR-202). A harness belongs to at most one
- * live slot, so a harness already enrolled keeps its slot: a re-apply, or
- * with `--force` a replacement of that slot's enrollment alone. A harness no
- * slot holds goes to the root when the root holds nothing live. When the
- * root is live, a token names a second agent, which gets a slot of its own
- * and revokes nothing; an operator's enroll adds the harness to the root's
- * enrollment, as it always has.
+ * Which agent an enroll goes into (ADR-202). A harness belongs to at most
+ * one live agent, so an enroll that names a harness a live agent hooks goes
+ * to that agent: a re-apply, an addition of the other harnesses it names,
+ * or with `--force` a replacement of that agent's enrollment alone. An
+ * enroll that names only harnesses no live agent hooks enrolls an agent of
+ * its own and revokes nothing. It reuses the directory of a retired agent
+ * that hooked one of them, which keeps that agent's device key, port and
+ * local token, and otherwise gets a new directory.
+ *
+ * `fresh` is true when the directory does not exist yet, so a failed enroll
+ * can take it away again.
  */
 export function enrollTarget(
-  options: Pick<EnrollOptions, "harnesses" | "enrollmentToken">,
-  root: TachoPaths,
-): { paths: TachoPaths } | { refusal: string } {
-  const harnesses = options.harnesses ?? ["claude-code"];
-  const slots = listSlots(root);
-  const holders = new Map<string, Slot>();
+  options: Pick<EnrollOptions, "harnesses">,
+  paths: TachoPaths,
+  mint?: () => string,
+): { paths: TachoPaths; fresh: boolean } | { refusal: string } {
+  const harnesses: string[] = options.harnesses ?? ["claude-code"];
+  const holders = new Map<string, Agent>();
   for (const harness of harnesses) {
-    const slot = slotHolding(root, harness);
-    if (slot !== undefined) holders.set(slot.paths.root, slot);
+    const agent = agentHolding(paths, harness);
+    if (agent !== undefined) holders.set(agent.paths.dir, agent);
   }
   const held = [...holders.values()];
   if (held.length > 1)
     return {
-      refusal: `Those harnesses belong to different agents on this machine (${held.map((slot) => `${slot.host?.harnesses.join(", ")} as ${slot.host?.agent_key}`).join("; ")}), so one enroll cannot cover them. Enroll one agent at a time.`,
+      refusal: `Those harnesses belong to different agents on this machine (${held.map(describeAgent).join("; ")}), so one enroll cannot cover them. Enroll one agent at a time.`,
     };
   const [only] = held;
-  if (only !== undefined) return { paths: only.paths };
-  const rootSlot = slots[0] as Slot;
-  if (!slotIsLive(rootSlot) || options.enrollmentToken === undefined)
-    return { paths: root };
-  const [harness, ...more] = harnesses;
-  if (harness === undefined || more.length > 0)
-    return {
-      refusal: `This machine is enrolled as ${rootSlot.host.agent_key}, and a token enrolls one more agent with one harness. Pass one --harness.`,
-    };
-  return { paths: slotPaths(root, harness) };
+  if (only !== undefined) return { paths: only.paths, fresh: false };
+  // The most recent retired agent that hooked one of these harnesses. A
+  // legacy enrollment is left to the migration that moves it.
+  const retired = listAgents(paths)
+    .filter(
+      (agent) =>
+        !agent.legacy &&
+        !agentIsLive(agent) &&
+        harnesses.some((harness) => agent.host?.harnesses.includes(harness)),
+    )
+    .at(-1);
+  if (retired !== undefined) return { paths: retired.paths, fresh: false };
+  // The paths the command started with, when nothing is enrolled in them:
+  // the first enroll on a machine.
+  if (!existsSync(paths.hostFile))
+    return { paths, fresh: !existsSync(paths.dir) };
+  return { paths: freshAgentPaths(paths, mint), fresh: true };
 }
 
 /**
@@ -544,22 +556,37 @@ export async function enroll(
     return { ok: false, warnings: [] };
   }
   // `--print-managed` too: it mints, writes host.json and installs the
-  // service like any enroll, so it must not interleave with another.
-  const lock = acquireInstallLock(deps.paths.root, deps.now);
+  // service like any enroll, so it must not interleave with another. One
+  // lock covers every agent, since they share the service and the ports.
+  const lock = acquireInstallLock(deps.paths.tachoDir, deps.now);
   if ("heldBy" in lock) {
     deps.err(
       `Another tacho enroll, unenroll or reassign is running on this machine (pid ${lock.heldBy}); wait for it to finish and run this again.`,
     );
     return { ok: false, warnings: [] };
   }
+  let target: ReturnType<typeof enrollTarget> | undefined;
+  let result: EnrollResult = { ok: false, warnings: [] };
   try {
-    const target = enrollTarget(options, deps.paths);
+    target = enrollTarget(options, deps.paths, deps.newAgentId);
     if ("refusal" in target) {
       deps.err(target.refusal);
-      return { ok: false, warnings: [] };
+      return result;
     }
-    return await enrollLocked(options, slotDeps(deps, target.paths));
+    result = await enrollLocked(options, agentDeps(deps, target.paths));
+    return result;
   } finally {
+    // A new agent whose enrollment never reached host.json holds at most a
+    // device key nothing was enrolled with. Harness files are written only
+    // after host.json, so removing the directory loses nothing.
+    if (
+      target !== undefined &&
+      "paths" in target &&
+      target.fresh &&
+      !result.ok &&
+      !existsSync(target.paths.hostFile)
+    )
+      rmSync(target.paths.dir, { recursive: true, force: true });
     lock.release();
   }
 }
@@ -834,15 +861,11 @@ async function enrollSteps(
       // CLI's session; a one-time token cannot revoke.
       if (credentials === undefined) {
         // The token reached here because it also names a harness this agent
-        // holds. It enrolls a second agent only when it names one new
-        // harness alone (`enrollTarget`, ADR-202), so say that, not "revoke
-        // this host": that advice predates slots and removed the agent.
-        const own =
-          added.length === 1
-            ? `only \`--harness ${added.join("")}\``
-            : `one --harness from ${added.join(", ")}`;
+        // hooks. The harnesses it adds belong to no live agent
+        // (`enrollTarget`, ADR-202), so the token enrolls an agent of its own
+        // when it names only those.
         deps.err(
-          `Adding a harness to an enrolled host needs the CLI's session: this token names ${added.join(", ")} beside a harness ${existing.agent_key} already hooks. To add ${added.join(", ")} to ${existing.agent_key}, run \`oxagen login\` and enroll again without the token. To enroll a separate agent, run the token again with ${own}. A token enrolls one more agent with one harness.`,
+          `Adding a harness to an enrolled agent needs the CLI's session: this token names ${added.join(", ")} beside a harness ${existing.agent_key} already hooks. To add ${added.join(", ")} to ${existing.agent_key}, run \`oxagen login\` and enroll again without the token. To enroll the token's agent separately, run the token again with only \`--harness ${added.join(",")}\`.`,
         );
         return { ok: false, warnings };
       }
@@ -880,7 +903,7 @@ async function enrollSteps(
     }
 
     step(2, `Generating the host device key at ${deps.paths.deviceKey}`);
-    ensureDir(deps.paths.root);
+    ensureDir(deps.paths.dir);
     const { key, created } = loadOrCreateDeviceKey(deps.paths.deviceKey);
     deps.out(
       `      ${created ? "created" : "reusing"} ed25519 key ${key.fingerprint}`,
@@ -985,7 +1008,7 @@ async function enrollSteps(
       return { ok: false, warnings };
     }
     const port =
-      options.port ?? existing?.port ?? (await portClearOfSlots(deps));
+      options.port ?? existing?.port ?? (await portClearOfAgents(deps));
     const now = toProtocolTimestamp(deps.now());
     // A pin outranks the signed claim in `mcpEndpointFor`, so it is worth
     // exactly as much as the deployment it was aimed at. Carrying it to a
@@ -1119,6 +1142,7 @@ async function enrollSteps(
           : {},
       mcp_stdio_command: deps.runtime.mcpStdioCommand,
       harness_files: harnessFilesRecord(deps.paths),
+      enrollment_source: credentials === undefined ? "token" : "session",
       enrolled_at: now,
       expires_at: response.expiresAt,
       revoked_at: null,

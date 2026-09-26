@@ -3,7 +3,7 @@ import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import type { CliDeps } from "./deps";
 import { shellQuote } from "./deps";
-import { depsForHarness } from "./slot-deps";
+import { depsForHarness } from "./agent-deps";
 import { type HostFile, readHostFile, writeHostFile } from "../host/host-file";
 import { isWrappedHarness } from "../wire";
 

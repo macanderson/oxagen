@@ -16,7 +16,7 @@
  * that app would and would not record, and a list that leaves the tier to be
  * inferred invites the surface to guess.
  */
-import { listSlots } from "../host/slots";
+import { listAgents } from "../host/agents";
 import {
   isConnectedHarness,
   TACHO_HARNESS_LABELS,
@@ -25,7 +25,6 @@ import {
   type TachoHarness,
 } from "../wire";
 import type { AppFacts, CliDeps, CursorFacts, HarnessFacts } from "./deps";
-import { rootPathsOf } from "./slot-deps";
 
 export interface DetectedHarness {
   harness: TachoHarness;
@@ -157,8 +156,10 @@ export function detect(
   // version or cut short must not stop the first run from listing the apps.
   // Every enrollment on the machine counts (ADR-202): a harness another
   // agent hooks is covered all the same.
-  const enrolledHosts = listSlots(rootPathsOf(deps)).flatMap((slot) =>
-    slot.host !== undefined && slot.host.revoked_at === null ? [slot.host] : [],
+  const enrolledHosts = listAgents(deps.paths).flatMap((agent) =>
+    agent.host !== undefined && agent.host.revoked_at === null
+      ? [agent.host]
+      : [],
   );
   const enrolledList = enrolledHosts.flatMap((host) => host.harnesses);
   const report: DetectReport = {

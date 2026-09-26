@@ -1,7 +1,9 @@
 /**
  * Where a Tacho host keeps its state (spec section 5.1). Everything lives
- * under one directory so `unenroll` can remove it whole and a test can point
- * `TACHO_HOME` at a scratch directory.
+ * under one directory so a test can point `TACHO_HOME` at a scratch
+ * directory. Each agent on the machine has a directory of its own under
+ * `agents/`, with the same files in it (ADR-202). No enrollment lives in the
+ * tacho directory itself: it holds only what the one `tachod` service needs.
  *
  * The same `~/.config/oxagen` root is used on every platform, Windows
  * included, so `oxagen login` (apps/cli) and the desktop app read one file.
@@ -11,20 +13,73 @@ import { join } from "node:path";
 import { claudeDesktopConfigPath } from "./claude-desktop-writer";
 import { cursorHooksPaths } from "./cursor-writer";
 
-export interface TachoPaths {
+/**
+ * The machine-level paths: the tacho directory, the one `tachod` service that
+ * serves every agent, and the harness config files, which belong to the user
+ * and not to any one agent.
+ */
+export interface TachoHome {
   /** `~/.config/oxagen/tacho` unless `TACHO_HOME` overrides it. */
-  root: string;
+  tachoDir: string;
+  /** `<tachoDir>/agents`: one directory per agent on this machine (ADR-202). */
+  agents: string;
+  /** The daemon's pid file. */
+  pid: string;
+  /** Daemon stdout/stderr when run as a service. */
+  log: string;
+  /**
+   * The wrapper script the Windows scheduled task runs (sets the env, then
+   * starts `tachod`). Unused on macOS and Linux, where the unit carries env.
+   */
+  daemonLauncher: string;
+  /** Claude Code's user settings file. */
+  claudeSettings: string;
+  /** Claude Code's transcript root. */
+  claudeProjects: string;
+  /** Codex CLI's user hooks file (`~/.codex/hooks.json`). */
+  codexHooks: string;
+  /**
+   * Cursor's user hooks files, most likely first. Normally one
+   * (`~/.cursor/hooks.json`); two when `CURSOR_CONFIG_DIR` or, on Linux and
+   * BSD, `XDG_CONFIG_HOME` moves the config directory, because Cursor
+   * documents those variables for the CLI config directory and not for the
+   * hooks loader. See `cursor-writer.ts`.
+   */
+  cursorHooks: string[];
+  /**
+   * Stella's user config (`$STELLA_HOME/stella.toml`, `~/.stella` by
+   * default). When it exists it wins whole over `stellaSettingsJson`.
+   */
+  stellaToml: string;
+  /** Stella's legacy user settings (`$STELLA_HOME/settings.json`). */
+  stellaSettingsJson: string;
+  /**
+   * Claude Desktop's MCP client config, or undefined on a platform Anthropic
+   * ships no build for — Linux, as of 2026-09-16. See
+   * `claude-desktop-writer.ts` for the paths and the date they were verified.
+   */
+  claudeDesktopConfig: string | undefined;
+}
+
+/**
+ * One agent's paths: the machine's, plus the directory that holds the
+ * agent's enrollment and every file that belongs to it. Every agent has the
+ * same layout, at `<tachoDir>/agents/<id>/` (ADR-202).
+ */
+export interface TachoPaths extends TachoHome {
+  /** The agent's directory. */
+  dir: string;
   /** Enrollment identity, credentials, cached bundle (0600). */
   hostFile: string;
   /** Ed25519 device private key, PKCS#8 PEM (0600). */
   deviceKey: string;
-  /** The HMAC key that signs this host's run tokens (0600; `host/run-token.ts`). */
+  /** The HMAC key that signs this agent's run tokens (0600; `host/run-token.ts`). */
   runTokenKey: string;
   /** Vendor credentials in the gateway's custody, sealed (`host/credential-store.ts`). */
   credentials: string;
   /** The key that seals `credentials`, in its own file so a copy of one is useless. */
   credentialsKey: string;
-  /** The daemon's Unix socket (unused on Windows, where the hook uses TCP). */
+  /** The collector's Unix socket (unused on Windows, where the hook uses TCP). */
   socket: string;
   /** Per-session append-only event logs and the shipped cursor. */
   wal: string;
@@ -66,43 +121,34 @@ export interface TachoPaths {
    * A cache only, so `tacho unenroll` removes it.
    */
   stellaIdentity: string;
-  /** The daemon's pid file. */
-  pid: string;
-  /** Daemon stdout/stderr when run as a service. */
-  log: string;
-  /** Claude Code's user settings file. */
-  claudeSettings: string;
-  /** Claude Code's transcript root. */
-  claudeProjects: string;
-  /** Codex CLI's user hooks file (`~/.codex/hooks.json`). */
-  codexHooks: string;
-  /**
-   * Cursor's user hooks files, most likely first. Normally one
-   * (`~/.cursor/hooks.json`); two when `CURSOR_CONFIG_DIR` or, on Linux and
-   * BSD, `XDG_CONFIG_HOME` moves the config directory, because Cursor
-   * documents those variables for the CLI config directory and not for the
-   * hooks loader. See `cursor-writer.ts`.
-   */
-  cursorHooks: string[];
-  /**
-   * Stella's user config (`$STELLA_HOME/stella.toml`, `~/.stella` by
-   * default). When it exists it wins whole over `stellaSettingsJson`.
-   */
-  stellaToml: string;
-  /** Stella's legacy user settings (`$STELLA_HOME/settings.json`). */
-  stellaSettingsJson: string;
-  /**
-   * Claude Desktop's MCP client config, or undefined on a platform Anthropic
-   * ships no build for — Linux, as of 2026-09-16. See
-   * `claude-desktop-writer.ts` for the paths and the date they were verified.
-   */
-  claudeDesktopConfig: string | undefined;
-  /**
-   * The wrapper script the Windows scheduled task runs (sets the env, then
-   * starts `tachod`). Unused on macOS and Linux, where the unit carries env.
-   */
-  daemonLauncher: string;
 }
+
+/**
+ * The name of each file an agent keeps in its directory. A new `TachoPaths`
+ * field that is not a `TachoHome` one is a type error here until it has a
+ * name, so no agent's file can land outside the agent's directory.
+ */
+export const AGENT_FILES: Record<
+  Exclude<keyof TachoPaths, keyof TachoHome | "dir">,
+  string
+> = {
+  hostFile: "host.json",
+  deviceKey: "device.key",
+  runTokenKey: "run-token.key",
+  credentials: "credentials.json",
+  credentialsKey: "credentials.key",
+  socket: "tachod.sock",
+  wal: "wal",
+  spool: "spool",
+  quarantine: "quarantine",
+  daemonState: "daemon.json",
+  daemonSealedState: "daemon-sealed.json",
+  pendingEnds: "pending-session-ends.json",
+  hookIdJournal: "hook-ids.jsonl",
+  transcriptTailState: "transcript-tail.json",
+  preSessionCopies: "pre-session",
+  stellaIdentity: "stella-identity",
+};
 
 /** Claude Code's config directory: `$CLAUDE_CONFIG_DIR`, else `~/.claude`. */
 export function claudeConfigDirFor(
@@ -122,7 +168,7 @@ export function codexHomeFor(
 
 /**
  * The Claude Code and Codex directories for `home`, resolved the way
- * `tachoPaths` resolves them. The variables describe the running user's own
+ * `tachoHome` resolves them. The variables describe the running user's own
  * home, so they apply only when `home` is that home: a caller that names
  * another one (a test's scratch directory) gets that home's defaults and
  * never the real directory a variable points at.
@@ -139,44 +185,66 @@ export function harnessConfigDirs(
   };
 }
 
-export function tachoPaths(
+/** The machine-level paths for `env` and `home`. */
+export function tachoHome(
   env: Record<string, string | undefined> = process.env,
   home: string = homedir(),
   platform: NodeJS.Platform = process.platform,
-): TachoPaths {
-  const root = env["TACHO_HOME"] ?? join(home, ".config", "oxagen", "tacho");
+): TachoHome {
+  const tachoDir =
+    env["TACHO_HOME"] ?? join(home, ".config", "oxagen", "tacho");
   const claudeConfigDir = claudeConfigDirFor(env, home);
   const codexHome = codexHomeFor(env, home);
   const stellaHome = env["STELLA_HOME"] ?? join(home, ".stella");
   return {
-    root,
-    hostFile: join(root, "host.json"),
-    deviceKey: join(root, "device.key"),
-    runTokenKey: join(root, "run-token.key"),
-    credentials: join(root, "credentials.json"),
-    credentialsKey: join(root, "credentials.key"),
-    socket: join(root, "tachod.sock"),
-    wal: join(root, "wal"),
-    spool: join(root, "spool"),
-    quarantine: join(root, "quarantine"),
-    daemonState: join(root, "daemon.json"),
-    daemonSealedState: join(root, "daemon-sealed.json"),
-    pendingEnds: join(root, "pending-session-ends.json"),
-    hookIdJournal: join(root, "hook-ids.jsonl"),
-    transcriptTailState: join(root, "transcript-tail.json"),
-    preSessionCopies: join(root, "pre-session"),
-    stellaIdentity: join(root, "stella-identity"),
-    pid: join(root, "tachod.pid"),
-    log: join(root, "tachod.log"),
+    tachoDir,
+    agents: join(tachoDir, "agents"),
+    pid: join(tachoDir, "tachod.pid"),
+    log: join(tachoDir, "tachod.log"),
+    daemonLauncher: join(tachoDir, "tachod.cmd"),
     claudeSettings: join(claudeConfigDir, "settings.json"),
     claudeProjects: join(claudeConfigDir, "projects"),
     codexHooks: join(codexHome, "hooks.json"),
     cursorHooks: cursorHooksPaths(home, platform, env),
     stellaToml: join(stellaHome, "stella.toml"),
     stellaSettingsJson: join(stellaHome, "settings.json"),
-    daemonLauncher: join(root, "tachod.cmd"),
     claudeDesktopConfig: claudeDesktopConfigPath(platform, home, env),
   };
+}
+
+/** The machine-level half of `paths`, without any agent's files. */
+export function homeOf(paths: TachoHome): TachoHome {
+  return {
+    tachoDir: paths.tachoDir,
+    agents: paths.agents,
+    pid: paths.pid,
+    log: paths.log,
+    daemonLauncher: paths.daemonLauncher,
+    claudeSettings: paths.claudeSettings,
+    claudeProjects: paths.claudeProjects,
+    codexHooks: paths.codexHooks,
+    cursorHooks: paths.cursorHooks,
+    stellaToml: paths.stellaToml,
+    stellaSettingsJson: paths.stellaSettingsJson,
+    claudeDesktopConfig: paths.claudeDesktopConfig,
+  };
+}
+
+/** The paths of the agent whose directory is `<tachoDir>/agents/<id>`. */
+export function agentPaths(home: TachoHome, id: string): TachoPaths {
+  return pathsInDir(home, join(home.agents, id));
+}
+
+/**
+ * The paths of an agent kept in `dir`. `agentPaths` is the one layout. This
+ * also reads the layout from before ADR-202, where the only enrollment sat
+ * in the tacho directory itself, until `tachod` moves it (`host/agents.ts`).
+ */
+export function pathsInDir(home: TachoHome, dir: string): TachoPaths {
+  const files = {} as Record<keyof typeof AGENT_FILES, string>;
+  for (const key of Object.keys(AGENT_FILES) as (keyof typeof AGENT_FILES)[])
+    files[key] = join(dir, AGENT_FILES[key]);
+  return { ...homeOf(home), dir, ...files };
 }
 
 /** The shared CLI credential store `oxagen login` writes. */

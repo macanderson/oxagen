@@ -15,11 +15,11 @@ import { describeHarness } from "./credential";
 import { tachoHookPresence } from "../host/settings-writer";
 import { stellaHookPresence } from "../host/stella-writer";
 import { Wal } from "../host/wal";
-import { describeSlot, enrolledSlots } from "../host/slots";
+import { describeAgent, listAgents } from "../host/agents";
 import { isBrokerableHarness, isModelRoutedHarness } from "../wire";
 import { type CliDeps, cursorAppFacts } from "./deps";
 import { CURSOR_COVERAGE_NOTE, wrappedCursor } from "./detect";
-import { depsForSlot, rootPathsOf } from "./slot-deps";
+import { depsForAgent } from "./agent-deps";
 
 export interface StatusOptions {
   json?: boolean;
@@ -133,16 +133,18 @@ export interface StatusReport {
    */
   shipping?: ShippingHealth;
   /**
-   * Every enrollment on this machine, one report each, present when there is
-   * more than one (ADR-202): the root's first, then each slot under
-   * `agents/`. The rest of this report repeats the first live one.
+   * Every agent on this machine, one report each, oldest enrollment first
+   * (ADR-202). Empty when nothing is enrolled. The rest of this report
+   * repeats the first live one, so a reader that knows one enrollment still
+   * reads a working agent.
    */
   enrollments?: EnrollmentStatus[];
 }
 
-/** One enrollment's report, with the slot directory it lives in. */
+/** One agent's report, with its id and the directory it lives in. */
 export type EnrollmentStatus = Omit<StatusReport, "enrollments"> & {
-  slot: string;
+  id: string;
+  dir: string;
 };
 
 /**
@@ -292,29 +294,23 @@ export async function status(
   options: StatusOptions,
   deps: CliDeps,
 ): Promise<StatusReport> {
-  const slots = enrolledSlots(rootPathsOf(deps)).map((slot) => ({
-    slot,
-    deps: depsForSlot(deps, slot),
+  const agents = listAgents(deps.paths).map((agent) => ({
+    agent,
+    deps: depsForAgent(deps, agent),
   }));
-  const [only] = slots;
-  if (slots.length <= 1) {
-    const one = only?.deps ?? deps;
-    const report = await slotStatus(one);
-    if (options.json === true) deps.out(JSON.stringify(report, null, 2));
-    else printStatus(report, one);
-    return report;
-  }
-  // More than one agent on this machine (ADR-202): one report per slot. The
-  // top level repeats the first live one, so a reader that knows only one
-  // enrollment, the desktop app among them, still reads a working agent.
   const reports: StatusReport[] = [];
-  for (const { deps: bound } of slots) reports.push(await slotStatus(bound));
+  for (const { deps: bound } of agents) reports.push(await agentStatus(bound));
+  // With no agent, the paths the command started with report that this
+  // machine is not enrolled.
   const primary =
-    reports.find((entry) => entry.enrolled) ?? (reports[0] as StatusReport);
+    reports.find((entry) => entry.enrolled) ??
+    reports[0] ??
+    (await agentStatus(deps));
   const report: StatusReport = {
     ...primary,
     enrollments: reports.map((entry, index) => ({
-      slot: slots[index]?.slot.paths.root ?? "",
+      id: agents[index]?.agent.id ?? "",
+      dir: agents[index]?.agent.paths.dir ?? "",
       ...entry,
     })),
   };
@@ -322,21 +318,25 @@ export async function status(
     deps.out(JSON.stringify(report, null, 2));
     return report;
   }
-  deps.out(`This machine holds ${slots.length} enrollments.`);
-  for (const [index, { slot, deps: bound }] of slots.entries()) {
+  if (agents.length <= 1) {
+    printStatus(primary, agents[0]?.deps ?? deps);
+    return report;
+  }
+  deps.out(`This machine holds ${agents.length} enrollments.`);
+  for (const [index, { agent, deps: bound }] of agents.entries()) {
     deps.out("");
-    deps.out(`Agent       ${describeSlot(slot)} in ${slot.paths.root}`);
+    deps.out(`Agent       ${describeAgent(agent)} in ${agent.paths.dir}`);
     printStatus(reports[index] as StatusReport, bound);
   }
   return report;
 }
 
 /**
- * One enrollment's report, read through `deps` bound to its slot: its own
+ * One agent's report, read through `deps` bound to that agent: its own
  * host.json, daemon, WAL and credential store, and the harness files it
  * hooks.
  */
-async function slotStatus(deps: CliDeps): Promise<StatusReport> {
+async function agentStatus(deps: CliDeps): Promise<StatusReport> {
   // Lenient: `status` is what a person runs when something is wrong, so a
   // host.json that does not validate is a finding to print, not a throw.
   const read = readHostFileLenient(deps.paths.hostFile);
@@ -522,7 +522,7 @@ function printStatus(report: StatusReport, deps: CliDeps): void {
     );
     return;
   }
-  // An enrolled report always carries these; see `slotStatus`.
+  // An enrolled report always carries these; see `agentStatus`.
   const b = report.bundle as NonNullable<StatusReport["bundle"]>;
   const service = report.service as NonNullable<StatusReport["service"]>;
   const hooks = report.hooks as NonNullable<StatusReport["hooks"]>;

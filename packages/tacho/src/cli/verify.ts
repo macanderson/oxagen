@@ -14,7 +14,7 @@ import {
   type WrappedHarness,
 } from "../wire";
 import type { CliDeps } from "./deps";
-import { depsForHarness } from "./slot-deps";
+import { depsForHarness } from "./agent-deps";
 
 export interface VerifyOptions {
   prompt?: string;

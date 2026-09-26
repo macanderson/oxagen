@@ -45,15 +45,18 @@ export {
   STATIC_TOKEN_RENEW_WINDOW_MS,
   staticTokenStillGood,
 } from "../host/model-credential";
+import {
+  harnessesHeldElsewhere,
+  otherLiveAgents,
+} from "../host/agents";
 import type { RunTokenPlacement, RunTokenProvider } from "../host/run-token";
-import { harnessesHeldElsewhere, listSlots, slotIsLive } from "../host/slots";
 import {
   BROKERABLE_HARNESSES,
   isBrokerableHarness,
   TACHO_HARNESS_LABELS,
 } from "../wire";
 import type { CliDeps } from "./deps";
-import { depsForHarness, rootPathsOf, slotDeps } from "./slot-deps";
+import { depsForAgent, depsForHarness } from "./agent-deps";
 
 /**
  * Claude Code's and Codex's directories as this process's paths resolved
@@ -138,14 +141,14 @@ export async function credentialIssue(
       detail: `run tokens are issued for ${MODEL_CREDENTIAL_HARNESSES.join(" and ")}; got "${harness}"`,
     };
   const placement: RunTokenPlacement = options.placement ?? "helper";
-  // The helper names only its harness; the slot that hooks it mints.
-  const slot = depsForHarness(deps, harness);
-  const answer = await slot.daemonPost?.("/credential/issue", {
+  // The helper names only its harness; the agent that hooks it mints.
+  const holder = depsForHarness(deps, harness);
+  const answer = await holder.daemonPost?.("/credential/issue", {
     harness,
     placement,
   });
   if (answer === undefined) {
-    const host = readHost(slot);
+    const host = readHost(holder);
     return {
       ok: false,
       detail:
@@ -209,14 +212,12 @@ export async function credentialStatus(
 ): Promise<CredentialStatusReport> {
   const host = readHost(deps);
   // Each agent on this machine holds its own keys (ADR-202).
-  const later = listSlots(rootPathsOf(deps))
-    .slice(1)
-    .filter(slotIsLive);
+  const others = otherLiveAgents(deps.paths, deps.paths.dir);
   const custody = [
     deps,
-    ...later.map((slot) => slotDeps(deps, slot.paths)),
-  ].flatMap((slot) =>
-    (slot.credentialStore?.status() ?? []).map((c) => ({
+    ...others.map((agent) => depsForAgent(deps, agent)),
+  ].flatMap((agent) =>
+    (agent.credentialStore?.status() ?? []).map((c) => ({
       provider: c.provider,
       kind: c.kind,
       source: c.source,
@@ -225,11 +226,11 @@ export async function credentialStatus(
     })),
   );
   const enrolled: string[] =
-    host === undefined && later.length === 0
+    host === undefined && others.length === 0
       ? MODEL_CREDENTIAL_HARNESSES
       : [
           ...(host?.harnesses ?? []),
-          ...later.flatMap((slot) => slot.host.harnesses),
+          ...others.flatMap((agent) => agent.host?.harnesses ?? []),
         ];
   const harnesses = [...new Set(enrolled)].filter(isCredentialHarness);
   const state =
@@ -512,10 +513,7 @@ export async function restoreCredentials(
   if (contract === undefined)
     return { restored, failed, warnings, custodyUnreadable };
   const helperCommand = deps.runtime.credentialHelperCommand;
-  const heldElsewhere = harnessesHeldElsewhere(
-    rootPathsOf(deps),
-    deps.paths.root,
-  );
+  const heldElsewhere = harnessesHeldElsewhere(deps.paths, deps.paths.dir);
   for (const harness of MODEL_CREDENTIAL_HARNESSES) {
     if (only !== undefined && !only.includes(harness)) continue;
     // Another agent on this machine brokers this harness's key (ADR-202).

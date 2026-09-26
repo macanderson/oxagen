@@ -18,7 +18,7 @@ import {
   rmSync,
   unlinkSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { acquireInstallLock } from "../host/install-lock";
 import { stripClaudeDesktopConfig } from "../host/claude-desktop-writer";
 import { untrustCodexHooks } from "../host/codex-hook-trust";
@@ -29,13 +29,21 @@ import {
 } from "../host/cursor-writer";
 import type { McpServerEntry } from "../host/mcp-config-writer";
 import {
+  type Agent,
+  agentForHarness,
+  agentIsLive,
+  describeAgent,
+  harnessesHeldElsewhere,
+  listAgents,
+  otherLiveAgents,
+} from "../host/agents";
+import {
   type HostFile,
   modelProxyPortFor,
   readHostFileLenient,
-  withRecordedHarnessFiles,
   writeHostFile,
 } from "../host/host-file";
-import type { TachoPaths } from "../host/paths";
+import type { TachoHome } from "../host/paths";
 import { restoreGithubRepositories } from "./github";
 import { harnessDirsOf, restoreCredentials } from "./credential";
 import {
@@ -44,17 +52,6 @@ import {
   type ModelBaseUrlHarness,
 } from "../host/model-base-url";
 import { stripTachoSettings } from "../host/settings-writer";
-import {
-  describeSlot,
-  enrolledSlots,
-  harnessesHeldElsewhere,
-  listSlots,
-  otherLiveSlots,
-  SLOTS_DIR,
-  type Slot,
-  slotForHarness,
-  slotIsLive,
-} from "../host/slots";
 import { stripStellaHooks } from "../host/stella-writer";
 import { toProtocolTimestamp } from "../timestamp";
 import { MODEL_ROUTED_HARNESSES, type TachoHarness } from "../wire";
@@ -64,7 +61,7 @@ import {
   type CredentialOptions,
   resolveCredentials,
 } from "./deps";
-import { rootPathsOf, slotDeps } from "./slot-deps";
+import { depsForAgent } from "./agent-deps";
 
 export interface UnenrollOptions extends CredentialOptions {
   purge?: boolean;
@@ -76,8 +73,7 @@ export interface UnenrollOptions extends CredentialOptions {
   harness?: TachoHarness;
   /**
    * Every agent's enrollment on the machine, one after another, as the
-   * desktop app's Uninstall needs. The root goes last, so it clears what
-   * no enrollment accounts for any more.
+   * desktop app's Uninstall needs.
    */
   all?: boolean;
 }
@@ -200,10 +196,7 @@ export async function restoreModelBaseUrlsFor(
   const failed: string[] = [];
   if (deps.modelBaseUrls === undefined) return { restored, failed };
   const stellaHome = dirname(deps.paths.stellaToml);
-  const heldElsewhere = harnessesHeldElsewhere(
-    rootPathsOf(deps),
-    deps.paths.root,
-  );
+  const heldElsewhere = harnessesHeldElsewhere(deps.paths, deps.paths.dir);
   for (const harness of MODEL_BASE_URL_HARNESSES) {
     // Another agent on this machine routes this harness's model calls.
     if (heldElsewhere.has(harness)) continue;
@@ -350,10 +343,7 @@ export async function stripEnrollmentHooks(
       failed.push(reason.includes(path) ? reason : `${path}: ${reason}`);
     }
   };
-  const heldElsewhere = harnessesHeldElsewhere(
-    rootPathsOf(deps),
-    deps.paths.root,
-  );
+  const heldElsewhere = harnessesHeldElsewhere(deps.paths, deps.paths.dir);
   // With no enrollment id, the strip would take every Tacho entry, and
   // while another agent on this machine is enrolled some are its (ADR-202).
   if (host?.host_enrollment_id === undefined && heldElsewhere.size > 0)
@@ -521,7 +511,7 @@ export async function unenroll(
       warnings: [refusal],
     };
   }
-  const lock = acquireInstallLock(deps.paths.root, deps.now);
+  const lock = acquireInstallLock(deps.paths.tachoDir, deps.now);
   if ("heldBy" in lock) {
     const warning = `another tacho enroll, unenroll or reassign is running on this machine (pid ${lock.heldBy}); wait for it to finish and run this again`;
     deps.err(`warning: ${warning}`);
@@ -532,13 +522,13 @@ export async function unenroll(
       warnings: [warning],
     };
   }
-  const slotRoots: string[] = [];
+  const dirs: string[] = [];
   try {
     const target =
       options.all === true
-        ? undefined
+        ? listAgents(deps.paths)
         : unenrollTarget(deps.paths, options.harness);
-    if (target !== undefined && "refused" in target) {
+    if ("refused" in target) {
       deps.err(`error: ${target.refused}`);
       return {
         ok: false,
@@ -547,30 +537,16 @@ export async function unenroll(
         warnings: [target.refused],
       };
     }
-    const targets = target !== undefined ? [target] : everySlot(deps.paths);
-    const many = enrolledSlots(deps.paths).length > 1;
+    const many = listAgents(deps.paths).length > 1;
     const installed = serviceInstalled(deps);
     const results: UnenrollResult[] = [];
-    for (const slot of targets) {
-      if (many && slot.host !== undefined)
-        deps.out(`Unenrolling ${describeSlot(slot)}`);
-      if (slot.harness === undefined) {
-        results.push(await unenrollLocked(options, deps));
-        continue;
-      }
-      slotRoots.push(slot.paths.root);
-      // The harness files this slot's enroll recorded, as `recordedCliDeps`
-      // does for the root.
-      const read = readHostFileLenient(slot.paths.hostFile);
-      results.push(
-        await unenrollLocked(
-          options,
-          slotDeps(
-            deps,
-            withRecordedHarnessFiles(slot.paths, read.host ?? read.salvaged),
-          ),
-        ),
-      );
+    // With no agent on the machine, one unenroll in the paths the command
+    // started with clears whatever an enrollment lost part way left behind.
+    if (target.length === 0) results.push(await unenrollLocked(options, deps));
+    for (const agent of target) {
+      if (many) deps.out(`Unenrolling ${describeAgent(agent)}`);
+      if (!agent.legacy) dirs.push(agent.paths.dir);
+      results.push(await unenrollLocked(options, depsForAgent(deps, agent)));
     }
     const result = combined(results);
     const restart = restartForRemaining(installed, deps);
@@ -579,18 +555,12 @@ export async function unenroll(
       : { ...result, ok: false, warnings: [...result.warnings, restart] };
   } finally {
     lock.release();
-    // Nothing of ours left in it: the directory goes too, so a machine that
-    // was enrolled and purged looks like one that never was.
-    for (const slotRoot of slotRoots) removeIfEmpty(slotRoot);
-    if (slotRoots.length > 0) removeIfEmpty(join(deps.paths.root, SLOTS_DIR));
-    removeIfEmpty(deps.paths.root);
+    // Nothing of ours left in them: the directories go too, so a machine
+    // that was enrolled and purged looks like one that never was.
+    for (const dir of dirs) removeIfEmpty(dir);
+    removeIfEmpty(deps.paths.agents);
+    removeIfEmpty(deps.paths.tachoDir);
   }
-}
-
-/** What `--all` unenrolls: every agent's slot, then the root. */
-function everySlot(root: TachoPaths): Slot[] {
-  const [rootSlot, ...subSlots] = listSlots(root);
-  return [...subSlots, rootSlot as Slot];
 }
 
 /** One result for several unenrolls: ok and revoked only when each was. */
@@ -604,30 +574,29 @@ function combined(results: readonly UnenrollResult[]): UnenrollResult {
 }
 
 /**
- * The slot an unenroll acts on (ADR-202). With a harness named, the slot
- * that hooks it (`slotForHarness`). With none named, the one enrollment on
- * the machine, or the root when there is none, whose unenroll then clears
- * whatever an enrollment lost part way left behind. With more than one
- * enrollment and no harness named it refuses, and lists them: taking every
+ * The agents an unenroll acts on (ADR-202). With a harness named, the agent
+ * that hooks it (`agentForHarness`). With none named, the one agent on the
+ * machine. None when the machine holds no agent, and the unenroll then
+ * clears whatever an enrollment lost part way left behind. With more than
+ * one agent and no harness named it refuses, and lists them: taking every
  * agent off the machine for a command that named none is the defect #4371
  * describes.
  */
 export function unenrollTarget(
-  root: TachoPaths,
+  home: TachoHome,
   harness: TachoHarness | undefined,
-): Slot | { refused: string } {
-  const rootSlot: Slot = { harness: undefined, paths: root, host: undefined };
-  const present = enrolledSlots(root);
-  const listed = present.map(describeSlot).join("; ");
+): Agent[] | { refused: string } {
+  const present = listAgents(home);
+  const listed = present.map(describeAgent).join("; ");
   if (harness !== undefined) {
-    const slot = slotForHarness(root, harness);
-    if (slot !== undefined) return slot;
-    if (present.length === 0) return rootSlot;
+    const agent = agentForHarness(home, harness);
+    if (agent !== undefined) return [agent];
+    if (present.length === 0) return [];
     return {
       refused: `no enrollment on this machine hooks ${harness}. It holds ${listed}`,
     };
   }
-  if (present.length <= 1) return present[0] ?? rootSlot;
+  if (present.length <= 1) return present;
   return {
     refused: `this machine holds ${present.length} enrollments: ${listed}. Pass --harness to name the one to remove, or --all to remove them all`,
   };
@@ -643,20 +612,20 @@ export function serviceInstalled(deps: CliDeps): boolean {
 
 /**
  * Put the service back for the agents that are still enrolled. One tachod
- * serves every slot (ADR-202), so an unenroll or a failed reassign that
+ * serves every agent (ADR-202), so an unenroll or a failed reassign that
  * removed the service stopped the other agents' collectors and model
  * proxies with its own, and they are down until this starts it again. The
- * command is this binary's, as `enroll` installs it. `deps` are the root's.
- * Returns a warning when the service could not be started again.
+ * command is this binary's, as `enroll` installs it. Returns a warning when
+ * the service could not be started again.
  */
 export function restartForRemaining(
   installed: boolean,
   deps: CliDeps,
 ): string | undefined {
-  const remaining = listSlots(deps.paths).filter(slotIsLive);
+  const remaining = listAgents(deps.paths).filter(agentIsLive);
   if (!installed || remaining.length === 0 || serviceInstalled(deps))
     return undefined;
-  const agents = remaining.map((slot) => slot.host.agent_key).join(", ");
+  const agents = remaining.map((agent) => agent.host.agent_key).join(", ");
   deps.out(
     `Starting the ${deps.serviceManager.kind} service again for ${agents}`,
   );
@@ -667,9 +636,9 @@ export function restartForRemaining(
     return undefined;
   } catch (error) {
     // Name the harnesses: a bare `tacho enroll` means claude-code, and when
-    // no remaining agent hooks it, that enroll adds it to the root's
-    // enrollment by revoking and minting it again. Naming one agent's own
-    // harnesses re-applies that agent's slot, which installs the service.
+    // no remaining agent hooks it, that enroll enrolls a new agent. Naming
+    // one agent's own harnesses re-applies that agent's enrollment, which
+    // installs the service.
     const [first] = remaining;
     const warning = `the service could not be started again, so ${agents} ${remaining.length === 1 ? "has" : "have"} no collector or model proxy: ${error instanceof Error ? error.message : String(error)}. Run \`tacho enroll --harness ${first?.host.harnesses.join(",") ?? ""}\` to install it again`;
     deps.err(`warning: ${warning}`);
@@ -843,7 +812,7 @@ async function unenrollLocked(
     if (revoked) deps.out("      revoked");
   }
 
-  deps.out(`[4/4] Removing host credentials under ${deps.paths.root}`);
+  deps.out(`[4/4] Removing host credentials under ${deps.paths.dir}`);
   // Custody is over: every key went back to its file above, so the store and
   // its key are shredded, and the run token signing key goes with them so a
   // token still in some process's memory is refused from here on. A store
@@ -889,7 +858,7 @@ async function unenrollLocked(
   }
   // The Stella identity cache holds pids and start times and nothing else. A
   // later enrollment rebuilds it, so it goes whether or not `--purge` was
-  // given, and an emptied root can then be removed. A cache left behind does
+  // given, and an emptied agent directory can then be removed. A cache left behind does
   // no harm, so a failure here becomes a warning. A throw would stop the
   // unenroll after the keys are gone and before it deals with host.json.
   try {
@@ -927,17 +896,16 @@ async function unenrollLocked(
     // pending session ends hold sealed terminal batches, bodies included,
     // that never reached the WAL, so they go with it (ADR-139).
     rmSync(deps.paths.pendingEnds, { force: true });
-    // One tachod writes one log for every slot (ADR-202), so it stays while
-    // another agent on this machine is enrolled.
-    const root = rootPathsOf(deps);
-    if (otherLiveSlots(root, deps.paths.root).length === 0) {
-      rmSync(root.log, { force: true });
+    // One tachod writes one log for every agent (ADR-202), so it stays
+    // while another agent on this machine is enrolled.
+    if (otherLiveAgents(deps.paths, deps.paths.dir).length === 0) {
+      rmSync(deps.paths.log, { force: true });
       deps.out(
         "      WAL, spool, quarantine, pending session ends and the collector log purged",
       );
     } else {
       deps.out(
-        `      WAL, spool, quarantine and pending session ends purged; the collector log at ${root.log} is kept for the other agents on this machine`,
+        `      WAL, spool, quarantine and pending session ends purged; the collector log at ${deps.paths.log} is kept for the other agents on this machine`,
       );
     }
   } else {

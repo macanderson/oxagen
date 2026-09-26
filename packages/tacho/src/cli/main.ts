@@ -11,7 +11,8 @@ import {
   readHostFileLenient,
   withRecordedHarnessFiles,
 } from "../host/host-file";
-import { tachoPaths } from "../host/paths";
+import { defaultAgentPaths } from "../host/agents";
+import { tachoHome } from "../host/paths";
 import { isWrappedHarness, type TachoHarness } from "../wire";
 import {
   githubConfigure,
@@ -99,7 +100,7 @@ export function tokenOption(
  * to files that never held a hook and left the real ones behind.
  */
 export function recordedCliDeps(): CliDeps {
-  const base = tachoPaths();
+  const base = defaultAgentPaths(tachoHome());
   const read = readHostFileLenient(base.hostFile);
   return defaultCliDeps({
     paths: withRecordedHarnessFiles(base, read.host ?? read.salvaged),

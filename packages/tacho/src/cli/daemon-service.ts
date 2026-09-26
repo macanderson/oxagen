@@ -1,11 +1,10 @@
 /**
- * The user service that runs `tachod`. One service serves every enrollment
- * slot on the machine (ADR-202), so `enroll` installs it and `unenroll`
- * reinstalls it for the slots that remain, from the same spec.
+ * The user service that runs `tachod`. One service serves every agent on
+ * the machine (ADR-202), so `enroll` installs it and `unenroll` reinstalls
+ * it for the agents that remain, from the same spec.
  */
 import type { ServiceSpec } from "../host/service";
 import type { CliDeps } from "./deps";
-import { rootPathsOf } from "./slot-deps";
 
 /** The harness homes a shell can move, which tachod must read the same way. */
 const HARNESS_HOME_VARS = [
@@ -17,9 +16,8 @@ const HARNESS_HOME_VARS = [
 
 export function daemonServiceSpec(
   daemonCommand: string[],
-  deps: Pick<CliDeps, "env" | "home" | "paths" | "rootPaths">,
+  deps: Pick<CliDeps, "env" | "home" | "paths">,
 ): ServiceSpec {
-  const root = rootPathsOf(deps);
   return {
     command: daemonCommand,
     env: {
@@ -37,9 +35,9 @@ export function daemonServiceSpec(
       PATH: deps.env["PATH"] ?? "/usr/local/bin:/usr/bin:/bin",
       HOME: deps.home,
     },
-    // One tachod serves every slot, so its log and directory are the root's
-    // whichever slot the enrollment went into.
-    logPath: root.log,
-    workingDirectory: root.root,
+    // One tachod serves every agent, so its log and working directory are
+    // the tacho directory's, whichever agent the enrollment went into.
+    logPath: deps.paths.log,
+    workingDirectory: deps.paths.tachoDir,
   };
 }
