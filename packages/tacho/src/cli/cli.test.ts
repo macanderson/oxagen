@@ -22,6 +22,7 @@ import type { FetchLike } from "../host/control-client";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
 import { mcpEndpointFor, readHostFile, writeHostFile } from "../host/host-file";
 import { oxagenConfigPath, tachoPaths } from "../host/paths";
+import { slotHolding, slotPaths } from "../host/slots";
 import type { Exec, ServiceManager, ServiceSpec } from "../host/service";
 import {
   bundleSigner,
@@ -4228,5 +4229,216 @@ describe("brokered credentials (ADR-143)", () => {
         ?.commands.map((c) => c.name())
         .sort(),
     ).toEqual(["issue", "status"]);
+  });
+});
+
+describe("two agents on one machine (ADR-202)", () => {
+  const TOKEN = "oxe_1time_0123456789abcdefghjkmnpqrs";
+  const BOTH =
+    "claude-code as acme.core.cc-laptop; codex as acme.core.codex-agent";
+
+  /**
+   * Claude Code enrolled at the root by an operator, then Codex enrolled by
+   * a one-time token for a second agent. The fake control plane answers the
+   * token with an enrollment of its own, and the OS hands out the next port
+   * on each ask.
+   */
+  async function twoAgents() {
+    const d = deps();
+    let next = 47123;
+    d.findFreePort = async () => next++;
+    const first = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(first.ok, d.errors.join("\n")).toBe(true);
+    const signer = bundleSigner();
+    const controlPlane = d.fetch;
+    d.fetch = async (url, init) => {
+      const answer = await controlPlane(url, init);
+      if (!url.endsWith("/v1/tacho/enroll") || !answer.ok) return answer;
+      const base = enrollmentResponse(signer, "core", OTHER_ENROLLMENT);
+      const claims = {
+        ...base.enrollment.claims,
+        agent_key: "acme.core.codex-agent",
+        harnesses: ["codex"],
+      };
+      return {
+        ...answer,
+        text: async () =>
+          JSON.stringify({
+            ...base,
+            agentKey: "acme.core.codex-agent",
+            agentId: "agt_codex",
+            orgSlug: "acme",
+            workspaceSlug: "core",
+            enrollment: { ...base.enrollment, claims },
+          }),
+      };
+    };
+    d.requests.length = 0;
+    const second = await enroll(
+      {
+        enrollmentToken: TOKEN,
+        harnesses: ["codex"],
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(second.ok, d.errors.join("\n")).toBe(true);
+    return { d, codex: slotPaths(d.paths, "codex") };
+  }
+
+  /** The enrollment ids the fake control plane was asked to revoke. */
+  function revoked(d: ReturnType<typeof deps>): unknown[] {
+    return d.requests
+      .filter((r) => r.url.endsWith("/tacho/enrollments/revoke"))
+      .map((r) => (r.body as { hostEnrollmentId?: string }).hostEnrollmentId);
+  }
+
+  function claudeSettings(d: ReturnType<typeof deps>) {
+    return readJsonFileIfExists(d.paths.claudeSettings) as
+      | { hooks?: Record<string, unknown[]>; env?: Record<string, string> }
+      | undefined;
+  }
+
+  it("enrolls a second agent in a slot of its own and revokes nothing", async () => {
+    const { d, codex } = await twoAgents();
+    expect(revoked(d)).toEqual([]);
+
+    const first = readHostFile(d.paths.hostFile);
+    const second = readHostFile(codex.hostFile);
+    expect(first).toMatchObject({
+      host_enrollment_id: TEST_ENROLLMENT,
+      agent_key: "acme.core.cc-laptop",
+      harnesses: ["claude-code"],
+      revoked_at: null,
+    });
+    expect(second).toMatchObject({
+      host_enrollment_id: OTHER_ENROLLMENT,
+      agent_key: "acme.core.codex-agent",
+      harnesses: ["codex"],
+      revoked_at: null,
+    });
+    // Its own device key, and a collector and model proxy port clear of the
+    // first agent's.
+    expect(second?.device_key_fingerprint).not.toBe(
+      first?.device_key_fingerprint,
+    );
+    const firstPorts = [first?.port, (first?.port ?? 0) + 1];
+    expect(firstPorts).not.toContain(second?.port);
+    expect(firstPorts).not.toContain((second?.port ?? 0) + 1);
+
+    // The Codex hooks carry the second enrollment, so Codex sessions report
+    // as the second agent. Claude Code's still carry the first.
+    const codexHooks = d.readCodexHooks() as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    expect(codexHookPresence(codexHooks, OTHER_ENROLLMENT).complete).toBe(true);
+    expect(
+      codexHooks.hooks["PreToolUse"]?.map((g) => g.hooks[0]?.command),
+    ).toEqual([
+      `node /opt/tacho/tacho-hook.mjs --enrollment ${OTHER_ENROLLMENT} --harness codex`,
+    ]);
+    const settings = claudeSettings(d);
+    expect(settings?.env?.TACHO_ENROLLMENT).toBe(TEST_ENROLLMENT);
+    expect(settings?.hooks?.SessionEnd).toHaveLength(1);
+    expect(d.service.running).toBe(true);
+
+    // Enrolling Codex again re-applies its slot and mints nothing.
+    d.requests.length = 0;
+    expect((await enroll({ harnesses: ["codex"] }, d)).ok).toBe(true);
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(codex.hostFile)?.host_enrollment_id).toBe(
+      OTHER_ENROLLMENT,
+    );
+  });
+
+  it("lists both enrollments in status", async () => {
+    const { d, codex } = await twoAgents();
+    d.lines.length = 0;
+    const report = await status({ json: true }, d);
+    expect(
+      report.enrollments?.map((entry) => [
+        entry.slot,
+        entry.host?.host_enrollment_id,
+      ]),
+    ).toEqual([
+      [d.paths.root, TEST_ENROLLMENT],
+      [codex.root, OTHER_ENROLLMENT],
+    ]);
+    expect(report.host?.host_enrollment_id).toBe(TEST_ENROLLMENT);
+
+    d.lines.length = 0;
+    await status({}, d);
+    expect(d.lines[0]).toBe("This machine holds 2 enrollments.");
+    expect(d.lines).toContain(
+      `Agent       codex as acme.core.codex-agent in ${codex.root}`,
+    );
+  });
+
+  it("unenrolls one agent by its harness and keeps the other", async () => {
+    const { d, codex } = await twoAgents();
+    d.requests.length = 0;
+    const bare = await unenroll({ token: "tok" }, d);
+    expect(bare.ok).toBe(false);
+    expect(d.errors.at(-1)).toBe(
+      `error: this machine holds 2 enrollments: ${BOTH}. Pass --harness to name the one to remove, or --all to remove them all`,
+    );
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(codex.hostFile)?.revoked_at).toBeNull();
+
+    const result = await unenroll({ token: "tok", harness: "codex" }, d);
+    expect(result.ok, d.errors.join("\n")).toBe(true);
+    expect(revoked(d)).toEqual([OTHER_ENROLLMENT]);
+    expect(slotHolding(d.paths, "codex")).toBeUndefined();
+    expect(JSON.stringify(d.readCodexHooks() ?? {})).not.toContain(
+      OTHER_ENROLLMENT,
+    );
+
+    // The first agent is untouched, and the service still runs for it.
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: TEST_ENROLLMENT,
+      revoked_at: null,
+    });
+    const settings = claudeSettings(d);
+    expect(settings?.env?.TACHO_ENROLLMENT).toBe(TEST_ENROLLMENT);
+    expect(settings?.hooks?.SessionEnd).toHaveLength(1);
+    expect(d.service.running).toBe(true);
+    expect(d.service.installed).toBeDefined();
+  });
+
+  it("unenrolls every agent with --all", async () => {
+    const { d } = await twoAgents();
+    d.requests.length = 0;
+    const result = await unenroll({ token: "tok", all: true }, d);
+    expect(result.ok, d.errors.join("\n")).toBe(true);
+    expect(revoked(d)).toEqual([OTHER_ENROLLMENT, TEST_ENROLLMENT]);
+    expect(slotHolding(d.paths, "codex")).toBeUndefined();
+    expect(slotHolding(d.paths, "claude-code")).toBeUndefined();
+    expect(JSON.stringify(d.readCodexHooks() ?? {})).not.toContain(
+      OTHER_ENROLLMENT,
+    );
+    expect(claudeSettings(d)?.env?.TACHO_ENROLLMENT).toBeUndefined();
+    expect(d.service.running).toBe(false);
+  });
+
+  it("refuses a reassign that names neither agent", async () => {
+    const { d } = await twoAgents();
+    d.requests.length = 0;
+    const result = await reassign(
+      { token: "tok", org: "acme", workspace: "edge" },
+      d,
+    );
+    expect(result.ok).toBe(false);
+    expect(d.errors.at(-1)).toBe(
+      `This machine holds 2 enrollments: ${BOTH}. Pass --harness with the harnesses of the one to reassign.`,
+    );
+    expect(d.requests).toEqual([]);
   });
 });
