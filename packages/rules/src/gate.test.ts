@@ -597,3 +597,22 @@ describe("external tool identity at the gate", () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe("the rule errors name the rules that decided (#3971)", () => {
+  test("a denial and an approval each list the verdict's one rule", () => {
+    const verdict = {
+      effect: "deny" as const,
+      ruleId: "refund-cap",
+      description: "refunds over $500 need a person",
+    };
+    expect(new DecisionRuleDeniedError(verdict).ruleIds).toEqual([
+      "refund-cap",
+    ]);
+    expect(
+      new DecisionRuleApprovalRequiredError({
+        ...verdict,
+        effect: "require_approval",
+      }).ruleIds,
+    ).toEqual(["refund-cap"]);
+  });
+});

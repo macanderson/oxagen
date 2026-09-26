@@ -1,7 +1,8 @@
 /**
  * Unit tests for the run recorder routes (#2952, ADR-058):
  *   run.frame_body.get, run.transcript.get, run.turns.get, run.bisect,
- *   run.fork, run.export, run.export.get, run.summarize
+ *   run.fork, run.export, run.export.get, run.summarize, run.context.get,
+ *   run.issues.get
  *
  * Pattern: mock at the adapter seam (@oxagen/auth, @oxagen/oxagen/kernel,
  * @oxagen/billing, @oxagen/handlers, middleware/logger); assert the happy
@@ -148,10 +149,81 @@ const CASES: RouteCase[] = [
         },
       ],
       complete: true,
+      chains: [],
     },
     refused: {
       "run id of neither store": { runId: "run_01K5RQ8M4" },
       "unknown field": { runId: TACHO_ID, zoom: "turns" },
+    },
+  },
+  {
+    path: "/runs/issues",
+    contract: "get_run_issues",
+    input: { runId: TACHO_ID },
+    output: {
+      runId: TACHO_ID,
+      issues: [
+        {
+          ref: "acme/core#12",
+          repository: {
+            host: "github.com",
+            owner: "acme",
+            name: "core",
+            url: "https://github.com/acme/core",
+            connected: true,
+          },
+          number: 12,
+          title: "Retry the upload after a timeout",
+          status: "closed",
+          statusRead: "read",
+          readAt: "2026-09-26T10:00:00.000Z",
+          relation: "resolves",
+          resolvedBy: [
+            { number: 40, url: "https://github.com/acme/core/pull/40" },
+          ],
+          actions: [],
+          edge: "observed",
+          frameSeqs: ["31"],
+          url: "https://github.com/acme/core/issues/12",
+        },
+      ],
+      complete: true,
+      warnings: [],
+    },
+    refused: {
+      "run id of neither store": { runId: "run_01K5RQ8M4" },
+      "unknown field": { runId: TACHO_ID, repository: "acme/core" },
+    },
+  },
+  {
+    path: "/runs/context",
+    contract: "get_run_context",
+    input: { runId: LEDGER_ID },
+    output: {
+      runId: LEDGER_ID,
+      source: "ledger",
+      windows: [
+        {
+          seq: "2",
+          responseSeq: "3",
+          modelCallId: "prov-1-0",
+          provider: "oxagen",
+          model: "anthropic/claude-sonnet-4.6",
+          promptTokens: 1000,
+          bytes: 1000,
+          blocks: [
+            { kind: "system", bytes: 400, items: 1, tokens: 400 },
+            { kind: "conversation", bytes: 600, items: 3, tokens: 600 },
+          ],
+        },
+      ],
+      unmeasured: 0,
+      assemblies: [],
+      complete: true,
+    },
+    refused: {
+      "run id of neither store": { runId: "run_01K5RQ8M4" },
+      "unknown field": { runId: LEDGER_ID, seq: "2" },
     },
   },
   {

@@ -12,6 +12,7 @@ import {
   type McpGatewayDeps,
   parseJsonRpc,
   readRpcBody,
+  refusalRulesOf,
   RPC_INVALID_REQUEST,
   RPC_REFUSED,
   toolCountOf,
@@ -509,6 +510,55 @@ describe("evidence", () => {
     await gw.handle(CALL, CTX);
     expect(records[0]?.status).toBe("rejected");
     expect(records[0]?.refusedReason).toBe("Tool blocked by workspace policy");
+    // The refusal named no rule, so the record names none.
+    expect(records[0]).not.toHaveProperty("ruleIds");
+  });
+
+  it("records the rules a refusal names, in order, and none from any other answer (#3971)", async () => {
+    const answer = (error: unknown) => {
+      const fetch: GatewayFetch = async () => ({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ jsonrpc: "2.0", id: 7, error }),
+      });
+      return gateway({ fetch });
+    };
+    const refused = answer({
+      code: RPC_REFUSED,
+      message: "refunds over $500 need a person",
+      data: { ruleIds: ["refund-cap", "", 7, "weekend-freeze"] },
+    });
+    await refused.gw.handle(CALL, CTX);
+    expect(refused.records[0]?.ruleIds).toEqual([
+      "refund-cap",
+      "weekend-freeze",
+    ]);
+    // A tool failure is not a decision, whatever its data says.
+    const failed = answer({
+      code: -32603,
+      message: "handler threw",
+      data: { ruleIds: ["refund-cap"] },
+    });
+    await failed.gw.handle(CALL, CTX);
+    expect(failed.records[0]?.status).toBe("error");
+    expect(failed.records[0]).not.toHaveProperty("ruleIds");
+  });
+
+  it("reads a refusal's rules within the envelope's bounds (negative)", () => {
+    const refusal = (data: unknown) => ({
+      jsonrpc: "2.0" as const,
+      id: 1,
+      error: { code: RPC_REFUSED, message: "denied", data },
+    });
+    expect(refusalRulesOf(refusal({ ruleIds: [] }))).toBeUndefined();
+    expect(refusalRulesOf(refusal({ ruleIds: "refund-cap" }))).toBeUndefined();
+    expect(refusalRulesOf(refusal(null))).toBeUndefined();
+    expect(refusalRulesOf(undefined)).toBeUndefined();
+    const many = refusalRulesOf(
+      refusal({ ruleIds: Array.from({ length: 80 }, () => "r".repeat(600)) }),
+    );
+    expect(many).toHaveLength(64);
+    expect(many?.[0]).toHaveLength(512);
   });
 
   it("records an ordinary tool failure as an error, not as a refusal", async () => {

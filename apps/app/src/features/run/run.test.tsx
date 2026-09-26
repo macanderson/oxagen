@@ -19,6 +19,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RunTranscript, TranscriptZoom } from "@/data/contracts/run";
+import type { RunRow } from "@/data/contracts/runs";
 import type { PriceBook } from "@/data/contracts/spend";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -46,6 +47,7 @@ import {
   transcriptEntry,
   transcriptFigures,
 } from "./run.builders";
+import { runIssue, runIssues } from "./issues.builders";
 import { releaseTranscript } from "./transcript.builders";
 
 /**
@@ -453,6 +455,175 @@ describe("header", () => {
     );
     await expectNoAxe(container);
   });
+
+  it.each<[string, Partial<RunRow>, string, string]>([
+    [
+      "a proxied request's effort, titled with the request",
+      { effort: "low", effortSource: "request", enforcementTier: "gateway" },
+      "effort low",
+      "Read from the model request Oxagen proxied.",
+    ],
+    [
+      "the harness's reported effort, titled with the harness",
+      { effort: "high", effortSource: "harness" },
+      "effort high",
+      "Reported by the harness.",
+    ],
+    [
+      "not captured on an observe run, because Oxagen never read the request",
+      { effort: null, effortSource: null, enforcementTier: "observe" },
+      "effort not captured",
+      "The model call did not go through Oxagen, so the request body was never read.",
+    ],
+    [
+      "not captured on a gateway run whose request carried none",
+      { effort: null, effortSource: null, enforcementTier: "gateway" },
+      "effort not captured",
+      "The call went through Oxagen and its request carried no effort setting, so the model used its own default.",
+    ],
+  ])("prints %s (#3891)", async (_case, row, text, title) => {
+    const { container } = await renderRun({
+      detail: ok(runDetail({ run: runRow(row) })),
+      transcript: ok(runTranscript()),
+    });
+    const chip = screen.getByTestId("run-effort");
+    expect(chip).toHaveTextContent(text);
+    expect(chip).toHaveAttribute("title", title);
+    await expectNoAxe(container);
+  });
+
+  /** A stored reading of a sealed run: a class too heavy and an effort that fits. */
+  const READING: NonNullable<RunRow["fit"]> = {
+    method: "run-fit/v1",
+    readAt: "2026-09-15T08:45:00.000Z",
+    sealedAt: "2026-09-15T08:40:00.000Z",
+    read: {
+      prompts: 1,
+      turns: 2,
+      steps: 5,
+      failed: 0,
+      outputTokens: 1_000,
+      reasoningTokens: 100,
+    },
+    model: { verdict: "over", tier: "sonnet", suggest: "haiku" },
+    effort: { verdict: "fit", effort: "high", source: "request" },
+  };
+
+  it("draws the rig's fit badges from the stored reading (#3893)", async () => {
+    const { container } = await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            effort: "high",
+            effortSource: "request",
+            fit: READING,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const rig = within(screen.getByTestId("run-rig"));
+    expect(rig.getByTestId("run-fit-model")).toHaveTextContent(
+      "Wrong model tier",
+    );
+    expect(rig.getByTestId("run-fit-effort")).toHaveTextContent("Effort fit");
+    await expectNoAxe(container);
+  });
+
+  it("draws the rig's other two badges: a model class that fits, and an effort the reading would move (#3893)", async () => {
+    const { container } = await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            effort: "high",
+            effortSource: "request",
+            fit: {
+              ...READING,
+              model: { verdict: "fit", tier: "sonnet" },
+              effort: {
+                verdict: "over",
+                effort: "high",
+                source: "request",
+                suggest: "medium",
+              },
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const rig = within(screen.getByTestId("run-rig"));
+    expect(rig.getByTestId("run-fit-model")).toHaveTextContent("Model fit");
+    expect(rig.getByTestId("run-fit-effort")).toHaveTextContent(
+      "Wrong effort setting",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("draws no fit badge on a live run, and no effort badge for an effort the reading did not see (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            outcome: "running",
+            sealedAt: null,
+            effort: "high",
+            effortSource: "request",
+            fit: READING,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByTestId("run-fit-model")).toBeNull();
+    expect(screen.queryByTestId("run-fit-effort")).toBeNull();
+    cleanup();
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            effort: null,
+            fit: {
+              ...READING,
+              effort: { verdict: "unseen", why: "not_proxied" },
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-fit-model")).toBeTruthy();
+    expect(screen.queryByTestId("run-fit-effort")).toBeNull();
+  });
+
+  it.each<[string, Partial<RunRow>, string, string]>([
+    [
+      "a recorded effort",
+      { effort: "high", effortSource: "request", fit: READING },
+      "effort high",
+      "Effort high, read from the model request, fits this run.",
+    ],
+    [
+      "no effort on a gateway run",
+      { effort: null, effortSource: null, enforcementTier: "gateway" },
+      "effort not captured",
+      "This agent sent no effort setting, so the model used its own default.",
+    ],
+  ])(
+    "prints the same effort on the rig and on the Cost tab's effort card: %s (regression #3893)",
+    async (_case, row, rig, card) => {
+      await renderRun(
+        {
+          detail: ok(runDetail({ run: runRow(row) })),
+          transcript: ok(runTranscript()),
+        },
+        { tab: "cost" },
+      );
+      expect(screen.getByTestId("run-effort")).toHaveTextContent(rig);
+      expect(screen.getByTestId("fit-effort-card")).toHaveTextContent(card);
+    },
+  );
 
   it("reads the agent's 30-day runs and spend onto its card, and leaves them off when the roster does not hold it", async () => {
     await renderRun({
@@ -896,8 +1067,9 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
     });
+    // No kind is recorded, so no role segment: only a person holds one.
     expect(screen.getByTestId("run-operator-name")).toHaveTextContent(
-      /^prn_unknown_kindoperator$/,
+      /^prn_unknown_kindoperator · core-platform$/,
     );
     expect(screen.getByTestId("run-operator")).not.toHaveTextContent(
       "not recorded",
@@ -910,7 +1082,10 @@ describe("header", () => {
       transcript: ok(runTranscript()),
     });
     const operator = screen.getByTestId("run-operator-name");
-    expect(operator).toHaveTextContent(/^Marcus Belloperator$/);
+    // The builder's run predates the role stamp (#3999).
+    expect(operator).toHaveTextContent(
+      /^Marcus Belloperator · role not recorded · core-platform$/,
+    );
     expect(operator.getAttribute("data-operator-id")).toBe("prn_marcusbell");
     // The id is a key, not a label: it is in the hover card, never in the line.
     expect(
@@ -1684,6 +1859,8 @@ describe("tabs", () => {
     const { container } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
+      // One issue: the task (#3970).
+      issues: ok(runIssues()),
     });
     const tabs = within(screen.getByRole("tablist", { name: "Run sections" }));
     expect(
@@ -2860,17 +3037,13 @@ describe("the work", () => {
         "src/release/cut.ts",
       ),
     ).toBeTruthy();
-    // The base is the branch the pull request merges into (#3890). No read
-    // carries a release, so that row says so rather than naming one.
+    // The base is the branch the pull request merges into (#3890). The
+    // session created no release, so the panel draws no Release row.
     const rows = changes
       .getAllByRole("term")
       .map((term) => [term.textContent, term.nextElementSibling?.textContent]);
-    expect(rows).toEqual(
-      expect.arrayContaining([
-        ["Base", "main"],
-        ["Release", "not recorded"],
-      ]),
-    );
+    expect(rows).toEqual(expect.arrayContaining([["Base", "main"]]));
+    expect(rows.map(([term]) => term)).not.toContain("Release");
     expect(
       changes.getByRole("link", { name: "main" }).getAttribute("href"),
     ).toBe("https://github.com/acme/platform/tree/main");
@@ -3221,9 +3394,28 @@ describe("an open run's cost and the idle close (#3980)", () => {
 });
 
 describe("issues", () => {
-  it("lists the task the run was started on", async () => {
+  it("lists the issues get_run_issues answers, the task first", async () => {
     const { container } = await renderRun(
-      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        issues: ok(
+          runIssues({
+            issues: [
+              runIssue({
+                ref: "ENG-4121",
+                repository: null,
+                number: null,
+                title: null,
+                status: null,
+                statusRead: "not_github",
+                readAt: null,
+                url: null,
+              }),
+            ],
+          }),
+        ),
+      },
       { tab: "issues" },
     );
     const issues = within(screen.getByRole("region", { name: "Issues" }));
@@ -3236,7 +3428,7 @@ describe("issues", () => {
     await expectNoAxe(container);
   });
 
-  it("says a run with no task reference names no issue, and counts a floor while GitHub's closing list is unread (negative)", async () => {
+  it("says a run that names no issue has none, and counts a floor when a limit cut the list (negative)", async () => {
     await renderRun(
       {
         detail: ok(runDetail({ run: runRow({ taskRef: null }) })),
@@ -3244,11 +3436,8 @@ describe("issues", () => {
       },
       { tab: "issues" },
     );
-    // No pull request was recorded, so the answer is exact.
     expect(
-      screen.getByText(
-        "This run names no issue, and no pull request it opened closes one.",
-      ),
+      screen.getByText("No issue is linked to this session."),
     ).toBeTruthy();
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent(/^0$/);
     cleanup();
@@ -3256,44 +3445,45 @@ describe("issues", () => {
       {
         detail: ok(runDetail({ run: runRow({ taskRef: null }) })),
         transcript: ok(runTranscript()),
-        work: ok(runWork()),
+        issues: ok(
+          runIssues({
+            issues: [],
+            complete: false,
+            warnings: ["closing_issues_read_failed"],
+          }),
+        ),
       },
       { tab: "issues" },
     );
-    // A recorded pull request whose closing list GitHub did not return.
-    expect(
-      screen.getByText(
-        "This run names no issue. GitHub did not return the issues its pull requests close.",
-      ),
-    ).toBeTruthy();
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent("0+");
   });
 
-  it("counts the issues the run's pull requests close in the tab, the same rows the table draws", async () => {
-    const work = runWork();
+  it("counts the rows the table draws in the tab, from the one issues read", async () => {
     await renderRun(
       {
         detail: ok(runDetail()),
         transcript: ok(runTranscript()),
-        work: ok({
-          ...work,
-          pullRequests: work.pullRequests.map((pr) => ({
-            ...pr,
-            closingIssues: {
-              issues: [
-                {
-                  owner: "acme",
-                  repo: "platform",
-                  number: 490,
-                  title: "Release checklist",
-                  url: "https://github.com/acme/platform/issues/490",
-                  state: "open" as const,
-                },
-              ],
-              complete: true,
-            },
-          })),
-        }),
+        issues: ok(
+          runIssues({
+            issues: [
+              runIssue(),
+              runIssue({
+                ref: "a-intel/platform#490",
+                number: 490,
+                relation: "resolves",
+                resolvedBy: [
+                  {
+                    number: 511,
+                    url: "https://github.com/a-intel/platform/pull/511",
+                  },
+                ],
+                edge: "observed",
+                frameSeqs: ["36"],
+                url: "https://github.com/a-intel/platform/issues/490",
+              }),
+            ],
+          }),
+        ),
       },
       { tab: "issues" },
     );
@@ -3320,6 +3510,8 @@ describe("policy and context", () => {
       decision: "deny",
       type: "policy.denied",
       harness: false,
+      rules: [],
+      taint: null,
       at: "2026-09-20T00:00:00Z",
     },
   });
@@ -3382,6 +3574,8 @@ describe("policy and context", () => {
         at: "2026-09-20T00:00:00Z",
         source: "harness",
         harness: true,
+        rules: [],
+        taint: null,
       },
     });
     // The server counts the two decisions under the policy chip, and only
@@ -3594,6 +3788,52 @@ describe("what the session recorded", () => {
     const operator = within(screen.getByTestId("run-operator"));
     expect(operator.getByText("enrolled the host")).toBeTruthy();
     expect(operator.queryByText("operator")).toBeNull();
+  });
+
+  // #3999, ADR-197: the role the operator held in this workspace when the run
+  // opened, as pages/run.md draws the Summary.
+  it("prints the operator's stamped workspace role and the workspace beside the operator", async () => {
+    const { container } = await renderRun({
+      detail: ok(runDetail({ run: runRow({ operatorRole: "owner" }) })),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-operator-name")).toHaveTextContent(
+      /^Marcus Belloperator · workspace\.owner · core-platform$/,
+    );
+    expect(screen.getByTestId("run-operator-role")).toHaveTextContent(
+      "workspace.owner",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("says a person's role is not recorded on a run from before the stamp, and draws no role for an agent (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ operatorRole: null }) })),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-operator-role")).toHaveTextContent(
+      "role not recorded",
+    );
+    expect(screen.getByTestId("run-operator")).not.toHaveTextContent(
+      "workspace.",
+    );
+    cleanup();
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            operatorKind: "agent",
+            operatorName: null,
+            operatorRole: "owner",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByTestId("run-operator-role")).toBeNull();
+    expect(screen.getByTestId("run-operator")).toHaveTextContent(
+      "core-platform",
+    );
   });
 
   it("lists the subagents the session started under the checkout, and draws no row when it started none", async () => {

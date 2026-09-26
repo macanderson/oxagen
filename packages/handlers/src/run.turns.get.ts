@@ -55,6 +55,8 @@ export function createRunTurnsGetHandler(
         runId: input.runId,
         turns: ledger.turns,
         complete: ledger.complete && read.complete,
+        // A ledger run records no subagent chains (#4001).
+        chains: [],
       };
     }
     const children =
@@ -68,7 +70,7 @@ export function createRunTurnsGetHandler(
       facts.find((f) => f.sessionUuid === run.sessionUuid),
     );
     if (starts.length === 0)
-      return { runId: input.runId, turns: [], complete: true };
+      return { runId: input.runId, turns: [], complete: true, chains: [] };
     // One start past the cap is enough to tell a longer run from one that
     // fits, and it keeps the list the query binds bounded.
     const kept = starts.slice(0, RUN_TURNS_MAX + 1);
@@ -87,6 +89,7 @@ export function createRunTurnsGetHandler(
     });
     return {
       runId: input.runId,
+      // The turns, and the turn each subagent chain counts toward (#4001).
       ...tachoTurns({
         rootSessionUuid: run.sessionUuid,
         starts: kept,

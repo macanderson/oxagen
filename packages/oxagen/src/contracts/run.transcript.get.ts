@@ -398,6 +398,21 @@ export const transcriptDecisionSchema = z
     harness: z.boolean(),
     /** RFC 3339. */
     at: z.string().datetime(),
+    /**
+     * The rule ids or permission patterns that matched, in evaluation order
+     * (#3971). Empty when the frame names none.
+     */
+    rules: z.array(z.string().min(1).max(512)).max(64).default([]),
+    /**
+     * The taint labels a producer assessed on the call's inputs (#3971). Null
+     * when no producer assessed taint, and an empty list when one assessed
+     * the inputs as untainted.
+     */
+    taint: z
+      .array(z.string().min(1).max(128))
+      .max(32)
+      .nullable()
+      .default(null),
   })
   .strict();
 

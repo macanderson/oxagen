@@ -275,6 +275,34 @@ describe("the everything zoom", () => {
       ]);
     });
 
+    it("names the rules that fired, and says no producer assessed taint (#3971)", () => {
+      const decided = (seq: number, body: Record<string, unknown>) =>
+        w(seq, "policy_decision", {
+          policyDecision: "allow",
+          body: JSON.stringify({ policy_source: "bundle", ...body }),
+        });
+      const entries = foldTranscript(
+        [
+          // A current hook writes the list beside the joined form.
+          decided(1, {
+            policy_rule: "Bash(git add:*) and Bash(git commit:*)",
+            policy_rules: ["Bash(git add:*)", "Bash(git commit:*)"],
+          }),
+          // A row sealed before the list existed carries the joined form alone.
+          decided(2, { policy_rule: "Read" }),
+          // A decision no rule made names none.
+          decided(3, {}),
+        ],
+        "everything",
+      );
+      expect(entries.map((e) => e.decision?.rules)).toEqual([
+        ["Bash(git add:*)", "Bash(git commit:*)"],
+        ["Read"],
+        [],
+      ]);
+      expect(entries.map((e) => e.decision?.taint)).toEqual([null, null, null]);
+    });
+
     it("never becomes the decision of a call, and stays an entry of its own", () => {
       const folded = stepFolds([
         w(0, "tool_requested", { toolName: "Read", toolUseId: "toolu_r" }),

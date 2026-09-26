@@ -5,10 +5,12 @@
 //
 // The record carries the operator's first prompt (the `turn_start` body),
 // the input the first model call reported, the `steering.manifest` frame the
-// host sealed at the session's start, and the recall frames. It does not
-// carry the window block by block, a context frame's score or citation, or
-// the retrieval figures (gap G10), so those panels are drawn and say so. A
-// token is never estimated here.
+// host sealed at the session's start, and the recall frames. `get_run_context`
+// adds each model request's window block by block where the call passed
+// through the gateway, and the assembler's budget and counts (ADR-200). A
+// block's tokens are its byte share of the provider's total, so nothing is
+// counted here. A context frame's score and citation are still not recorded,
+// so those cells say so.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {
@@ -16,13 +18,18 @@ import type {
   TranscriptEntry,
   TranscriptRecallItem,
 } from "@/data/contracts/run";
+import type {
+  ContextAssembly,
+  ContextWindow,
+  RunContext,
+} from "@/data/contracts/run-context";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
 import { Badge } from "@/ui/badge";
 import { buttonSecondary, eyebrowQuiet, mono } from "@/ui/control-styles";
 import { type ListRow, ListTable } from "@/ui/list-table";
-import { formatCount } from "@/ui/money-format";
+import { formatCount, formatRatio } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell } from "@/ui/table";
@@ -37,6 +44,7 @@ import {
 import { Fact, Facts, Meter, Note, NoValue, Panel, PanelBody } from "./parts";
 import { FrameLink } from "./policy-tab";
 import { entriesOf } from "./recorded-entries";
+import { BLOCK_HUE, CompositionBar } from "./request-window";
 import type { FrameTabProps, Place } from "./tab-props";
 import { entryKey } from "./transcript-rows";
 import { isWhole } from "./whole-transcript";
@@ -136,19 +144,66 @@ function operatorOf(run: RunRow): string | null {
   return run.operatorName ?? run.operatorId;
 }
 
+/**
+ * The first request's blocks as bars, each track filled by its share of the
+ * window and its tokens beside it (bytes when the provider reported no
+ * input). The shares are the ones `get_run_context` split the total by.
+ */
+function WindowBars({ measured }: { measured: ContextWindow }) {
+  const t = useTranslations("run.frames.window");
+  const locale = useLocale();
+  const size = (block: ContextWindow["blocks"][number]) =>
+    block.tokens ?? block.bytes;
+  const whole = measured.blocks.reduce((sum, block) => sum + size(block), 0);
+  return (
+    <div className="grid gap-1.5" data-testid="run-context-bars">
+      {measured.blocks.map((block) => (
+        <div
+          key={block.kind}
+          data-testid="run-context-bar"
+          data-kind={block.kind}
+          className={promptBar}
+        >
+          <span className="truncate">{t(`block.${block.kind}`)}</span>
+          <span className="block h-[7px] min-w-0 overflow-hidden rounded-[4px] bg-hl">
+            <i
+              aria-hidden="true"
+              className={`block h-full rounded-[4px] ${BLOCK_HUE[block.kind]}`}
+              style={{
+                width: `${String(whole === 0 ? 0 : (size(block) / whole) * 100)}%`,
+              }}
+            />
+          </span>
+          <span className="font-mono text-[10.5px]">
+            {block.tokens === null
+              ? t("bytes", { count: formatCount(block.bytes, locale) })
+              : t("tokens", { count: formatCount(block.tokens, locale) })}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PromptPanel({
   run,
   prompt,
   request,
+  measured,
 }: {
   run: RunRow;
   prompt: FirstPrompt | null;
   request: FirstRequest | null;
+  /** The first request's window; null when the record measured none. */
+  measured: ContextWindow | null;
 }) {
   const t = useTranslations("run.context.prompt");
   const locale = useLocale();
   const operator = operatorOf(run);
   const parts = [t("words"), t("toolsSteering"), t("systemBrief")];
+  // The window's total is the provider's, the same figure the bars split, so
+  // "tok sent" and the window cannot disagree.
+  const sent = measured?.promptTokens ?? request?.input ?? null;
   return (
     <Panel
       title={t("title")}
@@ -157,9 +212,9 @@ function PromptPanel({
         <>
           <span className="font-mono text-[11px] text-dim">
             {t("writtenNotRecorded")} ·{" "}
-            {request === null || request.input === null
+            {sent === null
               ? t("sentNotRecorded")
-              : t("sent", { count: formatCount(request.input, locale) })}
+              : t("sent", { count: formatCount(sent, locale) })}
           </span>
           {/* A fragment on this page: WINDOW_ANCHOR, written out because a link's target is never computed (INV-13). */}
           <a
@@ -191,35 +246,41 @@ function PromptPanel({
         </div>
         <div className="min-w-0">
           <p className={`${eyebrowQuiet} mb-1.5`}>{t("firstRequest")}</p>
-          {request === null ? (
+          {request === null && measured === null ? (
             <p className="m-0 text-[11.5px] text-muted-foreground">
               {t("noRequest")}
             </p>
           ) : (
             <>
-              <div className="grid gap-1.5" data-testid="run-context-bars">
-                {parts.map((part) => (
-                  <div key={part} className={promptBar}>
-                    <span className="truncate">{part}</span>
-                    <span className="block h-[7px] min-w-0 overflow-hidden rounded-[4px] bg-hl" />
-                    <span className="font-mono text-[10.5px]">
-                      <NoValue />
-                    </span>
-                  </div>
-                ))}
-              </div>
+              {measured === null ? (
+                <div className="grid gap-1.5" data-testid="run-context-bars">
+                  {parts.map((part) => (
+                    <div key={part} className={promptBar}>
+                      <span className="truncate">{part}</span>
+                      <span className="block h-[7px] min-w-0 overflow-hidden rounded-[4px] bg-hl" />
+                      <span className="font-mono text-[10.5px]">
+                        <NoValue />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <WindowBars measured={measured} />
+              )}
               <p className="mb-0 mt-2 text-[11.5px] text-muted-foreground">
-                {request.input !== null && request.cached !== null
+                {request !== null &&
+                request.input !== null &&
+                request.cached !== null
                   ? t("cache", {
-                      total: formatCount(request.input, locale),
+                      total: formatCount(sent ?? request.input, locale),
                       cached: formatCount(request.cached, locale),
                     })
-                  : request.cached !== null
+                  : request !== null && request.cached !== null
                     ? t("cachedOnly", {
                         cached: formatCount(request.cached, locale),
                       })
                     : t("noUsage")}{" "}
-                {t("splitNotRecorded")}
+                {measured === null ? t("splitNotRecorded") : t("splitByBytes")}
               </p>
             </>
           )}
@@ -404,16 +465,56 @@ function ManifestSpine({
   );
 }
 
-/** The first request's window: its total, and the split the record does not carry. */
+/**
+ * The first request's window: its blocks as the composition bar where the
+ * record measured them (ADR-200), else its reported total and the split the
+ * record does not carry.
+ */
 function PromptWindow({
   request,
+  context,
   runId,
 }: {
   request: FirstRequest | null;
+  /** `get_run_context`; the first window it lists is the first request's. */
+  context: Read<RunContext>;
   runId: string;
 }) {
   const t = useTranslations("run.context.window");
   const locale = useLocale();
+  const measured = context.ok ? (context.value.windows[0] ?? null) : null;
+  if (measured !== null)
+    return (
+      <div id={WINDOW_ANCHOR}>
+        <Panel
+          title={t("title")}
+          testId="run-context-window"
+          aside={
+            <>
+              <Badge tone="quiet" dot={false} mono>
+                {t("frame", { seq: measured.seq })}
+              </Badge>
+              <Badge tone="quiet" dot={false}>
+                {measured.promptTokens === null
+                  ? t("inputNotRecorded")
+                  : t("input", {
+                      count: formatCount(measured.promptTokens, locale),
+                    })}
+              </Badge>
+            </>
+          }
+        >
+          <CompositionBar recorded={measured} />
+          <div className="mt-[13px]">
+            <Note testId="run-context-window-note">
+              {measured.promptTokens === null
+                ? t("measuredBytes")
+                : t("measured")}
+            </Note>
+          </div>
+        </Panel>
+      </div>
+    );
   if (request === null)
     return (
       <div id={WINDOW_ANCHOR}>
@@ -455,6 +556,11 @@ function PromptWindow({
         <div className="mt-[13px]">
           <Note>{t("note")}</Note>
         </div>
+        {context.ok ? null : (
+          <div className="mt-2">
+            <ReadFailure read={context} section={t("title")} />
+          </div>
+        )}
       </Panel>
     </div>
   );
@@ -628,41 +734,77 @@ function WalkWindow({
   );
 }
 
+/**
+ * The assembler's figures from the first manifest `get_run_context` read
+ * (ADR-200): what it spent of its budget, the candidates it ranked, kept and
+ * cut, the headroom left and the digest of the text. The assembler has no
+ * relevance floor, so that figure stays not recorded.
+ */
 function RetrievalStats({
   assembled,
+  assembly,
   place,
 }: {
   assembled: TranscriptEntry | null;
+  assembly: ContextAssembly | null;
   place: Place;
 }) {
   const t = useTranslations("run.context.retrieval");
+  const locale = useLocale();
+  const count = (value: number) => formatCount(value, locale);
+  const share =
+    assembly === null || assembly.budgetTokens === 0
+      ? null
+      : assembly.spentTokens / assembly.budgetTokens;
   return (
     <Panel title={t("title")} testId="run-context-retrieval">
       <Meter
         label={t("budget")}
-        value={<NoValue />}
-        share={null}
+        value={
+          assembly === null ? (
+            <NoValue />
+          ) : (
+            t("spent", {
+              spent: count(assembly.spentTokens),
+              budget: count(assembly.budgetTokens),
+            })
+          )
+        }
+        share={share}
         hue="bg-proven"
+        title={share === null ? undefined : formatRatio(share, locale)}
       />
       <div className="mt-[13px]">
         <Facts>
           <Fact label={t("scored")}>
-            <NoValue />
+            {assembly === null ? (
+              <NoValue />
+            ) : (
+              count(assembly.included + assembly.cut)
+            )}
           </Fact>
           <Fact label={t("admitted")}>
-            <NoValue />
+            {assembly === null ? <NoValue /> : count(assembly.included)}
           </Fact>
           <Fact label={t("held")}>
-            <NoValue />
+            {assembly === null ? <NoValue /> : count(assembly.cut)}
           </Fact>
           <Fact label={t("floor")}>
             <NoValue />
           </Fact>
           <Fact label={t("headroom")}>
-            <NoValue />
+            {assembly === null ? (
+              <NoValue />
+            ) : (
+              t("tokens", {
+                count: count(
+                  Math.max(0, assembly.budgetTokens - assembly.spentTokens),
+                ),
+              })
+            )}
           </Fact>
-          <Fact label={t("digest")}>
-            <NoValue />
+          <Fact label={t("digest")} code={assembly !== null && assembly.textDigest !== null}>
+            {assembly?.textDigest ?? <NoValue />}
           </Fact>
           {assembled === null ? null : (
             <Fact label={t("assembledAt")}>
@@ -680,7 +822,7 @@ function RetrievalStats({
         </Facts>
       </div>
       <div className="mt-3">
-        <Note>{t("note")}</Note>
+        <Note>{assembly === null ? t("note") : t("recorded")}</Note>
       </div>
     </Panel>
   );
@@ -691,6 +833,7 @@ function ContextBody({
   read,
   steps,
   manifest,
+  context,
   place,
 }: {
   run: RunRow;
@@ -699,6 +842,8 @@ function ContextBody({
   /** The run at `steps`, where the first model step is one entry. */
   steps: Read<RunTranscript>;
   manifest: ManifestRead | null;
+  /** `get_run_context`: the windows and the assembler's manifests. */
+  context: Read<RunContext>;
   place: Place;
 }) {
   const t = useTranslations("run.context");
@@ -760,17 +905,28 @@ function ContextBody({
     const stop = stopOf(entry);
     return stop === null ? [] : [stop];
   });
+  const measured = context.ok ? (context.value.windows[0] ?? null) : null;
+  const assembly = context.ok ? (context.value.assemblies[0] ?? null) : null;
   return (
     <>
-      <PromptPanel run={run} prompt={prompt} request={request} />
+      <PromptPanel
+        run={run}
+        prompt={prompt}
+        request={request}
+        measured={measured}
+      />
       <ManifestSpine manifest={manifest} run={run} />
-      <PromptWindow request={request} runId={run.id} />
+      <PromptWindow request={request} context={context} runId={run.id} />
       {/* `.split { grid-template-columns:minmax(0,1fr) 340px }`, one column under 1080px. */}
       <div className="grid items-start gap-3.5 min-[67.5rem]:grid-cols-[minmax(0,1fr)_340px]">
         <ContextFrames read={read} manifest={manifest} place={place} />
         <div className="flex min-w-0 flex-col gap-3.5">
           <WalkWindow stops={stops} place={place} />
-          <RetrievalStats assembled={assembled} place={place} />
+          <RetrievalStats
+            assembled={assembled}
+            assembly={assembly}
+            place={place}
+          />
         </div>
       </div>
     </>
@@ -778,19 +934,22 @@ function ContextBody({
 }
 
 /**
- * The Context tab. It makes no read of its own: the server read the manifest
- * frame's whole body and states each item's outcome on the entry (`recall`,
- * ADR-182).
+ * The Context tab. Its one read of its own is `get_run_context`, the windows
+ * and the assembler's figures (ADR-200). The manifest's items come from the
+ * transcript: the server read the frame's whole body and states each item's
+ * outcome on the entry (`recall`, ADR-182).
  */
-export function ContextTab(props: FrameTabProps): ReactNode {
-  const { everything, transcript, run, place } = props;
+export async function ContextTab(props: FrameTabProps): Promise<ReactNode> {
+  const { ctx, source, everything, transcript, run, place } = props;
   const manifest = everything.ok ? manifestOf(everything.value.entries) : null;
+  const context = await source.runs.context(ctx, run.id);
   return (
     <ContextBody
       run={run}
       read={everything}
       steps={transcript}
       manifest={manifest}
+      context={context}
       place={place}
     />
   );

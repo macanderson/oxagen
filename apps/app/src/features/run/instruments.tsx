@@ -6,12 +6,23 @@
 // Every figure is read from `runMetrics` and from the per-turn ledger
 // `cost-figures.ts` sums from `get_run_turns`, so the Tokens tile is the stat
 // row's Tokens figure and the total row of Spend by token class, and the Shape
-// tile's steps and frames are the waterfall's total row. What the record does not carry (this agent's
-// median run, its 30-day productive ratio) is named as not recorded where the
-// mockup draws a figure.
+// tile's steps and frames are the waterfall's total row.
+//
+// Cost so far and Productive ratio set the run beside the agent's own sealed
+// runs in the 30 days before it started (`get_run_cost`'s baseline, #3984,
+// ADR-199): the gap to the agent's median run, and the points between this
+// run's ratio and the 30-day one. A baseline the agent's history is too thin
+// for reads not recorded, never a guessed figure. Productive ratio's foot
+// names why the steps that did not advance the task made no progress, from
+// the causes the rollup recorded.
 import { useLocale, useTranslations } from "next-intl";
 import { Fragment, type ReactNode } from "react";
-import { type Money, ratioOfIntegers } from "@/data/contracts/money";
+import {
+  differenceOfMicros,
+  type Money,
+  ratioOfIntegers,
+} from "@/data/contracts/money";
+import type { RunCost } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import { Clock } from "@/ui/clock";
 import { Money as MoneyText } from "@/ui/money";
@@ -120,6 +131,29 @@ const MIN_COLUMN = 0.04;
 /** `.inst .iv small .delta.down { font-size:11px; font-weight:600; color:var(--st-denied) }`: calls that failed. */
 const failedUnit =
   "ml-1.5 text-[11px] font-semibold tracking-normal text-warning tabular-nums";
+
+/** The agent's 30 days before the run, as `get_run_cost` answers them; null when too thin. */
+type Baseline = NonNullable<RunCost["baseline"]>;
+
+/** The rollup's graded steps: null together until the rollup grades the run. */
+type GradedSteps = {
+  advanced: number | null;
+  unproductive: number | null;
+  causes: { failed: number; repeated: number; retried: number } | null;
+};
+
+/** The causes Productive ratio's foot names, in the order it names them. */
+const CAUSES = ["failed", "repeated", "retried"] as const;
+
+/** A signed whole number of points between two ratios: `+9`, `−3`, `0`. */
+function pointsBetween(ratio: number, base: number): number {
+  return Math.round((ratio - base) * 100);
+}
+
+/** The sign a delta prints with; a zero delta prints none. */
+function signOf(n: -1 | 0 | 1): string {
+  return n > 0 ? "+" : n < 0 ? "−" : "";
+}
 
 type Part = {
   key: string;
@@ -262,17 +296,55 @@ function ProvisionalModels({ provisional }: { provisional: ProvisionalSpend }) {
   );
 }
 
+/**
+ * The run set against the agent's median run: the gap and the median, the
+ * median alone when the run has no cost to set against it, or not recorded
+ * when the agent's history is too thin to have one.
+ */
+function MedianLine({
+  cost,
+  baseline,
+}: {
+  cost: Money | null;
+  baseline: Baseline | null;
+}) {
+  const t = useTranslations("run.cost.inst");
+  const locale = useLocale();
+  const median = baseline?.medianCost ?? null;
+  if (median === null) return <>{t("median")}</>;
+  const money = (value: Money) =>
+    formatMoney(value, { locale, precision: "cents" });
+  const gap = cost === null ? null : differenceOfMicros(cost, median);
+  return (
+    <span data-testid="inst-cost-median">
+      {gap === null
+        ? t.rich("medianOnly", { median: () => <b>{money(median)}</b> })
+        : t.rich("medianDelta", {
+            delta: () => (
+              <b>
+                {signOf(gap.sign)}
+                {money(gap.gap)}
+              </b>
+            ),
+            median: () => <b>{money(median)}</b>,
+          })}
+    </span>
+  );
+}
+
 function CostTile({
   run,
   metrics,
   ledger,
   live,
+  baseline,
 }: {
   run: RunRow;
   metrics: RunMetrics;
   /** Null when the per-turn read failed. */
   ledger: Ledger | null;
   live: boolean;
+  baseline: Baseline | null;
 }) {
   const t = useTranslations("run.cost.inst");
   const tCost = useTranslations("run.cost");
@@ -331,7 +403,10 @@ function CostTile({
               ledger === null || ledger.dearest === null
                 ? null
                 : t("dearest", { turn: ledger.dearest }),
-            median: t("median"),
+            // The recorded cost, not the session's provisional figure: the
+            // median is of rolled-up runs, so only a rolled-up figure is set
+            // against it.
+            median: <MedianLine cost={metrics.cost} baseline={baseline} />,
           }}
         />
       }
@@ -820,23 +895,119 @@ function CallsTile({ metrics }: { metrics: RunMetrics }) {
   );
 }
 
-function RatioTile({
-  metrics,
+/**
+ * This run's ratio set against the agent's 30-day one: the points between
+ * them, the 30-day ratio alone when this run is not graded, or not recorded
+ * when the agent's history is too thin to have one.
+ */
+function ThirtyDayLine({
+  ratio,
+  baseline,
+}: {
+  ratio: number | null;
+  baseline: Baseline | null;
+}) {
+  const t = useTranslations("run.cost.inst");
+  const locale = useLocale();
+  const base = baseline?.productiveRatio ?? null;
+  if (base === null) return <>{t("thirtyDay")}</>;
+  if (ratio === null)
+    return (
+      <span data-testid="inst-ratio-baseline">
+        {t.rich("thirtyDayOnly", {
+          ratio: () => <b>{formatRatio(base, locale)}</b>,
+        })}
+      </span>
+    );
+  const points = pointsBetween(ratio, base);
+  return (
+    <span data-testid="inst-ratio-baseline">
+      {t.rich("thirtyDayDelta", {
+        delta: () => (
+          <b>
+            {t("points", {
+              sign: signOf(points > 0 ? 1 : points < 0 ? -1 : 0),
+              count: Math.abs(points),
+            })}
+          </b>
+        ),
+        ratio: () => <b>{formatRatio(base, locale)}</b>,
+      })}
+    </span>
+  );
+}
+
+/**
+ * Why the steps that did not advance the task made no progress, from the
+ * causes the rollup recorded; the retry count alone on a run it has not
+ * graded.
+ */
+function RatioFoot({
+  steps,
   retries,
 }: {
-  metrics: RunMetrics;
+  steps: GradedSteps | null;
   retries: number | null;
 }) {
   const t = useTranslations("run.cost.inst");
   const locale = useLocale();
+  const causes = steps?.causes ?? null;
+  const unproductive = steps?.unproductive ?? null;
+  if (causes !== null && unproductive !== null) {
+    if (unproductive === 0)
+      return <span data-testid="inst-ratio-causes">{t("allAdvanced")}</span>;
+    const named = CAUSES.filter((cause) => causes[cause] > 0).map((cause) =>
+      t(`causes.${cause}`, { count: formatCount(causes[cause], locale) }),
+    );
+    return (
+      <span data-testid="inst-ratio-causes">
+        {t.rich("unproductive", {
+          count: unproductive,
+          n: () => <b>{formatCount(unproductive, locale)}</b>,
+          causes: named.join(", "),
+        })}
+      </span>
+    );
+  }
+  if (retries === null) return null;
+  return (
+    <>
+      {t.rich("retries", {
+        count: retries,
+        n: () => <b>{formatCount(retries, locale)}</b>,
+      })}
+    </>
+  );
+}
+
+function RatioTile({
+  metrics,
+  retries,
+  steps,
+  baseline,
+}: {
+  metrics: RunMetrics;
+  retries: number | null;
+  steps: GradedSteps | null;
+  baseline: Baseline | null;
+}) {
+  const t = useTranslations("run.cost.inst");
+  const locale = useLocale();
   const ratio = metrics.productiveRatio;
+  const advanced = steps?.advanced ?? null;
+  const unproductive = steps?.unproductive ?? null;
+  // The counts when the rollup graded the run, so the legend reads "18
+  // advanced, 6 did not"; the shares alone on a row graded before the counts
+  // were stored.
+  const counted = advanced !== null && unproductive !== null;
+  const graded = counted && steps?.causes !== null;
   return (
     <Tile
       testId="inst-ratio"
       title={t("ratio")}
       basis={t("advancedTask")}
       value={ratio === null ? <NoValue /> : formatRatio(ratio, locale)}
-      line={t("thirtyDay")}
+      line={<ThirtyDayLine ratio={ratio} baseline={baseline} />}
       chart={
         ratio === null ? undefined : (
           <Stacked
@@ -846,27 +1017,28 @@ function RatioTile({
                 key: "advanced",
                 hue: "bg-fk-model",
                 label: t("advanced"),
-                value: ratio,
-                shown: formatRatio(ratio, locale),
+                value: counted ? advanced : ratio,
+                shown: counted
+                  ? t("stepCount", { count: advanced })
+                  : formatRatio(ratio, locale),
               },
               {
                 key: "didNot",
                 hue: NEUTRAL,
                 label: t("didNot"),
-                value: 1 - ratio,
-                shown: formatRatio(1 - ratio, locale),
+                value: counted ? unproductive : 1 - ratio,
+                shown: counted
+                  ? t("stepCount", { count: unproductive })
+                  : formatRatio(1 - ratio, locale),
               },
             ]}
           />
         )
       }
       foot={
-        retries === null
-          ? undefined
-          : t.rich("retries", {
-              count: retries,
-              n: () => <b>{formatCount(retries, locale)}</b>,
-            })
+        graded || retries !== null ? (
+          <RatioFoot steps={steps} retries={retries} />
+        ) : undefined
       }
     />
   );
@@ -878,6 +1050,8 @@ export function Instruments({
   ledger,
   prices,
   retries,
+  steps,
+  baseline,
 }: {
   run: RunRow;
   metrics: RunMetrics;
@@ -886,6 +1060,10 @@ export function Instruments({
   prices: ClassPrices;
   /** The rollup's retries; null when the rollup has not run or did not count them. */
   retries: number | null;
+  /** The rollup's graded steps; null when the rollup has not run. */
+  steps: GradedSteps | null;
+  /** The agent's 30 days before the run; null when its history is too thin. */
+  baseline: Baseline | null;
 }) {
   const t = useTranslations("run.cost.inst");
   // Live is the run's status, as everywhere else on the page. A halted run
@@ -898,12 +1076,23 @@ export function Instruments({
       data-testid="run-instruments"
       className={instGrid}
     >
-      <CostTile run={run} metrics={metrics} ledger={ledger} live={live} />
+      <CostTile
+        run={run}
+        metrics={metrics}
+        ledger={ledger}
+        live={live}
+        baseline={baseline}
+      />
       <WallTile metrics={metrics} />
       <TokensTile metrics={metrics} prices={prices} />
       <ShapeTile run={run} metrics={metrics} ledger={ledger} live={live} />
       <CallsTile metrics={metrics} />
-      <RatioTile metrics={metrics} retries={retries} />
+      <RatioTile
+        metrics={metrics}
+        retries={retries}
+        steps={steps}
+        baseline={baseline}
+      />
     </section>
   );
 }

@@ -2111,6 +2111,14 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "policy_rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "maxItems": 64
+                    },
                     "policy_source": {
                       "type": "string",
                       "enum": [
@@ -3365,6 +3373,14 @@
                     "policy_rule": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "policy_rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "maxItems": 64
                     },
                     "policy_source": {
                       "type": "string",
@@ -6587,6 +6603,10 @@
                       },
                       "maxItems": 64
                     },
+                    "request_effort": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "mcp_server_name": {
                       "type": "string",
                       "maxLength": 512
@@ -7221,6 +7241,14 @@
                     "policy_rule": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "policy_rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "maxItems": 64
                     },
                     "policy_source": {
                       "type": "string",
@@ -7932,6 +7960,14 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "policy_rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "maxItems": 64
+                    },
                     "policy_source": {
                       "type": "string",
                       "enum": [
@@ -8642,6 +8678,14 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "policy_rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "maxItems": 64
+                    },
                     "policy_source": {
                       "type": "string",
                       "enum": [
@@ -9188,6 +9232,14 @@
                     "policy_rule": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "policy_rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "maxItems": 64
                     },
                     "policy_source": {
                       "type": "string",
@@ -9899,6 +9951,14 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "policy_rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "maxItems": 64
+                    },
                     "policy_source": {
                       "type": "string",
                       "enum": [
@@ -10609,6 +10669,14 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "policy_rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "maxItems": 64
+                    },
                     "policy_source": {
                       "type": "string",
                       "enum": [
@@ -11318,6 +11386,14 @@
                     "policy_rule": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "policy_rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "maxItems": 64
                     },
                     "policy_source": {
                       "type": "string",
@@ -13090,6 +13166,10 @@
                         "maxLength": 512
                       },
                       "maxItems": 64
+                    },
+                    "request_effort": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "prompt_digest": {
                       "type": "string"
@@ -15207,6 +15287,10 @@
                         "maxLength": 512
                       },
                       "maxItems": 64
+                    },
+                    "request_effort": {
+                      "type": "string",
+                      "maxLength": 512
                     }
                   },
                   "additionalProperties": false
@@ -19146,6 +19230,10 @@
                         "maxLength": 512
                       },
                       "maxItems": 64
+                    },
+                    "request_effort": {
+                      "type": "string",
+                      "maxLength": 512
                     }
                   },
                   "additionalProperties": false
@@ -24087,6 +24175,10 @@
                         "maxLength": 512
                       },
                       "maxItems": 64
+                    },
+                    "request_effort": {
+                      "type": "string",
+                      "maxLength": 512
                     }
                   },
                   "additionalProperties": false
@@ -28155,6 +28247,10 @@
                       },
                       "maxItems": 64
                     },
+                    "request_effort": {
+                      "type": "string",
+                      "maxLength": 512
+                    },
                     "mcp_server_name": {
                       "type": "string",
                       "maxLength": 512
@@ -28844,6 +28940,10 @@
                         "maxLength": 512
                       },
                       "maxItems": 64
+                    },
+                    "request_effort": {
+                      "type": "string",
+                      "maxLength": 512
                     },
                     "mcp_server_name": {
                       "type": "string",
@@ -31128,6 +31228,14 @@
                     "policy_rule": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "policy_rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "maxLength": 512
+                      },
+                      "maxItems": 64
                     },
                     "policy_source": {
                       "type": "string",

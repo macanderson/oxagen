@@ -166,7 +166,8 @@
       "pageFailed": "The next page could not be read. Everything above is still the record.",
       "followDenied": "Access to this run was refused. Ask a workspace Owner or organization Admin to restore access.",
       "followLost": "The connection to the live head dropped. The run kept recording. Read more to catch up.",
-      "followSealed": "The run sealed while you were following it. This is the whole recording."
+      "followSealed": "The run sealed while you were following it. This is the whole recording.",
+      "compacted": "<b>Compacted.</b> This transcript is read from the archive."
     },
     "frames": {
       "title": "Frame {seq}",
@@ -219,6 +220,52 @@
           "halted": "halted"
         },
         "basisNotRecorded": "basis not recorded"
+      },
+      "window": {
+        "title": "Request window",
+        "provider": "Provider",
+        "model": "Model",
+        "tools": "Tools offered",
+        "context": "Context frames",
+        "promptTokens": "Prompt tokens",
+        "answeredAt": "answered at frame {seq}",
+        "notApart": "Counted with the conversation",
+        "itemsWithTokens": "{items}, {tokens} tok",
+        "composition": "Prompt composition",
+        "compositionNote": "{count} tok as the provider reported them",
+        "compositionBytes": "The provider reported no input",
+        "stack": "Message stack",
+        "tokens": "{count} tok",
+        "bytes": "{count} bytes",
+        "none": "No window is on record for this request.",
+        "block": {
+          "system": "System",
+          "steering": "Steering",
+          "tools": "Tool definitions",
+          "context": "Context frames",
+          "conversation": "Conversation"
+        },
+        "items": {
+          "system": "{count, plural, one {# part} other {# parts}}",
+          "steering": "{count, plural, one {# part} other {# parts}}",
+          "tools": "{count, plural, one {# tool} other {# tools}}",
+          "context": "{count, plural, one {# message} other {# messages}}",
+          "conversation": "{count, plural, one {# message} other {# messages}}"
+        }
+      },
+      "assembled": {
+        "title": "Assembled context",
+        "budget": "Budget",
+        "used": "Used",
+        "usedValue": "{tokens} tok, {share} of budget, {headroom} tok headroom",
+        "tokens": "{count} tok",
+        "frames": "Context frames",
+        "framesValue": "{included, plural, one {# included} other {# included}}, {cut, plural, one {# cut} other {# cut}}",
+        "by": "Assembled by",
+        "assembler": "The steering assembler",
+        "digest": "Composition digest",
+        "noText": "No text was included",
+        "none": "This frame carries no manifest summary the record can read."
       }
     },
     "player": {
@@ -293,12 +340,38 @@
         "noRead": "The reading needs the run's prompts, turns, steps, and failed tool calls, and the record does not carry all four yet.",
         "noTier": "The run records no model class, so the reading has no rung to argue for.",
         "noLadder": "Oxagen places the {tier} class on no capability ladder, so the reading has no rung to argue for.",
+        "live": "The run is still open. Oxagen reads it once it seals.",
+        "pending": "Oxagen has not read this seal yet. The reading is written a few minutes after the run seals.",
+        "modelVerdict": {
+          "over": "Heavier than needed",
+          "under": "Lighter than needed"
+        },
         "move": "Move this agent to {suggest}",
         "moveStub": "No contract changes an agent's model class from this page yet.",
+        "effortTitle": {
+          "not_proxied": "Effort not captured",
+          "not_sent": "No effort setting"
+        },
         "effortWhy": {
           "not_proxied": "Oxagen did not capture the effort setting for this run. The model call did not go through Oxagen, so the request body was never read. Oxagen reads it only where it proxies the call, at the gateway and contained tiers.",
-          "not_sent": "Oxagen did not capture the effort setting for this run. The call went through Oxagen, and no contract records the setting from the request body yet, so none is shown."
+          "not_sent": "This agent sent no effort setting, so the model used its own default. The call went through Oxagen, and its request body carried none."
         },
+        "effortSource": {
+          "request": "read from the model request",
+          "harness": "reported by the harness"
+        },
+        "effortFit": "Effort fits this run",
+        "wrongEffort": "Wrong effort setting",
+        "effortVerdict": {
+          "over": "More effort than needed",
+          "under": "Less effort than needed"
+        },
+        "effortNoVerdict": "Effort {effort}, {source}.",
+        "effortFitSay": "Effort {effort}, {source}, fits this run. Nothing in the record argues for moving it either way.",
+        "effortOverSay": "This run landed first try at effort {effort}, {source}, and still spent more than a fifth of its output reasoning. The reading argues for effort {suggest}, one level down.",
+        "effortUnderSay": "This run was redone at effort {effort}, {source}: the operator prompted again or a tool call failed. The reading argues for effort {suggest}, one level up, where the model reasons before it acts.",
+        "setEffort": "Set effort to {suggest}",
+        "effortStub": "No contract changes an agent's effort setting from this page yet.",
         "read": "Read from this run only: {prompts, plural, one {# prompt} other {# prompts}} · {turns, plural, one {# turn} other {# turns}} · {steps, plural, one {# step} other {# steps}} · {failed, plural, =0 {no tool call failed} one {# tool call failed} other {# tool calls failed}}. A reading is an argument. It changes nothing on its own, and every run the agent has sealed keeps the model it ran on.",
         "readNone": "There is no reading for this run. A reading is an argument and changes nothing on its own."
       },
@@ -308,6 +381,8 @@
         "perTurn": "<cost></cost> per turn",
         "dearest": "turn {turn} was the dearest",
         "median": "this agent's median run is not recorded",
+        "medianDelta": "<delta></delta> vs this agent's median run <median></median>",
+        "medianOnly": "this agent's median run is <median></median>",
         "provisional": "provisional figure the agent reported",
         "provisionalModel": "<model></model> <cost></cost> over {calls, plural, one {# call} other {# calls}}",
         "provisionalModelUnpriced": "<model></model> over {calls, plural, one {# call} other {# calls}} with no cost reported",
@@ -382,9 +457,20 @@
         "ratio": "Productive ratio",
         "advancedTask": "steps that advanced the task",
         "thirtyDay": "this agent's 30-day ratio is not recorded",
+        "thirtyDayDelta": "<delta></delta> vs 30-day <ratio></ratio>",
+        "thirtyDayOnly": "this agent's 30-day ratio is <ratio></ratio>",
+        "points": "{sign}{count, plural, one {# pt} other {# pts}}",
         "ratioChart": "Steps that advanced the task",
         "advanced": "advanced",
         "didNot": "did not",
+        "stepCount": "{count, plural, one {# step} other {# steps}}",
+        "unproductive": "<n></n> {count, plural, one {step} other {steps}} did not advance the task: {causes}.",
+        "causes": {
+          "failed": "{count} failed",
+          "repeated": "{count} repeated an earlier call",
+          "retried": "{count} retried"
+        },
+        "allAdvanced": "Every step the rollup graded advanced the task.",
         "retries": "The rollup recorded <n></n> {count, plural, one {retry} other {retries}}."
       },
       "families": {
@@ -416,13 +502,16 @@
         },
         "outputTitle": "{reasoning} of it reasoning",
         "tok": "{count} tok",
-        "dearest": "Dearest tools",
+        "dearest": "Most expensive tools",
         "calls": "{count, plural, one {# call} other {# calls}}",
         "byCalls": "What each tool cost is not recorded, so the tools are listed by calls.",
+        "byCost": "Each tool's cost is an estimate: its result tokens at the run's input rate. It is part of the run's cost, not added to it.",
+        "resultsTitle": "The tools' result tokens at the run's input rate, an estimate inside the run's cost",
         "noTools": "This run called no tool.",
         "toolsNotRead": "The transcript was not read, so the tools are not listed.",
         "unnamedTool": "A tool the record did not name",
         "note": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>, and how a request splits between them is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
+        "noteWithResults": "Model output is the run's recorded cost for its output and reasoning tokens. The six input areas share the run's {input} input tokens, which cost <cost></cost>. Tool calls is the tools' result tokens at the run's input rate, an estimate. How the rest of a request splits between the other five is not recorded yet. A follow-up prompt re-sends the window, which is why it costs more than its own words.",
         "noteNotRolledUp": "The rollup has not counted this run's tokens yet, so no area is priced."
       },
       "calls": {
@@ -501,7 +590,8 @@
           "estimated": "estimated where nothing counted it"
         },
         "productive": "Productive ratio",
-        "productiveValue": "{ratio} of steps advanced the task"
+        "productiveValue": "{ratio} of steps advanced the task",
+        "productiveSteps": "{advanced} of {total} {steps, plural, one {step} other {steps}} advanced the task"
       }
     },
     "commands": {
@@ -708,6 +798,7 @@
     },
     "chain": {
       "title": "Chain and seal",
+      "compacted": "<b>Compacted.</b> This run is read from its archive segment.",
       "hash": {
         "title": "Hash chain",
         "clean": "no gaps",
@@ -747,7 +838,8 @@
         "unsealed": "The seal is written when the run ends, for every terminal outcome. Until then the chain is verifiable frame by frame, but there is no Merkle root and no attestation.",
         "signature": "Signature",
         "signsOver": "Signs over",
-        "notInRead": "The chain read does not carry the seal's signature yet.",
+        "signatureValue": "{alg} key {keyRef}",
+        "unsigned": "The seal was written with no attester key, or before seals were signed.",
         "merkleRoot": "Merkle root",
         "tier": "Enforcement tier",
         "archive": "Archive segment",
@@ -810,8 +902,12 @@
       "total": "total",
       "turnCost": "turn cost",
       "soFar": "cost so far",
-      "caption": "Bar height is the turn's cost on the left scale. The dashed line is cost accumulating to {total}. Finding pins are not recorded yet.",
-      "captionCut": "Bar height is the turn's cost on the left scale. The dashed line is cost accumulating to {total} over the first {count, plural, one {# turn} other {# turns}}, not the whole run. Finding pins are not recorded yet.",
+      "caption": "Bar height is the turn's cost on the left scale. The dashed line is cost accumulating to {total}. A diamond marks a turn an open finding cites.",
+      "captionCut": "Bar height is the turn's cost on the left scale. The dashed line is cost accumulating to {total} over the first {count, plural, one {# turn} other {# turns}}, not the whole run. A diamond marks a turn an open finding cites.",
+      "finding": "finding",
+      "findingsSection": "Findings",
+      "pinTitle": "{finding}: {saving} to save. Open its evidence.",
+      "pinChartTitle": "Turn {turn}: {findings}",
       "totalCut": "first {count, plural, one {# turn} other {# turns}}",
       "partial": "partial",
       "tableLabel": "Cost by turn",
@@ -960,7 +1056,11 @@
       "permissionMode": "mode {value}",
       "effortWhy": {
         "not_proxied": "The model call did not go through Oxagen, so the request body was never read.",
-        "not_sent": "Oxagen records no effort setting from the request body yet, so none is shown."
+        "not_sent": "The call went through Oxagen and its request carried no effort setting, so the model used its own default."
+      },
+      "effortSource": {
+        "request": "Read from the model request Oxagen proxied.",
+        "harness": "Reported by the harness."
       },
       "pathNotEnrolled": "{machine} has no checkout of this repository enrolled, so Oxagen holds no path for it.",
       "pathRecorded": "Oxagen recorded this checkout on {machine}. Click to copy the path.",
@@ -971,7 +1071,9 @@
       "statusParked": "parked",
       "fit": {
         "fit": "Model fit",
-        "wrongTier": "Wrong model tier"
+        "wrongTier": "Wrong model tier",
+        "effortFit": "Effort fit",
+        "wrongEffort": "Wrong effort setting"
       },
       "runs30d": "{count} runs 30d"
     },
@@ -981,6 +1083,8 @@
       "generated": "generated · not the record",
       "onBehalfOf": "on behalf of →",
       "operator": "operator",
+      "workspaceRole": "workspace.{role}",
+      "roleNotRecorded": "role not recorded",
       "generatedBy": "generated by",
       "notGenerated": "not generated yet"
     },
@@ -1015,6 +1119,7 @@
     "issues": {
       "title": "Issues",
       "count": "{count} in this session",
+      "countAtLeast": "{count}+ in this session",
       "issue": "Issue",
       "status": "Status",
       "relation": "Relation",
@@ -1024,19 +1129,30 @@
       "viewLabel": "View {ref} on its tracker",
       "noLink": "no link",
       "task": "task",
-      "statusWhy": "No tracker read is recorded for this run, so the issue's status is not shown.",
-      "empty": "This run names no issue, and no pull request it opened closes one.",
-      "emptyUnread": "This run names no issue. GitHub did not return the issues its pull requests close.",
-      "loading": "Reading the issues the run's pull requests close.",
-      "closingUnread": "GitHub did not return every issue the run's pull requests close, so this list may be short.",
-      "pullRequests": "The run's pull requests",
+      "referenced": "referenced",
       "closedBy": "closed by #{number}",
+      "empty": "No issue is linked to this session.",
+      "emptyIncomplete": "No issue was found in what Oxagen could read. Some records could not be read, so an issue may be missing.",
+      "incomplete": "Some records could not be read, so this list may be short.",
+      "loading": "Reading the run's issues.",
       "state": {
         "open": "open",
-        "closed": "closed"
+        "closed": "closed",
+        "in_progress": "in progress",
+        "blocked": "blocked"
       },
-      "stateWhy": "GitHub's state for the issue when the run's pull requests were read.",
-      "note": "The task comes from the run's dispatch, and no tracker read gives its status. The other rows are the issues GitHub records each pull request the run opened as closing. Issues the run only read or referenced are not captured.",
+      "stateAt": "GitHub's state when this page loaded, read at {at}.",
+      "statusUnknown": "status unknown",
+      "statusRead": {
+        "no_connection": "This workspace has no connection to the issue's repository, so GitHub was not read.",
+        "not_github": "This tracker is not GitHub, so Oxagen does not read its status.",
+        "repository_unknown": "The record does not name the issue's repository.",
+        "not_found": "GitHub has no issue with this number.",
+        "read_failed": "GitHub could not be read.",
+        "read_limit": "The run names more issues than one page load reads."
+      },
+      "statusFilter": "Filter by status",
+      "noMatch": "No issue has this status.",
       "linked": {
         "title": "Linked work",
         "edge": {
@@ -1110,7 +1226,8 @@
       "unrecorded": "The transcript does not carry this for a decision yet.",
       "empty": "No policy decision was recorded on this run.",
       "cut": "The transcript read stopped short, so later decisions are missing here.",
-      "note": "Each row is a decision on this run's record, by Oxagen policy or an operator, linked to its frame. The agent harness's own permission checks are folded below. The rules that fired, the taint on the call's inputs and the decision's latency are not on the transcript yet.",
+      "note": "Each row is a decision on this run's record, by Oxagen policy or an operator, linked to its frame. The agent harness's own permission checks are folded below. Rules are listed in the order they were evaluated. The taint on the call's inputs and the decision's latency are not on the transcript yet.",
+      "none": "none",
       "decidedBy": "decided by {who}",
       "by": {
         "oxagen": "Oxagen policy",
@@ -1143,7 +1260,8 @@
         "cachedOnly": "{cached} tokens of the first request came from cache. Its full input was not reported.",
         "noUsage": "The first request's usage was not reported.",
         "splitNotRecorded": "The request is not recorded block by block, so the split is not shown.",
-        "noRequest": "No model request is in view for this run, so the window is not shown."
+        "noRequest": "No model request is in view for this run, so the window is not shown.",
+        "splitByBytes": "Each block is its share of the request's bytes."
       },
       "manifest": {
         "label": "Steering manifest",
@@ -1181,7 +1299,10 @@
         "blocksNotRecorded": "not recorded block by block",
         "note": "The window is not recorded block by block yet, so its identity, steering, tools, context and brief are not split here. The total is the input the first model call reported.",
         "noneTitle": "No window on record",
-        "none": "The frames in view for {run} carry no model request, so there is no request to account for block by block."
+        "none": "The frames in view for {run} carry no model request, so there is no request to account for block by block.",
+        "frame": "frame {seq}",
+        "measured": "The provider reported this total, and each block is its share of the request's bytes.",
+        "measuredBytes": "The provider reported no input for this call, so the blocks are drawn by their bytes."
       },
       "frames": {
         "title": "Context frames",
@@ -1213,7 +1334,10 @@
         "digest": "Composition digest",
         "assembledAt": "Assembled at",
         "assembledFrame": "{type} · fr {seq}",
-        "note": "Retrieval is not recorded candidate by candidate yet, so these figures are not shown."
+        "note": "Retrieval is not recorded candidate by candidate yet, so these figures are not shown.",
+        "spent": "{spent} of {budget} tok",
+        "tokens": "{count} tok",
+        "recorded": "The assembler ranked these candidates and fitted them to its budget. It records no relevance floor."
       }
     },
     "work": {
@@ -1228,7 +1352,12 @@
       "base": "Base",
       "baseNotRecorded": "not recorded",
       "release": "Release",
-      "releaseNotRecorded": "not recorded",
+      "releaseState": {
+        "draft": "draft",
+        "prerelease": "prerelease",
+        "published": "published"
+      },
+      "releaseStateUnread": "state not read",
       "checks": "Checks",
       "noChecks": "none reported",
       "ci": {

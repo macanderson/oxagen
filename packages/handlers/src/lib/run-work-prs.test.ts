@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { RunCheckout } from "@oxagen/oxagen/contracts/run.work.get";
-import { readWorkPullRequests, type WorkPrDeps } from "./run-work-prs";
+import { event } from "../run.test-support";
+import {
+  readLedgerPrReceipts,
+  readWorkPullRequests,
+  type WorkPrDeps,
+} from "./run-work-prs";
 const repo = {
   host: "github.com",
   owner: "acme",
@@ -190,5 +195,57 @@ describe("run pull request evidence", () => {
     expect(output.pullRequests[0]?.ci).not.toBeNull();
     expect(output.warnings).toContain("closing_issues_read_failed");
     expect(output.complete).toBe(false);
+  });
+});
+
+// get_run_work and get_run_issues read a ledger run's pull requests from the
+// same events, so the walk is one function.
+describe("readLedgerPrReceipts", () => {
+  const opened = (runSeq: number, number: number) =>
+    event(runSeq, {
+      eventType: "provider_publish.pull_request_opened",
+      payload: {
+        provider_repository_id: "R_1",
+        pull_request_number: number,
+        head_commit_sha: "abc",
+      },
+    });
+
+  it("reads each opened pull request, and skips other events and unreadable payloads", async () => {
+    const store = {
+      readAttemptEventsSince: vi.fn().mockResolvedValue([
+        opened(1, 41),
+        event(2),
+        event(3, {
+          eventType: "provider_publish.pull_request_opened",
+          payload: { provider_repository_id: "R_1" },
+        }),
+        opened(4, 42),
+      ]),
+    };
+    await expect(readLedgerPrReceipts(store, "run")).resolves.toEqual({
+      receipts: [
+        { repositoryId: "R_1", number: 41, headSha: "abc", seq: "1" },
+        { repositoryId: "R_1", number: 42, headSha: "abc", seq: "4" },
+      ],
+      complete: true,
+    });
+    expect(store.readAttemptEventsSince).toHaveBeenCalledWith("run", "0", 500);
+  });
+
+  it("walks page by page from the last event, and says when it stopped at the bound", async () => {
+    const page = (from: number) =>
+      Array.from({ length: 500 }, (_, i) => event(from + i));
+    const store = {
+      readAttemptEventsSince: vi
+        .fn()
+        .mockImplementation(async (_run: string, cursor: string) =>
+          page(Number(cursor) + 1),
+        ),
+    };
+    const result = await readLedgerPrReceipts(store, "run");
+    expect(result.complete).toBe(false);
+    expect(store.readAttemptEventsSince).toHaveBeenCalledTimes(20);
+    expect(store.readAttemptEventsSince.mock.calls[1]?.[1]).toBe("500");
   });
 });

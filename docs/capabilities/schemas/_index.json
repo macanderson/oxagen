@@ -1,5 +1,5 @@
 {
-  "generatedCount": 396,
+  "generatedCount": 398,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1664,6 +1664,18 @@
       "consumes": []
     },
     {
+      "name": "get_run_context",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp",
+        "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "get_run_cost",
       "domain": "run",
       "surfaces": [
@@ -1703,6 +1715,17 @@
       "domain": "run",
       "surfaces": [
         "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_run_issues",
+      "domain": "run",
+      "surfaces": [
+        "api",
+        "mcp"
       ],
       "component": null,
       "produces": [],
@@ -2313,7 +2336,8 @@
       "domain": "spend",
       "surfaces": [
         "api",
-        "mcp"
+        "mcp",
+        "cli"
       ],
       "component": null,
       "produces": [],

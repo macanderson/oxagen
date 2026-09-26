@@ -10,6 +10,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import {
   type AttemptRecord,
   createPostgresRunStore,
+  deferredAttester,
   type FrameRead,
   ledgerFrame,
   listSubagentSessions,
@@ -53,6 +54,7 @@ export interface SealedSegment {
   archiveSegmentDigest: string | null;
   /** The seal's `event_stream_digest`; a wrapped session has none. */
   eventStreamDigest: string | null;
+  /** The tier the seal recorded and graded under (spec §8.4). */
   enforcementTier: string;
   completenessGaps: string[];
   replayGrade: string | null;
@@ -60,6 +62,13 @@ export interface SealedSegment {
   envelopes: JsonValue[];
   /** The frames' own digests, in the same order, for the Merkle root. */
   digests: string[];
+  /**
+   * The attestation the seal signed when it was written (ADR-195): the key
+   * id and the signature. Null for a wrapped session, whose seal is not a
+   * ledger row, and for a ledger seal written with no attester key or before
+   * the seal signed.
+   */
+  sealAttestation: { keyId: string; sig: string } | null;
 }
 
 type RunRecord =
@@ -82,8 +91,16 @@ export function ledgerStore(): RunStore {
   // RunBodyStore, RunArchiveStore`). Passing it as the archive alone left a
   // store that refuses any append whose frame carries a retained body, which
   // is a trap for the next producer rather than a decision anyone made.
+  //
+  // The idle close and the abandon sweep seal through this store, so it
+  // carries the attester: a seal signs its figures when it is written
+  // (ADR-195), and a deployment with no key seals unsigned.
   const store = evidenceStore();
-  return createPostgresRunStore({ archive: store, bodies: store });
+  return createPostgresRunStore({
+    archive: store,
+    bodies: store,
+    attester: deferredAttester,
+  });
 }
 
 /** The run behind a public id in its tenant, or null. */
@@ -275,6 +292,7 @@ export async function readSealedSegments(
           replayGrade: record.replayGrade,
           envelopes: records.map(tachoExportFrame),
           digests: records.map((r) => r.frame.hash),
+          sealAttestation: null,
         },
       ];
     }
@@ -299,7 +317,10 @@ export async function readSealedSegments(
         merkleRoot: seal.merkleRoot,
         archiveSegmentDigest: digestBytes(bytes),
         eventStreamDigest: seal.eventStreamDigest,
-        enforcementTier: "harness",
+        // The tier the seal graded under, so the export signs what the seal
+        // signed. A seal written before the column existed was graded as
+        // `harness`, which is how every reader takes a null.
+        enforcementTier: seal.enforcementTier ?? "harness",
         completenessGaps: seal.completenessGaps,
         replayGrade: seal.replayGrade,
         envelopes,
@@ -312,6 +333,10 @@ export async function readSealedSegments(
           }
           return digest;
         }),
+        sealAttestation:
+          seal.attestationKeyId !== null && seal.attestationSig !== null
+            ? { keyId: seal.attestationKeyId, sig: seal.attestationSig }
+            : null,
       });
     }
     return segments;

@@ -4,6 +4,7 @@ import { billingDunningSweep } from "./functions/billing.dunning-sweep";
 import { billingUsageDelivery } from "./functions/billing.usage-delivery";
 import { billingGauClose } from "./functions/billing.gau-close";
 import { costRunRollup } from "./functions/cost.run-rollup";
+import { runFit } from "./functions/run.fit";
 import { costRunProgress } from "./functions/cost.run-progress";
 import { tachoSessionIdleClose } from "./functions/tacho.session-idle-close";
 import { runLedgerIdleClose } from "./functions/run.ledger-idle-close";
@@ -76,6 +77,7 @@ export const functions: any[] = [
   billingGauClose,
   billingUsageDelivery,
   costRunRollup,
+  runFit,
   costRunProgress,
   tachoSessionIdleClose,
   runLedgerIdleClose,

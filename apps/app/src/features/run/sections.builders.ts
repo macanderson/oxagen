@@ -9,11 +9,13 @@ import type {
   TranscriptEntry,
   TranscriptUsage,
 } from "@/data/contracts/run";
+import type { RunIssues } from "@/data/contracts/run-issues";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
+import { runIssues } from "./issues.builders";
 import { runMetrics } from "./metrics";
 import {
   NOW,
@@ -336,6 +338,8 @@ export function evidenceTranscript(
               decision: spec.decision,
               type: spec.type,
               harness: false,
+              rules: [],
+              taint: null,
               at: at(-3600 + spec.seq * 2),
             },
       cost: null,
@@ -563,6 +567,7 @@ export function tabProps({
   transcript = readOk(evidenceSteps()),
   outputs = readOk(runOutputs()),
   work = readOk(runWork()),
+  issues = readOk(runIssues()),
   body = null,
 }: {
   ctx: WsCtx;
@@ -572,6 +577,8 @@ export function tabProps({
   transcript?: Read<RunTranscript>;
   outputs?: RunTabProps["outputs"];
   work?: Read<RunWork>;
+  /** `get_run_issues`; the demo run's task alone unless a test names the rows. */
+  issues?: Read<RunIssues>;
   /** `?body=`, the frame the page has open. */
   body?: string | null;
 }): FrameTabProps {
@@ -589,6 +596,7 @@ export function tabProps({
     cost,
     outputs,
     work: Promise.resolve(work),
+    issues: Promise.resolve(issues),
     agent: null,
     now: NOW,
   };
