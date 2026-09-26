@@ -4,7 +4,15 @@ One run read as a transcript at one of three zoom levels (Mission Control spec Â
 
 A wrapped run's subagents record on chains of their own. The transcript reads every chain under the run's root session and places each subagent chain directly after the `subagent_start` that spawned it. An entry from a subagent chain carries `subagent`, and its body halves and decisions carry `sessionUuid`, because a subagent chain numbers its frames from 0 like the run's. `get_run_frame_body` reads the run's own chain only.
 
-The cursor is opaque. It names two frames: the opening of the last entry sent, and the latest frame any page has delivered. An entry whose frames grew past that second frame since it was sent (a step that gained its result, a turn that gained a step, a Task call whose subagent recorded more) is sent again once, ahead of the new entries, and no entry after it is sent again (#4048). A reader keeps each entry once by its opening frame, `seq` together with `subagent.sessionUuid`, and replaces a copy it holds with the one sent again. A cursor written before the two-frame form, which names one frame, is still accepted.
+The cursor is opaque, and it is at most 256 characters. It names two frames: the opening of the last entry sent, and the latest frame any page has delivered. An entry whose frames grew past that second frame since it was sent (a step that gained its result, a turn that gained a step, a Task call whose subagent recorded more) is sent again once, ahead of the new entries, and no entry after it is sent again (#4048). A reader keeps each entry once by its opening frame, `seq` together with `subagent.sessionUuid`, and replaces a copy it holds with the one sent again.
+
+On a wrapped run the cursor also carries a receipt: the latest time the control plane received a frame of the read (`received_at`), and a digest of the frames it received in the 10 seconds before that. Two frame positions cannot name a subagent frame that lands after later frames were sent. When subagent A records after subagent B's frames were sent, A's new frame sits before the cursor, in an entry that neither opens after it nor ends past it (#4083). The next read sends each such entry once: every entry before the cursor that holds a frame received after the receipt.
+
+The receipt allows for inserts in flight. Ingest stamps `received_at` on a batch before its insert lands, so a batch stamped earlier can become readable after a read saw a later one. When the frames received in the 10 seconds before the receipt are not the ones the cursor saw, the read also sends every entry that holds a frame from that window. That is the documented overlap: entries sent again, whole, which the reader replaces by key. A read that finds nothing new sends nothing again.
+
+When more entries are late than one page holds, the page rewinds rather than holding the receipt back. It sends entries in order from the first late or grown one, and the pages after it go on in order. Some of those entries are unchanged and sent again, which is the same documented overlap. A ledger run records no receipt time, and its cursor carries none.
+
+A cursor written before the receipt, which names two frames, is still accepted. Its next read sends what the two frames alone say, and the cursor it answers carries a receipt. A cursor written before the two-frame form, which names one frame, is still accepted too.
 
 A page reads a bounded range of the run's frames rather than the run from the cursor to its end, and a subagent chain is read by its `session_uuid` from the list Postgres keeps, so a read's cost does not grow with the workspace. A whole-run reader pages at the largest `limit` the contract allows. The Cost tab's per-turn ledger is `get_run_turns`, which counts every frame of the run in one grouped read rather than paging this one (#4067).
 
@@ -167,7 +175,7 @@ Label, subject and target are on the entry. The halves are in the evidence store
 
 A `quiet` entry is not searched: it draws no row, so it can neither match nor count as unsearched, and it spends none of the bound.
 
-A read from a cursor searches only the entries it and the pages after it can still send: those past the cursor, and those before it that grew since they were sent. The pages before it searched the rest, so paging through a search reads each body once rather than once per page.
+A read from a cursor searches only the entries it and the pages after it can still send: those past the cursor, and those before it that grew since they were sent or hold a frame received after the cursor's receipt. The pages before it searched the rest, so paging through a search reads each body once rather than once per page.
 
 `search` says what the query found over the entries the read searched: the whole run on a first page, and from the cursor on after it, never only the page:
 
