@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   // What each withTenantDb call answers, in call order.
   answers: [] as unknown[][],
   statements: [] as { sql: string; params: unknown[] }[],
+  // The tenant scope each withTenantDb call ran in, in call order.
+  scopes: [] as ({ orgId: string; workspaceId: string } | null)[],
   getPullRequest: vi.fn(),
   getMergeRequest: vi.fn(),
   resolveGitHubToken: vi.fn(),
@@ -14,10 +16,15 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@oxagen/database", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@oxagen/database")>();
   const { drizzle } = await import("drizzle-orm/postgres-js");
+  const { getScope } = await import("@oxagen/tenancy");
   const db = drizzle.mock({ schema: actual.schema });
   return {
     ...actual,
     withTenantDb: (fn: (tx: typeof db) => { toSQL(): unknown }) => {
+      const scope = getScope();
+      mocks.scopes.push(
+        scope ? { orgId: scope.orgId, workspaceId: scope.workspaceId } : null,
+      );
       mocks.statements.push(
         fn(db).toSQL() as { sql: string; params: unknown[] },
       );
@@ -60,6 +67,7 @@ import {
   type GithubConnectionRow,
   type PullRequestBackfillDeps,
   pullRequestBackfillDeps,
+  runPullRequestBackfill,
 } from "./run-pull-request-backfill";
 
 /** A legacy source that names its owner, as the sources wizard wrote it. */
@@ -92,6 +100,7 @@ const GL_KEY = {
 beforeEach(() => {
   mocks.answers = [];
   mocks.statements = [];
+  mocks.scopes = [];
   for (const fn of [
     mocks.getPullRequest,
     mocks.getMergeRequest,
@@ -357,6 +366,31 @@ describe("pullRequestBackfillDeps", () => {
     expect(update?.params).toEqual(
       expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId]),
     );
+  });
+});
+
+describe("runPullRequestBackfill", () => {
+  it("runs every read and write in the event's own tenant scope", async () => {
+    mocks.answers = [
+      [{ id: "sid" }],
+      [],
+      [
+        {
+          id: "conn-modern",
+          deliveryConfig: { installationId: 12345 },
+          oauthAccountId: null,
+        },
+      ],
+      [{ id: "r1" }],
+    ];
+    mocks.resolveGitHubToken.mockResolvedValue("ghs_token");
+    mocks.getPullRequest.mockResolvedValue({ state: "open", draft: false });
+    expect(await runPullRequestBackfill(REQUEST)).toEqual({
+      outcome: "recorded",
+      rows: 1,
+    });
+    expect(mocks.scopes).toHaveLength(4);
+    for (const scope of mocks.scopes) expect(scope).toEqual(SCOPE);
   });
 });
 

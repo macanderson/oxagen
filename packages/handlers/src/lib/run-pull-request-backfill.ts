@@ -20,6 +20,7 @@ import { createGitHubClient, GitHubApiError } from "@oxagen/github";
 import { resolveGitHubToken } from "@oxagen/github/workspace-token";
 import { createGitLabClient, GitLabApiError } from "@oxagen/gitlab";
 import type { PullRequestBackfillRequest } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
+import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { logger } from "../logger";
 import { installationIdOf } from "../repository.github-connection";
@@ -246,3 +247,16 @@ export const pullRequestBackfillDeps: PullRequestBackfillDeps = {
   },
   now: () => new Date(),
 };
+
+/**
+ * The runner `register.ts` installs: the backfill with its real
+ * dependencies, in the event's own tenant scope.
+ */
+export function runPullRequestBackfill(
+  request: PullRequestBackfillRequest,
+): Promise<PullRequestBackfillResult> {
+  return runInTenantScope(
+    { orgId: request.orgId, workspaceId: request.workspaceId },
+    () => backfillRunPullRequest(pullRequestBackfillDeps, request),
+  );
+}

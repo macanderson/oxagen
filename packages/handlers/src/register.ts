@@ -53,22 +53,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
     };
   });
   // The pull request backfill (ADR-189) lives in @oxagen/inngest-functions
-  // for the same reason. It writes in the event's own tenant scope, and is
-  // loaded on its first run.
-  setPullRequestBackfillRunner(async (request) => {
-    const [{ runInTenantScope }, backfill] = await Promise.all([
-      import("@oxagen/tenancy"),
-      import("./lib/run-pull-request-backfill"),
-    ]);
-    return runInTenantScope(
-      { orgId: request.orgId, workspaceId: request.workspaceId },
-      () =>
-        backfill.backfillRunPullRequest(
-          backfill.pullRequestBackfillDeps,
-          request,
-        ),
-    );
-  });
+  // for the same reason, and is loaded on its first run.
+  setPullRequestBackfillRunner(async (request) =>
+    (await import("./lib/run-pull-request-backfill")).runPullRequestBackfill(
+      request,
+    ),
+  );
   registerHandler("get_run_issue_providers", () =>
     import("./run.issue.providers.get").then(
       (m) => m.handler as CapabilityHandlerFn,
