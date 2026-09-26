@@ -160,7 +160,7 @@ describe("pull requests on a Fleet row", () => {
       name: "Open acme/platform/web!9 on GitLab",
     });
     expect(gitlab).toHaveAttribute("href", GITLAB.url);
-    // No store records a pull request's state: each says so, never "open".
+    // No forge has reported either state: each says so, never "open".
     const states = within(row).getAllByTestId("row-pr-state");
     expect(states.map((s) => s.textContent)).toEqual([
       "status unknown",
@@ -168,7 +168,7 @@ describe("pull requests on a Fleet row", () => {
     ]);
     expect(states[0]).toHaveAttribute(
       "title",
-      "Oxagen does not record pull request status yet. Open the run to read it from GitHub.",
+      "No forge has reported this pull request's status to Oxagen. Open the run to read it from GitHub.",
     );
   });
 

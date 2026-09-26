@@ -19,6 +19,8 @@ import {
   isReplayGrade,
 } from "@oxagen/tacho";
 import { modelFactsOf } from "./model-facts";
+import { compactedField } from "./run-list-status";
+import { type RollupTokenColumns, rollupTokenFields } from "./run-list-tokens";
 
 /** The generated summary columns a run row carries (`summarize_run`, G14). */
 type GeneratedSummaryColumns = {
@@ -106,6 +108,11 @@ export type LedgerSeal = {
   finalEventDigest: string | null;
   /** The fold of every frame digest in sequence; always written. */
   eventStreamDigest: string;
+  /**
+   * Whether frame compaction moved the attempt's frames to its archive
+   * segment (`compactedProbe`, ADR-190). Absent when the read did not ask.
+   */
+  compacted?: boolean;
 };
 
 export type LedgerRunRecord = LedgerRunRow & {
@@ -126,7 +133,7 @@ export type RunCost = {
  * verdict, and whether the run had sealed when the row was rebuilt (null: it
  * had not, so the spend is a running estimate).
  */
-export type RunRollup = {
+export type RunRollup = RollupTokenColumns & {
   cost: RunCost | null;
   verdict: RunItem["verdict"];
   sealedAt: Date | null;
@@ -464,6 +471,7 @@ export function toLedgerRunItem(
       status === "live" ? null : (record.seal?.sealedAt ?? null),
       totals,
     ),
+    ...rollupTokenFields(totals),
     taskRef: identity.goal,
     startedAt: (run.startedAt ?? run.createdAt).toISOString(),
     sealedAt:
@@ -478,6 +486,7 @@ export function toLedgerRunItem(
         : recordedGrade(record.seal?.replayGrade ?? null),
     verdict: totals?.verdict ?? null,
     enforcementTier: publishedTier(record.seal?.enforcementTier),
+    ...compactedField(status, record.seal),
     // A ledger run's controls fence evidence ingress; no host carries them.
     commandBlock: null,
     steerBlock: null,
@@ -648,6 +657,7 @@ export function toTachoRunItem(
     frames: session.seqCount,
     cost: rollupCost(totals),
     costIsEstimate: costIsEstimate(session.sealedAt, totals),
+    ...rollupTokenFields(totals),
     reportedCost:
       Number.isSafeInteger(session.totalCostMicros) &&
       ((session.totalCostMicros ?? 0) > 0 || session.costBasis != null)

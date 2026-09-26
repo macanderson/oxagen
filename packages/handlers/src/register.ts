@@ -1,4 +1,5 @@
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
+import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
 import {
   registerHandler,
@@ -51,6 +52,13 @@ registerHandlersOnce("@oxagen/handlers", () => {
       retryAfterSeconds: out.retryAfterSeconds,
     };
   });
+  // The pull request backfill (ADR-189) lives in @oxagen/inngest-functions
+  // for the same reason, and is loaded on its first run.
+  setPullRequestBackfillRunner(async (request) =>
+    (await import("./lib/run-pull-request-backfill")).runPullRequestBackfill(
+      request,
+    ),
+  );
   registerHandler("get_run_issue_providers", () =>
     import("./run.issue.providers.get").then(
       (m) => m.handler as CapabilityHandlerFn,
