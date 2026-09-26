@@ -50,8 +50,8 @@ const CURATED: Record<string, { label: string; Icon?: LucideIcon }> = {
   send_message: { label: "Send message" },
   upload_asset: { label: "Upload file" },
   // Fleet + governance
-  list_agent_defs: { label: "List agents", Icon: Bot },
-  get_agent_def: { label: "Read agent definition", Icon: Bot },
+  list_agents: { label: "List agents", Icon: Bot },
+  get_agent: { label: "Read agent", Icon: Bot },
   list_agent_executions: { label: "List agent runs", Icon: Bot },
   get_agent_trace: { label: "Read run trace", Icon: ScrollText },
   query_audit_log: { label: "Query the audit log", Icon: ScrollText },

@@ -1478,8 +1478,8 @@ export function buildProgram(): Command {
   // ── agent env: bind agents to environments ──────────────────────────────────
   //
   // Server-scoped: the <agent> arg is an agent's public id (agt_…), slug, or
-  // agent-key, resolved against the workspace's agent definitions. Environments
-  // are governed configuration records — binding one does not run anything.
+  // agent key, resolved against the workspace's registered agents. Environments
+  // are governed configuration records: binding one does not run anything.
 
   const agent = program
     .command("agent")
@@ -1490,22 +1490,32 @@ export function buildProgram(): Command {
   agent
     .command("register")
     .description(
-      "Register an agent identity and print its credential once — Owner/Admin only",
+      "Register an agent: one harness on one runtime, carrying a toolbelt. Prints its credential once. Owner or Admin only",
     )
-    .requiredOption("--slug <slug>", "Lowercase words joined by hyphens")
     .requiredOption("--name <name>", "Display name")
     .requiredOption(
       "--harness <harness>",
       "stella | claude-code | codex | cursor | claude-agent-sdk | custom",
     )
+    .requiredOption("--runtime <rtm_id>", "The runtime it runs on (rtm_…)")
+    .option(
+      "--slug <slug>",
+      "Lowercase words joined by hyphens; derived from --name when omitted",
+    )
+    .option(
+      "--toolbelt <tbt_id>",
+      "The toolbelt it carries (tbt_…); the All tools belt when omitted",
+    )
     .option("--description <text>", "What the agent is for")
-    .option("--validity-days <n>", "Credential lifetime in days (1–365)")
+    .option("--validity-days <n>", "Credential lifetime in days (1 to 365)")
     .option("--json", "Output JSON")
     .action(
       async (opts: {
         slug?: string;
         name?: string;
         harness?: string;
+        runtime?: string;
+        toolbelt?: string;
         description?: string;
         validityDays?: string;
         json?: boolean;
@@ -1521,7 +1531,7 @@ export function buildProgram(): Command {
       "An agent id or slug. Omit it to report this machine instead",
     )
     .description(
-      "With an agent: its identity, credentials, roles, hosts and definition of record. Without one: this machine's enrollment, daemon, hooks, bundle and spool",
+      "With an agent: its identity, runtime, toolbelt, versions, credentials, roles and hosts. Without one: this machine's enrollment, daemon, hooks, bundle and spool",
     )
     .option("--json", "Output JSON")
     .action(

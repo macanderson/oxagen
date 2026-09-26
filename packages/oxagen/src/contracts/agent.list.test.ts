@@ -9,6 +9,17 @@ const item = {
   description: "Cuts releases and opens their pull requests.",
   agentKey: "acme.core.release-bot",
   harness: "stella",
+  runtime: {
+    id: "rtm_0123456789abcdefghjkmn",
+    name: "Mac's laptop",
+    slug: "macs-laptop",
+  },
+  toolbelt: {
+    id: "tbt_0123456789abcdefghjkmn",
+    name: "All tools",
+    slug: "all-tools",
+    kind: "all_tools",
+  },
   managed: false,
   principalId: "prn_0123456789abcdefghjkmn",
   operatorId: "usr_0123456789abcdefghjkmn",
@@ -76,6 +87,21 @@ describe("list_agents contract", () => {
     expect(parsed.mandates).toBeNull();
     expect(parsed.tokens30d).toBeNull();
     expect(parsed.spend30d).toEqual(item.spend30d);
+  });
+
+  it("names the runtime and toolbelt, and takes null for an agent on no named runtime (ADR-198)", () => {
+    expect(agentListItem.parse(item).runtime?.slug).toBe("macs-laptop");
+    expect(
+      agentListItem.parse({ ...item, runtime: null, toolbelt: null }).runtime,
+    ).toBeNull();
+    const { runtime: _omit, ...withoutRuntime } = item;
+    expect(agentListItem.safeParse(withoutRuntime).success).toBe(false);
+    expect(
+      agentListItem.safeParse({
+        ...item,
+        toolbelt: { ...item.toolbelt, kind: "shared" },
+      }).success,
+    ).toBe(false);
   });
 
   it("carries the wrapped-session token rollup and refuses a cache rate above one", () => {

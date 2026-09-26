@@ -1,0 +1,90 @@
+{
+  "name": "assign_agent_toolbelt",
+  "domain": "agent",
+  "description": "Give an agent another toolbelt and keep its principal, roles and grants. Writes a new agent version.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "tools"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "toolbeltId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "agentId",
+      "toolbeltId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "agentId": {
+        "type": "string"
+      },
+      "toolbelt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "all_tools",
+              "custom"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "version": {
+        "type": "integer",
+        "exclusiveMinimum": 0
+      }
+    },
+    "required": [
+      "agentId",
+      "toolbelt",
+      "version"
+    ],
+    "additionalProperties": false
+  }
+}

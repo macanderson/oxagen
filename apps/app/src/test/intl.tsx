@@ -10,7 +10,6 @@ import audit from "../../messages/audit.json";
 import auth from "../../messages/auth.json";
 import billing from "../../messages/billing.json";
 import create from "../../messages/create.json";
-import createAgent from "../../messages/create-agent.json";
 import createRecord from "../../messages/create-record.json";
 import en from "../../messages/en.json";
 import fleet from "../../messages/fleet.json";
@@ -36,7 +35,6 @@ export const messages = {
   ...auth,
   ...billing,
   ...create,
-  ...createAgent,
   ...createRecord,
   ...fleet,
   ...mandate,

@@ -350,10 +350,9 @@ the only path from this file to `git rm`.
 
 ## 13. Deleted, with an ADR
 
-Nothing yet.
-
 | Feature | ADR | Deleted in | Recoverable from |
 |---|---|---|---|
+| The agent definition file (`.oxagen/agents/<slug>.toml`) and every capability that authored or read it: `propose_agent`, `commit_agent_definition`, `create/update/delete/publish/get/list_agent_def(s)`, `suggest/revise/summarize_agent_def`, `deploy_agent`, the `agent` kind of the configuration clone, `agent-definition-source.ts`, and their routes, MCP tools, handlers and docs. An agent is now one operator on one runtime with one harness, carrying a toolbelt. | [ADR-198](docs/adr/ADR-198-an-agent-is-one-operator-on-one-runtime-with-one-harness.md) | #4369 | git history before #4369 |
 
 ---
 

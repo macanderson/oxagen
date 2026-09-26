@@ -1,17 +1,16 @@
-// Toolbelts (mockup `tools.md`, Toolbelts tab): the named sets of tool
-// versions assigned to agents, and who carries which. A toolbelt is the only
-// edge from the registry to an agent, and it decides what a model is shown,
-// never what it may call.
+// Toolbelts (mockup `tools.md`, Toolbelts tab; ADR-198): the sets of tools
+// agents are shown. Every workspace holds one All tools belt, the tools an
+// admin made available, and the belts cloned from it. A toolbelt narrows what
+// an agent is shown and grants nothing: every call still meets the agent's
+// roles, the policy on the tool version, the kill switches and the mandates.
 //
-// Nothing stores a toolbelt yet. A belt exists today only as the tool list
-// computed for each agent (`get_agent_toolbelt`), so there is no named set, no
-// owner and no assignment record to read (#3852). Both panels keep their
-// heading, caption and New toolbelt, and say what is missing in place of the
-// rows; an empty table would read as "no belt exists", which the record cannot
-// say either way. Each agent's computed list is on its own Toolbelt tab, which
-// the Assignments panel links to so the chain does not end here.
-import { useTranslations } from "next-intl";
-import { routes } from "@/shared/safe-path";
+// The list comes from `list_toolbelts`, the All tools belt first. The belt the
+// URL names (`?belt=tbt_…`) opens below it from `get_toolbelt`, with its tools
+// grouped by server and the controls the viewer may use. New toolbelt clones
+// All tools; each row can be cloned too.
+import { useLocale, useTranslations } from "next-intl";
+import type { ToolbeltDetail, ToolbeltList } from "@/data/contracts/toolbelts";
+import type { Read } from "@/data/read";
 import {
   linkText,
   panel,
@@ -19,20 +18,103 @@ import {
   panelHeader,
   panelTitle,
 } from "@/ui/control-styles";
+import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
-import { NotBacked } from "./not-backed";
-import { StubAction, StubField } from "./stub-action";
-import type { ToolsAt } from "./view";
+import { ReadFailure } from "@/ui/read-failure";
+import { cell, numericCell, Table } from "@/ui/table";
+import { BeltView } from "./belt-view";
+import { CloneToolbelt } from "./clone-toolbelt";
+import { type ToolsAt, toolsLink } from "./view";
+
+function BeltList({
+  at,
+  list,
+  openId,
+  canEdit,
+}: {
+  at: ToolsAt;
+  list: ToolbeltList;
+  openId: string | null;
+  canEdit: boolean;
+}) {
+  const t = useTranslations("tools.toolbelts");
+  const locale = useLocale();
+  return (
+    <Table
+      label={t("title")}
+      columns={[
+        { label: t("columns.belt") },
+        { label: t("columns.tools"), numeric: true },
+        { label: t("columns.active"), numeric: true },
+        { label: t("columns.servers"), numeric: true },
+        { label: t("columns.agents"), numeric: true },
+        ...(canEdit ? [{ label: t("columns.actions"), hidden: true }] : []),
+      ]}
+    >
+      {list.belts.map((belt) => (
+        <tr
+          key={belt.id}
+          data-testid="toolbelt-row"
+          data-belt={belt.id}
+          data-kind={belt.kind}
+          aria-current={belt.id === openId ? "true" : undefined}
+          className="border-b border-border last:border-b-0"
+        >
+          <td className={cell}>
+            <SafeLink
+              to={toolsLink(at, { tab: "toolbelts", belt: belt.id })}
+              aria-label={t("openBelt", { name: belt.name })}
+              className={`${linkText} font-medium`}
+            >
+              {belt.name}
+            </SafeLink>
+            <span className="block text-xs text-muted-foreground">
+              {belt.clonedFrom === null
+                ? t("allTools")
+                : t("clonedFrom", { name: belt.clonedFrom.name })}
+            </span>
+          </td>
+          <td className={numericCell}>{formatCount(belt.tools, locale)}</td>
+          <td className={numericCell}>
+            {formatCount(belt.activeTools, locale)}
+          </td>
+          <td className={numericCell}>{formatCount(belt.servers, locale)}</td>
+          <td className={numericCell}>{formatCount(belt.agents, locale)}</td>
+          {canEdit ? (
+            <td className={`${cell} text-right`}>
+              <CloneToolbelt
+                at={at}
+                source={belt}
+                label={t("clone.open")}
+                testId={`toolbelt-clone-${belt.id}`}
+              />
+            </td>
+          ) : null}
+        </tr>
+      ))}
+    </Table>
+  );
+}
 
 export function Toolbelts({
   at,
-  canCreate,
+  canEdit,
+  list,
+  open,
 }: {
   at: ToolsAt;
-  /** An org Owner or Admin: who would hold `toolbelt.create`. */
-  canCreate: boolean;
+  /** An org Owner or Admin: who the toolbelt writes admit (see `canAdministerOrg`). */
+  canEdit: boolean;
+  /** `list_toolbelts`. */
+  list: Read<ToolbeltList>;
+  /** `get_toolbelt` for the belt the URL names, or null when none is open. */
+  open: Read<ToolbeltDetail> | null;
 }) {
   const t = useTranslations("tools.toolbelts");
+  const allTools = list.ok
+    ? list.value.belts.find((belt) => belt.kind === "all_tools")
+    : undefined;
+  const openId = open?.ok === true ? open.value.belt.id : null;
   return (
     <div className="flex flex-col gap-4">
       <section aria-labelledby="tools-toolbelts" className={panel}>
@@ -43,60 +125,49 @@ export function Toolbelts({
             </h2>
             <p className="text-xs text-muted-foreground">{t("caption")}</p>
           </div>
-          {canCreate ? (
-            <StubAction
-              label={t("new.open")}
-              tone="primary"
-              title={t("new.title")}
-              gap="toolbelts"
-              note={t("new.note")}
-              confirm={t("new.confirm")}
+          {canEdit && allTools !== undefined ? (
+            <CloneToolbelt
+              at={at}
+              source={allTools}
+              label={t("new")}
+              gold
               testId="tools-belt-new"
-            >
-              <StubField id="belt-name" label={t("new.name")} />
-              <StubField id="belt-purpose" label={t("new.purpose")} />
-              <StubField
-                id="belt-owner"
-                label={t("new.owner")}
-                options={["platform", "finops", "security"]}
-                hint={t("new.ownerHint")}
-              />
-            </StubAction>
+            />
           ) : null}
         </div>
         <div className={`${panelBody} flex flex-col gap-3`}>
-          <NotBacked gap="toolbelts" testId="tools-toolbelts-not-backed">
-            {t("notBacked")}
-          </NotBacked>
+          {list.ok ? (
+            <BeltList
+              at={at}
+              list={list.value}
+              openId={openId}
+              canEdit={canEdit}
+            />
+          ) : (
+            <ReadFailure read={list} section={t("title")} />
+          )}
           <p className="max-w-prose border-l-2 border-gold pl-3 text-[13px] text-muted-foreground">
             {t("note")}
           </p>
         </div>
       </section>
-      <section aria-labelledby="tools-assignments" className={panel}>
-        <div className={panelHeader}>
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <h2 id="tools-assignments" className={panelTitle}>
-              {t("assignments.title")}
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              {t("assignments.caption")}
-            </p>
-          </div>
-        </div>
-        <div className={`${panelBody} flex flex-col gap-3`}>
-          <NotBacked gap="toolbelts" testId="tools-assignments-not-backed">
-            {t("assignments.notBacked")}
-          </NotBacked>
+      {open === null ? null : open.ok ? (
+        <BeltView at={at} detail={open.value} canEdit={canEdit} />
+      ) : (
+        <section
+          aria-label={t("title")}
+          data-testid="tools-belt-failure"
+          className={`${panel} ${panelBody}`}
+        >
+          <ReadFailure read={open} section={t("title")} />
           <SafeLink
-            to={routes.agents(at.org, at.ws)}
-            data-testid="tools-assignments-agents"
+            to={toolsLink(at, { tab: "toolbelts" })}
             className={`${linkText} text-[13px]`}
           >
-            {t("assignments.agents")}
+            {t("belt.close")}
           </SafeLink>
-        </div>
-      </section>
+        </section>
+      )}
     </div>
   );
 }

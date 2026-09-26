@@ -6,11 +6,10 @@ import { z } from "zod";
 // This module is the executable implementation of the agent schema design.
 // The design copy that sat at docs/reference/agent-schema.ts duplicated it and
 // was removed on 2026-09-23 (#3895); git history keeps it.
-// An agent DEFINITION is the versioned, declarative source of truth (what the
-// agent is, what it loads, how it reaches the graph, and whether it is
-// deployed). Triggers belong to automations/playbooks, not the agent — a
-// definition is a pure, portable unit with no trigger fields. An agent
-// INSTANCE is one running execution of a definition with live state and a
+// An agent VERSION CONFIG is the body `agent_versions.config` carries (see the
+// section below; ADR-198 removed the agent definition file). Triggers belong
+// to automations/playbooks, not the agent: the config carries no trigger
+// fields. An agent INSTANCE is one running execution with live state and a
 // debug posture. An agent LOG is the append-only, typed traceability record
 // for a run (persisted to ClickHouse).
 //
@@ -20,9 +19,9 @@ import { z } from "zod";
 //
 // ADR-043 removed the execution runtime, and with it every field that
 // described HOW an agent runs: skills, sandboxes, sandbox-bound environments
-// and code mode are gone. What remains is the governed-agent REGISTRY record —
-// identity, versioned instructions, the graph scope it may reason over, and the
-// allowlist of tools it may reach.
+// and code mode are gone. ADR-198 then moved identity onto the agent row (one
+// operator, one runtime, one harness) and what an agent can reach onto its
+// toolbelt, so what remains here is the version config.
 //
 // The two escape hatches from the reference (`AgentTool.config` and
 // `AgentLogEntry.data`) stay typed as open records: they are deliberate seams
@@ -115,27 +114,26 @@ export const agentToolSchema = z.object({
 export type AgentTool = z.infer<typeof agentToolSchema>;
 
 // ═════════════════════════════════════════════════════════════════════════════
-// AGENT DEFINITION — the versioned, declarative source of truth
+// VERSION CONFIG — the body `agent_versions.config` carries
 // ═════════════════════════════════════════════════════════════════════════════
+// ADR-198: a customer's agent carries no prompt and no tool list of its own.
+// It carries a runtime and a toolbelt, recorded on the version row, and this
+// config holds only the budget and containment tables the host bundle reads
+// (`agent-version-config.ts`). The in-app assistant, which Oxagen seeds and
+// runs itself, is the one agent whose config also names a graph scope, a
+// tool allowlist and instructions (`interactive-agent.ts`).
 
-/** Deploy posture, distinct from the draft/active/archived lifecycle. A new
- *  agent is always created `inactive`; activation makes it eligible to be
- *  triggered by an automation/playbook. */
-export const agentDeploymentStatusSchema = z.enum(["inactive", "active"]);
-export type AgentDeploymentStatus = z.infer<typeof agentDeploymentStatusSchema>;
-
-/** One declared spend ceiling in micros. `definitionBudget` in
- *  agent-definition-source.ts applies the same rule to the TOML source: a
- *  positive safe integer. */
+/** One declared spend ceiling in micros. `agentVersionBudget` in
+ *  agent-version-config.ts applies the same rule: a positive safe integer. */
 const budgetMicrosSchema = z
   .number()
   .int()
   .positive()
   .max(Number.MAX_SAFE_INTEGER);
 
-/** The definition's `budget` table: the ceilings the mandate signs to the host
- *  (see `budgetDocFromVersion`). It keeps any other key the table carries, the
- *  way the TOML source path does, so the config path drops nothing. */
+/** The config's `budget` table: the ceilings the mandate signs to the host
+ *  (see `budgetDocFromVersion`). It keeps any other key the table carries, so
+ *  a round trip drops nothing. */
 export const agentDefinitionBudgetSchema = z
   .object({
     per_run_micros: budgetMicrosSchema.optional(),
@@ -144,42 +142,19 @@ export const agentDefinitionBudgetSchema = z
   .passthrough();
 export type AgentDefinitionBudget = z.infer<typeof agentDefinitionBudgetSchema>;
 
-export const agentDefinitionSchema = z.object({
-  /** Stable id. Slugged public_id + UUID under the hood, per Oxagen convention. */
-  id: z.string(),
-  /** Human-readable name shown in selectors and the agents registry. */
-  name: z.string().min(1),
-  /** What this agent does — the description a human governs it by. */
-  description: z.string(),
-  /** Immutable version. Publish a new version; never edit one in place. */
-  version: z.string(),
-  /** The ontology this agent reasons over and how it pulls context efficiently. */
+/** The versioned body persisted in `agent_versions.config` for the in-app
+ *  assistant: the graph it reasons over, the tools it may reach, its
+ *  instructions and its budget. */
+export const agentDefinitionConfigSchema = z.object({
+  /** The ontology the assistant reasons over and how it pulls context. */
   graph: graphAccessSchema,
-  /** The tool allowlist: the capabilities and MCP servers this agent may
-   *  reach. One uniform list, and the ceiling the runtime materializes against
-   *  — a tool absent from it is never advertised to the model. */
+  /** The tool allowlist: the capabilities and MCP servers it may reach. A
+   *  tool absent from it is never advertised to the model. */
   agentTools: z.array(agentToolSchema),
-  /** Optional system prompt / instructions baked into the definition. */
+  /** The assistant's instructions. */
   instructions: z.string().optional(),
   /** Optional spend ceilings for one run and one UTC day. */
   budget: agentDefinitionBudgetSchema.optional(),
-  /** Deploy posture. New definitions seed `inactive`. */
-  deploymentStatus: agentDeploymentStatusSchema.default("inactive"),
-  /** Tenant + workspace scope. Every agent is scoped; no global agents. */
-  tenantId: z.string(),
-  workspaceId: z.string().optional(),
-});
-export type AgentDefinition = z.infer<typeof agentDefinitionSchema>;
-
-/** The portion of an AgentDefinition persisted in `agent_versions.config` — the
- *  versioned body, without the identity columns the `agents`/`agent_versions`
- *  rows already carry. Keeping these in one schema means the row and the jsonb
- *  never drift. */
-export const agentDefinitionConfigSchema = agentDefinitionSchema.pick({
-  graph: true,
-  agentTools: true,
-  instructions: true,
-  budget: true,
 });
 export type AgentDefinitionConfig = z.infer<typeof agentDefinitionConfigSchema>;
 
@@ -299,21 +274,3 @@ export const agentLogSchema = z.object({
   endedAt: z.string().optional(),
 });
 export type AgentLog = z.infer<typeof agentLogSchema>;
-
-// ═════════════════════════════════════════════════════════════════════════════
-// PARSERS — the single seam other layers use to validate persisted definitions
-// ═════════════════════════════════════════════════════════════════════════════
-
-/** Parse an `agent_versions.config` jsonb blob into a typed, validated config.
- *  Handlers and the runtime call this instead of trusting the column shape. */
-export function parseAgentDefinitionConfig(
-  value: unknown,
-): AgentDefinitionConfig {
-  return agentDefinitionConfigSchema.parse(value);
-}
-
-/** Parse a full AgentDefinition (identity + config). Used by the seeder and the
- *  definition CRUD handlers when assembling a definition from row + config. */
-export function parseAgentDefinition(value: unknown): AgentDefinition {
-  return agentDefinitionSchema.parse(value);
-}

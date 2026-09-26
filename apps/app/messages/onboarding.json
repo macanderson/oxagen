@@ -13,8 +13,10 @@
       "agentSlugInvalid": "Use up to 18 lowercase letters, digits and hyphens, starting and ending with a letter or digit.",
       "agentNameRequired": "Enter a name for the agent.",
       "agentNameTooLong": "Use at most 128 characters.",
-      "agentDescriptionTooLong": "Use at most 1024 characters.",
       "agentHarnessInvalid": "Pick one of the harnesses Oxagen wraps.",
+      "agentRuntimeRequired": "Choose the runtime this agent runs on.",
+      "agentSlugTaken": "An agent in this workspace has held this slug, and a slug is never reused. Choose another.",
+      "agentRuntimeHarnessTaken": "Another agent already runs this harness on this runtime. Choose another runtime or harness.",
       "failed": "The organization could not be created. Nothing was saved; try again.",
       "namespaceInvalid": "Use 2–6 lowercase letters or digits."
     },
@@ -306,7 +308,7 @@
       "eyebrow": "Step {n} of 3",
       "railLabel": "Register an agent",
       "steps": {
-        "name": "Name the agent",
+        "name": "Define the agent",
         "wrap": "Wrap the agent",
         "run": "Wait for the first frame"
       },
@@ -322,8 +324,8 @@
       "loading": "Loading the step",
       "noAgent": {
         "title": "No agent to wrap yet",
-        "body": "This step works on the identity the first step mints. Start from Name the agent.",
-        "start": "Name the agent"
+        "body": "This step works on the agent the first step mints. Start from Define the agent.",
+        "start": "Define the agent"
       },
       "denied": {
         "title": "You cannot see agent registration",
@@ -339,20 +341,31 @@
         "dialogBody": "Oxagen cannot send an access request from this page yet. Ask an organization owner to grant {permission}. The grant lands in the audit record."
       },
       "name": {
-        "title": "Name the agent",
-        "lead": "The key is reserved now and is immutable.",
+        "title": "Define the agent",
+        "lead": "An agent is one harness on one runtime, working for you. Name it, choose where it runs and the tools it carries. The key is reserved now and is immutable.",
+        "agent": "Agent",
+        "name": "Name",
+        "nameHint": "What your team calls it, such as Mac's Claude Code.",
         "slug": "Slug",
         "slugHint": "The agent key becomes <mono>{key}</mono>.",
-        "workspace": "Workspace",
-        "workspaceValue": "{workspace} · {repository}",
-        "noRepository": "no main repository",
-        "workspaceHint": "Its definition file lands in <code>.oxagen/agents/</code> in the main repo.",
+        "place": "Where it runs",
         "harness": "Harness",
         "harnessHint": "Picks the installer on the next step.",
-        "tier": "Model tier",
-        "tierHint": "The harness calls the model with its own key. The tier is recorded on every frame.",
-        "tierNotSent": "Oxagen stores no model tier at registration yet, so this choice is not sent.",
-        "note": "Continue reserves <mono>{key}</mono> by registering its identity. The definition file is committed in a separate pull request.",
+        "runtime": "Runtime",
+        "runtimeHint": "The laptop, VM or cloud workspace it runs on. Each runtime runs one agent per harness.",
+        "runtimeNone": "No runtime is named in this workspace yet. Add one, then register its agent.",
+        "addRuntime": "Add a runtime",
+        "noRuntime": "none",
+        "taken": "{harness} already runs on {runtime} as {agent}.",
+        "toolbelt": "Toolbelt",
+        "toolbeltHint": "The tools this agent is shown. Its roles and mandates still decide what it may do.",
+        "toolbeltTools": "{count, plural, one {# active tool} other {# active tools}}",
+        "toolbeltDone": "Done",
+        "toolbeltEmpty": "This agent carries the All tools belt. There is no toolbelt to choose yet because this workspace has no tools. Import MCP servers to build one.",
+        "toolbeltImport": "Import MCP servers",
+        "toolbeltDefault": "The agent carries the All tools belt until you choose another on its page.",
+        "allTools": "All tools",
+        "note": "Continue reserves <mono>{key}</mono> by registering the agent on its runtime.",
         "reserved": "<mono>{key}</mono> is reserved. Continue opens the wrap step.",
         "continue": "Continue",
         "pending": "Reserving…"

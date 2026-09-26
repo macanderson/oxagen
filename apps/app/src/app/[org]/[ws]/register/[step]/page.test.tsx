@@ -55,7 +55,7 @@ beforeEach(() => {
 
 describe("/[org]/[ws]/register/[step]", () => {
   it.each([
-    ["name", "Name the agent"],
+    ["name", "Define the agent"],
     ["wrap", "Wrap the agent"],
     ["run", "Wait for the first frame"],
   ])("names the %s step in the tab as its h1 does", async (step, title) => {
@@ -95,12 +95,26 @@ describe("/[org]/[ws]/register/[step]", () => {
     expect(screen.getByTestId("register-body")).toBeInTheDocument();
   });
 
-  it("passes no identity when the URL names none", async () => {
+  it("passes no identity and no runtime when the URL names none", async () => {
     await renderPage(
       await page.default(routeProps({ ...SEGMENTS, step: "name" })),
     );
     expect(RegisterAgent.mock.calls[0]?.[0]).toEqual(
-      expect.objectContaining({ step: "name", agent: null }),
+      expect.objectContaining({ step: "name", agent: null, runtime: null }),
+    );
+  });
+
+  it("hands the runtime Add a runtime chose to the name step (ADR-198)", async () => {
+    await renderPage(
+      await page.default(
+        routeProps(
+          { ...SEGMENTS, step: "name" },
+          { runtime: "rtm_macslaptop" },
+        ),
+      ),
+    );
+    expect(RegisterAgent.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ step: "name", runtime: "rtm_macslaptop" }),
     );
   });
 

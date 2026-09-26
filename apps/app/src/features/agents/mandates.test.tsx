@@ -43,6 +43,8 @@ vi.mock("./actions", () => ({
   rotateAgentCredential: vi.fn(),
   setAgentSuspended: vi.fn(),
   requestMandate: vi.fn(),
+  moveAgent: vi.fn(),
+  assignAgentToolbelt: vi.fn(),
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));

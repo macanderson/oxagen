@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 // One agent over a fake DataSource (spec pages/agent.md): the header and its
-// badges, the eight tabs with their live counts and the rev1 aliases, the
+// badges, the seven tabs with their live counts and the rev1 aliases, the
 // not-loaded states, and each tab's panels in the design's order, with what
 // the record does not hold named rather than drawn as a zero. Axe runs after
 // every test. The Toolbelt tab's interactive panels, the mandates panel and
-// the definition form have their own files.
+// the belt and runtime controls (ADR-198) have their own files.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -16,7 +16,6 @@ import { mandateList, mandateRow } from "@/test/mandate-views";
 import {
   agentDetail,
   agentsSource,
-  committedDefinition,
   incident,
   incidentPage,
   roleCatalog,
@@ -53,7 +52,8 @@ vi.mock("./actions", () => ({
   setAgentCostCenter: vi.fn(),
   revokeHostEnrollment: vi.fn(),
   issueAgentEnrollmentToken: vi.fn(),
-  commitAgentDefinition: vi.fn(),
+  moveAgent: vi.fn(),
+  assignAgentToolbelt: vi.fn(),
   requestMandate: vi.fn(),
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
@@ -89,7 +89,7 @@ type Reads = Parameters<typeof agentsSource>[0];
 /** Every read the page can make, answered; a test overrides what it is about. */
 function allReads(overrides: Reads = {}): Reads {
   return {
-    get: readOk(agentDetail({ definition: committedDefinition() })),
+    get: readOk(agentDetail()),
     toolbelt: readOk(toolbelt()),
     mandates: mandateList([]),
     incidents: incidentPage([incident()]),
@@ -193,7 +193,7 @@ describe("Agent header", () => {
 });
 
 describe("Agent tabs", () => {
-  it("draws the eight tabs in order as a tablist of links, Overview selected by default", async () => {
+  it("draws the seven tabs in order as a tablist of links, Overview selected by default", async () => {
     await renderAgent();
     expect(
       tabs().map((tab) => [
@@ -209,7 +209,6 @@ describe("Agent tabs", () => {
         ["Runtime", "runtime"],
         ["Permissions", "permissions"],
         ["Activity", "activity"],
-        ["Definition in git", "definition"],
       ].map(([label, id]) => [
         label,
         `/acme/core-platform/agents/release-bot/${String(id)}`,
@@ -238,6 +237,8 @@ describe("Agent tabs", () => {
     ["runs", "activity"],
     ["incidents", "activity"],
     ["enrollment", "runtime"],
+    // The definition file went with ADR-198; a link to it lands on Toolbelt.
+    ["definition", "toolbelt"],
     ["no-such-tab", "overview"],
   ])("lands the rev1 id %s on %s", async (alias, tab) => {
     await renderAgent({}, alias);
@@ -415,7 +416,7 @@ describe("Overview", () => {
     );
   });
 
-  it("draws the last 30 days and the definition in git with their links", async () => {
+  it("draws the last 30 days with its link, and the agent's versions (ADR-198)", async () => {
     await renderAgent();
     const last30 = region("Last 30 days");
     expect(last30).toHaveTextContent("Runs4");
@@ -426,17 +427,78 @@ describe("Overview", () => {
       "href",
       "/acme/core-platform/agents/release-bot/activity",
     );
-    const git = region("Definition in git");
-    expect(git).toHaveTextContent(".oxagen/agents/release-bot.toml");
-    expect(git).toHaveTextContent("acme/core @ agents/release-bot");
-    expect(git).toHaveTextContent("9c1e2f0");
-    expect(git).toHaveTextContent("definition_digest");
+    const versions = region("Versions");
+    expect(within(versions).getAllByTestId("agent-version")).toHaveLength(1);
+    expect(versions).toHaveTextContent("Registered");
+    expect(versions).toHaveTextContent("Build box");
+    expect(versions).toHaveTextContent("All tools");
     expect(
-      within(git).getByRole("link", { name: "Open the file" }),
-    ).toHaveAttribute(
-      "href",
-      "/acme/core-platform/agents/release-bot/definition",
+      screen.queryByRole("region", { name: "Definition in git" }),
+    ).toBeNull();
+  });
+
+  it("names the belt the agent carries and the runtime it runs on in Composition", async () => {
+    await renderAgent();
+    const composition = region("Composition");
+    expect(
+      within(composition).getByTestId("composition-belt"),
+    ).toHaveTextContent("All tools");
+    expect(
+      within(composition).getByTestId("composition-runtime"),
+    ).toHaveTextContent("Build box");
+  });
+});
+
+describe("Toolbelt and Runtime controls (ADR-198)", () => {
+  it("offers the workspace's belts on the Toolbelt tab with the current one chosen", async () => {
+    const calls = await renderAgent({}, "toolbelt");
+    expect(calls.belts).toHaveLength(1);
+    const choice = region("Assigned toolbelt");
+    expect(within(choice).getByTestId("agent-belt-current")).toHaveTextContent(
+      "It carries All tools.",
     );
+    expect(
+      within(choice).getByRole("radio", { name: /All tools/ }),
+    ).toHaveAttribute("aria-checked", "true");
+    expect(
+      within(choice).getByRole("radio", { name: /Review belt/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers the runtimes on the Runtime tab, the current one and a runtime already running the harness disabled", async () => {
+    const calls = await renderAgent({}, "runtime");
+    expect(calls.runtimes).toHaveLength(1);
+    const move = region("Runtime placement");
+    expect(
+      within(move).getByRole("radio", { name: /Build box/ }),
+    ).toHaveAttribute("aria-disabled", "true");
+    const taken = within(move).getByRole("radio", { name: /Mac's laptop/ });
+    expect(taken).toHaveAttribute("aria-disabled", "true");
+    expect(taken).toHaveAccessibleDescription(
+      "Claude Code already runs on Mac's laptop as mac-claude.",
+    );
+    expect(
+      within(move).getByRole("radio", { name: /GPU box/ }),
+    ).not.toHaveAttribute("aria-disabled");
+  });
+
+  it("shows a member the binding and no control (negative)", async () => {
+    await renderAgent(
+      {},
+      "toolbelt",
+      unsafeMint(WsCtx, { ...CTX_FIELDS, orgRole: "member" }),
+    );
+    const choice = region("Assigned toolbelt");
+    expect(within(choice).queryByRole("radiogroup")).toBeNull();
+    expect(choice).toHaveTextContent(
+      "An organization owner or admin can change it.",
+    );
+  });
+
+  it("reads neither the belts nor the runtimes off their tabs", async () => {
+    const calls = await renderAgent({}, "identity");
+    expect(calls.belts).toEqual([]);
+    expect(calls.runtimes).toEqual([]);
   });
 });
 
@@ -446,7 +508,7 @@ describe("Identity", () => {
     const facts = region("Identity");
     expect(facts).toHaveTextContent("Agent keyacme.core.release-bot");
     expect(facts).toHaveTextContent("Principalprn_91");
-    expect(facts).toHaveTextContent("Model tiercomplex");
+    expect(facts).toHaveTextContent("RuntimeBuild box build-box");
     expect(facts).toHaveTextContent("OperatorMarcus Bell");
     expect(facts).toHaveTextContent(
       "Deregistering retires the principal and never deletes it",
@@ -617,7 +679,8 @@ describe("Permissions", () => {
     const roles = region("Roles");
     expect(roles).toHaveTextContent("repo.write · pr.open");
     expect(roles).toHaveTextContent("Resource scopenot recorded");
-    expect(roles).toHaveTextContent("$2.50");
+    // The agent's own budget is on its version, which get_agent does not return (ADR-198).
+    expect(roles).toHaveTextContent("Spend ceilingnot recorded");
     expect(roles).toHaveTextContent(
       "Can move moneynono mandate, so a financial call is denied before dispatch",
     );
@@ -626,11 +689,8 @@ describe("Permissions", () => {
       within(roles).getByRole("button", { name: "Assign a role" }),
     ).toBeVisible();
     expect(
-      within(region("Budgets")).getByRole("link", { name: "Set budget" }),
-    ).toHaveAttribute(
-      "href",
-      "/acme/core-platform/agents/release-bot/definition",
-    );
+      within(region("Budgets")).queryByRole("link", { name: "Set budget" }),
+    ).toBeNull();
     expect(screen.getByTestId("denial-chain")).toHaveTextContent("no_mandate");
     expect(screen.getByTestId("mandate-badge")).toHaveTextContent(
       "cannot move money",
@@ -731,47 +791,6 @@ describe("Agent tab bodies", () => {
     expect(screen.queryByTestId("agent-toolbelt-tab")).toBeNull();
     expect(region("Toolbelt")).toHaveTextContent("toolbelt_unavailable");
     expect(screen.queryByTestId("tab-count-toolbelt")).toBeNull();
-  });
-
-  it("opens the Definition tab on the committed file", async () => {
-    await renderAgent({}, "definition");
-    expect(selected()).toEqual(["definition"]);
-    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue(
-      "Release bot",
-    );
-    expect(screen.getByRole("textbox", { name: "Description" })).toHaveValue(
-      "",
-    );
-  });
-
-  it("seeds the Definition tab from the identity when no file is committed, description included", async () => {
-    await renderAgent(
-      {
-        get: readOk(agentDetail({ definition: null })),
-        mandates: readError("mandates_unavailable", 503),
-      },
-      "definition",
-    );
-    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue(
-      "Release bot",
-    );
-    expect(screen.getByRole("textbox", { name: "Description" })).toHaveValue(
-      "Cuts releases and opens their pull requests.",
-    );
-  });
-
-  it("seeds no description line for an identity that records none (negative)", async () => {
-    await renderAgent(
-      {
-        get: readOk(
-          agentDetail({ definition: null, identity: { description: null } }),
-        ),
-      },
-      "definition",
-    );
-    expect(screen.getByRole("textbox", { name: "Description" })).toHaveValue(
-      "",
-    );
   });
 
   it.each(["admin", "billing"] as const)(

@@ -28,7 +28,9 @@ const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
   addConnection,
+  cloneToolbelt,
   deleteApprovalRule,
+  deleteToolbelt,
   flipKillSwitch,
   importTools,
   readConnection,
@@ -37,6 +39,8 @@ const {
   saveApprovalRule,
   setApprovalRuleEnabled,
   setToolClassification,
+  setToolState,
+  updateToolbelt,
 } = await import("./actions");
 const { approvalRuleListOutput, connectionGetOutput } = await import(
   "@/test/tools-outputs"
@@ -1026,5 +1030,208 @@ describe("removeProvider", () => {
     expect(await removeProvider("acme", "core-platform", "mcs_01k5s9")).toEqual(
       { ok: false, reason: "denied", code: "org_role_required" },
     );
+  });
+});
+
+describe("cloneToolbelt", () => {
+  const cloned = {
+    toolbelt: {
+      id: "tbt_reviewbelt",
+      name: "Review belt",
+      slug: "review-belt",
+      kind: "custom" as const,
+    },
+  };
+
+  it("clones the source with the name, slug and description, trimmed", async () => {
+    invoke.mockResolvedValue(cloned);
+    expect(
+      await cloneToolbelt("acme", "core-platform", {
+        toolbeltId: " tbt_alltools ",
+        name: " Review belt ",
+        slug: " review-belt ",
+        description: " What a reviewer needs ",
+      }),
+    ).toEqual({
+      ok: true,
+      value: { id: "tbt_reviewbelt", name: "Review belt", slug: "review-belt" },
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "clone_toolbelt",
+      {
+        toolbeltId: "tbt_alltools",
+        name: "Review belt",
+        slug: "review-belt",
+        description: "What a reviewer needs",
+      },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("leaves a blank slug and description off, so the handler derives the slug", async () => {
+    invoke.mockResolvedValue(cloned);
+    await cloneToolbelt("acme", "core-platform", {
+      toolbeltId: "tbt_alltools",
+      name: "Review belt",
+      slug: " ",
+      description: "",
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "clone_toolbelt",
+      { toolbeltId: "tbt_alltools", name: "Review belt" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("is refused before the kernel when the slug is malformed, naming the field", async () => {
+    expect(
+      await cloneToolbelt("acme", "core-platform", {
+        toolbeltId: "tbt_alltools",
+        name: "Review belt",
+        slug: "Review Belt",
+        description: "",
+      }),
+    ).toMatchObject({ ok: false, reason: "invalid", field: "slug" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns the handler's reason when the slug is taken", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({
+        code: "conflict",
+        reason: "toolbelt_slug_taken",
+      }),
+    );
+    expect(
+      await cloneToolbelt("acme", "core-platform", {
+        toolbeltId: "tbt_alltools",
+        name: "Review belt",
+        slug: "review-belt",
+        description: "",
+      }),
+    ).toMatchObject({ ok: false, code: "toolbelt_slug_taken" });
+  });
+});
+
+describe("updateToolbelt", () => {
+  it("sends the belt's changes in order", async () => {
+    invoke.mockResolvedValue({
+      toolbelt: {
+        id: "tbt_reviewbelt",
+        name: "Review belt",
+        slug: "review-belt",
+        kind: "custom",
+      },
+    });
+    const changes = [
+      { op: "remove_server", serverId: "mcs_linear" },
+      { op: "set_tool_active", toolId: "tol_createissue", active: false },
+    ] as const;
+    expect(
+      await updateToolbelt(
+        "acme",
+        "core-platform",
+        " tbt_reviewbelt ",
+        changes,
+      ),
+    ).toEqual({ ok: true, value: { id: "tbt_reviewbelt" } });
+    expect(invoke).toHaveBeenCalledWith(
+      "update_toolbelt",
+      { toolbeltId: "tbt_reviewbelt", changes: [...changes] },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("returns the handler's reason when the belt is All tools", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({
+        code: "conflict",
+        reason: "all_tools_is_derived",
+      }),
+    );
+    expect(
+      await updateToolbelt("acme", "core-platform", "tbt_alltools", [
+        { op: "set_tool_active", toolId: "tol_createissue", active: true },
+      ]),
+    ).toMatchObject({ ok: false, code: "all_tools_is_derived" });
+  });
+
+  it("is refused before the kernel when a tool id is malformed", async () => {
+    expect(
+      await updateToolbelt("acme", "core-platform", "tbt_reviewbelt", [
+        { op: "set_tool_active", toolId: "create_issue", active: true },
+      ]),
+    ).toMatchObject({ ok: false, reason: "invalid" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("deleteToolbelt", () => {
+  it("deletes the belt it names", async () => {
+    invoke.mockResolvedValue({ toolbeltId: "tbt_reviewbelt", deleted: true });
+    expect(
+      await deleteToolbelt("acme", "core-platform", "tbt_reviewbelt"),
+    ).toEqual({ ok: true, value: { id: "tbt_reviewbelt" } });
+    expect(invoke).toHaveBeenCalledWith(
+      "delete_toolbelt",
+      { toolbeltId: "tbt_reviewbelt" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("returns the handler's reason when an agent still carries the belt", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({ code: "conflict", reason: "toolbelt_in_use" }),
+    );
+    expect(
+      await deleteToolbelt("acme", "core-platform", "tbt_reviewbelt"),
+    ).toMatchObject({ ok: false, code: "toolbelt_in_use" });
+  });
+});
+
+describe("setToolState", () => {
+  it("sets a list of tools and sends only the fields given", async () => {
+    invoke.mockResolvedValue({ updated: 1 });
+    expect(
+      await setToolState("acme", "core-platform", {
+        toolIds: ["tol_deleterepo"],
+        defaultActive: true,
+      }),
+    ).toEqual({ ok: true, value: { updated: 1 } });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_tool_state",
+      { toolIds: ["tol_deleterepo"], defaultActive: true },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("sets every tool of one server, null naming the declared tools", async () => {
+    invoke.mockResolvedValue({ updated: 3 });
+    await setToolState("acme", "core-platform", {
+      serverId: null,
+      available: false,
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "set_tool_state",
+      { serverId: null, available: false },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("is refused before the kernel when nothing would change", async () => {
+    expect(
+      await setToolState("acme", "core-platform", { serverId: "mcs_github" }),
+    ).toMatchObject({ ok: false, reason: "invalid" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("passes on the handler's refusal", async () => {
+    invoke.mockRejectedValue(refused("org_role_required"));
+    expect(
+      await setToolState("acme", "core-platform", {
+        toolIds: ["tol_deleterepo"],
+        available: false,
+      }),
+    ).toEqual({ ok: false, reason: "denied", code: "org_role_required" });
   });
 });

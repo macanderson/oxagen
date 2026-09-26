@@ -279,8 +279,6 @@ export function breadcrumbs(
       if (id !== undefined) {
         const agentHref = pathOf(org, ws, "agents", id);
         out.push({ kind: "id", text: id, href: agentHref });
-        if (sub === "source")
-          out.push({ kind: "id", text: "source", href: null });
       }
       break;
     case "mandates":

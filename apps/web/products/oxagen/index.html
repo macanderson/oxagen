@@ -298,7 +298,7 @@
           <h3>Record</h3>
           <p>Follow the action back to its authority.</p>
           <ol>
-            <li><a href="#iam">A definition and an identity for each agent</a></li>
+            <li><a href="#iam">An identity for each agent</a></li>
             <li><a href="#recorder">Play back any run</a></li>
             <li><a href="#more">An archive your auditor can check</a></li>
             <li><a href="#more">One accountable person per run</a></li>
@@ -423,32 +423,31 @@
     <div class="wrap split split-flip">
       <div class="dg-copy reveal reveal-d1">
         <p class="eyebrow">Access and record</p>
-        <h2>A definition and an identity for each agent</h2>
-        <p class="lede">Each agent has one identity in Oxagen, with an ID that does not change. It
-        also has one definition file in your repo. You change the file with a pull request, like
-        any other code.</p>
+        <h2>An identity for each agent</h2>
+        <p class="lede">Each agent has one identity in Oxagen, with an ID that does not change. An
+        agent is one person's harness on one runtime: your laptop running Claude Code is one
+        agent. It carries a toolbelt, the set of tools it is shown, which you can swap.</p>
         <ul>
-          <li>From that one file, Oxagen writes the agent files for Claude Code and Codex in the same pull request. So both tools run the same agent.</li>
+          <li>Move an agent to a new machine or a new cloud and it keeps its ID, its roles, and its runs. Each move and each new toolbelt is a new version of the agent.</li>
           <li>Access is set by role, down to the tool version. An agent can never do more than the person it works for. A helper agent it starts can only have less.</li>
           <li>The agent's own shell and file tools follow the same rules. If the agent may not call a tool, it cannot see the tool or search for it.</li>
         </ul>
       </div>
 
-      <figure class="dg reveal" role="img" aria-label="Illustration: one agent in two parts. In git, a definition file lists its purpose, the tools it may call and may never call, its highest effect, its model size, and its budget. In Oxagen, its identity holds its ID, roles, and mandates, and Oxagen holds the keys. Each run records which version of the definition it used.">
-        <div class="dg-bar"><b>support-refunds</b> one agent, two parts<span class="end">definition 7d0e…a4c2</span></div>
+      <figure class="dg reveal" role="img" aria-label="Illustration: one agent in two parts. Its current version names the operator, the runtime, the harness, and the toolbelt. Its identity holds its ID, roles, and mandates, and Oxagen holds the keys. The ID, roles, and runs stay when the runtime or the toolbelt changes.">
+        <div class="dg-bar"><b>support-refunds</b> one agent, two parts<span class="end">version 3</span></div>
         <div class="p-halves">
           <div class="p-half dg-in" style="--i:0">
-            <span class="dg-k">in git</span>
-            <b class="dg-m">.oxagen/agents/support-refunds.md</b>
+            <span class="dg-k">version 3</span>
+            <b>Binding</b>
             <dl class="p-kv">
-              <div><dt>purpose</dt><dd>Refund duplicate charges</dd></div>
-              <div><dt>may call</dt><dd>stripe.create_refund, zendesk.reply</dd></div>
-              <div><dt>may never</dt><dd>stripe.delete_customer</dd></div>
-              <div><dt>highest effect</dt><dd>moves money</dd></div>
-              <div><dt>model size</dt><dd>light</dd></div>
-              <div><dt>budget</dt><dd>$0.50 per run</dd></div>
+              <div><dt>operator</dt><dd>Dana Ruiz</dd></div>
+              <div><dt>runtime</dt><dd>refunds-vm-east</dd></div>
+              <div><dt>harness</dt><dd>Claude Code</dd></div>
+              <div><dt>toolbelt</dt><dd>refunds, 6 tools</dd></div>
+              <div><dt>changed</dt><dd>moved from dana-laptop</dd></div>
             </dl>
-            <span class="dg-tag">changed by pull request</span>
+            <span class="dg-tag">a move writes a version</span>
           </div>
           <div class="p-half dg-in" style="--i:1">
             <span class="dg-k">in Oxagen</span>
@@ -463,7 +462,7 @@
             <span class="dg-tag">revocable in one second</span>
           </div>
         </div>
-        <div class="dg-foot">Each run records which version of the definition it used.</div>
+        <div class="dg-foot">The ID, roles, and runs stay when the runtime or the toolbelt changes.</div>
       </figure>
     </div>
   </section>

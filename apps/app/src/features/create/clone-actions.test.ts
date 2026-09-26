@@ -22,7 +22,6 @@ const draft = {
   name: "review-cloned",
   source: "edited text",
   files: [],
-  harness: null,
 };
 beforeEach(() => {
   vi.clearAllMocks();

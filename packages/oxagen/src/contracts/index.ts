@@ -29,11 +29,20 @@ import { agentInterjectionAnswer } from "./agent.interjection.answer";
 import { agentList } from "./agent.list";
 import { agentGet } from "./agent.get";
 import { agentRegister } from "./agent.register";
+// ADR-198 (#4369): runtimes, toolbelts, tool state, and the two version writes.
+import { agentMove } from "./agent.move";
+import { agentToolbeltAssign } from "./agent.toolbelt.assign";
+import { runtimeCreate } from "./runtime.create";
+import { runtimeList } from "./runtime.list";
+import { toolbeltList } from "./toolbelt.list";
+import { toolbeltGet } from "./toolbelt.get";
+import { toolbeltClone } from "./toolbelt.clone";
+import { toolbeltUpdate } from "./toolbelt.update";
+import { toolbeltDelete } from "./toolbelt.delete";
+import { toolStateSet } from "./tool.state.set";
 import { agentCredentialRotate } from "./agent.credential.rotate";
 import { agentSuspend } from "./agent.suspend";
 import { agentRetire } from "./agent.retire";
-import { agentDefinitionCommit } from "./agent.definition.commit";
-import { agentPropose } from "./agent.propose";
 import { agentToolbeltGet } from "./agent.toolbelt.get";
 import { tachoIncidentList } from "./tacho.incident.list";
 import { agentApprovalResolve } from "./agent.approval.resolve";
@@ -48,20 +57,10 @@ import { approvalRuleSet } from "./approval_rule.set";
 import { approvalRuleDelete } from "./approval_rule.delete";
 import { approvalRuleEnabledSet } from "./approval_rule.enabled.set";
 import { approvalAutoEligibilityGet } from "./approval.auto_eligibility.get";
-import { agentDefinitionCreate } from "./agent.definition.create";
-import { agentDefinitionDelete } from "./agent.definition.delete";
-import { agentDefinitionSuggest } from "./agent.definition.suggest";
-import { agentDefinitionRevise } from "./agent.definition.revise";
-import { agentDefinitionSummarize } from "./agent.definition.summarize";
-import { agentDefinitionUpdate } from "./agent.definition.update";
-import { agentDefinitionPublish } from "./agent.definition.publish";
-import { agentDefinitionGet } from "./agent.definition.get";
-import { agentDefinitionList } from "./agent.definition.list";
 import { agentRoleAssign } from "./agent.role.assign";
 import { agentRoleRevoke } from "./agent.role.revoke";
 import { agentRoleList } from "./agent.role.list";
 import { agentRoleGet } from "./agent.role.get";
-import { agentDeploy } from "./agent.deploy";
 import { agentExecutionList } from "./agent.execution.list";
 import { modelCapabilityList } from "./model.capability.list";
 import { agentExecutionRecord } from "./agent.execution.record";
@@ -453,6 +452,25 @@ export type {
   SpendGroupKind,
   TokenCounts,
 } from "./spend.shared";
+// Runtime and toolbelt vocabulary (ADR-198). Not capabilities, so exported
+// here to satisfy the file-coverage guard.
+export {
+  RUNTIME_SLUG_MAX,
+  runtimeIdSchema,
+  runtimeRefSchema,
+  runtimeSlugSchema,
+} from "./runtime.shared";
+export type { RuntimeRef } from "./runtime.shared";
+export {
+  TOOLBELT_SLUG_MAX,
+  toolIdSchema,
+  toolServerIdSchema,
+  toolbeltIdSchema,
+  toolbeltKindSchema,
+  toolbeltRefSchema,
+  toolbeltSlugSchema,
+} from "./toolbelt.shared";
+export type { ToolbeltKind, ToolbeltRef } from "./toolbelt.shared";
 // Who an operator is, shared by the rows that name one (get_spend). Not a
 // capability, so exported here to satisfy the file-coverage guard.
 export { operatorFactsSchema } from "./operator.shared";
@@ -656,11 +674,19 @@ export {
   agentList,
   agentGet,
   agentRegister,
+  agentMove,
+  agentToolbeltAssign,
+  runtimeCreate,
+  runtimeList,
+  toolbeltList,
+  toolbeltGet,
+  toolbeltClone,
+  toolbeltUpdate,
+  toolbeltDelete,
+  toolStateSet,
   agentCredentialRotate,
   agentSuspend,
   agentRetire,
-  agentDefinitionCommit,
-  agentPropose,
   agentToolbeltGet,
   tachoIncidentList,
   agentApprovalResolve,
@@ -675,20 +701,10 @@ export {
   approvalRuleDelete,
   approvalRuleEnabledSet,
   approvalAutoEligibilityGet,
-  agentDefinitionCreate,
-  agentDefinitionDelete,
-  agentDefinitionSuggest,
-  agentDefinitionRevise,
-  agentDefinitionSummarize,
-  agentDefinitionUpdate,
-  agentDefinitionPublish,
-  agentDefinitionGet,
-  agentDefinitionList,
   agentRoleAssign,
   agentRoleRevoke,
   agentRoleList,
   agentRoleGet,
-  agentDeploy,
   agentExecutionList,
   agentExecutionRecord,
   modelCapabilityList,
@@ -1070,11 +1086,19 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentList,
   agentGet,
   agentRegister,
+  agentMove,
+  agentToolbeltAssign,
+  runtimeCreate,
+  runtimeList,
+  toolbeltList,
+  toolbeltGet,
+  toolbeltClone,
+  toolbeltUpdate,
+  toolbeltDelete,
+  toolStateSet,
   agentCredentialRotate,
   agentSuspend,
   agentRetire,
-  agentDefinitionCommit,
-  agentPropose,
   agentToolbeltGet,
   tachoIncidentList,
   agentApprovalResolve,
@@ -1089,20 +1113,10 @@ export const contracts: readonly CapabilityDeclaration[] = [
   approvalRuleDelete,
   approvalRuleEnabledSet,
   approvalAutoEligibilityGet,
-  agentDefinitionCreate,
-  agentDefinitionDelete,
-  agentDefinitionSuggest,
-  agentDefinitionRevise,
-  agentDefinitionSummarize,
-  agentDefinitionUpdate,
-  agentDefinitionPublish,
-  agentDefinitionGet,
-  agentDefinitionList,
   agentRoleAssign,
   agentRoleRevoke,
   agentRoleList,
   agentRoleGet,
-  agentDeploy,
   agentMcpList,
   agentMcpResolve,
   agentMcpRegister,

@@ -442,7 +442,6 @@ describe("command menu", () => {
       "Ask what an agent cost this month",
       "Mint a model key for this organization",
       "Create anything",
-      "New agent",
       "Add a skill",
       "Write a context record",
       "Cut 4.11.0 release notes",

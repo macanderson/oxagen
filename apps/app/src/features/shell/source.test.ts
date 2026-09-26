@@ -45,7 +45,7 @@ const openInterjections = vi.fn<DataSource["interjections"]["open"]>();
 const resolvedSince = vi.fn<DataSource["approvals"]["resolvedSince"]>();
 const mandatesList = vi.fn();
 const source = {
-  runtimes: { list: vi.fn(), agents: vi.fn() },
+  runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
   conversations: { latest: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: { context, preferences, counts, notifications, assistantEngine },
@@ -127,6 +127,8 @@ const source = {
     approvalRules: vi.fn(),
     connections: vi.fn(),
     mcpServers: vi.fn(),
+    toolbelts: vi.fn(),
+    toolbelt: vi.fn(),
   },
 };
 const listed = readOk({

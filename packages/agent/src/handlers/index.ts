@@ -17,7 +17,7 @@ type LoaderEntry = () => Promise<
 // Single source of truth mapping capability name → handler module.
 // Every entry is a governance capability: the governed-tool catalogue, the
 // MCP registry + consent ledger, agent memory, approvals, the execution
-// evidence record, the agent-definition registry, and agent RBAC. Oxagen
+// evidence record, agent identity, and agent RBAC. Oxagen
 // governs agents; nothing here executes one (ADR-043).
 const LOADERS: Record<string, LoaderEntry> = {
   list_agent_tools: () => import("./agent.tool.list"),
@@ -67,17 +67,11 @@ const LOADERS: Record<string, LoaderEntry> = {
   // fingerprint. Pure SQL (ADR-021 §1), the counterpart to the single-execution
   // failure frame above.
   list_error_clusters: () => import("./telemetry.error.cluster"),
-  create_agent_def: () => import("./agent.definition.create"),
-  delete_agent_def: () => import("./agent.definition.delete"),
-  update_agent_def: () => import("./agent.definition.update"),
-  publish_agent_def: () => import("./agent.definition.publish"),
-  get_agent_def: () => import("./agent.definition.get"),
-  list_agent_defs: () => import("./agent.definition.list"),
-  // Agent identity (MC spec §6.2, #2956): the identities table and the one
-  // identity read with credentials, roles, hosts and the definition of record.
+  // Agent identity (ADR-198, MC spec §6.2, #2956): the identities table and
+  // the one identity read with credentials, roles, hosts, runtime, toolbelt
+  // and versions.
   list_agents: () => import("./agent.list"),
   get_agent: () => import("./agent.get"),
-  deploy_agent: () => import("./agent.deploy"),
   // Agent RBAC role assignment (docs/specs/agent-rbac/spec.md §3.2) — attach/
   // detach/inspect IAM roles on an agent's delegated principal.
   assign_agent_role: () => import("./agent.role.assign"),

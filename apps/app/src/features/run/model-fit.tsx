@@ -5,19 +5,17 @@
 //
 // The panel is generated, not the record, and says so in its badge. A reading
 // names a capability class, never a model id, and changes nothing on its own:
-// moving an agent is a Context pull request against its definition file, and
-// a sealed run keeps the model it ran on. No contract opens that pull request
-// from this page yet, so the card's action is drawn as a stub that says what
-// it would do, never a control that silently does nothing.
+// a sealed run keeps the model it ran on, and an agent carries no definition
+// file to change (ADR-198). No contract changes an agent's model class from
+// this page yet, so the card's action is drawn as a stub that says so, never a
+// control that silently does nothing.
 //
 // Effort is never captured today (`fit.ts`, `EffortFit`), so its card names
 // why and offers nothing.
 import { useTranslations } from "next-intl";
-import type { AgentDetail } from "@/data/contracts/agents";
 import type { RunRow } from "@/data/contracts/runs";
-import type { Read } from "@/data/read";
 import { Badge } from "@/ui/badge";
-import { buttonSecondary, mono } from "@/ui/control-styles";
+import { buttonSecondary } from "@/ui/control-styles";
 import { type FitRead, type ModelFit, runFit } from "./fit";
 import type { RunMetrics } from "./metrics";
 import { Note, Panel, PanelBody } from "./parts";
@@ -29,28 +27,14 @@ const buttonSmall = `${buttonSecondary} min-h-7 rounded-[7px] px-[9px] py-1 text
 const cardTitle = "m-0 text-sm font-bold text-foreground";
 const cardReading = "mb-0 mt-1.5 text-[12.5px] text-muted-foreground";
 
-/**
- * The file a reading argues against: the path the agent's last committed
- * definition was recorded at, else `.oxagen/agents/<slug>.toml`, where a
- * definition is committed. Null when the agent was not read, and the note
- * says "the agent definition" rather than naming a path it cannot see.
- */
-function definitionFile(agent: Read<AgentDetail> | null): string | null {
-  if (agent === null || !agent.ok) return null;
-  const { definition, identity } = agent.value;
-  return definition?.path ?? `.oxagen/agents/${identity.slug}.toml`;
-}
-
 function ModelCard({
   model,
   read,
   tier,
-  file,
 }: {
   model: ModelFit | null;
   read: FitRead | null;
   tier: string | null;
-  file: string | null;
 }) {
   const t = useTranslations("run.cost.fit");
   if (model === null || read === null) {
@@ -116,11 +100,7 @@ function ModelCard({
             id="run-fit-move-why"
             className="min-w-0 text-[11.5px] text-muted-foreground"
           >
-            {t.rich("moveStub", {
-              file: () => (
-                <span className={mono}>{file ?? t("fileFallback")}</span>
-              ),
-            })}
+            {t("moveStub")}
           </span>
         </div>
       </div>
@@ -131,18 +111,13 @@ function ModelCard({
 export function ModelFitPanel({
   run,
   metrics,
-  agent,
 }: {
   run: RunRow;
   metrics: RunMetrics;
-  agent: Read<AgentDetail> | null;
 }) {
   const t = useTranslations("run.cost.fit");
   const tRun = useTranslations("run");
   const fit = runFit(run, metrics);
-  const file = definitionFile(agent);
-  const fileNode = () =>
-    file === null ? t("fileFallback") : <span className={mono}>{file}</span>;
   return (
     <Panel
       title={t("title")}
@@ -158,7 +133,6 @@ export function ModelFitPanel({
         model={fit.model}
         read={fit.read}
         tier={run.model?.tier ?? null}
-        file={file}
       />
       <PanelBody>
         <div data-testid="fit-effort-card">
@@ -169,13 +143,12 @@ export function ModelFitPanel({
       <PanelBody>
         <Note testId="fit-read">
           {fit.read === null
-            ? t.rich("readNone", { file: fileNode })
-            : t.rich("read", {
+            ? t("readNone")
+            : t("read", {
                 prompts: fit.read.prompts,
                 turns: fit.read.turns,
                 steps: fit.read.steps,
                 failed: fit.read.failed,
-                file: fileNode,
               })}
         </Note>
       </PanelBody>
