@@ -36,6 +36,7 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import {
   answerCommand,
+  INTERJECTION_RELEASE_TTL_MS,
   type InterjectionAuditEvent,
   type LockedInterjection,
   lockInterjection,
@@ -56,12 +57,7 @@ export const INTERJECTION_TIMED_OUT_TEXT =
   "Oxagen asked a person whether to bind this repository to a workspace, " +
   "and nobody answered in time. This session goes on without skills.";
 
-/**
- * How long the release waits for the host to collect it. The question has
- * already expired, so the release cannot expire with it as a person's
- * answer does. `dispatch_command`'s default.
- */
-export const INTERJECTION_RELEASE_TTL_MS = 3_600_000;
+export { INTERJECTION_RELEASE_TTL_MS };
 
 /** The reads and writes the timeout makes, inside one tenant transaction. */
 export interface InterjectionTimeoutStore {

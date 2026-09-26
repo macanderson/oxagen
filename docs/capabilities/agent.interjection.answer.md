@@ -107,8 +107,11 @@ non-enterprise organization, so the handler's check is the enforcement.
    host that is revoked or silent for five minutes, and a harness that reads
    text only at session start get no command. A path answer follows
    `commandBlockOf` alone, because the host applies the release, not the
-   harness. The command asks for `next_step` delivery, records the mode the
-   host can carry, and expires with the question.
+   harness. The command asks for `next_step` delivery and records the mode
+   the host can carry. A free-text answer's command expires with the
+   question. A path answer's command waits an hour for the host, because the
+   host holds the loop until its next prompt past its own deadline, and an
+   answer given in the last seconds must still reach it.
 6. An `arun_…` ledger run has no connection point, so its answer stays on the
    question.
 

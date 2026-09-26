@@ -37,11 +37,14 @@
 // stays bound. A link retried after it bound the repository takes the
 // existing binding as its own.
 //
-// The command expires with the question: past it, the run has carried on
-// without an answer and a late message would arrive out of context. A path
-// answer's command also carries `payload.interjection`. The host reads it to
-// seal `control.answer` and what the answer did, and to release the loop it
-// holds. The host releases that loop, not the harness, so only the host's
+// A free-text answer's command expires with the question: past it, the run
+// has carried on without an answer and a late message would arrive out of
+// context. A path answer's command also carries `payload.interjection`. The
+// host reads it to seal `control.answer` and what the answer did, and to
+// release the loop it holds. The host holds until its next prompt past its
+// own deadline, so the release waits `INTERJECTION_RELEASE_TTL_MS` for it:
+// an answer given in the last seconds still reaches a host that polls after
+// the deadline. The host releases that loop, not the harness, so only the host's
 // reach decides whether the command is queued.
 import type {
   CapabilityContext,
@@ -92,6 +95,13 @@ import {
   type RecipientSession,
   resolveDeliveryMode,
 } from "./tacho.command.dispatch";
+
+/**
+ * How long a release waits for the host to collect it: `dispatch_command`'s
+ * default. The timeout's release waits as long, because the question has
+ * expired by then.
+ */
+export const INTERJECTION_RELEASE_TTL_MS = 3_600_000;
 
 /** Who may give a free-text answer: the contract's defaultRoles. */
 export const INTERJECTION_ANSWER_ROLES = {
@@ -568,7 +578,10 @@ export function createAnswerInterjectionHandler(
                 answer: outcome?.text ?? answerText,
                 userId: actingUserId,
                 now,
-                expiresAt: row.expiresAt,
+                expiresAt:
+                  interjection === undefined
+                    ? row.expiresAt
+                    : new Date(now.getTime() + INTERJECTION_RELEASE_TTL_MS),
                 ...(interjection === undefined ? {} : { interjection }),
               });
         if (command !== null)

@@ -33,6 +33,7 @@ import {
   createAnswerInterjectionHandler,
   type InterjectionAnswerStore,
   type InterjectionAuditEvent,
+  INTERJECTION_RELEASE_TTL_MS,
   type InterjectionPathCalls,
   type LockedInterjection,
   mintReceiptId,
@@ -469,6 +470,11 @@ describe("answer_interjection: the link path", () => {
     });
     expect(store.queued[0]?.payload["interjection"]).not.toHaveProperty(
       "workspace_id",
+    );
+    // The host holds until its next prompt past its own deadline, so the
+    // release outlives the question.
+    expect(store.queued[0]?.expiresAt).toEqual(
+      new Date(NOW.getTime() + INTERJECTION_RELEASE_TTL_MS),
     );
     expect(store.audits[0]?.detail).toEqual({
       interjectionId: "inj_0123456789abcdefghjkmn",
