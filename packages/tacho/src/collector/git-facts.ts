@@ -53,7 +53,7 @@
  */
 import { digestBytes, type Sha256Digest } from "../digest";
 import { MAX_OBSERVED_CHANGES } from "../envelope";
-import { canonicalRemote } from "../remote";
+import { canonicalRemote, foldedRemote } from "../remote";
 import type { ExecAsync, ExecResult } from "../host/service";
 
 // The rule lives in the leaf module `../remote`, which the control plane
@@ -217,6 +217,52 @@ export async function readGitFacts(
   if (remote !== undefined)
     facts.remote_digest = digestBytes(canonicalRemote(remote));
   return facts;
+}
+
+/**
+ * The repository a session runs in, as the host names it when it asks
+ * whether the organisation has bound it (#3941).
+ */
+export interface RepositoryRemote {
+  /** sha256 of `canonicalRemote(origin)`, the `git_remote_digest` rule. */
+  remote_digest: Sha256Digest;
+  /**
+   * sha256 of `foldedRemote(canonicalRemote(origin))`, which matches a
+   * binding stored in another case on a forge that ignores it.
+   */
+  remote_digest_folded: Sha256Digest;
+  /**
+   * The last segment of the remote's path, which the create path proposes
+   * as the new workspace's name. The owner and the host stay on the machine.
+   */
+  name?: string;
+  head_sha?: string;
+}
+
+/**
+ * The digests of the `origin` remote and its repository's name, or undefined
+ * when the directory is in no repository or has no `origin`. The two reads
+ * answer independent questions, so they are asked at once: this runs while a
+ * harness waits on its first prompt.
+ */
+export async function readRepositoryRemote(
+  exec: ExecAsync,
+  cwd: string,
+): Promise<RepositoryRemote | undefined> {
+  const [remote, head] = await Promise.all([
+    git(exec, cwd, ["remote", "get-url", "origin"]).then(firstLine),
+    git(exec, cwd, ["rev-parse", "HEAD"]).then(firstLine),
+  ]);
+  if (remote === undefined) return undefined;
+  const canonical = canonicalRemote(remote);
+  const slash = canonical.lastIndexOf("/");
+  const name = slash === -1 ? "" : canonical.slice(slash + 1);
+  return {
+    remote_digest: digestBytes(canonical),
+    remote_digest_folded: digestBytes(foldedRemote(canonical)),
+    ...(name.length > 0 ? { name } : {}),
+    ...(head !== undefined ? { head_sha: head } : {}),
+  };
 }
 
 /**

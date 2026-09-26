@@ -24,6 +24,7 @@ import {
   commandAcknowledgementSchema,
   type DeliveredCommand,
 } from "../wire";
+import { applyInterjectionAnswer, interjectionAnswerOf } from "./interjection";
 import {
   isInternalSession,
   type SessionRecord,
@@ -295,7 +296,31 @@ function applyToSession(
     }
     case "message":
     case "steer": {
+      // The answer to the question the host holds the session's loop on
+      // (#3941) rides a `message`, so a host built before it delivers the
+      // text and nothing else. This host settles the question first: it
+      // seals the answer and what it did, and lets prompts through again.
+      // An answer to a question this session does not hold (settled by the
+      // host's own timeout, or never raised here) seals nothing and is not
+      // delivered: the agent was already told how it was settled.
+      const answer =
+        command.command === "message"
+          ? interjectionAnswerOf(command.payload)
+          : undefined;
+      if (answer !== undefined) {
+        const settled = applyInterjectionAnswer(record, answer, command.id);
+        if (settled === undefined)
+          return {
+            events,
+            status: "failed",
+            detail: "no question under this key is held on the session",
+          };
+        events.push(...settled);
+      }
       const text = textOf(command);
+      // A settled answer with nothing to tell the agent applied in full.
+      if (text.length === 0 && answer !== undefined)
+        return { events, status: "applied" };
       if (text.length === 0)
         return {
           events,

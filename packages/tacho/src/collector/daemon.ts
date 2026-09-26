@@ -110,6 +110,7 @@ import {
   TACHO_CREDENTIAL_HARNESS_HELD,
 } from "../wire";
 import { Detector } from "./detector";
+import { readRepositoryRemote } from "./git-facts";
 import { createGitLane } from "./git-lane";
 import { removeCopiesOutside } from "./session-changes";
 import { exportSession, type ExportFormat } from "./exporters";
@@ -1027,12 +1028,16 @@ async function initializeDaemon(
     messages: SessionRecord["control"]["messages"];
     resumeOwed: string | undefined;
     sealed: boolean;
+    repoChecked: true | undefined;
+    interjection: SessionRecord["control"]["interjection"];
   }> {
     return registry.list().map((session) => ({
       session,
       messages: [...session.control.messages],
       resumeOwed: session.control.resumeOwed,
       sealed: session.sealed,
+      repoChecked: session.control.repoChecked,
+      interjection: session.control.interjection,
     }));
   }
 
@@ -1069,8 +1074,23 @@ async function initializeDaemon(
    */
   function restoreEveryQueue(marks: ReturnType<typeof markEveryQueue>): void {
     withdrawExpiredAcks(marks);
-    for (const { session, messages, resumeOwed, sealed } of marks) {
+    for (const {
+      session,
+      messages,
+      resumeOwed,
+      sealed,
+      repoChecked,
+      interjection,
+    } of marks) {
       if (session.sealed && !sealed) session.sealed = false;
+      // The repository question (#3941). Only a hook checks a repository,
+      // and hooks run one at a time, so the check goes back to where the
+      // hook found it and the next prompt checks again. A question this hook
+      // raised is taken back with its frames. A release is left standing:
+      // an answer the inbox applied during the hook's awaits also releases,
+      // and putting a settled question back would hold the session again.
+      session.control.repoChecked = repoChecked;
+      if (interjection === undefined) session.control.interjection = undefined;
       const held = new Set(messages.map((message) => message.id));
       const arrived = session.control.messages.filter(
         (message) => !held.has(message.id),
@@ -2217,6 +2237,7 @@ async function initializeDaemon(
                 readHostFile(paths.hostFile)?.github_repositories ?? [],
               execAsync,
             }),
+          repositoryRemote: (cwd) => readRepositoryRemote(execAsync, cwd),
         },
         envelope.replay,
         envelope.harness,

@@ -44,6 +44,14 @@ import {
   type SessionRecord,
   type SessionRegistry,
 } from "./registry";
+import type { RepositoryRemote } from "./git-facts";
+import {
+  expireInterjection,
+  INTERJECTION_TIMED_OUT_TEXT,
+  isBound,
+  raiseInterjection,
+  showsRefusedPrompt,
+} from "./interjection";
 
 export interface PolicyView {
   bundle: PolicyBundle;
@@ -110,6 +118,14 @@ export interface HookHandlerDeps {
     command: string,
     cwd: string | undefined,
   ) => Promise<TachoCredentialBasis>;
+  /**
+   * The repository a session runs in, read from its `origin` remote
+   * (`readRepositoryRemote` in `./git-facts`): the digests the host looks
+   * for in the bundle's `unbound_repo.bound_remote_digests`, and the name the
+   * create path proposes (#3941). Absent, or answering undefined, the host
+   * asks nothing.
+   */
+  repositoryRemote?: (cwd: string) => Promise<RepositoryRemote | undefined>;
 }
 
 export interface HookReplay {
@@ -252,6 +268,67 @@ function operatorBlock(
     };
   }
   return undefined;
+}
+
+/**
+ * The block a prompt meets: an operator's (`operatorBlock`), or the question
+ * the host is holding the session's loop to ask (#3941). The question refuses
+ * prompts only. A `SessionStart` answered `continue: false` would end the
+ * session, where the hold only waits for an answer.
+ */
+function promptBlock(
+  view: PolicyView,
+  record: SessionRecord,
+): { code: string; reason: string; source: "human" | "bundle" } | undefined {
+  const block = operatorBlock(view, record);
+  if (block !== undefined) return block;
+  const held = record.control.interjection;
+  if (held === undefined) return undefined;
+  return { code: "interjection_open", reason: held.question, source: "bundle" };
+}
+
+/**
+ * Ask, once per session, whether its repository is one the organisation
+ * bound, and hold the loop on the question when it is not (#3941). Runs at
+ * the session's first prompt and never again, so a later or replayed prompt
+ * raises no second question.
+ *
+ * Nothing is asked when the verified bundle carries no `unbound_repo` (the
+ * workspace's skills are off, or the control plane predates the field), for
+ * a harness that cannot show a refused prompt's reason, once the chain has
+ * recorded a model call, for a replay (the harness went on without the
+ * daemon), or when the directory has no `origin` or the remote is bound.
+ * Answers the `repo.unknown` and `control.interject` frames it sealed.
+ */
+async function askAboutRepository(
+  record: SessionRecord,
+  view: PolicyView,
+  deps: HookHandlerDeps,
+  replay: HookReplay | undefined,
+  fields: { hook_event_name: string; attrs: Record<string, string> },
+): Promise<TachoEvent[]> {
+  if (record.control.repoChecked === true) return [];
+  record.control.repoChecked = true;
+  const clause = view.verified ? view.bundle.unbound_repo : undefined;
+  if (
+    clause === undefined ||
+    replay !== undefined ||
+    !showsRefusedPrompt(record.harness) ||
+    record.recorder.hasModelCall ||
+    record.cwd === undefined ||
+    deps.repositoryRemote === undefined
+  )
+    return [];
+  let remote: RepositoryRemote | undefined;
+  try {
+    remote = await deps.repositoryRemote(record.cwd);
+  } catch {
+    // A failed read proves nothing about the repository, and the prompt it
+    // was read for must still go through.
+    remote = undefined;
+  }
+  if (remote === undefined || isBound(clause, remote)) return [];
+  return raiseInterjection(record, clause, remote, deps.now(), fields) ?? [];
 }
 
 /**
@@ -908,12 +985,39 @@ async function routeHook(
     }
 
     case "UserPromptSubmit": {
-      const block = operatorBlock(view, record);
+      // The repository question (#3941). A held question whose deadline
+      // passed is answered `deny` by the host before the prompt is judged,
+      // and the first prompt asks it. Either seals its frames ahead of the
+      // prompt they decide.
+      const questionFields = {
+        hook_event_name: "UserPromptSubmit",
+        attrs: replayed,
+      };
+      const timedOut =
+        replay === undefined
+          ? expireInterjection(record, deps.now(), questionFields)
+          : undefined;
+      if (timedOut !== undefined) events.push(...timedOut);
+      const asked = await askAboutRepository(
+        record,
+        view,
+        deps,
+        replay,
+        questionFields,
+      );
+      events.push(...asked);
+      const block = promptBlock(view, record);
+      // Why the session goes on without skills, told once, at the prompt
+      // the timeout let through.
+      const notice =
+        block === undefined && timedOut !== undefined
+          ? INTERJECTION_TIMED_OUT_TEXT
+          : undefined;
       const messages =
         block === undefined &&
         replay === undefined &&
         deliversMessages(record.harness, input.hook_event_name)
-          ? drainMessages(record, deps, events)
+          ? drainMessages(record, deps, events, notice?.length ?? 0)
           : [];
       // A person prompting supersedes a resume's continuation.
       if (block === undefined) record.control.resumeOwed = undefined;
@@ -939,16 +1043,18 @@ async function routeHook(
           record,
         };
       }
+      const context = [
+        ...(notice !== undefined ? [notice] : []),
+        ...messages.map((m) => m.text),
+      ];
       return {
         events,
         response:
-          messages.length > 0
+          context.length > 0
             ? {
                 hookSpecificOutput: {
                   hookEventName: "UserPromptSubmit",
-                  additionalContext: messages
-                    .map((m) => m.text)
-                    .join(CONTEXT_JOINER),
+                  additionalContext: context.join(CONTEXT_JOINER),
                 },
               }
             : {},
