@@ -37,7 +37,7 @@ A model:
 |---|---|---|
 | `model` | string | the model id as the frames report it; a gateway call and a wrapped agent's call of the same model are one row, because they need one price |
 | `provider` | string or null | the vendor the frames name; null when they name none |
-| `calls` | number | model calls seen in the window. A wrapped agent's call is counted once whichever token-bearing sources (OTel log, collector, hook) recorded it: per session, only the highest-authority source that reported any model call is admitted |
+| `calls` | number | model calls seen in the window. A wrapped agent's call is counted once, whichever token-bearing sources (OTel log, collector, hook) recorded it. The host stamps a later source's copy of a call it already sealed with `oxagen.llm_call_duplicate_of`, and the read drops every stamped row |
 | `tokens` | number | total tokens across every class, the figure the list is ranked by |
 | `firstSeen`, `lastSeen` | string | RFC 3339; when the model first and last ran in the window |
 | `missingClasses` | enum[] | the token classes with no effective price entry covering the calls that used them, out of `input_uncached`, `cache_read`, `cache_write_5m`, `cache_write_1h`, `output`, `reasoning` and `server_tool_request`. `server_tool_request` counts a wrapped call's web searches, which the vendor bills per request. A web fetch is not counted, because it carries no per-request charge, so a model whose calls only fetched is not reported for it. Every class is checked on the same footing: a class the model never sent a token in is never named here, even when the book has no row for it at all, but `cache_write_1h` and `reasoning` are checked exactly like the rest whenever the model actually used them |

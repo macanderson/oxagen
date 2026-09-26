@@ -76,7 +76,10 @@ function costOf(result: { costUsd?: number }): number {
   return result.costUsd ?? 0;
 }
 
-/** How long a failed run waits before the sweep tries it again unchanged. */
+/**
+ * The shortest wait before the sweep tries an unchanged failed run again. The
+ * wait grows from here with the run's age (see {@link dueForEnrichment}).
+ */
 export const FAILED_RETRY_MS = 30 * 60_000;
 
 /**

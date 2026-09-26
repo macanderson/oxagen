@@ -800,7 +800,9 @@ export async function readObservedModels(args: {
    * both cost the scan and split this report into buckets whose price
    * answers are identical.
    */
-  boundariesFor?: (models: readonly string[]) => readonly Date[];
+  boundariesFor?: (
+    models: readonly string[],
+  ) => readonly Date[] | Promise<readonly Date[]>;
   /**
    * Which frame stores to read. `all` (the default) folds the gateway's
    * `token_usage` rows and the wrapped agents' `tacho_events` rows, which is
@@ -945,7 +947,7 @@ export async function readObservedModels(args: {
   const boundaryDates =
     args.boundariesFor === undefined
       ? (args.boundaries ?? [])
-      : args.boundariesFor(models);
+      : await args.boundariesFor(models);
   const boundaries = boundaryDates.map(chDateTime);
   const gatewayCacheWrite = "toInt64(coalesce(cache_write_tokens, 0))";
   const tachoCacheWrite = "toInt64(coalesce(c.cache_creation_tokens, 0))";
