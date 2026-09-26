@@ -5,8 +5,9 @@
 // attr any frame carries, or a pr_link frame's `pr_url` from before #3944.
 // Each root session and URL is asked once. Its event id holds for that pair,
 // so a re-sent batch or a second frame naming the same link sends nothing
-// new, and a lost event leaves the link reading "status unknown" until the
-// forge next reports the pull request.
+// new. Only the backfill creates a row and webhooks only update rows, so a
+// lost event leaves the link reading "status unknown" until the run records
+// the link again.
 import { createHash } from "node:crypto";
 import { RUN_PULL_REQUEST_LINKED_EVENT } from "@oxagen/inngest-functions/events";
 import { logger } from "../logger";
@@ -67,8 +68,9 @@ export function pullRequestLinkEvents(
 }
 
 /**
- * Send the batch's link events. Best effort: a failed send is logged, and the
- * webhooks still fill the state the next time the forge reports it.
+ * Send the batch's link events. Best effort: a failed send is logged and
+ * never fails the ingest. The links it named have no row, so they read
+ * "status unknown" until the run records them again.
  */
 export async function sendPullRequestLinks(
   send: (events: PullRequestLinkedEvent[]) => Promise<unknown>,
@@ -82,7 +84,7 @@ export async function sendPullRequestLinks(
   } catch (err) {
     logger.warn(
       { err, links: events.length },
-      "tacho.events.ingest: run/pull-request.linked dispatch failed; the forge's next delivery fills the state",
+      "tacho.events.ingest: run/pull-request.linked dispatch failed; these links read status unknown until the run records them again",
     );
   }
 }

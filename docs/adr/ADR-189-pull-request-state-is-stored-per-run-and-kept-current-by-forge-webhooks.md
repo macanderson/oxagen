@@ -73,12 +73,15 @@ Three facts shape where the state can come from:
 ## Consequences
 
 - A repository no connection reaches never gets a state, and neither does a
-  workspace of a connected organization that holds no connection itself. Its links read
-  "status unknown", and so does every link to a forge other than github.com
-  and gitlab.com. That is the honest answer: Oxagen has no reader for them.
-- Links recorded before the table existed have no row. They fill in when the
-  forge next reports the pull request, or through a one-off backfill over the
-  ClickHouse frames if one is ever run.
+  workspace of a connected organization that holds no connection itself. Its
+  links read "status unknown", and so does every link to a forge other than
+  github.com and gitlab.com, self-hosted GitLab included. That is the honest
+  answer: Oxagen has no reader for them.
+- Only the backfill creates a row. A webhook updates rows and never adds one,
+  because a delivery cannot name a run. So a link recorded before the table
+  existed, or one whose `run/pull-request.linked` event was lost, keeps "status
+  unknown" until the run records the link again or a one-off backfill over the
+  ClickHouse frames runs.
 - The state is as current as the last delivery. A delivery GitHub never sends
   (the App is not subscribed to `pull_request`, or GitHub drops it) leaves the
   last stored state in place, and `stateSeenAt` says how old it is.
