@@ -71,6 +71,7 @@ import pino from "pino";
 import { buildChatSystemPrompt } from "../system-prompt";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { ASSISTANT_MESSAGE_STOPPED } from "./assistant-message-status";
+import { projectRunContextWindows } from "../dispatch/context-projection";
 import { recallWorkspaceMemoryMessage } from "./assistant-recall";
 import { toolCallsFromReceipts } from "./assistant-tool-calls";
 import {
@@ -591,6 +592,9 @@ async function runPreparedTurn(
         LOAD_TOOLS,
       ]),
     ],
+    // USED_CONTEXT lineage for the windows the run records, projected once
+    // it seals and never on the turn's path (ADR-193).
+    projectContext: projectRunContextWindows,
   });
   hooks.onRun?.({ runId: run.runPublicId });
   // Every materialized tool's `execute` closure reads this at call time
