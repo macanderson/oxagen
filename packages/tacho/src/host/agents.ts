@@ -62,8 +62,11 @@ export interface Agent {
 
 /**
  * The directory of every agent that has a `host.json`: each one under
- * `agents/`, then the legacy one while it is there. A directory whose name
- * starts with a dot is a migration in progress and is left out.
+ * `agents/` by name, then the legacy one while it is there. A directory whose
+ * name starts with a dot is a migration in progress and is left out. The
+ * names are sorted because `readdir` order differs between filesystems, and a
+ * hook that falls back to the first directory must pick the same one each
+ * time.
  */
 function agentDirs(home: TachoHome): { id: string; paths: TachoPaths }[] {
   let names: string[];
@@ -73,6 +76,7 @@ function agentDirs(home: TachoHome): { id: string; paths: TachoPaths }[] {
     names = [];
   }
   const dirs = names
+    .sort()
     .filter((name) => !name.startsWith("."))
     .map((id) => ({ id, paths: agentPaths(home, id) }))
     .filter(({ paths }) => existsSync(paths.hostFile));

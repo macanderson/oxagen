@@ -225,13 +225,13 @@ Register the second agent on the Agents page. Then run the command the page show
 oxagen agent enroll --token <oxe_1time_…> --harness codex
 ```
 
-The first agent keeps recording, and nothing is revoked. The first enrollment stays in `~/.config/oxagen/tacho`. The second one goes into `~/.config/oxagen/tacho/agents/codex/`, a directory named for its harness. The harness's own hook file, such as `~/.codex/hooks.json`, stays where it is, and each hook entry names the enrollment it belongs to.
+The first agent keeps recording, and nothing is revoked. Each agent keeps its files in a directory of its own under `~/.config/oxagen/tacho/agents/`, named by a short random id, and the two directories hold the same files under the same names. The harness's own hook file, such as `~/.codex/hooks.json`, stays where it is, and each hook entry names the enrollment it belongs to.
 
 Three rules decide what an enroll does on a machine that already has an agent:
 
-- A token enrolls one agent with one harness. Pass one `--harness`. A token with two harnesses is refused.
 - A harness belongs to one agent. A token for a harness that an agent on the machine already hooks is refused. Pass `--force` to replace that agent's enrollment with the agent the token names. The other agents keep theirs.
-- Without a token, `tacho enroll --harness <harness>` adds a harness that no agent hooks to the first enrollment. When that enrollment is live, the command revokes it and enrolls it again under a new id, with the added harness alongside the ones it already hooks. Use a token to add a separate agent.
+- An enroll for a harness that no agent hooks enrolls a new agent in a new directory, with a token or without one.
+- To add a harness to an agent, name the harness it already hooks and the new one: `tacho enroll --harness claude-code,codex`. The command revokes that agent and enrolls it again under a new id with both harnesses. An enroll that names harnesses two different agents hook is refused.
 
 ### Check both agents
 
@@ -244,19 +244,19 @@ On a machine with more than one enrollment, the output starts with a count. Each
 ```text
 This machine holds 2 enrollments.
 
-Agent       claude-code as acme.core.cc-laptop in /Users/you/.config/oxagen/tacho
+Agent       claude-code as acme.core.cc-laptop in /Users/you/.config/oxagen/tacho/agents/3f9a1c20
 …
 
-Agent       codex as acme.core.codex-laptop in /Users/you/.config/oxagen/tacho/agents/codex
+Agent       codex as acme.core.codex-laptop in /Users/you/.config/oxagen/tacho/agents/b71e04d8
 …
 ```
 
 An agent removed on this machine whose revoke has not reached Oxagen yet reads `(retired on this machine)`. An agent revoked from the fleet page reads `(revoked on the fleet page)`.
 
-`tacho status --json` keeps the shape a script already reads. Its top-level fields are the report of the first agent still enrolled on this machine. When the machine holds more than one enrollment, the output adds `enrollments`: one full report per enrollment, each with a `slot` field that names its directory. With one enrollment, `enrollments` is absent. This command lists every agent in both cases:
+`tacho status --json` keeps the shape a script already reads. Its top-level fields are the report of the first agent still enrolled on this machine. The output always carries `enrollments`: one full report per agent, oldest first, each with an `id` and a `dir` that name its directory. This command lists every agent:
 
 ```bash
-tacho status --json | jq -r '(.enrollments // [.])[] | [.host.agent_key, (.host.harnesses // [] | join(",")), .enrolled, .shipping.healthy] | @tsv'
+tacho status --json | jq -r '.enrollments[] | [.host.agent_key, (.host.harnesses // [] | join(",")), .enrolled, .shipping.healthy] | @tsv'
 ```
 
 `tacho status` exits `1` when no agent on the machine is enrolled, or when any agent's events are not reaching Oxagen (`shipping.healthy` is `false`).

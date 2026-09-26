@@ -121,24 +121,28 @@ may add a harness on a re-apply but never silently removes one.
 
 ### More than one agent
 
-A machine holds one enrollment per agent (ADR-202). The first enrollment lives
-in the tacho root, `~/.config/oxagen/tacho` (`TACHO_HOME`). A one-time token
-presented on a machine whose first enrollment is live puts its one harness in
-a slot of its own, `<root>/agents/<harness>/`, and revokes nothing. A slot
-holds the same per-enrollment files as the root under the same names:
-`host.json`, the device key, the credential store, the WAL, the spool, and the
-daemon's state (`SLOT_STATE` in `src/host/slots.ts`). A harness belongs to at
-most one live slot. An operator enroll without a token still adds a harness to
-the root enrollment.
+A machine holds one enrollment per agent (ADR-202). Every agent keeps its
+files in a directory of its own, `~/.config/oxagen/tacho/agents/<id>/` (the
+tacho directory is `TACHO_HOME` when set), and no enrollment lives in the tacho
+directory itself. Each agent directory holds the same files under the same
+names: `host.json`, the device key, the credential store, the WAL, the spool,
+the daemon's state, and the harness receipts (`AGENT_FILES` in
+`src/host/paths.ts`). The id is 8 random hex characters and never changes.
 
-One `tachod` runs a collector per slot, on that slot's ports, and one service
-serves them all. The commands that act on one agent name it by harness:
+A harness belongs to at most one live agent. An enroll for a harness an agent
+already hooks acts on that agent. An enroll for harnesses no live agent hooks
+creates a new agent directory and revokes nothing, with a token or without
+one.
+
+One `tachod` runs a collector per agent, on that agent's ports, and one
+service serves them all. The commands that act on one agent name it by
+harness:
 
 ```
 tacho unenroll --harness codex            # remove the agent that hooks Codex
 tacho unenroll --all                      # remove every agent on the machine
 tacho reassign --harness codex --workspace other
-tacho status --json                       # adds `enrollments`, one report per slot
+tacho status --json                       # `enrollments` holds one report per agent
 ```
 
 A bare `unenroll` or `reassign` on a machine with two enrollments refuses and

@@ -7,8 +7,8 @@
   enrollment per machine, so a second agent on a runtime cannot enroll its
   host without revoking the first).
 - **Related:** issue #4371,
-  `packages/tacho/src/host/slots.ts`,
-  `packages/tacho/src/cli/{enroll,unenroll,reassign,status,slot-deps,daemon-service}.ts`,
+  `packages/tacho/src/host/{paths,agents}.ts`,
+  `packages/tacho/src/cli/{enroll,unenroll,reassign,status,agent-deps,daemon-service}.ts`,
   `packages/tacho/src/collector/run.ts`,
   `packages/tacho/src/claude-code/hook-process.ts`,
   `apps/desktop/src-tauri/src/machine.rs`.
@@ -20,177 +20,198 @@ that runs Claude Code and Codex for one person is therefore two agents, and
 the register page gives each its own one-time token and its own command,
 `oxagen agent enroll --token <token> --harness <harness>`.
 
-Tacho kept one enrollment per machine, in `host.json` under the tacho root
+Tacho kept one enrollment per machine, in `host.json` in the tacho directory
 (`~/.config/oxagen/tacho`, or `TACHO_HOME`). A token presented on an enrolled
 machine was refused, and `--force` replaced the live enrollment. The second
 agent could enroll only by revoking the first (#4371).
 
 An enrollment is more than `host.json`. It owns a device key, a run-token key,
 a sealed credential store and its key, a collector port and a model proxy
-port, a WAL, a spool, a quarantine, the daemon's state files, and a hook-id
-journal. Every hook entry names its enrollment
+port, a WAL, a spool, a quarantine, the daemon's state files, a hook-id
+journal, and the install receipts and backups for the harness files it
+wrote. Every hook entry names its enrollment
 (`tacho hook --enrollment tch_…`). The harness config files are different:
 Claude Code's settings, Codex's and Cursor's hooks files, Stella's config, and
 Claude Desktop's MCP config belong to the person, and more than one agent
 writes into them.
 
+Most runtimes will run more than one harness. A layout that treats the first
+agent as special makes every command ask which agent it is looking at, and
+makes the second agent a different kind of thing from the first.
+
 ## Decision
 
-### 1. Slot directories
+### 1. One directory per agent, all alike
 
-The first enrollment stays where it always was, directly under the tacho root.
-This is the root slot. Each later agent gets a slot directory at
-`<root>/agents/<harness>/`, named for the one harness its token enrolled. A
-slot holds the same per-enrollment files the root holds, under the same file
-names.
+Every agent on a machine has a directory at `<tachoDir>/agents/<id>/`. No
+enrollment lives in the tacho directory itself. Each agent directory holds the
+same files under the same names: `host.json`, the keys, the credential
+store, the WAL, the spool, the quarantine, the daemon state, the hook-id
+journal, and the harness receipts and backups.
 
-`slotPaths` (`host/slots.ts`) builds a slot's `TachoPaths` by moving every
-per-enrollment field into the slot directory. Every function that takes
-`TachoPaths` therefore works on a slot unchanged. The fields that move are
-listed in `SLOT_STATE`, so a new `TachoPaths` field fails to compile until
-someone decides whether it belongs to the enrollment or to the person. The
-harness config paths stay at user level, and a command acting on a slot
-overlays the harness files that slot's enroll recorded
-(`withRecordedHarnessFiles`).
+`host/paths.ts` splits the paths in two:
 
-The alternative was a map of enrollments inside `host.json`. A map still
-needs a device key, a credential store, a WAL, a spool, and two ports for each
-entry, so it needs per-enrollment paths anyway. It would also change the
-stored `tacho.host.v1` format, which other code parses: the desktop app's
-Rust (`apps/desktop/src-tauri/src/{machine,lib,cli_install}.rs`), the install
-rig (`install_rig_tests.rs`), and older tacho binaries still on machines. A
-slot leaves the root `host.json` in its old format, so each of those readers
-keeps reading the first agent.
+- `TachoHome` is the machine: the tacho directory, `agents/`, the service's
+  pid file, its log, and its Windows launcher, plus the person's harness
+  config files.
+- `TachoPaths` extends `TachoHome` with one agent's `dir` and the files in
+  it. `agentPaths(home, id)` builds it, and `AGENT_FILES` names every file,
+  so a new per-agent file is added in one place.
 
-### 2. One live slot per harness
+Every function that takes `TachoPaths` works on any agent unchanged. A
+command acting on one agent overlays the harness file paths that agent's
+enroll recorded (`withRecordedHarnessFiles`).
 
-A slot is live when its `host.json` has no `revoked_at` and its host status
-is not `revoked`. A harness belongs to at most one live slot, and
-`slotHolding` finds it. A hook, a run token, a credential helper call, or a
+The id is 8 random hex characters (`newAgentId`). It is opaque, and it never
+changes for the life of the directory. It is short because the agent's Unix
+socket path must fit the 104 bytes macOS allows.
+
+`host/agents.ts` reads the directories. `listAgents` returns every agent
+with a `host.json`, oldest enrollment first, then by id, with an unreadable
+`host.json` last. The file format stays `tacho.host.v1`.
+
+### 2. One live agent per harness
+
+An agent is live when its `host.json` has no `revoked_at` and its host status
+is not `revoked`. A harness belongs to at most one live agent, and
+`agentHolding` finds it. A hook, a run token, a credential helper call, or a
 model call for a harness therefore has one enrollment to go to.
 
-`enrollTarget` (`cli/enroll.ts`) decides where an enroll goes:
+`enrollTarget` (`cli/enroll.ts`) decides which agent an enroll acts on:
 
-- A harness a live slot already hooks stays in that slot. The enroll
-  re-applies it, or with `--force` replaces that slot's enrollment alone.
-- Harnesses that two different slots hold are refused, because one enroll
+- Harnesses a live agent already hooks stay with that agent. The enroll
+  re-applies it, or with `--force` replaces that agent's enrollment alone.
+  An enroll that names one of the agent's harnesses and a new one adds the
+  new one to that agent.
+- Harnesses that two different agents hold are refused, because one enroll
   cannot cover two agents.
-- With no live root, or with no token, the enroll goes to the root. An
-  operator enroll (`oxagen tacho enroll`) that adds a harness still revokes
-  the root enrollment and enrolls it again with both harnesses. An operator
-  enroll names no agent, so there is no second agent to put in a slot.
-- With a live root and a one-time token, the token's one harness goes into a
-  new slot, and nothing is revoked. A token with more than one harness is
-  refused, because the agent it names has one harness.
+- Otherwise the most recent retired agent that hooked one of the harnesses
+  is enrolled again in its own directory, keeping its device key and ports.
+- Otherwise the enroll gets a new agent directory, and nothing is revoked.
+  A token enroll and an operator enroll take the same path.
 
-A new slot takes a collector port whose model proxy port is also free, and
-neither may be a port another live slot holds (`portsInUse`).
+A new agent takes a collector port whose model proxy port is also free, and
+neither may be a port another agent the daemon serves holds (`portsInUse`).
+An enroll that fails before `host.json` is written removes the new
+directory, so a failed enroll leaves no agent behind.
 
 Routing follows the same rule. A hook entry carries `--enrollment <id>`, and
-`slotPathsForEnrollment` picks the slot with that id, live or retired, so a
-stale entry is answered by its own slot's check. A command that names only a
-harness reaches the live slot that hooks it (`depsForHarness`): the model
-credential helper, the Git credential helper, `tacho run`, and
-`tacho verify`. A custom agent's `tacho hook --agent <name>` carries no
-enrollment id and reports under the root slot.
+`agentPathsForEnrollment` picks the agent with that enrollment id, live or
+retired, so a stale entry is answered by its own agent's check. It reads two
+fields of each `host.json` and parses nothing else, because every hook calls
+it. A command that names only a harness reaches the live agent that hooks it
+(`depsForHarness`): the model credential helper, the Git credential helper,
+`tacho run`, and `tacho verify`. A command that names nothing acts on the
+oldest live agent (`defaultAgentPaths`).
 
-Slots are named by harness, not by enrollment id. `reassign` and
-`enroll --force` mint a new enrollment id, and a directory named by id would
-move on each of them.
+Directories are named by opaque id, not by harness and not by enrollment id.
+`reassign` and `enroll --force` mint a new enrollment id, and a harness can
+move between agents, so a directory named by either would have to move.
 
-### 3. One daemon for every slot
+### 3. One daemon for every agent
 
-The service, its pid file, its log, and its Windows launcher stay at the
-root. `host/service.ts` names one service on every platform
+The service, its pid file, its log, and its Windows launcher belong to the
+machine. `host/service.ts` names one service on every platform
 (`sh.oxagen.tachod` on macOS). The one `tachod` process starts a collector
-per slot (`collector/run.ts`):
+for each agent not retired on this machine (`daemonAgents` in
+`collector/run.ts`). When every agent is retired, the oldest still runs, as a
+lone enrollment always has, because its revoke may still be pending.
 
-- each sub slot not retired on this machine
-- the root, unless it was retired on this machine while another agent is
-  live
-
-Each collector listens on its slot's ports and ships from its slot's WAL.
-Exactly one watches Claude Code transcripts: the slot that hooks Claude Code,
-else the root. A slot that fails to start is logged and the others start. The
-process fails only when no slot starts. A sub slot's log lines begin with
-`tachod [<harness>]`, and SIGHUP refreshes every slot's bundle.
+Each collector listens on its agent's ports and ships from its agent's WAL.
+Exactly one watches Claude Code transcripts: the live agent that hooks Claude
+Code, else the first agent served. An agent that fails to start is logged
+and the others start. The process fails only when no agent starts. With more
+than one agent, each log line begins with `tachod [<id>]`, and SIGHUP
+refreshes every agent's bundle.
 
 The cost is memory. Each collector holds its own state in the one process, so
 the daemon grows with each agent on the machine.
 
 The alternative was one service per agent. That needs a label, a unit file, a
-pid file, a log, and a launcher per slot, and every command that installs,
-checks, or removes the service would have to enumerate them. With one
-service, a machine with one agent runs what it ran before this change.
+pid file, a log, and a launcher per agent, and every command that installs,
+checks, or removes the service would have to enumerate them.
 
 ### 4. Service restart for the remaining agents
 
-`tacho unenroll` uninstalls the one service, whichever slot it removes. A
+`tacho unenroll` uninstalls the one service, whichever agent it removes. A
 `tacho reassign` that fails after its revoke leaves the service removed too.
 Both then call `restartForRemaining` (`cli/unenroll.ts`). When the service
-was installed before the command, is gone after it, and a live slot remains,
+was installed before the command, is gone after it, and a live agent remains,
 it installs the service again and prints
 `Starting the <kind> service again for <agent keys>`.
 
 The other agents have no collector and no model proxy from the uninstall to
 the reinstall. A hook that fires in that window decides from the cached
-bundle and writes its event to its own slot's spool, which the collector
+bundle and writes its event to its own agent's spool, which the collector
 drains when it starts. A model call routed through the proxy fails until the
 service is back. When the reinstall fails, the command warns that the
 remaining agents have no collector or model proxy, names them, says to run
 `tacho enroll --harness <list>` with the first agent's harness list, and
-exits 1. That enroll finds the agent's slot, sends no request, and installs
-the service again.
+exits 1. That enroll finds the agent, sends no request, and installs the
+service again.
 
 This outage is accepted. Stopping one collector while the others keep running
-needs a way to tell a running `tachod` which slot to drop, and it has none:
+needs a way to tell a running `tachod` which agent to drop, and it has none:
 SIGHUP refreshes bundles and nothing more. Uninstalling and installing the
 service again reuses paths `unenroll` and `enroll` already exercise.
 
-The commands that act on one agent name it:
+### 5. Commands that act on one agent name it
 
-- `tacho unenroll` on a machine with more than one enrollment refuses and
-  lists them. `--harness <name>` removes the agent that hooks that harness.
-  `--all` removes every slot, the sub slots first and the root last. A bare
-  unenroll that removed every agent is the defect #4371 describes, and one
-  that picked an agent would be guessing.
-- `tacho reassign` on a machine with more than one enrollment requires
-  `--harness`. The list names the agent, as the slot whose harnesses it
-  shares, and replaces that agent's harness list. A list that touches two
-  agents is refused.
-- `tacho status` prints one report per enrollment. `--json` keeps its
-  top-level fields as the first enrollment not retired on this machine and
-  adds `enrollments`, one report per enrollment with its `slot` directory.
-  `enrollments` is present only when the machine holds more than one. The
-  command exits 1 when any enrollment is not shipping. The top level stays a
-  single report so a reader that knows one enrollment, the desktop app among
-  them, still reads a working agent.
+- `tacho unenroll` on a machine with more than one agent refuses and lists
+  them. `--harness <name>` removes the agent that hooks that harness. `--all`
+  removes every agent, oldest first. A bare unenroll that removed every
+  agent is the defect #4371 describes, and one that picked an agent would be
+  guessing. An unenroll removes the agent's directory once it is empty, then
+  `agents/`, then the tacho directory, so a machine with nothing enrolled
+  looks like one that never was.
+- `tacho reassign` on a machine with more than one agent requires
+  `--harness`. The list names the agent whose harnesses it shares and
+  replaces that agent's harness list. A list that touches two agents is
+  refused.
+- `tacho status` prints one report per agent, with its directory, when the
+  machine holds more than one. `--json` always carries `enrollments`, one
+  report per agent with its `id` and `dir`, oldest first. The top-level
+  fields repeat the first enrolled agent, so a reader that knows one
+  enrollment still reads a working agent. The command exits 1 when any agent
+  is not shipping.
 - `tacho unenroll --purge` keeps the collector log while another agent on
-  the machine is live, because one log serves every slot.
+  the machine is live, because one log serves every agent.
 
-### 5. Room for a multi-tenant collector
+### 6. Machines enrolled before this ADR
 
-A later collector that serves several enrollments from one listener can take
-over the sub slots as they are. Each slot is a complete enrollment in the
-root's own file format, and the root's layout did not change, so moving to
-such a collector needs no data migration.
+A machine enrolled before this change keeps its one enrollment in the tacho
+directory itself. `listAgents` reads it there as the agent `legacy`, so every
+command works on it before it moves. `tachod` moves it when it starts, before
+any collector runs (`migrateLegacyLayout`):
+
+1. It fills `agents/.migrating-<id>/` with every per-agent file and moves
+   `host.json` last, so until the move ends every reader finds the
+   enrollment where it was.
+2. It renames the staging directory to `agents/<id>/`.
+3. It sweeps into the new directory any spool or quarantine entry a hook
+   wrote into the old place while the move ran.
+
+A start that finds a `.migrating-` directory finishes that move instead of
+starting another. `listAgents` skips directories whose names start with a
+dot. An enroll never migrates: it leaves the legacy enrollment to the daemon.
+
+### 7. The desktop app
+
+The desktop app reads the same layout (`apps/desktop/src-tauri/src/machine.rs`):
+every agent under `agents/`, and a legacy enrollment until `tachod` moves it.
+Its uninstall runs `tacho unenroll --all --purge` and removes every agent.
 
 ## Consequences
 
-- A second agent enrolls on a machine without revoking the first. The
-  register page's command creates its slot.
-- A machine with one agent keeps its layout, its service, its `tacho status`
-  output, and its `tacho unenroll` behavior.
+- A second agent enrolls on a machine without revoking the first, and gets a
+  directory identical to the first agent's.
+- No command, reader, or test treats the first agent differently from the
+  others.
 - The daemon's memory grows with each agent on the machine.
-- Only a one-time token creates a slot. An operator enroll that adds a
-  harness still adds it to the root enrollment.
-- **Known gap: the desktop app shows the first agent only.**
-  `apps/desktop/src-tauri/src/machine.rs` reads the root `host.json` alone
-  (lines 195 and 228). The top level of `tacho status --json` is the first
-  enrollment too, so the panels agree with each other. Uninstall runs
-  `tacho unenroll --all --purge` and removes every agent. The app's report of
-  a revoke still owed reads the root alone, so after an offline uninstall it
-  does not name a sub slot's agent for the fleet page.
+- The bundled desktop daemon reads `agents/` only once the desktop app ships
+  with this tacho. Until then, a machine on the old bundled daemon keeps its
+  legacy layout, and an enroll from this CLI writes into `agents/`, which the
+  old daemon does not read.
 - **Known gap: scripts must name the agent.** A bare `tacho unenroll` or
   `tacho reassign` on a machine with two agents refuses. A script that ran
   either must pass `--harness`, or `--all` to unenroll every agent.
@@ -198,29 +219,35 @@ such a collector needs no data migration.
   `tacho reassign` enrolls again through the CLI session (`cli/reassign.ts`
   passes no token). `create_tacho_enrollment` then derives the agent key from
   the hostname and mints a host row with no agent
-  (`packages/handlers/src/tacho.enrollment.create.ts`). A sub slot is
-  token-enrolled by construction, so reassigning one returns an agent under a
-  different key, unlinked from the agent registered on the Agents page and
-  from that agent's mandate. Before its revoke, a reassign of a sub slot
-  prints a warning that names the agent key and says how to keep the link:
-  unenroll that agent, register it in the target workspace, and run the
-  command its page shows. When such a reassign fails after its revoke, the
-  error sends the operator to the Agents page too, because only a one-time
-  token opens a slot. A failed reassign of the root names the root's harness
-  list in its `tacho enroll --force` command, so the enroll lands in the root
-  and not in a slot that another agent holds. #4410 tracks carrying the agent
-  link through a reassign.
+  (`packages/handlers/src/tacho.enrollment.create.ts`). Reassigning an agent
+  enrolled with a one-time token therefore returns it under a different key,
+  unlinked from the agent registered on the Agents page and from that agent's
+  mandate. Before its revoke, such a reassign prints a warning that names the
+  agent key and says how to keep the link: unenroll that agent, register it
+  in the target workspace, and run the command its page shows. When it fails
+  after its revoke, the error sends the operator to the Agents page too.
+  #4410 tracks carrying the agent link through a reassign.
 
 ## Alternatives considered
 
-- **A map of enrollments in `host.json`.** Rejected for the reasons in
-  decision 1: it still needs per-enrollment paths, and it breaks the stored
-  format that the desktop app, the install rig, and older binaries read.
+- **Keep the first enrollment in the tacho directory and give later agents
+  their own directories.** This was the first version of this ADR. It kept
+  the old layout for a machine with one agent, but it made the first agent a
+  different kind of thing: commands, the daemon, the desktop app, and the
+  tests each had to handle a root case and an agent case, and an operator
+  enroll could still revoke the root to add a harness. Rejected because most
+  runtimes will run more than one harness, so the special case would be the
+  common case.
+- **A map of enrollments in `host.json`.** A map still needs a device key, a
+  credential store, a WAL, a spool, and two ports for each entry, so it needs
+  per-agent paths anyway. It would also change the stored `tacho.host.v1`
+  format that the desktop app, the install rig, and older binaries parse.
 - **One service per agent.** Rejected for the reasons in decision 3.
 - **Replace the enrollment when a second token arrives.** This was the
   behavior before this ADR, through `--force`. Rejected because it revokes the
   first agent, which is #4371.
-- **Slots named by enrollment id.** Rejected because the id changes on every
-  `reassign` and `enroll --force`, and the directory would move with it.
+- **Directories named by harness or by enrollment id.** Rejected because a
+  harness can move between agents, and the enrollment id changes on every
+  `reassign` and `enroll --force`, so the directory would move with either.
 - **A bare `tacho unenroll` that removes every agent.** Rejected because a
   command that names no agent should not take all of them off the machine.
