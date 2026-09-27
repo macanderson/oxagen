@@ -74,7 +74,7 @@ import {
   type SteerBlock,
   steerBlockOf,
 } from "@oxagen/oxagen/contracts/run.list";
-import { and, desc, eq, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { writeRecipientCommand } from "./lib/run-command-recipients";
 import { logger } from "./logger";
 import { ledgerIdentityQuery, type RunScope, runScope } from "./run.list";
@@ -567,6 +567,18 @@ function recipientOf(row: RecipientRow): RecipientSession {
   };
 }
 
+/**
+ * The advisory lock key that orders the commands of one kind queued for one
+ * idle agent's next run.
+ */
+function nextRunCommandLockKey(row: {
+  scope: RunScope;
+  agentKey: string;
+  command: RunCommand;
+}): string {
+  return `next_run_command:${row.scope.workspaceId}:${row.agentKey}:${row.command}`;
+}
+
 export function postgresCommandStore(tx: Tx): CommandStore {
   const ledger = createPostgresRunStore();
   return {
@@ -780,6 +792,13 @@ export function postgresCommandStore(tx: Tx): CommandStore {
         )
         .limit(1);
       if (!host) return null;
+      // Two dispatches for one idle agent and command would each insert
+      // before the other's row is visible, and both rows would stay queued.
+      // The lock orders them, so the later one cancels the earlier (Codex
+      // review on #4421). A run's commands are ordered by the run's row lock.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${nextRunCommandLockKey(row)}, 0))`,
+      );
       const [inserted] = await tx
         .insert(commands)
         .values({
