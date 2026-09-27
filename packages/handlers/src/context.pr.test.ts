@@ -37,6 +37,8 @@ import { createProposeRecordHandler } from "./context.proposal.create";
 import { createListRecordsHandler } from "./context.records.list";
 import { stringify } from "smol-toml";
 import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
+import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
+import { logger } from "./logger";
 import { parseChecked } from "./context.steering.checks";
 import { stampRecordObject } from "./context.steering.file";
 import {
@@ -52,8 +54,42 @@ import {
 
 const LINEAGE = "ctx.release.no-reread-changelog";
 const PATH = `.oxagen/rules/${LINEAGE}.toml`;
-const BRANCH = `context/${LINEAGE}`;
+const BRANCH = `steering/${LINEAGE}`;
 const GOVERNANCE = ".oxagen/rules/governance.toml";
+
+/** A steering record as an author writes one: no id or hash yet. */
+function steeringRecord(lineage: string): string {
+  return [
+    "---",
+    "schema: steering-record/v1",
+    `lineage: ${lineage}`,
+    "label: A rule",
+    "kind: rule",
+    "force: should",
+    "scope: workspace",
+    "status: active",
+    "origin: user",
+    "---",
+    "",
+    "Do not re-read CHANGELOG.md more than once in a run.",
+    "",
+  ].join("\n");
+}
+
+/**
+ * The fixture steering repo on main, with a clock after its ledger's last
+ * line, so a stamp appends to 2026-09.jsonl.
+ */
+function steeringHarness(): Harness {
+  const seed: Record<string, string> = {};
+  for (const [path, text] of fixtureRepo()) seed[`main:${path}`] = text;
+  const h = harness(seed);
+  let t = Date.parse("2026-09-26T12:00:00.000Z");
+  const clock = () => new Date((t += 1000));
+  h.github.clock = clock;
+  h.now = clock;
+  return h;
+}
 
 const proposalInput = (over: Record<string, unknown> = {}) =>
   contextProposalCreate.input.parse({
@@ -172,13 +208,17 @@ describe("open_context_pr", () => {
           c.completedAt,
       ),
     ).toBe(true);
-    expect(h.github.checkRuns.map((c) => c.conclusion)).toEqual(
-      Array(6).fill("success"),
+    // One required check carries all six outcomes.
+    expect(h.github.checkRuns).toEqual([
+      expect.objectContaining({
+        name: "Oxagen steering",
+        headSha: "head1",
+        conclusion: "success",
+      }),
+    ]);
+    expect(h.github.checkRuns[0]!.summary).toContain(
+      "- Passed: Conflict against active records.",
     );
-    expect(h.github.checkRuns[0]).toMatchObject({
-      name: "Oxagen · Schema",
-      headSha: "head1",
-    });
     expect(out.onMerge).toEqual({
       publishes: { lineageId: LINEAGE, path: PATH },
       bundleVersion: { current: 0, afterMerge: 1 },
@@ -257,9 +297,15 @@ describe("open_context_pr", () => {
     expect(scan.status).toBe("failed");
     expect(scan.summary).toContain("email address in statement");
     expect(out.checks.filter((c) => c.status === "passed")).toHaveLength(5);
-    expect(
-      h.github.checkRuns.filter((c) => c.conclusion === "failure"),
-    ).toHaveLength(1);
+    expect(h.github.checkRuns).toEqual([
+      expect.objectContaining({
+        name: "Oxagen steering",
+        conclusion: "failure",
+      }),
+    ]);
+    expect(h.github.checkRuns[0]!.summary).toContain(
+      "email address in statement",
+    );
     expect(h.github.pulls).toHaveLength(1);
   });
 
@@ -286,10 +332,10 @@ describe("open_context_pr", () => {
       status: "failed",
       summary: expect.stringContaining("does not match the file's"),
     });
-    expect(h.github.checkRuns).toHaveLength(12);
-    expect(h.github.checkRuns.slice(6).map((c) => c.headSha)).toEqual(
-      Array(6).fill("head2"),
-    );
+    expect(h.github.checkRuns.map((c) => c.headSha)).toEqual([
+      "head1",
+      "head2",
+    ]);
   });
 
   it("a re-run on a branch edit that re-stamps the record passes and the row carries the file's identity", async () => {
@@ -488,8 +534,8 @@ describe("open_context_pr", () => {
     expect(out.status).toBe("checks_passed");
     expect(out.pr).toMatchObject({ number: 519, headSha: "head2" });
     expect(h.github.pulls).toHaveLength(1);
-    expect(h.github.checkRuns).toHaveLength(6);
-    expect(h.github.checkRuns.every((r) => r.headSha === "head2")).toBe(true);
+    expect(h.github.checkRuns).toHaveLength(1);
+    expect(h.github.checkRuns[0]!.headSha).toBe("head2");
   });
 
   it("adopts an open PR on the branch only when its body names the proposal: another proposal's orphan PR is refused, survives the first proposal's dismissal, and is adopted by its own retry", async () => {
@@ -803,6 +849,11 @@ describe("merge_context_pr", () => {
         number: 519,
         commitTitle: `steering: publish ${LINEAGE} (#519)`,
         sha: "head1",
+        commitMessage: [
+          `Oxagen-Approved-By: ${REVIEWER}`,
+          "Oxagen-Checks: schema,lineage_uniqueness,record_hash,secret_pii_scan,conflict_against_active,constraint_effect",
+          "Oxagen-Version: 1",
+        ].join("\n"),
       },
     ]);
     expect(h.github.deletedBranches).toEqual([BRANCH]);
@@ -1031,9 +1082,7 @@ describe("merge_context_pr", () => {
     // Nothing was published, and no check reported on the merged head.
     expect(h.store.records).toHaveLength(0);
     expect(h.store.ledger).toHaveLength(0);
-    expect(h.github.checkRuns.map((c) => c.headSha)).toEqual(
-      Array(6).fill("head1"),
-    );
+    expect(h.github.checkRuns.map((c) => c.headSha)).toEqual(["head1"]);
     expect(h.store.proposals[0]!.status).toBe("checks_passed");
 
     // The way out the refusal names: dismiss, propose the wording again, and
@@ -1103,7 +1152,7 @@ describe("merge_context_pr", () => {
     await expect(
       createOpenContextPrHandler(h)({ proposalId: id }, ctx()),
     ).rejects.toMatchObject({ code: "conflict", reason: "base_moved" });
-    expect(h.github.checkRuns).toHaveLength(6);
+    expect(h.github.checkRuns).toHaveLength(1);
     expect(h.github.merges).toHaveLength(0);
     expect(h.github.deletedBranches).toHaveLength(0);
     expect(h.store.records).toHaveLength(0);
@@ -1455,5 +1504,364 @@ describe("merge_context_pr", () => {
     expect(h.store.ledger).toHaveLength(0);
     expect(h.events).toHaveLength(0);
     expect(h.store.proposals[0]!.status).toBe("checks_passed");
+  });
+
+  // ── The merge queue ────────────────────────────────────────────────────────
+
+  it("refuses repository_unhealthy while the repository is not healthy, and touches nothing", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const readHealth = vi.fn(async () => "diverged" as const);
+    await expect(
+      createMergeContextPrHandler(h, { readHealth })(
+        { proposalId: id },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "repository_unhealthy",
+      message: expect.stringContaining("a-intel/platform is diverged"),
+    });
+    expect(readHealth).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: SCOPE.workspaceId }),
+      REPO,
+    );
+    expect(h.github.merges).toHaveLength(0);
+    expect(h.github.updates).toHaveLength(0);
+    expect(h.github.deployments).toHaveLength(0);
+    expect(h.store.ledger).toHaveLength(0);
+    expect(h.store.proposals[0]!.status).toBe("checks_passed");
+  });
+
+  it("team mode: refuses approval_required without an approval at the checked head by a member other than the author", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const merge = createMergeContextPrHandler(h);
+    h.github.approvals = [];
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "approval_required" });
+
+    // An approval of an older head, the author's own, one by a person
+    // outside the workspace, and one by a host account linked to nobody
+    // count for nothing.
+    h.github.approvals = [
+      { userId: REVIEWER, login: "reviewer", commitSha: "base0" },
+      { userId: AUTHOR, login: "author", commitSha: "head1" },
+      { userId: "u_outsider", login: "outsider", commitSha: "head1" },
+      { userId: null, login: "unlinked", commitSha: "head1" },
+    ];
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({ reason: "approval_required" });
+    expect(h.github.merges).toHaveLength(0);
+    expect(h.github.deletedBranches).toHaveLength(0);
+    expect(h.store.ledger).toHaveLength(0);
+
+    // A workspace member's approval at the checked head merges, and the
+    // trailer names that member once.
+    h.roleOf.set("u_member", { org: null, workspace: "Member" });
+    h.github.approvals = [
+      { userId: "u_member", login: "member", commitSha: "head1" },
+      { userId: "u_member", login: "member", commitSha: "head1" },
+    ];
+    const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(out.status).toBe("merged");
+    expect(h.github.merges[0]!.commitMessage).toMatch(
+      /^Oxagen-Approved-By: u_member\n/,
+    );
+  });
+
+  it("lets an owner, or a merger holding merge_without_review, merge without an approval, and the trailer says nobody reviewed it", async () => {
+    const owner = harness();
+    const ownerPr = await opened(owner);
+    owner.github.approvals = [];
+    owner.roleOf.set(REVIEWER, { org: "Owner", workspace: null });
+    const byOwner = await createMergeContextPrHandler(owner)(
+      { proposalId: ownerPr },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(byOwner.status).toBe("merged");
+    expect(owner.github.merges[0]!.commitMessage).toContain(
+      `Oxagen-Approved-By: none; merged without review by ${REVIEWER}\n`,
+    );
+
+    const h = harness();
+    const id = await opened(h);
+    h.github.approvals = [];
+    const holds = vi.fn(
+      async (_scope: unknown, userId: string) => userId === REVIEWER,
+    );
+    const out = await createMergeContextPrHandler(h, {
+      holdsMergeWithoutReview: holds,
+    })({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(out.status).toBe("merged");
+    expect(holds).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: SCOPE.workspaceId }),
+      REVIEWER,
+    );
+    expect(h.github.merges[0]!.commitMessage).toContain(
+      `merged without review by ${REVIEWER}`,
+    );
+  });
+
+  it("records the publish as a deployment of the merge commit to the steering environment, and never calls publish() for the code repository", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const publish = vi.fn(async () => undefined);
+    await createMergeContextPrHandler(h, {
+      nextVersion: async () => 7,
+      publish,
+    })({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(h.github.merges[0]!.commitMessage).toMatch(/\nOxagen-Version: 7$/);
+    expect(h.github.deployments).toEqual([
+      {
+        sha: "merge519",
+        ref: "main",
+        environment: "steering",
+        description: "Steering version 7 from #519",
+      },
+    ]);
+    // The legacy layout is the main code repository, which publish() skips.
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it("still publishes when the host refuses the deployment record", async () => {
+    const h = harness();
+    const id = await opened(h);
+    h.github.deploymentRefused = true;
+    const warn = vi.spyOn(logger, "warn");
+    try {
+      const out = await createMergeContextPrHandler(h)(
+        { proposalId: id },
+        ctx({ userId: REVIEWER }),
+      );
+      expect(out.status).toBe("merged");
+      expect(h.store.ledger).toHaveLength(1);
+      expect(h.github.deployments).toHaveLength(0);
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({ sha: "merge519", pr: 519 }),
+        expect.stringContaining("refused the deployment record"),
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("brings the branch up to date when main moved after the checks passed, checks the new head again, and merges that head", async () => {
+    const h = harness();
+    const id = await opened(h);
+    h.github.commit("main", "README.md", "# Platform\n");
+    const out = await createMergeContextPrHandler(h)(
+      { proposalId: id },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(out.status).toBe("merged");
+    expect(h.github.updates).toEqual([
+      { branch: BRANCH, from: "head1", to: "head3" },
+    ]);
+    expect(
+      h.github.checkRuns.map((c) => [c.name, c.headSha, c.conclusion]),
+    ).toEqual([
+      ["Oxagen steering", "head1", "success"],
+      ["Oxagen steering", "head3", "success"],
+    ]);
+    expect(h.github.merges).toEqual([
+      expect.objectContaining({ number: 519, sha: "head3" }),
+    ]);
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "merged",
+      headSha: "head3",
+    });
+    expect(h.store.records[0]!.commitSha).toBe("merge519");
+  });
+
+  it("refuses checks_failed when the checks fail on the head brought up to date, and merges nothing", async () => {
+    const h = harness();
+    const constraint = (lineageId: string, effect: "forbid" | "require") => ({
+      record: {
+        lineageId,
+        kind: "constraint",
+        force: "must",
+        constraintEffect: effect,
+        sharingScope: "workspace",
+        statement: "Never renumber a merged migration.",
+      },
+    });
+    const forbidId = await opened(
+      h,
+      constraint("ctx.platform.migration-order", "forbid"),
+    );
+    const requireId = await opened(
+      h,
+      constraint("ctx.platform.migration-renumber", "require"),
+    );
+    const merge = createMergeContextPrHandler(h);
+    await merge({ proposalId: requireId }, ctx({ userId: REVIEWER }));
+
+    // main now holds the require constraint, so the forbid on the same
+    // statement fails when it is checked again.
+    await expect(
+      merge({ proposalId: forbidId }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "checks_failed",
+      message: expect.stringContaining(
+        "brought steering/ctx.platform.migration-order up to date",
+      ),
+    });
+    const row = h.store.proposals.find((p) => p.publicId === forbidId)!;
+    expect(row.status).toBe("checks_failed");
+    expect(row.headSha).toBe(h.github.updates[0]!.to);
+    expect(
+      row.checks.find((c) => c.name === "conflict_against_active"),
+    ).toMatchObject({
+      status: "failed",
+      summary: expect.stringContaining(
+        "ctx.platform.migration-renumber is an active require",
+      ),
+    });
+    expect(h.github.checkRuns.at(-1)).toMatchObject({
+      name: "Oxagen steering",
+      headSha: h.github.updates[0]!.to,
+      conclusion: "failure",
+    });
+    expect(h.github.merges.map((m) => m.number)).toEqual([520]);
+    expect(h.store.ledger).toHaveLength(1);
+  });
+
+  it("merges two PRs in the order they were queued: the second waits, then is brought up to date with the first and checked again", async () => {
+    const h = harness();
+    const a = await opened(h);
+    const b = await opened(h, {
+      record: {
+        ...proposalInput().record,
+        lineageId: "ctx.release.cache-readme",
+        statement: "Do not re-read README.md more than once in a run.",
+      },
+    });
+    const merge = createMergeContextPrHandler(h);
+    const [first, second] = await Promise.all([
+      merge({ proposalId: a }, ctx({ userId: REVIEWER })),
+      merge({ proposalId: b }, ctx({ userId: REVIEWER })),
+    ]);
+    expect(first.bundleVersion).toEqual({ before: 0, after: 1 });
+    expect(second.bundleVersion).toEqual({ before: 1, after: 2 });
+    expect(h.github.merges.map((m) => [m.number, m.sha])).toEqual([
+      [519, "head1"],
+      [520, "head3"],
+    ]);
+    expect(h.github.updates).toEqual([
+      {
+        branch: "steering/ctx.release.cache-readme",
+        from: "head2",
+        to: "head3",
+      },
+    ]);
+    // The version is read inside the queue, after the first merge landed.
+    expect(h.github.merges[1]!.commitMessage).toMatch(/\nOxagen-Version: 2$/);
+    expect(h.store.ledger).toHaveLength(2);
+  });
+
+  it("in a steering repo, fails the one required check when the branch changes a path outside its folder", async () => {
+    const h = steeringHarness();
+    const id = await proposed(h);
+    const out = await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
+    expect(out.status).toBe("checks_failed");
+    expect(out.checks.find((c) => c.name === "schema")).toMatchObject({
+      status: "failed",
+      summary: expect.stringContaining(
+        `${PATH} is outside every folder a steering PR may change`,
+      ),
+    });
+    expect(h.github.checkRuns).toEqual([
+      expect.objectContaining({
+        name: "Oxagen steering",
+        headSha: "head1",
+        conclusion: "failure",
+      }),
+    ]);
+  });
+
+  /**
+   * A steering-repo PR whose row passed. The proposal writer still writes
+   * .oxagen/rules/, which a steering repo refuses (the test above), so the
+   * branch is rewritten into a steering record and the row marked passed.
+   */
+  async function steeringPrPassed(h: Harness) {
+    const id = await proposed(h);
+    await createOpenContextPrHandler(h)({ proposalId: id }, ctx());
+    const recordAt = `steering/platform/${LINEAGE}.md`;
+    h.github.remove(BRANCH, PATH);
+    const head = h.github.commit(BRANCH, recordAt, steeringRecord(LINEAGE));
+    const row = h.store.proposals[0]!;
+    Object.assign(row, {
+      status: "checks_passed",
+      headSha: head,
+      path: recordAt,
+      checks: row.checks.map((c) => ({ ...c, status: "passed" })),
+    });
+    return { id, head, recordAt };
+  }
+
+  it("in a steering repo, stamps the checked head, posts the required check on the stamp, merges the stamp, and calls publish() with the merge commit", async () => {
+    const h = steeringHarness();
+    const { id, head, recordAt } = await steeringPrPassed(h);
+    const publish = vi.fn(async () => undefined);
+    const out = await createMergeContextPrHandler(h, { publish })(
+      { proposalId: id },
+      ctx({ userId: REVIEWER }),
+    );
+
+    expect(out.status).toBe("merged");
+    expect(h.github.stamps).toHaveLength(1);
+    const stamp = h.github.stamps[0]!;
+    expect(stamp).toMatchObject({ branch: BRANCH, parent: head });
+    expect(stamp.files.map((f) => f.path)).toEqual([
+      recordAt,
+      "steering/promotions/2026-09.jsonl",
+    ]);
+    expect(h.github.checkRuns.at(-1)).toMatchObject({
+      name: "Oxagen steering",
+      headSha: stamp.sha,
+      conclusion: "success",
+    });
+    expect(h.github.merges).toEqual([
+      expect.objectContaining({ number: 519, sha: stamp.sha }),
+    ]);
+    // The row follows the stamp, and the registry holds the stamped bytes.
+    expect(h.store.proposals[0]!.headSha).toBe(stamp.sha);
+    expect(h.store.versions[0]!.body).toBe(
+      await h.github.readFile(REPO, recordAt, stamp.sha),
+    );
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenCalledWith(REPO, "merge519");
+    expect(h.github.deployments).toEqual([
+      expect.objectContaining({ sha: "merge519", environment: "steering" }),
+    ]);
+  });
+
+  it("in a steering repo, a failed publish() is logged and the merge stands", async () => {
+    const h = steeringHarness();
+    const { id } = await steeringPrPassed(h);
+    const publish = vi.fn(async () => {
+      throw new Error("bundle store unreachable");
+    });
+    const warn = vi.spyOn(logger, "warn");
+    try {
+      const out = await createMergeContextPrHandler(h, { publish })(
+        { proposalId: id },
+        ctx({ userId: REVIEWER }),
+      );
+      expect(out.status).toBe("merged");
+      expect(h.store.proposals[0]!.status).toBe("merged");
+      expect(h.github.deployments).toHaveLength(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({ commit: "merge519" }),
+        expect.stringContaining("publish() failed"),
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

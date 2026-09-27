@@ -371,9 +371,9 @@ describe("Context PRs on the host", () => {
     const edited = (await r.h.github.readFile(
       r.h.github.repository!,
       path,
-      `context/${LINEAGE}`,
+      `steering/${LINEAGE}`,
     ))!.replace("more than once in a run.", "more than once per run.");
-    r.h.github.commit(`context/${LINEAGE}`, path, edited);
+    r.h.github.commit(`steering/${LINEAGE}`, path, edited);
     r.h.github.mergeOnHost(r.h.github.pulls[0]!.number);
     pastGrace(r);
 
@@ -401,7 +401,7 @@ describe("Context PRs on the host", () => {
     const id = await openedAndPassed(r);
     const path = proposal(r, id).path!;
     r.h.github.commit(
-      `context/${LINEAGE}`,
+      `steering/${LINEAGE}`,
       path,
       recordText(LINEAGE, "Edited on the PR."),
     );
@@ -468,7 +468,7 @@ describe("Context PRs on the host", () => {
     const id = await openedAndPassed(r);
     const path = proposal(r, id).path!;
     r.h.github.commit(
-      `context/${LINEAGE}`,
+      `steering/${LINEAGE}`,
       path,
       recordText(LINEAGE, "Push with ghp_0123456789abcdefghijklmnopqrstuvwx."),
     );
@@ -498,7 +498,7 @@ describe("Context PRs on the host", () => {
     expect(active(r)).toEqual([]);
     // The next proposal on the lineage branches from main, not from the
     // closed PR's commits.
-    expect(r.h.github.deletedBranches).toContain(`context/${LINEAGE}`);
+    expect(r.h.github.deletedBranches).toContain(`steering/${LINEAGE}`);
   });
 
   it("resets the checks when the PR's branch moves on GitHub", async () => {
@@ -506,7 +506,7 @@ describe("Context PRs on the host", () => {
     const id = await openedAndPassed(r);
     const path = proposal(r, id).path!;
     const moved = r.h.github.commit(
-      `context/${LINEAGE}`,
+      `steering/${LINEAGE}`,
       path,
       recordText(LINEAGE, "Moved."),
     );
@@ -562,7 +562,7 @@ describe("Context PRs on the host", () => {
       mergedByUserId: null,
     });
     expect(r.h.store.versions).toHaveLength(1);
-    expect(r.h.github.deletedBranches).toContain(`context/${LINEAGE}`);
+    expect(r.h.github.deletedBranches).toContain(`steering/${LINEAGE}`);
   });
 });
 

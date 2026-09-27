@@ -1,7 +1,7 @@
 // The GitLab steering seam (#3762), against an in-memory gitlab.com project.
 //
 // The first block runs the real handlers end to end: a proposal becomes a
-// merge request on the GitLab project, its six checks become commit statuses,
+// merge request on the GitLab project, its six checks become one commit status,
 // and a reviewer's merge squashes the checked head and publishes the record.
 // The rest pins the seam's GitLab-specific behaviour one call at a time.
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -53,7 +53,7 @@ import {
 const TOKEN = "glpat-stored-token-never-shown";
 const LINEAGE = "ctx.release.no-reread-changelog";
 const PATH = `.oxagen/rules/${LINEAGE}.toml`;
-const BRANCH = `context/${LINEAGE}`;
+const BRANCH = `steering/${LINEAGE}`;
 
 const CONNECTION: GitLabSteeringConnection = {
   connectionId: "0192d4a8-7c1e-7a00-8000-00000000c011",
@@ -137,7 +137,7 @@ beforeEach(() => {
 });
 
 describe("a context record published through a GitLab merge request", () => {
-  it("opens a merge request, reports six commit statuses, then squash-merges the checked head and publishes", async () => {
+  it("opens a merge request, reports one commit status for the six checks, then squash-merges the checked head and publishes", async () => {
     const { api, h } = gitlabHarness();
     const proposalId = await propose(h);
 
@@ -161,11 +161,14 @@ describe("a context record published through a GitLab merge request", () => {
     expect(mr!.description).toContain(proposalId);
     const head = api.branches.get(BRANCH)!;
     expect(opened.pr!.headSha).toBe(head);
-    expect(api.statuses).toHaveLength(6);
-    expect(
-      api.statuses.every((s) => s.sha === head && s.state === "success"),
-    ).toBe(true);
-    expect(api.statuses.map((s) => s.name)).toContain("Oxagen · Schema");
+    // One required status carries all six outcomes.
+    expect(api.statuses).toEqual([
+      expect.objectContaining({
+        sha: head,
+        name: "Oxagen steering",
+        state: "success",
+      }),
+    ]);
     // The record's set id is the approved project path, dotted.
     const file = api.commits.get(head)!.files.get(PATH)!;
     expect(file).toContain('set_id = "acme.platform.rules"');
@@ -185,7 +188,14 @@ describe("a context record published through a GitLab merge request", () => {
         iid: 1,
         sha: head,
         squash: true,
-        message: `steering: publish ${LINEAGE} (#1)`,
+        // GitLab takes the squash title and the trailers in one message.
+        message: [
+          `steering: publish ${LINEAGE} (#1)`,
+          "",
+          `Oxagen-Approved-By: ${REVIEWER}`,
+          "Oxagen-Checks: schema,lineage_uniqueness,record_hash,secret_pii_scan,conflict_against_active,constraint_effect",
+          "Oxagen-Version: 1",
+        ].join("\n"),
       },
     ]);
     // The squash commit is what landed on main, and the published record is
