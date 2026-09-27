@@ -785,7 +785,7 @@
       "pick": {
         "legend": "Your answer",
         "link": "Link it to {ws}",
-        "linkDescription": "Becomes a linked repository of {ws}.",
+        "linkDescription": "Oxagen opens a steering PR that links it to {ws}.",
         "create": "Create a new workspace",
         "createDescription": "Called {name}. It starts with no linked repository.",
         "createDescriptionUnnamed": "A new workspace with no linked repository.",
@@ -814,7 +814,11 @@
       "closedReason": "The answer window closed at {at}.",
       "receipt": {
         "sent": "Answer recorded. Receipt {receipt}.",
-        "linked": "Linked {repository} to {ws}.",
+        "linkProposed": "Steering PR <pr>#{number}</pr> adds {repository} to {ws}.",
+        "linkReused": "Steering PR <pr>#{number}</pr> already adds {repository} to {ws}.",
+        "linkMerge": "Merge the steering PR to finish linking.",
+        "linkListed": "The steering record of {ws} lists {repository} already. The next steering sync links it.",
+        "linkBound": "{repository} is linked to {ws} already.",
         "created": "Created the workspace {slug}."
       },
       "timeout": {
@@ -857,6 +861,8 @@
         "githubNotAuthorized": "This organization has no usable GitHub authorization. Connect GitHub from an existing workspace's settings first.",
         "installationUnreachable": "The GitHub App is not installed on the repository's owner, or Oxagen cannot reach that installation.",
         "repositoryNotInstalled": "The GitHub App installation cannot see this repository.",
+        "mainRepoUnbound": "This workspace has no steering repository yet, so Oxagen has nowhere to open the steering PR. Set one up first.",
+        "workspaceTomlUnreadable": "The steering repository’s workspace.toml is present but unreadable. It must read as workspace/v1. Fix the file, then answer again.",
         "choice": "Pick link or create, then send.",
         "slug": "A slug takes 2 to 40 lowercase letters, digits, and single hyphens, and cannot be a reserved word.",
         "name": "A workspace name takes 1 to 120 characters.",
