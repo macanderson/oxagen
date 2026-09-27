@@ -4188,7 +4188,7 @@
       "writes": []
     }
   ],
-  "contentHash": "436446f8fc7eb6391cb401cbaea6095aff0fa15f9af3d0fad50dd008bbab05d6",
+  "contentHash": "bb929c9e103d32e4c2d5fc2c9a17709b4c739596e0c1955a99cd3a3d1da37782",
   "domains": [
     {
       "name": "agent",
@@ -4658,7 +4658,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 156
+      "tableCount": 157
     },
     {
       "domains": [
