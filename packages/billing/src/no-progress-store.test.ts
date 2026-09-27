@@ -8,17 +8,25 @@ vi.mock("@oxagen/database", () => ({
     throw new Error("the check must not reach the database in this test");
   }),
 }));
+const readers = vi.hoisted(() => ({
+  readRunToolCalls: vi.fn(),
+  readTachoProgressFrames: vi.fn(),
+}));
 vi.mock("./cost-rollup-store", () => ({
   loadRunSource: vi.fn(),
-  readRunToolCalls: vi.fn(),
+  readRunToolCalls: readers.readRunToolCalls,
+}));
+vi.mock("@oxagen/telemetry", () => ({
+  readTachoProgressFrames: readers.readTachoProgressFrames,
 }));
 
 import type { RunSource } from "./cost-rollup-store";
 import type { ToolCallFrame } from "./cost-rollup";
-import type { NoProgressLimit } from "./no-progress";
+import type { NoProgressFrame, NoProgressLimit } from "./no-progress";
 import {
   checkNoProgress,
   loopKeyOf,
+  readNoProgressFrames,
   type NoProgressDeps,
   type NoProgressHit,
   type NoProgressRun,
@@ -73,7 +81,7 @@ function fakeHits() {
 
 function deps(
   limit: NoProgressLimit | null,
-  calls: ToolCallFrame[],
+  calls: NoProgressFrame[],
   over: Partial<NoProgressDeps> = {},
 ) {
   const store = fakeHits();
@@ -81,7 +89,7 @@ function deps(
     now: () => NOW,
     readLimit: vi.fn(async () => limit),
     loadRunSource: vi.fn(async () => SOURCE),
-    readToolCalls: vi.fn(async () => calls),
+    readFrames: vi.fn(async () => calls),
     readRecorded: store.readRecorded,
     writeHits: store.writeHits,
     pauseRun: null,
@@ -123,6 +131,14 @@ describe("checkNoProgress", () => {
     expect(out).toMatchObject({ loops: 1, newLoops: 0 });
     expect(rows.size).toBe(1);
     expect([...rows.values()][0]).toMatchObject({ repeats: 25, atCall: 20 });
+  });
+
+  it("records no hit when a file changes between the calls (negative)", async () => {
+    const calls = [...times(10), { fileChanged: true as const }, ...times(10)];
+    const { d } = deps({ repeats: 20, mode: "observe" }, calls);
+    const out = await checkNoProgress(RUN, d);
+    expect(out).toMatchObject({ checked: true, loops: 0 });
+    expect(d.writeHits).not.toHaveBeenCalled();
   });
 
   it("records a second hit for a second loop in the same run", async () => {
@@ -206,7 +222,7 @@ describe("checkNoProgress", () => {
       paused: false,
     });
     expect(d.loadRunSource).not.toHaveBeenCalled();
-    expect(d.readToolCalls).not.toHaveBeenCalled();
+    expect(d.readFrames).not.toHaveBeenCalled();
     expect(d.writeHits).not.toHaveBeenCalled();
   });
 
@@ -230,7 +246,7 @@ describe("checkNoProgress", () => {
     });
     const out = await checkNoProgress(RUN, d);
     expect(out.checked).toBe(false);
-    expect(d.readToolCalls).not.toHaveBeenCalled();
+    expect(d.readFrames).not.toHaveBeenCalled();
     expect(d.writeHits).not.toHaveBeenCalled();
   });
 
@@ -240,5 +256,42 @@ describe("checkNoProgress", () => {
     });
     expect((await checkNoProgress(RUN, d)).checked).toBe(false);
     expect(d.writeHits).not.toHaveBeenCalled();
+  });
+});
+
+describe("readNoProgressFrames", () => {
+  it("reads a wrapped run's tool calls and file changes from its own sessions", async () => {
+    const frames = [call(), { fileChanged: true as const }];
+    readers.readTachoProgressFrames.mockResolvedValueOnce(frames);
+    const source = {
+      meta: { orgId: RUN.orgId, workspaceId: RUN.workspaceId },
+      frames: {
+        kind: "tacho",
+        rootSessionUuid: "00000000-0000-4000-8000-0000000000aa",
+        sessionUuids: ["00000000-0000-4000-8000-0000000000aa"],
+      },
+    } as unknown as RunSource;
+    expect(await readNoProgressFrames(source)).toBe(frames);
+    expect(readers.readTachoProgressFrames).toHaveBeenCalledWith({
+      orgId: RUN.orgId,
+      workspaceId: RUN.workspaceId,
+      rootSessionUuid: "00000000-0000-4000-8000-0000000000aa",
+      sessionUuids: ["00000000-0000-4000-8000-0000000000aa"],
+    });
+    expect(readers.readRunToolCalls).not.toHaveBeenCalled();
+  });
+
+  it("reads a ledger run's tool calls, which carry its file changes", async () => {
+    const calls = times(3);
+    readers.readRunToolCalls.mockResolvedValueOnce(calls);
+    const source = {
+      meta: { orgId: RUN.orgId, workspaceId: RUN.workspaceId },
+      frames: {
+        kind: "ledger",
+        runUuid: "00000000-0000-4000-8000-0000000000cc",
+      },
+    } as unknown as RunSource;
+    expect(await readNoProgressFrames(source)).toBe(calls);
+    expect(readers.readRunToolCalls).toHaveBeenCalledWith(source);
   });
 });

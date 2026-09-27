@@ -21,6 +21,7 @@ import {
   OBSERVED_TOKEN_CLASSES,
   readModelCallFrames,
   readObservedModels,
+  readTachoProgressFrames,
   readTachoToolCallFrames,
   readTachoToolCallObservations,
 } from "./cost-frames";
@@ -625,6 +626,78 @@ describe("readTachoToolCallFrames", () => {
       "error",
       "rejected",
     ]);
+  });
+});
+
+describe("readTachoProgressFrames", () => {
+  const args = {
+    orgId: ORG,
+    workspaceId: WS,
+    rootSessionUuid: RUN,
+    sessionUuids: [RUN],
+  };
+
+  it("reads the hook source's tool calls and the file changes between them, in the run's order", async () => {
+    answer([
+      {
+        kind: "tool_call",
+        name: "Bash",
+        input_digest: "sha256:in",
+        output_digest: "sha256:out",
+        is_mutating: null,
+      },
+      {
+        kind: "oxagen:file_changed",
+        name: "",
+        input_digest: "",
+        output_digest: "",
+        is_mutating: null,
+      },
+      {
+        kind: "tool_call",
+        name: "",
+        input_digest: "",
+        output_digest: "",
+        is_mutating: false,
+      },
+    ]);
+    const frames = await readTachoProgressFrames(args);
+    const { query, query_params } = lastQuery();
+    expect(query).toContain("(kind = 'tool_call' AND source = 'hook')");
+    expect(query).toContain("OR kind = 'oxagen:file_changed'");
+    expect(query).toContain("root_session_uuid = {rootSessionUuid:UUID}");
+    expect(query).toContain("session_uuid IN {sessionUuids:Array(UUID)}");
+    expect(query).toContain("ORDER BY ts, seq");
+    expect(query_params).toEqual(args);
+    expect(selectedColumns(query)).toEqual([
+      "kind",
+      "name",
+      "input_digest",
+      "output_digest",
+      "is_mutating",
+    ]);
+    expect(frames).toEqual([
+      {
+        name: "Bash",
+        inputDigest: "sha256:in",
+        outputDigest: "sha256:out",
+        isMutating: null,
+      },
+      { fileChanged: true },
+      {
+        name: null,
+        inputDigest: null,
+        outputDigest: null,
+        isMutating: false,
+      },
+    ]);
+  });
+
+  it("names the root session when the run's list left it out", async () => {
+    answer([]);
+    const SUBAGENT = "00000000-0000-4000-8000-0000000000bb";
+    await readTachoProgressFrames({ ...args, sessionUuids: [SUBAGENT] });
+    expect(lastQuery().query_params["sessionUuids"]).toEqual([RUN, SUBAGENT]);
   });
 });
 

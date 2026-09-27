@@ -11,9 +11,11 @@
  *
  * A call counts only when `RepeatedCalls` in ./step-grade.ts would count it
  * as a repeat: a shell command or a read-only call, with an output digest.
- * Any other call ends the loop. That covers the spec's "no mutating call or
- * file change between them": a call that writes, or one the classifier said
- * nothing about, may change what the next call returns.
+ * Any other call ends the loop, and so does a file change the harness
+ * announced between two calls. That covers the spec's "no mutating call or
+ * file change between them": a call that writes, one the classifier said
+ * nothing about, or a file changed outside any call may change what the
+ * next call returns.
  *
  * Observe mode records each hit and lets the run continue. Enforced mode
  * pauses the run at the next checkpoint, on governed calls, when the check
@@ -31,6 +33,18 @@ export type NoProgressOutcome = (typeof NO_PROGRESS_OUTCOMES)[number];
 
 /** The smallest count a limit can name: one call and one repeat of it. */
 export const NO_PROGRESS_MIN_REPEATS = 2;
+
+/** What the check reads of one tool call. A rollup `ToolCallFrame` is one. */
+export type NoProgressCall = Pick<
+  ToolCallFrame,
+  "name" | "inputDigest" | "outputDigest" | "isMutating"
+>;
+
+/**
+ * One step of a run in the order it ran: a tool call, or a file change the
+ * harness announced between calls. A file change ends any loop.
+ */
+export type NoProgressFrame = NoProgressCall | { fileChanged: true };
 
 /** A workspace's no-progress limit. */
 export interface NoProgressLimit {
@@ -84,7 +98,7 @@ interface CallIdentity {
 }
 
 /** The call's identity, or null when it cannot be part of a loop. */
-function identityOf(call: ToolCallFrame): CallIdentity | null {
+function identityOf(call: NoProgressCall): CallIdentity | null {
   const { name, inputDigest, outputDigest, isMutating } = call;
   if (!name || !inputDigest || !outputDigest) return null;
   if (repeatKindOf({ tool: name, isMutating }) === null) return null;
@@ -103,12 +117,13 @@ function keyOf(call: CallIdentity): string {
 }
 
 /**
- * Every loop in the run's calls that reached `limit`, in the order each one
+ * Every loop in the run's frames that reached `limit`, in the order each one
  * reached it. A loop reports once, with the count it has reached so far, so
  * a check that reads the run again as it grows finds the same loops again.
+ * `atCall` counts tool calls only, never file changes.
  */
 export function findNoProgressLoops(
-  calls: readonly ToolCallFrame[],
+  frames: readonly NoProgressFrame[],
   limit: number,
 ): NoProgressLoop[] {
   if (!Number.isInteger(limit) || limit < NO_PROGRESS_MIN_REPEATS) return [];
@@ -116,9 +131,15 @@ export function findNoProgressLoops(
   const loopsPerCall = new Map<string, number>();
   const loops: NoProgressLoop[] = [];
   let streak: Streak | null = null;
+  let calls = 0;
 
-  for (const [index, call] of calls.entries()) {
-    const identity = identityOf(call);
+  for (const frame of frames) {
+    if ("fileChanged" in frame) {
+      streak = null;
+      continue;
+    }
+    calls += 1;
+    const identity = identityOf(frame);
     if (identity === null) {
       streak = null;
       continue;
@@ -146,7 +167,7 @@ export function findNoProgressLoops(
       ...identity,
       loop: ordinal,
       repeats: streak.count,
-      atCall: index + 1,
+      atCall: calls,
     };
     loops.push(streak.loop);
   }

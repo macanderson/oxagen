@@ -1,8 +1,9 @@
 /**
  * no-progress-store.ts — the reads and writes around the no-progress limit
  * (./no-progress.ts; spend spec, detector 1; #4490): the workspace's limit
- * from `workspace.no_progress_policy`, the run's tool calls from the store
- * that holds the run, and one `cost.no_progress_hits` row per loop.
+ * from `workspace.no_progress_policy`, the run's tool calls and file changes
+ * from the store that holds the run, and one `cost.no_progress_hits` row per
+ * loop.
  *
  * `cost.run-progress` runs the check while a run is open. It reads the whole
  * run each pass, so every write here is idempotent: a loop keeps the row it
@@ -13,8 +14,8 @@
  * predicates, since the job runs outside a tenant scope.
  */
 import { schema, withSystemDb } from "@oxagen/database";
+import { readTachoProgressFrames } from "@oxagen/telemetry";
 import { and, eq, sql } from "drizzle-orm";
-import type { ToolCallFrame } from "./cost-rollup";
 import {
   loadRunSource,
   readRunToolCalls,
@@ -24,6 +25,7 @@ import {
   findNoProgressLoops,
   noProgressLimitOf,
   noProgressOutcome,
+  type NoProgressFrame,
   type NoProgressLimit,
   type NoProgressLoop,
   type NoProgressMode,
@@ -59,7 +61,7 @@ export interface NoProgressDeps {
   now: () => Date;
   readLimit: (scope: NoProgressScope) => Promise<NoProgressLimit | null>;
   loadRunSource: (runId: string) => Promise<RunSource | null>;
-  readToolCalls: (source: RunSource) => Promise<ToolCallFrame[]>;
+  readFrames: (source: RunSource) => Promise<NoProgressFrame[]>;
   /** The loops the run already has a row for, by {@link loopKeyOf}. */
   readRecorded: (run: NoProgressRun) => Promise<Set<string>>;
   writeHits: (
@@ -201,11 +203,30 @@ export async function writeNoProgressHits(
   );
 }
 
+/**
+ * The run's tool calls and file changes in the order they ran. A wrapped
+ * run's harness announces file changes as frames of their own. A ledger
+ * run's agent changes files only through its own tool calls, so its tool
+ * calls are all the check needs.
+ */
+export function readNoProgressFrames(
+  source: RunSource,
+): Promise<NoProgressFrame[]> {
+  return source.frames.kind === "ledger"
+    ? readRunToolCalls(source)
+    : readTachoProgressFrames({
+        orgId: source.meta.orgId,
+        workspaceId: source.meta.workspaceId,
+        rootSessionUuid: source.frames.rootSessionUuid,
+        sessionUuids: source.frames.sessionUuids,
+      });
+}
+
 const productionDeps: NoProgressDeps = {
   now: () => new Date(),
   readLimit: readNoProgressLimit,
   loadRunSource,
-  readToolCalls: readRunToolCalls,
+  readFrames: readNoProgressFrames,
   readRecorded: readRecordedLoops,
   writeHits: writeNoProgressHits,
   // The pause path lives in @oxagen/handlers (`writeRecipientCommand`, the
@@ -236,7 +257,7 @@ export async function checkNoProgress(
     return UNCHECKED;
 
   const loops = findNoProgressLoops(
-    await deps.readToolCalls(source),
+    await deps.readFrames(source),
     limit.repeats,
   );
   if (loops.length === 0) return { ...UNCHECKED, checked: true };

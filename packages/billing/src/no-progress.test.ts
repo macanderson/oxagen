@@ -62,6 +62,24 @@ describe("findNoProgressLoops", () => {
     ]);
   });
 
+  it("ends a loop at a file change, and counts calls only in atCall", () => {
+    const frames = [
+      ...times(20),
+      { fileChanged: true as const },
+      ...times(20),
+    ];
+    const loops = findNoProgressLoops(frames, 20);
+    expect(loops.map((l) => [l.loop, l.repeats, l.atCall])).toEqual([
+      [1, 20, 20],
+      [2, 20, 40],
+    ]);
+  });
+
+  it("finds no loop when a file changes partway (negative)", () => {
+    const frames = [...times(10), { fileChanged: true as const }, ...times(10)];
+    expect(findNoProgressLoops(frames, 20)).toEqual([]);
+  });
+
   it("numbers loops of different calls separately", () => {
     const calls = [
       ...times(3, { inputDigest: "sha256:a" }),
