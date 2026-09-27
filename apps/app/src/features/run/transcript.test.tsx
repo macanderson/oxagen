@@ -1623,6 +1623,52 @@ describe("reading a live run from its end (#4427)", () => {
     renderSection({ read: readOk(releaseTranscript({ before: "YjoxMA" })) });
     expect(screen.queryByTestId("transcript-older")).toBeNull();
   });
+
+  it("reads the page before when the reader scrolls to the top of the feed", async () => {
+    readTranscriptPage.mockResolvedValueOnce(
+      pageOk(
+        runTranscript({
+          entries: bareEntries(1, 2),
+          cursor: null,
+          complete: true,
+          before: null,
+        }),
+      ),
+    );
+    renderSection({
+      read: readOk(releaseTranscript({ before: "YjoxMA" })),
+      status: "live",
+    });
+    // The feed opens at scrollTop 0, which is within OLDER_PX of the top.
+    fireEvent.scroll(screen.getByTestId("tx-feed"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("transcript-older")).toBeNull();
+    });
+    expect(readTranscriptPage).toHaveBeenCalledTimes(1);
+    expect(readTranscriptPage).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "tse_7k2m9q",
+      "steps",
+      { before: "YjoxMA", text: "full", limit: TRANSCRIPT_PAGE },
+    );
+  });
+
+  it("reads no page before while the reader is scrolled below the top (negative)", () => {
+    renderSection({
+      read: readOk(releaseTranscript({ before: "YjoxMA" })),
+      status: "live",
+    });
+    const feed = screen.getByTestId("tx-feed");
+    Object.defineProperty(feed, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 10_000,
+    });
+    fireEvent.scroll(feed);
+    expect(readTranscriptPage).not.toHaveBeenCalled();
+    expect(screen.getByTestId("transcript-older")).toBeEnabled();
+  });
 });
 
 describe("live access changes", () => {
