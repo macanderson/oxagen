@@ -217,6 +217,9 @@ export const AgentDetail = z.object({
    * The ceilings the active version's config sets, which the host bundle
    * enforces (ADR-198). A ceiling the config does not name is null; `invalid`
    * means the config cannot be read and the host suspends governed actions.
+   * `containmentRequired` is the setting of the agent's current runtime, not
+   * of its version: false on no named runtime, whatever the budget reads
+   * (ADR-204).
    */
   limits: z.object({
     perRun: Money.nullable(),
