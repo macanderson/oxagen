@@ -103,6 +103,17 @@ function isRegistryWarning(warning: string): boolean {
   return warning.startsWith("The tool registry was not updated");
 }
 
+/** The server folders under tools/servers/ in the fixture repo. */
+const FIXTURE_FOLDERS = ["billing", "stripe"];
+
+/** The fixture repo with one more server folder, zeta. */
+function repoWithZeta(): Map<string, string> {
+  const files = fixtureRepo();
+  files.set("tools/servers/zeta/server.toml", 'name = "zeta"\n');
+  files.set("tools/servers/zeta/tools.toml", "");
+  return files;
+}
+
 // ── versionTag ───────────────────────────────────────────────────────────────
 
 describe("versionTag", () => {
@@ -210,8 +221,18 @@ describe("publish", () => {
     const result = published(await publish(deps, IDENTITY, FIRST_COMMIT));
 
     expect(project).toHaveBeenCalledTimes(1);
-    expect(project).toHaveBeenCalledWith(result.bundle);
+    expect(project).toHaveBeenCalledWith(result.bundle, { folders: FIXTURE_FOLDERS });
     expect(result.warnings.filter(isRegistryWarning)).toEqual([]);
+  });
+
+  it("names every server folder to project(), including servers that did not compile", async () => {
+    const project = vi.fn<NonNullable<PublishDeps["project"]>>(async () => undefined);
+    const { deps } = setup({ project });
+
+    const result = published(await publish(deps, IDENTITY, FIRST_COMMIT));
+
+    expect(result.bundle.tools).toBeNull();
+    expect(project.mock.calls[0]?.[1]).toEqual({ folders: FIXTURE_FOLDERS });
   });
 
   it("publishes with a warning when project() is not built", async () => {
@@ -353,7 +374,7 @@ describe("publish", () => {
     await expect(publish(deps, IDENTITY, SECOND_COMMIT)).rejects.toBe(failure);
 
     expect(project.mock.calls.map(([bundle]) => bundle.version)).toEqual([1, 2, 1]);
-    expect(project).toHaveBeenLastCalledWith(first.bundle);
+    expect(project).toHaveBeenLastCalledWith(first.bundle, { folders: FIXTURE_FOLDERS });
     expect(await store.current(REPOSITORY)).toBe(first.bundle);
   });
 
@@ -369,7 +390,7 @@ describe("publish", () => {
     await expect(publish(deps, IDENTITY, SECOND_COMMIT)).rejects.toBe(failure);
 
     expect(project).toHaveBeenCalledTimes(3);
-    expect(project).toHaveBeenLastCalledWith(first.bundle);
+    expect(project).toHaveBeenLastCalledWith(first.bundle, { folders: FIXTURE_FOLDERS });
     expect(store.published.get(REPOSITORY)?.version).toBe(1);
   });
 
@@ -399,6 +420,58 @@ describe("publish", () => {
     expect((error as AggregateError).message).toBe(
       "Version 2 was not published, and MCP Studio's registry could not be put back on version 1. The next publish projects the registry again.",
     );
+    expect(store.published.get(REPOSITORY)?.version).toBe(1);
+  });
+
+  it("projects back with the folders at the published version's commit", async () => {
+    const failure = new Error("The pointer write failed.");
+    const store = memoryVersionStore();
+    const project = vi.fn<NonNullable<PublishDeps["project"]>>(async () => undefined);
+    const tree = vi.fn<PublishDeps["tree"]>(async (_repository, commit) =>
+      treeFromFiles(commit === SECOND_COMMIT ? repoWithZeta() : fixtureRepo()),
+    );
+    const { deps, moveHead } = setup({ project, tree }, store);
+    const first = published(await publish(deps, IDENTITY, FIRST_COMMIT));
+    failNextSetPublished(store, failure);
+    moveHead(SECOND_COMMIT);
+
+    await expect(publish(deps, IDENTITY, SECOND_COMMIT)).rejects.toBe(failure);
+
+    expect(project.mock.calls.map(([, options]) => options)).toEqual([
+      { folders: FIXTURE_FOLDERS },
+      { folders: ["billing", "stripe", "zeta"] },
+      { folders: FIXTURE_FOLDERS },
+    ]);
+    expect(project).toHaveBeenLastCalledWith(first.bundle, { folders: FIXTURE_FOLDERS });
+    expect(tree).toHaveBeenLastCalledWith(REPOSITORY, FIRST_COMMIT);
+  });
+
+  it("throws both failures when the published version's tree cannot be read", async () => {
+    const failure = new Error("The pointer write failed.");
+    const unread = new Error("The host did not list the tree.");
+    const store = memoryVersionStore();
+    const project = vi.fn<NonNullable<PublishDeps["project"]>>(async () => undefined);
+    let listings = 0;
+    const tree: PublishDeps["tree"] = async () => {
+      listings += 1;
+      if (listings === 3) throw unread;
+      return treeFromFiles(fixtureRepo());
+    };
+    const { deps, moveHead } = setup({ project, tree }, store);
+    published(await publish(deps, IDENTITY, FIRST_COMMIT));
+    failNextSetPublished(store, failure);
+    moveHead(SECOND_COMMIT);
+
+    const error = await publish(deps, IDENTITY, SECOND_COMMIT).then(
+      () => {
+        throw new Error("expected the publish to fail");
+      },
+      (thrown: unknown) => thrown,
+    );
+
+    expect(error).toBeInstanceOf(AggregateError);
+    expect((error as AggregateError).errors).toEqual([failure, unread]);
+    expect(project).toHaveBeenCalledTimes(2);
     expect(store.published.get(REPOSITORY)?.version).toBe(1);
   });
 

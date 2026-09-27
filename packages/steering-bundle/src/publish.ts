@@ -14,18 +14,21 @@
 //   5. The bundle, built from the merged tree. Files whose blob the previous
 //      version or the cache already holds are not read again.
 //   6. MCP Studio's project() (lane M13), so the tool registry follows the
-//      merge. Until M13 builds it, publish goes on with a warning.
+//      merge. It gets every folder under tools/servers/, so it can tell a
+//      server that did not compile from one the merge removed. Until M13
+//      builds it, publish goes on with a warning.
 //   7. Store the version, then switch the published version in one write.
 //      When either write fails after project() ran, the registry is projected
-//      back to the published version, so runs never get tools from a version
-//      they were not delivered. The next sync publishes the head again.
+//      back to the published version, with the folders at that version's
+//      commit, so runs never get tools from a version they were not
+//      delivered. The next sync publishes the head again.
 //   8. Tag the merge commit steering/<number>. The version is already live,
 //      so a tag that fails is a warning.
 import { NotBuiltError } from "@oxagen/mcp-studio";
 import type { Bundle } from "@oxagen/oxagen/steering-repo/bundle";
 import type { RepoHealth } from "@oxagen/oxagen/steering-repo/health";
 import { buildBundle, type BundleIdentity } from "./build";
-import type { ToolCompiler } from "./tools";
+import { serverNames, type ToolCompiler } from "./tools";
 import { TreeReader, type BlobCache, type SteeringTree } from "./tree";
 
 /** The published version's number, its merge commit, and its ledger line, switched in one write. */
@@ -59,8 +62,13 @@ export interface PublishDeps {
   tree: (repository: string, commit: string) => Promise<SteeringTree>;
   /** Tags the commit. */
   tag: (repository: string, name: string, commit: string) => Promise<void>;
-  /** MCP Studio's project() (lane M13). Unset until it is built. */
-  project?: (bundle: Bundle) => Promise<void>;
+  /**
+   * MCP Studio's project() (lane M13). Unset until it is built. `folders`
+   * names every folder under tools/servers/ at the bundle's commit, including
+   * servers that did not compile, so project() retires only the servers a
+   * merge removed.
+   */
+  project?: (bundle: Bundle, options?: { folders?: string[] }) => Promise<void>;
   /** Compiles a server folder. MCP Studio's compile() when unset. */
   compiler?: ToolCompiler;
   /** File texts by blob id, shared between publishes. */
@@ -119,12 +127,12 @@ export async function publish(
       compiler: deps.compiler,
     });
 
-    const projected = await projectBundle(deps, bundle, warnings);
+    const projected = await projectBundle(deps, bundle, serverNames(reader.paths), warnings);
     try {
       await deps.store.put(bundle);
       await deps.store.setPublished(repository, { version, commit, ledger: bundle.ledger });
     } catch (error) {
-      if (projected) await restoreProjection(deps, current, version, error);
+      if (projected) await restoreProjection(deps, repository, current, version, error);
       throw error;
     }
 
@@ -157,6 +165,7 @@ export async function publish(
 async function projectBundle(
   deps: PublishDeps,
   bundle: Bundle,
+  folders: string[],
   warnings: string[],
 ): Promise<boolean> {
   if (deps.project === undefined) {
@@ -164,7 +173,7 @@ async function projectBundle(
     return false;
   }
   try {
-    await deps.project(bundle);
+    await deps.project(bundle, { folders });
     return true;
   } catch (error) {
     if (!(error instanceof NotBuiltError)) throw error;
@@ -177,19 +186,24 @@ async function projectBundle(
 
 /**
  * Project the published version back after the store refused the new one.
- * Before the first version there is nothing to put back, and the next sync
- * publishes the head again. When this projection fails too, both failures
+ * The server folders come from the tree at the published version's commit,
+ * because a bundle names only the servers that compiled. Before the first
+ * version there is nothing to put back, and the next sync publishes the head
+ * again. When reading that tree or this projection fails too, both failures
  * are thrown together.
  */
 async function restoreProjection(
   deps: PublishDeps,
+  repository: string,
   previous: Bundle | null,
   version: number,
   failure: unknown,
 ): Promise<void> {
   if (deps.project === undefined || previous === null) return;
   try {
-    await deps.project(previous);
+    const entries = await (await deps.tree(repository, previous.commit)).list();
+    const folders = serverNames(entries.map((entry) => entry.path));
+    await deps.project(previous, { folders });
   } catch (undone) {
     throw new AggregateError(
       [failure, undone],
