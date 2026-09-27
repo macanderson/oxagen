@@ -333,14 +333,26 @@ describe("runtimes.named (ADR-198)", () => {
     ],
     liveHosts: 1,
     lastSeenAt: null,
+    containmentRequired: true,
   };
 
-  it("reads list_runtimes once and maps each runtime with its agents", async () => {
+  it("reads list_runtimes once and maps each runtime with its agents and containment (ADR-204)", async () => {
     kernelRead.mockResolvedValueOnce(readOk({ items: [item] }));
     const read = await runtimes.named(ctx);
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
       contract: runtimeList,
       input: {},
+      page: "runtimes",
+    });
+    expect(read).toEqual(readOk({ runtimes: [item] }));
+  });
+
+  it("passes an id through, so one runtime is read past the list's cap", async () => {
+    kernelRead.mockResolvedValueOnce(readOk({ items: [item] }));
+    const read = await runtimes.named(ctx, "rtm_macslaptop");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runtimeList,
+      input: { id: "rtm_macslaptop" },
       page: "runtimes",
     });
     expect(read).toEqual(readOk({ runtimes: [item] }));

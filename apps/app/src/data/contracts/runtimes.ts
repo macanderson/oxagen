@@ -136,6 +136,11 @@ export const NamedRuntime = z.object({
   /** Host enrollments bound to the runtime that are not revoked. */
   liveHosts: Count,
   lastSeenAt: Instant.nullable(),
+  /**
+   * Whether every agent on the runtime runs only under the contained launcher
+   * (ADR-152). The runtime holds it and the host bundle reads it (ADR-204).
+   */
+  containmentRequired: z.boolean(),
 });
 export type NamedRuntime = z.infer<typeof NamedRuntime>;
 

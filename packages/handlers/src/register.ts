@@ -1363,6 +1363,14 @@ registerHandlersOnce("@oxagen/handlers", () => {
       (await import("./runtime.list"))
         .runtimeListHandler as CapabilityHandlerFn,
   );
+  // ADR-204 (#4372): the runtime owns whether its agents must run under the
+  // contained launcher.
+  registerHandler(
+    "update_runtime",
+    async () =>
+      (await import("./runtime.update"))
+        .runtimeUpdateHandler as CapabilityHandlerFn,
+  );
   registerHandler(
     "list_toolbelts",
     async () =>

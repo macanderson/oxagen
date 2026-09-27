@@ -18,7 +18,9 @@ import {
 import type { DataSource } from "@/data/ports";
 import { readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
-import type { WsCtx } from "@/server/viewer";
+
+// The port names the viewer context; a live adapter may not import the viewer.
+type WsCtx = Parameters<DataSource["conversations"]["latest"]>[0];
 
 /** The newest messages a reopened thread shows: fifty turns. */
 const THREAD_MESSAGES = 100;

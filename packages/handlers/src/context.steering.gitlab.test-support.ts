@@ -10,6 +10,7 @@ import {
   type GitLabCommitAction,
   type GitLabMergeRequest,
 } from "@oxagen/gitlab";
+import type { GitLabRest, GitLabRestResponse } from "./context.steering.gitlab";
 
 interface Commit {
   parent: string | null;
@@ -49,6 +50,29 @@ export class FakeGitLabApi {
   statusesRefused = false;
   /** How many reads of a new merge request report `checking` first. */
   checkingReads = 1;
+  /** Every plain REST call, as `METHOD /route` under the project. */
+  restCalls: string[] = [];
+  /** Every rebase asked for, by merge request iid. */
+  rebases: number[] = [];
+  /** How many polls of each rebase report it still running. */
+  rebasePolls = 1;
+  /** Poll a rebase forever, as when GitLab's rebase worker is stuck. */
+  rebaseStuck = false;
+  /** The result of the last rebase of each merge request. */
+  rebaseState = new Map<number, { polls: number; error: string | null }>();
+  /** The users GitLab reports as approving every merge request. */
+  approvedBy: { id: number; username: string }[] = [
+    { id: 501, username: "reviewer" },
+  ];
+  deployments: {
+    environment: string;
+    sha: string;
+    ref: string;
+    tag: boolean;
+    status: string;
+  }[] = [];
+  /** Answer deployments 403, as for a Developer-role token. */
+  deploymentsRefused = false;
   seq = 0;
   clock = Date.parse("2026-09-23T10:00:00.000Z");
 
@@ -86,6 +110,42 @@ export class FakeGitLabApi {
     for (let s: string | null = sha; s; s = this.commits.get(s)!.parent)
       out.push(s);
     return out;
+  }
+  /** The newest commit both refs hold, or null when they share none. */
+  mergeBase(a: string, b: string): string | null {
+    const seen = new Set(this.lineage(a));
+    return this.lineage(b).find((s) => seen.has(s)) ?? null;
+  }
+  /**
+   * Rebase a merge request's branch onto its target, as GitLab's rebase
+   * worker does: the branch's own changes land in one commit on top of the
+   * target. A path both sides changed differently is a conflict, reported the
+   * way GitLab reports it, as the merge request's `merge_error`.
+   */
+  rebase(iid: number): string | null {
+    const mr = this.mr(iid);
+    const head = this.branches.get(mr.sourceBranch)!;
+    const target = this.branches.get(mr.targetBranch)!;
+    const base = this.mergeBase(head, target);
+    if (base === target) return null;
+    const before = base
+      ? this.commits.get(base)!.files
+      : new Map<string, string>();
+    const mine = this.commits.get(head)!.files;
+    const files = new Map(this.commits.get(target)!.files);
+    for (const path of new Set([...before.keys(), ...mine.keys()])) {
+      const was = before.get(path);
+      const now = mine.get(path);
+      if (now === was) continue;
+      const theirs = files.get(path);
+      if (theirs !== was && theirs !== now)
+        return `Rebase failed: conflict in ${path}`;
+      if (now === undefined) files.delete(path);
+      else files.set(path, now);
+    }
+    this.branches.set(mr.sourceBranch, target);
+    this.addCommit(mr.sourceBranch, files, `rebase ${mr.sourceBranch}`);
+    return null;
   }
   /** A commit anyone with push access makes on a branch. */
   commit(branch: string, path: string, content: string): string {
@@ -129,6 +189,75 @@ export class FakeGitLabApi {
     this.tokens.push(token);
     return clientOver(this);
   }
+
+  rest(token: string): GitLabRest {
+    this.tokens.push(token);
+    return restOver(this);
+  }
+}
+
+/**
+ * The plain REST calls the steering seam makes, answered from one fake
+ * project: merge base, rebase and its poll, approvals and deployments.
+ */
+function restOver(api: FakeGitLabApi): GitLabRest {
+  const answer = <T>(status: number, data: unknown): GitLabRestResponse<T> => ({
+    status,
+    data: data as T,
+  });
+  return {
+    async request<T>(method: string, path: string, body?: unknown) {
+      const url = new URL(path, "https://gitlab.test");
+      const [, root, project, ...rest] = url.pathname.split("/");
+      if (root !== "projects") throw new GitLabApiError(404, "404 Not Found");
+      api.guard(decodeURIComponent(project ?? ""));
+      const route = `${method} /${rest.join("/")}`;
+      api.restCalls.push(route);
+      const mrRoute =
+        /^(GET|PUT) \/merge_requests\/(\d+)(\/rebase|\/approvals)?$/.exec(route);
+      if (route === "GET /repository/merge_base") {
+        const [a, b] = url.searchParams
+          .getAll("refs[]")
+          .map((r) => api.sha(r));
+        const id = a && b ? api.mergeBase(a, b) : null;
+        if (!id) throw new GitLabApiError(400, "Could not find merge base");
+        return answer<T>(200, { id });
+      }
+      if (route === "POST /deployments") {
+        if (api.deploymentsRefused)
+          throw new GitLabApiError(403, "403 Forbidden");
+        api.deployments.push(body as (typeof api.deployments)[number]);
+        return answer<T>(201, { id: api.deployments.length });
+      }
+      if (mrRoute) {
+        const iid = Number(mrRoute[2]);
+        const mr = api.mr(iid);
+        if (mrRoute[1] === "PUT" && mrRoute[3] === "/rebase") {
+          api.rebases.push(iid);
+          api.rebaseState.set(iid, {
+            polls: api.rebasePolls,
+            error: api.rebase(iid),
+          });
+          return answer<T>(202, { rebase_in_progress: true });
+        }
+        if (mrRoute[1] === "GET" && mrRoute[3] === "/approvals")
+          return answer<T>(200, {
+            approved_by: api.approvedBy.map((user) => ({ user })),
+          });
+        if (mrRoute[1] === "GET" && mrRoute[3] === undefined) {
+          const state = api.rebaseState.get(iid) ?? { polls: 0, error: null };
+          const running = api.rebaseStuck || state.polls > 0;
+          if (state.polls > 0) state.polls -= 1;
+          return answer<T>(200, {
+            rebase_in_progress: running,
+            merge_error: running ? null : state.error,
+            sha: api.branches.get(mr.sourceBranch) ?? null,
+          });
+        }
+      }
+      throw new GitLabApiError(404, `404 No fake route for ${route}`);
+    },
+  };
 }
 
 /** The GitLab client surface, answered from one fake project. */

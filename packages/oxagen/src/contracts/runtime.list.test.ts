@@ -17,6 +17,7 @@ const item = {
   ],
   liveHosts: 1,
   lastSeenAt: null,
+  containmentRequired: true,
 };
 
 describe("list_runtimes contract", () => {
@@ -32,8 +33,13 @@ describe("list_runtimes contract", () => {
     });
   });
 
-  it("takes no input", () => {
+  it("takes an optional runtime id and nothing else", () => {
     expect(runtimeList.input.parse({})).toEqual({});
+    expect(runtimeList.input.parse({ id: "rtm_abc" })).toEqual({
+      id: "rtm_abc",
+    });
+    expect(runtimeList.input.safeParse({ id: "bad" }).success).toBe(false);
+    expect(runtimeList.input.safeParse({ id: "agt_abc" }).success).toBe(false);
     expect(runtimeList.input.safeParse({ limit: 5 }).success).toBe(false);
   });
 
@@ -44,6 +50,16 @@ describe("list_runtimes contract", () => {
         ...item,
         agents: [{ ...item.agents[0], harness: "langchain" }],
       }).success,
+    ).toBe(false);
+  });
+
+  it("says whether each runtime requires the contained launcher (ADR-204)", () => {
+    const withoutContainment: Partial<typeof item> = { ...item };
+    delete withoutContainment.containmentRequired;
+    expect(runtimeListItem.safeParse(withoutContainment).success).toBe(false);
+    expect(
+      runtimeListItem.parse({ ...item, containmentRequired: false })
+        .containmentRequired,
     ).toBe(false);
   });
 });

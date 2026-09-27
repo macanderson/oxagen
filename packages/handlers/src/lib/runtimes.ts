@@ -21,6 +21,8 @@ export interface RuntimeRow {
   publicId: string;
   name: string;
   slug: string;
+  /** Every agent on the runtime runs only under the contained launcher (ADR-204). */
+  containmentRequired: boolean;
 }
 
 const runtimeColumns = {
@@ -28,6 +30,7 @@ const runtimeColumns = {
   publicId: schema.runtimes.publicId,
   name: schema.runtimes.name,
   slug: schema.runtimes.slug,
+  containmentRequired: schema.runtimes.containmentRequired,
 } as const;
 
 /** The runtime as a contract reference. */
@@ -39,13 +42,18 @@ export function runtimeRefOf(row: RuntimeRow): {
   return { id: row.publicId, name: row.name, slug: row.slug };
 }
 
-/** A live runtime by public id in the caller's workspace, or `not_found`. */
+/**
+ * A live runtime by public id in the caller's workspace, or `not_found`.
+ * `forUpdate` locks the row until the transaction ends, for a caller that
+ * reads a value and then writes it.
+ */
 export async function requireRuntime(
   tx: Tx,
   scope: Scope,
   publicId: string,
+  options: { forUpdate?: boolean } = {},
 ): Promise<RuntimeRow> {
-  const [row] = await tx
+  const query = tx
     .select(runtimeColumns)
     .from(schema.runtimes)
     .where(
@@ -57,6 +65,7 @@ export async function requireRuntime(
       ),
     )
     .limit(1);
+  const [row] = options.forUpdate ? await query.for("update") : await query;
   if (!row) {
     throw new HandlerError({
       code: "not_found",
@@ -97,11 +106,19 @@ export function runtimeSlugTakenError(slug: string): HandlerError {
   });
 }
 
-/** Insert one runtime. The caller has checked the slug is free. */
+/**
+ * Insert one runtime. The caller has checked the slug is free. A runtime
+ * requires no containment unless the caller says so (ADR-204).
+ */
 export async function insertRuntime(
   tx: Tx,
   scope: Scope,
-  args: { name: string; slug: string; userId: string | null },
+  args: {
+    name: string;
+    slug: string;
+    userId: string | null;
+    containmentRequired?: boolean;
+  },
 ): Promise<RuntimeRow> {
   const [row] = await tx
     .insert(schema.runtimes)
@@ -110,6 +127,7 @@ export async function insertRuntime(
       workspaceId: scope.workspaceId,
       name: args.name,
       slug: args.slug,
+      containmentRequired: args.containmentRequired ?? false,
       createdById: args.userId,
       updatedById: args.userId,
     })
@@ -119,12 +137,48 @@ export async function insertRuntime(
 }
 
 /**
- * The live runtime a host enrollment with no agent binds (the operator path
- * of `tacho enroll`): the runtime named after the host, created when none is.
+ * The live runtime a host enrollment binds when it has no runtime of its own
+ * to take: an operator enrollment (the operator path of `tacho enroll`), or an
+ * agent on no runtime. It is the runtime named after the host, created when
+ * none is.
  * The slug is `slugFromName(hostname)` with a trailing `.local` dropped, and a
  * numeric suffix when another runtime already holds it.
+ *
+ * `containmentRequired: true` makes the runtime require containment, whether
+ * it is created here or already existed. A function decides once the runtime
+ * is known, and is called only when that runtime does not already require
+ * containment. It never turns containment off.
  */
 export async function findOrCreateHostRuntime(
+  tx: Tx,
+  scope: Scope,
+  hostname: string,
+  userId: string | null,
+  opts: {
+    containmentRequired?: boolean | ((runtime: RuntimeRow) => Promise<boolean>);
+  } = {},
+): Promise<RuntimeRow> {
+  const runtime = await findOrInsertHostRuntime(tx, scope, hostname, userId);
+  if (runtime.containmentRequired || opts.containmentRequired === undefined) {
+    return runtime;
+  }
+  const required =
+    typeof opts.containmentRequired === "function"
+      ? await opts.containmentRequired(runtime)
+      : opts.containmentRequired;
+  if (!required) return runtime;
+  await tx
+    .update(schema.runtimes)
+    .set({
+      containmentRequired: true,
+      updatedAt: new Date(),
+      updatedById: userId,
+    })
+    .where(eq(schema.runtimes.id, runtime.id));
+  return { ...runtime, containmentRequired: true };
+}
+
+async function findOrInsertHostRuntime(
   tx: Tx,
   scope: Scope,
   hostname: string,
@@ -231,8 +285,9 @@ export type AgentVersionChange =
  * Write the agent's next version and move its current binding in the same
  * transaction (ADR-198). The agent row is locked first so two writes number
  * their versions in order. The new version carries the prior active
- * version's `config` forward, which holds the per-agent budget and
- * containment the host bundle reads. Returns the version number written.
+ * version's `config` forward, which holds the per-agent budget the host
+ * bundle reads. Containment is the runtime's, not the version's (ADR-204).
+ * Returns the version number written.
  */
 export async function writeAgentVersion(
   tx: Tx,

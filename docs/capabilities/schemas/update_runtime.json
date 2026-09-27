@@ -1,0 +1,79 @@
+{
+  "name": "update_runtime",
+  "domain": "runtime",
+  "description": "Rename a runtime or change whether every agent on it must run under the contained launcher. A field left out keeps its value. Hosts bound to the runtime carry the change on their next bundle fetch.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "high",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "identity"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runtimeId": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "containmentRequired": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "runtimeId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runtime": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug"
+        ],
+        "additionalProperties": false
+      },
+      "containmentRequired": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "runtime",
+      "containmentRequired"
+    ],
+    "additionalProperties": false
+  }
+}

@@ -10,6 +10,7 @@ import { request } from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+  type CedarCallInput,
   evaluatePreToolUse,
   type Evaluation,
   type MatchContext,
@@ -58,6 +59,8 @@ import {
   translateCursorPayload,
 } from "./cursor-adapter";
 import { codexHarnessPid } from "./harness-process";
+import type { BuiltinAction } from "../policy/builtins";
+import { type CedarRuntime, loadCedarRuntime } from "../policy/runtime";
 import { hookInputSchema } from "./hooks";
 import {
   type PsLookup,
@@ -261,6 +264,8 @@ export interface HookRunDeps {
   enrollment?: string;
   /** Which harness ran this hook (`--harness`); the daemon labels the session. */
   harness?: TachoHarness;
+  /** Loads Cedar's evaluator for the offline path. Tests replace it. */
+  cedar?: () => Promise<CedarRuntime | null>;
   /**
    * A custom agent's name (`--agent`). Its payload is Claude Code's shape;
    * the session is labelled `runtime: "custom"`. Wins over `harness`.
@@ -539,6 +544,7 @@ function evaluateToolPermission(
   toolInput: Record<string, unknown> | undefined,
   cwd: string | undefined,
   harnessReadOnly?: boolean,
+  cedar?: CedarCallInput,
 ): { response: Record<string, unknown>; evaluation: Evaluation; note: string } {
   const evaluation = evaluatePreToolUse({
     bundle: host.bundle,
@@ -550,6 +556,7 @@ function evaluateToolPermission(
     // No daemon means no re-evaluation: a stale bundle fails closed.
     controlReachable: false,
     ...(harnessReadOnly === true ? { harnessReadOnly } : {}),
+    ...(cedar !== undefined ? { cedar } : {}),
     now,
     context: { ...local.match, ...(cwd !== undefined ? { cwd } : {}) },
   });
@@ -601,17 +608,52 @@ function evaluateToolPermission(
   };
 }
 
+/**
+ * What the offline path needs to decide a call with the bundle's Cedar
+ * policies: the evaluator, or null when it would not load, and who runs
+ * the hook. A custom agent is picked by its name, and any other session by
+ * its harness.
+ */
+export interface LocalCedar {
+  runtime: CedarRuntime | null;
+  harness: TachoHarness;
+  agent?: string;
+}
+
 /** Decide from the cached bundle alone; the daemon replays the event later. */
 export function decideLocally(
   host: HostFile,
   input: ReturnType<typeof hookInputSchema.parse>,
   now: number,
   match: MatchContext = localMatchContext(),
+  cedar?: LocalCedar,
 ): {
   response: Record<string, unknown>;
   evaluation?: Evaluation;
   note: string;
 } {
+  // A bundle with Cedar policies is decided with them. A caller that loaded
+  // no evaluator gets a null runtime, so a mutating tool is refused rather
+  // than decided without the policies.
+  const cedarFor = (action?: BuiltinAction): CedarCallInput | undefined =>
+    host.bundle.cedar === undefined
+      ? undefined
+      : {
+          runtime: cedar?.runtime ?? null,
+          harness:
+            cedar?.agent !== undefined
+              ? "custom"
+              : (cedar?.harness ?? "claude-code"),
+          ...(cedar?.agent !== undefined ? { agent: cedar.agent } : {}),
+          ...(input.agent_type !== undefined
+            ? { skill: input.agent_type }
+            : {}),
+          ...(action !== undefined ? { action } : {}),
+          // Cursor's adapter renames `Shell` to `Bash` and keeps Cursor's own name here.
+          ...(typeof input["cursor_tool_name"] === "string"
+            ? { harness_tool: input["cursor_tool_name"] }
+            : {}),
+        };
   const bundleVerified = verifyBundle(
     host.bundle,
     host.bundle_public_key_pem,
@@ -677,6 +719,7 @@ export function decideLocally(
         input.tool_input,
         input.cwd,
         harnessReadOnly,
+        cedarFor(),
       );
     }
     case "PreToolUse":
@@ -689,6 +732,7 @@ export function decideLocally(
         input.tool_input,
         input.cwd,
         harnessReadOnly,
+        cedarFor(),
       );
     case "SubagentStart": {
       // Cursor treats subagentStart as a permission event. An empty answer
@@ -726,6 +770,8 @@ export function decideLocally(
         "Task",
         toolInput,
         input.cwd,
+        undefined,
+        cedarFor("builtin__start_subagent"),
       );
     }
     default:
@@ -1228,7 +1274,16 @@ export async function runTachoHook(deps: HookRunDeps): Promise<HookRunResult> {
       `daemon answered ${result.status}: ${result.body.slice(0, 200)}`,
     );
   } catch (error) {
-    const local = decideLocally(host, input, now());
+    // Cedar's evaluator loads only when the bundle carries policies for it.
+    const cedar: LocalCedar | undefined =
+      host.bundle.cedar !== undefined
+        ? {
+            runtime: await (deps.cedar ?? loadCedarRuntime)(),
+            harness,
+            ...(agent !== undefined ? { agent } : {}),
+          }
+        : undefined;
+    const local = decideLocally(host, input, now(), undefined, cedar);
     // The spool write is best-effort, not a precondition for answering.
     // Losing it used to lose the local decision too — the throw escaped
     // before `stdout`/`stderr` were ever built, so a deny this process just

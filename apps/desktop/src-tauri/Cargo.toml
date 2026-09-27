@@ -1,6 +1,6 @@
 [package]
 name = "oxagen-desktop"
-version = "2.1.1"
+version = "2.1.2"
 description = "The Oxagen desktop app: CLI + Tacho wrapper installer and host management"
 authors = ["Oxagen"]
 edition = "2021"

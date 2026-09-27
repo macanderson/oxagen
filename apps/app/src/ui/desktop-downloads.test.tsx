@@ -84,6 +84,14 @@ describe("DesktopDownloads", () => {
     expect(note.textContent).not.toMatch(/(right|control|ctrl)[- ]click/i);
   });
 
+  it("says the macOS app installs updates on its own and how to turn that off", () => {
+    renderDownloads();
+    const note = screen.getByTestId("desktop-downloads-macos-updates");
+    expect(note).toHaveTextContent(
+      "On macOS, the app installs new versions on its own and runs them after your next restart. To turn this off, clear Install updates automatically in the app's Updates panel. Windows and Linux ask first.",
+    );
+  });
+
   it("groups the installers under macOS, Windows and Linux, in that order", () => {
     renderDownloads();
     const terms = screen.getAllByRole("term").map((term) => term.textContent);

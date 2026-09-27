@@ -68,6 +68,14 @@ export function DesktopDownloads() {
       >
         {t("macosFirstLaunch")}
       </p>
+      {/* ADR-202: every surface that hands out an installer says that the
+          macOS app updates itself. */}
+      <p
+        className="max-w-prose text-xs text-muted-foreground"
+        data-testid="desktop-downloads-macos-updates"
+      >
+        {t("macosUpdates")}
+      </p>
       <p className="text-xs">
         <DesktopDownloadsPageLink
           to={DESKTOP_DOWNLOADS_PAGE}

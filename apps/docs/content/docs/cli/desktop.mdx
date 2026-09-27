@@ -57,6 +57,24 @@ Open a new terminal after the first launch. On macOS and Linux, this prints both
 command -v oxagen tacho
 ```
 
+## Updates
+
+On macOS, the Oxagen app installs new versions automatically. It checks for one when it opens, every hour, and when you return to the window after 15 minutes or more. It downloads the new version, checks its signature, and replaces the app in the background. Your next restart runs it, and the window shows **Restart** until then.
+
+The app installs automatically only when your account can replace it without a password. When it cannot, for example when a standard account runs it from `/Applications`, it asks first and offers **Install and relaunch** or **Later**. The Updates panel says why.
+
+Windows and Linux always ask first.
+
+Every update is signed, and the app installs nothing whose signature fails. Updates come only from published releases.
+
+To turn automatic installs off, clear **Install updates automatically** in the Updates panel. The checkbox writes `autoUpdate` to `~/.config/oxagen/desktop.json`, so an administrator can set it for you with a management tool:
+
+```json
+{ "autoUpdate": false }
+```
+
+With it off, the app still tells you when a new version is out and waits for your click.
+
 ## Next step
 
 [Set up your Oxagen account](/docs/cli/account-setup) and enroll this machine.

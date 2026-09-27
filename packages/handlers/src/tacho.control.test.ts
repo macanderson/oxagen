@@ -263,6 +263,7 @@ function wire(db: Fake, apiKey: Record<string, unknown> = HOST_KEY): void {
           // empty.
           agents: { findFirst: async () => undefined },
           agentVersions: { findFirst: async () => undefined },
+          runtimes: { findFirst: async () => undefined },
           workspaces: { findFirst: async () => undefined },
         },
         // The steering read: the ledger count over `context_promotions`

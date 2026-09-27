@@ -4,7 +4,9 @@
 // catalogue does not list or could not be read, a role that expires, the
 // revoke control for an Owner and Admin and nobody on a retired identity, the
 // agent's own ceilings that no read returns yet (ADR-198), the highest priced
-// run, and an agent that holds a mandate. Axe runs after every test (INV-26).
+// run, an agent that holds a mandate, and containment shown read-only as the
+// runtime's setting with the budgets' field-later line (ADR-204). Axe runs
+// after every test (INV-26).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -289,5 +291,81 @@ describe("Permissions › budgets", () => {
     expect(
       screen.queryByRole("region", { name: "Ceilings above this agent" }),
     ).toBeNull();
+  });
+});
+
+describe("Permissions › containment (ADR-204)", () => {
+  const LIMITS: AgentDetail["limits"] = {
+    perRun: null,
+    perDay: null,
+    containmentRequired: true,
+    invalid: false,
+  };
+
+  it("shows the runtime's containment read-only and links to the runtime's page", () => {
+    renderPermissions({ detail: agentDetail({ limits: LIMITS }) });
+    const containment = region("Containment");
+    expect(containment).toBe(screen.getByTestId("agent-containment"));
+    expect(containment).toHaveTextContent(
+      "The agent’s runtime decides whether it runs only under the contained launcher.",
+    );
+    expect(within(containment).getByRole("term")).toHaveTextContent(
+      "Contained launcher",
+    );
+    const value = screen.getByTestId("agent-containment-value");
+    expect(value).toHaveTextContent(/^Required/);
+    expect(value).toHaveTextContent("set on the runtime Build box");
+    expect(
+      within(containment).getByRole("link", { name: "Build box" }),
+    ).toHaveAttribute("href", "/acme/core-platform/runtimes/rtm_buildbox");
+    expect(containment).toHaveTextContent(
+      "An organization Owner or Admin changes it on the runtime’s page. The change applies to every agent on that runtime and reaches each host on its next bundle fetch.",
+    );
+  });
+
+  it("offers an Owner no control over containment on the agent (negative)", () => {
+    renderPermissions({ orgRole: "owner" });
+    const containment = region("Containment");
+    expect(screen.getByTestId("agent-containment-value")).toHaveTextContent(
+      /^Not required/,
+    );
+    expect(within(containment).queryByRole("switch")).toBeNull();
+    expect(within(containment).queryByRole("checkbox")).toBeNull();
+    expect(within(containment).queryByRole("button")).toBeNull();
+    // The one way to change it is the runtime's own page.
+    expect(within(containment).getByRole("link")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runtimes/rtm_buildbox",
+    );
+  });
+
+  it("says nothing requires containment for an agent on no named runtime (negative)", () => {
+    renderPermissions({ detail: agentDetail({ runtime: null }) });
+    const containment = region("Containment");
+    expect(screen.getByTestId("agent-containment-value")).toHaveTextContent(
+      "Not requiredThis agent runs on no named runtime, so nothing requires it.",
+    );
+    expect(within(containment).queryByRole("link")).toBeNull();
+  });
+
+  it("keeps the agent's own budgets read-only and says a field comes later", () => {
+    renderPermissions({
+      orgRole: "owner",
+      detail: agentDetail({
+        limits: {
+          ...LIMITS,
+          perRun: { micros: "2500000", currency: "USD" },
+          perDay: { micros: "40000000", currency: "USD" },
+        },
+      }),
+    });
+    const budgets = region("Budgets");
+    expect(
+      within(budgets).getByTestId("agent-budget-field-later"),
+    ).toHaveTextContent(
+      "These budgets are read-only for now. A field to set an agent’s own budget comes later.",
+    );
+    expect(within(budgets).queryByRole("textbox")).toBeNull();
+    expect(within(budgets).queryByRole("spinbutton")).toBeNull();
   });
 });
