@@ -50,7 +50,6 @@ import { logger } from "./logger";
 import {
   workspaceRepositoriesLock,
   writeRepositoryHead,
-  type RepositoryHeadRole,
 } from "./repository.binding-write";
 
 // ── Names ────────────────────────────────────────────────────────────────────
@@ -1082,31 +1081,9 @@ export function steeringRepoProvisionDeps(options: {
       return runInTenantScope(tenant, () =>
         withTenantDb(async (tx) => {
           // The lock every writer of the workspace's heads takes, so a
-          // concurrent bind_main_repository cannot write a main head between
-          // the demotion below and the steering head's insert.
+          // concurrent writer cannot add a steering head between the check
+          // below and this step's insert.
           await tx.execute(workspaceRepositoriesLock(scope.workspaceId));
-          // A workspace holds one steering source, main or steering. No
-          // index holds that per workspace: every writer checks it under the
-          // lock above. A main head that bind_main_repository wrote before
-          // this step ran becomes a linked repository, the rank S8's
-          // migration gives it, so the workspace keeps one steering source.
-          // Transitional: once no head can be main, this matches nothing.
-          const demoted = await tx
-            .update(schema.repositoryBindingHeads)
-            .set({ role: "linked", updatedAt: now })
-            .where(
-              and(
-                eq(schema.repositoryBindingHeads.orgId, scope.orgId),
-                eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-                eq(schema.repositoryBindingHeads.role, "main"),
-              ),
-            )
-            .returning({ id: schema.repositoryBindingHeads.id });
-          if (demoted.length > 0)
-            logger.info(
-              { ...tenant, demoted: demoted.length },
-              "steering_repo.provision: the workspace's main repository is now a linked repository",
-            );
           // A steering head for another repository means an earlier run bound
           // a different steering repo. A second one would leave the readers
           // to pick between them, so the job stops for a person to decide.
@@ -1214,9 +1191,7 @@ export function steeringRepoProvisionDeps(options: {
               fullName: repository.full_name,
               defaultBranch: default_branch,
             },
-            // S0's migration allows 'steering'. The shared type still names
-            // only main and linked until the Drizzle schema catches up (S8).
-            role: "steering" as unknown as RepositoryHeadRole,
+            role: "steering",
             provider,
             userId: options.actorUserId,
             now,

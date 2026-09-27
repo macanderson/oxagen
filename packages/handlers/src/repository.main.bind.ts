@@ -25,9 +25,9 @@
 //      workspace so two binds IN THIS WORKSPACE read the heads one after the
 //      other: the workspace's heads, of EITHER role, decide idempotent /
 //      promote (a head this workspace already holds as linked for this
-//      repository becomes main in place) / repair (the same repository through
+//      repository becomes the steering head in place) / repair (the same repository through
 //      a replacement connection, which supersedes the binding onto it) /
-//      conflict; else the binding and its `role = 'main'` head through
+//      conflict; else the binding and its `role = 'steering'` head through
 //      `writeRepositoryHead`, which reuses a version retained from an unlinked
 //      head instead of colliding with it; then the connection marked
 //      connected, and the gate's provisional window closed when this workspace
@@ -662,7 +662,7 @@ export function createMainRepositoryBindHandler(
             // repository became the one that steers the workspace.
             await tx
               .update(schema.repositoryBindingHeads)
-              .set({ role: "main", updatedAt: now })
+              .set({ role: "steering", updatedAt: now })
               .where(eq(schema.repositoryBindingHeads.id, same.id));
             bindingPublicId = existing.publicId;
             boundAt = now;
@@ -734,9 +734,9 @@ export function createMainRepositoryBindHandler(
                 currentBindingId: successor.id,
                 // Carried with the rest: a linked head being promoted in the
                 // same statement that moves its binding forward. A head that
-                // already steers keeps its role, so a re-bind of a steering
-                // head never turns it back into a main one.
-                role: promote ? "main" : same.role,
+                // already steers is written `steering` too, which it already
+                // was.
+                role: "steering",
                 updatedAt: now,
               })
               .where(eq(schema.repositoryBindingHeads.id, same.id));
@@ -754,14 +754,14 @@ export function createMainRepositoryBindHandler(
           // operator as a 500 rather than as anything they can act on.
           // `writeRepositoryHead` reuses that retained version, or supersedes
           // it when something it records has moved, and writes the
-          // `role = 'main'` head. The role is written out there rather than
-          // left to the column default, because which role a head carries is
-          // the whole question the store's exclusivity rule answers.
+          // `role = 'steering'` head. The column has no default: which role a
+          // head carries is the whole question the store's exclusivity rule
+          // answers.
           const written = await writeRepositoryHead(tx, {
             scope,
             connectionId: connection.id,
             repo,
-            role: "main",
+            role: "steering",
             provider,
             userId,
             now,

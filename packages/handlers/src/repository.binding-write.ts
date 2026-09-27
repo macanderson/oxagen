@@ -31,10 +31,11 @@ export function workspaceRepositoriesLock(workspaceId: string) {
 
 /**
  * A head's role (`repository_binding_heads_role_check`). `steering` is the
- * steering repo lane S1 provisions with the workspace; `main` is the v1 name
- * for the same place, which lane S8 retires; `linked` is a code repository.
+ * workspace's steering record source, of which it has one; `linked` is a code
+ * repository, of which it may have many. 20260927185600 moved every former
+ * `main` head to `steering` (ADR-212).
  */
-export type RepositoryHeadRole = "main" | "linked" | "steering";
+export type RepositoryHeadRole = "linked" | "steering";
 
 /** The hosts a binding can name (`repository_bindings_provider_check`). */
 export type RepositoryProvider = "github" | "gitlab";
