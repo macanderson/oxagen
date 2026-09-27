@@ -17,6 +17,8 @@
  * leave the block empty.
  */
 
+import Link from "next/link";
+
 const DOWNLOADS = "https://downloads.oxagen.sh";
 
 interface Installer {
@@ -80,9 +82,9 @@ export function AutoUpdateNotice() {
     <p className="text-sm text-fd-muted-foreground">
       On macOS, the app installs new versions on its own and runs them after
       your next restart. Windows and Linux ask first.{" "}
-      <a className={link} href="/docs/cli/desktop#updates">
+      <Link className={link} href="/docs/cli/desktop#updates">
         How updates work and how to turn them off
-      </a>
+      </Link>
       .
     </p>
   );
