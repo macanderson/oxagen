@@ -17,6 +17,7 @@ import {
   replayPlanDigest,
   startReplay,
   type ReplayApproval,
+  type ReplayOwnership,
   type ReplayPlan,
   type ReplayRun,
 } from "./model-class-replay";
@@ -28,6 +29,7 @@ const START = new Date("2026-08-16T00:00:00.000Z");
 const NOW = new Date("2026-09-15T00:00:00.000Z");
 const AGENT = "acme.core.triage";
 const OWNER = "prn_0123456789abcdefghjkmn";
+const OTHER = "prn_zzzzzzzzzzzzzzzzzzzzzz";
 const OPUS = "claude-opus-5-5";
 
 function price(
@@ -95,7 +97,10 @@ const opus = (millions = 1) =>
 
 let seq = 0;
 
-function run(models: ModelBreakdown[] = [opus()]): RunTotalsRecord {
+function run(
+  models: ModelBreakdown[] = [opus()],
+  operatorKey: string | null = OWNER,
+): RunTotalsRecord {
   seq += 1;
   const startedAt = new Date(START.getTime() + seq * 60_000);
   return {
@@ -104,7 +109,7 @@ function run(models: ModelBreakdown[] = [opus()]): RunTotalsRecord {
     orgId: ORG,
     workspaceId: WS,
     operatorPrincipalId: null,
-    operatorKey: OWNER,
+    operatorKey,
     agentPrincipalId: null,
     agentKey: AGENT,
     taskRef: null,
@@ -151,7 +156,10 @@ function finding(runs: RunTotalsRecord[]) {
   };
 }
 
-function plan(runs: RunTotalsRecord[], over: { sampleMax?: number } = {}) {
+function plan(
+  runs: RunTotalsRecord[],
+  over: { sampleMax?: number; operatorKey?: string } = {},
+) {
   return planReplay({
     finding: finding(runs),
     runs: new Map(runs.map((r) => [r.runId, r])),
@@ -167,12 +175,14 @@ function approve(p: ReplayPlan, over: Partial<ReplayApproval> = {}) {
     shownMicros: p.estimatedMicros,
     shownCurrency: p.currency,
     approvedBy: OWNER,
-    approvedAt: new Date(NOW.getTime() + 60_000),
+    approvedAtMs: NOW.getTime() + 60_000,
     ...over,
   };
 }
 
-const OWNERS = new Set([OWNER]);
+/** Each operator owns their own runs. */
+const owns: ReplayOwnership = (approver, operatorKey) =>
+  approver === operatorKey;
 
 describe("planReplay", () => {
   it("prices each run on the smaller class and sums the estimate", () => {
@@ -184,17 +194,19 @@ describe("planReplay", () => {
       subject: AGENT,
       currency: "USD",
       estimatedMicros: 6_000_000n,
-      plannedAt: NOW,
+      plannedAtMs: NOW.getTime(),
     });
     expect(p.runs).toEqual([
       {
         runId: a.runId,
+        operatorKey: OWNER,
         models: [{ from: OPUS, to: "claude-sonnet-5" }],
         measuredMicros: 4_000_000n,
         estimatedMicros: 2_000_000n,
       },
       {
         runId: b.runId,
+        operatorKey: OWNER,
         models: [{ from: OPUS, to: "claude-sonnet-5" }],
         measuredMicros: 8_000_000n,
         estimatedMicros: 4_000_000n,
@@ -243,8 +255,21 @@ describe("planReplay", () => {
       expect(() => plan(runs, { sampleMax })).toThrow(RangeError);
   });
 
-  it("leaves out a run it cannot price, has no record of, or cannot move", () => {
+  it("plans one operator's runs when asked", () => {
+    const mine = run([opus(1)]);
+    const theirs = run([opus(2)], OTHER);
+    expect(plan([mine, theirs])!.runs.map((r) => r.runId)).toEqual([
+      mine.runId,
+      theirs.runId,
+    ]);
+    const p = plan([mine, theirs], { operatorKey: OTHER })!;
+    expect(p.runs.map((r) => r.runId)).toEqual([theirs.runId]);
+    expect(p.estimatedMicros).toBe(4_000_000n);
+  });
+
+  it("leaves out a run it cannot price, has no record of, cannot move, or no operator owns", () => {
     const priced = run();
+    const unowned = run([opus()], null);
     const cached = run([
       model(
         OPUS,
@@ -261,8 +286,8 @@ describe("planReplay", () => {
     ]);
     const missing = run();
     const p = planReplay({
-      finding: finding([priced, cached, haiku, missing]),
-      runs: new Map([priced, cached, haiku].map((r) => [r.runId, r])),
+      finding: finding([priced, cached, haiku, missing, unowned]),
+      runs: new Map([priced, cached, haiku, unowned].map((r) => [r.runId, r])),
       now: NOW,
       book: BOOK,
     })!;
@@ -301,13 +326,13 @@ describe("startReplay", () => {
 
   it("starts on an owner's approval that showed the estimated cost", () => {
     const approval = approve(p);
-    const result = startReplay(p, approval, OWNERS);
+    const result = startReplay(p, approval, owns);
     expect(result).toEqual({ ok: true, start: { plan: p, approval } });
   });
 
   it("hands the dispatcher frozen copies the caller cannot change", () => {
     const mine = plan([run(), run()])!;
-    const result = startReplay(mine, approve(mine), OWNERS);
+    const result = startReplay(mine, approve(mine), owns);
     if (!result.ok) throw new Error(result.refusal);
     const { start } = result;
     const runs = mine.runs as ReplayRun[];
@@ -329,7 +354,7 @@ describe("startReplay", () => {
   });
 
   it("refuses without an approval", () => {
-    expect(startReplay(p, null, OWNERS)).toEqual({
+    expect(startReplay(p, null, owns)).toEqual({
       ok: false,
       refusal: "no_approval",
     });
@@ -337,7 +362,7 @@ describe("startReplay", () => {
 
   it("refuses a plan changed after it was digested", () => {
     const changed = { ...p, runs: p.runs.slice(1) };
-    expect(startReplay(changed, approve(p), OWNERS)).toEqual({
+    expect(startReplay(changed, approve(p), owns)).toEqual({
       ok: false,
       refusal: "plan_changed",
     });
@@ -345,7 +370,7 @@ describe("startReplay", () => {
 
   it("refuses an approval of another plan", () => {
     const other = plan([run()])!;
-    expect(startReplay(p, approve(other), OWNERS)).toEqual({
+    expect(startReplay(p, approve(other), owns)).toEqual({
       ok: false,
       refusal: "other_plan",
     });
@@ -355,29 +380,56 @@ describe("startReplay", () => {
     const under = approve(p, { shownMicros: p.estimatedMicros - 1n });
     const euros = approve(p, { shownCurrency: "EUR" });
     for (const approval of [under, euros])
-      expect(startReplay(p, approval, OWNERS)).toEqual({
+      expect(startReplay(p, approval, owns)).toEqual({
         ok: false,
         refusal: "cost_not_shown",
       });
   });
 
   it("refuses an approver who does not own the runs", () => {
-    const approval = approve(p, { approvedBy: "prn_zzzzzzzzzzzzzzzzzzzzzz" });
-    expect(startReplay(p, approval, OWNERS)).toEqual({
+    expect(startReplay(p, approve(p, { approvedBy: OTHER }), owns)).toEqual({
       ok: false,
       refusal: "not_an_owner",
     });
-    expect(startReplay(p, approve(p), new Set())).toEqual({
+    expect(startReplay(p, approve(p), () => false)).toEqual({
       ok: false,
       refusal: "not_an_owner",
     });
   });
 
-  it("refuses an approval older than the plan", () => {
-    const approval = approve(p, { approvedAt: new Date(NOW.getTime() - 1) });
-    expect(startReplay(p, approval, OWNERS)).toEqual({
+  it("refuses an approver who owns only some of the sampled runs", () => {
+    const mixed = plan([run([opus(1)]), run([opus(2)], OTHER)])!;
+    expect(startReplay(mixed, approve(mixed), owns)).toEqual({
       ok: false,
-      refusal: "approved_before_plan",
+      refusal: "not_an_owner",
     });
+    // A team that owns both operators' runs may approve the whole plan.
+    const team: ReplayOwnership = (approver) => approver === OWNER;
+    expect(startReplay(mixed, approve(mixed), team).ok).toBe(true);
+  });
+
+  it("refuses a plan with no runs", () => {
+    const bare = {
+      kind: p.kind,
+      fingerprint: p.fingerprint,
+      subject: p.subject,
+      currency: p.currency,
+      runs: [],
+      estimatedMicros: 0n,
+      plannedAtMs: p.plannedAtMs,
+    };
+    const empty = { ...bare, digest: replayPlanDigest(bare) };
+    expect(startReplay(empty, approve(empty), () => true)).toEqual({
+      ok: false,
+      refusal: "not_an_owner",
+    });
+  });
+
+  it("refuses an approval older than the plan or with no time", () => {
+    for (const approvedAtMs of [NOW.getTime() - 1, Number.NaN])
+      expect(startReplay(p, approve(p, { approvedAtMs }), owns)).toEqual({
+        ok: false,
+        refusal: "approved_before_plan",
+      });
   });
 });
