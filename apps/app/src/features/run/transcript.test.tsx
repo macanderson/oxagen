@@ -2464,7 +2464,8 @@ describe("a read the page makes again", () => {
       return name === null ? [] : [name];
     });
 
-  it("takes the page's new read, so a subagent frame recorded behind the cursor shows under its call once the run seals (#4083)", () => {
+  it("reads its own end again once the run seals, so a subagent frame recorded behind the cursor shows under its call (#4083)", async () => {
+    readTranscriptPage.mockResolvedValue(pageOk(stepsOf(specs(true))));
     const { rerender } = render(
       view(
         readOk(stepsOf(specs(false), { cursor: "c1", complete: true })),
@@ -2472,9 +2473,19 @@ describe("a read the page makes again", () => {
       ),
     );
     expect(names()).toEqual(["Task", "Grep", "Bash"]);
-    // The seal refreshes the page, which reads the whole run again.
+    // The seal refreshes the page, which reads the run from its first entry.
+    // This view opened at the run's end, so it reads that end again.
     rerender(view(readOk(stepsOf(specs(true))), "sealed"));
-    expect(names()).toEqual(["Task", "Grep", "Read", "Bash"]);
+    await waitFor(() => {
+      expect(names()).toEqual(["Task", "Grep", "Read", "Bash"]);
+    });
+    expect(readTranscriptPage).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "tse_7k2m9q",
+      "steps",
+      { from: "end", text: "full", limit: TRANSCRIPT_PAGE },
+    );
     const nested = screen.getByTestId("transcript-subagent-steps");
     expect(
       within(nested)
@@ -2488,7 +2499,10 @@ describe("a read the page makes again", () => {
   it("keeps the rows it holds when the page renders again with the same read (negative)", () => {
     const read = readOk(stepsOf(specs(false)));
     const { rerender } = render(view(read, "sealed"));
+    // A stopped run plays from its first row; the test starts at its end.
+    fireEvent.click(screen.getByRole("button", { name: "To the end" }));
     rerender(view(read, "sealed"));
     expect(names()).toEqual(["Task", "Grep", "Bash"]);
+    expect(readTranscriptPage).not.toHaveBeenCalled();
   });
 });
