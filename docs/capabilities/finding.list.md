@@ -59,5 +59,6 @@ A read that names `runId` adds `citation` to each finding: what it cites in that
 | `duplicate_tool_calls` | agent, or the operator when the run names no agent | nothing: each turn that only repeated calls with an identical earlier result counts at its own priced cost |
 | `cache_writes_never_read` | operator (`prn_…`), or the agent when the run names no operator | the written prefix sent uncached |
 | `unpaged_results` | tool | the same result capped at 4,000 tokens |
+| `repeated_instructions` | the agent or operator every run it reached names, or the workspace when those runs name more than one | a steering record in place of the paste: each later prompt that repeats it counts at the priced cost of the turns it answered, an upper bound. It claims no frame and adds nothing to the unproductive spend headline |
 
 A turn counts only when every tool call it made is a repeat. Its whole cost counts once, and `calls` counts turns for these three kinds. A run whose model calls the job did not read has its repeats cited with no price. ADR-208 has the rules, and ADR-062's detector table has the rollup and frame fields each kind reads.
