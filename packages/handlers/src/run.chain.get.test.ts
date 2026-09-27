@@ -829,6 +829,38 @@ describe("get_run_chain subagent chains (#3823)", () => {
     expect(alone.ladder.some((r) => r.reason === "body_missing")).toBe(false);
   });
 
+  // Codex review on #4421: a gap a subagent's seal recorded that no frame
+  // read can show, such as `unobserved_tail`, capped nothing, so an intact
+  // read claimed a rung the child's seal refused.
+  it("caps the ladder at a gap a subagent chain's seal recorded, and an empty one changes nothing (negative)", async () => {
+    const read = (completenessGaps: unknown) =>
+      tachoHarness(root([0, 1]), {
+        session: { completenessGaps: [], enforcementTier: "gateway" },
+        chains: [
+          chainRow(CHILD, {
+            seqCount: 1,
+            sealedAt: SEALED_AT,
+            completenessGaps,
+          }),
+        ],
+        children: [kept(onChain(CHILD, 0))],
+      })({ runId: TACHO_ID }, ctx());
+
+    const intact = await read([]);
+    expect(intact.ladder[1]).toMatchObject({ grade: "view", met: true });
+
+    const tail = await read(["unobserved_tail", "something_new"]);
+    // The run's own seal recorded nothing: the child's gap is the child's.
+    expect(tail.gaps.recorded).toEqual([]);
+    expect(tail.ladder.map((r) => [r.grade, r.met])).toEqual([
+      ["inspect", true],
+      ["view", false],
+      ["fork", false],
+      ["retry", false],
+    ]);
+    expect(tail.ladder[1]?.reason).toBe("unobserved_tail");
+  });
+
   it("marks the chain the frame cap cut, and every chain past it, incomplete", async () => {
     const spread = (session: string, count: number) =>
       Array.from({ length: count }, (_, seq) => kept(onChain(session, seq)));

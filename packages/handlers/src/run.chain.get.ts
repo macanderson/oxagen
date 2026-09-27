@@ -40,6 +40,7 @@ import {
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { type RunFrame, tachoFrame } from "@oxagen/run-ledger";
 import {
+  type CompletenessGapKind,
   explainReplayGrade,
   frameOwesBody,
   isReplayGrade,
@@ -411,6 +412,12 @@ function sealsOf(
 interface SubagentWalk {
   chains: ChainSubagent[];
   frames: RunFrame[];
+  /**
+   * The gaps each listed chain's session row recorded when it sealed, in one
+   * set. A gap no frame read can show, such as `unobserved_tail`, caps the
+   * whole run's ladder whichever chain it was recorded on.
+   */
+  recorded: CompletenessGapKind[];
   /** False when a chain was cut short or the run has more chains than listed. */
   complete: boolean;
 }
@@ -441,7 +448,8 @@ async function walkSubagentChains(
     limit: CHAIN_SUBAGENTS_MAX + 1,
   });
   const rows = listed.slice(0, CHAIN_SUBAGENTS_MAX);
-  if (rows.length === 0) return { chains: [], frames: [], complete: true };
+  if (rows.length === 0)
+    return { chains: [], frames: [], recorded: [], complete: true };
   const [stored, signed] = await Promise.all([
     read({
       rootSessionUuid,
@@ -500,9 +508,14 @@ async function walkSubagentChains(
       complete,
     };
   });
+  const recorded = new Set<CompletenessGapKind>();
+  for (const row of rows) {
+    for (const gap of publishedGaps(row.completenessGaps)) recorded.add(gap);
+  }
   return {
     chains,
     frames,
+    recorded: [...recorded],
     complete:
       listed.length <= CHAIN_SUBAGENTS_MAX &&
       chains.every((chain) => chain.complete),
@@ -570,10 +583,14 @@ export function createRunChainGetHandler(
         : publishedTier(run.row.session.enforcementTier);
 
     // The ladder is computed from what this read can see: the gaps the seal
-    // recorded, plus a chain break the walk found that the seal did not name,
-    // on the run's own chain or on any subagent's (#3823).
+    // recorded, the gaps each subagent chain's seal recorded, plus a chain
+    // break the walk found that no seal named, on the run's own chain or on
+    // any subagent's (#3823).
     const children = subagents?.chains ?? [];
-    const observed = new Set<string>(recorded);
+    const observed = new Set<string>([
+      ...recorded,
+      ...(subagents?.recorded ?? []),
+    ]);
     if (
       sequences.gaps.length > 0 ||
       children.some((chain) => chain.gaps.missingSequences.length > 0)
