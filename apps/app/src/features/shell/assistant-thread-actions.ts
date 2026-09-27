@@ -64,6 +64,7 @@ export async function openAssistantSession(
   conversationId: string,
 ): Promise<ActionResult<AssistantThread>> {
   const ctx = await requireViewer(org, ws);
-  const { conversations } = dataSource();
-  return readToActionResult(await conversations.byId(ctx, conversationId));
+  return readToActionResult(
+    await dataSource().conversations.byId(ctx, conversationId),
+  );
 }
