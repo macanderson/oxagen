@@ -1719,6 +1719,7 @@ describe("merge_context_pr", () => {
   it("records the publish as a deployment of the merge commit to the steering environment, and never calls publish() for the code repository", async () => {
     const h = harness();
     const id = await opened(h);
+    const current = vi.fn(async () => null);
     const highestVersion = vi.fn(async () => 40);
     const publish = vi.fn(
       async (): Promise<PublishResult> => ({
@@ -1731,7 +1732,7 @@ describe("merge_context_pr", () => {
       nextVersion: async () => 7,
       publisher: {
         repository: () => BUNDLE_IDENTITY.repository,
-        store: { highestVersion },
+        store: { current, highestVersion },
         publish,
       },
     })({ proposalId: id }, ctx({ userId: REVIEWER }));
@@ -1747,6 +1748,7 @@ describe("merge_context_pr", () => {
     // The legacy layout is the main code repository, which publish() skips,
     // so its version is the ledger's and S5's store is never read.
     expect(publish).not.toHaveBeenCalled();
+    expect(current).not.toHaveBeenCalled();
     expect(highestVersion).not.toHaveBeenCalled();
   });
 
@@ -2083,7 +2085,7 @@ describe("merge_context_pr", () => {
       createMergeContextPrHandler(h, {
         publisher: {
           repository: () => BUNDLE_IDENTITY.repository,
-          store: { highestVersion: async () => 4 },
+          store: { current: async () => null, highestVersion: async () => 4 },
           publish,
         },
       })({ proposalId: id }, ctx({ userId: REVIEWER })),
@@ -2113,7 +2115,7 @@ describe("merge_context_pr", () => {
       const out = await createMergeContextPrHandler(h, {
         publisher: {
           repository: () => BUNDLE_IDENTITY.repository,
-          store: { highestVersion: async () => 0 },
+          store: { current: async () => null, highestVersion: async () => 0 },
           publish: async () => ({
             status: "stale",
             commit: "merge519",
@@ -2132,6 +2134,50 @@ describe("merge_context_pr", () => {
     }
   });
 
+  it("in a steering repo, a resumed merge keeps the version S5 published for its merge commit between the two calls", async () => {
+    const h = steeringHarness();
+    const { id } = await steeringPrPassed(h);
+    const s5 = s5Publisher();
+    const original = h.store.publishMerge.bind(h.store);
+    let fail = true;
+    h.store.publishMerge = async (input) => {
+      if (fail) {
+        fail = false;
+        throw new Error("connection reset");
+      }
+      return original(input);
+    };
+    const merge = createMergeContextPrHandler(h, { publisher: s5.publisher });
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toThrow("connection reset");
+    expect(h.github.merges[0]!.commitMessage).toMatch(/\nOxagen-Version: 1$/);
+    expect(s5.publish).not.toHaveBeenCalled();
+
+    // S5's sync publishes the merge commit before the retry, so the store's
+    // highest version is now the one in the trailer.
+    await expect(
+      publishBundle(s5.deps, BUNDLE_IDENTITY, "merge519"),
+    ).resolves.toMatchObject({ status: "published", version: 1 });
+
+    const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(out.status).toBe("merged");
+    expect(h.github.merges).toHaveLength(1);
+    // The retry keeps version 1 and does not publish the commit again.
+    expect(s5.publish).not.toHaveBeenCalled();
+    expect(s5.store.published.get(BUNDLE_IDENTITY.repository)).toMatchObject({
+      version: 1,
+      commit: "merge519",
+    });
+    expect(h.github.deployments).toEqual([
+      expect.objectContaining({
+        sha: "merge519",
+        description: "Steering version 1 from #519",
+      }),
+    ]);
+    expect(h.events.map((e) => e.eventType)).toContain("steering.published");
+  });
+
   it("in a steering repo, a failed publish() is logged and the merge stands", async () => {
     const h = steeringHarness();
     const { id } = await steeringPrPassed(h);
@@ -2143,7 +2189,7 @@ describe("merge_context_pr", () => {
       const out = await createMergeContextPrHandler(h, {
         publisher: {
           repository: () => BUNDLE_IDENTITY.repository,
-          store: { highestVersion: async () => 0 },
+          store: { current: async () => null, highestVersion: async () => 0 },
           publish,
         },
       })({ proposalId: id }, ctx({ userId: REVIEWER }));

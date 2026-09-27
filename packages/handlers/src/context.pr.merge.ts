@@ -26,7 +26,9 @@
 // `steering.published`. In a steering repo the Oxagen-Version trailer is the
 // version publish() assigns next, read from its own version store. When
 // publish() assigns another version, the merge is refused after it lands.
-// In a legacy repository the version is the ledger length plus one.
+// A resumed merge whose commit S5 already published keeps that version and
+// is not published again. In a legacy repository the version is the ledger
+// length plus one.
 // The head branch is deleted before the publication so the next proposal on
 // the lineage branches from the production branch.
 //
@@ -70,7 +72,7 @@ export interface SteeringPublisher {
   /** The key the store and publish() use for this repository. */
   repository: (repo: SteeringRepository) => string;
   /** The version store publish() assigns versions from. */
-  store: Pick<VersionStore, "highestVersion">;
+  store: Pick<VersionStore, "current" | "highestVersion">;
   /** S5's publish() at `commit`, bound to `store` and the repository. */
   publish: (repo: SteeringRepository, commit: string) => Promise<PublishResult>;
 }
@@ -228,11 +230,13 @@ export function createMergeContextPrHandler(
       // The published body is the file at the merged commit.
       let body = await readBody(deps, repo, path, recorded.headSha);
       // Only a steering repo publishes. Its trailer carries the version
-      // publish() assigns next, read from the store it assigns versions from.
+      // publish() assigns, read from the store it assigns versions from.
       const publisher = layout.layout === "steering" ? seams.publisher : null;
-      const version = publisher
-        ? await nextPublishedVersion(publisher, repo)
-        : await nextVersion(scope);
+      const mergedAs = pr.merged ? pr.mergeCommitSha : null;
+      const steering = publisher
+        ? await steeringVersion(publisher, repo, mergedAs)
+        : null;
+      const version = steering ? steering.version : await nextVersion(scope);
 
       let commitSha: string;
       let attempts = 0;
@@ -351,7 +355,10 @@ export function createMergeContextPrHandler(
         mergedByUserId: userId,
         policyVersion: `governance:${mode}`,
       });
-      if (publisher) await publishSteering(publisher, repo, commitSha, version);
+      // S5 already published a resumed merge whose version it holds.
+      if (publisher && !steering?.published) {
+        await publishSteering(publisher, repo, commitSha, version);
+      }
       const deploymentUrl = await recordPublishDeployment(deps.github, repo, {
         sha: commitSha,
         version,
@@ -427,12 +434,27 @@ async function readBody(
   return body;
 }
 
-/** The version publish() assigns next: one past the highest in its store. */
-async function nextPublishedVersion(
+/**
+ * The version a steering merge becomes. A resumed merge whose commit S5
+ * already published keeps that version, so the retry neither publishes again
+ * nor refuses the version S5 assigned between the two calls. Any other merge
+ * takes the version publish() assigns next: one past the highest in its
+ * store.
+ */
+async function steeringVersion(
   publisher: SteeringPublisher,
   repo: SteeringRepository,
-): Promise<number> {
-  return (await publisher.store.highestVersion(publisher.repository(repo))) + 1;
+  mergedAs: string | null,
+): Promise<{ version: number; published: boolean }> {
+  const repository = publisher.repository(repo);
+  if (mergedAs) {
+    const current = await publisher.store.current(repository);
+    if (current?.commit === mergedAs) {
+      return { version: current.version, published: true };
+    }
+  }
+  const highest = await publisher.store.highestVersion(repository);
+  return { version: highest + 1, published: false };
 }
 
 /**
