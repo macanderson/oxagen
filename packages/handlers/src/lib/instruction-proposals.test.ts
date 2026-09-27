@@ -41,7 +41,7 @@ describe("openInstructionProposalsFor", () => {
     const result = await openInstructionProposalsFor(
       scope,
       [proposal(1), proposal(2)],
-      { store, create: createProposal },
+      { store, create: createProposal, audit: vi.fn() },
     );
     expect(result).toEqual({ opened: 2, taken: 0 });
     expect(store.insertProposal).toHaveBeenCalledTimes(2);
@@ -69,10 +69,11 @@ describe("openInstructionProposalsFor", () => {
   });
 
   it("gives each proposal its own request id", async () => {
-    const create = vi.fn(async () => ({}) as never);
+    const create = vi.fn(async () => ({ publicId: "cprop_1" }) as never);
     await openInstructionProposalsFor(scope, [proposal(1), proposal(2)], {
       store: storeWith(),
       create,
+      audit: vi.fn(),
     });
     const ids = create.mock.calls.map(
       (call) => (call as unknown as [unknown, { requestId: string }])[1].requestId,
@@ -89,7 +90,7 @@ describe("openInstructionProposalsFor", () => {
     const result = await openInstructionProposalsFor(
       scope,
       [proposal(1), proposal(2)],
-      { store, create: createProposal },
+      { store, create: createProposal, audit: vi.fn() },
     );
     expect(result).toEqual({ opened: 1, taken: 1 });
   });
@@ -104,7 +105,7 @@ describe("openInstructionProposalsFor", () => {
       openInstructionProposalsFor(
         scope,
         [proposal(1), proposal(2), proposal(3)],
-        { store, create: createProposal },
+        { store, create: createProposal, audit: vi.fn() },
       ),
     ).rejects.toThrow("database unavailable");
     expect(store.insertProposal).toHaveBeenCalledTimes(3);
@@ -118,6 +119,7 @@ describe("openInstructionProposalsFor", () => {
       openInstructionProposalsFor(scope, [proposal(1)], {
         store,
         create: createProposal,
+        audit: vi.fn(),
       }),
     ).rejects.toMatchObject({ reason: "stale_head" });
   });
@@ -125,8 +127,63 @@ describe("openInstructionProposalsFor", () => {
   it("opens nothing for an empty list", async () => {
     const store = storeWith();
     await expect(
-      openInstructionProposalsFor(scope, [], { store, create: createProposal }),
+      openInstructionProposalsFor(scope, [], {
+        store,
+        create: createProposal,
+        audit: vi.fn(),
+      }),
     ).resolves.toEqual({ opened: 0, taken: 0 });
     expect(store.insertProposal).not.toHaveBeenCalled();
+  });
+
+  it("audits each proposal it opens as the findings job", async () => {
+    const insertProposal = vi
+      .fn()
+      .mockResolvedValueOnce({ publicId: "cprop_1" });
+    const audit = vi.fn();
+    await openInstructionProposalsFor(scope, [proposal(1)], {
+      store: { insertProposal },
+      create: createProposal,
+      audit,
+    });
+    expect(audit).toHaveBeenCalledTimes(1);
+    const event = audit.mock.calls[0]![0];
+    expect(event).toMatchObject({
+      eventType: "capability.invoke_allowed",
+      actorUserId: null,
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      capability: "propose_record",
+      outcome: "allow",
+      detail: {
+        actor: "findings_job",
+        source: INSTRUCTION_PROPOSAL_SOURCE,
+        lineageId: "ctx.habits.instruction-000000000001",
+        proposalId: "cprop_1",
+      },
+    });
+    const values = insertProposal.mock.calls[0]![0];
+    expect(values.createdById).toBeNull();
+  });
+
+  it("audits a failed write and leaves a taken lineage unaudited", async () => {
+    const store = storeWith(taken(), new Error("database unavailable"));
+    const audit = vi.fn();
+    await expect(
+      openInstructionProposalsFor(scope, [proposal(1), proposal(2)], {
+        store,
+        create: createProposal,
+        audit,
+      }),
+    ).rejects.toThrow("database unavailable");
+    expect(audit).toHaveBeenCalledTimes(1);
+    expect(audit.mock.calls[0]![0]).toMatchObject({
+      eventType: "capability.invoke_error",
+      outcome: "error",
+      detail: {
+        lineageId: "ctx.habits.instruction-000000000002",
+        proposalId: null,
+      },
+    });
   });
 });

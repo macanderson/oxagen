@@ -24,6 +24,9 @@ vi.mock("@oxagen/telemetry", () => ({
 vi.mock("@oxagen/tenancy", () => ({ runInTenantScope }));
 vi.mock("@oxagen/run-ledger/evidence-store", () => ({
   evidenceStore: () => ({ getBody }),
+  // A ref this store cannot read starts with "foreign".
+  parseEvidenceBodyRef: (ref: string) =>
+    ref.startsWith("foreign") ? null : { keyId: "k", digestHex: ref },
 }));
 vi.mock("./logger", () => ({ logger: { warn, error, info: vi.fn() } }));
 
@@ -98,6 +101,11 @@ const digestOf = (bytes: Uint8Array) =>
 /** A row whose body is `text`, stored under `ref` with a matching digest. */
 function withBody(ref: string, text: string, over: Partial<Row> = {}): Row {
   return row({ bytes_ref: ref, content_digest: digestOf(bytesOf(text)), ...over });
+}
+
+/** An error carrying `name`, as the storage driver and evidence store throw. */
+function failure(name: string): Error {
+  return Object.assign(new Error(name), { name });
 }
 
 function bodies(byRef: Record<string, Uint8Array | Error>) {
@@ -271,7 +279,10 @@ describe("readRunPrompts", () => {
       good: bytesOf(TESTS),
       altered: bytesOf("Something else entirely."),
       binary: notUtf8,
-      broken: new Error("store unavailable"),
+      gone: failure("StorageNotFoundError"),
+      erased: failure("BodyKeyGoneError"),
+      damaged: failure("BodyUnopenableError"),
+      malformed: new RangeError("frame body plaintext too short"),
     });
     chSelect.mockResolvedValue({
       data: [
@@ -279,7 +290,11 @@ describe("readRunPrompts", () => {
         row({ seq: 2, bytes_ref: "altered", content_digest: digestOf(bytesOf(TESTS)), prompt_length: null }),
         row({ seq: 3, bytes_ref: "binary", content_digest: digestOf(notUtf8), prompt_length: "n/a" }),
         row({ seq: 4, bytes_ref: "", content_digest: "sha256:none" }),
-        row({ seq: 5, bytes_ref: "broken", content_digest: "sha256:none" }),
+        row({ seq: 5, bytes_ref: "gone", content_digest: "sha256:none" }),
+        row({ seq: 6, bytes_ref: "erased", content_digest: "sha256:none" }),
+        row({ seq: 7, bytes_ref: "damaged", content_digest: "sha256:none" }),
+        row({ seq: 8, bytes_ref: "malformed", content_digest: "sha256:none" }),
+        row({ seq: 9, bytes_ref: "foreign:1", content_digest: "sha256:none" }),
       ],
     });
     const readFrames = vi.fn();
@@ -297,10 +312,32 @@ describe("readRunPrompts", () => {
       [3, null, null],
       [4, null, 80],
       [5, null, 80],
+      [6, null, 80],
+      [7, null, 80],
+      [8, null, 80],
+      [9, null, 80],
     ]);
-    expect(getBody).toHaveBeenCalledTimes(4);
+    expect(getBody).toHaveBeenCalledTimes(7);
     expect(getBody).toHaveBeenCalledWith(SCOPE, "good");
+    expect(getBody).not.toHaveBeenCalledWith(SCOPE, "foreign:1");
     expect(readFrames).not.toHaveBeenCalled();
+  });
+
+  it("fails the read when a body read fails for a reason that can pass", async () => {
+    readPolicy.mockResolvedValue(undefined);
+    bodies({
+      good: bytesOf(TESTS),
+      broken: new TypeError("fetch failed"),
+    });
+    chSelect.mockResolvedValue({
+      data: [
+        withBody("good", TESTS, { seq: 1 }),
+        row({ seq: 2, bytes_ref: "broken", content_digest: "sha256:none" }),
+      ],
+    });
+    await expect(
+      readRunPrompts(SCOPE, WINDOW, BY_SESSION, new Set([RUN_A]), vi.fn()),
+    ).rejects.toThrow("fetch failed");
   });
 
   it(`reads at most ${PROMPT_BODIES_MAX} bodies, newest first`, async () => {
@@ -427,5 +464,21 @@ describe("the findings pass with prompts", () => {
     });
     expect(readPrompts).not.toHaveBeenCalled();
     expect(openProposals).toHaveBeenCalledWith(SCOPE, []);
+  });
+
+  it("writes nothing when the prompt read fails", async () => {
+    const deps = baseDeps([pricedRun(RUN_A)]);
+    const openProposals = vi.fn(async () => undefined);
+    await expect(
+      runFindingsPass(SCOPE, {
+        ...deps,
+        readPrompts: async () => {
+          throw new TypeError("fetch failed");
+        },
+        openProposals,
+      }),
+    ).rejects.toThrow("fetch failed");
+    expect(deps.write).not.toHaveBeenCalled();
+    expect(openProposals).not.toHaveBeenCalled();
   });
 });

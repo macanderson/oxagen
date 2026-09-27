@@ -413,6 +413,25 @@ export interface GovernanceChangeDetail {
 }
 
 /**
+ * A steering record proposal the findings job opened with no acting user
+ * (detector 6, prompt habits). It rides a `capability.invoke_allowed` or
+ * `capability.invoke_error` row for `propose_record` with a null actor. The
+ * proposal steers nothing: a person with a workspace role opens it as a
+ * Context PR, and `merge_context_pr` records `steering.published` when it
+ * merges.
+ */
+export interface SystemProposalDetail {
+  /** The system job that opened the proposal. */
+  actor: "findings_job";
+  /** The attribution the proposal row carries. */
+  source: string;
+  /** The lineage the proposal would add a record to. */
+  lineageId: string;
+  /** The proposal's public id, or null when the write failed. */
+  proposalId: string | null;
+}
+
+/**
  * Everything `security_events.detail` may carry.
  *
  * The column is jsonb with no CHECK, so this union is the only thing keeping
@@ -656,6 +675,7 @@ export type SecurityEventDetail =
   | RuntimeContainmentChangeDetail
   | ApprovalRuleInvalidationDetail
   | GovernanceChangeDetail
+  | SystemProposalDetail
   | SsoProviderChangeDetail
   | SsoSignInDetail
   | SsoPolicyDetail

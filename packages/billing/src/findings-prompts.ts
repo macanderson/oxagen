@@ -8,7 +8,11 @@
  * Its text is a body in the evidence store, kept only when the workspace's
  * retention policy keeps `model_call` bodies (`content_exact`). A body is
  * read back, checked against its digest, and decoded as UTF-8. One that
- * fails any of the three reads as no text.
+ * fails any of the three for good reads as no text: the object is gone, its
+ * key is gone, it does not open, its bytes changed, or they are not UTF-8.
+ * Any other failure fails the read, and with it the pass, so the job retries
+ * the workspace. Reading a prompt as no text would drop the findings it
+ * backs, and the next pass would open them again under new ids.
  *
  * The pass runs outside a tenant scope, so each read that needs one enters
  * it for the workspace it reads.
@@ -122,34 +126,51 @@ type EvidenceModule = typeof import("@oxagen/run-ledger/evidence-store");
 /**
  * The evidence store module, loaded once per read and only when the pass
  * reads bodies. Concurrent dynamic imports of one module can race each
- * other, so the batch reads below share this one. Null when it cannot load:
- * every prompt then reads as no text.
+ * other, so the batch reads below share this one. A module that does not
+ * load fails the read.
  */
-async function loadEvidenceModule(): Promise<EvidenceModule | null> {
-  try {
-    return await import("@oxagen/run-ledger/evidence-store");
-  } catch (err) {
-    logger.warn(
-      { err },
-      "findings: evidence store failed to load; prompts read without text",
-    );
-    return null;
-  }
+async function loadEvidenceModule(): Promise<EvidenceModule> {
+  return import("@oxagen/run-ledger/evidence-store");
 }
 
-/** A prompt body as text; null when it is missing, altered, or not UTF-8. */
+/**
+ * Failures that reading the body again cannot change. The storage driver's
+ * `StorageNotFoundError` is matched by name, since this package does not
+ * depend on @oxagen/storage. A `RangeError` is a stored plaintext that does
+ * not parse.
+ */
+const LASTING_BODY_FAILURES = new Set([
+  "StorageNotFoundError",
+  "BodyKeyGoneError",
+  "BodyUnopenableError",
+  "RangeError",
+]);
+
+/**
+ * A prompt body as text. Null when the row names no body, names one this
+ * store cannot read, or the body fails for good, is altered, or is not
+ * UTF-8. Any other failure is thrown.
+ */
 async function bodyText(
   scope: Scope,
   store: EvidenceModule,
   row: PromptRow,
 ): Promise<string | null> {
   if (row.bytes_ref === "" || row.content_digest === "") return null;
+  if (store.parseEvidenceBodyRef(row.bytes_ref) === null) return null;
+  let bytes: Uint8Array;
   try {
-    const { bytes } = await runInTenantScope(scope, () =>
+    ({ bytes } = await runInTenantScope(scope, () =>
       store.evidenceStore().getBody(scope, row.bytes_ref),
-    );
-    const digest = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-    if (digest !== row.content_digest) return null;
+    ));
+  } catch (err) {
+    if (err instanceof Error && LASTING_BODY_FAILURES.has(err.name))
+      return null;
+    throw err;
+  }
+  const digest = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+  if (digest !== row.content_digest) return null;
+  try {
     return decoder.decode(bytes);
   } catch {
     return null;
