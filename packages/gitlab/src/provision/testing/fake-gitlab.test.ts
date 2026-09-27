@@ -239,6 +239,23 @@ describe("FakeGitlab groups and projects", () => {
     });
   });
 
+  it("keeps approvals on push until the project turns on reset", async () => {
+    const fake = newFake();
+    fake.seedProject({ name: "steering" });
+    expect(await send(fake, "GET", "/projects/1/approvals")).toMatchObject({
+      status: 200,
+      body: { reset_approvals_on_push: false },
+    });
+    const res = await send(fake, "POST", "/projects/1/approvals", {
+      reset_approvals_on_push: true,
+    });
+    expect(res).toMatchObject({ status: 200, body: { reset_approvals_on_push: true } });
+    expect(fake.snapshot().projects["acme/steering"]?.settings.reset_approvals_on_push).toBe(
+      true,
+    );
+    expect((await send(fake, "GET", "/projects/9/approvals")).status).toBe(404);
+  });
+
   it.each([
     [{ visibility: "secret" }, "visibility does not have a valid value"],
     [{ squash_option: "sometimes" }, "squash_option does not have a valid value"],

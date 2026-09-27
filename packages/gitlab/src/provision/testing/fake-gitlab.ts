@@ -54,6 +54,7 @@ export interface FakeProjectSnapshot {
     squash_option: string;
     only_allow_merge_if_pipeline_succeeds: boolean;
     remove_source_branch_after_merge: boolean;
+    reset_approvals_on_push: boolean;
     builds_access_level: string;
   };
   protected_branches: Record<
@@ -106,6 +107,7 @@ interface FakeProject {
   squash_option: string;
   only_allow_merge_if_pipeline_succeeds: boolean;
   remove_source_branch_after_merge: boolean;
+  reset_approvals_on_push: boolean;
   builds_access_level: string;
   branches: Map<string, FakeBranch>;
   protected_branches: Map<string, FakeProtectedBranch>;
@@ -270,6 +272,17 @@ function protectionJson(rule: FakeProtectedBranch): Json {
   };
 }
 
+/** The project approval settings GitLab Premium reports. The fake holds one of them. */
+function approvalsJson(p: FakeProject): Json {
+  return {
+    approvals_before_merge: 0,
+    reset_approvals_on_push: p.reset_approvals_on_push,
+    disable_overriding_approvers_per_merge_request: false,
+    merge_requests_author_approval: false,
+    merge_requests_disable_committers_approval: false,
+  };
+}
+
 function deploymentJson(d: FakeDeployment): Json {
   return {
     id: d.id,
@@ -387,6 +400,7 @@ export class FakeGitlab {
           squash_option: p.squash_option,
           only_allow_merge_if_pipeline_succeeds: p.only_allow_merge_if_pipeline_succeeds,
           remove_source_branch_after_merge: p.remove_source_branch_after_merge,
+          reset_approvals_on_push: p.reset_approvals_on_push,
           builds_access_level: p.builds_access_level,
         },
         protected_branches,
@@ -481,6 +495,8 @@ export class FakeGitlab {
       squash_option: "default_off",
       only_allow_merge_if_pipeline_succeeds: false,
       remove_source_branch_after_merge: true,
+      // GitLab keeps approvals on push unless a project turns this on.
+      reset_approvals_on_push: false,
       builds_access_level: "enabled",
       branches: new Map(),
       protected_branches: new Map(),
@@ -549,6 +565,16 @@ export class FakeGitlab {
       on("POST", "/projects", (req) => this.createProject(req.body)),
       on("PUT", "/projects/:id", (req) =>
         this.withProject(req, (p) => this.updateProject(p, req.body)),
+      ),
+      on("GET", "/projects/:id/approvals", (req) =>
+        this.withProject(req, (p) => ok(approvalsJson(p))),
+      ),
+      on("POST", "/projects/:id/approvals", (req) =>
+        this.withProject(req, (p) => {
+          p.reset_approvals_on_push =
+            bool(req.body, "reset_approvals_on_push") ?? p.reset_approvals_on_push;
+          return ok(approvalsJson(p));
+        }),
       ),
       on("GET", "/projects/:id/repository/branches/:branch", (req) =>
         this.withProject(req, (p) => {

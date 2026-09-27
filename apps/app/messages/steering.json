@@ -587,6 +587,8 @@
         "governanceUnreadable": "The workspace repository has a .oxagen/rules/governance.toml that could not be read, so nothing was opened or merged.",
         "repositoryMissing": "This workspace has no connected repository to open the pull request on.",
         "checksNotPassed": "Merge is blocked until every check passes.",
+        "approvalRequired": "Merge needs an approval from a workspace member other than the author. An owner, or a member allowed to merge without review, can merge without one. Nothing was merged.",
+        "approvalsNotHeadBound": "Oxagen could not confirm which commit a reviewer approved on this GitLab project. Nothing was merged. Check that Reset approvals on push is on in the project's approval settings. The setting needs GitLab Premium, and the project access token must be able to read it. Oxagen also needs a GitLab version that reports when each approval was given.",
         "headMoved": "The pull request changed after the checks ran. Run the checks again.",
         "baseMoved": "The pull request no longer targets the production branch. Nothing was merged.",
         "githubRefused": "GitHub refused the change. Nothing was published.",

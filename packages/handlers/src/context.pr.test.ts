@@ -1681,7 +1681,7 @@ describe("merge_context_pr", () => {
     );
   });
 
-  it("lets an owner, or a merger holding merge_without_review, merge without an approval, and the trailer says nobody reviewed it", async () => {
+  it("lets an owner, or a merger holding merge_pr_without_review, merge without an approval, and the trailer says nobody reviewed it", async () => {
     const owner = harness();
     const ownerPr = await opened(owner);
     owner.github.approvals = [];
