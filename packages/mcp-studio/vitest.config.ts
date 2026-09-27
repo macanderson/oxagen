@@ -17,7 +17,9 @@ export default defineConfig({
         "src/**/*.test.ts",
         "src/index.ts",
       ],
-      thresholds: { lines: 60, branches: 60, functions: 60, statements: 60 },
+      // CI measured 99.94 / 98.03 / 100 / 99.94 on 06a30ab9b. The ratchet
+      // keeps 2.5 points of headroom and caps a threshold at 90.
+      thresholds: { lines: 90, branches: 90, functions: 90, statements: 90 },
     },
   },
 });

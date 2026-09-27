@@ -270,7 +270,7 @@ function compileTool(server: McpServer, tools: McpTools, key: string, entry: Too
       select: entry.select ?? [],
       redact: entry.redact ?? [],
       max_result_bytes: entry.max_result_bytes ?? tools.defaults?.max_result_bytes ?? DEFAULT_MAX_RESULT_BYTES,
-      deadline_ms: DEFAULT_DEADLINE_MS,
+      deadline_ms: entry.deadline_ms ?? DEFAULT_DEADLINE_MS,
     },
     request: source.request,
   };

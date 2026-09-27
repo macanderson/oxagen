@@ -132,6 +132,12 @@ describe.each(SERVERS)("the %s server folder", (name) => {
     for (const tool of Object.values(lock.tools)) expect(tool.version).toBe(1);
   });
 
+  it("writes the lock in the form lock() writes, so M4 can match it byte for byte", () => {
+    const raw = text(`servers/${name}/tools.lock.json`);
+    expect(formatJson(JSON.parse(raw))).toBe(raw);
+    expect(JSON.parse(raw)).toStrictEqual(lock);
+  });
+
   it("carries each locked upstream's hash", () => {
     for (const tool of Object.values(lock.tools)) expect(tool.upstream_hash).toBe(upstreamHash(tool.upstream));
   });
