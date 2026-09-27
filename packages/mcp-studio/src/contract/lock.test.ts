@@ -5,7 +5,12 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { formatJson } from "./json";
-import { definitionLockSourceSchema, localLockSourceSchema, mcpLockSourceSchema } from "./lock";
+import {
+  definitionLockSourceSchema,
+  localLockSourceSchema,
+  mcpLockSourceSchema,
+  registryLockSourceSchema,
+} from "./lock";
 import { parseLock } from "./parse";
 
 interface Issue {
@@ -140,9 +145,24 @@ describe("MCP lock sources", () => {
     version: "1.2.0",
   };
 
+  const endpoint = { url: "https://api.githubcopilot.com/mcp/", transport: "http" };
+
   it("accepts a registry entry that names its endpoint or its package", () => {
-    expect(issues(mcpLockSourceSchema, { ...registry, url: "https://api.githubcopilot.com/mcp/" })).toStrictEqual([]);
+    expect(issues(mcpLockSourceSchema, { ...registry, ...endpoint })).toStrictEqual([]);
+    expect(issues(mcpLockSourceSchema, { ...registry, ...endpoint, transport: "sse" })).toStrictEqual([]);
     expect(issues(mcpLockSourceSchema, { ...registry, package: pinnedPackage })).toStrictEqual([]);
+  });
+
+  it("pins how a remote registry entry is reached", () => {
+    expect(issues(mcpLockSourceSchema, { ...registry, url: endpoint.url })).toStrictEqual([
+      { path: "transport", message: "transport is required when url is set" },
+    ]);
+    expect(issues(mcpLockSourceSchema, { ...registry, package: pinnedPackage, transport: "http" })).toStrictEqual([
+      { path: "transport", message: "transport is not allowed without url: only a remote entry has one" },
+    ]);
+    expect(issues(registryLockSourceSchema, { ...registry, ...endpoint, transport: "streamable-http" })).toStrictEqual([
+      { path: "transport", message: "Invalid enum value. Expected 'http' | 'sse', received 'streamable-http'" },
+    ]);
   });
 
   it("refuses a registry entry that names neither its endpoint nor its package", () => {
@@ -152,7 +172,7 @@ describe("MCP lock sources", () => {
   });
 
   it("refuses a registry entry that names both its endpoint and its package", () => {
-    const both = { ...registry, url: "https://api.githubcopilot.com/mcp/", package: pinnedPackage };
+    const both = { ...registry, ...endpoint, package: pinnedPackage };
     expect(issues(mcpLockSourceSchema, both)).toStrictEqual([
       {
         path: "package",

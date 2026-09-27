@@ -13,7 +13,7 @@ import { z } from "zod";
 import { gitObjectIdSchema, repoPathSchema, sha256Schema } from "@oxagen/oxagen/steering-repo/common";
 import { securitySchemeSchema } from "../model/security-scheme";
 import { upstreamToolSchema } from "../model/upstream-tool";
-import { withChecks, type CustomCheck } from "./checks";
+import { dependentRequired, withChecks, type CustomCheck } from "./checks";
 import { lockedMcpToolSchema } from "./mcp-tool";
 import { httpUrlSchema, serverNameSchema, toolKeySchema } from "./primitives";
 import { DEFINITION_FROMS, definitionLocationChecks, gitRefSchema, sourceRepoSchema } from "./server";
@@ -68,6 +68,22 @@ const urlOrPackage: CustomCheck = {
   json: { oneOf: [{ required: ["url"] }, { required: ["package"] }] },
 };
 
+/** Only a remote entry is reached by a transport, so a lock source with no url names none. */
+const transportOnlyWithUrl: CustomCheck = {
+  issues: (value) =>
+    value.transport !== undefined && value.url === undefined
+      ? [{ path: ["transport"], message: "transport is not allowed without url: only a remote entry has one" }]
+      : [],
+  json: { dependentRequired: { transport: ["url"] } },
+};
+
+/**
+ * A registry server's source as the lock pins it. server.toml names only the
+ * catalog entry, so the lock records what the entry resolved to. For a remote
+ * entry that is the endpoint and how to reach it, so the gateway connects the
+ * same way on every call. The catalog's streamable-http is http here, as in
+ * server.toml's remote source.
+ */
 export const registryLockSourceSchema = withChecks(
   z
     .object({
@@ -76,11 +92,15 @@ export const registryLockSourceSchema = withChecks(
       server: z.string().min(3).max(200),
       version: z.string().min(1).max(64),
       url: httpUrlSchema.optional().describe("The endpoint the catalog entry named, for a remote entry."),
+      transport: z
+        .enum(["http", "sse"])
+        .optional()
+        .describe("How the catalog entry reaches url: http (the catalog's streamable-http) or sse."),
       package: lockPackageSchema.optional().describe("The package the catalog entry named, for a local entry."),
       server_version: serverVersionSchema,
     })
     .strict(),
-  [urlOrPackage],
+  [urlOrPackage, dependentRequired("url", ["transport"]), transportOnlyWithUrl],
 );
 
 export const localLockSourceSchema = z
