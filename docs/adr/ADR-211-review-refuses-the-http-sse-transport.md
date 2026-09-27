@@ -72,8 +72,9 @@ streamable-http endpoint, or run its package on the local gateway.
   repository) still lists sse in its Keys table and among the relay's
   protocols. That page lives outside this repository, and issue #4556 stays
   open until it matches.
-- Install and lock can still disagree on a catalog entry that lists an sse
-  remote before a streamable-http one. `deriveTransportTypes` in
-  `packages/plugins/src/registry/map-server.ts` keeps catalog order, and
-  `plugin.org.install.ts` installs the first type, so that entry installs as
-  sse and enables as a legacy row while its lock pins the http remote.
+- A registry install prefers streamable-http. `plugin.org.install.ts` picks
+  the entry's first streamable-http remote when the catalog lists one, and
+  takes the URL and the transport from that same remote. An entry that lists
+  an sse remote before a streamable-http one therefore installs the
+  streamable-http remote, which is the one its lock pins. An entry that offers
+  only sse still installs as sse and stays a legacy row.
