@@ -3,6 +3,10 @@
  * Stage dist-standalone/ as the publishable @oxagen/tacho package: the three
  * bundled executables plus a manifest with no workspace dependencies.
  * Run order: scripts/bundle.mjs → this script → `npm publish dist-standalone`.
+ *
+ * The one runtime dependency is Cedar's evaluator. Its Node build reads its
+ * `.wasm` from its own directory, so the bundles leave it out and npm
+ * installs it beside them, at the version this package pins.
  */
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -21,6 +25,13 @@ for (const name of ["tacho", "tachod", "tacho-hook"]) {
 }
 
 const src = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
+const CEDAR = "@cedar-policy/cedar-wasm";
+const cedarVersion = src.dependencies?.[CEDAR];
+if (typeof cedarVersion !== "string" || cedarVersion.length === 0) {
+  throw new Error(
+    `package.json names no ${CEDAR} dependency, and the hook cannot decide Cedar policies without it`,
+  );
+}
 const manifest = {
   name: src.name,
   version: src.version,
@@ -32,6 +43,7 @@ const manifest = {
     "tacho-hook": "./tacho-hook.mjs",
   },
   files: ["tacho.mjs", "tachod.mjs", "tacho-hook.mjs", "README.md"],
+  dependencies: { [CEDAR]: cedarVersion },
   engines: { node: ">=20" },
   keywords: [
     "oxagen",

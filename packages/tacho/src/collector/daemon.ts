@@ -31,6 +31,7 @@ import type {
 import { tachoEventSchema, type TachoEvent } from "../envelope";
 import { type FrameBody, retentionAllows } from "../evidence/frame-body";
 import { pollEtag, verifyBundle } from "../host/bundle";
+import { loadCedarRuntime } from "../policy/runtime";
 import {
   ControlError,
   createControlClient,
@@ -2246,6 +2247,7 @@ async function initializeDaemon(
               execAsync,
             }),
           repositoryRemote: (cwd) => readRepositoryRemote(execAsync, cwd),
+          cedar: loadCedarRuntime,
         },
         envelope.replay,
         envelope.harness,

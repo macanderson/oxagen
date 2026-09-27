@@ -21,6 +21,8 @@ export default defineConfig({
         "src/cli/main.ts",
         "src/claude-code/hook-main.ts",
         "src/host/test-support.ts",
+        "src/policy/index.ts",
+        "src/policy/test-schema.ts",
         "src/test-helpers.ts",
         "src/bench/**",
         "bin/**",
