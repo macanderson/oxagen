@@ -787,6 +787,17 @@ describe("calls that cannot be decided", () => {
     expect(verdict).toMatchObject({ decision: "deny", errors: ["Argument command is not a String."] });
   });
 
+  it("denies a call whose context the schema rejects", () => {
+    const verdict = decide(policy, RELEASE_BOT, {
+      action: "builtin__shell",
+      args: { command: "ls" },
+      taint: { tainted: "yes", sources: [] } as unknown as ToolCallInput["taint"],
+    });
+    expect(verdict.decision).toBe("deny");
+    expect(verdict.reasons).toEqual([]);
+    expect(verdict.errors.length).toBeGreaterThan(0);
+  });
+
   it("ignores an argument the tool does not declare", () => {
     const verdict = decide(policy, RELEASE_BOT, {
       action: "stripe__create_refund",

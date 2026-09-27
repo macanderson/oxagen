@@ -168,3 +168,45 @@ unless { context.operator.role == "sre" };`);
     expect(visibility(policy, RELEASE_MANAGER.name, "stripe__create_payment")).toEqual(VISIBLE);
   });
 });
+
+describe("a tool Cedar cannot evaluate", () => {
+  const policy = () =>
+    compile(`@id("refund.never")
+forbid (principal, action == Action::"stripe__create_refund", resource);`);
+
+  it("hides the tool when the evaluator fails", () => {
+    const failing = {
+      ...runtime,
+      isAuthorizedPartial: () => ({ type: "failure", errors: [{ message: "wasm trap" }] }),
+    } as unknown as CedarRuntime;
+    const result = toolVisibility({
+      runtime: failing,
+      policy: policy(),
+      agent: RELEASE_MANAGER.name,
+      action: "stripe__create_refund",
+    });
+    expect(result.visible).toBe(false);
+    expect(result.reasons).toEqual([]);
+    expect(result.errors).toContain("wasm trap");
+  });
+
+  it("hides the tool when a rule errors", () => {
+    const erroring = {
+      ...runtime,
+      isAuthorizedPartial: () => ({
+        type: "success",
+        response: { decision: null, errored: ["refund.x"], mustBeDetermining: [] },
+        warnings: [],
+      }),
+    } as unknown as CedarRuntime;
+    const result = toolVisibility({
+      runtime: erroring,
+      policy: policy(),
+      agent: RELEASE_MANAGER.name,
+      action: "stripe__create_refund",
+    });
+    expect(result.visible).toBe(false);
+    expect(result.reasons).toEqual([]);
+    expect(result.errors).toContain("refund.x: Cedar could not evaluate the rule.");
+  });
+});

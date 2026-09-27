@@ -868,14 +868,28 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
     );
   }
 
-  // 2. Freshness.
+  // 2. Freshness. A stale bundle may lack a newer forbid, so it lets through
+  // only what cannot change anything. When the steering record decides tools
+  // with Cedar, the signed manifest must also class the call as a read: the
+  // name heuristic reads an MCP tool named `get_and_delete` as a lookup.
   const stale = isStale(
     bundle,
     input.latestDenyGeneration,
     input.now,
     input.mandateConfirmedAt,
   );
-  if (stale && !readOnly) {
+  const staleSafe =
+    readOnly &&
+    (bundle.cedar === undefined ||
+      input.cedar === undefined ||
+      isOxagenTool(toolName) ||
+      cedarReadOnly(
+        bundle.cedar,
+        toolName,
+        input.cedar.harness,
+        input.cedar.action,
+      ));
+  if (stale && !staleSafe) {
     if (!input.controlReachable) {
       return deny(
         "bundle_stale",

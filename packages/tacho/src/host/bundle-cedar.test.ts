@@ -311,22 +311,120 @@ when { context has harness_tool && context.harness_tool == "Shell" };`,
       decision: "deny",
       reason_code: "cedar_unavailable",
     });
-    // A name that reads like a lookup does not make a mutation a read.
-    expect(
-      evaluatePreToolUse({ ...refund, toolName: "mcp__billing__get_and_delete", toolInput: {} }),
-    ).toMatchObject({ decision: "deny", reason_code: "cedar_unavailable" });
+    // A name that reads like a lookup does not make a tool a read. The
+    // workspace did not import this one, so it is decided as the shell.
+    const getAndDelete = { ...refund, toolName: "mcp__billing__get_and_delete", toolInput: {} };
+    expect(evaluatePreToolUse(getAndDelete)).toMatchObject({
+      decision: "deny",
+      reason_code: "cedar_unavailable",
+    });
+    // Imported and signed as irreversible, it is still not a read.
+    const imported = signed({
+      ...cedar,
+      tools: { ...cedar.tools, billing__get_and_delete: { ...REFUND_TOOL } },
+    });
+    expect(evaluatePreToolUse({ ...getAndDelete, bundle: imported })).toMatchObject({
+      decision: "deny",
+      reason_code: "cedar_unavailable",
+    });
     // The manifest's own class decides: the same tool, signed as a read, falls
     // through to the permission rules.
     const lookup = signed({
       ...cedar,
       tools: { [REFUND_ACTION]: { ...REFUND_TOOL, side_effect: "read" } },
     });
-    expect(evaluatePreToolUse({ ...refund, bundle: lookup }).reason_code).not.toMatch(/^cedar_/);
+    expect(evaluatePreToolUse({ ...refund, bundle: lookup })).toMatchObject({
+      decision: "ask",
+      reason_code: "no_rule",
+    });
     // Oxagen's own tools are the kernel's to decide.
     expect(
-      evaluatePreToolUse({ ...refund, toolName: "mcp__oxagen__steering_status", toolInput: {} })
-        .reason_code,
-    ).not.toMatch(/^cedar_/);
+      evaluatePreToolUse({ ...refund, toolName: "mcp__oxagen__steering_status", toolInput: {} }),
+    ).toMatchObject({ decision: "ask", reason_code: "no_rule" });
+  });
+
+  it("decides a harness tool no map names as the shell when the host has no evaluator", () => {
+    const bundle = signed(testCedarBundle({}));
+    // Claude Code's map does not name TodoWrite.
+    expect(
+      evaluatePreToolUse({
+        ...input(bundle),
+        toolName: "TodoWrite",
+        toolInput: { todos: [] },
+        cedar: { runtime: null, harness: "claude-code" },
+      }),
+    ).toMatchObject({ decision: "deny", reason_code: "cedar_unavailable" });
+    // No map covers this harness, so even Read is decided as the shell.
+    expect(
+      evaluatePreToolUse({
+        ...input(bundle),
+        toolName: "Read",
+        toolInput: { file_path: "/repo/README.md" },
+        cedar: { runtime: null, harness: "gemini-cli" },
+      }),
+    ).toMatchObject({ decision: "deny", reason_code: "cedar_unavailable" });
+  });
+
+  it("classes an MCP tool by the signed manifest when the host runs another Cedar version", () => {
+    const cedar = { ...testCedarBundle({}), cedar_version: "0.0.0" };
+    const refund = input(signed(cedar), {
+      toolName: `mcp__${REFUND_ACTION}`,
+      toolInput: { amount_cents: 4000, customer: "cus_1" },
+    });
+    expect(evaluatePreToolUse(refund)).toMatchObject({
+      decision: "deny",
+      reason_code: "cedar_version_mismatch",
+    });
+    const lookup = signed({
+      ...cedar,
+      tools: { [REFUND_ACTION]: { ...REFUND_TOOL, side_effect: "read" } },
+    });
+    expect(evaluatePreToolUse({ ...refund, bundle: lookup })).toMatchObject({
+      decision: "ask",
+      reason_code: "no_rule",
+    });
+  });
+
+  it("holds back a stale bundle's MCP tool that only its name calls a read", () => {
+    // The stale set permits the tool. A forbid published after it would not
+    // reach this host, so the call must not run on the stale set's word.
+    const fresh = testCedarBundle({});
+    const cedar = {
+      ...fresh,
+      schema: TEST_CEDAR_SCHEMA.replace(
+        `"${REFUND_ACTION}"\n`,
+        `"${REFUND_ACTION}", "billing__get_and_delete"\n`,
+      ),
+      tools: { ...fresh.tools, billing__get_and_delete: { ...REFUND_TOOL } },
+    };
+    const stale = {
+      ...input(signed(cedar)),
+      latestDenyGeneration: { org: 2, workspace: 1 },
+    };
+    const getAndDelete = { ...stale, toolName: "mcp__billing__get_and_delete", toolInput: {} };
+    expect(evaluatePreToolUse({ ...getAndDelete, controlReachable: false })).toMatchObject({
+      decision: "deny",
+      reason_code: "bundle_stale",
+      stale: true,
+    });
+    expect(evaluatePreToolUse(getAndDelete)).toMatchObject({
+      decision: "defer",
+      reason_code: "bundle_stale",
+      stale: true,
+    });
+    // The fresh bundle lets Cedar decide the same call.
+    expect(
+      evaluatePreToolUse({ ...getAndDelete, latestDenyGeneration: { org: 1, workspace: 1 } }),
+    ).toMatchObject({ decision: "ask", reason_code: "cedar_allow" });
+    // A built-in the table classes as a read still runs on a stale bundle.
+    expect(
+      evaluatePreToolUse({
+        ...stale,
+        controlReachable: false,
+        toolName: "Read",
+        toolInput: { file_path: "/repo/README.md" },
+      }),
+    ).toMatchObject({ decision: "allow", reason_code: "rule_allow", stale: true });
   });
 
   it("denies a call when no agent on this host runs the harness", () => {
