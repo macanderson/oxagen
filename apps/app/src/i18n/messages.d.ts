@@ -6111,11 +6111,18 @@ type Messages = {
         byCalls: string;
         byCost: string;
         resultsTitle: string;
+        standingTitle: string;
+        sources: {
+          toolDefinitions: string;
+          steering: string;
+          contextFrames: string;
+        };
         noTools: string;
         toolsNotRead: string;
         unnamedTool: string;
         note: string;
         noteWithResults: string;
+        noteWithStanding: string;
         noteNotRolledUp: string;
       };
       calls: {

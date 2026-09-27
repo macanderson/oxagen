@@ -995,6 +995,62 @@ describe("runs.cost", () => {
     ]);
   });
 
+  it("maps the standing context by source, and a rollup without it as null (#4537)", async () => {
+    const estimated = (micros: string) => ({
+      micros,
+      currency: "USD",
+      basis: "estimated" as const,
+    });
+    const rollup = {
+      cost: estimated("4130000"),
+      tokens,
+      cacheHitRate: 0.9,
+      turns: 2,
+      steps: 7,
+      modelCalls: 4,
+      toolCalls: 3,
+      retries: null,
+      productiveRatio: null,
+      advancedSteps: null,
+      unproductiveSteps: null,
+      unproductiveCauses: null,
+      byModel: [],
+      byTool: [],
+      priceEntryIds: ["prc_1"],
+      rolledUpAt: "2026-09-15T08:59:00.000Z",
+      isEstimate: false,
+    };
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        baseline: null,
+        rollup: {
+          ...rollup,
+          standingContext: {
+            toolDefinitions: {
+              resentTokens: 60_000,
+              cost: estimated("18000"),
+            },
+            steering: { resentTokens: 15_000, cost: null },
+            contextFrames: null,
+          },
+        },
+      }),
+    );
+    const read = await runs.cost(ctx, "tse_4f0a");
+    if (!read.ok) throw new Error("expected an ok read");
+    expect(read.value.rollup?.standingContext).toEqual({
+      toolDefinitions: { resentTokens: 60_000, cost: estimated("18000") },
+      steering: { resentTokens: 15_000, cost: null },
+      contextFrames: null,
+    });
+    kernelRead.mockResolvedValue(
+      readOk({ runId: "tse_4f0a", baseline: null, rollup }),
+    );
+    const bare = await runs.cost(ctx, "tse_4f0a");
+    expect(bare.ok && bare.value.rollup?.standingContext).toBeNull();
+  });
+
   it("keeps a baseline figure too few runs carry as null, never a zero (negative)", async () => {
     kernelRead.mockResolvedValue(
       readOk({
