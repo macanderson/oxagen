@@ -243,6 +243,14 @@ export const BUNDLE_FEATURE_STEER_NEXT_STEP = "steer_next_step" as const;
 export const BUNDLE_FEATURE_UNBOUND_REPO = "unbound_repo" as const;
 
 /**
+ * The host can parse `cedar`, the steering repo's compiled Cedar policies,
+ * and decides each tool call with them in `PreToolUse` (lane S12). Gated for
+ * the same reason `gateway_tools` is: the bundle schema is strict, so a host
+ * built before the field would reject the whole mandate.
+ */
+export const BUNDLE_FEATURE_CEDAR = "cedar" as const;
+
+/**
  * Every bundle feature the host in *this* tree can parse, which is what it
  * advertises. One list, read by the daemon's health report and by enrollment,
  * so a field added to `policyBundleSchema` is advertised from the one place
@@ -259,6 +267,7 @@ export const TACHO_BUNDLE_FEATURES = [
   BUNDLE_FEATURE_DAILY_BUDGET,
   BUNDLE_FEATURE_STEER_NEXT_STEP,
   BUNDLE_FEATURE_UNBOUND_REPO,
+  BUNDLE_FEATURE_CEDAR,
 ] as const;
 
 export type TachoBundleFeature = (typeof TACHO_BUNDLE_FEATURES)[number];
@@ -706,6 +715,56 @@ export type SteeringManifestFrame = z.output<
   typeof steeringManifestFrameSchema
 >;
 
+const cedarIdSchema = z.string().min(1).max(256);
+
+/**
+ * One agent this host runs, from `agents/<name>.toml`, and the facts its
+ * requests read. Two agents can share a host: the hook picks the one whose
+ * harness sent the call.
+ */
+export const cedarPrincipalSchema = z
+  .object({
+    name: cedarIdSchema,
+    operator: cedarIdSchema,
+    runtime: cedarIdSchema,
+    harness: cedarIdSchema,
+    workspace: cedarIdSchema,
+    /** The role of the operator the agent works for. Absent reads as `developer`. */
+    operator_role: z.string().min(1).max(64).optional(),
+    /** What the agent's budget has left, in cents. Absent, no budget rule can fire. */
+    budget_remaining_cents: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+
+export type CedarPrincipalEntry = z.output<typeof cedarPrincipalSchema>;
+
+/**
+ * The Cedar part of the signed bundle: the steering record's compiled
+ * policies, the agents this host runs, and the schema each request is
+ * validated against (lane S12). The hook decides each built-in tool call in
+ * `PreToolUse` from this, with no call to the control plane. A tool the
+ * gateway serves (`mcp__…`) is decided by the gateway, which sees the call's
+ * full context.
+ */
+export const cedarBundleSchema = z
+  .object({
+    /** The cedar-wasm version the set was validated with. */
+    cedar_version: z.string().min(1).max(32),
+    /** Every compiled policy by its id: the grant and the steering repo's rules. */
+    policies: z
+      .record(cedarIdSchema, z.string().min(1).max(65_536))
+      .refine((p) => Object.keys(p).length <= 2048, "at most 2048 policies"),
+    /** The ids of the rules marked `@decision("require_approval")`. */
+    approval_ids: z.array(cedarIdSchema).max(2048),
+    /** `policy/schema.cedarschema`, which the request is validated against. */
+    schema: z.string().min(1).max(1_048_576),
+    /** The agents whose `runtime` is this host. */
+    principals: z.array(cedarPrincipalSchema).min(1).max(64),
+  })
+  .strict();
+
+export type CedarBundle = z.output<typeof cedarBundleSchema>;
+
 /** The signed policy bundle a host caches (spec section 7.1). */
 export const policyBundleSchema = z
   .object({
@@ -951,6 +1010,14 @@ export const policyBundleSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * The steering record's Cedar policies for this agent (lane S12). The
+     * hook decides every tool call with them after the deny rules above.
+     * Absent means the workspace has published no steering record, and the
+     * permission rules decide alone. Emitted only to a host that advertised
+     * `BUNDLE_FEATURE_CEDAR`.
+     */
+    cedar: cedarBundleSchema.optional(),
     signature: z
       .object({
         key_id: z.string().min(1),
