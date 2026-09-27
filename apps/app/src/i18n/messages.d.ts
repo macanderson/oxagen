@@ -5662,6 +5662,9 @@ type Messages = {
       pause: string;
       replay: string;
       speedLabel: string;
+      scrub: string;
+      waited: string;
+      working: string;
       speed: string;
       position: string;
       unpaced: string;
