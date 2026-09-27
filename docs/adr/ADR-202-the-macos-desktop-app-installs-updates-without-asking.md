@@ -190,7 +190,11 @@ Recorded here, not built:
   installer carries a short notice. In the docs, `LatestDownloads` and
   `ReleaseDownloads` link to that section (`ReleaseDownloads` from 2.1.2,
   the first app with the updater). In the web app, `DesktopDownloads` on
-  the enrollment and onboarding screens names the off switch. When Oxagen writes terms of service, they
+  the enrollment and onboarding screens names the off switch. On
+  downloads.oxagen.sh, `renderIndexHtml` (`apps/desktop/src/downloads.ts`)
+  puts a short notice under the download button and a full one, with the
+  off switch, under Verify, from 2.1.2 on. When Oxagen writes terms of
+  service, they
   carry this sentence: "On macOS, the Oxagen desktop app downloads and
   installs new versions automatically unless you turn automatic updates
   off."
