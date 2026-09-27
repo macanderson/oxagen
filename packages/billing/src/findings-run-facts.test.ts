@@ -122,7 +122,7 @@ describe("readFirstPrompts", () => {
     vi.mocked(chSelect).mockResolvedValueOnce({
       data: [
         {
-          root_session_uuid: ROOT,
+          root: ROOT,
           at: "2026-09-10T10:00:00.123456Z",
           prompt_digest: "sha256:p",
           prompt_source: "typed",
@@ -130,7 +130,7 @@ describe("readFirstPrompts", () => {
           command_name: "",
         },
         {
-          root_session_uuid: "00000000-0000-4000-8000-0000000000ff",
+          root: "00000000-0000-4000-8000-0000000000ff",
           at: "2026-09-10T10:00:00.000000Z",
           prompt_digest: "sha256:q",
           prompt_source: null,
@@ -147,6 +147,8 @@ describe("readFirstPrompts", () => {
     };
     expect(call.query).toContain("kind = 'turn_start'");
     expect(call.query).toContain("LIMIT 1 BY root_session_uuid");
+    // No alias names a column, so the filters read the stored uuids.
+    expect(call.query).not.toMatch(/AS (root_session_uuid|session_uuid)\b/);
     expect(call.params).toEqual({
       roots: [ROOT],
       from: "2026-08-28 00:00:00.000",
@@ -177,8 +179,8 @@ describe("readCompactions", () => {
     vi.mocked(chSelect).mockResolvedValueOnce({
       data: [
         {
-          root_session_uuid: ROOT,
-          session_uuid: CHILD,
+          root: ROOT,
+          chain: CHILD,
           seq: "4",
           at: "2026-09-10T11:00:00.000000Z",
           compact_trigger: "auto",
@@ -186,8 +188,8 @@ describe("readCompactions", () => {
           tokens_after: null,
         },
         {
-          root_session_uuid: ROOT,
-          session_uuid: ROOT,
+          root: ROOT,
+          chain: ROOT,
           seq: 9,
           at: "2026-09-10T10:00:00.000000Z",
           compact_trigger: "",

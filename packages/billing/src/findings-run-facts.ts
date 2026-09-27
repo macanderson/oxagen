@@ -147,7 +147,7 @@ export async function readRunRefs(
 }
 
 interface FirstPromptRow {
-  root_session_uuid: string;
+  root: string;
   at: string;
   prompt_digest: string;
   prompt_source: string | null;
@@ -158,9 +158,10 @@ interface FirstPromptRow {
 /**
  * The first `turn_start` frame with a prompt on each root's own chain. A
  * slash command is kept, with its name, so a detector can tell it from typed
- * text.
+ * text. A text column takes an alias of its own, since a ClickHouse alias
+ * that names a column replaces the column everywhere in the query.
  */
-const FIRST_PROMPTS_QUERY = `SELECT toString(root_session_uuid) AS root_session_uuid,
+const FIRST_PROMPTS_QUERY = `SELECT toString(root_session_uuid) AS root,
   formatDateTime(ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
   prompt_digest, prompt_source, prompt_origin, command_name
   FROM tacho_events FINAL
@@ -193,7 +194,7 @@ export async function readFirstPrompts(
       }),
     );
     for (const r of result.data) {
-      const runId = runByRoot.get(r.root_session_uuid);
+      const runId = runByRoot.get(r.root);
       if (runId === undefined) continue;
       out.set(runId, {
         at: new Date(r.at),
@@ -209,8 +210,8 @@ export async function readFirstPrompts(
 }
 
 interface CompactionRow {
-  root_session_uuid: string;
-  session_uuid: string;
+  root: string;
+  chain: string;
   seq: string | number;
   at: string;
   compact_trigger: string | null;
@@ -224,8 +225,8 @@ interface CompactionRow {
  * records it once. This is the rule the ingest handler counts a session's
  * compactions by (`numCompactions`).
  */
-const COMPACTIONS_QUERY = `SELECT toString(root_session_uuid) AS root_session_uuid,
-  toString(session_uuid) AS session_uuid, seq,
+const COMPACTIONS_QUERY = `SELECT toString(root_session_uuid) AS root,
+  toString(session_uuid) AS chain, seq,
   formatDateTime(ts, '%Y-%m-%dT%H:%i:%S.%fZ', 'UTC') AS at,
   compact_trigger, tokens_before, tokens_after
   FROM tacho_events FINAL
@@ -255,15 +256,14 @@ export async function readCompactions(
       }),
     );
     for (const r of result.data) {
-      const runId = runByRoot.get(r.root_session_uuid);
+      const runId = runByRoot.get(r.root);
       if (runId === undefined) continue;
       const list = out.get(runId) ?? [];
       list.push({
         at: new Date(r.at),
         atMicros: microsOf(r.at),
         seq: Number(r.seq),
-        sessionUuid:
-          r.session_uuid === r.root_session_uuid ? null : r.session_uuid,
+        sessionUuid: r.chain === r.root ? null : r.chain,
         trigger: text(r.compact_trigger),
         tokensBefore: count(r.tokens_before),
         tokensAfter: count(r.tokens_after),

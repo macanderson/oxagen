@@ -442,6 +442,9 @@ function rowContent(row: ModelCallFrameRow): string {
     // Last, so frames that already differ keep the order they had before the
     // chain was read. Two chains' frames of one instant differ here alone.
     row.sessionUuid ?? null,
+    // After the chain, for the same reason: two frames that differ only in
+    // their system context keep one order from pass to pass.
+    row.systemContextDigest ?? null,
   ]);
 }
 
