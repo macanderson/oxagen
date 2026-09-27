@@ -1391,6 +1391,112 @@ describe("the GitHub seam's merge-queue calls", () => {
     ).rejects.toMatchObject({ reason: "github_refused" });
   });
 
+  it("lists a commit's files with their blob ids, leaving out directories and submodules", async () => {
+    const { gh, repo, calls } = await restSeam({
+      [`GET ${REPO_PATH}/git/commits/c1`]: () => ({ tree: { sha: "t1" } }),
+      [`GET ${REPO_PATH}/git/trees/t1?recursive=1`]: () => ({
+        truncated: false,
+        tree: [
+          { path: "rules", type: "tree", sha: "t2" },
+          { path: "rules/a.toml", type: "blob", sha: "b1" },
+          { path: "vendor", type: "commit", sha: "s1" },
+        ],
+      }),
+    });
+    await expect(gh.listTree(repo, "c1")).resolves.toEqual([
+      { path: "rules/a.toml", blob: "b1" },
+    ]);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("walks a tree GitHub cut short one directory at a time", async () => {
+    const { gh, repo } = await restSeam({
+      [`GET ${REPO_PATH}/git/commits/c1`]: () => ({ tree: { sha: "t1" } }),
+      [`GET ${REPO_PATH}/git/trees/t1?recursive=1`]: () => ({
+        truncated: true,
+        tree: [],
+      }),
+      [`GET ${REPO_PATH}/git/trees/t1`]: () => ({
+        tree: [
+          { path: "rules", type: "tree", sha: "t2" },
+          { path: "README.md", type: "blob", sha: "b0" },
+        ],
+      }),
+      [`GET ${REPO_PATH}/git/trees/t2`]: () => ({
+        tree: [{ path: "a.toml", type: "blob", sha: "b1" }],
+      }),
+    });
+    const entries = await gh.listTree(repo, "c1");
+    expect(entries).toHaveLength(2);
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        { path: "README.md", blob: "b0" },
+        { path: "rules/a.toml", blob: "b1" },
+      ]),
+    );
+  });
+
+  it("refuses a tree when even one directory's listing is cut short", async () => {
+    const { gh, repo } = await restSeam({
+      [`GET ${REPO_PATH}/git/commits/c1`]: () => ({ tree: { sha: "t1" } }),
+      [`GET ${REPO_PATH}/git/trees/t1?recursive=1`]: () => ({
+        truncated: true,
+        tree: [],
+      }),
+      [`GET ${REPO_PATH}/git/trees/t1`]: () => ({ truncated: true, tree: [] }),
+    });
+    await expect(gh.listTree(repo, "c1")).rejects.toMatchObject({
+      reason: "tree_too_large",
+    });
+    const missing = await restSeam({});
+    await expect(
+      missing.gh.listTree(missing.repo, "c1"),
+    ).rejects.toMatchObject({ reason: "github_refused" });
+  });
+
+  it("tags a commit, and keeps a tag that already names that commit", async () => {
+    const { gh, repo, calls } = await restSeam({
+      [`POST ${REPO_PATH}/git/refs`]: () => ({ ref: "refs/tags/steering/3" }),
+    });
+    await expect(
+      gh.createTag(repo, "steering/3", "sq1"),
+    ).resolves.toBeUndefined();
+    expect(calls[0]!.body).toEqual({ ref: "refs/tags/steering/3", sha: "sq1" });
+    const again = await restSeam({
+      [`POST ${REPO_PATH}/git/refs`]: refuse(422, "Reference already exists"),
+      [`GET ${REPO_PATH}/git/ref/tags/steering/3`]: () => ({
+        object: { sha: "sq1" },
+      }),
+    });
+    await expect(
+      again.gh.createTag(again.repo, "steering/3", "sq1"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("refuses to move a tag that names another commit", async () => {
+    const { gh, repo } = await restSeam({
+      [`POST ${REPO_PATH}/git/refs`]: refuse(422, "Reference already exists"),
+      [`GET ${REPO_PATH}/git/ref/tags/steering/3`]: () => ({
+        object: { sha: "sq0" },
+      }),
+    });
+    await expect(gh.createTag(repo, "steering/3", "sq1")).rejects.toMatchObject(
+      { reason: "tag_exists", message: expect.stringContaining("sq0") },
+    );
+    const refused = await restSeam({
+      [`POST ${REPO_PATH}/git/refs`]: refuse(403, "Resource not accessible"),
+    });
+    await expect(
+      refused.gh.createTag(refused.repo, "steering/3", "sq1"),
+    ).rejects.toMatchObject({ reason: "github_refused" });
+    const unreadable = await restSeam({
+      [`POST ${REPO_PATH}/git/refs`]: refuse(422, "Reference already exists"),
+    });
+    await expect(
+      unreadable.gh.createTag(unreadable.repo, "steering/3", "sq1"),
+    ).rejects.toMatchObject({ reason: "github_refused" });
+  });
+
   it("refuses a REST call on a handle it did not resolve", async () => {
     const { gh, repo } = await restSeam({});
     const forged = { ...repo };

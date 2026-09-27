@@ -8,12 +8,14 @@
 import type { CapabilityContext } from "@oxagen/oxagen";
 import type { SecurityEventInput } from "@oxagen/telemetry";
 import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
+import { gitBlobId } from "@oxagen/steering-bundle";
 import type { SteeringDeps } from "./context.steering.deps";
-import type {
-  SteeringApproval,
-  SteeringChangedFile,
-  SteeringGitHub,
-  SteeringRepository,
+import {
+  tagExists,
+  type SteeringApproval,
+  type SteeringChangedFile,
+  type SteeringGitHub,
+  type SteeringRepository,
 } from "./context.steering.github";
 import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
@@ -922,6 +924,19 @@ export class FakeGitHub implements SteeringGitHub {
     return [...this.tree(this.shaOf(ref)).keys()]
       .filter((path) => path.startsWith(`${dir}/`))
       .sort();
+  }
+  /** Every tag `createTag` wrote: its name, and the commit it names. */
+  tags = new Map<string, string>();
+  async listTree(_repo: SteeringRepository, commit: string) {
+    return [...this.tree(this.shaOf(commit))]
+      .map(([path, content]) => ({ path, blob: gitBlobId(content) }))
+      .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  }
+  async createTag(repo: SteeringRepository, name: string, sha: string) {
+    const tagged = this.tags.get(name);
+    if (tagged !== undefined && tagged !== sha)
+      throw tagExists(repo.fullName, name, tagged, sha);
+    this.tags.set(name, sha);
   }
   /** Remove a file on a branch, as a person with push access does. */
   remove(branch: string, path: string, message = ""): string {

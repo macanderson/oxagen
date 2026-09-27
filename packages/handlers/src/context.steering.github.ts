@@ -105,6 +105,12 @@ interface SteeringRepositoryFields {
   defaultBranch: string;
 }
 
+/** One file in a commit's tree: its path, and its git blob id. */
+export interface SteeringTreeEntry {
+  path: string;
+  blob: string;
+}
+
 /**
  * The port every steering handler publishes through (ADR-061). The method
  * names are GitHub's because GitHub was the first host; a GitLab
@@ -201,6 +207,20 @@ export interface SteeringHost {
     ref: string,
     dir: string,
   ): Promise<string[]>;
+  /**
+   * Every file at `commit`, with its git blob id. A publish reads the merged
+   * tree through this, and skips fetching a file whose blob it already holds.
+   */
+  listTree(
+    repo: SteeringRepository,
+    commit: string,
+  ): Promise<SteeringTreeEntry[]>;
+  /**
+   * Tag the commit `sha` as `name`. A tag already at `sha` is left as it is,
+   * so a publish that runs again succeeds. A tag at another commit refuses
+   * with `tag_exists`.
+   */
+  createTag(repo: SteeringRepository, name: string, sha: string): Promise<void>;
   /**
    * Every path the commit `head` changes against `base`, as its pull request
    * shows them; a rename names both its paths. Refuses with `too_many_files`
@@ -773,6 +793,69 @@ const RESET_BRANCH = `mutation ResetSteeringBranch(
   }
 }`;
 
+/** The refusal for a tag that already names another commit. */
+export function tagExists(
+  fullName: string,
+  name: string,
+  tagged: string,
+  sha: string,
+): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "tag_exists",
+    message: `The tag ${name} in ${fullName} already names commit ${tagged}, so it was not moved to ${sha}.`,
+  });
+}
+
+interface GitTreeListing {
+  truncated?: boolean;
+  tree: { path: string; type: string; sha: string }[];
+}
+
+/**
+ * Every blob under the tree `treeSha`, with its blob id. GitHub cuts a
+ * recursive listing short on a very large tree and flags it `truncated`, so a
+ * cut listing is walked again one directory at a time. A partial tree is never
+ * returned as the whole one, because a publish would read a file it cannot see
+ * as deleted.
+ */
+async function listGitTree(
+  rest: GitHubRest,
+  repoPath: string,
+  treeSha: string,
+): Promise<SteeringTreeEntry[]> {
+  const whole = await rest.request<GitTreeListing>(
+    "GET",
+    `${repoPath}/git/trees/${githubPath(treeSha)}?recursive=1`,
+  );
+  if (!whole.data.truncated)
+    return whole.data.tree
+      .filter((item) => item.type === "blob")
+      .map((item) => ({ path: item.path, blob: item.sha }));
+  const entries: SteeringTreeEntry[] = [];
+  const pending = [{ sha: treeSha, prefix: "" }];
+  for (let dir = pending.pop(); dir; dir = pending.pop()) {
+    const level = await rest.request<GitTreeListing>(
+      "GET",
+      `${repoPath}/git/trees/${githubPath(dir.sha)}`,
+    );
+    if (level.data.truncated)
+      throw new HandlerError({
+        code: "conflict",
+        reason: "tree_too_large",
+        message: `GitHub cut short the listing of the directory ${dir.prefix || "/"} in ${repoPath}, so the tree cannot be read whole.`,
+      });
+    for (const item of level.data.tree) {
+      const itemPath = `${dir.prefix}${item.path}`;
+      if (item.type === "blob")
+        entries.push({ path: itemPath, blob: item.sha });
+      else if (item.type === "tree")
+        pending.push({ sha: item.sha, prefix: `${itemPath}/` });
+    }
+  }
+  return entries;
+}
+
 export function githubRefused(err: unknown): HandlerError {
   if (err instanceof HandlerError) return err;
   return new HandlerError({
@@ -1074,6 +1157,44 @@ export function createSteeringGitHub(
       } catch (err) {
         throw githubRefused(err);
       }
+    },
+    async listTree(repo, commit) {
+      const { rest, path } = restFor(repo);
+      try {
+        const head = await rest.request<{ tree: { sha: string } }>(
+          "GET",
+          `${path}/git/commits/${githubPath(commit)}`,
+        );
+        return await listGitTree(rest, path, head.data.tree.sha);
+      } catch (err) {
+        throw githubRefused(err);
+      }
+    },
+    async createTag(repo, name, sha) {
+      const { rest, path } = restFor(repo);
+      try {
+        await rest.request("POST", `${path}/git/refs`, {
+          ref: `refs/tags/${name}`,
+          sha,
+        });
+        return;
+      } catch (err) {
+        if (!(err instanceof GitHubApiError && err.status === 422))
+          throw githubRefused(err);
+      }
+      // GitHub answers 422 when the tag exists. At `sha` it is this tag,
+      // written by an earlier run of the same publish.
+      let tagged: string;
+      try {
+        const out = await rest.request<{ object: { sha: string } }>(
+          "GET",
+          `${path}/git/ref/tags/${githubPath(name)}`,
+        );
+        tagged = out.data.object.sha;
+      } catch (err) {
+        throw githubRefused(err);
+      }
+      if (tagged !== sha) throw tagExists(repo.fullName, name, tagged, sha);
     },
     async reportCheckRun(repo, args) {
       try {

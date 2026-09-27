@@ -27,9 +27,11 @@ import { and, eq, isNull, notInArray } from "drizzle-orm";
 import {
   linkedOxagenUser,
   refuseLongCompare,
+  tagExists,
   type SteeringChangedFile,
   type SteeringHost,
   type SteeringRepository,
+  type SteeringTreeEntry,
 } from "./context.steering.github";
 import {
   GITLAB_PROVIDER,
@@ -58,6 +60,11 @@ const STATUS_DESCRIPTION_LIMIT = 255;
 
 /** How many times the branch update polls a rebase before giving up. */
 const REBASE_POLL_LIMIT = 30;
+
+/** Entries per page of a tree listing, GitLab's largest page. */
+const TREE_PAGE_SIZE = 100;
+/** Pages of a tree listing read before the tree counts as too large. */
+const TREE_PAGE_LIMIT = 100;
 
 const GITLAB_BASE_URL = "https://gitlab.com";
 const GITLAB_REQUEST_TIMEOUT_MS = 30_000;
@@ -584,6 +591,58 @@ export function createSteeringGitLab(
           path.startsWith(`${dir}/`),
         ),
       );
+    },
+
+    listTree(repo, commit) {
+      return callRest(repo, async (rest, path) => {
+        const entries: SteeringTreeEntry[] = [];
+        for (let page = 1; page <= TREE_PAGE_LIMIT; page++) {
+          const out = await rest.request<
+            { id: string; path: string; type: string }[]
+          >(
+            "GET",
+            `${path}/repository/tree?recursive=true&ref=${encodeURIComponent(commit)}&per_page=${TREE_PAGE_SIZE}&page=${page}`,
+          );
+          for (const item of out.data)
+            if (item.type === "blob")
+              entries.push({ path: item.path, blob: item.id });
+          if (out.data.length < TREE_PAGE_SIZE) return entries;
+        }
+        // A partial tree would read every file it missed as deleted.
+        throw new HandlerError({
+          code: "conflict",
+          reason: "tree_too_large",
+          message: `${repo.fullName} holds more than ${TREE_PAGE_SIZE * TREE_PAGE_LIMIT} entries at ${commit}, more than a steering publish reads.`,
+        });
+      });
+    },
+
+    createTag(repo, name, sha) {
+      return callRest(repo, async (rest, path) => {
+        try {
+          await rest.request("POST", `${path}/repository/tags`, {
+            tag_name: name,
+            ref: sha,
+          });
+          return;
+        } catch (err) {
+          // GitLab answers 400 when the tag exists. At `sha` it is this tag,
+          // written by an earlier run of the same publish.
+          if (!isStatus(err, 400) && !isStatus(err, 409)) throw err;
+          let tagged: string;
+          try {
+            const out = await rest.request<{ commit: { id: string } }>(
+              "GET",
+              `${path}/repository/tags/${encodeURIComponent(name)}`,
+            );
+            tagged = out.data.commit.id;
+          } catch {
+            // No such tag: the 400 was about something else, so report it.
+            throw err;
+          }
+          if (tagged !== sha) throw tagExists(repo.fullName, name, tagged, sha);
+        }
+      });
     },
 
     changedPaths(repo, base, head) {

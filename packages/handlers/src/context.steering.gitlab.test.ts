@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
 import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
+import { gitBlobId } from "@oxagen/steering-bundle";
 
 const gate = vi.hoisted(() => ({ refuse: false }));
 vi.mock("@oxagen/iam/org-role", () => ({
@@ -886,6 +887,71 @@ describe("the GitLab seam's merge-queue calls", () => {
     });
   });
 
+  it("lists every file at a commit with its blob id, a page of one hundred at a time", async () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 150; i++) files[`rules/r${i}.toml`] = `rule ${i}`;
+    const { api, seam, repo } = await onBranch(files);
+    const entries = await seam.listTree(repo, "c0");
+    expect(entries).toHaveLength(150);
+    expect(entries).toContainEqual({
+      path: "rules/r7.toml",
+      blob: gitBlobId("rule 7"),
+    });
+    // The directory itself is not a file, so it is left out.
+    expect(entries.map((entry) => entry.path)).not.toContain("rules");
+    expect(
+      api.restCalls.filter((call) => call === "GET /repository/tree"),
+    ).toHaveLength(2);
+    await expect(seam.listTree(repo, "missing")).rejects.toMatchObject({
+      reason: "gitlab_refused",
+    });
+  });
+
+  it("refuses a tree larger than a publish reads", async () => {
+    const { api } = await onBranch();
+    // The seam takes its REST caller when it resolves the repository, so a
+    // fresh seam picks up this one.
+    const request = api.rest.bind(api);
+    api.rest = (token) => {
+      const inner = request(token);
+      return {
+        request: async <T>(method: string, path: string, body?: unknown) =>
+          path.includes("/repository/tree")
+            ? {
+                status: 200,
+                data: Array.from({ length: 100 }, (_, i) => ({
+                  id: `b${i}`,
+                  path: `f${i}`,
+                  type: "blob",
+                })) as T,
+              }
+            : inner.request<T>(method, path, body),
+      };
+    };
+    const { seam: large } = gitlabSeam(api);
+    const fresh = await large.resolveRepository(SCOPE);
+    await expect(large.listTree(fresh, "c0")).rejects.toMatchObject({
+      reason: "tree_too_large",
+    });
+  });
+
+  it("tags a commit, keeps a tag already at it, and refuses to move one", async () => {
+    const { api, seam, repo, head } = await onBranch();
+    await expect(
+      seam.createTag(repo, "steering/1", "c0"),
+    ).resolves.toBeUndefined();
+    expect(api.tags.get("steering/1")).toBe("c0");
+    await expect(
+      seam.createTag(repo, "steering/1", "c0"),
+    ).resolves.toBeUndefined();
+    await expect(seam.createTag(repo, "steering/1", head)).rejects.toMatchObject(
+      { reason: "tag_exists", message: expect.stringContaining("c0") },
+    );
+    await expect(
+      seam.createTag(repo, "steering/2", "missing"),
+    ).rejects.toMatchObject({ reason: "gitlab_refused" });
+  });
+
   it("refuses a REST call on a handle it did not resolve", async () => {
     const { seam, repo } = await onBranch();
     const forged = { ...repo } as SteeringRepository;
@@ -1039,6 +1105,8 @@ describe("the host dispatcher", () => {
       environment: "steering",
       description: "d",
     });
+    await host.listTree(repo, "a");
+    await host.createTag(repo, "steering/1", "a");
     expect(calls).toEqual([
       "changedFiles",
       "commitFiles",
@@ -1047,6 +1115,8 @@ describe("the host dispatcher", () => {
       "resetBranch",
       "listApprovals",
       "recordDeployment",
+      "listTree",
+      "createTag",
     ]);
   });
 });

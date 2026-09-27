@@ -10,6 +10,7 @@ import {
   type GitLabCommitAction,
   type GitLabMergeRequest,
 } from "@oxagen/gitlab";
+import { gitBlobId } from "@oxagen/steering-bundle";
 import type { GitLabRest, GitLabRestResponse } from "./context.steering.gitlab";
 
 interface Commit {
@@ -73,6 +74,8 @@ export class FakeGitLabApi {
   }[] = [];
   /** Answer deployments 403, as for a Developer-role token. */
   deploymentsRefused = false;
+  /** Every tag written through REST: its name, and the commit it names. */
+  tags = new Map<string, string>();
   seq = 0;
   clock = Date.parse("2026-09-23T10:00:00.000Z");
 
@@ -222,6 +225,43 @@ function restOver(api: FakeGitLabApi): GitLabRest {
         const id = a && b ? api.mergeBase(a, b) : null;
         if (!id) throw new GitLabApiError(400, "Could not find merge base");
         return answer<T>(200, { id });
+      }
+      if (route === "GET /repository/tree") {
+        const sha = api.sha(url.searchParams.get("ref") ?? "");
+        if (!sha) throw new GitLabApiError(404, "404 Tree Not Found");
+        const entries = [...api.tree(sha)].flatMap(([path, content]) => {
+          // GitLab lists each directory as its own `tree` entry.
+          const dirs = path
+            .split("/")
+            .slice(0, -1)
+            .map((_, i, parts) => parts.slice(0, i + 1).join("/"));
+          return [
+            ...dirs.map((dir) => ({ id: `tree:${dir}`, path: dir, type: "tree" })),
+            { id: gitBlobId(content), path, type: "blob" },
+          ];
+        });
+        const unique = [
+          ...new Map(entries.map((entry) => [entry.path, entry])).values(),
+        ].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+        const size = Number(url.searchParams.get("per_page") ?? 20);
+        const page = Number(url.searchParams.get("page") ?? 1);
+        return answer<T>(200, unique.slice((page - 1) * size, page * size));
+      }
+      if (route === "POST /repository/tags") {
+        const { tag_name: name, ref } = body as { tag_name: string; ref: string };
+        if (api.tags.has(name))
+          throw new GitLabApiError(400, `Tag ${name} already exists`);
+        const sha = api.sha(ref);
+        if (!sha) throw new GitLabApiError(400, "Target is invalid");
+        api.tags.set(name, sha);
+        return answer<T>(201, { name, commit: { id: sha } });
+      }
+      const tagRoute = /^GET \/repository\/tags\/(.+)$/.exec(route);
+      if (tagRoute) {
+        const name = decodeURIComponent(tagRoute[1]!);
+        const sha = api.tags.get(name);
+        if (!sha) throw new GitLabApiError(404, "404 Tag Not Found");
+        return answer<T>(200, { name, commit: { id: sha } });
       }
       if (route === "POST /deployments") {
         if (api.deploymentsRefused)
