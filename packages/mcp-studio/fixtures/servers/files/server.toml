@@ -1,0 +1,23 @@
+#:schema https://oxagen.sh/schemas/mcp-server/v1.json
+schema = "mcp-server/v1"
+name = "files"
+label = "Files"
+description = "Reads and writes files in the directory each machine sets."
+
+[source]
+type = "registry"
+registry = "https://registry.modelcontextprotocol.io"
+server = "io.github.modelcontextprotocol/server-filesystem"
+version = "2026.8.1"
+machines = ["dev-laptops"]                 # run the entry's package on these machines
+registry_type = "npm"                      # the entry's npm package
+env = ["WORK_DIR"]                         # names only, never values
+
+[source.arguments]
+directory = "${WORK_DIR}"                  # the positional argument whose valueHint is directory
+
+[exposure]
+mode = "direct"
+
+[sync]
+schedule = "daily"

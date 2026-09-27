@@ -1,0 +1,23 @@
+{
+  "schema": "mcp-tools-lock/v1",
+  "server": "files",
+  "source": {
+    "args": [
+      "--yes",
+      "@modelcontextprotocol/server-filesystem@2026.8.1",
+      "${WORK_DIR}"
+    ],
+    "command": "npx",
+    "package": {
+      "digest": "sha256:0d4c7a91e5b3f8260c1e9a7d4b2f6e8039a5c1d7e4b9f2a6083c5e1d7a4b9f26",
+      "name": "@modelcontextprotocol/server-filesystem",
+      "registry_type": "npm",
+      "version": "2026.8.1"
+    },
+    "registry": "https://registry.modelcontextprotocol.io",
+    "server": "io.github.modelcontextprotocol/server-filesystem",
+    "type": "registry",
+    "version": "2026.8.1"
+  },
+  "tools": {}
+}
