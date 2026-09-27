@@ -174,9 +174,11 @@ async function enableThroughSteering(
           origin: "proposed",
           discoveredTools: [],
         })
+        // onConflictDoNothing names the partial index's predicate `where`, not
+        // `targetWhere`, and renders it as ON CONFLICT (...) WHERE ... DO NOTHING.
         .onConflictDoNothing({
           target: [s.workspaceId, s.orgListingId],
-          targetWhere: sql`org_listing_id IS NOT NULL`,
+          where: sql`org_listing_id IS NOT NULL`,
         })
         .returning({ id: s.id, publicId: s.publicId }),
     );
