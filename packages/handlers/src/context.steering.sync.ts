@@ -81,12 +81,14 @@ export interface SyncPublished {
  * steering version (@oxagen/steering-bundle `publish`). It takes only the
  * sync's scope. The port resolves the steering repository and reads its
  * production head itself, because this sync reads the main code repository
- * (ADR-184), and a code repository's head is never a steering head.
+ * (ADR-184), and a code repository's head is never a steering head. It
+ * answers null when the workspace has no steering repository to publish.
+ * `steeringSyncPublish` (./steering-repo/publisher) builds it.
  */
 export type SyncPublish = (scope: {
   orgId: string;
   workspaceId: string;
-}) => Promise<SyncPublished>;
+}) => Promise<SyncPublished | null>;
 
 export interface SyncDeps {
   github: SteeringHost;

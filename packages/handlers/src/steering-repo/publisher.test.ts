@@ -1,0 +1,353 @@
+// S5's publish() bound to a workspace's steering repo (S3, #4449): the key
+// every caller stores versions under, the bundle identity, the deps over the
+// host, the merge's publisher, and the repository sync's publish port.
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
+import {
+  gitBlobId,
+  memoryVersionStore,
+  type PublishDeps,
+} from "@oxagen/steering-bundle";
+import type {
+  SteeringHost,
+  SteeringRepository,
+} from "../context.steering.github";
+
+const db = vi.hoisted(() => ({
+  rows: [] as { organization: string; workspace: string }[],
+  calls: 0,
+}));
+vi.mock("@oxagen/database", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@oxagen/database")>();
+  // The slug read is select → from → innerJoin → where → limit.
+  const chain: Record<string, unknown> = {};
+  for (const step of ["select", "from", "innerJoin", "where"])
+    chain[step] = () => chain;
+  chain.limit = async () => db.rows;
+  return {
+    ...real,
+    withSystemDb: async (fn: (tx: unknown) => Promise<unknown>) => {
+      db.calls += 1;
+      return fn(chain);
+    },
+  };
+});
+
+import {
+  steeringBundleIdentity,
+  steeringPublishDeps,
+  steeringPublisher,
+  steeringRepositoryKey,
+  steeringSyncPublish,
+} from "./publisher";
+
+const SCOPE = {
+  orgId: "0192d4a8-7c1e-7a00-8000-00000000ac3e",
+  workspaceId: "0192d4a8-7c1e-7a00-8000-0000000c0e01",
+};
+const REPO: SteeringRepository = {
+  provider: "github",
+  owner: "a-intel",
+  repo: "oxagen-core-platform",
+  fullName: "a-intel/oxagen-core-platform",
+  currentFullName: "a-intel/oxagen-core-platform",
+  defaultBranch: "main",
+};
+const KEY = "github.com/a-intel/oxagen-core-platform";
+const HEAD = "5eed000000000000000000000000000000000001";
+const LATER = "5eed000000000000000000000000000000000002";
+
+/** A host over one tree, whose production branch points at `head`. */
+function fakeHost(files: Map<string, string> = fixtureRepo()) {
+  const tags = new Map<string, string>();
+  const host = {
+    tags,
+    resolveRepository: vi.fn(async () => REPO),
+    readFile: vi.fn(
+      async (_repo: SteeringRepository, path: string) =>
+        files.get(path) ?? null,
+    ),
+    branchHead: vi.fn(async (): Promise<string | null> => HEAD),
+    listTree: vi.fn(async () =>
+      [...files].map(([path, text]) => ({ path, blob: gitBlobId(text) })),
+    ),
+    createTag: vi.fn(
+      async (_repo: SteeringRepository, name: string, sha: string) => {
+        tags.set(name, sha);
+      },
+    ),
+  };
+  return { fake: host, host: host as unknown as SteeringHost };
+}
+
+// No server compiles here, so the bundle's tool manifest stays null.
+const noCompiler = (deps: Omit<PublishDeps, "project">): PublishDeps => ({
+  ...deps,
+  compiler: () => {
+    throw new Error("the publisher tests compile no tools");
+  },
+});
+const now = () => new Date("2026-09-27T08:00:00Z");
+
+beforeEach(() => {
+  db.rows = [{ organization: "a-intel", workspace: "core-platform" }];
+  db.calls = 0;
+});
+
+describe("steeringRepositoryKey", () => {
+  it("names a GitHub repository by host, owner, and name, lowercased", () => {
+    expect(
+      steeringRepositoryKey({
+        ...REPO,
+        fullName: "A-Intel/Oxagen-Core-Platform",
+      }),
+    ).toBe(KEY);
+  });
+
+  it("keeps a GitLab project's nested group in the owner", () => {
+    expect(
+      steeringRepositoryKey({
+        provider: "gitlab",
+        projectId: "42",
+        owner: "acme/platform/tools",
+        repo: "steering",
+        fullName: "Acme/Platform/Tools/Steering",
+        currentFullName: "Acme/Platform/Tools/Steering",
+        defaultBranch: "main",
+      }),
+    ).toBe("gitlab.com/acme/platform/tools/steering");
+  });
+
+  it("keys a renamed repository by the name its binding recorded", () => {
+    expect(
+      steeringRepositoryKey({ ...REPO, currentFullName: "a-intel/renamed" }),
+    ).toBe(KEY);
+  });
+});
+
+describe("steeringBundleIdentity", () => {
+  it("names the repository and the workspace's slugs", async () => {
+    await expect(steeringBundleIdentity(SCOPE, REPO)).resolves.toEqual({
+      repository: KEY,
+      scope: "workspace",
+      organization: "a-intel",
+      workspace: "core-platform",
+    });
+    expect(db.calls).toBe(1);
+  });
+
+  it("refuses a workspace outside the organization", async () => {
+    db.rows = [];
+    await expect(steeringBundleIdentity(SCOPE, REPO)).rejects.toMatchObject({
+      code: "not_found",
+      reason: "workspace_not_found",
+    });
+  });
+});
+
+describe("steeringPublishDeps", () => {
+  it("refuses a repository key other than its own", async () => {
+    const { host } = fakeHost();
+    const deps = steeringPublishDeps({ scope: SCOPE, host, repo: REPO });
+    const other = "github.com/a-intel/other";
+    const refusal = /Compute the key with steeringRepositoryKey/;
+    await expect(deps.health(other)).rejects.toThrow(refusal);
+    await expect(deps.head(other)).rejects.toThrow(refusal);
+    await expect(deps.tree(other, HEAD)).rejects.toThrow(refusal);
+    await expect(deps.tag(other, "steering/1", HEAD)).rejects.toThrow(refusal);
+  });
+
+  it("reads healthy until S2 reports health, and reads its health after", async () => {
+    const { host } = fakeHost();
+    const plain = steeringPublishDeps({ scope: SCOPE, host, repo: REPO });
+    await expect(plain.health(KEY)).resolves.toBe("healthy");
+    const readHealth = vi.fn(async () => "drifted" as const);
+    const read = steeringPublishDeps({
+      scope: SCOPE,
+      host,
+      repo: REPO,
+      readHealth,
+    });
+    await expect(read.health(KEY)).resolves.toBe("drifted");
+    expect(readHealth).toHaveBeenCalledWith(REPO);
+  });
+
+  it("reads the production branch's head, and refuses when the branch is gone", async () => {
+    const { fake, host } = fakeHost();
+    const deps = steeringPublishDeps({ scope: SCOPE, host, repo: REPO });
+    await expect(deps.head(KEY)).resolves.toBe(HEAD);
+    expect(fake.branchHead).toHaveBeenCalledWith(REPO, "main");
+    fake.branchHead.mockResolvedValueOnce(null);
+    await expect(deps.head(KEY)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "production_branch_missing",
+    });
+  });
+
+  it("lists the merged tree with blob ids and reads its files at the commit", async () => {
+    const { fake, host } = fakeHost();
+    const deps = steeringPublishDeps({ scope: SCOPE, host, repo: REPO });
+    const tree = await deps.tree(KEY, HEAD);
+    const entries = await tree.list();
+    expect(entries).toContainEqual({
+      path: "workspace.toml",
+      blob: gitBlobId(fixtureRepo().get("workspace.toml") ?? ""),
+    });
+    expect(fake.listTree).toHaveBeenCalledWith(REPO, HEAD);
+    await expect(tree.read("workspace.toml")).resolves.toBe(
+      fixtureRepo().get("workspace.toml"),
+    );
+    expect(fake.readFile).toHaveBeenCalledWith(REPO, "workspace.toml", HEAD);
+    await expect(tree.read("missing.md")).rejects.toThrow(
+      "the host returned no file",
+    );
+  });
+
+  it("tags the commit on the host", async () => {
+    const { fake, host } = fakeHost();
+    const deps = steeringPublishDeps({ scope: SCOPE, host, repo: REPO });
+    await deps.tag(KEY, "steering/3", HEAD);
+    expect(fake.createTag).toHaveBeenCalledWith(REPO, "steering/3", HEAD);
+  });
+
+  it("stores in the workspace's Postgres store, reads the wall clock, and compiles with MCP Studio by default", () => {
+    const { host } = fakeHost();
+    const deps = steeringPublishDeps({ scope: SCOPE, host, repo: REPO });
+    expect(typeof deps.store.versionAt).toBe("function");
+    expect(deps.now()).toBeInstanceOf(Date);
+    // No compiler, so buildBundle falls back to compileServerFolder.
+    expect(deps.compiler).toBeUndefined();
+    const publisher = steeringPublisher({ scope: SCOPE, host });
+    expect(typeof publisher.store.highestVersion).toBe("function");
+  });
+});
+
+describe("steeringPublisher", () => {
+  it("publishes a merge into the store the merge reads, and tags it", async () => {
+    const { fake, host } = fakeHost();
+    const store = memoryVersionStore();
+    const publisher = steeringPublisher({
+      scope: SCOPE,
+      host,
+      store,
+      extend: noCompiler,
+      now,
+    });
+    expect(publisher.repository(REPO)).toBe(KEY);
+    expect(publisher.store).toBe(store);
+
+    const result = await publisher.publish(REPO, HEAD);
+    expect(result).toMatchObject({
+      status: "published",
+      version: 1,
+      commit: HEAD,
+      tag: "steering/1",
+      bundle: {
+        repository: KEY,
+        organization: "a-intel",
+        workspace: "core-platform",
+        commit: HEAD,
+      },
+    });
+    await expect(publisher.store.versionAt(KEY, HEAD)).resolves.toEqual({
+      version: 1,
+      published: true,
+    });
+    expect(fake.tags.get("steering/1")).toBe(HEAD);
+
+    // The same commit again is already published.
+    await expect(publisher.publish(REPO, HEAD)).resolves.toMatchObject({
+      status: "current",
+      version: 1,
+    });
+  });
+
+  it("publishes nothing while the repository is not healthy", async () => {
+    const { fake, host } = fakeHost();
+    const publisher = steeringPublisher({
+      scope: SCOPE,
+      host,
+      store: memoryVersionStore(),
+      readHealth: async () => "diverged",
+    });
+    await expect(publisher.publish(REPO, HEAD)).resolves.toEqual({
+      status: "refused",
+      health: "diverged",
+    });
+    expect(fake.listTree).not.toHaveBeenCalled();
+  });
+});
+
+describe("steeringSyncPublish", () => {
+  it("publishes the production head, and then answers current", async () => {
+    const { fake, host } = fakeHost();
+    const store = memoryVersionStore();
+    const storeFor = vi.fn(() => store);
+    const port = steeringSyncPublish({
+      host,
+      store: storeFor,
+      extend: noCompiler,
+      now,
+    });
+    await expect(port(SCOPE)).resolves.toEqual({
+      status: "published",
+      version: 1,
+    });
+    await expect(port(SCOPE)).resolves.toEqual({
+      status: "current",
+      version: 1,
+    });
+    expect(fake.resolveRepository).toHaveBeenCalledWith(SCOPE);
+    expect(storeFor).toHaveBeenCalledWith(SCOPE);
+    expect(store.published.get(KEY)?.commit).toBe(HEAD);
+  });
+
+  it("publishes nothing from a repository in the legacy layout", async () => {
+    // No steering/governance.toml: the legacy layout, in its default mode.
+    const legacy = new Map([["README.md", "# Platform\n"]]);
+    const { fake, host } = fakeHost(legacy);
+    const store = memoryVersionStore();
+    const port = steeringSyncPublish({ host, store: () => store });
+    await expect(port(SCOPE)).resolves.toBeNull();
+    expect(fake.branchHead).not.toHaveBeenCalled();
+    expect(store.versions.size).toBe(0);
+  });
+
+  it("reports a refusal and a stale head without a version", async () => {
+    const { fake, host } = fakeHost();
+    const refused = steeringSyncPublish({
+      host,
+      store: () => memoryVersionStore(),
+      readHealth: async () => "disconnected",
+    });
+    await expect(refused(SCOPE)).resolves.toEqual({
+      status: "refused",
+      version: null,
+    });
+
+    // The branch moves between the port's head read and publish()'s own.
+    fake.branchHead.mockResolvedValueOnce(HEAD).mockResolvedValueOnce(LATER);
+    const stale = steeringSyncPublish({
+      host,
+      store: () => memoryVersionStore(),
+      extend: noCompiler,
+      now,
+    });
+    await expect(stale(SCOPE)).resolves.toEqual({
+      status: "stale",
+      version: null,
+    });
+  });
+
+  it("refuses when the production branch is gone", async () => {
+    const { fake, host } = fakeHost();
+    fake.branchHead.mockResolvedValueOnce(null);
+    const port = steeringSyncPublish({
+      host,
+      store: () => memoryVersionStore(),
+    });
+    await expect(port(SCOPE)).rejects.toMatchObject({
+      reason: "production_branch_missing",
+    });
+  });
+});
