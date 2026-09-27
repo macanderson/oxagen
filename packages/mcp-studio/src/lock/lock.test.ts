@@ -298,6 +298,7 @@ describe("lock with a registry remote", () => {
     const server = ok(
       parseServerToml(
         [
+          "#:schema https://oxagen.sh/schemas/mcp-server/v1.json",
           'schema = "mcp-server/v1"',
           'name = "github"',
           'label = "GitHub"',
