@@ -613,6 +613,9 @@ describe("an answer from the control plane", () => {
         source: "person",
         receipt_id: "rcp_01a2b3",
         answered_by: "usr_0123abc",
+        // A link seals `repo.bound` only when the answer names the binding.
+        binding_id: "rpb_77",
+        workspace_slug: "core",
       },
     };
     const deps = {
