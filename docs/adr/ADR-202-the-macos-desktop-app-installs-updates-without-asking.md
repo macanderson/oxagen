@@ -194,9 +194,8 @@ Recorded here, not built:
   downloads.oxagen.sh, `renderIndexHtml` (`apps/desktop/src/downloads.ts`)
   puts a short notice under the download button and a full one, with the
   off switch, under Verify, from 2.1.2 on. When Oxagen writes terms of
-  service, they
-  carry this sentence: "On macOS, the Oxagen desktop app downloads and
-  installs new versions automatically unless you turn automatic updates
-  off."
+  service, they carry this sentence: "On macOS, the Oxagen desktop app
+  downloads and installs new versions automatically unless you turn
+  automatic updates off."
 - This replaces the rule confirmed on #3697 for macOS installs that pass the
   gates. Everywhere else, that rule still holds.
