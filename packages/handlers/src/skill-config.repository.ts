@@ -1,6 +1,6 @@
 import { createGitHubClient, type GitHubClient } from "@oxagen/github";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { HandlerError } from "@oxagen/oxagen";
 import { resolveGitHubToken } from "./lib/github-token";
 import { repositoryHostUnsupported } from "./repository.bound";
@@ -39,7 +39,7 @@ export async function readSkillRepositoryBinding(scope: SkillScope) {
         and(
           eq(head.orgId, scope.orgId),
           eq(head.workspaceId, scope.workspaceId),
-          eq(head.role, "main"),
+          inArray(head.role, schema.STEERING_HEAD_ROLES),
           eq(binding.orgId, scope.orgId),
           eq(binding.workspaceId, scope.workspaceId),
           eq(connection.orgId, scope.orgId),

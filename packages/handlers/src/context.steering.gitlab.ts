@@ -23,7 +23,7 @@ import {
   type GitLabMergeRequest,
 } from "@oxagen/gitlab";
 import { HandlerError } from "@oxagen/oxagen";
-import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import {
   linkedOxagenUser,
   type SteeringChangedFile,
@@ -192,7 +192,10 @@ export async function readGitLabConnection(scope: {
         and(
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-          eq(schema.repositoryBindingHeads.role, "main"),
+          inArray(
+            schema.repositoryBindingHeads.role,
+            schema.STEERING_HEAD_ROLES,
+          ),
           eq(schema.repositoryBindingHeads.provider, GITLAB_PROVIDER),
           eq(schema.sourceConnections.connectorId, GITLAB_PROVIDER),
           isNull(schema.sourceConnections.deletedAt),

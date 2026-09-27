@@ -35,7 +35,7 @@ import {
 } from "@oxagen/tacho";
 import { SKILL_INTERJECTION_TIMEOUT_MS } from "@oxagen/oxagen/skills";
 import { schema, type Tx, withTransactionOrgWideRead } from "@oxagen/database";
-import { and, desc, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { logger } from "../logger";
 
 export type UnboundRepoClause = NonNullable<PolicyBundle["unbound_repo"]>;
@@ -110,7 +110,7 @@ async function readSkillsHead(
         eq(heads.currentBindingId, versions.repositoryBindingId),
         eq(heads.orgId, scope.orgId),
         eq(heads.workspaceId, scope.workspaceId),
-        eq(heads.role, "main"),
+        inArray(heads.role, schema.STEERING_HEAD_ROLES),
       ),
     )
     .innerJoin(connections, eq(connections.id, heads.connectionId))

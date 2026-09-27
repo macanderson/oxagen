@@ -799,8 +799,10 @@ describe("the workspace's main repository", () => {
     const dialect = new PgDialect();
     for (const cond of captured.slice(0, 2)) {
       const query = dialect.sqlToQuery(cond);
-      expect(query.sql).toMatch(/"role" = \$\d+/);
-      expect(query.params).toContain("main");
+      expect(query.sql).toMatch(/"role" in \(\$\d+, \$\d+\)/);
+      expect(query.params).toEqual(
+        expect.arrayContaining(["main", "steering"]),
+      );
     }
   });
 

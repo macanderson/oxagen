@@ -220,7 +220,7 @@ export function assertNotHeldElsewhere(
   fullName: string,
   heads: ReadonlyArray<{ role: string }>,
 ): void {
-  if (heads.some((h) => h.role === "main"))
+  if (heads.some((h) => schema.isSteeringHeadRole(h.role)))
     throw repositoryClaimedElsewhere(fullName);
   if (heads.length > 0) throw repositoryLinkedElsewhere(fullName);
 }
@@ -587,7 +587,9 @@ export function createMainRepositoryBindHandler(
           providerRepositoryId: string;
         }) => h.provider === provider && h.providerRepositoryId === repo.id;
         const same = heads.find(isThis);
-        if (heads.some((h) => h.role === "main" && !isThis(h))) {
+        if (
+          heads.some((h) => schema.isSteeringHeadRole(h.role) && !isThis(h))
+        ) {
           throw new HandlerError({
             code: "conflict",
             reason: "main_repo_bound",
@@ -653,7 +655,7 @@ export function createMainRepositoryBindHandler(
           // decision as a first bind. The UPDATE fires the store's exclusivity
           // trigger (it is `BEFORE INSERT OR UPDATE OF role`), so a repository
           // another workspace holds still loses here, with the same sentence.
-          const promote = same.role !== "main";
+          const promote = !schema.isSteeringHeadRole(same.role);
           if (!drifted && !promote) {
             // Nothing has moved, so nothing is written. The first bind's identity
             // is the answer.
