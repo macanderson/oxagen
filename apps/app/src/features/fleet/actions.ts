@@ -334,7 +334,7 @@ export async function steerFleet(
 }
 
 function isFleetSteerMode(mode: string): mode is FleetSteerMode {
-  return (FLEET_STEER_MODES as readonly string[]).includes(mode);
+  return FLEET_STEER_MODES.some((known) => known === mode);
 }
 
 /**

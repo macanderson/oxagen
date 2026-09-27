@@ -260,11 +260,11 @@ export function DeliveryReport({
   const [state, setState] = useState<State>({ kind: "idle" });
   // Counts the readings, so an answer to one the dialog has since closed or
   // read again does not overwrite the latest.
-  const reading = useRef(0);
+  const readingRef = useRef(0);
 
   async function read() {
-    reading.current += 1;
-    const mine = reading.current;
+    readingRef.current += 1;
+    const mine = readingRef.current;
     setState({ kind: "reading" });
     let next: State;
     try {
@@ -285,13 +285,13 @@ export function DeliveryReport({
     } catch {
       next = { kind: "failed", text: t("unanswered") };
     }
-    if (mine === reading.current) setState(next);
+    if (mine === readingRef.current) setState(next);
   }
 
   function openChange(next: boolean) {
     setOpen(next);
     if (!next) {
-      reading.current += 1;
+      readingRef.current += 1;
       setState({ kind: "idle" });
     }
   }

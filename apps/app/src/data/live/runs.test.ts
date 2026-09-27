@@ -2375,7 +2375,7 @@ describe("runs.commands", () => {
   });
 
   it("reads a broadcast of more ids than one read may name in slices, and keeps the report newest first", async () => {
-    const ids = Array.from({ length: 101 }, (_, i) => `tcm_${i}`);
+    const ids = Array.from({ length: 101 }, (_, i) => `tcm_${String(i)}`);
     const older = {
       ...command,
       id: "tcm_0",
@@ -2408,7 +2408,7 @@ describe("runs.commands", () => {
   });
 
   it("orders commands issued at the same instant by id across slices, as one read would", async () => {
-    const ids = Array.from({ length: 101 }, (_, i) => `tcm_${i}`);
+    const ids = Array.from({ length: 101 }, (_, i) => `tcm_${String(i)}`);
     const at = "2026-09-15T08:57:00.000Z";
     kernelRead
       .mockResolvedValueOnce(
@@ -2429,7 +2429,7 @@ describe("runs.commands", () => {
     kernelRead
       .mockResolvedValueOnce(readOk({ commands: [command] }))
       .mockResolvedValueOnce(denied);
-    const ids = Array.from({ length: 101 }, (_, i) => `tcm_${i}`);
+    const ids = Array.from({ length: 101 }, (_, i) => `tcm_${String(i)}`);
     expect(await runs.commands(ctx, { commandIds: ids })).toEqual(denied);
   });
 

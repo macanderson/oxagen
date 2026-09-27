@@ -1061,7 +1061,10 @@ describe("readDeliveryReport", () => {
   });
 
   it("refuses more command ids than one report reads, before any read (negative)", async () => {
-    const commandIds = Array.from({ length: 1_001 }, (_, i) => `tcm_${i}`);
+    const commandIds = Array.from(
+      { length: 1_001 },
+      (_, i) => `tcm_${String(i)}`,
+    );
     expect(
       await readDeliveryReport("acme", "core-platform", { commandIds }),
     ).toEqual({
@@ -1076,11 +1079,12 @@ describe("readDeliveryReport", () => {
   it("refuses a query that names neither a run nor a command, before any read (negative)", async () => {
     for (const q of [{}, { commandIds: [] }, { runId: RUN, commandIds: ["tcm_1"] }]) {
       expect(
-        await readDeliveryReport(
+        // A server action is an endpoint: the page's types do not bind a caller.
+        await Reflect.apply(readDeliveryReport, undefined, [
           "acme",
           "core-platform",
-          q as Parameters<typeof readDeliveryReport>[2],
-        ),
+          q,
+        ]),
       ).toEqual({
         ok: false,
         reason: "invalid",
@@ -1157,13 +1161,13 @@ describe("answerInterjection", () => {
       null,
     ]) {
       expect(
-        await answerInterjection(
+        // A server action is an endpoint: the page's types do not bind a caller.
+        await Reflect.apply(answerInterjection, undefined, [
           "acme",
           "core-platform",
           QUESTION,
-          // A server action is an endpoint: the page's types do not bind a caller.
-          choice as unknown as Parameters<typeof answerInterjection>[3],
-        ),
+          choice,
+        ]),
       ).toEqual({
         ok: false,
         reason: "invalid",

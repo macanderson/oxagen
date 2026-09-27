@@ -34,16 +34,16 @@ const WORDS = {
 } as const;
 
 /** The create field an invalid answer names, when it names one. */
-const FIELDS = {
-  "create.slug": "slug",
-  "create.name": "name",
-} as const;
-
 function fieldOf(failure: AnswerFailure): "slug" | "name" | null {
-  if (failure.reason !== "invalid" || failure.field === undefined) return null;
-  return Object.hasOwn(FIELDS, failure.field)
-    ? FIELDS[failure.field as keyof typeof FIELDS]
-    : null;
+  if (failure.reason !== "invalid") return null;
+  switch (failure.field) {
+    case "create.slug":
+      return "slug";
+    case "create.name":
+      return "name";
+    default:
+      return null;
+  }
 }
 
 export function useAnswerFailure(): (failure: AnswerFailure) => string {

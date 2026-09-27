@@ -313,7 +313,7 @@ function reportQueryOf(q: unknown): ReportQuery | null {
     q.commandIds.length <= REPORT_IDS_MAX &&
     q.commandIds.every((id: unknown) => typeof id === "string")
   )
-    return { commandIds: q.commandIds as string[] };
+    return { commandIds: q.commandIds };
   return null;
 }
 

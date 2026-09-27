@@ -123,10 +123,7 @@ export function controlOf(
       : type.startsWith(CONTROL_PREFIX)
         ? type.slice(CONTROL_PREFIX.length)
         : null;
-  return name !== null &&
-    (CONTROL_COMMANDS as readonly string[]).includes(name)
-    ? (name as ControlCommand)
-    : null;
+  return CONTROL_COMMANDS.find((command) => command === name) ?? null;
 }
 
 /** A frame's type as the player names it: an operator's command as `control.<command>`, any other as recorded. */

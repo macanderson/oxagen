@@ -33,7 +33,7 @@ vi.mock("@/features/run/client", () => ({
   DeliveryReport: (props: { query: unknown; testId?: string }) => {
     deliveryReport(props);
     return (
-      <button type="button" data-testid={`${props.testId}-open`}>
+      <button type="button" data-testid={`${props.testId ?? ""}-open`}>
         Delivery report
       </button>
     );
@@ -46,6 +46,13 @@ const AGENTS = [
   { agentKey: "acme.core.release-bot" },
   { agentKey: "acme.core.docs" },
 ];
+/** The docs agent's sealed run, which has nothing in flight. */
+const SEALED_RUN = runRow({
+  id: "arun_done",
+  agentKey: "acme.core.docs",
+  status: "sealed",
+  outcome: "completed",
+});
 const RUNS: RunRow[] = [
   runRow({
     id: "tse_live",
@@ -53,12 +60,7 @@ const RUNS: RunRow[] = [
     agentKey: "acme.core.release-bot",
     turns: 12,
   }),
-  runRow({
-    id: "arun_done",
-    agentKey: "acme.core.docs",
-    status: "sealed",
-    outcome: "completed",
-  }),
+  SEALED_RUN,
 ];
 
 /** The release bot's run in flight on the gateway tier, whose proxy can cut a call. */
@@ -70,7 +72,7 @@ const GATEWAY_RUNS: RunRow[] = [
     turns: 12,
     enforcementTier: "gateway",
   }),
-  RUNS[1] as RunRow,
+  SEALED_RUN,
 ];
 
 function renderDialog(
@@ -178,7 +180,7 @@ describe("Steer the fleet", () => {
   });
 
   it("keeps Interrupt disabled when no selected agent has a run in flight (negative)", () => {
-    renderDialog({ runs: [RUNS[1] as RunRow] });
+    renderDialog({ runs: [SEALED_RUN] });
     const interrupt = screen.getByRole("switch", { name: "Interrupt" });
     expect(interrupt).toBeDisabled();
     expect(interrupt).toHaveAccessibleDescription(

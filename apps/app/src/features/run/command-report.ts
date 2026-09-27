@@ -52,9 +52,7 @@ type DegradedReason = (typeof DEGRADED_REASONS)[number];
 
 /** A recorded reason the report has words for, or null for one it shows as recorded. */
 export function degradedOf(reason: string): DegradedReason | null {
-  return (DEGRADED_REASONS as readonly string[]).includes(reason)
-    ? (reason as DegradedReason)
-    : null;
+  return DEGRADED_REASONS.find((known) => known === reason) ?? null;
 }
 
 /**
