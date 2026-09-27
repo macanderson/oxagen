@@ -13,7 +13,7 @@ import {
   resolveMethod,
   type ResolvedMethod,
 } from "./descriptors";
-import { GET_ENTRY, LIST_ENTRIES, POST_ENTRY, UPLOAD_ENTRIES } from "./__tests__/ledger-context";
+import { GET_ENTRY, LIST_ENTRIES, POST_ENTRY, REVERSE_ENTRY, UPLOAD_ENTRIES } from "./__tests__/ledger-context";
 import { LEDGER_DESCRIPTOR_SET, LEDGER_PROTO_SHA256 } from "./__tests__/ledger-descriptor-set";
 
 /** Encode a response message the way an upstream would. */
@@ -92,6 +92,23 @@ describe("resolveMethod", () => {
       "a_intel.ledger.v1.Ledger/GetEntry takes a_intel.ledger.v1.GetEntryRequest and returns " +
         "a_intel.ledger.v1.Entry, but the tool names a_intel.ledger.v1.GetEntryRequest and " +
         "a_intel.ledger.v1.UploadSummary.",
+    );
+  });
+
+  it.each([
+    ["GetEntry", GET_ENTRY, "NO_SIDE_EFFECTS"],
+    ["PostEntry", POST_ENTRY, "IDEMPOTENCY_UNKNOWN"],
+    ["ReverseEntry", REVERSE_ENTRY, "IDEMPOTENT"],
+    ["ListEntries", LIST_ENTRIES, "NO_SIDE_EFFECTS"],
+  ] as const)("reads %s's idempotency level from the descriptor set", (_, template, level) => {
+    expect(resolveMethod(LEDGER_DESCRIPTOR_SET, template).idempotency_level).toBe(level);
+  });
+
+  it("refuses an idempotency level that differs from the descriptor set's", () => {
+    const template = { ...POST_ENTRY, idempotency_level: "IDEMPOTENT" as const };
+    expect(() => resolveMethod(LEDGER_DESCRIPTOR_SET, template)).toThrow(
+      "a_intel.ledger.v1.Ledger/PostEntry is IDEMPOTENCY_UNKNOWN in the descriptor set, " +
+        "but the tool marks it IDEMPOTENT.",
     );
   });
 

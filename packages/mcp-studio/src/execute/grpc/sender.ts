@@ -11,9 +11,9 @@
 // { items, truncated }. A status other than OK becomes an error that names
 // the status and carries the upstream's message.
 //
-// UNAVAILABLE is retried up to 3 times, and only for a method marked
-// NO_SIDE_EFFECTS or IDEMPOTENT, since the upstream may have acted on a call
-// that failed. A stream that already sent an item is not retried.
+// UNAVAILABLE is retried up to 3 times, and only for a method the descriptor
+// set marks NO_SIDE_EFFECTS or IDEMPOTENT, since the upstream may have acted
+// on a call that failed. A stream that already sent an item is not retried.
 import type { JsonObject, JsonValue } from "@bufbuild/protobuf";
 import { MAX_ITEMS_LIMIT, MAX_RESULT_BYTES_LIMIT } from "../../contract/tools";
 import type { GrpcIdempotencyLevel, GrpcRequest } from "../../model/upstream-tool";
@@ -128,7 +128,8 @@ async function send(
   const prepared = prepare(template, args, context);
   if (!prepared.ok) return { ok: false, error: prepared.error, attempts: 0 };
   const deadline = Date.now() + context.shaping.deadline_ms;
-  const retried = RETRIED_LEVELS.has(template.idempotency_level);
+  // The level comes from the descriptor set, which resolveMethod checked the template against.
+  const retried = RETRIED_LEVELS.has(prepared.call.method.idempotency_level);
   for (let attempt = 1; ; attempt += 1) {
     const result = await attemptCall(prepared.call, context, deadline, settings);
     if (result.ok) return { ok: true, value: result.value, attempts: attempt };
@@ -139,6 +140,8 @@ async function send(
     // A retry that cannot start before the deadline would only fail again.
     if (Date.now() + wait >= deadline) return { ok: false, error: result.error, attempts: attempt };
     if (!(await sleep(wait, context.signal))) return { ok: false, error: CANCELLED, attempts: attempt };
+    // A timer can fire late, so check the deadline again after the wait.
+    if (Date.now() >= deadline) return { ok: false, error: result.error, attempts: attempt };
   }
 }
 

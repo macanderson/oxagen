@@ -19,15 +19,23 @@ import {
   type JsonObject,
   type JsonValue,
 } from "@bufbuild/protobuf";
-import { FileDescriptorSetSchema } from "@bufbuild/protobuf/wkt";
-import type { GrpcRequest } from "../../model/upstream-tool";
+import { FileDescriptorSetSchema, MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
+import type { GrpcIdempotencyLevel, GrpcRequest } from "../../model/upstream-tool";
 
 /** One method, resolved from the descriptors. */
 export interface ResolvedMethod {
   registry: FileRegistry;
   input: DescMessage;
   output: DescMessage;
+  /** The method's idempotency_level option, from the descriptor set. The Sender retries by this level. */
+  idempotency_level: GrpcIdempotencyLevel;
 }
+
+const LEVEL_NAMES: Record<MethodOptions_IdempotencyLevel, GrpcIdempotencyLevel> = {
+  [MethodOptions_IdempotencyLevel.IDEMPOTENCY_UNKNOWN]: "IDEMPOTENCY_UNKNOWN",
+  [MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS]: "NO_SIDE_EFFECTS",
+  [MethodOptions_IdempotencyLevel.IDEMPOTENT]: "IDEMPOTENT",
+};
 
 /** Why a method did not resolve, or a message did not encode or decode. */
 export class DescriptorError extends Error {
@@ -63,7 +71,9 @@ function registryFor(descriptorSet: string): FileRegistry {
 
 /**
  * Find the template's method in the descriptor set, and check that its
- * streaming kind and message types match the template.
+ * streaming kind, message types, and idempotency level match the template.
+ * A tool that marks an unsafe method safe would let the Sender retry it, so
+ * a level that differs from the descriptor is refused.
  */
 export function resolveMethod(descriptorSet: string | undefined, template: GrpcRequest): ResolvedMethod {
   if (descriptorSet === undefined) {
@@ -93,7 +103,13 @@ export function resolveMethod(descriptorSet: string | undefined, template: GrpcR
         `but the tool names ${template.request_type} and ${template.response_type}.`,
     );
   }
-  return { registry, input: method.input, output: method.output };
+  const level = LEVEL_NAMES[method.idempotency];
+  if (level !== template.idempotency_level) {
+    throw new DescriptorError(
+      `${template.method} is ${level} in the descriptor set, but the tool marks it ${template.idempotency_level}.`,
+    );
+  }
+  return { registry, input: method.input, output: method.output, idempotency_level: level };
 }
 
 /** Encode the upstream arguments as the request message. Unknown fields are refused. */

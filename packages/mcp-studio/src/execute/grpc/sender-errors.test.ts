@@ -266,6 +266,14 @@ describe("a Transport that fails", () => {
     expect(result).toMatchObject({ ok: true, attempts: 3, value: { id: "e_1" } });
   });
 
+  it("refuses a tool that marks an unsafe method safe, and sends nothing", async () => {
+    const fake = fakeTransport(unavailable);
+    const mislabeled = { ...POST_ENTRY, idempotency_level: "IDEMPOTENT" as const };
+    const result = await sender.send(mislabeled, { accountId: "acct_1" }, context(fake.transport));
+    expect(expectError(result, "Invalid descriptor set", undefined, 0)).toContain("the tool marks it IDEMPOTENT");
+    expect(fake.requests).toHaveLength(0);
+  });
+
   it("reports a call that was not sent as UNAVAILABLE, with no retry for an unsafe method", async () => {
     const fake = fakeTransport(() => Promise.reject(new TransportError("not_sent", "The relay is offline.", false)));
     const result = await sender.send(POST_ENTRY, { accountId: "acct_1" }, context(fake.transport));
@@ -373,6 +381,30 @@ describe("a Transport that stalls", () => {
     const late = response([]);
     open(late);
     await vi.waitFor(() => expect(late.cancel).toHaveBeenCalled());
+  });
+
+  it("gives up when the wait before a retry ends past the deadline", async () => {
+    // The wait fits before the deadline when it starts, but the clock moves
+    // past the deadline while it runs, as a late timer would.
+    let skew = 0;
+    const realNow = Date.now.bind(Date);
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => realNow() + skew);
+    try {
+      const late = createGrpcSender({
+        backoff_ms: () => {
+          setTimeout(() => {
+            skew = 10_000;
+          }, 0);
+          return 20;
+        },
+      });
+      const fake = fakeTransport(unavailable);
+      const result = await late.send(GET_ENTRY, { id: "e_1" }, context(fake.transport, { deadline_ms: 5_000 }));
+      expect(expectError(result, "UNAVAILABLE", 14, 1)).toBe("The ledger is restarting.");
+      expect(fake.requests).toHaveLength(1);
+    } finally {
+      clock.mockRestore();
+    }
   });
 });
 
