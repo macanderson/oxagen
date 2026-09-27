@@ -46,6 +46,13 @@ import {
 } from "./registry";
 import type { RepositoryRemote } from "./git-facts";
 import {
+  notePolicyDenial,
+  notePrompt,
+  noteToolCall,
+  noteToolFailure,
+  reflectionAsk,
+} from "./memory-capture/reflection-ask";
+import {
   expireInterjection,
   INTERJECTION_TIMED_OUT_TEXT,
   isBound,
@@ -793,6 +800,17 @@ async function gitPushBasis(
   }
 }
 
+/**
+ * A `UserPromptSubmit`'s text, from `prompt` or, for a harness that sends it
+ * there, `user_input`, the way `normalizeHook` reads it.
+ */
+function promptText(input: HookInput): string | undefined {
+  const prompt = input["prompt"];
+  if (typeof prompt === "string") return prompt;
+  const userInput = input["user_input"];
+  return typeof userInput === "string" ? userInput : undefined;
+}
+
 async function routeHook(
   raw: unknown,
   env: Record<string, string | undefined>,
@@ -1026,6 +1044,8 @@ async function routeHook(
           : [];
       // A person prompting supersedes a resume's continuation.
       if (block === undefined) record.control.resumeOwed = undefined;
+      // Only a prompt the agent received can correct it.
+      if (block === undefined) notePrompt(record, promptText(input));
       events.push(
         ...record.recorder.ingestHook(payload, env, at, (draft) =>
           withReplay({
@@ -1070,6 +1090,7 @@ async function routeHook(
     case "PreToolUse": {
       const toolName = input.tool_name ?? "unknown";
       const toolInput = input.tool_input;
+      noteToolCall(record, toolName, toolInput);
       let currentView = view;
       let evaluation =
         replay?.evaluation ??
@@ -1150,6 +1171,10 @@ async function routeHook(
           };
         }
       }
+      // A deny from the operator (a pause, a cancel, an interrupting steer)
+      // says nothing about how the run went, so only the policy's counts.
+      if (evaluation.decision === "deny" && evaluation.source !== "human")
+        notePolicyDenial(record, toolName);
       const facts = policyFacts(evaluation, currentView);
       const attrs = policyAttrs(evaluation, replay);
       const toolDrafts = normalizeHook(payload, env, {
@@ -1361,6 +1386,8 @@ async function routeHook(
     case "PostToolUse":
     case "PostToolUseFailure": {
       events.push(...record.recorder.ingestHook(payload, env, at, withReplay));
+      if (input.hook_event_name === "PostToolUseFailure")
+        noteToolFailure(record, input.tool_name);
       if (operatorBlock(view, record) !== undefined)
         return { events, response: {}, record };
       const texts = drainMidTurn(input, record, deps, events, replay);
@@ -1395,9 +1422,29 @@ async function routeHook(
       // Claude Code ignores a StopFailure answer, so only Stop drains.
       if (input.hook_event_name === "StopFailure")
         return { events, response: {}, record };
+      // A run that showed trouble is asked once to record a reflection
+      // (`memory-capture/reflection-ask.ts`). A custom agent speaks Claude
+      // Code's hooks but may have no Oxagen MCP server, so it is not asked.
+      // A subagent's hook is not the session's turn end, as in
+      // `drainMidTurn`, so it leaves the ask for the main agent's Stop.
+      const ask =
+        input.agent_id !== undefined
+          ? undefined
+          : reflectionAsk(record, {
+              harness:
+                record.customAgent !== undefined
+                  ? undefined
+                  : (record.harness ?? "claude-code"),
+              stopHookActive: input["stop_hook_active"] === true,
+              replayed: replay !== undefined,
+            });
       // A queued steer, or a resume's continuation, keeps the turn going:
       // `decision: "block"` hands the reason to the model as what to do next.
-      const texts = drainMidTurn(input, record, deps, events, replay);
+      // The ask goes last, and its length is held back from the steers.
+      const texts = [
+        ...drainMidTurn(input, record, deps, events, replay, ask?.length ?? 0),
+        ...(ask !== undefined ? [ask] : []),
+      ];
       return {
         events,
         response:

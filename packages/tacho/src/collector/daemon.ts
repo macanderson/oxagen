@@ -15,6 +15,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { z } from "zod";
 import { quarantineHookPayload } from "../claude-code/hook-client";
 import { hookInputSchema } from "../claude-code/hooks";
@@ -138,6 +139,11 @@ import {
 } from "./mcp-gateway";
 import { gatewayFrameBody } from "./gateway-frame";
 import { createGithubProxy } from "./github-proxy";
+import {
+  createMemoryReader,
+  HARNESS_MEMORY_LOCATIONS,
+} from "./memory-capture/memory-reader";
+import { createMemoryUpload } from "./memory-capture/memory-upload";
 import { pushCredentialBasis } from "./push-basis";
 import { issueRunToken } from "./credential-issuer";
 import { utcDay } from "./day-spend";
@@ -228,6 +234,12 @@ export const DEFAULT_TIMERS: DaemonTimers = {
 /** How often the daemon looks at Codex's static run token. */
 const STATIC_TOKEN_RENEWAL_CHECK_MS = 60 * 60_000;
 
+/** How often the daemon reads the harnesses' memory folders. */
+const MEMORY_SCAN_MS = 5 * 60_000;
+
+/** Set to `1` to turn memory capture on. It is off otherwise. */
+const MEMORY_CAPTURE_ENV = "TACHO_MEMORY_CAPTURE";
+
 export interface DaemonOptions {
   paths: TachoPaths;
   host?: HostFile;
@@ -268,6 +280,12 @@ export interface DaemonOptions {
   beforeForward?: BeforeForward;
   /** The home directory the harness config files live under. */
   home?: string;
+  /**
+   * Upload the harnesses' memory files to Oxagen every five minutes. Off
+   * unless this is true or `TACHO_MEMORY_CAPTURE=1` is set. Only a started
+   * listener scans.
+   */
+  memoryCapture?: boolean;
 }
 
 export interface DaemonHandle {
@@ -3960,6 +3978,45 @@ async function initializeDaemon(
     timer.unref();
   }
 
+  // Memory capture (opt-in): the harnesses' memory files go to the API as
+  // `local_gateway` memories, with the host key the GitHub broker uses.
+  let memoryTimer: NodeJS.Timeout | undefined;
+  if (
+    (options.listen ?? true) &&
+    (options.memoryCapture ?? process.env[MEMORY_CAPTURE_ENV] === "1")
+  ) {
+    const memoryReader = createMemoryReader({
+      home: options.home ?? homedir(),
+      fs: {
+        readdir: (path) => readdir(path),
+        stat: (path) => stat(path),
+        readFile: (path) => readFile(path, "utf8"),
+      },
+      send: createMemoryUpload({
+        host: () => host,
+        fetch: options.fetch ?? globalThis.fetch,
+        log,
+      }),
+      // Claude Code's folder follows `CLAUDE_CONFIG_DIR`, as the transcript
+      // tailer's does.
+      harnesses: HARNESS_MEMORY_LOCATIONS.map((location) =>
+        location.harness === "claude-code"
+          ? { ...location, projectsDir: () => paths.claudeProjects }
+          : location,
+      ),
+    });
+    const scanMemories = (): void => {
+      memoryReader.scan().catch((error: unknown) => {
+        log(
+          `memory scan failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
+    };
+    scanMemories();
+    memoryTimer = setInterval(scanMemories, MEMORY_SCAN_MS);
+    memoryTimer.unref();
+  }
+
   return {
     api,
     registry,
@@ -3990,6 +4047,7 @@ async function initializeDaemon(
       if (stopped) return;
       stopped = true;
       if (timer) clearInterval(timer);
+      if (memoryTimer) clearInterval(memoryTimer);
       // Persist now, before the waits below. A stop timeout that kills this
       // process mid-wait must not leave `state.json` any further behind the
       // WAL than the last ordinary tick already left it. The finalize below
