@@ -41,7 +41,7 @@ const facts = (
 ): ApprovalToolFacts => ({
   slug: "pay",
   version: 1,
-  consequenceTags: [],
+  impacts: [],
   classification: null,
   measures: {
     amount: { path: "amount.value", type: "amount", unit: "USD", scale: 2 },
@@ -61,7 +61,7 @@ const args = {
   actorUserId: "classifier",
   capability: "set_tool_classification",
   before: facts(),
-  after: facts({ consequenceTags: ["moves_money"] }),
+  after: facts({ impacts: ["moves_money"] }),
 };
 beforeEach(() => {
   vi.clearAllMocks();

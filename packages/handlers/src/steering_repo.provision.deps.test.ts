@@ -30,6 +30,7 @@ interface Chain {
 const mocks = vi.hoisted(() => {
   const chains: Chain[] = [];
   const results: unknown[][] = [];
+  const updateResults: unknown[][] = [];
   const dbCalls: Via[] = [];
   const builderMethods = [
     "from",
@@ -41,9 +42,11 @@ const mocks = vi.hoisted(() => {
     "returning",
     "innerJoin",
   ];
-  // Each select, insert, or update starts a chain that records every builder
-  // call. Awaiting a select or an insert resolves the next queued result. An
-  // update resolves nothing and takes no result from the queue.
+  // Each select, insert, update, or execute starts a chain that records every
+  // builder call. Awaiting a select or an insert resolves the next queued
+  // result. An update with `returning` resolves the next queued update result,
+  // or no rows. Any other update, and every execute, resolves nothing and
+  // takes no result from a queue.
   const makeTx = (via: Via, scope: unknown) => {
     const start =
       (op: string) =>
@@ -59,21 +62,31 @@ const mocks = vi.hoisted(() => {
         builder["then"] = (
           onFulfilled?: (value: unknown) => unknown,
           onRejected?: (reason: unknown) => unknown,
-        ) =>
-          Promise.resolve(
-            op === "update" ? undefined : (results.shift() ?? []),
-          ).then(onFulfilled, onRejected);
+        ) => {
+          const returning = chain.calls.some((c) => c.method === "returning");
+          const value =
+            op === "execute"
+              ? undefined
+              : op === "update"
+                ? returning
+                  ? (updateResults.shift() ?? [])
+                  : undefined
+                : (results.shift() ?? []);
+          return Promise.resolve(value).then(onFulfilled, onRejected);
+        };
         return builder;
       };
     return {
       select: start("select"),
       insert: start("insert"),
       update: start("update"),
+      execute: start("execute"),
     };
   };
   return {
     chains,
     results,
+    updateResults,
     dbCalls,
     makeTx,
     failure: { system: null as Error | null },
@@ -157,7 +170,8 @@ vi.mock("./event-client", () => ({ eventClient: { send: mocks.send } }));
 vi.mock("./logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: mocks.warn, error: mocks.error },
 }));
-vi.mock("./repository.binding-write", () => ({
+vi.mock("./repository.binding-write", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./repository.binding-write")>()),
   writeRepositoryHead: mocks.writeRepositoryHead,
 }));
 
@@ -174,6 +188,7 @@ import {
   STEERING_REPO_PROVISION_EVENT,
   SteeringProvisionBlockedError,
   steeringAppFromEnv,
+  steeringGroupToken,
   steeringInstallationRest,
   steeringRepoProvisionDeps,
   type SteeringConnection,
@@ -182,6 +197,7 @@ import {
   type SteeringRepoState,
   type SteeringRepository,
 } from "./steering_repo.provision";
+import { workspaceRepositoriesLock } from "./repository.binding-write";
 
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
 const WS = "0192d4a8-7c1e-7a00-8000-0000000c0e01";
@@ -300,6 +316,7 @@ function githubClients(scope: SteeringRepoScope = WORKSPACE) {
 beforeEach(() => {
   mocks.chains.length = 0;
   mocks.results.length = 0;
+  mocks.updateResults.length = 0;
   mocks.dbCalls.length = 0;
   mocks.failure.system = null;
 });
@@ -876,7 +893,7 @@ describe("steeringRepoProvisionDeps", () => {
       );
 
     it("creates the GitHub steering connection and binding head in the tenant scope", async () => {
-      mocks.results.push([], [{ id: CONN }], []);
+      mocks.results.push([], [], [{ id: CONN }], []);
       await expect(
         deps().bind(WORKSPACE, {
           connection: GITHUB,
@@ -886,13 +903,36 @@ describe("steeringRepoProvisionDeps", () => {
       ).resolves.toBe("rpb_new");
 
       expect(mocks.dbCalls).toEqual(["tenant"]);
-      expect(mocks.chains).toHaveLength(3);
+      expect(mocks.chains).toHaveLength(5);
       for (const c of mocks.chains) {
         expect(c.via).toBe("tenant");
         expect(c.scope).toMatchObject({ orgId: ORG, workspaceId: WS });
       }
 
-      const find = chain(0);
+      const lock = chain(0);
+      expect(methods(lock)).toEqual(["execute"]);
+      expect(render(argOf(lock, "execute"))).toEqual(
+        render(workspaceRepositoriesLock(WS)),
+      );
+
+      const steering = chain(1);
+      expect(methods(steering)).toEqual(["select", "from", "where"]);
+      expect(argOf(steering, "select")).toEqual({
+        provider: schema.repositoryBindingHeads.provider,
+        providerRepositoryId: schema.repositoryBindingHeads.providerRepositoryId,
+      });
+      expect(argOf(steering, "from")).toBe(schema.repositoryBindingHeads);
+      expect(render(argOf(steering, "where"))).toEqual(
+        render(
+          and(
+            eq(schema.repositoryBindingHeads.orgId, ORG),
+            eq(schema.repositoryBindingHeads.workspaceId, WS),
+            eq(schema.repositoryBindingHeads.role, "steering"),
+          ),
+        ),
+      );
+
+      const find = chain(2);
       expect(methods(find)).toEqual(["select", "from", "where", "limit"]);
       expect(argOf(find, "select")).toEqual({
         id: schema.sourceConnections.id,
@@ -903,7 +943,7 @@ describe("steeringRepoProvisionDeps", () => {
       );
       expect(argOf(find, "limit")).toBe(1);
 
-      const insert = chain(1);
+      const insert = chain(3);
       expect(methods(insert)).toEqual(["insert", "values", "returning"]);
       expect(argOf(insert, "insert")).toBe(schema.sourceConnections);
       const values = argOf(insert, "values") as {
@@ -929,7 +969,7 @@ describe("steeringRepoProvisionDeps", () => {
         id: schema.sourceConnections.id,
       });
 
-      const head = chain(2);
+      const head = chain(4);
       expect(methods(head)).toEqual([
         "select",
         "from",
@@ -982,7 +1022,7 @@ describe("steeringRepoProvisionDeps", () => {
     });
 
     it("creates a GitLab steering connection with the group in its config", async () => {
-      mocks.results.push([], [{ id: CONN }], []);
+      mocks.results.push([], [], [{ id: CONN }], []);
       await expect(
         deps().bind(WORKSPACE, {
           connection: GITLAB,
@@ -990,10 +1030,10 @@ describe("steeringRepoProvisionDeps", () => {
           default_branch: "main",
         }),
       ).resolves.toBe("rpb_new");
-      expect(render(argOf(chain(0), "where"))).toEqual(
+      expect(render(argOf(chain(2), "where"))).toEqual(
         connectionFilter(GITLAB_STEERING_PROVIDER),
       );
-      expect(argOf(chain(1), "values")).toMatchObject({
+      expect(argOf(chain(3), "values")).toMatchObject({
         connectorId: GITLAB_STEERING_PROVIDER,
         displayName: "GitLab steering",
         authScheme: "group_access_token",
@@ -1009,7 +1049,11 @@ describe("steeringRepoProvisionDeps", () => {
     });
 
     it("reuses the connection and the binding head a rerun finds", async () => {
-      mocks.results.push([{ id: CONN }], [{ publicId: "rpb_existing" }]);
+      mocks.results.push(
+        [{ provider: "gitlab", providerRepositoryId: "901" }],
+        [{ id: CONN }],
+        [{ publicId: "rpb_existing" }],
+      );
       await expect(
         deps().bind(WORKSPACE, {
           connection: GITLAB,
@@ -1017,8 +1061,13 @@ describe("steeringRepoProvisionDeps", () => {
           default_branch: "main",
         }),
       ).resolves.toBe("rpb_existing");
-      expect(mocks.chains.map((c) => c.op)).toEqual(["select", "select"]);
-      expect(render(argOf(chain(1), "where"))).toEqual(
+      expect(mocks.chains.map((c) => c.op)).toEqual([
+        "execute",
+        "select",
+        "select",
+        "select",
+      ]);
+      expect(render(argOf(chain(3), "where"))).toEqual(
         render(
           and(
             eq(schema.repositoryBindingHeads.connectionId, CONN),
@@ -1030,7 +1079,7 @@ describe("steeringRepoProvisionDeps", () => {
     });
 
     it("writes a head on the connection it finds when no head exists", async () => {
-      mocks.results.push([{ id: CONN }], []);
+      mocks.results.push([], [{ id: CONN }], []);
       await expect(
         deps().bind(WORKSPACE, {
           connection: GITHUB,
@@ -1038,7 +1087,12 @@ describe("steeringRepoProvisionDeps", () => {
           default_branch: "trunk",
         }),
       ).resolves.toBe("rpb_new");
-      expect(mocks.chains.map((c) => c.op)).toEqual(["select", "select"]);
+      expect(mocks.chains.map((c) => c.op)).toEqual([
+        "execute",
+        "select",
+        "select",
+        "select",
+      ]);
       expect(mocks.writeRepositoryHead.mock.calls[0]?.[1]).toMatchObject({
         connectionId: CONN,
         repo: { defaultBranch: "trunk" },
@@ -1046,7 +1100,7 @@ describe("steeringRepoProvisionDeps", () => {
     });
 
     it("throws when the connection insert returns no row", async () => {
-      mocks.results.push([], []);
+      mocks.results.push([], [], []);
       await expect(
         deps().bind(WORKSPACE, {
           connection: GITHUB,
@@ -1055,6 +1109,54 @@ describe("steeringRepoProvisionDeps", () => {
         }),
       ).rejects.toThrow("source_connections insert returned no row");
       expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
+    });
+
+    it("stops when the workspace already has a steering head for another repository", async () => {
+      mocks.results.push([
+        { provider: "github", providerRepositoryId: "777" },
+      ]);
+      const bound = deps().bind(WORKSPACE, {
+        connection: GITHUB,
+        repository: REPOSITORY,
+        default_branch: "main",
+      });
+      await expect(bound).rejects.toBeInstanceOf(SteeringProvisionBlockedError);
+      await expect(bound).rejects.toMatchObject({
+        code: "steering_repo_already_bound",
+        message: `Workspace ${WS} already has a steering repository, so this job does not bind acme/oxagen-platform as a second one.`,
+      });
+      expect(mocks.chains.map((c) => c.op)).toEqual(["execute", "select"]);
+      expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
+    });
+
+    it("stops when the steering head has the same id on another host", async () => {
+      mocks.results.push([
+        { provider: "gitlab", providerRepositoryId: "901" },
+      ]);
+      await expect(
+        deps().bind(WORKSPACE, {
+          connection: GITHUB,
+          repository: REPOSITORY,
+          default_branch: "main",
+        }),
+      ).rejects.toMatchObject({ code: "steering_repo_already_bound" });
+      expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
+    });
+
+    it("binds again when the only steering head is this repository", async () => {
+      mocks.results.push(
+        [{ provider: "github", providerRepositoryId: "901" }],
+        [{ id: CONN }],
+        [],
+      );
+      await expect(
+        deps().bind(WORKSPACE, {
+          connection: GITHUB,
+          repository: REPOSITORY,
+          default_branch: "main",
+        }),
+      ).resolves.toBe("rpb_new");
+      expect(mocks.writeRepositoryHead).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1223,5 +1325,37 @@ describe("startSteeringRepoProvision", () => {
     ]);
     expect(mocks.dbCalls).toEqual(["system"]);
     expect(mocks.chains).toEqual([]);
+  });
+});
+
+describe("steeringGroupToken", () => {
+  it("returns the newest stored token for the group", async () => {
+    mocks.results.push([
+      tokenRow("acme", "glpat-bad-id"),
+      tokenRow("77", "glpat-newest"),
+      tokenRow("77", "glpat-older"),
+    ]);
+    await expect(steeringGroupToken(ORG, 77)).resolves.toBe("glpat-newest");
+    expect(mocks.dbCalls).toEqual(["system"]);
+    expect(render(argOf(chain(0), "where"))).toEqual(
+      render(
+        and(
+          eq(schema.oauthAccounts.orgId, ORG),
+          eq(schema.oauthAccounts.provider, GITLAB_STEERING_PROVIDER),
+        ),
+      ),
+    );
+  });
+
+  it("returns null when no token is stored for the group", async () => {
+    mocks.results.push([tokenRow("88", "glpat-other")]);
+    await expect(steeringGroupToken(ORG, 77)).resolves.toBeNull();
+  });
+
+  it("returns null when the stored token for the group has expired", async () => {
+    mocks.results.push([
+      { ...tokenRow("77", "glpat-expired"), expiresAt: new Date(0) },
+    ]);
+    await expect(steeringGroupToken(ORG, 77)).resolves.toBeNull();
   });
 });

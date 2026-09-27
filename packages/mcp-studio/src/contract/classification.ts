@@ -3,7 +3,7 @@
 //
 // tools.toml writes the classification in snake case. The code, Cedar's
 // context, and agent.tool_versions read ToolClassification in camelCase.
-// `impacts` is today's `consequenceTags` until lane M13 renames it.
+// Both call the list of labels such as `moves_money` `impacts`.
 import {
   toolClassificationSchema,
   type ToolClassification,
@@ -34,7 +34,7 @@ export function toCodeClassification(entry: ToolsClassification): {
   const classification = toolClassificationSchema.parse({
     sideEffect: entry.side_effect,
     egress: entry.egress,
-    consequenceTags: [...(entry.impacts ?? [])],
+    impacts: [...(entry.impacts ?? [])],
     measures,
     dataClasses: [...(entry.data_classes ?? [])],
   });
@@ -51,7 +51,7 @@ export function fromCodeClassification(
     side_effect: classification.sideEffect,
     egress: classification.egress,
   };
-  if (classification.consequenceTags.length > 0) out.impacts = [...classification.consequenceTags];
+  if (classification.impacts.length > 0) out.impacts = [...classification.impacts];
   const names = Object.keys(classification.measures);
   if (names.length > 0) {
     const measures: Record<string, ToolsMeasure> = {};

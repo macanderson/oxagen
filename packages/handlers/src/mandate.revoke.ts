@@ -26,7 +26,7 @@ export const mandateRevokeHandler: CapabilityHandler<
   const actingUserId = await resolveActingUserId(ctx);
   const { tags, overrides } = await withTenantDb(async (tx) => ({
     tags: (await loadMandateRow(tx, workspaceId, input.mandateId))
-      .consequenceTags,
+      .impacts,
     overrides: await loadConsequenceRoles(tx, workspaceId),
   }));
   await assertConsequenceRole(ctx, tags, overrides);

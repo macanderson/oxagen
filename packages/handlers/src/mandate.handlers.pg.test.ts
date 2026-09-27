@@ -245,7 +245,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           riskGrade: "high",
           manifest: {},
           checksum: "0".repeat(64),
-          consequenceTags: ["moves_money"],
+          impacts: ["moves_money"],
           measures: {
             amount: {
               path: "amount.value",
@@ -413,7 +413,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         grantedBy: billingPublicId,
         roleAtGrant: "Billing",
         status: "active",
-        consequenceTags: ["moves_money"],
+        impacts: ["moves_money"],
         requestedBy: null,
       });
       expect(out.id).toMatch(/^mnd_/);
@@ -470,7 +470,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expect(
           grant(billingUserId, {
             ...body(),
-            consequenceTags: ["moves_money", "changes_access"],
+            impacts: ["moves_money", "changes_access"],
           }),
         ).rejects.toSatisfy(forbidden("no_role_covers_all_tags"));
       } finally {

@@ -92,12 +92,12 @@ vi.mock("@oxagen/rules", () => ({
   parseMandateRow: (row: {
     id: string;
     publicId: string;
-    consequenceTags: string[];
+    impacts: string[];
     approvalRules: { approvers: string[] };
   }) => ({
     id: row.id,
     publicId: row.publicId,
-    consequenceTags: row.consequenceTags,
+    impacts: row.impacts,
     approval: {
       humanAbove: {},
       alwaysHumanFor: [],
@@ -275,7 +275,7 @@ function makeTx(tenant: Tenant, captured: Captured) {
                       {
                         id: m.mandateId,
                         publicId: "mnd_01k5rt9xq7v3m8n2p4s6t8w0",
-                        consequenceTags: m.tags ?? ["moves_money"],
+                        impacts: m.tags ?? ["moves_money"],
                         approvalRules: { approvers: m.approvers ?? [] },
                       },
                     ]

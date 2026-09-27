@@ -225,10 +225,10 @@ export function createMainRepositoryGetHandler(
               eq(schema.repositoryBindingHeads.orgId, scope.orgId),
               eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
               // Only the steering head steers. Its role is 'steering', and
-              // 'linked' marks a repository that only receives PRs. A reader that ignores the
-              // column goes on resolving through a linked head, so the
-              // cross-workspace steering collision the index forbids would
-              // survive the reconciliation that was meant to end it.
+              // 'linked' marks a repository that only receives PRs. A reader
+              // that ignores the column goes on resolving through a linked
+              // head, so the cross-workspace steering collision the index
+              // forbids would survive the reconciliation meant to end it.
               inArray(
                 schema.repositoryBindingHeads.role,
                 schema.STEERING_HEAD_ROLES,

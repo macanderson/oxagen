@@ -70,7 +70,7 @@
         "additionalProperties": {},
         "description": "The full declared manifest body, verbatim"
       },
-      "consequence_tags": {
+      "impacts": {
         "type": "array",
         "items": {
           "type": "string"

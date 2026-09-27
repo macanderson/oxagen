@@ -28,7 +28,7 @@ never re-derived; null only on a row written before this field existed),
 `externalEffectId` (settle rows: the payment, migration, message or
 deployment id the tool returned), `periodKey`, `balanceAfter`, `at`.
 
-The mandate shape (spec §6.9 part 3): `agentId` (`agt_…`), `consequenceTags`,
+The mandate shape (spec §6.9 part 3): `agentId` (`agt_…`), `impacts`,
 `limits` (measure → `{ perCall?, perPeriod?, period: daily | weekly | monthly,
 currencyOrUnit, kind? }`, integer strings: micros for a currency, whole units
 otherwise), `targets` (measure → `{ allow, deny }` globs over a text measure),

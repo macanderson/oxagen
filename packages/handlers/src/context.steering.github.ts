@@ -7,7 +7,9 @@
 // org owner approved — not whatever GitHub reports as the default branch
 // today. Every operation runs with the workspace's own token (ADR-020:
 // installation token, then the connecting user's OAuth token, then the
-// local-only PAT).
+// local-only PAT). A steering repository the provisioner created is the one
+// exception: only the Oxagen Steering app can reach it, so the seam mints that
+// app's installation token for it.
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import {
@@ -23,6 +25,10 @@ import {
 import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { logger } from "./logger";
 import { resolveGitHubToken } from "./lib/github-token";
+import {
+  GITHUB_STEERING_PROVIDER,
+  mintSteeringInstallationToken,
+} from "./lib/steering-app";
 
 /**
  * The repository hosts steering can publish through. A Context PR on GitHub is
@@ -136,12 +142,16 @@ export interface SteeringHost {
     path: string,
     ref: string,
   ): Promise<GitHubPathCommit | null>;
-  /** Create the branch from `fromBranch`; an existing branch is reused. */
+  /**
+   * Create the branch from `fromBranch`; an existing branch is reused. With
+   * `at`, the branch starts at that commit instead of at `fromBranch`'s head.
+   * The host creates it there in one call, so nothing moves it in between.
+   */
   ensureBranch(
     repo: SteeringRepository,
     branch: string,
     fromBranch: string,
-    options?: { exclusive: boolean },
+    options?: { exclusive: boolean; at?: string },
   ): Promise<void>;
   /** Remove omitted files from a proposal's owned paths before writing its replacement. */
   reconcileFiles(
@@ -358,6 +368,29 @@ export type SteeringGitHub = SteeringHost;
 interface DeliveryConfig {
   owner?: unknown;
   repo?: unknown;
+  /**
+   * The Oxagen Steering app's installation id, on a `github_steering`
+   * connection the steering repo provisioner wrote.
+   */
+  installationId?: unknown;
+}
+
+/**
+ * The installation id on a `github_steering` connection's delivery config, as
+ * a positive integer. The provisioner writes a number. A string of digits
+ * reads too, because the settings-path GitHub connections store theirs as one.
+ */
+function steeringInstallationIdOf(
+  config: DeliveryConfig | null,
+): number | null {
+  const raw = config?.installationId;
+  const id =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string" && /^\d+$/.test(raw)
+        ? Number(raw)
+        : Number.NaN;
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
 /**
@@ -397,6 +430,13 @@ export type SteeringConnection =
        */
       approvedFullName: string;
       approvedDefaultRef: string;
+      /**
+       * Set when the head hangs from a `github_steering` connection: the
+       * steering repo provisioner created the repository through the Oxagen
+       * Steering app, and only that app's installation can reach it. The seam
+       * then mints that installation's token, not the workspace's own.
+       */
+      steeringInstallationId?: number;
     }
   | {
       /**
@@ -467,6 +507,8 @@ export async function readGitHubConnection(scope: {
         repo: schema.repositoryBindings.providerName,
         approvedFullName: schema.repositoryBindings.providerFullName,
         approvedDefaultRef: schema.repositoryBindings.configuredDefaultRef,
+        connectorId: schema.sourceConnections.connectorId,
+        deliveryConfig: schema.sourceConnections.deliveryConfig,
       })
       .from(schema.repositoryBindingHeads)
       .innerJoin(
@@ -488,10 +530,10 @@ export async function readGitHubConnection(scope: {
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
           // Only the steering head steers. Its role is 'steering', and
-          // 'linked' marks a repository that only receives PRs. A reader that ignores the
-          // column goes on resolving through a linked head, so the
-          // cross-workspace steering collision the index forbids would
-          // survive the reconciliation that was meant to end it.
+          // 'linked' marks a repository that only receives PRs. A reader
+          // that ignores the column goes on resolving through a linked
+          // head, so the cross-workspace steering collision the index
+          // forbids would survive the reconciliation meant to end it.
           inArray(
             schema.repositoryBindingHeads.role,
             schema.STEERING_HEAD_ROLES,
@@ -504,14 +546,30 @@ export async function readGitHubConnection(scope: {
         ),
       )
       .limit(1);
-    if (bound)
-      return {
-        source: "binding",
+    if (bound) {
+      const answer = {
+        source: "binding" as const,
         owner: bound.owner,
         repo: bound.repo,
         approvedFullName: bound.approvedFullName,
         approvedDefaultRef: bound.approvedDefaultRef,
       };
+      if (bound.connectorId !== GITHUB_STEERING_PROVIDER) return answer;
+      // A provisioned steering repository. The workspace's own GitHub token
+      // cannot see it, so the seam needs the Oxagen Steering installation the
+      // provisioner recorded. Without one, every call would fail on GitHub
+      // with a 404 that names no cause, so the read refuses here instead.
+      const installationId = steeringInstallationIdOf(
+        bound.deliveryConfig as DeliveryConfig | null,
+      );
+      if (installationId === null)
+        throw new HandlerError({
+          code: "conflict",
+          reason: "steering_installation_missing",
+          message: `The steering repository ${bound.approvedFullName} hangs from an Oxagen Steering connection with no installation id, so Oxagen cannot reach it. Provision the steering repository again.`,
+        });
+      return { ...answer, steeringInstallationId: installationId };
+    }
 
     // Why the join missed. A head is the workspace's declaration that it HAS a
     // main repository; its presence survives the connection being retired,
@@ -567,6 +625,12 @@ interface SteeringGitHubDeps {
     workspaceId: string;
   }) => Promise<string>;
   client: (token: string) => GitHubClient;
+  /**
+   * The Oxagen Steering app's token for one installation, used when the
+   * steering head hangs from a `github_steering` connection. Defaults to
+   * {@link mintSteeringInstallationToken}.
+   */
+  steeringToken?: (installationId: number) => Promise<string>;
   /**
    * The plain REST calls the merge queue makes that `GitHubClient` does not
    * carry: git data, branch updates, reviews, deployments. Defaults to
@@ -829,7 +893,15 @@ export function createSteeringGitHub(
             "This workspace has no connected GitHub repository; a Context PR needs the main repo (MC spec §10.1)",
         });
       }
-      const token = await deps.resolveToken(scope);
+      // A provisioned steering repository answers only to the Oxagen Steering
+      // app. Every other head uses the workspace's own token.
+      const token =
+        connection.source === "binding" &&
+        connection.steeringInstallationId !== undefined
+          ? await (deps.steeringToken ?? mintSteeringInstallationToken)(
+              connection.steeringInstallationId,
+            )
+          : await deps.resolveToken(scope);
       const gh = deps.client(token);
       const info = await gh.getRepoInfo({
         owner: connection.owner,
@@ -924,6 +996,7 @@ export function createSteeringGitHub(
           repo: repo.repo,
           branch,
           fromBranch,
+          fromSha: options?.at,
         });
       } catch (err) {
         if (

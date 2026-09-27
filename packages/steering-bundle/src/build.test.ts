@@ -39,7 +39,7 @@ const BILLING_SERVICE = "github.com/a-intel/billing-service";
 const REFUNDS = "steering/billing/a-intel.billing.refunds-over-100.md";
 const RELEASE_STEPS = "steering/platform/a-intel.platform.release-steps.md";
 
-/** MCP Studio's compile() stands here until lane M4 builds it. */
+/** No server compiles, so the tool manifest stays null, as in S0's stored bundle. */
 const refuseCompile: ToolCompiler = () => {
   throw new NotBuiltError("compile");
 };

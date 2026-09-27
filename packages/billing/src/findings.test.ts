@@ -11,15 +11,24 @@ import {
   type RunTotalsRecord,
 } from "./cost-rollup";
 import {
+  countClaims,
+  DETECTED_KINDS,
+  DETECTORS,
   detectFindings,
   EVIDENCE_RUNS,
   FINDING_FRAMES_PER_RUN,
+  FINDINGS_MAX,
   FINDINGS_PER_KIND,
   findingFingerprint,
+  microsOf,
   MIN_SAVING_MICROS,
   PAGE_TOKENS,
+  SPIN_LOOP_REPEATS,
+  timeOf,
   UNPAGED_RESULT_TOKENS,
+  type ClaimRow,
   type DetectInput,
+  type PricedRequestFrame,
   type ToolCallObservation,
 } from "./findings";
 
@@ -29,6 +38,9 @@ const START = new Date("2026-08-16T00:00:00.000Z");
 const END = new Date("2026-09-15T00:00:00.000Z");
 const OPERATOR = "prn_0123456789abcdefghjkmn";
 const AGENT = "acme.core.triage";
+/** What one model request costs in these tests, and the tokens it carries. */
+const TURN_MICROS = 12_000n;
+const TURN_TOKENS = 4_000;
 
 let seq = 0;
 
@@ -119,6 +131,44 @@ function call(
   };
 }
 
+/** A model request at `time`, keyed the way the store keys it. */
+function frameAt(
+  time: Date,
+  costMicros: bigint | null = TURN_MICROS,
+): PricedRequestFrame {
+  return {
+    key: `${time.toISOString()}#0`,
+    at: time,
+    costMicros,
+    tokens: TURN_TOKENS,
+    basis: costMicros === null ? null : "gateway_observed",
+  };
+}
+
+/** The model request one millisecond before the call at `at` seconds into the run. */
+function request(
+  r: RunTotalsRecord,
+  at: number,
+  costMicros: bigint | null = TURN_MICROS,
+): PricedRequestFrame {
+  return frameAt(new Date(r.startedAt.getTime() + at * 1_000 - 1), costMicros);
+}
+
+/** One model request just before each call, so each call is its own turn. */
+function turns(
+  calls: readonly ToolCallObservation[],
+  costMicros: bigint | null = TURN_MICROS,
+): Map<string, PricedRequestFrame[]> {
+  const out = new Map<string, PricedRequestFrame[]>();
+  for (const c of calls) {
+    const frame = frameAt(new Date(c.at.getTime() - 1), costMicros);
+    const list = out.get(c.runId) ?? [];
+    if (!list.some((f) => f.key === frame.key)) list.push(frame);
+    out.set(c.runId, list);
+  }
+  return out;
+}
+
 function detect(over: Partial<DetectInput>) {
   return detectFindings({
     window: { start: START, end: END },
@@ -143,6 +193,48 @@ describe("runInputPrice", () => {
     const noInput = run();
     noInput.breakdown.models[0]!.tokens.input_uncached = 0;
     expect(runInputPrice(noInput)).toBeNull();
+  });
+});
+
+describe("microsOf", () => {
+  const second = Date.parse("2026-09-27T05:30:12Z") * 1_000;
+
+  it("reads the store's six fractional digits, which a Date drops", () => {
+    expect(microsOf("2026-09-27T05:30:12.500500Z")).toBe(second + 500_500);
+    expect(microsOf("2026-09-27T05:30:12.500900Z")).toBe(second + 500_900);
+  });
+
+  it("pads a shorter fraction, drops digits past the sixth, and reads an offset", () => {
+    expect(microsOf("2026-09-27T05:30:12.5Z")).toBe(second + 500_000);
+    expect(microsOf("2026-09-27T05:30:12.5005009Z")).toBe(second + 500_500);
+    expect(microsOf("2026-09-27T07:30:12.000001+02:00")).toBe(second + 1);
+  });
+
+  it("reads a time with no fraction as a whole second", () => {
+    expect(microsOf("2026-09-27T05:30:12Z")).toBe(second);
+  });
+
+  it("is what timeOf uses, and timeOf falls back to the Date", () => {
+    const at = new Date("2026-09-27T05:30:12.500Z");
+    expect(timeOf({ at, atMicros: second + 500_500 })).toBe(second + 500_500);
+    expect(timeOf({ at })).toBe(second + 500_000);
+  });
+});
+
+describe("the detector registry", () => {
+  it("runs spin loops first, then repeats, then spend with no outcome, then the detectors that claim no frame", () => {
+    expect(DETECTORS.map((d) => [d.kinds, d.counting])).toEqual([
+      [["spin_loops"], 1],
+      [["repeated_shell_commands", "duplicate_tool_calls"], 1],
+      [["spend_with_no_outcome"], 8],
+      [["cache_writes_never_read"], null],
+      [["unpaged_results"], null],
+      [["model_class_fit"], null],
+    ]);
+  });
+
+  it("writes only kinds the schema accepts", () => {
+    for (const kind of DETECTED_KINDS) expect(FINDING_KINDS).toContain(kind);
   });
 });
 
@@ -177,6 +269,8 @@ describe("cache writes never read", () => {
       counterfactualMicros: "24000",
       operatorKeys: [OPERATOR],
     });
+    // It prices a part of each request, so it claims no frame.
+    expect(finding!.claims).toBeUndefined();
   });
 
   it("cites the agent when the run names no operator", () => {
@@ -209,89 +303,568 @@ describe("cache writes never read", () => {
 });
 
 describe("repeated shell commands and duplicate tool calls", () => {
-  it("prices a repeat with an identical input and output at the run's input price, against nothing", () => {
+  it("counts each turn that only re-ran a shell command at its own cost, against nothing", () => {
     const r = run();
-    const calls = [1, 2, 3].map((at) =>
+    const toolCalls = [1, 2, 3].map((at) =>
       call(r, { at, tool: "Bash", isMutating: true, resultTokens: 4_000 }),
     );
-    const [finding] = detect({ runs: [r], toolCalls: calls });
+    const [finding, ...rest] = detect({
+      runs: [r],
+      toolCalls,
+      frames: turns(toolCalls),
+    });
+    expect(rest).toEqual([]);
     expect(finding).toMatchObject({
       kind: "repeated_shell_commands",
       level: "tool",
       subject: "Bash",
-      savingMicros: 2n * 12_000n,
+      savingMicros: 2n * TURN_MICROS,
+      basis: "gateway_observed",
       confidence: "high",
     });
+    expect(finding!.why).toContain("2 turns on 1 run");
     expect(finding!.evidence).toMatchObject({
       calls: 2,
+      coveredCalls: 2,
+      measuredTokens: 2 * TURN_TOKENS,
       counterfactualTokens: 0,
+      counterfactualMicros: "0",
     });
+  });
+
+  it("claims each counted turn's frame as detector 1, under the run's operator", () => {
+    const r = run();
+    const toolCalls = [1, 2].map((at) =>
+      call(r, { at, tool: "Bash", isMutating: true }),
+    );
+    const [finding] = detect({
+      runs: [r],
+      toolCalls,
+      frames: turns(toolCalls),
+    });
+    const frame = request(r, 2);
+    expect(finding!.claims).toEqual([
+      {
+        detector: 1,
+        runId: r.runId,
+        frameKey: frame.key,
+        frameAt: frame.at,
+        operatorKey: OPERATOR,
+        costMicros: TURN_MICROS,
+      },
+    ]);
+  });
+
+  it("counts a turn that made several repeats once", () => {
+    const r = run();
+    const toolCalls = [1, 2, 3, 4].map((at) =>
+      call(r, { at, tool: "Bash", isMutating: true }),
+    );
+    const [finding] = detect({
+      runs: [r],
+      toolCalls,
+      // One request made the first call, and one more made the other three.
+      frames: new Map([[r.runId, [request(r, 1), request(r, 2)]]]),
+    });
+    expect(finding).toMatchObject({ savingMicros: TURN_MICROS });
+    expect(finding!.evidence.calls).toBe(1);
+    expect(finding!.evidence.frames?.[r.runId]?.total).toBe(3);
+    expect(finding!.claims).toHaveLength(1);
+  });
+
+  it("does not count a turn that also made a new call", () => {
+    const r = run();
+    const toolCalls = [
+      call(r, { at: 1, tool: "Bash", isMutating: true }),
+      call(r, { at: 2, tool: "Bash", isMutating: true }),
+      call(r, { at: 3, tool: "Bash", isMutating: true, inputDigest: "in-2" }),
+    ];
+    expect(
+      detect({
+        runs: [r],
+        toolCalls,
+        frames: new Map([[r.runId, [request(r, 1), request(r, 2)]]]),
+      }),
+    ).toEqual([]);
+  });
+
+  it("does not count a turn that made a call with no input digest", () => {
+    const r = run();
+    const shell = { tool: "Bash", isMutating: true };
+    // The second request repeats both calls of the first, but the hook
+    // recorded no input for one of them, so it may have done new work.
+    const toolCalls = [
+      call(r, { at: 1, ...shell }),
+      call(r, { at: 1.5, ...shell, inputDigest: "" }),
+      call(r, { at: 2, ...shell }),
+      call(r, { at: 2.5, ...shell, inputDigest: "" }),
+    ];
+    expect(
+      detect({
+        runs: [r],
+        toolCalls,
+        frames: new Map([[r.runId, [request(r, 1), request(r, 2)]]]),
+      }),
+    ).toEqual([]);
   });
 
   it("cites a read-only tool's repeat at the run's agent", () => {
     const r = run();
+    const toolCalls = [call(r, { at: 1 }), call(r, { at: 2 })];
     const [finding] = detect({
       runs: [r],
-      toolCalls: [call(r, { at: 1 }), call(r, { at: 2 })],
+      toolCalls,
+      frames: turns(toolCalls),
     });
     expect(finding).toMatchObject({
       kind: "duplicate_tool_calls",
       level: "agent",
       subject: AGENT,
-      savingMicros: 15_000n,
+      savingMicros: TURN_MICROS,
     });
+  });
+
+  it("cites a read-only tool's repeat at the run's operator when the run names no agent", () => {
+    const r = run({ agentKey: null });
+    const toolCalls = [call(r, { at: 1 }), call(r, { at: 2 })];
+    const [finding] = detect({
+      runs: [r],
+      toolCalls,
+      frames: turns(toolCalls),
+    });
+    expect(finding).toMatchObject({
+      kind: "duplicate_tool_calls",
+      level: "operator",
+      subject: OPERATOR,
+    });
+  });
+
+  it("cites a turn that repeated a shell command and a read-only call as a duplicate tool call", () => {
+    const r = run();
+    const toolCalls = [
+      call(r, { at: 1, tool: "Bash", isMutating: true }),
+      call(r, { at: 1.5 }),
+      call(r, { at: 2, tool: "Bash", isMutating: true }),
+      call(r, { at: 2.5 }),
+    ];
+    const findings = detect({
+      runs: [r],
+      toolCalls,
+      frames: new Map([[r.runId, [request(r, 1), request(r, 2)]]]),
+    });
+    expect(findings.map((f) => [f.kind, f.evidence.calls])).toEqual([
+      ["duplicate_tool_calls", 1],
+    ]);
   });
 
   it("is not a repeat when the output changed, or when a non-shell tool writes", () => {
     const r = run();
+    const toolCalls = [
+      call(r, { at: 1 }),
+      call(r, { at: 2, outputDigest: "out-2" }),
+      call(r, { at: 3, tool: "Write", isMutating: true, inputDigest: "w" }),
+      call(r, { at: 4, tool: "Write", isMutating: true, inputDigest: "w" }),
+    ];
+    expect(
+      detect({ runs: [r], toolCalls, frames: turns(toolCalls) }),
+    ).toEqual([]);
+  });
+
+  it("is medium confidence when a tenth or more of the counted turns have no price", () => {
+    const r = run();
+    const toolCalls = Array.from({ length: 10 }, (_, i) =>
+      call(r, { at: i + 1, tool: "Bash", isMutating: true }),
+    );
+    const [finding] = detect({
+      runs: [r],
+      toolCalls,
+      frames: new Map([
+        [
+          r.runId,
+          [
+            ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((at) => request(r, at)),
+            request(r, 10, null),
+          ],
+        ],
+      ]),
+    });
+    expect(finding).toMatchObject({
+      confidence: "medium",
+      savingMicros: 8n * TURN_MICROS,
+    });
+    expect(finding!.evidence).toMatchObject({ calls: 9, coveredCalls: 8 });
+    // An unpriced turn is cited, and it claims no frame.
+    expect(finding!.claims).toHaveLength(8);
+  });
+
+  it("writes nothing when fewer than half the counted turns are priced", () => {
+    const r = run();
+    const toolCalls = [1, 2, 3, 4].map((at) =>
+      call(r, { at, tool: "Bash", isMutating: true }),
+    );
     expect(
       detect({
         runs: [r],
-        toolCalls: [
-          call(r, { at: 1 }),
-          call(r, { at: 2, outputDigest: "out-2" }),
-          call(r, { at: 3, tool: "Write", isMutating: true, inputDigest: "w" }),
-          call(r, { at: 4, tool: "Write", isMutating: true, inputDigest: "w" }),
-        ],
+        toolCalls,
+        frames: new Map([
+          [
+            r.runId,
+            [
+              request(r, 1),
+              request(r, 2),
+              request(r, 3, null),
+              request(r, 4, null),
+            ],
+          ],
+        ]),
       }),
     ).toEqual([]);
   });
 
-  it("is medium confidence when a tenth or more of the repeats carry no result tokens", () => {
+  it("cites each repeat, and prices none, when the run's frames were not read", () => {
     const r = run();
-    const toolCalls = [
-      call(r, { at: 1, tool: "Bash", resultTokens: 5_000 }),
-      ...[2, 3, 4, 5, 6, 7, 8, 9].map((at) =>
-        call(r, { at, tool: "Bash", resultTokens: 5_000 }),
-      ),
-      call(r, { at: 10, tool: "Bash", resultTokens: null }),
-    ];
-    const [finding] = detect({ runs: [r], toolCalls });
-    expect(finding).toMatchObject({ confidence: "medium" });
-    expect(finding!.evidence).toMatchObject({ calls: 9, coveredCalls: 8 });
-  });
-
-  it("writes nothing when fewer than half the repeats are covered", () => {
-    const r = run();
-    const toolCalls = [1, 2, 3, 4].map((at) =>
-      call(r, { at, tool: "Bash", resultTokens: at === 2 ? 50_000 : null }),
+    const other = run();
+    const toolCalls = [1, 2, 3].map((at) =>
+      call(r, { at, tool: "Bash", isMutating: true }),
     );
     expect(detect({ runs: [r], toolCalls })).toEqual([]);
+    expect(
+      detect({
+        runs: [r, other],
+        toolCalls,
+        frames: new Map([[other.runId, [request(other, 1)]]]),
+      }),
+    ).toEqual([]);
+  });
+
+  it("gives each call to the latest request at or before it, whatever order the frames arrive in", () => {
+    const r = run();
+    const toolCalls = [1, 2].map((at) =>
+      call(r, { at, tool: "Bash", isMutating: true }),
+    );
+    // The request at 1.5s made the call at 2s; the request at 3s made no call.
+    const [finding] = detect({
+      runs: [r],
+      toolCalls,
+      frames: new Map([
+        [r.runId, [request(r, 3), request(r, 1.5), request(r, 1)]],
+      ]),
+    });
+    expect(finding!.claims?.map((c) => c.frameKey)).toEqual([
+      request(r, 1.5).key,
+    ]);
+  });
+
+  it("gives a call to the request before it when a later request shares its millisecond", () => {
+    const r = run();
+    const base = r.startedAt.getTime();
+    const toolCalls = [
+      call(r, { at: 2 }),
+      call(r, { at: 3.5, atMicros: (base + 3_500) * 1_000 + 500, seq: 3 }),
+      call(r, { at: 4, inputDigest: "in-2", seq: 4 }),
+    ];
+    const made = frameAt(new Date(base + 3_000));
+    const later = {
+      ...frameAt(new Date(base + 3_500)),
+      atMicros: (base + 3_500) * 1_000 + 900,
+    };
+    // By the millisecond alone, `later` made the repeat and the new call, so
+    // nothing would count.
+    const [finding, ...rest] = detect({
+      runs: [r],
+      toolCalls,
+      frames: new Map([
+        [r.runId, [frameAt(new Date(base + 1_000)), made, later]],
+      ]),
+    });
+    expect(rest).toEqual([]);
+    expect(finding).toMatchObject({
+      kind: "duplicate_tool_calls",
+      savingMicros: TURN_MICROS,
+    });
+    expect(finding!.claims?.map((c) => c.frameKey)).toEqual([made.key]);
+  });
+
+  describe("two chains whose model calls share a millisecond", () => {
+    const SUBAGENT = "00000000-0000-4000-8000-0000000000bb";
+    const shell = { tool: "Bash", isMutating: true };
+
+    /**
+     * The root and a subagent each run a command, then each repeat it from a
+     * request that finished in the same millisecond as the other's.
+     * `tacho_events.ts` keeps milliseconds, so the two frames share `at`,
+     * and the store keys them by their place at that instant.
+     */
+    function tiedChains(extra: (r: RunTotalsRecord) => ToolCallObservation[]) {
+      const r = run();
+      const base = r.startedAt.getTime();
+      const tied = new Date(base + 2_000);
+      const rootTied = { ...frameAt(tied), sessionUuid: null };
+      const subTied = {
+        ...frameAt(tied),
+        key: `${tied.toISOString()}#1`,
+        sessionUuid: SUBAGENT,
+      };
+      const toolCalls = [
+        call(r, { at: 1, seq: 1, ...shell }),
+        call(r, {
+          at: 1,
+          seq: 1,
+          ...shell,
+          inputDigest: "sub-in",
+          sessionUuid: SUBAGENT,
+        }),
+        call(r, { at: 2.25, seq: 2, ...shell }),
+        call(r, {
+          at: 2.5,
+          seq: 2,
+          ...shell,
+          inputDigest: "sub-in",
+          sessionUuid: SUBAGENT,
+        }),
+        ...extra(r),
+      ];
+      const frames = new Map<string, PricedRequestFrame[]>([
+        [
+          r.runId,
+          [
+            { ...frameAt(new Date(base + 500)), sessionUuid: null },
+            { ...frameAt(new Date(base + 600)), sessionUuid: SUBAGENT },
+            rootTied,
+            subTied,
+          ],
+        ],
+      ]);
+      return { r, toolCalls, frames, rootTied, subTied };
+    }
+
+    it("counts and prices each chain's request on its own", () => {
+      const { r, toolCalls, frames, rootTied, subTied } = tiedChains(() => []);
+      // By time alone, both repeats would land on the frame that sorts last,
+      // and one request would be counted for two.
+      const [finding, ...rest] = detect({ runs: [r], toolCalls, frames });
+      expect(rest).toEqual([]);
+      expect(finding).toMatchObject({
+        kind: "repeated_shell_commands",
+        savingMicros: 2n * TURN_MICROS,
+      });
+      expect(finding!.evidence.calls).toBe(2);
+      expect(finding!.claims?.map((c) => c.frameKey)).toEqual([
+        rootTied.key,
+        subTied.key,
+      ]);
+    });
+
+    it("still counts one chain's request when the other chain's request did new work", () => {
+      const { r, toolCalls, frames, subTied } = tiedChains((record) => [
+        call(record, { at: 2.75, seq: 3, ...shell, inputDigest: "in-2" }),
+      ]);
+      // By time alone, the root's new call would land on the subagent's
+      // request as well, and neither request would count.
+      const [finding, ...rest] = detect({ runs: [r], toolCalls, frames });
+      expect(rest).toEqual([]);
+      expect(finding).toMatchObject({
+        kind: "repeated_shell_commands",
+        savingMicros: TURN_MICROS,
+      });
+      expect(finding!.evidence.calls).toBe(1);
+      expect(finding!.claims?.map((c) => c.frameKey)).toEqual([subTied.key]);
+    });
+
+    it("gives a subagent's call the run's latest request when its own chain recorded none", () => {
+      // The proxy records a subagent's model call on the root chain
+      // (ADR-168), so the subagent's calls fall back to time.
+      const r = run();
+      const base = r.startedAt.getTime();
+      const toolCalls = [1, 2.5].map((at) =>
+        call(r, { at, seq: at * 2, ...shell, sessionUuid: SUBAGENT }),
+      );
+      const later = { ...frameAt(new Date(base + 2_000)), sessionUuid: null };
+      const [finding] = detect({
+        runs: [r],
+        toolCalls,
+        frames: new Map([
+          [
+            r.runId,
+            [{ ...frameAt(new Date(base + 500)), sessionUuid: null }, later],
+          ],
+        ]),
+      });
+      expect(finding!.claims?.map((c) => c.frameKey)).toEqual([later.key]);
+    });
+  });
+});
+
+describe("spin loops", () => {
+  const same = (
+    r: RunTotalsRecord,
+    n: number,
+    over: Omit<Partial<ToolCallObservation>, "at"> = {},
+  ) =>
+    Array.from({ length: n }, (_, i) => call(r, { at: i + 1, ...over }));
+
+  it(`finds ${SPIN_LOOP_REPEATS} repeats of one call in a row, prices each turn, and claims its frame`, () => {
+    const r = run();
+    const toolCalls = same(r, SPIN_LOOP_REPEATS + 1);
+    const findings = detect({
+      runs: [r],
+      toolCalls,
+      frames: turns(toolCalls),
+    });
+    expect(findings.map((f) => f.kind)).toEqual(["spin_loops"]);
+    const [finding] = findings;
+    expect(finding).toMatchObject({
+      level: "agent",
+      subject: AGENT,
+      savingMicros: BigInt(SPIN_LOOP_REPEATS) * TURN_MICROS,
+      confidence: "high",
+    });
+    expect(finding!.evidence.calls).toBe(SPIN_LOOP_REPEATS);
+    expect(finding!.why).toContain(`${SPIN_LOOP_REPEATS} turns`);
+    expect(finding!.claims).toHaveLength(SPIN_LOOP_REPEATS);
+    expect(finding!.claims![0]).toEqual({
+      detector: 1,
+      runId: r.runId,
+      frameKey: request(r, 2).key,
+      frameAt: request(r, 2).at,
+      operatorKey: OPERATOR,
+      costMicros: TURN_MICROS,
+    });
+  });
+
+  it(`leaves ${SPIN_LOOP_REPEATS - 1} repeats in a row to the duplicate tool call finding`, () => {
+    const r = run();
+    const toolCalls = same(r, SPIN_LOOP_REPEATS);
+    const findings = detect({
+      runs: [r],
+      toolCalls,
+      frames: turns(toolCalls),
+    });
+    expect(findings.map((f) => [f.kind, f.evidence.calls])).toEqual([
+      ["duplicate_tool_calls", SPIN_LOOP_REPEATS - 1],
+    ]);
+  });
+
+  it("takes a shell loop ahead of the repeated shell command finding", () => {
+    const r = run();
+    const toolCalls = same(r, SPIN_LOOP_REPEATS + 1, {
+      tool: "Bash",
+      isMutating: true,
+    });
+    const findings = detect({
+      runs: [r],
+      toolCalls,
+      frames: turns(toolCalls),
+    });
+    expect(findings.map((f) => [f.kind, f.evidence.calls])).toEqual([
+      ["spin_loops", SPIN_LOOP_REPEATS],
+    ]);
+  });
+
+  it("breaks a streak at a different call", () => {
+    const r = run();
+    const half = SPIN_LOOP_REPEATS / 2;
+    const toolCalls = [
+      ...Array.from({ length: half + 1 }, (_, i) => call(r, { at: i + 1 })),
+      call(r, { at: half + 2, inputDigest: "in-2" }),
+      ...Array.from({ length: half }, (_, i) => call(r, { at: half + 3 + i })),
+    ];
+    const findings = detect({
+      runs: [r],
+      toolCalls,
+      frames: turns(toolCalls),
+    });
+    expect(findings.map((f) => [f.kind, f.evidence.calls])).toEqual([
+      ["duplicate_tool_calls", SPIN_LOOP_REPEATS],
+    ]);
+  });
+
+  it("reads each chain on its own, so a subagent's call does not break the run's streak", () => {
+    const r = run();
+    const SUBAGENT = "00000000-0000-4000-8000-0000000000bb";
+    const toolCalls = [
+      ...same(r, SPIN_LOOP_REPEATS + 1),
+      call(r, { at: 5.5, seq: 1, inputDigest: "in-2", sessionUuid: SUBAGENT }),
+    ];
+    // Each request makes one call, the subagent's too.
+    const findings = detect({
+      runs: [r],
+      toolCalls,
+      frames: turns(toolCalls),
+    });
+    expect(findings.map((f) => [f.kind, f.evidence.calls])).toEqual([
+      ["spin_loops", SPIN_LOOP_REPEATS],
+    ]);
+  });
+
+  it("cites the run's operator when the run names no agent, and nothing when it names neither", () => {
+    const r = run({ agentKey: null });
+    const toolCalls = same(r, SPIN_LOOP_REPEATS + 1);
+    const [finding] = detect({
+      runs: [r],
+      toolCalls,
+      frames: turns(toolCalls),
+    });
+    expect(finding).toMatchObject({
+      kind: "spin_loops",
+      level: "operator",
+      subject: OPERATOR,
+    });
+
+    const anon = run({ agentKey: null, operatorKey: null });
+    const anonCalls = same(anon, SPIN_LOOP_REPEATS + 1);
+    expect(
+      detect({ runs: [anon], toolCalls: anonCalls, frames: turns(anonCalls) }),
+    ).toEqual([]);
+  });
+
+  it("cites each looping call, and prices none, when the run's frames were not read", () => {
+    const r = run();
+    const big = UNPAGED_RESULT_TOKENS + 1_000;
+    const toolCalls = same(r, SPIN_LOOP_REPEATS + 1, { resultTokens: big });
+    // The first call is still an unpaged result. The loop's calls are cited
+    // by the loop, so they are not unpaged results as well.
+    expect(
+      detect({ runs: [r], toolCalls }).map((f) => [f.kind, f.evidence.calls]),
+    ).toEqual([["unpaged_results", 1]]);
+  });
+
+  it("cites only runs that started after a person decided the loop finding", () => {
+    const before = run();
+    const after = run();
+    const toolCalls = [before, after].flatMap((r) =>
+      same(r, SPIN_LOOP_REPEATS + 1),
+    );
+    const decidedSince = new Map([
+      [
+        findingFingerprint("spin_loops", "agent", AGENT),
+        new Date(before.startedAt.getTime() + 1),
+      ],
+    ]);
+    const findings = detect({
+      runs: [before, after],
+      toolCalls,
+      decidedSince,
+      frames: turns(toolCalls),
+    });
+    // The decided run's turns are claimed by the loop, so they are not
+    // repeats as well.
+    expect(findings.map((f) => [f.kind, f.citedRuns])).toEqual([
+      ["spin_loops", [after.runId]],
+    ]);
   });
 });
 
 describe("a result another run already fetched", () => {
   it("is not a finding: the new run's context has to carry the result either way", () => {
     const [a, b, c] = [run(), run(), run()];
+    const toolCalls = [
+      call(a!, { at: 1 }),
+      call(b!, { at: 1 }),
+      call(c!, { at: 1 }),
+    ];
     expect(
-      detect({
-        runs: [a!, b!, c!],
-        toolCalls: [
-          call(a!, { at: 1 }),
-          call(b!, { at: 1 }),
-          call(c!, { at: 1 }),
-        ],
-      }),
+      detect({ runs: [a!, b!, c!], toolCalls, frames: turns(toolCalls) }),
     ).toEqual([]);
   });
 
@@ -312,7 +885,7 @@ describe("a result another run already fetched", () => {
 });
 
 describe("unpaged results", () => {
-  it("re-prices a result above the threshold at one page", () => {
+  it("re-prices a result above the threshold at one page when the run's frames were not read", () => {
     const r = run();
     const tokens = UNPAGED_RESULT_TOKENS + 1_000;
     const [finding] = detect({
@@ -334,9 +907,28 @@ describe("unpaged results", () => {
       measuredTokens: tokens,
       counterfactualTokens: PAGE_TOKENS,
     });
+    expect(finding!.claims).toBeUndefined();
   });
 
-  it("does not also count a large result a repeat already claimed", () => {
+  it("does not also count a large result a repeat finding cites", () => {
+    const r = run();
+    const big = UNPAGED_RESULT_TOKENS + 1_000;
+    const toolCalls = [
+      call(r, { at: 1, tool: "Bash", resultTokens: big }),
+      call(r, { at: 2, tool: "Bash", resultTokens: big }),
+    ];
+    const findings = detect({
+      runs: [r],
+      toolCalls,
+      frames: turns(toolCalls, 100_000n),
+    });
+    expect(findings.map((f) => [f.kind, f.evidence.calls])).toEqual([
+      ["repeated_shell_commands", 1],
+      ["unpaged_results", 1],
+    ]);
+  });
+
+  it("leaves a large repeat to the repeat finding when the run's frames were not read", () => {
     const r = run();
     const big = UNPAGED_RESULT_TOKENS + 1_000;
     const findings = detect({
@@ -347,12 +939,11 @@ describe("unpaged results", () => {
       ],
     });
     expect(findings.map((f) => [f.kind, f.evidence.calls])).toEqual([
-      ["repeated_shell_commands", 1],
       ["unpaged_results", 1],
     ]);
   });
 
-  it("does not flag a result at the threshold", () => {
+  it("does not flag a result at the threshold when the run's frames were not read", () => {
     const r = run();
     expect(
       detect({
@@ -379,9 +970,11 @@ describe("detectFindings", () => {
       runs: [before, after],
       toolCalls,
       decidedSince,
+      frames: turns(toolCalls),
     });
     expect(finding!.citedRuns).toEqual([after.runId]);
     expect(finding!.windowStart).toEqual(since);
+    expect(finding!.claims?.map((c) => c.runId)).toEqual([after.runId]);
   });
 
   it("ignores tool calls of runs the rollup has no row for", () => {
@@ -402,13 +995,15 @@ describe("detectFindings", () => {
       tokens: { ...ZERO_TOKENS, input_uncached: 3_000, cache_write_5m: 8_000 },
     });
     const toolWindowStart = new Date(START.getTime() + 86_400_000);
+    const toolCalls = shellRuns.flatMap((r) => [
+      call(r, { at: 1, tool: "Bash", isMutating: true }),
+      call(r, { at: 2, tool: "Bash", isMutating: true }),
+    ]);
     const findings = detect({
       runs: [...shellRuns, cache],
       toolWindowStart,
-      toolCalls: shellRuns.flatMap((r) => [
-        call(r, { at: 1, tool: "Bash", isMutating: true }),
-        call(r, { at: 2, tool: "Bash", isMutating: true }),
-      ]),
+      toolCalls,
+      frames: turns(toolCalls),
     });
     expect(findings.map((f) => f.kind)).toEqual([
       "cache_writes_never_read",
@@ -418,6 +1013,23 @@ describe("detectFindings", () => {
     expect(findings[1]!.windowStart).toEqual(toolWindowStart);
     expect(findings[1]!.citedRuns).toHaveLength(12);
     expect(findings[1]!.evidence.runs).toHaveLength(10);
+    expect(findings[1]!.claims).toHaveLength(12);
+  });
+
+  it(`keeps at most ${FINDINGS_PER_KIND} findings of one kind, largest saving first`, () => {
+    const r = run();
+    const toolCalls = Array.from({ length: FINDINGS_PER_KIND + 2 }, (_, i) =>
+      call(r, {
+        at: i + 1,
+        tool: `tool_${String(i).padStart(2, "0")}`,
+        inputDigest: `in-${i}`,
+        resultTokens: UNPAGED_RESULT_TOKENS + 1_000 * (i + 1),
+      }),
+    );
+    const findings = detect({ runs: [r], toolCalls });
+    expect(findings).toHaveLength(FINDINGS_PER_KIND);
+    expect(findings[0]!.subject).toBe(`tool_${FINDINGS_PER_KIND + 1}`);
+    expect(findings.map((f) => f.subject)).not.toContain("tool_00");
   });
 });
 
@@ -433,10 +1045,12 @@ describe("the frames a finding cites (#4001)", () => {
 
   it("records each cited call of one run by its seq, across the run's turns", () => {
     const r = run();
+    // The first call did the work; the repeats in two later turns are cited.
+    const toolCalls = [bash(r, 1), bash(r, 40), bash(r, 5)];
     const [finding] = detect({
       runs: [r],
-      // The first call did the work; the repeats in two later turns are cited.
-      toolCalls: [bash(r, 1), bash(r, 40), bash(r, 5)],
+      toolCalls,
+      frames: turns(toolCalls),
     });
     expect(finding?.evidence.frames).toEqual({
       [r.runId]: { seqs: [{ seq: "5" }, { seq: "40" }], total: 2 },
@@ -445,9 +1059,11 @@ describe("the frames a finding cites (#4001)", () => {
 
   it("names the subagent chain a cited call was recorded on", () => {
     const r = run();
+    const toolCalls = [bash(r, 1), bash(r, 2, SUBAGENT)];
     const [finding] = detect({
       runs: [r],
-      toolCalls: [bash(r, 1), bash(r, 2, SUBAGENT)],
+      toolCalls,
+      frames: turns(toolCalls),
     });
     expect(finding?.evidence.frames?.[r.runId]?.seqs).toEqual([
       { seq: "2", sessionUuid: SUBAGENT },
@@ -459,13 +1075,15 @@ describe("the frames a finding cites (#4001)", () => {
     // both cite seq 3. The subagent's call ran first here, so an order kept
     // from the calls would list it first.
     const r = run();
+    const toolCalls = [
+      bash(r, 1),
+      { ...bash(r, 2, SUBAGENT), seq: 3 },
+      bash(r, 3),
+    ];
     const [finding] = detect({
       runs: [r],
-      toolCalls: [
-        bash(r, 1),
-        { ...bash(r, 2, SUBAGENT), seq: 3 },
-        bash(r, 3),
-      ],
+      toolCalls,
+      frames: turns(toolCalls),
     });
     expect(finding?.evidence.frames?.[r.runId]).toEqual({
       seqs: [{ seq: "3" }, { seq: "3", sessionUuid: SUBAGENT }],
@@ -489,7 +1107,11 @@ describe("the frames a finding cites (#4001)", () => {
       { length: FINDING_FRAMES_PER_RUN + 10 },
       (_, i) => bash(r, i + 1),
     );
-    const [finding] = detect({ runs: [r], toolCalls });
+    const [finding] = detect({
+      runs: [r],
+      toolCalls,
+      frames: turns(toolCalls),
+    });
     const cited = finding?.evidence.frames?.[r.runId];
     expect(cited?.seqs).toHaveLength(FINDING_FRAMES_PER_RUN);
     expect(cited?.seqs[0]).toEqual({ seq: "2" });
@@ -507,9 +1129,11 @@ describe("the frames a finding cites (#4001)", () => {
 
   it("cites frames in every cited run, past the ten the evidence itemises", () => {
     const runs = Array.from({ length: EVIDENCE_RUNS + 2 }, () => run());
+    const toolCalls = runs.flatMap((r) => [bash(r, 1), bash(r, 2)]);
     const [finding] = detect({
       runs,
-      toolCalls: runs.flatMap((r) => [bash(r, 1), bash(r, 2)]),
+      toolCalls,
+      frames: turns(toolCalls),
     });
     expect(finding?.evidence.runs).toHaveLength(EVIDENCE_RUNS);
     expect(Object.keys(finding?.evidence.frames ?? {}).sort()).toEqual(
@@ -521,38 +1145,89 @@ describe("the frames a finding cites (#4001)", () => {
     const r = run();
     const [finding] = detect({
       runs: [r],
-      toolCalls: [
-        bash(r, 1),
-        bash(r, 2),
-        bash(r, 3),
-        { ...bash(r, 4), resultTokens: null },
-      ],
+      toolCalls: [bash(r, 1), bash(r, 2), bash(r, 3), bash(r, 4)],
+      frames: new Map([
+        [
+          r.runId,
+          [request(r, 1), request(r, 2), request(r, 3), request(r, 4, null)],
+        ],
+      ]),
     });
     expect(finding?.evidence.coveredCalls).toBe(2);
     expect(finding?.evidence.frames?.[r.runId]?.total).toBe(3);
   });
 
-  it("leaves a read-only repeat on a run with no agent unclaimed, so a large one is still unpaged", () => {
-    const r = run({ agentKey: null });
+  it("leaves a read-only repeat on a run with no agent or operator unclaimed, so a large one is still unpaged", () => {
+    const r = run({ agentKey: null, operatorKey: null });
     const big = UNPAGED_RESULT_TOKENS + 1_000;
-    const findings = detect({
-      runs: [r],
-      toolCalls: [
-        call(r, { at: 1, resultTokens: big }),
-        call(r, { at: 2, resultTokens: big }),
+    const toolCalls = [
+      call(r, { at: 1, resultTokens: big }),
+      call(r, { at: 2, resultTokens: big }),
+    ];
+    // A third request re-reads the second result, so both results count.
+    const frames = turns(toolCalls);
+    frames.get(r.runId)!.push(request(r, 3));
+    const findings = detect({ runs: [r], toolCalls, frames });
+    expect(
+      findings.map((f) => [f.kind, f.evidence.frames?.[r.runId]?.total]),
+    ).toEqual([["unpaged_results", 2]]);
+  });
+});
+
+describe("countClaims", () => {
+  const row = (
+    detector: number,
+    runId: string,
+    frameKey: string,
+    operatorKey: string | null,
+    costMicros: bigint,
+  ): ClaimRow => ({ detector, runId, frameKey, operatorKey, costMicros });
+
+  it("counts a frame two detectors claim once, under the lower detector", () => {
+    const spend = countClaims([
+      row(8, "tse_a", "k#0", "prn_a", 40_000n),
+      row(1, "tse_a", "k#0", "prn_a", 30_000n),
+      row(7, "tse_a", "k#0", "prn_a", 35_000n),
+      row(7, "tse_a", "k#1", "prn_a", 5_000n),
+      row(1, "tse_b", "k#0", null, 7_000n),
+      row(8, "tse_c", "k#0", "prn_b", 2_000n),
+    ]);
+    expect(spend).toEqual({
+      totalMicros: 44_000n,
+      operators: [
+        { operatorKey: "prn_a", micros: 35_000n },
+        { operatorKey: null, micros: 7_000n },
+        { operatorKey: "prn_b", micros: 2_000n },
       ],
     });
-    expect(findings.map((f) => [f.kind, f.evidence.calls])).toEqual([
-      ["unpaged_results", 2],
+  });
+
+  it("sums the operator totals to the headline", () => {
+    const spend = countClaims([
+      row(1, "tse_a", "k#0", "prn_a", 11_000n),
+      row(7, "tse_a", "k#0", "prn_a", 11_000n),
+      row(1, "tse_b", "k#0", "prn_b", 11_000n),
+      row(8, "tse_c", "k#0", null, 3_000n),
     ]);
+    expect(spend.operators.reduce((sum, o) => sum + o.micros, 0n)).toBe(
+      spend.totalMicros,
+    );
+    // Equal totals order by operator key.
+    expect(spend.operators.map((o) => o.operatorKey)).toEqual([
+      "prn_a",
+      "prn_b",
+      null,
+    ]);
+  });
+
+  it("is zero with no operators when nothing is claimed", () => {
+    expect(countClaims([])).toEqual({ totalMicros: 0n, operators: [] });
   });
 });
 
 describe("the limits the contracts carry", () => {
   it("keeps every open finding inside one list_findings answer", () => {
-    expect(FINDINGS_PER_KIND * FINDING_KINDS.length).toBeLessThanOrEqual(
-      FINDINGS_LIST_MAX,
-    );
+    expect(FINDINGS_MAX).toBeLessThanOrEqual(FINDINGS_LIST_MAX);
   });
 
   it("itemises exactly as many runs as the evidence contract accepts", () => {

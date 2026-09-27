@@ -116,6 +116,10 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   // Windows' command interpreter, which tacho spawns a `.cmd` shim through
   // (packages/tacho/src/host/codex-app-server.ts).
   "COMSPEC",
+  // Windows' list of executable extensions, which tacho's local servers
+  // read to find a server's command on the PATH
+  // (packages/tacho/src/collector/local-servers/digest.ts).
+  "PATHEXT",
   // Set by `sudo` to the invoking user; `tacho enroll` names that user in
   // the `sudo -u` command its refusal to run as root suggests
   // (packages/tacho/src/cli/enroll.ts).
