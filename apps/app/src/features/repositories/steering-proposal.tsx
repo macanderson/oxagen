@@ -26,7 +26,8 @@ export function SteeringProposal({
   fullName: string;
   /**
    * The PR the write opened. Null on a link means `workspace.toml` lists the
-   * repository already. An unlink shows this block only with a PR.
+   * repository already. The unlink dialog passes a PR every time. A null
+   * there shows only the line that says to merge the steering PR.
    */
   steeringPullRequest: SteeringPullRequest | null;
   testId: string;
