@@ -1,0 +1,18 @@
+{
+  "check": "schema",
+  "rule": "memories-required",
+  "severity": "error",
+  "description": "A record whose source is run cites no memories.",
+  "refused_by_reader": true,
+  "changed": [
+    "steering/memory/platform/a-intel.platform.ci-cache-key.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/memory/platform/a-intel.platform.ci-cache-key.md",
+      "line": 17,
+      "field": "provenance.memories"
+    }
+  ]
+}
