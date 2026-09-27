@@ -96,7 +96,7 @@ describe("a journaled session end over a long body file", () => {
       now,
       log: () => undefined,
       listen: false,
-      transcriptRoots: [`${paths.root}/no-transcripts`],
+      transcriptRoots: [`${paths.tachoDir}/no-transcripts`],
       timers: {
         detectorMs: 60 * 60_000,
         sweepMs: 60 * 60_000,

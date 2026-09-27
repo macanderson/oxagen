@@ -21,8 +21,9 @@
  * `host.json` itself, which is the same file the hook reads and is mode 0600.
  */
 import { createInterface } from "node:readline";
+import { agentPathsForEnrollment } from "../host/agents";
 import { readHostFile } from "../host/host-file";
-import { tachoPaths } from "../host/paths";
+import { tachoHome } from "../host/paths";
 
 export interface McpStdioOptions {
   /** The enrollment this config entry was written for. */
@@ -65,7 +66,14 @@ export function resolveTarget(
   options: McpStdioOptions,
   deps: Pick<McpStdioDeps, "env" | "home">,
 ): { ok: true; url: string; token: string } | { ok: false; message: string } {
-  const paths = tachoPaths(deps.env, deps.home);
+  // The entry names the enrollment it was written for, and a machine can
+  // hold one enrollment per agent (ADR-203). An entry written before entries
+  // named their enrollment gets the oldest agent.
+  const paths = agentPathsForEnrollment(
+    tachoHome(deps.env, deps.home),
+    options.enrollment,
+    undefined,
+  );
   let host: ReturnType<typeof readHostFile>;
   try {
     host = readHostFile(paths.hostFile);

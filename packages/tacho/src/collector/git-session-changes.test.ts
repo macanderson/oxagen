@@ -621,7 +621,7 @@ describe("the daemon's reconciliation against a real repository", () => {
       now: () => Date.now(),
       log: () => undefined,
       listen: false,
-      transcriptRoots: [`${paths.root}/no-transcripts`],
+      transcriptRoots: [`${paths.tachoDir}/no-transcripts`],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
     });
     daemons.push(handle);

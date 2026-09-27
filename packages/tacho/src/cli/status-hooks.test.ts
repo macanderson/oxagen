@@ -68,14 +68,14 @@ function claudeCodeHost(settings: SettingsDocument): {
   const lines: string[] = [];
   const deps = {
     paths,
-    home: join(paths.root, ".."),
+    home: join(paths.tachoDir, ".."),
     platform: "linux",
     env: {},
     now: () => Date.parse("2026-09-25T12:00:00Z"),
     out: (line: string) => lines.push(line),
     serviceManager: {
       kind: "systemd",
-      unitPath: join(paths.root, "tachod.service"),
+      unitPath: join(paths.tachoDir, "tachod.service"),
       install: () => undefined,
       uninstall: () => undefined,
       status: () => ({ installed: true, running: true }),

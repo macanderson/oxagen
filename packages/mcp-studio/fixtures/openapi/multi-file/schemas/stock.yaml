@@ -1,0 +1,18 @@
+StockLevel:
+  type: object
+  properties:
+    on_hand:
+      type: integer
+      minimum: 0
+    reserved:
+      type: integer
+      minimum: 0
+StockChange:
+  type: object
+  required: [delta, reason]
+  properties:
+    delta:
+      type: integer
+    reason:
+      type: string
+      enum: [received, sold, damaged, counted]

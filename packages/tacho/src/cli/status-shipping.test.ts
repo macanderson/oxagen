@@ -128,12 +128,12 @@ function enrolledHost(daemon: Record<string, unknown>): {
   const lines: string[] = [];
   const deps = {
     paths,
-    home: join(paths.root, ".."),
+    home: join(paths.tachoDir, ".."),
     now: () => NOW,
     out: (line: string) => lines.push(line),
     serviceManager: {
       kind: "launchd",
-      unitPath: join(paths.root, "unit.plist"),
+      unitPath: join(paths.tachoDir, "unit.plist"),
       install: () => undefined,
       uninstall: () => undefined,
       status: () => ({ installed: true, running: true }),

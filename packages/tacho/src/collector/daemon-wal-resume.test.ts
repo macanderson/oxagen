@@ -95,7 +95,7 @@ describe("a chain reopened over its own WAL", () => {
       now,
       log: (line) => log.push(line),
       listen: false,
-      transcriptRoots: [`${paths.root}/no-transcripts`],
+      transcriptRoots: [`${paths.tachoDir}/no-transcripts`],
       timers: {
         detectorMs: 0,
         sweepMs: 60 * 60_000,

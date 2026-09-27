@@ -15,7 +15,7 @@ const idleServer = () => createCollectorServer(() => undefined);
 describe("collector startup ownership", () => {
   it("refuses an occupied TCP port before changing the WAL or the live Unix listener", async () => {
     const paths = scratchPaths();
-    mkdirSync(paths.root, { recursive: true });
+    mkdirSync(paths.dir, { recursive: true });
     writeFileSync(paths.daemonState, "existing registry");
     const active = idleServer();
     const listening = await active.listen({
@@ -47,7 +47,7 @@ describe("collector startup ownership", () => {
 
   it("releases a TCP listener when its Unix bind fails", async () => {
     const paths = scratchPaths();
-    mkdirSync(paths.root, { recursive: true });
+    mkdirSync(paths.dir, { recursive: true });
     const reservation = idleServer();
     const { port } = await reservation.listen({ port: 0 });
     await reservation.close();
@@ -67,7 +67,7 @@ describe("collector startup ownership", () => {
       await expect(
         failed.listen({
           port,
-          socketPath: join(paths.root, "missing", "daemon.sock"),
+          socketPath: join(paths.tachoDir, "missing", "daemon.sock"),
         }),
       ).rejects.toMatchObject({
         code: expect.stringMatching(/^(?:ENOENT|EACCES)$/),
@@ -81,7 +81,7 @@ describe("collector startup ownership", () => {
 
   it("preserves a regular file at the requested socket path", async () => {
     const paths = scratchPaths();
-    mkdirSync(paths.root, { recursive: true });
+    mkdirSync(paths.dir, { recursive: true });
     writeFileSync(paths.socket, "keep this file");
     const server = idleServer();
     try {

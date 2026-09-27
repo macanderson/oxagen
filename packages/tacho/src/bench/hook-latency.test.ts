@@ -214,7 +214,7 @@ describe("hook latency", () => {
     new Promise((resolve, reject) => {
       const t0 = process.hrtime.bigint();
       const child = spawn(process.execPath, [HOOK_BIN], {
-        env: { ...process.env, TACHO_HOME: paths.root },
+        env: { ...process.env, TACHO_HOME: paths.tachoDir },
         stdio: ["pipe", "pipe", "pipe"],
       });
       let stdout = "";

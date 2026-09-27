@@ -144,7 +144,7 @@ describe("the daemon's git seam", () => {
       log: () => undefined,
       listen: driver !== undefined,
       ...(driver !== undefined ? { port: 0 } : {}),
-      transcriptRoots: [`${paths.root}/no-transcripts`],
+      transcriptRoots: [`${paths.tachoDir}/no-transcripts`],
       timers: {
         detectorMs: 0,
         sweepMs: 0,
