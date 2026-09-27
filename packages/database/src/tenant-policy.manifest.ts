@@ -150,6 +150,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "cost.daily_totals", policyClass: "standard" },
   // The findings job's output (ADR-062); org_id + workspace_id NOT NULL.
   { table: "cost.findings", policyClass: "standard" },
+  // What each run's pull requests became (#4491); org_id + workspace_id NOT NULL.
+  { table: "cost.run_pr_outcomes", policyClass: "standard" },
   // The organization's cost-center labels (ADR-142): org_id NOT NULL, no
   // workspace_id, so org_only.
   { table: "cost.cost_centers", policyClass: "org_only" },

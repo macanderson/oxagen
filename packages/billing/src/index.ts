@@ -34,6 +34,19 @@ export * from "./cost-rollup";
 export * from "./cost-rollup-store";
 export type { FindingEvidence } from "./findings";
 export { listWorkspacesForFindings, runFindingsPass } from "./findings-store";
+export * from "./run-pr-outcomes";
+export {
+  applyOutcomeDelivery,
+  listOutcomeRuns,
+  listWorkspacesForOutcomes,
+  markPullRequestsReverted,
+  type OutcomeRun,
+  readOutcomeRows,
+  readRunTerminalReasons,
+  readTachoRunPrLinks,
+  saveOutcomeRows,
+  type TachoPrLink,
+} from "./run-pr-outcomes-store";
 export * from "./discount";
 export * from "./action-metering";
 export {
