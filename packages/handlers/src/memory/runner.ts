@@ -580,9 +580,19 @@ async function prepareBranch(
     });
   }
   // The default branch can move between the read and the branch's creation.
-  // The commit's parent is the head the plan read.
-  if ((await host.branchHead(repo, branch)) !== head)
-    await host.resetBranch(repo, branch, head);
+  // The commit's parent is the head the plan read, so the branch goes back
+  // to it. The reset moves the branch only while it still points where it
+  // was just read. A branch that changed in between holds a push the curator
+  // did not make, so the pass fails and its retry plans again.
+  const current = await host.branchHead(repo, branch);
+  if (
+    current !== head &&
+    (current === null ||
+      !(await host.resetBranch(repo, branch, { from: current, to: head })))
+  )
+    throw new Error(
+      `[memory] ${branch} in ${repo.fullName} changed while the curator prepared it`,
+    );
   return true;
 }
 
