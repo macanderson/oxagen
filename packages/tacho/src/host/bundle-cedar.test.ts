@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { evaluatePreToolUse, type EvaluationInput } from "./bundle";
 import { bundleSigner, unsignedBundle } from "./test-support";
 import { requireCedarRuntime, type CedarRuntime } from "../policy/runtime";
-import { REFUND_ACTION, TEST_CEDAR_SCHEMA, testCedarBundle } from "../policy/test-schema";
+import { REFUND_ACTION, REFUND_TOOL, TEST_CEDAR_SCHEMA, testCedarBundle } from "../policy/test-schema";
 import type { CedarBundle, PolicyBundle } from "../wire";
 
 const NOW = Date.parse("2026-09-22T11:30:00.000Z");
@@ -296,6 +296,37 @@ when { context has harness_tool && context.harness_tool == "Shell" };`,
         cedar: { runtime: null, harness: "claude-code" },
       }),
     ).toMatchObject({ decision: "allow", reason_code: "rule_allow" });
+  });
+
+  it("classes an MCP tool by the signed manifest when the host has no evaluator", () => {
+    const cedar = testCedarBundle({});
+    const noRuntime = { runtime: null, harness: "claude-code" };
+    const refund = {
+      ...input(signed(cedar)),
+      toolName: `mcp__${REFUND_ACTION}`,
+      toolInput: { amount: 4000 },
+      cedar: noRuntime,
+    };
+    expect(evaluatePreToolUse(refund)).toMatchObject({
+      decision: "deny",
+      reason_code: "cedar_unavailable",
+    });
+    // A name that reads like a lookup does not make a mutation a read.
+    expect(
+      evaluatePreToolUse({ ...refund, toolName: "mcp__billing__get_and_delete", toolInput: {} }),
+    ).toMatchObject({ decision: "deny", reason_code: "cedar_unavailable" });
+    // The manifest's own class decides: the same tool, signed as a read, falls
+    // through to the permission rules.
+    const lookup = signed({
+      ...cedar,
+      tools: { [REFUND_ACTION]: { ...REFUND_TOOL, side_effect: "read" } },
+    });
+    expect(evaluatePreToolUse({ ...refund, bundle: lookup }).reason_code).not.toMatch(/^cedar_/);
+    // Oxagen's own tools are the kernel's to decide.
+    expect(
+      evaluatePreToolUse({ ...refund, toolName: "mcp__oxagen__steering_status", toolInput: {} })
+        .reason_code,
+    ).not.toMatch(/^cedar_/);
   });
 
   it("denies a call when no agent on this host runs the harness", () => {
