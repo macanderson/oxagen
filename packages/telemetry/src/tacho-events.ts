@@ -402,10 +402,15 @@ export async function selectTachoSubagentEvents(args: {
   }));
 }
 
-/** A chain's last readable frame. */
+/** A chain's last readable frame, and how many frames it holds. */
 export interface TachoChainHead {
   sessionUuid: string;
   lastSeq: number;
+  /**
+   * Distinct seqs the chain holds. Ingest can accept a chain with a gap, so
+   * this can be less than `lastSeq + 1`.
+   */
+  frameCount: number;
 }
 
 /**
@@ -416,7 +421,8 @@ export interface TachoChainHead {
  *
  * Each chain is fenced by `root_session_uuid`, so a chain from another run
  * answers nothing. A listed chain with no frame is absent from the answer.
- * No `FINAL`: a redelivered row carries the same seq, so `max` is unchanged.
+ * No `FINAL`: a redelivered row carries the same seq, so `max` and the
+ * distinct count are unchanged.
  * The list puts `session_uuid` in the primary key's range. Tenant-filtered
  * by the ambient scope through chSelect.
  */
@@ -428,9 +434,10 @@ export async function selectTachoChainHeads(args: {
   const res = await chSelect<{
     session_uuid: string;
     last_seq: string | number;
+    frame_count: string | number;
   }>({
     query: `
-      SELECT session_uuid, max(seq) AS last_seq
+      SELECT session_uuid, max(seq) AS last_seq, uniqExact(seq) AS frame_count
       FROM ${TACHO_EVENTS_TABLE}
       WHERE org_id = {orgId:UUID}
         AND workspace_id = {workspaceId:UUID}
@@ -447,6 +454,7 @@ export async function selectTachoChainHeads(args: {
   return res.data.map((r) => ({
     sessionUuid: r.session_uuid,
     lastSeq: Number(r.last_seq),
+    frameCount: Number(r.frame_count),
   }));
 }
 

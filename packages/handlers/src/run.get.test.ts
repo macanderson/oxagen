@@ -1115,6 +1115,16 @@ describe("get_run subagent chains (#3823)", () => {
     expect(out.chains?.cursor).toMatch(/^h:[0-9a-f]{16}$/);
   });
 
+  it("counts the frames a chain with a gap holds, not its last seq plus one (negative)", async () => {
+    const { get } = chainHarness({
+      children: [onChain(CHILD, 0), onChain(CHILD, 5)],
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(
+      out.chains?.heads.find((head) => head.sessionUuid === CHILD),
+    ).toMatchObject({ lastSeq: "5", frameCount: 2 });
+  });
+
   it("wakes a long poll on the run's own chain when only a subagent chain records a frame", async () => {
     const { get, sleeps, headReads, lists } = chainHarness({
       status: "running",

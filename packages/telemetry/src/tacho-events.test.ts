@@ -662,8 +662,10 @@ describe("selectTachoChainHeads (#3823)", () => {
     chSelect.mockReset();
     chSelect.mockResolvedValueOnce({
       data: [
-        { session_uuid: CHILD_A, last_seq: "12" },
-        { session_uuid: CHILD_B, last_seq: 0 },
+        // A chain ingest accepted with a gap holds fewer frames than its
+        // last seq implies.
+        { session_uuid: CHILD_A, last_seq: "12", frame_count: "9" },
+        { session_uuid: CHILD_B, last_seq: 0, frame_count: 1 },
       ],
     });
     const heads = await selectTachoChainHeads({
@@ -671,11 +673,13 @@ describe("selectTachoChainHeads (#3823)", () => {
       sessionUuids: [CHILD_A, CHILD_B],
     });
     expect(heads).toEqual([
-      { sessionUuid: CHILD_A, lastSeq: 12 },
-      { sessionUuid: CHILD_B, lastSeq: 0 },
+      { sessionUuid: CHILD_A, lastSeq: 12, frameCount: 9 },
+      { sessionUuid: CHILD_B, lastSeq: 0, frameCount: 1 },
     ]);
     const [call] = chSelect.mock.calls[0] ?? [];
     expect(call?.query).toContain("max(seq) AS last_seq");
+    // Distinct seqs, so a redelivered row counts once.
+    expect(call?.query).toContain("uniqExact(seq) AS frame_count");
     expect(call?.query).toContain("session_uuid IN {sessionUuids:Array(UUID)}");
     // The root filter keeps a listed chain from another run out.
     expect(call?.query).toContain("root_session_uuid = {rootSessionUuid:UUID}");

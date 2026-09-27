@@ -191,9 +191,10 @@ export function chainsCursor(
 /**
  * Every subagent chain under a wrapped run with its head: Postgres lists the
  * chains (`listed`, every one the run has), and ClickHouse answers each one's
- * last frame, so a head names a frame a read can return. A chain holds its
- * frames from seq 0 without holes, so its count is its last seq plus one. The
- * heads stop at RUN_CHAIN_HEADS_MAX chains and say so.
+ * last frame and its distinct frame count, so a head names a frame a read
+ * can return. Ingest can accept a chain with a gap, so the count is read, not
+ * inferred from the last seq (Codex review on #4421). The heads stop at
+ * RUN_CHAIN_HEADS_MAX chains and say so.
  *
  * The cursor hashes every listed chain's head, the ones past the cap too, so
  * a chain the answer leaves out still wakes the long poll and the run stream
@@ -209,19 +210,19 @@ async function readChainHeads(
     rootSessionUuid,
     sessionUuids: listed.map((row) => row.sessionUuid),
   });
-  const lastSeqOf = new Map(
-    read.map((head) => [head.sessionUuid.toLowerCase(), head.lastSeq]),
+  const headOf = new Map(
+    read.map((head) => [head.sessionUuid.toLowerCase(), head]),
   );
   const all = listed.map((row) => {
-    const last = lastSeqOf.get(row.sessionUuid.toLowerCase());
+    const head = headOf.get(row.sessionUuid.toLowerCase());
     return {
       sessionUuid: row.sessionUuid,
       parentSessionUuid: row.parentSessionUuid,
       subagentId: row.subagentId,
       subagentType: row.subagentType,
       spawnCallId: row.spawnToolUseId,
-      lastSeq: last === undefined ? null : String(last),
-      frameCount: last === undefined ? 0 : last + 1,
+      lastSeq: head === undefined ? null : String(head.lastSeq),
+      frameCount: head?.frameCount ?? 0,
     };
   });
   return {

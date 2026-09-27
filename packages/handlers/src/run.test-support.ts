@@ -641,27 +641,36 @@ export function memorySubagentChains(rows: readonly SubagentChainFixture[]) {
 }
 
 /**
- * An in-memory `selectTachoChainHeads` over `rows`: the last seq each listed
- * chain holds under the root, fenced by `root_session_uuid`, with a chain
- * that holds no row left out. `rows` may grow between reads, which is how a
- * long-poll test lands a subagent's frame mid-wait.
+ * An in-memory `selectTachoChainHeads` over `rows`: the last seq and the
+ * distinct seq count each listed chain holds under the root, fenced by
+ * `root_session_uuid`, with a chain that holds no row left out. `rows` may
+ * grow between reads, which is how a long-poll test lands a subagent's frame
+ * mid-wait.
  */
 export function memoryChainHeads(rows: TachoFrameRow[]) {
   return (args: {
     rootSessionUuid: string;
     sessionUuids: readonly string[];
-  }): Promise<{ sessionUuid: string; lastSeq: number }[]> => {
-    const last = new Map<string, number>();
+  }): Promise<
+    { sessionUuid: string; lastSeq: number; frameCount: number }[]
+  > => {
+    const seqs = new Map<string, Set<number>>();
     for (const r of rows) {
       const session = r.sessionUuid ?? "";
       if (r.rootSessionUuid !== args.rootSessionUuid) continue;
       if (!args.sessionUuids.includes(session)) continue;
-      last.set(session, Math.max(last.get(session) ?? -1, r.seq));
+      const held = seqs.get(session) ?? new Set<number>();
+      held.add(r.seq);
+      seqs.set(session, held);
     }
     return Promise.resolve(
-      [...last.entries()]
+      [...seqs.entries()]
         .sort(([a], [b]) => (a < b ? -1 : 1))
-        .map(([sessionUuid, lastSeq]) => ({ sessionUuid, lastSeq })),
+        .map(([sessionUuid, held]) => ({
+          sessionUuid,
+          lastSeq: Math.max(...held),
+          frameCount: held.size,
+        })),
     );
   };
 }
