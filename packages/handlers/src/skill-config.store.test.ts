@@ -175,8 +175,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           provider: "github",
           providerRepositoryId: connectionId,
           currentBindingId: repositoryBindingId,
-          // The role lane S1 writes for a provisioned steering repository.
-          // The store resolves the steering repository through either role.
+          // The only role a steering head carries.
           role: "steering",
         });
       });

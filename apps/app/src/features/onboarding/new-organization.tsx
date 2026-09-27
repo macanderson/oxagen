@@ -23,7 +23,7 @@ export async function NewOrganizationScreen({
 }) {
   // Where a created organization continues to. /cli/authorize sends a new
   // account here with itself as the destination, so the CLI's PKCE round trip
-  // finishes; with none, the form continues to the gate's Wrap an agent step.
+  // finishes; with none, the form continues to the gate's Connect step.
   const next = readNext(await searchParams);
   await requireUser(routes.newOrganization(next));
   const [user, requestHeaders] = await Promise.all([getAuthUser(), headers()]);

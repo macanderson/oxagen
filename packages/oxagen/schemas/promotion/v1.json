@@ -68,7 +68,7 @@
     },
     "without_review": {
       "type": "boolean",
-      "description": "True when the owner, or a role with merge_without_review, merged without an approval."
+      "description": "True when the owner, or a role with merge_pr_without_review, merged without an approval."
     },
     "changes": {
       "type": "array",

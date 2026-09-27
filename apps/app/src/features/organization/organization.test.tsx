@@ -77,7 +77,6 @@ vi.mock("./sso-actions", () => ({
   rotateScimToken: vi.fn(),
   revokeScimToken: vi.fn(),
 }));
-vi.mock("./workspace-reads", () => ({ readRepositoryChoices: vi.fn() }));
 vi.mock("@/server/session", () => ({ getSession }));
 vi.mock("@/server/tenancy-lookups", () => ({
   systemLookups: { mfaPolicy: () => Promise.resolve(null) },

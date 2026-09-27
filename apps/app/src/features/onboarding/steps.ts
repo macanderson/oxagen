@@ -5,8 +5,19 @@
 import type { OnboardingStep } from "@/data/contracts/onboarding";
 import { routes, type SafePath } from "@/shared/safe-path";
 
-/** The three steps of the gate's rail. Sign-up and email verification belong to the session and are not recorded. */
-const GATE_STEPS = ["organization", "wrap", "run"] as const;
+/**
+ * The five steps of the gate's rail. Sign-up and email verification belong to
+ * the session and are not recorded. Connect and the first workspace come
+ * before any workspace exists, so the gate record never stands on them: a rail
+ * drawn inside a workspace shows both as done.
+ */
+const GATE_STEPS = [
+  "organization",
+  "connect",
+  "workspace",
+  "wrap",
+  "run",
+] as const;
 export type GateStep = (typeof GATE_STEPS)[number];
 
 /** The register flow's own three steps, which are the `[step]` segment. */
@@ -40,9 +51,9 @@ function stateOf(index: number, current: number): StepState {
 }
 
 /**
- * Where the gate's rail stands. `organization` is complete as soon as the
- * organization exists, so a rail rendered inside a workspace never shows it as
- * current; `unlocked` leaves every step done.
+ * Where the gate's rail stands. `organization`, `connect` and `workspace` are
+ * complete as soon as the workspace exists, so a rail rendered inside a
+ * workspace never shows them as current; `unlocked` leaves every step done.
  */
 export function gateRail(
   step: OnboardingStep,
@@ -51,22 +62,30 @@ export function gateRail(
   const current =
     step === "organization"
       ? 0
-      : step === "wrap"
-        ? 1
-        : step === "run"
-          ? 2
-          : GATE_STEPS.length;
+      : step === "wrap" || step === "run"
+        ? GATE_STEPS.indexOf(step)
+        : GATE_STEPS.length;
   return GATE_STEPS.map((gateStep, index) => {
     const state = stateOf(index, current);
-    // The organization step is the /new-organization form, which an
-    // organization that exists has already passed; the other two are the
-    // register flow's own steps, open once the gate has reached them.
-    const to =
-      gateStep === "organization" || state === "todo"
-        ? null
-        : routes.register(place.org, place.ws, gateStep);
-    return { step: gateStep, state, to };
+    return { step: gateStep, state, to: gateTarget(gateStep, state, place) };
   });
+}
+
+/**
+ * Where a rail step opens. The organization step is the /new-organization
+ * form, which an organization that exists has already passed. Connect and the
+ * first workspace are the onboarding pages for the organization. Wrap and run
+ * are the register flow's own steps, open once the gate has reached them.
+ */
+function gateTarget(
+  step: GateStep,
+  state: StepState,
+  place: Place,
+): SafePath | null {
+  if (step === "organization" || state === "todo") return null;
+  if (step === "connect") return routes.welcomeConnect(place.org);
+  if (step === "workspace") return routes.welcomeFirstWorkspace(place.org);
+  return routes.register(place.org, place.ws, step);
 }
 
 /**

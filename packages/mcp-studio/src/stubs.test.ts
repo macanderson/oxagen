@@ -2,22 +2,11 @@
 // builds a module, it deletes that module's row here.
 import { describe, expect, it } from "vitest";
 import { CompileError } from "./compile";
-import {
-  execute,
-  graphqlSender,
-  grpcSender,
-  httpSender,
-  mcpSender,
-  type CallEnvironment,
-  type CredentialSource,
-  type SendContext,
-  type Transport,
-} from "./execute";
+import { graphqlSender, grpcSender, httpSender, mcpSender } from "./execute";
 import { importGrpc } from "./grpc";
 import { lint, type LintContext, type ServerFolder } from "./lint";
 import { NotBuiltError } from "./not-built";
 import { importOpenApi } from "./openapi";
-import type { ManifestTool } from "./contract/manifest";
 
 // The stubs never read their arguments, so an empty object stands in for each.
 const stub = <T>(): T => ({}) as T;
@@ -29,14 +18,6 @@ const syncStubs: Array<[string, () => unknown]> = [
 const asyncStubs: Array<[string, () => Promise<unknown>]> = [
   ["openapi", () => importOpenApi(stub())],
   ["grpc", () => importGrpc(stub())],
-  [
-    "execute",
-    () =>
-      execute(stub<ManifestTool>(), {}, stub<CallEnvironment>(), stub<CredentialSource>(), stub<Transport>()),
-  ],
-  ["execute/mcp", () => mcpSender.send(stub(), {}, stub<SendContext>())],
-  ["execute/http", () => httpSender.send(stub(), {}, stub<SendContext>())],
-  ["execute/graphql", () => graphqlSender.send(stub(), {}, stub<SendContext>())],
 ];
 
 describe("module stubs", () => {

@@ -190,6 +190,17 @@ const FindingLevel = z.enum(["tool", "agent", "operator", "workspace"]);
 const FindingConfidence = z.enum(["high", "medium"]);
 
 /**
+ * A setting a finding's fix names, with the value it proposes and, when the
+ * detector read it, the value in effect. A cache finding names a cache TTL
+ * (ADR-210).
+ */
+const FindingRecommendation = z.object({
+  setting: z.string().min(1),
+  value: z.union([z.string(), z.number()]),
+  current: z.union([z.string(), z.number()]).optional(),
+});
+
+/**
  * One costed finding (`list_findings`): the saving is the job's figure,
  * measured minus counterfactual over the runs it cites, with the basis those
  * runs were priced on. The page prints it and computes nothing from it but
@@ -206,6 +217,8 @@ export const SpendFinding = z.object({
   window: FindingWindow,
   why: z.string().min(1),
   fix: z.string().min(1),
+  /** The setting the fix names; absent when the fix names none. */
+  recommendation: FindingRecommendation.optional(),
   /** What the finding cites. */
   runs: Count,
   calls: Count,
