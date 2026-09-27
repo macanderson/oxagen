@@ -2,50 +2,63 @@
 
 ## v2.1.2
 
-Version 2.1.2 carries 1045 changes since 30871f592. The list below is the commit log; a written summary was not available for this release.
+The macOS app installs updates on its own. Fleet and the Run page were rebuilt, Stella answers inside the app, and organizations can sign in with SSO and provision people with SCIM.
 
-- feat(run): draw the transcript in the harness's skin and read a long run a page at a time (#4428)
-- chore(agents): label, watch, and fix agent PRs by review pass (#4446)
-- feat: stella session list, titles, and idle archive (#4438)
-- Give app findBy queries five seconds under the coverage run (#4441)
-- [S0] Contract: memory/v1 and memory provenance (#4436)
-- fix(tacho): one enrollment per agent on a machine (#4402)
-- [M0] MCP Studio storage contract, operation model, and fixtures (#4416)
-- feat(desktop): install updates in the background on macOS (ADR-202) (#4422)
-- fix(fleet): draw a pause command's answer with the buttons it frees (#4433)
-- fix(app): return main's lint to green after #4423 (#4431)
-- fix(app): brace the first-page read's timer cleanup so the app lint passes (#4430)
-- perf(run): read one transcript page before the Run page draws (#4423)
-- test(agent): give the replay rows the operator avatar key #4401 made required (#4426)
-- test(run, billing): return main's test job to green after #4389 (#4419)
-- fix(run): gate Fork by role, name the run on approvals, and bound run enrichment (#4382)
-- test(run): give the web search cost fixtures the step fields #4389 made required (#4417)
-- fix(infra): the vector size drift check reads a graph with no organisation databases (#4414)
-- fix(telemetry, billing): return main's typecheck to green after #4389 (#4409)
-- [S0] Test the steering repo contract so packages/oxagen meets its coverage gate (#4408)
-- fix(app): hold the Run page side column to its track (#4407)
-- fix(tacho): seal an ended session while a long tick runs (#4396)
-- fix(app): draw operator and member avatars from the record (#4401)
-- feat(run): record what the Run page's evidence tabs read (#4389)
-- [S0] Steering repo contract: paths, schemas, fixtures, and the steering binding role (#4392)
-- fix(spend): batch A1 API memory and run cost (#4384)
-- fix(app): draw organization and workspace avatars in the switchers (#4397)
-- fix: apply the Neo4j vector index resize, and keep ingestion up until it lands (#4385)
-- fix(fleet): send the uncounted pager's links to page 1 of the same list (#4386)
-- feat(agents): one agent per runtime and harness, with toolbelts and versions (#4376)
-- fix: return main to green after the Voyage embeddings merge (#4379)
-- fix(ai): embed with Voyage voyage-4-large on one platform key (#4378)
-- feat(fleet): server-side run search, tokens, pull request state, interjections and a workspace pause (#4370)
-- fix(billing): hold an organization on its own database to its credit balance, and show the cache write share on Spend (#4365)
-- chore(agents): no local builds, tests, servers, Docker, Biome or hooks (#4377)
-- fix(agents): stop deregistering stella's built-in agent from breaking stella (#4352)
-- fix(run): a transcript read hides nothing it failed to read, and fails only the body that does not open (#4347)
-- fix(tacho): bound the daemon's state and stop, check pid identity, and bound bundle refresh (#4346)
-- fix(tacho): stale live light, workspace live count, run place, and a stream that resumes from the page (#4343)
-- fix(tacho): pin session lineage, bound host 409s, and cap a run's enrichment spend (#4341)
-- fix(tacho): tail subagent transcripts live and seal a hooked gateway call once (#4342)
+These notes cover the 518 changes merged to main since the v2.1.1 app build of 2026-09-17 (40a42ca3f).
 
-And 1005 more, in the commit log.
+### Desktop updates
+
+- The macOS app installs new versions on its own. It checks when it opens, every hour, and when you come back to it after 15 minutes. It downloads the update, checks its signature, and installs it in the background, and your next restart runs it (#4422).
+- It installs without asking only when your account can replace the app without a password. Otherwise it asks first, and Windows and Linux always ask. Clear **Install updates automatically** in the Updates panel to turn it off.
+- macOS gets first-launch steps that work, and the app narrows what its window can run (#4255, #4335). Install and uninstall were fixed, and uninstall on Windows is now tested (#3321, #4304).
+
+### Run page
+
+- The Run page was rebuilt. Its transcript shows each step as the thing the agent did, with the prompt, the tool input and output, and the tokens and cost of each turn (#3660, #3789, #4033).
+- A frame player replays a run with play, pause, and speed controls (#4146). A long run loads one transcript page at a time, so the page opens without reading the whole run first (#4423, #4428).
+- The header shows the checkout, subagents, and usage. The page shows checkout evidence, pull request CI, and what the run produced (#4018, #3778, #3632).
+- A live run's clock ticks, and a finished run seals and stops its agent (#4074).
+
+### Fleet
+
+- Fleet was redesigned with tiles, a runs panel, and a steer dialog (#3928).
+- Run search happens on the server. Each run row shows its tokens, pull request state, lines changed, and enforcement tier (#4370, #4120, #3705).
+- You can interject in a live run and pause a whole workspace (#4370).
+
+### Spend
+
+- Oxagen costs a run while it runs. Every cost figure comes from one price book and shows as it was recorded (#3987, #4071).
+- A ledger itemizes each governed action, and wrapped and external tool calls are billed (#3911).
+- Charge an agent to a cost center from its page, and read the chargeback on Spend (#3732, #3747, #3753).
+- Current Claude models are priced at Anthropic's list price, and Spend shows the share of cache writes (#4049, #4365).
+- Bring your own model key from the Model funding page, including any OpenAI-compatible endpoint (#3308, #3290).
+
+### Stella
+
+- Stella's replies stream into the flyout as it writes them, and you can stop a turn (#4204, #4258).
+- When Stella parks a write for approval, you approve or deny it inside the thread (#4213). A turn cannot approve its own parked write, and writing a secret needs a person's approval (#4198, #4185).
+- Each reply shows its cost and the tool calls behind it, and you can mark a reply useful or wrong (#4210, #4256, #4206).
+- The thread survives a reload. Stella can read runs, spend, approvals, and agents, and it suggests questions for the page you are on (#4207, #4187, #4186).
+
+### Agents and tools
+
+- An agent is registered once per runtime and harness, with its toolbelt and versions, and a Runtimes page lists them (#4376, #3914).
+- Stop an agent from its page with the kill switch (#3708). A deregistered agent leaves every list and takes no new work (#4333).
+- Search the MCP Registry and authorize a provider over OAuth from the tool wizard (#4134). Tool pickers show the provider's logo and the tool's risk, and forms pick records by name instead of by id (#4235, #4240, #4045).
+
+### Sign-in and roles
+
+- Organizations can sign in with enterprise SSO over OIDC or SAML, map identity provider groups to roles, and provision and deprovision people with SCIM 2.0 (#3735, #3832).
+- Thirty actions that a workspace Member could run now check the roles their contract requires (#4216).
+
+### Recording and steering
+
+- Cursor is recorded alongside Claude Code, Codex, and Stella (#3347).
+- The gateway holds the model vendor's credential, and the agent holds a run token (#3725). GitHub credentials stay in the host's Git proxy (#3768).
+- The daily agent budget resets on the UTC day, and a workspace's model list is enforced apart from its budget (#3990, #3761).
+- The recorder no longer drops hook events or the event that ends a turn, and a machine enrolls each agent once (#4337, #3746, #4402).
+- `oxagen verify` checks a downloaded run export offline (#3731).
+- The context registry syncs from the production branch, and a checkout whose `.oxagen/` is behind it gets a warning (#4291, #3276). Context records can publish as merge requests on gitlab.com (#3827).
 
 ## Unreleased
 
