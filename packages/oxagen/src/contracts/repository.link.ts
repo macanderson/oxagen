@@ -33,7 +33,8 @@
  *     steering record. A repository that steers no workspace may be linked by
  *     any number of workspaces.
  *   - `conflict: workspace_toml_unreadable`: the steering repository's
- *     `workspace.toml` is missing or does not read as `workspace/v1`.
+ *     `workspace.toml` is present but does not read as `workspace/v1`. When
+ *     the file is missing, the steering PR creates it.
  *
  * The reason codes keep their `main_repo` spelling so existing callers still
  * match them. Their messages say "steering repository".

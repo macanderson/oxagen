@@ -22,9 +22,11 @@
  *   - `conflict: main_repo_unlink_refused`: it is the workspace's steering
  *     repository, which this write never removes.
  *   - `not_found: repository_not_linked`: this workspace sees no such binding.
- *   - `conflict: workspace_toml_unreadable`: `workspace.toml` is present but
- *     does not read as `workspace/v1`, so the handler cannot tell which path
- *     applies.
+ *   - `conflict: workspace_toml_unreadable`: `workspace.toml` names
+ *     `workspace/v1` on its first line but does not read against that
+ *     schema, so the handler cannot tell which path applies. A missing file,
+ *     or one whose first line names no `workspace/v1` schema, lists nothing,
+ *     so the handler deletes the head at once.
  *
  * Nothing is purged from the graph. The v2 descriptor
  * (`./v2/unlink-repository.ts`) carries the purge-and-deregister target shape

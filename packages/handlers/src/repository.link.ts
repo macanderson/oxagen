@@ -1,69 +1,140 @@
-// repository.link.ts — `link_repository` (Mission Control spec §10.1; ADR-099).
+// repository.link.ts: `link_repository` (ADR-212).
+//
+// The steering record decides which code repositories a workspace links.
+// This handler writes no head. It opens a steering PR that adds the
+// repository to workspace.toml, and the steering sync writes the head once
+// that PR merges.
 //
 // Flow:
-//   1. Role gate — assertOrgRole: org Owner or Admin, or the workspace's Owner
+//   1. Role gate: assertOrgRole, org Owner or Admin, or the workspace's Owner
 //      (INV-29).
-//   2. The installation: the workspace's GitHub connection, through the one
-//      shared resolver `bind_main_repository` uses. The caller never names one.
-//   3. The repository, read through the installation's token. One it cannot
-//      see is `not_found: repository_not_installed`.
-//   4. Is it ANOTHER workspace's main repository? Refused, `main_repo_claimed`:
-//      a linked repository receives this workspace's repository-scoped Context
-//      PRs (§10.1), and another workspace's main repository holds that
-//      workspace's `.oxagen/` governance tree. The heads table is
-//      tenant-scoped, so the read crosses through `withSystemDb`, and — like
-//      the main-repository claim — it is refused rather than guessed when a
-//      dedicated data plane makes the answer unknowable.
-//   5. One transaction under the workspace's repository lock: this
-//      workspace's heads decide `main_repo_unbound` (no main head yet: the
-//      organisation's first workspace is written without one, and GitHub can
-//      be attached to it before `bind_main_repository` runs, so a link here
-//      would be a linked repository with no main to be second to),
-//      `main_repo` (it is the main repository here) and
-//      `repository_already_linked`; else a binding (reused or superseded
-//      when this connection bound the repository before) and a
-//      `role = 'linked'` head. The store's trigger
-//      `repository_binding_heads_exclusive_main` serialises this write
-//      against a concurrent main claim elsewhere on a repository-keyed lock,
-//      and a lost race is mapped back to `main_repo_claimed`.
+//   2. The checks the sync applies when it writes the head
+//      (`repository.link.write.ts`): the installation, the repository, another
+//      workspace's steering claim, and this workspace's heads. A steering PR
+//      that could never take effect is refused before it is opened.
+//   3. workspace.toml on the steering repository's production branch:
+//      - it lists the repository already: `status: listed`, no PR. The next
+//        steering sync writes the head.
+//      - it is missing: the steering PR creates it with this one entry.
+//      - it reads as workspace/v1: the steering PR appends the entry.
+//      - it names another schema, or names workspace/v1 and does not read
+//        against it: `conflict: workspace_toml_unreadable`. The handler
+//        will not overwrite a file it cannot read.
+//   4. The steering PR, from `workspace/link-<owner>-<name>`. A second call for
+//      the same repository reuses the branch and the open PR.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import {
   repositoryLink,
   type RepositoryLinkOutput,
 } from "@oxagen/oxagen/contracts/repository.link";
-import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
+import { WORKSPACE_TOML_PATH } from "@oxagen/oxagen/steering-repo/paths";
+import { schema, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import { and, eq, inArray, ne, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import {
+  githubRefused,
+  type SteeringHost,
+  type SteeringRepository,
+} from "./context.steering.github";
+import { createSteeringHost } from "./context.steering.host";
 import { logger } from "./logger";
-import { writeRepositoryHead } from "./repository.binding-write";
+import { assertLinkAllowed, resolveLinkTarget } from "./repository.link.write";
 import {
-  GITHUB_PROVIDER,
-  resolveWorkspaceGithubInstallation,
-} from "./repository.github-connection";
-import {
-  assertGlobalClaimIsKnowable,
   githubMainRepositoryDeps,
-  repositoryHeadConflict,
-  workspaceRepositoriesLock,
   type MainRepositoryDeps,
 } from "./repository.main.bind";
+import {
+  openSteeringPullRequest,
+  type SteeringPullRequestHost,
+  workspaceTomlBranch,
+} from "./repository.steering-pr";
+import {
+  githubRepoRef,
+  newWorkspaceToml,
+  readWorkspaceToml,
+  withRepository,
+} from "./repository.workspace-toml";
 
-/**
- * The refusal for another workspace's main repository. Names neither the
- * organisation nor the workspace holding the claim: the read that finds it
- * crosses tenants (see `repositoryClaimedElsewhere`).
- */
-function mainRepoClaimed(fullName: string): HandlerError {
+type Scope = { orgId: string; workspaceId: string };
+
+/** The steering host calls `link_repository` and `unlink_repository` make. */
+export type RepositorySteeringHost = Pick<
+  SteeringHost,
+  "resolveRepository" | "readFile"
+> &
+  SteeringPullRequestHost;
+
+export interface RepositoryLinkDeps {
+  repository: MainRepositoryDeps["repository"];
+  steering: RepositorySteeringHost;
+  /** The organization and workspace slugs a new workspace.toml names. */
+  workspaceNames(
+    scope: Scope,
+  ): Promise<{ organization: string; workspace: string } | null>;
+}
+
+/** The slugs of the caller's organization and workspace. */
+export async function readWorkspaceNames(
+  scope: Scope,
+): Promise<{ organization: string; workspace: string } | null> {
+  return withTenantDb(async (tx) => {
+    const [org] = await tx
+      .select({ slug: schema.organizations.slug })
+      .from(schema.organizations)
+      .where(eq(schema.organizations.id, scope.orgId))
+      .limit(1);
+    const [workspace] = await tx
+      .select({ slug: schema.workspaces.slug })
+      .from(schema.workspaces)
+      .where(
+        and(
+          eq(schema.workspaces.id, scope.workspaceId),
+          eq(schema.workspaces.orgId, scope.orgId),
+        ),
+      )
+      .limit(1);
+    return org && workspace
+      ? { organization: org.slug, workspace: workspace.slug }
+      : null;
+  });
+}
+
+/** workspace.toml on the production branch of the steering repository. */
+export async function readSteeringWorkspaceToml(
+  steering: Pick<SteeringHost, "resolveRepository" | "readFile">,
+  scope: Scope,
+): Promise<{
+  repo: SteeringRepository;
+  file: ReturnType<typeof readWorkspaceToml>;
+}> {
+  try {
+    const repo = await steering.resolveRepository(scope);
+    const text = await steering.readFile(
+      repo,
+      WORKSPACE_TOML_PATH,
+      repo.defaultBranch,
+    );
+    return { repo, file: readWorkspaceToml(text) };
+  } catch (err) {
+    throw githubRefused(err);
+  }
+}
+
+/** The refusal for a workspace.toml the handlers will not edit. */
+export function workspaceTomlUnreadable(
+  repo: SteeringRepository,
+  detail: string,
+): HandlerError {
   return new HandlerError({
     code: "conflict",
-    reason: "main_repo_claimed",
-    message: `${fullName} is the main repository of another workspace. Its .oxagen/ tree governs that workspace, so it cannot be linked here.`,
+    reason: "workspace_toml_unreadable",
+    message: `${WORKSPACE_TOML_PATH} on ${repo.fullName}@${repo.defaultBranch} ${detail}. Fix the file on the production branch, then try again.`,
   });
 }
 
 export function createRepositoryLinkHandler(
-  deps: MainRepositoryDeps,
+  deps: RepositoryLinkDeps,
 ): CapabilityHandler<typeof repositoryLink> {
   return async (input, ctx): Promise<RepositoryLinkOutput> => {
     const actingUserId = await resolveActingUserId(ctx);
@@ -71,160 +142,94 @@ export function createRepositoryLinkHandler(
       { ...ctx, userId: actingUserId },
       { org: ["Owner", "Admin"], workspace: ["Owner"] },
     );
-    const userId = actingUserId as string;
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
 
-    const connection = await resolveWorkspaceGithubInstallation(scope);
-    if (!connection) {
-      throw new HandlerError({
-        code: "conflict",
-        reason: "github_not_connected",
-        message:
-          "This workspace has no GitHub App installation attached; connect GitHub first",
-      });
-    }
-
-    const repo = await deps.repository(
-      connection.installationId,
+    const target = await resolveLinkTarget(
+      scope,
       input.owner,
       input.name,
+      deps,
     );
-    if (!repo) {
-      throw new HandlerError({
-        code: "not_found",
-        reason: "repository_not_installed",
-        message: `The GitHub App installation on this workspace cannot see ${input.owner}/${input.name}`,
-      });
-    }
+    await withTenantDb((tx) => assertLinkAllowed(tx, scope, target.repo));
 
-    await assertGlobalClaimIsKnowable(ctx.orgId);
-    // tenancy: a global cross-tenant read, filtered to this provider
-    // repository id and the steering roles in other workspaces. It returns
-    // only whether such a head exists, never another tenant's row.
-    const mainElsewhere = await withSystemDb((tx) =>
-      tx
-        .select({ id: schema.repositoryBindingHeads.id })
-        .from(schema.repositoryBindingHeads)
-        .where(
-          and(
-            eq(schema.repositoryBindingHeads.provider, GITHUB_PROVIDER),
-            eq(schema.repositoryBindingHeads.providerRepositoryId, repo.id),
-            inArray(
-              schema.repositoryBindingHeads.role,
-              schema.STEERING_HEAD_ROLES,
-            ),
-            ne(schema.repositoryBindingHeads.workspaceId, ctx.workspaceId),
-          ),
-        )
-        .limit(1),
+    const { repo, file } = await readSteeringWorkspaceToml(
+      deps.steering,
+      scope,
     );
-    if (mainElsewhere.length > 0) {
-      logger.warn(
-        { ...scope, repository: repo.fullName },
-        "repository.link: refused — repository is another workspace's main repository",
-      );
-      throw mainRepoClaimed(repo.fullName);
-    }
+    const ref = githubRepoRef(target.repo.owner, target.repo.name);
+    const answer = (
+      status: RepositoryLinkOutput["status"],
+      steeringPullRequest: RepositoryLinkOutput["steeringPullRequest"],
+    ): RepositoryLinkOutput => ({
+      fullName: target.repo.fullName,
+      defaultRef: target.repo.defaultBranch,
+      status,
+      steeringPullRequest,
+    });
 
-    const now = new Date();
-    let written: Awaited<ReturnType<typeof writeRepositoryHead>>;
-    try {
-      written = await withTenantDb(async (tx) => {
-        await tx.execute(workspaceRepositoriesLock(scope.workspaceId));
-        // This workspace's main head, whichever repository it names, and its
-        // heads for THIS repository, in one read.
-        const heads = await tx
-          .select({
-            role: schema.repositoryBindingHeads.role,
-            providerRepositoryId:
-              schema.repositoryBindingHeads.providerRepositoryId,
-          })
-          .from(schema.repositoryBindingHeads)
-          .where(
-            and(
-              eq(schema.repositoryBindingHeads.orgId, scope.orgId),
-              eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-              eq(schema.repositoryBindingHeads.provider, GITHUB_PROVIDER),
-              or(
-                eq(schema.repositoryBindingHeads.providerRepositoryId, repo.id),
-                inArray(
-                  schema.repositoryBindingHeads.role,
-                  schema.STEERING_HEAD_ROLES,
-                ),
-              ),
-            ),
-          );
-        // A linked repository is the workspace's second. The organisation's
-        // first workspace is written without a main repository (ADR-099 §6)
-        // and GitHub can be attached to it before the main head exists, and
-        // a link then would leave a linked head with no main beside it.
-        if (!heads.some((h) => schema.isSteeringHeadRole(h.role))) {
-          throw new HandlerError({
-            code: "conflict",
-            reason: "main_repo_unbound",
-            message:
-              "Bind this workspace's main repository first; a linked repository is its second.",
-          });
-        }
-        const same = heads.filter((h) => h.providerRepositoryId === repo.id);
-        if (same.some((h) => schema.isSteeringHeadRole(h.role))) {
-          throw new HandlerError({
-            code: "conflict",
-            reason: "main_repo",
-            message: `${repo.fullName} is this workspace's main repository; it is already bound`,
-          });
-        }
-        if (same.length > 0) {
-          throw new HandlerError({
-            code: "conflict",
-            reason: "repository_already_linked",
-            message: `${repo.fullName} is already linked to this workspace`,
-          });
-        }
-        return writeRepositoryHead(tx, {
-          scope,
-          connectionId: connection.id,
+    let content: string;
+    switch (file.kind) {
+      case "foreign":
+        throw workspaceTomlUnreadable(
           repo,
-          role: "linked",
-          userId,
-          now,
-        });
-      });
-    } catch (err) {
-      // The window the pre-check above cannot close: a main claim on this
-      // repository that committed elsewhere after the read. The trigger's
-      // repository-keyed lock serialised the two writes and refused this one
-      // with a constraint name; the sentence is the pre-check's.
-      if (repositoryHeadConflict(err) === "main_elsewhere") {
-        logger.warn(
-          { ...scope, repository: repo.fullName },
-          "repository.link: lost the race to a main repository claim elsewhere",
+          "does not name the workspace/v1 schema on its first line",
         );
-        throw mainRepoClaimed(repo.fullName);
+      case "unreadable":
+        throw workspaceTomlUnreadable(
+          repo,
+          `does not read as workspace/v1 (${file.issues.map((i) => i.message).join("; ")})`,
+        );
+      case "read":
+        if (file.repositories.includes(ref)) {
+          logger.info(
+            { ...scope, repository: target.repo.fullName },
+            "repository.link: workspace.toml already lists the repository",
+          );
+          return answer("listed", null);
+        }
+        content = withRepository(file, ref);
+        break;
+      case "missing": {
+        const names = await deps.workspaceNames(scope);
+        if (!names) {
+          throw new HandlerError({
+            code: "not_found",
+            reason: "workspace_not_found",
+            message: "This workspace or its organization no longer exists",
+          });
+        }
+        content = newWorkspaceToml(names.organization, names.workspace, ref);
+        break;
       }
-      throw err;
     }
+
+    const pullRequest = await openSteeringPullRequest(deps.steering, repo, {
+      branch: workspaceTomlBranch("link", target.repo.owner, target.repo.name),
+      content,
+      message: `Link ${target.repo.fullName} to the workspace`,
+      title: `Link ${target.repo.fullName}`,
+      body: [
+        `This steering PR adds \`${ref}\` to \`${WORKSPACE_TOML_PATH}\`.`,
+        "",
+        `When it merges, the steering sync links ${target.repo.fullName} to the workspace. Until then the repository is not linked.`,
+      ].join("\n"),
+    });
 
     logger.info(
       {
         ...scope,
-        repository: repo.fullName,
-        bindingId: written.bindingPublicId,
+        repository: target.repo.fullName,
+        pr: pullRequest.url,
+        reused: pullRequest.reused,
       },
-      "repository.link: repository linked",
+      "repository.link: opened the steering PR",
     );
-
-    return {
-      bindingId: written.bindingPublicId,
-      connectionId: connection.publicId,
-      fullName: repo.fullName,
-      defaultRef: repo.defaultBranch,
-      role: "linked",
-      linkedAt: now.toISOString(),
-    };
+    return answer("proposed", pullRequest);
   };
 }
 
-export const repositoryLinkHandler = createRepositoryLinkHandler(
-  githubMainRepositoryDeps,
-);
+export const repositoryLinkHandler = createRepositoryLinkHandler({
+  repository: githubMainRepositoryDeps.repository,
+  steering: createSteeringHost(),
+  workspaceNames: readWorkspaceNames,
+});
