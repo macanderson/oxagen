@@ -94,6 +94,49 @@
                     "type": "string",
                     "pattern": "^(?:cloud|relay:[a-z0-9][a-z0-9-]{0,62})$",
                     "description": "cloud by default, or relay:<name> for a server inside a private network."
+                  },
+                  "machines": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+                    },
+                    "maxItems": 64,
+                    "uniqueItems": true,
+                    "description": "The machine groups whose local gateway runs the entry's package. Without it, the cloud gateway connects to the entry's remote."
+                  },
+                  "registry_type": {
+                    "type": "string",
+                    "enum": [
+                      "npm",
+                      "pypi",
+                      "oci",
+                      "nuget"
+                    ],
+                    "description": "Which of the entry's packages the local gateway runs. Required with machines."
+                  },
+                  "env": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+                    },
+                    "maxItems": 128,
+                    "uniqueItems": true,
+                    "description": "Environment variables the local gateway passes from the machine, including every one the entry marks required. Only names, never values."
+                  },
+                  "arguments": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^\\S{1,128}$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 4096,
+                      "pattern": "^(?:[^$]|\\$\\$|\\$\\{[A-Za-z_][A-Za-z0-9_]{0,127}\\})*$"
+                    },
+                    "description": "Values for the package's arguments, keyed by a named argument's name or a positional argument's valueHint. An argument left out takes the entry's default."
                   }
                 },
                 "required": [
@@ -103,7 +146,37 @@
                   "version"
                 ],
                 "additionalProperties": false,
-                "description": "An MCP server from a registry catalog."
+                "description": "An MCP server from a registry catalog. With machines, the local gateway runs the entry's package.",
+                "allOf": [
+                  {
+                    "dependentRequired": {
+                      "registry_type": [
+                        "machines"
+                      ],
+                      "env": [
+                        "machines"
+                      ],
+                      "arguments": [
+                        "machines"
+                      ]
+                    }
+                  },
+                  {
+                    "dependentRequired": {
+                      "machines": [
+                        "registry_type"
+                      ]
+                    }
+                  },
+                  {
+                    "not": {
+                      "required": [
+                        "machines",
+                        "network"
+                      ]
+                    }
+                  }
+                ]
               },
               {
                 "type": "object",
@@ -857,16 +930,42 @@
                           "digest": {
                             "type": "string",
                             "pattern": "^sha256:[0-9a-f]{64}$",
-                            "description": "SHA-256 of the package or binary."
+                            "description": "For oci, the image's manifest digest. For the others, the SHA-256 of the package archive."
+                          },
+                          "registry_type": {
+                            "type": "string",
+                            "enum": [
+                              "npm",
+                              "pypi",
+                              "oci",
+                              "nuget"
+                            ],
+                            "description": "source.registry_type: npm, pypi, oci, or nuget."
                           }
                         },
                         "required": [
                           "name",
                           "version",
-                          "digest"
+                          "digest",
+                          "registry_type"
                         ],
                         "additionalProperties": false,
-                        "description": "The package the catalog entry named, for a local entry."
+                        "description": "The package the local gateway runs, when server.toml names machines."
+                      },
+                      "command": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1024,
+                        "description": "For a package: the command the local gateway runs, npx, uvx, docker, or dnx."
+                      },
+                      "args": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "maxLength": 4096
+                        },
+                        "maxItems": 1024,
+                        "description": "For a package: the command's arguments. ${NAME} stays for the local gateway to fill from the machine, and $$ writes one $."
                       },
                       "server_version": {
                         "type": "string",
@@ -908,6 +1007,24 @@
                         "dependentRequired": {
                           "transport": [
                             "url"
+                          ]
+                        }
+                      },
+                      {
+                        "dependentRequired": {
+                          "package": [
+                            "command",
+                            "args"
+                          ]
+                        }
+                      },
+                      {
+                        "dependentRequired": {
+                          "command": [
+                            "package"
+                          ],
+                          "args": [
+                            "package"
                           ]
                         }
                       }
@@ -1690,7 +1807,7 @@
                 "type": "null"
               }
             ],
-            "description": "Null when the mode is none or the server is local. Each environment names its credential."
+            "description": "Null when the mode is none or the local gateway runs the server. Each environment names its credential."
           },
           "environments": {
             "type": "object",
@@ -1709,7 +1826,7 @@
                   "type": "string",
                   "format": "uri",
                   "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
-                  "description": "Absent for a local server."
+                  "description": "Absent for a server the local gateway runs."
                 },
                 "network": {
                   "type": "string",
@@ -2130,11 +2247,13 @@
                     },
                     "max_result_bytes": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 1048576
                     },
                     "deadline_ms": {
                       "type": "integer",
                       "minimum": 1,
+                      "maximum": 300000,
                       "description": "Every send has one. 30,000 unless tools.toml sets deadline_ms."
                     },
                     "paginate": {
@@ -2148,7 +2267,8 @@
                     },
                     "max_items": {
                       "type": "integer",
-                      "minimum": 1
+                      "minimum": 1,
+                      "maximum": 10000
                     },
                     "idempotency_header": {
                       "type": "string",

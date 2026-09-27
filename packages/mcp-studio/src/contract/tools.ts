@@ -39,7 +39,7 @@ export const DEFAULT_DEADLINE_MS = 30_000;
 export const MAX_DEADLINE_MS = 300_000;
 /** The most items auto paging or a gRPC server stream collects. */
 export const MAX_ITEMS_LIMIT = 10_000;
-/** A replacement description is at most 1,024 characters. */
+/** A description is at most 1,024 characters: a replacement in tools.toml, or the source's own, cut on import. */
 export const TOOL_DESCRIPTION_MAX = 1024;
 
 const measureShape = toolMeasureSchema.innerType().shape;
