@@ -30,6 +30,12 @@ jobs:
     # 90, as pipeline.yml's `test` job: at the bounded concurrency below the
     # full suite outlasts 30 minutes (#4266).
     timeout-minutes: 90
+    # Job-level scopes replace the defaults: checkout, the ghcr.io pull, and
+    # the OIDC token `.github/actions/turbo-cache` trades for the cache role.
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -84,8 +90,6 @@ jobs:
           --health-retries 10
 
     env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
       # sslmode=disable: Atlas (Go lib/pq) defaults to sslmode=require and fails
       # against the plain-TCP CI service container ("SSL is not enabled").
       # node-postgres ignores the param, so it is safe for every consumer.
@@ -120,6 +124,8 @@ jobs:
         run: psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
       - uses: ./.github/actions/pnpm-install
+
+      - uses: ./.github/actions/turbo-cache
       # Bring the fresh service-container schema fully current. Must mirror the
       # ci.yml migrate path exactly: Postgres is managed by Atlas (the `local`
       # atlas env points at the developer's localhost:5433 dev DB + a scratch
@@ -193,12 +199,18 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     # 75m, measured rather than guessed. This job runs the whole Playwright
     # suite in one shard, where pipeline.yml splits the same 121 tests across
-    # four jobs that take ~7m each; it also builds apps/app first, and turbo's
-    # remote cache currently answers 402 so that build is always cold. At 30m
+    # four jobs that take ~7m each; it also builds apps/app first, and while
+    # Vercel's turbo cache answered 402 (#4233) that build was always cold. At 30m
     # the job was cancelled mid-suite with no result at all — the third and
     # last thing standing between #1206 and a measurable full sweep, after the
     # tenancy refusal and the API bind address.
     timeout-minutes: 75
+    # Job-level scopes replace the defaults: checkout, the ghcr.io pull, and
+    # the OIDC token `.github/actions/turbo-cache` trades for the cache role.
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
 
     services:
       postgres:
@@ -283,8 +295,6 @@ jobs:
       AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
       OXAGEN_MODEL_PROVIDER: openrouter
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
       # sslmode=disable: Atlas (Go lib/pq) defaults to sslmode=require and fails
       # against the plain-TCP CI service container ("SSL is not enabled").
       # Jobs run inside the toolchain container, so service containers are
@@ -355,6 +365,8 @@ jobs:
         run: psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
       - uses: ./.github/actions/pnpm-install
+
+      - uses: ./.github/actions/turbo-cache
       # Mirror the ci.yml migrate path: Atlas for Postgres (--env ci reads
       # $DATABASE_URL; the `local` atlas env targets the dev-only localhost:5433
       # box, so `pnpm db:migrate` cannot run here), then ClickHouse + Neo4j.

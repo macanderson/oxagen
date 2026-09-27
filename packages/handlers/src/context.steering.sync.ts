@@ -23,6 +23,11 @@
 //   6. The Context PRs: a merged one points at its published record, a closed
 //      one is rejected, and one whose head moved has its checks reset.
 //   7. The sync state, and a check on the head commit naming every problem.
+//   8. The workspace's steering repository published as its next steering
+//      version (#4447), when a publisher is wired. The publisher reads that
+//      repository's head itself, since the head above is the main code
+//      repository's. A publish that fails is a warning: the registry already
+//      matches the branch, and the next sync tries again.
 import { HandlerError } from "@oxagen/oxagen";
 import {
   CHECK_NAMES,
@@ -58,11 +63,38 @@ import {
 } from "./context.steering.sync.store";
 import { logger } from "./logger";
 
+/** What one publish of the workspace's steering repository did. */
+export interface SyncPublished {
+  /**
+   * `refused` while the steering repository is not healthy, `current` when its
+   * head is already published, and `stale` when its branch moved between the
+   * publisher's head read and the publish. The next sync publishes the newer
+   * head.
+   */
+  status: "refused" | "current" | "stale" | "published";
+  /** The published version's number, or null when the publish was refused or stale. */
+  version: number | null;
+}
+
+/**
+ * Publishes the head of the workspace's steering repository as its next
+ * steering version (@oxagen/steering-bundle `publish`). It takes only the
+ * sync's scope. The port resolves the steering repository and reads its
+ * production head itself, because this sync reads the main code repository
+ * (ADR-184), and a code repository's head is never a steering head.
+ */
+export type SyncPublish = (scope: {
+  orgId: string;
+  workspaceId: string;
+}) => Promise<SyncPublished>;
+
 export interface SyncDeps {
   github: SteeringHost;
   store: SyncStore;
   steering: Pick<SteeringStore, "updateProposal">;
   now: () => Date;
+  /** Unset until the version store is wired, and then the sync publishes nothing. */
+  publish?: SyncPublish;
 }
 
 export function syncDeps(): SyncDeps {
@@ -90,6 +122,8 @@ export interface SyncOutcome {
    * until the window passes.
    */
   retryAfterSeconds: number | null;
+  /** What publishing the steering repository did, or null when nothing published it. */
+  published?: SyncPublished | null;
 }
 
 /** How long a merge Oxagen made is left to `merge_context_pr` to publish. */
@@ -550,6 +584,7 @@ export async function syncWorkspaceSteering(
           ? "synced"
           : "current";
     outcome.retryAfterSeconds = defer.size > 0 ? MERGE_GRACE_SECONDS : null;
+    outcome.published = await publishSteering(deps, scope);
     logger.info(
       {
         workspaceId: scope.workspaceId,
@@ -568,6 +603,27 @@ export async function syncWorkspaceSteering(
   } catch (err) {
     await recordFailure(deps, scope, prior, err, repo);
     throw err;
+  }
+}
+
+/**
+ * 8. Publish the workspace's steering repository. The registry write above
+ * already stands, so a publish that throws is logged and the sync still
+ * succeeds. The next sync publishes the steering repository's head then.
+ */
+async function publishSteering(
+  deps: SyncDeps,
+  scope: { orgId: string; workspaceId: string },
+): Promise<SyncPublished | null> {
+  if (deps.publish === undefined) return null;
+  try {
+    return await deps.publish(scope);
+  } catch (err) {
+    logger.warn(
+      { err, workspaceId: scope.workspaceId },
+      "context.sync: could not publish the steering version. The next sync tries again.",
+    );
+    return null;
   }
 }
 

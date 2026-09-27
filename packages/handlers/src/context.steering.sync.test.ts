@@ -703,3 +703,72 @@ describe("workspace.toml settings (#4435)", () => {
     );
   });
 });
+
+describe("publishing the steering repository (#4447)", () => {
+  // The sync reads the main code repository, so it hands the publisher only
+  // the workspace's scope. The publisher resolves the steering repository and
+  // reads its head, and never receives the code repository's name or head.
+  it("publishes with the workspace's scope and no code repository", async () => {
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      `${RULES}/ctx.a.one.toml`,
+      recordText("ctx.a.one"),
+    );
+    const publish = vi.fn(async () => ({
+      status: "published" as const,
+      version: 1,
+    }));
+    const out = await syncWorkspaceSteering({ ...r.deps, publish }, SCOPE);
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(publish.mock.calls[0]).toEqual([SCOPE]);
+    expect(out.published).toEqual({ status: "published", version: 1 });
+    expect(out.outcome).toBe("synced");
+  });
+
+  it("asks for a publish when the code repository has not moved", async () => {
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      `${RULES}/ctx.a.one.toml`,
+      recordText("ctx.a.one"),
+    );
+    const publish = vi.fn(async () => ({
+      status: "current" as const,
+      version: 1,
+    }));
+    const deps = { ...r.deps, publish };
+    await syncWorkspaceSteering(deps, SCOPE);
+    const again = await syncWorkspaceSteering(deps, SCOPE);
+    expect(again.outcome).toBe("current");
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(again.published).toEqual({ status: "current", version: 1 });
+  });
+
+  it("publishes nothing and says so when no publisher is wired", async () => {
+    const r = rig();
+    const out = await r.run();
+    expect(out.published).toBeNull();
+  });
+
+  it("keeps the sync when the publish throws, and the next sync tries again", async () => {
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      `${RULES}/ctx.a.one.toml`,
+      recordText("ctx.a.one"),
+    );
+    const publish = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("the version store is down"))
+      .mockResolvedValueOnce({ status: "published", version: 1 });
+    const deps = { ...r.deps, publish };
+    const first = await syncWorkspaceSteering(deps, SCOPE);
+    expect(first.outcome).toBe("synced");
+    expect(first.published).toBeNull();
+    expect(r.sync.state).toMatchObject({ status: "synced", error: null });
+    const second = await syncWorkspaceSteering(deps, SCOPE);
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(second.published).toEqual({ status: "published", version: 1 });
+  });
+});

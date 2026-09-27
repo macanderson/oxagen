@@ -1,26 +1,32 @@
 // The §10.1 repository model against a real Postgres (Mission Control spec
-// §17 M0; ADR-099): a workspace is created with its main repository and gets
-// exactly one `role = 'main'` head; a second repository is linked and the
-// workspace has two heads; the linked one is unlinked and its binding version
-// survives; the main one cannot be unlinked; another workspace's main
-// repository cannot be linked; a repository that is nobody's main links to two
-// workspaces; and every reader that resolves "the main repository" keeps
-// answering it while a linked head sits beside it. Then the other direction
-// (review of #3326): a repository linked anywhere cannot become a main
-// repository, a workspace with GitHub attached but no main head cannot link,
-// and the store's trigger refuses, by constraint name, the three writes the
-// handlers' pre-checks refuse by sentence. Runs wherever DATABASE_URL
-// points at a migrated database — CI's `test` job migrates Postgres with Atlas
-// before `turbo run build test:unit`; a local run without one is skipped, not
+// §17 M0; ADR-099): a workspace binds its main repository and gets exactly one
+// `role = 'main'` head; a second repository is linked and the workspace has
+// two heads; the linked one is unlinked and its binding version survives; the
+// main one cannot be unlinked; another workspace's main repository cannot be
+// linked; a repository that is nobody's main links to two workspaces; and
+// every reader that resolves "the main repository" keeps answering it while a
+// linked head sits beside it. Then the other direction (review of #3326): a
+// repository linked anywhere cannot become a main repository, a workspace with
+// GitHub attached but no main head cannot link, and the store's trigger
+// refuses, by constraint name, the three writes the handlers' pre-checks
+// refuse by sentence. Runs wherever DATABASE_URL points at a migrated
+// database. CI's `test` job migrates Postgres with Atlas before
+// `turbo run build test:unit`, and a local run without one is skipped, not
 // red. Every row it writes is removed in afterAll.
+//
+// Since lane S1 (#4450), `create_workspace` binds no repository. It records
+// the workspace, starts the steering repo job, and ignores a deprecated
+// `mainRepo`. So each workspace here is created, given the GitHub connection
+// the install callback would attach, and bound through `bind_main_repository`.
+// The steering repo job is a spy, so nothing here needs a live Inngest.
 //
 // The fixture mirrors organization.pg.test.ts: an enterprise org, an Admin
 // with a principal and the seeded Admin role, and a first workspace the
-// create calls are scoped to. GitHub is answered by fixtures — one
+// create calls are scoped to. GitHub is answered by fixtures: one
 // installation on `acme` and a repository whose id is a pure function of
 // owner/name, so two reads of one repository agree, and two workspaces asking
 // for the same repository collide the way two real ones would.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
 import { repositoryLink } from "@oxagen/oxagen/contracts/repository.link";
 import { repositoryList } from "@oxagen/oxagen/contracts/repository.list";
@@ -40,7 +46,10 @@ import {
 } from "./repository.main.bind";
 import { createMainRepositoryGetHandler } from "./repository.main.get";
 import { repositoryUnlinkHandler } from "./repository.unlink";
-import { createWorkspaceCreateHandler } from "./workspace.create";
+import {
+  createWorkspaceCreateHandler,
+  type WorkspaceCreateDeps,
+} from "./workspace.create";
 
 const enabled = Boolean(process.env.DATABASE_URL);
 
@@ -78,7 +87,11 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
       defaultBranch: "main",
     }),
   };
-  const createWorkspace = createWorkspaceCreateHandler(github);
+  // The steering repo job's trigger. A spy, so no create needs a live Inngest.
+  const requestProvision = vi.fn<WorkspaceCreateDeps["requestProvision"]>(
+    async () => {},
+  );
+  const createWorkspace = createWorkspaceCreateHandler({ requestProvision });
   const linkRepository = createRepositoryLinkHandler(github);
   const bindMainRepository = createMainRepositoryBindHandler(github);
   const getMainRepository = createMainRepositoryGetHandler({
@@ -103,13 +116,19 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     return { code: err.code, reason: err.reason };
   };
 
-  const create = (slug: string, repo: string) =>
+  /**
+   * A workspace through `create_workspace`. `deprecatedMainRepo` names the
+   * repository an older caller would still send, which the handler ignores.
+   */
+  const create = (slug: string, deprecatedMainRepo?: string) =>
     inWorkspace(coreWorkspaceId, () =>
       createWorkspace(
         workspaceCreate.input.parse({
           name: slug,
           slug,
-          mainRepo: { owner: "acme", name: repo },
+          ...(deprecatedMainRepo === undefined
+            ? {}
+            : { mainRepo: { owner: "acme", name: deprecatedMainRepo } }),
         }),
         ctx(coreWorkspaceId),
       ),
@@ -172,6 +191,32 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     );
     if (!row) throw new Error(`no workspace ${publicId}`);
     return row.id;
+  };
+  /**
+   * What the GitHub install callback leaves on a workspace: a connection
+   * carrying the installation. `bind_main_repository` marks it connected.
+   */
+  const attachGithub = (workspaceId: string) =>
+    withSystemDb((tx) =>
+      tx.insert(schema.sourceConnections).values({
+        orgId,
+        workspaceId,
+        connectorId: GITHUB_PROVIDER,
+        displayName: "GitHub",
+        authScheme: "oauth2_authorization_code",
+        deliveryMethod: "webhook",
+        deliveryConfig: { installationId: "555" },
+        status: "pending_setup",
+        createdById: userId,
+      }),
+    );
+  /** A workspace with its main repository: create, attach GitHub, and bind. */
+  const createWithMain = async (slug: string, repo: string) => {
+    const workspace = await create(slug);
+    const id = await internalId(workspace.publicId);
+    await attachGithub(id);
+    const main = await bind(id, repo);
+    return { id, main };
   };
   const headsOf = (workspaceId: string) =>
     withSystemDb((tx) =>
@@ -298,7 +343,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
           .delete(schema.workspaceSlugHistory)
           .where(inArray(schema.workspaceSlugHistory.workspaceId, wsIds));
       }
-      // The heads and bindings the creates and links wrote, main and linked.
+      // The heads and bindings the binds and links wrote, main and linked.
       await tx
         .delete(schema.repositoryBindingHeads)
         .where(eq(schema.repositoryBindingHeads.orgId, orgId));
@@ -319,47 +364,45 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     await closeDatabase();
   });
 
-  it("walks the model: create with a main repo, link a second, the readers keep answering main, unlink the linked one, refuse to unlink main, refuse another workspace's main, share a repository that is nobody's main", async () => {
-    // ── create: exactly one head, role main ──────────────────────────────
-    const alpha = await create("alpha", "alpha");
-    expect(alpha.mainRepo.fullName).toBe("acme/alpha");
-    const alphaId = await internalId(alpha.publicId);
+  it("walks the model: bind a main repo, link a second, the readers keep answering main, unlink the linked one, refuse to unlink main, refuse another workspace's main, share a repository that is nobody's main", async () => {
+    // ── bind: exactly one head, role main ────────────────────────────────
+    const alpha = await createWithMain("alpha", "alpha");
+    expect(alpha.main.fullName).toBe("acme/alpha");
+    const alphaId = alpha.id;
     expect(await headsOf(alphaId)).toEqual([
       { role: "main", providerRepositoryId: repoId("acme", "alpha") },
     ]);
 
-    const beta = await create("beta", "beta");
-    const betaId = await internalId(beta.publicId);
+    const beta = await createWithMain("beta", "beta");
+    const betaId = beta.id;
     expect(await headsOf(betaId)).toEqual([
       { role: "main", providerRepositoryId: repoId("acme", "beta") },
     ]);
 
-    // A third workspace asking for alpha's main repository is refused by the
-    // global claim, and no workspace row is left behind.
-    await expect(refusal(create("gamma", "alpha"))).resolves.toEqual({
+    // A third workspace created with alpha's main repository as its
+    // deprecated `mainRepo` is created with no head: the handler ignores the
+    // field and starts the steering repo job instead.
+    const gamma = await create("gamma", "alpha");
+    expect(gamma.steering_repo).toEqual({ status: "provisioning" });
+    const gammaId = await internalId(gamma.publicId);
+    expect(await headsOf(gammaId)).toEqual([]);
+    // Binding alpha's main repository afterwards is refused by the global
+    // claim, and no head is left behind.
+    await attachGithub(gammaId);
+    await expect(refusal(bind(gammaId, "alpha"))).resolves.toEqual({
       code: "conflict",
       reason: "main_repo_claimed",
     });
-    expect(
-      await withSystemDb((tx) =>
-        tx
-          .select({ id: schema.workspaces.id })
-          .from(schema.workspaces)
-          .where(
-            and(
-              eq(schema.workspaces.orgId, orgId),
-              eq(schema.workspaces.slug, "gamma"),
-            ),
-          ),
-      ),
-    ).toEqual([]);
+    expect(await headsOf(gammaId)).toEqual([]);
+    // Each create started its workspace's steering repo job.
+    expect(requestProvision).toHaveBeenCalledTimes(3);
 
     // ── link a second repo: two heads, main + linked ─────────────────────
     const shared = await link(alphaId, "shared");
     expect(shared).toMatchObject({
       fullName: "acme/shared",
       role: "linked",
-      connectionId: alpha.mainRepo.connectionId,
+      connectionId: alpha.main.connectionId,
     });
     expect(await headsOf(alphaId)).toEqual([
       { role: "linked", providerRepositoryId: repoId("acme", "shared") },
@@ -372,7 +415,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
       ["main", "acme/alpha", true],
       ["linked", "acme/shared", true],
     ]);
-    expect(listed.repositories[0]?.bindingId).toBe(alpha.mainRepo.bindingId);
+    expect(listed.repositories[0]?.bindingId).toBe(alpha.main.bindingId);
     expect(listed.repositories[1]?.bindingId).toBe(shared.bindingId);
 
     // ── the readers that resolve THE main repository filter role = 'main' ──
@@ -382,7 +425,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
       getMainRepository({}, ctx(alphaId)),
     );
     expect(main.repository).toMatchObject({
-      bindingId: alpha.mainRepo.bindingId,
+      bindingId: alpha.main.bindingId,
       fullName: "acme/alpha",
     });
     await expect(
@@ -434,7 +477,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
 
     // ── unlink main: refused, nothing moves ──────────────────────────────
     await expect(
-      refusal(unlink(alphaId, alpha.mainRepo.bindingId)),
+      refusal(unlink(alphaId, alpha.main.bindingId)),
     ).resolves.toEqual({
       code: "conflict",
       reason: "main_repo_unlink_refused",
@@ -446,7 +489,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
       reason: "repository_not_linked",
     });
     await expect(
-      refusal(unlink(betaId, alpha.mainRepo.bindingId)),
+      refusal(unlink(betaId, alpha.main.bindingId)),
     ).resolves.toEqual({
       code: "not_found",
       reason: "repository_not_linked",
@@ -467,41 +510,18 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     const alphaId = await workspaceIdBySlug("alpha");
     const betaId = await workspaceIdBySlug("beta");
 
-    // ── create with a repository that is linked elsewhere: refused, no row ──
-    await expect(refusal(create("delta", "shared"))).resolves.toEqual({
-      code: "conflict",
-      reason: "repository_linked_elsewhere",
-    });
-    expect(
-      await withSystemDb((tx) =>
-        tx
-          .select({ id: schema.workspaces.id })
-          .from(schema.workspaces)
-          .where(
-            and(
-              eq(schema.workspaces.orgId, orgId),
-              eq(schema.workspaces.slug, "delta"),
-            ),
-          ),
-      ),
-    ).toEqual([]);
+    // ── create with a repository that is linked elsewhere: no head ────────
+    // The deprecated `mainRepo` is ignored, so the create succeeds and binds
+    // nothing, even for a repository two workspaces link.
+    const delta = await create("delta", "shared");
+    expect(delta.steering_repo).toEqual({ status: "provisioning" });
+    const deltaId = await workspaceIdBySlug("delta");
+    expect(await headsOf(deltaId)).toEqual([]);
 
     // ── the first workspace: GitHub attached, no main head yet ────────────
     // What the install callback leaves behind on the organisation's first
     // workspace before `bind_main_repository` runs (ADR-099 §6).
-    await withSystemDb((tx) =>
-      tx.insert(schema.sourceConnections).values({
-        orgId,
-        workspaceId: coreWorkspaceId,
-        connectorId: GITHUB_PROVIDER,
-        displayName: "GitHub",
-        authScheme: "oauth2_authorization_code",
-        deliveryMethod: "webhook",
-        deliveryConfig: { installationId: "555" },
-        status: "pending_setup",
-        createdById: userId,
-      }),
-    );
+    await attachGithub(coreWorkspaceId);
     expect(await headsOf(coreWorkspaceId)).toEqual([]);
 
     // A link before the main: refused, nothing written.

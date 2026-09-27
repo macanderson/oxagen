@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/cli",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "Oxagen governance CLI — spend, lineage, grounding, credentials, and audit (agentic coding lives in the stella CLI)",
   "type": "module",
   "main": "./dist/index.js",

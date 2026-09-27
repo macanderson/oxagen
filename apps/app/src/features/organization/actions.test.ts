@@ -218,16 +218,12 @@ describe("createWorkspace", () => {
     slug: "research",
     orgSlug: "acme",
     createdAt: "2026-09-15T00:00:00.000Z",
-    mainRepo: {
-      provider: "github",
-      bindingId: "rpb_0a1b2c",
-      connectionId: "con_01hq",
-      fullName: "acme/research",
-      defaultRef: "main",
-    },
+    // What `create_workspace` answers since lane S1 (#4450). Without it the
+    // kernel seam refuses the answer as `contract_output_mismatch`.
+    steering_repo: { status: "provisioning" },
   };
 
-  it("creates the workspace with its main repository and reports its slug", async () => {
+  it("creates the workspace and reports its slug", async () => {
     invoke.mockResolvedValue(CREATED);
     expect(
       await createWorkspace("acme", {
@@ -335,8 +331,10 @@ describe("createWorkspace", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  // The five repository refusals `create_workspace` documents, each carried
-  // with its reason intact so the dialog can print its own sentence.
+  // Any refusal the handler raises reaches the caller with its reason intact,
+  // so the dialog can print its own sentence. These five came from the main
+  // repository binding `create_workspace` made before lane S1 (#4450). The
+  // handler no longer raises them, and the action still carries them.
   it.each([
     ["conflict", "github_not_authorized"],
     ["not_found", "installation_unreachable"],

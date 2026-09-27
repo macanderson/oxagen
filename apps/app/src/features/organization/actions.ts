@@ -115,9 +115,11 @@ export async function deleteRole(
 type WorkspaceDraft = { name: string; slug: string };
 
 /**
- * A new workspace's draft: its name, and its main repository as the one
- * `owner/name` text the form sends. `create_workspace` requires the main
- * repository (MC spec §10.1, §17 M0: a workspace cannot exist without one).
+ * A new workspace's draft: its name, and a repository as the one `owner/name`
+ * text the form sends. `create_workspace` no longer binds a main repository
+ * (lane S1, #4450): it takes `mainRepo` as a deprecated field and ignores it,
+ * and the workspace gets a steering repo instead. The form still collects the
+ * repository until the new create flow replaces it.
  *
  * The design's form has no slug field, so the slug is made from the name
  * (`slugFromName`) unless a caller names one.
@@ -146,12 +148,10 @@ function parseRepository(text: string): { owner: string; name: string } | null {
 }
 
 /**
- * A workspace in this organization, created with its main repository: the
- * in-app path to a second one (#2964). The installation is never named here —
- * the handler resolves it from the org's GitHub authorization by the
- * repository's owner — so the draft carries only `owner/name`, and a value
- * that does not split into the two is refused as `invalid` on `mainRepo` with
- * no capability run.
+ * A workspace in this organization: the in-app path to a second one (#2964).
+ * The draft carries a repository as `owner/name`, and a value that does not
+ * split into the two is refused as `invalid` on `mainRepo` with no capability
+ * run. The handler ignores the repository it receives (lane S1, #4450).
  */
 export async function createWorkspace(
   org: string,
