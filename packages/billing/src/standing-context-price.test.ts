@@ -4,6 +4,7 @@ import {
   priceAtPerThousand,
   resentStandingTokens,
   runReadPrice,
+  standingContextBySource,
   weeklyPriceMicros,
   weeklyPricePerThousand,
 } from "./standing-context-price";
@@ -87,15 +88,64 @@ describe("resentStandingTokens", () => {
     ).toBe(75_000);
   });
 
-  it("is null when no source reported or the run made one call", () => {
+  it("is null when no source reported, and 0 when the run made one call", () => {
     const none = {
       toolDefinitionTokens: null,
       contextFrameTokens: null,
       steeringTokens: null,
     };
     expect(resentStandingTokens(none, 4)).toBeNull();
+    expect(resentStandingTokens({ ...none, steeringTokens: 5_000 }, 1)).toBe(
+      0,
+    );
+  });
+});
+
+describe("standingContextBySource", () => {
+  const sources = {
+    toolDefinitionTokens: 80_000,
+    contextFrameTokens: null,
+    steeringTokens: 20_000,
+  };
+
+  it("prices each reported source's re-sent tokens at the cache read price", () => {
     expect(
-      resentStandingTokens({ ...none, steeringTokens: 5_000 }, 1),
+      standingContextBySource(
+        { ...priced(30_000, 9_000n), modelCalls: 4 },
+        sources,
+      ),
+    ).toEqual({
+      toolDefinitionTokens: { resentTokens: 60_000, micros: 18_000n },
+      steeringTokens: { resentTokens: 15_000, micros: 4_500n },
+      contextFrameTokens: null,
+    });
+  });
+
+  it("falls back to the input price, and leaves the price out when the run has none", () => {
+    const uncached = { ...priced(0, 0n), modelCalls: 4 };
+    uncached.breakdown.models[0]!.tokens.input_uncached = 3_000;
+    uncached.breakdown.models[0]!.costByClass.input_uncached = 9_000n;
+    expect(
+      standingContextBySource(uncached, sources)?.steeringTokens,
+    ).toEqual({ resentTokens: 15_000, micros: 45_000n });
+    expect(
+      standingContextBySource(
+        { ...priced(30_000, 9_000n, "estimated"), modelCalls: 4 },
+        sources,
+      )?.toolDefinitionTokens,
+    ).toEqual({ resentTokens: 60_000, micros: null });
+  });
+
+  it("is null when no source reported", () => {
+    expect(
+      standingContextBySource(
+        { ...priced(30_000, 9_000n), modelCalls: 4 },
+        {
+          toolDefinitionTokens: null,
+          contextFrameTokens: null,
+          steeringTokens: null,
+        },
+      ),
     ).toBeNull();
   });
 });

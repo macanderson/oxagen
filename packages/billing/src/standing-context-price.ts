@@ -14,6 +14,8 @@
  */
 import {
   divideHalfEven,
+  priceInputTokens,
+  runInputPrice,
   type CostBasis,
   type InputPrice,
   type RunBreakdown,
@@ -102,22 +104,100 @@ export interface StandingContextSources {
 }
 
 /**
- * The standing tokens a run re-sent: each source's sum over the run's
- * requests, less the first request's share. The run-totals columns hold the
- * sum over every request, so one request's share is the sum over the
- * requests. Null when no source reported, or the run made one request or
- * none.
+ * The sources a run row carries. The stores read `StoredRunTotals`, and the
+ * findings input and the handlers type the row as the record alone, so a
+ * source a row does not carry reads as unreported.
+ */
+export function standingSourcesOf(run: object): StandingContextSources {
+  const row = run as Partial<StandingContextSources>;
+  return {
+    toolDefinitionTokens: row.toolDefinitionTokens ?? null,
+    contextFrameTokens: row.contextFrameTokens ?? null,
+    steeringTokens: row.steeringTokens ?? null,
+  };
+}
+
+/** The sources in the order the run page lists them. */
+export const STANDING_SOURCES = [
+  "toolDefinitionTokens",
+  "steeringTokens",
+  "contextFrameTokens",
+] as const satisfies readonly (keyof StandingContextSources)[];
+
+export type StandingSource = (typeof STANDING_SOURCES)[number];
+
+/**
+ * The tokens of one source that a run re-sent: its sum over the run's model
+ * calls, less the first call's share. The run-totals columns hold the sum
+ * over every call, so one call's share is the sum over the calls. A run of
+ * one call re-sent nothing.
+ */
+export function resentTokens(tokens: number, requests: number): number {
+  if (requests <= 1) return 0;
+  return Math.round((tokens * (requests - 1)) / requests);
+}
+
+/**
+ * The standing tokens a run re-sent over every reported source; null when no
+ * source reported. Each source rounds on its own, so the total is the sum of
+ * the run page's areas.
  */
 export function resentStandingTokens(
   sources: StandingContextSources,
   requests: number,
 ): number | null {
-  const reported = [
-    sources.toolDefinitionTokens,
-    sources.contextFrameTokens,
-    sources.steeringTokens,
-  ].filter((n): n is number => n !== null);
-  if (reported.length === 0 || requests <= 1) return null;
-  const sum = reported.reduce((a, b) => a + b, 0);
-  return Math.round((sum * (requests - 1)) / requests);
+  let total: number | null = null;
+  for (const source of STANDING_SOURCES) {
+    const tokens = sources[source];
+    if (tokens !== null) total = (total ?? 0) + resentTokens(tokens, requests);
+  }
+  return total;
+}
+
+/** One source's re-sent tokens and their price; null micros when the run has no price. */
+export interface StandingSourcePrice {
+  resentTokens: number;
+  micros: bigint | null;
+}
+
+/**
+ * The price a run re-read its standing context at: its cache read price, or
+ * its input price when it read nothing from the cache, since then it sent
+ * the prefix uncached. Null when neither is priced.
+ */
+export function standingReadPrice(run: {
+  costBasis: CostBasis | null;
+  breakdown: Pick<RunBreakdown, "models">;
+}): InputPrice | null {
+  return runReadPrice(run) ?? runInputPrice(run);
+}
+
+/**
+ * A run's standing context by source, as `standing_tokens × read_price ×
+ * (requests − 1)` (spec detector 2). A source the recorder did not report is
+ * null, never a zero. Null when no source reported.
+ */
+export function standingContextBySource(
+  run: {
+    costBasis: CostBasis | null;
+    breakdown: Pick<RunBreakdown, "models">;
+    modelCalls: number;
+  },
+  sources: StandingContextSources,
+): Record<StandingSource, StandingSourcePrice | null> | null {
+  if (STANDING_SOURCES.every((source) => sources[source] === null)) return null;
+  const price = standingReadPrice(run);
+  const priced = (tokens: number | null): StandingSourcePrice | null => {
+    if (tokens === null) return null;
+    const resent = resentTokens(tokens, run.modelCalls);
+    return {
+      resentTokens: resent,
+      micros: price === null ? null : priceInputTokens(price, resent),
+    };
+  };
+  return {
+    toolDefinitionTokens: priced(sources.toolDefinitionTokens),
+    steeringTokens: priced(sources.steeringTokens),
+    contextFrameTokens: priced(sources.contextFrameTokens),
+  };
 }

@@ -15,15 +15,12 @@
  * of each request, so it claims no frame (ADR-208, counting rule 2). It is
  * cited at the run's agent, or at its operator when it names no agent.
  */
-import {
-  priceInputTokens,
-  runInputPrice,
-  type RunTotalsRecord,
-} from "../cost-rollup";
-import type { RunTokenSources } from "../cost-rollup-store";
+import { priceInputTokens } from "../cost-rollup";
 import {
   resentStandingTokens,
-  runReadPrice,
+  resentTokens,
+  standingReadPrice,
+  standingSourcesOf as sourcesOf,
   type StandingContextSources,
 } from "../standing-context-price";
 import {
@@ -35,27 +32,13 @@ import {
   type Group,
 } from "./shared";
 
-/**
- * The sources a run row carries. The store reads `StoredRunTotals`, and the
- * detector input is typed as the record alone, so a source a row does not
- * carry reads as unreported.
- */
-export function sourcesOf(run: RunTotalsRecord): StandingContextSources {
-  const row = run as RunTotalsRecord & Partial<RunTokenSources>;
-  return {
-    toolDefinitionTokens: row.toolDefinitionTokens ?? null,
-    contextFrameTokens: row.contextFrameTokens ?? null,
-    steeringTokens: row.steeringTokens ?? null,
-  };
-}
-
 function detect(input: DetectInput, ctx: DetectContext): void {
   for (const run of input.runs) {
     const resent = resentStandingTokens(sourcesOf(run), run.modelCalls);
     if (resent === null || resent === 0) continue;
     const key = agentOrOperator("standing_context", run);
     if (key === null || !ctx.groups.admits(key, run)) continue;
-    const price = runReadPrice(run) ?? runInputPrice(run);
+    const price = standingReadPrice(run);
     ctx.groups.add(
       key,
       input.window.start,
@@ -83,10 +66,8 @@ function resentOf(
   let total: number | null = null;
   for (const { run } of group.runs.values()) {
     const tokens = sourcesOf(run)[source];
-    if (tokens === null || run.modelCalls <= 1) continue;
-    total =
-      (total ?? 0) +
-      Math.round((tokens * (run.modelCalls - 1)) / run.modelCalls);
+    if (tokens !== null)
+      total = (total ?? 0) + resentTokens(tokens, run.modelCalls);
   }
   return total;
 }

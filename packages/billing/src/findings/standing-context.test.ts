@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ZERO_TOKENS, type RunTotalsRecord } from "../cost-rollup";
 import type { StoredRunTotals } from "../cost-rollup-store";
 import { detectFindings, type DetectInput } from "./index";
-import { sourcesOf } from "./standing-context";
+import { standingSourcesOf as sourcesOf } from "../standing-context-price";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const WS = "00000000-0000-4000-8000-000000000002";

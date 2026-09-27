@@ -77,6 +77,33 @@ export const runCostBaselineSchema = z
   })
   .strict();
 
+/**
+ * One source of the context every model call re-sends (spec detector 2): the
+ * tokens the calls after the first re-sent, and what they cost at the run's
+ * prompt-cache read rate, or its uncached input rate when it read nothing
+ * from the cache. Its basis is always `estimated`: the recorder estimates
+ * the tokens. The cost attributes input the run's `cost` already counts and
+ * never adds to it. Null cost when the run has no read or input price.
+ */
+export const runCostStandingSourceSchema = z
+  .object({
+    resentTokens: z.number().int().nonnegative(),
+    cost: costSchema.nullable(),
+  })
+  .strict();
+
+/**
+ * The run's standing context by source (#4493, #4537). A source the recorder
+ * did not report is null, never a zero.
+ */
+export const runCostStandingContextSchema = z
+  .object({
+    toolDefinitions: runCostStandingSourceSchema.nullable(),
+    steering: runCostStandingSourceSchema.nullable(),
+    contextFrames: runCostStandingSourceSchema.nullable(),
+  })
+  .strict();
+
 export const runCostRollupSchema = z
   .object({
     /** Null when no model frame was priced. */
@@ -151,6 +178,11 @@ export const runCostRollupSchema = z
         })
         .strict(),
     ),
+    /**
+     * The context every model call after the first re-sent, by source. Null
+     * when the recorder reported no source.
+     */
+    standingContext: runCostStandingContextSchema.nullable().default(null),
     /** The price entries the frames were priced with (spec §12.2). */
     priceEntryIds: z.array(z.string()),
     /** RFC 3339: when the row was last rebuilt from the frames. */
@@ -192,7 +224,7 @@ export const runCostGet = registerCapability({
   name: "get_run_cost",
   domain: "run",
   description:
-    "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps and how many of them advanced the run, model and tool calls, and the per-model breakdown (cost by token class, cache saving, whether any call went unpriced) and per-tool breakdown with each tool's result tokens and their estimated cost, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime. It also answers the agent's median cost and productive share over its runs in the 30 days before this one.",
+    "Read one run's cost rollup: total cost with its basis, tokens by class, cache hit rate, turns, steps and how many of them advanced the run, model and tool calls, and the per-model breakdown (cost by token class, cache saving, whether any call went unpriced) and per-tool breakdown with each tool's result tokens and their estimated cost, the standing context each call after the first re-sent by source (tool definitions, steering, context frames) with its estimated cost, marked as an estimate while the run is still open; null until the rollup has rebuilt the run from its frames, with provisional per-model figures for a wrapped run in the meantime. It also answers the agent's median cost and productive share over its runs in the 30 days before this one.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -229,6 +261,9 @@ export type RunCostRollup = z.output<typeof runCostRollupSchema>;
 export type RunCostProvisional = z.output<typeof runCostProvisionalSchema>;
 export type RunCostByClass = z.output<typeof runCostByClassSchema>;
 export type RunCostBaseline = z.output<typeof runCostBaselineSchema>;
+export type RunCostStandingContext = z.output<
+  typeof runCostStandingContextSchema
+>;
 export type RunCostUnproductiveCauses = z.output<
   typeof runCostUnproductiveCausesSchema
 >;
