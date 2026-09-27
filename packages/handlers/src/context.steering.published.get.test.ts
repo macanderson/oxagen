@@ -281,7 +281,7 @@ describe("readMainBoundRepository", () => {
   const scope = { orgId: "org_1", workspaceId: "ws_1" };
   const row = {
     headId: "head-1",
-    role: "main",
+    role: "steering",
     provider: "github",
     connectionId: "conn-1",
     providerRepositoryId: "42",

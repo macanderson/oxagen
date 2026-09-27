@@ -282,32 +282,47 @@ describe("planCuration", () => {
       expect(cited(twoRuns)).toEqual([["before", "once", "twice", "other"]]);
     });
 
-    it("counts a memory with no run by its capture and source", () => {
+    it("counts no memory with no run toward the 2 runs a rejected statement needs", () => {
       const rejections = [
-        { statementHash: statementHash(MIGRATE), rejectedAt: daysAgo(5) },
+        { statementHash: statementHash(MIGRATE), rejectedAt: daysAgo(6) },
       ];
-      const gateway = {
-        runPublicId: null,
-        capture: "local_gateway" as const,
-        source: "claude-code:memory/migrations.md",
-      };
-      const first = memory("gateway-1", { ...gateway, createdAt: daysAgo(3) });
-      const second = memory("gateway-2", { ...gateway, createdAt: daysAgo(2) });
-
-      const sameSource = planCuration(input({ waiting: [first, second], rejections }));
-      expect(sameSource.held).toEqual(["gateway-1", "gateway-2"]);
-
+      const gateway = { runPublicId: null, capture: "local_gateway" as const };
+      const fileA = memory("gateway-a", {
+        ...gateway,
+        source: "claude-code:memory/a.md",
+        createdAt: daysAgo(5),
+      });
+      const fileB = memory("gateway-b", {
+        ...gateway,
+        source: "claude-code:memory/b.md",
+        createdAt: daysAgo(4),
+      });
       const pullRequest = memory("pull-request", {
         runPublicId: null,
         capture: "pull_request",
         source: null,
-        createdAt: daysAgo(1),
+        createdAt: daysAgo(3),
       });
-      const twoSources = planCuration(
-        input({ waiting: [first, second, pullRequest], rejections }),
+
+      const twoFiles = planCuration(input({ waiting: [fileA, fileB], rejections }));
+      expect(twoFiles.held).toEqual(["gateway-a", "gateway-b"]);
+      expect(twoFiles.records).toEqual([]);
+
+      const runOne = memory("run-1", { createdAt: daysAgo(2) });
+      const oneRun = planCuration(
+        input({ waiting: [fileA, fileB, pullRequest, runOne], rejections }),
       );
-      expect(twoSources.held).toEqual([]);
-      expect(cited(twoSources)).toEqual([["gateway-1", "gateway-2", "pull-request"]]);
+      expect(oneRun.held).toEqual(["gateway-a", "gateway-b", "pull-request", "run-1"]);
+      expect(oneRun.records).toEqual([]);
+
+      const runTwo = memory("run-2", { createdAt: daysAgo(1) });
+      const twoRuns = planCuration(
+        input({ waiting: [fileA, fileB, pullRequest, runOne, runTwo], rejections }),
+      );
+      expect(twoRuns.held).toEqual([]);
+      expect(cited(twoRuns)).toEqual([
+        ["gateway-a", "gateway-b", "pull-request", "run-1", "run-2"],
+      ]);
     });
 
     it("counts runs from the latest rejection of a statement", () => {

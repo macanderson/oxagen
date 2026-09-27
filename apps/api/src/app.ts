@@ -221,6 +221,7 @@ import { contextProposalDismissRoute } from "./routes/v1/context.proposal.dismis
 import { contextPrOpenRoute } from "./routes/v1/context.pr.open";
 import { contextPrGetRoute } from "./routes/v1/context.pr.get";
 import { contextPrMergeRoute } from "./routes/v1/context.pr.merge";
+import { contextPrMergeWithoutReviewRoute } from "./routes/v1/context.pr.merge_without_review";
 import { agentRoleAssignRoute } from "./routes/v1/agent.role.assign";
 import { agentRoleRevokeRoute } from "./routes/v1/agent.role.revoke";
 import { agentRoleListRoute } from "./routes/v1/agent.role.list";
@@ -1153,6 +1154,10 @@ orgScoped.route("/context/proposals/dismiss", contextProposalDismissRoute);
 orgScoped.route("/context/prs/open", contextPrOpenRoute);
 orgScoped.route("/context/prs/get", contextPrGetRoute);
 orgScoped.route("/context/prs/merge", contextPrMergeRoute);
+orgScoped.route(
+  "/context/prs/merge-without-review",
+  contextPrMergeWithoutReviewRoute,
+);
 orgScoped.route("/privacy/export", privacyDataExportRoute);
 orgScoped.route("/privacy/erase", privacyDataEraseRoute);
 orgScoped.route("/connections", connectionRoute);

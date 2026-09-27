@@ -218,14 +218,14 @@ describe("steering/sync-sweep", () => {
 
   it("reads only steering binding heads", async () => {
     // A linked repository does not steer. Sweeping it would cost a sync per
-    // linked head every five minutes for nothing. A steering head is role
-    // 'main' (the binder) or 'steering' (a provisioned steering repo).
+    // linked head every five minutes for nothing. Every steering head is
+    // role 'steering'.
     await runSweep(fakeStep());
     const query = new PgDialect().sqlToQuery(
       mocks.where[0] as Parameters<PgDialect["sqlToQuery"]>[0],
     );
-    expect(query.sql).toContain('"role" in ($1, $2)');
-    expect(query.params).toEqual(["main", "steering"]);
+    expect(query.sql).toContain('"role" in ($1)');
+    expect(query.params).toEqual(["steering"]);
   });
 
   it("sends nothing when no workspace has a main repository", async () => {
@@ -266,10 +266,9 @@ describe("steering/sync-sweep", () => {
       mocks.where[1] as Parameters<PgDialect["sqlToQuery"]>[0],
     );
     expect(query.sql).toContain("not exists");
-    expect(query.sql).toMatch(/h\.role in \(\$\d+, \$\d+\)/);
-    expect(query.params).toEqual(
-      expect.arrayContaining(["main", "steering"]),
-    );
+    expect(query.sql).toMatch(/h\.role in \(\$\d+\)/);
+    expect(query.params).toContain("steering");
+    expect(query.params).not.toContain("main");
   });
 });
 

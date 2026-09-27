@@ -177,7 +177,7 @@ is unambiguous.
 
 **Local verification policy:** CI runs builds, lint, typechecks, coverage, and test suites. None of them runs on this shared machine, not even one test file. Do not run `pnpm gate`, `pnpm gate:full`, or any test locally. Lightweight integrity checks still apply. Git hooks are off on this machine. `CLAUDE.md` has the verification workflow.
 
-**Affected-package caveat:** CI runs `pnpm gate`, and it is not run on this machine. The gate selects packages changed since `origin/main`. If `HEAD` equals `origin/main`, it may select no packages. An empty selection is not verification evidence. Inspect the actual CI jobs and their output.
+**Affected-package caveat:** `pnpm gate` selects packages changed since `origin/main`, and it is not run on this machine. If `HEAD` equals `origin/main`, it may select no packages. CI's PR jobs select packages changed since the PR's base commit (`github.event.pull_request.base.sha`), so a job that starts after the PR merges still tests the PR's packages (#4520). Push to main and the merge queue run every package. An empty selection is not verification evidence. Inspect the actual CI jobs and their output.
 
 **Release script flags**: `tsx tools/scripts/release.ts major --dry-run` (preview without writing), `--set X.Y.Z` (exact version), `--no-npm` / `--no-git` / `--no-notes` (skip individual steps), `--from <ref>` (regenerate notes for an existing tag).
 

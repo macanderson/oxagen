@@ -213,6 +213,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [list_proposals](context.proposal.list.md) | [context.proposal.list.ts](../../packages/oxagen/src/contracts/context.proposal.list.ts) | api, mcp |
 | [list_records](context.records.list.md) | [context.records.list.ts](../../packages/oxagen/src/contracts/context.records.list.ts) | api, mcp, agent |
 | [merge_context_pr](context.pr.merge.md) | [context.pr.merge.ts](../../packages/oxagen/src/contracts/context.pr.merge.ts) | api |
+| [merge_pr_without_review](context.pr.merge_without_review.md) | [context.pr.merge_without_review.ts](../../packages/oxagen/src/contracts/context.pr.merge_without_review.ts) | api |
 | [open_context_pr](context.pr.open.md) | [context.pr.open.ts](../../packages/oxagen/src/contracts/context.pr.open.ts) | api |
 | [promote_context_record](context.record.promote.md) | [context.record.promote.ts](../../packages/oxagen/src/contracts/context.record.promote.ts) | api |
 | [propose_record](context.proposal.create.md) | [context.proposal.create.ts](../../packages/oxagen/src/contracts/context.proposal.create.ts) | api, mcp, agent |

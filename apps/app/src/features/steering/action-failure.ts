@@ -31,6 +31,10 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("repositoryMissing");
           case "checks_not_passed":
             return t("checksNotPassed");
+          case "approval_required":
+            return t("approvalRequired");
+          case "approvals_not_head_bound":
+            return t("approvalsNotHeadBound");
           case "head_moved":
             return t("headMoved");
           case "base_moved":

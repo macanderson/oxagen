@@ -173,18 +173,18 @@ beforeAll(async () => {
 
     // ingestion.repository_binding_heads — NOT NULL: id, org_id,
     // workspace_id, connection_id, provider, provider_repository_id,
-    // current_binding_id, created_at/updated_at (default). No public_id;
-    // pins to the binding just seeded above so current_binding_id is a real
-    // (if unenforced) reference.
+    // current_binding_id, role (no default since 20260927185600),
+    // created_at/updated_at (default). No public_id; pins to the binding just
+    // seeded above so current_binding_id is a real (if unenforced) reference.
     await tx`
       INSERT INTO ingestion.repository_binding_heads
         (id, org_id, workspace_id, connection_id, provider,
-         provider_repository_id, current_binding_id)
+         provider_repository_id, current_binding_id, role)
       VALUES
         (${REPO_BINDING_HEAD_A}, ${ORG_A}, ${WS_A}, ${CONNECTION_A}, 'github',
-         'rls-test-repo-a', ${REPO_BINDING_A}),
+         'rls-test-repo-a', ${REPO_BINDING_A}, 'steering'),
         (${REPO_BINDING_HEAD_B}, ${ORG_B}, ${WS_B}, ${CONNECTION_B}, 'github',
-         'rls-test-repo-b', ${REPO_BINDING_B})
+         'rls-test-repo-b', ${REPO_BINDING_B}, 'steering')
       ON CONFLICT (id) DO NOTHING
     `;
   });

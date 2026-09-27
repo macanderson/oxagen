@@ -19,6 +19,7 @@ export const EXAMPLE_GITLAB_BASELINE: SteeringGitlabSettings = {
     squash_option: "always",
     only_allow_merge_if_pipeline_succeeds: true,
     remove_source_branch_after_merge: true,
+    reset_approvals_on_push: true,
     required_status: "Oxagen steering",
   },
   ci_cd: { builds_access_level: "disabled" },
