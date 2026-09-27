@@ -19,6 +19,7 @@ import {
 import type { AssistantThread } from "@/data/contracts/conversations";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
+import { nth } from "@/test/nth";
 import { ShellStateProvider, useShellState } from "./shell-state";
 
 // The turn streams from the API (assistant-stream-client.ts, ADR-176) and
@@ -543,7 +544,7 @@ describe("the session list (#4435)", () => {
     await user.click(screen.getByTestId("assistant-sessions-toggle"));
     const rows = await screen.findAllByTestId("assistant-session");
 
-    await user.click(rows[1] as HTMLElement);
+    await user.click(nth(rows, 1, "the older session row"));
 
     expect(openAssistantSession).toHaveBeenCalledWith(
       "acme",
@@ -573,7 +574,7 @@ describe("the session list (#4435)", () => {
     await user.click(screen.getByTestId("assistant-sessions-toggle"));
     const rows = await screen.findAllByTestId("assistant-session");
 
-    await user.click(rows[0] as HTMLElement);
+    await user.click(nth(rows, 0, "the current session row"));
 
     expect(openAssistantSession).not.toHaveBeenCalled();
     expect(screen.getByTestId("assistant-thread-view")).not.toHaveAttribute(
@@ -668,7 +669,7 @@ describe("the session list (#4435)", () => {
     await user.click(screen.getByTestId("assistant-sessions-toggle"));
     const rows = await screen.findAllByTestId("assistant-session");
 
-    await user.click(rows[1] as HTMLElement);
+    await user.click(nth(rows, 1, "the older session row"));
 
     expect(
       await screen.findByTestId("assistant-sessions-open-failed"),

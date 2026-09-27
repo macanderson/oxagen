@@ -97,11 +97,11 @@ export function AssistantSessions({
 
   // A session opened after the list went away (a workspace switch unmounts
   // it) is dropped: the person is no longer looking at this workspace.
-  const mounted = useRef(true);
+  const mountedRef = useRef(true);
   useEffect(() => {
-    mounted.current = true;
+    mountedRef.current = true;
     return () => {
-      mounted.current = false;
+      mountedRef.current = false;
     };
   }, []);
 
@@ -116,7 +116,7 @@ export function AssistantSessions({
     const result = await openAssistantSession(org, ws, session.id).catch(
       () => null,
     );
-    if (!mounted.current) return;
+    if (!mountedRef.current) return;
     setOpening(null);
     if (result === null) {
       setOpenFailed("failed");
