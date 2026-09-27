@@ -704,8 +704,11 @@ describe("workspace.toml settings (#4435)", () => {
   });
 });
 
-describe("publishing the synced head (#4447)", () => {
-  it("publishes the head it synced, with the workspace's scope", async () => {
+describe("publishing the steering repository (#4447)", () => {
+  // The sync reads the main code repository, so it hands the publisher only
+  // the workspace's scope. The publisher resolves the steering repository and
+  // reads its head, and never receives the code repository's name or head.
+  it("publishes with the workspace's scope and no code repository", async () => {
     const r = rig();
     r.h.github.commit(
       "main",
@@ -717,12 +720,29 @@ describe("publishing the synced head (#4447)", () => {
       version: 1,
     }));
     const out = await syncWorkspaceSteering({ ...r.deps, publish }, SCOPE);
-    expect(publish).toHaveBeenCalledWith(SCOPE, {
-      repository: "a-intel/platform",
-      head: r.h.github.heads.get("main"),
-    });
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(publish.mock.calls[0]).toEqual([SCOPE]);
     expect(out.published).toEqual({ status: "published", version: 1 });
     expect(out.outcome).toBe("synced");
+  });
+
+  it("asks for a publish when the code repository has not moved", async () => {
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      `${RULES}/ctx.a.one.toml`,
+      recordText("ctx.a.one"),
+    );
+    const publish = vi.fn(async () => ({
+      status: "current" as const,
+      version: 1,
+    }));
+    const deps = { ...r.deps, publish };
+    await syncWorkspaceSteering(deps, SCOPE);
+    const again = await syncWorkspaceSteering(deps, SCOPE);
+    expect(again.outcome).toBe("current");
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(again.published).toEqual({ status: "current", version: 1 });
   });
 
   it("publishes nothing and says so when no publisher is wired", async () => {
