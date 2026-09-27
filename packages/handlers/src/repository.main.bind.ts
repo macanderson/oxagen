@@ -738,8 +738,10 @@ export function createMainRepositoryBindHandler(
                 connectionId: connection.id,
                 currentBindingId: successor.id,
                 // Carried with the rest: a linked head being promoted in the
-                // same statement that moves its binding forward.
-                role: "main",
+                // same statement that moves its binding forward. A head that
+                // already steers keeps its role, so a re-bind of a steering
+                // head never turns it back into a main one.
+                role: promote ? "main" : same.role,
                 updatedAt: now,
               })
               .where(eq(schema.repositoryBindingHeads.id, same.id));

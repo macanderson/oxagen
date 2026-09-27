@@ -26,6 +26,7 @@ import { HandlerError } from "@oxagen/oxagen";
 import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import {
   linkedOxagenUser,
+  refuseLongCompare,
   type SteeringChangedFile,
   type SteeringHost,
   type SteeringRepository,
@@ -591,6 +592,7 @@ export function createSteeringGitLab(
     changedPaths(repo, base, head) {
       return call(repo, async (gl, project) => {
         const diffs = await gl.compare({ project, from: base, to: head });
+        refuseLongCompare(diffs.length, base, head);
         return [
           ...new Set(
             diffs.flatMap((d) =>
@@ -690,6 +692,7 @@ export function createSteeringGitLab(
     changedFiles(repo, base, head) {
       return call(repo, async (gl, project) => {
         const diffs = await gl.compare({ project, from: base, to: head });
+        refuseLongCompare(diffs.length, base, head);
         return diffs.flatMap((d): SteeringChangedFile[] => {
           if (d.renamed && d.oldPath !== d.newPath)
             return [
@@ -765,7 +768,8 @@ export function createSteeringGitLab(
             message: `The steering PR's branch ${args.branch} moved while Oxagen was merging it. Merge again to check the new head.`,
           });
         // GitLab brings a merge request up to date by rebasing it onto the
-        // target branch. The rebase runs in the background, so poll it.
+        // target branch as it is now, so it cannot pin `args.base`. The
+        // rebase runs in the background, so poll it.
         await rest.request(
           "PUT",
           `${path}/merge_requests/${args.number}/rebase`,
@@ -786,7 +790,8 @@ export function createSteeringGitLab(
                 reason: "update_conflict",
                 message: `${repo.defaultBranch} does not rebase cleanly under ${args.branch}: ${mr.data.merge_error}. Resolve the conflict on the steering PR, then merge again.`,
               });
-            return { headSha: mr.data.sha ?? args.expectedHead };
+            // A rebase makes no merge commit, so it has no parents to answer.
+            return { headSha: mr.data.sha ?? args.expectedHead, parents: null };
           }
           await deps.sleep(1000);
         }
@@ -798,13 +803,18 @@ export function createSteeringGitLab(
       });
     },
 
-    resetBranch(repo, branch, sha) {
+    resetBranch(repo, branch, args) {
       // GitLab has no call that moves a branch backwards, so the branch is
-      // deleted and created again at `sha`. The merge request keeps its
-      // source branch name and picks the branch up again.
+      // deleted and created again at `to`. The merge request keeps its
+      // source branch name and picks the branch up again. Neither call takes
+      // an expected head, so the branch is read first: a branch that moved
+      // off `from` is left alone.
       return call(repo, async (gl, project) => {
+        const head = await gl.getBranch({ project, branch });
+        if (head?.commitSha !== args.from) return false;
         await gl.deleteBranch({ project, branch });
-        await gl.createBranch({ project, branch, ref: sha });
+        await gl.createBranch({ project, branch, ref: args.to });
+        return true;
       });
     },
 
