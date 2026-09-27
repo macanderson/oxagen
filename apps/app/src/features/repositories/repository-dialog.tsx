@@ -10,12 +10,17 @@
 // an owner action and this dialog never offers it. A governed repository
 // offers See its changes, an ungoverned one Add Oxagen.
 //
+// A link binds nothing at once (ADR-212). It opens a steering PR that adds the
+// repository to `workspace.toml`, and the dialog names that PR and says to
+// merge it. The row stays not linked until the steering sync reads the merge.
+//
 // The production branch never moves on its own (§11.4): when GitHub's
 // default branch moves, the dialog shows both and a person decides, through
 // `set_production_branch`. A main repository whose GitHub connection was
 // retired carries the repair, which binds the same repository again.
 import { useTranslations } from "next-intl";
 import { type SyntheticEvent, useId, useState } from "react";
+import type { LinkedRepository } from "@/data/contracts/repository";
 import { parseGitHubUrl } from "@/shared/github-url";
 import {
   buttonPrimary,
@@ -32,6 +37,7 @@ import { REPOSITORY_GAPS } from "./gaps";
 import { RepositorySetup } from "./main-repository";
 import { buttonDanger, code, kv, note, prose } from "./parts";
 import { TreeBadge } from "./repositories-tab";
+import { SteeringProposal } from "./steering-proposal";
 import { type RepositoryRow, treeState } from "./view";
 
 export function RepositoryDialog({
@@ -69,7 +75,7 @@ export function RepositoryDialog({
   const failureText = useRepositoriesFailure();
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const [linked, setLinked] = useState<string | null>(null);
+  const [linked, setLinked] = useState<LinkedRepository | null>(null);
   const open = row !== null;
   const governed = row !== null && treeState(row.tree) === "governed";
 
@@ -83,7 +89,7 @@ export function RepositoryDialog({
         name: row.name,
       });
       if (result.ok) {
-        setLinked(t("linked", { repository: row.fullName, workspace }));
+        setLinked(result.value);
         onChanged();
       } else setFailure(failureText(result));
     } catch {
@@ -193,7 +199,8 @@ function Body({
   mainFullName: string | null;
   row: RepositoryRow;
   failure: string | null;
-  linked: string | null;
+  /** What the link proposed; null until a link answers. */
+  linked: LinkedRepository | null;
   onChanged: () => void;
 }) {
   const t = useTranslations("repositories.dialog");
@@ -218,13 +225,12 @@ function Body({
         <FormAlert testId="repository-dialog-failure">{failure}</FormAlert>
       )}
       {linked === null ? null : (
-        <p
-          role="status"
-          data-testid="repository-dialog-linked"
-          className="text-[13px]"
-        >
-          {linked}
-        </p>
+        <SteeringProposal
+          action="link"
+          fullName={linked.fullName}
+          steeringPullRequest={linked.steeringPullRequest}
+          testId="repository-dialog-linked"
+        />
       )}
       {row.tree?.kind === "failed" ? (
         <FormAlert testId="repository-dialog-tree-failure">

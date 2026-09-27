@@ -47,6 +47,9 @@ export function useRepositoriesFailure(): (
             return t("mainRepoUnlinkRefused");
           case "repository_not_linked":
             return t("repositoryNotLinked");
+          // A link or an unlink found the steering record unreadable (ADR-212).
+          case "workspace_toml_unreadable":
+            return t("workspaceTomlUnreadable");
           // The production branch and the init pull request (§10.2, §11.4).
           case "branch_not_found":
             return t("branchNotFound");
