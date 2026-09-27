@@ -41,10 +41,7 @@ import {
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
-import {
-  writeRepositoryHead,
-  type RepositoryHeadRole,
-} from "./repository.binding-write";
+import { writeRepositoryHead } from "./repository.binding-write";
 
 // ── Names ────────────────────────────────────────────────────────────────────
 
@@ -1149,9 +1146,7 @@ export function steeringRepoProvisionDeps(options: {
               fullName: repository.full_name,
               defaultBranch: default_branch,
             },
-            // S0's migration allows 'steering'. The shared type still names
-            // only main and linked until the Drizzle schema catches up (S8).
-            role: "steering" as unknown as RepositoryHeadRole,
+            role: "steering",
             provider,
             userId: options.actorUserId,
             now,

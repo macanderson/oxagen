@@ -534,11 +534,12 @@ export const repositoryBindings = ingestionSchema.table(
 // Not declared here: the trigger `repository_binding_heads_exclusive_main`
 // (20260918200000_repository_binding_heads_exclusive_across_roles.sql). It
 // serialises every writer of a head for one repository on a repository-keyed
-// advisory lock and refuses, as a 23505 carrying a constraint name, a main or
+// advisory lock and refuses, as a 23505 carrying a constraint name, a
 // steering head where another workspace holds any head for the repository,
-// and a linked head where another workspace holds its main or steering head
-// (20260926120000 widened both). The partial index below holds the
-// exclusive-against-exclusive half on its own; the trigger holds the rest.
+// and a linked head where another workspace holds it as its steering head
+// (20260927090000 narrowed both from "main or steering" to steering). The
+// partial index below holds the steering-against-steering half on its own;
+// the trigger holds the rest.
 export const repositoryBindingHeads = ingestionSchema.table(
   "repository_binding_heads",
   {
@@ -548,14 +549,14 @@ export const repositoryBindingHeads = ingestionSchema.table(
     provider: text("provider").notNull(),
     providerRepositoryId: text("provider_repository_id").notNull(),
     currentBindingId: uuid("current_binding_id").notNull(),
-    // 'steering' — the steering repo Oxagen creates and holds for this
-    // workspace (lane S1), of which a workspace has exactly one and which no
-    // other workspace can see; 'main' — the v1 name for a workspace's steering
-    // source, a code repository whose `.oxagen/rules/` steers it, which lane
-    // S8 moves to 'steering'; 'linked' — a code repository the workspace can
-    // see but is not steered by, of which it may have many and which may be
-    // shared with other workspaces.
-    role: text("role").notNull().default("main"),
+    // 'steering': the workspace's steering record source, of which it has
+    // exactly one and which no other workspace holds. Lane S1 provisions it
+    // as the steering repo Oxagen creates and holds, and 20260927090000 moved
+    // every former 'main' head here (ADR-212). 'linked': a code repository
+    // the workspace can see but is not steered by, of which it may have many
+    // and which many workspaces may link. No default: the one writer,
+    // writeRepositoryHead, always names the role.
+    role: text("role").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
@@ -568,26 +569,36 @@ export const repositoryBindingHeads = ingestionSchema.table(
       t.connectionId,
       t.providerRepositoryId,
     ),
-    // A repository is the MAIN repository of at most one workspace ANYWHERE.
-    // Global on purpose — no org_id, no workspace_id in the key — because the
-    // case that matters most is one repository claimed as main by two
-    // ORGANISATIONS: `.oxagen/rules/` is keyed by repository full name, so both
-    // would write their steering into the same files and read each other's
-    // records back as their own. `provider` is in the key because
-    // `provider_repository_id` is only unique within a provider.
-    // See 20260918040000_repository_main_binding_is_exclusive.sql.
+    // A repository is the steering repository of at most one workspace
+    // ANYWHERE. Global on purpose, with no org_id or workspace_id in the key,
+    // because the case that matters most is one repository claimed by two
+    // ORGANISATIONS: both would write their steering into the same files and
+    // read each other's records back as their own. `provider` is in the key
+    // because `provider_repository_id` is only unique within a provider. The
+    // name predates the steering role and stays, because the handlers map a
+    // 23505 on it to `main_repo_claimed`. See
+    // 20260918040000_repository_main_binding_is_exclusive.sql and
+    // 20260927090000_repository_binding_heads_main_to_steering.sql.
     mainRepositoryUniq: uniqueIndex(
       "repository_binding_heads_main_repository_uq",
     )
       .on(t.provider, t.providerRepositoryId)
-      .where(sql`${t.role} IN ('main', 'steering')`),
+      .where(sql`${t.role} = 'steering'`),
+    // A workspace has one steering repository. Every steering read takes the
+    // first steering head it finds, so a second one would make the answer
+    // depend on row order.
+    workspaceSteeringUniq: uniqueIndex(
+      "repository_binding_heads_workspace_steering_uq",
+    )
+      .on(t.workspaceId)
+      .where(sql`${t.role} = 'steering'`),
     orgIdx: index("repository_binding_heads_org_idx").on(
       t.orgId,
       t.workspaceId,
     ),
     roleCheck: check(
       "repository_binding_heads_role_check",
-      sql`${t.role} IN ('main', 'linked', 'steering')`,
+      sql`${t.role} IN ('linked', 'steering')`,
     ),
     providerCheck: check(
       "repository_binding_heads_provider_check",
@@ -605,13 +616,11 @@ export type RepositoryBindingHead = typeof repositoryBindingHeads.$inferSelect;
  * asks "which repository steers this workspace" filters on this list, never
  * on one literal.
  *
- * Both roles are live until lane S8's migration moves every `main` head to
- * `steering`. S1 already binds each new steering repo as `steering`, so a
- * reader that filtered `role = 'main'` found nothing for those workspaces.
- * When the migration lands, this list becomes `["steering"]`, and the readers
- * follow without an edit.
+ * 20260927090000 moved every `main` head to `steering` and the role check
+ * dropped `main`, so the list holds one role. The readers keep the list, so a
+ * later role joins them in one edit here.
  */
-export const STEERING_HEAD_ROLES = ["main", "steering"] as const;
+export const STEERING_HEAD_ROLES = ["steering"] as const;
 export type SteeringHeadRole = (typeof STEERING_HEAD_ROLES)[number];
 
 /** True when a head with this role is its workspace's steering source. */

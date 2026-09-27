@@ -1,6 +1,5 @@
-// The GitLab steering reader's head roles. A workspace S1 provisioned carries a
-// `steering` head and one bound through `bind_main_repository` carries `main`.
-// The reader must find both, or steering on GitLab stops for the first kind.
+// The GitLab steering reader's head role. Every head that steers carries role
+// `steering`, and a linked head never steers.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -47,12 +46,12 @@ describe("readGitLabConnection head roles", () => {
     db.rows = [];
   });
 
-  it("asks for a head with either steering role, in one read", async () => {
+  it("asks for a head with the steering role, in one read", async () => {
     await readGitLabConnection(SCOPE);
     expect(db.whereCalls).toHaveLength(1);
     const query = new PgDialect().sqlToQuery(db.whereCalls[0] as SQL);
-    expect(query.sql).toMatch(/"role" in \(\$\d+, \$\d+\)/);
-    expect(query.params).toEqual(expect.arrayContaining(["main", "steering"]));
+    expect(query.sql).toMatch(/"role" in \(\$\d+\)/);
+    expect(query.params).toContain("steering");
     expect(query.params).not.toContain("linked");
   });
 

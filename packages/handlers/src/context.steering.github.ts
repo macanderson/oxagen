@@ -487,9 +487,8 @@ export async function readGitHubConnection(scope: {
         and(
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-          // Only the steering head steers. Its role is 'main' (the binder) or
-          // 'steering' (steering repo provisioning), and 'linked' marks a
-          // repository that only receives PRs. A reader that ignores the
+          // Only the steering head steers. Its role is 'steering', and
+          // 'linked' marks a repository that only receives PRs. A reader that ignores the
           // column goes on resolving through a linked head, so the
           // cross-workspace steering collision the index forbids would
           // survive the reconciliation that was meant to end it.
@@ -525,7 +524,7 @@ export async function readGitHubConnection(scope: {
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
           eq(schema.repositoryBindingHeads.provider, "github"),
-          // Only a steering head (role 'main' or 'steering') declares the
+          // Only the steering head (role 'steering') declares the
           // steering repository. A linked head (`link_repository`) declares
           // nothing about steering, and counting it would report "bound but
           // retired" for a workspace whose linked repository is all it has.
