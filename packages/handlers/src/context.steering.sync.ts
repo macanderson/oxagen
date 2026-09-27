@@ -65,6 +65,8 @@ import {
   type SyncStore,
 } from "./context.steering.sync.store";
 import { logger } from "./logger";
+import { withToolProjection } from "./mcp-studio/publish-deps";
+import { steeringSyncPublish } from "./steering-repo/publisher";
 
 /** What one publish of the workspace's steering repository did. */
 export interface SyncPublished {
@@ -99,8 +101,8 @@ export interface SyncDeps {
   steering: Pick<SteeringStore, "updateProposal">;
   now: () => Date;
   /**
-   * Unset until the version store is wired, and then the sync publishes
-   * nothing. The publisher builds its publish() deps through
+   * The sync publishes nothing when this is unset, as in tests that do not
+   * exercise step 8. The production deps build it through
    * `withToolProjection` (./mcp-studio/publish-deps), so each version it
    * publishes also writes the workspace's tool registry.
    */
@@ -108,11 +110,15 @@ export interface SyncDeps {
 }
 
 export function syncDeps(): SyncDeps {
+  const github = createSteeringHost();
   return {
-    github: createSteeringHost(),
+    github,
     store: postgresSyncStore,
     steering: postgresSteeringStore,
     now: () => new Date(),
+    // The same publisher merge_context_pr calls, over the same host, so a
+    // merge made on the host reaches the same version sequence.
+    publish: steeringSyncPublish({ host: github, extend: withToolProjection }),
   };
 }
 

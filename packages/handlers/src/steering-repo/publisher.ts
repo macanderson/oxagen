@@ -11,7 +11,7 @@
 // - steeringBundleIdentity: the repository, organization, and workspace a
 //   bundle names.
 // - steeringPublishDeps: publish()'s deps over the workspace's host and its
-//   Postgres version store. MCP Studio (M13) adds project() to these.
+//   Postgres version store. `withToolProjection` (M13) adds project().
 // - steeringPublisher: what merge_context_pr calls.
 // - steeringSyncPublish: the repository sync's publish port
 //   (`SyncDeps.publish`), over the same publisher.
@@ -144,7 +144,8 @@ export async function steeringBundleIdentity(
  * repository key but this one, so a caller that computed another key fails
  * loudly instead of starting a second version sequence.
  *
- * MCP Studio's sync (M13) wraps these with project() for `SyncDeps.publish`.
+ * Both production callers add MCP Studio's project() to these through
+ * `withToolProjection` (M13).
  */
 export function steeringPublishDeps(
   options: SteeringPublishOptions & { repo: SteeringRepository },
@@ -198,7 +199,8 @@ export function steeringPublishDeps(
 /**
  * The publisher merge_context_pr calls for one workspace. The version store
  * is built once, so the merge's version read and publish() share it.
- * `extend` adds MCP Studio's project() to the deps once M13 lands.
+ * `extend` adds MCP Studio's project() to the deps. The production merge
+ * passes `withToolProjection`.
  */
 export function steeringPublisher(
   options: SteeringPublishOptions & {
@@ -237,8 +239,8 @@ export type SteeringSyncPublishOptions = Omit<
  * reaches the same version sequence as one made from Oxagen. A repository in
  * the legacy layout has no bundle to publish, and the port answers null.
  *
- * MCP Studio (M13) passes `extend: withToolProjection`, so a version the sync
- * publishes also writes the workspace's tool registry.
+ * The production sync deps pass `extend: withToolProjection`, so a version the
+ * sync publishes also writes the workspace's tool registry.
  */
 export function steeringSyncPublish(
   options: SteeringSyncPublishOptions,

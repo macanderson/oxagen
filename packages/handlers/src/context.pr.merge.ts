@@ -72,6 +72,7 @@ import {
   type ProposalRow,
 } from "./context.steering.store";
 import { logger } from "./logger";
+import { withToolProjection } from "./mcp-studio/publish-deps";
 import { sha256Hex } from "./registry-digest";
 import {
   assertHealthy,
@@ -707,7 +708,9 @@ async function mergedAtOnGitHub(
 export const mergeContextPrHandler = createMergeContextPrHandler(
   steeringDeps(),
   {
-    // Each workspace publishes through its own version store and host.
-    publisher: (scope, host) => steeringPublisher({ scope, host }),
+    // Each workspace publishes through its own version store and host, and
+    // each version writes the workspace's tool registry (M13).
+    publisher: (scope, host) =>
+      steeringPublisher({ scope, host, extend: withToolProjection }),
   },
 );
