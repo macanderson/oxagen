@@ -212,7 +212,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     /**
      * A declared, enabled tool whose slug names a registered capability, with
-     * the consequence tags it carries in each of the two halves.
+     * the impacts it carries in each of the two halves.
      *
      * The capability registration is not decoration: a classified declaration
      * whose slug names none is refused by `publish_tool_declaration`, and a
@@ -260,7 +260,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           riskGrade: "high",
           manifest: {},
           checksum: randomUUID().replace(/-/g, "").padEnd(64, "0"),
-          consequenceTags: tags.declared,
+          impacts: tags.declared,
           measures: {},
           // A whole `toolClassificationSchema` value, not the tag list alone:
           // a fixture carrying a key the schema does not have would document a
@@ -274,7 +274,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
                 classification: {
                   sideEffect: "write",
                   egress: "local",
-                  consequenceTags: tags.classified,
+                  impacts: tags.classified,
                   measures: {},
                   dataClasses: [],
                 },
@@ -398,7 +398,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           riskGrade: "high",
           manifest: {},
           checksum: "0".repeat(64),
-          consequenceTags: ["moves_money"],
+          impacts: ["moves_money"],
           measures: {
             amount: {
               path: "amount.value",
@@ -487,7 +487,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
                     classification: {
                       sideEffect: "write",
                       egress: "local",
-                      consequenceTags: ["moves_money"],
+                      impacts: ["moves_money"],
                       measures: {},
                       dataClasses: [],
                     },
@@ -515,7 +515,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
                 classification: {
                   sideEffect: "write",
                   egress: "local",
-                  consequenceTags: ["moves_money"],
+                  impacts: ["moves_money"],
                   measures: {},
                   dataClasses: [],
                 },
@@ -607,7 +607,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
                 classification: {
                   sideEffect: "write",
                   egress: "local",
-                  consequenceTags: ["moves_money"],
+                  impacts: ["moves_money"],
                   measures: {},
                   dataClasses: [],
                 },
@@ -623,7 +623,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           );
           expect(retained?.isLatest).toBe(false);
           expect(retained?.classification).toMatchObject({
-            consequenceTags: ["moves_money"],
+            impacts: ["moves_money"],
           });
           await withSystemDb((tx) =>
             tx
@@ -657,7 +657,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         source: "custom" as const,
         mcpServerId: null,
         schemaOrigin: "declared" as const,
-        consequenceTags: [],
+        impacts: [],
       };
       try {
         await inScope(() =>
@@ -820,7 +820,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           riskGrade: "high",
           manifest: {},
           checksum: "1".repeat(64),
-          consequenceTags: [],
+          impacts: [],
           measures: {},
         });
         await tx
@@ -911,7 +911,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it("reads the CLASSIFIED consequences at authoring time, so a classified tag cannot be authored around", async () => {
       // The bypass this closes, and it is the case that was passing and
-      // should not have been. A tool with NO declared consequence tags that
+      // should not have been. A tool with NO declared impacts that
       // `set_tool_classification` has marked `moves_money` used to present an
       // empty tag set to `assertRulesSavable`: an Admin cleared the handler's
       // own `{ org: ["Owner","Admin"] }` gate, never reached the consequence
@@ -924,11 +924,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         tx
           .update(schema.toolVersions)
           .set({
-            consequenceTags: [],
+            impacts: [],
             classification: {
               sideEffect: "write",
               egress: "third_party",
-              consequenceTags: ["moves_money"],
+              impacts: ["moves_money"],
               measures: {},
               dataClasses: [],
             },
@@ -951,7 +951,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           tx
             .update(schema.toolVersions)
             .set({
-              consequenceTags: ["moves_money"],
+              impacts: ["moves_money"],
               classification: null,
               classifiedRiskGrade: null,
               classifiedAt: null,
@@ -994,7 +994,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             classification: {
               sideEffect: "write",
               egress: "third_party",
-              consequenceTags: ["changes_access"],
+              impacts: ["changes_access"],
               measures: {},
               dataClasses: [],
             },

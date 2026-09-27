@@ -33,7 +33,7 @@ A rule body is the rule shape without `createdBy`, `createdAt` and
 off, so a rule names only what it asks for: `enabled` true, `maxMeasures` and
 `allowTargets` empty, `standingWindowMs` and `businessHours` null.
 
-`authoredConsequences` is the effective consequence tags the rule's tools
+`authoredConsequences` is the effective impacts the rule's tools
 carried at this write — the union of the declared column and the classified
 jsonb. It is the handler's to set and an author cannot supply it. The
 evaluation compares a call's tool against it, so a tool classified AFTER a

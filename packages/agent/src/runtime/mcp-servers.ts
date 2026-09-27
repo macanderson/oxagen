@@ -2,7 +2,7 @@
 // (plugin-types/mcp.ts) and get_agent_toolbelt (packages/handlers) both select
 // through this one query, so the belt lists exactly the servers whose tools
 // the model can be given.
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { schema, type Tx } from "@oxagen/database";
 
 interface McpServerFilter {
@@ -16,6 +16,7 @@ interface McpServerFilter {
  * An enabled, not soft-deleted server whose `plugin.installed_plugins` row is
  * enabled and not soft-deleted, with health `healthy` or `unknown`. Standalone
  * HTTP servers need no install row. A linked install must remain active.
+ * A server a steering version published (origin `steering`) is left out.
  */
 export function selectMaterializableMcpServers(
   tx: Tx,
@@ -50,6 +51,11 @@ export function selectMaterializableMcpServers(
         // Soft-deleted servers stop registering tools but keep their
         // descriptor snapshots for replay.
         isNull(schema.mcpServers.deletedAt),
+        // A steering row is for wrapped agents, which reach it through the
+        // gateway. The in-app agent keeps the servers connected the old way
+        // (M13, #4478). Filtering here keeps the contributor and
+        // get_agent_toolbelt in step, and no turn connects to a steering row.
+        ne(schema.mcpServers.origin, "steering"),
         // "unknown" is the state the toggle/secret path leaves (only the OAuth
         // callback sets "healthy"); the live connect in the contributor is the
         // health gate for it. "degraded" and "unreachable" are excluded.

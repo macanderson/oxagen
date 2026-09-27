@@ -55,7 +55,7 @@ export interface KillSwitchRow {
   readonly id: string;
   readonly publicId: string;
   readonly targetKind: KillSwitchTargetKind;
-  /** The public id the switch was flipped with, or the consequence tag. */
+  /** The public id the switch was flipped with, or the impact. */
   readonly targetId: string;
   readonly scopeKind: "org" | "workspace";
   readonly workspaceId: string | null;
@@ -385,8 +385,8 @@ interface KillSwitchCallFacts {
   readonly serverId?: string | null;
   /** The stored credential (`mcp.credentials.id`) the server was reached with. */
   readonly connectionId?: string | null;
-  /** The tool version's consequence tags, from its classification. */
-  readonly consequenceTags?: readonly string[];
+  /** The tool version's impacts, from its classification. */
+  readonly impacts?: readonly string[];
   readonly agentId?: string | null;
   readonly operatorUserId?: string | null;
   readonly principalIds?: readonly string[];
@@ -410,7 +410,7 @@ export function callScopeDigests(facts: KillSwitchCallFacts): string[] {
       resourceScopeDigestOf({ kind: "connection", id: facts.connectionId }),
     );
   }
-  for (const tag of facts.consequenceTags ?? []) {
+  for (const tag of facts.impacts ?? []) {
     digests.push(resourceScopeDigestOf({ kind: "class", id: tag }));
   }
   return digests;

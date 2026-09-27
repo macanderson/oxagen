@@ -302,12 +302,12 @@ describe("the registered export handler", () => {
         tool: "publish_release",
         reason: "classification_changed",
         before: {
-          consequenceTags: ["read"],
+          impacts: ["read"],
           measures: null,
           classification: "read",
         },
         after: {
-          consequenceTags: ["write"],
+          impacts: ["write"],
           measures: null,
           classification: "write",
         },

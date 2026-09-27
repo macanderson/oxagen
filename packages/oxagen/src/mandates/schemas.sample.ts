@@ -4,7 +4,7 @@
  */
 export const SPEC_MANDATE_BODY = {
   agentId: "agt_0123456789abcdefghjkmn",
-  consequenceTags: ["moves_money"],
+  impacts: ["moves_money"],
   limits: {
     amount: {
       perCall: "250000000",

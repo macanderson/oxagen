@@ -1396,7 +1396,7 @@
       "tool": "grant_mandate",
       "grade": "NEW",
       "group": "Toolbelt",
-      "does": "bounded authority for a consequence tag to an agent",
+      "does": "bounded authority for an impact to an agent",
       "absorbs": [],
       "unresolved": [],
       "screens": ["Tools"],

@@ -45,9 +45,10 @@ import { createGitHubClient, getInstallationToken } from "@oxagen/github";
 import type { GitHubRepoInfo } from "@oxagen/github";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { assertDataPlaneUsable, resolveDataPlane } from "@oxagen/tenancy";
-import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { logger } from "./logger";
 import {
+  workspaceRepositoriesLock,
   writeRepositoryHead,
   type BindableRepository,
   type RepositoryProvider,
@@ -220,7 +221,7 @@ export function assertNotHeldElsewhere(
   fullName: string,
   heads: ReadonlyArray<{ role: string }>,
 ): void {
-  if (heads.some((h) => h.role === "main"))
+  if (heads.some((h) => schema.isSteeringHeadRole(h.role)))
     throw repositoryClaimedElsewhere(fullName);
   if (heads.length > 0) throw repositoryLinkedElsewhere(fullName);
 }
@@ -314,16 +315,10 @@ export async function assertPlaneStillShared(scope: {
   }
 }
 
-/**
- * The transaction-scoped advisory lock every writer of a workspace's binding
- * heads takes — `bind_main_repository`, `link_repository`,
- * `unlink_repository` — so each reads the heads the previous one committed.
- * The key keeps its original spelling so a deploy that mixes old and new
- * processes still serialises on one lock.
- */
-export function workspaceRepositoriesLock(workspaceId: string) {
-  return sql`SELECT pg_advisory_xact_lock(hashtextextended(${`bind_main_repository:${workspaceId}`}::text, 0))`;
-}
+// The lock lives in `repository.binding-write.ts`, beside the head writer, so
+// the steering provisioner can take it without importing this module. It is
+// re-exported here for the writers that import it from this path.
+export { workspaceRepositoriesLock };
 
 export interface MainRepositoryDeps {
   /** The repository as the installation sees it, or null when it cannot. */
@@ -587,7 +582,9 @@ export function createMainRepositoryBindHandler(
           providerRepositoryId: string;
         }) => h.provider === provider && h.providerRepositoryId === repo.id;
         const same = heads.find(isThis);
-        if (heads.some((h) => h.role === "main" && !isThis(h))) {
+        if (
+          heads.some((h) => schema.isSteeringHeadRole(h.role) && !isThis(h))
+        ) {
           throw new HandlerError({
             code: "conflict",
             reason: "main_repo_bound",
@@ -653,7 +650,7 @@ export function createMainRepositoryBindHandler(
           // decision as a first bind. The UPDATE fires the store's exclusivity
           // trigger (it is `BEFORE INSERT OR UPDATE OF role`), so a repository
           // another workspace holds still loses here, with the same sentence.
-          const promote = same.role !== "main";
+          const promote = !schema.isSteeringHeadRole(same.role);
           if (!drifted && !promote) {
             // Nothing has moved, so nothing is written. The first bind's identity
             // is the answer.
@@ -736,8 +733,10 @@ export function createMainRepositoryBindHandler(
                 connectionId: connection.id,
                 currentBindingId: successor.id,
                 // Carried with the rest: a linked head being promoted in the
-                // same statement that moves its binding forward.
-                role: "main",
+                // same statement that moves its binding forward. A head that
+                // already steers keeps its role, so a re-bind of a steering
+                // head never turns it back into a main one.
+                role: promote ? "main" : same.role,
                 updatedAt: now,
               })
               .where(eq(schema.repositoryBindingHeads.id, same.id));

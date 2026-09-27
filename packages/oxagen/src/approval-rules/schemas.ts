@@ -24,7 +24,7 @@
 import { z } from "zod";
 // The same tag vocabulary the tools carry, so the stamp and the fact it is
 // compared against cannot drift apart.
-import { consequenceTagSchema } from "../contracts/tool.classification";
+import { impactSchema } from "../contracts/tool.classification";
 
 /**
  * The ceiling on a rule's authored-consequence stamp, and the widest
@@ -34,7 +34,7 @@ import { consequenceTagSchema } from "../contracts/tool.classification";
  * has no maximum to size the field for. A tool version carries at most 16
  * declared tags (`publish_tool_declaration`) and 32 classified ones
  * (`toolClassificationSchema`) — 48 — and the vocabulary is open, since
- * `consequenceTagSchema` admits any snake_case string rather than the starter
+ * `impactSchema` admits any snake_case string rather than the starter
  * set. So two matched tools can already contribute 96 distinct tags, and a
  * rule whose pattern is `*` follows however many tools the workspace holds.
  *
@@ -191,7 +191,7 @@ export const approvalRuleSchema = approvalRuleBodySchema.extend({
   /** When it was last written, ISO-8601. */
   createdAt: z.string().datetime({ offset: true }),
   /**
-   * The effective consequence tags the rule's tools carried when it was last
+   * The effective impacts the rule's tools carried when it was last
    * written — the union of the declared column and the classified jsonb over
    * every tool the rule's patterns matched at that moment.
    *
@@ -228,7 +228,7 @@ export const approvalRuleSchema = approvalRuleBodySchema.extend({
    * always parses and the strictness lands on the auto-approval axis alone.
    */
   authoredConsequences: z
-    .array(consequenceTagSchema)
+    .array(impactSchema)
     .max(MAX_AUTHORED_CONSEQUENCES)
     .optional(),
 });

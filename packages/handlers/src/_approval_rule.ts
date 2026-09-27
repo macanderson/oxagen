@@ -18,7 +18,7 @@ import {
   HandlerError,
   type CheckedContext,
 } from "@oxagen/oxagen";
-import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classification";
+import { unionImpacts } from "@oxagen/oxagen/contracts/tool.classification";
 import {
   measureDeclarationsReadSchema,
   type MeasureDeclarations,
@@ -211,14 +211,14 @@ export function stamp(
 interface DeclaredTool {
   slug: string;
   version: number;
-  consequenceTags: string[];
+  impacts: string[];
   measures: MeasureDeclarations;
 }
 
 /**
  * Every enabled declared tool of the workspace, with its active version.
  *
- * `consequenceTags` is the EFFECTIVE union of the declared column and the
+ * `impacts` is the EFFECTIVE union of the declared column and the
  * classified jsonb, through the one function every reader of this fact uses.
  * Reading only the column here was a real bypass, and a quiet one: a tool with
  * no declared consequences that `set_tool_classification` had marked
@@ -236,7 +236,7 @@ async function declaredTools(
     .select({
       slug: schema.tools.slug,
       version: schema.toolVersions.versionNumber,
-      consequenceTags: schema.toolVersions.consequenceTags,
+      impacts: schema.toolVersions.impacts,
       classification: schema.toolVersions.classification,
       measures: schema.toolVersions.measures,
     })
@@ -259,7 +259,7 @@ async function declaredTools(
     return {
       slug: r.slug,
       version: r.version,
-      consequenceTags: unionConsequenceTags(r),
+      impacts: unionImpacts(r),
       measures: parsed.success ? parsed.data : {},
     };
   });
@@ -318,7 +318,7 @@ function assertDeclaredAs(
 }
 
 /**
- * The effective consequence tags each rule was checked against, by rule id —
+ * The effective impacts each rule was checked against, by rule id —
  * what `stamp` records so the evaluation can tell that a tool's consequences
  * grew under a rule that was already saved (`approvalRuleSchema`).
  */
@@ -389,7 +389,7 @@ export async function assertRulesSavable(
         for (const measure of Object.keys(rule.allowTargets)) {
           assertDeclaredAs(tool, measure, "target");
         }
-        for (const tag of tool.consequenceTags) {
+        for (const tag of tool.impacts) {
           tags.add(tag);
           perRule.add(tag);
         }
@@ -398,7 +398,7 @@ export async function assertRulesSavable(
     // The stamp is a STORED field with a bound, and the bound is reachable.
     // A version carries at most 16 declared tags (`publish_tool_declaration`)
     // and 32 classified ones (`toolClassificationSchema`), and the vocabulary
-    // is open — `consequenceTagSchema` admits any snake_case string — so two
+    // is open — `impactSchema` admits any snake_case string — so two
     // matched tools can already contribute 96 distinct tags and a `*` pattern
     // has no ceiling at all. There is no maximum to size the field for.
     //
