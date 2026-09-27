@@ -10,6 +10,11 @@ permissions:
   issues: write
 jobs:
   guard:
+    # Only an open or a P-label can break the invariant. The script ignores
+    # every other label, and a job this `if` skips takes no runner.
+    if: >-
+      github.event.action == 'opened' ||
+      contains(fromJSON('["P0","P1","P2","P3","P4"]'), github.event.label.name)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/github-script@v7
