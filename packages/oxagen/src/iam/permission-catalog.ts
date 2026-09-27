@@ -100,8 +100,9 @@ export const PERMISSION_CATALOG: readonly Permission[] = [
     // say, so a ticked `runtime.unenroll` would be a grant the write ignores
     // (#3857 moves the handler onto role grants and adds the two writes).
     // `list_runtimes` names the runtimes those hosts bind to (ADR-198).
-    // `create_runtime` is not a permission, for the unenroll reason above: its
-    // handler admits the contract's roles whatever the grants say.
+    // `create_runtime` and `update_runtime` (ADR-204) are not permissions,
+    // for the unenroll reason above: their handlers admit the contract's roles
+    // whatever the grants say.
     id: "runtime.read",
     group: "Agents",
     description:

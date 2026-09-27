@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  agentVersionBudget,
-  agentVersionContainment,
-} from "./agent-version-config";
+import { agentVersionBudget } from "./agent-version-config";
 
 describe("the budget table of an agent version's config", () => {
   it("reads both ceilings, and none when the config declares no budget", () => {
@@ -45,25 +42,16 @@ describe("the budget table of an agent version's config", () => {
   });
 });
 
-describe("the containment table (ADR-152)", () => {
-  it("reads required true as the requirement, and false or absent as none", () => {
+describe("the containment table the migration copied (ADR-204)", () => {
+  it("is ignored: containment is the runtime's, and a malformed table refuses nothing", () => {
     expect(
-      agentVersionContainment({ containment: { required: true } }),
-    ).toEqual({ required: true });
+      agentVersionBudget({
+        containment: "required",
+        budget: { per_run_micros: 1500000 },
+      }),
+    ).toEqual({ perRunMicros: 1500000 });
     expect(
-      agentVersionContainment({ containment: { required: false } }),
+      agentVersionBudget({ containment: { required: true } }),
     ).toBeUndefined();
-    expect(agentVersionContainment({})).toBeUndefined();
-  });
-  it.each([
-    { required: "true" },
-    { required: 1 },
-    { required: true, image: "x" },
-    "required",
-    {},
-  ])("refuses %j", (containment) => {
-    expect(() => agentVersionContainment({ containment })).toThrow(
-      expect.objectContaining({ reason: "invalid_agent_config" }),
-    );
   });
 });

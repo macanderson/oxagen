@@ -2,23 +2,23 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Oxagen, a founder's story</title>
-<meta name="description" content="One founder built Oxagen in seven months by directing coding agents. This page counts that work from the record: 21,861 GitHub contributions, 6,341 commits, and 8,133 prompts.">
+<title>Letting agents write the code</title>
+<meta name="description" content="Mac Anderson wrote code by hand for 20 years. In 2026 he decided to let coding agents write all of the code he shipped. This page follows what happened next, taken from his GitHub history, his git history, and his prompts.">
 <link rel="canonical" href="https://oxagen.sh/story">
 <meta name="theme-color" content="#09090B">
 <meta name="color-scheme" content="dark light">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://oxagen.sh/story">
 <meta property="og:site_name" content="Oxagen">
-<meta property="og:title" content="Oxagen, a founder's story">
-<meta property="og:description" content="One founder directed coding agents for seven months. The record shows 6,341 commits and 4,427 merged pull requests. This page compares them with published baselines.">
+<meta property="og:title" content="Letting agents write the code">
+<meta property="og:description" content="Mac Anderson wrote code by hand for 20 years. In 2026 he decided to let coding agents write all of the code he shipped. This page follows what happened next.">
 <meta property="og:image" content="https://oxagen.sh/research-assets/mac-bw-1080.jpg">
 <meta property="og:image:width" content="1080">
 <meta property="og:image:height" content="1080">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@oxagenai">
-<meta name="twitter:title" content="Oxagen, a founder's story">
-<meta name="twitter:description" content="One founder directed coding agents for seven months. The record shows 6,341 commits and 4,427 merged pull requests. This page compares them with published baselines.">
+<meta name="twitter:title" content="Letting agents write the code">
+<meta name="twitter:description" content="Mac Anderson wrote code by hand for 20 years. In 2026 he decided to let coding agents write all of the code he shipped. This page follows what happened next.">
 <meta name="twitter:image" content="https://oxagen.sh/research-assets/mac-bw-1080.jpg">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
@@ -27,7 +27,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preload" href="/fonts/space-grotesk-latin-600.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/fonts/geist-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
-<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "Oxagen, a founder's story", "description": "How one founder built Oxagen in seven months, taken from the record.", "datePublished": "2026-09-21", "author": {"@type": "Person", "name": "Mac Anderson", "url": "https://github.com/macanderson"}, "publisher": {"@type": "Organization", "name": "Oxagen, Inc.", "url": "https://oxagen.sh"}, "mainEntityOfPage": "https://oxagen.sh/story", "image": "https://oxagen.sh/research-assets/mac-bw-1080.jpg"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "Letting agents write the code", "description": "Mac Anderson wrote code by hand for 20 years. In 2026 he decided to let coding agents write all of the code he shipped. This page follows what happened next, taken from the record.", "datePublished": "2026-09-21", "author": {"@type": "Person", "name": "Mac Anderson", "url": "https://github.com/macanderson"}, "publisher": {"@type": "Organization", "name": "Oxagen, Inc.", "url": "https://oxagen.sh"}, "mainEntityOfPage": "https://oxagen.sh/story", "image": "https://oxagen.sh/research-assets/mac-bw-1080.jpg"}</script>
 <link rel="stylesheet" href="/assets/house-tokens.css">
 <style>
 /* The site already serves these three families. Linking them instead of
@@ -246,24 +246,7 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
 #tip { position: fixed; pointer-events: none; z-index: 10; background: var(--panel); color: var(--body); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; line-height: 1.45; max-width: 260px; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
 #tip b { color: var(--fg); font-family: var(--mono); font-weight: 500; }
 
-/* ---- throughput table ---- */
-.bars { display: grid; gap: 14px; margin: 4px 0 0; }
-.bar-row { display: grid; grid-template-columns: minmax(170px, 1.1fr) minmax(0, 3fr) auto; gap: 14px; align-items: center; }
-.bar-row .who { font-size: 14px; color: var(--body); line-height: 1.35; }
-.bar-row .who small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
-.bar-track { display: block; height: 18px; background: var(--hl); border-radius: 4px; overflow: hidden; }
-.bar-fill { display: block; height: 100%; min-width: 3px; border-radius: 4px; background: var(--rule); }
-.bar-row.mine .bar-fill { background: var(--gold); }
-.bar-row.mine .who { color: var(--fg); font-weight: 500; }
-.bar-row .num { font-family: var(--mono); font-size: 14px; color: var(--body); white-space: nowrap; }
-.bar-row.mine .num { color: var(--accent-text); }
-.compare { display: grid; gap: 34px; }
-.compare h3 { font-family: var(--font-display); font-size: 19px; font-weight: 600; margin: 0 0 4px; color: var(--fg); }
-.compare h3 + p { margin: 0 0 14px; color: var(--muted); font-size: 14.5px; max-width: 78ch; }
-.compare p.muted { margin: 12px 0 0; }
-.srcs { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; color: var(--muted); max-width: 84ch; }
-.srcs a { color: var(--muted); }
-.srcs a:hover { color: var(--accent-text); }
+/* ---- counts ---- */
 .caveat { border-left: 2px solid var(--rule); padding: 2px 0 2px 14px; color: var(--muted); font-size: 14px; max-width: 80ch; }
 
 /* ---- bio ---- */
@@ -277,8 +260,6 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
 .bio .links svg { width: 14px; height: 14px; fill: currentColor; opacity: .75; }
 @media (max-width: 720px) {
   .bio { grid-template-columns: 1fr; gap: 18px; }
-  .bar-row { grid-template-columns: 1fr; gap: 5px; }
-  .bar-row .num { font-size: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -296,109 +277,24 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
 <section class="hero">
   <div class="wrap stack">
     <span class="eyebrow first">A founder's story</span>
-    <h1>One person built Oxagen in seven months, while learning to manage a fleet of coding agents.</h1>
-    <p class="lead">Before he built Oxagen, Mac Anderson built an agent, a benchmark, a protocol, a verifier, a fleet, and a memory system. He wrote little of it by hand. He directed coding agents, six at a time. Over the summer he learned how much work it takes to manage that many agents. He built Oxagen to do that work, and his agents sent their work through Oxagen while they built it. This page tells the seven months from the record: his GitHub history, his git history, and the <span class="hl">8,133</span> prompts he typed to Claude Code.</p>
-    <div class="stats">
-      <div class="stat"><span class="label">GitHub contributions</span><span class="value" id="s-contrib">21,861</span><span class="sub">26 Feb to 20 Sep 2026. Commits, pull requests, issues, and reviews, as GitHub counts them.</span></div>
-      <div class="stat"><span class="label">Commits</span><span class="value">6,341</span><span class="sub">On the default branch of 13 repositories, 28 May to 20 Sep. 54.7 a day.</span></div>
-      <div class="stat"><span class="label">Pull requests merged</span><span class="value">4,427</span><span class="sub">Same dates. 38.2 a day on average. The busiest week, starting 20 Aug, averaged 72.6 a day.</span></div>
-      <div class="stat"><span class="label">Prompts to Claude Code</span><span class="value">8,133</span><span class="sub">29 Jun to 20 Sep 2026, across 1,769 conversations.</span></div>
-    </div>
-    <p class="note">The GitHub totals start on 26 February 2026, the first day of real activity on the account this year. Before that, GitHub shows 38 contributions in all of 2025. The commit and pull request totals start on 28 May 2026, the first commit in any local clone. The prompt count is the smallest total on this page and the least complete. It covers 81 days on one laptop. <a href="#caveat">What the prompt log covers.</a></p>
+    <h1>He wrote code by hand for 20 years. Then he let agents write it.</h1>
+    <p class="lead">Mac Anderson spent 20 years writing software by hand. In 2026 he made a decision: agents would write all of the code he shipped. His job would be to direct them, read their work, and decide what merged. Some of it went well. A lot of it went wrong. The hardest part turned out to be managing the agents, and he built Oxagen to do that job. This page follows those seven months from the record he left: his GitHub history, his git history, and the <span class="hl">8,133</span> prompts he typed to Claude Code.</p>
+    <p class="note">The chapters come first, then the charts. <a href="#counts">The counts</a> are at the end, with how each one was counted.</p>
   </div>
 </section>
 
-<section id="throughput">
+<section id="chapters">
   <div class="wrap stack">
-    <span class="eyebrow">How this compares</span>
-    <h2>Compared with published numbers</h2>
-    <p>Four months is a short time. So every figure below is per week, and none is scaled up to a year. The dates are 28 May to 20 September 2026. That is 116 calendar days, 16.6 weeks, or about 83 working days. He made commits on <span class="hl">114</span> of the 116 days. No credible source publishes an average for these measures. They publish medians and percentiles instead. A few people produce far more than everyone else, so an average would not describe a typical person.</p>
-
-    <div class="compare">
-      <div>
-        <h3>Pull requests merged, per week</h3>
-        <p>Both sides count pull requests merged into a default branch, per person, per calendar week. So this is the only comparison below that counts the same thing on both sides.</p>
-        <div class="bars">
-          <div class="bar-row mine">
-            <span class="who">Him<small>13 repositories, 4,427 merged</small></span>
-            <span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>
-            <span class="num">267</span>
-          </div>
-          <div class="bar-row">
-            <span class="who">Top 10 percent<small>Technology companies under 100 engineers</small></span>
-            <span class="bar-track"><span class="bar-fill" style="width:2.1%"></span></span>
-            <span class="num">5.5</span>
-          </div>
-          <div class="bar-row">
-            <span class="who">Median<small>Same population</small></span>
-            <span class="bar-track"><span class="bar-fill" style="width:1.4%"></span></span>
-            <span class="num">3.8</span>
-          </div>
-        </div>
-        <p class="muted">He merged about 70 times as many as the median engineer in that group, and about 48 times as many as the top 10 percent. His busiest week, starting 20 August, had 508.</p>
-      </div>
-
-      <div>
-        <h3>Changes added to the default branch, per week</h3>
-        <p>Google counts changes, not commits. A change is one reviewed piece of work added to Google&rsquo;s shared codebase. One change can combine several commits. So Google&rsquo;s number is lower than its commit count would be, and the gap below looks larger than it is. Google does not publish how many commits a change holds, so the true gap cannot be worked out.</p>
-        <div class="bars">
-          <div class="bar-row mine">
-            <span class="who">Him, commits<small>6,341 on default branches</small></span>
-            <span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>
-            <span class="num">383</span>
-          </div>
-          <div class="bar-row">
-            <span class="who">Google, changes<small>80 percent of developers make fewer than this</small></span>
-            <span class="bar-track"><span class="bar-fill" style="width:1.8%"></span></span>
-            <span class="num">7</span>
-          </div>
-          <div class="bar-row">
-            <span class="who">Google, changes<small>Median developer</small></span>
-            <span class="bar-track"><span class="bar-fill" style="width:0.8%"></span></span>
-            <span class="num">3</span>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <h3>Lines of code, added and removed</h3>
-        <p>This counts source files on default branches only. It leaves out lock files, build output, snapshots, fixtures, fonts, and generated code. Most of the removed lines are code he had added a week earlier and then took out. So removed lines count as work too.</p>
-        <div class="bars">
-          <div class="bar-row mine">
-            <span class="who">Added<small>Source files, 116 days</small></span>
-            <span class="bar-track"><span class="bar-fill" style="width:100%"></span></span>
-            <span class="num">3,906,359</span>
-          </div>
-          <div class="bar-row">
-            <span class="who">Removed<small>Same basis</small></span>
-            <span class="bar-track"><span class="bar-fill" style="width:39.2%"></span></span>
-            <span class="num">1,529,699</span>
-          </div>
-        </div>
-        <p class="muted">That is 235,700 source lines added a week and 92,300 removed. The net gain is 2,376,660 lines. If you count every file he touched, including generated output, the totals are 19,036,241 added and 16,999,466 removed. Across 19,223 distinct files, one change to one file added 2,000 lines or more only 27 times. So the totals come from many steady changes, not from a few huge ones.</p>
-        <p class="muted"><strong>The baseline counts lines changed, not lines added.</strong> No credible source publishes lines added per developer apart from lines removed. The same Google study does publish change size. The median change modifies 24 lines. A median developer makes 3 changes a week, so that developer changes about 72 lines a week. That figure multiplies two medians, so read it as a rough scale, not as a statistic. A tenth of Google's changes modify a single line, but a few changes are huge. So the real average is higher than 72. He changed about 328,000 source lines a week. That is thousands of times more. The two figures count different things, so this page does not quote an exact multiple.</p>
-        <p class="muted">Google removed changes made by automated tools before it counted anything. So Google's baseline counts what people wrote by hand. His number counts what his agents wrote.</p>
-
-      </div>
-
-      <p class="caveat">He did not type this code. Agents wrote it. He directed them, reviewed their work, and merged it. So this compares one person managing agents with one person writing by hand. That comparison is the subject of this page. Two more facts count against him. These repositories are four months old. They have no release schedule, no on-call rotation, and no other engineers to work with. So a commit here takes less work than a commit at Google. Also, when he opened and merged a pull request himself, no second person reviewed it.</p>
-
-      <div>
-        <h3>Sources</h3>
-        <ul class="srcs">
-          <li>Caitlin Sadowski, Emma Söderberg, Luke Church, Michal Sipko, and Alberto Bacchelli, &ldquo;Modern Code Review: A Case Study at Google,&rdquo; ICSE Software Engineering in Practice, 2018. About 9 million reviewed changes by more than 25,000 authors and reviewers, January 2014 to July 2016, with changes made by automated processes filtered out. The median developer authors about 3 changes a week, 80 percent author fewer than 7, and the median change modifies 24 lines. <a href="https://sback.it/publications/icse2018seip.pdf" rel="nofollow">sback.it/publications/icse2018seip.pdf</a></li>
-          <li>DX, &ldquo;Engineering Benchmarks,&rdquo; the diffs-per-engineer measure, defined as pull requests merged each week per engineer. Technology companies under 100 engineers: 3.8 at the median, 5.53 at the 90th percentile. DX does not disclose the sample size. <a href="https://getdx.com/research/benchmarks/" rel="nofollow">getdx.com/research/benchmarks</a></li>
-          <li>His numbers come from the git history of 13 local clones. They count the default branch only, and they count each commit once, by its hash. A rebased branch repeats its commits under new hashes. So counting every branch would have raised the total by nearly half.</li>
-        </ul>
-      </div>
-    </div>
+    <span class="eyebrow">Nine chapters</span>
+    <h2>How the seven months went</h2>
+    <p>Each chapter comes from reading the prompts in order. The quotes are his, trimmed, with the swearing taken out.</p>
+    <div class="chapters" id="chapterList"></div>
   </div>
 </section>
-
 
 <section id="hive">
   <div class="wrap stack">
-    <span class="eyebrow">One day, one cell</span>
+    <span class="eyebrow">Daily activity</span>
     <h2>The hive</h2>
     <p>Each hexagon is one day. Each column is one week, with Monday at the top. The colour shows which area of work led that day&rsquo;s prompts. The brightness shows how many GitHub contributions he made that day. A pale cell is a quiet day, and a bright cell is a busy one.</p>
     <p>The prompt log covers 81 days. Shipping work led on <span class="hl">50</span> of them: CI checks, pipelines, deploys, and the machines that run them. Building the agent led on <span class="hl">19</span> days, proving it works on <span class="hl">7</span>, and selling it on <span class="hl">5</span>. So when he ran many agents at once, most of his summer went into the systems around the agents, not into the agent itself.</p>
@@ -433,19 +329,10 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
   </div>
 </section>
 
-<section id="chapters">
-  <div class="wrap stack">
-    <span class="eyebrow">Nine chapters</span>
-    <h2>How the seven months went</h2>
-    <p>Each chapter comes from reading the prompts in order. The quotes are his, trimmed, with the swearing taken out.</p>
-    <div class="chapters" id="chapterList"></div>
-  </div>
-</section>
-
 <section id="weather">
   <div class="wrap stack">
-    <span class="eyebrow">When he was happy, when he swore</span>
-    <h2>Happy words in July, swear words in August</h2>
+    <span class="eyebrow">Mood</span>
+    <h2>Good days and bad days</h2>
     <p>Each bar counts words in his prompts on one day. Happy words go above the line, and swear words go below it. Both count words, so they share one scale. The happy words fall across the July launch weeks. Almost all of the swearing falls in August. That month he was trying to prove that Stella&rsquo;s work was done when Stella said it was.</p>
     <div class="chart-box"><svg id="moodSvg" role="img" aria-label="Happy words and swear words per day, 29 June to 20 September 2026"></svg></div>
     <div class="two">
@@ -472,7 +359,7 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
         <p class="muted" style="font-size:14px">Each time, an agent said something was done, and it was not. Stella's witness tests, and later Oxagen's record, were built to answer that problem.</p>
       </div>
     </div>
-    <h3 style="margin-top:40px">By topic, per 100 prompts</h3>
+    <h3 style="margin-top:40px">Topics per 100 prompts</h3>
     <p class="muted" style="font-size:15px">Each prompt gets one topic, picked by keyword. Prompts about design have the most happy words. Prompts about verification and model providers have the most swear words. The two columns use separate scales.</p>
     <div class="topics" id="topicGrid"></div>
   </div>
@@ -504,9 +391,9 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
 
 <section id="built">
   <div class="wrap stack">
-    <span class="eyebrow">What he built</span>
-    <h2>Nearly every part of an agent system</h2>
-    <p>Each tile is something he designed and shipped in these seven months. Select one to show the day it started in the hive.</p>
+    <span class="eyebrow">The work</span>
+    <h2>What he built</h2>
+    <p>Each tile is one part his agents built from his plans in these seven months. Select a tile to see the day it started in the hive.</p>
     <div class="workbench" id="workbench"></div>
   </div>
 </section>
@@ -515,8 +402,8 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
   <div class="wrap stack">
     <span class="eyebrow">What he had to learn</span>
     <h2>Learning to manage a fleet</h2>
-    <p>With one agent, you give it a task, watch it work, and read the diff. With six agents at once, the job changes, and this page is about that job. It was the hardest thing he learned in seven months, and none of it was about prompting.</p>
-    <p>He started with one agent on one branch, and he watched it work. That setup works, but it cannot grow, because he can only watch one thing at a time. So he added more agents. In the setup he ended with, <span class="hl">6</span> agents work in parallel, each in its own git worktree. Background agents are on, so work continues while he reads something else.</p>
+    <p>With one agent, you give it a task, watch it work, and read the diff. With many agents at once, the job changes, and this page is about that job. It was the hardest thing he learned in seven months, and none of it was about prompting.</p>
+    <p>He started with one agent on one branch, and he watched it work. That setup works, but it cannot grow, because he can only watch one thing at a time. So he added more agents. In the setup he ended with, six or more agents work in parallel, each in its own git worktree. Background agents are on, so work continues while he reads something else.</p>
     <p>More agents caused problems he had not expected. Two agents edited the same branch. A branch merged into main with no conflicts, but it still did not work with code that had merged beside it. He had to repair a broken main three separate times before he understood the cause. A merge with no conflicts says nothing about whether the code works. Agents also finished, reported success, and left their work uncommitted. These problems happened between agents, not inside any one agent.</p>
     <div class="two">
       <div class="card">
@@ -524,7 +411,7 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
         <ul>
           <li>A separate worktree for each agent, so two agents cannot edit the same files.</li>
           <li>A written definition of done. Without one, an agent decides for itself what finished means.</li>
-          <li>Checks that run without him. There are <span class="hl">21</span> of them, so he does not have to review six agents&rsquo; work by hand.</li>
+          <li>Checks that run without him. There are <span class="hl">21</span> of them, so he does not have to review every agent&rsquo;s work by hand.</li>
           <li>A trial merge before the real one, because a merge with no conflicts can still break the code.</li>
         </ul>
       </div>
@@ -534,7 +421,7 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
           <li>What each agent did, in order, and what it read.</li>
           <li>What that cost, and which piece of work it paid for.</li>
           <li>Who allowed each action, and under which rule.</li>
-          <li>Which of the six agents is stuck right now, and on what.</li>
+          <li>Which agent is stuck right now, and on what.</li>
         </ul>
       </div>
     </div>
@@ -553,7 +440,7 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
       <div class="stat"><span class="label">Checks in CI</span><span class="value">21</span><span class="sub">Separate checks, including one that reads this page's text and fails on an em dash.</span></div>
       <div class="stat"><span class="label">Decision records</span><span class="value">136</span><span class="sub">Architecture decision records, plus 5 schema change records. Each one says what was decided and why.</span></div>
     </div>
-    <p>A human reviewer notices when a file imports across a boundary it should not. Six agents working in parallel do not notice. Each may break the same rule in a different place on the same afternoon. A test that fails the build checks every change, however many agents make them. So with many agents, the architecture tests matter most.</p>
+    <p>A human reviewer notices when a file imports across a boundary it should not. Many agents working in parallel do not notice. Each may break the same rule in a different place on the same afternoon. A test that fails the build checks every change, however many agents make them. So with many agents, the architecture tests matter most.</p>
     <h3>The audit</h3>
     <p>In September he had the operator console checked against its own specification. The reviewer was told to look hard for problems and to assume the work was incomplete. The review returned <span class="hl">14</span> findings. Two of them must be fixed before a release. Its summary said:</p>
     <p class="pull">The app has substantial working foundations, but it does not yet close the core operator workflows.</p>
@@ -568,7 +455,7 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
     <h2>Oxagen was built using Oxagen</h2>
     <p>This claim can sound like marketing, so here is how it works.</p>
     <p>The agent's base URL points at <span class="hl">127.0.0.1:51781</span>. That address is Oxagen's own gateway, running on his laptop. So every model call made from this repository goes through the gateway, and there is no other path. Oxagen sees each call, measures its cost, and records it. So Oxagen governed and priced the runs that built Oxagen.</p>
-    <p>Tool calls work the same way. A hook checks each tool call and can refuse it before it runs. Without a rule, each of six agents would start its own full test build. So this repository has a hook that denies an agent a full test build. This is Oxagen's main idea: the agent asks, and a rule answers. Here it applies to the agents writing Oxagen.</p>
+    <p>Tool calls work the same way. A hook checks each tool call and can refuse it before it runs. Without a rule, every agent would start its own full test build. So this repository has a hook that denies an agent a full test build. This is Oxagen's main idea: the agent asks, and a rule answers. Here it applies to the agents writing Oxagen.</p>
     <p>The prompts that wrote this page went through the same gateway. The prompt log this page uses is the record the gateway kept.</p>
     <p class="note">Scope: this is the local gateway and its record, which is what a single operator runs. It uses the same code as the hosted control plane. It is not a separate demo build. But one laptop is not a deployment, and this page does not claim it is.</p>
   </div>
@@ -587,7 +474,7 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
   <div class="wrap close">
     <span class="eyebrow">What it became</span>
     <h2>Why Oxagen</h2>
-    <p class="quote">He built the agent, the benchmark, the protocol, the verifier, and the fleet. Then he found that the hardest part was knowing what each agent did, what it cost, and who allowed it.</p>
+    <p class="quote">The agents could write the code. The hard part was knowing what each agent did, what it cost, and who allowed it.</p>
     <p>Oxagen is workforce management for autonomous agents. You give each agent its own identity. You set its authority, budget, tools, and skills in one mandate. For actions routed through Oxagen, the agent asks, a rule your team wrote answers, and Oxagen records the answer with its cost.</p>
     <div class="mandate">
       <div><b>Access</b>The identity the agent acts as, and what it may request.</div>
@@ -599,6 +486,22 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
     <p>This page was written from the same kind of record that Oxagen keeps.</p>
   </div>
 </section>
+<section id="counts">
+  <div class="wrap stack">
+    <span class="eyebrow">From the record</span>
+    <h2>The counts</h2>
+    <p>He did not type this code. Agents wrote it. He directed them, read their work, and merged it. These are the totals the record shows.</p>
+    <div class="stats">
+      <div class="stat"><span class="label">GitHub contributions</span><span class="value" id="s-contrib">21,861</span><span class="sub">26 Feb to 20 Sep 2026. Commits, pull requests, issues, and reviews, as GitHub counts them. The same account shows 38 in all of 2025.</span></div>
+      <div class="stat"><span class="label">Commits</span><span class="value">6,341</span><span class="sub">On the default branch of 13 repositories, 28 May to 20 Sep. He made commits on 114 of those 116 days.</span></div>
+      <div class="stat"><span class="label">Pull requests merged</span><span class="value">4,427</span><span class="sub">Same repositories and dates.</span></div>
+      <div class="stat"><span class="label">Prompts to Claude Code</span><span class="value">8,133</span><span class="sub">29 Jun to 20 Sep 2026, across 1,769 conversations on one laptop.</span></div>
+    </div>
+    <p>His agents added <span class="hl">3,906,359</span> source lines and removed <span class="hl">1,529,699</span>. That counts source files on default branches only, and leaves out lock files, build output, fixtures, and generated code. Most of the removed lines were code added a week earlier and then taken out.</p>
+    <p class="caveat">Read these counts with three facts beside them. The repositories are four months old, with no release schedule, no on-call rotation, and no other engineers. When he opened and merged a pull request himself, no second person reviewed it. The prompt count is the least complete number here, because it covers 81 days on one laptop. <a href="#caveat">What the prompt log covers.</a></p>
+  </div>
+</section>
+
 <section id="bio">
   <div class="wrap close">
     <div class="bio">
@@ -626,8 +529,8 @@ footer ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; max-width: 8
     <ul>
       <li>GitHub contributions come from GitHub's contribution calendar for the account <span class="mono">macanderson</span>, 26 February to 20 September 2026, private repositories included. For 1 January to 20 September, GitHub counts 7,345 commits, 4,732 pull requests, 5,076 issues, and 4,577 private contributions.</li>
       <li>Prompts come from Claude Code's prompt history on one laptop, 29 June to 20 September 2026. The earlier laptop's history is not included. Prompts were loaded into SQLite and read in full, in order.</li>
-            <li>Commits and lines come from the default branch of 13 local clones. Each commit counts once, by its hash. The counts cover the 10 name and email pairs Mac has used for commits, across two GitHub organizations. GitHub's contribution graph also counts the default branch only. Counting only that branch means a rebased branch is not counted twice. Pull request counts come from the GitHub search API for <span class="mono">author:macanderson</span> over the same dates.</li>
-      <li>Lines fall into three groups. All lines means every text line in every diff. Authored lines leave out machine output: lockfiles, build output, vendored code, snapshots, benchmark artifacts, and event logs. Code lines keep only files with known source code extensions. The published studies measure code lines, so this page reports code lines.</li>
+      <li>Commits and lines come from the default branch of 13 local clones. Each commit counts once, by its hash. The counts cover the 10 name and email pairs Mac has used for commits, across two GitHub organizations. GitHub's contribution graph also counts the default branch only. Counting only that branch means a rebased branch is not counted twice. Counting every branch would have raised the commit count by nearly half. Pull request counts come from the GitHub search API for <span class="mono">author:macanderson</span> over the same dates.</li>
+      <li>Lines fall into three groups. All lines means every text line in every diff. Authored lines leave out machine output: lockfiles, build output, vendored code, snapshots, benchmark artifacts, and event logs. Code lines keep only files with known source code extensions. The source line counts on this page are code lines.</li>
       <li>Happy words and swear words are counted from fixed word lists. On 11 September, a mockup brief pasted into 15 conversations repeated the word &ldquo;wow&rdquo; 30 times. So the count leaves out &ldquo;wow&rdquo;. No swear word is printed on this page.</li>
       <li>Topics are assigned by keyword, one per prompt. About half the prompts matched no topic and are left out of the topic table.</li>
       <li>Benchmark numbers are the ones Mac published or typed at the time. The 58 of 89 result is Stella against Claude Code on Terminal-Bench 2.1, both on the same GLM model, on 31 July 2026.</li>

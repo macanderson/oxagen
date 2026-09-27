@@ -11,7 +11,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // One runtime (roadmap mockups/pages/runtimes.md, Runtime detail), addressed by
-// its enrollment's public id. An id the workspace does not hold is a 404.
+// its enrollment's public id. A named runtime is addressed by its `rtm_` id
+// instead, and its page carries the runtime's facts and its containment switch
+// (ADR-204). An id the workspace does not hold is a 404.
 export default async function RuntimePage({
   params,
 }: {

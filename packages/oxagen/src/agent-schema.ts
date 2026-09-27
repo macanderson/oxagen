@@ -118,8 +118,9 @@ export type AgentTool = z.infer<typeof agentToolSchema>;
 // ═════════════════════════════════════════════════════════════════════════════
 // ADR-198: a customer's agent carries no prompt and no tool list of its own.
 // It carries a runtime and a toolbelt, recorded on the version row, and this
-// config holds only the budget and containment tables the host bundle reads
-// (`agent-version-config.ts`). The in-app assistant, which Oxagen seeds and
+// config holds only the budget table the host bundle reads
+// (`agent-version-config.ts`). Containment is the runtime's setting, not
+// the version's (ADR-204). The in-app assistant, which Oxagen seeds and
 // runs itself, is the one agent whose config also names a graph scope, a
 // tool allowlist and instructions (`interactive-agent.ts`).
 

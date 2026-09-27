@@ -298,7 +298,18 @@ jobs:
           LINEAR_PROJECT_ID: ${{ vars.LINEAR_PROJECT_ID || 'oxagen-v2-355ea6b2a3f7' }}
         run: pnpm check:manifest:tickets
 
-  test:
+  # The gate that used to be one `test` job, split across runners. That job
+  # built every app, then ran every package's coverage suite, in series on one
+  # 4-vCPU runner. With the turbo remote cache answering 402 (#4233), a
+  # whole-repo run took 40 minutes there (run 36283641852): 15 building, 23 in
+  # coverage. The lanes below run the same builds and the same suites with the
+  # same thresholds, in parallel. `test` at the end keeps the job name the
+  # ruleset requires and the deploy jobs need.
+  #
+  # Build lanes carry no service containers. `next build` and `xmcp build`
+  # validate the environment at import time and never connect to a store, which
+  # is how deploy-node already builds with no database in reach.
+  build:
     needs: [preflight]
     if: >-
       github.event_name != 'workflow_dispatch' &&
@@ -309,19 +320,92 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    # 60m (was 30m): a change to a root dependency (e.g. packages/config)
-    # marks the entire monorepo affected, so build + unit tests + coverage all
-    # run cold — run 28684991013 passed every unit test but hit the 30m
-    # ceiling mid-coverage. Warm (remote-cached) runs stay minutes-fast; the
-    # ceiling only matters on whole-repo-affected pushes.
-    #
-    # 90m (was 60m): a push to main is always whole-repo, and the warm run
-    # for eace53664 already took 46 of the 60 minutes. With the Turbo remote
-    # cache answering 402 from 2026-09-25 (#4233) every package builds and
-    # tests cold, and the Build step below runs at --concurrency=2 with the
-    # deprecated app on its own. A timeout here fails the gate for code that
-    # is fine and holds every deploy behind it.
-    timeout-minutes: 90
+    timeout-minutes: 40
+    strategy:
+      # One lane failing must not cancel the others: each names its own
+      # failure in the same run.
+      fail-fast: false
+      matrix:
+        # apps/app and apps/app_deprecated each run `next build` with a 5GB V8
+        # heap, so each gets a runner of its own. Four PR runs on 2026-09-25
+        # lost the runner when both ran at once (exit 137). `rest` builds
+        # every other app. Its longest task is apps/mcp's `xmcp build`, which
+        # is the critical path of this job.
+        lane: [app, app-deprecated, rest]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Compute turbo filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          # Same rule as the unit and e2e jobs: a PR builds the packages
+          # affected since origin/main, and a push to main builds everything.
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            git fetch origin main --no-tags
+            echo "TURBO_FILTER=--filter=...[origin/main]" >> "$GITHUB_ENV"
+          else
+            echo "TURBO_FILTER=" >> "$GITHUB_ENV"
+          fi
+
+      - uses: ./.github/actions/pnpm-install
+
+      - name: Build ${{ matrix.lane }}
+        env:
+          LANE: ${{ matrix.lane }}
+        run: |
+          set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
+          # Turbo unions its --filter flags, so a lane cannot intersect
+          # $TURBO_FILTER with its own package on the command line. A
+          # single-app lane asks a dry run whether the filter selects its
+          # package, then builds that package alone. The dry run is read into
+          # a variable so a turbo or jq error fails this step rather than
+          # skipping the build unseen.
+          #
+          # `rest` subtracts the two single-app lanes. Turbo subtracts an
+          # exclusion from the include set, and with an empty TURBO_FILTER
+          # (push to main) it starts from every package. --concurrency=3:
+          # this lane has no 5GB Next heap and no service containers beside
+          # it, and at 2 apps/mcp's build could wait for a slot.
+          if [ "$LANE" = rest ]; then
+            pnpm turbo run build --concurrency=3 $TURBO_FILTER \
+              --filter=!@oxagen/app --filter=!@oxagen/app-deprecated
+            exit 0
+          fi
+          selected=$(pnpm exec turbo run build $TURBO_FILTER --dry=json)
+          in_scope=$(printf '%s' "$selected" | jq --arg p "@oxagen/$LANE" '.packages | index($p) != null')
+          if [ "$in_scope" = true ]; then
+            pnpm turbo run build --filter=@oxagen/$LANE
+          else
+            echo "@oxagen/$LANE is outside this run's filter; nothing to build."
+          fi
+
+  # Every package's coverage suite, which fails the job on a missed threshold.
+  # apps/app, packages/handlers and apps/app_deprecated each took 9 to 13
+  # minutes while sharing one runner in run 36283641852, so each gets its own.
+  # `rest` runs every other package. No package depends on an app, and only
+  # apps have build scripts, so `test:coverage`'s `^build` builds nothing here.
+  # No lane runs test:unit as well: tools/scripts/check-coverage-gates.mjs
+  # (under check:contracts in the checks job) refuses a package with a
+  # test:unit script and no test:coverage script, so coverage runs every suite.
+  unit:
+    needs: [preflight]
+    if: >-
+      github.event_name != 'workflow_dispatch' &&
+      needs.preflight.outputs.proceed == 'true'
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/macanderson/oxagen-ci-base:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [app, handlers, app-deprecated, rest]
     services:
       postgres:
         image: postgres:16-alpine
@@ -389,66 +473,60 @@ jobs:
             echo "TURBO_FILTER=" >> "$GITHUB_ENV"
           fi
 
-      - name: Bootstrap Postgres extensions
-        run: psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
-
       - uses: ./.github/actions/pnpm-install
+
+      # A single-package lane whose package is outside the filter skips the
+      # store setup and the suite. The same union rule as the build lanes
+      # applies: turbo cannot intersect filters, so a dry run answers.
+      - name: Select ${{ matrix.lane }}
+        id: scope
+        env:
+          LANE: ${{ matrix.lane }}
+        run: |
+          set -f
+          if [ "$LANE" = rest ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          selected=$(pnpm exec turbo run test:coverage $TURBO_FILTER --dry=json)
+          in_scope=$(printf '%s' "$selected" | jq --arg p "@oxagen/$LANE" '.packages | index($p) != null')
+          if [ "$in_scope" = true ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "@oxagen/$LANE is outside this run's filter; nothing to test."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # The postgres/clickhouse/neo4j services above are fresh, schema-less
       # containers on every single job run (GitHub Actions never persists
-      # service-container state between runs) — so these three setup steps
-      # must run unconditionally on every push, exactly like the e2e job
-      # below does. A prior version gated them behind a diff check for
-      # "did this push touch migrations/telemetry/cypher", which silently
-      # left every DB-backed integration test (file-lock lease, ingestion
-      # upsert-entity, etc.) pointed at an empty schema on any push that
-      # didn't happen to touch those paths — i.e. almost every push.
+      # service-container state between runs) — so these setup steps must run
+      # on every push, exactly like the e2e job below does. A prior version
+      # gated them behind a diff check for "did this push touch
+      # migrations/telemetry/cypher", which silently left every DB-backed
+      # integration test (file-lock lease, ingestion upsert-entity, etc.)
+      # pointed at an empty schema on any push that didn't happen to touch
+      # those paths — i.e. almost every push.
+      - name: Bootstrap Postgres extensions
+        if: steps.scope.outputs.run == 'true'
+        run: psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
+
       - name: Migrate Postgres (Atlas)
+        if: steps.scope.outputs.run == 'true'
         working-directory: packages/database
         run: atlas migrate apply --env ci
 
       - name: Migrate ClickHouse and Neo4j
+        if: steps.scope.outputs.run == 'true'
         run: DB_MIGRATE_STORES=clickhouse,neo4j npx tsx --env-file-if-exists=.env.local tools/scripts/db-migrate.ts
 
       - name: Seed platform defaults
+        if: steps.scope.outputs.run == 'true'
         run: npx tsx --env-file-if-exists=.env.local tools/scripts/seed-platform.ts
 
-      - name: Build
-        run: |
-          set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
-          # --concurrency=3: same fix as the `checks` job's lint/typecheck step —
-          # turbo's default (10) runs that many build tasks in parallel,
-          # several of which set their own large NODE_OPTIONS
-          # --max-old-space-size, exceeding this runner's available RAM (shared
-          # with the Postgres/ClickHouse/Neo4j service containers) and causing
-          # either a kernel OOM-kill or severe memory-pressure slowdown.
-          #
-          # Build only: the Coverage step below runs every package's suite
-          # under test:coverage, so a test:unit pass here ran it twice.
-          # tools/scripts/check-coverage-gates.mjs (under check:contracts in
-          # the checks job) refuses a package with a test:unit script and no
-          # test:coverage script, which is what keeps that sentence true.
-          #
-          # --concurrency=2, and apps/app_deprecated built on its own (#4233):
-          # apps/app and apps/app_deprecated each run `next build` with a 5GB
-          # V8 heap. At --concurrency=3 turbo can run both at once, and on a
-          # cold cache it does. Four PR runs on 2026-09-25 lost the runner
-          # that way (exit 137, "The runner has received a shutdown signal").
-          # The e2e job's Build step already runs at 2 and leaves the
-          # deprecated app out. Here the deprecated app keeps its one build
-          # gate, but only after everything else has finished, so at most one
-          # 5GB heap is live. It builds only when $TURBO_FILTER selects it.
-          # Its dependencies are in the local turbo cache by then. The dry run
-          # is read into a variable so a turbo or jq error fails this step
-          # rather than skipping the deprecated build unseen.
-          pnpm turbo run build --concurrency=2 $TURBO_FILTER --filter=!@oxagen/app-deprecated
-          selected=$(pnpm exec turbo run build $TURBO_FILTER --dry=json)
-          deprecated=$(printf '%s' "$selected" | jq '.packages | index("@oxagen/app-deprecated") != null')
-          if [ "$deprecated" = true ]; then
-            pnpm turbo run build --concurrency=1 --filter=@oxagen/app-deprecated
-          fi
-
       - name: Coverage thresholds
+        if: steps.scope.outputs.run == 'true'
+        env:
+          LANE: ${{ matrix.lane }}
         run: |
           set -f
           # --continue: turbo otherwise halts at the first failing package, so
@@ -461,7 +539,43 @@ jobs:
           # changes nothing about which failures are fatal: the job still
           # fails if any package fails. CLAUDE.md documents this form under
           # Gotchas ("Turbo halts on first failing coverage package").
-          pnpm turbo run test:coverage --concurrency=3 --continue $TURBO_FILTER
+          #
+          # --concurrency=3 in `rest`: several suites set a large
+          # --max-old-space-size, and the runner shares its RAM with the three
+          # service containers.
+          if [ "$LANE" = rest ]; then
+            pnpm turbo run test:coverage --concurrency=3 --continue $TURBO_FILTER \
+              --filter=!@oxagen/app --filter=!@oxagen/handlers --filter=!@oxagen/app-deprecated
+          else
+            pnpm turbo run test:coverage --filter=@oxagen/$LANE
+          fi
+
+  # The required status check. The ruleset on main requires `test`, and
+  # migration-gate, deploy-web and deploy-node need it, so it keeps the name
+  # and fails unless every build and unit lane succeeded. `!cancelled()` lets
+  # it report a failed lane as a failure, where the implicit success() would
+  # skip it, and a skipped required check reads as passing. A run cancelled by
+  # a newer push skips it.
+  test:
+    needs: [preflight, build, unit]
+    if: >-
+      github.event_name != 'workflow_dispatch' &&
+      needs.preflight.outputs.proceed == 'true' &&
+      !cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every build and unit lane passed
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          UNIT_RESULT: ${{ needs.unit.result }}
+        run: |
+          echo "build: $BUILD_RESULT"
+          echo "unit: $UNIT_RESULT"
+          if [ "$BUILD_RESULT" != success ] || [ "$UNIT_RESULT" != success ]; then
+            echo "::error::A build or unit lane did not succeed (build: $BUILD_RESULT, unit: $UNIT_RESULT). Open the failed lane in this run for its log."
+            exit 1
+          fi
 
   e2e:
     needs: [preflight]
@@ -601,30 +715,24 @@ jobs:
       - name: Build
         run: |
           set -f  # keep the unquoted ...[origin/main] filter literal (no globbing)
-          # --concurrency=2: same fix as the `checks` job's lint/typecheck step
-          # (see below), dropped a further notch from 3. turbo's default (10)
-          # runs that many packages' build scripts in parallel, several of
-          # which set their own large NODE_OPTIONS --max-old-space-size, far
-          # exceeding this runner's available RAM (shared with the
-          # Postgres/ClickHouse/Neo4j service containers) and triggering a
-          # kernel OOM-kill (exit 137) rather than a graceful per-task heap
-          # error. apps/app alone reserves a 5GB V8 heap for its
-          # typecheck-during-build step; even at concurrency=3 that single
-          # task plus two siblings running alongside it can exceed the
-          # 2-core runner's total RAM (observed: apps/app#build SIGKILL'd
-          # mid "Running TypeScript ..." after 8.5min of otherwise-successful
-          # compilation). Two concurrent tasks leaves enough headroom for
-          # apps/app's own build to run without contending against another
-          # large build at the same time.
+          # apps/app only. It is the one package with a test:e2e script, and
+          # Playwright's webServer serves only it. Every other app's build is
+          # gated by the `build` job's lanes, so building them here too spent
+          # runner time and RAM on output nothing below reads. apps/app
+          # reserves a 5GB V8 heap for its typecheck-during-build step, and
+          # alone on this runner it has the RAM the service containers leave.
           #
-          # --filter=!@oxagen/app-deprecated: the deprecated app is not under
-          # e2e (its test:e2e script is gone) and nothing here serves it, yet
-          # its `next build` reserves the same 5GB heap as apps/app. Building
-          # both on this runner is the OOM above twice over. Its build stays
-          # gated in exactly one place, the `test` job's `turbo run build`.
-          # Turbo subtracts an exclusion from the include set, and with an
-          # empty TURBO_FILTER (push to main) it starts from every package.
-          pnpm turbo run build --concurrency=2 $TURBO_FILTER --filter=!@oxagen/app-deprecated
+          # Turbo unions its --filter flags, so the step asks a dry run
+          # whether $TURBO_FILTER selects apps/app, then builds it alone. The
+          # dry run is read into a variable so a turbo or jq error fails this
+          # step rather than skipping the build unseen.
+          selected=$(pnpm exec turbo run build $TURBO_FILTER --dry=json)
+          in_scope=$(printf '%s' "$selected" | jq '.packages | index("@oxagen/app") != null')
+          if [ "$in_scope" = true ]; then
+            pnpm turbo run build --filter=@oxagen/app
+          else
+            echo "@oxagen/app is outside this run's filter; nothing to build."
+          fi
 
       # The Build step is filtered, so on a pull request that leaves
       # @oxagen/app outside the affected set (apps/api-only, tools-only,
