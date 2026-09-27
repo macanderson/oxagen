@@ -563,8 +563,9 @@ export async function linkedOxagenUser(
   providerId: string,
   accountId: string,
 ): Promise<string | null> {
-  // withSystemDb: auth.accounts is platform state, keyed by the host's own
-  // account id, and no tenant owns the link between a login and a user.
+  // tenancy: global lookup in auth.accounts, filtered by providerId and
+  // accountId. The table is platform state keyed by the host's own account
+  // id, and no tenant owns the link between a login and a user.
   const [row] = await withSystemDb((tx) =>
     tx
       .select({ userId: schema.accounts.userId })
