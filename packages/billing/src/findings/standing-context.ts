@@ -8,7 +8,8 @@
  *
  * The price is the run's prompt-cache read price, since a re-sent prefix is a
  * cache read. A run that read nothing from the cache sent its prefix
- * uncached, so it falls back to the run's input price.
+ * uncached, so it falls back to the run's input price. A run with neither
+ * price is cited and left out of the tokens, the split, and the saving.
  *
  * Every recorder today estimates the sources, and the run-totals row keeps no
  * basis per source, so the finding's basis is `estimated`. It prices a part
@@ -58,13 +59,23 @@ function detect(input: DetectInput, ctx: DetectContext): void {
   }
 }
 
-/** The re-sent tokens of one source over a group's runs; null when no run reported it. */
+/**
+ * The runs whose re-sent context the finding priced. A run with no read
+ * price is cited and left out of the finding's tokens and saving, so the
+ * split and the run count leave it out too, and the parts add up to the
+ * total the finding states.
+ */
+function pricedRuns(group: Group) {
+  return [...group.runs.values()].filter((acc) => acc.covered > 0);
+}
+
+/** The re-sent tokens of one source over a group's priced runs; null when none reported it. */
 function resentOf(
   group: Group,
   source: keyof StandingContextSources,
 ): number | null {
   let total: number | null = null;
-  for (const { run } of group.runs.values()) {
+  for (const { run } of pricedRuns(group)) {
     const tokens = sourcesOf(run)[source];
     if (tokens !== null)
       total = (total ?? 0) + resentTokens(tokens, run.modelCalls);
@@ -94,7 +105,7 @@ export const standingContext: Detector = {
   counting: null,
   detect,
   prose: (group, evidence) => ({
-    why: `${plural(group.runs.size, "run", "runs")} re-sent ${plural(evidence.measuredTokens, "estimated token", "estimated tokens")} of standing context on every turn after the first: ${standingSplit(group)}.`,
+    why: `${plural(pricedRuns(group).length, "run", "runs")} re-sent ${plural(evidence.measuredTokens, "estimated token", "estimated tokens")} of standing context on every turn after the first: ${standingSplit(group)}.`,
     fix: "Move a tool provider whose tools agents rarely call to Searchable, and hold the steering prefix to its budget.",
   }),
 };

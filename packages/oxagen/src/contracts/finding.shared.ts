@@ -117,7 +117,8 @@ export const findingRunCitationSchema = z
     runId: runPublicIdSchema,
     /**
      * True for a finding that cites the run as a whole
-     * (`cache_writes_never_read`). It pins no turn, and `frames` is empty.
+     * (`cache_writes_never_read`, `standing_context`, `model_class_fit`). It
+     * pins no turn, and `frames` is empty.
      */
     runLevel: z.boolean(),
     /**

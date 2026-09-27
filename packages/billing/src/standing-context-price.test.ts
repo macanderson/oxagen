@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { ZERO_TOKENS } from "./cost-rollup";
+import {
+  ZERO_TOKENS,
+  type CostBasis,
+  type ModelBreakdown,
+} from "./cost-rollup";
 import {
   priceAtPerThousand,
   resentStandingTokens,
   runReadPrice,
   standingContextBySource,
+  standingReadPrice,
   weeklyPriceMicros,
   weeklyPricePerThousand,
 } from "./standing-context-price";
@@ -13,7 +18,7 @@ function priced(
   cacheReadTokens: number,
   cacheReadMicros: bigint,
   costBasis: "gateway_observed" | "estimated" | null = "gateway_observed",
-) {
+): { costBasis: CostBasis | null; breakdown: { models: ModelBreakdown[] } } {
   return {
     costBasis,
     breakdown: {
@@ -54,6 +59,52 @@ describe("runReadPrice", () => {
     expect(runReadPrice(priced(30_000, 9_000n, "estimated"))).toBeNull();
     expect(runReadPrice(priced(30_000, 9_000n, null))).toBeNull();
     expect(runReadPrice(priced(0, 0n))).toBeNull();
+  });
+
+  it("is a zero price, not no price, for cache reads the book priced at nothing", () => {
+    expect(runReadPrice(priced(30_000, 0n))).toEqual({
+      micros: 0n,
+      tokens: 30_000n,
+    });
+  });
+
+  it("is null when a model's cache reads include an unpriced call", () => {
+    const partial = priced(30_000, 9_000n);
+    partial.breakdown.models[0]!.hasUnpriced = true;
+    expect(runReadPrice(partial)).toBeNull();
+  });
+
+  it("ignores an unpriced model that read nothing from the cache", () => {
+    const run = priced(30_000, 9_000n);
+    run.breakdown.models.push({
+      ...run.breakdown.models[0]!,
+      model: "claude-haiku-5",
+      tokens: { ...ZERO_TOKENS, input_uncached: 500 },
+      costMicros: null,
+      costByClass: { ...run.breakdown.models[0]!.costByClass, cache_read: 0n },
+      hasUnpriced: true,
+    });
+    expect(runReadPrice(run)).toEqual({ micros: 9_000n, tokens: 30_000n });
+  });
+});
+
+describe("standingReadPrice", () => {
+  it("does not fall back to the input price when the cache reads have no price", () => {
+    const partial = priced(30_000, 9_000n);
+    const model = partial.breakdown.models[0]!;
+    model.tokens = { ...model.tokens, input_uncached: 3_000 };
+    model.costByClass = { ...model.costByClass, input_uncached: 9_000n };
+    model.hasUnpriced = true;
+    expect(standingReadPrice(partial)).toBeNull();
+  });
+
+  it("is the input price for a run that read nothing from the cache", () => {
+    const run = priced(0, 0n);
+    const model = run.breakdown.models[0]!;
+    model.tokens = { ...model.tokens, input_uncached: 3_000 };
+    model.costByClass = { ...model.costByClass, input_uncached: 9_000n };
+    model.costMicros = 9_000n;
+    expect(standingReadPrice(run)).toEqual({ micros: 9_000n, tokens: 3_000n });
   });
 });
 
@@ -134,6 +185,19 @@ describe("standingContextBySource", () => {
         sources,
       )?.toolDefinitionTokens,
     ).toEqual({ resentTokens: 60_000, micros: null });
+  });
+
+  it("prices free cache reads at zero rather than leaving the price out", () => {
+    expect(
+      standingContextBySource(
+        { ...priced(30_000, 0n), modelCalls: 4 },
+        sources,
+      ),
+    ).toEqual({
+      toolDefinitionTokens: { resentTokens: 60_000, micros: 0n },
+      steeringTokens: { resentTokens: 15_000, micros: 0n },
+      contextFrameTokens: null,
+    });
   });
 
   it("is null when no source reported", () => {

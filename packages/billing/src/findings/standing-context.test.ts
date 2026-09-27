@@ -144,6 +144,30 @@ describe("standing context", () => {
     expect(finding!.savingMicros).toBe(225_000n);
   });
 
+  it("splits only the runs it priced, so the parts add up to the total", () => {
+    const [finding] = detect([run(), run({ costBasis: "estimated" })]);
+    expect(finding!.evidence).toMatchObject({
+      calls: 2,
+      coveredCalls: 1,
+      measuredTokens: 75_000,
+    });
+    expect(finding!.why).toBe(
+      "1 run re-sent 75,000 estimated tokens of standing context on every turn after the first: 60,000 of tool definitions and 15,000 of steering.",
+    );
+  });
+
+  it("writes nothing when the cache reads were free, and never prices them at the input rate", () => {
+    const free = run();
+    free.breakdown.models[0]!.costByClass.cache_read = 0n;
+    expect(detect([free])).toEqual([]);
+  });
+
+  it("writes nothing when a cache read went unpriced, rather than pricing the reads as input", () => {
+    const partial = run();
+    partial.breakdown.models[0]!.hasUnpriced = true;
+    expect(detect([partial])).toEqual([]);
+  });
+
   it("cites the operator when the run names no agent", () => {
     const [finding] = detect([run({ agentKey: null })]);
     expect(finding).toMatchObject({ level: "operator", subject: OPERATOR });

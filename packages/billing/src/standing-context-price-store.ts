@@ -6,7 +6,10 @@
  * The requests are every model call the workspace's runs made in the last
  * 7 days. The read price is the cache reads the rollup priced over the cache
  * read tokens, on runs whose cost is not estimated, so a guess never prices
- * the week. The tool and steering pages quote this one price, so a provider
+ * the week. A model with an unpriced call is left out of the price, since its
+ * tokens count that call and its cost does not; a row stored before
+ * `hasUnpriced` existed is unpriced when its cost is null. Free cache reads
+ * price the week at zero. The tool and steering pages quote this one price, so a provider
  * and a record of the same size cost the same.
  */
 import { withTenantDb } from "@oxagen/database";
@@ -37,8 +40,8 @@ function whole(value: string | number | null): bigint {
 
 /**
  * The weekly price per 1,000 tokens for one workspace; null when the week
- * made no request, no priced run read the cache, or the priced runs name more
- * than one currency.
+ * made no request, no fully priced model read the cache, or the priced runs
+ * name more than one currency.
  */
 export async function readWeeklyContextPrice(
   scope: { orgId: string; workspaceId: string },
@@ -65,6 +68,10 @@ export async function readWeeklyContextPrice(
         cross join lateral jsonb_array_elements(w.breakdown->'models') m
         where w.cost_basis is not null and w.cost_basis <> 'estimated'
           and (m->'tokens'->>'cache_read')::numeric > 0
+          and not coalesce(
+            (m->>'hasUnpriced')::boolean,
+            (m->>'costMicros') is null
+          )
       )
       select
         (select sum(model_calls) from week) as requests,
@@ -79,7 +86,7 @@ export async function readWeeklyContextPrice(
   const requests = Number(whole(row.requests));
   const micros = whole(row.micros);
   const tokens = whole(row.tokens);
-  if (requests === 0 || micros === 0n || tokens === 0n) return null;
+  if (requests === 0 || tokens === 0n) return null;
   return {
     perThousandMicros: weeklyPricePerThousand({ micros, tokens }, requests),
     currency: row.currency,

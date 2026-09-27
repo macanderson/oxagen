@@ -10,10 +10,11 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       return state.rows;
     },
   };
-  return {
+  const __dbMock = {
     ...real,
     withTenantDb: async (fn: (t: unknown) => unknown) => fn(tx),
   };
+  return { ...__dbMock, withOrgDb: __dbMock.withTenantDb };
 });
 
 import { readWeeklyContextPrice } from "./standing-context-price-store";
@@ -68,6 +69,20 @@ describe("readWeeklyContextPrice", () => {
     }
     state.rows = [];
     await expect(readWeeklyContextPrice(SCOPE, NOW)).resolves.toBeNull();
+  });
+
+  it("quotes free cache reads at zero rather than no price", async () => {
+    state.rows = [
+      {
+        requests: "1000",
+        micros: "0",
+        tokens: "30000",
+        currencies: "1",
+        currency: "USD",
+      },
+    ];
+    const price = await readWeeklyContextPrice(SCOPE, NOW);
+    expect(price?.perThousandMicros).toBe(0n);
   });
 
   it("reads a numeric sum with a fraction as its whole part", async () => {

@@ -27,23 +27,39 @@ export const STANDING_CONTEXT_WEEK_DAYS = 7;
 /** The tokens a weekly price is quoted for. */
 export const WEEKLY_PRICE_TOKENS = 1_000;
 
-/**
- * What a run paid for one prompt-cache read token, as a ratio; null when no
- * priced frame read the cache. A run whose cost is `estimated`, or has none,
- * has no price, as with `runInputPrice`.
- */
-export function runReadPrice(run: {
+type PricedRun = {
   costBasis: CostBasis | null;
   breakdown: Pick<RunBreakdown, "models">;
-}): InputPrice | null {
+};
+
+/** Whether a run's models read anything from the prompt cache. */
+function readTheCache(run: PricedRun): boolean {
+  return run.breakdown.models.some((m) => m.tokens.cache_read > 0);
+}
+
+/**
+ * What a run paid for one prompt-cache read token, as a ratio; null when no
+ * frame read the cache. A run whose cost is `estimated`, or has none, has no
+ * price, as with `runInputPrice`.
+ *
+ * A zero price is a price: a model whose book rate for a cache read is 0, or
+ * whose reads round to 0 micros, read the cache for free. A model with an
+ * unpriced call among its cache reads is not: its tokens count every call and
+ * its cost only the priced ones, so the ratio would read low. A run with such
+ * a model has no read price. A row stored before `hasUnpriced` existed marks
+ * an unpriced model by a null cost, the rule the store revives it by.
+ */
+export function runReadPrice(run: PricedRun): InputPrice | null {
   if (run.costBasis === null || run.costBasis === "estimated") return null;
   let micros = 0n;
   let tokens = 0n;
   for (const m of run.breakdown.models) {
+    if (m.tokens.cache_read === 0) continue;
+    if (m.hasUnpriced || m.costMicros === null) return null;
     micros += m.costByClass.cache_read;
     tokens += BigInt(m.tokens.cache_read);
   }
-  if (tokens === 0n || micros === 0n) return null;
+  if (tokens === 0n) return null;
   return { micros, tokens };
 }
 
@@ -163,13 +179,12 @@ export interface StandingSourcePrice {
 /**
  * The price a run re-read its standing context at: its cache read price, or
  * its input price when it read nothing from the cache, since then it sent
- * the prefix uncached. Null when neither is priced.
+ * the prefix uncached. Null when that price is not known. A run that read the
+ * cache and has no read price never falls back to the input price, which
+ * would price its cache reads at the uncached rate.
  */
-export function standingReadPrice(run: {
-  costBasis: CostBasis | null;
-  breakdown: Pick<RunBreakdown, "models">;
-}): InputPrice | null {
-  return runReadPrice(run) ?? runInputPrice(run);
+export function standingReadPrice(run: PricedRun): InputPrice | null {
+  return readTheCache(run) ? runReadPrice(run) : runInputPrice(run);
 }
 
 /**
