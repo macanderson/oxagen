@@ -58,6 +58,14 @@ describe("workspace.create schema", () => {
 
   it("accepts a valid workspace payload", () => {
     expect(() =>
+      Schema.parse({ name: "My Workspace", slug: "my-workspace" }),
+    ).not.toThrow();
+  });
+
+  // Lane S1 (#4450): mainRepo is deprecated and ignored, so an older client
+  // that still sends one is accepted.
+  it("still accepts the deprecated main repository", () => {
+    expect(() =>
       Schema.parse({
         name: "My Workspace",
         slug: "my-workspace",
@@ -66,10 +74,13 @@ describe("workspace.create schema", () => {
     ).not.toThrow();
   });
 
-  // §17 M0: a workspace cannot be created without a main repo.
-  it("rejects a payload with no main repository", () => {
+  it("rejects a deprecated main repository that names an installation", () => {
     expect(() =>
-      Schema.parse({ name: "My Workspace", slug: "my-workspace" }),
+      Schema.parse({
+        name: "My Workspace",
+        slug: "my-workspace",
+        mainRepo: { owner: "acme", name: "widgets", installationId: "555" },
+      }),
     ).toThrow();
   });
 

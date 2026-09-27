@@ -430,22 +430,15 @@ describe("workspace.create handler", () => {
       slug: "my-workspace",
       orgSlug: "acme-corp",
       createdAt: "2026-01-01T00:00:00.000Z",
-      mainRepo: {
-        provider: "github",
-        bindingId: "rpb_0a1b",
-        connectionId: "con_0a1b",
-        fullName: "acme/widgets",
-        defaultRef: "main",
-      },
+      steering_repo: { status: "provisioning" },
     };
     mocks.invoke.mockResolvedValue(fakeOutput);
 
     const args = {
       name: "My Workspace",
       slug: "my-workspace",
-      mainRepo: { provider: "github" as const, owner: "acme", name: "widgets" },
     };
-    await handler_workspaceCreate(args);
+    const result = await handler_workspaceCreate(args);
 
     expect(mocks.invoke).toHaveBeenCalledWith(
       "create_workspace",
@@ -453,6 +446,7 @@ describe("workspace.create handler", () => {
       fakeCtx,
       { surface: "mcp" },
     );
+    expect(result.steering_repo).toEqual({ status: "provisioning" });
   });
 });
 

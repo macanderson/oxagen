@@ -270,13 +270,7 @@ const CREATED = {
   slug: "api",
   orgSlug: "acme",
   createdAt: NOW.toISOString(),
-  mainRepo: {
-    bindingId: "rpb_fedcba9876543210fedcba",
-    connectionId: "con_fedcba9876543210fedcba",
-    provider: "github" as const,
-    fullName: "acme/api",
-    defaultRef: "main",
-  },
+  steering_repo: { status: "provisioning" as const },
 };
 
 function fakePaths() {
@@ -606,7 +600,9 @@ describe("answer_interjection: the link path", () => {
 describe("answer_interjection: the create path", () => {
   beforeEach(() => tenant("Admin"));
 
-  it("creates the workspace with the repository as its main one, and names both on the answer and the release", async () => {
+  // Since lane S1 (#4450) create_workspace binds no repository, so the
+  // create path sends no mainRepo and its answer names no binding.
+  it("creates the workspace without binding the repository, and names the workspace on the answer and the release", async () => {
     const store = new MemoryStore([repoQuestion()]);
     const paths = fakePaths();
     const out = await handlerFor(store, { paths })(
@@ -614,43 +610,39 @@ describe("answer_interjection: the create path", () => {
       OPERATOR,
     );
     expect(paths.create).toHaveBeenCalledWith(
-      {
-        name: "API",
-        slug: "api",
-        mainRepo: { provider: "github", owner: "acme", name: "api" },
-      },
+      { name: "API", slug: "api" },
       expect.objectContaining({ orgId: ORG, workspaceId: WORKSPACE }),
     );
     expect(paths.link).not.toHaveBeenCalled();
     expect(agentInterjectionAnswer.output.parse(out)).toMatchObject({
       path: "create",
       receiptId: "rcp_test1",
-      repository: {
-        bindingId: CREATED.mainRepo.bindingId,
-        fullName: "acme/api",
-      },
+      repository: null,
       workspace: { publicId: CREATED.publicId, slug: "api" },
     });
     expect(store.questions[0]).toMatchObject({
       path: "create",
-      answer: "Created the workspace api for acme/api, with skills off.",
+      answer:
+        "Created the workspace api for acme/api, with skills off. The repository is not linked to it yet.",
     });
     expect(store.queued[0]?.payload).toMatchObject({
-      text: "A person created the workspace api for this repository. Its skills are off, so the session goes on without skills.",
+      text: "A person created the workspace api for this repository. The repository is not linked to it yet. Its skills are off, so the session goes on without skills.",
       interjection: {
         key: KEY,
         path: "create",
         source: "person",
-        binding_id: CREATED.mainRepo.bindingId,
         workspace_id: CREATED.publicId,
         workspace_slug: "api",
       },
     });
+    expect(store.queued[0]?.payload["interjection"]).not.toHaveProperty(
+      "binding_id",
+    );
     expect(store.audits[0]?.detail).toMatchObject({
       path: "create",
-      bindingId: CREATED.mainRepo.bindingId,
       workspaceId: CREATED.publicId,
     });
+    expect(store.audits[0]?.detail).not.toHaveProperty("bindingId");
   });
 
   it("takes the workspace an earlier try made when a retry finds its slug taken", async () => {
@@ -664,41 +656,35 @@ describe("answer_interjection: the create path", () => {
       }),
     );
     const createdWorkspace = vi.fn<AnswerInterjectionDeps["createdWorkspace"]>(
-      async () => ({
-        publicId: CREATED.publicId,
-        slug: "api",
-        bindingId: CREATED.mainRepo.bindingId,
-        fullName: "acme/api",
-      }),
+      async () => ({ publicId: CREATED.publicId, slug: "api" }),
     );
     const out = await handlerFor(store, { paths, createdWorkspace })(
       pathInput({ path: "create", create: { name: "API", slug: "api" } }),
       OPERATOR,
     );
+    // The claim is the workspace this person made under the slug after the
+    // question was raised.
     expect(createdWorkspace).toHaveBeenCalledWith(
       { orgId: ORG, workspaceId: WORKSPACE },
       {
         interjectionRowId: store.questions[0]?.id,
         slug: "api",
-        fullName: "acme/api",
+        createdById: USER,
       },
     );
     expect(out).toMatchObject({
       path: "create",
-      repository: {
-        bindingId: CREATED.mainRepo.bindingId,
-        fullName: "acme/api",
-      },
+      repository: null,
       workspace: { publicId: CREATED.publicId, slug: "api" },
     });
     expect(store.questions[0]).toMatchObject({
       path: "create",
-      answer: "Created the workspace api for acme/api, with skills off.",
+      answer:
+        "Created the workspace api for acme/api, with skills off. The repository is not linked to it yet.",
     });
     expect(store.queued[0]?.payload).toMatchObject({
       interjection: {
         path: "create",
-        binding_id: CREATED.mainRepo.bindingId,
         workspace_id: CREATED.publicId,
         workspace_slug: "api",
       },
@@ -730,7 +716,7 @@ describe("answer_interjection: the create path", () => {
     const store = new MemoryStore([repoQuestion()]);
     const paths = fakePaths();
     paths.create.mockRejectedValueOnce(
-      new HandlerError({ code: "conflict", reason: "main_repo_claimed" }),
+      new HandlerError({ code: "not_found", reason: "org_not_found" }),
     );
     const createdWorkspace = vi.fn<AnswerInterjectionDeps["createdWorkspace"]>(
       async () => null,
@@ -740,7 +726,9 @@ describe("answer_interjection: the create path", () => {
         pathInput({ path: "create", create: { name: "API", slug: "api" } }),
         OPERATOR,
       ),
-    ).rejects.toSatisfy(conflict("main_repo_claimed"));
+    ).rejects.toSatisfy(
+      (e: unknown) => isHandlerError(e) && e.reason === "org_not_found",
+    );
     expect(createdWorkspace).not.toHaveBeenCalled();
     expect(store.questions[0]?.answeredAt).toBeNull();
   });

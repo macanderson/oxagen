@@ -16,6 +16,11 @@ import { bootstrapOrgIAM } from "./iam-provision";
 import { openOnboardingGate } from "./lib/onboarding";
 import { bootstrapWorkspace } from "./workspace-bootstrap";
 import { provisionAssistantModelKey } from "./assistant-key-bootstrap";
+import {
+  initialSteeringRepoState,
+  settingsWithSteeringRepo,
+  startSteeringRepoProvision,
+} from "./steering_repo.provision";
 
 /**
  * The org bootstrap: the organization row, the creator's owner membership,
@@ -204,7 +209,30 @@ export const organizationCreateHandler: CapabilityHandler<
         now: org.createdAt,
       });
 
-      return { org, workspace };
+      // The first state of both steering repos (#4450): the organization's
+      // `<org>/oxagen` and the first workspace's own. The provision jobs start
+      // after this commits and record their progress here.
+      const steering = initialSteeringRepoState(org.createdAt);
+      await tx
+        .update(schema.organizations)
+        .set({
+          settings: settingsWithSteeringRepo(
+            schema.organizations.settings,
+            steering,
+          ),
+        })
+        .where(eq(schema.organizations.id, org.id));
+      await tx
+        .update(schema.workspaces)
+        .set({
+          settings: settingsWithSteeringRepo(
+            schema.workspaces.settings,
+            steering,
+          ),
+        })
+        .where(eq(schema.workspaces.id, workspace.id));
+
+      return { org, workspace, steering };
     });
 
     logger.info(
@@ -250,6 +278,26 @@ export const organizationCreateHandler: CapabilityHandler<
         "organization.create: assistant model key provisioning threw",
       );
     });
+
+    // Start both provision jobs. A new organization has no GitHub or GitLab
+    // connection yet, so each job stops at `pick_connection` and records that
+    // it waits for one. Onboarding sends the event again once the owner
+    // connects. A send that fails is recorded on the setting, never thrown:
+    // the organization already exists.
+    await Promise.all([
+      startSteeringRepoProvision(
+        { orgId: created.org.id, workspaceId: null, actorUserId: userId },
+        created.steering,
+      ),
+      startSteeringRepoProvision(
+        {
+          orgId: created.org.id,
+          workspaceId: created.workspace.id,
+          actorUserId: userId,
+        },
+        created.steering,
+      ),
+    ]);
 
     return {
       publicId: created.org.publicId,
