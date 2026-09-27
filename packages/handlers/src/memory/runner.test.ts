@@ -12,16 +12,6 @@ const BRANCH = "memory/2026-09-27";
 /** The default branch's head when the curator planned the PR. */
 const PLANNED = "base0";
 
-/** Run `during` after the curator reads the new branch's head, before it resets it. */
-function afterBranchRead(gh: FakeGitHub, during: () => Promise<void>): void {
-  const read = gh.branchHead.bind(gh);
-  gh.branchHead = async (repo, branch) => {
-    const sha = await read(repo, branch);
-    if (branch === BRANCH) await during();
-    return sha;
-  };
-}
-
 describe("prepareBranch", () => {
   beforeEach(() => vi.mocked(logger.warn).mockClear());
 
@@ -32,39 +22,26 @@ describe("prepareBranch", () => {
     expect(gh.resets).toEqual([]);
   });
 
-  it("moves the branch back to the planned head when the default branch moved after the plan", async () => {
+  it("creates the branch at the planned head when the default branch moved after the plan", async () => {
     const gh = new FakeGitHub();
     gh.commit(REPO.defaultBranch, "steering/rules/new.md", "a merge");
+    const branchHead = vi.spyOn(gh, "branchHead");
     await expect(prepareBranch(gh, REPO, BRANCH, PLANNED)).resolves.toBe(true);
     expect(gh.heads.get(BRANCH)).toBe(PLANNED);
-    expect(gh.resets).toEqual([{ branch: BRANCH, sha: PLANNED }]);
-  });
-
-  it("leaves the branch alone when someone pushes to it while the curator sets it up", async () => {
-    const gh = new FakeGitHub();
-    gh.commit(REPO.defaultBranch, "steering/rules/new.md", "a merge");
-    let pushed = "";
-    afterBranchRead(gh, async () => {
-      pushed = gh.commit(BRANCH, "steering/memory/theirs.md", "their push");
-    });
-    await expect(prepareBranch(gh, REPO, BRANCH, PLANNED)).resolves.toBe(false);
-    expect(gh.heads.get(BRANCH)).toBe(pushed);
+    // The host creates the branch at the planned commit in one call, so the
+    // curator never reads it back or moves it.
     expect(gh.resets).toEqual([]);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ branch: BRANCH, head: PLANNED }),
-      expect.stringContaining("moved while the curator set it up"),
-    );
+    expect(branchHead).not.toHaveBeenCalled();
   });
 
-  it("returns false when the branch is deleted while the curator sets it up", async () => {
+  it("recreates a failed pass's branch at the planned head when the default branch moved", async () => {
     const gh = new FakeGitHub();
-    const read = gh.branchHead.bind(gh);
-    gh.branchHead = async (repo, branch) => {
-      if (branch === BRANCH) await gh.deleteBranch(repo, branch);
-      return read(repo, branch);
-    };
-    await expect(prepareBranch(gh, REPO, BRANCH, PLANNED)).resolves.toBe(false);
-    expect(gh.heads.has(BRANCH)).toBe(false);
+    await gh.ensureBranch(REPO, BRANCH, REPO.defaultBranch);
+    gh.commit(BRANCH, "steering/memory/half.md", "a pass that failed");
+    gh.commit(REPO.defaultBranch, "steering/rules/new.md", "a merge");
+    await expect(prepareBranch(gh, REPO, BRANCH, PLANNED)).resolves.toBe(true);
+    expect(gh.deletedBranches).toEqual([BRANCH]);
+    expect(gh.heads.get(BRANCH)).toBe(PLANNED);
     expect(gh.resets).toEqual([]);
   });
 
@@ -90,5 +67,9 @@ describe("prepareBranch", () => {
     await expect(prepareBranch(gh, REPO, BRANCH, PLANNED)).resolves.toBe(false);
     expect(gh.deletedBranches).toEqual([]);
     expect(gh.heads.get(BRANCH)).toBe(theirs);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: BRANCH }),
+      expect.stringContaining("has an open PR"),
+    );
   });
 });
