@@ -228,9 +228,10 @@
   }
   .tm {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    align-items: baseline;
+    gap: 4px 5px;
     min-width: 0;
     padding: 7px 0 4px 12px;
     font-family: var(--font);
@@ -271,6 +272,7 @@
     color: var(--st-denied);
   }
   .mg-gap {
+    flex-basis: 100%;
     padding-top: 3px;
     border-top: 1px dashed var(--rule);
     font-style: italic;
@@ -796,8 +798,6 @@
       display: none;
     }
     .term .tm {
-      flex-direction: row;
-      flex-wrap: wrap;
       align-items: center;
       padding: 2px 12px 4px calc(12px + var(--depth, 0) * 1.5ch);
       border-inline: 1px solid var(--t-line);

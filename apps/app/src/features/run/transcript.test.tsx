@@ -471,7 +471,7 @@ describe("the rows", () => {
       within(bash).getByRole("button", { name: "Show the call" }),
     );
     expect(within(bash).getByTestId("tx-out").className).toContain(
-      "text-error",
+      "tx-err",
     );
   });
 
@@ -568,10 +568,10 @@ describe("the rows", () => {
   it("reads the agent's last words as the answer once the run has stopped, and not while it runs", () => {
     renderSection();
     const agents = screen.getAllByTestId("transcript-agent");
-    // The catalogue says the role in sentence case; the tag's style sets it
-    // in capitals (#3375).
+    // On screen the role is the skin's glyph, so its word is for a screen
+    // reader.
     expect(agents.at(-1)?.querySelector("span")?.className).toContain(
-      "uppercase",
+      "sr-only",
     );
     expect(agents.at(-1)).toHaveTextContent(/^Answer/);
     expect(agents[0]).toHaveTextContent(/^Agent/);
@@ -939,7 +939,8 @@ describe("event rows", () => {
     renderSection({ read: readOk(stepsOf(EVENTS)) });
     const [, notice] = events();
     if (notice === undefined) throw new Error("a notice row");
-    expect(notice).toHaveTextContent("●");
+    // The skin draws the call's glyph; only a failure's ✗ is in the text.
+    expect(notice).not.toHaveTextContent("✗");
     expect(within(notice).getByText("notification")).toBeTruthy();
     expect(within(notice).getByTestId("tx-event-line")).toHaveAttribute(
       "title",
