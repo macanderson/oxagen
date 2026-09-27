@@ -48,6 +48,23 @@ export const httpUrlSchema = z
     "a URL starts with https:// or http:// and has no user name or password",
   );
 
+/** Review's message for a server or lock that names the older HTTP+SSE transport (ADR-211). */
+export const SSE_REFUSAL =
+  "sse is the older HTTP+SSE transport, which the gateway does not call. Point url at the server's streamable-http endpoint and set transport to http.";
+
+/**
+ * How the gateway reaches a remote MCP server: http, MCP's streamable HTTP
+ * transport. The relay and the executor carry nothing else, so review refuses
+ * sse with a message that names streamable-http (ADR-211). Any other value
+ * keeps zod's message.
+ */
+export const remoteTransportSchema = z.enum(["http"], {
+  errorMap: (issue, ctx) => {
+    const sse = issue.code === "invalid_enum_value" && issue.received === "sse";
+    return { message: sse ? SSE_REFUSAL : ctx.defaultError };
+  },
+});
+
 /** A relay's name, as `relay:<name>` writes it. */
 export const RELAY_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
 

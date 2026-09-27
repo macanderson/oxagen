@@ -178,23 +178,27 @@ describe("batching", () => {
 });
 
 describe("which servers move", () => {
-  it("moves remote http and sse rows and lists stdio rows", () => {
+  it("moves remote streamable-http rows, and lists sse and stdio rows", () => {
     const http = server({ name: "Linear" });
     const sse = server({ name: "Legacy SSE", transportType: "sse" });
     const stdio = server({ name: "Filesystem", transportType: "stdio", endpointUrl: "npx fs" });
     const p = plan([http, sse, stdio]);
 
-    expect(folders(p).map((f) => f.folder).sort()).toEqual(["legacy_sse", "linear"]);
-    const sseFolder = folders(p).find((f) => f.folder === "legacy_sse") as PlannedFolder;
-    expect(serverDoc(sseFolder).source).toMatchObject({ type: "remote", transport: "sse" });
+    expect(folders(p).map((f) => f.folder)).toEqual(["linear"]);
     const httpFolder = folders(p).find((f) => f.folder === "linear") as PlannedFolder;
     expect(serverDoc(httpFolder).source).toMatchObject({ type: "remote", transport: "http" });
 
-    expect(p.notMoved).toEqual([
-      { name: "Filesystem", reason: expect.stringContaining("local process") },
-    ]);
+    expect(p.notMoved).toEqual(
+      expect.arrayContaining([
+        { name: "Legacy SSE", reason: expect.stringContaining("older HTTP+SSE transport") },
+        { name: "Filesystem", reason: expect.stringContaining("local process") },
+      ]),
+    );
+    expect(p.notMoved).toHaveLength(2);
     const body = batchBody(p.batches[0] as MigrationPlan["batches"][number], p);
     expect(body).toContain("## Servers not moved");
+    expect(body).toContain("- Legacy SSE: its transport is sse");
+    expect(body).toContain("streamable-http endpoints only");
     expect(body).toContain("- Filesystem: it runs as a local process");
   });
 

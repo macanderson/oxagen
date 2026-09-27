@@ -12,6 +12,7 @@ import {
   registryLockSourceSchema,
 } from "./lock";
 import { parseLock } from "./parse";
+import { SSE_REFUSAL } from "./primitives";
 
 interface Issue {
   path: string;
@@ -151,7 +152,6 @@ describe("MCP lock sources", () => {
 
   it("accepts a registry entry that names its endpoint or its package", () => {
     expect(issues(mcpLockSourceSchema, { ...registry, ...endpoint })).toStrictEqual([]);
-    expect(issues(mcpLockSourceSchema, { ...registry, ...endpoint, transport: "sse" })).toStrictEqual([]);
     expect(issues(mcpLockSourceSchema, { ...registry, package: registryPackage, ...launch })).toStrictEqual([]);
   });
 
@@ -165,7 +165,13 @@ describe("MCP lock sources", () => {
       { path: "transport", message: "transport is not allowed without url: only a remote entry has one" },
     ]);
     expect(issues(registryLockSourceSchema, { ...registry, ...endpoint, transport: "streamable-http" })).toStrictEqual([
-      { path: "transport", message: "Invalid enum value. Expected 'http' | 'sse', received 'streamable-http'" },
+      { path: "transport", message: "Invalid enum value. Expected 'http', received 'streamable-http'" },
+    ]);
+  });
+
+  it("refuses an sse remote and names streamable-http", () => {
+    expect(issues(registryLockSourceSchema, { ...registry, ...endpoint, transport: "sse" })).toStrictEqual([
+      { path: "transport", message: SSE_REFUSAL },
     ]);
   });
 

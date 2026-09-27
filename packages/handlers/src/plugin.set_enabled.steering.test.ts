@@ -29,7 +29,7 @@ vi.mock("@oxagen/database/security", () => ({
 }));
 
 vi.mock("@oxagen/agent/runtime/steering-pr", () => ({
-  MOVABLE_TRANSPORTS: ["streamable-http", "sse"],
+  MOVABLE_TRANSPORTS: ["streamable-http"],
   steeringWriter: mocks.steeringWriter,
 }));
 
@@ -52,8 +52,8 @@ const LISTING = {
   name: "Linear",
   pluginType: "mcp_server",
   enabled: true,
-  endpointUrl: "https://mcp.linear.app/sse",
-  transport: "sse",
+  endpointUrl: "https://mcp.linear.app/mcp",
+  transport: "streamable-http",
   authKind: "oauth",
   deletedAt: null,
 };
@@ -166,7 +166,7 @@ describe("set_plugin_enabled (workspace) once tools live in the steering repo", 
     expect(mocks.steeringWriter).toHaveBeenCalledWith({ orgId: "org-1", workspaceId: "ws-1" });
     expect(txLog[2]).toMatchObject({
       op: "insert",
-      values: { origin: "proposed", enabled: false, orgListingId: "porg-1", transportType: "sse" },
+      values: { origin: "proposed", enabled: false, orgListingId: "porg-1", transportType: "streamable-http" },
     });
     expect(mocks.addServer).toHaveBeenCalledWith({
       orgId: "org-1",
@@ -324,6 +324,17 @@ describe("set_plugin_enabled (workspace) once tools live in the steering repo", 
 
     expect(mocks.steeringWriter).not.toHaveBeenCalled();
     expect(mocks.addServer).not.toHaveBeenCalled();
+  });
+
+  it("enables an sse plugin as a legacy row, because review refuses sse (ADR-211)", async () => {
+    queue([{ ...LISTING, transport: "sse" }], [{ publicId: "mcp-pub-1" }]);
+
+    const result = await handler(ENABLE, ctx);
+
+    expect(result).toEqual({ ok: true, workspaceServerId: "mcp-pub-1" });
+    expect(mocks.steeringWriter).not.toHaveBeenCalled();
+    expect(mocks.addServer).not.toHaveBeenCalled();
+    expect(txLog[1]).toMatchObject({ op: "insert", values: { enabled: true, transportType: "sse" } });
   });
 
   it("disables directly without asking for a writer", async () => {

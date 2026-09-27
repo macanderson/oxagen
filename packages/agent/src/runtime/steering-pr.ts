@@ -24,10 +24,11 @@ export const STEERING_PR_FILES_MAX = 299;
 
 /**
  * The mcp.mcp_servers transports a server folder's remote source reaches:
- * streamable HTTP (http in server.toml) and SSE. A stdio server runs as a
- * local process and stays a legacy row.
+ * streamable HTTP, which server.toml writes as http. Review refuses the older
+ * HTTP+SSE transport (ADR-211), so an sse server stays a legacy row, as a
+ * stdio server does.
  */
-export const MOVABLE_TRANSPORTS = ["streamable-http", "sse"] as const;
+export const MOVABLE_TRANSPORTS = ["streamable-http"] as const;
 
 export interface WorkspaceScope {
   orgId: string;
