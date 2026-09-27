@@ -31,15 +31,17 @@ const CONVERSATION = {
 interface Captured {
   lookups: { where: string; params: unknown[] }[];
   inserts: { table: string; values: Record<string, unknown> }[];
-  updates: { table: string; set: Record<string, unknown> }[];
+  updates: { table: string; set: Record<string, unknown>; where?: string }[];
 }
 
 /**
  * A transaction whose conversation lookup answers `found`. The lookup is the
  * read that projects `publicId`. The history read (#4195) also selects from
- * conversations, for the stored summary, and answers no summary here.
+ * conversations, for the stored summary, and answers no summary here. An
+ * update answers one row unless `archivedMeanwhile`, which stands for the
+ * nightly archive committing between the lookup and the activity update.
  */
-function fakeTx(found: (typeof CONVERSATION)[]) {
+function fakeTx(found: (typeof CONVERSATION)[], archivedMeanwhile = false) {
   const captured: Captured = { lookups: [], inserts: [], updates: [] };
   const tx = {
     select: (projection?: Record<string, unknown>) => ({
@@ -78,8 +80,22 @@ function fakeTx(found: (typeof CONVERSATION)[]) {
     }),
     update: (table: Parameters<typeof getTableName>[0]) => ({
       set: (set: Record<string, unknown>) => {
-        captured.updates.push({ table: getTableName(table), set });
-        return { where: () => Promise.resolve() };
+        const update: Captured["updates"][number] = {
+          table: getTableName(table),
+          set,
+        };
+        captured.updates.push(update);
+        return {
+          where: (cond: SQL) => {
+            update.where = dialect.sqlToQuery(cond).sql;
+            return {
+              returning: () =>
+                Promise.resolve(
+                  archivedMeanwhile ? [] : [{ id: CONVERSATION.id }],
+                ),
+            };
+          },
+        };
       },
     }),
   };
@@ -192,6 +208,24 @@ describe("appendUserMessage", () => {
     );
     expect(bumps).toHaveLength(1);
     expect(bumps[0]?.set.updatedAt).toBeInstanceOf(Date);
+    // The archive may land after the lookup, so the update checks again.
+    expect(bumps[0]?.where).toMatch(/"archived_at" is null/);
+    expect(bumps[0]?.where).toMatch(/"deleted_at" is null/);
+  });
+
+  it("refuses the question when the archive lands between the lookup and the activity update (negative)", async () => {
+    // Postgres checks the update's archived_at filter again on the row the
+    // archive committed, so the update answers no row.
+    const { tx, captured } = fakeTx([CONVERSATION], true);
+    const refused = appendUserMessage(
+      tx,
+      SCOPE,
+      USER,
+      ask(CONVERSATION.id),
+      "chat",
+    );
+    await expect(refused).rejects.toBeInstanceOf(ConversationNotFoundError);
+    expect(captured.inserts).toHaveLength(0);
   });
 
   it("writes no activity bump for a new conversation, whose insert sets it", async () => {

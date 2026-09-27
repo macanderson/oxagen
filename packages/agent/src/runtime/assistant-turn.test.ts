@@ -305,7 +305,11 @@ function makeTx(world: World, captured: Captured) {
     update: (table: unknown) => ({
       set: (set: Record<string, unknown>) => {
         captured.updates.push({ table, set });
-        return { where: () => Promise.resolve() };
+        return {
+          where: () => ({
+            returning: () => Promise.resolve([{ id: CONVERSATION }]),
+          }),
+        };
       },
     }),
   };
