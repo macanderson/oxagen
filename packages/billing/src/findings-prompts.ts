@@ -86,6 +86,8 @@ function chDateTime(at: Date): string {
  * keeps no prompt text, so it reads as `digest_only` here.
  */
 export async function promptTextMode(scope: Scope): Promise<PromptTextMode> {
+  // tenancy: the scheduled findings job runs outside a tenant scope, and this
+  // read is filtered by the pass's orgId and workspaceId.
   const policy = await withSystemDb((tx) =>
     readLatestRetentionPolicy(tx, scope.orgId, scope.workspaceId),
   );
