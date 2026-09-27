@@ -17,10 +17,11 @@ import { type DraftContent, jsonContent } from "../evidence/frame-body";
 import {
   REQUEST_FULL_DIGEST_ATTR,
   resolveRequest,
+  STEERING_ASSEMBLY_PART,
   SYSTEM_CONTEXT_PARTS_OMITTED_ATTR,
   SystemContextMemory,
   SystemContextTracker,
-  steeringParts,
+  steeringContext,
   systemContextDigest,
   toolProvider,
 } from "./system-context";
@@ -119,6 +120,26 @@ const MANIFEST = {
       outcome: "cut",
     },
   ],
+};
+
+/**
+ * The same manifest as the assembler writes it: its text spent 80 tokens,
+ * 15 more than the two included items, on the header and the headings.
+ */
+const ASSEMBLED = {
+  ...MANIFEST,
+  spent_tokens: 80,
+  text_digest: digestBytes("# Steering\n\n## Must\n..."),
+};
+
+/** An operator message the host delivered beside the assembled text. */
+const STEER = {
+  id: "stp_0192d4a8",
+  kind: "steer",
+  force: "must",
+  recorded_at: "2026-09-26T00:00:00.000Z",
+  tokens: 12,
+  outcome: "included",
 };
 
 describe("the parts a request resolves to", () => {
@@ -273,6 +294,27 @@ describe("the parts a request resolves to", () => {
     ]);
   });
 
+  it("names a Responses request's leading developer message from its input", () => {
+    const { facts } = measured(
+      tracker(),
+      exchange({
+        model: "gpt-5",
+        input: [
+          { role: "developer", content: "Reply in JSON." },
+          { role: "user", content: "Review this diff." },
+          { role: "developer", content: "A later message is dialogue." },
+        ],
+        tools: [{ type: "web_search" }],
+      }),
+    );
+    const parts = facts.system_context_parts ?? [];
+    expect(parts.map((part) => [part.kind, part.name])).toEqual([
+      ["system", "input[0]"],
+      ["tool", "web_search"],
+    ]);
+    expect(parts[0]?.tokens).toBe(budgetTokens("Reply in JSON."));
+  });
+
   it("measures nothing from a body that is not a JSON exchange", () => {
     const on = tracker();
     for (const content of [
@@ -407,6 +449,44 @@ describe("a request the proxy stored with its prefix cut", () => {
     expect(b.facts.system_context_parts).toEqual(a.facts.system_context_parts);
     expect(b.facts.system_context_parts?.[0]?.name).toBe("messages[0]");
   });
+
+  it("keeps a Responses request's leading developer message when the cut took it", () => {
+    const lead = {
+      role: "developer",
+      content: "You are a careful reviewer. Name each file you read.",
+    };
+    const ask = { role: "user", content: "Review this diff, please." };
+    const tools = [
+      {
+        type: "function",
+        name: "get_diff",
+        description: "Read the diff of the pull request under review.",
+        parameters: {
+          type: "object",
+          properties: { path: { type: "string" } },
+        },
+      },
+    ];
+    const prefix = new RequestPrefixMemory();
+    const on = tracker();
+    const first = prefix.fold(
+      "s",
+      JSON.stringify({ model: "gpt-5", input: [lead, ask], tools }),
+    );
+    const a = proxied(on, first, "turn:1");
+    const second = prefix.fold(
+      "s",
+      JSON.stringify({
+        model: "gpt-5",
+        input: [lead, ask, ANSWERED, FOLLOWED],
+        tools,
+      }),
+    );
+    expect(second.prior?.messages).toBe(2);
+    const b = proxied(on, second, "turn:2");
+    expect(b.facts.system_context_parts).toEqual(a.facts.system_context_parts);
+    expect(b.facts.system_context_parts?.[0]?.name).toBe("input[0]");
+  });
 });
 
 describe("when a turn lists its parts", () => {
@@ -515,7 +595,7 @@ describe("the steering a session was delivered", () => {
   });
 
   it("skips an item with no id or no token count", () => {
-    const parts = steeringParts({
+    const steering = steeringContext({
       items: [
         "not an item",
         { outcome: "included", tokens: 5 },
@@ -523,8 +603,81 @@ describe("the steering a session was delivered", () => {
         { id: "counted", outcome: "included", tokens: 3 },
       ],
     });
-    expect(parts?.map((part) => part.name)).toEqual(["counted"]);
-    expect(steeringParts({})).toBeUndefined();
+    expect(steering?.parts.map((part) => part.name)).toEqual(["counted"]);
+    expect(steering?.tokens).toBe(3);
+    expect(steeringContext({})).toBeUndefined();
+  });
+
+  it("counts the assembled text's spent tokens, header and headings included", () => {
+    const on = tracker();
+    on.noteSteeringManifest(ASSEMBLED);
+    const { facts } = measured(on, exchange(request()));
+    expect(facts.steering_tokens).toBe(80);
+    const steering = (facts.system_context_parts ?? []).filter(
+      (part) => part.kind === "steering",
+    );
+    expect(steering.map((part) => [part.name, part.tokens])).toEqual([
+      [STEERING_ASSEMBLY_PART, 15],
+      ["no-force-push", 40],
+      ["prefer-rg", 25],
+    ]);
+    expect(steering[0]?.digest).toBe(ASSEMBLED.text_digest);
+  });
+
+  it("adds each steer the host delivered beside the assembled text", () => {
+    const on = tracker();
+    on.noteSteeringManifest({ ...ASSEMBLED, items: [...MANIFEST.items, STEER] });
+    const { facts } = measured(on, exchange(request()));
+    expect(facts.steering_tokens).toBe(92);
+    const steering = (facts.system_context_parts ?? []).filter(
+      (part) => part.kind === "steering",
+    );
+    expect(steering.map((part) => [part.name, part.tokens])).toEqual([
+      [STEERING_ASSEMBLY_PART, 15],
+      ["no-force-push", 40],
+      ["prefer-rg", 25],
+      [STEER.id, 12],
+    ]);
+  });
+
+  it("changes only the assembly part's digest when the header alone changes", () => {
+    const before = tracker();
+    before.noteSteeringManifest(ASSEMBLED);
+    const after = tracker();
+    after.noteSteeringManifest({
+      ...ASSEMBLED,
+      text_digest: digestBytes("# Steering records\n\n## Must\n..."),
+    });
+    const was = measured(before, exchange(request())).facts;
+    const now = measured(after, exchange(request())).facts;
+    const wasParts = was.system_context_parts ?? [];
+    const changed = (now.system_context_parts ?? [])
+      .filter((part, index) => part.digest !== wasParts[index]?.digest)
+      .map((part) => part.name);
+    expect(changed).toEqual([STEERING_ASSEMBLY_PART]);
+    expect(now.system_context_digest).not.toBe(was.system_context_digest);
+    expect(now.steering_tokens).toBe(was.steering_tokens);
+  });
+
+  it("counts the items alone when the manifest lacks a text digest or a spent count", () => {
+    const { spent_tokens: _spent, ...unspent } = ASSEMBLED;
+    for (const manifest of [{ ...ASSEMBLED, text_digest: null }, unspent]) {
+      const steering = steeringContext(manifest);
+      expect(steering?.tokens).toBe(65);
+      expect(steering?.parts.map((part) => part.name)).toEqual([
+        "no-force-push",
+        "prefer-rg",
+      ]);
+    }
+  });
+
+  it("takes the spent count when the items' own counts add up to more", () => {
+    const steering = steeringContext({ ...ASSEMBLED, spent_tokens: 50 });
+    expect(steering?.tokens).toBe(50);
+    expect(steering?.parts[0]).toMatchObject({
+      name: STEERING_ASSEMBLY_PART,
+      tokens: 0,
+    });
   });
 });
 
@@ -570,6 +723,23 @@ describe("the tracker's state", () => {
     expect(again.facts.system_context_digest).toBe(
       first.facts.system_context_digest,
     );
+  });
+
+  it("carries the steering count over a restart where the parts add up to more", () => {
+    const before = tracker();
+    before.noteSteeringManifest({ ...ASSEMBLED, spent_tokens: 50 });
+    const state = before.state();
+    expect(state.steeringTokens).toBe(50);
+    const after = new SystemContextTracker(state);
+    expect(measured(after, undefined).facts.steering_tokens).toBe(50);
+  });
+
+  it("sums the parts of a state saved before the count was carried", () => {
+    const before = tracker();
+    before.noteSteeringManifest(MANIFEST);
+    const { steeringTokens: _count, ...older } = before.state();
+    const after = new SystemContextTracker(older);
+    expect(measured(after, undefined).facts.steering_tokens).toBe(65);
   });
 
   it("writes no state before it has anything to carry", () => {

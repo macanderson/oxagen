@@ -9,10 +9,12 @@
  * ids, digests, and token counts, never their text, and sums three of them:
  *
  * - `tool_definition_tokens`: the tools the request declared.
- * - `steering_tokens`: the included items of the session's latest
- *   `steering.manifest` frame. Claude Code delivers steering through
- *   `SessionStart` context, which rides the conversation, so the request
- *   cannot say which bytes are steering. The manifest can.
+ * - `steering_tokens`: the session's latest `steering.manifest` frame. That
+ *   is the assembled text's `spent_tokens`, header and headings included,
+ *   plus each operator message the host delivered beside it. A manifest
+ *   without `spent_tokens` counts its included items. Claude Code delivers
+ *   steering through `SessionStart` context, which rides the conversation,
+ *   so the request cannot say which bytes are steering. The manifest can.
  * - `context_frame_tokens`: left absent. Claude Code's hook context rides the
  *   conversation too, and nothing marks it apart (ADR-200), so no count here
  *   would be honest.
@@ -88,7 +90,10 @@ export interface RequestContext {
   system: readonly SystemContextPart[];
   /** From `instructions`, the Responses API's system prompt. */
   instructions: readonly SystemContextPart[];
-  /** The leading `system` and `developer` messages of a chat request. */
+  /**
+   * The leading `system` and `developer` messages of the conversation: a
+   * chat request's `messages`, or a Responses request's `input`.
+   */
   leading: readonly SystemContextPart[];
   tools: readonly SystemContextPart[];
 }
@@ -200,8 +205,28 @@ function isLeadingInstruction(message: JsonValue | undefined): boolean {
   return role === "system" || role === "developer";
 }
 
+/**
+ * The conversation arrays a request may carry: `messages` for Anthropic
+ * Messages and chat completions, `input` for Responses. The order is the one
+ * the proxy's fold reads them in (`request-prefix.ts`), so a cut request's
+ * kept count applies to the same array here.
+ */
+const CONVERSATION_FIELDS = ["messages", "input"] as const;
+
+/** The first conversation array a request carries, with its field name. */
+function conversationOf(
+  request: Json,
+): { field: string; items: readonly JsonValue[] } | undefined {
+  for (const field of CONVERSATION_FIELDS) {
+    const items = request[field];
+    if (Array.isArray(items)) return { field, items };
+  }
+  return undefined;
+}
+
 /** The leading instruction messages, named by position from `offset`. */
 function leadingParts(
+  field: string,
   messages: readonly JsonValue[],
   offset: number,
 ): SystemContextPart[] {
@@ -210,7 +235,7 @@ function leadingParts(
     if (!isLeadingInstruction(message)) break;
     parts.push({
       kind: "system",
-      name: `messages[${offset + parts.length}]`,
+      name: `${field}[${offset + parts.length}]`,
       ...measurePart(message),
     });
   }
@@ -285,8 +310,9 @@ export function resolveRequest(
   const cut = prior?.fields ?? new Set<string>();
 
   let leading: readonly SystemContextPart[] = [];
-  const messages = request["messages"];
-  if (Array.isArray(messages)) {
+  const conversation = conversationOf(request);
+  if (conversation !== undefined) {
+    const { field, items } = conversation;
     const kept = prior?.messages ?? 0;
     const inherited = base?.leading ?? [];
     // Past the end of the earlier call's lead, the cut prefix already holds
@@ -294,7 +320,7 @@ export function resolveRequest(
     leading =
       kept > inherited.length
         ? inherited
-        : [...inherited.slice(0, kept), ...leadingParts(messages, kept)];
+        : [...inherited.slice(0, kept), ...leadingParts(field, items, kept)];
   }
 
   return {
@@ -349,13 +375,41 @@ function sum(parts: readonly SystemContextPart[]): number {
   return clampU32(parts.reduce((total, part) => total + part.tokens, 0));
 }
 
-/** The steering parts of a `steering.manifest` body: its included items. */
-export function steeringParts(
+/**
+ * The name of the steering part that stands for the assembled text around
+ * the items: the header, the force headings, the separators, and any
+ * omission note. It is always the first steering part, and its digest is the
+ * manifest's `text_digest`, so a record that happens to share the name still
+ * reads as a separate part.
+ */
+export const STEERING_ASSEMBLY_PART = "$assembly";
+
+/** A session's steering: its parts, and the tokens they cost together. */
+export interface SteeringContext {
+  parts: SystemContextPart[];
+  tokens: number;
+}
+
+/**
+ * The steering a `steering.manifest` body names. Each included item is a
+ * part. The host appends one included `steer` item per operator message it
+ * delivered beside the assembled text, so those count on top of it.
+ *
+ * The assembler's `spent_tokens` covers its whole text, which is more than
+ * the item bodies, and `text_digest` names those bytes. When the manifest
+ * carries both, the total is `spent_tokens` plus the delivered steers, and
+ * one {@link STEERING_ASSEMBLY_PART} part carries the text digest and the
+ * tokens the items leave over. A changed header then changes the
+ * whole-context digest. A manifest without both counts its items alone.
+ */
+export function steeringContext(
   body: Record<string, unknown>,
-): SystemContextPart[] | undefined {
+): SteeringContext | undefined {
   const items = body["items"];
   if (!Array.isArray(items)) return undefined;
   const parts: SystemContextPart[] = [];
+  let assembled = 0;
+  let delivered = 0;
   for (const item of items) {
     if (!isObject(item) || item["outcome"] !== "included") continue;
     const { id, kind, force, recorded_at, tokens } = item;
@@ -373,14 +427,39 @@ export function steeringParts(
       }),
       tokens: clampU32(tokens),
     });
+    if (kind === "steer") delivered += clampU32(tokens);
+    else assembled += clampU32(tokens);
   }
-  return parts;
+  const spent = body["spent_tokens"];
+  const text = body["text_digest"];
+  if (
+    typeof spent !== "number" ||
+    !Number.isFinite(spent) ||
+    !isSha256Digest(text)
+  ) {
+    return { parts, tokens: clampU32(assembled + delivered) };
+  }
+  const assembly: SystemContextPart = {
+    kind: "steering",
+    name: STEERING_ASSEMBLY_PART,
+    digest: text,
+    tokens: clampU32(spent - assembled),
+  };
+  return {
+    parts: [assembly, ...parts],
+    tokens: clampU32(clampU32(spent) + delivered),
+  };
 }
 
 /** What a tracker carries over a restart. */
 export interface SystemContextState {
   /** The latest manifest's steering parts. Absent until a manifest seals. */
   steering?: SystemContextPart[];
+  /**
+   * The steering's token count. A state saved before the count was carried
+   * has none, and the tracker sums the parts.
+   */
+  steeringTokens?: number;
   /** The turn `listed` belongs to. */
   listedTurn?: string;
   /** The system context digests already listed on this chain this turn. */
@@ -402,7 +481,7 @@ export interface SystemContextMeasure {
  * listed. The other calls carry the digest and the counts alone.
  */
 export class SystemContextTracker {
-  private steering: SystemContextPart[] | undefined;
+  private steering: SteeringContext | undefined;
   private listedTurn: string | undefined;
   private listed: string[];
 
@@ -410,15 +489,21 @@ export class SystemContextTracker {
     state?: SystemContextState,
     private readonly memory: SystemContextMemory = SHARED_MEMORY,
   ) {
-    this.steering = state?.steering?.map((part) => ({ ...part }));
+    const parts = state?.steering?.map((part) => ({ ...part }));
+    this.steering =
+      parts === undefined
+        ? undefined
+        : { parts, tokens: state?.steeringTokens ?? sum(parts) };
     this.listedTurn = state?.listedTurn;
     this.listed = [...(state?.listed ?? [])];
   }
 
   state(): SystemContextState {
     const state: SystemContextState = {};
-    if (this.steering !== undefined)
-      state.steering = this.steering.map((part) => ({ ...part }));
+    if (this.steering !== undefined) {
+      state.steering = this.steering.parts.map((part) => ({ ...part }));
+      state.steeringTokens = this.steering.tokens;
+    }
     if (this.listedTurn !== undefined) state.listedTurn = this.listedTurn;
     if (this.listed.length > 0) state.listed = [...this.listed];
     return state;
@@ -426,8 +511,8 @@ export class SystemContextTracker {
 
   /** Take the steering a sealed `steering.manifest` frame names. */
   noteSteeringManifest(body: Record<string, unknown>): void {
-    const parts = steeringParts(body);
-    if (parts !== undefined) this.steering = parts;
+    const steering = steeringContext(body);
+    if (steering !== undefined) this.steering = steering;
   }
 
   /**
@@ -442,7 +527,7 @@ export class SystemContextTracker {
     const facts: TokenSourceFacts = {};
     const steering = this.steering;
     if (steering !== undefined) {
-      facts.steering_tokens = sum(steering);
+      facts.steering_tokens = steering.tokens;
       facts.steering_tokens_basis = "estimated";
     }
     const recorded = requestOf(content);
@@ -469,7 +554,7 @@ export class SystemContextTracker {
       ...resolved.instructions,
       ...resolved.leading,
       ...resolved.tools,
-      ...(steering ?? []),
+      ...(steering?.parts ?? []),
     ];
     facts.tool_definition_tokens = sum(resolved.tools);
     facts.tool_definition_tokens_basis = "estimated";
