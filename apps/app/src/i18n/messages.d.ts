@@ -1201,8 +1201,8 @@ type Messages = {
         unit: string;
         unitHint: string;
         perCallHint: string;
-        consequenceTags: string;
-        consequenceTagsHint: string;
+        impacts: string;
+        impactsHint: string;
         consequenceOther: string;
       };
       truncated: string;
@@ -9830,7 +9830,7 @@ type Messages = {
         riskGrade: string;
         sideEffect: string;
         egress: string;
-        consequenceTags: string;
+        impacts: string;
         tagsHint: string;
         dataClasses: string;
         dataClassesHint: string;
@@ -10314,7 +10314,7 @@ type Messages = {
       agentsUnavailable: string;
       agentsEmpty: string;
       consequenceOther: string;
-      consequenceTagsHint: string;
+      impactsHint: string;
       toolsHint: string;
       limits: string;
       limitsHint: string;
@@ -10341,7 +10341,7 @@ type Messages = {
       pending: string;
       fields: {
         agentId: string;
-        consequenceTags: string;
+        impacts: string;
         measure: string;
         unit: string;
         perCall: string;

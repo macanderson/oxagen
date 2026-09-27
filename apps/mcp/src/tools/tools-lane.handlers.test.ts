@@ -163,7 +163,7 @@ describe("list_tool_versions, set_tool_classification, import_tools, list_creden
     const classification = {
       sideEffect: "write" as const,
       egress: "third_party" as const,
-      consequenceTags: ["communicates_externally"],
+      impacts: ["communicates_externally"],
       measures: {},
       dataClasses: [],
     };

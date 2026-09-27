@@ -19,12 +19,12 @@
 // caller that holds the tool's measure declaration.
 import { mandateGrant } from "@oxagen/oxagen/contracts/mandate.grant";
 import {
-  CONSEQUENCE_TAG,
+  IMPACT,
   MANDATE_APPROVER,
   MEASURE_NAME,
   MEASURE_VALUE,
   TARGET_MAX,
-  consequenceTagsOf,
+  impactsOf,
   listOf,
   mandateLimitsOf,
 } from "@/data/contracts/mandates";
@@ -44,7 +44,7 @@ export type GrantDraft = {
   /** The draft this grant activates (`mnd_…`), or null for a new mandate. */
   requestId: string | null;
   /** Every consequence the covered tools declare, comma-separated. */
-  consequenceTags: string;
+  impacts: string;
   /** The measure the tool version declares the limit under; never `calls`. */
   measure: string;
   /** What that measure counts, in its own name. Never an ISO 4217 code. */
@@ -99,8 +99,8 @@ export async function grantMandate(
   const agentId = draft.agentId.trim();
   if (agentId === "") return refuse("agentId");
 
-  const consequenceTags = consequenceTagsOf(draft.consequenceTags);
-  if (consequenceTags === null) return refuse("consequenceTags");
+  const impacts = impactsOf(draft.impacts);
+  if (impacts === null) return refuse("impacts");
 
   const limits = mandateLimitsOf(draft);
   if (!limits.ok) return refuse(limits.field);
@@ -127,7 +127,7 @@ export async function grantMandate(
     return refuse("targetDeny");
 
   const alwaysHumanFor = [...new Set(listOf(draft.alwaysHumanFor))];
-  if (!alwaysHumanFor.every((tag) => CONSEQUENCE_TAG.test(tag)))
+  if (!alwaysHumanFor.every((tag) => IMPACT.test(tag)))
     return refuse("alwaysHumanFor");
 
   // The threshold is compared with the call's measure in the units the ledger
@@ -173,7 +173,7 @@ export async function grantMandate(
   const requestId = draft.requestId?.trim() ?? "";
   const result = await kernelWrite(ctx, mandateGrant, {
     agentId,
-    consequenceTags,
+    impacts,
     limits: limits.limits,
     targets: wantsTargets ? { [targetMeasure]: { allow, deny } } : {},
     tools,

@@ -37,7 +37,7 @@ import {
   type ToolVersionListDeps,
 } from "./tool.version.list";
 import { makeCTX } from "./test-utils/fixtures";
-import { unionConsequenceTags } from "@oxagen/agent/runtime/tool-registry-facts";
+import { unionImpacts } from "@oxagen/agent/runtime/tool-registry-facts";
 
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
 const WS = "0192d4a8-7c1e-7a00-8000-00000000ac40";
@@ -101,7 +101,7 @@ function row(over: Partial<RegistryRow> & { slug: string }): RegistryRow {
     riskGrade: "high",
     classifiedRiskGrade: null,
     classification: null,
-    consequenceTags: [],
+    impacts: [],
     classifiedAt: null,
     schemaOrigin: "imported",
     checksum: "a".repeat(64),
@@ -112,7 +112,7 @@ function row(over: Partial<RegistryRow> & { slug: string }): RegistryRow {
 const classified = {
   sideEffect: "irreversible",
   egress: "third_party",
-  consequenceTags: ["moves_money"],
+  impacts: ["moves_money"],
   measures: {},
   dataClasses: [],
 };
@@ -123,8 +123,8 @@ function memoryPage(rows: RegistryRow[]) {
     rows
       .filter((r) => {
         if (q.category === null) return true;
-        // The SQL matches either half of the consequence tags; so does this.
-        return unionConsequenceTags(r).includes(q.category);
+        // The SQL matches either half of the impacts; so does this.
+        return unionImpacts(r).includes(q.category);
       })
       .filter((r) => q.serverId === null || r.serverPublicId === q.serverId)
       .filter((r) => {
@@ -255,7 +255,7 @@ describe("list_tool_versions", () => {
     expect(out.items[0]?.calls30d).toBeNull();
   });
 
-  it("filters by consequence tag", async () => {
+  it("filters by impact", async () => {
     const rows = [
       row({ slug: "search" }),
       row({
@@ -395,11 +395,11 @@ describe("list_tool_versions", () => {
     // The page and the gateway's gate have to agree, or the operator flips a
     // class switch, sees `open` on the Tools page and concludes it missed. A
     // tool published through import_tools or publish_tool_declaration carries
-    // its tags in agent.tool_versions.consequence_tags and has no
+    // its tags in agent.tool_versions.impacts and has no
     // classification jsonb at all until an admin classifies it.
     const declaredOnly = row({
       slug: "wire_transfer",
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       classification: null,
       classifiedAt: null,
     });
@@ -424,10 +424,10 @@ describe("list_tool_versions", () => {
     expect(page.items[0]?.classification).toBeNull();
   });
 
-  it("filters by category on either half of the consequence tags", async () => {
+  it("filters by category on either half of the impacts", async () => {
     const declared = row({
       slug: "wire_transfer",
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
     });
     const classifiedRow = row({
       slug: "create_payment",
@@ -458,7 +458,7 @@ describe("list_tool_versions", () => {
         workspaceId: WS,
         capabilityId: "search",
         serverId: null,
-        consequenceTags: [],
+        impacts: [],
       }),
     ).toEqual({ kind: "open", switchId: null });
   });

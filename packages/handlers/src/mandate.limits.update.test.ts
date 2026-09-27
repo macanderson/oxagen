@@ -113,7 +113,7 @@ vi.mock("@oxagen/rules", async (importOriginal) => ({
       orgId: "org_1",
       workspaceId: "ws_1",
       agentPrincipalId: "prn_1",
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       limits: doubles.locked.limits,
       // Every case here writes through limitChanges naming the measure it
       // asserts on, so nothing needs the untouched-measure kind preserved
@@ -143,11 +143,11 @@ vi.mock("@oxagen/rules", async (importOriginal) => ({
 vi.mock("./_mandate", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./_mandate")>()),
   // The stale read the handler does before it locks anything: it is there for
-  // the consequence tags, and the merge must not take its limits.
+  // the impacts, and the merge must not take its limits.
   loadMandateRow: async () => ({
     id: "11111111-1111-4111-8111-111111111111",
     publicId: "mnd_1",
-    consequenceTags: ["moves_money"],
+    impacts: ["moves_money"],
     limits: doubles.stale,
   }),
   // Passthrough (ADR-108): the real function stamps `kind` from the tool

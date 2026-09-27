@@ -136,12 +136,16 @@ export interface SteeringHost {
     path: string,
     ref: string,
   ): Promise<GitHubPathCommit | null>;
-  /** Create the branch from `fromBranch`; an existing branch is reused. */
+  /**
+   * Create the branch from `fromBranch`; an existing branch is reused. With
+   * `at`, the branch starts at that commit instead of at `fromBranch`'s head.
+   * The host creates it there in one call, so nothing moves it in between.
+   */
   ensureBranch(
     repo: SteeringRepository,
     branch: string,
     fromBranch: string,
-    options?: { exclusive: boolean },
+    options?: { exclusive: boolean; at?: string },
   ): Promise<void>;
   /** Remove omitted files from a proposal's owned paths before writing its replacement. */
   reconcileFiles(
@@ -920,6 +924,7 @@ export function createSteeringGitHub(
           repo: repo.repo,
           branch,
           fromBranch,
+          fromSha: options?.at,
         });
       } catch (err) {
         if (

@@ -23,15 +23,15 @@
 // Which switches reach a call is decided by `matchKillSwitch` in @oxagen/iam,
 // the same matcher `list_tool_versions` prints the gate with. The facts a call
 // carries: its capability id, the external server and connection it goes
-// through, and the consequence tags of its registry version.
+// through, and the impacts of its registry version.
 //
-// A version's consequence tags live in TWO columns and a class switch reaches
-// a tool tagged in either. `agent.tool_versions.consequence_tags` (text[]) is
+// A version's impacts live in TWO columns and a class switch reaches
+// a tool tagged in either. `agent.tool_versions.impacts` (text[]) is
 // the declared half — what `publish_tool_declaration` and `import_tools` write
 // from the descriptor, and what the mandate gate reads — and
-// `classification->'consequenceTags'` is the classified half, what
+// `classification->'impacts'` is the classified half, what
 // `set_tool_classification` writes. Both are drawn from the same vocabulary
-// (`consequenceTagSchema`), so the index is their union: reading only the
+// (`impactSchema`), so the index is their union: reading only the
 // jsonb left every declared-tag tool outside every class switch's reach while
 // `list_kill_switches` reported the switch on.
 //
@@ -58,7 +58,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
 import {
   registryCapabilityId,
-  unionConsequenceTags,
+  unionImpacts,
 } from "./tool-registry-facts";
 
 /** What the gate knows about one call beyond the run's own scope. */
@@ -71,7 +71,7 @@ interface ToolCallFacts {
   readonly readOnly: boolean;
 }
 
-/** The consequence tags of every classified active version, by capability id. */
+/** The impacts of every classified active version, by capability id. */
 type ClassificationIndex = ReadonlyMap<string, readonly string[]>;
 
 export interface KillSwitchSnapshot {
@@ -97,7 +97,7 @@ async function readClassificationIndex(
   scope: { orgId: string; workspaceId: string },
 ): Promise<ClassificationIndex> {
   // No `classification IS NOT NULL` filter: an unclassified version with
-  // declared consequence tags is exactly the row a class switch has to reach.
+  // declared impacts is exactly the row a class switch has to reach.
   const rows = await tx
     .select({
       source: schema.tools.source,
@@ -105,7 +105,7 @@ async function readClassificationIndex(
       name: schema.tools.name,
       mcpServerId: schema.tools.mcpServerId,
       classification: schema.toolVersions.classification,
-      consequenceTags: schema.toolVersions.consequenceTags,
+      impacts: schema.toolVersions.impacts,
     })
     .from(schema.tools)
     .innerJoin(
@@ -121,7 +121,7 @@ async function readClassificationIndex(
     );
   const index = new Map<string, readonly string[]>();
   for (const row of rows) {
-    const tags = unionConsequenceTags(row);
+    const tags = unionImpacts(row);
     if (tags.length === 0) continue;
     index.set(registryCapabilityId(row), tags);
   }
@@ -247,7 +247,7 @@ export function createKillSwitchGate(
         capabilityId: facts.capabilityId,
         serverId: facts.serverId ?? null,
         connectionId: facts.connectionId ?? null,
-        consequenceTags: current.tags.get(facts.capabilityId) ?? [],
+        impacts: current.tags.get(facts.capabilityId) ?? [],
         agentId: agentRun?.agentId ?? actingAgent?.agentId ?? null,
         operatorUserId: ctx.userId ?? null,
         principalIds: agentRun
