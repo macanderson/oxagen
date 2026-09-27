@@ -355,6 +355,10 @@ async function pickConnection(ctx: StepContext): Promise<void> {
     ctx.state.provider = ctx.connection.provider;
     return;
   }
+  // A stored token that the host refuses stops this step with a reauthorize
+  // banner for that host. The step does not skip the refused host and pick
+  // the other one, because the saved choice is permanent and the owner may
+  // have meant the host whose token lapsed.
   const candidates: SteeringConnection[] = [];
   const github = ctx.deps.github(ctx.scope);
   if (github !== null) {
@@ -618,6 +622,20 @@ function lastStep(scope: SteeringRepoScope): SteeringRepoStep {
  * Whether an owner has to authorize again: the token is missing, or the host
  * refused it. Both provider errors and the blocked error carry this code.
  */
+/**
+ * The host whose authorization a reauthorize stop asks for. A stop inside
+ * `pick_connection` comes before any provider is recorded, so the error class
+ * names the host there.
+ */
+function reauthorizeHost(
+  err: unknown,
+  provider: "github" | "gitlab" | null,
+): "github" | "gitlab" {
+  if (err instanceof gl.SteeringGitlabReauthorizeError) return "gitlab";
+  if (err instanceof gh.SteeringReauthorizeError) return "github";
+  return provider ?? "github";
+}
+
 function isReauthorize(err: unknown): boolean {
   return (
     err instanceof gh.SteeringReauthorizeError ||
@@ -678,7 +696,7 @@ export async function runSteeringRepoStep(
     if (isReauthorize(err)) {
       // One banner per stop, not one per retry.
       if (previous?.code !== code)
-        await deps.notifyReauthorize(scope, provider ?? "github");
+        await deps.notifyReauthorize(scope, reauthorizeHost(err, provider));
       throw new SteeringProvisionBlockedError(code, message);
     }
     throw err;
