@@ -195,6 +195,57 @@ export async function reportBusy(busy: boolean): Promise<void> {
   }
 }
 
+/**
+ * Whether this install may update itself without asking (ADR-202), from
+ * `update_policy` in update.rs.
+ */
+export interface UpdatePolicy {
+  /** `autoUpdate` in `desktop.json`: absent or `true` is on. */
+  auto_update: boolean;
+  /** The first gate that stops an automatic install, as a sentence. */
+  blocker: string | null;
+  /** Install without asking: the setting is on and no gate blocks it. */
+  silent: boolean;
+}
+
+/**
+ * Read the policy. A shell that predates the command answers with an error,
+ * and null keeps the prompt.
+ */
+export async function readUpdatePolicy(): Promise<UpdatePolicy | null> {
+  try {
+    return await invoke<UpdatePolicy>("update_policy");
+  } catch {
+    return null;
+  }
+}
+
+/** The Updates panel's checkbox. Rejects when `desktop.json` cannot be written. */
+export const setAutoUpdate = (enabled: boolean) =>
+  invoke<UpdatePolicy>("set_auto_update", { enabled });
+
+/**
+ * After an install, restart the collector so it runs the new build. Never
+ * rejects: a failed restart must not fail the update, so the error comes
+ * back as text for the activity log.
+ */
+export async function restartTachoService(): Promise<
+  | { ok: true; outcome: "restarted" | "not_running" | "unsupported" }
+  | { ok: false; error: string }
+> {
+  try {
+    const outcome = await invoke<"restarted" | "not_running" | "unsupported">(
+      "restart_tacho_service",
+    );
+    return { ok: true, outcome };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 export interface OrgItem {
   id: string;
   slug: string;

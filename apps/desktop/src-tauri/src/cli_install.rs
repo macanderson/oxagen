@@ -247,7 +247,7 @@ pub fn cli_install_dir() -> PathBuf {
     Roots::real().cli_install_dir()
 }
 
-fn read_json_object(path: &Path) -> Map<String, Value> {
+pub(crate) fn read_json_object(path: &Path) -> Map<String, Value> {
     crate::read_json(path)
         .and_then(|v| v.as_object().cloned())
         .unwrap_or_default()
@@ -259,7 +259,7 @@ const CONFIG_DIR_CREATED: &str = "configDirCreated";
 /// Write `desktop.json`. When `~/.config` is not there yet, this write is what
 /// creates it, and the file records that under `configDirCreated`, so
 /// Uninstall removes an empty `~/.config` only when Oxagen made it.
-fn write_desktop_config(roots: &Roots, config: &Map<String, Value>) -> Result<(), String> {
+pub(crate) fn write_desktop_config(roots: &Roots, config: &Map<String, Value>) -> Result<(), String> {
     let mut config = config.clone();
     if !roots.home.join(".config").exists() {
         config.insert(CONFIG_DIR_CREATED.to_string(), Value::Bool(true));
@@ -845,10 +845,13 @@ impl Default for CliInstallView {
 /// window is undone the moment the probe returns.
 static INSTALL_LOCK: Mutex<()> = Mutex::new(());
 
-/// The guard every install/uninstall pass holds. A panic in an earlier pass
-/// must not lock out every later one, and there is no state to be poisoned:
-/// the lock guards `()`, not data.
-fn install_guard() -> std::sync::MutexGuard<'static, ()> {
+/// The guard every install/uninstall pass holds, and every other writer of
+/// `desktop.json` (`update::write_auto_update`), so no read-modify-write of
+/// that file lands on top of another's. A panic in an earlier pass must not
+/// lock out every later one, and there is no state to be poisoned: the lock
+/// guards `()`, not data. It is not reentrant, so a caller that already holds
+/// it must not call a function that takes it.
+pub(crate) fn install_guard() -> std::sync::MutexGuard<'static, ()> {
     INSTALL_LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
