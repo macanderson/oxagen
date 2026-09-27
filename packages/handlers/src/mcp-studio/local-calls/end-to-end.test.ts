@@ -118,7 +118,7 @@ afterEach(async () => {
   running = undefined;
 });
 
-async function rig(options: { env?: MachineEnv; digest?: string } = {}): Promise<Rig> {
+async function rig(options: { env?: MachineEnv; digest?: `sha256:${string}` } = {}): Promise<Rig> {
   const signer = testSigner();
   const broker = createInProcessBroker();
   const started: Started[] = [];
