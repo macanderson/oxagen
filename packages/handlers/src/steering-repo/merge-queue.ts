@@ -9,11 +9,13 @@
 // and one ledger line. The squash merge is pinned to the commit that was
 // checked (or stamped), and its message ends with the Oxagen-* trailers.
 //
-// The queue is a lock held in this process. Two API instances can each run
-// one merge on the same repository at once; the host still refuses a merge
-// pinned to a head that moved, and the stamp refuses a branch that moved, so
-// the ledger cannot fork, but one of the two merges is refused and must be
-// retried.
+// The queue is a lock held in this process. merge_context_pr runs on the api
+// surface only, and one API process serves it today, so the lock orders every
+// merge of a repository. A second process needs a lock both can see. Without
+// one, the host still refuses a merge pinned to a head that moved, and two
+// ledger lines in the same period file conflict, so one merge is refused. Two
+// merges that straddle a ledger period write different files, though, so both
+// can land, each with the same version.
 import { HandlerError } from "@oxagen/oxagen";
 import type { GovernanceMode } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { readTomlFile } from "@oxagen/oxagen/steering-repo/files";
