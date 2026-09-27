@@ -594,6 +594,30 @@ describe("planAddTools", () => {
     const p = planAddTools({ folder: "github", toolsText, lockText, pins, toolNames: ["delete_repo"] });
     expect(p).toMatchObject({ ok: false, code: "not_found", reason: "tool_not_pinned" });
   });
+
+  it("matches a listed tool by its upstream name when its key was renamed", () => {
+    const t = server({ name: "Tracker", origin: "steering", steeringName: "tracker" });
+    const made = planAddServer(t, "tracker", { tools: [tool(t.id, "Create-Issue")], descriptors: [] });
+    if (!made.ok) throw new Error(made.reason);
+    const p = planAddTools({
+      folder: "tracker",
+      toolsText: fileOf(made.folder, "/tools.toml"),
+      lockText: fileOf(made.folder, "/tools.lock.json"),
+      pins: [{ name: "Create-Issue", description: null, inputSchema: { type: "object" } }],
+      toolNames: ["Create-Issue"],
+    });
+    expect(p).toMatchObject({ ok: false, reason: "nothing_to_add" });
+  });
+
+  it("refuses a tools.toml on the default branch that does not validate", () => {
+    const p = planAddTools({ folder: "github", toolsText: "tools = [", lockText, pins, toolNames: ["create_issue"] });
+    expect(p).toMatchObject({ ok: false, code: "conflict", reason: "tools_toml_invalid" });
+  });
+
+  it("refuses a lock on the default branch that does not validate", () => {
+    const p = planAddTools({ folder: "github", toolsText, lockText: "{}", pins, toolNames: ["create_issue"] });
+    expect(p).toMatchObject({ ok: false, code: "conflict", reason: "tools_lock_invalid" });
+  });
 });
 
 describe("createServerFolderWriter", () => {
@@ -603,6 +627,8 @@ describe("createServerFolderWriter", () => {
     server: MigrationServer;
     taken?: string[];
     files?: Record<string, string>;
+    /** Every server.toml path reads as present on the default branch. */
+    everyFolderExists?: boolean;
     openFails?: boolean;
     nameFolder?: (folder: string) => Promise<boolean>;
     descriptors?: MigrationDescriptor[];
@@ -614,7 +640,8 @@ describe("createServerFolderWriter", () => {
     const opened: OpenSteeringPrRequest[] = [];
     const opener: SteeringPrOpener = {
       hasSteeringRepo: async () => true,
-      readFile: async (_scope, path) => setup.files?.[path] ?? null,
+      readFile: async (_scope, path) =>
+        setup.files?.[path] ?? (setup.everyFolderExists === true ? "schema = 1\n" : null),
       open: async (request) => {
         opened.push(request);
         if (setup.openFails) throw new Error("GitHub is down");
@@ -656,7 +683,18 @@ describe("createServerFolderWriter", () => {
     expect(request.branch).toBe("tools/add-server-linear-20260927t070000z");
     expect(request.actorUserId).toBe("user-1");
     expect(request.files.every((f) => f.path.startsWith("tools/servers/linear/"))).toBe(true);
+    expect(request.title).toBe("Add the Linear MCP server");
+    expect(request.body).toContain("as `tools/servers/linear/`");
+    expect(request.body).toContain("When this PR merges, the next publish connects the server.");
     expect(w.unnamed).toEqual([]);
+  });
+
+  it("gives up when every folder name it tries is taken", async () => {
+    const w = add({ server: proposed(), everyFolderExists: true });
+
+    await expect(w.run()).rejects.toMatchObject({ code: "conflict", reason: "folder_name_taken" });
+    expect(w.named).toEqual([]);
+    expect(w.opened).toEqual([]);
   });
 
   it("skips a name another row holds or the default branch already has", async () => {
@@ -751,7 +789,21 @@ describe("createServerFolderWriter", () => {
     expect(pr.number).toBe(42);
     const request = w.opened[0] as OpenSteeringPrRequest;
     expect(request.title).toBe("Add 1 tool to the github MCP server");
+    expect(request.branch).toBe("tools/add-tools-github-20260927t070000z");
     expect(request.files.map((f) => f.path)).toEqual([toolsTomlPath("github"), toolsLockPath("github")]);
+    expect(request.body).toContain("This PR adds 1 tool to `tools/servers/github/`.");
+    expect(request.body).toContain("- `github__create_issue`");
+  });
+
+  it("refuses to add tools to a server its steering repo does not hold", async () => {
+    for (const s of [server({ origin: "legacy" }), server({ origin: "proposed", steeringName: "github" })]) {
+      const w = writerFor({ server: s });
+
+      await expect(
+        w.writer.addTools({ ...scope, serverId: s.id, toolNames: ["x"], actorUserId: null }),
+      ).rejects.toMatchObject({ code: "conflict", reason: "server_not_steering" });
+      expect(w.opened).toEqual([]);
+    }
   });
 
   it("refuses to add tools when the folder is missing on the default branch", async () => {

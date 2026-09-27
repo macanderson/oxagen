@@ -4,6 +4,7 @@ import {
   UnsafeOutboundUrlError,
 } from "@oxagen/config/public-url";
 import { and, eq } from "drizzle-orm";
+import pino from "pino";
 import { withTenantDb, schema } from "@oxagen/database";
 import type { CapabilityContext } from "../types";
 import { healthcheck, type McpToolDescriptor } from "../dispatch/mcp-client";
@@ -16,6 +17,11 @@ import type {
 } from "@oxagen/oxagen/contracts/agent.mcp.register";
 
 export type { AgentMcpRegisterInput, AgentMcpRegisterOutput };
+
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "agent.mcp" },
+});
 
 // ── SSRF protection ───────────────────────────────────────────────────────────
 // The endpointUrl is attacker-influenceable (an authenticated org admin supplies
@@ -155,6 +161,8 @@ export async function agentMcpRegisterHandler(
     });
   } catch (error) {
     // No steering PR opened, so the proposed row has nothing to wait for.
+    // A failed delete is logged, and the caller still gets the writer's error,
+    // which says why the server was not added.
     await withTenantDb((tx) =>
       tx
         .update(schema.mcpServers)
@@ -165,7 +173,12 @@ export async function agentMcpRegisterHandler(
             eq(schema.mcpServers.workspaceId, ctx.workspaceId),
           ),
         ),
-    );
+    ).catch((deleteError: unknown) => {
+      logger.error(
+        { err: deleteError, serverId: row.id, workspaceId: ctx.workspaceId },
+        "register_mcp_server: the steering PR did not open and the proposed row was not deleted",
+      );
+    });
     throw error;
   }
   return { ...output, steeringPr: { number: pr.number, url: pr.url } };

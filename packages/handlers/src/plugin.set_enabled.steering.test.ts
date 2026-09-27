@@ -67,6 +67,7 @@ interface TxEntry {
   set?: Record<string, unknown>;
   values?: Record<string, unknown>;
   conflictSet?: Record<string, unknown>;
+  where?: SQL;
 }
 
 let txLog: TxEntry[] = [];
@@ -99,7 +100,10 @@ function fakeTx(result: unknown[]): unknown {
       return chain;
     },
     from: same,
-    where: same,
+    where: (w: SQL) => {
+      entry.where = w;
+      return chain;
+    },
     onConflictDoNothing: same,
     onConflictDoUpdate: (c: { set: Record<string, unknown> }) => {
       entry.conflictSet = c.set;
@@ -111,6 +115,11 @@ function fakeTx(result: unknown[]): unknown {
       Promise.resolve(result).then(ok, fail),
   });
   return chain;
+}
+
+/** Render a recorded WHERE clause as Postgres SQL and its parameters. */
+function renderWhere(entry: TxEntry | undefined): { sql: string; params: unknown[] } {
+  return new PgDialect().sqlToQuery(entry?.where as SQL);
 }
 
 /** One withTenantDb call per result, in order. */
@@ -169,7 +178,7 @@ describe("set_plugin_enabled (workspace) once tools live in the steering repo", 
   });
 
   it("turns a disabled legacy row into a proposal and keeps its id", async () => {
-    queue([LISTING], [existingRow({})], []);
+    queue([LISTING], [existingRow({})], [{ id: "srv-2" }]);
 
     const result = (await handler(ENABLE, ctx)) as { workspaceServerId: string };
 
@@ -179,15 +188,39 @@ describe("set_plugin_enabled (workspace) once tools live in the steering repo", 
       set: { origin: "proposed", enabled: false, steeringName: null, deletedAt: null, deletedById: null },
     });
     expect(mocks.addServer).toHaveBeenCalledWith(expect.objectContaining({ serverId: "srv-2" }));
+    // The conversion matches only the origin and the empty folder name it read.
+    const where = renderWhere(txLog[2]);
+    expect(where.sql).toMatch(/"origin" = \$\d+/);
+    expect(where.sql).toMatch(/"steering_name" is null/);
+    expect(where.params).toContain("legacy");
   });
 
   it("brings back a soft-deleted row as a proposal", async () => {
-    queue([LISTING], [existingRow({ origin: "steering", steeringName: "linear", deletedAt: new Date() })], []);
+    queue(
+      [LISTING],
+      [existingRow({ origin: "steering", steeringName: "linear", deletedAt: new Date() })],
+      [{ id: "srv-2" }],
+    );
 
     await handler(ENABLE, ctx);
 
-    expect(txLog[2]).toMatchObject({ op: "update", set: { origin: "proposed", deletedAt: null } });
+    expect(txLog[2]).toMatchObject({ op: "update", set: { origin: "proposed", steeringName: null, deletedAt: null } });
+    // The conversion matches the folder name it read, so it clears only that name.
+    const where = renderWhere(txLog[2]);
+    expect(where.sql).toMatch(/"steering_name" = \$\d+/);
+    expect(where.params).toEqual(expect.arrayContaining(["steering", "linear"]));
     expect(mocks.addServer).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses when another request changed the row after it was read", async () => {
+    queue([LISTING], [existingRow({})], []);
+
+    await expect(handler(ENABLE, ctx)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "plugin_enable_in_progress",
+    });
+    expect(mocks.addServer).not.toHaveBeenCalled();
+    expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
   });
 
   it("toggles a live steering row on directly", async () => {
@@ -236,12 +269,16 @@ describe("set_plugin_enabled (workspace) once tools live in the steering repo", 
     expect(txLog[3]?.op).toBe("update");
     expect(txLog[3]?.set?.deletedAt).toBeInstanceOf(Date);
     expect(txLog[3]?.set?.deletedById).toBe("user-1");
+    // The delete touches the row only while it is still an unnamed proposal.
+    const where = renderWhere(txLog[3]);
+    expect(where.sql).toMatch(/"steering_name" is null/);
+    expect(where.params).toContain("proposed");
     expect(mocks.emitSecurityEvent).not.toHaveBeenCalled();
   });
 
   it("restores a converted row when the PR does not open", async () => {
     mocks.addServer.mockRejectedValue(new Error("GitHub is down"));
-    queue([LISTING], [existingRow({})], [], []);
+    queue([LISTING], [existingRow({})], [{ id: "srv-2" }], []);
 
     await expect(handler(ENABLE, ctx)).rejects.toThrow("GitHub is down");
 
@@ -249,6 +286,11 @@ describe("set_plugin_enabled (workspace) once tools live in the steering repo", 
       op: "update",
       set: { origin: "legacy", enabled: false, steeringName: null, deletedAt: null, deletedById: null },
     });
+    // The restore leaves alone a row a concurrent enable has already named.
+    const where = renderWhere(txLog[3]);
+    expect(where.sql).toMatch(/"origin" = \$\d+/);
+    expect(where.sql).toMatch(/"steering_name" is null/);
+    expect(where.params).toContain("proposed");
   });
 
   it("still rethrows the PR error when the rollback fails", async () => {

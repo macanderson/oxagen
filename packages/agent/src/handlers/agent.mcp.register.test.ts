@@ -435,6 +435,31 @@ describe("agent.mcp.register handler", () => {
       expect(setArg.deletedById).toBe("u_1");
     });
 
+    it("rethrows the writer's error when the proposed row cannot be deleted", async () => {
+      mocks.healthcheckMock.mockResolvedValueOnce(HEALTHY);
+      mocks.addServer.mockRejectedValueOnce(new Error("server_not_movable"));
+      mocks.updateWhere.mockRejectedValueOnce(new Error("connection reset"));
+
+      await expect(agentMcpRegisterHandler(BASE_INPUT, CTX)).rejects.toThrow("server_not_movable");
+
+      expect(mocks.updateSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("captures the tool snapshots before the writer reads them", async () => {
+      mocks.healthcheckMock.mockResolvedValueOnce(HEALTHY);
+      mocks.addServer.mockResolvedValueOnce({
+        number: 13,
+        url: "https://github.com/acme/steering/pull/13",
+        branch: "tools/add-server-test-mcp-20260927",
+      });
+
+      await agentMcpRegisterHandler(BASE_INPUT, CTX);
+
+      const captured = captureSnapshotsMock.mock.invocationCallOrder[0] ?? Infinity;
+      const opened = mocks.addServer.mock.invocationCallOrder[0] ?? -Infinity;
+      expect(captured).toBeLessThan(opened);
+    });
+
     it("keeps writing a stdio server as a direct row", async () => {
       const input = { ...BASE_INPUT, transportType: "stdio" as const, endpointUrl: "stdio://linear" };
 

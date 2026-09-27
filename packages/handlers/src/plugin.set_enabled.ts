@@ -104,10 +104,21 @@ async function enableThroughSteering(
   const stillUnnamedProposal = (id: string) =>
     and(eq(s.id, id), eq(s.workspaceId, ctx.workspaceId), eq(s.origin, "proposed"), isNull(s.steeringName));
 
+  const enableInProgress = () =>
+    new HandlerError({
+      code: "conflict",
+      reason: "plugin_enable_in_progress",
+      message: `Another request is enabling "${listing.name}" in this workspace. Try again in a moment.`,
+    });
+
   let row: { id: string; publicId: string };
   let undo: () => Promise<unknown>;
   if (existing !== null) {
-    await withTenantDb((tx) =>
+    // The update matches only the origin and folder name this request read.
+    // A concurrent enable that already changed the row, or reserved a folder
+    // name for it, keeps its PR, and this request stops instead of clearing
+    // the name and opening a second PR.
+    const [converted] = await withTenantDb((tx) =>
       tx
         .update(s)
         .set({
@@ -119,8 +130,17 @@ async function enableThroughSteering(
           healthStatus: "unknown",
           updatedAt: new Date(),
         })
-        .where(and(eq(s.id, existing.id), eq(s.workspaceId, ctx.workspaceId))),
+        .where(
+          and(
+            eq(s.id, existing.id),
+            eq(s.workspaceId, ctx.workspaceId),
+            eq(s.origin, existing.origin),
+            existing.steeringName === null ? isNull(s.steeringName) : eq(s.steeringName, existing.steeringName),
+          ),
+        )
+        .returning({ id: s.id }),
     );
+    if (converted === undefined) throw enableInProgress();
     row = { id: existing.id, publicId: existing.publicId };
     undo = () =>
       withTenantDb((tx) =>
@@ -160,13 +180,7 @@ async function enableThroughSteering(
         })
         .returning({ id: s.id, publicId: s.publicId }),
     );
-    if (inserted === undefined) {
-      throw new HandlerError({
-        code: "conflict",
-        reason: "plugin_enable_in_progress",
-        message: `Another request is enabling "${listing.name}" in this workspace. Try again in a moment.`,
-      });
-    }
+    if (inserted === undefined) throw enableInProgress();
     row = inserted;
     undo = () =>
       withTenantDb((tx) =>
