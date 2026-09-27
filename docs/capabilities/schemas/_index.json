@@ -1,5 +1,5 @@
 {
-  "generatedCount": 402,
+  "generatedCount": 405,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -21,6 +21,14 @@
         "mcp",
         "agent"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "add_group_machine",
+      "domain": "tacho",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []
@@ -2440,6 +2448,14 @@
       "consumes": []
     },
     {
+      "name": "list_machine_groups",
+      "domain": "tacho",
+      "surfaces": [],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "list_mandates",
       "domain": "mandate",
       "surfaces": [
@@ -3348,6 +3364,14 @@
       "surfaces": [
         "mcp"
       ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "remove_group_machine",
+      "domain": "tacho",
+      "surfaces": [],
       "component": null,
       "produces": [],
       "consumes": []

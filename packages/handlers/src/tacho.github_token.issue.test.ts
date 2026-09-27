@@ -195,4 +195,19 @@ describe("repository-scoped GitHub credentials", () => {
     expect(compiled.sql).toContain('"workspace_id"');
     expect(compiled.sql).toContain("lower(");
   });
+  it("reads a steering head as the main repository, not a linked one", async () => {
+    const chain = {
+      from: () => chain,
+      innerJoin: () => chain,
+      where: () => chain,
+      limit: async () => [{ ...repo, role: "steering" }],
+    };
+    const row = await selectGovernedRepository(
+      { select: () => chain } as unknown as Tx,
+      ctx,
+      "Acme",
+      "Repo",
+    );
+    expect(row?.role).toBe("main");
+  });
 });

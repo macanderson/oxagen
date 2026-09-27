@@ -1,7 +1,10 @@
 // context.steering.gitlab.ts: the GitLab implementation of the steering port
 // (#3762; ADR-061). A Context PR on GitLab is a merge request, a check is a
 // commit status, and every call authenticates with the project access token
-// the workspace connected.
+// the workspace connected. A steering project the provisioner created is the
+// one exception: it hangs from a `gitlab_steering` connection with no token of
+// its own, so the seam uses the group access token the organization stored for
+// that project's group.
 //
 // Three GitLab facts shape this file:
 //
@@ -23,7 +26,7 @@ import {
   type GitLabMergeRequest,
 } from "@oxagen/gitlab";
 import { HandlerError } from "@oxagen/oxagen";
-import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import {
   linkedOxagenUser,
   refuseLongCompare,
@@ -35,6 +38,7 @@ import {
   GITLAB_PROVIDER,
   resolveGitLabCredential,
 } from "./lib/gitlab-credential";
+import { GITLAB_STEERING_PROVIDER } from "./lib/steering-app";
 import { logger } from "./logger";
 
 type GitLabRepository = Extract<SteeringRepository, { provider: "gitlab" }>;
@@ -149,6 +153,31 @@ export interface GitLabSteeringConnection {
   repo: string;
   approvedFullName: string;
   approvedDefaultRef: string;
+  /**
+   * The GitLab group whose stored group access token reaches this project.
+   * Set only for a steering project the provisioner bound through a
+   * `gitlab_steering` connection. Every other project uses the token stored
+   * on its own connection.
+   */
+  steeringGroupId?: number;
+}
+
+/**
+ * The group id a `gitlab_steering` connection's `delivery_config` holds, or
+ * null when it holds none. The provisioner writes `{ groupId, groupPath }`.
+ */
+function steeringGroupIdOf(config: unknown): number | null {
+  const raw =
+    config !== null && typeof config === "object"
+      ? (config as { groupId?: unknown }).groupId
+      : undefined;
+  const id =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string" && /^\d+$/.test(raw)
+        ? Number(raw)
+        : Number.NaN;
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
 /**
@@ -159,6 +188,11 @@ export interface GitLabSteeringConnection {
  * binding rows outlive a revoked connection, and steering must stop at the
  * revoke rather than when the purge runs. There is no legacy fallback: GitLab
  * support starts with bindings.
+ *
+ * The connection is either the workspace's own GitLab project connection or
+ * the `gitlab_steering` connection the provisioner wrote. For the second, the
+ * answer carries the group id whose token the seam uses, and a connection
+ * with no group id refuses, because no stored token can reach the project.
  */
 export async function readGitLabConnection(scope: {
   orgId: string;
@@ -173,6 +207,8 @@ export async function readGitLabConnection(scope: {
         repo: schema.repositoryBindings.providerName,
         approvedFullName: schema.repositoryBindings.providerFullName,
         approvedDefaultRef: schema.repositoryBindings.configuredDefaultRef,
+        connectorId: schema.sourceConnections.connectorId,
+        deliveryConfig: schema.sourceConnections.deliveryConfig,
       })
       .from(schema.repositoryBindingHeads)
       .innerJoin(
@@ -193,9 +229,15 @@ export async function readGitLabConnection(scope: {
         and(
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-          eq(schema.repositoryBindingHeads.role, "main"),
+          inArray(
+            schema.repositoryBindingHeads.role,
+            schema.STEERING_HEAD_ROLES,
+          ),
           eq(schema.repositoryBindingHeads.provider, GITLAB_PROVIDER),
-          eq(schema.sourceConnections.connectorId, GITLAB_PROVIDER),
+          inArray(schema.sourceConnections.connectorId, [
+            GITLAB_PROVIDER,
+            GITLAB_STEERING_PROVIDER,
+          ]),
           isNull(schema.sourceConnections.deletedAt),
           notInArray(schema.sourceConnections.status, [
             ...RETIRED_CONNECTION_STATUSES,
@@ -203,7 +245,24 @@ export async function readGitLabConnection(scope: {
         ),
       )
       .limit(1);
-    return bound ?? null;
+    if (!bound) return null;
+    const answer: GitLabSteeringConnection = {
+      connectionId: bound.connectionId,
+      projectId: bound.projectId,
+      owner: bound.owner,
+      repo: bound.repo,
+      approvedFullName: bound.approvedFullName,
+      approvedDefaultRef: bound.approvedDefaultRef,
+    };
+    if (bound.connectorId !== GITLAB_STEERING_PROVIDER) return answer;
+    const groupId = steeringGroupIdOf(bound.deliveryConfig);
+    if (groupId === null)
+      throw new HandlerError({
+        code: "conflict",
+        reason: "steering_group_missing",
+        message: `The steering project ${bound.approvedFullName} hangs from a GitLab steering connection with no group id, so Oxagen cannot pick its group access token. Provision the steering repository again.`,
+      });
+    return { ...answer, steeringGroupId: groupId };
   });
 }
 
@@ -257,6 +316,36 @@ export interface SteeringGitLabDeps {
     providerId: string,
     accountId: string,
   ) => Promise<string | null>;
+  /**
+   * The group access token the organization stored for one GitLab group, or
+   * null when none is usable. The seam calls it for a steering project the
+   * provisioner bound. Defaults to the provisioner's `steeringGroupToken`.
+   */
+  steeringGroupToken?: (
+    orgId: string,
+    groupId: number,
+  ) => Promise<string | null>;
+}
+
+/** The provisioner's group token reader, loaded only when a head needs it. */
+async function storedSteeringGroupToken(
+  orgId: string,
+  groupId: number,
+): Promise<string | null> {
+  const { steeringGroupToken } = await import("./steering_repo.provision");
+  return steeringGroupToken(orgId, groupId);
+}
+
+/**
+ * The refusal for a steering project whose group has no usable stored token.
+ * It names the project and the repair, and nothing about any token.
+ */
+function steeringGroupNotConnected(fullName: string): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "gitlab_not_connected",
+    message: `No usable GitLab group access token is stored for the group that holds the steering project ${fullName}. An organization owner must connect the group again.`,
+  });
 }
 
 const defaultDeps: SteeringGitLabDeps = {
@@ -433,10 +522,20 @@ export function createSteeringGitLab(
             "This workspace has no connected GitLab project; a Context PR needs the main repository (MC spec §10.1)",
         });
       }
-      const token = await deps.resolveToken({
-        ...scope,
-        connectionId: connection.connectionId,
-      });
+      let token: string;
+      if (connection.steeringGroupId === undefined) {
+        token = await deps.resolveToken({
+          ...scope,
+          connectionId: connection.connectionId,
+        });
+      } else {
+        const stored = await (
+          deps.steeringGroupToken ?? storedSteeringGroupToken
+        )(scope.orgId, connection.steeringGroupId);
+        if (stored === null)
+          throw steeringGroupNotConnected(connection.approvedFullName);
+        token = stored;
+      }
       const gl = deps.client(token);
       let project;
       try {

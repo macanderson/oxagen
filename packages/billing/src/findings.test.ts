@@ -222,12 +222,14 @@ describe("microsOf", () => {
 });
 
 describe("the detector registry", () => {
-  it("runs spin loops first, then repeats, then the detectors that claim no frame", () => {
+  it("runs spin loops first, then repeats, then spend with no outcome, then the detectors that claim no frame", () => {
     expect(DETECTORS.map((d) => [d.kinds, d.counting])).toEqual([
       [["spin_loops"], 1],
       [["repeated_shell_commands", "duplicate_tool_calls"], 1],
+      [["spend_with_no_outcome"], 8],
       [["cache_writes_never_read"], null],
       [["unpaged_results"], null],
+      [["model_class_fit"], null],
     ]);
   });
 
@@ -883,7 +885,7 @@ describe("a result another run already fetched", () => {
 });
 
 describe("unpaged results", () => {
-  it("re-prices a result above the threshold at one page", () => {
+  it("re-prices a result above the threshold at one page when the run's frames were not read", () => {
     const r = run();
     const tokens = UNPAGED_RESULT_TOKENS + 1_000;
     const [finding] = detect({
@@ -941,7 +943,7 @@ describe("unpaged results", () => {
     ]);
   });
 
-  it("does not flag a result at the threshold", () => {
+  it("does not flag a result at the threshold when the run's frames were not read", () => {
     const r = run();
     expect(
       detect({
@@ -1162,14 +1164,13 @@ describe("the frames a finding cites (#4001)", () => {
       call(r, { at: 1, resultTokens: big }),
       call(r, { at: 2, resultTokens: big }),
     ];
-    const findings = detect({
-      runs: [r],
-      toolCalls,
-      frames: turns(toolCalls),
-    });
-    expect(findings.map((f) => [f.kind, f.evidence.calls])).toEqual([
-      ["unpaged_results", 2],
-    ]);
+    // A third request re-reads the second result, so both results count.
+    const frames = turns(toolCalls);
+    frames.get(r.runId)!.push(request(r, 3));
+    const findings = detect({ runs: [r], toolCalls, frames });
+    expect(
+      findings.map((f) => [f.kind, f.evidence.frames?.[r.runId]?.total]),
+    ).toEqual([["unpaged_results", 2]]);
   });
 });
 

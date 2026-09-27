@@ -1376,6 +1376,24 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .pauseWorkspaceRunsHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "add_group_machine",
+    async () =>
+      (await import("./mcp-studio/local-calls/machine-group.add"))
+        .tachoMachineGroupAddHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "remove_group_machine",
+    async () =>
+      (await import("./mcp-studio/local-calls/machine-group.remove"))
+        .tachoMachineGroupRemoveHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "list_machine_groups",
+    async () =>
+      (await import("./mcp-studio/local-calls/machine-group.list"))
+        .tachoMachineGroupListHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "fetch_commands",
     async () =>
       (await import("./tacho.command.fetch"))

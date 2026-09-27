@@ -9,7 +9,7 @@
 // and whose production branch it touched, and ask each for a sync.
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
-import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { eventClient } from "./event-client";
 import { logger } from "./logger";
 import { postgresSyncStore } from "./context.steering.sync.store";
@@ -120,7 +120,10 @@ const dedicatedPlaneDeps: DedicatedPlaneDeps = {
                 schema.repositoryBindingHeads.providerRepositoryId,
                 repositoryId,
               ),
-              eq(schema.repositoryBindingHeads.role, "main"),
+              inArray(
+                schema.repositoryBindingHeads.role,
+                schema.STEERING_HEAD_ROLES,
+              ),
             ),
           )
           .limit(1);
@@ -161,7 +164,7 @@ export async function githubSyncTargets(
 
   // tenancy: webhook routing before any tenant is known; the delivery's HMAC
   // was verified by the route, and this reads only org_id and workspace_id of
-  // the main heads filtered by GitHub's repository id.
+  // the steering heads filtered by GitHub's repository id.
   const bound = await withSystemDb((tx) =>
     tx
       .select({
@@ -181,7 +184,10 @@ export async function githubSyncTargets(
         and(
           eq(schema.repositoryBindingHeads.provider, "github"),
           eq(schema.repositoryBindingHeads.providerRepositoryId, repositoryId),
-          eq(schema.repositoryBindingHeads.role, "main"),
+          inArray(
+            schema.repositoryBindingHeads.role,
+            schema.STEERING_HEAD_ROLES,
+          ),
         ),
       ),
   );
@@ -211,7 +217,7 @@ export async function githubSyncTargets(
     const [owner, name] = fullName.split("/");
     // tenancy: webhook routing before any tenant is known; filtered by the
     // verified delivery's installation id and repository, and by workspaces
-    // that hold no main binding head of their own.
+    // that hold no steering head of their own.
     const legacy = await withSystemDb((tx) =>
       tx
         .select({
@@ -230,7 +236,7 @@ export async function githubSyncTargets(
             sql`${schema.sourceConnections.deliveryConfig} ->> 'installationId' = ${args.installationId}`,
             sql`lower(${schema.sourceConnections.deliveryConfig} ->> 'owner') = ${(owner ?? "").toLowerCase()}`,
             sql`lower(${schema.sourceConnections.deliveryConfig} ->> 'repo') = ${(name ?? "").toLowerCase()}`,
-            sql`not exists (select 1 from ${schema.repositoryBindingHeads} h where h.workspace_id = ${schema.sourceConnections.workspaceId} and h.role = 'main')`,
+            sql`not exists (select 1 from ${schema.repositoryBindingHeads} h where h.workspace_id = ${schema.sourceConnections.workspaceId} and ${inArray(sql.raw("h.role"), schema.STEERING_HEAD_ROLES)})`,
           ),
         ),
     );

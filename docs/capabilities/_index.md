@@ -581,6 +581,7 @@ after the registered name separately when their contract uses a dotted stem.
 
 | Capability | Contract | Declared surfaces |
 | --- | --- | --- |
+| [add_group_machine](tacho.machine_group.add.md) | [tacho.machine_group.add.ts](../../packages/oxagen/src/contracts/tacho.machine_group.add.ts) | none |
 | [create_enrollment_token](tacho.enrollment_token.create.md) | [tacho.enrollment_token.create.ts](../../packages/oxagen/src/contracts/tacho.enrollment_token.create.ts) | api, cli |
 | [create_tacho_enrollment](tacho.enrollment.create.md) | [tacho.enrollment.create.ts](../../packages/oxagen/src/contracts/tacho.enrollment.create.ts) | api |
 | [create_github_token](tacho.github_token.issue.md) | [tacho.github_token.issue.ts](../../packages/oxagen/src/contracts/tacho.github_token.issue.ts) | api |
@@ -589,8 +590,10 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_tacho_session](tacho.session.get.md) | [tacho.session.get.ts](../../packages/oxagen/src/contracts/tacho.session.get.ts) | api |
 | [ingest_tacho_events](tacho.events.ingest.md) | [tacho.events.ingest.ts](../../packages/oxagen/src/contracts/tacho.events.ingest.ts) | api |
 | [list_incidents](tacho.incident.list.md) | [tacho.incident.list.ts](../../packages/oxagen/src/contracts/tacho.incident.list.ts) | api, mcp |
+| [list_machine_groups](tacho.machine_group.list.md) | [tacho.machine_group.list.ts](../../packages/oxagen/src/contracts/tacho.machine_group.list.ts) | none |
 | [list_tacho_hosts](tacho.host.list.md) | [tacho.host.list.ts](../../packages/oxagen/src/contracts/tacho.host.list.ts) | api, mcp |
 | [list_tacho_sessions](tacho.session.list.md) | [tacho.session.list.ts](../../packages/oxagen/src/contracts/tacho.session.list.ts) | api |
+| [remove_group_machine](tacho.machine_group.remove.md) | [tacho.machine_group.remove.ts](../../packages/oxagen/src/contracts/tacho.machine_group.remove.ts) | none |
 | [revoke_tacho_enrollment](tacho.enrollment.revoke.md) | [tacho.enrollment.revoke.ts](../../packages/oxagen/src/contracts/tacho.enrollment.revoke.ts) | api |
 
 ## Telemetry
