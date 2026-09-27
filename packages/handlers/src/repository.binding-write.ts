@@ -14,8 +14,20 @@
 // something has, and only when there is none is a version 1 written.
 import { schema, type Tx } from "@oxagen/database";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { GITHUB_PROVIDER } from "./repository.github-connection";
+
+/**
+ * The transaction-scoped advisory lock every writer of a workspace's binding
+ * heads takes, so each reads the heads the previous one committed. The
+ * writers are `bind_main_repository`, `link_repository`,
+ * `unlink_repository`, `set_production_branch`, and the steering
+ * provisioner's bind step. The key keeps its original spelling so a deploy
+ * that mixes old and new processes still serialises on one lock.
+ */
+export function workspaceRepositoriesLock(workspaceId: string) {
+  return sql`SELECT pg_advisory_xact_lock(hashtextextended(${`bind_main_repository:${workspaceId}`}::text, 0))`;
+}
 
 /**
  * A head's role (`repository_binding_heads_role_check`). `steering` is the

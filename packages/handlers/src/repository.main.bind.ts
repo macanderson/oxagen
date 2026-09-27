@@ -45,9 +45,10 @@ import { createGitHubClient, getInstallationToken } from "@oxagen/github";
 import type { GitHubRepoInfo } from "@oxagen/github";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { assertDataPlaneUsable, resolveDataPlane } from "@oxagen/tenancy";
-import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { logger } from "./logger";
 import {
+  workspaceRepositoriesLock,
   writeRepositoryHead,
   type BindableRepository,
   type RepositoryProvider,
@@ -314,16 +315,10 @@ export async function assertPlaneStillShared(scope: {
   }
 }
 
-/**
- * The transaction-scoped advisory lock every writer of a workspace's binding
- * heads takes — `bind_main_repository`, `link_repository`,
- * `unlink_repository` — so each reads the heads the previous one committed.
- * The key keeps its original spelling so a deploy that mixes old and new
- * processes still serialises on one lock.
- */
-export function workspaceRepositoriesLock(workspaceId: string) {
-  return sql`SELECT pg_advisory_xact_lock(hashtextextended(${`bind_main_repository:${workspaceId}`}::text, 0))`;
-}
+// The lock lives in `repository.binding-write.ts`, beside the head writer, so
+// the steering provisioner can take it without importing this module. It is
+// re-exported here for the writers that import it from this path.
+export { workspaceRepositoriesLock };
 
 export interface MainRepositoryDeps {
   /** The repository as the installation sees it, or null when it cannot. */
