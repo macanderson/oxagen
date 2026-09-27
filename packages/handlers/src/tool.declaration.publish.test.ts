@@ -157,9 +157,11 @@ const INPUT = {
   effect_id_path: undefined,
 };
 
+// The hash input keeps the pre-rename key, so stored checksums stay valid
+// (toolChecksum in lib/tool-registry.ts).
 const EXPECTED_CHECKSUM = sha256Hex(
   canonicalJson({
-    impacts: [],
+    consequence_tags: [],
     description: INPUT.description,
     effect_id_path: null,
     input_schema: INPUT.input_schema,
