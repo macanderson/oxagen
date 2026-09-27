@@ -396,7 +396,7 @@ describe("landSteeringPr: stamping", () => {
       message: `steering: stamp #${pr.number}`,
     });
     expect(landed).toMatchObject({
-      commitSha: `merge${pr.number}`,
+      commitSha: String(pr.number).padStart(40, "0"),
       mergedHead: stamp.sha,
       checkedHead: pr.head,
       attempts: 1,
