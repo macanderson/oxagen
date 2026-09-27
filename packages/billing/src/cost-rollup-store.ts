@@ -128,7 +128,7 @@ function resolvedCostCenter(
 }
 
 /** What a rollup needs to know about a run before it reads the frames. */
-interface RunSource {
+export interface RunSource {
   meta: RunMeta;
   frames: FrameRunRef;
 }
@@ -152,7 +152,9 @@ function grade(value: string | null): RunMeta["replayGrade"] {
  * The run's own record by public id: a V2 ledger run (`arun_…`) or a root
  * tacho session (`tse_…`). Null when neither store has it.
  */
-async function loadRunSource(publicId: string): Promise<RunSource | null> {
+export async function loadRunSource(
+  publicId: string,
+): Promise<RunSource | null> {
   if (publicId.startsWith("arun_")) {
     // tenancy: the scheduled rollup job runs outside a tenant scope and finds
     // the run by its globally unique public id; the orgId it answers comes
@@ -802,23 +804,31 @@ async function readCarried(runId: string) {
   return { accepted: row.accepted };
 }
 
+/**
+ * A run's tool calls in the order they ran, from the store that holds the
+ * run. The rollup and the no-progress check (./no-progress-store.ts) read
+ * the same calls.
+ */
+export function readRunToolCalls(source: RunSource): Promise<ToolCallFrame[]> {
+  return source.frames.kind === "ledger"
+    ? readLedgerToolCalls({
+        orgId: source.meta.orgId,
+        workspaceId: source.meta.workspaceId,
+        runUuid: source.frames.runUuid,
+      })
+    : readTachoToolCallFrames({
+        orgId: source.meta.orgId,
+        workspaceId: source.meta.workspaceId,
+        rootSessionUuid: source.frames.rootSessionUuid,
+        sessionUuids: source.frames.sessionUuids,
+      });
+}
+
 const productionRunRollupDeps: RunRollupDeps = {
   loadRunSource,
   readModelCalls: async (args) =>
     (await readModelCallFrames(args)).map(toFrame),
-  readToolCalls: (source) =>
-    source.frames.kind === "ledger"
-      ? readLedgerToolCalls({
-          orgId: source.meta.orgId,
-          workspaceId: source.meta.workspaceId,
-          runUuid: source.frames.runUuid,
-        })
-      : readTachoToolCallFrames({
-          orgId: source.meta.orgId,
-          workspaceId: source.meta.workspaceId,
-          rootSessionUuid: source.frames.rootSessionUuid,
-          sessionUuids: source.frames.sessionUuids,
-        }),
+  readToolCalls: readRunToolCalls,
   loadPriceBook: loadPriceBookSlice,
   readCarried,
   readVerdict: (scope, runId) =>
