@@ -135,6 +135,9 @@ describe("readModelCallFrames", () => {
       "server_tool_request",
       "cost_micros",
       "session_uuid",
+      "tool_definition_tokens",
+      "context_frame_tokens",
+      "steering_tokens",
     ]);
     expect(query_params).toEqual({
       orgId: ORG,
@@ -175,6 +178,9 @@ describe("readModelCallFrames", () => {
         reportedCostMicros: "4125",
         basis: "client_attested",
         sessionUuid: RUN,
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: null,
       },
       {
         at: "2026-09-14T10:00:01.000Z",
@@ -192,6 +198,9 @@ describe("readModelCallFrames", () => {
         // The chain each frame was recorded on, so the findings job can keep
         // two chains' requests apart when they share a millisecond.
         sessionUuid: CHILD,
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: null,
       },
     ]);
   });
@@ -372,6 +381,9 @@ describe("readModelCallFrames", () => {
         serverToolRequests: 0,
         reportedCostMicros: "4125",
         basis: "client_attested",
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: null,
       },
     ]);
   });
@@ -421,6 +433,51 @@ describe("readModelCallFrames", () => {
     expect(frames[0]).toMatchObject({ serverToolRequests: 3 });
   });
 
+  // #4493. The rollup sums the token sources over the calls it prices. A
+  // second read of its own could see a call a live run added after this one,
+  // so the sources ride the priced row itself.
+  it("carries the token sources the recorder measured on the priced row", async () => {
+    answer([
+      {
+        at: "2026-09-14T10:00:00.000Z",
+        model: "claude-sonnet-5",
+        provider: "firstParty",
+        input_uncached: "1000",
+        cache_read: "0",
+        cache_write_5m: "0",
+        cache_write_1h: "0",
+        output: "200",
+        reasoning: "0",
+        server_tool_request: "0",
+        cost_micros: null,
+        tool_definition_tokens: 12_000,
+        context_frame_tokens: null,
+        steering_tokens: "0",
+      },
+    ]);
+    const frames = await readModelCallFrames({
+      orgId: ORG,
+      workspaceId: WS,
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+    });
+    // The priced row selects the three columns so the outer read can use them.
+    const { query } = lastQuery();
+    const priced = query.slice(query.indexOf("FROM ("), query.indexOf("LEFT JOIN"));
+    for (const column of [
+      "tool_definition_tokens",
+      "context_frame_tokens",
+      "steering_tokens",
+    ]) {
+      expect(priced).toContain(column);
+    }
+    // A measured zero stays zero, and an unmeasured source stays null.
+    expect(frames[0]).toMatchObject({
+      toolDefinitionTokens: 12_000,
+      contextFrameTokens: null,
+      steeringTokens: 0,
+    });
+  });
+
   it("reads a ledger run's gateway-metered rows as gateway_observed", async () => {
     answer([
       {
@@ -460,6 +517,10 @@ describe("readModelCallFrames", () => {
         serverToolRequests: 0,
         reportedCostMicros: "3000",
         basis: "gateway_observed",
+        // The gateway does not measure the token sources (#4493).
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: null,
       },
     ]);
   });

@@ -90,6 +90,23 @@ export interface ModelCallFrameRow {
    * frame, which has no chain.
    */
   sessionUuid?: string;
+  /**
+   * The tokens the call spent on tool definitions, context frames, and
+   * steering, as the recorder measured them on the frame (#4493). Each is
+   * null when the frame carried none. A ledger frame carries none: the gateway
+   * does not measure them. They ride this read so the rollup sums them over
+   * exactly the calls it prices.
+   */
+  toolDefinitionTokens: number | null;
+  contextFrameTokens: number | null;
+  steeringTokens: number | null;
+}
+
+/** A count ClickHouse returns for a Nullable column, or null when absent. */
+function nullableCount(
+  value: string | number | null | undefined,
+): number | null {
+  return value === null || value === undefined ? null : Number(value);
 }
 
 /**
@@ -381,6 +398,9 @@ export async function readModelCallFrames(args: {
       serverToolRequests: 0,
       reportedCostMicros: r.cost_micros,
       basis: "gateway_observed",
+      toolDefinitionTokens: null,
+      contextFrameTokens: null,
+      steeringTokens: null,
     }));
   }
 
@@ -398,13 +418,17 @@ export async function readModelCallFrames(args: {
         ${FRAME_REASONING} AS reasoning,
         ${FRAME_SERVER_TOOL_REQUESTS} AS server_tool_request,
         c.cost_usd_micros AS cost_micros,
-        toString(c.session_uuid) AS session_uuid
+        toString(c.session_uuid) AS session_uuid,
+        c.tool_definition_tokens AS tool_definition_tokens,
+        c.context_frame_tokens AS context_frame_tokens,
+        c.steering_tokens AS steering_tokens
       FROM (
         SELECT
           ts, seq, session_uuid, model, provider, input_tokens, output_tokens,
           cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
           thinking_tokens, web_search_requests, cost_usd_micros, request_id,
-          message_id
+          message_id, tool_definition_tokens, context_frame_tokens,
+          steering_tokens
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -472,6 +496,9 @@ export async function readModelCallFrames(args: {
     server_tool_request: string;
     cost_micros: string | null;
     session_uuid: string;
+    tool_definition_tokens?: string | number | null;
+    context_frame_tokens?: string | number | null;
+    steering_tokens?: string | number | null;
   };
   const rows = (await result.json()) as Row[];
   return rows.map((r) => ({
@@ -488,6 +515,9 @@ export async function readModelCallFrames(args: {
     reportedCostMicros: r.cost_micros,
     basis: "client_attested",
     sessionUuid: r.session_uuid,
+    toolDefinitionTokens: nullableCount(r.tool_definition_tokens),
+    contextFrameTokens: nullableCount(r.context_frame_tokens),
+    steeringTokens: nullableCount(r.steering_tokens),
   }));
 }
 

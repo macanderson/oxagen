@@ -528,6 +528,7 @@ describe("the tables this repository declares", () => {
         "0033_tacho_events_part_settings.sql",
         "0034_tacho_events_partition_received_at.sql",
         "0035_tacho_events_request_effort_policy_rules.sql",
+        "0036_tacho_events_token_sources.sql",
       ],
       missing: ["tacho_events"],
     });
