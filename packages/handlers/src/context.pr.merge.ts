@@ -36,10 +36,21 @@
 // The head branch is deleted before the publication so the next proposal on
 // the lineage branches from the production branch.
 //
-// One window stays open: a crash after the stamp merged and before the row
-// moved to the stamp commit leaves the row at the checked head. The next call
-// reads a merged PR at another head and refuses `merged_outside_oxagen`, which
-// asks the repository sync to publish the merge from the production branch.
+// Before it lands the PR, the merge claims the proposal (merge_claimed_at).
+// While the claim stands, a check rerun, a dismissal, and another merge are
+// refused `merge_in_progress`, and the repository sync leaves the proposal
+// alone. The stamp commit is the PR's head until the host merges it, so any
+// of those would otherwise read a moved head and strand a proposal the host
+// has merged (#4504). The publication clears the claim. A landing that fails
+// before the host merged releases it. A landing that fails after the host
+// merged keeps it, and a retry resumes the merge. A claim a crash left behind
+// lapses after MERGE_CLAIM_SECONDS.
+//
+// One window stays open: a crash or a timeout after the stamp merged and
+// before the row moved to the stamp commit leaves the row at the checked
+// head. Once the claim lapses, the next call reads a merged PR at another
+// head and refuses `merged_outside_oxagen`, which asks the repository sync to
+// publish the merge from the production branch.
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import type { RepoHealth } from "@oxagen/oxagen/steering-repo/health";
@@ -54,7 +65,12 @@ import {
   type SteeringRepository,
 } from "./context.steering.github";
 import { mergeRefusal } from "./context.steering.policy";
-import type { ProposalRow } from "./context.steering.store";
+import {
+  claimCutoff,
+  mergeClaimed,
+  mergeInProgress,
+  type ProposalRow,
+} from "./context.steering.store";
 import { logger } from "./logger";
 import { sha256Hex } from "./registry-digest";
 import {
@@ -214,6 +230,15 @@ export function createMergeContextPrHandler(
 
       // The commit the checks ran on is the only one that merges.
       const pr = await deps.github.getPullRequest(repo, prNumber);
+      // Another call is landing this PR. Its stamp commit is the PR's head
+      // until the host merges it, and the row moves to that commit only once
+      // it has, so the head check below would misread either.
+      if (
+        mergeClaimed(recorded, deps.now()) &&
+        (!pr.merged || pr.headSha !== recorded.headSha)
+      ) {
+        throw mergeInProgress(recorded.publicId, recorded.mergeClaimedAt);
+      }
       if (pr.headSha !== recorded.headSha) {
         // Merged on the host after the head moved: running the checks again
         // cannot help, because a merged pull request's head never moves again.
@@ -269,6 +294,14 @@ export function createMergeContextPrHandler(
         commitSha = pr.mergeCommitSha;
         mergedAt = requireMergedAt(pr.mergedAt, row.prUrl);
       } else {
+        // Claim the proposal before the stamp moves the PR's head. The write
+        // refuses a claim another call holds.
+        row = await deps.store.updateProposal(
+          row.id,
+          { mergeClaimedAt: deps.now() },
+          ["checks_passed"],
+          { headSha: recorded.headSha, noClaimSince: claimCutoff(deps.now()) },
+        );
         const landed = await landSteeringPr({
           host: deps.github,
           repo,
@@ -321,6 +354,9 @@ export function createMergeContextPrHandler(
               checks: passedChecks(row),
             };
           },
+        }).catch(async (err: unknown) => {
+          await releaseUnmergedClaim(deps, repo, prNumber, row);
+          throw err;
         });
         commitSha = landed.commitSha;
         attempts = landed.attempts;
@@ -459,7 +495,7 @@ async function steeringVersion(
   deps: SteeringDeps,
   scope: Scope,
   repo: SteeringRepository,
-  row: { publicId: string; prUrl: string | null },
+  row: Pick<ProposalRow, "id" | "publicId" | "prUrl" | "mergeClaimedAt">,
   mergedAs: string | null,
 ): Promise<{ version: number; published: boolean }> {
   const repository = publisher.repository(repo);
@@ -470,6 +506,9 @@ async function steeringVersion(
     }
     const head = await deps.github.branchHead(repo, repo.defaultBranch);
     if (head !== mergedAs) {
+      // The sync links this merge, so an earlier call's claim must not hold
+      // it off.
+      if (row.mergeClaimedAt !== null) await releaseClaim(deps, row);
       await requestSync(deps, scope, row);
       throw new HandlerError({
         code: "conflict",
@@ -489,6 +528,67 @@ async function steeringVersion(
   }
   const highest = await publisher.store.highestVersion(repository);
   return { version: highest + 1, published: false };
+}
+
+/** The statuses a claimed proposal can hold before it merges. */
+const CLAIMABLE = [
+  "pr_open",
+  "checks_running",
+  "checks_passed",
+  "checks_failed",
+] as const;
+
+/**
+ * Clear a proposal's merge claim. A failure is logged and not thrown, so the
+ * error that led here reaches the caller. The claim then lapses after
+ * MERGE_CLAIM_SECONDS.
+ */
+async function releaseClaim(
+  deps: SteeringDeps,
+  row: Pick<ProposalRow, "id" | "publicId">,
+): Promise<void> {
+  try {
+    await deps.store.updateProposal(row.id, { mergeClaimedAt: null }, [
+      ...CLAIMABLE,
+    ]);
+  } catch (err) {
+    logger.warn(
+      { err, proposal: row.publicId },
+      "context.pr.merge: could not release the merge claim; it lapses in ten minutes",
+    );
+  }
+}
+
+/**
+ * After a landing failed, release the claim unless the host merged the PR.
+ * A merged PR keeps the claim, so the sync leaves the proposal to a retry of
+ * this merge until the claim lapses. A failed read keeps it too, and is
+ * logged, so the landing's own error reaches the caller.
+ */
+async function releaseUnmergedClaim(
+  deps: SteeringDeps,
+  repo: SteeringRepository,
+  prNumber: number,
+  row: Pick<ProposalRow, "id" | "publicId">,
+): Promise<void> {
+  let merged: boolean;
+  try {
+    merged = (await deps.github.getPullRequest(repo, prNumber)).merged;
+  } catch (err) {
+    logger.warn(
+      { err, proposal: row.publicId, pr: prNumber },
+      "context.pr.merge: the landing failed and the pull request could not be read, so the merge claim stays; it lapses in ten minutes",
+    );
+    return;
+  }
+  if (merged) {
+    logger.warn(
+      { proposal: row.publicId, pr: prNumber },
+      "context.pr.merge: the host merged the pull request, but the landing failed; the merge claim stays until a retry publishes it or the claim lapses in ten minutes",
+    );
+    return;
+  }
+  await releaseClaim(deps, row);
 }
 
 /** Ask for the repository sync, and log a request that fails. */

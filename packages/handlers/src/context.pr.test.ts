@@ -53,6 +53,7 @@ import {
 import { logger } from "./logger";
 import { parseChecked } from "./context.steering.checks";
 import { stampRecordObject } from "./context.steering.file";
+import { MERGE_CLAIM_SECONDS } from "./context.steering.store";
 import {
   AUTHOR,
   MemoryStore,
@@ -2193,6 +2194,8 @@ describe("merge_context_pr", () => {
     ).rejects.toThrow("connection reset");
     expect(h.github.merges[0]!.commitMessage).toMatch(/\nOxagen-Version: 1$/);
     expect(s5.publish).not.toHaveBeenCalled();
+    // The host merged, so the claim stays for the retry.
+    expect(h.store.proposals[0]!.mergeClaimedAt).not.toBeNull();
 
     // S5's sync publishes the merge commit before the retry, so the store's
     // highest version is now the one in the trailer.
@@ -2203,6 +2206,7 @@ describe("merge_context_pr", () => {
     const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
     expect(out.status).toBe("merged");
     expect(h.github.merges).toHaveLength(1);
+    expect(h.store.proposals[0]!.mergeClaimedAt).toBeNull();
     // The retry keeps version 1 and does not publish the commit again.
     expect(s5.publish).not.toHaveBeenCalled();
     expect(s5.store.published.get(BUNDLE_IDENTITY.repository)).toMatchObject({
@@ -2279,6 +2283,7 @@ describe("merge_context_pr", () => {
       merge({ proposalId: id }, ctx({ userId: REVIEWER })),
     ).rejects.toThrow("connection reset");
     expect(h.github.merges[0]!.commitMessage).toMatch(/\nOxagen-Version: 1$/);
+    expect(h.store.proposals[0]!.mergeClaimedAt).not.toBeNull();
 
     // A later merge lands on the host before the retry, and S5's sync
     // publishes it as version 1: the number in this merge's trailer.
@@ -2296,6 +2301,8 @@ describe("merge_context_pr", () => {
       message: expect.stringContaining(`has moved on to ${LATER} since`),
     });
     expect(requestSync).toHaveBeenCalledWith(SCOPE);
+    // The sync links this merge, so the refusal released the claim.
+    expect(h.store.proposals[0]!.mergeClaimedAt).toBeNull();
     // Nothing records version 1 a second time.
     expect(s5.publish).not.toHaveBeenCalled();
     expect(h.store.ledger).toHaveLength(0);
@@ -2403,6 +2410,240 @@ describe("merge_context_pr", () => {
         expect.objectContaining({ commit: "0000000000000000000000000000000000000519" }),
         expect.stringContaining("publish() failed"),
       );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  // ── The merge claim (#4504) ────────────────────────────────────────────────
+
+  it("in a steering repo, refuses a check rerun and a dismissal while the stamp lands, and the merge publishes", async () => {
+    const h = steeringHarness();
+    const { id } = await steeringPrPassed(h);
+    const s5 = s5Publisher();
+    // The stamp commit is the PR's head from here until the host merges it.
+    // A rerun and a dismissal arrive in that window.
+    const commitFiles = h.github.commitFiles.bind(h.github);
+    const during: unknown[] = [];
+    let claimDuringLanding: Date | null = null;
+    let once = true;
+    h.github.commitFiles = async (repo, args) => {
+      const out = await commitFiles(repo, args);
+      if (once) {
+        once = false;
+        claimDuringLanding = h.store.proposals[0]!.mergeClaimedAt;
+        during.push(
+          await createOpenContextPrHandler(h)({ proposalId: id }, ctx()).catch(
+            (e: unknown) => e,
+          ),
+          await createDismissProposalHandler(h)(
+            { proposalId: id, reason: "superseded" },
+            ctx(),
+          ).catch((e: unknown) => e),
+        );
+      }
+      return out;
+    };
+    const out = await createMergeContextPrHandler(h, {
+      publisher: () => s5.publisher,
+    })({ proposalId: id }, ctx({ userId: REVIEWER }));
+
+    expect(claimDuringLanding).toBeInstanceOf(Date);
+    expect(during).toHaveLength(2);
+    for (const refusal of during)
+      expect(refusal).toMatchObject({
+        code: "conflict",
+        reason: "merge_in_progress",
+      });
+    expect(out.status).toBe("merged");
+    expect(h.github.merges).toHaveLength(1);
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "merged",
+      mergeClaimedAt: null,
+      dismissedAt: null,
+    });
+  });
+
+  it("refuses a merge, a check rerun, and a dismissal while another merge's claim stands, and touches nothing until it lapses", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const claimedAt = h.now();
+    Object.assign(h.store.proposals[0]!, { mergeClaimedAt: claimedAt });
+    const lapses = new Date(
+      claimedAt.getTime() + MERGE_CLAIM_SECONDS * 1000,
+    ).toISOString();
+    const refusal = {
+      code: "conflict",
+      reason: "merge_in_progress",
+      message: expect.stringContaining(lapses),
+    };
+    const checkRuns = h.github.checkRuns.length;
+
+    await expect(
+      createMergeContextPrHandler(h)(
+        { proposalId: id },
+        ctx({ userId: REVIEWER }),
+      ),
+    ).rejects.toMatchObject(refusal);
+    await expect(
+      createOpenContextPrHandler(h)({ proposalId: id }, ctx()),
+    ).rejects.toMatchObject(refusal);
+    await expect(
+      createDismissProposalHandler(h)(
+        { proposalId: id, reason: "superseded" },
+        ctx(),
+      ),
+    ).rejects.toMatchObject(refusal);
+    expect(h.github.merges).toHaveLength(0);
+    expect(h.github.pulls[0]!.state).toBe("open");
+    expect(h.github.deletedBranches).toEqual([]);
+    expect(h.github.checkRuns).toHaveLength(checkRuns);
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "checks_passed",
+      mergeClaimedAt: claimedAt,
+    });
+
+    // A claim older than MERGE_CLAIM_SECONDS has lapsed, and blocks nothing.
+    Object.assign(h.store.proposals[0]!, {
+      mergeClaimedAt: new Date(
+        h.now().getTime() - (MERGE_CLAIM_SECONDS + 1) * 1000,
+      ),
+    });
+    const rerun = await createOpenContextPrHandler(h)(
+      { proposalId: id },
+      ctx(),
+    );
+    expect(rerun.status).toBe("checks_passed");
+    const out = await createMergeContextPrHandler(h)(
+      { proposalId: id },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(out.status).toBe("merged");
+    expect(h.store.proposals[0]!.mergeClaimedAt).toBeNull();
+    expect(h.github.merges).toHaveLength(1);
+  });
+
+  it("releases the claim when the host refuses the merge, so a retry can land it", async () => {
+    const h = harness();
+    const id = await opened(h);
+    h.github.mergeRefusedWith = "At least 1 approving review is required";
+    const claims: (Date | null)[] = [];
+    const mergePullRequest = h.github.mergePullRequest.bind(h.github);
+    h.github.mergePullRequest = async (repo, args) => {
+      claims.push(h.store.proposals[0]!.mergeClaimedAt);
+      return mergePullRequest(repo, args);
+    };
+    const merge = createMergeContextPrHandler(h);
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({ code: "conflict", reason: "github_refused" });
+    // The merge held the claim while it called the host, and released it.
+    expect(claims[0]).toBeInstanceOf(Date);
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "checks_passed",
+      mergeClaimedAt: null,
+    });
+
+    h.github.mergeRefusedWith = null;
+    const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(out.status).toBe("merged");
+    expect(h.github.merges).toHaveLength(1);
+  });
+
+  it("keeps the claim when the host merged and the call failed, and a retry publishes the merge", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const publicId = h.store.proposals[0]!.publicId;
+    const mergePullRequest = h.github.mergePullRequest.bind(h.github);
+    h.github.mergePullRequest = async (repo, args) => {
+      await mergePullRequest(repo, args);
+      throw new Error("socket hang up");
+    };
+    const merge = createMergeContextPrHandler(h);
+    const warn = vi.spyOn(logger, "warn");
+    try {
+      await expect(
+        merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+      ).rejects.toThrow("socket hang up");
+      expect(h.store.proposals[0]!.status).toBe("checks_passed");
+      expect(h.store.proposals[0]!.mergeClaimedAt).toBeInstanceOf(Date);
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({ proposal: publicId, pr: 519 }),
+        expect.stringContaining("the host merged the pull request"),
+      );
+
+      // The retry reads the merged PR at the checked head and resumes.
+      h.github.mergePullRequest = mergePullRequest;
+      const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+      expect(out.status).toBe("merged");
+      expect(h.store.proposals[0]!.mergeClaimedAt).toBeNull();
+      expect(h.github.merges).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("keeps the claim when the landing failed and the PR could not be read, and logs it", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const publicId = h.store.proposals[0]!.publicId;
+    let broken = false;
+    h.github.mergePullRequest = async () => {
+      broken = true;
+      throw new Error("connection refused");
+    };
+    const getPullRequest = h.github.getPullRequest.bind(h.github);
+    h.github.getPullRequest = async (repo, number) => {
+      if (broken) throw new Error("connection refused");
+      return getPullRequest(repo, number);
+    };
+    const merge = createMergeContextPrHandler(h);
+    const warn = vi.spyOn(logger, "warn");
+    try {
+      await expect(
+        merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+      ).rejects.toThrow("connection refused");
+      expect(h.store.proposals[0]!.mergeClaimedAt).toBeInstanceOf(Date);
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({ proposal: publicId, pr: 519 }),
+        expect.stringContaining("could not be read"),
+      );
+
+      // The host answers again, and the claim still holds the proposal.
+      broken = false;
+      await expect(
+        merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+      ).rejects.toMatchObject({ reason: "merge_in_progress" });
+      expect(h.github.merges).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("logs a claim it could not release, and the host's refusal reaches the caller", async () => {
+    const h = harness();
+    const id = await opened(h);
+    const publicId = h.store.proposals[0]!.publicId;
+    h.github.mergeRefusedWith = "At least 1 approving review is required";
+    const updateProposal = h.store.updateProposal.bind(h.store);
+    h.store.updateProposal = async (rowId, patch, from, guard) => {
+      if (patch.mergeClaimedAt === null)
+        throw new Error("connection reset");
+      return updateProposal(rowId, patch, from, guard);
+    };
+    const warn = vi.spyOn(logger, "warn");
+    try {
+      await expect(
+        createMergeContextPrHandler(h)(
+          { proposalId: id },
+          ctx({ userId: REVIEWER }),
+        ),
+      ).rejects.toMatchObject({ reason: "github_refused" });
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({ proposal: publicId }),
+        expect.stringContaining("could not release the merge claim"),
+      );
+      expect(h.store.proposals[0]!.mergeClaimedAt).toBeInstanceOf(Date);
     } finally {
       warn.mockRestore();
     }

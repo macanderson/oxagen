@@ -20,9 +20,9 @@ import {
 import type { ProposalStatus } from "@oxagen/oxagen/contracts/context.steering.shared";
 import {
   alreadyMerged,
-  headMoved,
-  proposalMoved,
+  refusedWrite,
   type AppendRow,
+  type ProposalGuard,
   type ProposalRow,
   type PublishedRecordRow,
   type SteeringStore,
@@ -171,6 +171,7 @@ export class MemoryStore implements SteeringStore {
       promotionEventId: null,
       dismissedAt: null,
       dismissedReason: null,
+      mergeClaimedAt: null,
       ...values,
     };
     this.proposals.push(row);
@@ -234,15 +235,21 @@ export class MemoryStore implements SteeringStore {
     id: string,
     patch: Parameters<SteeringStore["updateProposal"]>[1],
     from: readonly ProposalStatus[],
-    guard?: { headSha: string },
+    guard?: ProposalGuard,
   ) {
     const i = this.proposals.findIndex((p) => p.id === id);
     if (i < 0) throw new Error(`no proposal ${id}`);
     const current = this.proposals[i]!;
-    if (!from.includes(current.status as ProposalStatus))
-      throw proposalMoved(current.publicId, current.status);
-    if (guard && current.headSha !== guard.headSha)
-      throw headMoved(current.publicId, current.headSha, guard.headSha);
+    const claimStands =
+      guard?.noClaimSince !== undefined &&
+      current.mergeClaimedAt !== null &&
+      current.mergeClaimedAt.getTime() > guard.noClaimSince.getTime();
+    if (
+      !from.includes(current.status as ProposalStatus) ||
+      (guard?.headSha !== undefined && current.headSha !== guard.headSha) ||
+      claimStands
+    )
+      throw refusedWrite(current, from, guard);
     const next = { ...this.proposals[i]!, ...patch, updatedAt: new Date() };
     if (
       OPEN.has(next.status) &&
@@ -522,9 +529,11 @@ export class MemoryStore implements SteeringStore {
       checksum: version.checksum,
     });
     this.ledger.push(promotion);
-    await this.updateProposal(proposal.id, { status: "merged" }, [
-      "checks_passed",
-    ]);
+    await this.updateProposal(
+      proposal.id,
+      { status: "merged", mergeClaimedAt: null },
+      ["checks_passed"],
+    );
     Object.assign(this.proposals.find((p) => p.id === proposal.id)!, {
       mergedCommit: input.commitSha,
       mergedAt: input.mergedAt,
@@ -1464,7 +1473,12 @@ export class MemorySyncStore implements SyncStore {
   async linkMergedProposal(
     scope: SyncScope,
     proposalId: string,
-    args: { lineageId: string; mergedCommit: string; mergedAt: Date },
+    args: {
+      lineageId: string;
+      mergedCommit: string;
+      mergedAt: Date;
+      noClaimSince: Date;
+    },
   ) {
     const record = this.store.records.find(
       (r) =>
@@ -1480,6 +1494,11 @@ export class MemorySyncStore implements SyncStore {
     if (!promotion) return false;
     const proposal = this.store.proposals.find((p) => p.id === proposalId);
     if (!proposal || !OPEN.has(proposal.status)) return false;
+    if (
+      proposal.mergeClaimedAt !== null &&
+      proposal.mergeClaimedAt.getTime() > args.noClaimSince.getTime()
+    )
+      return false;
     Object.assign(proposal, {
       status: "merged",
       mergedCommit: args.mergedCommit,
@@ -1487,6 +1506,7 @@ export class MemorySyncStore implements SyncStore {
       mergedByUserId: null,
       publishedRecordId: record.id,
       promotionEventId: promotion.id,
+      mergeClaimedAt: null,
     });
     return true;
   }
