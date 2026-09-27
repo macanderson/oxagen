@@ -6,7 +6,10 @@ import {
   DEFAULT_ENVIRONMENT,
   isDefinitionSource,
   mcpServerSchema,
+  REGISTRY_TYPES,
+  registryTypeSchema,
   serverSourceSchema,
+  templateVariables,
   type McpServer,
 } from "./server";
 
@@ -61,6 +64,18 @@ const billing = {
 };
 
 const serviceAuth = { mode: "service", scheme: "bearer", credential: "oxagen:credential/api-token" };
+
+/** The spec's files server: a registry entry whose npm package runs on dev-laptops. */
+const files = {
+  type: "registry",
+  registry: "https://registry.modelcontextprotocol.io",
+  server: "io.github.modelcontextprotocol/server-filesystem",
+  version: "2026.8.1",
+  machines: ["dev-laptops"],
+  registry_type: "npm",
+  env: ["WORK_DIR"],
+  arguments: { directory: "${WORK_DIR}" },
+};
 const oneEnvironment = { production: { url: "https://api.example.com" } };
 
 /** A server with the given source and auth, and whatever else the source needs. */
@@ -95,6 +110,18 @@ describe("valid servers", () => {
         },
         { auth: { mode: "operator-oauth", scheme: "oauth", credential: "oxagen:credential/github-oauth" } },
       ),
+    ],
+    [
+      "a registry package on machines, with no auth",
+      server(files),
+    ],
+    [
+      "a registry package on machines with no env or arguments",
+      server({ ...files, env: undefined, arguments: undefined, registry_type: "oci" }),
+    ],
+    [
+      "an argument that writes $$ for a literal $",
+      server({ ...files, env: undefined, arguments: { directory: "$${WORK_DIR}", "--price": "5$$" } }),
     ],
     [
       "a local server",
@@ -255,6 +282,71 @@ describe("sources", () => {
     expect(issues(server(namespaced, { auth: { mode: "none" } }))).toStrictEqual([]);
   });
 
+  describe("a registry package on machines", () => {
+    const { machines: _machines, registry_type: _type, env: _env, arguments: _args, ...cloud } = files;
+
+    it.each([
+      ["registry_type", { registry_type: "npm" }],
+      ["env", { env: ["WORK_DIR"] }],
+      ["arguments", { arguments: { directory: "/tmp" } }],
+    ])("refuses %s without machines", (field, extra) => {
+      expect(issues(server({ ...cloud, ...extra }, { auth: { mode: "none" } }))).toStrictEqual([
+        {
+          path: `source.${field}`,
+          message: `${field} is not allowed without machines: only a package the local gateway runs takes it`,
+        },
+      ]);
+    });
+
+    it("requires registry_type with machines", () => {
+      expect(issues(server({ ...files, registry_type: undefined }))).toStrictEqual([
+        { path: "source.registry_type", message: "registry_type is required when machines is set" },
+      ]);
+    });
+
+    it("refuses network with machines", () => {
+      expect(issues(server({ ...files, network: "relay:a-intel-east" }))).toStrictEqual([
+        { path: "source.network", message: "network is not allowed with machines: the package runs on the machine" },
+      ]);
+    });
+
+    it("refuses mcpb, which the local gateway does not run", () => {
+      // An enum miss fails every branch of the source union, which reports one issue on source.
+      expect(issues(server({ ...files, registry_type: "mcpb" }))).toStrictEqual([
+        { path: "source", message: "Invalid input" },
+      ]);
+      expect(registryTypeSchema.safeParse("mcpb").success).toBe(false);
+      expect(REGISTRY_TYPES).toStrictEqual(["npm", "pypi", "oci", "nuget"]);
+    });
+
+    it("refuses a variable that source.env does not list", () => {
+      expect(issues(server({ ...files, arguments: { directory: "${HOME}/work/${WORK_DIR}" } }))).toStrictEqual([
+        {
+          path: "source.arguments.directory",
+          message: "${HOME} needs HOME in source.env: the local gateway passes only the names listed",
+        },
+      ]);
+    });
+
+    it.each(["$HOME", "${}", "${1DIR}", "cost: 5$", "${WORK DIR}"])("refuses the value %s", (value) => {
+      expect(issues(server({ ...files, arguments: { directory: value } }))).toStrictEqual([
+        {
+          path: "source.arguments.directory",
+          message: "write ${NAME} for a variable from source.env, or $$ for one $",
+        },
+      ]);
+    });
+
+    it("refuses an argument key with a space", () => {
+      expect(issues(server({ ...files, arguments: { "work dir": "/tmp" } }))).toStrictEqual([
+        {
+          path: "source.arguments.work dir",
+          message: "an argument key is the argument's name or valueHint, with no spaces",
+        },
+      ]);
+    });
+  });
+
   it("tells a definition source from an MCP one", () => {
     const definitions = [
       openapi,
@@ -279,19 +371,33 @@ describe("sources", () => {
 describe("auth", () => {
   const remote = { type: "remote", url: "https://mcp.example.com", transport: "http" };
 
-  it("requires auth unless the source is local", () => {
-    expect(issues(server(remote))).toStrictEqual([
-      { path: "auth", message: 'auth is required unless the source is local. Write mode = "none" for none.' },
-    ]);
+  const required = [
+    {
+      path: "auth",
+      message:
+        'auth is required unless the local gateway runs the server: a local source, or a registry source with machines. Write mode = "none" for none.',
+    },
+  ];
+
+  it("requires auth unless the local gateway runs the server", () => {
+    expect(issues(server(remote))).toStrictEqual(required);
+    const { machines: _machines, registry_type: _type, env: _env, arguments: _args, ...cloud } = files;
+    expect(issues(server(cloud))).toStrictEqual(required);
   });
 
-  it("refuses auth and environments for a local server", () => {
-    const local = server({ type: "local", command: "files" }, { auth: { mode: "none" }, environments: oneEnvironment });
-    expect(issues(local)).toStrictEqual([
-      { path: "auth", message: "auth is not allowed for a local server, which gets no credential from Oxagen" },
+  it.each([
+    ["a local server", { type: "local", command: "files" }],
+    ["a registry package on machines", files],
+  ])("refuses auth and environments for %s", (_label, source) => {
+    const value = server(source, { auth: { mode: "none" }, environments: oneEnvironment });
+    expect(issues(value)).toStrictEqual([
+      {
+        path: "auth",
+        message: "auth is not allowed for a server the local gateway runs, which gets no credential from Oxagen",
+      },
       {
         path: "environments",
-        message: "environments is not allowed for a local server, which gets no credential from Oxagen",
+        message: "environments is not allowed for a server the local gateway runs, which gets no credential from Oxagen",
       },
     ]);
   });
@@ -374,6 +480,54 @@ describe("auth", () => {
     ]);
     const liveHasNone = { ...stripe, environments: { ...stripe.environments, live: {} } };
     expect(issues(liveHasNone)).toStrictEqual([{ path: "auth.credential", message: credentialMessage }]);
+  });
+});
+
+describe("sync", () => {
+  const onChange = { sync: { schedule: "on-change" } };
+  const none = { auth: { mode: "none" } };
+  const defined = { auth: serviceAuth, environments: oneEnvironment };
+
+  it.each([
+    ["remote", server({ type: "remote", url: "https://mcp.example.com", transport: "http" }, { ...none, ...onChange })],
+    [
+      "registry",
+      server(
+        {
+          type: "registry",
+          registry: "https://registry.modelcontextprotocol.io",
+          server: "io.github.github/github-mcp-server",
+          version: "1.2.0",
+        },
+        { ...none, ...onChange },
+      ),
+    ],
+    ["registry", server(files, onChange)],
+    ["local", server({ type: "local", command: "files" }, onChange)],
+    ["openapi from url", server({ type: "openapi", from: "url", url: "https://a.example.com/openapi.json" }, { ...defined, ...onChange })],
+    ["openapi from upload", server({ type: "openapi", from: "upload" }, { ...defined, ...onChange })],
+    ["graphql from introspection", server({ type: "graphql", from: "introspection" }, { ...defined, ...onChange })],
+    ["grpc from reflection", server({ type: "grpc", from: "reflection" }, { ...defined, ...onChange })],
+  ])("refuses on-change for a %s source", (what, value) => {
+    expect(issues(value)).toStrictEqual([
+      {
+        path: "sync.schedule",
+        message: `on-change needs a definition in a linked repository, and this source is ${what}. Write daily or manual.`,
+      },
+    ]);
+  });
+
+  it("allows on-change for a definition in a linked repository", () => {
+    expect(issues(billing)).toStrictEqual([]);
+    const graphql = { type: "graphql", from: "repository", repo: "github.com/a/b", path: "schema.graphql", ref: "main" };
+    expect(issues(server(graphql, { ...defined, ...onChange }))).toStrictEqual([]);
+  });
+});
+
+describe("templateVariables", () => {
+  it("names each ${NAME} in order, and none for $$", () => {
+    expect(templateVariables("${A}/$${B}/${C_2}")).toStrictEqual(["A", "C_2"]);
+    expect(templateVariables("no variables")).toStrictEqual([]);
   });
 });
 
