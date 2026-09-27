@@ -65,7 +65,7 @@ export type RestoredEntry =
     };
 
 /** Whether the read for the workspace on screen is out, or failed. */
-export type ThreadStatus = "idle" | "loading" | "failed";
+type ThreadStatus = "idle" | "loading" | "failed";
 
 /**
  * The recorded thread as entries. A question is `asked`; a reply is
