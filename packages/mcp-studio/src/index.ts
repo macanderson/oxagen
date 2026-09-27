@@ -29,6 +29,7 @@ export * from "./model/security-scheme";
 export * from "./model/upstream-tool";
 export * from "./model/import-result";
 export * from "./model/from-mcp";
+export * from "./model/registry-launch";
 
 // The modules. Each body throws NotBuiltError until its lane builds it.
 export * from "./openapi";

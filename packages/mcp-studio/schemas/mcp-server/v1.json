@@ -92,6 +92,49 @@
               "type": "string",
               "pattern": "^(?:cloud|relay:[a-z0-9][a-z0-9-]{0,62})$",
               "description": "cloud by default, or relay:<name> for a server inside a private network."
+            },
+            "machines": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+              },
+              "maxItems": 64,
+              "uniqueItems": true,
+              "description": "The machine groups whose local gateway runs the entry's package. Without it, the cloud gateway connects to the entry's remote."
+            },
+            "registry_type": {
+              "type": "string",
+              "enum": [
+                "npm",
+                "pypi",
+                "oci",
+                "nuget"
+              ],
+              "description": "Which of the entry's packages the local gateway runs. Required with machines."
+            },
+            "env": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,127}$"
+              },
+              "maxItems": 128,
+              "uniqueItems": true,
+              "description": "Environment variables the local gateway passes from the machine, including every one the entry marks required. Only names, never values."
+            },
+            "arguments": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^\\S{1,128}$"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "maxLength": 4096,
+                "pattern": "^(?:[^$]|\\$\\$|\\$\\{[A-Za-z_][A-Za-z0-9_]{0,127}\\})*$"
+              },
+              "description": "Values for the package's arguments, keyed by a named argument's name or a positional argument's valueHint. An argument left out takes the entry's default."
             }
           },
           "required": [
@@ -101,7 +144,37 @@
             "version"
           ],
           "additionalProperties": false,
-          "description": "An MCP server from a registry catalog."
+          "description": "An MCP server from a registry catalog. With machines, the local gateway runs the entry's package.",
+          "allOf": [
+            {
+              "dependentRequired": {
+                "registry_type": [
+                  "machines"
+                ],
+                "env": [
+                  "machines"
+                ],
+                "arguments": [
+                  "machines"
+                ]
+              }
+            },
+            {
+              "dependentRequired": {
+                "machines": [
+                  "registry_type"
+                ]
+              }
+            },
+            {
+              "not": {
+                "required": [
+                  "machines",
+                  "network"
+                ]
+              }
+            }
+          ]
         },
         {
           "type": "object",
@@ -860,7 +933,7 @@
           }
         }
       ],
-      "description": "Required unless the source is local."
+      "description": "Required unless the local gateway runs the server: a local source, or a registry source with machines."
     },
     "environments": {
       "type": "object",
@@ -926,7 +999,7 @@
             "daily",
             "manual"
           ],
-          "description": "on-change (a definition in a linked repository), daily, or manual."
+          "description": "on-change (a definition in a linked repository, from = \"repository\"), daily, or manual."
         }
       },
       "required": [
@@ -950,13 +1023,29 @@
       "if": {
         "properties": {
           "source": {
-            "properties": {
-              "type": {
-                "enum": [
-                  "local"
-                ]
+            "anyOf": [
+              {
+                "required": [
+                  "type"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "local"
+                  }
+                }
+              },
+              {
+                "required": [
+                  "type",
+                  "machines"
+                ],
+                "properties": {
+                  "type": {
+                    "const": "registry"
+                  }
+                }
               }
-            }
+            ]
           }
         }
       },
@@ -1185,6 +1274,39 @@
                     }
                   }
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "sync"
+        ],
+        "properties": {
+          "sync": {
+            "required": [
+              "schedule"
+            ],
+            "properties": {
+              "schedule": {
+                "const": "on-change"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "source": {
+            "required": [
+              "from"
+            ],
+            "properties": {
+              "from": {
+                "const": "repository"
               }
             }
           }
