@@ -171,7 +171,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           riskGrade: "high",
           manifest: {},
           checksum: "0".repeat(64),
-          consequenceTags: ["moves_money"],
+          impacts: ["moves_money"],
           measures: {
             amount: {
               path: "amount.value",
@@ -325,7 +325,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         version: 3,
         riskGrade: "high",
         sideEffect: null,
-        consequenceTags: ["moves_money"],
+        impacts: ["moves_money"],
       });
       expect(subject.measures).toEqual({ amount: "12500000" });
       expect(subject.targets).toEqual({ counterparty: "vendor:aws" });
@@ -397,7 +397,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
     });
 
-    it("unions the classified consequence tags with the declared ones, so a classification can only ever raise the floor", async () => {
+    it("unions the classified impacts with the declared ones, so a classification can only ever raise the floor", async () => {
       // The asymmetry that makes reading the jsonb safe. The column is written
       // by publish_tool_declaration behind assertConsequenceRole; the jsonb by
       // set_tool_classification behind Owner/Admin. Replacement would let an
@@ -436,16 +436,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
         // it. This is the fix — an administrator RAISES the floor.
         await classify({
           sideEffect: "irreversible",
-          consequenceTags: ["destroys_data"],
+          impacts: ["destroys_data"],
         });
         const raised = await tags();
-        // Sorted, and the assertion is exact on purpose: `unionConsequenceTags`
+        // Sorted, and the assertion is exact on purpose: `unionImpacts`
         // guarantees the order (see its contract), so a literal here tests a
         // real promise rather than an incidental one. Unsorted, the order
         // depended on which half contributed the tag first — the same
         // unspecified-representation hazard the digest canonicaliser sorts Map
         // entries and Set members to avoid, one level up.
-        expect(raised?.consequenceTags).toEqual([
+        expect(raised?.impacts).toEqual([
           "destroys_data",
           "moves_money",
         ]);
@@ -454,19 +454,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
         // Classified names NO tags: the declared one survives. An
         // administrator cannot lower what the manifest declared, which is the
         // bypass union rules out.
-        await classify({ sideEffect: "read", consequenceTags: [] });
+        await classify({ sideEffect: "read", impacts: [] });
         const notLowered = await tags();
-        expect(notLowered?.consequenceTags).toEqual(["moves_money"]);
+        expect(notLowered?.impacts).toEqual(["moves_money"]);
 
         // A classification that is not the shape we expect contributes
         // nothing rather than throwing away the declared tags.
         await classify({ nonsense: true });
-        expect((await tags())?.consequenceTags).toEqual(["moves_money"]);
+        expect((await tags())?.impacts).toEqual(["moves_money"]);
       } finally {
         await classify(null);
       }
       const restored = await tags();
-      expect(restored?.consequenceTags).toEqual(["moves_money"]);
+      expect(restored?.impacts).toEqual(["moves_money"]);
       expect(restored?.sideEffect).toBeNull();
     });
 
@@ -491,7 +491,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
                 ? {
                     sideEffect: "write",
                     egress: "third_party",
-                    consequenceTags: [],
+                    impacts: [],
                     measures: {},
                     dataClasses: [],
                   }
@@ -555,7 +555,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             classification: {
               sideEffect: "write",
               egress: "third_party",
-              consequenceTags: ["changes_access"],
+              impacts: ["changes_access"],
               measures: {},
               dataClasses: [],
             },
@@ -868,7 +868,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             agentPrincipalId,
             grantedBy: userId,
             roleAtGrant: "Billing",
-            consequenceTags: ["moves_money"],
+            impacts: ["moves_money"],
             limits: {
               amount: {
                 perCall: "250000000",

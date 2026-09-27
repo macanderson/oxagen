@@ -110,7 +110,7 @@ export const updateWorkspace = defineTool({
 
     /**
      * ADR-059 decision 1, carried by reference from
-     * `update_workspace_settings`: consequence tag → the org roles that may
+     * `update_workspace_settings`: impact → the org roles that may
      * grant, change or revoke a mandate for it. Governing a workspace is
      * exactly where this belongs — it decides who is allowed to hand an agent
      * bounded authority to move money or alter production, which is the same

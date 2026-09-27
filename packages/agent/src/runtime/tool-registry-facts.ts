@@ -1,6 +1,6 @@
 // tool-registry-facts.ts — the two pure facts a registry row carries into a
 // governance decision: the capability id its calls are governed under, and the
-// consequence tags it answers a class kill switch with (#2958).
+// impacts it answers a class kill switch with (#2958).
 //
 // A leaf module on purpose. The gateway's kill-switch gate and three read
 // handlers all need these, and importing them from kill-switch-gate.ts dragged
@@ -27,7 +27,7 @@ export function registryCapabilityId(row: {
 }
 
 /**
- * The consequence tags a version carries, from BOTH halves, deduped.
+ * The impacts a version carries, from BOTH halves, deduped.
  *
  * Re-exported, not implemented here. The one implementation lives in
  * `@oxagen/oxagen/contracts/tool.classification`, beside the vocabulary it
@@ -38,7 +38,7 @@ export function registryCapabilityId(row: {
  * The path stays so every caller #2958 wired keeps working unchanged.
  */
 export {
-  unionConsequenceTags,
+  unionImpacts,
   effectiveSideEffect,
   type ClassificationHalves,
 } from "@oxagen/oxagen/contracts/tool.classification";
