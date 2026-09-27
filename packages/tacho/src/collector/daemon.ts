@@ -497,7 +497,7 @@ export async function startDaemon(
       `no enrollment at ${options.paths.hostFile}; run \`tacho enroll\` first`,
     );
   }
-  ensureDir(options.paths.root);
+  ensureDir(options.paths.dir);
   let ready: CollectorApi | undefined;
   const log =
     options.log ??
@@ -585,7 +585,7 @@ async function initializeDaemon(
     );
   }
   let host: HostFile = loaded;
-  for (const dir of [paths.root, paths.wal, paths.spool, paths.quarantine])
+  for (const dir of [paths.dir, paths.wal, paths.spool, paths.quarantine])
     ensureDir(dir);
 
   const deviceKey: DeviceKey = loadOrCreateDeviceKey(paths.deviceKey).key;

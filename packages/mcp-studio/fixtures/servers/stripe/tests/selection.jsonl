@@ -1,0 +1,2 @@
+{"task":"Refund $40 of charge ch_3P9 to the card it was paid with.","expect":"stripe__create_refund"}
+{"task":"Show the last two charges for customer cus_81.","expect":"stripe__list_charges"}

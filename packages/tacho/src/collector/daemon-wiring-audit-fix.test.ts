@@ -261,7 +261,7 @@ describe("the daemon's audit wiring", () => {
       now: options.now ?? (() => 1_000),
       log: (line) => options.log?.push(line),
       listen: false,
-      transcriptRoots: [`${paths.root}/no-transcripts`],
+      transcriptRoots: [`${paths.tachoDir}/no-transcripts`],
       timers: {
         detectorMs: 0,
         sweepMs: 0,

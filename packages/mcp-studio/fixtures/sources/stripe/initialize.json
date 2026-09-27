@@ -1,0 +1,12 @@
+{
+  "protocolVersion": "2025-06-18",
+  "capabilities": {
+    "tools": {
+      "listChanged": true
+    }
+  },
+  "serverInfo": {
+    "name": "stripe",
+    "version": "2026.09.1"
+  }
+}

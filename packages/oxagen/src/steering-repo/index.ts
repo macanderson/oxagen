@@ -11,6 +11,7 @@ export * from "./files";
 export * from "./governance";
 export * from "./health";
 export * from "./json-schema";
+export * from "./memory";
 export * from "./names";
 export * from "./paths";
 export * from "./promotion";

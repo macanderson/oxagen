@@ -415,7 +415,7 @@ describe("tachod", () => {
       exec: () => ({ status: 0, stdout: "", stderr: "" }),
       log: (line) => log.push(line),
       port: 0,
-      transcriptRoots: [join(paths.root, "no-transcripts")],
+      transcriptRoots: [join(paths.tachoDir, "no-transcripts")],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
       ...overrides,
     });
@@ -600,7 +600,7 @@ describe("tachod", () => {
     // The crash: everything on disk right now, and nothing the daemon would
     // have written on its way down.
     const crashed = scratchPaths();
-    cpSync(paths.root, crashed.root, {
+    cpSync(paths.dir, crashed.dir, {
       recursive: true,
       filter: (source) => source !== paths.socket,
     });

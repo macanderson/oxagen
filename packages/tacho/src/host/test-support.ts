@@ -18,9 +18,12 @@ import type { PolicyBundle } from "../wire";
 import { generateDeviceKey } from "./device-key";
 import { HOST_FILE_SCHEMA, type HostFile } from "./host-file";
 import { keyIdForPublicKey } from "./key-id";
-import { tachoPaths, type TachoPaths } from "./paths";
+import { agentPaths, tachoHome, type TachoPaths } from "./paths";
 
 export const TEST_ENROLLMENT = "tch_0123456789abcdefghjkmn";
+
+/** The id of the one agent `scratchPaths` lays out. */
+export const TEST_AGENT_ID = "a1b2c3d4";
 
 export interface BundleSigner {
   publicKeyPem: string;
@@ -82,11 +85,12 @@ export function unsignedBundle(
 }
 
 /**
- * A path set rooted entirely in a fresh scratch directory.
+ * One agent's path set (`TEST_AGENT_ID`), rooted entirely in a fresh scratch
+ * directory. Its directory is not created: an enroll or a test makes it.
  *
  * `platform` defaults to `"darwin"` rather than to `process.platform` because
  * the whole job of this helper is a path set that does not depend on the host
- * running the test. `tachoPaths` derives one field from the platform —
+ * running the test. `tachoHome` derives one field from the platform —
  * `claudeDesktopConfig`, which is undefined where Claude Desktop has no build
  * — and letting that one field read the real OS while every other field came
  * from the scratch dir made tests pass on macOS and fail on Linux CI. A test
@@ -94,7 +98,7 @@ export function unsignedBundle(
  */
 export function scratchPaths(platform: NodeJS.Platform = "darwin"): TachoPaths {
   const root = mkdtempSync(join(tmpdir(), "tacho-"));
-  return tachoPaths(
+  const home = tachoHome(
     {
       TACHO_HOME: join(root, "home"),
       CLAUDE_CONFIG_DIR: join(root, "claude"),
@@ -105,6 +109,7 @@ export function scratchPaths(platform: NodeJS.Platform = "darwin"): TachoPaths {
     root,
     platform,
   );
+  return agentPaths(home, TEST_AGENT_ID);
 }
 
 export function testHostFile(

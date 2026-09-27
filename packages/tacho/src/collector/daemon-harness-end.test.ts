@@ -54,7 +54,7 @@ describe("a session the host closes when its harness ends", () => {
       now,
       log: () => undefined,
       listen: false,
-      transcriptRoots: [`${paths.root}/no-transcripts`],
+      transcriptRoots: [`${paths.tachoDir}/no-transcripts`],
       timers: {
         detectorMs: 60 * 60_000,
         sweepMs: 0,

@@ -5,9 +5,15 @@
  * the settings writers install `tacho hook --enrollment ... [--harness ...]`;
  * a custom agent runs `tacho hook --agent <name>`).
  */
-import { tachoPaths } from "../host/paths";
+import { agentPathsForEnrollment } from "../host/agents";
+import { tachoHome } from "../host/paths";
 import { ulid } from "../ids";
-import { agentFromArgv, harnessFromArgv, runTachoHook } from "./hook-client";
+import {
+  agentFromArgv,
+  enrollmentFromArgv,
+  harnessFromArgv,
+  runTachoHook,
+} from "./hook-client";
 
 /** The most stdin bytes one hook process reads before it stops waiting for more. */
 export const MAX_HOOK_STDIN_BYTES = 8 * 1024 * 1024;
@@ -93,7 +99,13 @@ export async function runHookProcess(
     const hookId = ulid(Date.now());
     const { text: stdin, truncated } = await readStdin();
     const result = await runTachoHook({
-      paths: tachoPaths(process.env),
+      // A machine can hold one enrollment per agent (ADR-203), and the hook
+      // entry names the one it was written for.
+      paths: agentPathsForEnrollment(
+        tachoHome(process.env),
+        enrollmentFromArgv(argv),
+        harnessFromArgv(argv),
+      ),
       env: process.env,
       stdin,
       hookId,

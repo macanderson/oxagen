@@ -267,6 +267,40 @@ describe("instantSchema", () => {
       expect(accepts(instantSchema, value)).toBe(false);
     },
   );
+
+  const offsetMessage =
+    "the offset must be Z, or +HH:MM or -HH:MM with hours 00 to 23 and minutes 00 to 59";
+
+  it.each(["2026-09-26T10:00:00+23:59", "2026-09-26T10:00:00-00:00"])(
+    "accepts the offset in %j, which Date.parse reads",
+    (value) => {
+      expect(Number.isNaN(Date.parse(value))).toBe(false);
+      expect(accepts(instantSchema, value)).toBe(true);
+    },
+  );
+
+  it.each([
+    "2026-09-26T10:00:00+99:99",
+    "2026-09-26T10:00:00+24:00",
+    "2026-09-26T10:00:00-23:60",
+  ])("refuses the offset in %j, which Date.parse reads as NaN", (value) => {
+    expect(Number.isNaN(Date.parse(value))).toBe(true);
+    expect(messages(instantSchema, value)).toEqual([offsetMessage]);
+  });
+
+  it("refuses an offset with no colon, which RFC 3339 does not allow", () => {
+    expect(messages(instantSchema, "2026-09-26T10:00:00+0200")).toEqual([
+      offsetMessage,
+    ]);
+  });
+
+  it("reports a malformed time once, as the datetime check words it", () => {
+    expect(messages(instantSchema, "2026-09-26T10:00:00")).toEqual(["Invalid datetime"]);
+  });
+
+  it("publishes the date-time format, which already limits the offset", () => {
+    expect(toJsonSchema(instantSchema)).toEqual({ type: "string", format: "date-time" });
+  });
 });
 
 describe("organizationSlugSchema", () => {

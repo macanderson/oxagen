@@ -1,0 +1,32 @@
+parameters:
+  - name: sku
+    in: path
+    required: true
+    schema:
+      type: string
+get:
+  operationId: getItem
+  summary: Read one item.
+  responses:
+    "200":
+      description: The item.
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/item.yaml"
+patch:
+  operationId: adjustStock
+  summary: Change an item's stock count.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../schemas/stock.yaml#/StockChange"
+  responses:
+    "200":
+      description: The item.
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/item.yaml"

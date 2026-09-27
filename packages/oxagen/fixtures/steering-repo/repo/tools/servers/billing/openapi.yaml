@@ -39,7 +39,6 @@ paths:
       operationId: createRefund
       summary: Refund part or all of a captured charge.
       parameters:
-        - { name: Idempotency-Key, in: header, required: true, schema: { type: string } }
         - { name: X-Request-Source, in: header, schema: { type: string } }
       requestBody:
         required: true

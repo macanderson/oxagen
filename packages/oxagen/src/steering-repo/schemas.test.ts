@@ -14,6 +14,7 @@ import {
   writeSchemaFiles,
 } from "./generate-schemas";
 import { governanceSchema } from "./governance";
+import { memorySchema } from "./memory";
 import { promotionSchema } from "./promotion";
 import { steeringRecordSchema } from "./record";
 import { reflectionSchema } from "./reflection";
@@ -37,6 +38,7 @@ const MODULE_SCHEMAS: Record<SteeringRepoSchemaId, z.ZodTypeAny> = {
   "governance/v1": governanceSchema,
   "toolbelt/v1": toolbeltSchema,
   "reflection/v1": reflectionSchema,
+  "memory/v1": memorySchema,
   "promotion/v1": promotionSchema,
   "bundle/v1": bundleSchema,
 };
@@ -102,6 +104,45 @@ describe("the published schema files", () => {
       expect(committed.get(schemaFilePath(entry))).toBe(renderSchemaFile(entry));
     },
   );
+
+  // The steering record spec's canonical frontmatter schema, for the fields
+  // the memory provenance change added.
+  it("publishes toolbelt and provenance as the canonical steering-record/v1 writes them", () => {
+    const entry = STEERING_REPO_SCHEMAS.find(({ id }) => id === "steering-record/v1");
+    if (entry === undefined) throw new Error("STEERING_REPO_SCHEMAS has no steering-record/v1");
+    const { properties } = JSON.parse(renderSchemaFile(entry)) as {
+      properties: Record<string, unknown>;
+    };
+    expect(properties.toolbelt).toMatchObject({ type: "string", minLength: 1 });
+    expect(properties.provenance).toMatchObject({
+      type: "object",
+      additionalProperties: false,
+      required: ["source", "uri"],
+      properties: {
+        source: { enum: ["proposal", "run", "import"] },
+        uri: { type: "string" },
+        agent: { type: "string" },
+        memories: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["agent", "run", "statement", "evidence"],
+            properties: {
+              agent: { anyOf: [{ type: "string" }, { type: "null" }] },
+              run: { anyOf: [{ type: "string" }, { type: "null" }] },
+              statement: { type: "string", minLength: 1 },
+              evidence: { type: "array", items: { type: "string" } },
+            },
+          },
+        },
+      },
+      allOf: [
+        { if: { properties: { source: { const: "run" } } }, then: { required: ["memories"] } },
+      ],
+    });
+  });
 
   it.each(STEERING_REPO_SCHEMAS)("opens the $id file with its dialect, URL, title, and description", (entry) => {
     const text = renderSchemaFile(entry);

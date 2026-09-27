@@ -7,6 +7,7 @@
 import { EventEmitter } from "node:events";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -124,6 +125,12 @@ describe("tachod.pid", () => {
 
   it("is written at start and removed when SIGTERM stops the daemon", async () => {
     const home = scratch();
+    // One agent to serve: tachod refuses to start on a machine with none. An
+    // agent directory counts only with a `host.json`, and one that does not
+    // read still gets a collector (`agentServes`).
+    const agentDir = join(home, "agents", "a1b2c3d4");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(join(agentDir, "host.json"), "{}\n");
     const events = [
       "SIGTERM",
       "SIGINT",
