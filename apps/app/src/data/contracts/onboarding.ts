@@ -23,12 +23,11 @@ export const OnboardingStep = z.enum([
 export type OnboardingStep = z.infer<typeof OnboardingStep>;
 
 /** The git remote the enrolling host reported, as `enroll_host` parsed it. */
-export const DetectedRepository = z.object({
+const DetectedRepository = z.object({
   provider: z.literal("github"),
   owner: z.string().min(1),
   name: z.string().min(1),
 });
-export type DetectedRepository = z.infer<typeof DetectedRepository>;
 
 export const OnboardingGate = z.object({
   step: OnboardingStep,

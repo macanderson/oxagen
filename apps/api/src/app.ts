@@ -276,6 +276,7 @@ import { tachoEventsIngestRoute } from "./routes/v1/tacho.events.ingest";
 import { tachoHostEnrollRoute } from "./routes/v1/tacho.host.enroll";
 import { tachoEnrollmentTokenCreateRoute } from "./routes/v1/tacho.enrollment_token.create";
 import { onboardingStateGetRoute } from "./routes/v1/onboarding.state.get";
+import { steeringConnectionRoute } from "./routes/v1/gitlab-oauth";
 import { onboardingAdvanceRoute } from "./routes/v1/onboarding.advance";
 import { onboardingFirstFrameGetRoute } from "./routes/v1/onboarding.first_frame.get";
 import { repositoryMainBindRoute } from "./routes/v1/repository.main.bind";
@@ -1191,6 +1192,7 @@ orgOnlyScoped.route("/onboarding/state", onboardingStateGetRoute);
 // workspace-scoped group above, that URL matched no route and 404'd, leaving
 // the advertised REST surface unreachable (#3097).
 orgOnlyScoped.route("/audit/events/export", auditEventsExportRoute);
+orgOnlyScoped.route("/connections/steering", steeringConnectionRoute);
 app.route("/v1/:org_slug", orgOnlyScoped);
 
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

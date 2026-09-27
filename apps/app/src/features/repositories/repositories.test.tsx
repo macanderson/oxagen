@@ -53,6 +53,7 @@ const actions = vi.hoisted(() => ({
   mergeRepositoryChange: vi.fn(),
   closeRepositoryChange: vi.fn(),
   readWorkingCopies: vi.fn(),
+  promoteInstructionToSteering: vi.fn(),
 }));
 vi.mock("./actions", () => actions);
 
@@ -1639,6 +1640,22 @@ describe("repository refusal messages", () => {
         code: "action_failed",
       }),
     ).toContain("action_failed");
+  });
+
+  it("names the capability a deployment has not registered, and only when the caller passes it", () => {
+    const { result } = renderHook(useRepositoriesFailure, {
+      wrapper: IntlProvider,
+    });
+    const refusal = {
+      ok: false,
+      reason: "unavailable",
+      code: "tool_not_registered",
+    } as const;
+    expect(result.current(refusal, "promote_instruction_to_steering")).toBe(
+      "This deployment does not run promote_instruction_to_steering yet, so Oxagen changed nothing.",
+    );
+    // With no capability named, the code is printed as recorded.
+    expect(result.current(refusal)).toContain("tool_not_registered");
   });
 });
 

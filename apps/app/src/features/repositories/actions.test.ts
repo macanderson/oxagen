@@ -40,6 +40,7 @@ const {
   listInstallationRepositories,
   mergeRepositoryChange,
   openInitPullRequest,
+  promoteInstructionToSteering,
   readRepositoryChange,
   readRepositoryChanges,
   readRepositoryTree,
@@ -1109,6 +1110,26 @@ describe("connectGitLabProject", () => {
       code: "gitlab_token_not_project_scoped",
     });
     expect(invoke).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("promoteInstructionToSteering", () => {
+  // The platform has not registered the capability yet (#4518), so the kernel
+  // refuses the call before invoke(). When it registers, this case fails and
+  // moves to the ok path.
+  it("answers tool_not_registered and never reaches the kernel (negative)", async () => {
+    expect(
+      await promoteInstructionToSteering("acme", "core-platform", {
+        repositoryId: "rpb_0d1e2f",
+        path: "AGENTS.md",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "unavailable",
+      code: "tool_not_registered",
+    });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).not.toHaveBeenCalled();
   });
 });
 

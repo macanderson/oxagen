@@ -703,13 +703,36 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
   // The Oxagen Steering app (#4450, docs/specs/github-app/github-app-setup.md).
   // A second GitHub App with the Oxagen app's permissions plus Administration
   // and Deployments write, used only on steering repos. The steering repo
-  // provision job reads all three. It stops with a typed error when any is
-  // missing.
+  // provision job reads the ID, the private key and the slug, and stops with a
+  // typed error when any is missing. The steering connect in api
+  // (/v1/:org_slug/connections/steering/github and /oauth/github/steering)
+  // reads all five plus GITHUB_APP_INSTALL_STATE_SECRET, and answers 503 naming
+  // the first that is unset.
   OXAGEN_STEERING_APP_ID: {
     group: "github",
     description:
       "The Oxagen Steering GitHub App's numeric ID. The steering repo provision job uses it with OXAGEN_STEERING_APP_PRIVATE_KEY to mint installation tokens for steering repos. Find it on the app's settings page.",
     secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_STEERING_APP_CLIENT_ID: {
+    group: "github",
+    description:
+      "The Oxagen Steering GitHub App's OAuth client ID. The steering connect sends it to GitHub to authorize the app and exchanges the returned code with it. Find it on the app's settings page.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_STEERING_APP_CLIENT_SECRET: {
+    group: "github",
+    description:
+      "The Oxagen Steering GitHub App's OAuth client secret. The steering callback at /oauth/github/steering uses it to exchange GitHub's code for a user token. Generate it under the app's settings, Client secrets.",
+    secret: true,
     clientExposed: false,
     services: ["api"],
     requiredIn: [],
