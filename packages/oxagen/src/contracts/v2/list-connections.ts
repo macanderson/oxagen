@@ -228,7 +228,7 @@ export const listConnections = defineTool({
 
         /**
          * Appendix A `requires_mandate`: true when any tool this connection
-         * backs carries a consequence tag (§6.9). Surfaced here because it is
+         * backs carries an impact (§6.9). Surfaced here because it is
          * what tells an operator that granting the connection is not the last
          * step — a mandate is still needed before a call using it can proceed.
          */

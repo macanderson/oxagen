@@ -98,7 +98,7 @@ describe("importTools", () => {
         version: 1,
         checksum: "c",
         schemaOrigin: "imported" as const,
-        consequenceTags: [],
+        impacts: [],
         measures: {},
         effectIdPath: null,
         published: true,
@@ -111,7 +111,7 @@ describe("importTools", () => {
         version: 2,
         checksum: "c",
         schemaOrigin: "imported" as const,
-        consequenceTags: [],
+        impacts: [],
         measures: {},
         effectIdPath: null,
         published: false,
@@ -180,7 +180,7 @@ describe("setToolClassification", () => {
     riskGrade: "critical" as const,
     sideEffect: "irreversible" as const,
     egress: "third_party" as const,
-    consequenceTags: ["moves_money"],
+    impacts: ["moves_money"],
     dataClasses: ["payment"],
     measures: [
       {
@@ -201,7 +201,7 @@ describe("setToolClassification", () => {
       classification: {
         sideEffect: "irreversible",
         egress: "third_party",
-        consequenceTags: ["moves_money"],
+        impacts: ["moves_money"],
         measures: {
           amount: {
             path: "$.amount",
@@ -224,7 +224,7 @@ describe("setToolClassification", () => {
         classification: {
           sideEffect: "irreversible",
           egress: "third_party",
-          consequenceTags: ["moves_money"],
+          impacts: ["moves_money"],
           dataClasses: ["payment"],
           measures: {
             amount: {
@@ -247,7 +247,7 @@ describe("setToolClassification", () => {
       classification: {
         sideEffect: "read",
         egress: "local",
-        consequenceTags: [],
+        impacts: [],
         measures: { rows: { path: "$.rows", type: "count", unit: "rows" } },
         dataClasses: [],
       },
@@ -258,7 +258,7 @@ describe("setToolClassification", () => {
       riskGrade: "low",
       sideEffect: "read",
       egress: "local",
-      consequenceTags: [],
+      impacts: [],
       dataClasses: [],
       measures: [
         {

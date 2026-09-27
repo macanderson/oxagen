@@ -73,7 +73,7 @@ export type RuleSetLoader = (ctx: {
  * The mandate check the gate runs after the rules, for an agent principal
  * only (ADR-059 decision 4). It throws to refuse or park the call and
  * returns the settlement the kernel applies after the handler, or undefined
- * when no declared tool with a consequence tag is involved. Unlike the rule
+ * when no declared tool with an impact is involved. Unlike the rule
  * set loader it never fails open: a mandate check that cannot run refuses
  * the call, because a consequential call with no verdict is the thing the
  * mandate exists to prevent.

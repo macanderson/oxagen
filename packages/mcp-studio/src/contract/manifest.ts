@@ -9,7 +9,7 @@
 // is resolved, so no reader applies one.
 import { z } from "zod";
 import {
-  consequenceTagSchema,
+  impactSchema,
   toolClassificationSchema,
   toolEgressClassSchema,
   toolRiskGradeSchema,
@@ -69,7 +69,7 @@ export const manifestClassificationSchema = z
     risk: toolRiskGradeSchema,
     side_effect: toolSideEffectClassSchema,
     egress: toolEgressClassSchema,
-    impacts: uniqueList(consequenceTagSchema, "impacts", 32),
+    impacts: uniqueList(impactSchema, "impacts", 32),
     measures: z.record(toolClassificationSchema.innerType().shape.measures.keySchema, toolsMeasureSchema),
     data_classes: toolClassificationSchema.innerType().shape.dataClasses,
   })

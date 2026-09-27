@@ -24,8 +24,11 @@
 // not exist. The failure is then rethrown — a partial import is a failed one,
 // and re-running it republishes only what changed.
 //
-// The pull-request path the mockup shows (declarations to `.oxagen/tools/` on
-// a branch) needs a bound repository, which no capability records; ADR-072.
+// A server whose folder lives in the steering repo (origin `steering`) takes
+// new tools through a steering PR that appends them to its tools.toml, and
+// the registry changes when that PR merges and publishes (M13, #4478). Its
+// declarations live in tools.toml, so the declarations path refuses it. A
+// proposed server waits on the PR that adds it and takes no import.
 
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
@@ -34,6 +37,11 @@ import { TOOL_NAME_MAX_LENGTH } from "@oxagen/oxagen/contracts/tool.declaration.
 import { schema, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { readLatestPinnedDescriptors } from "@oxagen/agent/runtime/mcp-snapshots";
+import {
+  steeringWriter,
+  type ServerFolderWriter,
+  type WorkspaceScope,
+} from "@oxagen/agent/runtime/steering-pr";
 import type { McpToolDescriptor } from "@oxagen/agent/dispatch/mcp-client";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { sha256Hex } from "./registry-digest";
@@ -49,7 +57,12 @@ export interface ToolImportDeps {
     orgId: string;
     workspaceId: string;
     publicId: string;
-  }): Promise<{ id: string; publicId: string } | null>;
+  }): Promise<{
+    id: string;
+    publicId: string;
+    origin: string;
+    steeringName: string | null;
+  } | null>;
   readPins(scope: {
     orgId: string;
     workspaceId: string;
@@ -67,6 +80,8 @@ export interface ToolImportDeps {
     digest: string;
     userId: string | null;
   }): Promise<void>;
+  /** The steering PR writer, or null while the workspace writes rows directly. */
+  writer(scope: WorkspaceScope): Promise<ServerFolderWriter | null>;
 }
 
 const postgresToolImportDeps: ToolImportDeps = {
@@ -76,6 +91,8 @@ const postgresToolImportDeps: ToolImportDeps = {
         .select({
           id: schema.mcpServers.id,
           publicId: schema.mcpServers.publicId,
+          origin: schema.mcpServers.origin,
+          steeringName: schema.mcpServers.steeringName,
         })
         .from(schema.mcpServers)
         .where(
@@ -126,6 +143,7 @@ const postgresToolImportDeps: ToolImportDeps = {
         .where(eq(schema.mcpServers.id, args.serverId)),
     );
   },
+  writer: steeringWriter,
 };
 
 /** sha256 over the sorted checksums: the same set of versions gives the same digest. */
@@ -156,6 +174,51 @@ export function createToolImportHandler(
       });
     }
 
+    if (server.origin === "proposed") {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "server_proposed",
+        message: `MCP server ${input.serverId} waits on the steering PR that adds it. Import its tools after that PR merges.`,
+      });
+    }
+    if (server.origin === "steering") {
+      const toolsToml = `tools/servers/${server.steeringName}/tools.toml`;
+      if (input.declarations) {
+        throw new HandlerError({
+          code: "conflict",
+          reason: "server_in_steering_repo",
+          message: `MCP server ${input.serverId} is declared in ${toolsToml} in the steering repo. Edit that file instead.`,
+        });
+      }
+      const writer = await deps.writer(scope);
+      if (writer === null) {
+        throw new HandlerError({
+          code: "conflict",
+          reason: "steering_pr_unavailable",
+          message: `MCP server ${input.serverId} lives in ${toolsToml}, and no steering PR can be opened for this workspace yet. Add the tools to that file by hand.`,
+        });
+      }
+      const toolNames =
+        input.tools ??
+        (await deps.readPins({ ...scope, serverId: server.id })).map((p) => p.name);
+      const pr = await writer.addTools({
+        ...scope,
+        serverId: server.id,
+        toolNames,
+        actorUserId: actingUserId,
+      });
+      // Nothing is published until the PR merges: report the registry as it is.
+      const importDigest = importDigestOf(
+        await deps.activeChecksums({ ...scope, serverId: server.id }),
+      );
+      return {
+        serverId: server.publicId,
+        importDigest,
+        tools: [],
+        steeringPr: { number: pr.number, url: pr.url },
+      };
+    }
+
     const publishes: Array<
       Omit<
         PublishToolArgs,
@@ -173,7 +236,7 @@ export function createToolImportHandler(
           policyGroup: d.policy_group ?? null,
           manifest: d.manifest,
           schemaOrigin: "declared",
-          consequenceTags: d.consequence_tags,
+          impacts: d.impacts,
           measures: d.measures,
           effectIdPath: d.effect_id_path ?? null,
         });
@@ -208,7 +271,7 @@ export function createToolImportHandler(
           schemaOrigin: "imported",
           // A pulled descriptor states no consequences: it lands unclassified
           // and an admin classifies it, the same fail-safe as the risk grade.
-          consequenceTags: [],
+          impacts: [],
           measures: {},
           effectIdPath: null,
         });
@@ -277,7 +340,7 @@ export function createToolImportHandler(
           version: published.version,
           checksum: published.checksum,
           schemaOrigin: p.schemaOrigin,
-          consequenceTags: [...(p.consequenceTags ?? [])],
+          impacts: [...(p.impacts ?? [])],
           measures: p.measures ?? {},
           effectIdPath: p.effectIdPath ?? null,
           published: published.published,

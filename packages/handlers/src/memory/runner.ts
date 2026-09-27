@@ -544,12 +544,12 @@ async function settleOne(
 }
 
 /**
- * Put today's branch at `head`. A branch left by a pass that failed before
- * it opened its PR is replaced. The function returns false and leaves the
- * branch alone when it already has an open PR, or when someone else moves
- * it while the curator creates it.
+ * Create today's branch at `head`, the default branch's commit the plan read.
+ * A branch left by a pass that failed before it opened its PR is replaced.
+ * The function returns false and leaves the branch alone when it already has
+ * an open PR.
  */
-async function prepareBranch(
+export async function prepareBranch(
   host: SteeringHost,
   repo: SteeringRepository,
   branch: string,
@@ -558,6 +558,7 @@ async function prepareBranch(
   try {
     await host.ensureBranch(repo, branch, repo.defaultBranch, {
       exclusive: true,
+      at: head,
     });
   } catch (err) {
     if (!(isHandlerError(err) && err.reason === "proposal_branch_exists"))
@@ -578,25 +579,13 @@ async function prepareBranch(
     await host.deleteBranch(repo, branch);
     await host.ensureBranch(repo, branch, repo.defaultBranch, {
       exclusive: true,
+      at: head,
     });
   }
-  // The default branch can move between the read and the branch's creation.
-  // The commit's parent is the head the plan read, so the branch goes back
-  // to it. The reset moves the branch only while it still points where the
-  // curator created it. A branch gone or moved since holds a change the
-  // curator did not make, so the curator leaves it.
-  const created = await host.branchHead(repo, branch);
-  if (created === head) return true;
-  if (
-    created === null ||
-    !(await host.resetBranch(repo, branch, { from: created, to: head }))
-  ) {
-    logger.warn(
-      { repository: repo.fullName, branch, created, head },
-      "memory: today's memory branch moved while the curator created it; the curator leaves it",
-    );
-    return false;
-  }
+  // The default branch can move after the plan read it. The branch starts at
+  // the head the plan read, because that head is the commit's parent. The
+  // host creates it there in one call, so no reset follows and no push to the
+  // branch can land between a read and a move.
   return true;
 }
 

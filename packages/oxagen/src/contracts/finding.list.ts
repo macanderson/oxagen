@@ -22,7 +22,7 @@ import { costSchema, ratioSchema } from "./spend.shared";
 /** A window shorter than this many days annualises as if it were this long. */
 export const ANNUALISED_WINDOW_MIN_DAYS = 7;
 
-/** At most this many findings in one answer: the job keeps ten per kind, so every open finding fits (billing's findings test asserts it). */
+/** At most this many findings in one answer: the job keeps at most `FINDINGS_MAX` open findings, so every one fits (billing's findings test asserts it). */
 export const FINDINGS_LIST_MAX = 50;
 
 export const findingList = registerCapability({

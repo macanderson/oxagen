@@ -70,3 +70,74 @@ describe("readGitLabConnection head roles", () => {
     await expect(readGitLabConnection(SCOPE)).resolves.toBeNull();
   });
 });
+
+describe("readGitLabConnection connection kinds", () => {
+  const BOUND = {
+    connectionId: "0192d4a8-7c1e-7a00-8000-00000000c011",
+    projectId: "4242",
+    owner: "acme/platform",
+    repo: "rules",
+    approvedFullName: "acme/platform/rules",
+    approvedDefaultRef: "main",
+  };
+
+  beforeEach(() => {
+    db.whereCalls.length = 0;
+    db.rows = [];
+  });
+
+  it("asks for a head on a project connection or a steering connection", async () => {
+    await readGitLabConnection(SCOPE);
+    const query = new PgDialect().sqlToQuery(db.whereCalls[0] as SQL);
+    expect(query.params).toEqual(
+      expect.arrayContaining(["gitlab", "gitlab_steering"]),
+    );
+  });
+
+  it("answers a project connection's head with no group id", async () => {
+    db.rows = [{ ...BOUND, connectorId: "gitlab", deliveryConfig: {} }];
+    await expect(readGitLabConnection(SCOPE)).resolves.toEqual(BOUND);
+  });
+
+  it("carries the group id of a steering project the provisioner bound", async () => {
+    db.rows = [
+      {
+        ...BOUND,
+        connectorId: "gitlab_steering",
+        deliveryConfig: { groupId: 77, groupPath: "acme" },
+      },
+    ];
+    await expect(readGitLabConnection(SCOPE)).resolves.toEqual({
+      ...BOUND,
+      steeringGroupId: 77,
+    });
+  });
+
+  it("reads a group id stored as a string of digits", async () => {
+    db.rows = [
+      {
+        ...BOUND,
+        connectorId: "gitlab_steering",
+        deliveryConfig: { groupId: "77" },
+      },
+    ];
+    await expect(readGitLabConnection(SCOPE)).resolves.toMatchObject({
+      steeringGroupId: 77,
+    });
+  });
+
+  it.each([
+    ["no delivery config", null],
+    ["no group id", { groupPath: "acme" }],
+    ["a zero group id", { groupId: 0 }],
+    ["a group id that is not a number", { groupId: "acme" }],
+  ])("refuses a steering connection with %s", async (_label, config) => {
+    db.rows = [
+      { ...BOUND, connectorId: "gitlab_steering", deliveryConfig: config },
+    ];
+    await expect(readGitLabConnection(SCOPE)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "steering_group_missing",
+    });
+  });
+});

@@ -64,8 +64,10 @@ vi.mock("@oxagen/iam/org-role", () => ({
 }));
 
 // The head writer has its own suite (repository.binding-write.test.ts); here
-// it is a seam, so the test can say WHAT the handler asked it to write.
-vi.mock("./repository.binding-write", () => ({
+// it is a seam, so the test can say WHAT the handler asked it to write. The
+// rest of the module, the workspace lock among it, stays real.
+vi.mock("./repository.binding-write", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./repository.binding-write")>()),
   writeRepositoryHead: mocks.writeRepositoryHead,
 }));
 

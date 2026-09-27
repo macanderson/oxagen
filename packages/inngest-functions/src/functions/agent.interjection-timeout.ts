@@ -45,7 +45,7 @@ export const [agentInterjectionTimeout] = createFunction(
   {
     id: "agent/interjection-timeout",
     retries: 3,
-    concurrency: { limit: 10, key: "event.data.workspaceId" },
+    concurrency: { limit: 5, key: "event.data.workspaceId" },
   },
   { event: AGENT_INTERJECTION_RAISED_EVENT },
   async ({ event, step }) => {

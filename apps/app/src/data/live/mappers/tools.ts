@@ -41,7 +41,7 @@ export function toToolVersionPage(
           : {
               sideEffect: item.classification.sideEffect,
               egress: item.classification.egress,
-              consequenceTags: item.classification.consequenceTags,
+              impacts: item.classification.impacts,
               dataClasses: item.classification.dataClasses,
               measures: Object.entries(item.classification.measures).map(
                 ([name, measure]) => ({

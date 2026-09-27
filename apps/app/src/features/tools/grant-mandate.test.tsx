@@ -180,7 +180,7 @@ describe("GrantMandate", () => {
     expect(grantMandate).toHaveBeenCalledWith("acme", "core-platform", {
       agentId: "agt_releasebot",
       requestId: null,
-      consequenceTags: "moves_money",
+      impacts: "moves_money",
       measure: "rows",
       unit: "rows",
       perCall: "",
@@ -318,7 +318,7 @@ describe("GrantMandate on a requested draft", () => {
     status: "draft",
     grantedBy: null,
     roleAtGrant: null,
-    consequenceTags: ["moves_money", "ships_code"],
+    impacts: ["moves_money", "ships_code"],
     tools: ["stripe__create_payment@*", "deploy__ship@3"],
     authority: [
       mandateAuthority({
@@ -389,7 +389,7 @@ describe("GrantMandate on a requested draft", () => {
       expect.objectContaining({
         agentId: "agt_invoicebot",
         requestId: "mnd_7c1d2e",
-        consequenceTags: "moves_money,ships_code",
+        impacts: "moves_money,ships_code",
         measure: "rows",
         perCall: "50",
         perPeriod: "1000",

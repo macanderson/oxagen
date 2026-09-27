@@ -90,7 +90,7 @@ describe("parseToolsView", () => {
     expect(parseToolsView("tools", { belt: "tbt_01k5s1" }).belt).toBeNull();
   });
 
-  it("reads a consequence tag only on the Tools tab, and only in the contract's shape", () => {
+  it("reads an impact only on the Tools tab, and only in the contract's shape", () => {
     expect(parseToolsView("tools", { category: "moves_money" }).category).toBe(
       "moves_money",
     );

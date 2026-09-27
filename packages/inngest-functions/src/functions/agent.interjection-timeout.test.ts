@@ -80,7 +80,7 @@ describe("agent.interjection-timeout", () => {
       options: {
         id: "agent/interjection-timeout",
         retries: 3,
-        concurrency: { limit: 10, key: "event.data.workspaceId" },
+        concurrency: { limit: 5, key: "event.data.workspaceId" },
       },
       trigger: { event: "agent/interjection.raised" },
     });

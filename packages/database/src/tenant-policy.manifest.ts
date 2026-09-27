@@ -156,6 +156,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "cost.daily_totals", policyClass: "standard" },
   // The findings job's output (ADR-062); org_id + workspace_id NOT NULL.
   { table: "cost.findings", policyClass: "standard" },
+  // The model calls a finding claims (ADR-208); org_id + workspace_id NOT NULL.
+  { table: "cost.finding_claims", policyClass: "standard" },
   // What each run's pull requests became (#4491); org_id + workspace_id NOT NULL.
   { table: "cost.run_pr_outcomes", policyClass: "standard" },
   // The reverts kept until their outcome rows exist (#4491); org_id + workspace_id NOT NULL.

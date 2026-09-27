@@ -1019,7 +1019,7 @@ const ROUTES: ThinRoute[] = [
       classification: {
         sideEffect: "write",
         egress: "third_party",
-        consequenceTags: ["communicates_externally"],
+        impacts: ["communicates_externally"],
         measures: {},
         dataClasses: [],
       },
@@ -1606,7 +1606,7 @@ const ROUTES: ThinRoute[] = [
       read_only: false,
       // Both carry a schema default, so the parsed input the route dispatches
       // holds them even when the body declares neither (ADR-059 decision 6).
-      consequence_tags: [],
+      impacts: [],
       measures: {},
     },
     invalidBody: {
@@ -1855,7 +1855,7 @@ const ROUTES: ThinRoute[] = [
     capability: mandateGrant.name,
     body: {
       agentId: "agt_1",
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       limits: {
         refund_amount: {
           perCall: "50000000",
@@ -1871,7 +1871,7 @@ const ROUTES: ThinRoute[] = [
     },
     expectedInput: {
       agentId: "agt_1",
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       limits: {
         refund_amount: {
           perCall: "50000000",
@@ -1891,7 +1891,7 @@ const ROUTES: ThinRoute[] = [
     invalidBody: {
       ...{
         agentId: "agt_1",
-        consequenceTags: ["moves_money"],
+        impacts: ["moves_money"],
         limits: {
           refund_amount: {
             perCall: "50000000",
@@ -2008,7 +2008,7 @@ const ROUTES: ThinRoute[] = [
     capability: mandateRequest.name,
     body: {
       agentId: "agt_1",
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       limits: {
         refund_amount: {
           perCall: "50000000",
@@ -2024,7 +2024,7 @@ const ROUTES: ThinRoute[] = [
     },
     expectedInput: {
       agentId: "agt_1",
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       limits: {
         refund_amount: {
           perCall: "50000000",
@@ -2044,7 +2044,7 @@ const ROUTES: ThinRoute[] = [
     invalidBody: {
       ...{
         agentId: "agt_1",
-        consequenceTags: ["moves_money"],
+        impacts: ["moves_money"],
         limits: {
           refund_amount: {
             perCall: "50000000",
