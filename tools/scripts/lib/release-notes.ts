@@ -43,6 +43,11 @@ export interface ReleaseNotes {
   summary: string;
   /** Markdown, headings at `##` and below, no title. */
   body: string;
+  /**
+   * Who wrote the notes. The release PR's body names it, so a reviewer reads
+   * model notes for a wrong claim and commit-log notes for a missing summary.
+   */
+  source: "model" | "commit-log";
 }
 
 /** Read the skill files under `root`; a missing one is an error, not a blank. */
@@ -127,7 +132,7 @@ export function parseNotes(text: string): ReleaseNotes | null {
   const summary = m[1].replace(/\s+/g, " ").trim();
   const body = m[2].trim();
   if (summary.length === 0 || body.length < 40) return null;
-  return { summary, body };
+  return { summary, body, source: "model" };
 }
 
 /** The prose scanner's findings for the notes, as the model would read them. */
@@ -193,7 +198,7 @@ export function fallbackNotes(h: NotesHistory): ReleaseNotes {
       : shown.map((s) => `- ${s}`)),
     ...(omitted > 0 ? ["", `And ${omitted} more, in the commit log.`] : []),
   ].join("\n");
-  return { summary, body };
+  return { summary, body, source: "commit-log" };
 }
 
 /**
