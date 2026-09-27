@@ -304,9 +304,12 @@ function valuesOf(row: OutcomeRow) {
  * dated states. Between two undated states, the later read wins. An undated
  * write never replaces a dated row, so a pass that read no GitHub time cannot
  * undo a delivery that carried one. `isStaleRead` holds the same order for a
- * read the refresh folds into a row in memory.
+ * read the refresh folds into a row in memory. It is built per write, not at
+ * import, so a module that mocks the schema can still import this one.
  */
-const replacesStored = sql`(excluded.source_updated_at IS NOT NULL AND (${outcomes.sourceUpdatedAt} IS NULL OR excluded.source_updated_at >= ${outcomes.sourceUpdatedAt})) OR (excluded.source_updated_at IS NULL AND ${outcomes.sourceUpdatedAt} IS NULL AND (${outcomes.prStateReadAt} IS NULL OR excluded.pr_state_read_at >= ${outcomes.prStateReadAt}))`;
+function replacesStored() {
+  return sql`(excluded.source_updated_at IS NOT NULL AND (${outcomes.sourceUpdatedAt} IS NULL OR excluded.source_updated_at >= ${outcomes.sourceUpdatedAt})) OR (excluded.source_updated_at IS NULL AND ${outcomes.sourceUpdatedAt} IS NULL AND (${outcomes.prStateReadAt} IS NULL OR excluded.pr_state_read_at >= ${outcomes.prStateReadAt}))`;
+}
 
 /**
  * Write rows the refresh computed, one upsert per run and pull request. The
@@ -348,7 +351,7 @@ export async function saveOutcomeRows(
             revertedReadAt: sql`CASE WHEN ${outcomes.reverted} THEN ${outcomes.revertedReadAt} ELSE excluded.reverted_read_at END`,
             updatedAt: sql`now()`,
           },
-          setWhere: sql`${outcomes.orgId} = ${scope.orgId} AND ${outcomes.workspaceId} = ${scope.workspaceId} AND (${replacesStored})`,
+          setWhere: sql`${outcomes.orgId} = ${scope.orgId} AND ${outcomes.workspaceId} = ${scope.workspaceId} AND (${replacesStored()})`,
         })
         .returning({ id: outcomes.id });
       written += result.length;
