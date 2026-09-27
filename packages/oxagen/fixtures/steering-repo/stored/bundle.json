@@ -4,14 +4,14 @@
   "scope": "workspace",
   "organization": "a-intel",
   "workspace": "core-platform",
-  "version": 20,
-  "commit": "78054f71905114b4bb66a30dfdbb922f98a5cd4d",
+  "version": 21,
+  "commit": "b5518188b20ddf02f905fadeaa50d9976abdcc90",
   "ledger": {
     "path": "steering/promotions/2026-09.jsonl",
-    "seq": 19,
-    "hash": "sha256:43279eb737719f368d859a0e8b613afbb19f15584c04435820a593f0d436115a"
+    "seq": 20,
+    "hash": "sha256:50cbbe698cb887bc28af63fe00d92e8c5d2f39bc1f324fbb4e8e7b7589073a91"
   },
-  "published_at": "2026-09-22T13:45:30Z",
+  "published_at": "2026-09-24T10:00:30Z",
   "records": [
     {
       "lineage": "a-intel.billing.refunds-over-100",
