@@ -52,7 +52,10 @@ const REAUTHORIZE = {
 
 function provisioning(
   view: SteeringRepoView,
-  { canAct = true, ws = "core-platform" as string | null } = {},
+  {
+    canAct = true,
+    ws = "core-platform",
+  }: { canAct?: boolean; ws?: string | null } = {},
 ) {
   render(
     <IntlProvider>
@@ -129,9 +132,10 @@ describe("the steering repo provisioning", () => {
     const failed = root.querySelector<HTMLElement>(
       'li[data-step="create_repository"]',
     );
+    if (failed === null) throw new Error("the failed step is not rendered");
     expect(failed).toHaveAttribute("data-state", "failed");
     expect(
-      within(failed as HTMLElement).getByTestId("steering-repo-step-error"),
+      within(failed).getByTestId("steering-repo-step-error"),
     ).toHaveTextContent(
       "GitHub already has a repository named acme/oxagen-core-platform.",
     );
@@ -154,7 +158,9 @@ describe("the steering repo provisioning", () => {
     });
     provisioning(FAILED);
     await userEvent.click(screen.getByTestId("steering-repo-retry"));
-    await waitFor(() => expect(nav.refresh).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(nav.refresh).toHaveBeenCalledTimes(1);
+    });
     expect(actions.retrySteeringRepoProvision).toHaveBeenCalledWith(
       "acme",
       "core-platform",
@@ -193,7 +199,9 @@ describe("the steering repo provisioning", () => {
     await userEvent.click(retry);
     expect(actions.retrySteeringRepoProvision).toHaveBeenCalledTimes(1);
     answer({ ok: true, value: { status: "provisioning" } });
-    await waitFor(() => expect(nav.refresh).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(nav.refresh).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("names the capability a deployment has not registered, and re-reads nothing (negative)", async () => {

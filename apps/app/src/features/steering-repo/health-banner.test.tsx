@@ -194,7 +194,9 @@ describe("the steering repo health banner", () => {
     });
     banner();
     await userEvent.click(screen.getByTestId("steering-repo-repair"));
-    await waitFor(() => expect(nav.refresh).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(nav.refresh).toHaveBeenCalledTimes(1);
+    });
     expect(actions.repairSteeringRepo).toHaveBeenCalledWith(
       "acme",
       "core-platform",
@@ -217,7 +219,9 @@ describe("the steering repo health banner", () => {
     await userEvent.click(repair);
     expect(actions.repairSteeringRepo).toHaveBeenCalledTimes(1);
     answer({ ok: true, value: { health: "healthy" } });
-    await waitFor(() => expect(nav.refresh).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(nav.refresh).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("shows a member the drift and no Repair (negative)", () => {

@@ -118,8 +118,7 @@ export function MemoryPrReview({
               </p>
               <ul className="flex flex-col gap-2">
                 {record.memories.map((memory, index) => (
-                  // A record's memories are a fixed list in the order the
-                  // file cites them, so the position is a stable key.
+                  // eslint-disable-next-line @eslint-react/no-array-index-key -- a record's memories are a fixed list in the order the file cites them, and two can share a statement, agent and run, so the position is the only stable key
                   <Memory key={index} at={at} memory={memory} />
                 ))}
               </ul>

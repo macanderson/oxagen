@@ -154,7 +154,7 @@ export function SteeringRepoProvisioning({
           data-testid="steering-repo-ready"
           className="flex flex-wrap items-baseline gap-x-1.5 text-[13px] text-foreground"
         >
-          <span>{t("ready")}</span>
+          <span>{t("ready")}</span>{" "}
           <SteeringRepositoryLink
             provider={view.provider}
             repository={ready}
