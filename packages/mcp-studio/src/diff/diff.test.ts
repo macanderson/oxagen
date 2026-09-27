@@ -47,12 +47,13 @@ function pinnedLock(name: FixtureServer): McpToolsLock {
 /** A fixture's tools.toml with entries changed, added, or dropped. */
 function toolsToml(name: FixtureServer, replace: Replace = {}): McpTools {
   const parsed = ok(parseToolsToml(text(`servers/${name}/tools.toml`)));
-  const keys = [...new Set([...Object.keys(parsed.tools), ...Object.keys(replace)])];
+  const tools = parsed.tools ?? {};
+  const keys = [...new Set([...Object.keys(tools), ...Object.keys(replace)])];
   const entries = Object.fromEntries(
     keys.flatMap((key): Array<[string, Record<string, unknown>]> => {
       const change = Object.hasOwn(replace, key) ? replace[key] : undefined;
       if (change === null) return [];
-      const current = Object.hasOwn(parsed.tools, key) ? parsed.tools[key] : undefined;
+      const current = Object.hasOwn(tools, key) ? tools[key] : undefined;
       return [[key, { ...current, ...change }]];
     }),
   );

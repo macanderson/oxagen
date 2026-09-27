@@ -315,6 +315,7 @@ describe("lock with a registry remote", () => {
           'mode = "direct"',
           "[sync]",
           'schedule = "daily"',
+          "",
         ].join("\n"),
       ),
     );
