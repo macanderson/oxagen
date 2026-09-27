@@ -1707,6 +1707,12 @@ importers:
 
   packages/mcp-studio:
     dependencies:
+      '@bufbuild/protobuf':
+        specifier: 2.12.0
+        version: 2.12.0
+      '@grpc/grpc-js':
+        specifier: 1.14.4
+        version: 1.14.4
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../oxagen
@@ -2090,6 +2096,9 @@ importers:
 
   packages/tacho:
     dependencies:
+      '@cedar-policy/cedar-wasm':
+        specifier: 4.13.0
+        version: 4.13.0
       '@contextgraphprotocol/typescript-sdk':
         specifier: 0.1.0
         version: 0.1.0
@@ -2774,6 +2783,9 @@ packages:
 
   '@cacheable/utils@2.5.0':
     resolution: {integrity: sha512-buipgOVDkkPXNR5+xBpDw7Zk2n1EvU7qBJCNUcL7rhQ//kfpOXPAvQ511Os0vpLYJ1pZnvudNytkQt2hst3wqA==}
+
+  '@cedar-policy/cedar-wasm@4.13.0':
+    resolution: {integrity: sha512-1omEd/J0c7RjcfSUWiXZc6zk6XUs1IuY7Yk9TVysoKV/LpFWIk45RpjvRFVioPUR3RQmgA/DaqKhK3pucbBx1A==}
 
   '@changesets/apply-release-plan@8.1.1':
     resolution: {integrity: sha512-nk2Hbq3M9NeHMdaIRBDvawKrQJzXB9sGyBUE5yWnIKtvdcNCPj75zBekJYr0gTT2ecJH3eFeTrc8eisPImcv0Q==}
@@ -13920,6 +13932,8 @@ snapshots:
     dependencies:
       hashery: 1.5.1
       keyv: 5.6.0
+
+  '@cedar-policy/cedar-wasm@4.13.0': {}
 
   '@changesets/apply-release-plan@8.1.1':
     dependencies:

@@ -321,6 +321,7 @@ import { agentMoveRoute } from "./routes/v1/agent.move";
 import { agentToolbeltAssignRoute } from "./routes/v1/agent.toolbelt.assign";
 import { runtimeCreateRoute } from "./routes/v1/runtime.create";
 import { runtimeListRoute } from "./routes/v1/runtime.list";
+import { runtimeUpdateRoute } from "./routes/v1/runtime.update";
 import { toolbeltListRoute } from "./routes/v1/toolbelt.list";
 import { toolbeltGetRoute } from "./routes/v1/toolbelt.get";
 import { toolbeltCloneRoute } from "./routes/v1/toolbelt.clone";
@@ -989,6 +990,7 @@ orgScoped.route("/agents", agentListRoute);
 // Runtimes, toolbelts and tool state (ADR-198). Session auth; the role is
 // checked in each write handler.
 orgScoped.route("/runtimes/create", runtimeCreateRoute);
+orgScoped.route("/runtimes/update", runtimeUpdateRoute);
 orgScoped.route("/runtimes", runtimeListRoute);
 orgScoped.route("/toolbelts/get", toolbeltGetRoute);
 orgScoped.route("/toolbelts/clone", toolbeltCloneRoute);

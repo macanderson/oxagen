@@ -98,6 +98,7 @@ export function toNamedRuntimeList(
       })),
       liveHosts: item.liveHosts,
       lastSeenAt: item.lastSeenAt,
+      containmentRequired: item.containmentRequired,
     })),
   };
 }

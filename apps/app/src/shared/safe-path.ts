@@ -467,7 +467,11 @@ export const routes = {
         : pathOf(org, ws, "repositories", tab),
   /** Runtimes: the hosts agents run on (roadmap mockups/pages/runtimes.md). */
   runtimes: (org: string, ws: string): SafePath => pathOf(org, ws, "runtimes"),
-  /** One runtime, addressed by its enrollment's public id (`tch_…`). */
+  /**
+   * One runtime: a host enrollment by its public id (`tch_…`), or a named
+   * runtime by its id (`rtm_…`, ADR-198), whose page carries its containment
+   * (ADR-204).
+   */
   runtime: (org: string, ws: string, runtime: string): SafePath =>
     pathOf(org, ws, "runtimes", runtime),
   /**

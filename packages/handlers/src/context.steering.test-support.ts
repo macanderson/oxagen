@@ -10,6 +10,8 @@ import type { SecurityEventInput } from "@oxagen/telemetry";
 import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
 import type { SteeringDeps } from "./context.steering.deps";
 import type {
+  SteeringApproval,
+  SteeringChangedFile,
   SteeringGitHub,
   SteeringRepository,
 } from "./context.steering.github";
@@ -572,6 +574,8 @@ export class FakeGitHub implements SteeringGitHub {
   heads = new Map<string, string>();
   /** sha → its parent sha. */
   private parents = new Map<string, string>();
+  /** A merge commit's second parent: the production branch it brought in. */
+  private mergedParents = new Map<string, string>();
   /**
    * sha → when it was committed and what its message said. A commit's date and
    * message are fixed when it is made, which is what lets a test read a
@@ -601,8 +605,42 @@ export class FakeGitHub implements SteeringGitHub {
     conclusion: string;
     summary: string;
   }[] = [];
-  merges: { number: number; commitTitle: string; sha: string }[] = [];
+  merges: {
+    number: number;
+    commitTitle: string;
+    sha: string;
+    commitMessage?: string;
+  }[] = [];
   deletedBranches: string[] = [];
+  /** Every stamp commit `commitFiles` wrote, in order. */
+  stamps: {
+    branch: string;
+    parent: string;
+    sha: string;
+    message: string;
+    files: { path: string; content: string | null }[];
+  }[] = [];
+  /** Every branch update: the head before and the head after. */
+  updates: { branch: string; from: string; to: string }[] = [];
+  /** Every reset: the branch and the commit it was pointed back at. */
+  resets: { branch: string; sha: string }[] = [];
+  /** Every deployment recorded, in order. */
+  deployments: {
+    sha: string;
+    ref: string;
+    environment: string;
+    description: string;
+  }[] = [];
+  /** Set to make deployment creation refused (a token without the scope). */
+  deploymentRefused = false;
+  /**
+   * The approvals every PR holds, or null for the default: one approval by
+   * REVIEWER at the PR's current head, standing for "a linked reviewer
+   * approved on the host". A test about approvals sets its own list.
+   */
+  approvals: SteeringApproval[] | null = null;
+  /** Runs right after each stamp commit, so a test can move main then. */
+  onCommitFiles: (() => void) | null = null;
   /** Set to make check-run creation answer like a non-App token (403). */
   checksRefused = false;
   /** Set to make the merge refused by GitHub (a required review). */
@@ -655,10 +693,29 @@ export class FakeGitHub implements SteeringGitHub {
     this.heads.set(branch, sha);
     return sha;
   }
+  /**
+   * `sha` and every commit it holds, nearest first. A merge commit's first
+   * parent line comes before the production branch it brought in.
+   */
   private lineage(sha: string): string[] {
-    const out = [sha];
-    for (let p = this.parents.get(sha); p; p = this.parents.get(p)) out.push(p);
+    const out: string[] = [];
+    const seen = new Set<string>();
+    const queue = [sha];
+    while (queue.length > 0) {
+      const next = queue.shift();
+      if (next === undefined || seen.has(next)) continue;
+      seen.add(next);
+      out.push(next);
+      const first = this.parents.get(next);
+      if (first) queue.push(first);
+      const second = this.mergedParents.get(next);
+      if (second) queue.push(second);
+    }
     return out;
+  }
+  private mergeBase(base: string, head: string): string | undefined {
+    const onBase = new Set(this.lineage(this.shaOf(base)));
+    return this.lineage(this.shaOf(head)).find((s) => onBase.has(s));
   }
   private tree(sha: string): Map<string, string> {
     const out = new Map<string, string>();
@@ -832,8 +889,7 @@ export class FakeGitHub implements SteeringGitHub {
       : null;
   }
   async changedPaths(_repo: SteeringRepository, base: string, head: string) {
-    const onBase = new Set(this.lineage(this.shaOf(base)));
-    const mergeBase = this.lineage(this.shaOf(head)).find((s) => onBase.has(s));
+    const mergeBase = this.mergeBase(base, head);
     const from = mergeBase ? this.tree(mergeBase) : new Map<string, string>();
     const to = this.tree(this.shaOf(head));
     return [...new Set([...from.keys(), ...to.keys()])]
@@ -928,7 +984,12 @@ export class FakeGitHub implements SteeringGitHub {
   }
   async mergePullRequest(
     _repo: SteeringRepository,
-    args: { number: number; commitTitle: string; sha: string },
+    args: {
+      number: number;
+      commitTitle: string;
+      sha: string;
+      commitMessage?: string;
+    },
   ) {
     if (this.mergeRefusedWith) return this.refused(this.mergeRefusedWith);
     const pr = this.pull(args.number);
@@ -950,7 +1011,13 @@ export class FakeGitHub implements SteeringGitHub {
     const mergedAt = this.clock();
     // The merge commit is the publishing commit: it is what put these bytes on
     // the production branch, so it is what a record's provenance names.
-    this.commitMeta.set(mergeSha, { at: mergedAt, message: args.commitTitle });
+    this.commitMeta.set(mergeSha, {
+      at: mergedAt,
+      message:
+        args.commitMessage === undefined
+          ? args.commitTitle
+          : `${args.commitTitle}\n\n${args.commitMessage}`,
+    });
     this.heads.set(pr.base, mergeSha);
     Object.assign(pr, {
       state: "closed",
@@ -968,6 +1035,140 @@ export class FakeGitHub implements SteeringGitHub {
   }
   async deleteBranch(_repo: SteeringRepository, branch: string) {
     if (this.heads.delete(branch)) this.deletedBranches.push(branch);
+  }
+  private async headMovedOn(branch: string): Promise<never> {
+    const { HandlerError } = await import("@oxagen/oxagen");
+    throw new HandlerError({
+      code: "conflict",
+      reason: "head_moved",
+      message: `The steering PR's branch ${branch} moved`,
+    });
+  }
+  async changedFiles(
+    _repo: SteeringRepository,
+    base: string,
+    head: string,
+  ): Promise<SteeringChangedFile[]> {
+    const mergeBase = this.mergeBase(base, head);
+    const from = mergeBase ? this.tree(mergeBase) : new Map<string, string>();
+    const to = this.tree(this.shaOf(head));
+    return [...new Set([...from.keys(), ...to.keys()])]
+      .filter((path) => from.get(path) !== to.get(path))
+      .sort()
+      .map((path): SteeringChangedFile => ({
+        path,
+        status: !from.has(path)
+          ? "added"
+          : !to.has(path)
+            ? "removed"
+            : "modified",
+      }));
+  }
+  async commitFiles(
+    _repo: SteeringRepository,
+    args: {
+      branch: string;
+      parent: string;
+      message: string;
+      files: { path: string; content: string | null }[];
+    },
+  ) {
+    if (this.heads.get(args.branch) !== args.parent)
+      return this.headMovedOn(args.branch);
+    const sha = this.nextSha();
+    for (const [path, content] of this.tree(args.parent))
+      this.files.set(`${sha}:${path}`, content);
+    for (const file of args.files) {
+      if (file.content === null) this.files.delete(`${sha}:${file.path}`);
+      else this.files.set(`${sha}:${file.path}`, file.content);
+    }
+    this.parents.set(sha, args.parent);
+    this.commitMeta.set(sha, { at: this.clock(), message: args.message });
+    this.heads.set(args.branch, sha);
+    this.stamps.push({ ...args, sha });
+    this.onCommitFiles?.();
+    return { sha };
+  }
+  async holdsCommit(_repo: SteeringRepository, head: string, ancestor: string) {
+    return this.lineage(this.shaOf(head)).includes(ancestor);
+  }
+  /**
+   * Merge the production branch into the PR's branch, as GitHub's "Update
+   * branch" does. Each path the branch changed since the merge base keeps the
+   * branch's version; a path both sides changed differently is a conflict.
+   */
+  async updateBranch(
+    repo: SteeringRepository,
+    args: { number: number; branch: string; expectedHead: string },
+  ) {
+    const head = this.heads.get(args.branch);
+    if (head !== args.expectedHead) return this.headMovedOn(args.branch);
+    const main = this.shaOf(repo.defaultBranch);
+    if (this.lineage(head).includes(main)) return { headSha: head };
+    const mergeBase = this.mergeBase(repo.defaultBranch, head);
+    const baseTree = mergeBase
+      ? this.tree(mergeBase)
+      : new Map<string, string>();
+    const mainTree = this.tree(main);
+    const headTree = this.tree(head);
+    const merged = new Map(mainTree);
+    for (const path of new Set([...baseTree.keys(), ...headTree.keys()])) {
+      const ours = headTree.get(path);
+      if (ours === baseTree.get(path)) continue;
+      const theirs = mainTree.get(path);
+      if (theirs !== baseTree.get(path) && theirs !== ours) {
+        const { HandlerError } = await import("@oxagen/oxagen");
+        throw new HandlerError({
+          code: "conflict",
+          reason: "update_conflict",
+          message: `${repo.defaultBranch} does not merge cleanly into ${args.branch}`,
+        });
+      }
+      if (ours === undefined) merged.delete(path);
+      else merged.set(path, ours);
+    }
+    const sha = this.nextSha();
+    for (const [path, content] of merged)
+      this.files.set(`${sha}:${path}`, content);
+    this.parents.set(sha, head);
+    this.mergedParents.set(sha, main);
+    this.commitMeta.set(sha, {
+      at: this.clock(),
+      message: `Merge ${repo.defaultBranch} into ${args.branch}`,
+    });
+    this.heads.set(args.branch, sha);
+    this.updates.push({ branch: args.branch, from: head, to: sha });
+    const pr = this.pulls.find((p) => p.number === args.number);
+    if (pr && pr.state === "open") pr.headSha = sha;
+    return { headSha: sha };
+  }
+  async resetBranch(_repo: SteeringRepository, branch: string, sha: string) {
+    this.heads.set(branch, sha);
+    this.resets.push({ branch, sha });
+  }
+  async listApprovals(
+    _repo: SteeringRepository,
+    number: number,
+  ): Promise<SteeringApproval[]> {
+    if (this.approvals) return this.approvals;
+    const pr = this.pull(number);
+    if (pr.state !== "open") return [];
+    return [
+      { userId: REVIEWER, login: "reviewer", commitSha: this.shaOf(pr.head) },
+    ];
+  }
+  async recordDeployment(
+    _repo: SteeringRepository,
+    args: { sha: string; ref: string; environment: string; description: string },
+  ) {
+    if (this.deploymentRefused)
+      return this.refused(
+        "GitHub API error 403: Resource not accessible by integration",
+      );
+    this.deployments.push(args);
+    return {
+      url: `https://github.com/a-intel/platform/deployments/${args.environment}`,
+    };
   }
 }
 

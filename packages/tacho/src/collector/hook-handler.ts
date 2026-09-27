@@ -33,11 +33,14 @@ import {
   type TachoHarness,
 } from "../wire";
 import {
+  type CedarCallInput,
   type Evaluation,
   type EvaluationInput,
   evaluatePreToolUse,
   type MatchContext,
 } from "../host/bundle";
+import type { BuiltinAction } from "../policy/builtins";
+import type { CedarRuntime } from "../policy/runtime";
 import {
   rememberHookId,
   sawHookId,
@@ -126,6 +129,13 @@ export interface HookHandlerDeps {
    * asks nothing.
    */
   repositoryRemote?: (cwd: string) => Promise<RepositoryRemote | undefined>;
+  /**
+   * Cedar's evaluator (`loadCedarRuntime` in `../policy/runtime`), called
+   * only when the bundle carries Cedar policies, so a host without them
+   * never loads it. Absent, the hook decides with the permission rules
+   * alone.
+   */
+  cedar?: () => Promise<CedarRuntime | null>;
 }
 
 export interface HookReplay {
@@ -714,6 +724,37 @@ export async function handleHookEvent(
  * builder, reading the view it is handed, is what stops the parent and the
  * subagent drifting apart again.
  */
+/**
+ * What Cedar needs to decide a call in this session, or undefined when the
+ * bundle carries no Cedar policies. A custom agent is picked by its name,
+ * and any other session by its harness. Claude Code names the subagent a
+ * call runs in (`agent_type`), and that name is the call's skill. Cursor's
+ * own tool name reaches Cedar as `context.harness_tool`.
+ */
+async function cedarCallFor(
+  view: PolicyView,
+  record: SessionRecord,
+  input: HookInput,
+  deps: HookHandlerDeps,
+  action?: BuiltinAction,
+): Promise<CedarCallInput | undefined> {
+  if (view.bundle.cedar === undefined) return undefined;
+  const custom = record.customAgent;
+  return {
+    // No loader means no evaluator: a mutating tool is refused rather than
+    // decided without the bundle's policies.
+    runtime: deps.cedar !== undefined ? await deps.cedar() : null,
+    harness: custom !== undefined ? "custom" : (record.harness ?? "claude-code"),
+    ...(custom !== undefined ? { agent: custom } : {}),
+    ...(input.agent_type !== undefined ? { skill: input.agent_type } : {}),
+    ...(action !== undefined ? { action } : {}),
+    // Cursor's adapter renames `Shell` to `Bash` and keeps Cursor's own name here.
+    ...(typeof input["cursor_tool_name"] === "string"
+      ? { harness_tool: input["cursor_tool_name"] }
+      : {}),
+  };
+}
+
 function evaluationRequestFor(
   view: PolicyView,
   toolName: string,
@@ -721,8 +762,10 @@ function evaluationRequestFor(
   record: SessionRecord,
   deps: HookHandlerDeps,
   input: HookInput,
+  cedar?: CedarCallInput,
 ): EvaluationInput {
   return {
+    ...(cedar !== undefined ? { cedar } : {}),
     bundle: view.bundle,
     bundleVerified: view.verified,
     toolName,
@@ -1081,6 +1124,7 @@ async function routeHook(
             record,
             deps,
             input,
+            await cedarCallFor(currentView, record, input, deps),
           ),
         );
       if (evaluation.decision === "defer" && deps.refreshBundle) {
@@ -1094,6 +1138,7 @@ async function routeHook(
             record,
             deps,
             input,
+            await cedarCallFor(currentView, record, input, deps),
           ),
         );
       }
@@ -1230,6 +1275,9 @@ async function routeHook(
                 : {}),
             }
           : undefined;
+      // Every harness's subagent start is one Cedar action, whatever the
+      // harness calls the tool.
+      const startSubagent: BuiltinAction = "builtin__start_subagent";
       let currentView = view;
       let evaluation =
         replay?.evaluation ??
@@ -1241,6 +1289,7 @@ async function routeHook(
             record,
             deps,
             input,
+            await cedarCallFor(currentView, record, input, deps, startSubagent),
           ),
         );
       if (evaluation.decision === "defer" && deps.refreshBundle) {
@@ -1254,6 +1303,7 @@ async function routeHook(
             record,
             deps,
             input,
+            await cedarCallFor(currentView, record, input, deps, startSubagent),
           ),
         );
       }

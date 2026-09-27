@@ -12,6 +12,8 @@
 
 Name a runtime in the workspace (ADR-198, #4369): a laptop, a VM, or a cloud workspace agents run on. A runtime holds a name and a slug and no machine facts. A host enrollment binds a machine to it later, and the runtime keeps its id when that machine is replaced, so the agents on it keep theirs.
 
+`containmentRequired` makes every agent on the runtime run only under the contained launcher (ADR-152, ADR-204). The host bundle reads it from the runtime the host enrollment binds. `update_runtime` changes it later.
+
 The Runtimes page's Add a runtime dialog calls this, then goes straight to registering the runtime's first agent (`register_agent`).
 
 ## Input
@@ -20,6 +22,7 @@ The Runtimes page's Add a runtime dialog calls this, then goes straight to regis
 |---|---|---|
 | `name` | `string` | 1 to 128 characters. |
 | `slug` | `string?` | 1 to 40 characters, lowercase letters and digits joined by single hyphens. Derived from `name` when absent: spaces become hyphens and every other special character, apostrophes included, is dropped, so "Mac's Laptop" becomes `macs-laptop`. |
+| `containmentRequired` | `boolean?` | Whether every agent on the runtime must run under the contained launcher. False when absent. |
 
 ## Output
 

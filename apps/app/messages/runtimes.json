@@ -13,6 +13,8 @@
       "nameHint": "What your team calls it, such as Mac's laptop.",
       "slug": "Slug",
       "slugHint": "Made from the name. Lowercase letters and digits joined by hyphens.",
+      "containment": "Require the contained launcher",
+      "containmentHint": "Every agent on this runtime then runs only under the contained launcher. You can change this later on the runtime’s page.",
       "next": "Next you register the agent that runs here: one agent for each harness on this runtime.",
       "submit": "Add and register an agent",
       "pending": "Adding",
@@ -41,7 +43,27 @@
       "noAgent": "No agent yet",
       "register": "Register an agent",
       "registerOn": "Register an agent on {runtime}",
+      "open": "Open {runtime}",
       "never": "never"
+    },
+    "containment": {
+      "title": "Containment",
+      "lead": "When containment is required, every agent on this runtime runs only under the contained launcher, including agents registered later.",
+      "label": "Require the contained launcher",
+      "term": "Contained launcher",
+      "required": "Required",
+      "notRequired": "Not required",
+      "readOnly": "An organization Owner or Admin can change it.",
+      "saving": "Saving",
+      "note": "A change reaches each host on its next bundle fetch.",
+      "failure": {
+        "denied": "Your roles do not let you change containment. An organization Owner or Admin can. Nothing was changed.",
+        "notFound": "This runtime no longer exists. Nothing was changed.",
+        "refused": "This write was refused: {code}. Nothing was changed.",
+        "invalid": "This change is not one the write accepts. Nothing was changed.",
+        "pendingApproval": "This write is waiting for approval. Access request {accessRequestId}.",
+        "unavailable": "This write could not be answered: {code}. Nothing was changed."
+      }
     },
     "notRecorded": "not recorded",
     "notReported": "not reported yet",
