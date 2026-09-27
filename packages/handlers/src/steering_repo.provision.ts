@@ -792,8 +792,9 @@ interface StoredToken {
 
 /**
  * The tokens stored under `provider` for one organization, newest first. A
- * token that cannot be decrypted is left out, so the step that needs it asks
- * an owner to authorize again.
+ * token that has expired or cannot be decrypted is left out, so the step that
+ * needs it asks an owner to authorize again instead of sending a token the
+ * provider refuses.
  */
 async function storedTokens(
   orgId: string,
@@ -807,6 +808,7 @@ async function storedTokens(
       .select({
         providerUserId: schema.oauthAccounts.providerUserId,
         accessTokenEnc: schema.oauthAccounts.accessTokenEnc,
+        expiresAt: schema.oauthAccounts.expiresAt,
       })
       .from(schema.oauthAccounts)
       .where(
@@ -818,9 +820,12 @@ async function storedTokens(
       .orderBy(desc(schema.oauthAccounts.updatedAt)),
   );
   const out: StoredToken[] = [];
+  const now = Date.now();
   for (const row of rows) {
     const enc = row.accessTokenEnc as EncryptedToken | null;
     if (!enc) continue;
+    // A null expiry is a token that does not expire.
+    if (row.expiresAt !== null && row.expiresAt.getTime() <= now) continue;
     try {
       const { adapter } = resolveIngestionCryptoAdapterForKeyId(enc.keyId);
       const plain = await decrypt(
