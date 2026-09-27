@@ -27,7 +27,7 @@
                 "url": {
                   "type": "string",
                   "format": "uri",
-                  "pattern": "^https?:\\/\\/"
+                  "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)"
                 },
                 "server_version": {
                   "type": "string",
@@ -51,7 +51,7 @@
                 "registry": {
                   "type": "string",
                   "format": "uri",
-                  "pattern": "^https?:\\/\\/"
+                  "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)"
                 },
                 "server": {
                   "type": "string",
@@ -66,7 +66,7 @@
                 "url": {
                   "type": "string",
                   "format": "uri",
-                  "pattern": "^https?:\\/\\/",
+                  "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
                   "description": "The endpoint the catalog entry named, for a remote entry."
                 },
                 "package": {
@@ -353,7 +353,7 @@
             "url": {
               "type": "string",
               "format": "uri",
-              "pattern": "^https?:\\/\\/"
+              "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)"
             },
             "security_schemes": {
               "type": "object",
@@ -393,25 +393,25 @@
                   "authorization_url": {
                     "type": "string",
                     "format": "uri",
-                    "pattern": "^https?:\\/\\/",
+                    "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
                     "description": "oauth2: the authorization code flow's authorizationUrl."
                   },
                   "token_url": {
                     "type": "string",
                     "format": "uri",
-                    "pattern": "^https?:\\/\\/",
+                    "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
                     "description": "oauth2: the tokenUrl of the authorization code or client credentials flow."
                   },
                   "refresh_url": {
                     "type": "string",
                     "format": "uri",
-                    "pattern": "^https?:\\/\\/",
+                    "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
                     "description": "oauth2: the refreshUrl, when it differs from token_url."
                   },
                   "openid_connect_url": {
                     "type": "string",
                     "format": "uri",
-                    "pattern": "^https?:\\/\\/",
+                    "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
                     "description": "openIdConnect: the discovery document."
                   },
                   "scopes": {

@@ -35,11 +35,18 @@ export const toolKeySchema = z
     "a tool key starts with a letter and uses lowercase letters, digits, and underscores",
   );
 
-/** An http or https URL. */
+/**
+ * An http or https URL with no user name or password. A URL in a steering
+ * repo file is committed to git, so a credential in it would stay in the
+ * history. A credential is named by `oxagen:credential/<name>` instead.
+ */
 export const httpUrlSchema = z
   .string()
   .url()
-  .regex(/^https?:\/\//, "a URL starts with https:// or http://");
+  .regex(
+    /^https?:\/\/[^/?#@]*(?:[/?#]|$)/,
+    "a URL starts with https:// or http:// and has no user name or password",
+  );
 
 /** A relay's name, as `relay:<name>` writes it. */
 export const RELAY_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;

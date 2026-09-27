@@ -38,7 +38,7 @@
             "url": {
               "type": "string",
               "format": "uri",
-              "pattern": "^https?:\\/\\/",
+              "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
               "description": "The MCP endpoint."
             },
             "transport": {
@@ -72,7 +72,7 @@
             "registry": {
               "type": "string",
               "format": "uri",
-              "pattern": "^https?:\\/\\/",
+              "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
               "description": "The registry's URL."
             },
             "server": {
@@ -184,7 +184,7 @@
             "url": {
               "type": "string",
               "format": "uri",
-              "pattern": "^https?:\\/\\/",
+              "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
               "description": "Where Oxagen fetches the definition."
             },
             "network": {
@@ -366,7 +366,7 @@
             "url": {
               "type": "string",
               "format": "uri",
-              "pattern": "^https?:\\/\\/",
+              "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
               "description": "Where Oxagen fetches the definition."
             },
             "network": {
@@ -586,7 +586,7 @@
             "url": {
               "type": "string",
               "format": "uri",
-              "pattern": "^https?:\\/\\/",
+              "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
               "description": "Where Oxagen fetches the definition."
             },
             "network": {
@@ -878,7 +878,7 @@
           "url": {
             "type": "string",
             "format": "uri",
-            "pattern": "^https?:\\/\\/",
+            "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
             "description": "The endpoint in this environment."
           },
           "network": {

@@ -148,6 +148,26 @@ describe("valid servers", () => {
   });
 });
 
+describe("urls", () => {
+  const remote = (url: string) => server({ type: "remote", url, transport: "http" }, { auth: { mode: "none" } });
+
+  it.each(["https://user:secret@mcp.example.com", "https://sk_live_1@mcp.example.com/mcp", "http://@mcp.example.com"])(
+    "refuses %s, which carries a user name or password",
+    (url) => {
+      expect(issues(remote(url))).toStrictEqual([
+        { path: "source.url", message: "a URL starts with https:// or http:// and has no user name or password" },
+      ]);
+    },
+  );
+
+  it.each(["https://mcp.example.com/@octo/mcp", "https://mcp.example.com?owner=a@b.com", "https://mcp.example.com#@x"])(
+    "reads %s, whose @ is after the host",
+    (url) => {
+      expect(issues(remote(url))).toStrictEqual([]);
+    },
+  );
+});
+
 describe("sources", () => {
   const openapi = { type: "openapi", from: "repository", repo: "github.com/a/b", path: "openapi.yaml", ref: "main" };
   const rest = { auth: serviceAuth, environments: oneEnvironment };
