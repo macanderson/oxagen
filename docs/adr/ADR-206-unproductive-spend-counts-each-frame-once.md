@@ -67,8 +67,10 @@ request, as detector 3 does.
    milliseconds. The key keeps the store's text, and the position (0, 1, 2)
    separates frames of one run at the same instant. The job sorts those
    frames by their content before it numbers them, so a frame keeps its key
-   whatever order the store returns them in. Two frames with the same content
-   are interchangeable, so their order does not matter.
+   whatever order the store returns them in. The content includes the chain
+   the frame was recorded on, so two chains' frames of one instant keep their
+   keys. Two frames of one chain with the same content are interchangeable,
+   so their order does not matter.
 6. **A request counts only when every tool call it made is a repeat.** The
    repeat rule is the rollup's (ADR-199): the same tool, input digest, and
    output digest as an earlier call of the run, on the `Bash` tool or on a
@@ -76,11 +78,15 @@ request, as detector 3 does.
    needed, so its whole priced cost is the measured side and the
    counterfactual is 0. A request that also made one new call does not count.
    The evidence counts requests, and the prose calls them turns.
-7. **A tool call belongs to the latest frame of its run at or before it.**
-   The job compares the microseconds the store printed for both, since two
-   events of one millisecond would otherwise tie.
-   Model-call frames carry no chain, so a subagent's call can land on a
-   parent's frame that ran just before it. Calls before a run's first frame
+7. **A tool call belongs to the latest frame on its own chain at or before
+   it.** The job compares the microseconds the store printed for both, since
+   two events of one millisecond would otherwise tie. A wrapped frame names
+   the chain it was recorded on. `tacho_events.ts` keeps milliseconds, so
+   the root and a subagent can finish a model call in the same millisecond,
+   and the chain keeps their two requests apart. A call whose chain has no
+   frame at or before it takes the run's latest frame at or before it. The
+   proxy records a subagent's model call on the root chain (ADR-168), so
+   that call still lands by time alone. Calls before a run's first frame
    form a request with no frame. It is cited and not priced.
 8. **A spin loop is 20 or more repeats of one call in a row on one chain.**
    The job orders each chain by `seq` and finds streaks of the same tool,
@@ -113,8 +119,9 @@ request, as detector 3 does.
   definition. The rollup's repeat rule already requires the same output, and
   a write between two identical reads that changes what they return breaks
   the repeat.
-- Attribution by time can put a subagent's call on its parent's frame (7).
-  The fix is a chain on the model-call frame, which the recorder does not
-  write yet.
+- A subagent whose model calls the proxy recorded on the root chain has no
+  frame on its own chain, so its calls are attributed by time and can land
+  on the parent's frame that ran just before them (7). Two frames of one
+  chain in one millisecond are still told apart by their content alone.
 - Runs past the 200-run frame cap (10) are cited and not priced, so a large
   workspace can under-count. The cap bounds the ClickHouse reads of one pass.

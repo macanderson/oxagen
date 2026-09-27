@@ -121,6 +121,12 @@ export interface PricedRequestFrame {
   tokens: number;
   /** Null when no price covers the frame. */
   basis: CostBasis | null;
+  /**
+   * The chain the frame was recorded on: null on the run's own chain, and a
+   * subagent's session uuid otherwise, as on {@link ToolCallObservation}.
+   * Absent when the store names no chain.
+   */
+  sessionUuid?: string | null;
 }
 
 /**

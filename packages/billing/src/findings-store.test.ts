@@ -272,11 +272,16 @@ describe("frameReads", () => {
 
 describe("pricedFrames", () => {
   it("keys each frame by its instant and its place at that instant, and prices it once", () => {
-    const out = pricedFrames([], SCOPE.orgId, [
-      frameRow(),
-      frameRow({ reportedCostMicros: null }),
-      frameRow({ at: "2026-09-10T09:00:00.000000Z" }),
-    ]);
+    const out = pricedFrames(
+      [],
+      SCOPE.orgId,
+      [
+        frameRow(),
+        frameRow({ reportedCostMicros: null }),
+        frameRow({ at: "2026-09-10T09:00:00.000000Z" }),
+      ],
+      SESSION,
+    );
     expect(out.map((f) => f.key)).toEqual([
       "2026-09-10T09:00:00.000000Z#0",
       "2026-09-10T10:00:00.500000Z#0",
@@ -294,10 +299,15 @@ describe("pricedFrames", () => {
 
   it("orders two frames of one millisecond by the microsecond", () => {
     const second = Date.parse("2026-09-10T10:00:00Z") * 1_000;
-    const out = pricedFrames([], SCOPE.orgId, [
-      frameRow({ at: "2026-09-10T10:00:00.500900Z" }),
-      frameRow({ at: "2026-09-10T10:00:00.500500Z" }),
-    ]);
+    const out = pricedFrames(
+      [],
+      SCOPE.orgId,
+      [
+        frameRow({ at: "2026-09-10T10:00:00.500900Z" }),
+        frameRow({ at: "2026-09-10T10:00:00.500500Z" }),
+      ],
+      SESSION,
+    );
     expect(out.map((f) => [f.key, f.atMicros])).toEqual([
       ["2026-09-10T10:00:00.500500Z#0", second + 500_500],
       ["2026-09-10T10:00:00.500900Z#0", second + 500_900],
@@ -308,7 +318,10 @@ describe("pricedFrames", () => {
     const cheap = frameRow();
     const dear = frameRow({ reportedCostMicros: "30000" });
     const keyed = (rows: ModelCallFrameRow[]) =>
-      pricedFrames([], SCOPE.orgId, rows).map((f) => [f.key, f.costMicros]);
+      pricedFrames([], SCOPE.orgId, rows, SESSION).map((f) => [
+        f.key,
+        f.costMicros,
+      ]);
     expect(keyed([dear, cheap])).toEqual([
       ["2026-09-10T10:00:00.500000Z#0", 15_000n],
       ["2026-09-10T10:00:00.500000Z#1", 30_000n],
@@ -319,6 +332,28 @@ describe("pricedFrames", () => {
       ["2026-09-10T10:00:00.500000Z#0", 15_000n],
       ["2026-09-10T10:00:00.500000Z#1", 15_000n],
     ]);
+  });
+
+  it("names each frame's chain and keeps two chains' frames of one instant apart by it", () => {
+    const SUBAGENT = "00000000-0000-4000-8000-0000000000cc";
+    const root = frameRow({ sessionUuid: SESSION });
+    const child = frameRow({ sessionUuid: SUBAGENT });
+    const chained = (rows: ModelCallFrameRow[]) =>
+      pricedFrames([], SCOPE.orgId, rows, SESSION).map((f) => [
+        f.key,
+        f.sessionUuid,
+      ]);
+    // The root's own chain reads as null, as a tool call's does; the
+    // subagent's names its uuid.
+    expect(chained([child, root])).toEqual([
+      ["2026-09-10T10:00:00.500000Z#0", null],
+      ["2026-09-10T10:00:00.500000Z#1", SUBAGENT],
+    ]);
+    expect(chained([root, child])).toEqual(chained([child, root]));
+    // A row that names no chain gives a frame with none.
+    expect(
+      pricedFrames([], SCOPE.orgId, [frameRow()], SESSION)[0],
+    ).not.toHaveProperty("sessionUuid");
   });
 });
 

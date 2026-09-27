@@ -84,6 +84,12 @@ export interface ModelCallFrameRow {
   /** The micro-USD the frame's own record carries; null when it carries none. */
   reportedCostMicros: string | null;
   basis: CostFrameBasis;
+  /**
+   * The chain a wrapped frame was recorded on (`session_uuid`), which is the
+   * root session for a call on the root's own chain. Absent on a gateway
+   * frame, which has no chain.
+   */
+  sessionUuid?: string;
 }
 
 /**
@@ -311,6 +317,10 @@ function runSessions(run: {
  * A wrapped frame carries the call's web searches as `server_tool_request`,
  * priced per request. Web fetches are not counted: the vendor does not charge
  * per fetch (#3721).
+ *
+ * A wrapped frame also names the chain it was recorded on. `ts` keeps
+ * milliseconds, so two chains' calls can share one instant, and the findings
+ * job tells their requests apart by the chain.
  */
 export async function readModelCallFrames(args: {
   orgId: string;
@@ -387,10 +397,11 @@ export async function readModelCallFrames(args: {
         toInt64(greatest(0, toInt64(coalesce(c.output_tokens, 0)) - ${FRAME_REASONING})) AS output,
         ${FRAME_REASONING} AS reasoning,
         ${FRAME_SERVER_TOOL_REQUESTS} AS server_tool_request,
-        c.cost_usd_micros AS cost_micros
+        c.cost_usd_micros AS cost_micros,
+        toString(c.session_uuid) AS session_uuid
       FROM (
         SELECT
-          ts, seq, model, provider, input_tokens, output_tokens,
+          ts, seq, session_uuid, model, provider, input_tokens, output_tokens,
           cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
           thinking_tokens, web_search_requests, cost_usd_micros, request_id,
           message_id
@@ -460,6 +471,7 @@ export async function readModelCallFrames(args: {
     reasoning: string;
     server_tool_request: string;
     cost_micros: string | null;
+    session_uuid: string;
   };
   const rows = (await result.json()) as Row[];
   return rows.map((r) => ({
@@ -475,6 +487,7 @@ export async function readModelCallFrames(args: {
     serverToolRequests: Number(r.server_tool_request),
     reportedCostMicros: r.cost_micros,
     basis: "client_attested",
+    sessionUuid: r.session_uuid,
   }));
 }
 

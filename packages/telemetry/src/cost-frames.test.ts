@@ -28,6 +28,8 @@ import {
 const ORG = "00000000-0000-4000-8000-000000000001";
 const WS = "00000000-0000-4000-8000-000000000002";
 const RUN = "00000000-0000-4000-8000-0000000000aa";
+/** A subagent chain under RUN. */
+const CHILD = "00000000-0000-4000-8000-0000000000cc";
 
 /**
  * The thinking figure the wrapped read prices a frame with: the transcript
@@ -90,6 +92,7 @@ describe("readModelCallFrames", () => {
         reasoning: "0",
         server_tool_request: "0",
         cost_micros: "4125",
+        session_uuid: RUN,
       },
       {
         at: "2026-09-14T10:00:01.000Z",
@@ -103,12 +106,13 @@ describe("readModelCallFrames", () => {
         reasoning: "0",
         server_tool_request: "0",
         cost_micros: null,
+        session_uuid: CHILD,
       },
     ]);
     const frames = await readModelCallFrames({
       orgId: ORG,
       workspaceId: WS,
-      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN] },
+      run: { kind: "tacho", rootSessionUuid: RUN, sessionUuids: [RUN, CHILD] },
     });
 
     const { query, query_params } = lastQuery();
@@ -129,12 +133,13 @@ describe("readModelCallFrames", () => {
       "reasoning",
       "server_tool_request",
       "cost_micros",
+      "session_uuid",
     ]);
     expect(query_params).toEqual({
       orgId: ORG,
       workspaceId: WS,
       rootSessionUuid: RUN,
-      sessionUuids: [RUN],
+      sessionUuids: [RUN, CHILD],
       sources: ["otel_log", "collector", "hook", "transcript"],
       duplicateAttr: "oxagen.llm_call_duplicate_of",
     });
@@ -168,6 +173,7 @@ describe("readModelCallFrames", () => {
         serverToolRequests: 0,
         reportedCostMicros: "4125",
         basis: "client_attested",
+        sessionUuid: RUN,
       },
       {
         at: "2026-09-14T10:00:01.000Z",
@@ -182,6 +188,9 @@ describe("readModelCallFrames", () => {
         serverToolRequests: 0,
         reportedCostMicros: null,
         basis: "client_attested",
+        // The chain each frame was recorded on, so the findings job can keep
+        // two chains' requests apart when they share a millisecond.
+        sessionUuid: CHILD,
       },
     ]);
   });

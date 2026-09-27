@@ -9,10 +9,13 @@
  * tool or a read-only one. A call that writes may change what the next
  * identical call returns, so it is never a repeat here.
  *
- * A tool call belongs to the latest model-call frame of its run at or before
- * the call, compared to the microsecond the store printed. Frames carry no
- * chain, so a subagent's call can land on a parent's frame that ran just
- * before it (ADR-206 names the gap).
+ * A tool call belongs to the latest model-call frame on its own chain at or
+ * before the call, compared to the microsecond the store printed. The store
+ * keeps milliseconds (`tacho_events.ts` is DateTime64(3)), so two chains can
+ * finish a model call in one millisecond. The chain keeps their requests
+ * apart. A call whose chain has no such frame takes the run's latest frame at
+ * or before it: the proxy records a subagent's model call on the root chain
+ * (ADR-168), so that call still lands by time alone (ADR-206 names the gap).
  */
 import type { RunTotalsRecord } from "../cost-rollup";
 import { RepeatedCalls, repeatKindOf } from "../step-grade";
@@ -89,7 +92,16 @@ export function runsWithRepeats(
   return out;
 }
 
-/** The calls of one run, grouped by the latest frame at or before each. */
+/** The chain a call or a frame names, with the run's own chain as "". */
+function chainOf(sessionUuid: string | null): string {
+  return sessionUuid ?? "";
+}
+
+/**
+ * The calls of one run, grouped by the latest frame on each call's chain at
+ * or before it, or the run's latest frame at or before it when that chain has
+ * none. Frames of one instant on two chains stay two requests.
+ */
 function attribute(
   calls: readonly ViewCall[],
   frames: readonly PricedRequestFrame[],
@@ -98,11 +110,20 @@ function attribute(
   const requests: RunRequest[] = [];
   let before: RunRequest | null = null;
   const byFrame = new Map<PricedRequestFrame, RunRequest>();
-  let i = -1;
+  let latest: PricedRequestFrame | null = null;
+  // The latest frame so far on each chain; a frame that names no chain
+  // counts only toward `latest`.
+  const onChain = new Map<string, PricedRequestFrame>();
+  let i = 0;
   for (const c of calls) {
     const at = timeOf(c.call);
-    while (i + 1 < ordered.length && timeOf(ordered[i + 1]!) <= at) i += 1;
-    if (i < 0) {
+    for (; i < ordered.length && timeOf(ordered[i]!) <= at; i += 1) {
+      const f = ordered[i]!;
+      latest = f;
+      if (f.sessionUuid !== undefined) onChain.set(chainOf(f.sessionUuid), f);
+    }
+    const frame = onChain.get(chainOf(c.call.sessionUuid)) ?? latest;
+    if (frame === null) {
       if (before === null) {
         before = { frame: null, calls: [] };
         requests.push(before);
@@ -110,7 +131,6 @@ function attribute(
       before.calls.push(c);
       continue;
     }
-    const frame = ordered[i]!;
     let request = byFrame.get(frame);
     if (!request) {
       request = { frame, calls: [] };

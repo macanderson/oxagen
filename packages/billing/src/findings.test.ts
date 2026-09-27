@@ -582,6 +582,115 @@ describe("repeated shell commands and duplicate tool calls", () => {
     });
     expect(finding!.claims?.map((c) => c.frameKey)).toEqual([made.key]);
   });
+
+  describe("two chains whose model calls share a millisecond", () => {
+    const SUBAGENT = "00000000-0000-4000-8000-0000000000bb";
+    const shell = { tool: "Bash", isMutating: true };
+
+    /**
+     * The root and a subagent each run a command, then each repeat it from a
+     * request that finished in the same millisecond as the other's.
+     * `tacho_events.ts` keeps milliseconds, so the two frames share `at`,
+     * and the store keys them by their place at that instant.
+     */
+    function tiedChains(extra: (r: RunTotalsRecord) => ToolCallObservation[]) {
+      const r = run();
+      const base = r.startedAt.getTime();
+      const tied = new Date(base + 2_000);
+      const rootTied = { ...frameAt(tied), sessionUuid: null };
+      const subTied = {
+        ...frameAt(tied),
+        key: `${tied.toISOString()}#1`,
+        sessionUuid: SUBAGENT,
+      };
+      const toolCalls = [
+        call(r, { at: 1, seq: 1, ...shell }),
+        call(r, {
+          at: 1,
+          seq: 1,
+          ...shell,
+          inputDigest: "sub-in",
+          sessionUuid: SUBAGENT,
+        }),
+        call(r, { at: 2.25, seq: 2, ...shell }),
+        call(r, {
+          at: 2.5,
+          seq: 2,
+          ...shell,
+          inputDigest: "sub-in",
+          sessionUuid: SUBAGENT,
+        }),
+        ...extra(r),
+      ];
+      const frames = new Map<string, PricedRequestFrame[]>([
+        [
+          r.runId,
+          [
+            { ...frameAt(new Date(base + 500)), sessionUuid: null },
+            { ...frameAt(new Date(base + 600)), sessionUuid: SUBAGENT },
+            rootTied,
+            subTied,
+          ],
+        ],
+      ]);
+      return { r, toolCalls, frames, rootTied, subTied };
+    }
+
+    it("counts and prices each chain's request on its own", () => {
+      const { r, toolCalls, frames, rootTied, subTied } = tiedChains(() => []);
+      // By time alone, both repeats would land on the frame that sorts last,
+      // and one request would be counted for two.
+      const [finding, ...rest] = detect({ runs: [r], toolCalls, frames });
+      expect(rest).toEqual([]);
+      expect(finding).toMatchObject({
+        kind: "repeated_shell_commands",
+        savingMicros: 2n * TURN_MICROS,
+      });
+      expect(finding!.evidence.calls).toBe(2);
+      expect(finding!.claims?.map((c) => c.frameKey)).toEqual([
+        rootTied.key,
+        subTied.key,
+      ]);
+    });
+
+    it("still counts one chain's request when the other chain's request did new work", () => {
+      const { r, toolCalls, frames, subTied } = tiedChains((record) => [
+        call(record, { at: 2.75, seq: 3, ...shell, inputDigest: "in-2" }),
+      ]);
+      // By time alone, the root's new call would land on the subagent's
+      // request as well, and neither request would count.
+      const [finding, ...rest] = detect({ runs: [r], toolCalls, frames });
+      expect(rest).toEqual([]);
+      expect(finding).toMatchObject({
+        kind: "repeated_shell_commands",
+        savingMicros: TURN_MICROS,
+      });
+      expect(finding!.evidence.calls).toBe(1);
+      expect(finding!.claims?.map((c) => c.frameKey)).toEqual([subTied.key]);
+    });
+
+    it("gives a subagent's call the run's latest request when its own chain recorded none", () => {
+      // The proxy records a subagent's model call on the root chain
+      // (ADR-168), so the subagent's calls fall back to time.
+      const r = run();
+      const base = r.startedAt.getTime();
+      const toolCalls = [1, 2.5].map((at) =>
+        call(r, { at, seq: at * 2, ...shell, sessionUuid: SUBAGENT }),
+      );
+      const later = { ...frameAt(new Date(base + 2_000)), sessionUuid: null };
+      const [finding] = detect({
+        runs: [r],
+        toolCalls,
+        frames: new Map([
+          [
+            r.runId,
+            [{ ...frameAt(new Date(base + 500)), sessionUuid: null }, later],
+          ],
+        ]),
+      });
+      expect(finding!.claims?.map((c) => c.frameKey)).toEqual([later.key]);
+    });
+  });
 });
 
 describe("spin loops", () => {

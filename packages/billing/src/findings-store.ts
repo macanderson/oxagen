@@ -231,6 +231,9 @@ function rowContent(row: ModelCallFrameRow): string {
     row.serverToolRequests,
     row.reportedCostMicros,
     row.basis,
+    // Last, so frames that already differ keep the order they had before the
+    // chain was read. Two chains' frames of one instant differ here alone.
+    row.sessionUuid ?? null,
   ]);
 }
 
@@ -239,13 +242,18 @@ function rowContent(row: ModelCallFrameRow): string {
  * order to the microsecond. A frame's key is its `at` exactly as the store
  * printed it, then `#` and its place among the run's frames at that instant.
  * The store can return two frames of one instant in either order, so the
- * place follows each frame's content, and a frame keeps its key from one
- * pass to the next. Two frames with the same content are interchangeable.
+ * place follows each frame's content, chain included, and a frame keeps its
+ * key from one pass to the next. Two frames with the same content on one
+ * chain are interchangeable.
+ *
+ * Each frame names its chain as a tool call does: null on `rootSessionUuid`,
+ * the chain's uuid otherwise, and absent when the row names none.
  */
 export function pricedFrames(
   book: PriceBook,
   orgId: string,
   rows: readonly ModelCallFrameRow[],
+  rootSessionUuid: string | null,
 ): PricedRequestFrame[] {
   const ordered = rows
     .map((row) => ({ row, micros: microsOf(row.at), text: rowContent(row) }))
@@ -278,6 +286,12 @@ export function pricedFrames(
         t.output +
         t.reasoning,
       basis: priced.basis,
+      ...(row.sessionUuid === undefined
+        ? {}
+        : {
+            sessionUuid:
+              row.sessionUuid === rootSessionUuid ? null : row.sessionUuid,
+          }),
     });
   }
   return out;
@@ -287,19 +301,21 @@ async function readFrames(
   scope: FindingsScope,
   runs: readonly FrameRead[],
 ): Promise<Map<string, PricedRequestFrame[]>> {
-  const rowsByRun = new Map<string, ModelCallFrameRow[]>();
+  const read: { run: FrameRead; rows: ModelCallFrameRow[] }[] = [];
   for (let i = 0; i < runs.length; i += FRAME_READ_CONCURRENCY) {
     const batch = runs.slice(i, i + FRAME_READ_CONCURRENCY);
-    const read = await Promise.all(
+    const rows = await Promise.all(
       batch.map((r) => readModelCallFrames({ ...scope, run: r.ref })),
     );
-    batch.forEach((r, j) => rowsByRun.set(r.runId, read[j] ?? []));
+    batch.forEach((run, j) => read.push({ run, rows: rows[j] ?? [] }));
   }
-  const all = [...rowsByRun.values()].flat().map(toModelCallFrame);
+  const all = read.flatMap((r) => r.rows).map(toModelCallFrame);
   const book = await loadPriceBookSlice(runPriceSlice(scope.orgId, all));
   const out = new Map<string, PricedRequestFrame[]>();
-  for (const [runId, rows] of rowsByRun)
-    out.set(runId, pricedFrames(book, scope.orgId, rows));
+  for (const { run, rows } of read) {
+    const root = run.ref.kind === "tacho" ? run.ref.rootSessionUuid : null;
+    out.set(run.runId, pricedFrames(book, scope.orgId, rows, root));
+  }
   return out;
 }
 
