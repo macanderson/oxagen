@@ -1448,7 +1448,7 @@ describe("merge_context_pr", () => {
     expect(latest?.commitShas).toContain(latest?.commitSha);
   });
 
-  it("two merges a moment apart publish once: the second resumes GitHub's merge and its publication rolls back with already_merged", async () => {
+  it("two merges a moment apart publish once: the second waits in the queue, reads the row as merged, and refuses already_merged", async () => {
     const h = harness();
     const id = await opened(h);
     const store = h.store;
@@ -1469,7 +1469,8 @@ describe("merge_context_pr", () => {
     const merge = createMergeContextPrHandler(h);
     const r1 = merge({ proposalId: id }, ctx({ userId: REVIEWER }));
     await parked;
-    // GitHub holds the merge; the second call reads it as merged and resumes.
+    // The second call waits behind the first in the queue, then reads the
+    // row the first one merged.
     const r2 = merge({ proposalId: id }, ctx({ userId: REVIEWER }));
     release();
     const settled = await Promise.allSettled([r1, r2]);
@@ -1577,11 +1578,13 @@ describe("merge_context_pr", () => {
     const ownerPr = await opened(owner);
     owner.github.approvals = [];
     owner.roleOf.set(REVIEWER, { org: "Owner", workspace: null });
-    const byOwner = await createMergeContextPrHandler(owner)(
-      { proposalId: ownerPr },
-      ctx({ userId: REVIEWER }),
-    );
+    const notAsked = vi.fn(async () => false);
+    const byOwner = await createMergeContextPrHandler(owner, {
+      holdsMergeWithoutReview: notAsked,
+    })({ proposalId: ownerPr }, ctx({ userId: REVIEWER }));
     expect(byOwner.status).toBe("merged");
+    // An Owner needs no grant, so the grant is never read.
+    expect(notAsked).not.toHaveBeenCalled();
     expect(owner.github.merges[0]!.commitMessage).toContain(
       `Oxagen-Approved-By: none; merged without review by ${REVIEWER}\n`,
     );
@@ -1674,6 +1677,44 @@ describe("merge_context_pr", () => {
       headSha: "head3",
     });
     expect(h.store.records[0]!.commitSha).toBe("merge519");
+  });
+
+  it("brings the branch up to date again when main moves during the re-check, and merges the head it checked last", async () => {
+    const h = harness();
+    const id = await opened(h);
+    h.github.commit("main", "README.md", "# Platform\n");
+    // Main moves again right after the re-check reports on head3.
+    const report = h.github.reportCheckRun.bind(h.github);
+    let moved = false;
+    h.github.reportCheckRun = async (repo, args) => {
+      const url = await report(repo, args);
+      if (!moved && args.headSha === "head3") {
+        moved = true;
+        h.github.commit("main", "CHANGELOG.md", "# Changes\n");
+      }
+      return url;
+    };
+    const out = await createMergeContextPrHandler(h)(
+      { proposalId: id },
+      ctx({ userId: REVIEWER }),
+    );
+    expect(out.status).toBe("merged");
+    expect(h.github.updates).toEqual([
+      { branch: BRANCH, from: "head1", to: "head3" },
+      { branch: BRANCH, from: "head3", to: "head5" },
+    ]);
+    expect(h.github.checkRuns.map((c) => [c.headSha, c.conclusion])).toEqual([
+      ["head1", "success"],
+      ["head3", "success"],
+      ["head5", "success"],
+    ]);
+    expect(h.github.merges).toEqual([
+      expect.objectContaining({ number: 519, sha: "head5" }),
+    ]);
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "merged",
+      headSha: "head5",
+    });
   });
 
   it("refuses checks_failed when the checks fail on the head brought up to date, and merges nothing", async () => {

@@ -656,6 +656,27 @@ describe("the GitLab seam's merge-queue calls", () => {
       { path: "old.toml", status: "removed" },
       { path: "new.toml", status: "added" },
     ]);
+
+    // The same 300-file refusal as GitHub, so both hosts refuse one change.
+    api.client = (t) => ({
+      ...client(t),
+      compare: async () =>
+        Array.from({ length: 300 }, (_, i) => ({
+          oldPath: `r${i}.toml`,
+          newPath: `r${i}.toml`,
+          renamed: false,
+          deleted: false,
+          added: true,
+        })),
+    });
+    const { seam: wide } = gitlabSeam(api);
+    const wideRepo = await wide.resolveRepository(SCOPE);
+    await expect(wide.changedFiles(wideRepo, "c0", head)).rejects.toMatchObject(
+      { code: "conflict", reason: "too_many_files" },
+    );
+    await expect(wide.changedPaths(wideRepo, "c0", head)).rejects.toMatchObject(
+      { reason: "too_many_files" },
+    );
   });
 
   it("commits writes and deletions on the parent, skipping a file already at its content", async () => {

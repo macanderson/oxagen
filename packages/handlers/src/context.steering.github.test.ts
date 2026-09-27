@@ -1009,6 +1009,36 @@ describe("the GitHub seam's merge-queue calls", () => {
     await expect(
       failing.gh.changedFiles(failing.repo, "b0", "h1"),
     ).rejects.toMatchObject({ reason: "github_refused" });
+
+    // GitHub's compare stops at 300 files without saying so. A list that
+    // long may be missing paths, so both reads refuse it; 299 still passes.
+    let count = 300;
+    const long = await restSeam(
+      {},
+      fakeClient({
+        compareCommits: async () =>
+          Array.from({ length: count }, (_, i) => file(`r${i}.toml`, "added")),
+      }),
+    );
+    await expect(
+      long.gh.changedFiles(long.repo, "b0", "h1"),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "too_many_files",
+      message: expect.stringContaining(
+        "h1 changes 300 or more files against b0",
+      ),
+    });
+    await expect(
+      long.gh.changedPaths(long.repo, "b0", "h1"),
+    ).rejects.toMatchObject({ reason: "too_many_files" });
+    count = 299;
+    await expect(
+      long.gh.changedFiles(long.repo, "b0", "h1"),
+    ).resolves.toHaveLength(299);
+    await expect(
+      long.gh.changedPaths(long.repo, "b0", "h1"),
+    ).resolves.toHaveLength(299);
   });
 
   const commitRoutes = (patch: Route = () => ({})): Record<string, Route> => ({

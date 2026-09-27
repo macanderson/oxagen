@@ -26,6 +26,7 @@ import { HandlerError } from "@oxagen/oxagen";
 import { and, eq, isNull, notInArray } from "drizzle-orm";
 import {
   linkedOxagenUser,
+  refuseLongCompare,
   type SteeringChangedFile,
   type SteeringHost,
   type SteeringRepository,
@@ -588,6 +589,7 @@ export function createSteeringGitLab(
     changedPaths(repo, base, head) {
       return call(repo, async (gl, project) => {
         const diffs = await gl.compare({ project, from: base, to: head });
+        refuseLongCompare(diffs.length, base, head);
         return [
           ...new Set(
             diffs.flatMap((d) =>
@@ -687,6 +689,7 @@ export function createSteeringGitLab(
     changedFiles(repo, base, head) {
       return call(repo, async (gl, project) => {
         const diffs = await gl.compare({ project, from: base, to: head });
+        refuseLongCompare(diffs.length, base, head);
         return diffs.flatMap((d): SteeringChangedFile[] => {
           if (d.renamed && d.oldPath !== d.newPath)
             return [

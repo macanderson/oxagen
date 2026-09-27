@@ -203,7 +203,8 @@ export interface SteeringHost {
   ): Promise<string[]>;
   /**
    * Every path the commit `head` changes against `base`, as its pull request
-   * shows them; a rename names both its paths.
+   * shows them; a rename names both its paths. Refuses with `too_many_files`
+   * at 300 files, where the host's list may be cut short.
    */
   changedPaths(
     repo: SteeringRepository,
@@ -247,7 +248,8 @@ export interface SteeringHost {
   /**
    * What the commit `head` does to each path against `base`. A rename is a
    * removal of the old path and an addition of the new one, because the stamp
-   * and the ledger speak of paths, not of moves.
+   * and the ledger speak of paths, not of moves. Refuses with
+   * `too_many_files` at 300 files, as {@link SteeringHost.changedPaths} does.
    */
   changedFiles(
     repo: SteeringRepository,
@@ -710,6 +712,30 @@ export function assertSameHost(
 }
 
 /**
+ * GitHub's compare answers at most 300 files and does not say when it cut the
+ * list. A list that long may be missing paths, so the branch-scope check and
+ * the stamp would each see only part of the change.
+ */
+const COMPARE_FILE_LIMIT = 300;
+
+/**
+ * Refuse a compare that may have been cut short. Both hosts call it, so
+ * GitHub and GitLab refuse the same change; GitLab's own limit is higher.
+ */
+export function refuseLongCompare(
+  files: number,
+  base: string,
+  head: string,
+): void {
+  if (files < COMPARE_FILE_LIMIT) return;
+  throw new HandlerError({
+    code: "conflict",
+    reason: "too_many_files",
+    message: `${head} changes ${files} or more files against ${base}. Oxagen reads at most ${COMPARE_FILE_LIMIT - 1} files in one steering PR, so split it into smaller steering PRs.`,
+  });
+}
+
+/**
  * Wrap a GitHub refusal as `conflict: github_refused` with GitHub's own
  * message. A `HandlerError` passes through unchanged, so a refusal this
  * module already shaped (`proposal_branch_exists`, a missing binding) keeps
@@ -961,6 +987,7 @@ export function createSteeringGitHub(
           base,
           head,
         });
+        refuseLongCompare(files.length, base, head);
         return [
           ...new Set(
             files.flatMap((f) =>
@@ -1099,6 +1126,7 @@ export function createSteeringGitHub(
           base,
           head,
         });
+        refuseLongCompare(files.length, base, head);
         return files.flatMap((f): SteeringChangedFile[] => {
           if (f.status === "renamed" && f.previousPath)
             return [
