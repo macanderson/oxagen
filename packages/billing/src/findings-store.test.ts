@@ -221,6 +221,9 @@ function frameRow(over: Partial<ModelCallFrameRow> = {}): ModelCallFrameRow {
     serverToolRequests: 3,
     reportedCostMicros: "15000",
     basis: "client_attested",
+    toolDefinitionTokens: null,
+    contextFrameTokens: null,
+    steeringTokens: null,
     ...over,
   };
 }
