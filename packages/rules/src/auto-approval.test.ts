@@ -39,7 +39,7 @@ function subject(over: Partial<AutoApprovalSubject> = {}): AutoApprovalSubject {
       version: 3,
       riskGrade: "medium",
       sideEffect: null,
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       ...(over.tool ?? {}),
     },
     measures: {},
@@ -105,7 +105,7 @@ describe("consequences that changed under the rule", () => {
           version: 3,
           riskGrade: "medium",
           sideEffect: null,
-          consequenceTags: [],
+          impacts: [],
         },
       }),
     );
@@ -212,7 +212,7 @@ describe("the floors no rule can lift", () => {
           version: 3,
           riskGrade: "critical",
           sideEffect: null,
-          consequenceTags: ["moves_money"],
+          impacts: ["moves_money"],
         },
       }),
     );
@@ -234,7 +234,7 @@ describe("the floors no rule can lift", () => {
           version: 1,
           riskGrade: "high",
           sideEffect: null,
-          consequenceTags: ["alters_production", "destroys_data"],
+          impacts: ["alters_production", "destroys_data"],
         },
       }),
     );
@@ -245,12 +245,12 @@ describe("the floors no rule can lift", () => {
     // `set_tool_classification` names the side-effect class; the consequence
     // tag is the other half of the same statement. Either one is the floor,
     // and it is reported once rather than twice.
-    const judge = (sideEffect: string | null, consequenceTags: string[]) =>
+    const judge = (sideEffect: string | null, impacts: string[]) =>
       evaluateAutoApproval(
         [
           rule({
             tools: ["db__drop_table@*"],
-            authoredConsequences: consequenceTags,
+            authoredConsequences: impacts,
           }),
         ],
         subject({
@@ -260,7 +260,7 @@ describe("the floors no rule can lift", () => {
             version: 1,
             riskGrade: "high",
             sideEffect,
-            consequenceTags,
+            impacts,
           },
         }),
       );
@@ -289,7 +289,7 @@ describe("the floors no rule can lift", () => {
           version: 3,
           riskGrade: "critical",
           sideEffect: null,
-          consequenceTags: ["destroys_data"],
+          impacts: ["destroys_data"],
         },
       }),
     );
@@ -558,7 +558,7 @@ describe("the recorded reason list stays readable", () => {
           version: 3,
           riskGrade: "critical",
           sideEffect: null,
-          consequenceTags: ["destroys_data"],
+          impacts: ["destroys_data"],
         },
       }),
     );

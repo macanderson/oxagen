@@ -84,7 +84,7 @@ const postgresToolClassificationDeps: ToolClassificationDeps = {
           activeVersionId: schema.tools.activeVersionId,
           slug: schema.tools.slug,
           version: schema.toolVersions.versionNumber,
-          consequenceTags: schema.toolVersions.consequenceTags,
+          impacts: schema.toolVersions.impacts,
           classification: schema.toolVersions.classification,
           measures: schema.toolVersions.measures,
         })

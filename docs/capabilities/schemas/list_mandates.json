@@ -93,7 +93,7 @@
                 }
               ]
             },
-            "consequenceTags": {
+            "impacts": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -347,7 +347,7 @@
             "requestedBy",
             "grantedBy",
             "roleAtGrant",
-            "consequenceTags",
+            "impacts",
             "limits",
             "targets",
             "tools",

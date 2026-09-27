@@ -1,6 +1,13 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
+import {
+  MOVABLE_TRANSPORTS,
+  steeringWriter,
+  type OpenedSteeringPr,
+  type ServerFolderWriter,
+} from "@oxagen/agent/runtime/steering-pr";
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
+import { HandlerError, type CapabilityContext } from "@oxagen/oxagen";
 import type { CapabilityHandlerFn } from "@oxagen/oxagen/kernel";
 import { pluginSetEnabled } from "@oxagen/oxagen/contracts/plugin.set_enabled";
 import { assertContractRole } from "./lib/capability-role-guard";
@@ -19,6 +26,192 @@ type Input = {
   orgListingId: string;
   enabled: boolean;
 };
+
+type Listing = typeof schema.pluginInstalledPlugins.$inferSelect;
+
+/** Audit event for a successful toggle. Fire-and-forget; it must not fail the capability. */
+function emitEnabledChanged(ctx: CapabilityContext): void {
+  emitSecurityEvent({
+    eventType: "plugin.enabled_changed",
+    actorUserId: ctx.userId ?? null,
+    orgId: ctx.orgId,
+    workspaceId: ctx.workspaceId ?? null,
+    capability: "set_plugin_enabled",
+    outcome: "success",
+    ip: null,
+    userAgent: null,
+    requestId: ctx.requestId ?? null,
+  });
+}
+
+/**
+ * Enable a plugin in a workspace whose tools live in its steering repo.
+ *
+ * A plugin whose row the steering repo already holds (origin steering, or a
+ * legacy row a migration PR named) is toggled on directly: null is returned
+ * and the caller upserts as before. Otherwise the row becomes a proposed,
+ * disabled row, and the writer opens a steering PR that adds its server
+ * folder. The first publish after that PR merges turns the row on.
+ *
+ * When the PR does not open, the row goes back to what it was and the error
+ * is rethrown.
+ */
+async function enableThroughSteering(
+  writer: ServerFolderWriter,
+  listing: Listing,
+  ctx: CapabilityContext,
+): Promise<{ publicId: string; pr: OpenedSteeringPr } | null> {
+  const s = schema.mcpServers;
+  // The listing index covers deleted rows too, so the lookup reads them.
+  const existing = await withTenantDb(async (tx) => {
+    const [row] = await tx
+      .select({
+        id: s.id,
+        publicId: s.publicId,
+        origin: s.origin,
+        steeringName: s.steeringName,
+        enabled: s.enabled,
+        deletedAt: s.deletedAt,
+        deletedById: s.deletedById,
+      })
+      .from(s)
+      .where(
+        and(
+          eq(s.orgId, ctx.orgId),
+          eq(s.workspaceId, ctx.workspaceId),
+          eq(s.orgListingId, listing.id),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  });
+
+  if (existing !== null && existing.deletedAt === null) {
+    if (existing.origin === "steering" || (existing.origin === "legacy" && existing.steeringName !== null)) {
+      return null;
+    }
+    if (existing.origin === "proposed" && existing.steeringName !== null) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "steering_pr_open",
+        message: `"${listing.name}" turns on when the steering PR that adds tools/servers/${existing.steeringName}/ merges and publishes.`,
+      });
+    }
+  }
+
+  // The undo only touches a row that is still proposed with no folder name.
+  // A concurrent enable that reserved a name keeps its row and its PR.
+  const stillUnnamedProposal = (id: string) =>
+    and(eq(s.id, id), eq(s.workspaceId, ctx.workspaceId), eq(s.origin, "proposed"), isNull(s.steeringName));
+
+  const enableInProgress = () =>
+    new HandlerError({
+      code: "conflict",
+      reason: "plugin_enable_in_progress",
+      message: `Another request is enabling "${listing.name}" in this workspace. Try again in a moment.`,
+    });
+
+  let row: { id: string; publicId: string };
+  let undo: () => Promise<unknown>;
+  if (existing !== null) {
+    // The update matches only the origin and folder name this request read.
+    // A concurrent enable that already changed the row, or reserved a folder
+    // name for it, keeps its PR, and this request stops instead of clearing
+    // the name and opening a second PR.
+    const [converted] = await withTenantDb((tx) =>
+      tx
+        .update(s)
+        .set({
+          origin: "proposed",
+          enabled: false,
+          steeringName: null,
+          deletedAt: null,
+          deletedById: null,
+          healthStatus: "unknown",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(s.id, existing.id),
+            eq(s.workspaceId, ctx.workspaceId),
+            eq(s.origin, existing.origin),
+            existing.steeringName === null ? isNull(s.steeringName) : eq(s.steeringName, existing.steeringName),
+          ),
+        )
+        .returning({ id: s.id }),
+    );
+    if (converted === undefined) throw enableInProgress();
+    row = { id: existing.id, publicId: existing.publicId };
+    undo = () =>
+      withTenantDb((tx) =>
+        tx
+          .update(s)
+          .set({
+            origin: existing.origin,
+            enabled: existing.enabled,
+            steeringName: existing.steeringName,
+            deletedAt: existing.deletedAt,
+            deletedById: existing.deletedById,
+            updatedAt: new Date(),
+          })
+          .where(stillUnnamedProposal(existing.id)),
+      );
+  } else {
+    const [inserted] = await withTenantDb((tx) =>
+      tx
+        .insert(s)
+        .values({
+          orgId: ctx.orgId,
+          workspaceId: ctx.workspaceId,
+          orgListingId: listing.id,
+          name: listing.name,
+          transportType: listing.transport ?? "sse",
+          endpointUrl: listing.endpointUrl!,
+          authStrategy: mapAuthStrategy(listing.authKind),
+          authConfig: {},
+          healthStatus: "unknown",
+          enabled: false,
+          origin: "proposed",
+          discoveredTools: [],
+        })
+        // onConflictDoNothing names the partial index's predicate `where`, not
+        // `targetWhere`, and renders it as ON CONFLICT (...) WHERE ... DO NOTHING.
+        .onConflictDoNothing({
+          target: [s.workspaceId, s.orgListingId],
+          where: sql`org_listing_id IS NOT NULL`,
+        })
+        .returning({ id: s.id, publicId: s.publicId }),
+    );
+    if (inserted === undefined) throw enableInProgress();
+    row = inserted;
+    undo = () =>
+      withTenantDb((tx) =>
+        tx
+          .update(s)
+          .set({ deletedAt: new Date(), deletedById: ctx.userId, updatedAt: new Date() })
+          .where(stillUnnamedProposal(inserted.id)),
+      );
+  }
+
+  let pr: OpenedSteeringPr;
+  try {
+    pr = await writer.addServer({
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      serverId: row.id,
+      actorUserId: ctx.userId,
+    });
+  } catch (err) {
+    await undo().catch((undoErr: unknown) => {
+      logger.error(
+        { err: undoErr, serverId: row.id, orgListingId: listing.id, workspaceId: ctx.workspaceId },
+        "set_plugin_enabled(workspace): the steering PR did not open and the proposed row was not rolled back",
+      );
+    });
+    throw err;
+  }
+  return { publicId: row.publicId, pr };
+}
 
 // scope="org": toggle the org listing's enabled flag.
 const setOrgEnabled: CapabilityHandlerFn = async (input, ctx) => {
@@ -56,18 +249,7 @@ const setOrgEnabled: CapabilityHandlerFn = async (input, ctx) => {
     throw err;
   }
 
-  // ── Emit audit event (fire-and-forget; must not fail the capability) ────────
-  emitSecurityEvent({
-    eventType: "plugin.enabled_changed",
-    actorUserId: ctx.userId ?? null,
-    orgId: ctx.orgId,
-    workspaceId: ctx.workspaceId ?? null,
-    capability: "set_plugin_enabled",
-    outcome: "success",
-    ip: null,
-    userAgent: null,
-    requestId: ctx.requestId ?? null,
-  });
+  emitEnabledChanged(ctx);
 
   logger.info(
     { orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId, enabled },
@@ -130,6 +312,34 @@ const setWorkspaceEnabled: CapabilityHandlerFn = async (input, ctx) => {
       );
     }
 
+    // Once the workspace's tools live in its steering repo, a new server is
+    // a steering PR. steeringWriter() is null until then.
+    const transportType = listing.transport ?? "sse";
+    const writer = (MOVABLE_TRANSPORTS as readonly string[]).includes(transportType)
+      ? await steeringWriter({ orgId: ctx.orgId, workspaceId: ctx.workspaceId })
+      : null;
+    if (writer !== null) {
+      const proposed = await enableThroughSteering(writer, listing, ctx);
+      if (proposed !== null) {
+        emitEnabledChanged(ctx);
+        logger.info(
+          {
+            orgListingId,
+            orgId: ctx.orgId,
+            workspaceId: ctx.workspaceId,
+            workspaceServerId: proposed.publicId,
+            steeringPr: proposed.pr.number,
+          },
+          "set_plugin_enabled(workspace): opened a steering PR",
+        );
+        return {
+          ok: true,
+          workspaceServerId: proposed.publicId,
+          steeringPr: { number: proposed.pr.number, url: proposed.pr.url },
+        };
+      }
+    }
+
     // Upsert the workspace MCP server row.
     const authStrategy = mapAuthStrategy(listing.authKind);
 
@@ -141,7 +351,7 @@ const setWorkspaceEnabled: CapabilityHandlerFn = async (input, ctx) => {
           workspaceId: ctx.workspaceId!,
           orgListingId,
           name: listing.name,
-          transportType: listing.transport ?? "sse",
+          transportType,
           endpointUrl: listing.endpointUrl!,
           authStrategy,
           authConfig: {},
@@ -160,6 +370,11 @@ const setWorkspaceEnabled: CapabilityHandlerFn = async (input, ctx) => {
           set: {
             enabled: true,
             healthStatus: "unknown",
+            // A proposal enabled here, while the workspace writes rows
+            // directly, becomes an ordinary legacy row. Left proposed, the
+            // migration would never count it and no publish would take it
+            // over unless a steering PR named it.
+            origin: sql`CASE WHEN ${schema.mcpServers.origin} = 'proposed' THEN 'legacy' ELSE ${schema.mcpServers.origin} END`,
             updatedAt: new Date(),
           },
         })
@@ -169,18 +384,7 @@ const setWorkspaceEnabled: CapabilityHandlerFn = async (input, ctx) => {
       return inserted ?? null;
     });
 
-    // ── Emit audit event (fire-and-forget; must not fail the capability) ──────
-    emitSecurityEvent({
-      eventType: "plugin.enabled_changed",
-      actorUserId: ctx.userId ?? null,
-      orgId: ctx.orgId,
-      workspaceId: ctx.workspaceId!,
-      capability: "set_plugin_enabled",
-      outcome: "success",
-      ip: null,
-      userAgent: null,
-      requestId: ctx.requestId ?? null,
-    });
+    emitEnabledChanged(ctx);
 
     logger.info(
       {
@@ -215,18 +419,7 @@ const setWorkspaceEnabled: CapabilityHandlerFn = async (input, ctx) => {
     throw err;
   }
 
-  // ── Emit audit event (fire-and-forget; must not fail the capability) ──────
-  emitSecurityEvent({
-    eventType: "plugin.enabled_changed",
-    actorUserId: ctx.userId ?? null,
-    orgId: ctx.orgId,
-    workspaceId: ctx.workspaceId!,
-    capability: "set_plugin_enabled",
-    outcome: "success",
-    ip: null,
-    userAgent: null,
-    requestId: ctx.requestId ?? null,
-  });
+  emitEnabledChanged(ctx);
 
   logger.info(
     { orgListingId, orgId: ctx.orgId, workspaceId: ctx.workspaceId },

@@ -87,7 +87,7 @@ function Row({
           {mandate.id}
         </SafeLink>
         <div className="text-xs text-muted-foreground">
-          {mandate.consequenceTags.join(", ")}
+          {mandate.impacts.join(", ")}
         </div>
       </td>
       <td className="px-3 py-2">

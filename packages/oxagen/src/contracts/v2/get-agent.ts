@@ -90,7 +90,7 @@ export const getAgent = defineTool({
       }),
     ),
     /**
-     * Summary rows only: mandate id, the consequence tags it authorizes, its
+     * Summary rows only: mandate id, the impacts it authorizes, its
      * window and its status. `list_mandates` owns the full shape, and the
      * remaining authority lives in `tools.mandate_ledger`, which moves between
      * reads. This answers the Agents page question: what may this agent cause,
@@ -99,7 +99,7 @@ export const getAgent = defineTool({
     mandates: z.array(
       z.object({
         mandateId: z.string(),
-        consequenceTags: z.array(z.string()),
+        impacts: z.array(z.string()),
         validFrom: z.string(),
         validTo: z.string(),
         status: z.enum(["active", "expired", "revoked"]),
