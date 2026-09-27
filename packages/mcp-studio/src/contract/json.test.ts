@@ -22,6 +22,13 @@ describe("plainJson", () => {
     expect(plainJson(value)).toBe(value);
   });
 
+  it("keeps a key named __proto__ as an own key, with the ordinary prototype", () => {
+    const copy = plainJson(JSON.parse('{"__proto__":{"a":1},"b":2}')) as Record<string, unknown>;
+    expect(Object.keys(copy)).toStrictEqual(["__proto__", "b"]);
+    expect(Object.getPrototypeOf(copy)).toBe(Object.prototype);
+    expect(Object.getOwnPropertyDescriptor(copy, "__proto__")?.value).toStrictEqual({ a: 1 });
+  });
+
   it("copies every level", () => {
     const source = { a: { b: [1] } };
     const copy = plainJson(source) as typeof source;
@@ -56,6 +63,12 @@ describe("canonical form", () => {
     expect(canonicalDigest({ a: 1, b: { c: 2, d: 3 } })).toBe(canonicalDigest({ b: { d: 3, c: 2 }, a: 1 }));
   });
 
+  it("hashes a key named __proto__ like any other key", () => {
+    const schema = '{"properties":{"__proto__":{"type":"string"}},"type":"object"}';
+    expect(canonicalText(JSON.parse(schema))).toBe(schema);
+    expect(canonicalDigest(JSON.parse('{"__proto__":5,"b":2}'))).not.toBe(canonicalDigest({ b: 2 }));
+  });
+
   it("gives a different digest for a different value", () => {
     expect(canonicalDigest({ a: 1 })).not.toBe(canonicalDigest({ a: 2 }));
   });
@@ -74,6 +87,10 @@ describe("formatJson", () => {
 
   it("drops undefined values and writes an undefined array item as null", () => {
     expect(formatJson({ a: undefined, b: [undefined] })).toBe('{\n  "b": [\n    null\n  ]\n}\n');
+  });
+
+  it("writes a key named __proto__", () => {
+    expect(formatJson(JSON.parse('{"b":1,"__proto__":2}'))).toBe('{\n  "__proto__": 2,\n  "b": 1\n}\n');
   });
 
   it("writes an empty object on one line", () => {

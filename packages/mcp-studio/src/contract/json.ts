@@ -10,17 +10,21 @@ import { digestJcs, jcsBytes, type Sha256Digest } from "@oxagen/run-evidence";
 /**
  * A deep copy with ordinary prototypes and no `undefined` object values.
  * An `undefined` array item becomes null, as `JSON.stringify` writes it.
+ *
+ * Each copy is built with `Object.fromEntries`, which defines every key as an
+ * own property. Assigning `out[key]` would send a key named `__proto__`,
+ * which JSON allows, to the prototype setter instead.
  */
 export function plainJson(value: unknown): unknown {
   if (value === null || typeof value !== "object") return value;
   if (Array.isArray(value)) {
     return value.map((item) => (item === undefined ? null : plainJson(item)));
   }
-  const out: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (item !== undefined) out[key] = plainJson(item);
-  }
-  return out;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, item]) => item !== undefined)
+      .map(([key, item]) => [key, plainJson(item)]),
+  );
 }
 
 /** The RFC 8785 bytes of a value. */
@@ -41,11 +45,12 @@ export function canonicalDigest(value: unknown): Sha256Digest {
 function sortKeys(value: unknown): unknown {
   if (value === null || typeof value !== "object") return value;
   if (Array.isArray(value)) return value.map(sortKeys);
-  const out: Record<string, unknown> = {};
-  for (const key of Object.keys(value).sort()) {
-    out[key] = sortKeys((value as Record<string, unknown>)[key]);
-  }
-  return out;
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.keys(record)
+      .sort()
+      .map((key) => [key, sortKeys(record[key])]),
+  );
 }
 
 /**
