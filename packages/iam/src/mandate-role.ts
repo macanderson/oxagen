@@ -1,7 +1,7 @@
 // mandate-role.ts — the role gates a mandate's consequences and approval rule
 // put on a caller (MC spec §6.9, ADR-059 decision 1).
 //
-// A consequence tag names the org roles accountable for it: the workspace's
+// An impact names the org roles accountable for it: the workspace's
 // `consequence_roles` override first, the defaults in
 // `@oxagen/oxagen/mandates/schemas` otherwise. Granting, changing or revoking
 // a mandate, answering a call its approval rule parked, and changing a tool's
@@ -63,7 +63,7 @@ export function rolesForAllTags(
 
 /**
  * Refuse unless the acting user (the signed-in user, or the API key's
- * creator) holds an org role the workspace names for every consequence tag; returns the role that satisfied the gate, the
+ * creator) holds an org role the workspace names for every impact; returns the role that satisfied the gate, the
  * `role_at_grant` a grant records.
  */
 export async function assertConsequenceRole(

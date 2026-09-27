@@ -1130,7 +1130,7 @@
   {
     "name": "grant_mandate",
     "group": "Toolbelt",
-    "does": "bounded authority for a consequence tag to an agent",
+    "does": "bounded authority for an impact to an agent",
     "absorbs": [],
     "resolved": [],
     "unresolved": [],

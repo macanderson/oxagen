@@ -1,5 +1,5 @@
 /**
- * The mandate vocabulary (MC spec §6.9, ADR-059): consequence tags, the
+ * The mandate vocabulary (MC spec §6.9, ADR-059): impacts, the
  * measure declaration a tool version carries, the limits, targets and
  * approval rule a mandate carries, the consequence-role map, and the row
  * shape every mandate read returns. Contracts, handlers and the rules gate
@@ -12,7 +12,7 @@
 import { z } from "zod";
 
 /** The starter set the customer extends (§6.9 part 1). */
-const CONSEQUENCE_TAG_STARTER_SET = [
+const IMPACT_STARTER_SET = [
   "moves_money",
   "destroys_data",
   "alters_production",
@@ -21,11 +21,11 @@ const CONSEQUENCE_TAG_STARTER_SET = [
   "changes_entitlement",
 ] as const;
 
-export const consequenceTagSchema = z
+export const impactSchema = z
   .string()
   .regex(
     /^[a-z][a-z0-9_]{1,63}$/,
-    "a consequence tag is snake_case, 2 to 64 characters",
+    "an impact is snake_case, 2 to 64 characters",
   );
 
 /** The org-scoped IAM role names provisioned for every org (iam-provision.ts ORG_ROLES). */
@@ -34,13 +34,13 @@ const orgRoleNameSchema = z.enum(ORG_ROLE_NAMES);
 export type OrgRoleName = z.infer<typeof orgRoleNameSchema>;
 
 /**
- * Consequence tag → the org roles that may grant, change or revoke a
+ * Impact → the org roles that may grant, change or revoke a
  * mandate for it (ADR-059 decision 1). A tag the customer defines and has
  * not mapped takes `DEFAULT_CONSEQUENCE_ROLES.other`.
  */
 export const DEFAULT_CONSEQUENCE_ROLES: Readonly<
   Record<
-    (typeof CONSEQUENCE_TAG_STARTER_SET)[number] | "other",
+    (typeof IMPACT_STARTER_SET)[number] | "other",
     readonly OrgRoleName[]
   >
 > = {
@@ -55,7 +55,7 @@ export const DEFAULT_CONSEQUENCE_ROLES: Readonly<
 
 /** The stored overrides: tag → non-empty role list. */
 export const consequenceRolesSchema = z.record(
-  consequenceTagSchema,
+  impactSchema,
   z.array(orgRoleNameSchema).min(1),
 );
 export type ConsequenceRoles = z.infer<typeof consequenceRolesSchema>;
@@ -78,7 +78,7 @@ export function effectiveConsequenceRoles(
   overrides: ConsequenceRoles,
 ): Record<string, OrgRoleName[]> {
   const tags = new Set<string>([
-    ...CONSEQUENCE_TAG_STARTER_SET,
+    ...IMPACT_STARTER_SET,
     ...Object.keys(overrides),
   ]);
   const out: Record<string, OrgRoleName[]> = {};
@@ -522,7 +522,7 @@ export const mandateApprovalSchema = z
     /** measure → the value above which a person must look. */
     humanAbove: z.record(measureNameSchema, measureValueSchema).default({}),
     /** Tags a call carries for which a person always looks. */
-    alwaysHumanFor: z.array(consequenceTagSchema).default([]),
+    alwaysHumanFor: z.array(impactSchema).default([]),
     /**
      * Who may answer a parked call, beside the consequence roles:
      * `role:<org role>` or `user:<usr_…>`. Empty leaves it to the
@@ -555,7 +555,7 @@ export const agentIdSchema = z
  */
 export const mandateBodyFields = {
   agentId: agentIdSchema,
-  consequenceTags: z.array(consequenceTagSchema).min(1).max(16),
+  impacts: z.array(impactSchema).min(1).max(16),
   limits: mandateLimitsSchema,
   targets: mandateTargetsSchema.default({}),
   tools: z.array(toolPatternSchema).min(1).max(64),
@@ -639,7 +639,7 @@ export const mandateSchema = z
     requestedBy: z.string().nullable(),
     grantedBy: z.string().nullable(),
     roleAtGrant: z.string().nullable(),
-    consequenceTags: z.array(consequenceTagSchema),
+    impacts: z.array(impactSchema),
     limits: mandateLimitsSchema,
     targets: mandateTargetsSchema,
     tools: z.array(toolPatternSchema),

@@ -438,7 +438,7 @@ describe("ToolDialog", () => {
     fireEvent.change(screen.getByLabelText("Risk grade"), {
       target: { value: "high" },
     });
-    fill("Consequence tags", "moves_money, changes_access");
+    fill("Impacts", "moves_money, changes_access");
     fill("Reason", "Narrowed after the audit.");
     fireEvent.submit(formOf(screen.getByText("Reclassify this version")));
     await waitFor(() => {
@@ -450,7 +450,7 @@ describe("ToolDialog", () => {
           riskGrade: "high",
           sideEffect: "irreversible",
           egress: "third_party",
-          consequenceTags: ["moves_money", "changes_access"],
+          impacts: ["moves_money", "changes_access"],
           // The round trip: the data classes were not touched, so they come
           // back byte for byte — the multiword one included.
           dataClasses: ["customer financial data", "payment"],
@@ -507,7 +507,7 @@ describe("ToolDialog", () => {
     // An unclassified version opens on the narrowest axes, never blank ones.
     expect(screen.getByLabelText("Side effect")).toHaveValue("read");
     expect(screen.getByLabelText("Egress")).toHaveValue("local");
-    expect(screen.getByLabelText("Consequence tags")).toHaveValue("");
+    expect(screen.getByLabelText("Impacts")).toHaveValue("");
     fill("Reason", "First classification.");
     fireEvent.submit(formOf(screen.getByText("Reclassify this version")));
     await waitFor(() => {
@@ -519,7 +519,7 @@ describe("ToolDialog", () => {
           riskGrade: "low",
           sideEffect: "read",
           egress: "local",
-          consequenceTags: [],
+          impacts: [],
           dataClasses: [],
           measures: [],
           reason: "First classification.",
@@ -595,7 +595,7 @@ describe("FlipControls", () => {
     const radius = within(dialog).getByTestId("tools-flip-blast-radius");
     expect(radius).toHaveTextContent("Blast radius");
     expect(radius).toHaveTextContent(
-      "Every tool version carrying this consequence tag",
+      "Every tool version carrying this impact",
     );
     // The blast radius is above the confirming button in the document.
     expect(
@@ -1015,7 +1015,7 @@ describe("FlipControls target picker", () => {
     expect(submitted("target")).toBe("");
   });
 
-  it("offers the starter consequence tags at the class level", async () => {
+  it("offers the starter impacts at the class level", async () => {
     withIntl(
       <FlipControls
         at={at}

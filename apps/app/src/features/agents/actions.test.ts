@@ -570,7 +570,7 @@ describe("a person the workspace refuses", () => {
 describe("requestMandate", () => {
   const draft = {
     agentId: "agt_invoicebot",
-    consequenceTags: "moves_money, alters_production",
+    impacts: "moves_money, alters_production",
     measure: "rows",
     unit: "rows",
     perCall: "50",
@@ -594,7 +594,7 @@ describe("requestMandate", () => {
       "request_mandate",
       {
         agentId: "agt_invoicebot",
-        consequenceTags: ["moves_money", "alters_production"],
+        impacts: ["moves_money", "alters_production"],
         limits: {
           rows: {
             perCall: "50",
@@ -672,8 +672,8 @@ describe("requestMandate", () => {
 
   it.each([
     [{ measure: "  " }, "measure"],
-    [{ consequenceTags: "" }, "consequenceTags"],
-    [{ consequenceTags: " , , " }, "consequenceTags"],
+    [{ impacts: "" }, "impacts"],
+    [{ impacts: " , , " }, "impacts"],
     [{ perCall: "", perPeriod: "" }, "perPeriod"],
     [{ perCall: "1,250" }, "perCall"],
     [{ perPeriod: "-5" }, "perPeriod"],
@@ -840,10 +840,10 @@ describe("requestMandate", () => {
     invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
     await requestMandate("acme", "core-platform", {
       ...good,
-      consequenceTags: " moves_money , alters_production ,moves_money, ",
+      impacts: " moves_money , alters_production ,moves_money, ",
     });
     expect(invoke.mock.calls[0]?.[1]).toMatchObject({
-      consequenceTags: ["moves_money", "alters_production"],
+      impacts: ["moves_money", "alters_production"],
     });
   });
 
@@ -851,36 +851,36 @@ describe("requestMandate", () => {
     invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
     await requestMandate("acme", "core-platform", {
       ...good,
-      consequenceTags: "destroys_data",
+      impacts: "destroys_data",
     });
     expect(invoke.mock.calls[0]?.[1]).toMatchObject({
-      consequenceTags: ["destroys_data"],
+      impacts: ["destroys_data"],
     });
   });
 
   // The six are a starter set the workspace extends, and `findCoveringMandate`
   // still wants every tag the tool declares — so a tool declaring a tag of the
   // workspace's own could otherwise never be given a mandate.
-  it("sends a consequence tag the starter set does not hold", async () => {
+  it("sends an impact the starter set does not hold", async () => {
     invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
     await requestMandate("acme", "core-platform", {
       ...good,
-      consequenceTags: "ships_code, moves_money",
+      impacts: "ships_code, moves_money",
     });
     expect(invoke.mock.calls[0]?.[1]).toMatchObject({
-      consequenceTags: ["ships_code", "moves_money"],
+      impacts: ["ships_code", "moves_money"],
     });
   });
 
   it.each([["Ships_Code"], ["ships code"], ["s"], ["9lives"], ["ships-code"]])(
-    "refuses %s, which is not a consequence tag (negative)",
+    "refuses %s, which is not an impact (negative)",
     async (tag) => {
       expect(
         await requestMandate("acme", "core-platform", {
           ...good,
-          consequenceTags: tag,
+          impacts: tag,
         }),
-      ).toMatchObject({ ok: false, field: "consequenceTags" });
+      ).toMatchObject({ ok: false, field: "impacts" });
       expect(invoke).not.toHaveBeenCalled();
     },
   );
@@ -889,12 +889,12 @@ describe("requestMandate", () => {
     expect(
       await requestMandate("acme", "core-platform", {
         ...good,
-        consequenceTags: Array.from(
+        impacts: Array.from(
           { length: 17 },
           (_, i) => `tag_${String(i)}`,
         ).join(","),
       }),
-    ).toMatchObject({ ok: false, field: "consequenceTags" });
+    ).toMatchObject({ ok: false, field: "impacts" });
     expect(invoke).not.toHaveBeenCalled();
   });
 
@@ -996,7 +996,7 @@ describe("requestMandate", () => {
   // The longest legal consequence set: sixteen tags at sixty-four characters.
   // A field that could not hold it truncated in the browser, and the truncated
   // set was still valid — requested, granted, covering nothing.
-  it("accepts every consequence tag at its ceiling", async () => {
+  it("accepts every impact at its ceiling", async () => {
     invoke.mockResolvedValue({ ...mandateOutput(), status: "draft" });
     // 62 + 2 = 64, the ceiling, and distinct for 00 through 15.
     const tags = Array.from(
@@ -1008,11 +1008,11 @@ describe("requestMandate", () => {
     expect(
       await requestMandate("acme", "core-platform", {
         ...good,
-        consequenceTags: tags.join(", "),
+        impacts: tags.join(", "),
       }),
     ).toMatchObject({ ok: true });
     expect(invoke.mock.calls[0]?.[1]).toMatchObject({
-      consequenceTags: tags,
+      impacts: tags,
     });
   });
 

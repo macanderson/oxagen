@@ -15,7 +15,7 @@ type ActionFailure = Exclude<ActionResult<unknown>, { ok: true }>;
 /** The draft fields the dialog labels, so an `invalid` refusal can name one. */
 const FIELDS: ReadonlySet<string> = new Set<keyof GrantDraft>([
   "agentId",
-  "consequenceTags",
+  "impacts",
   "measure",
   "unit",
   "perCall",

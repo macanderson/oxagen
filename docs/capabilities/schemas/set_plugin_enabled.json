@@ -1,7 +1,7 @@
 {
   "name": "set_plugin_enabled",
   "domain": "plugin",
-  "description": "Enable or disable a plugin listing. scope='org' toggles the org listing's enabled flag; scope='workspace' upserts/disables an agent.mcp_servers row for this workspace from the org listing.",
+  "description": "Enable or disable a plugin listing. scope='org' toggles the org listing's enabled flag; scope='workspace' upserts/disables an agent.mcp_servers row for this workspace from the org listing. Once the workspace's tools live in its steering repo, enabling a remote plugin the repo does not hold opens a steering PR instead, and the server stays off until that PR merges.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -61,6 +61,24 @@
             "type": "null"
           }
         ]
+      },
+      "steeringPr": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "number",
+          "url"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [

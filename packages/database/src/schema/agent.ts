@@ -1439,7 +1439,7 @@ export const toolVersions = agentSchema.table(
     schemaOrigin: text("schema_origin").notNull().default("declared"),
     // Safety classification (spec §6.9 part 1), the shape of
     // toolClassificationSchema in @oxagen/oxagen/contracts/tool.classification:
-    // side-effect class, egress class, consequence tags, measures, data
+    // side-effect class, egress class, impacts, measures, data
     // classes. Null until an admin classifies the version. Describes the tool
     // and decides nothing by itself; a class kill switch matches a version by
     // its tags at call time. A new version of the tool starts with the
@@ -1460,14 +1460,14 @@ export const toolVersions = agentSchema.table(
     classificationReason: text("classification_reason"),
     // The mandate gate's half of the same classification (MC spec §6.9 part 1,
     // ADR-059 decision 6, 20260915202300_mandates_and_ledger.sql): the
-    // consequences invoking this version can cause, the measures it exposes
+    // impacts invoking this version can have, the measures it exposes
     // as paths into its input ({ path, type, unit, scale? } per measure name),
     // and the path into its output that carries the external effect id a
     // settlement records. These are columns rather than keys inside
     // `classification` because a mandate reads them on every gated call and
     // the kill-switch gate reads the jsonb; both describe the tool and decide
     // nothing by themselves.
-    consequenceTags: text("consequence_tags")
+    impacts: text("impacts")
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),

@@ -44,7 +44,7 @@ export const mandates = toolsSchema.table(
     // The granter and the role that authorised the grant; null while a draft.
     grantedBy: uuid("granted_by"),
     roleAtGrant: text("role_at_grant"),
-    consequenceTags: text("consequence_tags").array().notNull(),
+    impacts: text("impacts").array().notNull(),
     // measure → { perCall?, perPeriod?, period, currencyOrUnit }; values are
     // integer strings (micros for a currency, whole units otherwise).
     limits: jsonb("limits").notNull(),

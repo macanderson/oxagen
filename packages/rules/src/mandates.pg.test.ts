@@ -98,7 +98,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             agentPrincipalId: agent,
             grantedBy: randomUUID(),
             roleAtGrant: "Billing",
-            consequenceTags: ["moves_money"],
+            impacts: ["moves_money"],
             limits: {
               amount: {
                 perCall: "250000000",
@@ -226,7 +226,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             riskGrade: "high",
             manifest: {},
             checksum: "0".repeat(64),
-            consequenceTags: [...tags],
+            impacts: [...tags],
             measures,
             effectIdPath: "payment.id",
           });
@@ -631,7 +631,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     // ── the check ──────────────────────────────────────────────────────────────
 
-    it("has no opinion on a capability that is no declared tool, or a tool with no consequence tag", async () => {
+    it("has no opinion on a capability that is no declared tool, or a tool with no impact", async () => {
       const agent = randomUUID();
       await expect(
         decide(checkArgs(agent, {}, { capability: "create_workspace" })),

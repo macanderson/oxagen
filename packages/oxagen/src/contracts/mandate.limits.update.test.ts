@@ -37,7 +37,7 @@ describe("update_mandate_limits contract", () => {
     expect(
       mandateLimitsUpdate.input.safeParse({
         mandateId: ID,
-        consequenceTags: ["moves_money"],
+        impacts: ["moves_money"],
       }).success,
     ).toBe(false);
   });
