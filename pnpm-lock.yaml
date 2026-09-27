@@ -1710,6 +1710,12 @@ importers:
 
   packages/mcp-studio:
     dependencies:
+      '@bufbuild/protobuf':
+        specifier: 2.12.0
+        version: 2.12.0
+      '@grpc/grpc-js':
+        specifier: 1.14.4
+        version: 1.14.4
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../oxagen
