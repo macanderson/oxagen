@@ -883,7 +883,7 @@ describe("a result another run already fetched", () => {
 });
 
 describe("unpaged results", () => {
-  it("re-prices a result above the threshold at one page", () => {
+  it("re-prices a result above the threshold at one page when the run's frames were not read", () => {
     const r = run();
     const tokens = UNPAGED_RESULT_TOKENS + 1_000;
     const [finding] = detect({
@@ -941,7 +941,7 @@ describe("unpaged results", () => {
     ]);
   });
 
-  it("does not flag a result at the threshold", () => {
+  it("does not flag a result at the threshold when the run's frames were not read", () => {
     const r = run();
     expect(
       detect({
@@ -1162,14 +1162,13 @@ describe("the frames a finding cites (#4001)", () => {
       call(r, { at: 1, resultTokens: big }),
       call(r, { at: 2, resultTokens: big }),
     ];
-    const findings = detect({
-      runs: [r],
-      toolCalls,
-      frames: turns(toolCalls),
-    });
-    expect(findings.map((f) => [f.kind, f.evidence.calls])).toEqual([
-      ["unpaged_results", 2],
-    ]);
+    // A third request re-reads the second result, so both results count.
+    const frames = turns(toolCalls);
+    frames.get(r.runId)!.push(request(r, 3));
+    const findings = detect({ runs: [r], toolCalls, frames });
+    expect(
+      findings.map((f) => [f.kind, f.evidence.frames?.[r.runId]?.total]),
+    ).toEqual([["unpaged_results", 2]]);
   });
 });
 
