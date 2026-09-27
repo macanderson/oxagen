@@ -1,0 +1,187 @@
+{
+  "name": "record_reflection",
+  "domain": "agent",
+  "description": "Reflect on the current run: its outcome, a summary, a grade for the work and each tool, and the lessons worth keeping. Oxagen stores it when the run ends.",
+  "mode": "sync",
+  "surfaces": [
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "outcome": {
+        "type": "string",
+        "enum": [
+          "completed",
+          "failed",
+          "cancelled",
+          "crashed",
+          "unknown"
+        ],
+        "description": "How the run ended."
+      },
+      "summary": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000,
+        "description": "What the run did, in one paragraph."
+      },
+      "grades": {
+        "type": "object",
+        "properties": {
+          "work": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Your work on the task, from 1 to 5."
+          },
+          "tools": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "default": {}
+          }
+        },
+        "required": [
+          "work"
+        ],
+        "additionalProperties": false
+      },
+      "lessons": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "statement": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000,
+              "description": "The lesson in one or two sentences, written as advice for the next run."
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "business-rule",
+                "code-rule",
+                "constraint",
+                "procedure",
+                "skill",
+                "fact",
+                "preference",
+                "memory"
+              ],
+              "default": "memory"
+            },
+            "repos": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "maxItems": 20
+            },
+            "applies_to": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "minItems": 1,
+              "maxItems": 20
+            },
+            "tools": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "minItems": 1,
+              "maxItems": 20
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "maxItems": 20,
+              "default": []
+            }
+          },
+          "required": [
+            "statement"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 50,
+        "default": []
+      },
+      "tool_feedback": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "tool": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "A tool name as you saw it, such as mcp__billing__create_refund."
+            },
+            "problem": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000,
+              "description": "What was wrong with the tool or its description."
+            }
+          },
+          "required": [
+            "tool",
+            "problem"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 50
+      }
+    },
+    "required": [
+      "outcome",
+      "summary",
+      "grades"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "status": {
+        "const": "noted"
+      },
+      "message": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "status",
+      "message"
+    ],
+    "additionalProperties": false
+  }
+}

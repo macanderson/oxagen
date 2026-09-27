@@ -1,0 +1,8 @@
+{
+  "name": "oxagen-ci-turbo-cache",
+  "private": true,
+  "description": "The turbo remote cache server that .github/actions/turbo-cache starts on each CI runner. Not a workspace package.",
+  "dependencies": {
+    "turborepo-remote-cache": "2.14.1"
+  }
+}

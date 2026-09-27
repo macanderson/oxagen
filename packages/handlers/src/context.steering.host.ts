@@ -125,7 +125,8 @@ export function createSteeringHost(
     holdsCommit: (repo, head, ancestor) =>
       on(repo).holdsCommit(repo, head, ancestor),
     updateBranch: (repo, args) => on(repo).updateBranch(repo, args),
-    resetBranch: (repo, branch, sha) => on(repo).resetBranch(repo, branch, sha),
+    resetBranch: (repo, branch, args) =>
+      on(repo).resetBranch(repo, branch, args),
     listApprovals: (repo, number) => on(repo).listApprovals(repo, number),
     recordDeployment: (repo, args) => on(repo).recordDeployment(repo, args),
   };

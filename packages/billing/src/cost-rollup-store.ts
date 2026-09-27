@@ -418,7 +418,60 @@ async function readLedgerToolCalls(args: {
   }));
 }
 
-function toFrame(row: ModelCallFrameRow): ModelCallFrame {
+/**
+ * What model calls spent on tool definitions, context frames, and steering
+ * (spec §12.6, #4493): one call's measurements, or their sums over a run.
+ * Null means absent, never zero.
+ */
+export interface RunTokenSources {
+  toolDefinitionTokens: number | null;
+  contextFrameTokens: number | null;
+  steeringTokens: number | null;
+}
+
+/** A run with no measured call: every source absent. */
+export const NO_RUN_TOKEN_SOURCES: RunTokenSources = Object.freeze({
+  toolDefinitionTokens: null,
+  contextFrameTokens: null,
+  steeringTokens: null,
+});
+
+/**
+ * A model call as the rollup reads it: the frame it prices, and the token
+ * sources the recorder measured on that same frame. The sources ride the
+ * priced frames rather than a read of their own, so the stored sums cover
+ * exactly the calls the row prices, even while a live run adds calls
+ * between two reads. A call with no `sources` measured none.
+ */
+export type PricedModelCall = ModelCallFrame & {
+  readonly sources?: RunTokenSources;
+};
+
+const SOURCE_MEMBERS = [
+  "toolDefinitionTokens",
+  "contextFrameTokens",
+  "steeringTokens",
+] as const;
+
+/**
+ * The three sources summed over a run's priced calls. A sum is null when no
+ * call carried that source, and 0 when the calls that carried it measured 0.
+ */
+export function sumTokenSources(
+  calls: readonly PricedModelCall[],
+): RunTokenSources {
+  const sums: RunTokenSources = { ...NO_RUN_TOKEN_SOURCES };
+  for (const call of calls) {
+    for (const member of SOURCE_MEMBERS) {
+      const tokens = call.sources?.[member];
+      if (tokens === null || tokens === undefined) continue;
+      sums[member] = (sums[member] ?? 0) + tokens;
+    }
+  }
+  return sums;
+}
+
+function toFrame(row: ModelCallFrameRow): PricedModelCall {
   return {
     at: new Date(row.at),
     model: row.model,
@@ -435,6 +488,11 @@ function toFrame(row: ModelCallFrameRow): ModelCallFrame {
     reportedCostMicros:
       row.reportedCostMicros === null ? null : BigInt(row.reportedCostMicros),
     basis: row.basis,
+    sources: {
+      toolDefinitionTokens: row.toolDefinitionTokens,
+      contextFrameTokens: row.contextFrameTokens,
+      steeringTokens: row.steeringTokens,
+    },
   };
 }
 
@@ -444,11 +502,12 @@ type RollupScope = { orgId: string; workspaceId: string };
 
 export interface RunRollupDeps {
   loadRunSource: (publicId: string) => Promise<RunSource | null>;
+  /** The run's priced model calls, each with the token sources it carried. */
   readModelCalls: (args: {
     orgId: string;
     workspaceId: string;
     run: FrameRunRef;
-  }) => Promise<ModelCallFrame[]>;
+  }) => Promise<PricedModelCall[]>;
   readToolCalls: (source: RunSource) => Promise<ToolCallFrame[]>;
   /**
    * The rows that could price the run's models over its span, never the
@@ -470,14 +529,37 @@ export interface RunRollupDeps {
     scope: RollupScope,
     runId: string,
   ) => Promise<string | null>;
-  write: (record: RunTotalsRecord, rolledUpAt: Date) => Promise<void>;
+  write: (
+    record: RunTotalsRecord,
+    rolledUpAt: Date,
+    sources?: RunTokenSources,
+  ) => Promise<void>;
   now: () => Date;
 }
 
 type Row = typeof totals.$inferSelect;
 
+/**
+ * A `cost.run_totals` row as it is stored: the rollup record and the token
+ * sources beside it (#4493). The sources are measured on the frames rather
+ * than computed by the pure rollup, so they are not part of the record.
+ */
+export type StoredRunTotals = RunTotalsRecord & RunTokenSources;
+
+/**
+ * The largest sum a source column holds. The three columns are Postgres
+ * `integer`, and a sum over a long run's calls could pass it, so the write
+ * clamps rather than failing the whole row.
+ */
+const PG_INT4_MAX = 2_147_483_647;
+
+function storedSource(tokens: number | null | undefined): number | null {
+  if (tokens === null || tokens === undefined) return null;
+  return Math.min(tokens, PG_INT4_MAX);
+}
+
 /** A `cost.run_totals` row as the rollup record; the handlers read rows through this too. */
-export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
+export function runTotalsRowToRecord(row: Row): StoredRunTotals {
   return {
     runId: row.runId,
     runSource: row.runSource as RunMeta["runSource"],
@@ -513,6 +595,9 @@ export function runTotalsRowToRecord(row: Row): RunTotalsRecord {
       row.productiveRatio === null ? null : Number(row.productiveRatio),
     advancedSteps: row.advancedSteps,
     unproductiveSteps: row.unproductiveSteps,
+    toolDefinitionTokens: row.toolDefinitionTokens,
+    contextFrameTokens: row.contextFrameTokens,
+    steeringTokens: row.steeringTokens,
   };
 }
 
@@ -711,21 +796,26 @@ function reopensSealed() {
 export async function upsertRunTotals(
   record: RunTotalsRecord,
   rolledUpAt: Date,
+  sources?: RunTokenSources,
 ): Promise<void> {
   // tenancy: the scheduled rollup job writes outside a tenant scope; the row
   // carries the run's own orgId and workspaceId, and the conflict target is the
   // run's globally unique public id, so no other organization's row is written.
-  await withSystemDb((tx) => writeRunTotals(tx, record, rolledUpAt));
+  await withSystemDb((tx) => writeRunTotals(tx, record, rolledUpAt, sources));
 }
 
 /**
  * The upsert itself, on the transaction it is handed. Exported for the unit
  * test, which hands it a fake that records the insert.
+ *
+ * `sources` are the run's summed token sources (#4493). A source left out is
+ * written as null, which reads as not measured, never as zero.
  */
 export async function writeRunTotals(
   tx: Tx,
   record: RunTotalsRecord,
   rolledUpAt: Date,
+  sources?: RunTokenSources,
 ): Promise<void> {
   const values = {
     orgId: record.orgId,
@@ -765,6 +855,11 @@ export async function writeRunTotals(
         : record.productiveRatio.toFixed(8),
     advancedSteps: record.advancedSteps,
     unproductiveSteps: record.unproductiveSteps,
+    // Rebuilt from the frames with the rest of the row, so a rebuild that
+    // finds a source no longer measured writes null over the old sum.
+    toolDefinitionTokens: storedSource(sources?.toolDefinitionTokens),
+    contextFrameTokens: storedSource(sources?.contextFrameTokens),
+    steeringTokens: storedSource(sources?.steeringTokens),
     rolledUpAt,
   };
   // A person's acceptance is another lane's column: a first insert carries
@@ -891,14 +986,22 @@ export async function rebuildRunTotals(
       calls,
       book: await deps.loadPriceBook(runPriceSlice(source.meta.orgId, calls)),
     }));
-  const [{ calls: modelCalls, book }, toolCalls, carried, verdict, workerId] =
-    await Promise.all([
-      pricedCalls,
-      deps.readToolCalls(source),
-      deps.readCarried(publicId),
-      deps.readVerdict(scope, publicId),
-      deps.readWitnessedRun(scope, publicId),
-    ]);
+  const [
+    { calls: modelCalls, book },
+    toolCalls,
+    carried,
+    verdict,
+    workerId,
+  ] = await Promise.all([
+    pricedCalls,
+    deps.readToolCalls(source),
+    deps.readCarried(publicId),
+    deps.readVerdict(scope, publicId),
+    deps.readWitnessedRun(scope, publicId),
+  ]);
+  // Summed from the frames the row prices, in the same read, so a call a
+  // live run adds mid-rebuild counts in both or in neither.
+  const sources = sumTokenSources(modelCalls);
   // A witness run is a run of its own whose cost belongs to the worker's
   // operator (spec §8.5 "Stamping"), so its row names that operator, and is
   // charged back to the worker's cost center for the same reason.
@@ -918,7 +1021,7 @@ export async function rebuildRunTotals(
     book,
     carried: { verdict, accepted: carried?.accepted ?? null },
   });
-  await deps.write(record, deps.now());
+  await deps.write(record, deps.now(), sources);
   return record;
 }
 

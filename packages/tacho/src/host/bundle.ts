@@ -12,10 +12,10 @@ import { createPublicKey, verify } from "node:crypto";
 import { posix, win32 } from "node:path";
 import { jcs, type JsonValue } from "../digest";
 import { classifyTool } from "../claude-code/tools";
-import type { BuiltinAction } from "../policy/builtins";
-import { evaluateHookCall } from "../policy/hook";
+import { BUILTIN_TOOLS, builtinActionFor, type BuiltinAction } from "../policy/builtins";
+import { evaluateHookCall, isOxagenTool, mcpActionFor } from "../policy/hook";
 import type { CedarRuntime } from "../policy/runtime";
-import type { DenyGeneration, PolicyBundle } from "../wire";
+import type { CedarBundle, DenyGeneration, PolicyBundle } from "../wire";
 import { keyIdForPublicKey } from "./key-id";
 
 export type PolicyDecisionValue = "allow" | "deny" | "ask" | "defer";
@@ -868,14 +868,28 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
     );
   }
 
-  // 2. Freshness.
+  // 2. Freshness. A stale bundle may lack a newer forbid, so it lets through
+  // only what cannot change anything. When the steering record decides tools
+  // with Cedar, the signed manifest must also class the call as a read: the
+  // name heuristic reads an MCP tool named `get_and_delete` as a lookup.
   const stale = isStale(
     bundle,
     input.latestDenyGeneration,
     input.now,
     input.mandateConfirmedAt,
   );
-  if (stale && !readOnly) {
+  const staleSafe =
+    readOnly &&
+    (bundle.cedar === undefined ||
+      input.cedar === undefined ||
+      isOxagenTool(toolName) ||
+      cedarReadOnly(
+        bundle.cedar,
+        toolName,
+        input.cedar.harness,
+        input.cedar.action,
+      ));
+  if (stale && !staleSafe) {
     if (!input.controlReachable) {
       return deny(
         "bundle_stale",
@@ -920,7 +934,7 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
   // here, after the deny rules and before any ask or allow rule, and a call
   // whose deciding forbids all carry @decision("require_approval") asks.
   // Cedar's allow means only that no policy objects: it answers last, below.
-  const cedar = decideWithCedar(input, readOnly);
+  const cedar = decideWithCedar(input);
   if (cedar !== undefined && cedar.evaluated !== "allow") {
     return {
       ...cedar,
@@ -1019,20 +1033,44 @@ function ruleNames(reasons: string[]): Pick<Evaluation, "rule" | "rules"> {
 }
 
 /**
+ * Whether the signed Cedar bundle classes a call as a read, for a host that
+ * cannot run Cedar. The tool's name must not decide it: an MCP tool named
+ * `get_and_delete` looks like a read to the name heuristic and may delete.
+ * An imported tool is a read when the signed manifest says its side effect
+ * is `read`. A direct MCP tool the workspace did not import is decided as the
+ * shell, so it is never a read. A built-in takes its class from the built-in
+ * table, and a harness tool the table does not map is the shell.
+ */
+function cedarReadOnly(
+  cedarBundle: CedarBundle,
+  toolName: string,
+  harness: string,
+  action: BuiltinAction | undefined,
+): boolean {
+  const mcpAction = action === undefined ? mcpActionFor(toolName) : undefined;
+  if (mcpAction !== undefined) {
+    const tool = Object.hasOwn(cedarBundle.tools, mcpAction)
+      ? cedarBundle.tools[mcpAction]
+      : undefined;
+    return tool?.side_effect === "read";
+  }
+  return BUILTIN_TOOLS[action ?? builtinActionFor(harness, toolName)].side_effect === "read";
+}
+
+/**
  * Cedar's answer for a call, or `undefined` when Cedar does not decide it:
  * the bundle carries no Cedar policies, the caller passed no Cedar input, or
  * the tool is one of Oxagen's own, which the kernel decides. A host without
  * the evaluator, or with a different Cedar version from the one that
- * validated the policies, cannot decide. It denies every tool that changes
- * anything and leaves reads to the permission rules.
+ * validated the policies, cannot decide. It denies every tool the signed
+ * bundle does not class as a read, and leaves reads to the permission rules.
  */
-function decideWithCedar(
-  input: EvaluationInput,
-  readOnly: boolean,
-): CedarOutcome | undefined {
+function decideWithCedar(input: EvaluationInput): CedarOutcome | undefined {
   const cedarBundle = input.bundle.cedar;
   if (cedarBundle === undefined || input.cedar === undefined) return undefined;
+  if (isOxagenTool(input.toolName)) return undefined;
   const { runtime, harness, agent, skill, action, harness_tool } = input.cedar;
+  const readOnly = cedarReadOnly(cedarBundle, input.toolName, harness, action);
   if (runtime === null) {
     if (readOnly) return undefined;
     return {

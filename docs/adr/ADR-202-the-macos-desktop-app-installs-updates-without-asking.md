@@ -173,7 +173,8 @@ Recorded here, not built:
 ## Consequences
 
 - No update reaches anyone until a `desktop-v*` release publishes
-  `latest.json` to `desktop-latest`. On 2026-09-26 none has.
+  `latest.json` to `desktop-latest`. desktop-v2.1.2 was the first, at
+  05:03 UTC on 2026-09-27. Its feed lists all four targets.
 - A Mac with automatic updates on runs a release within about an hour of the
   feed moving, plus one restart.
 - A standard account with the app in `/Applications` cannot write that

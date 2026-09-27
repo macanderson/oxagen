@@ -82,6 +82,7 @@ describe("parseNotes", () => {
     );
     expect(notes?.body.startsWith("## What changed")).toBe(true);
     expect(notes?.body).toContain("Configuration tab");
+    expect(notes?.source).toBe("model");
   });
 
   it("tolerates a code fence and case, and refuses anything else", () => {
@@ -100,6 +101,7 @@ describe("the prose gate", () => {
     const hits = proseHits({
       summary: "A seamless release — really!",
       body: "## What changed\n\n- Very robust now.",
+      source: "model",
     });
     expect(hits.join("\n")).toMatch(/em dash/);
     expect(hits.join("\n")).toMatch(/avoid: seamless/);
@@ -134,6 +136,7 @@ describe("fallbackNotes", () => {
       "Version 2.1.2 carries 2 changes since v2.1.1. The list below is the commit log; a written summary was not available for this release.",
     );
     expect(notes.body).toBe("## What changed\n\n- fix: a, b\n- feat: wow.");
+    expect(notes.source).toBe("commit-log");
     expect(proseHits(notes)).toEqual([]);
   });
 
@@ -197,7 +200,7 @@ describe("what gets written", () => {
     const quoted = releasePageMdx({
       version: "1.0.0",
       date: "d",
-      notes: { summary: 'Says "hi"', body: notes.body },
+      notes: { ...notes, summary: 'Says "hi"' },
     });
     expect(quoted).toContain("description: \"Says 'hi'\"");
   });
