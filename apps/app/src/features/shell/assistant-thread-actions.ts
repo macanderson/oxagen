@@ -64,6 +64,9 @@ export async function openAssistantSession(
   conversationId: string,
 ): Promise<ActionResult<AssistantThread>> {
   const ctx = await requireViewer(org, ws);
-  const { conversations } = dataSource();
-  return readToActionResult(await conversations.byId(ctx, conversationId));
+  // Called through `dataSource()` rather than a destructured port: INV-17's
+  // caller check reads only `….conversations.byId(…)`.
+  return readToActionResult(
+    await dataSource().conversations.byId(ctx, conversationId),
+  );
 }
