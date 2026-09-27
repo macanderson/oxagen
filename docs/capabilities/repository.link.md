@@ -49,7 +49,7 @@ One code repository can be linked to many workspaces, in the same organization o
    - The file is missing: the steering PR creates it with this one entry.
    - The file reads as `workspace/v1`: the steering PR appends the entry.
    - The file names another schema, or names `workspace/v1` and does not read against it: `conflict: workspace_toml_unreadable`. The handler does not overwrite a file it cannot read.
-4. It opens the steering PR from `workspace/link-<owner>-<name>`. A second call for the same repository reuses the branch and the open PR.
+4. It opens the steering PR from `workspace/link-<owner>-<name>-<hash>`. A second call for the same repository reuses the branch and the open PR.
 
 When the steering PR merges, the push to the production branch triggers the steering sync. The sync compares the new `workspace.toml` with the one it last synced. An entry that appears gets a head. An entry that goes away loses its head. Running the sync again at the same commit changes nothing.
 

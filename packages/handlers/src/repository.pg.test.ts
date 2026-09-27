@@ -617,7 +617,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     expect(opened.slice(openedBefore)).toEqual([
       {
         steeringRepo: steeringRepoOf(alphaId).fullName,
-        head: "workspace/link-acme-shared",
+        head: "workspace/link-acme-shared-0a48b2c1",
         number: pullRequest.number,
       },
     ]);
@@ -734,7 +734,7 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     expect(opened.slice(-1)).toEqual([
       {
         steeringRepo: steeringRepoOf(alphaId).fullName,
-        head: "workspace/unlink-acme-shared",
+        head: "workspace/unlink-acme-shared-0a48b2c1",
         number: unlinkPullRequest.number,
       },
     ]);

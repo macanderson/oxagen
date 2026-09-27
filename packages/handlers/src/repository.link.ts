@@ -20,8 +20,8 @@
 //      - it names another schema, or names workspace/v1 and does not read
 //        against it: `conflict: workspace_toml_unreadable`. The handler
 //        will not overwrite a file it cannot read.
-//   4. The steering PR, from `workspace/link-<owner>-<name>`. A second call for
-//      the same repository reuses the branch and the open PR.
+//   4. The steering PR, from `workspace/link-<owner>-<name>-<hash>`. A second
+//      call for the same repository reuses the branch and the open PR.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen";
 import {

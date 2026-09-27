@@ -5,6 +5,7 @@
 // production branch, the file lands on it, and only then does the handler
 // look for an open PR, so a reused PR always carries this change. A second
 // call for the same repository reuses the branch and the PR.
+import { createHash } from "node:crypto";
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import type { SteeringPullRequest } from "@oxagen/oxagen/contracts/repository.link";
 import { WORKSPACE_TOML_PATH } from "@oxagen/oxagen/steering-repo/paths";
@@ -64,12 +65,24 @@ export async function openSteeringPullRequest(
  * The branch a link or an unlink steering PR uses. A change to workspace.toml
  * takes the `workspace/` prefix. One branch per repository and direction, so
  * a second call reuses the first call's PR.
+ *
+ * The readable part cannot tell `acme-corp/docs` from `acme/corp-docs`, so
+ * the branch ends with a hash of the exact reference. Two repositories that
+ * share a branch would share a PR, and the second write would drop the first
+ * repository's entry. The hash also keeps the name a ref git accepts: a name
+ * ending in `.` or `.lock` no longer ends the branch, and runs of dots
+ * collapse, because git refuses `..` in a ref.
  */
 export function workspaceTomlBranch(
   action: "link" | "unlink",
   owner: string,
   name: string,
 ): string {
-  const slug = `${owner}-${name}`.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
-  return `workspace/${action}-${slug}`;
+  const ref = `${owner}/${name}`.toLowerCase();
+  const slug = `${owner}-${name}`
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/\.{2,}/g, ".");
+  const hash = createHash("sha256").update(ref).digest("hex").slice(0, 8);
+  return `workspace/${action}-${slug}-${hash}`;
 }

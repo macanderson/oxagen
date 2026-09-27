@@ -51,13 +51,13 @@ checkout cannot name a workspace.
    write runs (`repository.link.write.ts`): the installation, whether the
    installation can see the repository, another workspace's steering claim,
    and this workspace's heads. Then it opens a steering PR from
-   `workspace/link-<owner>-<name>` that adds the entry, and answers
+   `workspace/link-<owner>-<name>-<hash>` that adds the entry, and answers
    `status: "proposed"`. When the file already lists the repository, it
    answers `status: "listed"` and opens nothing. A second call reuses the
    branch and the open PR. The handler writes no head.
 5. **`unlink_repository` follows the file.** When `workspace.toml` lists the
    repository, the handler opens a steering PR from
-   `workspace/unlink-<owner>-<name>` that removes the entry, and the head
+   `workspace/unlink-<owner>-<name>-<hash>` that removes the entry, and the head
    stays until that PR merges. A head the file does not list predates the
    steering record, so the handler deletes it at once and answers
    `status: "unlinked"`. The steering head cannot be unlinked.

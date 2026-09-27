@@ -97,7 +97,7 @@ const STEERING: SteeringRepository = {
 
 /** How workspace.toml lists `REPO`: lowercase, host first. */
 const REF = "github.com/acme/docs";
-const BRANCH = "workspace/link-acme-docs";
+const BRANCH = "workspace/link-acme-docs-a9799a26";
 const PR_URL = "https://github.com/acme/steering/pull/12";
 const NAMES = { organization: "a-intel", workspace: "core-platform" };
 
@@ -415,7 +415,7 @@ describe("link_repository: workspace.toml", () => {
 });
 
 describe("link_repository: the steering PR", () => {
-  it("opens the steering PR from workspace/link-<owner>-<name> into the production branch", async () => {
+  it("opens the steering PR from workspace/link-<owner>-<name>-<hash> into the production branch", async () => {
     const { run, steering } = handler(workspaceToml("github.com/acme/other"));
 
     const out = await run(INPUT, makeCTX());

@@ -40,7 +40,7 @@ The steering repository is never removed by this write. A workspace always has o
 | `fullName` | string | `owner/name` of the repository |
 | `status` | `"unlinked"` or `"proposed"` | `unlinked`: the head is gone. `proposed`: a steering PR removes the entry, and the head goes when it merges. |
 | `unlinkedAt` | string or null | RFC 3339 when `status` is `unlinked`, null while a steering PR is open |
-| `steeringPullRequest` | object or null | `{ number, url, reused }` for the steering PR from `workspace/unlink-<owner>-<name>`, or null when `status` is `unlinked` |
+| `steeringPullRequest` | object or null | `{ number, url, reused }` for the steering PR from `workspace/unlink-<owner>-<name>-<hash>`, or null when `status` is `unlinked` |
 
 ## Refusals
 

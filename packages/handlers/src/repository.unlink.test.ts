@@ -67,7 +67,7 @@ const LINKED_HEAD = {
 };
 
 const REF = "github.com/acme/docs";
-const BRANCH = "workspace/unlink-acme-docs";
+const BRANCH = "workspace/unlink-acme-docs-a9799a26";
 const OPENED_URL = "https://github.com/acme/rules/pull/42";
 
 /** A workspace/v1 file that lists `repositories` in order. */

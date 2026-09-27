@@ -11,8 +11,9 @@
 //   3. workspace.toml on the steering repository's production branch decides
 //      the path:
 //      - it lists the repository: a steering PR removes the entry, from
-//        `workspace/unlink-<owner>-<name>`. The head stays until that PR merges
-//        and the steering sync reads the new file. `status: proposed`.
+//        `workspace/unlink-<owner>-<name>-<hash>`. The head stays until that
+//        PR merges and the steering sync reads the new file.
+//        `status: proposed`.
 //      - it does not list it, is missing, or names another schema: the link
 //        predates the steering record, so nothing there would remove it. The
 //        head is deleted now, under the workspace's repository lock.
