@@ -379,7 +379,7 @@ export interface ApprovalRuleInvalidationDetail {
 }
 
 export interface ApprovalToolChangeEvidence {
-  consequenceTags: readonly string[];
+  impacts: readonly string[];
   measures: unknown;
   classification: unknown;
 }

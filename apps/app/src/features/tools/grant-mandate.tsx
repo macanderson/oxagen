@@ -25,7 +25,7 @@ import {
   CONSEQUENCE_OTHER_MAX,
   MEASURE_NAME_MAX,
   PURPOSE_MAX,
-  STARTER_CONSEQUENCE_TAGS,
+  STARTER_IMPACTS,
   UNIT_MAX,
   listOf,
   type MandateRow,
@@ -50,10 +50,10 @@ const TESTID = "grant-mandate";
 
 const PERIODS = ["daily", "weekly", "monthly"] as const;
 
-const CONSEQUENCE_TAGS = STARTER_CONSEQUENCE_TAGS;
+const IMPACTS = STARTER_IMPACTS;
 
 /** The tags `alwaysHumanFor` offers; a tag the workspace added can be typed. */
-const TAG_OPTIONS = CONSEQUENCE_TAGS.map((tag) => ({ value: tag, label: tag }));
+const TAG_OPTIONS = IMPACTS.map((tag) => ({ value: tag, label: tag }));
 
 /** An agent the picker offers: a retired identity is never one (see `grantableAgents` in tools.tsx). */
 type GrantableAgent = { id: string; slug: string; name: string };
@@ -195,10 +195,10 @@ function prefillOf(request: MandateRow, timeZone: string | undefined): Prefill {
   const calls = request.authority.find((entry) => entry.measure === "calls");
   const target = request.targets[0];
   const threshold = request.approval.humanAbove[0];
-  const starter: readonly string[] = CONSEQUENCE_TAGS;
+  const starter: readonly string[] = IMPACTS;
   return {
-    tags: request.consequenceTags.filter((tag) => starter.includes(tag)),
-    otherTags: request.consequenceTags
+    tags: request.impacts.filter((tag) => starter.includes(tag)),
+    otherTags: request.impacts
       .filter((tag) => !starter.includes(tag))
       .join(", "),
     measure: counted?.measure ?? "",
@@ -283,8 +283,8 @@ export function GrantMandate({
       const result = await grantMandate(at.org, at.ws, {
         agentId: request === null ? text(form, "agentId") : request.agentId,
         requestId: request === null ? null : request.id,
-        consequenceTags: [
-          ...chosen(form, "consequenceTags"),
+        impacts: [
+          ...chosen(form, "impacts"),
           text(form, "consequenceOther"),
         ]
           .filter((tag) => tag !== "")
@@ -399,9 +399,9 @@ export function GrantMandate({
             </Field>
           )}
           <fieldset className="flex flex-col gap-1 text-sm text-foreground">
-            <legend>{label("consequenceTags")}</legend>
+            <legend>{label("impacts")}</legend>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-              {CONSEQUENCE_TAGS.map((tag) => (
+              {IMPACTS.map((tag) => (
                 <label
                   key={tag}
                   htmlFor={id(`consequence-${tag}`)}
@@ -410,7 +410,7 @@ export function GrantMandate({
                   <input
                     id={id(`consequence-${tag}`)}
                     type="checkbox"
-                    name="consequenceTags"
+                    name="impacts"
                     value={tag}
                     defaultChecked={prefill.tags.includes(tag)}
                   />
@@ -432,7 +432,7 @@ export function GrantMandate({
               className={inputBase}
             />
             <p className="text-xs text-muted-foreground">
-              {t("consequenceTagsHint")}
+              {t("impactsHint")}
             </p>
           </fieldset>
           <Field id={id("tools")} label={label("tools")} hint={t("toolsHint")}>

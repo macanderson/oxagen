@@ -7,7 +7,7 @@ import { buildContext } from "../context";
 export const schema = {
   ...killSwitchSet.input.shape,
   target: killSwitchSet.input.shape.target.describe(
-    "What to stop: { kind: tool_version | tool_server | connection | agent | operator | workspace | org | class, id } — the public id, or the consequence tag for a class",
+    "What to stop: { kind: tool_version | tool_server | connection | agent | operator | workspace | org | class, id } — the public id, or the impact for a class",
   ),
   on: killSwitchSet.input.shape.on.describe(
     "true to flip the switch on (deny), false to clear it",

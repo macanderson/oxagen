@@ -57,15 +57,15 @@ const stripe = (): VersionRow =>
 const github = (): VersionRow =>
   nth(toolVersionListOutput().items, 1, "GitHub version");
 
-/** A classified version carrying exactly these consequence tags. */
-function tagged(id: string, consequenceTags: string[]): VersionRow {
+/** A classified version carrying exactly these impacts. */
+function tagged(id: string, impacts: string[]): VersionRow {
   const base = stripe();
   if (base.classification === null) throw new Error("fixture lost its class");
   return {
     ...base,
     id,
     toolId: id.replace("tlv", "tol"),
-    classification: { ...base.classification, consequenceTags },
+    classification: { ...base.classification, impacts },
   };
 }
 

@@ -2,12 +2,12 @@
 // under tools/servers/ (steering-repo-spec, Finding tools; mcp-studio-spec,
 // Compile).
 //
-// Publish reads each server's server.toml, tools.toml, and tools.lock.json,
-// and MCP Studio's compile() turns them into the server's manifest entry. A
-// server that does not compile is left out with a warning, and the version
-// still publishes: the steering PR's compile check is the gate, and a server
-// that fails here must not hold back every record. Until lane M4 builds
-// compile(), every server is left out this way and the manifest is null.
+// Publish reads each server's server.toml, tools.toml, and tools.lock.json.
+// MCP Studio's compile() turns them into the server's effective tools, and
+// toManifestServer() pins each tool to its lock entry. A server that does not
+// compile, or whose lock no longer matches what compiles, is left out with a
+// warning, and the version still publishes. The steering PR's compile check is
+// the gate, and a server that fails here must not hold back every record.
 import {
   compile,
   NotBuiltError,

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import {
-  consequenceTagSchema,
+  impactSchema,
   measureDeclarationsSchema,
 } from "../mandates/schemas";
 
@@ -73,8 +73,8 @@ export const toolDeclarationPublish = registerCapability({
       // Safety classification (MC spec §6.9 part 1, ADR-059 decision 6):
       // describes the tool and decides nothing by itself. The mandate gate
       // reads it from the active version.
-      consequence_tags: z
-        .array(consequenceTagSchema)
+      impacts: z
+        .array(impactSchema)
         .max(16)
         .optional()
         .default([])

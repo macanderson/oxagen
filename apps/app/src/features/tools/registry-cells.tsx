@@ -80,7 +80,7 @@ export function GateDot({ version }: { version: ToolVersion }) {
   );
 }
 
-/** The consequence tags the classification records: the registry's category today. */
+/** The impacts the classification records: the registry's category today. */
 export function CategoryCell({ version }: { version: ToolVersion }) {
   const t = useTranslations("tools.registry");
   if (version.classification === null) {
@@ -88,12 +88,12 @@ export function CategoryCell({ version }: { version: ToolVersion }) {
       <span className="text-xs text-muted-foreground">{t("unclassified")}</span>
     );
   }
-  if (version.classification.consequenceTags.length === 0) {
+  if (version.classification.impacts.length === 0) {
     return <span className="text-xs text-muted-foreground">{t("noTags")}</span>;
   }
   return (
     <span className="flex flex-wrap gap-1">
-      {version.classification.consequenceTags.map((tag) => (
+      {version.classification.impacts.map((tag) => (
         <Chip key={tag}>{tag}</Chip>
       ))}
     </span>
@@ -109,7 +109,7 @@ export function CategoryCell({ version }: { version: ToolVersion }) {
  */
 export function FinancialCell({ version }: { version: ToolVersion }) {
   const financial =
-    version.classification?.consequenceTags.includes(MONEY_TAG) === true;
+    version.classification?.impacts.includes(MONEY_TAG) === true;
   return financial ? (
     <StateDot tone="deny" name="financial" label={MONEY_TAG} />
   ) : (

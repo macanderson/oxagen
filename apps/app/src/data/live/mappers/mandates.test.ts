@@ -44,7 +44,7 @@ describe("toMandateList", () => {
       requestedBy: "usr_marcusbell",
       grantedBy: "usr_priyanatarajan",
       roleAtGrant: "Billing",
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       tools: ["stripe__create_payment@*"],
       purpose: "monthly infrastructure invoices, PO-4471",
       status: "active",

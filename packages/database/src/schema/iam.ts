@@ -441,7 +441,7 @@ export const emergencyDenies = iamSchema.table(
     // Kill switches (MC spec §6.11, #2958): a deny written by set_kill_switch
     // names what it stops — target_kind is one of tool_version, tool_server,
     // connection, agent, operator, workspace, org, class — and target_id the
-    // public id (or the consequence tag for a class). A row with no target is
+    // public id (or the impact for a class). A row with no target is
     // an operator deny written by another path. flipped_by_user_id is who
     // flipped it on and reason why; the clearing user lands on
     // updated_by_id and why on cleared_reason.
