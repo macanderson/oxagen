@@ -159,7 +159,7 @@ describe("inMergeQueue", () => {
     expect(mergeQueueKey({ ...REPO, fullName: "A-Intel/Platform" })).toBe(
       "github:a-intel/platform",
     );
-    expect(mergeQueueKey({ ...REPO, provider: "gitlab", projectId: "4471" })).toBe(
+    expect(mergeQueueKey({ ...REPO, provider: "gitlab", projectId: "4242" })).toBe(
       "gitlab:a-intel/platform",
     );
   });
