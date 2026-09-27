@@ -998,6 +998,17 @@ export function createSteeringGitLab(
           a.user ? [{ user: a.user, at: Date.parse(a.approved_at ?? "") }] : [],
         );
         if (approvals.length === 0) return [];
+        // GitLab documents `approved_at` on every approval. One without a
+        // readable time cannot be placed on a head, so the merge refuses and
+        // names it, owners included, as it does for a project that keeps
+        // approvals on push. Dropping it would report a real review as absent.
+        const undated = approvals.find(({ at }) => Number.isNaN(at));
+        if (undated)
+          throw new HandlerError({
+            code: "conflict",
+            reason: "approvals_not_head_bound",
+            message: `GitLab did not report when ${undated.user.username} approved !${number}, so Oxagen cannot tell which head the approval covers. Oxagen needs a GitLab version that reports approved_at on each merge request approval.`,
+          });
         // The head is read after the approvals. A push between the two reads
         // makes a head the merge queue never produced, so no approval of it
         // counts.
@@ -1013,8 +1024,8 @@ export function createSteeringGitLab(
         // the queue's own rebase does. So each approval is placed on the
         // newest diff version GitLab recorded strictly before it. A version
         // recorded at the same instant does not count as seen. An approval
-        // with no time, or older than every version, is dropped. None is
-        // given a null head, because the merge reads null as "any head".
+        // older than every version is dropped. None is given a null head,
+        // because the merge reads null as "any head".
         const versions = await diffVersions(rest, path, number);
         if (!versions.some((v) => v.sha === head))
           throw new HandlerError({
@@ -1023,7 +1034,6 @@ export function createSteeringGitLab(
             message: `GitLab has not recorded ${head} as a version of !${number} yet, so no approval can be placed on it. Merge again in a minute.`,
           });
         const placed = approvals.flatMap(({ user, at }) => {
-          // A missing time parses to NaN, which no version precedes.
           const seen = versions.find((v) => v.at < at);
           return seen ? [{ user, commitSha: seen.sha }] : [];
         });

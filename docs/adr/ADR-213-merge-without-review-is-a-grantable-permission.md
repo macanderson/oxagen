@@ -41,8 +41,9 @@ it would make every member a holder on most plans.
 3. **A holder runs the `merge_context_pr` handler with the approval gate
    lifted.** Every other gate stays: the checks, the governance mode's
    reviewer rule, repository health, the pinned head, and on GitLab the
-   "Reset approvals on push" setting (`approvals_not_head_bound`). An
-   approval that already stands at the head is recorded as that approval.
+   "Reset approvals on push" setting and an `approved_at` time on every
+   approval (`approvals_not_head_bound`). An approval that already stands at
+   the head is recorded as that approval.
    The `steering.published` event carries `merge_pr_without_review`.
 4. **`merge_context_pr` asks the same question in production.**
    `productionMergeSeams` binds `holdsMergeWithoutReview` to

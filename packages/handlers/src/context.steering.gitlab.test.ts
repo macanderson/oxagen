@@ -1007,14 +1007,35 @@ describe("the GitLab seam's merge-queue calls", () => {
     });
   });
 
-  it("drops an approval with no time, and one older than every version", async () => {
+  it("drops an approval older than every version", async () => {
     const { api, seam, repo, mr } = await onBranch();
     api.approvedBy = [
-      { id: 501, username: "reviewer", at: null },
       { id: 777, username: "stranger", at: "2026-09-23T09:00:00.000Z" },
     ];
     await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([]);
   });
+
+  it.each([
+    ["no time", null],
+    ["an unreadable time", "yesterday"],
+  ])(
+    "refuses approvals_not_head_bound for an approval with %s, before reading the versions",
+    async (_label, at) => {
+      const { api, seam, repo, mr } = await onBranch();
+      api.approvedBy = [
+        { id: 777, username: "stranger" },
+        { id: 501, username: "reviewer", at },
+      ];
+      await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+        code: "conflict",
+        reason: "approvals_not_head_bound",
+        message: expect.stringContaining(
+          `GitLab did not report when reviewer approved !${mr.number}`,
+        ),
+      });
+      expect(api.restCalls).not.toContain("GET /merge_requests/1/versions");
+    },
+  );
 
   it("answers no approvals without reading the diff versions", async () => {
     const { api, seam, repo, mr } = await onBranch();

@@ -588,7 +588,7 @@
         "repositoryMissing": "This workspace has no connected repository to open the pull request on.",
         "checksNotPassed": "Merge is blocked until every check passes.",
         "approvalRequired": "Merge needs an approval from a workspace member other than the author. An owner, or a member allowed to merge without review, can merge without one. Nothing was merged.",
-        "approvalsNotHeadBound": "GitLab keeps approvals on this project after a push, so Oxagen cannot tell which commit a reviewer approved. Nothing was merged. Turn on Reset approvals on push in the project's approval settings.",
+        "approvalsNotHeadBound": "Oxagen cannot tell which commit a reviewer approved on this GitLab project. Nothing was merged. Turn on Reset approvals on push in the project's approval settings. The setting needs GitLab Premium, and Oxagen needs a GitLab version that reports when each approval was given.",
         "headMoved": "The pull request changed after the checks ran. Run the checks again.",
         "baseMoved": "The pull request no longer targets the production branch. Nothing was merged.",
         "githubRefused": "GitHub refused the change. Nothing was published.",
