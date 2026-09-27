@@ -17,11 +17,9 @@ import {
 } from "@oxagen/database";
 import {
   readModelCallFrames,
-  readRunTokenSources,
   readTachoToolCallFrames,
   type FrameRunRef,
   type ModelCallFrameRow,
-  type RunTokenSources,
 } from "@oxagen/telemetry";
 import {
   MODEL_CALL_EVENT_TYPES,
@@ -418,7 +416,60 @@ async function readLedgerToolCalls(args: {
   }));
 }
 
-function toFrame(row: ModelCallFrameRow): ModelCallFrame {
+/**
+ * What model calls spent on tool definitions, context frames, and steering
+ * (spec §12.6, #4493): one call's measurements, or their sums over a run.
+ * Null means absent, never zero.
+ */
+export interface RunTokenSources {
+  toolDefinitionTokens: number | null;
+  contextFrameTokens: number | null;
+  steeringTokens: number | null;
+}
+
+/** A run with no measured call: every source absent. */
+export const NO_RUN_TOKEN_SOURCES: RunTokenSources = Object.freeze({
+  toolDefinitionTokens: null,
+  contextFrameTokens: null,
+  steeringTokens: null,
+});
+
+/**
+ * A model call as the rollup reads it: the frame it prices, and the token
+ * sources the recorder measured on that same frame. The sources ride the
+ * priced frames rather than a read of their own, so the stored sums cover
+ * exactly the calls the row prices, even while a live run adds calls
+ * between two reads. A call with no `sources` measured none.
+ */
+export type PricedModelCall = ModelCallFrame & {
+  readonly sources?: RunTokenSources;
+};
+
+const SOURCE_MEMBERS = [
+  "toolDefinitionTokens",
+  "contextFrameTokens",
+  "steeringTokens",
+] as const;
+
+/**
+ * The three sources summed over a run's priced calls. A sum is null when no
+ * call carried that source, and 0 when the calls that carried it measured 0.
+ */
+export function sumTokenSources(
+  calls: readonly PricedModelCall[],
+): RunTokenSources {
+  const sums: RunTokenSources = { ...NO_RUN_TOKEN_SOURCES };
+  for (const call of calls) {
+    for (const member of SOURCE_MEMBERS) {
+      const tokens = call.sources?.[member];
+      if (tokens === null || tokens === undefined) continue;
+      sums[member] = (sums[member] ?? 0) + tokens;
+    }
+  }
+  return sums;
+}
+
+function toFrame(row: ModelCallFrameRow): PricedModelCall {
   return {
     at: new Date(row.at),
     model: row.model,
@@ -435,6 +486,11 @@ function toFrame(row: ModelCallFrameRow): ModelCallFrame {
     reportedCostMicros:
       row.reportedCostMicros === null ? null : BigInt(row.reportedCostMicros),
     basis: row.basis,
+    sources: {
+      toolDefinitionTokens: row.toolDefinitionTokens,
+      contextFrameTokens: row.contextFrameTokens,
+      steeringTokens: row.steeringTokens,
+    },
   };
 }
 
@@ -444,11 +500,12 @@ type RollupScope = { orgId: string; workspaceId: string };
 
 export interface RunRollupDeps {
   loadRunSource: (publicId: string) => Promise<RunSource | null>;
+  /** The run's priced model calls, each with the token sources it carried. */
   readModelCalls: (args: {
     orgId: string;
     workspaceId: string;
     run: FrameRunRef;
-  }) => Promise<ModelCallFrame[]>;
+  }) => Promise<PricedModelCall[]>;
   readToolCalls: (source: RunSource) => Promise<ToolCallFrame[]>;
   /**
    * The rows that could price the run's models over its span, never the
@@ -470,15 +527,6 @@ export interface RunRollupDeps {
     scope: RollupScope,
     runId: string,
   ) => Promise<string | null>;
-  /**
-   * What the run's priced model calls spent on tool definitions, context
-   * frames, and steering (#4493). Each is null when no call measured it.
-   */
-  readTokenSources: (args: {
-    orgId: string;
-    workspaceId: string;
-    run: FrameRunRef;
-  }) => Promise<RunTokenSources>;
   write: (
     record: RunTotalsRecord,
     rolledUpAt: Date,
@@ -872,7 +920,6 @@ const productionRunRollupDeps: RunRollupDeps = {
     withSystemDb((tx) => readRunVerdict(tx, scope, runId)),
   readWitnessedRun: (scope, runId) =>
     withSystemDb((tx) => readWitnessedRunId(tx, scope, runId)),
-  readTokenSources: (args) => readRunTokenSources(args),
   write: upsertRunTotals,
   now: () => new Date(),
 };
@@ -935,15 +982,16 @@ export async function rebuildRunTotals(
     carried,
     verdict,
     workerId,
-    sources,
   ] = await Promise.all([
     pricedCalls,
     deps.readToolCalls(source),
     deps.readCarried(publicId),
     deps.readVerdict(scope, publicId),
     deps.readWitnessedRun(scope, publicId),
-    deps.readTokenSources({ ...scope, run: source.frames }),
   ]);
+  // Summed from the frames the row prices, in the same read, so a call a
+  // live run adds mid-rebuild counts in both or in neither.
+  const sources = sumTokenSources(modelCalls);
   // A witness run is a run of its own whose cost belongs to the worker's
   // operator (spec §8.5 "Stamping"), so its row names that operator, and is
   // charged back to the worker's cost center for the same reason.

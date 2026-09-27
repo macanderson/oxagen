@@ -6,12 +6,10 @@
  * Postgres in packages/handlers/src/lib/proof.pg.test.ts.
  */
 import { schema } from "@oxagen/database";
-import type { RunTokenSources } from "@oxagen/telemetry";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it, vi } from "vitest";
 import {
   ZERO_TOKENS,
-  type ModelCallFrame,
   type RunMeta,
   type RunTotalsRecord,
   type ToolCallFrame,
@@ -23,7 +21,9 @@ import {
   reviveBreakdown,
   serializeBreakdown,
   toolCallName,
+  type PricedModelCall,
   type RunRollupDeps,
+  type RunTokenSources,
 } from "./cost-rollup-store";
 
 const SCOPE = {
@@ -57,9 +57,8 @@ function deps(over: {
   runs: Record<string, RunMeta>;
   verdict?: RunTotalsRecord["verdict"];
   witnessed?: Record<string, string>;
-  modelCalls?: ModelCallFrame[];
+  modelCalls?: PricedModelCall[];
   toolCalls?: ToolCallFrame[];
-  sources?: RunTokenSources;
 }) {
   const written: RunTotalsRecord[] = [];
   const sourcesWritten: (RunTokenSources | undefined)[] = [];
@@ -90,14 +89,6 @@ function deps(over: {
       scopes.push(scope);
       return over.witnessed?.[runId] ?? null;
     }),
-    readTokenSources: vi.fn(
-      async () =>
-        over.sources ?? {
-          toolDefinitionTokens: null,
-          contextFrameTokens: null,
-          steeringTokens: null,
-        },
-    ),
     write: async (record, _rolledUpAt, sources) => {
       written.push(record);
       sourcesWritten.push(sources);
@@ -205,30 +196,68 @@ describe("rebuildRunTotals", () => {
 });
 
 describe("the token sources a rollup writes (#4493)", () => {
-  it("reads the run's sources in its own scope and writes them beside the record", async () => {
-    const { d, sourcesWritten } = deps({
+  /** A priced call at `at`, with the sources the recorder measured on it. */
+  const measured = (
+    at: string,
+    sources?: RunTokenSources,
+  ): PricedModelCall => ({
+    at: new Date(at),
+    model: "claude-sonnet-5",
+    provider: "anthropic",
+    tokens: { ...ZERO_TOKENS, input_uncached: 10, output: 5 },
+    reportedCostMicros: null,
+    basis: "client_attested",
+    ...(sources === undefined ? {} : { sources }),
+  });
+
+  it("sums the sources over the same calls the row prices", async () => {
+    const { d, written, sourcesWritten } = deps({
       runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
-      sources: {
-        toolDefinitionTokens: 12_400,
-        contextFrameTokens: null,
-        steeringTokens: 900,
-      },
+      modelCalls: [
+        measured("2026-09-15T09:01:00.000Z", {
+          toolDefinitionTokens: 12_000,
+          contextFrameTokens: null,
+          steeringTokens: 500,
+        }),
+        measured("2026-09-15T09:02:00.000Z", {
+          toolDefinitionTokens: 400,
+          contextFrameTokens: null,
+          steeringTokens: 400,
+        }),
+        // A call the proxy did not see carries no sources and adds nothing.
+        measured("2026-09-15T09:03:00.000Z"),
+      ],
     });
     await rebuildRunTotals(WORKER, d);
-    expect(d.readTokenSources).toHaveBeenCalledWith({
-      ...SCOPE,
-      run: {
-        kind: "tacho",
-        rootSessionUuid: WORKER,
-        sessionUuids: [WORKER],
-      },
-    });
+    // The sums and the call count come from one read, so they agree.
+    expect(written[0]?.modelCalls).toBe(3);
     // A source no call measured stays null beside the two that were.
     expect(sourcesWritten).toEqual([
       {
         toolDefinitionTokens: 12_400,
         contextFrameTokens: null,
         steeringTokens: 900,
+      },
+    ]);
+  });
+
+  it("sums a measured zero as zero, apart from an unmeasured source", async () => {
+    const { d, sourcesWritten } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+      modelCalls: [
+        measured("2026-09-15T09:01:00.000Z", {
+          toolDefinitionTokens: 0,
+          contextFrameTokens: null,
+          steeringTokens: null,
+        }),
+      ],
+    });
+    await rebuildRunTotals(WORKER, d);
+    expect(sourcesWritten).toEqual([
+      {
+        toolDefinitionTokens: 0,
+        contextFrameTokens: null,
+        steeringTokens: null,
       },
     ]);
   });
@@ -247,17 +276,18 @@ describe("the token sources a rollup writes (#4493)", () => {
     ]);
   });
 
-  it("writes nothing when the sources cannot be read, so the job retries", async () => {
-    const { d, written } = deps({
+  it("writes nothing when the calls cannot be read, so the job retries", async () => {
+    const { d, written, sourcesWritten } = deps({
       runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
     });
-    d.readTokenSources = async () => {
+    d.readModelCalls = async () => {
       throw new Error("clickhouse down");
     };
     await expect(rebuildRunTotals(WORKER, d)).rejects.toThrow(
       "clickhouse down",
     );
     expect(written).toHaveLength(0);
+    expect(sourcesWritten).toHaveLength(0);
   });
 });
 
@@ -392,7 +422,7 @@ describe("the price rows a rollup loads (#4202)", () => {
   // The rollup loaded the whole price book, 28,246 rows in production, for
   // every run it priced, and four or five of those steps at once ran the API
   // out of heap. It must ask only for the run's models over the run's span.
-  const call = (at: string, model: string): ModelCallFrame => ({
+  const call = (at: string, model: string): PricedModelCall => ({
     at: new Date(at),
     model,
     provider: "anthropic",

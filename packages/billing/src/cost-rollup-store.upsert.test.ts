@@ -9,10 +9,9 @@
  * `upsertRunTotals`, is in cost-rollup-store.pg.test.ts.
  */
 import type { Tx } from "@oxagen/database";
-import type { RunTokenSources } from "@oxagen/telemetry";
 import { describe, expect, it } from "vitest";
 import type { RunTotalsRecord } from "./cost-rollup";
-import { writeRunTotals } from "./cost-rollup-store";
+import { type RunTokenSources, writeRunTotals } from "./cost-rollup-store";
 
 type Written = {
   values: Record<string, unknown>;
