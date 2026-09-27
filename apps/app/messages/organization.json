@@ -82,26 +82,31 @@
       "fields": {
         "name": "Name",
         "mainRepo": "Main repository",
-        "mainRepoHint": "owner/name on GitHub. This is where the workspace keeps .oxagen/, and it cannot change here later. The Oxagen GitHub App has to be installed on that owner and reachable from a GitHub account this organization has connected. Oxagen finds the installation from the owner.",
         "productionBranch": "Production branch",
         "productionBranchHint": "The only branch whose commits update the code graph. A re-approval on the Repositories page moves it.",
-        "productionBranchCreateHint": "The only branch whose commits update the code graph. If GitHub’s default changes later you are prompted; the binding never moves on its own.",
         "retention": "Retention mode",
         "retentionHint": "content_exact keeps prompts and tool bodies in full. digest_only lowers the replay grade. No contract records the mode per workspace yet.",
         "mainRepoFixed": "Changing main is an org-owner action with approval.",
         "namespace": "Namespace",
-        "namespaceHint": "Immutable. It is in every agent key in this workspace.",
-        "namespaceCreateHint": "2 to 6 characters, immutable, and part of every agent key in the workspace. Oxagen derives it from the name when it creates the workspace, and Create a workspace takes none yet (#3933).",
-        "mainRepoSelectHint": "Required at creation. A workspace without a main repo cannot exist.",
-        "mainRepoChoose": "Choose a repository",
-        "branchDefault": "{branch} — GitHub’s default, suggested",
-        "branchPick": "Choose the repository first"
+        "namespaceHint": "Immutable. It is in every agent key in this workspace."
       },
       "createWorkspace": {
         "open": "Create a workspace",
         "title": "Create a workspace",
         "confirm": "Create",
-        "pending": "Creating"
+        "pending": "Creating",
+        "done": {
+          "close": "Done",
+          "workspace": "Workspace",
+          "steeringRepo": "Steering repo",
+          "openRepositories": "Open repositories",
+          "status": {
+            "provisioning": "Oxagen is creating the private repository now.",
+            "ready": "The private repository is created and bound to this workspace.",
+            "failed": "A step stopped before the repository was ready.",
+            "blocked": "An organization owner has to act first, such as authorizing Oxagen again."
+          }
+        }
       },
       "editWorkspace": {
         "open": "Edit",
@@ -132,8 +137,7 @@
           "openPr": "Open pull request #{number}",
           "refused": "The name was saved. The governance mode was not changed: {reason}",
           "close": "Done"
-        },
-        "createHint": "Set it from Edit once the workspace exists. Create a workspace takes no governance mode yet."
+        }
       },
       "archiveWorkspace": {
         "open": "Archive",
@@ -182,12 +186,6 @@
         "targetNotMember": "This person is no longer a member of this organization.",
         "roleNotGrantable": "That role is not one this organization grants. Nothing was changed.",
         "insufficientRole": "Your organization role does not allow this change. Nothing was changed.",
-        "githubNotAuthorized": "This organization has not connected GitHub, so the repository cannot be reached. Connect GitHub from a workspace’s settings, then try again.",
-        "installationUnreachable": "The Oxagen GitHub App is not installed on that owner, or the connected GitHub account cannot reach it. Install the App on the owner, then try again.",
-        "repositoryNotInstalled": "The App’s installation on that owner cannot see that repository. Grant it access on GitHub, then try again.",
-        "mainRepoClaimed": "Another workspace already steers by that repository. A repository is the main repository of one workspace.",
-        "repositoryLinkedElsewhere": "Another workspace has linked that repository, so it cannot be a main repository. A main repository holds the .oxagen/ tree, and a linked one receives another workspace’s Context PRs.",
-        "repositoryUnparsable": "That is not a repository name GitHub accepts. Write it as owner/name.",
         "ssoProviderNotFound": "This identity provider no longer exists. Reload the page.",
         "ssoRequiresEnterprise": "Single sign-on is part of the Enterprise plan. Upgrade the organization to set it up.",
         "scimTokenExists": "The organization already has a SCIM token. Rotate it to get a new one.",
@@ -426,6 +424,9 @@
         "permissions": "Permissions",
         "selected": "{count} selected",
         "readOnly": "read-only",
+        "mergeWithoutReview": "Merge without review",
+        "mergeWithoutReviewHint": "Merge a steering PR without an approval. The required check still has to pass.",
+        "mergeWithoutReviewUnavailable": "Available when Oxagen registers merge_pr_without_review.",
         "holders": "{count, plural, one {Held by # principal} other {Held by # principals}}. Saving changes their effective permission at the next call, and nothing in flight is cut.",
         "governed": "Saving is a governed action. It passes IAM and writes an audit record. org.* is the only wildcard and only org.owner carries it.",
         "create": "Create role",

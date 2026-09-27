@@ -1,5 +1,5 @@
 // The onboarding gate's own shell (mockup `regShell` in onboard mode): the
-// brandmark, the signed-in email and Cancel on the top bar, the three-step rail
+// brandmark, the signed-in email and Cancel on the top bar, the five-step rail
 // labelled "Onboarding", the step's body, and the gate's caption. There is no
 // sidebar and no topbar, so no approvals button or drawer: the operator console
 // does not exist for this organization until its first frame arrives.
@@ -15,7 +15,13 @@ import type { SafePath } from "@/shared/safe-path";
 import { buttonSecondary } from "@/ui/control-styles";
 import { SafeLink } from "@/ui/navigation";
 
-const GATE_STEPS = ["organization", "wrap", "run"] as const;
+const GATE_STEPS = [
+  "organization",
+  "connect",
+  "workspace",
+  "wrap",
+  "run",
+] as const;
 export type GateStepId = (typeof GATE_STEPS)[number];
 
 const railItem =

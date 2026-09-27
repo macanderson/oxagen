@@ -41,9 +41,6 @@ vi.mock("./actions", () => ({
   setOrgAvatar: vi.fn(),
   setWorkspaceAvatar: vi.fn(),
 }));
-vi.mock("./workspace-reads", () => ({
-  readRepositoryChoices: vi.fn(),
-}));
 
 const { WorkspacesTab } = await import("./workspaces");
 type Facts = NonNullable<Parameters<typeof WorkspacesTab>[0]["facts"]>;
@@ -129,7 +126,6 @@ async function renderTab(
         org="acme"
         workspaces={value}
         facts={facts}
-        enterable={["core-platform"]}
       />
     </IntlProvider>,
   );

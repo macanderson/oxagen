@@ -261,14 +261,11 @@ export function WorkspacesTab({
   org,
   workspaces,
   facts = new Map(),
-  enterable = [],
 }: {
   org: string;
   workspaces: WorkspaceList;
   /** What was read inside each workspace the viewer may enter. */
   facts?: FactsBySlug;
-  /** The live workspaces the viewer may enter, for Create a workspace. */
-  enterable?: readonly string[];
 }) {
   const t = useTranslations("organization.workspaces");
   const columns = [
@@ -326,7 +323,7 @@ export function WorkspacesTab({
             <CopyId value={workspaces.orgId} label={t("copyOrgId")} />
           </div>
         </div>
-        <CreateWorkspace org={org} enterable={enterable} />
+        <CreateWorkspace org={org} />
       </div>
       <ListTable
         label={t("tableLabel")}

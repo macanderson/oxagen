@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-// The gate over Fleet: the rail while the gate is open, the provisional banner
-// while no main repo is bound, and the first-run banner once the ingest
-// recorded the run that opened the gate. An organization that predates the
-// gate, a bound workspace and a refused read each draw nothing, with an axe
-// check in every state.
+// The gate over Fleet: the rail while the gate is open, and the first-run
+// banner once the ingest recorded the run that opened the gate. There is no
+// provisional banner: a workspace is created with its steering repo (#4518).
+// An organization that predates the gate and a refused read each draw
+// nothing, with an axe check in every state.
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -17,9 +17,8 @@ import {
   runsPage,
 } from "./onboarding.builders";
 
-const { router, bindMainRepository } = vi.hoisted(() => ({
+const { router } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
-  bindMainRepository: vi.fn(),
 }));
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
@@ -27,7 +26,6 @@ vi.mock("next/link", () => ({
   ),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-vi.mock("./actions", () => ({ bindMainRepository }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
@@ -73,94 +71,23 @@ describe("OnboardingGate", () => {
     expect(calls.state).toEqual([[ctx]]);
   });
 
-  it("draws the three gate steps with the recorded one current", async () => {
+  it("draws the five gate steps with the recorded one current", async () => {
     await renderGate({ state: { ok: true, value: onboardingGate() } });
     expect(railSteps()).toEqual([
       { step: "organization", state: "done" },
+      { step: "connect", state: "done" },
+      { step: "workspace", state: "done" },
       { step: "wrap", state: "current" },
       { step: "run", state: "todo" },
     ]);
   });
 
-  it("names the provisional window and offers the repository the host reported", async () => {
+  // The provisional window is gone (#4518). A gate row that still carries one
+  // from before draws no banner and offers no bind.
+  it("draws no provisional banner while the gate is open (negative)", async () => {
     await renderGate({ state: { ok: true, value: onboardingGate() } });
-    const banner = screen.getByTestId("onboarding-provisional");
-    // The design names the workspace and ends the title with a period, and
-    // its pill is the denied tone.
-    expect(banner).toHaveTextContent(
-      "Core platform is provisional until Sep 29, 2026.",
-    );
-    expect(banner.querySelector("[data-banner-badge]")).toHaveAttribute(
-      "data-banner-badge",
-      "denied",
-    );
-    expect(banner).toHaveTextContent(
-      "Steering, context records and agent definitions stay off",
-    );
-    expect(screen.getByTestId("bind-main-repo")).toHaveTextContent(
-      "Bind acme/platform",
-    );
-  });
-
-  it("binds the reported repository from the banner itself", async () => {
-    // The banner used to link at the register flow's run step with no agent in
-    // the URL, where that step answers "No agent to wrap yet" — so the only
-    // Bind control on Fleet could never bind and the workspace stayed
-    // provisional until the window expired. The action takes the workspace and
-    // the repository, both of which the banner holds.
-    bindMainRepository.mockResolvedValue({
-      ok: true,
-      value: {
-        fullName: "acme/platform",
-        defaultRef: "main",
-        boundAt: "2026-09-15T14:10:00.000Z",
-        provisionalClosed: true,
-      },
-    });
-    const user = userEvent.setup();
-    await renderGate({ state: { ok: true, value: onboardingGate() } });
-    await user.click(
-      screen.getByRole("button", { name: "Bind acme/platform" }),
-    );
-    expect(bindMainRepository).toHaveBeenCalledWith("acme", "core-platform", {
-      owner: "acme",
-      name: "platform",
-    });
-    expect(router.refresh).toHaveBeenCalled();
-  });
-
-  it("names a refused bind and leaves the banner standing (negative)", async () => {
-    bindMainRepository.mockResolvedValue({
-      ok: false,
-      reason: "conflict",
-      code: "github_not_connected",
-    });
-    const user = userEvent.setup();
-    await renderGate({ state: { ok: true, value: onboardingGate() } });
-    await user.click(
-      screen.getByRole("button", { name: "Bind acme/platform" }),
-    );
-    expect(screen.getByTestId("bind-main-repo-failure")).toBeInTheDocument();
-    expect(screen.getByTestId("onboarding-provisional")).toBeInTheDocument();
-    expect(router.refresh).not.toHaveBeenCalled();
-  });
-
-  it("says a workspace with no reported remote has nothing to bind here (negative)", async () => {
-    await renderGate({
-      state: {
-        ok: true,
-        value: onboardingGate({
-          provisional: {
-            until: "2026-09-29T00:00:00.000Z",
-            mainRepoBoundAt: null,
-            detectedRepository: null,
-          },
-        }),
-      },
-    });
-    expect(screen.getByTestId("onboarding-provisional")).toHaveTextContent(
-      "No enrolled host has reported a GitHub remote",
-    );
+    expect(screen.getByTestId("onboarding-rail")).toBeInTheDocument();
+    expect(screen.queryByTestId("onboarding-provisional")).toBeNull();
     expect(screen.queryByTestId("bind-main-repo")).toBeNull();
   });
 
@@ -202,7 +129,6 @@ describe("OnboardingGate", () => {
       ]),
     });
     expect(screen.queryByTestId("onboarding-first-run")).toBeNull();
-    expect(screen.getByTestId("onboarding-provisional")).toBeInTheDocument();
   });
 
   it("draws no first-run banner when the runs read failed (negative)", async () => {
@@ -213,18 +139,14 @@ describe("OnboardingGate", () => {
     expect(screen.queryByTestId("onboarding-first-run")).toBeNull();
   });
 
-  it("draws nothing once the gate is open and a main repo is bound (negative)", async () => {
+  it("draws nothing once the gate is open and the first run is not on this page (negative)", async () => {
     const { container } = await renderGate({
       state: {
         ok: true,
         value: onboardingGate({
           step: "unlocked",
           firstRunId: "tse_first",
-          provisional: {
-            until: "2026-09-29T00:00:00.000Z",
-            mainRepoBoundAt: "2026-09-16T00:00:00.000Z",
-            detectedRepository: null,
-          },
+          workspace: { id: "wrk_other", slug: "other-workspace" },
         }),
       },
     });

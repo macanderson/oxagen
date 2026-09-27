@@ -38,7 +38,6 @@ vi.mock("./actions", () => ({
   registerAgent: vi.fn(),
   issueEnrollmentToken: vi.fn(),
   advanceOnboarding: vi.fn(),
-  bindMainRepository: vi.fn(),
 }));
 vi.mock("./register-actions", () => ({
   readRegisterPlace,
