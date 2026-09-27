@@ -873,7 +873,23 @@
                       "server",
                       "version"
                     ],
-                    "additionalProperties": false
+                    "additionalProperties": false,
+                    "allOf": [
+                      {
+                        "oneOf": [
+                          {
+                            "required": [
+                              "url"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "package"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
                   },
                   {
                     "type": "object",

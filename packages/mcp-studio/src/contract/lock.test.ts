@@ -145,13 +145,20 @@ describe("MCP lock sources", () => {
     expect(issues(mcpLockSourceSchema, { ...registry, package: pinnedPackage })).toStrictEqual([]);
   });
 
-  // Pinned as it stands: the contract does not yet require exactly one of url
-  // and package on a registry source. PR #4416 lists this as a follow-up.
-  it("accepts a registry entry with neither or both of url and package", () => {
-    expect(issues(mcpLockSourceSchema, registry)).toStrictEqual([]);
-    expect(
-      issues(mcpLockSourceSchema, { ...registry, url: "https://api.githubcopilot.com/mcp/", package: pinnedPackage }),
-    ).toStrictEqual([]);
+  it("refuses a registry entry that names neither its endpoint nor its package", () => {
+    expect(issues(mcpLockSourceSchema, registry)).toStrictEqual([
+      { path: "url", message: "url or package is required: the catalog entry names one of them" },
+    ]);
+  });
+
+  it("refuses a registry entry that names both its endpoint and its package", () => {
+    const both = { ...registry, url: "https://api.githubcopilot.com/mcp/", package: pinnedPackage };
+    expect(issues(mcpLockSourceSchema, both)).toStrictEqual([
+      {
+        path: "package",
+        message: "package is not allowed when url is set: a catalog entry names an endpoint or a package",
+      },
+    ]);
   });
 
   it("requires a local server's pinned package", () => {

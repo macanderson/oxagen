@@ -46,17 +46,42 @@ export const remoteLockSourceSchema = z
   })
   .strict();
 
-export const registryLockSourceSchema = z
-  .object({
-    type: z.literal("registry"),
-    registry: httpUrlSchema,
-    server: z.string().min(3).max(200),
-    version: z.string().min(1).max(64),
-    url: httpUrlSchema.optional().describe("The endpoint the catalog entry named, for a remote entry."),
-    package: lockPackageSchema.optional().describe("The package the catalog entry named, for a local entry."),
-    server_version: serverVersionSchema,
-  })
-  .strict();
+/**
+ * A catalog entry names either an endpoint or a package, so its lock source
+ * records exactly one of url and package.
+ */
+const urlOrPackage: CustomCheck = {
+  issues(value) {
+    if (value.url !== undefined && value.package !== undefined) {
+      return [
+        {
+          path: ["package"],
+          message: "package is not allowed when url is set: a catalog entry names an endpoint or a package",
+        },
+      ];
+    }
+    if (value.url === undefined && value.package === undefined) {
+      return [{ path: ["url"], message: "url or package is required: the catalog entry names one of them" }];
+    }
+    return [];
+  },
+  json: { oneOf: [{ required: ["url"] }, { required: ["package"] }] },
+};
+
+export const registryLockSourceSchema = withChecks(
+  z
+    .object({
+      type: z.literal("registry"),
+      registry: httpUrlSchema,
+      server: z.string().min(3).max(200),
+      version: z.string().min(1).max(64),
+      url: httpUrlSchema.optional().describe("The endpoint the catalog entry named, for a remote entry."),
+      package: lockPackageSchema.optional().describe("The package the catalog entry named, for a local entry."),
+      server_version: serverVersionSchema,
+    })
+    .strict(),
+  [urlOrPackage],
+);
 
 export const localLockSourceSchema = z
   .object({
