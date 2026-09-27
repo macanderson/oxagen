@@ -651,6 +651,11 @@ export class FakeGitHub implements SteeringGitHub {
   repository: SteeringRepository | null = REPO;
   /** What GitHub stamps `merged_at` with; the harness shares its clock. */
   clock: () => Date = () => new Date();
+  /**
+   * The sha a merge of PR `number` gets. A test whose merge commit reaches a
+   * schema that takes only a full object id, such as bundle/v1, sets one.
+   */
+  mergeShaFor: (number: number) => string = (number) => `merge${number}`;
   private prNumber = 518;
   private commitNo = 0;
 
@@ -1006,7 +1011,7 @@ export class FakeGitHub implements SteeringGitHub {
       return this.refused("GitHub API error 409: Head branch was modified");
     }
     this.merges.push(args);
-    const mergeSha = `merge${args.number}`;
+    const mergeSha = this.mergeShaFor(args.number);
     for (const [key, content] of this.files)
       if (key.startsWith(`${head}:`))
         this.files.set(`${mergeSha}:${key.slice(head.length + 1)}`, content);
