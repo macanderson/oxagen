@@ -28,6 +28,7 @@ vi.mock("./logger", () => ({
 }));
 
 import {
+  type AnswerInterjectionDeps,
   answerCommand,
   assertAnswerShape,
   createAnswerInterjectionHandler,
@@ -286,6 +287,7 @@ function handlerFor(
     now?: Date;
     paths?: InterjectionPathCalls;
     resolve?: (scope: unknown, body: InterjectBody) => Promise<string | null>;
+    createdWorkspace?: AnswerInterjectionDeps["createdWorkspace"];
   } = {},
 ) {
   let receipts = 0;
@@ -294,6 +296,7 @@ function handlerFor(
     now: () => opts.now ?? NOW,
     mintReceipt: () => `rcp_test${++receipts}`,
     paths: opts.paths ?? fakePaths(),
+    createdWorkspace: opts.createdWorkspace ?? (async () => null),
     resolveRepository: opts.resolve ?? (async () => null),
   });
 }
@@ -630,6 +633,98 @@ describe("answer_interjection: the create path", () => {
       bindingId: CREATED.mainRepo.bindingId,
       workspaceId: CREATED.publicId,
     });
+  });
+
+  it("takes the workspace an earlier try made when a retry finds its slug taken", async () => {
+    const store = new MemoryStore([repoQuestion()]);
+    const paths = fakePaths();
+    paths.create.mockRejectedValueOnce(
+      new HandlerError({
+        code: "conflict",
+        reason: "slug_taken",
+        message: "the slug api is taken in this organization",
+      }),
+    );
+    const createdWorkspace = vi.fn<AnswerInterjectionDeps["createdWorkspace"]>(
+      async () => ({
+        publicId: CREATED.publicId,
+        slug: "api",
+        bindingId: CREATED.mainRepo.bindingId,
+        fullName: "acme/api",
+      }),
+    );
+    const out = await handlerFor(store, { paths, createdWorkspace })(
+      pathInput({ path: "create", create: { name: "API", slug: "api" } }),
+      OPERATOR,
+    );
+    expect(createdWorkspace).toHaveBeenCalledWith(
+      { orgId: ORG, workspaceId: WORKSPACE },
+      {
+        interjectionRowId: store.questions[0]?.id,
+        slug: "api",
+        fullName: "acme/api",
+      },
+    );
+    expect(out).toMatchObject({
+      path: "create",
+      repository: {
+        bindingId: CREATED.mainRepo.bindingId,
+        fullName: "acme/api",
+      },
+      workspace: { publicId: CREATED.publicId, slug: "api" },
+    });
+    expect(store.questions[0]).toMatchObject({
+      path: "create",
+      answer: "Created the workspace api for acme/api, with skills off.",
+    });
+    expect(store.queued[0]?.payload).toMatchObject({
+      interjection: {
+        path: "create",
+        binding_id: CREATED.mainRepo.bindingId,
+        workspace_id: CREATED.publicId,
+        workspace_slug: "api",
+      },
+    });
+  });
+
+  it("passes slug_taken through when no workspace from this question holds the slug, and records nothing (negative)", async () => {
+    const store = new MemoryStore([repoQuestion()]);
+    const paths = fakePaths();
+    paths.create.mockRejectedValueOnce(
+      new HandlerError({ code: "conflict", reason: "slug_taken" }),
+    );
+    const createdWorkspace = vi.fn<AnswerInterjectionDeps["createdWorkspace"]>(
+      async () => null,
+    );
+    await expect(
+      handlerFor(store, { paths, createdWorkspace })(
+        pathInput({ path: "create", create: { name: "API", slug: "api" } }),
+        OPERATOR,
+      ),
+    ).rejects.toSatisfy(conflict("slug_taken"));
+    expect(createdWorkspace).toHaveBeenCalledTimes(1);
+    expect(store.questions[0]?.answeredAt).toBeNull();
+    expect(store.queued).toEqual([]);
+    expect(store.audits).toEqual([]);
+  });
+
+  it("passes any other create refusal through without looking for a workspace (negative)", async () => {
+    const store = new MemoryStore([repoQuestion()]);
+    const paths = fakePaths();
+    paths.create.mockRejectedValueOnce(
+      new HandlerError({ code: "conflict", reason: "main_repo_claimed" }),
+    );
+    const createdWorkspace = vi.fn<AnswerInterjectionDeps["createdWorkspace"]>(
+      async () => null,
+    );
+    await expect(
+      handlerFor(store, { paths, createdWorkspace })(
+        pathInput({ path: "create", create: { name: "API", slug: "api" } }),
+        OPERATOR,
+      ),
+    ).rejects.toSatisfy(conflict("main_repo_claimed"));
+    expect(createdWorkspace).not.toHaveBeenCalled();
+    expect(store.questions[0]?.answeredAt).toBeNull();
   });
 });
 

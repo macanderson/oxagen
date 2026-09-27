@@ -35,7 +35,10 @@
 // A link or create that succeeded before step 4 found the question closed
 // stays done: the refusal says the question was answered, and the repository
 // stays bound. A link retried after it bound the repository takes the
-// existing binding as its own.
+// existing binding as its own. A create retried after it made the workspace
+// meets `slug_taken`. It takes the org's workspace under that slug as its own
+// when the workspace was made after the question was raised and its main
+// repository is the questioned one.
 //
 // A free-text answer's command expires with the question: past it, the run
 // has carried on without an answer and a late message would arrive out of
@@ -85,7 +88,8 @@ import {
   interjectBodySchema,
   interjectionAnswerPayloadSchema,
 } from "@oxagen/tacho";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { getPrincipalAttribution, runInTenantScope } from "@oxagen/tenancy";
+import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { resolveInterjectionRepository } from "./lib/interjection-repository";
 import { logger } from "./logger";
 import { type RunScope, runScope } from "./run.list";
@@ -191,6 +195,15 @@ export type AnswerInterjectionDeps = {
   /** A new receipt id (`rcp_…`). */
   mintReceipt: () => string;
   paths: InterjectionPathCalls;
+  /**
+   * The workspace an earlier try of this create path made: the org's
+   * workspace under `slug`, made at or after the question was raised, whose
+   * main repository is `fullName`. Null when there is none.
+   */
+  createdWorkspace(
+    scope: RunScope,
+    args: { interjectionRowId: string; slug: string; fullName: string },
+  ): Promise<CreatedWorkspace | null>;
   /** `owner/name` of the repository a frame's remote digest names, or null. */
   resolveRepository(
     scope: RunScope,
@@ -299,6 +312,14 @@ type PathOutcome = {
   workspaceSlug: string;
 };
 
+/** A workspace the create path made, and its main repository's binding. */
+export type CreatedWorkspace = {
+  publicId: string;
+  slug: string;
+  bindingId: string;
+  fullName: string;
+};
+
 /** What the agent is told once the question is settled. */
 export const INTERJECTION_LINK_TEXT = (slug: string): string =>
   `A person linked this repository to the workspace ${slug}. The session goes on under that workspace.`;
@@ -344,27 +365,48 @@ async function linkPath(
 async function createPath(
   deps: AnswerInterjectionDeps,
   ctx: CheckedContext,
+  scope: RunScope,
+  row: LockedInterjection,
   create: { name: string; slug: string },
   fullName: string,
 ): Promise<PathOutcome> {
-  const created = await deps.paths.create(
-    {
-      name: create.name,
-      slug: create.slug,
-      mainRepo: { provider: "github", ...splitFullName(fullName) },
-    },
-    nestedContext(ctx),
-  );
-  return {
-    path: "create",
-    text: INTERJECTION_CREATE_TEXT(created.slug),
-    answer: `Created the workspace ${created.slug} for ${created.mainRepo.fullName}, with skills off.`,
-    repository: {
+  let made: CreatedWorkspace;
+  try {
+    const created = await deps.paths.create(
+      {
+        name: create.name,
+        slug: create.slug,
+        mainRepo: { provider: "github", ...splitFullName(fullName) },
+      },
+      nestedContext(ctx),
+    );
+    made = {
+      publicId: created.publicId,
+      slug: created.slug,
       bindingId: created.mainRepo.bindingId,
       fullName: created.mainRepo.fullName,
-    },
-    workspace: { publicId: created.publicId, slug: created.slug },
-    workspaceSlug: created.slug,
+    };
+  } catch (err) {
+    // A retry after a create that made the workspace and then failed to
+    // record the answer. A workspace made under this slug after the question
+    // was raised, with the questioned repository as its main one, is this
+    // answer's.
+    if (!isHandlerError(err) || err.reason !== "slug_taken") throw err;
+    const existing = await deps.createdWorkspace(scope, {
+      interjectionRowId: row.id,
+      slug: create.slug,
+      fullName,
+    });
+    if (existing === null) throw err;
+    made = existing;
+  }
+  return {
+    path: "create",
+    text: INTERJECTION_CREATE_TEXT(made.slug),
+    answer: `Created the workspace ${made.slug} for ${made.fullName}, with skills off.`,
+    repository: { bindingId: made.bindingId, fullName: made.fullName },
+    workspace: { publicId: made.publicId, slug: made.slug },
+    workspaceSlug: made.slug,
   };
 }
 
@@ -439,7 +481,7 @@ async function takePath(
   if (fullName === null) throw unresolved();
   const outcome =
     input.path === "create" && input.create !== undefined
-      ? await createPath(deps, ctx, input.create, fullName)
+      ? await createPath(deps, ctx, scope, row, input.create, fullName)
       : await linkPath(deps, ctx, scope, body, fullName);
   return { outcome, resolvedRepository };
 }
@@ -788,6 +830,80 @@ export function postgresInterjectionAnswerStore(
   };
 }
 
+/**
+ * The workspace an earlier try of the create path made for this question.
+ * The workspace read runs in the question's scope, where every workspace in
+ * the org is readable. The head read runs in the new workspace's scope,
+ * because a binding head is readable only from its own workspace.
+ *
+ * The workspace must have been made at or after the question was raised, so
+ * a workspace that already held the slug is never claimed as this answer's.
+ */
+async function readCreatedWorkspace(
+  scope: RunScope,
+  args: { interjectionRowId: string; slug: string; fullName: string },
+): Promise<CreatedWorkspace | null> {
+  const ws = schema.workspaces;
+  const [workspace] = await withTenantDb((tx) =>
+    tx
+      .select({ id: ws.id, publicId: ws.publicId, slug: ws.slug })
+      .from(ws)
+      .innerJoin(
+        ij,
+        and(
+          eq(ij.id, args.interjectionRowId),
+          eq(ij.orgId, scope.orgId),
+          eq(ij.workspaceId, scope.workspaceId),
+        ),
+      )
+      .where(
+        and(
+          eq(ws.orgId, scope.orgId),
+          eq(ws.slug, args.slug),
+          gte(ws.createdAt, ij.raisedAt),
+        ),
+      )
+      .limit(1),
+  );
+  if (workspace === undefined) return null;
+  const heads = schema.repositoryBindingHeads;
+  const bindings = schema.repositoryBindings;
+  const [binding] = await runInTenantScope(
+    {
+      ...getPrincipalAttribution(),
+      orgId: scope.orgId,
+      workspaceId: workspace.id,
+    },
+    () =>
+      withTenantDb((tx) =>
+        tx
+          .select({
+            bindingId: bindings.publicId,
+            fullName: bindings.providerFullName,
+          })
+          .from(heads)
+          .innerJoin(bindings, eq(bindings.id, heads.currentBindingId))
+          .where(
+            and(
+              eq(heads.orgId, scope.orgId),
+              eq(heads.workspaceId, workspace.id),
+              eq(heads.provider, "github"),
+              eq(heads.role, "main"),
+              sql`lower(${bindings.providerFullName}) = lower(${args.fullName})`,
+            ),
+          )
+          .limit(1),
+      ),
+  );
+  if (binding === undefined) return null;
+  return {
+    publicId: workspace.publicId,
+    slug: workspace.slug,
+    bindingId: binding.bindingId,
+    fullName: binding.fullName,
+  };
+}
+
 export const agentInterjectionAnswerHandler = createAnswerInterjectionHandler({
   withStore: (fn) =>
     withTenantDb((tx) => fn(postgresInterjectionAnswerStore(tx))),
@@ -799,6 +915,7 @@ export const agentInterjectionAnswerHandler = createAnswerInterjectionHandler({
     create: async (input, ctx) =>
       (await invoke(workspaceCreate.name, input, ctx)) as WorkspaceCreateOutput,
   },
+  createdWorkspace: readCreatedWorkspace,
   resolveRepository: (scope, body) =>
     resolveInterjectionRepository(scope, body),
 });
