@@ -61,15 +61,21 @@ describe("get_operator_ranking contract", () => {
     const row = {
       ...named,
       operator: { kind: "pseudonym", pseudonym: "Operator 0A1B2C3D" },
+      unproductiveShare: null,
+      runs: null,
       topRuns: [],
     };
-    expect(
-      spendOperatorRanking.output.parse({
-        ...out,
-        pseudonyms: true,
-        operators: [row],
-      }).operators[0]?.operator,
-    ).toEqual({ kind: "pseudonym", pseudonym: "Operator 0A1B2C3D" });
+    const parsed = spendOperatorRanking.output.parse({
+      ...out,
+      pseudonyms: true,
+      operators: [row],
+    }).operators[0];
+    expect(parsed?.operator).toEqual({
+      kind: "pseudonym",
+      pseudonym: "Operator 0A1B2C3D",
+    });
+    expect(parsed?.runs).toBeNull();
+    expect(parsed?.unproductiveShare).toBeNull();
     expect(
       spendOperatorRanking.output.safeParse({
         ...out,

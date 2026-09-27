@@ -124,6 +124,7 @@ const findings = vi.fn<DataSource["spend"]["findings"]>();
 const findingEvidence = vi.fn<DataSource["spend"]["findingEvidence"]>();
 const priceBook = vi.fn<DataSource["spend"]["priceBook"]>();
 const unpricedModels = vi.fn<DataSource["spend"]["unpricedModels"]>();
+const operatorRanking = vi.fn<DataSource["spend"]["operatorRanking"]>();
 const source: DataSource = {
   runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
   conversations: { latest: vi.fn(), list: vi.fn(), byId: vi.fn() },
@@ -172,6 +173,7 @@ const source: DataSource = {
     fleet: vi.fn(),
     drill,
     waste,
+    operatorRanking,
     budgets,
     gatewayPolicy,
     findings,
@@ -399,6 +401,7 @@ beforeEach(() => {
   findingEvidence.mockReset();
   priceBook.mockReset();
   unpricedModels.mockReset();
+  operatorRanking.mockReset();
 });
 
 afterEach(async () => {

@@ -30,13 +30,14 @@ function runId(n: number): string {
   return `tse_${String(n).padStart(22, "0")}`;
 }
 
-/** One claimed frame. Detector 1 unless the test says otherwise. */
+/** One claimed frame. Detector 1 and USD unless the test says otherwise. */
 function claim(
   run: number,
   frame: string,
   operatorKey: string | null,
   micros: bigint,
   detector = 1,
+  currency = "USD",
 ): UnproductiveClaim {
   return {
     detector,
@@ -44,7 +45,7 @@ function claim(
     frameKey: frame,
     operatorKey,
     costMicros: micros,
-    currency: "USD",
+    currency,
   };
 }
 
@@ -172,6 +173,48 @@ describe("get_operator_ranking figures", () => {
     ]);
   });
 
+  it("gives no unproductive share when an operator's priced spend holds two currencies", async () => {
+    const out = await harness(claims, {
+      spend: [
+        { operatorKey: ANA, currency: "USD", micros: 6_000n },
+        { operatorKey: ANA, currency: "EUR", micros: 2_000n },
+        { operatorKey: BEN, currency: "EUR", micros: 500n },
+        { operatorKey: BEN, currency: "USD", micros: 1_900n },
+        { operatorKey: CY, currency: "USD", micros: 400n },
+      ],
+    }).handler({ period: PERIOD }, ctx());
+    expect(out.operators.map((o) => o.unproductiveShare)).toEqual([
+      null,
+      null,
+      0.25,
+    ]);
+  });
+
+  it("refuses a period whose claims hold two currencies", async () => {
+    const h = harness([
+      claim(1, "f1", ANA, 700n),
+      claim(2, "f1", BEN, 300n, 1, "EUR"),
+    ]);
+    const refusal = h.handler({ period: PERIOD }, ctx());
+    await expect(refusal).rejects.toMatchObject({
+      code: "conflict",
+      reason: "ranking_mixed_currency",
+    });
+    await expect(refusal).rejects.toThrow(/EUR and in USD/);
+    expect(h.deps.readOperatorSpend).not.toHaveBeenCalled();
+  });
+
+  it("labels every figure with the claims' currency", async () => {
+    const out = await harness([
+      claim(1, "f1", ANA, 700n, 1, "EUR"),
+      claim(2, "f1", null, 300n, 1, "EUR"),
+    ]).handler({ period: PERIOD }, ctx());
+    expect(out.unproductive).toEqual({ micros: "1000", currency: "EUR" });
+    expect(out.unattributed.unproductive.currency).toBe("EUR");
+    expect(out.operators[0]?.unproductive.currency).toBe("EUR");
+    expect(out.operators[0]?.topRuns[0]?.unproductive.currency).toBe("EUR");
+  });
+
   it("caps each operator's cited runs and keeps the full run count", async () => {
     const many = Array.from({ length: OPERATOR_RANKING_RUNS_MAX + 3 }, (_, i) =>
       claim(i + 1, "f1", ANA, BigInt(100 + i)),
@@ -235,10 +278,34 @@ describe("get_operator_ranking pseudonyms", () => {
       { kind: "pseudonym", pseudonym: operatorPseudonym(SALT, BEN) },
     ]);
     expect(out.operators.every((o) => o.topRuns.length === 0)).toBe(true);
-    expect(out.operators.map((o) => o.runs)).toEqual([1, 1]);
     expect(h.deps.readOperatorFacts).not.toHaveBeenCalled();
     expect(JSON.stringify(out)).not.toContain(ANA);
     expect(() => spendOperatorRanking.output.parse(out)).not.toThrow();
+  });
+
+  it("withholds the figures that match a pseudonym to named spend", async () => {
+    const h = harness(claims, {
+      policy,
+      spend: [{ operatorKey: ANA, currency: "USD", micros: 2_800n }],
+    });
+    const out = await h.handler({ period: PERIOD }, ctx());
+    expect(out.operators.map((o) => o.unproductiveShare)).toEqual([null, null]);
+    expect(out.operators.map((o) => o.runs)).toEqual([null, null]);
+    expect(h.deps.readOperatorSpend).not.toHaveBeenCalled();
+  });
+
+  it("keeps the unproductive figures and the ranks under pseudonyms", async () => {
+    const out = await harness(claims, { policy }).handler(
+      { period: PERIOD },
+      ctx(),
+    );
+    expect(out.operators.map((o) => o.rank)).toEqual([1, 2]);
+    expect(out.operators.map((o) => o.unproductive.micros)).toEqual([
+      "700",
+      "300",
+    ]);
+    expect(out.operators.map((o) => o.shareOfTotal)).toEqual([0.7, 0.3]);
+    expect(out.unproductive.micros).toBe("1000");
   });
 
   it("keeps one operator's pseudonym the same across reads and apart from another's", () => {

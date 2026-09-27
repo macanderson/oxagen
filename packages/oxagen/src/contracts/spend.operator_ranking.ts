@@ -9,7 +9,13 @@
  *
  * With the workspace's pseudonym setting on, a stable pseudonym replaces each
  * name and the answer carries no key, no facts, and no run ids, since a run
- * page names its operator. The figures stay.
+ * page names its operator. It also carries no unproductive share and no run
+ * count: `get_spend` names each operator beside priced spend and runs, and
+ * those two figures would match a pseudonym to a name. The unproductive
+ * figures and the ranks stay.
+ *
+ * A period whose claims hold two currencies is refused with `conflict`
+ * (`ranking_mixed_currency`), since the ranking sums one currency.
  */
 import { z } from "zod";
 import { registerCapability } from "../registry";
@@ -52,10 +58,14 @@ export const operatorRankingRowSchema = z
     unproductive: moneySchema,
     /** `unproductive` over the headline. */
     shareOfTotal: ratioSchema,
-    /** `unproductive` over this operator's priced spend in the period; null when nothing was priced. */
+    /**
+     * `unproductive` over this operator's priced spend in the period. Null
+     * when nothing was priced, when that spend holds another currency, or
+     * under pseudonyms.
+     */
     unproductiveShare: ratioSchema.nullable(),
-    /** Distinct runs with a claimed frame. */
-    runs: z.number().int().positive(),
+    /** Distinct runs with a claimed frame; null under pseudonyms. */
+    runs: z.number().int().positive().nullable(),
     /** The runs behind the figure, largest first; empty under pseudonyms. */
     topRuns: z
       .array(

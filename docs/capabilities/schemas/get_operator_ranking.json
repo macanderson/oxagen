@@ -264,8 +264,15 @@
               ]
             },
             "runs": {
-              "type": "integer",
-              "exclusiveMinimum": 0
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "topRuns": {
               "type": "array",

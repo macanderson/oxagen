@@ -11,6 +11,12 @@
 // Managers read it: an org Owner or Admin, or the workspace's Owner. With the
 // pseudonym setting on, a pseudonym replaces each name, and the answer drops
 // the key, the facts, and the run ids, since a run page names its operator.
+// It also drops the unproductive share and the run count: the share gives
+// back the operator's priced spend, and `get_spend` names each operator
+// beside that spend and its runs.
+//
+// A period whose claims hold two currencies is refused. `countClaims` sums
+// micros, and a sum of dollars and euros is no figure.
 import {
   countClaims,
   dayBounds,
@@ -19,7 +25,7 @@ import {
 } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import type { CapabilityHandler } from "@oxagen/oxagen";
+import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
 import type { OperatorFacts } from "@oxagen/oxagen/contracts/operator.shared";
 import {
   OPERATOR_RANKING_RUNS_MAX,
@@ -175,8 +181,16 @@ export function createOperatorRankingHandler(
       deps.readClaims(scope, window),
       deps.readPolicy(scope),
     ]);
+    const currencies = [...new Set(claims.map((c) => c.currency))].sort();
+    if (currencies.length > 1) {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "ranking_mixed_currency",
+        message: `The period holds unproductive spend priced in ${currencies.join(" and in ")}. The ranking sums one currency, so no ranking was built.`,
+      });
+    }
     const headline = countClaims(claims);
-    const currency = claims[0]?.currency ?? "USD";
+    const currency = currencies[0] ?? "USD";
     const money = (micros: bigint) => ({ micros: micros.toString(), currency });
     const runs = runsByOperator(claims);
     const pseudonyms = policy.pseudonyms && policy.salt !== null;
@@ -186,14 +200,29 @@ export function createOperatorRankingHandler(
     );
     const keys = named.map((o) => o.key);
     const [spend, facts] = await Promise.all([
-      deps.readOperatorSpend(scope, window, keys),
+      pseudonyms || keys.length === 0
+        ? Promise.resolve<OperatorSpend[]>([])
+        : deps.readOperatorSpend(scope, window, keys),
       pseudonyms || keys.length === 0
         ? Promise.resolve(new Map<string, OperatorFacts>())
         : deps.readOperatorFacts(scope, keys),
     ]);
-    const spendOf = new Map<string, bigint>();
-    for (const s of spend)
-      if (s.currency === currency) spendOf.set(s.operatorKey, s.micros);
+    // An operator whose priced spend holds another currency has no share: the
+    // part is in one currency and the whole would be in two.
+    const spendOf = new Map<string, bigint | null>();
+    for (const s of spend) {
+      const held = spendOf.get(s.operatorKey);
+      if (s.currency !== currency || held === null) {
+        spendOf.set(s.operatorKey, null);
+      } else {
+        spendOf.set(s.operatorKey, (held ?? 0n) + s.micros);
+      }
+    }
+
+    const shareOf = (micros: bigint, key: string): number | null => {
+      const whole = spendOf.get(key);
+      return whole === null || whole === undefined ? null : ratio(micros, whole);
+    };
 
     const operators = named.map((o, i): OperatorRankingRow => {
       const own = runs.get(o.key) ?? new Map<string, bigint>();
@@ -214,8 +243,8 @@ export function createOperatorRankingHandler(
           : { kind: "named", key: o.key, facts: facts.get(o.key) ?? null },
         unproductive: money(o.micros),
         shareOfTotal: ratio(o.micros, headline.totalMicros) ?? 0,
-        unproductiveShare: ratio(o.micros, spendOf.get(o.key) ?? 0n),
-        runs: own.size,
+        unproductiveShare: pseudonyms ? null : shareOf(o.micros, o.key),
+        runs: pseudonyms ? null : own.size,
         topRuns,
       };
     });

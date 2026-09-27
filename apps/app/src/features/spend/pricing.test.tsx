@@ -105,6 +105,7 @@ const source: DataSource = {
     fleet: vi.fn(),
     drill: vi.fn(),
     waste,
+    operatorRanking: vi.fn(),
     budgets,
     gatewayPolicy: vi.fn(),
     findings,
