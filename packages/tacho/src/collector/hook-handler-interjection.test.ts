@@ -605,6 +605,7 @@ describe("an answer from the control plane", () => {
     const { record, key } = await held(h);
     const heldQuestion = record.control.interjection;
     const handled = new HandledCommands();
+    // A link seals `repo.bound` only when the answer names the binding.
     const payload = {
       text: "Oxagen linked this repository to core.",
       interjection: {
@@ -613,6 +614,8 @@ describe("an answer from the control plane", () => {
         source: "person",
         receipt_id: "rcp_01a2b3",
         answered_by: "usr_0123abc",
+        binding_id: "rpb_77",
+        workspace_slug: "core",
       },
     };
     const deps = {

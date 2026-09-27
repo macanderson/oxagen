@@ -18,7 +18,10 @@ import {
 import type { DataSource } from "@/data/ports";
 import { readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
-import type { WsCtx } from "@/server/viewer";
+
+// The port names the context type, so this file does not import
+// `@/server/viewer`, which only `ports.ts` may do (the layer rule).
+type WsCtx = Parameters<DataSource["conversations"]["latest"]>[0];
 
 /** The newest messages a reopened thread shows: fifty turns. */
 const THREAD_MESSAGES = 100;
