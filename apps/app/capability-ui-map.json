@@ -1794,7 +1794,7 @@
     "create_runtime": {
       "route": "/[org]/[ws]/runtimes",
       "page": "apps/app/src/app/[org]/[ws]/runtimes/page.tsx",
-      "entry": "Runtimes › Add a runtime: name, slug and whether it requires the contained launcher, then on to registering its agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
+      "entry": "Runtimes › Add a runtime: name, slug, and whether it requires the contained launcher, then on to registering its agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
       "testid": "runtimes-add",
       "proof": "apps/app/src/features/runtimes/actions.test.ts",
       "verifiedAt": "2026-09-26",

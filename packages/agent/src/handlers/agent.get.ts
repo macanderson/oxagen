@@ -225,13 +225,20 @@ function usd(micros: number | undefined): AgentGetOutput["limits"]["perRun"] {
  */
 async function runtimeContainmentFor(
   tx: Tx,
+  scope: { orgId: string; workspaceId: string },
   runtimeId: string | null,
 ): Promise<boolean> {
   if (runtimeId === null) return false;
   const [runtime] = await tx
     .select({ containmentRequired: schema.runtimes.containmentRequired })
     .from(schema.runtimes)
-    .where(eq(schema.runtimes.id, runtimeId))
+    .where(
+      and(
+        eq(schema.runtimes.id, runtimeId),
+        eq(schema.runtimes.orgId, scope.orgId),
+        eq(schema.runtimes.workspaceId, scope.workspaceId),
+      ),
+    )
     .limit(1);
   return runtime?.containmentRequired === true;
 }
@@ -246,10 +253,12 @@ async function runtimeContainmentFor(
  */
 async function limitsFor(
   tx: Tx,
+  scope: { orgId: string; workspaceId: string },
   agent: { id: string; runtimeId: string | null },
 ): Promise<AgentGetOutput["limits"]> {
   const containmentRequired = await runtimeContainmentFor(
     tx,
+    scope,
     agent.runtimeId,
   );
   const [active] = await tx
@@ -383,7 +392,7 @@ export async function agentGetHandler(
           : bindings.toolbelts.get(row.toolbeltId),
       ),
       versions,
-      limits: await limitsFor(tx, row),
+      limits: await limitsFor(tx, scope, row),
       credentials,
       roles,
       hosts,

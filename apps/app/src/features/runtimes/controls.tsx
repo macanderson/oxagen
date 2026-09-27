@@ -28,7 +28,7 @@ import {
   slugFromName,
 } from "@oxagen/oxagen/contracts/runtime.shared";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useId, useState, useTransition } from "react";
 import { routes } from "@/shared/safe-path";
 import { unanswered } from "@/ui/action-failure";
 import {
@@ -462,7 +462,9 @@ export function ContainmentSwitch({
   const t = useTranslations("runtimes.containment");
   const navigate = useNavigate();
   const id = useId();
-  const [pending, setPending] = useState(false);
+  // The transition holds `pending` through the page's re-read, so the switch
+  // stays busy until it shows the value just written.
+  const [pending, startTransition] = useTransition();
   const [failure, setFailure] = useState<string | null>(null);
 
   function failureText(result: ContainmentFailure): string {
@@ -485,19 +487,18 @@ export function ContainmentSwitch({
     }
   }
 
-  async function toggle(next: boolean) {
+  function toggle(next: boolean) {
     if (pending) return;
-    setPending(true);
     setFailure(null);
-    try {
-      const result = await setRuntimeContainment(org, ws, runtimeId, next);
-      if (result.ok) navigate.refresh();
-      else setFailure(failureText(result));
-    } catch {
-      setFailure(failureText(unanswered("action_failed")));
-    } finally {
-      setPending(false);
-    }
+    startTransition(async () => {
+      try {
+        const result = await setRuntimeContainment(org, ws, runtimeId, next);
+        if (result.ok) navigate.refresh();
+        else setFailure(failureText(result));
+      } catch {
+        setFailure(failureText(unanswered("action_failed")));
+      }
+    });
   }
 
   return (
@@ -518,7 +519,7 @@ export function ContainmentSwitch({
             aria-disabled={pending || undefined}
             aria-describedby={`${id}-state`}
             onChange={(event) => {
-              void toggle(event.target.checked);
+              toggle(event.target.checked);
             }}
             className="size-4"
           />
