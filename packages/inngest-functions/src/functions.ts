@@ -15,6 +15,10 @@ import { costDailyRollup } from "./functions/cost.daily-rollup";
 import { costPriceBookSync } from "./functions/cost.price-book-sync";
 import { costPriceBookReprice } from "./functions/cost.price-book-reprice";
 import { costFindings, costFindingsNightly } from "./functions/cost.findings";
+import {
+  costRunPrOutcomesDelivery,
+  costRunPrOutcomesHourly,
+} from "./functions/cost.run-pr-outcomes";
 import { securityAuditPartitionRollover } from "./functions/security.audit-partition-rollover";
 import { pluginOauthRefreshWatcher } from "./functions/plugin.oauth-refresh-watcher";
 import {
@@ -96,6 +100,8 @@ export const functions: any[] = [
   costPriceBookReprice,
   costFindings,
   costFindingsNightly,
+  costRunPrOutcomesHourly,
+  costRunPrOutcomesDelivery,
   securityAuditPartitionRollover,
   pluginOauthRefreshWatcher,
   privacyExportProcess,
