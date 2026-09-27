@@ -117,7 +117,7 @@ describe("GITHUB_SETTINGS_BASELINE", () => {
 });
 
 describe("GITLAB_SETTINGS_BASELINE", () => {
-  it("protects main, squashes merge requests, and turns CI off", () => {
+  it("protects main, squashes merge requests, resets approvals on push, and turns CI off", () => {
     expect(GITLAB_SETTINGS_BASELINE).toEqual({
       visibility: "private",
       default_branch: "main",
@@ -132,6 +132,7 @@ describe("GITLAB_SETTINGS_BASELINE", () => {
         squash_option: "always",
         only_allow_merge_if_pipeline_succeeds: true,
         remove_source_branch_after_merge: true,
+        reset_approvals_on_push: true,
         required_status: "Oxagen steering",
       },
       ci_cd: { builds_access_level: "disabled" },

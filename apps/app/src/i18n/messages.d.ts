@@ -9485,6 +9485,8 @@ type Messages = {
         governanceUnreadable: string;
         repositoryMissing: string;
         checksNotPassed: string;
+        approvalRequired: string;
+        approvalsNotHeadBound: string;
         headMoved: string;
         baseMoved: string;
         githubRefused: string;

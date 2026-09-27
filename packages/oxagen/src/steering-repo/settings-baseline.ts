@@ -175,6 +175,12 @@ export interface GitlabSettings {
     squash_option: "always" | "default_on" | "default_off" | "never";
     only_allow_merge_if_pipeline_succeeds: boolean;
     remove_source_branch_after_merge: boolean;
+    /**
+     * GitLab drops every approval when a commit is pushed to the merge
+     * request, so an approval always approves the head it was given on. The
+     * merge queue refuses a GitLab merge while this is off.
+     */
+    reset_approvals_on_push: boolean;
     /** The external commit status that satisfies "pipelines must succeed". */
     required_status: string;
   };
@@ -195,6 +201,7 @@ export const GITLAB_SETTINGS_BASELINE: GitlabSettings = {
     squash_option: "always",
     only_allow_merge_if_pipeline_succeeds: true,
     remove_source_branch_after_merge: true,
+    reset_approvals_on_push: true,
     required_status: REQUIRED_CHECK_NAME,
   },
   ci_cd: { builds_access_level: "disabled" },

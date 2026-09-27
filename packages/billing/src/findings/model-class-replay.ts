@@ -1,0 +1,284 @@
+/**
+ * Model class replay (detector 4, ADR-208): the plan that reruns a sample of
+ * a model class fit finding's runs on the smaller class, and the gate a
+ * replay starts through. A replay spends, so it starts only on an approval
+ * from the team that owns every sampled run, and only when that approval
+ * showed the plan's estimated cost. The replay turns the finding's estimate
+ * into a measurement.
+ *
+ * Both halves are pure. The caller passes the finding, the run records it
+ * cites, and who owns each operator's runs, and stores the plan and the
+ * approval. The gate returns the only value a dispatcher accepts.
+ */
+import { createHash } from "node:crypto";
+import type { RunTotalsRecord } from "../cost-rollup";
+import type { PriceBook } from "../price-book";
+import { inCodeListBook, lighterModel, measureRun } from "./model-class-fit";
+import type { FindingDraft } from "./shared";
+
+/** Runs one replay reruns at most. */
+export const REPLAY_SAMPLE_MAX = 5;
+
+/** One sampled run, as the replay reruns it. */
+export interface ReplayRun {
+  /** The run's public id. */
+  readonly runId: string;
+  /** The key of the operator the run ran for; the approver must own this operator's runs. */
+  readonly operatorKey: string;
+  /** Each model the run used and the model the replay runs it on; the same model when it has no smaller class. */
+  readonly models: readonly { readonly from: string; readonly to: string }[];
+  /** What the run cost as measured, in micro-units. */
+  readonly measuredMicros: bigint;
+  /** What the replay is estimated to cost: the run repriced at the smaller class. */
+  readonly estimatedMicros: bigint;
+}
+
+export interface ReplayPlan {
+  readonly kind: "model_class_fit";
+  /** The finding the plan replays. */
+  readonly fingerprint: string;
+  readonly subject: string;
+  readonly currency: string;
+  readonly runs: readonly ReplayRun[];
+  /** The sum of the sampled runs' estimates, which the approval must show. */
+  readonly estimatedMicros: bigint;
+  /** When the plan was made, in milliseconds since the epoch. */
+  readonly plannedAtMs: number;
+  /** SHA-256 over every field above, so an approval binds to this plan alone. */
+  readonly digest: string;
+}
+
+/** A person's approval of one plan, with the cost it showed them. */
+export interface ReplayApproval {
+  readonly planDigest: string;
+  /** The estimated cost the approval showed, in micro-units. */
+  readonly shownMicros: bigint;
+  readonly shownCurrency: string;
+  /** The key of the person who approved. */
+  readonly approvedBy: string;
+  /** When the person approved, in milliseconds since the epoch. */
+  readonly approvedAtMs: number;
+}
+
+/**
+ * Whether `approver` belongs to the team that owns the runs of the operator
+ * `operatorKey`. The caller supplies it, since no table names that team yet.
+ */
+export type ReplayOwnership = (approver: string, operatorKey: string) => boolean;
+
+declare const approvedByOwner: unique symbol;
+
+/**
+ * A replay the gate let start. Only {@link startReplay} returns one. Its plan
+ * and approval are frozen copies that hold only strings, numbers, and
+ * bigints, so a caller that changes the objects it passed in cannot change
+ * what the owner approved.
+ */
+export type ReplayStart = {
+  readonly plan: ReplayPlan;
+  readonly approval: ReplayApproval;
+  readonly [approvedByOwner]: true;
+};
+
+/** Why the gate refused a replay. */
+export type ReplayRefusal =
+  /** Nothing approved the plan. */
+  | "no_approval"
+  /** The plan changed after it was digested. */
+  | "plan_changed"
+  /** The approval names another plan. */
+  | "other_plan"
+  /** The approval showed a cost other than the plan's estimate. */
+  | "cost_not_shown"
+  /** The approver does not own every sampled run. */
+  | "not_an_owner"
+  /** The approval is older than the plan, or its time is not a number. */
+  | "approved_before_plan";
+
+/** The digest of a plan's fields, with amounts as decimal strings. */
+export function replayPlanDigest(plan: Omit<ReplayPlan, "digest">): string {
+  const canonical = JSON.stringify([
+    plan.kind,
+    plan.fingerprint,
+    plan.subject,
+    plan.currency,
+    plan.runs.map((r) => [
+      r.runId,
+      r.operatorKey,
+      r.models.map((m) => [m.from, m.to]),
+      r.measuredMicros.toString(),
+      r.estimatedMicros.toString(),
+    ]),
+    plan.estimatedMicros.toString(),
+    String(plan.plannedAtMs),
+  ]);
+  return createHash("sha256").update(canonical).digest("hex");
+}
+
+/**
+ * `count` items spread over `n`: the middle of each of `count` equal slices,
+ * so the sample spans the smallest runs and the largest. Every index when
+ * `n` is no more than `count`.
+ */
+function spread(n: number, count: number): number[] {
+  if (n <= count) return Array.from({ length: n }, (_, i) => i);
+  return Array.from({ length: count }, (_, i) =>
+    Math.floor(((2 * i + 1) * n) / (2 * count)),
+  );
+}
+
+/**
+ * The replay of a model class fit finding: a sample of its cited runs, each
+ * with the model it reruns on and its estimated cost there. A run is left
+ * out when it is absent from `runs`, has no operator to own it, has no model
+ * with a smaller class, or the book cannot price it, since the approval must
+ * show a cost and an owner for every run it starts. Null when the finding is
+ * another kind or no run is left.
+ *
+ * `operatorKey` plans one operator's runs alone, so each owning team can
+ * approve its own replay. `sampleMax` lowers the sample size. A value above
+ * {@link REPLAY_SAMPLE_MAX} is held to it, and a value that is not a whole
+ * number of at least 1 throws a `RangeError`.
+ */
+export function planReplay(args: {
+  finding: Pick<
+    FindingDraft,
+    "kind" | "fingerprint" | "subject" | "currency" | "citedRuns"
+  >;
+  runs: ReadonlyMap<string, RunTotalsRecord>;
+  now: Date;
+  book?: PriceBook;
+  operatorKey?: string;
+  sampleMax?: number;
+}): ReplayPlan | null {
+  const { finding } = args;
+  const sampleMax = args.sampleMax ?? REPLAY_SAMPLE_MAX;
+  if (!Number.isInteger(sampleMax) || sampleMax < 1)
+    throw new RangeError(
+      `sampleMax must be a whole number of at least 1, got ${sampleMax}`,
+    );
+  if (finding.kind !== "model_class_fit") return null;
+  const book = args.book ?? inCodeListBook();
+  const priced: ReplayRun[] = [];
+  for (const runId of new Set(finding.citedRuns)) {
+    const run = args.runs.get(runId);
+    if (run === undefined) continue;
+    const { operatorKey } = run;
+    if (operatorKey === null) continue;
+    if (args.operatorKey !== undefined && operatorKey !== args.operatorKey)
+      continue;
+    const models = run.breakdown.models.map((m) => ({
+      from: m.model,
+      to: lighterModel(m) ?? m.model,
+    }));
+    if (models.every((m) => m.from === m.to)) continue;
+    const { micros } = measureRun(book, run);
+    if (micros === null) continue;
+    priced.push({
+      runId,
+      operatorKey,
+      models,
+      measuredMicros: micros.measured,
+      estimatedMicros: micros.counterfactual,
+    });
+  }
+  if (priced.length === 0) return null;
+  priced.sort((a, b) =>
+    a.measuredMicros !== b.measuredMicros
+      ? a.measuredMicros < b.measuredMicros
+        ? -1
+        : 1
+      : a.runId < b.runId
+        ? -1
+        : 1,
+  );
+  const sample = spread(
+    priced.length,
+    Math.min(sampleMax, REPLAY_SAMPLE_MAX),
+  ).map((i) => priced[i]!);
+  const plan: Omit<ReplayPlan, "digest"> = {
+    kind: "model_class_fit",
+    fingerprint: finding.fingerprint,
+    subject: finding.subject,
+    currency: finding.currency,
+    runs: sample,
+    estimatedMicros: sample.reduce((sum, r) => sum + r.estimatedMicros, 0n),
+    plannedAtMs: args.now.getTime(),
+  };
+  return { ...plan, digest: replayPlanDigest(plan) };
+}
+
+/** A frozen copy of a plan, with its runs and their models copied. */
+function frozenPlan(plan: ReplayPlan): ReplayPlan {
+  return Object.freeze({
+    kind: plan.kind,
+    fingerprint: plan.fingerprint,
+    subject: plan.subject,
+    currency: plan.currency,
+    runs: Object.freeze(
+      plan.runs.map((r) =>
+        Object.freeze({
+          runId: r.runId,
+          operatorKey: r.operatorKey,
+          models: Object.freeze(
+            r.models.map((m) => Object.freeze({ from: m.from, to: m.to })),
+          ),
+          measuredMicros: r.measuredMicros,
+          estimatedMicros: r.estimatedMicros,
+        }),
+      ),
+    ),
+    estimatedMicros: plan.estimatedMicros,
+    plannedAtMs: plan.plannedAtMs,
+    digest: plan.digest,
+  });
+}
+
+/** A frozen copy of an approval. */
+function frozenApproval(approval: ReplayApproval): ReplayApproval {
+  return Object.freeze({
+    planDigest: approval.planDigest,
+    shownMicros: approval.shownMicros,
+    shownCurrency: approval.shownCurrency,
+    approvedBy: approval.approvedBy,
+    approvedAtMs: approval.approvedAtMs,
+  });
+}
+
+/**
+ * The gate a replay starts through. It refuses unless the approver owns
+ * every sampled run and approved this plan, after it was made, with the
+ * plan's estimated cost in front of them. The dispatcher that reruns the
+ * runs takes only the value this returns. The gate checks frozen copies of
+ * the plan and the approval and returns those copies, so what it checked is
+ * what the dispatcher runs.
+ */
+export function startReplay(
+  given: ReplayPlan,
+  givenApproval: ReplayApproval | null,
+  owns: ReplayOwnership,
+): { ok: true; start: ReplayStart } | { ok: false; refusal: ReplayRefusal } {
+  if (givenApproval === null) return { ok: false, refusal: "no_approval" };
+  const plan = frozenPlan(given);
+  const approval = frozenApproval(givenApproval);
+  const { digest, ...fields } = plan;
+  if (replayPlanDigest(fields) !== digest)
+    return { ok: false, refusal: "plan_changed" };
+  if (approval.planDigest !== digest)
+    return { ok: false, refusal: "other_plan" };
+  if (
+    approval.shownMicros !== plan.estimatedMicros ||
+    approval.shownCurrency !== plan.currency
+  )
+    return { ok: false, refusal: "cost_not_shown" };
+  // A plan with no runs has no owner to approve it.
+  if (
+    plan.runs.length === 0 ||
+    !plan.runs.every((r) => owns(approval.approvedBy, r.operatorKey))
+  )
+    return { ok: false, refusal: "not_an_owner" };
+  // Written as "not at or after" so a time that is not a number refuses too.
+  if (!(approval.approvedAtMs >= plan.plannedAtMs))
+    return { ok: false, refusal: "approved_before_plan" };
+  return { ok: true, start: Object.freeze({ plan, approval }) as ReplayStart };
+}
