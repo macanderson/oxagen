@@ -386,6 +386,26 @@ describe("repeated shell commands and duplicate tool calls", () => {
     ).toEqual([]);
   });
 
+  it("does not count a turn that made a call with no input digest", () => {
+    const r = run();
+    const shell = { tool: "Bash", isMutating: true };
+    // The second request repeats both calls of the first, but the hook
+    // recorded no input for one of them, so it may have done new work.
+    const toolCalls = [
+      call(r, { at: 1, ...shell }),
+      call(r, { at: 1.5, ...shell, inputDigest: "" }),
+      call(r, { at: 2, ...shell }),
+      call(r, { at: 2.5, ...shell, inputDigest: "" }),
+    ];
+    expect(
+      detect({
+        runs: [r],
+        toolCalls,
+        frames: new Map([[r.runId, [request(r, 1), request(r, 2)]]]),
+      }),
+    ).toEqual([]);
+  });
+
   it("cites a read-only tool's repeat at the run's agent", () => {
     const r = run();
     const toolCalls = [call(r, { at: 1 }), call(r, { at: 2 })];

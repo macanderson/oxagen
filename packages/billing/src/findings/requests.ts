@@ -58,23 +58,22 @@ function byTime(a: ToolCallObservation, b: ToolCallObservation): number {
       : a.seq - b.seq;
 }
 
-/** Each call with its repeat flag, in time order. */
+/**
+ * Each call with its repeat flag, in time order. A call with no input digest
+ * is never a repeat: the hook recorded no input, so the call may have done
+ * new work, and the request that made it does not count.
+ */
 function flagRepeats(calls: readonly ToolCallObservation[]): {
   call: ToolCallObservation;
   repeat: RepeatKind | null;
 }[] {
   const seen = new RepeatedCalls();
-  return [...calls].sort(byTime).map((call) => ({
-    call,
-    repeat: seen.repeats(
-      call.runId,
-      call.tool,
-      call.inputDigest,
-      call.outputDigest,
-    )
-      ? repeatKindOf(call)
-      : null,
-  }));
+  return [...calls].sort(byTime).map((call) => {
+    const repeats =
+      call.inputDigest !== "" &&
+      seen.repeats(call.runId, call.tool, call.inputDigest, call.outputDigest);
+    return { call, repeat: repeats ? repeatKindOf(call) : null };
+  });
 }
 
 /**
