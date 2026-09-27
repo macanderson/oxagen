@@ -1,8 +1,6 @@
 import { createFunction } from "../create-function";
 import { logger } from "../logger";
 import {
-  archiveAfterDays,
-  archiveCutoff,
   archiveIdleSessions,
   listWorkspacePage,
 } from "../lib/stella-session-archive";
@@ -19,14 +17,15 @@ interface PageResult {
 }
 
 /**
- * Daily at 04:30 UTC: archive every Stella session that has had no reply for
- * its workspace's archive window (#4435). The window is
+ * Daily at 04:30 UTC: archive every Stella session that has had no question
+ * or reply for its workspace's archive window (#4435). The window is
  * `[stella] archive_after_days` in workspace.toml, 7 days when unset. The rule
  * and what the archive leaves alone are in
  * `../lib/stella-session-archive.ts`.
  *
- * Each workspace is archived in its own transaction and tenant scope. One
- * that fails is logged and left for the next night.
+ * Each workspace is archived in its own transaction and tenant scope, which
+ * also reads its window. One that fails is logged and left for the next
+ * night.
  */
 export const [stellaSessionArchive] = createFunction(
   {
@@ -52,17 +51,13 @@ export const [stellaSessionArchive] = createFunction(
           let pageArchived = 0;
           let pageFailed = 0;
           for (const workspace of rows) {
-            const days = archiveAfterDays(workspace.settings);
             try {
-              pageArchived += await archiveIdleSessions(
-                workspace,
-                archiveCutoff(now, days),
-                now,
-              );
+              const done = await archiveIdleSessions(workspace, now);
+              pageArchived += done.archived;
             } catch (err) {
               pageFailed += 1;
               logger.warn(
-                { err, workspaceId: workspace.id, days },
+                { err, workspaceId: workspace.id },
                 "stella.session-archive: a workspace failed. The next run retries it.",
               );
             }

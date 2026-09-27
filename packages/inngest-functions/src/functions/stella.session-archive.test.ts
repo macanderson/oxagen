@@ -7,16 +7,10 @@ const mocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
-vi.mock("../lib/stella-session-archive", async (importOriginal) => {
-  const real =
-    await importOriginal<typeof import("../lib/stella-session-archive")>();
-  return {
-    archiveAfterDays: real.archiveAfterDays,
-    archiveCutoff: real.archiveCutoff,
-    listWorkspacePage: mocks.listWorkspacePage,
-    archiveIdleSessions: mocks.archiveIdleSessions,
-  };
-});
+vi.mock("../lib/stella-session-archive", () => ({
+  listWorkspacePage: mocks.listWorkspacePage,
+  archiveIdleSessions: mocks.archiveIdleSessions,
+}));
 vi.mock("../logger", () => ({
   logger: { info: vi.fn(), warn: mocks.warn, error: vi.fn() },
 }));
@@ -55,17 +49,14 @@ const step = {
 };
 
 const ORG = "0192d4a8-7c1e-7a00-8000-0000000000a1";
-const DAY_MS = 24 * 60 * 60 * 1000;
 
-function workspace(id: string, settings: unknown = {}) {
-  return { id, orgId: ORG, settings };
+function workspace(id: string) {
+  return { id, orgId: ORG };
 }
 
-/** The window each archive call used, in whole days before its `now`. */
-function daysOfEachCall(): number[] {
-  return mocks.archiveIdleSessions.mock.calls.map(([, cutoff, now]) =>
-    Math.round((now.getTime() - cutoff.getTime()) / DAY_MS),
-  );
+/** What `archiveIdleSessions` answers for one workspace. */
+function archivedBy(days: number, archived: number) {
+  return { days, archived };
 }
 
 describe("stella.session-archive", () => {
@@ -85,26 +76,33 @@ describe("stella.session-archive", () => {
     });
   });
 
-  it("archives each workspace with its own window and counts what it archived", async () => {
+  it("archives each workspace at one instant and counts what it archived", async () => {
     mocks.listWorkspacePage.mockResolvedValueOnce([
-      workspace("wrk_a", { stellaArchiveAfterDays: 30 }),
+      workspace("wrk_a"),
       workspace("wrk_b"),
-      workspace("wrk_c", { stellaArchiveAfterDays: 0 }),
+      workspace("wrk_c"),
     ]);
     mocks.archiveIdleSessions
-      .mockResolvedValueOnce(4)
-      .mockResolvedValueOnce(0)
-      .mockResolvedValueOnce(2);
+      .mockResolvedValueOnce(archivedBy(30, 4))
+      .mockResolvedValueOnce(archivedBy(7, 0))
+      .mockResolvedValueOnce(archivedBy(7, 2));
     const out = await handler!({ event: { data: {} }, step });
 
     expect(mocks.listWorkspacePage).toHaveBeenCalledWith({
       after: null,
       limit: 200,
     });
-    // An unset window and one outside 1 to 365 both get the 7-day default.
-    expect(daysOfEachCall()).toEqual([30, 7, 7]);
-    const ids = mocks.archiveIdleSessions.mock.calls.map(([ws]) => ws.id);
-    expect(ids).toEqual(["wrk_a", "wrk_b", "wrk_c"]);
+    // Each workspace's window is read on its own plane, inside
+    // archiveIdleSessions (ADR-042). The run only names the workspace and
+    // the instant the page runs at.
+    const calls = mocks.archiveIdleSessions.mock.calls;
+    expect(calls.map(([ws]) => ws)).toEqual([
+      workspace("wrk_a"),
+      workspace("wrk_b"),
+      workspace("wrk_c"),
+    ]);
+    const instants = new Set(calls.map(([, now]) => now.getTime()));
+    expect(instants.size).toBe(1);
     expect(out).toEqual({ workspaces: 3, archived: 6, failed: 0 });
   });
 
@@ -115,7 +113,7 @@ describe("stella.session-archive", () => {
     mocks.listWorkspacePage
       .mockResolvedValueOnce(full)
       .mockResolvedValueOnce([workspace("wrk_last")]);
-    mocks.archiveIdleSessions.mockResolvedValue(1);
+    mocks.archiveIdleSessions.mockResolvedValue(archivedBy(7, 1));
     const out = await handler!({ event: { data: {} }, step });
 
     expect(stepNames).toEqual([
@@ -136,7 +134,7 @@ describe("stella.session-archive", () => {
     ]);
     mocks.archiveIdleSessions
       .mockRejectedValueOnce(new Error("lock timeout"))
-      .mockResolvedValueOnce(3);
+      .mockResolvedValueOnce(archivedBy(7, 3));
     const out = await handler!({ event: { data: {} }, step });
 
     expect(mocks.warn).toHaveBeenCalledTimes(1);
