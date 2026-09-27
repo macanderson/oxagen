@@ -635,8 +635,11 @@ export class FakeGitHub implements SteeringGitHub {
   deploymentRefused = false;
   /**
    * The approvals every PR holds, or null for the default: one approval by
-   * REVIEWER at the PR's current head, standing for "a linked reviewer
-   * approved on the host". A test about approvals sets its own list.
+   * REVIEWER, standing for "a linked reviewer approved on the host". The
+   * default approval sits at the last head someone other than the merge queue
+   * pushed. A merge the queue made on top of that head never moves it, so a
+   * queue test proves the approval carries rather than being given again. A
+   * test about approvals sets its own list.
    */
   approvals: SteeringApproval[] | null = null;
   /** Runs right after each stamp commit, so a test can move main then. */
@@ -1093,19 +1096,26 @@ export class FakeGitHub implements SteeringGitHub {
     return this.lineage(this.shaOf(head)).includes(ancestor);
   }
   /**
-   * Merge the production branch into the PR's branch, as GitHub's "Update
-   * branch" does. Each path the branch changed since the merge base keeps the
-   * branch's version; a path both sides changed differently is a conflict.
+   * Merge `base`, a production branch head, into the PR's branch, as GitHub's
+   * merges endpoint does. Each path the branch changed since the merge base
+   * keeps the branch's version; a path both sides changed differently is a
+   * conflict.
    */
   async updateBranch(
     repo: SteeringRepository,
-    args: { number: number; branch: string; expectedHead: string },
-  ) {
+    args: {
+      number: number;
+      branch: string;
+      expectedHead: string;
+      base: string;
+    },
+  ): Promise<{ headSha: string; parents: string[] | null }> {
     const head = this.heads.get(args.branch);
     if (head !== args.expectedHead) return this.headMovedOn(args.branch);
-    const main = this.shaOf(repo.defaultBranch);
-    if (this.lineage(head).includes(main)) return { headSha: head };
-    const mergeBase = this.mergeBase(repo.defaultBranch, head);
+    const main = args.base;
+    if (this.lineage(head).includes(main))
+      return { headSha: head, parents: null };
+    const mergeBase = this.mergeBase(main, head);
     const baseTree = mergeBase
       ? this.tree(mergeBase)
       : new Map<string, string>();
@@ -1140,11 +1150,17 @@ export class FakeGitHub implements SteeringGitHub {
     this.updates.push({ branch: args.branch, from: head, to: sha });
     const pr = this.pulls.find((p) => p.number === args.number);
     if (pr && pr.state === "open") pr.headSha = sha;
-    return { headSha: sha };
+    return { headSha: sha, parents: [head, main] };
   }
-  async resetBranch(_repo: SteeringRepository, branch: string, sha: string) {
-    this.heads.set(branch, sha);
-    this.resets.push({ branch, sha });
+  async resetBranch(
+    _repo: SteeringRepository,
+    branch: string,
+    args: { from: string; to: string },
+  ) {
+    if (this.heads.get(branch) !== args.from) return false;
+    this.heads.set(branch, args.to);
+    this.resets.push({ branch, sha: args.to });
+    return true;
   }
   async listApprovals(
     _repo: SteeringRepository,
@@ -1154,8 +1170,21 @@ export class FakeGitHub implements SteeringGitHub {
     const pr = this.pull(number);
     if (pr.state !== "open") return [];
     return [
-      { userId: REVIEWER, login: "reviewer", commitSha: this.shaOf(pr.head) },
+      {
+        userId: REVIEWER,
+        login: "reviewer",
+        commitSha: this.pushedHead(this.shaOf(pr.head)),
+      },
     ];
+  }
+  /** `sha`, walked back through every merge the queue made on top of it. */
+  private pushedHead(sha: string): string {
+    let head = sha;
+    for (;;) {
+      const update = this.updates.find((u) => u.to === head);
+      if (!update) return head;
+      head = update.from;
+    }
   }
   async recordDeployment(
     _repo: SteeringRepository,

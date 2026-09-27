@@ -1,7 +1,7 @@
 // The GitLab steering seam (#3762), against an in-memory gitlab.com project.
 //
 // The first block runs the real handlers end to end: a proposal becomes a
-// merge request on the GitLab project, its six checks become commit statuses,
+// merge request on the GitLab project, its six checks become one commit status,
 // and a reviewer's merge squashes the checked head and publishes the record.
 // The rest pins the seam's GitLab-specific behaviour one call at a time.
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -53,7 +53,7 @@ import {
 const TOKEN = "glpat-stored-token-never-shown";
 const LINEAGE = "ctx.release.no-reread-changelog";
 const PATH = `.oxagen/rules/${LINEAGE}.toml`;
-const BRANCH = `context/${LINEAGE}`;
+const BRANCH = `steering/${LINEAGE}`;
 
 const CONNECTION: GitLabSteeringConnection = {
   connectionId: "0192d4a8-7c1e-7a00-8000-00000000c011",
@@ -137,7 +137,7 @@ beforeEach(() => {
 });
 
 describe("a context record published through a GitLab merge request", () => {
-  it("opens a merge request, reports six commit statuses, then squash-merges the checked head and publishes", async () => {
+  it("opens a merge request, reports one commit status for the six checks, then squash-merges the checked head and publishes", async () => {
     const { api, h } = gitlabHarness();
     const proposalId = await propose(h);
 
@@ -161,11 +161,14 @@ describe("a context record published through a GitLab merge request", () => {
     expect(mr!.description).toContain(proposalId);
     const head = api.branches.get(BRANCH)!;
     expect(opened.pr!.headSha).toBe(head);
-    expect(api.statuses).toHaveLength(6);
-    expect(
-      api.statuses.every((s) => s.sha === head && s.state === "success"),
-    ).toBe(true);
-    expect(api.statuses.map((s) => s.name)).toContain("Oxagen · Schema");
+    // One required status carries all six outcomes.
+    expect(api.statuses).toEqual([
+      expect.objectContaining({
+        sha: head,
+        name: "Oxagen steering",
+        state: "success",
+      }),
+    ]);
     // The record's set id is the approved project path, dotted.
     const file = api.commits.get(head)!.files.get(PATH)!;
     expect(file).toContain('set_id = "acme.platform.rules"');
@@ -185,7 +188,14 @@ describe("a context record published through a GitLab merge request", () => {
         iid: 1,
         sha: head,
         squash: true,
-        message: `steering: publish ${LINEAGE} (#1)`,
+        // GitLab takes the squash title and the trailers in one message.
+        message: [
+          `steering: publish ${LINEAGE} (#1)`,
+          "",
+          `Oxagen-Approved-By: ${REVIEWER}`,
+          "Oxagen-Checks: schema,lineage_uniqueness,record_hash,secret_pii_scan,conflict_against_active,constraint_effect",
+          "Oxagen-Version: 1",
+        ].join("\n"),
       },
     ]);
     // The squash commit is what landed on main, and the published record is
@@ -646,6 +656,27 @@ describe("the GitLab seam's merge-queue calls", () => {
       { path: "old.toml", status: "removed" },
       { path: "new.toml", status: "added" },
     ]);
+
+    // The same 300-file refusal as GitHub, so both hosts refuse one change.
+    api.client = (t) => ({
+      ...client(t),
+      compare: async () =>
+        Array.from({ length: 300 }, (_, i) => ({
+          oldPath: `r${i}.toml`,
+          newPath: `r${i}.toml`,
+          renamed: false,
+          deleted: false,
+          added: true,
+        })),
+    });
+    const { seam: wide } = gitlabSeam(api);
+    const wideRepo = await wide.resolveRepository(SCOPE);
+    await expect(wide.changedFiles(wideRepo, "c0", head)).rejects.toMatchObject(
+      { code: "conflict", reason: "too_many_files" },
+    );
+    await expect(wide.changedPaths(wideRepo, "c0", head)).rejects.toMatchObject(
+      { reason: "too_many_files" },
+    );
   });
 
   it("commits writes and deletions on the parent, skipping a file already at its content", async () => {
@@ -715,12 +746,15 @@ describe("the GitLab seam's merge-queue calls", () => {
       number: mr.number,
       branch: "b",
       expectedHead: head,
+      base: main,
     });
     expect(api.rebases).toEqual([mr.number]);
     expect(sleep).toHaveBeenCalledTimes(2);
     expect(sleep).toHaveBeenCalledWith(1000);
     expect(out.headSha).toBe(api.branches.get("b"));
     expect(out.headSha).not.toBe(head);
+    // A rebase makes no merge commit, so no approval carries onto it.
+    expect(out.parents).toBeNull();
     await expect(seam.holdsCommit(repo, out.headSha, main)).resolves.toBe(true);
     expect(Object.fromEntries(api.tree(out.headSha))).toEqual({
       a: "1",
@@ -735,6 +769,7 @@ describe("the GitLab seam's merge-queue calls", () => {
         number: mr.number,
         branch: "b",
         expectedHead: "c0",
+        base: "main",
       }),
     ).rejects.toMatchObject({ reason: "head_moved" });
     expect(api.rebases).toEqual([]);
@@ -748,6 +783,7 @@ describe("the GitLab seam's merge-queue calls", () => {
         number: mr.number,
         branch: "b",
         expectedHead: head,
+        base: "main",
       }),
     ).rejects.toMatchObject({
       code: "conflict",
@@ -765,6 +801,7 @@ describe("the GitLab seam's merge-queue calls", () => {
         number: mr.number,
         branch: "b",
         expectedHead: head,
+        base: "main",
       }),
     ).rejects.toMatchObject({
       reason: "update_conflict",
@@ -775,9 +812,25 @@ describe("the GitLab seam's merge-queue calls", () => {
 
   it("resets a branch by deleting it and creating it again at the SHA", async () => {
     const { api, seam, repo, head } = await onBranch();
-    api.commit("b", "a", "stamped");
-    await seam.resetBranch(repo, "b", head);
+    const stamp = api.commit("b", "a", "stamped");
+    await expect(
+      seam.resetBranch(repo, "b", { from: stamp, to: head }),
+    ).resolves.toBe(true);
     expect(api.branches.get("b")).toBe(head);
+  });
+
+  it("leaves a branch that moved off the stamp", async () => {
+    const { api, seam, repo, head } = await onBranch();
+    const stamp = api.commit("b", "a", "stamped");
+    const pushed = api.commit("b", "a", "pushed");
+    await expect(
+      seam.resetBranch(repo, "b", { from: stamp, to: head }),
+    ).resolves.toBe(false);
+    expect(api.branches.get("b")).toBe(pushed);
+    await expect(
+      seam.resetBranch(repo, "gone", { from: stamp, to: head }),
+    ).resolves.toBe(false);
+    expect(api.branches.has("gone")).toBe(false);
   });
 
   it("lists approvals with each reviewer's linked Oxagen user and no head", async () => {
@@ -972,8 +1025,13 @@ describe("the host dispatcher", () => {
       files: [],
     });
     await host.holdsCommit(repo, "b", "a");
-    await host.updateBranch(repo, { number: 1, branch: "b", expectedHead: "a" });
-    await host.resetBranch(repo, "b", "a");
+    await host.updateBranch(repo, {
+      number: 1,
+      branch: "b",
+      expectedHead: "a",
+      base: "c",
+    });
+    await host.resetBranch(repo, "b", { from: "b", to: "a" });
     await host.listApprovals(repo, 1);
     await host.recordDeployment(repo, {
       sha: "a",
