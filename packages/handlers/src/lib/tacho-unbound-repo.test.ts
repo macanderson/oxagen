@@ -287,7 +287,11 @@ describe("the reads behind the clause", () => {
     expect(read?.ordered).toBe(true);
     const join = text(read?.joins[0] ?? null);
     expect(join).toContain('"current_binding_id"');
-    expect(join).toContain('"role" = $');
+    // Only a steering head (role 'main' or 'steering') carries the skills.
+    expect(join).toContain('"role" in ($');
+    const params = dialect.sqlToQuery(read!.joins[0]!).params;
+    for (const role of schema.STEERING_HEAD_ROLES)
+      expect(params).toContain(role);
   });
 
   it("counts the workspace's linked repositories", async () => {

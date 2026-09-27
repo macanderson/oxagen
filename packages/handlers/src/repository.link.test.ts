@@ -306,6 +306,29 @@ describe("link_repository", () => {
     expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
   });
 
+  it("refuses this workspace's own steering repository with main_repo, the same as a main one", async () => {
+    wire({
+      connections: [CONNECTION],
+      heads: [{ role: "steering", providerRepositoryId: "9002" }],
+    });
+    await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+      code: "conflict",
+      reason: "main_repo",
+    });
+    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
+  });
+
+  it("links beside a steering head, which stands in for the main one", async () => {
+    wire({
+      connections: [CONNECTION],
+      heads: [{ role: "steering", providerRepositoryId: "1" }],
+    });
+    await expect(handler().run(INPUT, makeCTX())).resolves.toMatchObject({
+      role: "linked",
+    });
+    expect(mocks.writeRepositoryHead).toHaveBeenCalledTimes(1);
+  });
+
   it("refuses a repository already linked to this workspace", async () => {
     const state = wire({
       connections: [CONNECTION],

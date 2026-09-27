@@ -534,10 +534,11 @@ export const repositoryBindings = ingestionSchema.table(
 // Not declared here: the trigger `repository_binding_heads_exclusive_main`
 // (20260918200000_repository_binding_heads_exclusive_across_roles.sql). It
 // serialises every writer of a head for one repository on a repository-keyed
-// advisory lock and refuses, as a 23505 carrying a constraint name, a main
-// head where another workspace holds any head for the repository, and a
-// linked head where another workspace holds its main. The partial index below
-// holds the main-against-main half on its own; the trigger holds the rest.
+// advisory lock and refuses, as a 23505 carrying a constraint name, a main or
+// steering head where another workspace holds any head for the repository,
+// and a linked head where another workspace holds its main or steering head
+// (20260926120000 widened both). The partial index below holds the
+// exclusive-against-exclusive half on its own; the trigger holds the rest.
 export const repositoryBindingHeads = ingestionSchema.table(
   "repository_binding_heads",
   {
@@ -598,6 +599,25 @@ export const repositoryBindingHeads = ingestionSchema.table(
 export type RepositoryBinding = typeof repositoryBindings.$inferSelect;
 export type NewRepositoryBinding = typeof repositoryBindings.$inferInsert;
 export type RepositoryBindingHead = typeof repositoryBindingHeads.$inferSelect;
+
+/**
+ * The head roles that name a workspace's steering source. Every reader that
+ * asks "which repository steers this workspace" filters on this list, never
+ * on one literal.
+ *
+ * Both roles are live until lane S8's migration moves every `main` head to
+ * `steering`. S1 already binds each new steering repo as `steering`, so a
+ * reader that filtered `role = 'main'` found nothing for those workspaces.
+ * When the migration lands, this list becomes `["steering"]`, and the readers
+ * follow without an edit.
+ */
+export const STEERING_HEAD_ROLES = ["main", "steering"] as const;
+export type SteeringHeadRole = (typeof STEERING_HEAD_ROLES)[number];
+
+/** True when a head with this role is its workspace's steering source. */
+export function isSteeringHeadRole(role: string): role is SteeringHeadRole {
+  return (STEERING_HEAD_ROLES as readonly string[]).includes(role);
+}
 
 // A directory on a machine that `oxagen init` linked to a workspace (MC spec
 // §10.1, the Repositories page's Working copies tab). The CLI reports it with

@@ -110,9 +110,11 @@ export const repositoryListHandler: CapabilityHandler<
       });
       return {
         bindingId: r.bindingId,
-        // The table's CHECK admits only these two; anything else is a schema
-        // the contract does not know, and its output parse refuses it.
-        role: r.role as "main" | "linked",
+        // The contract still names the steering head "main". A `steering`
+        // head (S1 binds every new steering repo with that role) is the same
+        // head under its new name, and passing it through unmapped made the
+        // output parse refuse the whole list for that workspace.
+        role: r.role === "linked" ? ("linked" as const) : ("main" as const),
         provider:
           r.provider === "gitlab" ? ("gitlab" as const) : ("github" as const),
         owner: r.owner,
