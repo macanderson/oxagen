@@ -287,9 +287,7 @@ class Harness {
         groups: () => {
           if (this.groupsRefused)
             return Promise.reject(
-              new SteeringGitlabReauthorizeError(
-                "GitLab refused the steering token (status 401).",
-              ),
+              new SteeringGitlabReauthorizeError("401 Unauthorized"),
             );
           if (this.faults.groups > 0) {
             this.faults.groups -= 1;
@@ -1113,7 +1111,9 @@ describe("reauthorize", () => {
     const h = new Harness(null, gitlabFake());
     h.groupsRefused = true;
     const err = await expectReauthorize(h, "pick_connection", "gitlab");
-    expect(err.message).toBe("GitLab refused the steering token (status 401).");
+    expect(err.message).toBe(
+      "GitLab refused the steering token: 401 Unauthorized",
+    );
     expect(h.state(WS)?.provider).toBeNull();
     expect(h.savedConnections).toEqual([]);
   });

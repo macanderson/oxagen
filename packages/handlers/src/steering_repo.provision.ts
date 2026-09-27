@@ -1198,11 +1198,25 @@ export type SteeringRepoProvisionRequest = {
   actorUserId: string;
 };
 
+const loadEventClient = () => import("./event-client");
+
+/**
+ * The event client, imported on the first send. create_org starts two sends
+ * at once, and both wait on this one import. Two concurrent imports of a
+ * mocked module can resolve to different copies under vitest. A failed import
+ * is dropped, so the next send tries again.
+ */
+let eventClientImport: ReturnType<typeof loadEventClient> | undefined;
+
 /** Start the durable job, or resume it from the step that stopped. */
 export async function requestSteeringRepoProvision(
   data: SteeringRepoProvisionRequest,
 ): Promise<void> {
-  const { eventClient } = await import("./event-client");
+  eventClientImport ??= loadEventClient().catch((err: unknown) => {
+    eventClientImport = undefined;
+    throw err;
+  });
+  const { eventClient } = await eventClientImport;
   await eventClient.send({
     name: "steering-repo/provision.requested",
     data,
