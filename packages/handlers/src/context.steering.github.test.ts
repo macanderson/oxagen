@@ -692,7 +692,7 @@ describe("the workspace's main repository", () => {
   // repository the workspace can see and is not steered by. Context PRs and
   // `get_steering_freshness` both resolve through this read, so an unordered
   // `limit(1)` without the filter could steer either one by a linked head.
-  it("names the head's role in the joined read, so only a main head steers", async () => {
+  it("names the head's role in the joined read, so only a steering head steers", async () => {
     const counts = db({ bound: [] });
     await readGitHubConnection(SELECT_SCOPE);
     expect(columnsIn(counts.boundWhere).has("role")).toBe(true);
@@ -770,7 +770,7 @@ describe("the workspace's main repository", () => {
   // compiled, because a reader that ignored the column would write steering
   // into a linked repository. repository.pg.test.ts proves the same with both
   // heads present in Postgres.
-  it("asks only for the main head, on both reads", async () => {
+  it("asks only for a steering head, on both reads", async () => {
     const captured: SQL[] = [];
     mocks.withTenantDb.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) =>
