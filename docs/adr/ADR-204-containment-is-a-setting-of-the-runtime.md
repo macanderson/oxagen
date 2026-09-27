@@ -68,14 +68,17 @@ runtime and requires nothing.
   change.
 - A host picks up a change on its next bundle fetch.
 
-### 3. The version's containment table is no longer read
+### 3. The bundle no longer reads the version's containment table
 
-`agentVersionContainment` and the mandate's version fallback are removed. A
-`containment` table left in a version's config is ignored. Before this
-change, a malformed table (`{ required: "yes" }`, say) suspended governed
-actions on the host as an invalid agent config. It now does nothing,
-because nothing reads it. A malformed budget still suspends governed
-actions.
+`agentVersionContainment` and the mandate's version fallback are removed.
+The host bundle ignores a `containment` table left in a version's config.
+Before this change, a malformed table (`{ required: "yes" }`, say)
+suspended governed actions on the host as an invalid agent config. It now
+suspends nothing. A malformed budget still suspends governed actions.
+
+One read of the table remains. A host enrollment for an agent on no runtime
+reads it once, to carry the requirement to the runtime it binds (§4). Only
+`required: true` counts there, and any other shape carries nothing.
 
 ### 4. The migration carries every requirement over
 

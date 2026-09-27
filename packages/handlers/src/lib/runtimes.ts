@@ -137,8 +137,10 @@ export async function insertRuntime(
 }
 
 /**
- * The live runtime a host enrollment with no agent binds (the operator path
- * of `tacho enroll`): the runtime named after the host, created when none is.
+ * The live runtime a host enrollment binds when it has no runtime of its own
+ * to take: an operator enrollment (the operator path of `tacho enroll`), or an
+ * agent on no runtime. It is the runtime named after the host, created when
+ * none is.
  * The slug is `slugFromName(hostname)` with a trailing `.local` dropped, and a
  * numeric suffix when another runtime already holds it.
  *
