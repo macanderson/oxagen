@@ -11,6 +11,19 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { eq, inArray, sql } from "drizzle-orm";
 import { organizationCreateHandler } from "./org.create";
+import { initialSteeringRepoState } from "./steering_repo.provision";
+
+const mocks = vi.hoisted(() => ({
+  send: vi.fn(
+    async (_event: { name: string; data: unknown }): Promise<void> =>
+      undefined,
+  ),
+}));
+
+// create_org starts two steering repo provision jobs (#4450) through the
+// event client. The spy stands in for Inngest, so the test needs no live
+// event key and can read what was sent.
+vi.mock("./event-client", () => ({ eventClient: { send: mocks.send } }));
 
 // The bootstrap test makes ~15 sequential round trips to Postgres plus one per
 // billing table; under `test:coverage` on a shared CI runner that ran past the
@@ -185,6 +198,7 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
           publicId: schema.workspaces.publicId,
           slug: schema.workspaces.slug,
           namespace: schema.workspaces.namespace,
+          settings: schema.workspaces.settings,
         })
         .from(schema.workspaces)
         .where(eq(schema.workspaces.orgId, org.id));
@@ -276,6 +290,31 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
     expect(snapshot.environments).toEqual([{ isDefault: true }]);
     expect(snapshot.registries).toEqual([{ isDefault: true }]);
 
+    // The organization and its first workspace each hold the first state of
+    // their steering repo, timed from the organization's creation (#4450).
+    const firstState = initialSteeringRepoState(org.createdAt);
+    expect(firstState).toMatchObject({
+      status: "provisioning",
+      step: null,
+      failed_step: null,
+      error: null,
+      attempt: 1,
+    });
+    expect(org.settings).toMatchObject({ steering_repo: firstState });
+    expect(ws.settings).toMatchObject({ steering_repo: firstState });
+
+    // One provision request for the organization repo and one for the
+    // workspace's own, sent after the transaction committed.
+    expect(mocks.send).toHaveBeenCalledTimes(2);
+    expect(mocks.send).toHaveBeenCalledWith({
+      name: "steering-repo/provision.requested",
+      data: { orgId: org.id, workspaceId: null, actorUserId: userId },
+    });
+    expect(mocks.send).toHaveBeenCalledWith({
+      name: "steering-repo/provision.requested",
+      data: { orgId: org.id, workspaceId: ws.id, actorUserId: userId },
+    });
+
     // The $5 signup grant and nothing else billing-shaped: the grant's
     // ledger row, lot and balance mirror hold one row each, and every other
     // billing.* table keyed by org_id has no row for the new org. Enumerated
@@ -327,6 +366,7 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
   }, 30_000);
 
   it("refuses a second organization on the same slug", async () => {
+    const sentBefore = mocks.send.mock.calls.length;
     await expect(
       organizationCreateHandler(
         organizationCreate.input.parse({ name: "Clone", slug }),
@@ -340,5 +380,7 @@ describe.skipIf(!enabled)("create_org against Postgres", () => {
         .where(eq(schema.organizations.slug, slug)),
     );
     expect(count[0]?.n).toBe(1);
+    // A refused organization starts no provision job.
+    expect(mocks.send.mock.calls.length).toBe(sentBefore);
   });
 });

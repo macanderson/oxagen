@@ -1,7 +1,7 @@
 {
   "name": "create_workspace",
   "domain": "workspace",
-  "description": "Create a workspace within the active tenant together with its main repository, which is required: a GitHub repository, or a gitlab.com project with a project access token (web app and API only). Refused for a slug already used in the organization, or a repository the org's GitHub App installation cannot reach or another workspace already steers by.",
+  "description": "Create a workspace within the active tenant and start provisioning its private steering repo, oxagen-<slug>, in the organization's GitHub organization or GitLab group. The call returns before the repository exists, and the workspace's steering_repo status shows the progress. You no longer pass a main repository: mainRepo is deprecated and ignored. Refused when the organization already has a workspace with that slug.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -91,8 +91,7 @@
     },
     "required": [
       "name",
-      "slug",
-      "mainRepo"
+      "slug"
     ],
     "additionalProperties": false
   },
@@ -115,37 +114,21 @@
       "createdAt": {
         "type": "string"
       },
-      "mainRepo": {
+      "steering_repo": {
         "type": "object",
         "properties": {
-          "bindingId": {
-            "type": "string"
-          },
-          "connectionId": {
-            "type": "string"
-          },
-          "provider": {
+          "status": {
             "type": "string",
             "enum": [
-              "github",
-              "gitlab"
+              "provisioning",
+              "ready",
+              "failed",
+              "blocked"
             ]
-          },
-          "fullName": {
-            "type": "string",
-            "minLength": 1
-          },
-          "defaultRef": {
-            "type": "string",
-            "minLength": 1
           }
         },
         "required": [
-          "bindingId",
-          "connectionId",
-          "provider",
-          "fullName",
-          "defaultRef"
+          "status"
         ],
         "additionalProperties": false
       }
@@ -156,7 +139,7 @@
       "slug",
       "orgSlug",
       "createdAt",
-      "mainRepo"
+      "steering_repo"
     ],
     "additionalProperties": false
   }

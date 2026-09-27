@@ -74,8 +74,12 @@ env:
   GIT_CONFIG_COUNT: "1"
   GIT_CONFIG_KEY_0: safe.directory
   GIT_CONFIG_VALUE_0: "*"
-  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-  TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+  # No TURBO_TOKEN or TURBO_TEAM here. `.github/actions/turbo-cache` sets
+  # TURBO_API, TURBO_TOKEN and TURBO_TEAM in the jobs that run tests and
+  # builds for the gate, and only once its S3-backed server answers. A job
+  # without that step runs turbo with no remote cache. A token set here would
+  # send those jobs to Vercel's cache instead, which has answered 402 since
+  # 2026-09-25 (#4233).
   # ATLAS_VERSION is no longer installed per-job — it is baked into the
   # ghcr.io/macanderson/oxagen-ci-* images. This pin stays here as the single
   # source ci-image.yml reads when building those images.
@@ -174,6 +178,14 @@ jobs:
     # builds/typechecks going forward, so this ceiling is rarely hit after the
     # first warm. The `test` job uses 60m for the same reason.
     timeout-minutes: 60
+    # A job-level block replaces the repository's default token scopes, so it
+    # lists all three this job uses: the checkout, the ghcr.io container pull,
+    # and the OIDC token `.github/actions/turbo-cache` trades for the cache
+    # role.
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     steps:
       - uses: actions/checkout@v5
         with:
@@ -203,6 +215,8 @@ jobs:
           fi
 
       - uses: ./.github/actions/pnpm-install
+
+      - uses: ./.github/actions/turbo-cache
 
       - name: Lint and typecheck
         run: |
@@ -300,9 +314,11 @@ jobs:
 
   # The gate that used to be one `test` job, split across runners. That job
   # built every app, then ran every package's coverage suite, in series on one
-  # 4-vCPU runner. With the turbo remote cache answering 402 (#4233), a
+  # 4-vCPU runner. With Vercel's turbo remote cache answering 402 (#4233), a
   # whole-repo run took 40 minutes there (run 36283641852): 15 building, 23 in
-  # coverage. The lanes below run the same builds and the same suites with the
+  # coverage. Every lane now starts `.github/actions/turbo-cache`, the S3-backed
+  # cache that replaced Vercel's, so a task whose inputs did not change is
+  # restored rather than rerun. The lanes below run the same builds and the same suites with the
   # same thresholds, in parallel. `test` at the end keeps the job name the
   # ruleset requires and the deploy jobs need.
   #
@@ -321,6 +337,12 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 40
+    # Job-level scopes replace the defaults: checkout, the ghcr.io pull, and
+    # the OIDC token for the turbo cache role (see the checks job).
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     strategy:
       # One lane failing must not cancel the others: each names its own
       # failure in the same run.
@@ -351,6 +373,8 @@ jobs:
           fi
 
       - uses: ./.github/actions/pnpm-install
+
+      - uses: ./.github/actions/turbo-cache
 
       - name: Build ${{ matrix.lane }}
         env:
@@ -402,6 +426,12 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: 45
+    # Job-level scopes replace the defaults: checkout, the ghcr.io pull, and
+    # the OIDC token for the turbo cache role (see the checks job).
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -474,6 +504,8 @@ jobs:
           fi
 
       - uses: ./.github/actions/pnpm-install
+
+      - uses: ./.github/actions/turbo-cache
 
       # A single-package lane whose package is outside the filter skips the
       # store setup and the suite. The same union rule as the build lanes
@@ -604,6 +636,12 @@ jobs:
       # No model-provider credential: the three specs (login, pay, page-load)
       # call no model, and `next start` boots without one (WL-46).
     timeout-minutes: 45
+    # Job-level scopes replace the defaults: checkout, the ghcr.io pull, and
+    # the OIDC token for the turbo cache role (see the checks job).
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     services:
       postgres:
         image: postgres:16-alpine
@@ -701,6 +739,8 @@ jobs:
         run: psql "$DATABASE_URL" -f tools/scripts/init-postgres.sql
 
       - uses: ./.github/actions/pnpm-install
+
+      - uses: ./.github/actions/turbo-cache
 
       - name: Migrate Postgres (Atlas)
         working-directory: packages/database

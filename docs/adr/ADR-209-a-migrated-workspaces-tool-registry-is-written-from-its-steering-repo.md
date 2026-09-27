@@ -27,7 +27,9 @@ folder's remote source cannot reach.
 1. **Publishing writes the registry.** `project(bundle, { folders?, now? })` in
    `packages/handlers/src/mcp-studio/project.ts` writes a published version's
    servers and tools into the registry in one transaction that holds the
-   workspace rule lock. S5's `publish()` calls it. A server folder is one
+   workspace rule lock. S5's `publish()` calls it through the deps that
+   `withToolProjection` (`mcp-studio/publish-deps.ts`) builds, because
+   `@oxagen/steering-bundle` cannot import the handlers. A server folder is one
    `mcp.mcp_servers` row found by `steering_name`. A tool is one `agent.tools`
    row whose slug is `<folder>__<key>`. A definition hash the tool has never
    carried publishes a new version, and a hash one of its versions already

@@ -322,6 +322,50 @@ export const tachoSessionPolicy = workspaceSchema.table(
   }),
 );
 
+// Per-workspace no-progress limit (spend spec, detector 1): the owning team's
+// rule that a run calling the same tool with the same input and getting the
+// same output N times in a row has stopped making progress. It covers every
+// run of the workspace, wrapped or in-app, so it is its own row and not a
+// clause of tacho_session_policy. The limit ships with no default count:
+// absent row or NULL `repeats` ⇒ no check. `cost.run-progress` runs the
+// check (packages/billing/src/no-progress-store.ts) and records each hit in
+// cost.no_progress_hits.
+export const noProgressPolicy = workspaceSchema.table(
+  "no_progress_policy",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    orgId: uuid("org_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull().unique(),
+    // The calls in a row that make a hit, the first one included. NULL = no
+    // limit set.
+    repeats: integer("repeats"),
+    // "observe" = record each hit and let the run continue; "enforced" =
+    // also pause the run at the next checkpoint, on governed calls.
+    mode: text("mode").notNull().default("observe"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgWorkspaceIdx: index("no_progress_policy_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+    modeCheck: check(
+      "no_progress_policy_mode_check",
+      sql`${t.mode} IN ('observe', 'enforced')`,
+    ),
+    // One call and one repeat of it is the smallest loop there is.
+    repeatsCheck: check(
+      "no_progress_policy_repeats_check",
+      sql`${t.repeats} IS NULL OR ${t.repeats} >= 2`,
+    ),
+  }),
+);
+
 /**
  * The wrapped-session policy table, for a database that may not have it yet.
  *

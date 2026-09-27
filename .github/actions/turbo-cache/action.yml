@@ -1,0 +1,150 @@
+name: turbo remote cache (S3)
+description: >-
+  Start turbo's remote cache server on this runner, backed by the S3 bucket in
+  infra/stacks-new/ci-deploy/turbo-cache.tf, and point every later turbo run
+  in the job at it. The job assumes the gha-turbo-cache role over GitHub OIDC,
+  so it needs `id-token: write`. The action fails open: when there is no OIDC
+  token (a fork's pull request), STS refuses the role, a command that starts
+  the server fails, the server does not answer, or a test entry does not come
+  back from the bucket, it warns and sets nothing, and turbo runs with its local cache only. A cache outage costs
+  time, never a red job.
+
+inputs:
+  role-arn:
+    description: The role that can read and write the cache bucket.
+    default: arn:aws:iam::916294258235:role/gha-turbo-cache
+  bucket:
+    description: The cache bucket.
+    default: oxagen-turbo-cache-916294258235
+  region:
+    description: The bucket's region.
+    default: us-east-1
+  team:
+    description: >-
+      The namespace entries are stored under, as `<team>/<hash>`. Turbo sends it
+      as `?slug=`.
+    default: oxagen
+  port:
+    description: The loopback port the server listens on.
+    default: "41230"
+
+runs:
+  using: composite
+  steps:
+    # Credentials go to step outputs only. With `output-env-credentials: false`
+    # the action exports no AWS_* variable, so the tests and builds that run
+    # later in the job do not receive them. Only the server process gets them.
+    - name: Assume the turbo cache role
+      id: aws
+      continue-on-error: true
+      uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+      with:
+        role-to-assume: ${{ inputs.role-arn }}
+        role-session-name: turbo-cache-${{ github.run_id }}-${{ github.run_attempt }}
+        role-duration-seconds: 3600
+        aws-region: ${{ inputs.region }}
+        output-credentials: true
+        output-env-credentials: false
+
+    - name: Start the cache server
+      if: steps.aws.outcome == 'success'
+      continue-on-error: true
+      shell: bash
+      env:
+        CACHE_AWS_ACCESS_KEY_ID: ${{ steps.aws.outputs.aws-access-key-id }}
+        CACHE_AWS_SECRET_ACCESS_KEY: ${{ steps.aws.outputs.aws-secret-access-key }}
+        CACHE_AWS_SESSION_TOKEN: ${{ steps.aws.outputs.aws-session-token }}
+        CACHE_BUCKET: ${{ inputs.bucket }}
+        CACHE_REGION: ${{ inputs.region }}
+        CACHE_TEAM: ${{ inputs.team }}
+        CACHE_PORT: ${{ inputs.port }}
+      run: |
+        set -euo pipefail
+
+        # continue-on-error hides this step's failure, so every way out of it
+        # must warn. give_up covers the checks below. This trap covers any
+        # other command that fails, such as npm ci, cp, or node, which would
+        # otherwise stop the step with no annotation. give_up leaves by exit,
+        # which does not fire the trap, so no failure warns twice.
+        pid=""
+        trap 'echo "::warning title=Turbo remote cache off::Starting the cache server failed at: $BASH_COMMAND. Turbo runs with its local cache only."; [ -z "$pid" ] || kill "$pid" 2>/dev/null || true' ERR
+
+        # Install outside the checkout, so no node_modules lands in the tree
+        # turbo hashes. The lockfile pins every package by integrity hash, and
+        # --ignore-scripts runs none of their install scripts.
+        dir="$RUNNER_TEMP/turbo-cache"
+        mkdir -p "$dir"
+        cp "$GITHUB_ACTION_PATH/package.json" "$GITHUB_ACTION_PATH/package-lock.json" "$dir/"
+        npm ci --prefix "$dir" --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error
+
+        # A fresh token per job. The server listens on loopback only, so the
+        # token guards against nothing outside this runner; it exists because
+        # turbo refuses a remote cache without one.
+        token="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+        echo "::add-mask::$token"
+
+        # The server passes S3_ACCESS_KEY and S3_SECRET_KEY to the S3 client
+        # without a session token, which STS credentials need. Leaving those
+        # unset and handing it AWS_* makes the SDK's default chain read all
+        # three. setsid keeps the server alive after this step's shell exits.
+        # BODY_LIMIT is 1 GiB because a Next.js build output can pass the
+        # 100 MB default.
+        log="$RUNNER_TEMP/turbo-cache.log"
+        env \
+          AWS_ACCESS_KEY_ID="$CACHE_AWS_ACCESS_KEY_ID" \
+          AWS_SECRET_ACCESS_KEY="$CACHE_AWS_SECRET_ACCESS_KEY" \
+          AWS_SESSION_TOKEN="$CACHE_AWS_SESSION_TOKEN" \
+          AWS_REGION="$CACHE_REGION" \
+          S3_REGION="$CACHE_REGION" \
+          STORAGE_PROVIDER=s3 \
+          STORAGE_PATH="$CACHE_BUCKET" \
+          TURBO_TOKEN="$token" \
+          HOST=127.0.0.1 \
+          PORT="$CACHE_PORT" \
+          BODY_LIMIT=1073741824 \
+          LOG_LEVEL=warn \
+          setsid nohup node "$dir/node_modules/turborepo-remote-cache/dist/cli.js" \
+          >"$log" 2>&1 </dev/null &
+        pid=$!
+
+        api="http://127.0.0.1:$CACHE_PORT"
+        give_up() {
+          echo "::warning title=Turbo remote cache off::$1 Turbo runs with its local cache only."
+          tail -n 40 "$log" || true
+          kill "$pid" 2>/dev/null || true
+          exit 1
+        }
+
+        ready=false
+        for _ in $(seq 1 40); do
+          if curl -fsS -o /dev/null "$api/v8/artifacts/status"; then
+            ready=true
+            break
+          fi
+          sleep 0.5
+        done
+        [ "$ready" = true ] || give_up "The cache server did not answer within 20 seconds."
+
+        # The status route never touches S3, and the server reads an S3 403 as
+        # a cache miss, so neither proves the role works. Write an entry and
+        # read it back: only a working bucket returns the same bytes.
+        nonce="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(16).toString("hex"))')"
+        probe="$api/v8/artifacts/probe-$nonce?slug=$CACHE_TEAM"
+        auth="Authorization: Bearer $token"
+        curl -fsS -o /dev/null -X PUT -H "$auth" -H "Content-Type: application/octet-stream" \
+          --data-binary "$nonce" "$probe" || give_up "Writing a test entry to s3://$CACHE_BUCKET failed."
+        got="$(curl -fsS -H "$auth" "$probe")" || give_up "Reading the test entry back from s3://$CACHE_BUCKET failed."
+        [ "$got" = "$nonce" ] || give_up "The test entry read back from s3://$CACHE_BUCKET did not match what was written."
+
+        {
+          echo "TURBO_API=$api"
+          echo "TURBO_TOKEN=$token"
+          echo "TURBO_TEAM=$CACHE_TEAM"
+        } >> "$GITHUB_ENV"
+        echo "Turbo remote cache ready at $api, backed by s3://$CACHE_BUCKET."
+
+    - name: Report a skipped cache
+      if: steps.aws.outcome != 'success'
+      shell: bash
+      run: |
+        echo "::warning title=Turbo remote cache off::This job could not assume the turbo cache role (a fork's pull request gets no OIDC token). Turbo runs with its local cache only."
