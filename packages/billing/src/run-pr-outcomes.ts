@@ -139,13 +139,19 @@ export interface PrStateRead {
 
 /**
  * Whether a read is older than the state the row holds. Forges deliver out of
- * order, so the forge's `updated_at` decides when both carry one, and the read
- * time decides otherwise.
+ * order, so the forge's `updated_at` decides when both carry one. A state the
+ * forge dated outranks one it did not, whatever the read times. The read time
+ * decides only between two undated states. The store's upsert holds the same
+ * order (`saveOutcomeRows`).
  */
 export function isStaleRead(row: OutcomeRow, read: PrStateRead): boolean {
   if (row.prState === null) return false;
-  if (row.sourceUpdatedAt !== null && read.sourceUpdatedAt !== null)
-    return read.sourceUpdatedAt.getTime() < row.sourceUpdatedAt.getTime();
+  if (row.sourceUpdatedAt !== null)
+    return (
+      read.sourceUpdatedAt === null ||
+      read.sourceUpdatedAt.getTime() < row.sourceUpdatedAt.getTime()
+    );
+  if (read.sourceUpdatedAt !== null) return false;
   return (
     row.prStateReadAt !== null &&
     read.readAt.getTime() < row.prStateReadAt.getTime()

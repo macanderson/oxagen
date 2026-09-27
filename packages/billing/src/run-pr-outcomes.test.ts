@@ -156,6 +156,47 @@ describe("withStateRead", () => {
     expect(withStateRead(merged, stale)).toBe(merged);
   });
 
+  it("keeps a state GitHub dated against a later read that carries no GitHub time", () => {
+    const merged = withStateRead(
+      blank,
+      read({ state: "merged", mergedAt: at("2026-09-27T09:30:00Z") }),
+    );
+    const undated = read({
+      state: "open",
+      readAt: at("2026-09-27T11:00:00Z"),
+      sourceUpdatedAt: null,
+    });
+    expect(withStateRead(merged, undated)).toBe(merged);
+  });
+
+  it("takes a dated read over an undated state, and the later read between two undated states", () => {
+    const undated = withStateRead(
+      blank,
+      read({ readAt: at("2026-09-27T10:00:00Z"), sourceUpdatedAt: null }),
+    );
+    const older = read({
+      state: "closed",
+      readAt: at("2026-09-27T09:00:00Z"),
+      sourceUpdatedAt: null,
+    });
+    expect(withStateRead(undated, older)).toBe(undated);
+    const later = read({
+      state: "closed",
+      readAt: at("2026-09-27T11:00:00Z"),
+      sourceUpdatedAt: null,
+    });
+    expect(withStateRead(undated, later).prState).toBe("closed");
+    const dated = read({
+      state: "closed",
+      readAt: at("2026-09-27T09:00:00Z"),
+      sourceUpdatedAt: at("2026-09-27T08:00:00Z"),
+    });
+    expect(withStateRead(undated, dated)).toMatchObject({
+      prState: "closed",
+      sourceUpdatedAt: at("2026-09-27T08:00:00Z"),
+    });
+  });
+
   it("never moves the read time back when a later read reports an older record", () => {
     const row = withStateRead(blank, read({ readAt: at("2026-09-27T12:00:00Z") }));
     const again = withStateRead(row, read({ readAt: at("2026-09-27T08:00:00Z") }));

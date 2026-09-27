@@ -294,9 +294,19 @@ function valuesOf(row: OutcomeRow) {
 }
 
 /**
+ * Whether the row a write carries may replace the stored row. A state GitHub
+ * dated wins over an undated one, and the later `updated_at` wins between two
+ * dated states. Between two undated states, the later read wins. An undated
+ * write never replaces a dated row, so a pass that read no GitHub time cannot
+ * undo a delivery that carried one. `isStaleRead` holds the same order for a
+ * read the refresh folds into a row in memory.
+ */
+const replacesStored = sql`(excluded.source_updated_at IS NOT NULL AND (${outcomes.sourceUpdatedAt} IS NULL OR excluded.source_updated_at >= ${outcomes.sourceUpdatedAt})) OR (excluded.source_updated_at IS NULL AND ${outcomes.sourceUpdatedAt} IS NULL AND (${outcomes.prStateReadAt} IS NULL OR excluded.pr_state_read_at >= ${outcomes.prStateReadAt}))`;
+
+/**
  * Write rows the refresh computed, one upsert per run and pull request. The
  * write keeps two things a delivery may have written since the refresh read
- * the row: a state newer than the one written, which skips the update, and a
+ * the row: a newer state, which skips the update (`replacesStored`), and a
  * revert, which stays once marked. A run that gains a pull request row loses
  * its `none` row.
  */
@@ -333,7 +343,7 @@ export async function saveOutcomeRows(
             revertedReadAt: sql`CASE WHEN ${outcomes.reverted} THEN ${outcomes.revertedReadAt} ELSE excluded.reverted_read_at END`,
             updatedAt: sql`now()`,
           },
-          setWhere: sql`${outcomes.orgId} = ${scope.orgId} AND ${outcomes.workspaceId} = ${scope.workspaceId} AND (excluded.source_updated_at IS NULL OR ${outcomes.sourceUpdatedAt} IS NULL OR excluded.source_updated_at >= ${outcomes.sourceUpdatedAt})`,
+          setWhere: sql`${outcomes.orgId} = ${scope.orgId} AND ${outcomes.workspaceId} = ${scope.workspaceId} AND (${replacesStored})`,
         })
         .returning({ id: outcomes.id });
       written += result.length;
