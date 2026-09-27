@@ -856,6 +856,17 @@ export const runTranscriptGet = registerCapability({
         .default([]),
       /** An entry cursor from an earlier read; omitted reads from the start. */
       after: z.string().max(256).optional(),
+      /**
+       * A `before` cursor from an earlier read: the page is the `limit`
+       * entries just ahead of the entry it names. Not sent with `after`.
+       */
+      before: z.string().max(256).optional(),
+      /**
+       * Where a read with no cursor opens: at the run's first entry (`start`,
+       * the default) or at its last `limit` entries (`end`), as a view that
+       * follows a live run opens. Not sent with a cursor.
+       */
+      from: z.enum(["start", "end"]).optional(),
       /** How much of each body to carry; omitted takes the zoom's cap. */
       text: transcriptTextSchema.optional(),
       /**
@@ -879,6 +890,12 @@ export const runTranscriptGet = registerCapability({
       entries: z.array(transcriptEntrySchema).max(TRANSCRIPT_ENTRY_MAX),
       /** The point to continue from; null when nothing lies past this page. */
       cursor: z.string().nullable(),
+      /**
+       * The point to read the page ahead of this one from, on a read `from`
+       * the end or `before` a cursor; null when this page opens at the run's
+       * first entry. Absent on a read from the start or after a cursor.
+       */
+      before: z.string().nullable().optional(),
       /**
        * False when the run has more frames than the read could fold, so the
        * transcript is a prefix and the caller says so rather than presenting

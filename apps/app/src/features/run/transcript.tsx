@@ -2,10 +2,11 @@
 // Run page's default: the run as its operator saw it, with the kind chips,
 // the search, the transport, the header line and the burn meter over it.
 //
-// It reads nothing of its own to open. The page already read the first page
-// of the transcript at `steps`, folded on the server (ADR-182), and the tab
-// draws it, then pages in the rest of the run and plays that (#4420). A
-// search is the other read the tab makes itself.
+// It reads nothing of its own to open. The page already read one page of the
+// transcript at `steps`, folded on the server (ADR-182): a live run's last
+// page, which the tab follows and pages up from, or any other run's first,
+// which the tab plays and pages forward from (#4420, #4427). A search is the
+// other read the tab makes itself.
 // A chip's count is the server's count of what it shows. An entry whose body
 // was not retained draws no row rather than an empty one, a body cut at the
 // contract's ceiling says so and links to the whole of it, and a transcript
@@ -27,7 +28,11 @@ import { LiveEmptyFollow } from "./live-empty-follow";
 import { Note, Panel } from "./parts";
 import type { KindFilter, RunTabProps } from "./tab-props";
 import { isNonEmpty } from "./transcript-rows";
-import { type TranscriptRun, TranscriptView } from "./transcript-view";
+import {
+  type TranscriptFrom,
+  type TranscriptRun,
+  TranscriptView,
+} from "./transcript-view";
 
 type Place = { org: string; ws: string; runId: string };
 
@@ -41,6 +46,16 @@ export function kindsParam(kinds: KindFilter): string | undefined {
   if (kinds === "none") return "none";
   const picked = TRANSCRIPT_KINDS.filter((kind) => kinds.includes(kind));
   return picked.length === 0 ? undefined : picked.join(",");
+}
+
+/**
+ * Where the Transcript tab's read opens: a live run at its last page, which
+ * the tab follows, and any other at its first entry, which the tab plays
+ * from (#4427). The page's read and the tab's view both ask this, so the
+ * view knows which read it was handed.
+ */
+export function transcriptFrom(run: Pick<RunRow, "status">): TranscriptFrom {
+  return run.status === "live" ? "end" : "start";
 }
 
 /**
@@ -130,6 +145,7 @@ function TranscriptFeed({
     <TranscriptView
       transcript={read.value}
       entries={entries}
+      from={transcriptFrom(run)}
       run={run}
       kinds={kinds}
       org={org}

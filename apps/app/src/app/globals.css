@@ -4,6 +4,7 @@
  */
 @import "@oxagen/ui/styles/globals.css";
 @import "../ui/phone.css";
+@import "../ui/transcript-skins.css";
 
 /* Scan the app's own source for utility classes. */
 @source "../";
