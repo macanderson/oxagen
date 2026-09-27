@@ -3979,6 +3979,16 @@
       "writes": []
     },
     {
+      "domain": "runtime",
+      "name": "update_runtime",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "skill",
       "name": "update_skill_config",
       "reads": [],
@@ -4175,7 +4185,7 @@
       "writes": []
     }
   ],
-  "contentHash": "07227b2b3724178309ebee74d1ac5a683b5d22da04f8c5fccc7fb8ce95dcb07d",
+  "contentHash": "68c3eb80f1c4f3de07f8d5568fddb874b21fc9bb9f97fa5e092f057fbacb9ae1",
   "domains": [
     {
       "name": "agent",
