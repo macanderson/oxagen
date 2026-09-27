@@ -550,6 +550,13 @@ export interface TranscriptPagePlan {
   high: number;
   /** The receipt the next page reads from; set only when the plan is given `settleAt`. */
   received?: TranscriptReceipt;
+  /**
+   * How many grown or late entries at or before `through` the limit left for
+   * the next page. Set only when some are left. A sealed run keeps its cursor
+   * while any remain, so a reader that stops on a null cursor still gets
+   * them (Codex review on #4421).
+   */
+  unsent?: number;
 }
 
 /**
@@ -566,7 +573,9 @@ export interface TranscriptPagePlan {
  * after the cursor's receipt, changed out of the cursor's sight: a subagent
  * frame that landed before the cursor in fold order (#4083). It is sent after
  * the grown entries, in the order its frames were received. New entries fill
- * whatever room is left.
+ * whatever room is left. The plan counts the grown and late entries the
+ * limit left (`unsent`), so the caller can tell a page that holds every
+ * change from one cut short.
  *
  * `settleAt` is the receipt time every frame received by then has certainly
  * been read by (`RECEIPT_SETTLE_MS`). Given, the plan sets the next receipt:
@@ -627,6 +636,9 @@ export function planTranscriptPage(
     through: fresh.at(-1) ?? through,
     high,
   };
+  const unsent =
+    grown.length - resent.length + (late.length - skip - lateSent.length);
+  if (unsent > 0) plan.unsent = unsent;
   if (settleAt === undefined) return plan;
   const stop = skip + lateSent.length;
   // How many of the late entries before `stop` arrived at `at`: those the
@@ -1744,9 +1756,9 @@ export function createRunTranscriptGetHandler(
     const turnOf = (turn: number | null): number | null =>
       turnBase === null ? turn : (turn ?? 0) + turnBase;
 
-    // A sealed run answers no cursor once the page holds every fold left. A
-    // live run keeps a resume point even when caught up, so the next read can
-    // pick up frames that have not landed yet.
+    // A sealed run answers no cursor once the page holds every fold and
+    // every change left. A live run keeps a resume point even when caught
+    // up, so the next read can pick up frames that have not landed yet.
     const live = run.item.status === "live";
     const startKey = startCursorSeq(run);
 
@@ -1838,7 +1850,9 @@ export function createRunTranscriptGetHandler(
         received: plan.received ?? null,
         from: nextFrom,
       });
-    const more = plan.through + 1 < folds.length;
+    // A page the limit cut off before every grown or late entry was sent
+    // leaves the rest for the next page, on a sealed run too.
+    const more = plan.through + 1 < folds.length || (plan.unsent ?? 0) > 0;
     // A read the frame cap cut short goes on while its window can move on,
     // so a reader pages past the run's first 10,000 frames.
     const onward =

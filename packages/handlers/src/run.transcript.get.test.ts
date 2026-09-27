@@ -1011,7 +1011,13 @@ describe("planTranscriptPage", () => {
   it("leaves grown folds past the limit for the next page, never dropping one", () => {
     const folds = [span(0, 9), span(1, 7), span(2, 8)];
     const first = planTranscriptPage(folds, { through: 2, high: 2 }, 2);
-    expect(first).toEqual({ indexes: [1, 2], through: 2, high: 8 });
+    // The fold that grew to 9 is left, and the plan says so.
+    expect(first).toEqual({
+      indexes: [1, 2],
+      through: 2,
+      high: 8,
+      unsent: 1,
+    });
     expect(planTranscriptPage(folds, first, 2)).toEqual({
       indexes: [0],
       through: 2,
@@ -1065,6 +1071,7 @@ describe("planTranscriptPage", () => {
         through: 2,
         high: 2,
         received: { after: 499, sent: 2 },
+        unsent: 1,
       });
       expect(planTranscriptPage(folds, first, 2, 1000)).toEqual({
         indexes: [2],
@@ -1168,6 +1175,7 @@ describe("planTranscriptPage", () => {
         through: 3,
         high: 11,
         received: { after: 499, sent: 0 },
+        unsent: 1,
       });
       const second = planTranscriptPage(folds, first, 2, 1000);
       expect(second).toEqual({
@@ -2066,6 +2074,49 @@ describe("get_run_transcript and a late subagent frame (#4083)", () => {
       expect(fourth.entries).toEqual([]);
     },
   );
+
+  it("keeps a cursor on a sealed run while late entries remain past the limit", async () => {
+    const { root, children } = twoSubagents();
+    const reading = harness(root, live, children);
+    const first = await reading.transcript(
+      input({ zoom: "everything" }),
+      ctx(),
+    );
+    // Subagent A records two model calls, both before the cursor in fold
+    // order, and the run seals.
+    for (const seq of [1, 2]) {
+      children.push(
+        onA(seq, {
+          kind: "llm_call",
+          ...bare,
+          costUsdMicros: 300,
+          receivedAt: receipt(NOW + 1_000),
+        }),
+      );
+    }
+    const { transcript } = harness(root, undefined, children, {
+      now: () => NOW + 5_000,
+    });
+    const second = await transcript(
+      input({ zoom: "everything", limit: 1, after: first.cursor as string }),
+      ctx(),
+    );
+    expect(second.entries.map((e) => [e.seq, e.subagent?.sessionUuid])).toEqual(
+      [["1", A]],
+    );
+    // The page holds every fold, but not every change: a null cursor here
+    // lost the second call (Codex review on #4421).
+    expect(second.cursor).not.toBeNull();
+    const third = await transcript(
+      input({ zoom: "everything", limit: 1, after: second.cursor as string }),
+      ctx(),
+    );
+    expect(third.entries.map((e) => [e.seq, e.subagent?.sessionUuid])).toEqual(
+      [["2", A]],
+    );
+    // Negative control: with nothing left, the sealed run answers no cursor.
+    expect(third.cursor).toBeNull();
+  });
 
   it("sends a frame received inside the settle margin that the read before it missed", async () => {
     // Ingest stamps a batch's receipt time before ClickHouse can return the
