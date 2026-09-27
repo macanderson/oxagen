@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { lockedMcpTool, lockedMcpToolSchema, mcpToolSchema, mcpToolsListResultSchema } from "../contract/mcp-tool";
 import { lockedUpstream, upstreamFromMcpTool } from "./from-mcp";
-import { upstreamToolSchema, type UpstreamTool } from "./upstream-tool";
+import { cutDescription, upstreamToolSchema, type UpstreamTool } from "./upstream-tool";
 
 const annotated = mcpToolSchema.parse({
   name: "create_refund",
@@ -96,6 +96,14 @@ describe("upstreamFromMcpTool", () => {
     expect(upstream).not.toHaveProperty("annotations");
   });
 
+  it("cuts a 2,000-character description at 1,024 characters", () => {
+    const verbose = mcpToolSchema.parse({ name: "list_charges", description: "x".repeat(2000), inputSchema: { type: "object" } });
+    const upstream = upstreamFromMcpTool(verbose);
+    expect(upstream.description).toBe("x".repeat(1024));
+    expect(upstreamToolSchema.safeParse(upstream).success).toBe(true);
+    expect(upstreamToolSchema.safeParse({ ...upstream, description: "x".repeat(1025) }).success).toBe(false);
+  });
+
   it("maps a bare tool to its name, schema, and request only", () => {
     expect(upstreamFromMcpTool(bare)).toStrictEqual({
       name: "list_charges",
@@ -134,5 +142,18 @@ describe("lockedUpstream", () => {
       },
     };
     expect(lockedUpstream(http)).toBe(http);
+  });
+});
+
+describe("cutDescription", () => {
+  it("keeps a description of 1,024 characters or fewer", () => {
+    expect(cutDescription("Read one issue.")).toBe("Read one issue.");
+    expect(cutDescription("x".repeat(1024))).toBe("x".repeat(1024));
+  });
+
+  it("drops a surrogate pair the cut would split", () => {
+    const text = `${"a".repeat(1023)}\u{1F600}b`;
+    expect(cutDescription(text)).toBe("a".repeat(1023));
+    expect(cutDescription(`${"a".repeat(1022)}\u{1F600}b`)).toBe(`${"a".repeat(1022)}\u{1F600}`);
   });
 });

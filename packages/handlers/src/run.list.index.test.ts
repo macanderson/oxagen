@@ -306,6 +306,16 @@ describe("the index page query", () => {
     expect(sql).toContain("::bigint");
   });
 
+  it("sorts a session's reported zero as a cost only when the gateway observed it", () => {
+    // A self-reported basis such as `unknown` rides the session row since
+    // #2951, so the fallback names `observed` rather than any basis.
+    const { sql, params } = pageSql({ order: { key: "cost", dir: "desc" } });
+    const { tacho } = branches(sql);
+    expect(tacho).toMatch(/"sessions"\."cost_basis" = \$\d+/);
+    expect(tacho).not.toContain('"sessions"."cost_basis" is not null');
+    expect(params).toContain("observed");
+  });
+
   it("reads one row past the page, from the offset", () => {
     const { sql, params } = pageSql({ limit: 25, offset: 50 });
     expect(sql).toMatch(/limit \$\d+ offset \$\d+$/);

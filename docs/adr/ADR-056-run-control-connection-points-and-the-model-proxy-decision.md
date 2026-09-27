@@ -1,6 +1,6 @@
 # ADR-056: Run control connection points and the model-proxy decision
 
-- **Status:** Accepted; amended 2026-09-15 (run token) and 2026-09-18 (ledger producers exist; the proxy decision is ADR-094)
+- **Status:** Accepted; amended 2026-09-15 (run token), 2026-09-18 (ledger producers exist; the proxy decision is ADR-094), and 2026-09-26 (a steer for an idle agent waits for its next run)
 - **Date:** 2026-09-14
 - **Owners:** platform
 - **Related:** issue #2953 (run controls: pause, resume, cancel, steer with a
@@ -258,3 +258,51 @@ applied receipt, and the Run page disables the cancelled ingress control.
 Ledger Pause sets `agent_runs.ingress_paused` under the run row lock. The next evidence append or attempt admission refuses the paused run before writing. Resume clears that fence under the same lock. Both changes and their applied command receipts commit together. Cancellation remains separate and terminal: Resume refuses a cancelled run and never revives revoked credentials. These actions govern evidence admission, not the external process.
 
 The app reads the ingress flag independently of run outcome and labels the pause accordingly. The command receipt keeps the operator's reason. A pause does not extend credential expiry. After a long pause an operator must issue a new credential when resuming evidence delivery.
+
+## Amendment 2026-09-26: a steer for an idle agent waits for its next run
+
+Decision 2 said `target_kind` admits `host` and `run`, and that an
+`@<agent-key>` address is recorded in `payload.address`, never as a row of
+its own. That still holds for an agent with a run in flight. It no longer
+holds for an agent with none. #2953 asks that a steer sent to an idle agent
+reach its next run, and #4421 ships it.
+
+- **`target_kind` admits `agent`.** Migration
+  `20260926210000_live_run_page_agent_steer_interjection_answers_session_identity.sql`
+  widens the CHECK, and `TACHO_COMMAND_TARGET_KINDS` in
+  `packages/database/src/schema/tacho.ts` names the third kind.
+- **The row waits on the agent.** When `dispatch_command` sends a `steer` or
+  `message` to `@<agent-key>` and the agent has no run in flight, it writes
+  one row with `target_kind = agent`, `target_id` the agent key, and no host
+  and no session. No host drains that row. A host reads a command with no
+  session as a host-level command and would fan it out to whatever runs it
+  held at that moment.
+- **It is queued only when a host can open the run.** Dispatch writes the
+  row only while a host enrolled as the agent is not revoked. With no such
+  host, it queues nothing and its answer lists no command.
+- **A correction still delivers once.** A newer steer to the same idle agent
+  cancels the earlier queued one with `superseded_by:<id>`. A transaction
+  advisory lock keyed on the workspace, the agent, and the command orders two
+  dispatches that arrive together, so the later one cancels the earlier.
+- **Ingest re-addresses it to the next run.** When the agent's next root
+  session reaches ingest, `readdressNextRunCommands`
+  (`packages/handlers/src/lib/next-run-commands.ts`) turns each queued row
+  into a row for that run, in the transaction that writes the session. It
+  resolves the delivery mode against that run the way dispatch does for a
+  run in flight. The control envelope on the same ingest response carries
+  the row, and the host delivers it at the first boundary its harness can
+  carry. That is the run's first prompt when the envelope lands before it,
+  and otherwise the next tool call or the end of the turn.
+- **Some rows cannot be delivered.** A Stella run reads steering text only
+  when its session starts, and that has passed by the time ingest sees the
+  session, so the row becomes `failed` with `no_prompt_carrier`. A row past
+  its expiry becomes `expired` at re-addressing, since the host's sweep never
+  reads a row that names no host. When two runs of the agent open together,
+  the UPDATE re-reads its WHERE under the row lock, so each row goes to one
+  run.
+- **A host with no session to act on does not claim `applied`.** A
+  host-level command that reaches no agent session is acknowledged `failed`
+  with `no live agent session on this host`, and the daemon's chain records
+  no command applied (`packages/tacho/src/collector/inbox.ts`).
+- **Pause, resume, and cancel are unchanged.** Sent to an idle agent, they
+  still reach nothing.

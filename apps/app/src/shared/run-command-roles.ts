@@ -8,8 +8,9 @@
 // `org_role_required`. So it is written once, here, where both may read it.
 //
 // The other run writes keep their rules here for the same reason: `seal_run`
-// (`canSealRun`) and `fork_run` (`canForkRun`), whose Fork button the header
-// and the Chain tab both draw.
+// (`canSealRun`), `fork_run` (`canForkRun`), whose Fork button the header
+// and the Chain tab both draw, and a path answer to a repository question
+// (`canAnswerRepositoryQuestion`).
 //
 // The roles arrive as strings. A rule that classifies a role value needs no
 // edge to the viewer seam, and this layer has none (ARCHITECTURE.md §2); the
@@ -29,6 +30,21 @@ export function canCommandRun(orgRole: string, wsRole: string): boolean {
  * agent with Cancel, but sealing also closes the record, so it is not theirs.
  */
 export function canSealRun(orgRole: string, wsRole: string): boolean {
+  return COMMANDING_ORG_ROLES.has(orgRole) || wsRole === "owner";
+}
+
+/**
+ * Whether this viewer may answer a run's repository question with a path
+ * (`answer_interjection`, #3941): an organization Owner or Admin, or the
+ * workspace's Owner. A path answer links the repository or creates a
+ * workspace, the pair `link_repository` and `create_workspace` admit, so the
+ * handler holds a workspace Member to the same pair even though the
+ * contract's `defaultRoles` admit a Member for a free-text answer.
+ */
+export function canAnswerRepositoryQuestion(
+  orgRole: string,
+  wsRole: string,
+): boolean {
   return COMMANDING_ORG_ROLES.has(orgRole) || wsRole === "owner";
 }
 

@@ -130,6 +130,32 @@ export interface SessionControl {
    * sends no second acknowledgement.
    */
   resumeOwed?: string;
+  /**
+   * The host checked, at the session's first prompt, whether the session's
+   * repository is one the organisation bound (#3941). The check runs once per
+   * session, so a replayed or later prompt never raises a second question.
+   */
+  repoChecked?: true;
+  /**
+   * The question the host holds the loop to ask, from the `control.interject`
+   * it sealed until an answer or the timeout settles it. Every prompt while
+   * it is held is refused with the question.
+   */
+  interjection?: HeldInterjection;
+}
+
+/** A question the host is holding the session's loop to ask (#3941). */
+export interface HeldInterjection {
+  /** The ULID the `control.interject` frame names it by. */
+  key: string;
+  /** The text the harness showed, which every refused prompt shows again. */
+  question: string;
+  /** Protocol timestamp: after it, the host answers `deny` itself. */
+  expiresAt: string;
+  /** The workspace the link path binds the repository to. */
+  workspaceSlug: string;
+  /** The skills configuration version the bundle named; null when none. */
+  configVersion: string | null;
 }
 
 export interface SessionFacts {
@@ -1245,6 +1271,12 @@ export class SessionRegistry {
         ...(record.control.resumeOwed !== undefined
           ? { resumeOwed: record.control.resumeOwed }
           : {}),
+        ...(record.control.repoChecked === true
+          ? { repoChecked: true as const }
+          : {}),
+        ...(record.control.interjection !== undefined
+          ? { interjection: { ...record.control.interjection } }
+          : {}),
       },
       startedAt: record.startedAt,
       lastSeenAt: record.lastSeenAt,
@@ -1302,6 +1334,13 @@ export class SessionRegistry {
             : {}),
           ...(persisted.control.resumeOwed !== undefined
             ? { resumeOwed: persisted.control.resumeOwed }
+            : {}),
+          // Absent in state files written before the repository question.
+          ...(persisted.control.repoChecked === true
+            ? { repoChecked: true as const }
+            : {}),
+          ...(persisted.control.interjection !== undefined
+            ? { interjection: { ...persisted.control.interjection } }
             : {}),
         },
         startedAt: persisted.startedAt,

@@ -53,7 +53,12 @@
  */
 import { digestBytes, type Sha256Digest } from "../digest";
 import { MAX_OBSERVED_CHANGES } from "../envelope";
+import { canonicalRemote, foldedRemote } from "../remote";
 import type { ExecAsync, ExecResult } from "../host/service";
+
+// The rule lives in the leaf module `../remote`, which the control plane
+// imports from the package root. The host keeps importing it from here.
+export { canonicalRemote };
 
 /** Repository facts for one working directory, all optional. */
 export interface GitFacts {
@@ -215,47 +220,49 @@ export async function readGitFacts(
 }
 
 /**
- * The remote URL reduced to the repository it names, so two hosts working
- * the same repository digest to the same value.
- *
- * The digest exists to tell repositories apart without saying which one, so
- * it has to depend on the repository and nothing else. A remote often
- * carries per-machine credentials in its userinfo
- * (`https://user:token@host/acme/repo.git`), and hashing that raw made the
- * identity depend on the token: two developers, or one developer after a
- * rotation, produced different digests for the same repository and nothing
- * downstream could correlate them.
- *
- * So the userinfo, the query, and the fragment go, the scheme and the `.git`
- * suffix go, `scp` syntax (`git@host:acme/repo.git`) is folded onto the same
- * shape as its URL form, and the host is lowercased. The path is not, because a repository name is
- * case sensitive on most forges. None of this is reversible and none of it
- * needs to be: nothing reads the digest back, it is only compared.
+ * The repository a session runs in, as the host names it when it asks
+ * whether the organisation has bound it (#3941).
  */
-export function canonicalRemote(remote: string): string {
-  let value = remote.trim();
-  // `git@host:acme/repo.git` is the same repository as
-  // `ssh://git@host/acme/repo.git`.
-  const scp = /^([^/@]+)@([^/:]+):(.+)$/.exec(value);
-  if (scp !== null && !value.includes("://"))
-    value = `ssh://${scp[2] ?? ""}/${scp[3] ?? ""}`;
-  value = value.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "");
-  // Userinfo, which is where a token rides.
-  const at = value.indexOf("@");
-  const firstSlash = value.indexOf("/");
-  if (at !== -1 && (firstSlash === -1 || at < firstSlash))
-    value = value.slice(at + 1);
-  // The query and the fragment, which is where the other kind of token rides
-  // (`https://host/acme/repo.git?access_token=...`). Left on, the token
-  // changed the digest on every rotation, and the `.git` suffix was no longer
-  // at the end for the line below to find.
-  value = value.replace(/[?#].*$/, "");
-  // Trailing slashes first: the `.git` anchor does not match with one after
-  // it, so the other order left `repo.git/` carrying its suffix.
-  value = value.replace(/\/+$/, "").replace(/\.git$/, "");
-  const slash = value.indexOf("/");
-  if (slash === -1) return value.toLowerCase();
-  return `${value.slice(0, slash).toLowerCase()}${value.slice(slash)}`;
+export interface RepositoryRemote {
+  /** sha256 of `canonicalRemote(origin)`, the `git_remote_digest` rule. */
+  remote_digest: Sha256Digest;
+  /**
+   * sha256 of `foldedRemote(canonicalRemote(origin))`, which matches a
+   * binding stored in another case on a forge that ignores it.
+   */
+  remote_digest_folded: Sha256Digest;
+  /**
+   * The last segment of the remote's path, which the create path proposes
+   * as the new workspace's name. The owner and the host stay on the machine.
+   */
+  name?: string;
+  head_sha?: string;
+}
+
+/**
+ * The digests of the `origin` remote and its repository's name, or undefined
+ * when the directory is in no repository or has no `origin`. The two reads
+ * answer independent questions, so they are asked at once: this runs while a
+ * harness waits on its first prompt.
+ */
+export async function readRepositoryRemote(
+  exec: ExecAsync,
+  cwd: string,
+): Promise<RepositoryRemote | undefined> {
+  const [remote, head] = await Promise.all([
+    git(exec, cwd, ["remote", "get-url", "origin"]).then(firstLine),
+    git(exec, cwd, ["rev-parse", "HEAD"]).then(firstLine),
+  ]);
+  if (remote === undefined) return undefined;
+  const canonical = canonicalRemote(remote);
+  const slash = canonical.lastIndexOf("/");
+  const name = slash === -1 ? "" : canonical.slice(slash + 1);
+  return {
+    remote_digest: digestBytes(canonical),
+    remote_digest_folded: digestBytes(foldedRemote(canonical)),
+    ...(name.length > 0 ? { name } : {}),
+    ...(head !== undefined ? { head_sha: head } : {}),
+  };
 }
 
 /**

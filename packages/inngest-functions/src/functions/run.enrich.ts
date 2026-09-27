@@ -36,7 +36,7 @@ import {
   ENRICHMENT_RUN_TOTAL_BUDGET_MICROS,
   usdMicros,
 } from "../lib/run-enrichment";
-import { resolveRunRecord, runFramePages } from "../lib/run-record";
+import { readTranscriptFramesOf, resolveRunRecord } from "../lib/run-record";
 import { logger } from "../logger";
 
 import { RUN_ENRICH_EVENT } from "../events";
@@ -745,13 +745,14 @@ export const [runEnrich, runEnrichOnFailure] = createFunction(
         if (!previous) return null;
         const record = await resolveRunRecord(scope, data.runPublicId);
         if (!record) return null;
-        // The frames arrive a page at a time, and the read stops pulling
-        // pages at its ceiling, so one step holds one page of frames and at
-        // most the text ceiling (#3784).
-        const transcript = await collectRunText(
-          scope,
-          runFramePages(scope, record),
-          (s, ref) => evidenceStore().getBody(s, ref),
+        // Every chain the run recorded, its subagents' included, as the Run
+        // page folds them: a subagent's work belongs in the run's account
+        // (#3823). The read holds up to `TRANSCRIPT_FRAME_CAP` frames, which
+        // carry body references and no bodies. The text stops at its
+        // ceiling, and no body past it is opened (#3784).
+        const { frames } = await readTranscriptFramesOf(scope, record);
+        const transcript = await collectRunText(scope, frames, (s, ref) =>
+          evidenceStore().getBody(s, ref),
         );
         const { chunks, firstPrompt, ...facts } = transcript;
         // Until a model writes the account, the run is named for its first

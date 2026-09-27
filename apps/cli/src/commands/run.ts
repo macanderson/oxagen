@@ -1,11 +1,20 @@
 /**
- * `oxagen run list`, `oxagen run export <run-id>`,
+ * `oxagen run list`, `oxagen run show <run-id>`, `oxagen run export <run-id>`,
  * `oxagen run export-status <export-id>`, `oxagen run download <export-id>`,
- * `oxagen run chain <run-id>` and `oxagen run turns <run-id>`: the CLI parity
- * surfaces for `list_runs`, `export_run`, `get_run_export`, `get_run_chain`
- * and `get_run_turns` (Mission Control spec §12.9, §13.4, §14.1; ADR-058).
+ * `oxagen run chain <run-id>`, `oxagen run turns <run-id>` and
+ * `oxagen run transcript <run-id>`: the CLI parity surfaces for `list_runs`,
+ * `get_run`, `export_run`, `get_run_export`, `get_run_chain`, `get_run_turns`
+ * and `get_run_transcript` (Mission Control spec §12.9, §13.4, §14.1;
+ * ADR-058).
  *
  * `list` prints the workspace's runs, newest first, one page at a time.
+ *
+ * `show` prints one run's header, the pause in force, and the first page of
+ * its frames, as `get_run` answers them.
+ *
+ * `transcript` prints one page of a run's transcript at a zoom, narrowed to
+ * the chips asked for and to the entries that hold a query, with each chip's
+ * count over the whole run.
  *
  * `export` queues the signed, offline-verifiable evidence bundle for one
  * sealed run and prints the export id. The bundle is built off the request
@@ -21,6 +30,7 @@ import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { formatUsd } from "@oxagen/billing/rate-card";
+import { isTranscriptKind, TRANSCRIPT_KINDS } from "@oxagen/tacho";
 import { apiPostOrThrow, printTable } from "../lib/api.js";
 import { getApiUrl } from "../lib/config.js";
 import { createOutput } from "../lib/output.js";
@@ -289,6 +299,16 @@ interface RunChainResult {
   recordedGrade: string | null;
   ladder: { grade: string; met: boolean; reason: string }[];
   complete: boolean;
+  /** A wrapped run's subagent chains, each walked on its own (#3823). */
+  chains?: {
+    sessionUuid: string;
+    subagentId: string | null;
+    subagentType: string | null;
+    frameCount: number;
+    gaps: { missingFrameCount: number; missingBodies: number };
+    sealedAt: string | null;
+    complete: boolean;
+  }[];
 }
 
 /**
@@ -368,6 +388,22 @@ export async function runChain(
   }
   if (result.checkpoints.length > 0) {
     writer.write(`${result.checkpoints.length} signed checkpoint(s).`);
+  }
+  // Each subagent chain numbers its own frames from 0, so its gaps are its
+  // own and are printed on its own line.
+  const chains = result.chains ?? [];
+  if (chains.length > 0) {
+    writer.write("");
+    writer.write("Subagent chains");
+    for (const chain of chains) {
+      const name =
+        chain.subagentType ?? chain.subagentId ?? chain.sessionUuid;
+      writer.write(
+        `  ${name} (${chain.sessionUuid}): ${chain.frameCount} frames, ${chain.gaps.missingFrameCount} missing frames, ${chain.gaps.missingBodies} missing bodies${
+          chain.sealedAt === null ? ", unsealed" : ""
+        }${chain.complete ? "" : ", cut short"}`,
+      );
+    }
   }
   if (!result.complete) {
     writer.write(
@@ -471,6 +507,511 @@ export async function runTurns(
       `The run is longer than one read carries. These are its first ${result.turns.length} turns.`,
     );
   }
+}
+
+// ── oxagen run transcript ────────────────────────────────────────────────────
+
+/** The zoom levels and body lengths `get_run_transcript` takes. */
+const TRANSCRIPT_ZOOMS = ["turns", "steps", "everything"] as const;
+const TRANSCRIPT_TEXTS = ["excerpt", "full"] as const;
+/** The contract's bounds on a query and a page. */
+const TRANSCRIPT_QUERY_MAX = 200;
+const TRANSCRIPT_LIMIT_MAX = 500;
+
+/** One entry of the `get_run_transcript` output, as far as the CLI prints it. */
+interface RunTranscriptEntry {
+  seq: string;
+  key?: string;
+  kind: string;
+  label: string;
+  kinds: string[];
+  turn: number | null;
+  node?: string | null;
+  quiet?: boolean;
+  outcome?: string | null;
+  tool?: string | null;
+  model?: string | null;
+  matches?: string[];
+}
+
+/** Mirrors the `get_run_transcript` contract output, as far as the CLI prints it. */
+export interface RunTranscriptResult {
+  zoom: string;
+  kinds: string[];
+  entries: RunTranscriptEntry[];
+  cursor: string | null;
+  complete: boolean;
+  /** Present only on a read that starts at the run's first frame. */
+  counts?: {
+    kinds: Record<string, number>;
+    entries: number;
+    errors: number;
+    policy: number;
+  };
+  /** Present only on a read with a query. */
+  search?: { query: string; matched: number; unsearched: number };
+}
+
+export interface RunTranscriptOptions {
+  zoom?: string;
+  /** Chips to keep, comma-separated. */
+  kinds?: string;
+  query?: string;
+  after?: string;
+  limit?: number;
+  text?: string;
+  json?: boolean;
+}
+
+/** The chips in `--kinds`, each once, or the first word no chip answers to. */
+function parseKinds(
+  value: string | undefined,
+): { kinds: string[] } | { unknown: string } {
+  const words = (value ?? "")
+    .split(",")
+    .map((word) => word.trim())
+    .filter((word) => word !== "");
+  const unknown = words.find((word) => !isTranscriptKind(word));
+  if (unknown !== undefined) return { unknown };
+  return { kinds: [...new Set(words)] };
+}
+
+/** `a or b`, and `a, b, or c` past two. */
+function orList(words: readonly string[]): string {
+  if (words.length <= 2) return words.join(" or ");
+  return `${words.slice(0, -1).join(", ")}, or ${words.at(-1) ?? ""}`;
+}
+
+/** `1 entry`, `2 entries`. */
+function countOf(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** Left-aligned columns two spaces apart, as `oxagen run turns` prints them. */
+function writeColumns(rows: string[][], writer: CommandWriter): void {
+  const widths = (rows[0] ?? []).map((_, col) =>
+    Math.max(...rows.map((r) => (r[col] ?? "").length)),
+  );
+  for (const r of rows) {
+    writer.write(
+      r
+        .map((cell, col) => cell.padEnd(widths[col] ?? 0))
+        .join("  ")
+        .trimEnd(),
+    );
+  }
+}
+
+/**
+ * `oxagen run transcript <run-id>`: one page of `get_run_transcript`.
+ *
+ * `--kinds` keeps the entries that answer any of the chips named, and
+ * `--query` keeps the entries that hold the words in their label, tool,
+ * target or kept bodies. The server checks both. The CLI refuses a chip
+ * name, a zoom, a body length or a page size the contract does not take
+ * before it sends anything.
+ *
+ * Pretty mode prints the count per chip over the whole run, which only a
+ * read from the run's start carries, then what a query found, then the
+ * page's entries with their turn, key, row, name and outcome. An entry with
+ * nothing to show (`quiet`) is left out, as the Run page leaves it out, and
+ * `--json` lists it. A count or a match count from a read that stopped short
+ * of the run's end prints as a floor (`12+`).
+ */
+export async function runTranscript(
+  runId: string,
+  opts: RunTranscriptOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  const zoom = opts.zoom ?? "steps";
+  if (!(TRANSCRIPT_ZOOMS as readonly string[]).includes(zoom)) {
+    out.error(
+      `--zoom takes ${orList(TRANSCRIPT_ZOOMS)}, not "${zoom}".`,
+      "usage",
+    );
+    return;
+  }
+  const chips = parseKinds(opts.kinds);
+  if ("unknown" in chips) {
+    out.error(
+      `No chip is named "${chips.unknown}". --kinds takes ${orList(TRANSCRIPT_KINDS)}, comma-separated.`,
+      "usage",
+    );
+    return;
+  }
+  if (
+    opts.text !== undefined &&
+    !(TRANSCRIPT_TEXTS as readonly string[]).includes(opts.text)
+  ) {
+    out.error(
+      `--text takes ${orList(TRANSCRIPT_TEXTS)}, not "${opts.text}".`,
+      "usage",
+    );
+    return;
+  }
+  if (
+    opts.limit !== undefined &&
+    (!Number.isInteger(opts.limit) ||
+      opts.limit < 1 ||
+      opts.limit > TRANSCRIPT_LIMIT_MAX)
+  ) {
+    out.error(
+      `--limit takes a whole number from 1 to ${TRANSCRIPT_LIMIT_MAX}.`,
+      "usage",
+    );
+    return;
+  }
+  const query = opts.query?.trim();
+  if (
+    query !== undefined &&
+    (query === "" || query.length > TRANSCRIPT_QUERY_MAX)
+  ) {
+    out.error(
+      `--query takes 1 to ${TRANSCRIPT_QUERY_MAX} characters of words to search for.`,
+      "usage",
+    );
+    return;
+  }
+
+  let result: RunTranscriptResult;
+  try {
+    result = await apiPostOrThrow<RunTranscriptResult>("runs/transcript", {
+      runId,
+      zoom,
+      ...(chips.kinds.length === 0 ? {} : { kinds: chips.kinds }),
+      ...(query === undefined ? {} : { query }),
+      ...(opts.after === undefined ? {} : { after: opts.after }),
+      ...(opts.limit === undefined ? {} : { limit: opts.limit }),
+      ...(opts.text === undefined ? {} : { text: opts.text }),
+    });
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+
+  const { counts, search, complete } = result;
+  const count = (n: number) => (complete ? String(n) : `${n}+`);
+  const shown = result.entries.filter((entry) => entry.quiet !== true);
+  writer.write(
+    `${runId} at ${result.zoom}: ${countOf(shown.length, "entry", "entries")} on this page${
+      counts === undefined ? "" : `, ${count(counts.entries)} in the run`
+    }`,
+  );
+  if (counts !== undefined) {
+    const chipCounts = TRANSCRIPT_KINDS.filter(
+      (kind) => counts.kinds[kind] !== undefined,
+    ).map((kind) => `${kind} ${count(counts.kinds[kind] ?? 0)}`);
+    writer.write(`Counts: ${chipCounts.join(", ")}`);
+  }
+  if (search !== undefined) {
+    // The search reads the same frames the counts do, so a read that stopped
+    // short of the run's end found a floor too.
+    writer.write(`Search "${search.query}": ${count(search.matched)} matched`);
+    if (search.unsearched > 0) {
+      writer.write(
+        `The search is partial: it could not look inside ${countOf(search.unsearched, "kept body", "kept bodies")}.`,
+      );
+    }
+  }
+  writer.write("");
+  if (shown.length === 0) {
+    writer.write("No entries on this page.");
+  } else {
+    const dash = "-";
+    writeColumns(
+      [
+        [
+          "Turn",
+          "Key",
+          "Row",
+          "Name",
+          "Outcome",
+          ...(search === undefined ? [] : ["Matched in"]),
+        ],
+        ...shown.map((entry) => [
+          entry.turn === null ? dash : String(entry.turn),
+          entry.key ?? entry.seq,
+          entry.node ?? entry.kind,
+          entry.tool ?? entry.model ?? entry.label,
+          entry.outcome ?? dash,
+          ...(search === undefined
+            ? []
+            : [(entry.matches ?? []).join(", ") || dash]),
+        ]),
+      ],
+      writer,
+    );
+  }
+  const quiet = result.entries.length - shown.length;
+  if (quiet > 0) {
+    writer.write(
+      `${quiet === 1 ? "1 entry with nothing to show is" : `${quiet} entries with nothing to show are`} left out. --json lists them.`,
+    );
+  }
+  if (result.cursor !== null) {
+    // A live run answers a cursor on every read, past its last entry too, and
+    // its next page resends the entries whose frames arrived in the last
+    // minute (RECEIPT_SETTLE_MS). The output does not say which case this is.
+    writer.write(`Next page: pass --after ${result.cursor}.`);
+    writer.write(
+      "A live run keeps a cursor after its last entry. Its next page reads what the run records next and can repeat entries from the last minute.",
+    );
+  }
+  if (!complete) {
+    writer.write(
+      "The run is longer than one read carries. These entries cover its first part.",
+    );
+  }
+}
+
+/** Mirrors the `get_run` contract's pause, as far as the CLI prints it. */
+interface RunShowPause {
+  state: "pausing" | "paused" | "resuming";
+  seq: string | null;
+  turn: number | null;
+  step: number | null;
+  by: { id: string; name: string | null } | null;
+  issuedAt: string;
+  appliedAt: string | null;
+  reason: string | null;
+}
+
+/** Mirrors the `get_run` contract's subagent chain head. */
+interface RunShowChainHead {
+  sessionUuid: string;
+  parentSessionUuid: string | null;
+  subagentId: string | null;
+  subagentType: string | null;
+  spawnCallId: string | null;
+  lastSeq: string | null;
+  frameCount: number;
+}
+
+/** Mirrors the `get_run` contract output, as far as `oxagen run show` prints it. */
+export interface RunShowResult {
+  run: {
+    id: string;
+    name: string | null;
+    agentKey: string | null;
+    operatorId: string | null;
+    operatorName: string | null;
+    operatorAttribution: "initiator" | "host_enroller" | null;
+    status: "live" | "sealed" | "halted";
+    outcome: string;
+    turns: number | null;
+    steps: number;
+    frames: number;
+    cost: { micros: string; currency: string; basis: string } | null;
+    costIsEstimate?: boolean;
+    startedAt: string;
+    sealedAt: string | null;
+    replayGrade: string | null;
+    enforcementTier: string;
+    pause?: RunShowPause | null;
+  };
+  frames: {
+    frames: {
+      seq: string;
+      observedAt: string;
+      type: string;
+      summary: string;
+    }[];
+    cursor: string | null;
+  };
+  framesError?: { code: string; message: string };
+  /** Every subagent chain's head; absent on a ledger run. */
+  chains?: { cursor: string; heads: RunShowChainHead[]; complete: boolean };
+}
+
+/** What a pause state still waits on, for the states that wait on something. */
+const PAUSE_NOTES: Record<RunShowPause["state"], string | null> = {
+  pausing: "It takes effect at the next boundary.",
+  paused: null,
+  resuming: "A resume is queued behind it.",
+};
+
+/**
+ * Who the run names as its operator. A wrapped run names the person who
+ * enrolled its host, which is not always the person at the keyboard, so it
+ * says so.
+ */
+function operatorOf(run: RunShowResult["run"]): string {
+  const who = run.operatorName ?? run.operatorId;
+  if (who === null) return NOT_RECORDED;
+  return run.operatorAttribution === "host_enroller"
+    ? `${who} (enrolled the host)`
+    : who;
+}
+
+/** The pause's lines, with every part the record does not hold left out. */
+function pauseLines(pause: RunShowPause): string[] {
+  const lines = [`Pause: ${pause.state}`];
+  const note = PAUSE_NOTES[pause.state];
+  if (note !== null) lines.push(`  ${note}`);
+  const place = [
+    ...(pause.turn === null ? [] : [`turn ${pause.turn}`]),
+    ...(pause.step === null ? [] : [`step ${pause.step}`]),
+  ];
+  if (place.length > 0) lines.push(`  At: ${place.join(", ")}`);
+  const by = pause.by === null ? NOT_RECORDED : (pause.by.name ?? pause.by.id);
+  lines.push(`  Issued by: ${by} at ${pause.issuedAt}`);
+  if (pause.appliedAt !== null) lines.push(`  Applied: ${pause.appliedAt}`);
+  if (pause.reason !== null) lines.push(`  Reason: "${pause.reason}"`);
+  if (pause.seq !== null) lines.push(`  Pause frame: seq ${pause.seq}`);
+  return lines;
+}
+
+/** The subagent chain heads, one row each, and how to read one. */
+function writeChainHeads(
+  runId: string,
+  chains: NonNullable<RunShowResult["chains"]>,
+  writer: CommandWriter,
+): void {
+  const n = chains.heads.length;
+  writer.write("");
+  writer.write(`Subagent chains: ${chains.complete ? n : `${n}+`}`);
+  writeColumns(
+    [
+      ["Session", "Type", "Frames", "Last seq"],
+      ...chains.heads.map((head) => [
+        head.sessionUuid,
+        head.subagentType ?? NOT_RECORDED,
+        String(head.frameCount),
+        head.lastSeq ?? "none",
+      ]),
+    ],
+    writer,
+  );
+  if (!chains.complete) {
+    writer.write("The run has more subagent chains than one read lists.");
+  }
+  writer.write(
+    `Read a chain's frames with \`oxagen run show ${runId} --session <session>\`.`,
+  );
+}
+
+/** What `oxagen run show` reads: a page of one chain, from a cursor. */
+export interface RunShowOptions {
+  json?: boolean;
+  /** A frame cursor an earlier page printed, sent as `framesAfter`. */
+  after?: string;
+  /** A subagent chain's session id, sent as `sessionUuid`. */
+  session?: string;
+}
+
+/**
+ * `oxagen run show <run-id>`: one run's header and a page of its frames,
+ * from `get_run`. It prints the run's name, agent, status, outcome,
+ * operator, tier, replay grade, times, counts and cost, one fact per line.
+ * Then it prints the pause in force when there is one, a line per frame, the
+ * cursor for the next page, and a wrapped run's subagent chains. `--after`
+ * reads the page past a cursor and `--session` reads a subagent chain. A
+ * fact the record does not carry prints as not recorded, never as a zero.
+ */
+export async function runShow(
+  runId: string,
+  opts: RunShowOptions = {},
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  let result: RunShowResult;
+  try {
+    result = await apiPostOrThrow<RunShowResult>("runs/get", {
+      runId,
+      ...(opts.after === undefined ? {} : { framesAfter: opts.after }),
+      ...(opts.session === undefined ? {} : { sessionUuid: opts.session }),
+    });
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+  const { run } = result;
+  writer.write(run.name === null ? run.id : `${run.id}: ${run.name}`);
+  writer.write(`Agent: ${run.agentKey ?? NOT_RECORDED}`);
+  writer.write(`Status: ${run.status}`);
+  writer.write(`Outcome: ${run.outcome}`);
+  writer.write(`Operator: ${operatorOf(run)}`);
+  writer.write(`Tier: ${run.enforcementTier}`);
+  writer.write(`Replay grade: ${run.replayGrade ?? NOT_RECORDED}`);
+  writer.write(`Started: ${run.startedAt}`);
+  writer.write(`Sealed: ${run.sealedAt ?? "not sealed"}`);
+  writer.write(`Turns: ${run.turns ?? NOT_RECORDED}`);
+  writer.write(`Steps: ${run.steps}`);
+  writer.write(`Frames: ${run.frames}`);
+  writer.write(
+    `Cost: ${runCostOf(run.cost)}${run.cost !== null && run.costIsEstimate === true ? " (estimate)" : ""}`,
+  );
+  if (run.pause) for (const line of pauseLines(run.pause)) writer.write(line);
+
+  writer.write("");
+  if (opts.session !== undefined) writer.write(`Chain: ${opts.session}`);
+  const page = result.frames.frames;
+  // Only a read from the start of the run's own chain can set its page
+  // against the run's frame count.
+  const firstPage = opts.after === undefined && opts.session === undefined;
+  if (result.framesError) {
+    writer.write(
+      `The frames could not be read: ${result.framesError.message}`,
+    );
+  } else if (page.length === 0) {
+    writer.write(
+      opts.after !== undefined
+        ? "No frame lies past that cursor yet."
+        : opts.session !== undefined
+          ? "The chain has recorded no frame yet."
+          : "The run has recorded no frame yet.",
+    );
+  } else {
+    const rows = [
+      ["Seq", "Observed", "Type", "Summary"],
+      ...page.map((f) => [f.seq, f.observedAt, f.type, f.summary]),
+    ];
+    const widths = (rows[0] ?? []).map((_, col) =>
+      Math.max(...rows.map((r) => (r[col] ?? "").length)),
+    );
+    for (const r of rows) {
+      writer.write(
+        r
+          .map((cell, col) =>
+            col === r.length - 1 ? cell : cell.padEnd(widths[col] ?? 0),
+          )
+          .join("  "),
+      );
+    }
+    if (firstPage && run.frames > page.length) {
+      writer.write("");
+      writer.write(
+        `The run holds ${run.frames} frames. These are its first ${page.length}.`,
+      );
+    }
+  }
+  const cursor = result.frames.cursor;
+  if (!result.framesError && cursor !== null) {
+    const session =
+      opts.session === undefined ? "" : ` --session ${opts.session}`;
+    writer.write(`Next page: pass --after ${cursor}${session}.`);
+    if (run.status === "live") {
+      writer.write(
+        "A live run keeps a cursor after its last frame. Its next page holds what the run records next.",
+      );
+    }
+  }
+  if (result.chains !== undefined && result.chains.heads.length > 0) {
+    writeChainHeads(run.id, result.chains, writer);
+  }
+  writer.write("");
+  writer.write(
+    `Read its cost by turn with \`oxagen run turns ${run.id}\` and its chain with \`oxagen run chain ${run.id}\`.`,
+  );
 }
 
 /**
@@ -640,5 +1181,131 @@ export async function runPauseAll(
     writer.write(`Command ids: ${result.commandIds.join(", ")}`);
   writer.write(
     "Ledger runs are not paused. Each run stops at its next boundary once its host collects the command.",
+  );
+}
+
+// ── oxagen run answer ────────────────────────────────────────────────────────
+
+/** Mirrors the `answer_interjection` contract output. */
+export interface RunAnswerResult {
+  interjectionId: string;
+  runId: string;
+  answeredAt: string;
+  commandIds: string[];
+  receiptId: string;
+  path: "link" | "create" | null;
+  repository: { bindingId: string; fullName: string } | null;
+  workspace: { publicId: string; slug: string } | null;
+}
+
+/** The flags `oxagen run answer` takes; exactly one answer form. */
+export interface RunAnswerOptions {
+  text?: string;
+  link?: boolean;
+  create?: string;
+  slug?: string;
+  json?: boolean;
+}
+
+/**
+ * The request body for one answer form, or the reason the flags name none or
+ * more than one. `--text` answers an agent's own question. `--link` and
+ * `--create <name> --slug <slug>` answer a repository question.
+ */
+export function runAnswerBody(
+  interjectionId: string,
+  opts: RunAnswerOptions,
+): { body: Record<string, unknown> } | { error: string } {
+  const text = opts.text?.trim();
+  const forms = [
+    text !== undefined,
+    opts.link === true,
+    opts.create !== undefined,
+  ].filter(Boolean).length;
+  if (forms !== 1)
+    return {
+      error:
+        "Give one answer: --text <answer>, --link, or --create <name> --slug <slug>. Nothing was answered.",
+    };
+  if (opts.slug !== undefined && opts.create === undefined)
+    return {
+      error: "--slug goes with --create. Nothing was answered.",
+    };
+  if (text !== undefined) {
+    if (text === "")
+      return { error: "The answer is empty. Nothing was answered." };
+    return { body: { interjectionId, answer: text } };
+  }
+  if (opts.link === true) return { body: { interjectionId, path: "link" } };
+  const name = opts.create?.trim() ?? "";
+  if (name === "" || opts.slug === undefined)
+    return {
+      error:
+        "--create needs the new workspace's name and --slug <slug>. Nothing was answered.",
+    };
+  return {
+    body: {
+      interjectionId,
+      path: "create",
+      create: { name, slug: opts.slug },
+    },
+  };
+}
+
+/**
+ * `oxagen run answer <interjection-id>`: `answer_interjection`. Answers the
+ * question an agent paused its run to ask, with `--text`, or the question a
+ * host asked when a session started in a repository the workspace has not
+ * bound, with `--link` (bind it to this workspace) or `--create <name>
+ * --slug <slug>` (a new workspace for it, with skills off). Prints the
+ * receipt, what a link or create bound, and the command that carries the
+ * answer to the run.
+ *
+ * The API admits an org Owner or Admin, or a workspace Owner or Member, for
+ * `--text`, and an org Owner or Admin, or the workspace Owner, for `--link`
+ * and `--create`. `oxagen run` does not list questions yet: the app's
+ * approvals drawer and the Run page show them, and `list_interjections`
+ * reads them through the API.
+ */
+export async function runAnswer(
+  interjectionId: string,
+  opts: RunAnswerOptions,
+  writer: CommandWriter = stdoutWriter,
+): Promise<void> {
+  const out = createOutput({ json: opts.json }, writer);
+  const request = runAnswerBody(interjectionId, opts);
+  if ("error" in request) {
+    out.error(request.error, "answer");
+    return;
+  }
+  let result: RunAnswerResult;
+  try {
+    result = await apiPostOrThrow<RunAnswerResult>(
+      "agent/interjections/answer",
+      request.body,
+    );
+  } catch (err) {
+    out.error(err, "api");
+    return;
+  }
+  if (out.isJson) {
+    out.data(result);
+    return;
+  }
+  writer.write(
+    `Answered ${result.interjectionId} on ${result.runId}. Receipt ${result.receiptId}.`,
+  );
+  if (result.path === "create" && result.workspace && result.repository)
+    writer.write(
+      `Created the workspace ${result.workspace.slug} (${result.workspace.publicId}) for ${result.repository.fullName}. Its skills are off.`,
+    );
+  else if (result.path === "link" && result.repository)
+    writer.write(
+      `Linked ${result.repository.fullName} to this workspace (binding ${result.repository.bindingId}).`,
+    );
+  writer.write(
+    result.commandIds.length > 0
+      ? `The run's host collects the answer with command ${result.commandIds.join(", ")}.`
+      : "No host can take the answer now, so it is recorded on the question only.",
   );
 }

@@ -1,7 +1,7 @@
 {
   "name": "list_commands",
   "domain": "control",
-  "description": "The delivery report for one run: every command addressed to it, newest first, with its status, the requested and achieved delivery mode, and the frame an applied command landed on.",
+  "description": "The delivery report for one run, or for the commands one broadcast queued: every command, newest first, with its run (or its agent, for a steer held for an idle agent's next run), its issuer, its text, its status, the requested and achieved delivery mode, and the frame an applied command landed on.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -26,6 +26,15 @@
       "runId": {
         "type": "string"
       },
+      "commandIds": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        },
+        "minItems": 1,
+        "maxItems": 100
+      },
       "limit": {
         "type": "integer",
         "minimum": 1,
@@ -33,9 +42,6 @@
         "default": 50
       }
     },
-    "required": [
-      "runId"
-    ],
     "additionalProperties": false
   },
   "output": {
@@ -50,6 +56,27 @@
             "id": {
               "type": "string",
               "minLength": 1
+            },
+            "runId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "agentKey": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "command": {
               "type": "string",
@@ -191,10 +218,53 @@
                   "type": "null"
                 }
               ]
+            },
+            "issuedBy": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "name": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "text": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
             "id",
+            "runId",
+            "agentKey",
             "command",
             "status",
             "requestedMode",
@@ -207,7 +277,9 @@
             "acknowledgedAt",
             "appliedAt",
             "appliedAtSeq",
-            "detail"
+            "detail",
+            "issuedBy",
+            "text"
           ],
           "additionalProperties": false
         }

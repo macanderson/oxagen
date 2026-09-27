@@ -969,6 +969,15 @@ export class SessionRecorder {
     return this.started;
   }
 
+  /**
+   * Whether this chain, or the family it shares a ledger with, has recorded a
+   * model call from any source. The host asks its repository question only
+   * before the first one (#3941).
+   */
+  get hasModelCall(): boolean {
+    return !this.modelCallLedger.isEmpty;
+  }
+
   get hasStopped(): boolean {
     return this.stopped;
   }

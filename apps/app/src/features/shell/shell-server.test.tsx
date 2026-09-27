@@ -82,6 +82,7 @@ function stubSource() {
       turns: vi.fn(),
       transcript: vi.fn(),
       chain: vi.fn(),
+      commands: vi.fn(),
       outputs: vi.fn(),
       work: vi.fn(),
       outcomesSettings: vi.fn(),
@@ -94,7 +95,7 @@ function stubSource() {
       resolved: vi.fn(),
       resolvedSince: vi.fn(),
     },
-    interjections: { open: vi.fn() },
+    interjections: { open: vi.fn(), forRun: vi.fn() },
     agents: {
       list: vi.fn(),
       get: vi.fn(),

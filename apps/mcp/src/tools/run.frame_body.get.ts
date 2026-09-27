@@ -11,6 +11,9 @@ export const schema = {
   seq: runFrameBodyGet.input.shape.seq.describe(
     "The frame's sequence as get_run reports it (run_seq for a ledger run, seq for a wrapped session)",
   ),
+  sessionUuid: runFrameBodyGet.input.shape.sessionUuid.describe(
+    "The subagent chain the frame was recorded on, as get_run_transcript names it (sessionUuid on a half or entry). Omit it for the run's own chain",
+  ),
 };
 
 export const metadata: ToolMetadata = {

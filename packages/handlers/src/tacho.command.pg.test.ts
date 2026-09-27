@@ -3,7 +3,9 @@
 // steer and no other row, fetch_commands expires the queued rows the clock
 // passed and drains the rest as sent with their modes, an acknowledgement
 // lands on an open row (a sent one past its expiry included) and never on a
-// terminal one, and list_commands reads it all back with `expired` derived. Runs wherever DATABASE_URL points at a migrated
+// terminal one, and list_commands reads it all back with `expired` derived.
+// A steer for an agent with no run in flight is held for its next run, moved
+// to that run when it opens, and delivered there. Runs wherever DATABASE_URL points at a migrated
 // database — CI's `test` job migrates Postgres with Atlas before
 // `turbo run build test:unit`; a local run without one is skipped, not red.
 // Every row it writes is removed in afterAll.
@@ -12,7 +14,12 @@ import type { CapabilityContext } from "@oxagen/oxagen";
 import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dispatch";
 import { tachoCommandFetch } from "@oxagen/oxagen/contracts/tacho.command.fetch";
 import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
-import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
+import {
+  closeDatabase,
+  schema,
+  withSystemDb,
+  withTenantDb,
+} from "@oxagen/database";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { asc, eq, inArray } from "drizzle-orm";
 import {
@@ -21,6 +28,7 @@ import {
 } from "./tacho.command.dispatch";
 import { tachoCommandFetchHandler } from "./tacho.command.fetch";
 import { tachoCommandListHandler } from "./tacho.command.list";
+import { readdressNextRunCommands } from "./lib/next-run-commands";
 
 const enabled = Boolean(process.env.DATABASE_URL);
 
@@ -28,11 +36,20 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
   const tag = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
   const orgId = crypto.randomUUID();
   const workspaceId = crypto.randomUUID();
+  // A second workspace in the same organization, whose command a read by
+  // command ids must leave out.
+  const otherWorkspaceId = crypto.randomUUID();
   const userId = crypto.randomUUID();
   const apiKeyId = crypto.randomUUID();
   const hostId = crypto.randomUUID();
   const hostPublicId = `tch_${tag}00000000000000`;
   const agentKey = `g2953.core.bot-${tag}`;
+  // A second enrolled agent with no run in flight, whose steer waits for its
+  // next run (#2953). Its own host and key, so its poll drains only its rows.
+  const idleAgentKey = `g2953.core.idle-${tag}`;
+  const idleHostId = crypto.randomUUID();
+  const idleHostPublicId = `tch_${tag}0000000000000i`;
+  const idleApiKeyId = crypto.randomUUID();
   const sessionIds = {
     live: crypto.randomUUID(),
     observe: crypto.randomUUID(),
@@ -59,6 +76,11 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
     messageId: null,
   };
   const machine: CapabilityContext = { ...operator, userId: null, apiKeyId };
+  const idleMachine: CapabilityContext = {
+    ...operator,
+    userId: null,
+    apiKeyId: idleApiKeyId,
+  };
 
   const scoped = <T>(fn: () => Promise<T>) =>
     runInTenantScope({ orgId, workspaceId }, fn);
@@ -77,6 +99,13 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
     scoped(() =>
       tachoCommandListHandler(
         tachoCommandList.input.parse({ runId }),
+        operator,
+      ),
+    );
+  const reportByIds = (commandIds: string[]) =>
+    scoped(() =>
+      tachoCommandListHandler(
+        tachoCommandList.input.parse({ commandIds }),
         operator,
       ),
     );
@@ -139,6 +168,13 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
         slug: "core",
         namespace: "core",
       });
+      await tx.insert(schema.workspaces).values({
+        id: otherWorkspaceId,
+        orgId,
+        name: "Other",
+        slug: "other",
+        namespace: "other",
+      });
       // The Owner role the handler's gate resolves for the operator.
       const [principal] = await tx
         .insert(schema.principals)
@@ -196,6 +232,41 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
         lastSeenAt: new Date(),
         bundleFeatures: [BUNDLE_FEATURE_STEER_NEXT_STEP],
       });
+      await tx.insert(schema.apiKeys).values({
+        id: idleApiKeyId,
+        orgId,
+        workspaceId,
+        keyPrefix: `oxk_${tag}i`,
+        keyHash: `hash-${tag}-idle`,
+        name: `tacho host ${tag} idle`,
+        scope: {
+          purpose: "tacho_host_v1",
+          host_enrollment_id: idleHostPublicId,
+        },
+        createdById: userId,
+      });
+      await tx.insert(schema.tachoHosts).values({
+        id: idleHostId,
+        publicId: idleHostPublicId,
+        orgId,
+        workspaceId,
+        agentKey: idleAgentKey,
+        apiKeyId: idleApiKeyId,
+        hostname: "runner",
+        hostnameDigest: "sha256:1",
+        platform: "linux",
+        osUser: "ci",
+        osUserDigest: "sha256:1",
+        devicePublicKey: "pk-idle",
+        deviceKeyFingerprint: "fp-idle",
+        enrollmentClaims: {},
+        enrollmentSignature: "sig",
+        expiresAt: new Date("2027-01-01T00:00:00.000Z"),
+        status: "active",
+        mode: "enforce",
+        lastSeenAt: new Date(),
+        bundleFeatures: [BUNDLE_FEATURE_STEER_NEXT_STEP],
+      });
       await tx.insert(schema.tachoSessions).values([
         session("live", { outcome: "running", enforcementTier: "harness" }),
         session("observe", {
@@ -220,8 +291,10 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
         .where(eq(schema.tachoSessions.orgId, orgId));
       await tx
         .delete(schema.tachoHosts)
-        .where(eq(schema.tachoHosts.id, hostId));
-      await tx.delete(schema.apiKeys).where(eq(schema.apiKeys.id, apiKeyId));
+        .where(inArray(schema.tachoHosts.id, [hostId, idleHostId]));
+      await tx
+        .delete(schema.apiKeys)
+        .where(inArray(schema.apiKeys.id, [apiKeyId, idleApiKeyId]));
       await tx
         .delete(schema.principalRoleAssignments)
         .where(eq(schema.principalRoleAssignments.orgId, orgId));
@@ -231,7 +304,7 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
       await tx.delete(schema.roles).where(eq(schema.roles.orgId, orgId));
       await tx
         .delete(schema.workspaces)
-        .where(eq(schema.workspaces.id, workspaceId));
+        .where(inArray(schema.workspaces.id, [workspaceId, otherWorkspaceId]));
       await tx
         .delete(schema.organizations)
         .where(eq(schema.organizations.id, orgId));
@@ -445,6 +518,315 @@ describe.skipIf(!enabled)("run controls against Postgres", () => {
     expect((await report(publicIds.observe)).commands[0]).toMatchObject({
       status: "sent",
       deliveryMode: "next_step",
+    });
+
+    // 7. Each row names its run and its issuer, by public id, with the name
+    //    null because the fixture's user records none. The steer quotes its
+    //    text; the pause and the resume carry none.
+    const [issuer] = await withSystemDb((tx) =>
+      tx
+        .select({ publicId: schema.users.publicId })
+        .from(schema.users)
+        .where(eq(schema.users.id, userId)),
+    );
+    expect(issuer?.publicId).toMatch(/^usr_/);
+    for (const command of final.commands) {
+      expect(command.runId).toBe(publicIds.live);
+      expect(command.issuedBy).toEqual({ id: issuer?.publicId, name: null });
+    }
+    expect(final.commands.map((c) => c.text)).toEqual([
+      null,
+      "use production read replica",
+      null,
+      "use staging",
+    ]);
+  });
+
+  it("reads a broadcast's rows by command id, each naming its run, and leaves out an id from another workspace (negative)", async () => {
+    const broadcast = await withSystemDb((tx) =>
+      tx
+        .select({
+          publicId: schema.tachoControlCommands.publicId,
+          targetId: schema.tachoControlCommands.targetId,
+        })
+        .from(schema.tachoControlCommands)
+        .where(
+          inArray(schema.tachoControlCommands.targetId, [
+            publicIds.live,
+            publicIds.observe,
+          ]),
+        ),
+    );
+    const [foreign] = await withSystemDb((tx) =>
+      tx
+        .insert(schema.tachoControlCommands)
+        .values({
+          orgId,
+          workspaceId: otherWorkspaceId,
+          targetKind: "run",
+          targetId: `tse_${tag}0000000000000x`,
+          command: "pause",
+          issuedByUserId: userId,
+          createdById: userId,
+          updatedById: userId,
+        })
+        .returning({ publicId: schema.tachoControlCommands.publicId }),
+    );
+    if (!foreign) throw new Error("fixture insert returned no row");
+    const ids = [...broadcast.map((r) => r.publicId), foreign.publicId];
+    const read = await reportByIds(ids);
+    expect(read.commands.map((c) => c.id).sort()).toEqual(
+      broadcast.map((r) => r.publicId).sort(),
+    );
+    const runOf = new Map(broadcast.map((r) => [r.publicId, r.targetId]));
+    for (const command of read.commands)
+      expect(command.runId).toBe(runOf.get(command.id));
+    expect(read.commands.map((c) => c.id)).not.toContain(foreign.publicId);
+  });
+
+  it("holds a steer for an idle agent, gives it to the agent's next run, and delivers it there (#2953)", async () => {
+    const idleFetch = (input: unknown) =>
+      scoped(() =>
+        tachoCommandFetchHandler(
+          tachoCommandFetch.input.parse(input),
+          idleMachine,
+        ),
+      );
+    const heldFor = () =>
+      withSystemDb((tx) =>
+        tx
+          .select()
+          .from(schema.tachoControlCommands)
+          .where(eq(schema.tachoControlCommands.targetId, idleAgentKey))
+          .orderBy(
+            asc(schema.tachoControlCommands.issuedAt),
+            asc(schema.tachoControlCommands.publicId),
+          ),
+      );
+    const openRun = async (
+      key: "next" | "stella",
+      runtime: "claude-code" | "stella",
+    ) => {
+      const run = {
+        id: crypto.randomUUID(),
+        publicId: `tse_${tag}0000000000000${key === "next" ? "n" : "t"}`,
+        sessionUuid: crypto.randomUUID(),
+      };
+      await withSystemDb((tx) =>
+        tx.insert(schema.tachoSessions).values({
+          ...run,
+          orgId,
+          workspaceId,
+          harnessSessionId: `sess-${key}-${tag}`,
+          hostId: idleHostId,
+          agentKey: idleAgentKey,
+          rootSessionUuid: run.sessionUuid,
+          runtime,
+          harness: runtime,
+          startedAt: new Date(),
+          lastEventAt: new Date(),
+          outcome: "running",
+          enforcementTier: "harness",
+        }),
+      );
+      return scoped(() =>
+        withTenantDb(async (tx) => ({
+          ...run,
+          taken: await readdressNextRunCommands(tx, {
+            scope: { orgId, workspaceId },
+            agentKey: idleAgentKey,
+            run: {
+              ...run,
+              harnessSessionId: `sess-${key}-${tag}`,
+              hostId: idleHostId,
+              runtime,
+              enforcementTier: "harness",
+            },
+            hostFeatures: [BUNDLE_FEATURE_STEER_NEXT_STEP],
+            now: new Date(),
+          }),
+        })),
+      );
+    };
+
+    // 1. The agent has no run in flight: the steer is held for its next run,
+    //    addressed to the agent, with no host and no session.
+    const held = await dispatch({
+      target: { kind: "agent", id: idleAgentKey },
+      command: "steer",
+      payload: { text: "skip the mobile repo", requestedMode: "interrupt" },
+      reason: "platform release only",
+    });
+    expect(held.commandIds).toHaveLength(1);
+    const heldId = held.commandIds[0] ?? "";
+    const [row] = await heldFor();
+    expect(row).toMatchObject({
+      publicId: heldId,
+      targetKind: "agent",
+      hostId: null,
+      sessionId: null,
+      outcome: "queued",
+      requestedMode: "interrupt",
+      deliveryMode: null,
+      payload: { address: `@${idleAgentKey}`, text: "skip the mobile repo" },
+    });
+
+    // 2. The agent's host polls with no run open: nothing is handed over,
+    //    so no host-level fan-out can claim the steer applied.
+    const early = await idleFetch({
+      schema: "tacho.commands.v2",
+      host_enrollment_id: idleHostPublicId,
+    });
+    expect(early.control.commands).toEqual([]);
+    expect((await heldFor())[0]).toMatchObject({ outcome: "queued" });
+
+    //    The broadcast's ids read the held steer with its agent in place of
+    //    a run, so the receipt's report shows it waiting.
+    expect((await reportByIds([heldId])).commands).toEqual([
+      expect.objectContaining({
+        id: heldId,
+        runId: null,
+        agentKey: idleAgentKey,
+        status: "queued",
+        text: "skip the mobile repo",
+      }),
+    ]);
+
+    // 3. A held steer past its expiry, and one for another agent, stay out of
+    //    the next run.
+    const [expired, other] = await withSystemDb((tx) =>
+      tx
+        .insert(schema.tachoControlCommands)
+        .values([
+          {
+            orgId,
+            workspaceId,
+            targetKind: "agent",
+            targetId: idleAgentKey,
+            command: "message",
+            payload: { text: "stale" },
+            requestedMode: "next_step",
+            issuedAt: new Date("2026-09-14T08:00:00.000Z"),
+            expiresAt: new Date("2026-09-14T09:00:00.000Z"),
+            issuedByUserId: userId,
+            createdById: userId,
+            updatedById: userId,
+          },
+          {
+            orgId,
+            workspaceId,
+            targetKind: "agent",
+            targetId: `g2953.core.other-${tag}`,
+            command: "steer",
+            payload: { text: "not yours" },
+            requestedMode: "next_step",
+            expiresAt: new Date(Date.now() + 3_600_000),
+            issuedByUserId: userId,
+            createdById: userId,
+            updatedById: userId,
+          },
+        ])
+        .returning({ publicId: schema.tachoControlCommands.publicId }),
+    );
+
+    // 4. The agent's next run opens. The steer becomes the run's command,
+    //    with the mode resolved for that run; the expired one is marked.
+    const next = await openRun("next", "claude-code");
+    expect(next.taken).toBe(1);
+    const byId = async (id: string) => {
+      const [found] = await withSystemDb((tx) =>
+        tx
+          .select()
+          .from(schema.tachoControlCommands)
+          .where(eq(schema.tachoControlCommands.publicId, id)),
+      );
+      return found;
+    };
+    expect(await byId(heldId)).toMatchObject({
+      targetKind: "run",
+      targetId: next.publicId,
+      hostId: idleHostId,
+      sessionId: next.id,
+      outcome: "queued",
+      requestedMode: "interrupt",
+      deliveryMode: "next_step",
+      degradedReason: "harness_tier",
+      payload: {
+        address: `@${idleAgentKey}`,
+        text: "skip the mobile repo",
+        session_uuid: next.sessionUuid,
+      },
+    });
+    expect(await byId(expired?.publicId ?? "")).toMatchObject({
+      targetKind: "agent",
+      outcome: "expired",
+    });
+    //    The same id now reads with its run, and no agent.
+    expect((await reportByIds([heldId])).commands).toEqual([
+      expect.objectContaining({
+        id: heldId,
+        runId: next.publicId,
+        agentKey: null,
+      }),
+    ]);
+    expect(await byId(other?.publicId ?? "")).toMatchObject({
+      targetKind: "agent",
+      outcome: "queued",
+    });
+
+    // 5. The host's next poll carries it to the run, and the host's
+    //    acknowledgement lands on it. The run's report reads it applied.
+    const poll = await idleFetch({
+      schema: "tacho.commands.v2",
+      host_enrollment_id: idleHostPublicId,
+    });
+    expect(poll.control.commands).toEqual([
+      expect.objectContaining({
+        id: heldId,
+        command: "steer",
+        session_uuid: next.sessionUuid,
+        delivery_mode: "next_step",
+      }),
+    ]);
+    const acked = await idleFetch({
+      schema: "tacho.commands.v2",
+      host_enrollment_id: idleHostPublicId,
+      acknowledgements: [
+        { command_id: heldId, status: "applied", applied_at_seq: 3 },
+      ],
+    });
+    expect(acked.acknowledged).toBe(1);
+    const applied = await report(next.publicId);
+    expect(applied.commands).toEqual([
+      expect.objectContaining({
+        id: heldId,
+        runId: next.publicId,
+        status: "applied",
+        appliedAtSeq: 3,
+        text: "skip the mobile repo",
+      }),
+    ]);
+
+    // 6. A Stella run reads steering only when it starts, which has passed
+    //    by the time it reaches Oxagen: its held steer is recorded failed.
+    await withSystemDb((tx) =>
+      tx
+        .update(schema.tachoSessions)
+        .set({ outcome: "completed" })
+        .where(eq(schema.tachoSessions.id, next.id)),
+    );
+    const forStella = await dispatch({
+      target: { kind: "agent", id: idleAgentKey },
+      command: "steer",
+      payload: { text: "read the brief" },
+    });
+    const stella = await openRun("stella", "stella");
+    expect(stella.taken).toBe(1);
+    expect(await byId(forStella.commandIds[0] ?? "")).toMatchObject({
+      targetKind: "run",
+      targetId: stella.publicId,
+      outcome: "failed",
+      outcomeDetail: "no_prompt_carrier",
     });
   });
 });
