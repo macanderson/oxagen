@@ -203,7 +203,8 @@ export interface SteeringHost {
   ): Promise<string[]>;
   /**
    * Every path the commit `head` changes against `base`, as its pull request
-   * shows them; a rename names both its paths.
+   * shows them; a rename names both its paths. Refuses with `too_many_files`
+   * at 300 files, where the host's list may be cut short.
    */
   changedPaths(
     repo: SteeringRepository,
@@ -247,7 +248,8 @@ export interface SteeringHost {
   /**
    * What the commit `head` does to each path against `base`. A rename is a
    * removal of the old path and an addition of the new one, because the stamp
-   * and the ledger speak of paths, not of moves.
+   * and the ledger speak of paths, not of moves. Refuses with
+   * `too_many_files` at 300 files, as {@link SteeringHost.changedPaths} does.
    */
   changedFiles(
     repo: SteeringRepository,
@@ -279,18 +281,36 @@ export interface SteeringHost {
    * Bring the steering PR's branch up to date with the production branch.
    * Refuses with `head_moved` when the branch is not at `expectedHead`, and
    * with `update_conflict` when the production branch does not merge in
-   * cleanly. Answers the branch's new head.
+   * cleanly. Answers the branch's new head. When the update made a merge
+   * commit, it also answers that commit's parents in order.
+   *
+   * GitHub merges `base`, the production branch head Oxagen read, so the
+   * parents are `expectedHead` and then `base`. GitLab rebases onto the
+   * production branch as it is when the rebase runs. A rebase makes no merge
+   * commit, so `parents` is null there.
    */
   updateBranch(
     repo: SteeringRepository,
-    args: { number: number; branch: string; expectedHead: string },
-  ): Promise<{ headSha: string }>;
-  /** Point `branch` at `sha`, discarding what came after it. */
+    args: {
+      number: number;
+      branch: string;
+      expectedHead: string;
+      base: string;
+    },
+  ): Promise<{ headSha: string; parents: string[] | null }>;
+  /**
+   * Point `branch` back at `to` while it still points at `from`, discarding
+   * the commits between them. The answer is false when the branch has moved
+   * off `from`: it holds a push Oxagen did not make, so it is left alone.
+   * GitHub checks and moves the ref in one step. GitLab has no guarded move,
+   * so it reads the branch first, and a push between the read and the reset
+   * is lost.
+   */
   resetBranch(
     repo: SteeringRepository,
     branch: string,
-    sha: string,
-  ): Promise<void>;
+    args: { from: string; to: string },
+  ): Promise<boolean>;
   /** The approvals the PR holds now, one per reviewer. */
   listApprovals(
     repo: SteeringRepository,
@@ -711,11 +731,48 @@ export function assertSameHost(
 }
 
 /**
+ * GitHub's compare answers at most 300 files and does not say when it cut the
+ * list. A list that long may be missing paths, so the branch-scope check and
+ * the stamp would each see only part of the change.
+ */
+const COMPARE_FILE_LIMIT = 300;
+
+/**
+ * Refuse a compare that may have been cut short. Both hosts call it, so
+ * GitHub and GitLab refuse the same change; GitLab's own limit is higher.
+ */
+export function refuseLongCompare(
+  files: number,
+  base: string,
+  head: string,
+): void {
+  if (files < COMPARE_FILE_LIMIT) return;
+  throw new HandlerError({
+    code: "conflict",
+    reason: "too_many_files",
+    message: `${head} changes ${files} or more files against ${base}. Oxagen reads at most ${COMPARE_FILE_LIMIT - 1} files in one steering PR, so split it into smaller steering PRs.`,
+  });
+}
+
+/**
  * Wrap a GitHub refusal as `conflict: github_refused` with GitHub's own
  * message. A `HandlerError` passes through unchanged, so a refusal this
  * module already shaped (`proposal_branch_exists`, a missing binding) keeps
  * its reason when a caller wraps a whole GitHub sequence in one try.
  */
+/**
+ * Move one branch ref, but only while it points at `beforeOid`. GitHub
+ * applies every update in the list or none of them.
+ */
+const RESET_BRANCH = `mutation ResetSteeringBranch(
+  $repositoryId: ID!
+  $refUpdates: [RefUpdate!]!
+) {
+  updateRefs(input: { repositoryId: $repositoryId, refUpdates: $refUpdates }) {
+    clientMutationId
+  }
+}`;
+
 export function githubRefused(err: unknown): HandlerError {
   if (err instanceof HandlerError) return err;
   return new HandlerError({
@@ -962,6 +1019,7 @@ export function createSteeringGitHub(
           base,
           head,
         });
+        refuseLongCompare(files.length, base, head);
         return [
           ...new Set(
             files.flatMap((f) =>
@@ -1100,6 +1158,7 @@ export function createSteeringGitHub(
           base,
           head,
         });
+        refuseLongCompare(files.length, base, head);
         return files.flatMap((f): SteeringChangedFile[] => {
           if (f.status === "renamed" && f.previousPath)
             return [
@@ -1193,13 +1252,22 @@ export function createSteeringGitHub(
           branch: args.branch,
         });
         if (current?.sha !== args.expectedHead) throw headMoved(args.branch);
-        const out = await rest.request<{ sha: string } | undefined>(
-          "POST",
-          `${path}/merges`,
-          { base: args.branch, head: repo.defaultBranch },
-        );
+        const out = await rest.request<
+          { sha: string; parents?: { sha: string }[] } | undefined
+        >("POST", `${path}/merges`, {
+          base: args.branch,
+          // The sha, not the branch name, so the second parent is the head
+          // Oxagen read even when the production branch moves meanwhile.
+          head: args.base,
+        });
         // 204: the branch already holds the production branch.
-        return { headSha: out.data?.sha ?? args.expectedHead };
+        if (!out.data) return { headSha: args.expectedHead, parents: null };
+        // GitHub merges into the branch as it is when the request lands. A
+        // push after the read above becomes the first parent, and the
+        // approvals would carry onto a commit nobody reviewed.
+        const parents = out.data.parents?.map((p) => p.sha) ?? [];
+        if (parents[0] !== args.expectedHead) throw headMoved(args.branch);
+        return { headSha: out.data.sha, parents };
       } catch (err) {
         if (err instanceof GitHubApiError && err.status === 409)
           throw new HandlerError({
@@ -1210,17 +1278,57 @@ export function createSteeringGitHub(
         throw githubRefused(err);
       }
     },
-    async resetBranch(repo, branch, sha) {
+    async resetBranch(repo, branch, args) {
       const { rest, path } = restFor(repo);
+      // The REST ref update takes no expected value, so the reset goes
+      // through GraphQL, whose `beforeOid` moves the ref only while it still
+      // points at `from`. The client's base is api.github.com, so `/graphql`
+      // is GitHub's own endpoint.
+      let refusal: unknown;
       try {
-        await rest.request(
-          "PATCH",
-          `${path}/git/refs/heads/${githubPath(branch)}`,
-          { sha, force: true },
+        const info = await rest.request<{ node_id: string }>("GET", path);
+        const out = await rest.request<{ errors?: { message: string }[] }>(
+          "POST",
+          "/graphql",
+          {
+            query: RESET_BRANCH,
+            variables: {
+              repositoryId: info.data.node_id,
+              refUpdates: [
+                {
+                  name: `refs/heads/${branch}`,
+                  afterOid: args.to,
+                  beforeOid: args.from,
+                  force: true,
+                },
+              ],
+            },
+          },
         );
+        // GraphQL answers 200 and puts a refusal in `errors`.
+        const errors = out.data.errors ?? [];
+        if (errors.length === 0) return true;
+        refusal = new Error(errors.map((e) => e.message).join("; "));
       } catch (err) {
-        throw githubRefused(err);
+        refusal = err;
       }
+      // The refusal does not say whether the check on `from` failed, so the
+      // branch is read again. A branch at `to` took the reset before the
+      // answer was lost. A branch anywhere else but `from` moved.
+      let now: string | null;
+      try {
+        const out = await clientFor(repo).getBranch({
+          owner: repo.owner,
+          repo: repo.repo,
+          branch,
+        });
+        now = out?.sha ?? null;
+      } catch {
+        throw githubRefused(refusal);
+      }
+      if (now === args.to) return true;
+      if (now !== args.from) return false;
+      throw githubRefused(refusal);
     },
     async listApprovals(repo, number) {
       const { rest, path } = restFor(repo);

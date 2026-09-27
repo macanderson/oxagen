@@ -33,6 +33,7 @@ import {
   recordPublishDeployment,
   type ApprovalInput,
   type LandInput,
+  type MergeApproval,
   type RecheckResult,
 } from "./merge-queue";
 import { mergeTrailers, steeringBranch } from "./stamp";
@@ -119,7 +120,7 @@ async function land(
     checkedHead: pr.head,
     checks: CHECKS,
     layout: await readSteeringLayout(gh, REPO),
-    approval: { approvedBy: [REVIEWER], withoutReview: false },
+    approve: async () => ({ approvedBy: [REVIEWER], withoutReview: false }),
     mergedBy: REVIEWER,
     commitTitle: `steering: publish (#${pr.number})`,
     version: 21,
@@ -272,7 +273,7 @@ describe("mergeApproval", () => {
       repo: REPO,
       number: pr.number,
       mode: "team",
-      checkedHead: pr.head,
+      heads: [pr.head],
       authorUserId: AUTHOR,
       merger: { userId: MEMBER, orgRole: null, workspaceRole: "Member" },
       isMember: async (userId) => userId !== GUEST,
@@ -302,14 +303,15 @@ describe("mergeApproval", () => {
   it("ignores strangers, the author, guests, and approvals of an older head", async () => {
     const gh = steeringRepo();
     const args = await input(gh);
+    const head = args.heads[0]!;
     gh.approvals = [
-      { userId: null, login: "stranger", commitSha: args.checkedHead },
-      { userId: AUTHOR, login: "author", commitSha: args.checkedHead },
+      { userId: null, login: "stranger", commitSha: head },
+      { userId: AUTHOR, login: "author", commitSha: head },
       { userId: MEMBER, login: "member", commitSha: "an-older-head" },
-      { userId: GUEST, login: "guest", commitSha: args.checkedHead },
+      { userId: GUEST, login: "guest", commitSha: head },
       // GitLab does not say which head was approved, so the approval stands.
       { userId: REVIEWER, login: "reviewer", commitSha: null },
-      { userId: REVIEWER, login: "reviewer", commitSha: args.checkedHead },
+      { userId: REVIEWER, login: "reviewer", commitSha: head },
     ];
     await expect(mergeApproval(args)).resolves.toEqual({
       approvedBy: [REVIEWER],
@@ -356,6 +358,26 @@ describe("mergeApproval", () => {
       reason: "approval_required",
     });
   });
+
+  it("counts an approval at any of the heads, and a refusal names the last one", async () => {
+    const gh = steeringRepo();
+    const args = await input(gh);
+    const heads = [args.heads[0]!, "queue-merge"];
+    gh.approvals = [
+      { userId: REVIEWER, login: "reviewer", commitSha: "queue-merge" },
+    ];
+    await expect(mergeApproval({ ...args, heads })).resolves.toEqual({
+      approvedBy: [REVIEWER],
+      withoutReview: false,
+    });
+    gh.approvals = [{ userId: REVIEWER, login: "reviewer", commitSha: "a-push" }];
+    await expect(
+      refusal(mergeApproval({ ...args, heads })),
+    ).resolves.toMatchObject({
+      reason: "approval_required",
+      message: expect.stringContaining("approves it at queue-merge."),
+    });
+  });
 });
 
 describe("landSteeringPr: stamping", () => {
@@ -374,7 +396,7 @@ describe("landSteeringPr: stamping", () => {
       message: `steering: stamp #${pr.number}`,
     });
     expect(landed).toMatchObject({
-      commitSha: `merge${pr.number}`,
+      commitSha: String(pr.number).padStart(40, "0"),
       mergedHead: stamp.sha,
       checkedHead: pr.head,
       attempts: 1,
@@ -444,7 +466,7 @@ describe("landSteeringPr: stamping", () => {
     const gh = steeringRepo();
     const pr = await openPr(gh, "a-intel.platform.release-notes");
     await land(gh, pr, {
-      approval: { approvedBy: [], withoutReview: true },
+      approve: async () => ({ approvedBy: [], withoutReview: true }),
       mergedBy: MEMBER,
     });
     const line = (await ledgerLines(gh)).at(-1)!;
@@ -685,6 +707,120 @@ describe("landSteeringPr: when main moves", () => {
     expect(gh.merges).toEqual([]);
   });
 
+  it("reads the approvals again after the update and records the ones that stand", async () => {
+    const gh = steeringRepo();
+    const pr = await openPr(gh, "a-intel.platform.release-notes");
+    gh.commit("main", "README.md", "moved\n");
+    const approve = vi
+      .fn<(heads: readonly string[]) => Promise<MergeApproval>>()
+      .mockResolvedValueOnce({ approvedBy: [REVIEWER], withoutReview: false })
+      .mockResolvedValueOnce({
+        approvedBy: [REVIEWER, MEMBER],
+        withoutReview: false,
+      });
+    await land(gh, pr, { approve });
+
+    expect(approve).toHaveBeenCalledTimes(2);
+    expect((await ledgerLines(gh)).at(-1)).toMatchObject({
+      approved_by: [REVIEWER, MEMBER],
+    });
+    expect(gh.merges[0]!.commitMessage).toContain(
+      `Oxagen-Approved-By: ${REVIEWER}, ${MEMBER}`,
+    );
+  });
+
+  describe("the heads an approval counts at", () => {
+    type Update = { headSha: string; parents: string[] | null };
+    /** Land a PR after main moved, with `answer` in place of the update. */
+    async function approvedHeads(
+      answer?: (
+        args: { expectedHead: string },
+        update: () => Promise<Update>,
+      ) => Promise<Update>,
+    ) {
+      const gh = steeringRepo();
+      const pr = await openPr(gh, "a-intel.platform.release-notes");
+      gh.commit("main", "README.md", "moved\n");
+      if (answer) {
+        const update = gh.updateBranch.bind(gh);
+        gh.updateBranch = (repo, args) =>
+          answer(args, () => update(repo, args));
+      }
+      const approve = vi.fn(async (_heads: readonly string[]) => ({
+        approvedBy: [REVIEWER],
+        withoutReview: false,
+      }));
+      await land(gh, pr, { approve });
+      return {
+        pr,
+        updated: gh.updates[0]?.to,
+        calls: approve.mock.calls.map(([heads]) => heads),
+      };
+    }
+
+    it("adds the merge commit the update made on top of the approved head", async () => {
+      const { pr, updated, calls } = await approvedHeads();
+      expect(calls).toEqual([[pr.head], [pr.head, updated]]);
+    });
+
+    it("starts again at a new head that is no merge of the approved head and main", async () => {
+      // GitLab rebases, which makes no merge commit.
+      const rebased = await approvedHeads(async (_args, update) => ({
+        ...(await update()),
+        parents: null,
+      }));
+      expect(rebased.calls).toEqual([[rebased.pr.head], [rebased.updated]]);
+      // A merge of another production branch head.
+      const other = await approvedHeads(async (args, update) => ({
+        ...(await update()),
+        parents: [args.expectedHead, "another-main"],
+      }));
+      expect(other.calls).toEqual([[other.pr.head], [other.updated]]);
+    });
+
+    it("keeps the heads when the update answers the head it was given", async () => {
+      const { pr, updated, calls } = await approvedHeads(async (args) => ({
+        headSha: args.expectedHead,
+        parents: null,
+      }));
+      expect(updated).toBeUndefined();
+      expect(calls).toEqual([[pr.head], [pr.head]]);
+    });
+  });
+
+  it("refuses when the approval is withdrawn while the branch is brought up to date", async () => {
+    const gh = steeringRepo();
+    const pr = await openPr(gh, "a-intel.platform.release-notes");
+    gh.approvals = [{ userId: REVIEWER, login: "reviewer", commitSha: pr.head }];
+    gh.commit("main", "README.md", "moved\n");
+    const approve = (heads: readonly string[]) =>
+      mergeApproval({
+        host: gh,
+        repo: REPO,
+        number: pr.number,
+        mode: "team",
+        heads,
+        authorUserId: AUTHOR,
+        merger: { userId: MEMBER, orgRole: null, workspaceRole: "Member" },
+        isMember: async () => true,
+        holdsMergeWithoutReview: async () => false,
+      });
+    const err = await refusal(
+      land(gh, pr, {
+        approve,
+        recheck: async () => {
+          gh.approvals = [];
+          return { ok: true, checks: CHECKS };
+        },
+      }),
+    );
+
+    expect(err).toMatchObject({ reason: "approval_required" });
+    expect(gh.updates).toHaveLength(1);
+    expect(gh.stamps).toEqual([]);
+    expect(gh.merges).toEqual([]);
+  });
+
   it("drops the stamp and starts over when main moves after the stamp", async () => {
     const gh = steeringRepo();
     const pr = await openPr(gh, "a-intel.platform.release-notes");
@@ -742,6 +878,65 @@ describe("landSteeringPr: a refused merge", () => {
     expect(err).toMatchObject({ reason: "github_refused" });
     expect(gh.resets).toEqual([{ branch: pr.branch, sha: pr.head }]);
     expect(await gh.branchHead(REPO, pr.branch)).toBe(pr.head);
+  });
+
+  it("drops the stamp when a step between the stamp and the merge fails", async () => {
+    const gh = steeringRepo();
+    const pr = await openPr(gh, "a-intel.platform.release-notes");
+    gh.reportCheckRun = vi
+      .fn()
+      .mockRejectedValue(new Error("GitHub API error 502: Bad Gateway"));
+    await expect(land(gh, pr)).rejects.toThrow("502");
+    expect(gh.stamps).toHaveLength(1);
+    expect(gh.resets).toEqual([{ branch: pr.branch, sha: pr.head }]);
+    expect(await gh.branchHead(REPO, pr.branch)).toBe(pr.head);
+    expect(gh.merges).toEqual([]);
+  });
+
+  it("leaves a push that lands on the stamp when a later step fails", async () => {
+    const gh = steeringRepo();
+    const lineage = "a-intel.platform.release-notes";
+    const pr = await openPr(gh, lineage);
+    let pushed = "";
+    gh.onCommitFiles = () => {
+      if (pushed) return;
+      pushed = gh.commit(pr.branch, pr.path, record(lineage, "Dated notes."));
+    };
+    gh.reportCheckRun = vi
+      .fn()
+      .mockRejectedValue(new Error("GitHub API error 502: Bad Gateway"));
+    await expect(land(gh, pr)).rejects.toThrow("502");
+    expect(gh.resets).toEqual([]);
+    expect(await gh.branchHead(REPO, pr.branch)).toBe(pushed);
+    expect(gh.merges).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: pr.branch, stamp: gh.stamps[0]!.sha }),
+      expect.stringContaining("Oxagen left it"),
+    );
+  });
+
+  it("refuses head_moved and leaves the branch when main moves and a push lands on the stamp", async () => {
+    const gh = steeringRepo();
+    const lineage = "a-intel.platform.release-notes";
+    const pr = await openPr(gh, lineage);
+    let pushed = "";
+    gh.onCommitFiles = () => {
+      if (pushed) return;
+      gh.commit("main", "README.md", "moved\n");
+      pushed = gh.commit(pr.branch, pr.path, record(lineage, "Dated notes."));
+    };
+    const err = await refusal(land(gh, pr));
+    expect(err).toMatchObject({
+      code: "conflict",
+      reason: "head_moved",
+      message: expect.stringContaining(`steering: stamp #${pr.number}`),
+    });
+    expect(gh.stamps).toHaveLength(1);
+    expect(gh.resets).toEqual([]);
+    expect(await gh.branchHead(REPO, pr.branch)).toBe(pushed);
+    expect(gh.merges).toEqual([]);
+    // The refusal settles the stamp, so no second reset is tried.
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it("still answers the merge's refusal when the stamp cannot be dropped", async () => {
