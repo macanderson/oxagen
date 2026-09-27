@@ -188,6 +188,8 @@ class MemoryStore implements InterjectionAnswerStore {
   queued: CommandRowInput[] = [];
   audits: InterjectionAuditEvent[] = [];
   links: { bindingId: string; fullName: string }[] = [];
+  /** The workspace row's slug; the question's body names "core". */
+  slug: string | null = "core";
   constructor(
     readonly questions: Question[],
     readonly sessions: RecipientSession[] = [session()],
@@ -241,6 +243,9 @@ class MemoryStore implements InterjectionAnswerStore {
   }
   async userPublicId(userId: string): Promise<string | null> {
     return userId === USER ? USER_PUBLIC_ID : null;
+  }
+  async workspaceSlug(): Promise<string | null> {
+    return this.slug;
   }
   async linkedBinding(_scope: unknown, fullName: string) {
     return this.links.find((l) => l.fullName === fullName) ?? null;
@@ -488,6 +493,19 @@ describe("answer_interjection: the link path", () => {
       receiptId: "rcp_test1",
       bindingId: LINKED.bindingId,
       commandIds: ["tcm_1"],
+    });
+  });
+
+  it("names the workspace's current slug when it was renamed after the question was raised", async () => {
+    const store = new MemoryStore([repoQuestion()]);
+    store.slug = "core-platform";
+    await handlerFor(store)(pathInput(), OPERATOR);
+    expect(store.questions[0]).toMatchObject({
+      answer: "Linked acme/api to the workspace core-platform.",
+    });
+    expect(store.queued[0]?.payload).toMatchObject({
+      text: "A person linked this repository to the workspace core-platform. The session goes on under that workspace.",
+      interjection: { path: "link", workspace_slug: "core-platform" },
     });
   });
 
@@ -1009,6 +1027,32 @@ describe("the Postgres store", () => {
     expect(seen.params[0]).toEqual(
       expect.arrayContaining(["inj_0123456789abcdefghjkmn", ORG, WORKSPACE]),
     );
+  });
+
+  it("reads the slug of the caller's workspace from its row, inside the caller's org", async () => {
+    const { postgresInterjectionAnswerStore } = await import(
+      "./agent.interjection.answer"
+    );
+    const where: SQL[] = [];
+    const select = {
+      from: () => select,
+      where: (cond: SQL) => {
+        where.push(cond);
+        return select;
+      },
+      limit: () => Promise.resolve([{ slug: "core-platform" }]),
+    };
+    const store = postgresInterjectionAnswerStore({
+      select: () => select,
+    } as never);
+    await expect(
+      store.workspaceSlug({ orgId: ORG, workspaceId: WORKSPACE }),
+    ).resolves.toBe("core-platform");
+    expect(where).toHaveLength(1);
+    const q = dialect.sqlToQuery(where[0] as SQL);
+    expect(q.sql).toMatch(/"id" = \$/);
+    expect(q.sql).toMatch(/"org_id" = \$/);
+    expect(q.params).toEqual(expect.arrayContaining([WORKSPACE, ORG]));
   });
 
   it("reads a repository question's body through its schema, and a drifted body as null", async () => {

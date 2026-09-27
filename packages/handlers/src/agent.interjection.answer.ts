@@ -167,6 +167,11 @@ export interface InterjectionAnswerStore {
   queue(row: CommandRowInput): Promise<{ publicId: string }>;
   /** The `usr_…` public id of a user, or null when there is no such user. */
   userPublicId(userId: string): Promise<string | null>;
+  /**
+   * The scope's workspace slug as the workspace row holds it now, or null
+   * when the row is gone.
+   */
+  workspaceSlug(scope: RunScope): Promise<string | null>;
   /** The workspace's existing link to `fullName`, for a link that was already made. */
   linkedBinding(
     scope: RunScope,
@@ -333,7 +338,6 @@ async function linkPath(
   body: InterjectBody,
   fullName: string,
 ): Promise<PathOutcome> {
-  const slug = body.paths[0].workspace_slug;
   let repository: { bindingId: string; fullName: string };
   try {
     const linked = await deps.paths.link(
@@ -352,6 +356,15 @@ async function linkPath(
     if (existing === null) throw err;
     repository = existing;
   }
+  // The link bound the repository to the caller's workspace, so the agent's
+  // text, the answer, and the release name that workspace's slug as its row
+  // holds it now. The body's slug is what the host's bundle said when the
+  // question was raised: a rename since then, or a host that wrote any slug
+  // the schema takes, would name a workspace the session is not under. The
+  // body's slug stands only if the row is gone, which the link would refuse.
+  const slug =
+    (await deps.withStore((store) => store.workspaceSlug(scope))) ??
+    body.paths[0].workspace_slug;
   return {
     path: "link",
     text: INTERJECTION_LINK_TEXT(slug),
@@ -803,6 +816,15 @@ export function postgresInterjectionAnswerStore(
         .where(eq(schema.users.id, userId))
         .limit(1);
       return row?.publicId ?? null;
+    },
+    workspaceSlug: async (scope) => {
+      const ws = schema.workspaces;
+      const [row] = await tx
+        .select({ slug: ws.slug })
+        .from(ws)
+        .where(and(eq(ws.id, scope.workspaceId), eq(ws.orgId, scope.orgId)))
+        .limit(1);
+      return row?.slug ?? null;
     },
     linkedBinding: async (scope, fullName) => {
       const heads = schema.repositoryBindingHeads;
