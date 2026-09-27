@@ -1,3 +1,5 @@
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Enabling a plugin in a workspace whose tools live in its steering repo
@@ -64,6 +66,7 @@ interface TxEntry {
   op: "select" | "update" | "insert";
   set?: Record<string, unknown>;
   values?: Record<string, unknown>;
+  conflictSet?: Record<string, unknown>;
 }
 
 let txLog: TxEntry[] = [];
@@ -98,7 +101,10 @@ function fakeTx(result: unknown[]): unknown {
     from: same,
     where: same,
     onConflictDoNothing: same,
-    onConflictDoUpdate: same,
+    onConflictDoUpdate: (c: { set: Record<string, unknown> }) => {
+      entry.conflictSet = c.set;
+      return chain;
+    },
     limit: () => Promise.resolve(result),
     returning: () => Promise.resolve(result),
     then: (ok: (v: unknown) => unknown, fail: (e: unknown) => unknown) =>
@@ -264,6 +270,9 @@ describe("set_plugin_enabled (workspace) once tools live in the steering repo", 
     expect(result).toEqual({ ok: true, workspaceServerId: "mcp-pub-1" });
     expect(txLog[1]).toMatchObject({ op: "insert", values: { enabled: true } });
     expect(txLog[1]?.values?.origin).toBeUndefined();
+    // An existing proposal the upsert enables becomes a legacy row.
+    const origin = new PgDialect().sqlToQuery(txLog[1]?.conflictSet?.origin as SQL).sql;
+    expect(origin).toMatch(/CASE WHEN .*"origin" = 'proposed' THEN 'legacy' ELSE .*"origin" END/);
   });
 
   it("never asks for a writer for a stdio plugin", async () => {

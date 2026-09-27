@@ -354,6 +354,11 @@ const setWorkspaceEnabled: CapabilityHandlerFn = async (input, ctx) => {
           set: {
             enabled: true,
             healthStatus: "unknown",
+            // A proposal enabled here, while the workspace writes rows
+            // directly, becomes an ordinary legacy row. Left proposed, the
+            // migration would never count it and no publish would take it
+            // over unless a steering PR named it.
+            origin: sql`CASE WHEN ${schema.mcpServers.origin} = 'proposed' THEN 'legacy' ELSE ${schema.mcpServers.origin} END`,
             updatedAt: new Date(),
           },
         })
