@@ -36,8 +36,9 @@
  *    and no answer at all is no evidence either way.
  *
  *    `preflight` itself always succeeds (a branch of its one step, never a
- *    skip), so `checks` / `test` / `e2e` / `rls-integration` /
- *    `rds-compatibility` can add `needs: [preflight]` and read its output
+ *    skip), so `checks` / `build` / `unit` / `test` / `e2e` /
+ *    `rls-integration` / `rds-compatibility` can add `needs: [preflight]`
+ *    and read its output
  *    without the default skip-propagation rule (a job skipped by its own
  *    `if:` skips everything that needs it) forcing every PR run to skip the
  *    whole gate.
@@ -63,6 +64,8 @@ export const PREFLIGHT_JOB = "preflight";
 export const PREFLIGHT_GATE = "needs.preflight.outputs.proceed == 'true'";
 export const GATED_JOBS = [
   "checks",
+  "build",
+  "unit",
   "test",
   "e2e",
   "rls-integration",
