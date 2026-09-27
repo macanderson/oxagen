@@ -2157,11 +2157,24 @@ export function TranscriptView({
                   ? t("cut", { count: formatCount(entries.length, locale) })
                   : null;
 
+  // The recorded pause before each row, from the row before it in the run.
+  // A chip that hides rows hides no time, so the row before it on screen
+  // would overstate the pause. A search's matches are not the run's order of
+  // rows, so a search notes none.
+  const waitedMs = new Map<string, number>();
+  if (!searching) {
+    rows.forEach((row, index) => {
+      const prior = rows[index - 1];
+      if (prior !== undefined) {
+        waitedMs.set(row.key, row.elapsedMs - prior.elapsedMs);
+      }
+    });
+  }
+
   // One drawn row, with the subagent rows under it drawn inside it, a step
   // deeper. The margin notes a recorded pause of a minute or more before it.
   const drawRow = ({ row, index, children }: Drawn, depth: number): ReactNode => {
-    const prior = visible[index - 1];
-    const waited = prior === undefined ? 0 : row.elapsedMs - prior.elapsedMs;
+    const waited = waitedMs.get(row.key) ?? 0;
     return (
       <div
         key={row.key}
