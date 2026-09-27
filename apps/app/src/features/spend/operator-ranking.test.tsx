@@ -4,7 +4,8 @@
 // total, every figure links to its definition, and each operator's runs link
 // to their Cost tab. Anyone else sees who can read it. With pseudonyms on, the
 // pseudonym replaces the name and the figures that could match it to a name
-// are hidden. A period in two currencies says why no ranking was built.
+// are hidden, and only an org Owner or Admin sees the switch. A period in two
+// currencies says why no ranking was built.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -15,6 +16,7 @@ import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
   canReadOperatorRanking,
+  canSetOperatorPseudonyms,
   OperatorRankingSection,
 } from "./operator-ranking";
 
@@ -114,10 +116,17 @@ afterEach(async () => {
   }
 });
 
-function show(ranking: Parameters<typeof OperatorRankingSection>[0]["ranking"]) {
+function show(
+  ranking: Parameters<typeof OperatorRankingSection>[0]["ranking"],
+  canSetPseudonyms = true,
+) {
   return render(
     <IntlProvider>
-      <OperatorRankingSection ranking={ranking} at={AT} />
+      <OperatorRankingSection
+        ranking={ranking}
+        at={AT}
+        canSetPseudonyms={canSetPseudonyms}
+      />
     </IntlProvider>,
   );
 }
@@ -146,11 +155,40 @@ function microsIn(row: HTMLElement): bigint {
 }
 
 describe("canReadOperatorRanking", () => {
-  it("admits an org Owner or Admin and nobody else", () => {
-    expect(canReadOperatorRanking({ orgRole: "owner" })).toBe(true);
-    expect(canReadOperatorRanking({ orgRole: "admin" })).toBe(true);
-    expect(canReadOperatorRanking({ orgRole: "member" })).toBe(false);
-    expect(canReadOperatorRanking({ orgRole: "billing" })).toBe(false);
+  it("admits an org Owner or Admin whatever their workspace role", () => {
+    expect(
+      canReadOperatorRanking({ orgRole: "owner", wsRole: "member" }),
+    ).toBe(true);
+    expect(
+      canReadOperatorRanking({ orgRole: "admin", wsRole: "member" }),
+    ).toBe(true);
+  });
+
+  it("admits the workspace's Owner, as the contract does", () => {
+    expect(
+      canReadOperatorRanking({ orgRole: "member", wsRole: "owner" }),
+    ).toBe(true);
+  });
+
+  it("refuses everyone else (negative)", () => {
+    expect(
+      canReadOperatorRanking({ orgRole: "member", wsRole: "member" }),
+    ).toBe(false);
+    expect(
+      canReadOperatorRanking({ orgRole: "billing", wsRole: "admin" }),
+    ).toBe(false);
+  });
+});
+
+describe("canSetOperatorPseudonyms", () => {
+  it("admits an org Owner or Admin", () => {
+    expect(canSetOperatorPseudonyms({ orgRole: "owner" })).toBe(true);
+    expect(canSetOperatorPseudonyms({ orgRole: "admin" })).toBe(true);
+  });
+
+  it("refuses every other org role (negative)", () => {
+    expect(canSetOperatorPseudonyms({ orgRole: "member" })).toBe(false);
+    expect(canSetOperatorPseudonyms({ orgRole: "billing" })).toBe(false);
   });
 });
 
@@ -248,7 +286,7 @@ describe("Operator ranking", () => {
       screen.getByRole("heading", { name: "Operator ranking" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/An org Owner or Admin can read the operator ranking/),
+      screen.getByText(/or the workspace Owner, can read the operator ranking/),
     ).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByTestId("money")).toBeNull();
@@ -328,6 +366,15 @@ describe("Operator ranking › pseudonyms", () => {
       screen.getByRole("button", { name: "Turn off pseudonyms" }),
     );
     expect(action).toHaveBeenCalledWith(AT, false);
+  });
+
+  it("shows the ranking without the switch to a reader who cannot set it (negative)", () => {
+    show(readOk(RANKING), false);
+    expect(
+      screen.getByRole("table", { name: "Operator ranking" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("operator-pseudonyms")).toBeNull();
+    expect(screen.queryByRole("button", { name: /pseudonyms/ })).toBeNull();
   });
 
   it("says who can change the setting when the handler refuses (negative)", async () => {

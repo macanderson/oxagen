@@ -1,7 +1,7 @@
 "use client";
-// The pseudonym switch beside the operator ranking's heading. Only a manager
-// sees the ranking, and the same org Owner or Admin sets this, so the switch
-// shows wherever the ranking does. A save refreshes the page, so the ranking
+// The pseudonym switch beside the operator ranking's heading. Only an org
+// Owner or Admin sets this, so the ranking shows the switch to them alone
+// (`canSetOperatorPseudonyms`). A save refreshes the page, so the ranking
 // reads again under the new setting.
 import { useTranslations } from "next-intl";
 import { useState } from "react";

@@ -33,4 +33,4 @@ In the app, the switch sits beside the Operator ranking heading on Spend › By 
 
 The setting lives in `workspace.operator_ranking_policy`, one row per workspace. No row means the setting is off. The row's salt is written once when the row is created and is never returned or changed, so each operator keeps one pseudonym when the setting goes off and on again.
 
-Each change writes a `capability.invoke_allowed` security event with the acting person and `{ feature: "operator_ranking", change: "pseudonyms", enabled }`.
+Each change writes a `capability.invoke_allowed` security event with the acting person and `{ feature: "operator_ranking", change: "pseudonyms", enabled }`. The setting and its event commit in one transaction, so a change with no event rolls back and returns an error.

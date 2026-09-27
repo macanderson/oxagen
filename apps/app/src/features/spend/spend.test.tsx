@@ -919,6 +919,34 @@ describe("Spend › By operator › Operator ranking", () => {
     ).toBeTruthy();
     expect(ranking).toHaveTextContent("$5.00");
     expect(ranking).toHaveTextContent("Marcus Bell");
+    expect(
+      screen.getByRole("button", { name: "Turn on pseudonyms" }),
+    ).toBeInTheDocument();
+  });
+
+  it("reads the ranking for the workspace Owner and hides the pseudonym switch an org role sets", async () => {
+    const wsOwner = ctxAs("owner");
+    loaded({
+      operator: report([row("prn_marcusbell", { operator: MARCUS })]),
+    });
+    operatorRanking.mockResolvedValue(
+      readOk({
+        period: PERIOD,
+        pseudonyms: false,
+        unproductive: { micros: "0", currency: "USD" },
+        unattributed: {
+          unproductive: { micros: "0", currency: "USD" },
+          runs: 0,
+        },
+        operators: [],
+      }),
+    );
+    await renderSpend(["operator"], undefined, wsOwner);
+    expect(operatorRanking).toHaveBeenCalledWith(wsOwner, PERIOD);
+    expect(
+      screen.getByText("No run has unproductive spend in this period."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /pseudonyms/ })).toBeNull();
   });
 
   it("asks no ranking for a member and says who can read it (negative)", async () => {
@@ -931,7 +959,7 @@ describe("Spend › By operator › Operator ranking", () => {
       screen.queryByRole("table", { name: "Operator ranking" }),
     ).toBeNull();
     expect(
-      screen.getByText(/An org Owner or Admin can read the operator ranking/),
+      screen.getByText(/or the workspace Owner, can read the operator ranking/),
     ).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "By operator" })).toBeVisible();
   });

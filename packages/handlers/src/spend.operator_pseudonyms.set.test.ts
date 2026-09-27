@@ -6,16 +6,31 @@ const mocks = vi.hoisted(() => ({
   actor: vi.fn(),
   write: vi.fn(),
   audit: vi.fn(),
+  transactions: [] as Array<{ tx: object; outcome: "commit" | "rollback" }>,
 }));
 vi.mock("@oxagen/iam/org-role", () => ({
   assertOrgRole: mocks.role,
   resolveActingUserId: mocks.actor,
 }));
 vi.mock("./lib/operator-pseudonyms", () => ({
-  writePseudonymPolicy: mocks.write,
+  writePseudonymPolicyIn: mocks.write,
 }));
 vi.mock("@oxagen/database/security", () => ({
-  emitSecurityEventAsync: mocks.audit,
+  emitSecurityEventIn: mocks.audit,
+}));
+// A transaction fake: each call hands the callback its own tx object and
+// records whether the callback returned (commit) or threw (rollback).
+vi.mock("@oxagen/database", () => ({
+  withTenantDb: async (fn: (tx: object) => Promise<unknown>) => {
+    const entry = { tx: {}, outcome: "commit" as "commit" | "rollback" };
+    mocks.transactions.push(entry);
+    try {
+      return await fn(entry.tx);
+    } catch (err) {
+      entry.outcome = "rollback";
+      throw err;
+    }
+  },
 }));
 
 import { spendOperatorPseudonymsSetHandler } from "./spend.operator_pseudonyms.set";
@@ -32,11 +47,14 @@ const ctx: CapabilityContext = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.transactions.length = 0;
   mocks.actor.mockResolvedValue("user-1");
   mocks.role.mockResolvedValue("Owner");
-  mocks.write.mockImplementation(async (_scope, enabled: boolean) => ({
-    pseudonyms: enabled,
-  }));
+  mocks.write.mockImplementation(
+    async (_tx: object, _scope: object, enabled: boolean) => ({
+      pseudonyms: enabled,
+    }),
+  );
   mocks.audit.mockResolvedValue(undefined);
 });
 
@@ -62,15 +80,21 @@ describe("set_operator_pseudonyms", () => {
     const out = await spendOperatorPseudonymsSetHandler({ enabled: true }, ctx);
     expect(out).toEqual({ pseudonyms: true });
     expect(mocks.write).toHaveBeenCalledWith(
+      expect.anything(),
       { orgId: "org-1", workspaceId: "ws-1" },
       true,
       "user-1",
     );
   });
 
-  it("records each change as a security event and fails when the record fails", async () => {
+  it("records each change as a security event in the setting's transaction", async () => {
     await spendOperatorPseudonymsSetHandler({ enabled: false }, ctx);
+    expect(mocks.transactions).toHaveLength(1);
+    const [only] = mocks.transactions;
+    expect(only?.outcome).toBe("commit");
+    expect(mocks.write.mock.calls[0]?.[0]).toBe(only?.tx);
     expect(mocks.audit).toHaveBeenCalledWith(
+      only?.tx,
       expect.objectContaining({
         capability: "set_operator_pseudonyms",
         actorUserId: "user-1",
@@ -81,9 +105,16 @@ describe("set_operator_pseudonyms", () => {
         },
       }),
     );
+  });
+
+  it("rolls the setting back when its security event cannot be written", async () => {
     mocks.audit.mockRejectedValue(new Error("audit unavailable"));
     await expect(
       spendOperatorPseudonymsSetHandler({ enabled: true }, ctx),
     ).rejects.toThrow("audit unavailable");
+    expect(mocks.write).toHaveBeenCalledTimes(1);
+    expect(mocks.transactions).toHaveLength(1);
+    expect(mocks.transactions[0]?.outcome).toBe("rollback");
+    expect(mocks.write.mock.calls[0]?.[0]).toBe(mocks.transactions[0]?.tx);
   });
 });

@@ -7,7 +7,7 @@
 // same for one operator in one workspace while the setting is on, and the
 // salt keeps it from being read back by hashing a known id.
 import { createHmac } from "node:crypto";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { and, eq } from "drizzle-orm";
 
 export type PseudonymScope = { orgId: string; workspaceId: string };
@@ -47,30 +47,33 @@ export async function readPseudonymPolicy(
     : { pseudonyms: false, salt: null };
 }
 
-/** Turn the setting on or off. The salt is written with the row and kept after. */
-export async function writePseudonymPolicy(
+/**
+ * Turn the setting on or off inside the caller's transaction, so the caller
+ * can record the change in the same commit. The salt is written with the row
+ * and kept after.
+ */
+export async function writePseudonymPolicyIn(
+  tx: Tx,
   scope: PseudonymScope,
   enabled: boolean,
   actorUserId: string,
 ): Promise<{ pseudonyms: boolean }> {
-  const rows = await withTenantDb((tx) =>
-    tx
-      .insert(policy)
-      .values({
-        orgId: scope.orgId,
-        workspaceId: scope.workspaceId,
+  const rows = await tx
+    .insert(policy)
+    .values({
+      orgId: scope.orgId,
+      workspaceId: scope.workspaceId,
+      pseudonyms: enabled,
+      updatedById: actorUserId,
+    })
+    .onConflictDoUpdate({
+      target: policy.workspaceId,
+      set: {
         pseudonyms: enabled,
         updatedById: actorUserId,
-      })
-      .onConflictDoUpdate({
-        target: policy.workspaceId,
-        set: {
-          pseudonyms: enabled,
-          updatedById: actorUserId,
-          updatedAt: new Date(),
-        },
-      })
-      .returning({ pseudonyms: policy.pseudonyms }),
-  );
+        updatedAt: new Date(),
+      },
+    })
+    .returning({ pseudonyms: policy.pseudonyms });
   return { pseudonyms: rows[0]?.pseudonyms ?? enabled };
 }

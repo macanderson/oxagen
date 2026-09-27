@@ -1,13 +1,14 @@
 // Spend › By operator › Operator ranking (D15, #2962; spec "Operator
 // ranking"): the workspace's operators by unproductive spend for the period,
-// highest first, from get_operator_ranking. An org Owner or Admin reads it,
-// and anyone else sees who can. Each figure links to its definition under the
-// table, and each operator's runs link to their Cost tab. The panel reports
-// the record and gives no verdict on the person. The operator rows and the
-// row for runs with no operator sum to the total row. With the workspace's
-// pseudonyms on, a stable pseudonym replaces each name, and the share, the
-// run count and the runs are hidden: each could match a pseudonym to a named
-// row on the By operator table below.
+// highest first, from get_operator_ranking. An org Owner or Admin, or the
+// workspace's Owner, reads it, and anyone else sees who can. Only an org
+// Owner or Admin sees the pseudonym switch. Each figure links to its
+// definition under the table, and each operator's runs link to their Cost
+// tab. The panel reports the record and gives no verdict on the person. The
+// operator rows and the row for runs with no operator sum to the total row.
+// With the workspace's pseudonyms on, a stable pseudonym replaces each name,
+// and the share, the run count and the runs are hidden: each could match a
+// pseudonym to a named row on the By operator table below.
 import { useLocale, useTranslations } from "next-intl";
 import { ratioOfMicros } from "@/data/contracts/money";
 import type {
@@ -33,13 +34,29 @@ import type { SpendAt } from "./view";
 const MIXED_CURRENCY = "ranking_mixed_currency";
 
 /**
- * Who reads the ranking: an org Owner or Admin, the roles the contract's
- * defaultRoles allow and the handler asserts. A workspace role confers no IAM
- * authority on a person yet (#3198), so the page reads the org role alone, as
- * the Tools page does (features/tools/tools.tsx). The same roles set the
- * pseudonym setting.
+ * Who reads the ranking: an org Owner or Admin, or the workspace's Owner, the
+ * roles get_operator_ranking's defaultRoles allow and its handler asserts. The
+ * page asks for every role the kernel grants, so it never gates narrower than
+ * the check it guards (`WsCtx.wsRole`, #3143). Until a person can hold a
+ * workspace IAM role (#3198), the handler refuses a workspace Owner who is an
+ * org Member, and the section shows that refusal as its denied state.
  */
-export function canReadOperatorRanking(ctx: Pick<WsCtx, "orgRole">): boolean {
+export function canReadOperatorRanking(
+  ctx: Pick<WsCtx, "orgRole" | "wsRole">,
+): boolean {
+  return (
+    ctx.orgRole === "owner" || ctx.orgRole === "admin" || ctx.wsRole === "owner"
+  );
+}
+
+/**
+ * Who sets the pseudonyms: an org Owner or Admin, the narrower pair
+ * set_operator_pseudonyms asserts. A workspace Owner reads the ranking but
+ * does not see the switch.
+ */
+export function canSetOperatorPseudonyms(
+  ctx: Pick<WsCtx, "orgRole">,
+): boolean {
   return ctx.orgRole === "owner" || ctx.orgRole === "admin";
 }
 
@@ -50,9 +67,12 @@ export function canReadOperatorRanking(ctx: Pick<WsCtx, "orgRole">): boolean {
 export function OperatorRankingSection({
   ranking,
   at,
+  canSetPseudonyms,
 }: {
   ranking: Read<OperatorRanking> | null;
   at: SpendAt;
+  /** Whether the viewer may change the pseudonym setting. */
+  canSetPseudonyms: boolean;
 }) {
   const t = useTranslations("spend.ranking");
   if (ranking === null) {
@@ -72,15 +92,23 @@ export function OperatorRankingSection({
     }
     return <SpendSectionFailure read={ranking} />;
   }
-  return <RankingPanel ranking={ranking.value} at={at} />;
+  return (
+    <RankingPanel
+      ranking={ranking.value}
+      at={at}
+      canSetPseudonyms={canSetPseudonyms}
+    />
+  );
 }
 
 function RankingPanel({
   ranking,
   at,
+  canSetPseudonyms,
 }: {
   ranking: OperatorRanking;
   at: SpendAt;
+  canSetPseudonyms: boolean;
 }) {
   const t = useTranslations("spend.ranking");
   const locale = useLocale();
@@ -95,7 +123,9 @@ function RankingPanel({
       title={t("title")}
       note={t("note")}
       action={
-        <OperatorPseudonymsToggle at={at} pseudonyms={ranking.pseudonyms} />
+        canSetPseudonyms ? (
+          <OperatorPseudonymsToggle at={at} pseudonyms={ranking.pseudonyms} />
+        ) : undefined
       }
       footer={<Definitions hidden={hidden} />}
     >

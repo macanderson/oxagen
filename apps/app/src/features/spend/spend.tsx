@@ -30,6 +30,7 @@ import { FindingEvidence, FindingsSection } from "./findings";
 import { GatewayPolicySection } from "./gateway-policy";
 import {
   canReadOperatorRanking,
+  canSetOperatorPseudonyms,
   OperatorRankingSection,
 } from "./operator-ranking";
 import { PricingSection } from "./pricing";
@@ -237,8 +238,8 @@ async function body({
     case "coaching":
       return <CoachingSection at={at} />;
     case "operator": {
-      // The ranking is asked only for a manager; anyone else sees who can
-      // read it (D15).
+      // The ranking is asked only for a viewer who may read it; anyone else
+      // sees who can (D15).
       const [report, ranking] = await Promise.all([
         source.spend.byGroup(ctx, "operator", period),
         canReadOperatorRanking(ctx)
@@ -248,7 +249,11 @@ async function body({
       if (!report.ok) return <SpendReadFailure read={report} {...failure} />;
       return (
         <>
-          <OperatorRankingSection ranking={ranking} at={at} />
+          <OperatorRankingSection
+            ranking={ranking}
+            at={at}
+            canSetPseudonyms={canSetOperatorPseudonyms(ctx)}
+          />
           <OperatorTable
             report={report.value}
             findings={listed(findings)}
