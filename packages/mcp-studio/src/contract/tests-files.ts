@@ -6,23 +6,76 @@
 // and one per page for a paged call. The compile check replays the exchanges
 // in order with no network. Each built request must match its recorded
 // request, and the shaped result must match the recorded result.
+//
+// A recorded call never holds a credential, because calls.jsonl is committed
+// to the steering repo and a secret in git history is hard to remove. Save as
+// a test records each request as built before the credential is added, so no
+// header, query parameter, or cookie carries one. A recorded response keeps no
+// Set-Cookie header. The header checks below are a second guard.
+//
 // selection.jsonl holds tasks and the tool a model should pick for each.
 import { z } from "zod";
 import { instantSchema, toolNameSchema } from "@oxagen/oxagen/steering-repo/common";
+import { withChecks, type CustomCheck } from "./checks";
 import { grpcMethodSchema, httpMethodSchema, jsonObjectSchema, jsonValueSchema, toolKeySchema } from "./primitives";
 
-/** The HTTP request an OpenAPI tool built. */
-export const recordedHttpRequestSchema = z
-  .object({
-    method: httpMethodSchema,
-    path: z.string().regex(/^\/[^\s#]*$/, "a path starts with / and has no fragment"),
-    query: z.record(z.string(), z.union([z.string(), z.array(z.string())])).optional(),
-    headers: z.record(z.string(), z.string()).optional().describe("Every header but the credential."),
-    body: z.unknown().optional(),
-  })
-  .strict();
+/** Request headers that carry a credential, in lowercase. A recorded request holds none of them. */
+export const CREDENTIAL_REQUEST_HEADERS = ["authorization", "proxy-authorization", "cookie"] as const;
 
-/** The POST a GraphQL tool sent. */
+/** Response headers that carry a credential, in lowercase. A recorded response holds none of them. */
+export const CREDENTIAL_RESPONSE_HEADERS = ["set-cookie"] as const;
+
+/**
+ * A pattern that matches a lowercase header name in any case. JSON Schema
+ * uses ECMA-262 patterns, which have no inline flag for case, so each letter
+ * becomes a class such as `[aA]`.
+ */
+function anyCase(name: string): string {
+  return name.replace(/[a-z]/g, (letter) => `[${letter}${letter.toUpperCase()}]`);
+}
+
+/** `headers` names none of `refused`, in any case. */
+function noCredentialHeaders(refused: readonly string[]): CustomCheck {
+  const names = new Set(refused);
+  return {
+    issues(value) {
+      const headers = (value.headers ?? {}) as Record<string, string>;
+      return Object.keys(headers)
+        .filter((name) => names.has(name.toLowerCase()))
+        .map((name) => ({
+          path: ["headers", name],
+          message: `the ${name} header is not allowed: a recorded call holds no credential`,
+        }));
+    },
+    json: {
+      properties: {
+        headers: { propertyNames: { not: { pattern: `^(?:${refused.map(anyCase).join("|")})$` } } },
+      },
+    },
+  };
+}
+
+/** The HTTP request an OpenAPI tool built, before the credential was added. */
+export const recordedHttpRequestSchema = withChecks(
+  z
+    .object({
+      method: httpMethodSchema,
+      path: z.string().regex(/^\/[^\s#]*$/, "a path starts with / and has no fragment"),
+      query: z
+        .record(z.string(), z.union([z.string(), z.array(z.string())]))
+        .optional()
+        .describe("As built before the credential is added: no API key in the query."),
+      headers: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe("As built before the credential is added: no Authorization, Proxy-Authorization, or Cookie."),
+      body: z.unknown().optional(),
+    })
+    .strict(),
+  [noCredentialHeaders(CREDENTIAL_REQUEST_HEADERS)],
+);
+
+/** The POST a GraphQL tool sent, before the credential was added. */
 export const recordedGraphqlRequestSchema = z
   .object({
     query: z.string().min(1),
@@ -30,7 +83,10 @@ export const recordedGraphqlRequestSchema = z
   })
   .strict();
 
-/** The call a gRPC tool made, with the request message in its proto3 JSON form. */
+/**
+ * The call a gRPC tool made, before the credential was added, with the
+ * request message in its proto3 JSON form.
+ */
 export const recordedGrpcRequestSchema = z
   .object({
     method: grpcMethodSchema,
@@ -38,7 +94,7 @@ export const recordedGrpcRequestSchema = z
   })
   .strict();
 
-/** The tools/call an MCP tool sent. */
+/** The tools/call an MCP tool sent, before the credential was added. */
 export const recordedMcpRequestSchema = z
   .object({
     name: z.string().min(1),
@@ -47,13 +103,16 @@ export const recordedMcpRequestSchema = z
   .strict();
 
 /** An HTTP response: from an OpenAPI or GraphQL source. */
-export const recordedHttpResponseSchema = z
-  .object({
-    status: z.number().int().min(100).max(599),
-    headers: z.record(z.string(), z.string()).optional(),
-    body: z.unknown().optional(),
-  })
-  .strict();
+export const recordedHttpResponseSchema = withChecks(
+  z
+    .object({
+      status: z.number().int().min(100).max(599),
+      headers: z.record(z.string(), z.string()).optional().describe("Every header but Set-Cookie."),
+      body: z.unknown().optional(),
+    })
+    .strict(),
+  [noCredentialHeaders(CREDENTIAL_RESPONSE_HEADERS)],
+);
 
 /** A gRPC response: the status, and the message or the stream's messages. */
 export const recordedGrpcResponseSchema = z
@@ -73,7 +132,10 @@ export const recordedMcpResponseSchema = z
   })
   .strict();
 
-/** One request that went upstream and the response that came back. */
+/**
+ * One request that went upstream, as built before the credential was added,
+ * and the response that came back.
+ */
 export const recordedExchangeSchema = z
   .object({
     request: z

@@ -535,6 +535,22 @@ describe("parseRecordedCalls", () => {
       issues: [{ line: 1, field: "exchanges.0.request.path", message: "a path starts with / and has no fragment" }],
     });
   });
+
+  it("refuses a call that recorded a credential, on the header that holds it", () => {
+    const headers = { ...refundExchange.request.headers, Authorization: "Bearer sk_live_1" };
+    const exchange = { ...refundExchange, request: { ...refundExchange.request, headers } };
+    const call = { ...httpCall, exchanges: [exchange] };
+    expect(parseRecordedCalls(jsonLines([call]))).toStrictEqual({
+      ok: false,
+      issues: [
+        {
+          line: 1,
+          field: "exchanges.0.request.headers.Authorization",
+          message: "the Authorization header is not allowed: a recorded call holds no credential",
+        },
+      ],
+    });
+  });
 });
 
 describe("parseSelectionTests", () => {
