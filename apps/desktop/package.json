@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/desktop",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "description": "The Oxagen desktop app: installs the CLI and the Tacho wrapper for Claude Code and Codex, signs a machine in to an org, and lets the operator pick or change the workspace the host reports to. Spec: docs/specs/oxagen-desktop/spec.md.",
   "type": "module",

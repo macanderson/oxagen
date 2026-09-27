@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/tacho",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "description": "Tacho: the Oxagen wrapper that records, gates, and evidences Claude Code, Claude Agent SDK, and custom agents. Leaf package: no @oxagen/* runtime dependency.",
   "type": "module",
