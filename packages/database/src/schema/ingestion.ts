@@ -547,11 +547,13 @@ export const repositoryBindingHeads = ingestionSchema.table(
     provider: text("provider").notNull(),
     providerRepositoryId: text("provider_repository_id").notNull(),
     currentBindingId: uuid("current_binding_id").notNull(),
-    // 'main' — the repository whose `.oxagen/rules/` steers this workspace, of
-    // which a workspace has exactly one; 'linked' — a repository the workspace
-    // can see but is not steered by, of which it may have many and which may be
-    // shared with other workspaces. Every v1 head is 'main': the only writer
-    // admits one head per workspace and steering resolves through it.
+    // 'steering' — the steering repo Oxagen creates and holds for this
+    // workspace (lane S1), of which a workspace has exactly one and which no
+    // other workspace can see; 'main' — the v1 name for a workspace's steering
+    // source, a code repository whose `.oxagen/rules/` steers it, which lane
+    // S8 moves to 'steering'; 'linked' — a code repository the workspace can
+    // see but is not steered by, of which it may have many and which may be
+    // shared with other workspaces.
     role: text("role").notNull().default("main"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
@@ -577,14 +579,14 @@ export const repositoryBindingHeads = ingestionSchema.table(
       "repository_binding_heads_main_repository_uq",
     )
       .on(t.provider, t.providerRepositoryId)
-      .where(sql`${t.role} = 'main'`),
+      .where(sql`${t.role} IN ('main', 'steering')`),
     orgIdx: index("repository_binding_heads_org_idx").on(
       t.orgId,
       t.workspaceId,
     ),
     roleCheck: check(
       "repository_binding_heads_role_check",
-      sql`${t.role} IN ('main', 'linked')`,
+      sql`${t.role} IN ('main', 'linked', 'steering')`,
     ),
     providerCheck: check(
       "repository_binding_heads_provider_check",

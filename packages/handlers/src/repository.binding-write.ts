@@ -17,7 +17,12 @@ import { schema, type Tx } from "@oxagen/database";
 import { and, desc, eq } from "drizzle-orm";
 import { GITHUB_PROVIDER } from "./repository.github-connection";
 
-export type RepositoryHeadRole = "main" | "linked";
+/**
+ * A head's role (`repository_binding_heads_role_check`). `steering` is the
+ * steering repo lane S1 provisions with the workspace; `main` is the v1 name
+ * for the same place, which lane S8 retires; `linked` is a code repository.
+ */
+export type RepositoryHeadRole = "main" | "linked" | "steering";
 
 /** The hosts a binding can name (`repository_bindings_provider_check`). */
 export type RepositoryProvider = "github" | "gitlab";
