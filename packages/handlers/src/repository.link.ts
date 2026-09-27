@@ -98,6 +98,9 @@ export function createRepositoryLinkHandler(
     }
 
     await assertGlobalClaimIsKnowable(ctx.orgId);
+    // tenancy: a global cross-tenant read, filtered to this provider
+    // repository id and the steering roles in other workspaces. It returns
+    // only whether such a head exists, never another tenant's row.
     const mainElsewhere = await withSystemDb((tx) =>
       tx
         .select({ id: schema.repositoryBindingHeads.id })
