@@ -77,7 +77,8 @@ export function runReadPrice(run: RunTotalsRecord): InputPrice | null {
  * With no compaction, a chain's context only grows from one request to the
  * next, so a drop that large means the context shed at least the result's own
  * size, and the result is taken to be gone. A drop from clearing some other
- * result ends the carry early, so the count errs low.
+ * result ends the carry early. A compaction whose drop the next request's new
+ * context hides lets it run long.
  */
 export function carriesOf(
   chain: readonly PricedRequestFrame[],
