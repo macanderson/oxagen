@@ -28,6 +28,7 @@
     "@oxagen/iam": "workspace:*",
     "@oxagen/ingestion": "workspace:*",
     "@oxagen/inngest-functions": "workspace:*",
+    "@oxagen/mcp-studio": "workspace:*",
     "@oxagen/notifications": "workspace:*",
     "@oxagen/ontology": "workspace:*",
     "@oxagen/oxagen": "workspace:*",

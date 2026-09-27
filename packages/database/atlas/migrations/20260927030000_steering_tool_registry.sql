@@ -1,4 +1,4 @@
--- M13 (#4478): the steering repo writes the tool registry. Four changes.
+-- M13 (#4478): the steering repo writes the tool registry. Five changes.
 --
 -- 1. mcp.mcp_servers records where a row came from. origin is steering when
 --    publishing a steering version wrote the row, and legacy when a direct
@@ -19,6 +19,11 @@
 --    The update trigger is off while the key moves. The tags are the same,
 --    so no gate needs to reload, and a reload by code that still reads the
 --    old key would lose every classified tag until the new code deploys.
+-- 5. Moving a tool's active version bumps the deny generation. Publishing a
+--    steering version that rolls back to an earlier definition activates the
+--    version that already holds it, with no insert, so without this trigger
+--    the gate would keep the rolled-back version's classification until
+--    something else moved the generation.
 --
 -- No table is created, so the tenant policies and grants stay as they are.
 
@@ -138,3 +143,13 @@ ALTER TABLE "agent"."tool_versions"
 DROP INDEX IF EXISTS "agent"."tool_versions_classification_tags_gin";
 CREATE INDEX "tool_versions_classification_impacts_gin"
   ON "agent"."tool_versions" USING gin (("classification" -> 'impacts') jsonb_path_ops);
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 5. Moving a tool's active version bumps the deny generation.
+
+DROP TRIGGER IF EXISTS "tools_active_version_deny_generation" ON "agent"."tools";
+CREATE TRIGGER "tools_active_version_deny_generation"
+  AFTER UPDATE OF "active_version_id" ON "agent"."tools"
+  FOR EACH ROW
+  WHEN (OLD.active_version_id IS DISTINCT FROM NEW.active_version_id)
+  EXECUTE FUNCTION "iam"."deny_generation_scoped_trigger"();
