@@ -334,6 +334,9 @@ const MARK_SLOTS = 200;
  */
 const GAP_NOTE_MS = 60_000;
 
+/** A style that also sets CSS custom properties, such as a row's `--depth`. */
+type StyleWithVariables = CSSProperties & Record<`--${string}`, string>;
+
 // ── Pieces ──────────────────────────────────────────────────────────────────
 
 /** `txHi`: the text with every match of the search marked. */
@@ -2175,12 +2178,13 @@ export function TranscriptView({
   // deeper. The margin notes a recorded pause of a minute or more before it.
   const drawRow = ({ row, index, children }: Drawn, depth: number): ReactNode => {
     const waited = waitedMs.get(row.key) ?? 0;
+    const depthStyle: StyleWithVariables = { "--depth": String(depth) };
     return (
       <div
         key={row.key}
         data-testid="tx-row"
         data-kind={row.kind}
-        style={{ "--depth": depth } as CSSProperties}
+        style={depthStyle}
       >
         <div className="tr">
           <div className="tg">
