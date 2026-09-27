@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import en from "../../messages/en.json";
 import { catalogStems, mergeCatalogs, parseCatalog } from "./catalogs";
@@ -99,6 +102,70 @@ describe("messages/en.json", () => {
         "notFound",
         "globalError",
       ]),
+    );
+  });
+});
+
+/**
+ * The dotted path of every key that one JSON object in `text` declares twice.
+ * JSON.parse keeps the last copy without a word, so a merge that leaves two
+ * copies of a key changes the shown sentence and nothing fails.
+ */
+function duplicateKeys(text: string): string[] {
+  const duplicates: string[] = [];
+  const stack: { keys: Set<string> | null; path: string }[] = [];
+  let lastKey = "";
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      let end = i + 1;
+      while (end < text.length && text[end] !== '"')
+        end += text[end] === "\\" ? 2 : 1;
+      const raw = text.slice(i, end + 1);
+      i = end;
+      let next = end + 1;
+      while (/\s/.test(text[next] ?? "")) next++;
+      const top = stack.at(-1);
+      if (text[next] === ":" && top?.keys) {
+        const key = JSON.parse(raw) as string;
+        if (top.keys.has(key)) duplicates.push(`${top.path}${key}`);
+        top.keys.add(key);
+        lastKey = key;
+      }
+    } else if (ch === "{" || ch === "[") {
+      const parent = stack.at(-1);
+      const at = parent
+        ? `${parent.path}${parent.keys ? lastKey : "[]"}.`
+        : "";
+      stack.push({ keys: ch === "{" ? new Set() : null, path: at });
+    } else if (ch === "}" || ch === "]") {
+      stack.pop();
+    }
+  }
+  return duplicates;
+}
+
+describe("duplicateKeys", () => {
+  it("names a key declared twice in one object", () => {
+    expect(duplicateKeys('{"a":{"b":"x","c":"y","b":"z"}}')).toEqual(["a.b"]);
+  });
+
+  it("allows one key in two sibling objects", () => {
+    expect(duplicateKeys('{"a":{"b":"x"},"c":{"b":"y"}}')).toEqual([]);
+  });
+
+  it("reads a quoted key inside a value as text", () => {
+    expect(duplicateKeys('{"a":"say \\"b\\": no","b":"x"}')).toEqual([]);
+  });
+});
+
+describe("the catalogs in messages/", () => {
+  const dir = fileURLToPath(new URL("../../messages", import.meta.url));
+  const files = readdirSync(dir).filter((name) => name.endsWith(".json"));
+
+  it.each(files)("%s declares each key once per object", (file) => {
+    expect(duplicateKeys(readFileSync(path.join(dir, file), "utf8"))).toEqual(
+      [],
     );
   });
 });
