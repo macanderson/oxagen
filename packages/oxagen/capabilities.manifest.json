@@ -2113,6 +2113,21 @@
       }
     },
     {
+      "name": "merge_pr_without_review",
+      "file": "context.pr.merge_without_review.ts",
+      "domain": "context",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "open_context_pr",
       "file": "context.pr.open.ts",
       "domain": "context",

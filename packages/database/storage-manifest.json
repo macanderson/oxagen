@@ -2658,6 +2658,15 @@
       "writes": []
     },
     {
+      "domain": "context",
+      "name": "merge_pr_without_review",
+      "reads": [],
+      "surfaces": [
+        "api"
+      ],
+      "writes": []
+    },
+    {
       "domain": "agent",
       "name": "move_agent",
       "reads": [],
@@ -4206,7 +4215,7 @@
       "writes": []
     }
   ],
-  "contentHash": "20a19d38b72cfd718a2c8e0ad846fc9ec646b00919cc57256c36b52cb5c14f35",
+  "contentHash": "fd0113db5d66f8f4b302b03d34cf12626ade4151335b04434d9c17eb28b6036e",
   "domains": [
     {
       "name": "agent",
