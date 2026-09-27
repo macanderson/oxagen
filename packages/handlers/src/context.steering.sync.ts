@@ -257,9 +257,9 @@ interface SettingsRead {
  * The settings and the linked repositories workspace.toml sets at `ref`
  * (workspace/v1), read the way `link_repository` reads it
  * (repository.workspace-toml). With no such file, the workspace falls back to
- * every default and lists nothing. A file of that name whose first line does
- * not name workspace/v1 is some other tool's configuration, so it sets and
- * lists nothing either.
+ * every default and no linked head moves. A file of that name whose first line
+ * does not name workspace/v1 is some other tool's configuration, so it sets
+ * nothing and moves no head either.
  *
  * A workspace/v1 file that does not read cleanly leaves the last settings and
  * the linked heads in place, and becomes one warning. It is never an error: a
@@ -277,10 +277,13 @@ async function readWorkspaceSettings(
   switch (file.kind) {
     case "missing":
     case "foreign":
+      // No workspace/v1 file lists nothing, and a slip on its first line
+      // would otherwise unlink every repository it listed. Removal takes a
+      // file that still reads and no longer lists the repository.
       return {
         publish: { stellaArchiveAfterDays: null },
         findings: [],
-        repositories: [],
+        repositories: null,
       };
     case "unreadable":
       return {
@@ -496,9 +499,10 @@ export async function syncWorkspaceSteering(
       if (settings.publish)
         await deps.store.publishWorkspaceSettings(scope, settings.publish);
       settingsFindings = settings.findings;
-      // The linked heads follow the list. A file nobody can read moves none.
-      // The prior list is the last synced head's, and a failed sync keeps
-      // that head, so the next run compares the same two lists again.
+      // The linked heads follow the list. With no workspace/v1 file that
+      // reads, none moves. The prior list is the last synced head's, and a
+      // failed sync keeps that head, so the next run compares the same two
+      // lists again.
       if (deps.reconcileLinks && settings.repositories !== null) {
         const reconciled = await deps.reconcileLinks(scope, {
           prior: await priorRepositories(
@@ -745,7 +749,13 @@ async function dropBranch(
   }
 }
 
-/** Keep the last good head and findings, and say why this run failed. */
+/**
+ * Keep the last good head and findings, and say why this run failed. A head
+ * the prior state took from another steering repository is not kept: stored
+ * beside the new repository's name, it would make the next run read that
+ * repository at the old repository's sha, and a reconcile there could remove
+ * heads on a list the new repository never held.
+ */
 async function recordFailure(
   deps: SyncDeps,
   scope: { orgId: string; workspaceId: string },
@@ -753,15 +763,20 @@ async function recordFailure(
   err: unknown,
   repo?: SteeringRepository,
 ): Promise<void> {
+  const kept =
+    repo === undefined ||
+    (prior?.provider === repo.provider && prior?.repository === repo.fullName)
+      ? prior
+      : null;
   try {
     await deps.store.writeState(scope, {
       provider: repo?.provider ?? prior?.provider ?? null,
       repository: repo?.fullName ?? prior?.repository ?? null,
       branch: repo?.defaultBranch ?? prior?.branch ?? null,
-      headSha: prior?.headSha ?? null,
-      rulesSha: prior?.rulesSha ?? null,
+      headSha: kept?.headSha ?? null,
+      rulesSha: kept?.rulesSha ?? null,
       status: "failed",
-      findings: prior?.findings ?? [],
+      findings: kept?.findings ?? [],
       error: err instanceof Error ? err.message : String(err),
       syncedAt: deps.now(),
     });

@@ -66,12 +66,14 @@ checkout cannot name a workspace.
    (`repository.link.reconcile.ts`) with the list the prior synced head held
    and the list the new head holds. The reconcile deletes a `linked` head
    only when the prior list named it and the new list does not. When nobody
-   can tell what the prior list held, it deletes nothing. It writes a head,
-   naming no Oxagen user, for each listed repository that has none. A
-   repository it cannot link becomes one warning finding with code
-   `repository_link`, and the sync still succeeds. The reconcile runs once
-   per synced head, in step 5, and never in step 8. A second run at the same
-   head changes nothing.
+   can tell what the prior list held, it deletes nothing. A synced commit
+   with no `workspace.toml`, or with a file that is not workspace/v1, moves
+   no head. A deleted file or a slip on its first line unlinks nothing. The
+   reconcile writes a head, naming no Oxagen user, for each listed
+   repository that has none. A repository it cannot link becomes one warning
+   finding with code `repository_link`, and the sync still succeeds. The
+   reconcile runs once per synced head, in step 5, and never in step 8. A
+   second run at the same head changes nothing.
 7. **A session's workspace comes from its enrollment.** The key the host
    enrolled with names the workspace (ADR-073). The repository a session runs
    in never picks its workspace or its scope.

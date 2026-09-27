@@ -24,7 +24,7 @@
 // Removals run before additions, so an entry renamed in one PR loses its old
 // head before the new one is written. Running this again with the same lists
 // changes nothing: every entry has its head, and no entry went away.
-import { HandlerError } from "@oxagen/oxagen";
+import { isHandlerError } from "@oxagen/oxagen";
 import { WORKSPACE_TOML_PATH } from "@oxagen/oxagen/steering-repo/paths";
 import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { and, eq, inArray } from "drizzle-orm";
@@ -204,7 +204,7 @@ async function addListed(
       );
       linked.push(written.fullName);
     } catch (err) {
-      if (!(err instanceof HandlerError)) throw err;
+      if (!isHandlerError(err)) throw err;
       // A concurrent sync or a legacy link wrote it first. The entry has
       // its head, which is all this step wants.
       if (err.reason === "repository_already_linked") continue;
