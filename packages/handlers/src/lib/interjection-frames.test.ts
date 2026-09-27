@@ -8,9 +8,9 @@ import { schema, type Tx } from "@oxagen/database";
 import type { TachoEvent } from "@oxagen/tacho";
 import { SKILL_INTERJECTION_TIMEOUT_MS } from "@oxagen/oxagen/skills";
 
-const warn = vi.hoisted(() => vi.fn());
+const { warn, error } = vi.hoisted(() => ({ warn: vi.fn(), error: vi.fn() }));
 vi.mock("../logger", () => ({
-  logger: { error: vi.fn(), warn, info: vi.fn() },
+  logger: { error, warn, info: vi.fn() },
 }));
 
 const {
@@ -108,7 +108,10 @@ function record(tx: Tx, frames: readonly TachoEvent[]) {
   return recordInterjectionFrames(tx, SCOPE, RUN, frames, NOW);
 }
 
-beforeEach(() => warn.mockClear());
+beforeEach(() => {
+  warn.mockClear();
+  error.mockClear();
+});
 
 describe("recordInterjectionFrames", () => {
   it("writes one repo_unknown row per question, keyed on its frame, with a deadline read from the server's clock", async () => {
@@ -251,13 +254,17 @@ describe("the raised events", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it("logs a failed send and never fails the ingest (negative)", async () => {
+  it("logs a failed send as an error naming the sweep, and never fails the ingest (negative)", async () => {
     const send = vi.fn(async () => {
       throw new Error("event bus down");
     });
     await expect(
       sendInterjectionsRaised(send, SCOPE, raised),
     ).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalledOnce();
+    expect(error).toHaveBeenCalledOnce();
+    expect(error.mock.calls[0]?.[1]).toContain(
+      "agent/interjection-timeout-sweep",
+    );
+    expect(warn).not.toHaveBeenCalled();
   });
 });

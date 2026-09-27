@@ -201,9 +201,12 @@ export function interjectionRaisedEvents(
 }
 
 /**
- * Send the batch's raised events. A failed send is logged and never fails
- * the ingest: the host answers `deny` itself at its own deadline, and its
- * `control.answer` closes the row.
+ * Send the batch's raised events. A failed send is logged as an error and
+ * never fails the ingest. Failing it would not bring the event back: the
+ * host's resent `control.interject` frame meets the row it already wrote and
+ * sends nothing. `agent/interjection-timeout-sweep` settles each such row
+ * five minutes after its deadline, with the receipt, the audit event and the
+ * `message` that releases the host's hold.
  */
 export async function sendInterjectionsRaised(
   send: (events: InterjectionRaisedEvent[]) => Promise<unknown>,
@@ -215,9 +218,9 @@ export async function sendInterjectionsRaised(
   try {
     await send(events);
   } catch (err) {
-    logger.warn(
+    logger.error(
       { err, interjections: events.map((event) => event.data.interjectionId) },
-      "tacho.events.ingest: agent/interjection.raised dispatch failed; the host's own timeout settles these questions",
+      "tacho.events.ingest: agent/interjection.raised dispatch failed; agent/interjection-timeout-sweep settles these questions after their deadline",
     );
   }
 }

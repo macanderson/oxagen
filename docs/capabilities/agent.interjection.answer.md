@@ -151,6 +151,12 @@ writes. The durable function `agent/interjection-timeout` then:
    When the host's own timeout answered first, it adds the receipt and the
    event only. A person's answer is left alone.
 
+A failed send or a lost function run leaves the row open. The cron function
+`agent/interjection-timeout-sweep` runs every five minutes, finds each
+`repo_unknown` row with no receipt five minutes past its deadline, and runs
+the same deny step on it. The deny locks the row and writes a receipt only
+where none is recorded, so the sweep and a late timeout write one answer.
+
 ## Errors
 
 | code        | reason                  | meaning |
