@@ -1,7 +1,9 @@
 // The conversations port: one get_conversation read with no id, mapped into
 // the thread the assistant flyout reopens, with a refusal passed through, an
-// empty history read as null, and an unmappable record reported once.
+// empty history read as null, and an unmappable record reported once. The
+// session list reads list_conversations, and a picked session is read by id.
 import { conversationGet } from "@oxagen/oxagen/contracts/conversation.get";
+import { conversationList } from "@oxagen/oxagen/contracts/conversation.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { kernelRead, captureError } = vi.hoisted(() => ({
@@ -208,5 +210,107 @@ describe("conversations.latest", () => {
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+const summary = (over: Record<string, unknown>) => ({
+  publicId: "cnv_01k9x2",
+  title: "What is live in core-platform?",
+  status: "active",
+  archivedAt: null,
+  createdAt: "2026-09-25T09:59:00.000Z",
+  updatedAt: "2026-09-25T10:01:00.000Z",
+  ...over,
+});
+
+describe("conversations.list", () => {
+  it("reads the viewer's active conversations and keeps the id, title, and last activity", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        conversations: [
+          summary({}),
+          summary({
+            publicId: "cnv_01k8aa",
+            title: null,
+            updatedAt: "2026-09-22T08:00:00.000Z",
+          }),
+        ],
+        nextCursor: null,
+      }),
+    );
+
+    const read = await conversations.list(ctx);
+
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: conversationList,
+      input: { filter: "active", limit: 50, cursor: null },
+      page: "shell",
+    });
+    expect(read).toEqual(
+      readOk([
+        {
+          id: "cnv_01k9x2",
+          title: "What is live in core-platform?",
+          updatedAt: "2026-09-25T10:01:00.000Z",
+        },
+        {
+          id: "cnv_01k8aa",
+          title: null,
+          updatedAt: "2026-09-22T08:00:00.000Z",
+        },
+      ]),
+    );
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("passes a refusal through unchanged (negative)", async () => {
+    const refused = readError("control_plane_unavailable", 503);
+    kernelRead.mockResolvedValue(refused);
+    await expect(conversations.list(ctx)).resolves.toBe(refused);
+  });
+
+  it("answers record_unmappable and reports once for a row the view model refuses (negative)", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        conversations: [summary({ publicId: "not a public id" })],
+        nextCursor: null,
+      }),
+    );
+    await expect(conversations.list(ctx)).resolves.toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("conversations.byId", () => {
+  it("reads get_conversation with the picked id and maps its turns", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({ conversation: conversation([message({})]) }),
+    );
+
+    const read = await conversations.byId(ctx, "cnv_01k9x2");
+
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: conversationGet,
+      input: { conversationId: "cnv_01k9x2", limit: 100 },
+      page: "shell",
+    });
+    if (!read.ok) throw new Error(`the read failed: ${read.reason}`);
+    expect(read.value.id).toBe("cnv_01k9x2");
+    expect(read.value.messages.map((m) => m.text)).toEqual(["what is live?"]);
+  });
+
+  it("passes the handler's conversation_not_found through (negative)", async () => {
+    const refused = readError("conversation_not_found", 404);
+    kernelRead.mockResolvedValue(refused);
+    await expect(conversations.byId(ctx, "cnv_gone")).resolves.toBe(refused);
+  });
+
+  it("reads a null conversation as conversation_not_found (negative)", async () => {
+    kernelRead.mockResolvedValue(readOk({ conversation: null }));
+    await expect(conversations.byId(ctx, "cnv_01k9x2")).resolves.toEqual(
+      readError("conversation_not_found", 404),
+    );
   });
 });

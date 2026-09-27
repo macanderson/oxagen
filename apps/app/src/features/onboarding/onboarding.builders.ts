@@ -183,7 +183,11 @@ export function onboardingSource(reads: Reads): {
       // No runtime named, unless the test hands a list.
       named: () => Promise.resolve(reads.runtimes ?? readOk({ runtimes: [] })),
     },
-    conversations: { latest: refuse("conversations.latest") },
+    conversations: {
+      latest: refuse("conversations.latest"),
+      list: refuse("conversations.list"),
+      byId: refuse("conversations.byId"),
+    },
     onboarding: {
       state: (...args: Parameters<DataSource["onboarding"]["state"]>) => {
         calls.state.push(args);

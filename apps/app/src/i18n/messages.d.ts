@@ -7597,6 +7597,19 @@ type Messages = {
         loading: string;
         loadFailed: string;
       };
+      sessions: {
+        title: string;
+        loading: string;
+        failed: string;
+        retry: string;
+        empty: string;
+        untitled: string;
+        current: string;
+        busy: string;
+        gone: string;
+        openFailed: string;
+        archive: string;
+      };
       suggestions: {
         title: string;
         fleet: {
@@ -7654,6 +7667,7 @@ type Messages = {
         aborted: string;
         model: string;
         unavailable: string;
+        archived: string;
       };
       answering: {
         tool: string;

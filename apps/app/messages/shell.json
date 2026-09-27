@@ -358,6 +358,19 @@
         "loading": "Loading your last thread…",
         "loadFailed": "Your last thread could not be loaded. A new question starts a new thread."
       },
+      "sessions": {
+        "title": "Threads",
+        "loading": "Loading your threads…",
+        "failed": "Your threads could not be loaded.",
+        "retry": "Try again",
+        "empty": "No threads yet. Ask stella a question to start one.",
+        "untitled": "Untitled thread",
+        "current": "Current",
+        "busy": "stella is answering. Open another thread when the reply ends.",
+        "gone": "That thread was archived or deleted.",
+        "openFailed": "That thread could not be opened. Try again.",
+        "archive": "stella archives a thread after 7 idle days, or after the days a workspace sets in archive_after_days under [stella]."
+      },
       "suggestions": {
         "title": "Ask about this page",
         "fleet": {
@@ -414,7 +427,8 @@
         "unrecorded": "stella did not answer because the turn could not be recorded as a run. Nothing ran. Ask again.",
         "aborted": "stella stopped this turn before it answered, usually at the per-turn budget. Ask again, or raise the budget.",
         "model": "The model provider refused or failed stella’s request, so this question was not answered. An owner can check the key and model under Model funding. Ask again.",
-        "unavailable": "stella could not be reached. Try again."
+        "unavailable": "stella could not be reached. Try again.",
+        "archived": "This thread was archived or deleted, so stella could not continue it. Ask again to start a new thread."
       },
       "answering": {
         "tool": "Calling {capability}…"

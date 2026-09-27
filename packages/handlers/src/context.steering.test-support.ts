@@ -30,6 +30,7 @@ import {
   SYNC_POLICY_VERSION,
   type AppliedSync,
   type ApplyInput,
+  type PublishedWorkspaceSettings,
   type SyncState,
   type SyncStateWrite,
   type SyncStore,
@@ -1017,6 +1018,8 @@ export function harness(files: Record<string, string> = {}): Harness {
 export class MemorySyncStore implements SyncStore {
   state: SyncState | null = null;
   applied = 0;
+  /** Every settings publish the sync made, oldest first. */
+  published: PublishedWorkspaceSettings[] = [];
   constructor(private readonly store: MemoryStore) {}
 
   async readState() {
@@ -1240,5 +1243,12 @@ export class MemorySyncStore implements SyncStore {
       promotionEventId: promotion.id,
     });
     return true;
+  }
+
+  async publishWorkspaceSettings(
+    _scope: SyncScope,
+    settings: PublishedWorkspaceSettings,
+  ) {
+    this.published.push(settings);
   }
 }
