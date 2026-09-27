@@ -4,14 +4,15 @@ import {
   type CostBasis,
   type ModelBreakdown,
 } from "./cost-rollup";
+import type { PriceEntry } from "./price-book";
 import {
   priceAtPerThousand,
   resentStandingTokens,
   runReadPrice,
   standingContextBySource,
   standingReadPrice,
-  weeklyPriceMicros,
-  weeklyPricePerThousand,
+  weeklyPriceFromBook,
+  type WeekOfModel,
 } from "./standing-context-price";
 
 function priced(
@@ -108,15 +109,227 @@ describe("standingReadPrice", () => {
   });
 });
 
-describe("the weekly price", () => {
-  // 0.3 micros a read token.
-  const price = { micros: 9_000n, tokens: 30_000n };
+const ORG = "00000000-0000-4000-8000-000000000001";
+const RATE_CHANGE = new Date("2026-09-20T00:00:00.000Z");
 
-  it("is tokens times the read price times the requests of the week", () => {
-    expect(weeklyPriceMicros(price, 1_000, 4_000)).toBe(1_200_000n);
-    expect(weeklyPricePerThousand(price, 1_000)).toBe(300_000n);
+function entry(
+  overrides: Partial<PriceEntry> & Pick<PriceEntry, "id" | "tokenClass">,
+): PriceEntry {
+  return {
+    orgId: null,
+    provider: "anthropic",
+    model: "claude-sonnet-5",
+    modelAliases: [],
+    region: null,
+    unit: "token",
+    currency: "USD",
+    microsPerMillion: 3_000_000n,
+    effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+    effectiveTo: null,
+    source: "list",
+    ...overrides,
+  };
+}
+
+/** Input is $3 a million; reads are $0.30 before the change and $0.20 after. */
+const BOOK: PriceEntry[] = [
+  entry({ id: "pe_in", tokenClass: "input_uncached" }),
+  entry({
+    id: "pe_read_old",
+    tokenClass: "cache_read",
+    microsPerMillion: 300_000n,
+    effectiveTo: RATE_CHANGE,
+  }),
+  entry({
+    id: "pe_read_new",
+    tokenClass: "cache_read",
+    microsPerMillion: 200_000n,
+    effectiveFrom: RATE_CHANGE,
+  }),
+];
+
+function week(
+  model: string,
+  calls: number,
+  reads: readonly { calls: number; at: string }[],
+): WeekOfModel {
+  return {
+    model,
+    calls,
+    lastSeen: "2026-09-26T12:00:00.000Z",
+    classes: reads.map((r) => ({
+      tokenClass: "cache_read",
+      calls: r.calls,
+      firstSeen: r.at,
+    })),
+  };
+}
+
+describe("weeklyPriceFromBook", () => {
+  it("prices each request's re-read of 1,000 tokens at the read rate of its bucket", () => {
+    // 1,000 reads at $0.30 and 1,000 at $0.20 a million tokens: 1,000 tokens
+    // re-read 2,000 times cost 300,000 + 200,000 micros.
+    const price = weeklyPriceFromBook({
+      observed: [
+        week("claude-sonnet-5", 2_000, [
+          { calls: 1_000, at: "2026-09-19T08:00:00.000Z" },
+          { calls: 1_000, at: "2026-09-21T08:00:00.000Z" },
+        ]),
+      ],
+      book: BOOK,
+      orgId: ORG,
+    });
+    expect(price).toEqual({
+      perThousandMicros: 500_000n,
+      currency: "USD",
+      requests: 2_000,
+      unpricedRequests: 0,
+    });
   });
 
+  it("prices a request that read nothing from the cache at the input rate", () => {
+    // 100 reads at $0.20 and 10 misses at $3 a million: 20,000 + 30,000.
+    const price = weeklyPriceFromBook({
+      observed: [
+        week("claude-sonnet-5", 110, [
+          { calls: 100, at: "2026-09-22T08:00:00.000Z" },
+        ]),
+      ],
+      book: BOOK,
+      orgId: ORG,
+    });
+    expect(price?.perThousandMicros).toBe(50_000n);
+    expect(price?.requests).toBe(110);
+  });
+
+  it("weights a week split across models by each model's requests", () => {
+    const book = [
+      ...BOOK,
+      entry({
+        id: "pe_haiku_read",
+        model: "claude-haiku-5",
+        tokenClass: "cache_read",
+        microsPerMillion: 100_000n,
+      }),
+    ];
+    // 1,000 sonnet reads at $0.20 and 9,000 haiku reads at $0.10 a million.
+    const price = weeklyPriceFromBook({
+      observed: [
+        week("claude-sonnet-5", 1_000, [
+          { calls: 1_000, at: "2026-09-22T08:00:00.000Z" },
+        ]),
+        week("claude-haiku-5", 9_000, [
+          { calls: 9_000, at: "2026-09-22T08:00:00.000Z" },
+        ]),
+      ],
+      book,
+      orgId: ORG,
+    });
+    expect(price?.perThousandMicros).toBe(200_000n + 900_000n);
+    expect(price?.requests).toBe(10_000);
+  });
+
+  it("leaves out and counts a request the book has no rate for", () => {
+    const price = weeklyPriceFromBook({
+      observed: [
+        week("claude-sonnet-5", 1_000, [
+          { calls: 1_000, at: "2026-09-22T08:00:00.000Z" },
+        ]),
+        week("in-house-model", 40, [
+          { calls: 30, at: "2026-09-22T08:00:00.000Z" },
+        ]),
+      ],
+      book: BOOK,
+      orgId: ORG,
+    });
+    expect(price).toEqual({
+      perThousandMicros: 200_000n,
+      currency: "USD",
+      requests: 1_000,
+      unpricedRequests: 40,
+    });
+  });
+
+  it("quotes free cache reads at zero", () => {
+    const book = [
+      entry({ id: "pe_in", tokenClass: "input_uncached" }),
+      entry({ id: "pe_free", tokenClass: "cache_read", microsPerMillion: 0n }),
+    ];
+    const price = weeklyPriceFromBook({
+      observed: [
+        week("claude-sonnet-5", 500, [
+          { calls: 500, at: "2026-09-22T08:00:00.000Z" },
+        ]),
+      ],
+      book,
+      orgId: ORG,
+    });
+    expect(price?.perThousandMicros).toBe(0n);
+    expect(price?.requests).toBe(500);
+  });
+
+  it("is null when no request was priced or the rates name two currencies", () => {
+    expect(weeklyPriceFromBook({ observed: [], book: BOOK, orgId: ORG })).toBe(
+      null,
+    );
+    expect(
+      weeklyPriceFromBook({
+        observed: [week("in-house-model", 10, [])],
+        book: BOOK,
+        orgId: ORG,
+      }),
+    ).toBeNull();
+    const book = [
+      ...BOOK,
+      entry({
+        id: "pe_eur_read",
+        model: "claude-haiku-5",
+        tokenClass: "cache_read",
+        currency: "EUR",
+        microsPerMillion: 100_000n,
+      }),
+    ];
+    expect(
+      weeklyPriceFromBook({
+        observed: [
+          week("claude-sonnet-5", 10, [
+            { calls: 10, at: "2026-09-22T08:00:00.000Z" },
+          ]),
+          week("claude-haiku-5", 10, [
+            { calls: 10, at: "2026-09-22T08:00:00.000Z" },
+          ]),
+        ],
+        book,
+        orgId: ORG,
+      }),
+    ).toBeNull();
+  });
+
+  it("prices a negotiated read rate over the list rate", () => {
+    const book = [
+      ...BOOK,
+      entry({
+        id: "pe_own_read",
+        orgId: ORG,
+        tokenClass: "cache_read",
+        microsPerMillion: 150_000n,
+        source: "negotiated",
+      }),
+    ];
+    const price = weeklyPriceFromBook({
+      observed: [
+        week("claude-sonnet-5", 1_000, [
+          { calls: 1_000, at: "2026-09-22T08:00:00.000Z" },
+        ]),
+      ],
+      book,
+      orgId: ORG,
+    });
+    expect(price?.perThousandMicros).toBe(150_000n);
+  });
+});
+
+describe("priceAtPerThousand", () => {
   it("prices a count of tokens at a quoted price per 1,000, rounded half to even", () => {
     expect(priceAtPerThousand(300_000n, 4_000)).toBe(1_200_000n);
     expect(priceAtPerThousand(1n, 500)).toBe(0n);
