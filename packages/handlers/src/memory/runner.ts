@@ -545,11 +545,10 @@ async function settleOne(
 
 /**
  * Put today's branch at `head`. A branch left by a pass that failed before
- * it opened its PR is replaced. The function returns false and leaves the
- * branch alone when it already has an open PR, or when it moves or goes away
- * while the curator sets it up.
+ * it opened its PR is replaced, and a branch that already has an open PR is
+ * left alone: the function returns false.
  */
-export async function prepareBranch(
+async function prepareBranch(
   host: SteeringHost,
   repo: SteeringRepository,
   branch: string,
@@ -581,22 +580,10 @@ export async function prepareBranch(
     });
   }
   // The default branch can move between the read and the branch's creation.
-  // The commit's parent is the head the plan read, so the branch goes back to
-  // it. The reset runs only while the branch is still where it was created:
-  // a push or a delete in between is left alone, nothing is committed, and
-  // the memories keep waiting for the next pass.
-  const created = await host.branchHead(repo, branch);
-  if (created === head) return true;
-  if (
-    created !== null &&
-    (await host.resetBranch(repo, branch, { from: created, to: head }))
-  )
-    return true;
-  logger.warn(
-    { repository: repo.fullName, branch, head, created },
-    "memory: today's memory branch moved while the curator set it up; the curator leaves it",
-  );
-  return false;
+  // The commit's parent is the head the plan read.
+  if ((await host.branchHead(repo, branch)) !== head)
+    await host.resetBranch(repo, branch, head);
+  return true;
 }
 
 function proposeRecord(record: PlannedRecord): MemoryPrRecord {

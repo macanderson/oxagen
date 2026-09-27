@@ -111,22 +111,12 @@ const BUNDLE_IDENTITY: BundleIdentity = {
 };
 
 /**
- * Full object ids for the merge of PR #519 and an earlier production commit.
- * bundle/v1 takes nothing shorter, so the tests that run S5's publish() merge
- * to these instead of the fake's `merge519`.
- */
-const MERGE_COMMIT = "b".repeat(40);
-const SEED_COMMIT = "a".repeat(40);
-
-/**
  * S5's publish() over the fixture repo and an in-memory version store, bound
  * as the merge binds it. The production branch head is `tip.head`, so a test
- * can publish an earlier commit first. The harness's merges land as
- * `MERGE_COMMIT`.
+ * can publish an earlier commit first.
  */
-function s5Publisher(h: Harness) {
-  h.github.mergeShaFor = () => MERGE_COMMIT;
-  const tip = { head: MERGE_COMMIT };
+function s5Publisher() {
+  const tip = { head: "merge519" };
   const store = memoryVersionStore();
   const deps: PublishDeps = {
     store,
@@ -2013,7 +2003,7 @@ describe("merge_context_pr", () => {
   it("in a steering repo, stamps the checked head, posts the required check on the stamp, merges the stamp, and calls publish() with the merge commit", async () => {
     const h = steeringHarness();
     const { id, head, recordAt } = await steeringPrPassed(h);
-    const s5 = s5Publisher(h);
+    const s5 = s5Publisher();
     const out = await createMergeContextPrHandler(h, {
       publisher: s5.publisher,
     })({ proposalId: id }, ctx({ userId: REVIEWER }));
@@ -2040,22 +2030,22 @@ describe("merge_context_pr", () => {
       await h.github.readFile(REPO, recordAt, stamp.sha),
     );
     expect(s5.publish).toHaveBeenCalledTimes(1);
-    expect(s5.publish).toHaveBeenCalledWith(REPO, MERGE_COMMIT);
+    expect(s5.publish).toHaveBeenCalledWith(REPO, "merge519");
     expect(h.github.deployments).toEqual([
-      expect.objectContaining({ sha: MERGE_COMMIT, environment: "steering" }),
+      expect.objectContaining({ sha: "merge519", environment: "steering" }),
     ]);
   });
 
   it("in a steering repo, stamps the version S5's publish() assigns into the Oxagen-Version trailer", async () => {
     const h = steeringHarness();
     const { id } = await steeringPrPassed(h);
-    const s5 = s5Publisher(h);
+    const s5 = s5Publisher();
     // Version 1 is an earlier commit, published before this merge.
-    s5.tip.head = SEED_COMMIT;
+    s5.tip.head = "seed0";
     await expect(
-      publishBundle(s5.deps, BUNDLE_IDENTITY, SEED_COMMIT),
+      publishBundle(s5.deps, BUNDLE_IDENTITY, "seed0"),
     ).resolves.toMatchObject({ status: "published", version: 1 });
-    s5.tip.head = MERGE_COMMIT;
+    s5.tip.head = "merge519";
 
     const out = await createMergeContextPrHandler(h, {
       nextVersion: async () => 99,
@@ -2067,15 +2057,15 @@ describe("merge_context_pr", () => {
     await expect(s5.publish.mock.results[0]!.value).resolves.toMatchObject({
       status: "published",
       version: 2,
-      commit: MERGE_COMMIT,
+      commit: "merge519",
     });
     expect(s5.store.published.get(BUNDLE_IDENTITY.repository)).toMatchObject({
       version: 2,
-      commit: MERGE_COMMIT,
+      commit: "merge519",
     });
     expect(h.github.deployments).toEqual([
       expect.objectContaining({
-        sha: MERGE_COMMIT,
+        sha: "merge519",
         description: "Steering version 2 from #519",
       }),
     ]);
@@ -2147,7 +2137,7 @@ describe("merge_context_pr", () => {
   it("in a steering repo, a resumed merge keeps the version S5 published for its merge commit between the two calls", async () => {
     const h = steeringHarness();
     const { id } = await steeringPrPassed(h);
-    const s5 = s5Publisher(h);
+    const s5 = s5Publisher();
     const original = h.store.publishMerge.bind(h.store);
     let fail = true;
     h.store.publishMerge = async (input) => {
@@ -2167,7 +2157,7 @@ describe("merge_context_pr", () => {
     // S5's sync publishes the merge commit before the retry, so the store's
     // highest version is now the one in the trailer.
     await expect(
-      publishBundle(s5.deps, BUNDLE_IDENTITY, MERGE_COMMIT),
+      publishBundle(s5.deps, BUNDLE_IDENTITY, "merge519"),
     ).resolves.toMatchObject({ status: "published", version: 1 });
 
     const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
@@ -2177,11 +2167,11 @@ describe("merge_context_pr", () => {
     expect(s5.publish).not.toHaveBeenCalled();
     expect(s5.store.published.get(BUNDLE_IDENTITY.repository)).toMatchObject({
       version: 1,
-      commit: MERGE_COMMIT,
+      commit: "merge519",
     });
     expect(h.github.deployments).toEqual([
       expect.objectContaining({
-        sha: MERGE_COMMIT,
+        sha: "merge519",
         description: "Steering version 1 from #519",
       }),
     ]);
