@@ -114,18 +114,24 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@oxagen/database", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@oxagen/database")>()),
-  withSystemDb: async (fn: (tx: unknown) => unknown) => {
-    mocks.dbCalls.push("system");
-    if (mocks.failure.system) throw mocks.failure.system;
-    return fn(mocks.makeTx("system", getScope()));
-  },
-  withTenantDb: async (fn: (tx: unknown) => unknown) => {
-    mocks.dbCalls.push("tenant");
-    return fn(mocks.makeTx("tenant", getScope()));
-  },
-}));
+vi.mock("@oxagen/database", async (importOriginal) => {
+  // The org-wide seam is mocked as the SAME function as the tenant
+  // seam (ADR-086): a handler's role gate reads through withOrgDb, and
+  // a suite that counts seam calls must see one identity, not two.
+  const dbMock = {
+    ...(await importOriginal<typeof import("@oxagen/database")>()),
+    withSystemDb: async (fn: (tx: unknown) => unknown) => {
+      mocks.dbCalls.push("system");
+      if (mocks.failure.system) throw mocks.failure.system;
+      return fn(mocks.makeTx("system", getScope()));
+    },
+    withTenantDb: async (fn: (tx: unknown) => unknown) => {
+      mocks.dbCalls.push("tenant");
+      return fn(mocks.makeTx("tenant", getScope()));
+    },
+  };
+  return { ...dbMock, withOrgDb: dbMock.withTenantDb };
+});
 vi.mock("@oxagen/crypto", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/crypto")>()),
   decrypt: mocks.decrypt,
