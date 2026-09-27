@@ -18,7 +18,8 @@
   "dependencies": {
     "@oxagen/glob": "workspace:*",
     "@oxagen/mcp-studio": "workspace:*",
-    "@oxagen/oxagen": "workspace:*"
+    "@oxagen/oxagen": "workspace:*",
+    "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "25.9.8",

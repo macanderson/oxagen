@@ -2040,6 +2040,9 @@ importers:
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../oxagen
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: 25.9.8
