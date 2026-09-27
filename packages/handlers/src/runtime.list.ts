@@ -1,9 +1,11 @@
 // audit-exempt: read-only — lists runtimes and the agents on them; the kernel capability.invoke_* audit covers access.
 //
 // runtime.list.ts — the runtimes named in this workspace, each with its live
-// agents and their harness, its live host enrollments and when a host last
-// reported (ADR-198, #4369). The register form reads the agents to disable a
-// runtime and harness pair a live agent already holds.
+// agents and their harness, its live host enrollments, when a host last
+// reported (ADR-198, #4369) and whether it requires the contained launcher
+// (ADR-204). The register form reads the agents to disable a runtime and
+// harness pair a live agent already holds. An `id` narrows the read to that
+// runtime, so the runtime page finds one the 500 cap would cut.
 import { schema, withTenantDb } from "@oxagen/database";
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import type { AgentHarness } from "@oxagen/oxagen/contracts/agent.list";
@@ -16,7 +18,7 @@ const RUNTIMES_READ_LIMIT = 500;
 const AGENTS_PER_RUNTIME = 16;
 
 export const runtimeListHandler: CapabilityHandler<typeof runtimeList> = async (
-  _input,
+  input,
   ctx,
 ) => {
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
@@ -28,6 +30,7 @@ export const runtimeListHandler: CapabilityHandler<typeof runtimeList> = async (
         name: schema.runtimes.name,
         slug: schema.runtimes.slug,
         createdAt: schema.runtimes.createdAt,
+        containmentRequired: schema.runtimes.containmentRequired,
       })
       .from(schema.runtimes)
       .where(
@@ -35,6 +38,9 @@ export const runtimeListHandler: CapabilityHandler<typeof runtimeList> = async (
           eq(schema.runtimes.orgId, scope.orgId),
           eq(schema.runtimes.workspaceId, scope.workspaceId),
           isNull(schema.runtimes.deletedAt),
+          input.id === undefined
+            ? undefined
+            : eq(schema.runtimes.publicId, input.id),
         ),
       )
       .orderBy(asc(schema.runtimes.name))
@@ -108,6 +114,7 @@ export const runtimeListHandler: CapabilityHandler<typeof runtimeList> = async (
           // drivers, so it is read through Date either way.
           lastSeenAt:
             lastSeen === null ? null : new Date(lastSeen).toISOString(),
+          containmentRequired: runtime.containmentRequired,
         };
       }),
     };

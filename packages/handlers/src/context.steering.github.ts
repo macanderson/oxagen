@@ -8,12 +8,17 @@
 // today. Every operation runs with the workspace's own token (ADR-020:
 // installation token, then the connecting user's OAuth token, then the
 // local-only PAT).
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import {
   createGitHubClient,
+  GitHubApiError,
+  githubPath,
+  githubRest,
+  recordSteeringDeployment,
   type GitHubClient,
   type GitHubPathCommit,
+  type GitHubRest,
 } from "@oxagen/github";
 import { and, eq, isNull, notInArray } from "drizzle-orm";
 import { logger } from "./logger";
@@ -222,14 +227,109 @@ export interface SteeringHost {
       completedAt: string;
     },
   ): Promise<string | null>;
-  /** Squash-merge, pinned to `sha`: the host refuses when the head moved past it. */
+  /**
+   * Squash-merge, pinned to `sha`: the host refuses when the head moved past
+   * it. `commitMessage` is the squash commit's body, where the merge queue
+   * puts the `Oxagen-*` trailers (#4449).
+   */
   mergePullRequest(
     repo: SteeringRepository,
-    args: { number: number; commitTitle: string; sha: string },
+    args: {
+      number: number;
+      commitTitle: string;
+      sha: string;
+      commitMessage?: string;
+    },
   ): Promise<{ sha: string }>;
   closePullRequest(repo: SteeringRepository, number: number): Promise<void>;
   /** Delete the branch; a branch already gone is not an error. */
   deleteBranch(repo: SteeringRepository, branch: string): Promise<void>;
+  /**
+   * What the commit `head` does to each path against `base`. A rename is a
+   * removal of the old path and an addition of the new one, because the stamp
+   * and the ledger speak of paths, not of moves.
+   */
+  changedFiles(
+    repo: SteeringRepository,
+    base: string,
+    head: string,
+  ): Promise<SteeringChangedFile[]>;
+  /**
+   * Write one commit on `branch` whose only parent is `parent`: each file
+   * with content is written, each file with null content is deleted. The
+   * host refuses with `head_moved` when the branch no longer points at
+   * `parent`, so a stamp never lands on a head nobody checked.
+   */
+  commitFiles(
+    repo: SteeringRepository,
+    args: {
+      branch: string;
+      parent: string;
+      message: string;
+      files: { path: string; content: string | null }[];
+    },
+  ): Promise<{ sha: string }>;
+  /** True when `ancestor` is `head` or one of its ancestors. */
+  holdsCommit(
+    repo: SteeringRepository,
+    head: string,
+    ancestor: string,
+  ): Promise<boolean>;
+  /**
+   * Bring the steering PR's branch up to date with the production branch.
+   * Refuses with `head_moved` when the branch is not at `expectedHead`, and
+   * with `update_conflict` when the production branch does not merge in
+   * cleanly. Answers the branch's new head.
+   */
+  updateBranch(
+    repo: SteeringRepository,
+    args: { number: number; branch: string; expectedHead: string },
+  ): Promise<{ headSha: string }>;
+  /** Point `branch` at `sha`, discarding what came after it. */
+  resetBranch(
+    repo: SteeringRepository,
+    branch: string,
+    sha: string,
+  ): Promise<void>;
+  /** The approvals the PR holds now, one per reviewer. */
+  listApprovals(
+    repo: SteeringRepository,
+    number: number,
+  ): Promise<SteeringApproval[]>;
+  /**
+   * Record a publish as a successful deployment of `sha` to `environment`,
+   * so the host's own deployments page lists every steering version.
+   */
+  recordDeployment(
+    repo: SteeringRepository,
+    args: {
+      sha: string;
+      ref: string;
+      environment: string;
+      description: string;
+    },
+  ): Promise<{ url: string | null }>;
+}
+
+/** One path a commit changes, as the stamp and the ledger read it. */
+export interface SteeringChangedFile {
+  path: string;
+  status: "added" | "modified" | "removed";
+}
+
+/**
+ * One reviewer's standing approval on a steering PR.
+ *
+ * `userId` is the Oxagen user the host account is linked to, or null when
+ * nobody linked it: an approval by a stranger to the workspace counts for
+ * nothing. `commitSha` is the head the reviewer approved, or null when the
+ * host does not say (GitLab), in which case the approval stands whatever the
+ * head is now.
+ */
+export interface SteeringApproval {
+  userId: string | null;
+  login: string;
+  commitSha: string | null;
 }
 
 /** The GitHub implementation of {@link SteeringHost}. */
@@ -443,6 +543,75 @@ interface SteeringGitHubDeps {
     workspaceId: string;
   }) => Promise<string>;
   client: (token: string) => GitHubClient;
+  /**
+   * The plain REST calls the merge queue makes that `GitHubClient` does not
+   * carry: git data, branch updates, reviews, deployments. Defaults to
+   * `githubRest` with the same token.
+   */
+  rest?: (token: string) => GitHubRest;
+  /** The Oxagen user a host account is linked to. Defaults to {@link linkedOxagenUser}. */
+  linkAccount?: (providerId: string, accountId: string) => Promise<string | null>;
+}
+
+/**
+ * The Oxagen user who signed in with the host account `accountId`, or null
+ * when no Oxagen user linked it. The provider id is Better Auth's: `github`
+ * for a GitHub login. This is how a review on the host becomes an approval
+ * by a workspace member.
+ */
+export async function linkedOxagenUser(
+  providerId: string,
+  accountId: string,
+): Promise<string | null> {
+  // withSystemDb: auth.accounts is platform state, keyed by the host's own
+  // account id, and no tenant owns the link between a login and a user.
+  const [row] = await withSystemDb((tx) =>
+    tx
+      .select({ userId: schema.accounts.userId })
+      .from(schema.accounts)
+      .where(
+        and(
+          eq(schema.accounts.providerId, providerId),
+          eq(schema.accounts.accountId, accountId),
+        ),
+      )
+      .limit(1),
+  );
+  return row?.userId ?? null;
+}
+
+/**
+ * The reviews that stand on a PR, one per reviewer: the reviewer's latest
+ * review that approves, requests changes, or dismisses. A comment or a
+ * pending review changes nothing. Reviews arrive oldest first.
+ */
+export function standingApprovals<
+  R extends {
+    user: { id: number; login: string } | null;
+    state: string;
+    commit_id: string | null;
+  },
+>(reviews: readonly R[]): R[] {
+  const latest = new Map<number, R>();
+  for (const review of reviews) {
+    if (!review.user) continue;
+    if (
+      review.state === "APPROVED" ||
+      review.state === "CHANGES_REQUESTED" ||
+      review.state === "DISMISSED"
+    )
+      latest.set(review.user.id, review);
+  }
+  return [...latest.values()].filter((r) => r.state === "APPROVED");
+}
+
+/** A git ref update that is not a fast forward means the branch moved. */
+function headMoved(branch: string): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "head_moved",
+    message: `The steering PR's branch ${branch} moved while Oxagen was merging it. Merge again to check the new head.`,
+  });
 }
 
 /**
@@ -566,6 +735,10 @@ export function createSteeringGitHub(
   // one workspace's token serves only the calls made with that workspace's
   // handle; two workspaces connected to one repository never share an entry.
   const clients = new WeakMap<SteeringRepository, GitHubClient>();
+  // The plain REST calls, built with the same token and keyed the same way.
+  const rests = new WeakMap<SteeringRepository, GitHubRest>();
+  const makeRest = deps.rest ?? ((token: string) => githubRest({ token }));
+  const linkAccount = deps.linkAccount ?? linkedOxagenUser;
   const clientFor = (repo: SteeringRepository): GitHubClient => {
     const gh = clients.get(repo);
     if (!gh)
@@ -575,6 +748,13 @@ export function createSteeringGitHub(
       // when the message matters. The identifier is always present.
       throw new Error(`[context.steering] no client for ${repo.fullName}`);
     return gh;
+  };
+  const restFor = (repo: SteeringRepository) => {
+    const rest = rests.get(repo);
+    if (!rest)
+      throw new Error(`[context.steering] no client for ${repo.fullName}`);
+    const path = `/repos/${githubPath(repo.owner)}/${githubPath(repo.repo)}`;
+    return { rest, path };
   };
   return {
     async resolveRepository(scope) {
@@ -587,7 +767,8 @@ export function createSteeringGitHub(
             "This workspace has no connected GitHub repository; a Context PR needs the main repo (MC spec §10.1)",
         });
       }
-      const gh = deps.client(await deps.resolveToken(scope));
+      const token = await deps.resolveToken(scope);
+      const gh = deps.client(token);
       const info = await gh.getRepoInfo({
         owner: connection.owner,
         repo: connection.repo,
@@ -653,6 +834,7 @@ export function createSteeringGitHub(
         defaultBranch,
       };
       clients.set(repo, gh);
+      rests.set(repo, makeRest(token));
       return repo;
     },
     async readFile(repo, path, ref) {
@@ -853,6 +1035,22 @@ export function createSteeringGitHub(
     },
     async mergePullRequest(repo, args) {
       try {
+        if (args.commitMessage !== undefined) {
+          // The shared client sends no commit body, and the trailers live in
+          // the body, so a merge that carries them goes through REST.
+          const { rest, path } = restFor(repo);
+          const out = await rest.request<{ sha: string }>(
+            "PUT",
+            `${path}/pulls/${args.number}/merge`,
+            {
+              merge_method: "squash",
+              commit_title: args.commitTitle,
+              commit_message: args.commitMessage,
+              sha: args.sha,
+            },
+          );
+          return { sha: out.data.sha };
+        }
         const out = await clientFor(repo).mergePullRequest({
           owner: repo.owner,
           repo: repo.repo,
@@ -890,6 +1088,183 @@ export function createSteeringGitHub(
           /Reference does not exist/i.test(err.message)
         )
           return;
+        throw githubRefused(err);
+      }
+    },
+    async changedFiles(repo, base, head) {
+      try {
+        const files = await clientFor(repo).compareCommits({
+          owner: repo.owner,
+          repo: repo.repo,
+          base,
+          head,
+        });
+        return files.flatMap((f): SteeringChangedFile[] => {
+          if (f.status === "renamed" && f.previousPath)
+            return [
+              { path: f.previousPath, status: "removed" },
+              { path: f.path, status: "added" },
+            ];
+          if (f.status === "added" || f.status === "copied")
+            return [{ path: f.path, status: "added" }];
+          if (f.status === "removed")
+            return [{ path: f.path, status: "removed" }];
+          return [{ path: f.path, status: "modified" }];
+        });
+      } catch (err) {
+        throw githubRefused(err);
+      }
+    },
+    async commitFiles(repo, args) {
+      const { rest, path } = restFor(repo);
+      let sha: string;
+      try {
+        const parent = await rest.request<{ tree: { sha: string } }>(
+          "GET",
+          `${path}/git/commits/${encodeURIComponent(args.parent)}`,
+        );
+        const tree = await rest.request<{ sha: string }>(
+          "POST",
+          `${path}/git/trees`,
+          {
+            base_tree: parent.data.tree.sha,
+            tree: args.files.map((f) =>
+              f.content === null
+                ? { path: f.path, mode: "100644", type: "blob", sha: null }
+                : {
+                    path: f.path,
+                    mode: "100644",
+                    type: "blob",
+                    content: f.content,
+                  },
+            ),
+          },
+        );
+        const commit = await rest.request<{ sha: string }>(
+          "POST",
+          `${path}/git/commits`,
+          {
+            message: args.message,
+            tree: tree.data.sha,
+            parents: [args.parent],
+          },
+        );
+        sha = commit.data.sha;
+      } catch (err) {
+        throw githubRefused(err);
+      }
+      try {
+        // `force: false` makes GitHub refuse anything but a fast forward, so
+        // the stamp lands only on the head it was written against.
+        await rest.request(
+          "PATCH",
+          `${path}/git/refs/heads/${githubPath(args.branch)}`,
+          { sha, force: false },
+        );
+      } catch (err) {
+        // 422 here is GitHub's "Update is not a fast forward": the branch
+        // moved after the parent was read.
+        if (err instanceof GitHubApiError && err.status === 422)
+          throw headMoved(args.branch);
+        throw githubRefused(err);
+      }
+      return { sha };
+    },
+    async holdsCommit(repo, head, ancestor) {
+      if (head === ancestor) return true;
+      const { rest, path } = restFor(repo);
+      try {
+        const out = await rest.request<{ status: string }>(
+          "GET",
+          `${path}/compare/${encodeURIComponent(ancestor)}...${encodeURIComponent(head)}?per_page=1`,
+        );
+        return out.data.status === "ahead" || out.data.status === "identical";
+      } catch (err) {
+        throw githubRefused(err);
+      }
+    },
+    async updateBranch(repo, args) {
+      const { rest, path } = restFor(repo);
+      try {
+        const current = await clientFor(repo).getBranch({
+          owner: repo.owner,
+          repo: repo.repo,
+          branch: args.branch,
+        });
+        if (current?.sha !== args.expectedHead) throw headMoved(args.branch);
+        const out = await rest.request<{ sha: string } | undefined>(
+          "POST",
+          `${path}/merges`,
+          { base: args.branch, head: repo.defaultBranch },
+        );
+        // 204: the branch already holds the production branch.
+        return { headSha: out.data?.sha ?? args.expectedHead };
+      } catch (err) {
+        if (err instanceof GitHubApiError && err.status === 409)
+          throw new HandlerError({
+            code: "conflict",
+            reason: "update_conflict",
+            message: `${repo.defaultBranch} does not merge cleanly into ${args.branch}. Resolve the conflict on the steering PR, then merge again.`,
+          });
+        throw githubRefused(err);
+      }
+    },
+    async resetBranch(repo, branch, sha) {
+      const { rest, path } = restFor(repo);
+      try {
+        await rest.request(
+          "PATCH",
+          `${path}/git/refs/heads/${githubPath(branch)}`,
+          { sha, force: true },
+        );
+      } catch (err) {
+        throw githubRefused(err);
+      }
+    },
+    async listApprovals(repo, number) {
+      const { rest, path } = restFor(repo);
+      type Review = {
+        user: { id: number; login: string } | null;
+        state: string;
+        commit_id: string | null;
+      };
+      const reviews: Review[] = [];
+      try {
+        // A PR with more than 100 reviews pages; stop at the first short page.
+        for (let page = 1; ; page++) {
+          const out = await rest.request<Review[]>(
+            "GET",
+            `${path}/pulls/${number}/reviews?per_page=100&page=${page}`,
+          );
+          reviews.push(...out.data);
+          if (out.data.length < 100) break;
+        }
+      } catch (err) {
+        throw githubRefused(err);
+      }
+      const standing = standingApprovals(reviews).flatMap((r) =>
+        r.user ? [{ user: r.user, commitSha: r.commit_id }] : [],
+      );
+      return Promise.all(
+        standing.map(async ({ user, commitSha }) => ({
+          userId: await linkAccount("github", String(user.id)),
+          login: user.login,
+          commitSha,
+        })),
+      );
+    },
+    async recordDeployment(repo, args) {
+      const { rest } = restFor(repo);
+      try {
+        const out = await recordSteeringDeployment(rest, {
+          owner: repo.owner,
+          repo: repo.repo,
+          sha: args.sha,
+          environment: args.environment,
+          description: args.description,
+        });
+        return { url: out.url };
+      } catch (err) {
         throw githubRefused(err);
       }
     },

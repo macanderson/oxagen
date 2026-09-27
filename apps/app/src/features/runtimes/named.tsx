@@ -4,19 +4,22 @@
 //
 // A runtime is a slot, not a machine: a laptop replaced by another keeps its
 // runtime, and its agents keep their principals. A runtime with no agent yet
-// offers Register an agent, the one way to put it to work.
+// offers Register an agent, the one way to put it to work. Each runtime's name
+// opens its page, where an Owner or Admin sets its containment (ADR-204).
 import { useLocale, useTranslations } from "next-intl";
 import type { NamedRuntime, NamedRuntimeList } from "@/data/contracts/runtimes";
 import type { Read } from "@/data/read";
+import { routes } from "@/shared/safe-path";
 import { mono } from "@/ui/control-styles";
 import { useFormatter } from "@/ui/formatter";
 import { formatCount } from "@/ui/money-format";
+import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell, numericCell, Table } from "@/ui/table";
 import { RegisterOnRuntime } from "./controls";
 import { Panel, Sub } from "./parts";
 
-function AgentsCell({ runtime }: { runtime: NamedRuntime }) {
+export function AgentsCell({ runtime }: { runtime: NamedRuntime }) {
   const t = useTranslations("runtimes");
   if (runtime.agents.length === 0)
     return <span className="text-muted-foreground">{t("named.noAgent")}</span>;
@@ -32,7 +35,7 @@ function AgentsCell({ runtime }: { runtime: NamedRuntime }) {
   );
 }
 
-function LastSeen({ at }: { at: string | null }) {
+export function LastSeen({ at }: { at: string | null }) {
   const t = useTranslations("runtimes.named");
   const format = useFormatter();
   if (at === null)
@@ -101,10 +104,19 @@ export function NamedRuntimes({
             key={runtime.id}
             data-testid="named-runtime"
             data-runtime={runtime.id}
-            className="border-b border-border last:border-b-0"
+            className="relative cursor-pointer border-b border-border last:border-b-0"
           >
             <td className={cell}>
-              <span className="font-medium">{runtime.name}</span>
+              {/* The name's link is stretched over the row, and Register an
+                  agent sits above it, so the row opens the runtime. */}
+              <SafeLink
+                to={routes.runtime(org, ws, runtime.id)}
+                aria-label={t("open", { runtime: runtime.name })}
+                data-touch-target=""
+                className="inline-flex items-center rounded-sm font-medium after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-ring"
+              >
+                {runtime.name}
+              </SafeLink>
               <Sub monoFace>{runtime.slug}</Sub>
             </td>
             <td className={cell}>

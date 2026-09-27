@@ -517,6 +517,7 @@ export function runtimeList(): Read<NamedRuntimeList> {
         ],
         liveHosts: 1,
         lastSeenAt: null,
+        containmentRequired: false,
       },
       {
         id: "rtm_macslaptop",
@@ -533,6 +534,7 @@ export function runtimeList(): Read<NamedRuntimeList> {
         ],
         liveHosts: 1,
         lastSeenAt: null,
+        containmentRequired: false,
       },
       {
         id: "rtm_gpubox",
@@ -542,6 +544,7 @@ export function runtimeList(): Read<NamedRuntimeList> {
         agents: [],
         liveHosts: 0,
         lastSeenAt: null,
+        containmentRequired: false,
       },
     ],
   });

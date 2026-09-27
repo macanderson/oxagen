@@ -4,7 +4,11 @@ import { runtimeList } from "@oxagen/oxagen/contracts/runtime.list";
 import { invoke } from "@oxagen/oxagen/kernel";
 import { buildContext } from "../context";
 
-export const schema = { ...runtimeList.input.shape };
+export const schema = {
+  id: runtimeList.input.shape.id.describe(
+    "One runtime's id (rtm_…) to read it alone; leave out to list them all",
+  ),
+};
 
 export const metadata: ToolMetadata = {
   name: runtimeList.name,

@@ -3982,6 +3982,16 @@
       "writes": []
     },
     {
+      "domain": "runtime",
+      "name": "update_runtime",
+      "reads": [],
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "skill",
       "name": "update_skill_config",
       "reads": [],
@@ -4178,7 +4188,7 @@
       "writes": []
     }
   ],
-  "contentHash": "8cb411d2164813da63af969826d2202fca64aa699fb6745a42521a6c5ca16716",
+  "contentHash": "436446f8fc7eb6391cb401cbaea6095aff0fa15f9af3d0fad50dd008bbab05d6",
   "domains": [
     {
       "name": "agent",
@@ -9603,6 +9613,12 @@
           "nullable": false,
           "primaryKey": false,
           "type": "citext"
+        },
+        {
+          "name": "containment_required",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
         }
       ],
       "domain": "agent",

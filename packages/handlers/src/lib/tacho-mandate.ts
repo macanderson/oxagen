@@ -24,10 +24,7 @@
  * never reads the clock; every caller resolves its inputs first.
  */
 import type { PolicyBundle } from "@oxagen/tacho";
-import {
-  agentVersionBudget,
-  agentVersionContainment,
-} from "@oxagen/oxagen/agent-version-config";
+import { agentVersionBudget } from "@oxagen/oxagen/agent-version-config";
 
 /** The harness's own three-value permission vocabulary (mcp-config, tacho's rule evaluator). */
 export type HarnessRuleEffect = "allow" | "deny" | "ask";
@@ -147,13 +144,6 @@ export function budgetDocFromVersion(version: {
   config: unknown;
 }): AgentBudgetDoc | undefined {
   return agentVersionBudget(version.config);
-}
-
-/** The active version's containment requirement (ADR-152), read from its config. */
-export function containmentFromVersion(version: {
-  config: unknown;
-}): { required: true } | undefined {
-  return agentVersionContainment(version.config);
 }
 
 function microsToUsd(micros: number): number {

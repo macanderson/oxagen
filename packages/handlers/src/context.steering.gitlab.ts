@@ -24,9 +24,11 @@ import {
 } from "@oxagen/gitlab";
 import { HandlerError } from "@oxagen/oxagen";
 import { and, eq, isNull, notInArray } from "drizzle-orm";
-import type {
-  SteeringHost,
-  SteeringRepository,
+import {
+  linkedOxagenUser,
+  type SteeringChangedFile,
+  type SteeringHost,
+  type SteeringRepository,
 } from "./context.steering.github";
 import {
   GITLAB_PROVIDER,
@@ -52,6 +54,91 @@ const PENDING_MERGE_STATUSES = new Set([
 
 /** GitLab caps a commit status description at 255 characters. */
 const STATUS_DESCRIPTION_LIMIT = 255;
+
+/** How many times the branch update polls a rebase before giving up. */
+const REBASE_POLL_LIMIT = 30;
+
+const GITLAB_BASE_URL = "https://gitlab.com";
+const GITLAB_REQUEST_TIMEOUT_MS = 30_000;
+/** Longest GitLab error text kept in a message, as the client keeps it. */
+const GITLAB_MESSAGE_LIMIT = 500;
+
+/** One answer from {@link GitLabRest}. */
+export interface GitLabRestResponse<T> {
+  status: number;
+  data: T;
+}
+
+/**
+ * The GitLab calls the shared client does not make: rebase, merge base,
+ * approvals and deployments. A non-2xx answer throws `GitLabApiError`, and the
+ * token never appears in its message.
+ */
+export interface GitLabRest {
+  request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<GitLabRestResponse<T>>;
+}
+
+function gitlabErrorText(bodyText: string, statusText: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bodyText);
+  } catch {
+    parsed = undefined;
+  }
+  if (parsed !== null && typeof parsed === "object") {
+    const body = parsed as Record<string, unknown>;
+    const detail = body.message ?? body.error;
+    if (typeof detail === "string") return detail;
+    if (detail !== undefined) return JSON.stringify(detail);
+  }
+  return statusText || "request failed";
+}
+
+/**
+ * A plain GitLab REST v4 caller built on one token. The token travels in the
+ * `PRIVATE-TOKEN` header and is scrubbed from every error message, because
+ * those messages reach logs and proposal rows.
+ */
+export function gitlabRest(opts: {
+  token: string;
+  baseUrl?: string;
+  fetch?: typeof fetch;
+}): GitLabRest {
+  const baseUrl = (opts.baseUrl ?? GITLAB_BASE_URL).replace(/\/+$/, "");
+  const apiRoot = `${baseUrl}/api/v4`;
+  const fetchImpl = opts.fetch ?? globalThis.fetch;
+  return {
+    async request<T>(method: string, path: string, body?: unknown) {
+      const headers: Record<string, string> = {
+        "PRIVATE-TOKEN": opts.token,
+        Accept: "application/json",
+      };
+      if (body !== undefined) headers["Content-Type"] = "application/json";
+      const res = await fetchImpl(`${apiRoot}${path}`, {
+        method,
+        headers,
+        signal: AbortSignal.timeout(GITLAB_REQUEST_TIMEOUT_MS),
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        let message = gitlabErrorText(text, res.statusText);
+        if (opts.token.length > 0)
+          message = message.split(opts.token).join("[redacted]");
+        if (message.length > GITLAB_MESSAGE_LIMIT)
+          message = `${message.slice(0, GITLAB_MESSAGE_LIMIT)}...`;
+        throw new GitLabApiError(res.status, message);
+      }
+      if (res.status === 204)
+        return { status: res.status, data: undefined as T };
+      return { status: res.status, data: (await res.json()) as T };
+    },
+  };
+}
 
 /** The workspace's GitLab main project, as its binding recorded it. */
 export interface GitLabSteeringConnection {
@@ -156,8 +243,19 @@ export interface SteeringGitLabDeps {
     connectionId: string;
   }) => Promise<string>;
   client: (token: string) => GitLabClient;
-  /** Waits between merge-status polls. */
+  /** Waits between merge-status and rebase polls. */
   sleep: (ms: number) => Promise<void>;
+  /** The plain REST caller; defaults to {@link gitlabRest}. */
+  rest?: (token: string) => GitLabRest;
+  /**
+   * The Oxagen user a GitLab account id is linked to. Oxagen offers no GitLab
+   * sign-in today, so this normally answers null and a GitLab approval counts
+   * for nothing until one exists.
+   */
+  linkAccount?: (
+    providerId: string,
+    accountId: string,
+  ) => Promise<string | null>;
 }
 
 const defaultDeps: SteeringGitLabDeps = {
@@ -200,6 +298,9 @@ export function createSteeringGitLab(
   // Keyed by the handle `resolveRepository` returned, as in the GitHub seam:
   // a client built with one workspace's token serves only that handle.
   const clients = new WeakMap<SteeringRepository, GitLabClient>();
+  const rests = new WeakMap<SteeringRepository, GitLabRest>();
+  const makeRest = deps.rest ?? ((token: string) => gitlabRest({ token }));
+  const linkAccount = deps.linkAccount ?? linkedOxagenUser;
   const handle = (
     repo: SteeringRepository,
   ): { gl: GitLabClient; project: string } => {
@@ -225,6 +326,35 @@ export function createSteeringGitLab(
     }
   };
 
+  /** Run one plain REST call under the same refusals as {@link call}. */
+  const callRest = async <T>(
+    repo: SteeringRepository,
+    fn: (
+      rest: GitLabRest,
+      projectPath: string,
+      gl: GitLabClient,
+      project: string,
+    ) => Promise<T>,
+  ): Promise<T> => {
+    const { gl, project } = handle(repo);
+    const rest = rests.get(repo);
+    if (!rest)
+      throw new Error(
+        `[context.steering] no GitLab client for ${repo.fullName}`,
+      );
+    try {
+      return await fn(
+        rest,
+        `/projects/${encodeURIComponent(project)}`,
+        gl,
+        project,
+      );
+    } catch (err) {
+      if (isStatus(err, 401)) throw gitlabCredentialRejected(repo.fullName);
+      throw gitlabRefused(err);
+    }
+  };
+
   return {
     async resolveRepository(scope) {
       const connection = await deps.readConnection(scope);
@@ -236,12 +366,11 @@ export function createSteeringGitLab(
             "This workspace has no connected GitLab project; a Context PR needs the main repository (MC spec §10.1)",
         });
       }
-      const gl = deps.client(
-        await deps.resolveToken({
-          ...scope,
-          connectionId: connection.connectionId,
-        }),
-      );
+      const token = await deps.resolveToken({
+        ...scope,
+        connectionId: connection.connectionId,
+      });
+      const gl = deps.client(token);
       let project;
       try {
         project = await gl.getProject(connection.projectId);
@@ -287,6 +416,7 @@ export function createSteeringGitLab(
         defaultBranch: connection.approvedDefaultRef,
       };
       clients.set(repo, gl);
+      rests.set(repo, makeRest(token));
       return repo;
     },
 
@@ -505,7 +635,12 @@ export function createSteeringGitLab(
             iid: args.number,
             sha: args.sha,
             squash: true,
-            squashCommitMessage: args.commitTitle,
+            // GitLab takes the whole squash message in one field, so the
+            // title and the trailer body travel together.
+            squashCommitMessage:
+              args.commitMessage === undefined
+                ? args.commitTitle
+                : `${args.commitTitle}\n\n${args.commitMessage}`,
             shouldRemoveSourceBranch: false,
           });
         } catch (err) {
@@ -546,6 +681,161 @@ export function createSteeringGitLab(
           if (isStatus(err, 404)) return;
           throw err;
         }
+      });
+    },
+
+    changedFiles(repo, base, head) {
+      return call(repo, async (gl, project) => {
+        const diffs = await gl.compare({ project, from: base, to: head });
+        return diffs.flatMap((d): SteeringChangedFile[] => {
+          if (d.renamed && d.oldPath !== d.newPath)
+            return [
+              { path: d.oldPath, status: "removed" },
+              { path: d.newPath, status: "added" },
+            ];
+          if (d.added) return [{ path: d.newPath, status: "added" }];
+          if (d.deleted) return [{ path: d.oldPath, status: "removed" }];
+          return [{ path: d.newPath, status: "modified" }];
+        });
+      });
+    },
+
+    commitFiles(repo, args) {
+      return call(repo, async (gl, project) => {
+        // GitLab's commits API takes no expected head, so the branch is read
+        // first. A push that lands between this read and the commit is not
+        // caught here; the merge, pinned to the stamped SHA, still refuses it.
+        const branch = await gl.getBranch({ project, branch: args.branch });
+        if (branch?.commitSha !== args.parent)
+          throw new HandlerError({
+            code: "conflict",
+            reason: "head_moved",
+            message: `The steering PR's branch ${args.branch} moved while Oxagen was merging it. Merge again to check the new head.`,
+          });
+        const actions: GitLabCommitAction[] = [];
+        for (const file of args.files) {
+          const existing = await gl.getFileRaw({
+            project,
+            path: file.path,
+            ref: args.parent,
+          });
+          if (file.content === null) {
+            if (existing !== null)
+              actions.push({ action: "delete", filePath: file.path });
+          } else if (existing !== file.content) {
+            actions.push({
+              action: existing === null ? "create" : "update",
+              filePath: file.path,
+              content: file.content,
+            });
+          }
+        }
+        // GitLab refuses a commit that changes nothing.
+        if (actions.length === 0) return { sha: args.parent };
+        return gl.commitFiles({
+          project,
+          branch: args.branch,
+          message: args.message,
+          actions,
+        });
+      });
+    },
+
+    holdsCommit(repo, head, ancestor) {
+      if (head === ancestor) return Promise.resolve(true);
+      return callRest(repo, async (rest, path) => {
+        const out = await rest.request<{ id: string }>(
+          "GET",
+          `${path}/repository/merge_base?refs[]=${encodeURIComponent(head)}&refs[]=${encodeURIComponent(ancestor)}`,
+        );
+        return out.data.id === ancestor;
+      });
+    },
+
+    updateBranch(repo, args) {
+      return callRest(repo, async (rest, path, gl, project) => {
+        const branch = await gl.getBranch({ project, branch: args.branch });
+        if (branch?.commitSha !== args.expectedHead)
+          throw new HandlerError({
+            code: "conflict",
+            reason: "head_moved",
+            message: `The steering PR's branch ${args.branch} moved while Oxagen was merging it. Merge again to check the new head.`,
+          });
+        // GitLab brings a merge request up to date by rebasing it onto the
+        // target branch. The rebase runs in the background, so poll it.
+        await rest.request(
+          "PUT",
+          `${path}/merge_requests/${args.number}/rebase`,
+        );
+        for (let attempt = 0; attempt < REBASE_POLL_LIMIT; attempt++) {
+          const mr = await rest.request<{
+            rebase_in_progress?: boolean;
+            merge_error?: string | null;
+            sha: string | null;
+          }>(
+            "GET",
+            `${path}/merge_requests/${args.number}?include_rebase_in_progress=true`,
+          );
+          if (!mr.data.rebase_in_progress) {
+            if (mr.data.merge_error)
+              throw new HandlerError({
+                code: "conflict",
+                reason: "update_conflict",
+                message: `${repo.defaultBranch} does not rebase cleanly under ${args.branch}: ${mr.data.merge_error}. Resolve the conflict on the steering PR, then merge again.`,
+              });
+            return { headSha: mr.data.sha ?? args.expectedHead };
+          }
+          await deps.sleep(1000);
+        }
+        throw new HandlerError({
+          code: "conflict",
+          reason: "update_conflict",
+          message: `GitLab was still rebasing ${args.branch} after ${REBASE_POLL_LIMIT} seconds. Merge again once the rebase finishes.`,
+        });
+      });
+    },
+
+    resetBranch(repo, branch, sha) {
+      // GitLab has no call that moves a branch backwards, so the branch is
+      // deleted and created again at `sha`. The merge request keeps its
+      // source branch name and picks the branch up again.
+      return call(repo, async (gl, project) => {
+        await gl.deleteBranch({ project, branch });
+        await gl.createBranch({ project, branch, ref: sha });
+      });
+    },
+
+    listApprovals(repo, number) {
+      return callRest(repo, async (rest, path) => {
+        const out = await rest.request<{
+          approved_by?: { user: { id: number; username: string } | null }[];
+        }>("GET", `${path}/merge_requests/${number}/approvals`);
+        const users = (out.data.approved_by ?? []).flatMap((a) =>
+          a.user ? [a.user] : [],
+        );
+        // GitLab does not say which head each reviewer approved, so an
+        // approval stands whatever the head is now.
+        return Promise.all(
+          users.map(async (user) => ({
+            userId: await linkAccount(GITLAB_PROVIDER, String(user.id)),
+            login: user.username,
+            commitSha: null,
+          })),
+        );
+      });
+    },
+
+    recordDeployment(repo, args) {
+      return callRest(repo, async (rest, path) => {
+        await rest.request("POST", `${path}/deployments`, {
+          environment: args.environment,
+          sha: args.sha,
+          ref: args.ref,
+          tag: false,
+          status: "success",
+        });
+        // A GitLab deployment answers no page of its own.
+        return { url: null };
       });
     },
   };

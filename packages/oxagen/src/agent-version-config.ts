@@ -1,13 +1,17 @@
-// The per-agent limits an agent version's `config` carries (ADR-198).
+// The per-agent budget an agent version's `config` carries (ADR-198).
 //
 // An agent version records its runtime, its toolbelt and a `config` object.
-// Two tables in that object reach the host bundle: `budget`
-// (`per_run_micros`, `per_day_micros`) and `containment` (`required`,
-// ADR-152). Before ADR-198 they were written in the agent's definition file;
-// the migration that removed the file copied both tables into `config`, so
-// this module reads `config` alone.
+// One table in that object reaches the host bundle: `budget`
+// (`per_run_micros`, `per_day_micros`). Before ADR-198 it was written in the
+// agent's definition file; the migration that removed the file copied it into
+// `config`, so this module reads `config` alone.
 //
-// A present table that does not hold its shape throws `conflict` with reason
+// The same migration copied a `containment` table. Nothing reads it now:
+// whether an agent must run under the contained launcher is the runtime's
+// setting (`agent.runtimes.containment_required`, ADR-204), and the migration
+// that added that column carried each table's value onto the runtime.
+//
+// A present budget that does not hold its shape throws `conflict` with reason
 // `invalid_agent_config`, and the host bundle suspends governed actions for
 // that agent rather than guess a ceiling.
 import { HandlerError } from "./handler-error";
@@ -57,25 +61,4 @@ export function agentVersionBudget(
     out[target] = value;
   }
   return out;
-}
-
-/**
- * `containment.required = true`: the agent runs only under the contained
- * launcher (ADR-152). Undefined when the config declares no containment or
- * declares it not required.
- */
-export function agentVersionContainment(
-  config: unknown,
-): { required: true } | undefined {
-  const raw = table(config)?.["containment"];
-  if (raw === undefined) return undefined;
-  const containment = table(raw);
-  const required = containment?.["required"];
-  if (
-    !containment ||
-    typeof required !== "boolean" ||
-    Object.keys(containment).some((key) => key !== "required")
-  )
-    invalid("The agent containment takes one key, required, a boolean.");
-  return required ? { required: true } : undefined;
 }
