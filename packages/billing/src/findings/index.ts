@@ -10,6 +10,7 @@
  */
 import type { FindingKind } from "@oxagen/database/schema";
 import { cacheWritesNeverRead } from "./cache-writes-never-read";
+import { modelClassFit } from "./model-class-fit";
 import { buildRunViews } from "./requests";
 import { repeats } from "./repeats";
 import {
@@ -23,6 +24,7 @@ import {
   type FindingDraft,
   type Prose,
 } from "./shared";
+import { spendWithNoOutcome } from "./spend-with-no-outcome";
 import { spinLoops } from "./spin-loops";
 import { unpagedResults } from "./unpaged-results";
 
@@ -40,8 +42,10 @@ export { SPIN_LOOP_REPEATS, spinCalls } from "./spin-loops";
 export const DETECTORS: readonly Detector[] = [
   spinLoops,
   repeats,
+  spendWithNoOutcome,
   cacheWritesNeverRead,
   unpagedResults,
+  modelClassFit,
 ];
 
 /** The kinds the registered detectors write. */

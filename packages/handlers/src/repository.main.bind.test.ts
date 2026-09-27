@@ -767,6 +767,90 @@ describe("bind_main_repository", () => {
   // claim, so `rethrowHeadConflict` passes them through and the operator used
   // to get a 500 on the one move that would give the workspace a main
   // repository back.
+  // A steering repo provisioned by `provision_steering_repo` carries head role
+  // `steering`, not `main`. Each check below read only `main` before, so each
+  // test pins the steering role through it.
+  describe("a workspace whose head carries the steering role", () => {
+    const STEERING_HEAD = {
+      id: "head-uuid",
+      role: "steering",
+      provider: "github",
+      connectionId: "conn-uuid",
+      providerRepositoryId: "9001",
+      currentBindingId: "binding-1",
+    };
+    const CURRENT_BINDING = {
+      id: "binding-1",
+      publicId: "rpb_first",
+      createdAt: new Date("2026-09-16T08:00:00.000Z"),
+      version: 1,
+      connectionId: "conn-uuid",
+      providerOwner: REPO.owner,
+      providerName: REPO.name,
+      providerFullName: REPO.fullName,
+      configuredDefaultRef: REPO.defaultBranch,
+    };
+
+    it("refuses a repository that is the steering repo of another workspace", async () => {
+      claimedElsewhere([{ role: "steering", workspaceId: "ws-other" }]);
+      const writes = wire({ connections: [CONNECTED_CONNECTION] });
+      await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+        code: "conflict",
+        reason: "main_repo_claimed",
+      });
+      expect(writes.inserts).toHaveLength(0);
+      expect(writes.locks).toBe(0);
+    });
+
+    it("refuses a different repository while this workspace has a steering head", async () => {
+      const writes = wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [[{ ...STEERING_HEAD, providerRepositoryId: "4242" }]],
+      });
+      await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+        code: "conflict",
+        reason: "main_repo_bound",
+      });
+      expect(writes.inserts).toHaveLength(0);
+      expect(writes.updates).toHaveLength(0);
+    });
+
+    it("writes nothing when the steering repo itself is bound again and nothing moved", async () => {
+      const writes = wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [[STEERING_HEAD], [CURRENT_BINDING]],
+      });
+      const out = await handler().run(INPUT, makeCTX());
+      expect(writes.inserts).toHaveLength(0);
+      expect(
+        writes.updates.filter((w) => w.table === schema.repositoryBindingHeads),
+      ).toHaveLength(0);
+      expect(out).toMatchObject({
+        bindingId: "rpb_first",
+        boundAt: CURRENT_BINDING.createdAt.toISOString(),
+      });
+    });
+
+    it("keeps a steering head's role when a re-bind writes a successor", async () => {
+      const writes = wire({
+        connections: [CONNECTED_CONNECTION],
+        selects: [
+          [STEERING_HEAD],
+          [{ ...CURRENT_BINDING, configuredDefaultRef: "main" }],
+        ],
+        insertReturns: [{ id: "binding-2", publicId: "rpb_second" }],
+      });
+      await handler().run(INPUT, makeCTX());
+      const head = writes.updates.find(
+        (w) => w.table === schema.repositoryBindingHeads,
+      );
+      expect(head?.values).toMatchObject({
+        currentBindingId: "binding-2",
+        role: "steering",
+      });
+    });
+  });
+
   describe("binding a repository this workspace holds as a linked head", () => {
     const LINKED_HEAD = {
       id: "head-uuid",
