@@ -13,10 +13,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeGitHub, REPO } from "../context.steering.test-support";
 import { logger } from "../logger";
 import {
+  ledgerRun,
   memoryEvents,
   memoryStores,
   memoryTachoFrames,
   SCOPE,
+  seal,
+  summary,
   tachoRow,
   tachoSession,
 } from "../run.test-support";
@@ -52,6 +55,9 @@ vi.mock("../logger", () => ({
 }));
 
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
+/** A sealed ledger run: Oxagen's own agent, which gets no digest. */
+const LEDGER_ID = "arun_5f0c2e9a1b7d4c3e8f6a02";
+const LEDGER_RUN = "0192d4a8-7c1e-7a00-8000-0000000000a1";
 const SESSION_UUID = "0192d4a8-7c1e-7a00-8000-00000000c0de";
 /** The agent tachoSession records. */
 const AGENT = "acme.core.cc-laptop";
@@ -405,7 +411,13 @@ interface Over {
 
 function harness(over: Over = {}) {
   const stores = memoryStores(
-    [],
+    [
+      ledgerRun({
+        publicId: LEDGER_ID,
+        runId: LEDGER_RUN,
+        seal: seal(LEDGER_RUN),
+      }),
+    ],
     [tachoSession({ publicId: TACHO_ID, session: over.session ?? {} })],
   );
   const store = over.store ?? new FakeMemoryStore();
@@ -417,7 +429,12 @@ function harness(over: Over = {}) {
     read: {
       queries: stores.queries,
       store: {
-        getRunByPublicId: () => Promise.resolve(null),
+        getRunByPublicId: (id) =>
+          Promise.resolve(
+            id === LEDGER_ID
+              ? summary({ runId: LEDGER_RUN, publicId: LEDGER_ID })
+              : null,
+          ),
         readAttemptEventsSince: memoryEvents([]),
       },
       readRunRollups: stores.readRunRollups,
@@ -564,7 +581,7 @@ describe("captureMemories", () => {
     expect(first(store.memories).evidence).toEqual([`frame:${TACHO_ID}/1`]);
   });
 
-  it("skips a failed call, an unfinished call, and an input the tool refuses", async () => {
+  it("skips a failed call, an unfinished or parked call, and an input the tool refuses", async () => {
     const { deps, store } = harness({
       rows: [
         prompt(0, "Fix the build."),
@@ -582,6 +599,12 @@ describe("captureMemories", () => {
         call(3, REMEMBER, { ...stored("remember this") }),
         call(4, REMEMBER, { ...stored(JSON.stringify({ statement: "   " })) }),
         call(5, REMEMBER),
+        call(6, REMEMBER, {
+          toolStatus: "parked",
+          ...stored(
+            JSON.stringify({ statement: "A lesson that waits on an approval." }),
+          ),
+        }),
       ],
     });
     const out = await captureMemories(deps, SCOPE, TACHO_ID);
@@ -602,6 +625,83 @@ describe("captureMemories", () => {
     const { deps } = harness({ rows: FAILED_BUILD, store });
     const out = await captureMemories(deps, SCOPE, TACHO_ID);
     expect(out.digest).toBe(false);
+  });
+
+  it("reads a call as empty when the stored body does not match the frame's digest", async () => {
+    const frame = stored(
+      JSON.stringify({ statement: "A lesson whose stored body changed." }),
+    );
+    objects.set(frame.bytesRef, {
+      bytes: enc.encode(
+        JSON.stringify({ statement: "A lesson the frame never held." }),
+      ),
+      contentType: "text/plain",
+    });
+    const { deps, store } = harness({
+      rows: [prompt(0, "Fix the build."), call(1, REMEMBER, frame)],
+    });
+    expect(await captureMemories(deps, SCOPE, TACHO_ID)).toMatchObject({
+      outcome: "captured",
+      memories: 0,
+    });
+    expect(store.memories).toEqual([]);
+  });
+
+  it.each([
+    ["repeats one call with one input 3 times", "pnpm build", true],
+    ["changes the input on the third call", "pnpm test", false],
+  ])("asks for a digest only when the run %s", async (_name, third, digest) => {
+    const commands = ["pnpm build", "pnpm build", third];
+    const rows: TachoFrameRow[] = [prompt(0, "Fix the build.")];
+    commands.forEach((command, i) => {
+      const n = i + 1;
+      rows.push(
+        tachoRow(2 * n - 1, {
+          kind: "tool_requested",
+          toolName: "Bash",
+          toolUseId: `tu_loop${n}`,
+          turnSeq: 1,
+          ...stored(JSON.stringify({ command })),
+        }),
+        call(2 * n, "Bash", { toolUseId: `tu_loop${n}` }),
+      );
+    });
+    const { deps } = harness({ rows });
+    // Every call worked. Only the request frames' matching input digests
+    // make the retry loop.
+    expect(await captureMemories(deps, SCOPE, TACHO_ID)).toMatchObject({
+      outcome: "captured",
+      digest,
+    });
+  });
+
+  it("asks for no digest of a sealed ledger run", async () => {
+    const { deps, store } = harness();
+    const hasReflection = vi.spyOn(store, "hasReflection");
+    expect(await captureMemories(deps, SCOPE, LEDGER_ID)).toEqual({
+      outcome: "captured",
+      memories: 0,
+      reflected: false,
+      digest: false,
+      waiting: 0,
+    });
+    expect(hasReflection).not.toHaveBeenCalled();
+  });
+
+  it("passes on an error other than a missing run", async () => {
+    const { deps } = harness({ rows: RECORDED });
+    const down = new Error("the database is down");
+    const broken: MemoryRunnerDeps = {
+      ...deps,
+      read: {
+        ...deps.read,
+        queries: {
+          ...deps.read.queries,
+          tachoSession: () => Promise.reject(down),
+        },
+      },
+    };
+    await expect(captureMemories(broken, SCOPE, TACHO_ID)).rejects.toBe(down);
   });
 
   it("reports a run it cannot find, and a run that is still live", async () => {
@@ -995,16 +1095,24 @@ describe("curateMemories", () => {
     ]);
     expect(store.memories).toEqual([]);
 
-    const repeat = (source: string) => ({
-      capture: "local_gateway",
-      source,
-      statement: STATEMENT,
-      agentLineage: null,
-      runPublicId: null,
-    });
+    // Two memories from one run are one run of evidence.
+    const hash = statementHash(STATEMENT);
+    const RUN_A = "tse_7a7a7a7a7a7a7a7a7a7a7a";
+    const RUN_B = "tse_8b8b8b8b8b8b8b8b8b8b8b";
     store.now = hoursAfter(DAY2, 1);
-    await ingestMemories(store, SCOPE, [
-      repeat("https://github.com/a-intel/platform/pull/7"),
+    await store.insertMemories(SCOPE, [
+      draft(STATEMENT, {
+        runPublicId: RUN_A,
+        evidence: [`frame:${RUN_A}/1`],
+        dedupeKey: `${RUN_A}:${hash}`,
+      }),
+      draft(STATEMENT, {
+        runPublicId: RUN_A,
+        capture: "pull_request",
+        source: "https://github.com/a-intel/platform/pull/7",
+        evidence: [],
+        dedupeKey: `pull_request:https://github.com/a-intel/platform/pull/7:${hash}`,
+      }),
     ]);
     expect(await curateMemories(deps, SCOPE, DAY3)).toMatchObject({
       outcome: "curated",
@@ -1013,15 +1121,19 @@ describe("curateMemories", () => {
     expect(gh.pulls).toHaveLength(1);
 
     store.now = hoursAfter(DAY3, 1);
-    await ingestMemories(store, SCOPE, [
-      repeat("https://github.com/a-intel/platform/pull/8"),
+    await store.insertMemories(SCOPE, [
+      draft(STATEMENT, {
+        runPublicId: RUN_B,
+        evidence: [`frame:${RUN_B}/1`],
+        dedupeKey: `${RUN_B}:${hash}`,
+      }),
     ]);
     const out = await curateMemories(deps, SCOPE, DAY4);
     expect(out.pullRequest).not.toBeNull();
     const again = gh.pulls[1];
     expect(again?.head).toBe("memory/2026-09-30");
     expect(again?.body).toContain(
-      `- \`${PLANNED_PATH}\`. It cites 2 memories with no run.`,
+      `- \`${PLANNED_PATH}\`. It cites 3 memories from 2 runs.`,
     );
   });
 
@@ -1078,10 +1190,38 @@ describe("curateMemories", () => {
   });
 
   it.each([
-    [
-      "is on a repository the workspace no longer uses",
-      async (_gh: FakeGitHub) => ({ repository: "a-intel/other", number: 7 }),
-    ],
+    ["repository", { provider: "github", repository: "a-intel/other" }],
+    ["provider", { provider: "gitlab", repository: REPO.fullName }],
+  ])("keeps a memory PR open when its %s is not the steering repository's", async (_name, where) => {
+    const { deps, store, gh } = harness();
+    // The steering repository holds a closed PR with the same number. Without
+    // the check, the curator would settle the memory PR from it.
+    const closed = await gh.openPullRequest(REPO, {
+      title: "Memory PR 2026-09-20",
+      head: "memory/2026-09-20",
+      base: REPO.defaultBranch,
+      body: "",
+    });
+    gh.closeOnHost(closed.number);
+    await store.insertMemoryPr(SCOPE, {
+      ...where,
+      branch: "memory/2026-09-20",
+      number: closed.number,
+      url: `https://github.com/${where.repository}/pull/${closed.number}`,
+      records: [],
+    });
+    expect(await curateMemories(deps, SCOPE, DAY1)).toMatchObject({
+      outcome: "curated",
+      settled: 0,
+    });
+    expect(first(store.prs).status).toBe("open");
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ repository: where.repository }),
+      expect.stringContaining("no longer uses"),
+    );
+  });
+
+  it.each([
     [
       "has a number the host does not know",
       async (_gh: FakeGitHub) => ({ repository: REPO.fullName, number: 999 }),
@@ -1243,7 +1383,8 @@ describe("recallMemories", () => {
     store.recalls.set("migrate-after-schema-edit", {
       lineage: "migrate-after-schema-edit",
       recallCount: 0,
-      lastRecalledAt: reviewed,
+      // A recall yesterday does not reset the age.
+      lastRecalledAt: daysBefore(NOW, 1),
       reviewedAt: reviewed,
     });
     const [item] = await recallMemories(store, SCOPE, request(), [
