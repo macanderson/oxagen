@@ -1794,11 +1794,20 @@
     "create_runtime": {
       "route": "/[org]/[ws]/runtimes",
       "page": "apps/app/src/app/[org]/[ws]/runtimes/page.tsx",
-      "entry": "Runtimes › Add a runtime: name and slug, then on to registering its agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
+      "entry": "Runtimes › Add a runtime: name, slug and whether it requires the contained launcher, then on to registering its agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
       "testid": "runtimes-add",
       "proof": "apps/app/src/features/runtimes/actions.test.ts",
       "verifiedAt": "2026-09-26",
-      "verifiedBy": "runtime-agent-enrollment (#4369)"
+      "verifiedBy": "runtime-containment (#4372)"
+    },
+    "update_runtime": {
+      "route": "/[org]/[ws]/runtimes/[runtime]",
+      "page": "apps/app/src/app/[org]/[ws]/runtimes/[runtime]/page.tsx",
+      "entry": "Runtime › Containment: an Owner or Admin requires the contained launcher on a named runtime's page, others read it (features/runtimes/runtime.tsx, features/runtimes/controls.tsx ContainmentSwitch, features/runtimes/actions.ts)",
+      "testid": "runtime-containment-switch",
+      "proof": "apps/app/src/features/runtimes/runtimes.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-containment (#4372)"
     },
     "list_runtimes": {
       "route": "/[org]/[ws]/runtimes",
