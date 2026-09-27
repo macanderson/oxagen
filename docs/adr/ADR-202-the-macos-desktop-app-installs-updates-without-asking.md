@@ -182,7 +182,13 @@ Recorded here, not built:
 - A process killed between the plugin's two renames leaves no app in the
   folder. The old bundle waits in the temporary folder. The clicked install
   carries the same risk.
-- The terms of service need a line saying the desktop app installs updates
-  automatically. The wording is Mac's call.
+- Oxagen has no terms of service. On 2026-09-26 Mac asked for the fourth
+  condition to be met anyway, so the disclosure lives on the page you
+  download the app from (`apps/docs/content/docs/cli/desktop.mdx`, under
+  Updates). It says what installs, when, how to turn it off, and that
+  Windows and Linux ask first. When Oxagen writes terms of service, they
+  carry this sentence: "On macOS, the Oxagen desktop app downloads and
+  installs new versions automatically unless you turn automatic updates
+  off."
 - This replaces the rule confirmed on #3697 for macOS installs that pass the
   gates. Everywhere else, that rule still holds.
