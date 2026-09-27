@@ -6,6 +6,7 @@ import {
   execute,
   graphqlSender,
   grpcSender,
+  httpSender,
   mcpSender,
   type CallEnvironment,
   type CredentialSource,
