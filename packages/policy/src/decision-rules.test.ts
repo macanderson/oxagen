@@ -659,7 +659,11 @@ describe("operators", () => {
     const text = convertDecisionRules({ rules: [rule({ id: "r", when })], tools: TOOLS }).policies[
       "rules.r"
     ];
-    return text?.split("\n").find((line) => line.startsWith("when"));
+    // With no unless clause after it, the when line ends with the policy's closing semicolon.
+    return text
+      ?.split("\n")
+      .find((line) => line.startsWith("when"))
+      ?.replace(/;$/, "");
   }
 
   it("round a fractional bound to the whole number that decides the same", () => {
