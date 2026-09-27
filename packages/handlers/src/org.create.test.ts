@@ -17,6 +17,15 @@ const mocks = vi.hoisted(() => ({
   provisionOrgGraph: vi.fn(),
   recordOrgGraphDatabase: vi.fn(),
   provisionAssistantModelKey: vi.fn(),
+  startSteeringRepoProvision: vi.fn(),
+  /** Every `tx.update(table).set(v).where(w)` a system transaction issues. */
+  updates: [] as Array<{
+    table: unknown;
+    values: Record<string, unknown>;
+    where: unknown;
+    /** The transaction object the update ran on. */
+    tx: unknown;
+  }>,
 }));
 
 const ORG_ROW = {
@@ -47,7 +56,7 @@ mocks.txInsertOrgUsers.mockReturnValue({
 /** A fake system transaction: the slug pre-check reads, the main body writes. */
 function makeTx(): Record<string, unknown> {
   let insertCount = 0;
-  return {
+  const tx: Record<string, unknown> = {
     query: {
       organizations: { findFirst: mocks.orgFindFirst },
     },
@@ -59,7 +68,18 @@ function makeTx(): Record<string, unknown> {
       if (insertCount === 1) return mocks.txInsertOrg(table) as unknown;
       return mocks.txInsertOrgUsers(table) as unknown;
     },
+    // The first steering_repo state of the organization and of its first
+    // workspace (#4450) lands through update().set().where().
+    update: (table: unknown) => ({
+      set: (values: Record<string, unknown>) => ({
+        where: async (where: unknown) => {
+          mocks.updates.push({ table, values, where, tx });
+          return [];
+        },
+      }),
+    }),
   };
+  return tx;
 }
 
 function passthrough(): void {
@@ -120,8 +140,39 @@ vi.mock("./assistant-key-bootstrap", () => ({
   provisionAssistantModelKey: mocks.provisionAssistantModelKey,
 }));
 
+// The provision jobs have their own tests. Here org.create must start one for
+// the organization and one for its first workspace, after the commit. The
+// state and settings helpers stay real, so the settings writes below carry
+// the real first state.
+vi.mock("./steering_repo.provision", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./steering_repo.provision")>()),
+  startSteeringRepoProvision: mocks.startSteeringRepoProvision,
+}));
+
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { schema } from "@oxagen/database";
 import { organizationCreateHandler } from "./org.create";
 import type { CapabilityContext } from "@oxagen/oxagen";
+import { initialSteeringRepoState } from "./steering_repo.provision";
+
+const dialect = new PgDialect();
+
+/** The bound parameters of a drizzle SQL fragment. */
+function paramsOf(fragment: unknown): unknown[] {
+  return dialect.sqlToQuery(fragment as SQL).params;
+}
+
+/** The `steering_repo` state a settings merge writes, read from its jsonb patch. */
+function steeringStateIn(settings: unknown): unknown {
+  const patch = paramsOf(settings).find(
+    (p): p is string =>
+      typeof p === "string" && p.startsWith('{"steering_repo"'),
+  );
+  if (patch === undefined) return undefined;
+  const parsed = JSON.parse(patch) as { steering_repo?: unknown };
+  return parsed.steering_repo;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -154,6 +205,9 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
     mocks.recordOrgGraphDatabase.mockResolvedValue(undefined);
     mocks.provisionAssistantModelKey.mockReset();
     mocks.provisionAssistantModelKey.mockResolvedValue(undefined);
+    mocks.startSteeringRepoProvision.mockReset();
+    mocks.startSteeringRepoProvision.mockResolvedValue("provisioning");
+    mocks.updates.length = 0;
     mocks.withSystemDbFn.mockReset();
     passthrough();
   });
@@ -525,5 +579,118 @@ describe("organizationCreateHandler (@oxagen/handlers)", () => {
       slug: "acme",
     });
     release?.();
+  });
+
+  // ── the steering repos (#4450) ────────────────────────────────────────────
+
+  it("writes the first steering_repo state on the organization and the workspace inside the org transaction", async () => {
+    await organizationCreateHandler(INPUT, CTX);
+
+    const iamTx = mocks.bootstrapOrgIAM.mock.calls[0]?.[0]?.tx;
+    expect(iamTx).toBeDefined();
+    expect(mocks.updates).toHaveLength(2);
+    const [orgUpdate, wsUpdate] = mocks.updates;
+
+    expect(orgUpdate?.table).toBe(schema.organizations);
+    expect(orgUpdate?.tx).toBe(iamTx);
+    expect(paramsOf(orgUpdate?.where)).toEqual(["internal_org_id"]);
+
+    expect(wsUpdate?.table).toBe(schema.workspaces);
+    expect(wsUpdate?.tx).toBe(iamTx);
+    expect(paramsOf(wsUpdate?.where)).toEqual(["internal_ws_id"]);
+
+    // Both start from the state before the first step, timed from the
+    // organization's own creation.
+    const first = initialSteeringRepoState(ORG_ROW.createdAt);
+    expect(first).toMatchObject({
+      status: "provisioning",
+      step: null,
+      attempt: 1,
+      updated_at: "2026-05-01T00:00:00.000Z",
+    });
+    expect(steeringStateIn(orgUpdate?.values.settings)).toEqual(first);
+    expect(steeringStateIn(wsUpdate?.values.settings)).toEqual(first);
+  });
+
+  it("writes no steering_repo state when the org transaction fails", async () => {
+    mocks.grantSignupCredits.mockRejectedValueOnce(new Error("ledger down"));
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toThrow(
+      "ledger down",
+    );
+    expect(mocks.updates).toHaveLength(0);
+    expect(mocks.startSteeringRepoProvision).not.toHaveBeenCalled();
+  });
+
+  it("starts one provision job for the organization and one for the first workspace", async () => {
+    await organizationCreateHandler(INPUT, CTX);
+
+    const state = expect.objectContaining({
+      status: "provisioning",
+      step: null,
+      updated_at: "2026-05-01T00:00:00.000Z",
+    });
+    expect(mocks.startSteeringRepoProvision).toHaveBeenCalledTimes(2);
+    expect(mocks.startSteeringRepoProvision).toHaveBeenCalledWith(
+      { orgId: "internal_org_id", workspaceId: null, actorUserId: "u_1" },
+      state,
+    );
+    expect(mocks.startSteeringRepoProvision).toHaveBeenCalledWith(
+      {
+        orgId: "internal_org_id",
+        workspaceId: "internal_ws_id",
+        actorUserId: "u_1",
+      },
+      state,
+    );
+    // Each job gets the state the transaction wrote.
+    const written = steeringStateIn(mocks.updates[0]?.values.settings);
+    for (const call of mocks.startSteeringRepoProvision.mock.calls) {
+      expect(call[1]).toEqual(written);
+    }
+  });
+
+  it("starts the provision jobs only after the transaction has committed", async () => {
+    // A job started inside the transaction could read a workspace that a
+    // rollback then removes.
+    // The slug pre-check is the first system transaction and the bootstrap is
+    // the second, so a job must see two finished transactions.
+    let finished = 0;
+    mocks.withSystemDbFn.mockImplementation(
+      async (fn: (tx: Record<string, unknown>) => Promise<unknown>) => {
+        const out = await fn(makeTx());
+        finished++;
+        return out;
+      },
+    );
+    const finishedAtStart: number[] = [];
+    mocks.startSteeringRepoProvision.mockImplementation(async () => {
+      finishedAtStart.push(finished);
+      return "provisioning";
+    });
+
+    await organizationCreateHandler(INPUT, CTX);
+    expect(finishedAtStart).toEqual([2, 2]);
+  });
+
+  it("starts no provision job when the slug is taken", async () => {
+    mocks.orgFindFirst.mockResolvedValueOnce({ id: "existing_id" });
+    await expect(organizationCreateHandler(INPUT, CTX)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "slug_taken",
+    });
+    expect(mocks.updates).toHaveLength(0);
+    expect(mocks.startSteeringRepoProvision).not.toHaveBeenCalled();
+  });
+
+  it("returns the created organization when a provision job cannot be queued", async () => {
+    // startSteeringRepoProvision records the failure on the setting and
+    // answers failed. The organization already exists, so signup succeeds.
+    mocks.startSteeringRepoProvision.mockResolvedValue("failed");
+
+    const result = await organizationCreateHandler(INPUT, CTX);
+
+    expect(result.slug).toBe("acme");
+    expect(result.workspace).toEqual({ publicId: "ws_pub_1", slug: "core" });
+    expect(mocks.startSteeringRepoProvision).toHaveBeenCalledTimes(2);
   });
 });
