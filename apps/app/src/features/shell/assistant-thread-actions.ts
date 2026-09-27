@@ -64,6 +64,10 @@ export async function openAssistantSession(
   conversationId: string,
 ): Promise<ActionResult<AssistantThread>> {
   const ctx = await requireViewer(org, ws);
-  const { conversations } = dataSource();
-  return readToActionResult(await conversations.byId(ctx, conversationId));
+  // Call the port as `dataSource().conversations.byId(…)`. The INV-17 check
+  // (port-callers.test.ts) finds a caller by that `<port>.<method>(…)` shape
+  // and does not see a call on a destructured port.
+  return readToActionResult(
+    await dataSource().conversations.byId(ctx, conversationId),
+  );
 }
