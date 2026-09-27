@@ -154,6 +154,41 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
     ).toBeNull();
   });
 
+  it("stores a reflection and its lessons in one transaction", async () => {
+    const scope = newScope();
+    const run = runId();
+    const id = await store.insertReflection(
+      scope,
+      reflection(run, ["Run the migration check first."]),
+      [draft("Run the migration check first.")],
+    );
+    expect(id).toEqual(expect.any(String));
+    expect(
+      (await store.listWaiting(scope)).map((m) => m.reflectionId),
+    ).toEqual([id]);
+    // A second reflection for the run writes neither it nor its lessons.
+    expect(
+      await store.insertReflection(scope, reflection(run, ["Another lesson."]), [
+        draft("Another lesson."),
+      ]),
+    ).toBeNull();
+    expect(await store.countWaiting(scope)).toBe(1);
+  });
+
+  it("stores no reflection when the database refuses one of its lessons", async () => {
+    const scope = newScope();
+    const run = runId();
+    // memories_statement_check refuses an empty statement.
+    await expect(
+      store.insertReflection(scope, reflection(run, ["A lesson."]), [
+        draft("A lesson."),
+        draft("A refused lesson.", { statement: "" }),
+      ]),
+    ).rejects.toThrow();
+    expect(await store.hasReflection(scope, run)).toBe(false);
+    expect(await store.countWaiting(scope)).toBe(0);
+  });
+
   it("skips a memory whose dedupe key exists", async () => {
     const scope = newScope();
     const run = runId();
