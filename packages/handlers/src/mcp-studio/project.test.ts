@@ -491,6 +491,51 @@ describe("planProjection", () => {
     expect(plan.disable.map((t) => t.slug)).toEqual([
       `mcp.${serverId}.old_tool`,
     ]);
+    expect(plan.servers[0]?.enable).toBe(false);
+  });
+
+  it("takes over a proposed row and turns it on", () => {
+    const serverId = uuid();
+    const proposed: RegistrySnapshot = {
+      servers: [
+        {
+          id: serverId,
+          name: "Stripe",
+          steeringName: "stripe",
+          origin: "proposed",
+          transportType: "streamable-http",
+          endpointUrl: "https://mcp.stripe.com",
+          discoveredTools: [{ name: "create_refund" }],
+          enabled: false,
+          deletedAt: null,
+        },
+      ],
+      tools: [],
+      versions: [],
+    };
+    const plan = planProjection({ ...manifest, servers: [server("stripe")] }, proposed);
+    expect(plan.servers).toMatchObject([
+      { name: "stripe", action: "takeover", id: serverId, enable: true },
+    ]);
+    expect(toolStep(plan.tools, "stripe__create_refund")).toMatchObject({
+      tool: null,
+      enable: true,
+    });
+  });
+
+  it("never retires a proposed row whose steering PR has not merged", () => {
+    const before = snapshotOf(manifest);
+    const proposed: RegistrySnapshot = {
+      ...before,
+      servers: before.servers.map((s) =>
+        s.steeringName === "stripe" ? { ...s, origin: "proposed", enabled: false } : s,
+      ),
+    };
+    const next: ToolManifest = {
+      ...manifest,
+      servers: manifest.servers.filter((s) => s.name !== "stripe"),
+    };
+    expect(planProjection(next, proposed).retire).toEqual([]);
   });
 
   it("refuses a tool name a non-MCP tool already holds", () => {

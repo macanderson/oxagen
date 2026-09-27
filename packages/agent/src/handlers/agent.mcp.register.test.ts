@@ -4,7 +4,12 @@ const mocks = vi.hoisted(() => ({
   insertReturning: vi.fn(),
   insertValues: vi.fn(),
   insertSpy: vi.fn(),
+  updateSet: vi.fn(),
+  updateWhere: vi.fn(),
+  updateSpy: vi.fn(),
   healthcheckMock: vi.fn(),
+  steeringWriter: vi.fn(),
+  addServer: vi.fn(),
 }));
 
 // The handler's .returning() now yields { id, publicId } (id feeds the snapshot
@@ -15,7 +20,11 @@ mocks.insertReturning.mockResolvedValue([
 mocks.insertValues.mockReturnValue({ returning: mocks.insertReturning });
 mocks.insertSpy.mockReturnValue({ values: mocks.insertValues });
 
-const fakeDb = { insert: mocks.insertSpy };
+mocks.updateWhere.mockResolvedValue(undefined);
+mocks.updateSet.mockReturnValue({ where: mocks.updateWhere });
+mocks.updateSpy.mockReturnValue({ set: mocks.updateSet });
+
+const fakeDb = { insert: mocks.insertSpy, update: mocks.updateSpy };
 
 const captureSnapshotsMock = vi.hoisted(() => vi.fn(async () => 0));
 
@@ -41,6 +50,11 @@ vi.mock("../runtime/mcp-snapshots", () => ({
   captureToolSnapshots: captureSnapshotsMock,
 }));
 
+// No steering writer by default: the workspace writes rows directly.
+vi.mock("../runtime/steering-pr", () => ({
+  steeringWriter: mocks.steeringWriter,
+}));
+
 import { agentMcpRegisterHandler } from "./agent.mcp.register";
 
 import { TEST_CTX as CTX } from "../test-utils/fixtures";
@@ -63,6 +77,12 @@ describe("agent.mcp.register handler", () => {
     mocks.insertReturning.mockResolvedValue([
       { id: "mcs_uuid_1", publicId: "mcp_pub_1" },
     ]);
+    mocks.updateSpy.mockClear();
+    mocks.updateSet.mockClear();
+    mocks.updateWhere.mockClear();
+    mocks.addServer.mockReset();
+    mocks.steeringWriter.mockReset();
+    mocks.steeringWriter.mockResolvedValue(null);
   });
 
   it("runs healthcheck for streamable-http transport and inserts the row", async () => {
@@ -358,6 +378,73 @@ describe("agent.mcp.register handler", () => {
         /AUTH_TOKEN_ENCRYPTION_KEY/,
       );
       expect(mocks.insertSpy).not.toHaveBeenCalled();
+    });
+  });
+  // ── Steering mode (M13, #4478) ─────────────────────────────────────────────
+  describe("once the workspace's tools live in its steering repo", () => {
+    const HEALTHY = {
+      status: "healthy" as const,
+      discoveredTools: ["tool_a"],
+      descriptors: [{ name: "tool_a", description: "A", inputSchema: { type: "object" } }],
+    };
+
+    beforeEach(() => {
+      mocks.steeringWriter.mockResolvedValue({ addServer: mocks.addServer, addTools: vi.fn() });
+    });
+
+    it("writes a proposed, disabled row and opens a steering PR that adds the server", async () => {
+      mocks.healthcheckMock.mockResolvedValueOnce(HEALTHY);
+      mocks.addServer.mockResolvedValueOnce({
+        number: 12,
+        url: "https://github.com/acme/steering/pull/12",
+        branch: "tools/add-server-test-mcp-20260927",
+      });
+
+      const result = await agentMcpRegisterHandler(BASE_INPUT, CTX);
+
+      expect(mocks.steeringWriter).toHaveBeenCalledWith({ orgId: "org_1", workspaceId: "ws_1" });
+      const valuesArg = mocks.insertValues.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(valuesArg.origin).toBe("proposed");
+      expect(valuesArg.enabled).toBe(false);
+      // The snapshots are captured before the writer reads them for the lock.
+      expect(captureSnapshotsMock).toHaveBeenCalledTimes(1);
+      expect(mocks.addServer).toHaveBeenCalledWith({
+        orgId: "org_1",
+        workspaceId: "ws_1",
+        serverId: "mcs_uuid_1",
+        actorUserId: "u_1",
+      });
+      expect(result).toEqual({
+        mcpServerId: "mcp_pub_1",
+        healthStatus: "healthy",
+        discoveredTools: ["tool_a"],
+        steeringPr: { number: 12, url: "https://github.com/acme/steering/pull/12" },
+      });
+      expect(mocks.updateSpy).not.toHaveBeenCalled();
+    });
+
+    it("deletes the proposed row and rethrows when the steering PR does not open", async () => {
+      mocks.healthcheckMock.mockResolvedValueOnce(HEALTHY);
+      mocks.addServer.mockRejectedValueOnce(new Error("server_not_movable"));
+
+      await expect(agentMcpRegisterHandler(BASE_INPUT, CTX)).rejects.toThrow("server_not_movable");
+
+      expect(mocks.updateSpy).toHaveBeenCalledTimes(1);
+      const setArg = mocks.updateSet.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(setArg.deletedAt).toBeInstanceOf(Date);
+      expect(setArg.deletedById).toBe("u_1");
+    });
+
+    it("keeps writing a stdio server as a direct row", async () => {
+      const input = { ...BASE_INPUT, transportType: "stdio" as const, endpointUrl: "stdio://linear" };
+
+      const result = await agentMcpRegisterHandler(input, CTX);
+
+      expect(mocks.steeringWriter).not.toHaveBeenCalled();
+      const valuesArg = mocks.insertValues.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(valuesArg.origin).toBeUndefined();
+      expect(valuesArg.enabled).toBeUndefined();
+      expect(result.steeringPr).toBeUndefined();
     });
   });
 });

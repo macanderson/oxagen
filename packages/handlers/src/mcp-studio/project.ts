@@ -8,6 +8,9 @@
 // - A server folder is one mcp.mcp_servers row with origin steering, found by
 //   steering_name. A legacy row that a migration PR named is taken over and
 //   keeps its id, so the consents and tool snapshots keyed on that id survive.
+//   So is a proposed row, which a direct path wrote disabled while it opened a
+//   steering PR that adds the server. The takeover turns a proposed row on
+//   and keeps a legacy row's enabled flag.
 // - A tool is one agent.tools row whose slug is its full name,
 //   <server>__<tool>. A definition_hash the tool has never carried publishes a
 //   version through publishToolIn and makes it active. A hash that one of its
@@ -171,6 +174,8 @@ export interface ServerStep {
   /** The row's id, or null for an insert. */
   id: string | null;
   columns: ServerColumns;
+  /** Set the row's enabled flag to true: on an insert, a revive, and a takeover of a proposed row. */
+  enable: boolean;
 }
 
 /** The classification half of a version, as tools.toml states it. */
@@ -390,7 +395,7 @@ export function planProjection(
           )[0];
     const row = live ?? dead ?? null;
     const action: ServerStep["action"] = live
-      ? live.origin === "legacy"
+      ? live.origin === "legacy" || live.origin === "proposed"
         ? "takeover"
         : sameColumns(live, columns)
           ? "keep"
@@ -398,7 +403,16 @@ export function planProjection(
       : dead
         ? "revive"
         : "insert";
-    plan.servers.push({ name: server.name, action, id: row?.id ?? null, columns });
+    plan.servers.push({
+      name: server.name,
+      action,
+      id: row?.id ?? null,
+      columns,
+      enable:
+        action === "insert" ||
+        action === "revive" ||
+        (action === "takeover" && live?.origin === "proposed"),
+    });
     const previous = discoveredNames(row?.discoveredTools);
 
     for (const [key, entry] of Object.entries(server.tools).sort(([a], [b]) =>
@@ -485,8 +499,9 @@ export function planProjection(
     }
   }
 
-  // A steering server whose folder is gone. A legacy row that carries a
-  // steering_name belongs to an open migration PR and is never retired.
+  // A steering server whose folder is gone. A legacy or proposed row that
+  // carries a steering_name belongs to an open steering PR and is never
+  // retired.
   for (const row of snapshot.servers) {
     if (
       row.origin !== "steering" ||
@@ -691,9 +706,8 @@ async function applyPlan(
         discoveredTools: c.discoveredTools,
         origin: "steering",
         updatedAt: now,
-        ...(step.action === "revive"
-          ? { deletedAt: null, deletedById: null, enabled: true }
-          : {}),
+        ...(step.action === "revive" ? { deletedAt: null, deletedById: null } : {}),
+        ...(step.enable ? { enabled: true } : {}),
       })
       .where(eq(schema.mcpServers.id, step.id));
     if (step.action === "revive") summary.servers.revived += 1;

@@ -2,7 +2,9 @@
 --
 -- 1. mcp.mcp_servers records where a row came from. origin is steering when
 --    publishing a steering version wrote the row, and legacy when a direct
---    path wrote it. steering_name is the server folder the row belongs to.
+--    path wrote it. proposed marks a row a direct path wrote while opening a
+--    steering PR that adds it. steering_name is the server folder the row
+--    belongs to.
 --    migrate() sets it on a legacy row, so the first publish after the
 --    migration PR merges takes that row over and keeps its id, its tools and
 --    their history. transport_type also admits openapi, graphql and grpc, the
@@ -42,7 +44,7 @@ ALTER TABLE "mcp"."mcp_servers"
 
 ALTER TABLE "mcp"."mcp_servers"
   ADD CONSTRAINT "mcp_servers_origin_check"
-  CHECK ("origin" IN ('steering', 'legacy'));
+  CHECK ("origin" IN ('steering', 'legacy', 'proposed'));
 
 -- The folder name's pattern from the steering-repo contract.
 ALTER TABLE "mcp"."mcp_servers"
@@ -60,7 +62,7 @@ CREATE UNIQUE INDEX "mcp_servers_ws_steering_name_uniq"
   WHERE "steering_name" IS NOT NULL AND "deleted_at" IS NULL;
 
 COMMENT ON COLUMN "mcp"."mcp_servers"."origin" IS
-  'steering when publishing a steering version wrote the row; legacy when agent.mcp.register, a plugin install or import_tools wrote it. The in-app agent skips steering rows.';
+  'steering when publishing a steering version wrote the row; legacy when agent.mcp.register, a plugin install or import_tools wrote it; proposed when one of those opened a steering PR that adds the server. A proposed row stays disabled until the first publish after that PR merges takes it over. The in-app agent skips steering rows.';
 COMMENT ON COLUMN "mcp"."mcp_servers"."steering_name" IS
   'The server folder under tools/servers/ in the steering repo. Set on a steering row, and on a legacy row the migration PR moves.';
 

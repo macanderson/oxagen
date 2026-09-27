@@ -77,7 +77,7 @@ export const toolImport = registerCapability({
   name: "import_tools",
   domain: "tool",
   description:
-    "Import a registered MCP server's pinned tools into the workspace registry, or publish hand-authored declarations against it: one immutable tool version per changed manifest, idempotent on an unchanged one; stamps the server's last import.",
+    "Import a registered MCP server's pinned tools into the workspace registry, or publish hand-authored declarations against it: one immutable tool version per changed manifest, idempotent on an unchanged one; stamps the server's last import. For a server the workspace's steering repo holds, it opens a steering PR that adds the pinned tools to the server's folder instead.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -132,6 +132,15 @@ export const toolImport = registerCapability({
         published: z.boolean(),
       }),
     ),
+    /**
+     * Set when the server's tools live in the steering repo: the steering PR
+     * that adds the picked tools to its tools.toml. `tools` is then empty,
+     * and the tools reach the registry when the PR merges and the next
+     * publish runs.
+     */
+    steeringPr: z
+      .object({ number: z.number().int().positive(), url: z.string().url() })
+      .optional(),
   }),
 });
 

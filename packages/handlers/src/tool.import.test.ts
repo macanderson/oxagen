@@ -103,9 +103,9 @@ function memoryRegistry(pins: PinnedDescriptor[]) {
   const deps: ToolImportDeps = {
     findServer: async ({ publicId }) =>
       publicId === "mcs_github"
-        ? { id: SERVER, publicId }
+        ? { id: SERVER, publicId, origin: "legacy", steeringName: null }
         : publicId === "mcs_linear"
-          ? { id: SERVER_B, publicId }
+          ? { id: SERVER_B, publicId, origin: "legacy", steeringName: null }
           : null,
     readPins: async () => pins,
     publish: async (args: PublishToolArgs) => {
@@ -153,6 +153,7 @@ function memoryRegistry(pins: PinnedDescriptor[]) {
     stampImport: async ({ serverId, digest }) => {
       stamps.push({ serverId, digest });
     },
+    writer: async () => null,
   };
   return { deps, tools, stamps };
 }
@@ -469,6 +470,104 @@ describe("import_tools when a publish partway through throws", () => {
     await expect(
       createToolImportHandler(reg.deps)({ serverId: "mcs_github" }, ctx()),
     ).rejects.toThrow("server closed the connection");
+  });
+});
+
+describe("import_tools on a server the steering repo holds", () => {
+  const PR = { number: 7, url: "https://github.com/acme/steering/pull/7", branch: "tools/add-tools-github-x" };
+
+  function steeringRegistry(origin: "steering" | "proposed") {
+    const reg = memoryRegistry(PINS);
+    const addTools = vi.fn(async () => PR);
+    const writer = { addServer: vi.fn(), addTools };
+    reg.deps.findServer = async ({ publicId }) =>
+      publicId === "mcs_github"
+        ? { id: SERVER, publicId, origin, steeringName: origin === "steering" ? "github" : null }
+        : null;
+    reg.deps.writer = async () => writer;
+    return { reg, addTools };
+  }
+
+  it("opens a steering PR with the picked tools and publishes nothing", async () => {
+    const { reg, addTools } = steeringRegistry("steering");
+    const publish = vi.spyOn(reg.deps, "publish");
+    const out = await createToolImportHandler(reg.deps)(
+      { serverId: "mcs_github", tools: ["search"] },
+      ctx(),
+    );
+
+    expect(addTools).toHaveBeenCalledWith({
+      orgId: ORG,
+      workspaceId: WS,
+      serverId: SERVER,
+      toolNames: ["search"],
+      actorUserId: USER,
+    });
+    expect(out).toEqual({
+      serverId: "mcs_github",
+      importDigest: importDigestOf([]),
+      tools: [],
+      steeringPr: { number: 7, url: PR.url },
+    });
+    expect(publish).not.toHaveBeenCalled();
+    expect(reg.stamps).toEqual([]);
+  });
+
+  it("adds every pinned tool when none is picked", async () => {
+    const { reg, addTools } = steeringRegistry("steering");
+    await createToolImportHandler(reg.deps)({ serverId: "mcs_github" }, ctx());
+
+    expect(addTools).toHaveBeenCalledWith(
+      expect.objectContaining({ toolNames: ["search", "create_payment"] }),
+    );
+  });
+
+  it("refuses declarations and points at tools.toml", async () => {
+    const { reg, addTools } = steeringRegistry("steering");
+    const err = await createToolImportHandler(reg.deps)(
+      {
+        serverId: "mcs_github",
+        declarations: [
+          {
+            name: "lookup",
+            description: "Look up",
+            input_schema: { type: "object" },
+            read_only: true,
+            risk_grade: "low",
+            manifest: { name: "lookup" },
+            impacts: [],
+            measures: {},
+          },
+        ],
+      },
+      ctx(),
+    ).catch((e: unknown) => e);
+
+    expect(err).toMatchObject({ code: "conflict", reason: "server_in_steering_repo" });
+    expect((err as Error).message).toContain("tools/servers/github/tools.toml");
+    expect(addTools).not.toHaveBeenCalled();
+  });
+
+  it("refuses when no steering PR can be opened", async () => {
+    const { reg } = steeringRegistry("steering");
+    reg.deps.writer = async () => null;
+    const publish = vi.spyOn(reg.deps, "publish");
+
+    await expect(
+      createToolImportHandler(reg.deps)({ serverId: "mcs_github" }, ctx()),
+    ).rejects.toMatchObject({ code: "conflict", reason: "steering_pr_unavailable" });
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it("refuses a proposed server", async () => {
+    const { reg, addTools } = steeringRegistry("proposed");
+    const publish = vi.spyOn(reg.deps, "publish");
+
+    await expect(
+      createToolImportHandler(reg.deps)({ serverId: "mcs_github" }, ctx()),
+    ).rejects.toMatchObject({ code: "conflict", reason: "server_proposed" });
+    expect(addTools).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
   });
 });
 

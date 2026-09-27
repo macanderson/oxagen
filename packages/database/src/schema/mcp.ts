@@ -183,8 +183,11 @@ export const mcpServers = mcpSchema.table(
     lastImportDigest: text("last_import_digest"),
     // steering when publishing a steering version wrote the row (M13,
     // packages/handlers/src/mcp-studio/project.ts); legacy when
-    // agent.mcp.register, a plugin install or import_tools wrote it. The
-    // in-app agent's reader skips steering rows.
+    // agent.mcp.register, a plugin install or import_tools wrote it; proposed
+    // when one of those opened a steering PR that adds the server
+    // (packages/agent/src/runtime/steering-pr.ts). A proposed row stays
+    // disabled until the first publish after its PR merges takes it over.
+    // The in-app agent's reader skips steering rows.
     origin: text("origin").notNull().default("legacy"),
     // The server folder under tools/servers/ in the steering repo. Set on
     // every steering row, and on a legacy row the migration PR moves, so the
@@ -232,7 +235,7 @@ export const mcpServers = mcpSchema.table(
     ),
     originCheck: check(
       "mcp_servers_origin_check",
-      sql`${t.origin} IN ('steering', 'legacy')`,
+      sql`${t.origin} IN ('steering', 'legacy', 'proposed')`,
     ),
     steeringNameCheck: check(
       "mcp_servers_steering_name_check",

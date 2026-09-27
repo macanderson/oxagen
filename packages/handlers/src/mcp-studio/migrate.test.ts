@@ -12,9 +12,17 @@ import {
 } from "@oxagen/agent/runtime/steering-pr";
 import { SERVER_NAME_PATTERN, TOOL_NAME_MAX } from "@oxagen/oxagen/steering-repo/names";
 import {
+  serverTomlPath,
+  toolsLockPath,
+  toolsTomlPath,
+} from "@oxagen/oxagen/steering-repo/paths";
+import {
   batchBody,
   batchFolders,
+  createServerFolderWriter,
   openBatches,
+  planAddServer,
+  planAddTools,
   planMigration,
   type MigrationDescriptor,
   type MigrationInput,
@@ -470,6 +478,7 @@ describe("openBatches", () => {
     return {
       requests,
       hasSteeringRepo: async () => true,
+      readFile: async () => null,
       open: async (request) => {
         requests.push(request);
         return {
@@ -525,5 +534,233 @@ describe("openBatches", () => {
         },
       }),
     ).rejects.toThrow(/Steering PR #101 is open.*connection reset/);
+  });
+});
+
+describe("planAddServer", () => {
+  it("builds the folder a proposed row becomes", () => {
+    const s = server({ name: "Linear", origin: "proposed" });
+    const p = planAddServer(s, "linear", { tools: [tool(s.id, "search")], descriptors: [] });
+    if (!p.ok) throw new Error(p.reason);
+    expect(p.folder.folder).toBe("linear");
+    expect(serverDoc(p.folder).name).toBe("linear");
+    expect(Object.keys(toolsDoc(p.folder))).toEqual(["search"]);
+  });
+
+  it("refuses a row a server folder cannot hold", () => {
+    const s = server({ transportType: "stdio", origin: "proposed" });
+    expect(planAddServer(s, "local", { tools: [], descriptors: [] })).toMatchObject({ ok: false });
+  });
+});
+
+describe("planAddTools", () => {
+  const s = server({ name: "GitHub", origin: "steering", steeringName: "github" });
+  const base = planAddServer(s, "github", { tools: [tool(s.id, "search")], descriptors: [] });
+  if (!base.ok) throw new Error(base.reason);
+  const toolsText = fileOf(base.folder, "/tools.toml");
+  const lockText = fileOf(base.folder, "/tools.lock.json");
+  const pins = [
+    { name: "search", description: "Search", inputSchema: { type: "object" } },
+    { name: "create_issue", description: "Create an issue", inputSchema: { type: "object", properties: {} } },
+  ];
+
+  it("appends a pinned tool and locks it, keeping the file's text", () => {
+    const p = planAddTools({ folder: "github", toolsText, lockText, pins, toolNames: ["create_issue"] });
+    if (!p.ok) throw new Error(p.message);
+    expect(p.added).toEqual(["github__create_issue"]);
+    const [toolsFile, lockFile] = p.files;
+    expect(toolsFile?.path).toBe(toolsTomlPath("github"));
+    expect(toolsFile?.content.startsWith(toolsText)).toBe(true);
+    const tools = parseToolsToml(toolsFile?.content ?? "");
+    if (!tools.ok) throw new Error(JSON.stringify(tools.issues));
+    expect(Object.keys(tools.value.tools ?? {}).sort()).toEqual(["create_issue", "search"]);
+    expect(lockFile?.path).toBe(toolsLockPath("github"));
+    const lock = parseLock(lockFile?.content ?? "");
+    if (!lock.ok) throw new Error(JSON.stringify(lock.issues));
+    expect(Object.keys(lock.value.tools).sort()).toEqual(["create_issue", "search"]);
+  });
+
+  it("reports a tool the file already lists and adds the rest", () => {
+    const p = planAddTools({ folder: "github", toolsText, lockText, pins, toolNames: ["search", "create_issue"] });
+    expect(p).toMatchObject({ ok: true, added: ["github__create_issue"], alreadyListed: ["search"] });
+  });
+
+  it("refuses when every tool is already listed", () => {
+    const p = planAddTools({ folder: "github", toolsText, lockText, pins, toolNames: ["search"] });
+    expect(p).toMatchObject({ ok: false, code: "conflict", reason: "nothing_to_add" });
+  });
+
+  it("refuses a name the server has no pin for", () => {
+    const p = planAddTools({ folder: "github", toolsText, lockText, pins, toolNames: ["delete_repo"] });
+    expect(p).toMatchObject({ ok: false, code: "not_found", reason: "tool_not_pinned" });
+  });
+});
+
+describe("createServerFolderWriter", () => {
+  const scope = { orgId: "org-1", workspaceId: "ws-1" };
+
+  interface Setup {
+    server: MigrationServer;
+    taken?: string[];
+    files?: Record<string, string>;
+    openFails?: boolean;
+    nameFolder?: (folder: string) => Promise<boolean>;
+    descriptors?: MigrationDescriptor[];
+  }
+
+  function writerFor(setup: Setup) {
+    const named: string[] = [];
+    const unnamed: string[] = [];
+    const opened: OpenSteeringPrRequest[] = [];
+    const opener: SteeringPrOpener = {
+      hasSteeringRepo: async () => true,
+      readFile: async (_scope, path) => setup.files?.[path] ?? null,
+      open: async (request) => {
+        opened.push(request);
+        if (setup.openFails) throw new Error("GitHub is down");
+        return { number: 42, url: "https://github.com/acme/steering/pull/42", branch: request.branch };
+      },
+    };
+    const writer = createServerFolderWriter({
+      opener: () => opener,
+      loadServer: async () => setup.server,
+      loadTools: async () => [],
+      loadDescriptors: async () => setup.descriptors ?? [],
+      takenFolders: async () => setup.taken ?? [],
+      nameFolder: async (_scope, _id, folder) => {
+        named.push(folder);
+        return setup.nameFolder ? setup.nameFolder(folder) : true;
+      },
+      unnameFolder: async (_scope, _id, folder) => {
+        unnamed.push(folder);
+      },
+      now: () => new Date("2026-09-27T07:00:00.000Z"),
+    });
+    return { writer, named, unnamed, opened };
+  }
+
+  const add = (setup: Setup) => {
+    const w = writerFor(setup);
+    return { ...w, run: () => w.writer.addServer({ ...scope, serverId: setup.server.id, actorUserId: "user-1" }) };
+  };
+
+  const proposed = () => server({ name: "Linear", origin: "proposed" });
+
+  it("reserves the folder name, then opens the PR", async () => {
+    const w = add({ server: proposed() });
+    const pr = await w.run();
+
+    expect(pr.number).toBe(42);
+    expect(w.named).toEqual(["linear"]);
+    const request = w.opened[0] as OpenSteeringPrRequest;
+    expect(request.branch).toBe("tools/add-server-linear-20260927t070000z");
+    expect(request.actorUserId).toBe("user-1");
+    expect(request.files.every((f) => f.path.startsWith("tools/servers/linear/"))).toBe(true);
+    expect(w.unnamed).toEqual([]);
+  });
+
+  it("skips a name another row holds or the default branch already has", async () => {
+    const w = add({
+      server: proposed(),
+      taken: ["linear"],
+      files: { [serverTomlPath("linear_2")]: "schema = 1\n" },
+    });
+    await w.run();
+
+    expect(w.named).toEqual(["linear_3"]);
+  });
+
+  it("moves to the next name when another add reserved it first", async () => {
+    const race = Object.assign(new Error("duplicate key"), {
+      code: "23505",
+      constraint_name: "mcp_servers_ws_steering_name_uniq",
+    });
+    const w = add({
+      server: proposed(),
+      nameFolder: async (folder) => {
+        if (folder === "linear") throw race;
+        return true;
+      },
+    });
+    await w.run();
+
+    expect(w.named).toEqual(["linear", "linear_2"]);
+    expect(w.opened).toHaveLength(1);
+  });
+
+  it("rethrows a unique violation on another index", async () => {
+    const other = Object.assign(new Error("duplicate key"), { code: "23505", constraint_name: "some_other_uniq" });
+    const w = add({
+      server: proposed(),
+      nameFolder: async () => {
+        throw other;
+      },
+    });
+
+    await expect(w.run()).rejects.toBe(other);
+    expect(w.opened).toEqual([]);
+  });
+
+  it("releases the name when the PR does not open", async () => {
+    const w = add({ server: proposed(), openFails: true });
+
+    await expect(w.run()).rejects.toThrow("GitHub is down");
+    expect(w.unnamed).toEqual(["linear"]);
+  });
+
+  it("refuses a row that is not a proposal with no folder", async () => {
+    for (const s of [server({ origin: "legacy" }), server({ origin: "proposed", steeringName: "taken" })]) {
+      const w = add({ server: s });
+      await expect(w.run()).rejects.toMatchObject({ code: "conflict", reason: "server_not_proposed" });
+      expect(w.named).toEqual([]);
+      expect(w.opened).toEqual([]);
+    }
+  });
+
+  it("refuses when the row changed before its name was set", async () => {
+    const w = add({ server: proposed(), nameFolder: async () => false });
+
+    await expect(w.run()).rejects.toMatchObject({ reason: "server_not_proposed" });
+    expect(w.opened).toEqual([]);
+  });
+
+  it("refuses a server a folder cannot hold and reserves nothing", async () => {
+    const w = add({ server: server({ origin: "proposed", transportType: "stdio" }) });
+
+    await expect(w.run()).rejects.toMatchObject({ reason: "server_not_movable" });
+    expect(w.named).toEqual([]);
+  });
+
+  it("opens a PR that appends tools to a steering server", async () => {
+    const s = server({ name: "GitHub", origin: "steering", steeringName: "github" });
+    const base = planAddServer(s, "github", { tools: [tool(s.id, "search")], descriptors: [] });
+    if (!base.ok) throw new Error(base.reason);
+    const w = writerFor({
+      server: s,
+      files: {
+        [toolsTomlPath("github")]: fileOf(base.folder, "/tools.toml"),
+        [toolsLockPath("github")]: fileOf(base.folder, "/tools.lock.json"),
+      },
+      descriptors: [
+        { serverId: s.id, name: "create_issue", description: "Create an issue", inputSchema: { type: "object" } },
+      ],
+    });
+
+    const pr = await w.writer.addTools({ ...scope, serverId: s.id, toolNames: ["create_issue"], actorUserId: null });
+
+    expect(pr.number).toBe(42);
+    const request = w.opened[0] as OpenSteeringPrRequest;
+    expect(request.title).toBe("Add 1 tool to the github MCP server");
+    expect(request.files.map((f) => f.path)).toEqual([toolsTomlPath("github"), toolsLockPath("github")]);
+  });
+
+  it("refuses to add tools when the folder is missing on the default branch", async () => {
+    const s = server({ origin: "steering", steeringName: "github" });
+    const w = writerFor({ server: s });
+
+    await expect(
+      w.writer.addTools({ ...scope, serverId: s.id, toolNames: ["x"], actorUserId: null }),
+    ).rejects.toMatchObject({ reason: "folder_missing" });
+    expect(w.opened).toEqual([]);
   });
 });
