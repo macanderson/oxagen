@@ -138,6 +138,8 @@ describe("definition lock source type", () => {
 
 describe("MCP lock sources", () => {
   const pinnedPackage = { name: "@modelcontextprotocol/server-filesystem", version: "2026.9.1", digest: hash };
+  const registryPackage = { ...pinnedPackage, registry_type: "npm" };
+  const launch = { command: "npx", args: ["--yes", "@modelcontextprotocol/server-filesystem@2026.9.1", "${WORK_DIR}"] };
   const registry = {
     type: "registry",
     registry: "https://registry.modelcontextprotocol.io",
@@ -150,14 +152,16 @@ describe("MCP lock sources", () => {
   it("accepts a registry entry that names its endpoint or its package", () => {
     expect(issues(mcpLockSourceSchema, { ...registry, ...endpoint })).toStrictEqual([]);
     expect(issues(mcpLockSourceSchema, { ...registry, ...endpoint, transport: "sse" })).toStrictEqual([]);
-    expect(issues(mcpLockSourceSchema, { ...registry, package: pinnedPackage })).toStrictEqual([]);
+    expect(issues(mcpLockSourceSchema, { ...registry, package: registryPackage, ...launch })).toStrictEqual([]);
   });
 
   it("pins how a remote registry entry is reached", () => {
     expect(issues(mcpLockSourceSchema, { ...registry, url: endpoint.url })).toStrictEqual([
       { path: "transport", message: "transport is required when url is set" },
     ]);
-    expect(issues(mcpLockSourceSchema, { ...registry, package: pinnedPackage, transport: "http" })).toStrictEqual([
+    expect(
+      issues(mcpLockSourceSchema, { ...registry, package: registryPackage, ...launch, transport: "http" }),
+    ).toStrictEqual([
       { path: "transport", message: "transport is not allowed without url: only a remote entry has one" },
     ]);
     expect(issues(registryLockSourceSchema, { ...registry, ...endpoint, transport: "streamable-http" })).toStrictEqual([
@@ -172,12 +176,36 @@ describe("MCP lock sources", () => {
   });
 
   it("refuses a registry entry that names both its endpoint and its package", () => {
-    const both = { ...registry, ...endpoint, package: pinnedPackage };
+    const both = { ...registry, ...endpoint, package: registryPackage, ...launch };
     expect(issues(mcpLockSourceSchema, both)).toStrictEqual([
       {
         path: "package",
         message: "package is not allowed when url is set: a catalog entry names an endpoint or a package",
       },
+    ]);
+  });
+
+  it("requires the command and args with a package", () => {
+    expect(issues(mcpLockSourceSchema, { ...registry, package: registryPackage })).toStrictEqual([
+      { path: "command", message: "command is required when package is set" },
+      { path: "args", message: "args is required when package is set" },
+    ]);
+  });
+
+  it("refuses a command or args with a url", () => {
+    expect(issues(mcpLockSourceSchema, { ...registry, ...endpoint, ...launch })).toStrictEqual([
+      { path: "command", message: "command is not allowed without package: only a package entry has a launch" },
+      { path: "args", message: "args is not allowed without package: only a package entry has a launch" },
+    ]);
+  });
+
+  it("requires the registry type of a registry package, and only there", () => {
+    expect(issues(registryLockSourceSchema, { ...registry, package: pinnedPackage, ...launch })).toStrictEqual([
+      { path: "package.registry_type", message: "Required" },
+    ]);
+    const local = { type: "local", command: "npx", package: registryPackage };
+    expect(issues(localLockSourceSchema, local)).toStrictEqual([
+      { path: "package", message: "Unrecognized key(s) in object: 'registry_type'" },
     ]);
   });
 

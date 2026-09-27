@@ -8,7 +8,14 @@
 import { z } from "zod";
 import { credentialRefSchema, repoPathSchema } from "@oxagen/oxagen/steering-repo/common";
 import { DEFAULT_SERVER_DEFINITION_BUDGET } from "@oxagen/oxagen/steering-repo/tokens";
-import { uniqueList, withChecks, type Check, type CustomCheck } from "./checks";
+import {
+  allowedOnlyWith,
+  dependentRequired,
+  uniqueList,
+  withChecks,
+  type Check,
+  type CustomCheck,
+} from "./checks";
 import {
   environmentNameSchema,
   headerNameSchema,
@@ -50,25 +57,6 @@ export const remoteSourceSchema = z
   .strict()
   .describe("A remote MCP server.");
 
-export const registrySourceSchema = z
-  .object({
-    type: z.literal("registry"),
-    registry: httpUrlSchema.describe("The registry's URL."),
-    server: z
-      .string()
-      .min(3)
-      .max(200)
-      .regex(
-        /^[A-Za-z0-9.-]+\/[A-Za-z0-9._-]+$/,
-        "a registry name is <namespace>/<name>, such as io.github.github/github-mcp-server",
-      )
-      .describe("The server's registry name."),
-    version: z.string().min(1).max(64).describe("The catalog version. The entry supplies the endpoint or the package."),
-    network: networkField,
-  })
-  .strict()
-  .describe("An MCP server from a registry catalog.");
-
 /** An environment variable's name. Its value stays on the machine. */
 const envVarNameSchema = z
   .string()
@@ -78,6 +66,103 @@ const envVarNameSchema = z
 const machineGroupSchema = z
   .string()
   .regex(/^[a-z0-9][a-z0-9-]{0,62}$/, "a machine group is lowercase letters, digits, and hyphens");
+
+/** The package types the local gateway runs. A catalog entry may also list mcpb, which it does not run. */
+export const REGISTRY_TYPES = ["npm", "pypi", "oci", "nuget"] as const;
+export const registryTypeSchema = z.enum(REGISTRY_TYPES);
+export type RegistryType = z.output<typeof registryTypeSchema>;
+
+/** `${NAME}` in an argument value, or `$$`. */
+const TEMPLATE_TOKEN = /\$\$|\$\{([A-Za-z_][A-Za-z0-9_]{0,127})\}/g;
+
+/**
+ * A value in source.arguments. `${NAME}` is a variable from source.env, which
+ * the local gateway fills from the machine at launch. `$$` writes one `$`.
+ */
+export const argumentValueSchema = z
+  .string()
+  .max(4096)
+  .regex(
+    /^(?:[^$]|\$\$|\$\{[A-Za-z_][A-Za-z0-9_]{0,127}\})*$/,
+    "write ${NAME} for a variable from source.env, or $$ for one $",
+  );
+
+/** The variables an argument value names with `${NAME}`, in order. `$$` names none. */
+export function templateVariables(value: string): string[] {
+  return [...value.matchAll(TEMPLATE_TOKEN)].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
+}
+
+/** A key of source.arguments: a named argument's name, or a positional argument's valueHint. */
+export const argumentKeySchema = z
+  .string()
+  .regex(/^\S{1,128}$/, "an argument key is the argument's name or valueHint, with no spaces");
+
+const onMachinesOnly = allowedOnlyWith(
+  "machines",
+  ["registry_type", "env", "arguments"],
+  "only a package the local gateway runs takes it",
+);
+
+/** The local gateway runs the package on the machine, so no network route applies. */
+const noNetworkOnMachines: CustomCheck = {
+  issues: (value) =>
+    value.machines !== undefined && value.network !== undefined
+      ? [{ path: ["network"], message: "network is not allowed with machines: the package runs on the machine" }]
+      : [],
+  json: { not: { required: ["machines", "network"] } },
+};
+
+/** The local gateway passes only the names in source.env, so every `${NAME}` must be one of them. */
+const variablesInEnv: CustomCheck = {
+  issues(value) {
+    const args = (value.arguments ?? {}) as Record<string, string>;
+    const env = new Set((value.env ?? []) as string[]);
+    return Object.entries(args).flatMap(([key, text]) =>
+      templateVariables(text)
+        .filter((name) => !env.has(name))
+        .map((name) => ({
+          path: ["arguments", key],
+          message: `\${${name}} needs ${name} in source.env: the local gateway passes only the names listed`,
+        })),
+    );
+  },
+  json: undefined,
+};
+
+export const registrySourceSchema = withChecks(
+  z
+    .object({
+      type: z.literal("registry"),
+      registry: httpUrlSchema.describe("The registry's URL."),
+      server: z
+        .string()
+        .min(3)
+        .max(200)
+        .regex(
+          /^[A-Za-z0-9.-]+\/[A-Za-z0-9._-]+$/,
+          "a registry name is <namespace>/<name>, such as io.github.github/github-mcp-server",
+        )
+        .describe("The server's registry name."),
+      version: z.string().min(1).max(64).describe("The catalog version. The entry supplies the endpoint or the package."),
+      network: networkField,
+      machines: uniqueList(machineGroupSchema, "source.machines", 64)
+        .optional()
+        .describe("The machine groups whose local gateway runs the entry's package. Without it, the cloud gateway connects to the entry's remote."),
+      registry_type: registryTypeSchema
+        .optional()
+        .describe("Which of the entry's packages the local gateway runs. Required with machines."),
+      env: uniqueList(envVarNameSchema, "source.env", 128)
+        .optional()
+        .describe("Environment variables the local gateway passes from the machine, including every one the entry marks required. Only names, never values."),
+      arguments: z
+        .record(argumentKeySchema, argumentValueSchema)
+        .optional()
+        .describe("Values for the package's arguments, keyed by a named argument's name or a positional argument's valueHint. An argument left out takes the entry's default."),
+    })
+    .strict()
+    .describe("An MCP server from a registry catalog. With machines, the local gateway runs the entry's package."),
+  [onMachinesOnly, dependentRequired("machines", ["registry_type"]), noNetworkOnMachines, variablesInEnv],
+);
 
 export const localSourceSchema = z
   .object({
@@ -253,7 +338,7 @@ export const syncSchema = z
   .object({
     schedule: z
       .enum(["on-change", "daily", "manual"])
-      .describe("on-change (a definition in a linked repository), daily, or manual."),
+      .describe("on-change (a definition in a linked repository, from = \"repository\"), daily, or manual."),
   })
   .strict();
 
@@ -275,25 +360,79 @@ const sourceIs = (types: readonly string[]) => ({
   properties: { source: { properties: { type: { enum: [...types] } } } },
 });
 
-/** A local server takes no auth and no environments. Every other server names its auth. */
+/** A local source, or a registry source whose package runs on machines: the local gateway runs either one. */
+function runsOnMachines(value: Loose): boolean {
+  const source = value.source as Loose | undefined;
+  return source?.type === "local" || (source?.type === "registry" && source.machines !== undefined);
+}
+
+const onMachinesJson = {
+  properties: {
+    source: {
+      anyOf: [
+        { required: ["type"], properties: { type: { const: "local" } } },
+        { required: ["type", "machines"], properties: { type: { const: "registry" } } },
+      ],
+    },
+  },
+};
+
+/**
+ * A server the local gateway runs takes no auth and no environments: a local
+ * source, or a registry source with machines. Every other server names its
+ * auth.
+ */
 const localHasNoAuth: CustomCheck = {
   issues(value) {
-    if (sourceType(value) !== "local") {
+    if (!runsOnMachines(value)) {
       return value.auth === undefined
-        ? [{ path: ["auth"], message: "auth is required unless the source is local. Write mode = \"none\" for none." }]
+        ? [
+            {
+              path: ["auth"],
+              message:
+                'auth is required unless the local gateway runs the server: a local source, or a registry source with machines. Write mode = "none" for none.',
+            },
+          ]
         : [];
     }
     return (["auth", "environments"] as const)
       .filter((field) => value[field] !== undefined)
       .map((field) => ({
         path: [field],
-        message: `${field} is not allowed for a local server, which gets no credential from Oxagen`,
+        message: `${field} is not allowed for a server the local gateway runs, which gets no credential from Oxagen`,
       }));
   },
   json: {
-    if: sourceIs(["local"]),
+    if: onMachinesJson,
     then: { not: { anyOf: [{ required: ["auth"] }, { required: ["environments"] }] } },
     else: { required: ["auth"] },
+  },
+};
+
+/**
+ * on-change syncs when a definition in a linked repository changes. No other
+ * source fires it, so its lock would go stale without an error.
+ */
+const onChangeNeedsRepository: CustomCheck = {
+  issues(value) {
+    const sync = value.sync as Loose | undefined;
+    const source = value.source as Loose | undefined;
+    if (sync?.schedule !== "on-change" || source?.from === "repository") return [];
+    const type = String(source?.type);
+    const what = typeof source?.from === "string" ? `${type} from ${source.from}` : type;
+    return [
+      {
+        path: ["sync", "schedule"],
+        message: `on-change needs a definition in a linked repository, and this source is ${what}. Write daily or manual.`,
+      },
+    ];
+  },
+  json: {
+    if: {
+      required: ["sync"],
+      properties: { sync: { required: ["schedule"], properties: { schedule: { const: "on-change" } } } },
+    },
+    then: { properties: { source: { required: ["from"], properties: { from: { const: "repository" } } } } },
   },
 };
 
@@ -477,7 +616,9 @@ export const mcpServerSchema = withChecks(
       label: z.string().min(1).max(80).describe("The server's name on every surface."),
       description: z.string().min(1).max(200).describe("One sentence about the server."),
       source: serverSourceSchema,
-      auth: serverAuthSchema.optional().describe("Required unless the source is local."),
+      auth: serverAuthSchema
+        .optional()
+        .describe("Required unless the local gateway runs the server: a local source, or a registry source with machines."),
       environments: z
         .record(environmentNameSchema, serverEnvironmentSchema)
         .optional()
@@ -493,6 +634,7 @@ export const mcpServerSchema = withChecks(
     credentialNamed,
     noneNamesNoCredential,
     oneSandbox,
+    onChangeNeedsRepository,
   ],
 );
 export type McpServer = z.output<typeof mcpServerSchema>;
