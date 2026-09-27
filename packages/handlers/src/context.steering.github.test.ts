@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { schema } from "@oxagen/database";
-import type { GitHubClient } from "@oxagen/github";
+import {
+  GitHubApiError,
+  type GitHubClient,
+  type GitHubPrFile,
+  type GitHubRest,
+} from "@oxagen/github";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn() }));
 
@@ -16,6 +21,7 @@ import {
   assertProductionBase,
   createSteeringGitHub,
   readGitHubConnection,
+  standingApprovals,
   type SteeringConnection,
 } from "./context.steering.github";
 
@@ -868,5 +874,368 @@ describe("the workspace's main repository", () => {
       expect(counts.headReads).toBe(0);
       expect(counts.connectionReads).toBe(0);
     });
+  });
+});
+
+describe("the GitHub seam's merge-queue calls", () => {
+  const REPO_PATH = "/repos/a-intel/platform";
+  type Route = (body: unknown) => unknown;
+
+  /**
+   * A seam whose plain REST calls answer from `routes`, keyed by
+   * `METHOD path`. A route answers its data, or throws what GitHub would.
+   */
+  async function restSeam(
+    routes: Record<string, Route>,
+    client: GitHubClient = fakeClient(),
+  ) {
+    const calls: { method: string; path: string; body?: unknown }[] = [];
+    const rest: GitHubRest = {
+      async request<T>(method: string, path: string, body?: unknown) {
+        calls.push({ method, path, ...(body === undefined ? {} : { body }) });
+        const route = routes[`${method} ${path}`];
+        if (!route) throw new GitHubApiError(404, `no route ${method} ${path}`);
+        const data = route(body);
+        // GitHub answers a create 201 and a no-op 204.
+        const status =
+          data === undefined ? 204 : method === "POST" ? 201 : 200;
+        return { status, data: data as T };
+      },
+    };
+    const linkAccount = vi.fn(async (_provider: string, id: string) =>
+      id === "11" ? "user-11" : null,
+    );
+    const gh = createSteeringGitHub({
+      readConnection: async () => BOUND,
+      resolveToken: async () => "tok",
+      client: () => client,
+      rest: () => rest,
+      linkAccount,
+    });
+    const repo = await gh.resolveRepository(SCOPE);
+    return { gh, repo, calls, linkAccount };
+  }
+
+  const refuse = (status: number, message: string): Route => () => {
+    throw new GitHubApiError(status, message);
+  };
+
+  it("merges through REST with the trailers in the commit body, pinned to the head", async () => {
+    const mergePullRequest = vi.fn();
+    const { gh, repo, calls } = await restSeam(
+      { [`PUT ${REPO_PATH}/pulls/7/merge`]: () => ({ sha: "sq1" }) },
+      fakeClient({ mergePullRequest }),
+    );
+    await expect(
+      gh.mergePullRequest(repo, {
+        number: 7,
+        commitTitle: "[steering] rule",
+        sha: "h1",
+        commitMessage: "Oxagen-Version: 3",
+      }),
+    ).resolves.toEqual({ sha: "sq1" });
+    expect(calls[0]!.body).toEqual({
+      merge_method: "squash",
+      commit_title: "[steering] rule",
+      commit_message: "Oxagen-Version: 3",
+      sha: "h1",
+    });
+    expect(mergePullRequest).not.toHaveBeenCalled();
+  });
+
+  it("wraps a refused REST merge as github_refused", async () => {
+    const { gh, repo } = await restSeam({
+      [`PUT ${REPO_PATH}/pulls/7/merge`]: refuse(405, "Head branch was modified"),
+    });
+    await expect(
+      gh.mergePullRequest(repo, {
+        number: 7,
+        commitTitle: "t",
+        sha: "h1",
+        commitMessage: "m",
+      }),
+    ).rejects.toMatchObject({
+      reason: "github_refused",
+      message: expect.stringContaining("Head branch was modified"),
+    });
+  });
+
+  it("lists changed files, splitting a rename and counting a copy as an addition", async () => {
+    const file = (
+      path: string,
+      status: GitHubPrFile["status"],
+      previousPath: string | null = null,
+    ): GitHubPrFile => ({
+      path,
+      status,
+      previousPath,
+      additions: 0,
+      deletions: 0,
+      changes: 0,
+      patch: null,
+    });
+    const compareCommits = vi.fn(async () => [
+      file("new.toml", "renamed", "old.toml"),
+      file("added.toml", "added"),
+      file("copy.toml", "copied"),
+      file("gone.toml", "removed"),
+      file("edit.toml", "modified"),
+      file("mode.toml", "changed"),
+    ]);
+    const { gh, repo } = await restSeam({}, fakeClient({ compareCommits }));
+    await expect(gh.changedFiles(repo, "b0", "h1")).resolves.toEqual([
+      { path: "old.toml", status: "removed" },
+      { path: "new.toml", status: "added" },
+      { path: "added.toml", status: "added" },
+      { path: "copy.toml", status: "added" },
+      { path: "gone.toml", status: "removed" },
+      { path: "edit.toml", status: "modified" },
+      { path: "mode.toml", status: "modified" },
+    ]);
+    expect(compareCommits).toHaveBeenCalledWith({
+      owner: "a-intel",
+      repo: "platform",
+      base: "b0",
+      head: "h1",
+    });
+    const failing = await restSeam(
+      {},
+      fakeClient({
+        compareCommits: async () => {
+          throw new GitHubApiError(404, "No common ancestor");
+        },
+      }),
+    );
+    await expect(
+      failing.gh.changedFiles(failing.repo, "b0", "h1"),
+    ).rejects.toMatchObject({ reason: "github_refused" });
+  });
+
+  const commitRoutes = (patch: Route = () => ({})): Record<string, Route> => ({
+    [`GET ${REPO_PATH}/git/commits/p1`]: () => ({ tree: { sha: "t0" } }),
+    [`POST ${REPO_PATH}/git/trees`]: () => ({ sha: "t1" }),
+    [`POST ${REPO_PATH}/git/commits`]: () => ({ sha: "c9" }),
+    [`PATCH ${REPO_PATH}/git/refs/heads/steering/ctx.rule`]: patch,
+  });
+
+  it("writes one commit on the parent's tree and fast-forwards the branch to it", async () => {
+    const { gh, repo, calls } = await restSeam(commitRoutes());
+    await expect(
+      gh.commitFiles(repo, {
+        branch: "steering/ctx.rule",
+        parent: "p1",
+        message: "Stamp",
+        files: [
+          { path: "steering/rules/r.toml", content: "id = 1" },
+          { path: "old.toml", content: null },
+        ],
+      }),
+    ).resolves.toEqual({ sha: "c9" });
+    expect(calls.map((c) => c.body)).toEqual([
+      undefined,
+      {
+        base_tree: "t0",
+        tree: [
+          {
+            path: "steering/rules/r.toml",
+            mode: "100644",
+            type: "blob",
+            content: "id = 1",
+          },
+          { path: "old.toml", mode: "100644", type: "blob", sha: null },
+        ],
+      },
+      { message: "Stamp", tree: "t1", parents: ["p1"] },
+      { sha: "c9", force: false },
+    ]);
+  });
+
+  it("refuses a stamp whose branch moved as head_moved, and any other refusal as github_refused", async () => {
+    const args = {
+      branch: "steering/ctx.rule",
+      parent: "p1",
+      message: "Stamp",
+      files: [{ path: "a", content: "1" }],
+    };
+    const moved = await restSeam(
+      commitRoutes(refuse(422, "Update is not a fast forward")),
+    );
+    await expect(moved.gh.commitFiles(moved.repo, args)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "head_moved",
+    });
+    const locked = await restSeam(commitRoutes(refuse(403, "Forbidden")));
+    await expect(
+      locked.gh.commitFiles(locked.repo, args),
+    ).rejects.toMatchObject({ reason: "github_refused" });
+    const badTree = await restSeam({
+      ...commitRoutes(),
+      [`POST ${REPO_PATH}/git/trees`]: refuse(422, "tree.path is invalid"),
+    });
+    await expect(
+      badTree.gh.commitFiles(badTree.repo, args),
+    ).rejects.toMatchObject({
+      reason: "github_refused",
+      message: expect.stringContaining("tree.path is invalid"),
+    });
+  });
+
+  it("says a head holds a commit when the compare is ahead or identical", async () => {
+    let status = "ahead";
+    const { gh, repo, calls } = await restSeam({
+      [`GET ${REPO_PATH}/compare/m1...h1?per_page=1`]: () => ({ status }),
+    });
+    await expect(gh.holdsCommit(repo, "h1", "h1")).resolves.toBe(true);
+    expect(calls).toEqual([]);
+    await expect(gh.holdsCommit(repo, "h1", "m1")).resolves.toBe(true);
+    status = "identical";
+    await expect(gh.holdsCommit(repo, "h1", "m1")).resolves.toBe(true);
+    status = "diverged";
+    await expect(gh.holdsCommit(repo, "h1", "m1")).resolves.toBe(false);
+    status = "behind";
+    await expect(gh.holdsCommit(repo, "h1", "m1")).resolves.toBe(false);
+    await expect(gh.holdsCommit(repo, "h2", "m1")).rejects.toMatchObject({
+      reason: "github_refused",
+    });
+  });
+
+  it("merges main into the branch and answers the new head, or the old one when nothing changed", async () => {
+    let merged: unknown = { sha: "u1" };
+    const getBranch = vi.fn(async () => ({ name: "b", sha: "h1" }));
+    const { gh, repo, calls } = await restSeam(
+      { [`POST ${REPO_PATH}/merges`]: () => merged },
+      fakeClient({ getBranch }),
+    );
+    const args = { number: 7, branch: "steering/ctx.rule", expectedHead: "h1" };
+    await expect(gh.updateBranch(repo, args)).resolves.toEqual({
+      headSha: "u1",
+    });
+    expect(calls[0]!.body).toEqual({ base: "steering/ctx.rule", head: "main" });
+    merged = undefined;
+    await expect(gh.updateBranch(repo, args)).resolves.toEqual({
+      headSha: "h1",
+    });
+  });
+
+  it("refuses a branch update on a moved head, a conflict, or any other refusal", async () => {
+    const getBranch = vi.fn(async () => ({ name: "b", sha: "h2" }));
+    const args = { number: 7, branch: "steering/ctx.rule", expectedHead: "h1" };
+    const moved = await restSeam({}, fakeClient({ getBranch }));
+    await expect(moved.gh.updateBranch(moved.repo, args)).rejects.toMatchObject(
+      { reason: "head_moved" },
+    );
+    expect(moved.calls).toEqual([]);
+    const at = fakeClient({ getBranch: async () => ({ name: "b", sha: "h1" }) });
+    const conflicted = await restSeam(
+      { [`POST ${REPO_PATH}/merges`]: refuse(409, "Merge conflict") },
+      at,
+    );
+    await expect(
+      conflicted.gh.updateBranch(conflicted.repo, args),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "update_conflict",
+      message: expect.stringContaining("main does not merge cleanly"),
+    });
+    const refused = await restSeam(
+      { [`POST ${REPO_PATH}/merges`]: refuse(403, "Forbidden") },
+      at,
+    );
+    await expect(
+      refused.gh.updateBranch(refused.repo, args),
+    ).rejects.toMatchObject({ reason: "github_refused" });
+  });
+
+  it("resets a branch by forcing its ref back, and wraps a refusal", async () => {
+    const ref = `PATCH ${REPO_PATH}/git/refs/heads/steering/ctx.rule`;
+    const { gh, repo, calls } = await restSeam({ [ref]: () => ({}) });
+    await gh.resetBranch(repo, "steering/ctx.rule", "p1");
+    expect(calls[0]!.body).toEqual({ sha: "p1", force: true });
+    const refused = await restSeam({ [ref]: refuse(422, "Reference missing") });
+    await expect(
+      refused.gh.resetBranch(refused.repo, "steering/ctx.rule", "p1"),
+    ).rejects.toMatchObject({ reason: "github_refused" });
+  });
+
+  it("lists each reviewer's standing approval across pages, with the linked Oxagen user", async () => {
+    const review = (id: number, state: string, commit = "h1") => ({
+      user: { id, login: `u${id}` },
+      state,
+      commit_id: commit,
+    });
+    const first = [
+      review(11, "APPROVED", "h0"),
+      ...Array.from({ length: 99 }, () => review(12, "COMMENTED")),
+    ];
+    const second = [
+      review(11, "APPROVED"),
+      review(13, "APPROVED"),
+      review(13, "CHANGES_REQUESTED"),
+      { user: null, state: "APPROVED", commit_id: "h1" },
+    ];
+    const { gh, repo, calls, linkAccount } = await restSeam({
+      [`GET ${REPO_PATH}/pulls/7/reviews?per_page=100&page=1`]: () => first,
+      [`GET ${REPO_PATH}/pulls/7/reviews?per_page=100&page=2`]: () => second,
+    });
+    await expect(gh.listApprovals(repo, 7)).resolves.toEqual([
+      { userId: "user-11", login: "u11", commitSha: "h1" },
+    ]);
+    expect(calls).toHaveLength(2);
+    expect(linkAccount).toHaveBeenCalledWith("github", "11");
+    const refused = await restSeam({});
+    await expect(refused.gh.listApprovals(refused.repo, 7)).rejects.toMatchObject(
+      { reason: "github_refused" },
+    );
+  });
+
+  it("keeps a dismissed approval from standing", () => {
+    expect(
+      standingApprovals([
+        { user: { id: 1, login: "a" }, state: "APPROVED", commit_id: "h" },
+        { user: { id: 1, login: "a" }, state: "DISMISSED", commit_id: "h" },
+        { user: { id: 2, login: "b" }, state: "PENDING", commit_id: null },
+      ]),
+    ).toEqual([]);
+  });
+
+  it("records a publish as a deployment to the steering environment", async () => {
+    const { gh, repo, calls } = await restSeam({
+      [`POST ${REPO_PATH}/deployments`]: () => ({ id: 41 }),
+      [`POST ${REPO_PATH}/deployments/41/statuses`]: () => ({ id: 1 }),
+    });
+    await expect(
+      gh.recordDeployment(repo, {
+        sha: "sq1",
+        ref: "main",
+        environment: "steering",
+        description: "Steering version 3",
+      }),
+    ).resolves.toEqual({
+      url: "https://github.com/a-intel/platform/deployments/steering",
+    });
+    expect(calls[0]!.body).toMatchObject({
+      ref: "sq1",
+      environment: "steering",
+      required_contexts: [],
+    });
+    const refused = await restSeam({
+      [`POST ${REPO_PATH}/deployments`]: refuse(403, "Resource not accessible"),
+    });
+    await expect(
+      refused.gh.recordDeployment(refused.repo, {
+        sha: "sq1",
+        ref: "main",
+        environment: "steering",
+        description: "d",
+      }),
+    ).rejects.toMatchObject({ reason: "github_refused" });
+  });
+
+  it("refuses a REST call on a handle it did not resolve", async () => {
+    const { gh, repo } = await restSeam({});
+    const forged = { ...repo };
+    await expect(gh.holdsCommit(forged, "h1", "m1")).rejects.toThrow(
+      "no client",
+    );
   });
 });

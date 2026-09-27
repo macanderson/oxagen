@@ -120,5 +120,13 @@ export function createSteeringHost(
     mergePullRequest: (repo, args) => on(repo).mergePullRequest(repo, args),
     closePullRequest: (repo, number) => on(repo).closePullRequest(repo, number),
     deleteBranch: (repo, branch) => on(repo).deleteBranch(repo, branch),
+    changedFiles: (repo, base, head) => on(repo).changedFiles(repo, base, head),
+    commitFiles: (repo, args) => on(repo).commitFiles(repo, args),
+    holdsCommit: (repo, head, ancestor) =>
+      on(repo).holdsCommit(repo, head, ancestor),
+    updateBranch: (repo, args) => on(repo).updateBranch(repo, args),
+    resetBranch: (repo, branch, sha) => on(repo).resetBranch(repo, branch, sha),
+    listApprovals: (repo, number) => on(repo).listApprovals(repo, number),
+    recordDeployment: (repo, args) => on(repo).recordDeployment(repo, args),
   };
 }

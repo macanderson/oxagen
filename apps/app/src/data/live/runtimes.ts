@@ -108,10 +108,10 @@ export const runtimes: DataSource["runtimes"] = {
     }
     return view(ctx.orgId, RuntimeAgents, { agents }, "runtimes.agents");
   },
-  async named(ctx) {
+  async named(ctx, id) {
     const read = await kernelRead(ctx, {
       contract: runtimeList,
-      input: {},
+      input: id === undefined ? {} : { id },
       page: "runtimes",
     });
     if (!read.ok) return read;

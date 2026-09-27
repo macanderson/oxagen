@@ -775,6 +775,173 @@
             ],
             "additionalProperties": false
           },
+          "cedar": {
+            "type": "object",
+            "properties": {
+              "cedar_version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32
+              },
+              "policies": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 65536
+                },
+                "x-server-validated": true,
+                "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+              },
+              "approval_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "maxItems": 2048
+              },
+              "schema": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1048576
+              },
+              "principals": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "operator": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "runtime": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "harness": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "workspace": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "operator_role": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "budget_remaining_cents": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "operator",
+                    "runtime",
+                    "harness",
+                    "workspace"
+                  ],
+                  "additionalProperties": false
+                },
+                "minItems": 1,
+                "maxItems": 64
+              },
+              "tools": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "risk": {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "critical"
+                      ]
+                    },
+                    "side_effect": {
+                      "type": "string",
+                      "enum": [
+                        "read",
+                        "write",
+                        "irreversible"
+                      ]
+                    },
+                    "egress": {
+                      "type": "string",
+                      "enum": [
+                        "local",
+                        "org_tenant",
+                        "third_party"
+                      ]
+                    },
+                    "impacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "maxItems": 64
+                    },
+                    "args": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string",
+                        "enum": [
+                          "String",
+                          "Long",
+                          "Bool",
+                          "Set<String>",
+                          "Set<Long>"
+                        ]
+                      },
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "risk",
+                    "side_effect",
+                    "egress",
+                    "impacts",
+                    "args"
+                  ],
+                  "additionalProperties": false
+                },
+                "x-server-validated": true,
+                "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+              }
+            },
+            "required": [
+              "cedar_version",
+              "policies",
+              "approval_ids",
+              "schema",
+              "principals",
+              "tools"
+            ],
+            "additionalProperties": false
+          },
           "signature": {
             "type": "object",
             "properties": {

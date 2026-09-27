@@ -28,6 +28,7 @@ run `tacho` or `oxagen`. This directory is not a workspace package: it has no
 | Seam | Kind | Source | Wired by |
 |---|---|---|---|
 | `node tools/sea/compile.mjs --entry <bundle.cjs> --name <tacho\|oxagen> --out <dir> [--triple <target>]` | boundary | `tools/sea/compile.mjs` | `pnpm --filter @oxagen/cli compile`, `pnpm --filter @oxagen/tacho compile` |
+| `--asset <key>=<path>`, repeatable, read in the executable with `require("node:sea").getAsset(<key>)` | boundary | `tools/sea/compile.mjs` | `pnpm --filter @oxagen/tacho compile` embeds Cedar's wasm as `cedar_wasm_bg.wasm`, and `packages/tacho/src/policy/runtime.ts` reads it |
 | Output name `<name>[-<triple>][.exe]` | boundary | `tools/sea/compile.mjs` | Tauri's `externalBin` expects the triple suffix. `apps/desktop/scripts/sidecars.mjs` currently adds it when it stages the binary |
 
 ## Entry points
