@@ -187,7 +187,8 @@ Recorded here, not built:
   download the app from (`apps/docs/content/docs/cli/desktop.mdx`, under
   Updates). It says what installs, when, how to turn it off, and that
   Windows and Linux ask first. Every other block that hands out an
-  installer carries a short notice. In the docs, `LatestDownloads` and
+  installer carries a short notice, except the body of a `desktop-v*`
+  GitHub release (#4482). In the docs, `LatestDownloads` and
   `ReleaseDownloads` link to that section (`ReleaseDownloads` from 2.1.2,
   the first app with the updater). In the web app, `DesktopDownloads` on
   the enrollment and onboarding screens names the off switch. On
