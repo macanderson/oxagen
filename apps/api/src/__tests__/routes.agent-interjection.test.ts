@@ -158,7 +158,7 @@ describe("agent.interjection.answer route", () => {
     expect(mocks.invoke.mock.calls[1]?.[1]).toEqual(create);
   });
 
-  it("returns a path answer's receipt with the repository and the workspace it bound", async () => {
+  it("returns a create answer's receipt with the workspace it made and no repository", async () => {
     const receipt = {
       interjectionId: body.interjectionId,
       runId: "tse_0123456789abcdefghjkmn",
@@ -166,10 +166,7 @@ describe("agent.interjection.answer route", () => {
       commandIds: ["tcm_1"],
       receiptId: "rcp_0123456789abcdefghjkmn",
       path: "create",
-      repository: {
-        bindingId: "rpb_0123456789abcdef012345",
-        fullName: "acme/api",
-      },
+      repository: null,
       workspace: { publicId: "ws_0123456789abcdefghjkmn", slug: "api" },
     };
     mocks.invoke.mockResolvedValue(receipt);
@@ -179,6 +176,33 @@ describe("agent.interjection.answer route", () => {
         path: "create",
         create: { name: "API", slug: "api" },
       }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(receipt);
+  });
+
+  it("returns a link answer's receipt with the steering PR that proposes the link", async () => {
+    const receipt = {
+      interjectionId: body.interjectionId,
+      runId: "tse_0123456789abcdefghjkmn",
+      answeredAt: "2026-09-25T09:10:00.000Z",
+      commandIds: ["tcm_1"],
+      receiptId: "rcp_0123456789abcdefghjkmn",
+      path: "link",
+      repository: {
+        fullName: "acme/api",
+        bindingId: null,
+        steeringPullRequest: {
+          number: 9,
+          url: "https://github.com/acme/platform/pull/9",
+          reused: false,
+        },
+      },
+      workspace: null,
+    };
+    mocks.invoke.mockResolvedValue(receipt);
+    const res = await app.fetch(
+      post(PATH, { interjectionId: body.interjectionId, path: "link" }),
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual(receipt);

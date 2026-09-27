@@ -1112,11 +1112,19 @@ describe("answerInterjection", () => {
     commandIds: ["tcm_release1"],
     receiptId: "rcp_01k6qw44",
     path: "link" as const,
-    repository: { bindingId: "rbd_4t8e", fullName: "acme/edge-proxy" },
+    repository: {
+      fullName: "acme/edge-proxy",
+      bindingId: null,
+      steeringPullRequest: {
+        number: 12,
+        url: "https://github.com/acme/control/pull/12",
+        reused: false,
+      },
+    },
     workspace: null,
   };
 
-  it("links the repository through answer_interjection and answers the receipt", async () => {
+  it("proposes the link through answer_interjection and answers the receipt with its steering PR", async () => {
     invoke.mockResolvedValue(linked);
     expect(
       await answerInterjection("acme", "core-platform", QUESTION, {
@@ -1136,6 +1144,7 @@ describe("answerInterjection", () => {
       ...linked,
       receiptId: "rcp_01k6qw45",
       path: "create" as const,
+      repository: null,
       workspace: { publicId: "wsp_9e2c", slug: "edge-proxy" },
     };
     invoke.mockResolvedValue(created);
@@ -1212,6 +1221,33 @@ describe("answerInterjection", () => {
         }),
       ).toMatchObject({ ok: false, reason: "conflict", code: reason });
     }
+  });
+
+  it("keeps a steering repository the link cannot use as a conflict with its reason (negative)", async () => {
+    for (const reason of ["main_repo_unbound", "workspace_toml_unreadable"]) {
+      invoke.mockRejectedValueOnce(refused(reason));
+      expect(
+        await answerInterjection("acme", "core-platform", QUESTION, {
+          path: "link",
+        }),
+      ).toMatchObject({ ok: false, reason: "conflict", code: reason });
+    }
+  });
+
+  it("refuses the link answer a binding link gave before ADR-212 (negative)", async () => {
+    invoke.mockResolvedValue({
+      ...linked,
+      repository: { bindingId: "rbd_4t8e", fullName: "acme/edge-proxy" },
+    });
+    expect(
+      await answerInterjection("acme", "core-platform", QUESTION, {
+        path: "link",
+      }),
+    ).toMatchObject({
+      ok: false,
+      reason: "unavailable",
+      code: "contract_output_mismatch",
+    });
   });
 
   it("returns a kernel denial as denied (negative)", async () => {
