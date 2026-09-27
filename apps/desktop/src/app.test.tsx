@@ -264,6 +264,23 @@ describe("the window", () => {
     expect(masthead?.textContent).toContain("collector running · active");
     expect(masthead?.textContent).not.toContain("connected");
   });
+
+  // The Status row used to read "active, observe mode", which people took as
+  // the answer to whether their traffic goes through the gateway. The policy
+  // mode is a separate fact from the tier (ADR-095), so it gets its own row.
+  it("shows the policy mode on its own row, apart from the status and the gateway", async () => {
+    await renderEnrolled();
+    const row = (label: string) =>
+      Array.from(document.querySelectorAll(".kv dt")).find(
+        (dt) => dt.textContent === label,
+      )?.nextElementSibling?.textContent;
+    expect(row("Status")).toBe("active");
+    expect(row("Policy")).toBe(
+      "enforce: a matching rule can deny a governed call or ask first",
+    );
+    expect(row("Bundle")).toContain("v3, fetched");
+    expect(row("Gateway")).not.toContain("enforce");
+  });
 });
 
 // #3367: the wizard disabled every row whose scan said not installed, so a

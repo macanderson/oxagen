@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   gatewayText,
   parseTachoStatus,
+  policyText,
   serviceStatusText,
 } from "./tacho-status";
 
@@ -401,5 +402,22 @@ describe("the Gateway line", () => {
     expect(gatewayText({ enrolled: true }, true, [])).toBe(
       "not available on this build",
     );
+  });
+});
+
+describe("the Policy line", () => {
+  it("says observe records a rule match and lets the call go ahead", () => {
+    expect(policyText("observe")).toBe("observe: recorded, not enforced");
+  });
+
+  it("says enforce can deny a governed call or ask first", () => {
+    expect(policyText("enforce")).toBe(
+      "enforce: a matching rule can deny a governed call or ask first",
+    );
+  });
+
+  it("never names the gateway, whose tier is a separate line", () => {
+    expect(policyText("observe")).not.toContain("gateway");
+    expect(policyText("enforce")).not.toContain("gateway");
   });
 });

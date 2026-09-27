@@ -314,3 +314,17 @@ export function gatewayText(
     .join(", ");
   return `${proxy}; ${tiers}`;
 }
+
+/**
+ * The Policy line of the This machine panel: the host's policy mode. It is a
+ * separate fact from the tier on the Gateway line (ADR-095). In `observe`, a
+ * matching rule is recorded and the call goes ahead. In `enforce`, a matching
+ * rule can deny a governed call or ask first. The mode used to share the
+ * Status line as "observe mode", which read as the answer to "is my traffic
+ * routed through the gateway".
+ */
+export function policyText(mode: "observe" | "enforce"): string {
+  return mode === "enforce"
+    ? "enforce: a matching rule can deny a governed call or ask first"
+    : "observe: recorded, not enforced";
+}

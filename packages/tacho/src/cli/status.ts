@@ -574,7 +574,11 @@ function printStatus(report: StatusReport, deps: CliDeps): void {
     `Enrollment  ${h.agent_key} (${h.host_enrollment_id}) in ${h.organization_id}/${h.workspace_id}`,
   );
   deps.out(
-    `Status      ${h.host_status}${h.revoked_at !== null ? ` (revoked ${h.revoked_at})` : ""}, mode ${h.mode}${h.managed ? ", managed" : ""}, expires ${h.expires_at}`,
+    `Status      ${h.host_status}${h.revoked_at !== null ? ` (revoked ${h.revoked_at})` : ""}${h.managed ? ", managed" : ""}, expires ${h.expires_at}`,
+  );
+  // Its own line: the policy mode is not the tier above it (ADR-095).
+  deps.out(
+    `Policy      ${h.mode === "enforce" ? "enforce: a matching rule can deny a governed call or ask first" : "observe: recorded, not enforced"}`,
   );
   deps.out(
     `Bundle      v${b.version} (${b.etag}) fetched ${b.age_s}s ago, expires ${b.expires_at}`,
