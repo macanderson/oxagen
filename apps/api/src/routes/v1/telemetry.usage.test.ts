@@ -188,17 +188,26 @@ describe("POST /usage — insert failure", () => {
 
 describe("POST /usage — rate limiting", () => {
   it("rejects the 61st request/minute from the same IP with 429", async () => {
-    const ip = "198.51.100.250"; // dedicated IP, not shared with other tests
-    let lastStatus = 0;
-    for (let i = 0; i < 61; i++) {
-      const res = await telemetryUsageRoute.fetch(
-        makeRequest(VALID_PAYLOAD, { "x-forwarded-for": ip }),
-      );
-      lastStatus = res.status;
+    // The limiter's windows start on whole minutes of Date.now(). On the real
+    // clock, 61 requests can cross a minute and the 61st lands in a fresh
+    // window. Pin the clock 1 second into a minute so all 61 share a window.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-27T12:00:01.000Z"));
+    try {
+      const ip = "198.51.100.250"; // dedicated IP, not shared with other tests
+      let lastStatus = 0;
+      for (let i = 0; i < 61; i++) {
+        const res = await telemetryUsageRoute.fetch(
+          makeRequest(VALID_PAYLOAD, { "x-forwarded-for": ip }),
+        );
+        lastStatus = res.status;
+      }
+      expect(lastStatus).toBe(429);
+      // Exactly 60 successful inserts. The 61st never reached the handler.
+      expect(mocks.insertUsageEvents).toHaveBeenCalledTimes(60);
+    } finally {
+      vi.useRealTimers();
     }
-    expect(lastStatus).toBe(429);
-    // Exactly 60 successful inserts — the 61st never reached the handler.
-    expect(mocks.insertUsageEvents).toHaveBeenCalledTimes(60);
   });
 
   it("tracks a different IP independently of the one above", async () => {
