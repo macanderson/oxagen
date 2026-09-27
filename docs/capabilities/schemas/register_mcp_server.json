@@ -1,7 +1,7 @@
 {
   "name": "register_mcp_server",
   "domain": "agent",
-  "description": "Register an external MCP server with the workspace; its tools become available to the agent after health check",
+  "description": "Register an external MCP server with the workspace; its tools become available to the agent after health check. Once the workspace's tools live in its steering repo, a remote server is proposed through a steering PR instead and stays off until that PR merges.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -78,6 +78,24 @@
         "items": {
           "type": "string"
         }
+      },
+      "steeringPr": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "number",
+          "url"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [

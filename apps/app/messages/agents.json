@@ -948,7 +948,15 @@
             "cache_writes_never_read": "Cache writes never read",
             "duplicate_tool_calls": "Duplicate tool calls",
             "repeated_shell_commands": "Repeated shell commands",
-            "unpaged_results": "Unpaged results"
+            "unpaged_results": "Unpaged results",
+            "spin_loops": "Spin loops",
+            "standing_context": "Standing context",
+            "idle_cache_rewrites": "Idle cache rewrites",
+            "cache_busts": "Cache busts",
+            "model_class_fit": "Model class fit",
+            "repeated_instructions": "Repeated instructions",
+            "recurring_runs": "Recurring runs",
+            "spend_with_no_outcome": "Spend with no outcome"
           }
         }
       },
@@ -1075,7 +1083,7 @@
         "invalid": "The request was refused as invalid. Nothing was changed.",
         "pendingApproval": "The change is waiting for approval, request {accessRequestId}.",
         "unavailable": "The change could not be made: {code}. Nothing was changed.",
-        "noToolMatches": "No declared tool with a consequence tag matches those patterns in this workspace, so the mandate would cover nothing.",
+        "noToolMatches": "No declared tool with an impact matches those patterns in this workspace, so the mandate would cover nothing.",
         "measureNotDeclared": "A tool version those patterns match declares no such measure, so the limit could not be read from a call. A financial tool whose schema does not expose an amount cannot be given a mandate.",
         "measureUnitMismatch": "A covered tool declares that measure in a different unit. The gate reads a call in the unit the tool declares, so a limit denominated in anything else would be enforced as a figure nobody entered. Name the unit the tool declares.",
         "measureKindConflict": "Two tools your patterns cover declare that measure differently (one as an amount, one as a count), so there is no single figure to enforce. Narrow the patterns so they cover tools that agree on what the measure counts.",
@@ -1089,7 +1097,7 @@
       "noneTitle": "No mandate",
       "lead": "A mandate is bounded, expiring authority for the consequences it names. Nothing in a role, a grant or a toolbelt substitutes for one.",
       "none": "No mandate is recorded for this agent — none granted, and none requested — so it cannot carry a consequence.",
-      "noneDetail": "A call that carries a consequence tag is denied before dispatch — before any credential is minted and before anything reaches a tool server — whether or not the tool is on this agent's belt.",
+      "noneDetail": "A call that carries an impact is denied before dispatch — before any credential is minted and before anything reaches a tool server — whether or not the tool is on this agent's belt.",
       "authority": "Remaining authority is what the ledger says: every draw reserves, then settles against a receipt or releases. The tools a mandate covers appear on the belt gated by mandate and approval, never as plainly allowed.",
       "columns": {
         "mandate": "Mandate",
@@ -1135,8 +1143,8 @@
         "unit": "Unit",
         "unitHint": "What the measure counts, in the name the tool version declares — rows, recipients, GB. It must be the declared unit: the gate reads a call in that unit, so a limit denominated in another is enforced as a figure nobody entered, and the request is refused. Not a currency code: a limit in money is scaled by the tool’s declaration, which nothing here can read, so it is asked for over the API or MCP instead.",
         "perCallHint": "Whole units of the measure. The figure is recorded exactly as typed and is never scaled, so the limit this request carries is the figure entered.",
-        "consequenceTags": "Consequences",
-        "consequenceTagsHint": "Name every consequence the covered tools declare. A mandate covers a tool only when it names all of them — name one of a tool’s two and the mandate is granted as asked and the call is still denied. The six above are the starter set; a workspace defines its own, and those go in the field beneath.",
+        "impacts": "Impacts",
+        "impactsHint": "Name every impact the covered tools declare. A mandate covers a tool only when it names all of them — name one of a tool’s two and the mandate is granted as asked and the call is still denied. The six above are the starter set; a workspace defines its own, and those go in the field beneath.",
         "consequenceOther": "Others the tools declare, separated by commas"
       },
       "truncated": "The newest {shown} mandates recorded for this agent. There are at least that many, and older ones are not listed here.",
@@ -1155,7 +1163,7 @@
         "call": "Call",
         "callValue": "a tool call whose version declares a financial class",
         "financial": "Financial class",
-        "financialValue": "read from the tool version’s declared consequence tags",
+        "financialValue": "read from the tool version’s declared impacts",
         "lookup": "Mandate lookup",
         "lookupValue": "none for {agent}",
         "thisAgent": "this agent",

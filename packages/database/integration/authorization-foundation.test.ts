@@ -12,7 +12,7 @@
  *   A3  the security-definer trigger functions are not PUBLIC-executable
  *   A4  every authority-narrowing mutation bumps the generation IN THE SAME
  *       TRANSACTION (principal status, PRA, role, role grant, emergency deny,
- *       a tool version's classification or its declared consequence tags)
+ *       a tool version's classification or its declared impacts)
  *   A5  the typed emergency-deny and decision constraints
  *
  * NOTE ON SUPERUSER: superusers bypass RLS and always pass privilege checks, so
@@ -686,7 +686,7 @@ describe("A4: every authority-narrowing mutation advances the generation", () =>
   });
 
   it("a changed tool classification bumps the generation inside its transaction; an update that keeps it does not", async () => {
-    // The kill-switch gate reloads a version's consequence tags only when the
+    // The kill-switch gate reloads a version's impacts only when the
     // generation moves, so a reclassification is a narrowing like a deny.
     await asSystem(
       (tx) => tx`
@@ -698,7 +698,7 @@ describe("A4: every authority-narrowing mutation advances the generation", () =>
         ON CONFLICT (id) DO NOTHING
       `,
     );
-    const tags = '{"consequenceTags":["moves_money"]}';
+    const tags = '{"impacts":["moves_money"]}';
     const observed = await asSystem(async (tx) => {
       const read = async () => {
         const rows = await tx<{ g: string }[]>`
@@ -727,9 +727,9 @@ describe("A4: every authority-narrowing mutation advances the generation", () =>
     expect(observed.afterSame).toBe(observed.afterClassify);
   });
 
-  it("a version published with DECLARED consequence tags bumps the generation, on insert and on a tag change", async () => {
+  it("a version published with DECLARED impacts bumps the generation, on insert and on a tag change", async () => {
     // The other half of the tags. `publish_tool_declaration` and
-    // `import_tools` write agent.tool_versions.consequence_tags (text[]), never
+    // `import_tools` write agent.tool_versions.impacts (text[]), never
     // the classification jsonb, and publishing a version is an INSERT — which
     // the classification trigger's `AFTER UPDATE OF` never saw. So a tool
     // arriving already tagged `moves_money` did not move the generation and the
@@ -749,7 +749,7 @@ describe("A4: every authority-narrowing mutation advances the generation", () =>
       await tx`
         INSERT INTO agent.tool_versions
           (id, public_id, org_id, workspace_id, version_number, is_latest, tool_id,
-           input_schema, risk_grade, manifest, checksum, consequence_tags)
+           input_schema, risk_grade, manifest, checksum, impacts)
         VALUES (${id}, 'tlv_azf_declared_1', ${ORG_A}, ${WS_A}, 2, false, ${TOOL_ID},
                 '{}'::jsonb, 'high', '{}'::jsonb, ${"1".repeat(64)},
                 ARRAY['moves_money']::text[])
@@ -757,7 +757,7 @@ describe("A4: every authority-narrowing mutation advances the generation", () =>
       const afterInsert = await read();
       await tx`
         UPDATE agent.tool_versions
-        SET consequence_tags = ARRAY['moves_money', 'deletes_data']::text[]
+        SET impacts = ARRAY['moves_money', 'deletes_data']::text[]
         WHERE id = ${id}
       `;
       const afterRetag = await read();

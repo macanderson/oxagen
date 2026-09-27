@@ -338,6 +338,49 @@ describe("the GitLab seam", () => {
     });
   });
 
+  describe("a steering project the provisioner bound", () => {
+    const GROUP_TOKEN = "glpat-group-token-never-shown";
+    const steeringSeam = (api: FakeGitLabApi, stored: string | null) => {
+      const resolveToken = vi.fn(async () => TOKEN);
+      const steeringGroupToken = vi.fn(async () => stored);
+      const seam = createSteeringGitLab({
+        readConnection: async () => ({ ...CONNECTION, steeringGroupId: 77 }),
+        resolveToken,
+        steeringGroupToken,
+        client: (token) => api.client(token),
+        rest: (token) => api.rest(token),
+        sleep: vi.fn(async () => {}),
+      });
+      return { seam, resolveToken, steeringGroupToken };
+    };
+
+    it("uses the group's stored token and never the connection's", async () => {
+      const api = new FakeGitLabApi();
+      const { seam, resolveToken, steeringGroupToken } = steeringSeam(
+        api,
+        GROUP_TOKEN,
+      );
+      const repo = await seam.resolveRepository(SCOPE);
+      expect(repo.fullName).toBe("acme/platform/rules");
+      expect(steeringGroupToken).toHaveBeenCalledWith(SCOPE.orgId, 77);
+      expect(resolveToken).not.toHaveBeenCalled();
+      expect(api.tokens).toEqual([GROUP_TOKEN, GROUP_TOKEN]);
+    });
+
+    it("refuses when the organization stored no usable group token", async () => {
+      const api = new FakeGitLabApi();
+      const { seam, resolveToken } = steeringSeam(api, null);
+      const err = await seam.resolveRepository(SCOPE).catch((e: unknown) => e);
+      expect(err).toMatchObject({
+        code: "conflict",
+        reason: "gitlab_not_connected",
+      });
+      expect((err as Error).message).toContain("acme/platform/rules");
+      expect(resolveToken).not.toHaveBeenCalled();
+      expect(api.tokens).toEqual([]);
+    });
+  });
+
   it("fails closed on a revoked token, naming the project and not the token", async () => {
     const api = new FakeGitLabApi();
     api.revoked = true;
@@ -385,6 +428,22 @@ describe("the GitLab seam", () => {
     await expect(
       seam.ensureBranch(repo, "b", "main", { exclusive: true }),
     ).rejects.toMatchObject({ reason: "proposal_branch_exists" });
+  });
+
+  it("creates a branch at the commit it is given, not at the base branch's head", async () => {
+    const api = new FakeGitLabApi();
+    const { seam, repo } = await resolved(api);
+    const planned = api.branches.get("main")!;
+    await seam.ensureBranch(repo, "other", "main");
+    const { commitSha: moved } = await seam.putFile(repo, {
+      path: "a.toml",
+      content: "1",
+      message: "m",
+      branch: "other",
+    });
+    api.branches.set("main", moved);
+    await seam.ensureBranch(repo, "b", "main", { exclusive: true, at: planned });
+    expect(api.branches.get("b")).toBe(planned);
   });
 
   it("creates, updates, and answers the head for an identical write", async () => {

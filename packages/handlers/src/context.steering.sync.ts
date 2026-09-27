@@ -93,7 +93,12 @@ export interface SyncDeps {
   store: SyncStore;
   steering: Pick<SteeringStore, "updateProposal">;
   now: () => Date;
-  /** Unset until the version store is wired, and then the sync publishes nothing. */
+  /**
+   * Unset until the version store is wired, and then the sync publishes
+   * nothing. The publisher builds its publish() deps through
+   * `withToolProjection` (./mcp-studio/publish-deps), so each version it
+   * publishes also writes the workspace's tool registry.
+   */
   publish?: SyncPublish;
 }
 

@@ -44,7 +44,7 @@ export const mandateRequestHandler: CapabilityHandler<
         workspaceId,
         agentPrincipalId: agent.principalId,
         requestedBy: actingUserId,
-        consequenceTags: input.consequenceTags,
+        impacts: input.impacts,
         limits,
         targets: input.targets,
         tools: input.tools,

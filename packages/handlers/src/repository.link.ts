@@ -34,7 +34,7 @@ import {
 } from "@oxagen/oxagen/contracts/repository.link";
 import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import { and, eq, ne, or } from "drizzle-orm";
+import { and, eq, inArray, ne, or } from "drizzle-orm";
 import { logger } from "./logger";
 import { writeRepositoryHead } from "./repository.binding-write";
 import {
@@ -98,6 +98,9 @@ export function createRepositoryLinkHandler(
     }
 
     await assertGlobalClaimIsKnowable(ctx.orgId);
+    // tenancy: a global cross-tenant read, filtered to this provider
+    // repository id and the steering roles in other workspaces. It returns
+    // only whether such a head exists, never another tenant's row.
     const mainElsewhere = await withSystemDb((tx) =>
       tx
         .select({ id: schema.repositoryBindingHeads.id })
@@ -106,7 +109,10 @@ export function createRepositoryLinkHandler(
           and(
             eq(schema.repositoryBindingHeads.provider, GITHUB_PROVIDER),
             eq(schema.repositoryBindingHeads.providerRepositoryId, repo.id),
-            eq(schema.repositoryBindingHeads.role, "main"),
+            inArray(
+              schema.repositoryBindingHeads.role,
+              schema.STEERING_HEAD_ROLES,
+            ),
             ne(schema.repositoryBindingHeads.workspaceId, ctx.workspaceId),
           ),
         )
@@ -141,7 +147,10 @@ export function createRepositoryLinkHandler(
               eq(schema.repositoryBindingHeads.provider, GITHUB_PROVIDER),
               or(
                 eq(schema.repositoryBindingHeads.providerRepositoryId, repo.id),
-                eq(schema.repositoryBindingHeads.role, "main"),
+                inArray(
+                  schema.repositoryBindingHeads.role,
+                  schema.STEERING_HEAD_ROLES,
+                ),
               ),
             ),
           );
@@ -149,7 +158,7 @@ export function createRepositoryLinkHandler(
         // first workspace is written without a main repository (ADR-099 §6)
         // and GitHub can be attached to it before the main head exists, and
         // a link then would leave a linked head with no main beside it.
-        if (!heads.some((h) => h.role === "main")) {
+        if (!heads.some((h) => schema.isSteeringHeadRole(h.role))) {
           throw new HandlerError({
             code: "conflict",
             reason: "main_repo_unbound",
@@ -158,7 +167,7 @@ export function createRepositoryLinkHandler(
           });
         }
         const same = heads.filter((h) => h.providerRepositoryId === repo.id);
-        if (same.some((h) => h.role === "main")) {
+        if (same.some((h) => schema.isSteeringHeadRole(h.role))) {
           throw new HandlerError({
             code: "conflict",
             reason: "main_repo",

@@ -1,7 +1,7 @@
 {
   "name": "import_tools",
   "domain": "tool",
-  "description": "Import a registered MCP server's pinned tools into the workspace registry, or publish hand-authored declarations against it: one immutable tool version per changed manifest, idempotent on an unchanged one; stamps the server's last import.",
+  "description": "Import a registered MCP server's pinned tools into the workspace registry, or publish hand-authored declarations against it: one immutable tool version per changed manifest, idempotent on an unchanged one; stamps the server's last import. For a server the workspace's steering repo holds, it opens a steering PR that adds the pinned tools to the server's folder instead.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -79,7 +79,7 @@
               "additionalProperties": {},
               "description": "The full declared manifest body, verbatim"
             },
-            "consequence_tags": {
+            "impacts": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -194,7 +194,7 @@
                 "imported"
               ]
             },
-            "consequenceTags": {
+            "impacts": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -261,13 +261,31 @@
             "version",
             "checksum",
             "schemaOrigin",
-            "consequenceTags",
+            "impacts",
             "measures",
             "effectIdPath",
             "published"
           ],
           "additionalProperties": false
         }
+      },
+      "steeringPr": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "exclusiveMinimum": 0
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "number",
+          "url"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [

@@ -350,6 +350,25 @@ describe("the GitHub seam", () => {
     });
   });
 
+  it("creates a branch at the commit it is given in one call", async () => {
+    const createBranch = vi
+      .fn()
+      .mockResolvedValue({ ref: "refs/heads/memory/x", sha: "planned" });
+    const { gh } = seam(fakeClient({ createBranch }));
+    const repo = await gh.resolveRepository(SCOPE);
+    await gh.ensureBranch(repo, "memory/x", "main", {
+      exclusive: true,
+      at: "planned",
+    });
+    expect(createBranch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        branch: "memory/x",
+        fromBranch: "main",
+        fromSha: "planned",
+      }),
+    );
+  });
+
   it("records a check run's url, answers null when the token cannot write checks, and refuses on anything else", async () => {
     const createCheckRun = vi
       .fn()
@@ -692,7 +711,7 @@ describe("the workspace's main repository", () => {
   // repository the workspace can see and is not steered by. Context PRs and
   // `get_steering_freshness` both resolve through this read, so an unordered
   // `limit(1)` without the filter could steer either one by a linked head.
-  it("names the head's role in the joined read, so only a main head steers", async () => {
+  it("names the head's role in the joined read, so only a steering head steers", async () => {
     const counts = db({ bound: [] });
     await readGitHubConnection(SELECT_SCOPE);
     expect(columnsIn(counts.boundWhere).has("role")).toBe(true);
@@ -770,7 +789,7 @@ describe("the workspace's main repository", () => {
   // compiled, because a reader that ignored the column would write steering
   // into a linked repository. repository.pg.test.ts proves the same with both
   // heads present in Postgres.
-  it("asks only for the main head, on both reads", async () => {
+  it("asks only for a steering head, on both reads", async () => {
     const captured: SQL[] = [];
     mocks.withTenantDb.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) =>
@@ -799,8 +818,10 @@ describe("the workspace's main repository", () => {
     const dialect = new PgDialect();
     for (const cond of captured.slice(0, 2)) {
       const query = dialect.sqlToQuery(cond);
-      expect(query.sql).toMatch(/"role" = \$\d+/);
-      expect(query.params).toContain("main");
+      expect(query.sql).toMatch(/"role" in \(\$\d+, \$\d+\)/);
+      expect(query.params).toEqual(
+        expect.arrayContaining(["main", "steering"]),
+      );
     }
   });
 
@@ -874,6 +895,139 @@ describe("the workspace's main repository", () => {
       expect(counts.headReads).toBe(0);
       expect(counts.connectionReads).toBe(0);
     });
+  });
+
+  // The steering repo provisioner binds its repository through a
+  // `github_steering` connection, and only the Oxagen Steering app can reach
+  // that repository. The read carries the installation id so the seam can
+  // mint that app's token.
+  describe("a steering head the provisioner bound", () => {
+    const PROVISIONED = {
+      owner: "acme",
+      repo: "acme-steering",
+      approvedFullName: "acme/acme-steering",
+      approvedDefaultRef: "main",
+      connectorId: "github_steering",
+    };
+
+    it("carries the Oxagen Steering installation id", async () => {
+      db({
+        bound: [
+          {
+            ...PROVISIONED,
+            deliveryConfig: { installationId: 4242, owner: "acme" },
+          },
+        ],
+      });
+      await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toEqual({
+        source: "binding",
+        owner: "acme",
+        repo: "acme-steering",
+        approvedFullName: "acme/acme-steering",
+        approvedDefaultRef: "main",
+        steeringInstallationId: 4242,
+      });
+    });
+
+    it("reads an installation id stored as a string of digits", async () => {
+      db({
+        bound: [{ ...PROVISIONED, deliveryConfig: { installationId: "4242" } }],
+      });
+      await expect(readGitHubConnection(SELECT_SCOPE)).resolves.toMatchObject({
+        steeringInstallationId: 4242,
+      });
+    });
+
+    it.each([
+      ["no delivery config", null],
+      ["no installation id", { owner: "acme" }],
+      ["a zero installation id", { installationId: 0 }],
+      ["an installation id that is not a number", { installationId: "abc" }],
+    ])("refuses a steering head with %s", async (_label, deliveryConfig) => {
+      db({ bound: [{ ...PROVISIONED, deliveryConfig }] });
+      await expect(readGitHubConnection(SELECT_SCOPE)).rejects.toMatchObject({
+        code: "conflict",
+        reason: "steering_installation_missing",
+      });
+    });
+
+    it("leaves a head on the workspace's own GitHub connection alone", async () => {
+      db({
+        bound: [
+          {
+            ...PROVISIONED,
+            connectorId: "github",
+            deliveryConfig: { installationId: "555" },
+          },
+        ],
+      });
+      const answer = await readGitHubConnection(SELECT_SCOPE);
+      expect(answer).not.toHaveProperty("steeringInstallationId");
+    });
+  });
+});
+
+describe("the GitHub seam's token for a provisioned steering repository", () => {
+  const PROVISIONED_BOUND: SteeringConnection = {
+    source: "binding",
+    owner: "a-intel",
+    repo: "platform",
+    approvedFullName: "a-intel/platform",
+    approvedDefaultRef: "main",
+    steeringInstallationId: 4242,
+  };
+
+  it("mints the Oxagen Steering token and never asks for the workspace's", async () => {
+    const resolveToken = vi.fn(async () => "workspace-tok");
+    const steeringToken = vi.fn(async () => "steering-tok");
+    const client = vi.fn(() => fakeClient());
+    const gh = createSteeringGitHub({
+      readConnection: async () => PROVISIONED_BOUND,
+      resolveToken,
+      steeringToken,
+      client,
+    });
+    await gh.resolveRepository(SCOPE);
+    expect(steeringToken).toHaveBeenCalledWith(4242);
+    expect(resolveToken).not.toHaveBeenCalled();
+    expect(client).toHaveBeenCalledWith("steering-tok");
+  });
+
+  it("uses the workspace's token for a head with no steering installation", async () => {
+    const resolveToken = vi.fn(async () => "workspace-tok");
+    const steeringToken = vi.fn(async () => "steering-tok");
+    const client = vi.fn(() => fakeClient());
+    const gh = createSteeringGitHub({
+      readConnection: async () => BOUND,
+      resolveToken,
+      steeringToken,
+      client,
+    });
+    await gh.resolveRepository(SCOPE);
+    expect(resolveToken).toHaveBeenCalledWith(SCOPE);
+    expect(steeringToken).not.toHaveBeenCalled();
+    expect(client).toHaveBeenCalledWith("workspace-tok");
+  });
+
+  it("refuses by default when the deployment has no Oxagen Steering app", async () => {
+    vi.stubEnv("OXAGEN_STEERING_APP_ID", "");
+    vi.stubEnv("OXAGEN_STEERING_APP_PRIVATE_KEY", "");
+    vi.stubEnv("OXAGEN_STEERING_APP_SLUG", "");
+    try {
+      const resolveToken = vi.fn(async () => "workspace-tok");
+      const gh = createSteeringGitHub({
+        readConnection: async () => PROVISIONED_BOUND,
+        resolveToken,
+        client: () => fakeClient(),
+      });
+      await expect(gh.resolveRepository(SCOPE)).rejects.toMatchObject({
+        code: "conflict",
+        reason: "steering_app_unconfigured",
+      });
+      expect(resolveToken).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

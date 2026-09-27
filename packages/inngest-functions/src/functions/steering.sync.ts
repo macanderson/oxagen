@@ -1,6 +1,6 @@
 import { schema, withSystemDb } from "@oxagen/database";
 import { NonRetriableError } from "@oxagen/functions";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { listDedicatedPlaneScopes } from "../lib/assistant-run-abandon";
 
 import { createFunction } from "../create-function";
@@ -83,7 +83,7 @@ export const [steeringSyncSweep] = createFunction(
   async ({ step }) => {
     const heads = await step.run("list-steered-workspaces", async () => {
       // tenancy: scheduled global sweep across all orgs; both shared-plane
-      // reads select only org_id and workspace_id (main binding heads, and
+      // reads select only org_id and workspace_id (steering heads, and
       // legacy GitHub connections with no head), and every sync the sweep
       // requests re-enters that workspace's scope before reading or writing.
       const [bound, legacy, dedicated] = await Promise.all([
@@ -94,7 +94,12 @@ export const [steeringSyncSweep] = createFunction(
               workspaceId: schema.repositoryBindingHeads.workspaceId,
             })
             .from(schema.repositoryBindingHeads)
-            .where(eq(schema.repositoryBindingHeads.role, "main")),
+            .where(
+              inArray(
+                schema.repositoryBindingHeads.role,
+                schema.STEERING_HEAD_ROLES,
+              ),
+            ),
         ),
         // tenancy: scheduled global sweep across all orgs; a workspace the
         // legacy sources wizard connected has no binding head, only a live
@@ -114,7 +119,7 @@ export const [steeringSyncSweep] = createFunction(
                 isNull(schema.sourceConnections.deletedAt),
                 sql`${schema.sourceConnections.deliveryConfig} ->> 'owner' is not null`,
                 sql`${schema.sourceConnections.deliveryConfig} ->> 'repo' is not null`,
-                sql`not exists (select 1 from ${schema.repositoryBindingHeads} h where h.workspace_id = ${schema.sourceConnections.workspaceId} and h.role = 'main')`,
+                sql`not exists (select 1 from ${schema.repositoryBindingHeads} h where h.workspace_id = ${schema.sourceConnections.workspaceId} and ${inArray(sql.raw("h.role"), schema.STEERING_HEAD_ROLES)})`,
               ),
             ),
         ),

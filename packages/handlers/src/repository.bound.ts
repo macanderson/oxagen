@@ -91,8 +91,11 @@ export async function selectBoundRepository(
   if (!row) return null;
   return {
     ...row,
-    // The table's CHECK admits only these two.
-    role: row.role === "main" ? "main" : "linked",
+    // A `steering` head is the workspace's main head under its new name. It
+    // maps to "main", never to "linked": `productionBranchRoles` grants a
+    // workspace Owner the linked-repository write, and a steering head read
+    // as linked handed them the steering repository's production branch.
+    role: row.role === "linked" ? "linked" : "main",
     provider: row.provider === "gitlab" ? "gitlab" : "github",
   };
 }
