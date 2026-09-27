@@ -9,8 +9,9 @@ import { OXAGEN_PR_LABELS } from "@oxagen/github";
 import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
 import { digestBytes } from "@oxagen/tacho";
 import type { TachoFrameRow } from "@oxagen/telemetry";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeGitHub, REPO } from "../context.steering.test-support";
+import { logger } from "../logger";
 import {
   memoryEvents,
   memoryStores,
@@ -27,6 +28,7 @@ import {
   digestRun,
   ingestMemories,
   type MemoryRunnerDeps,
+  prepareBranch,
   recallMemories,
 } from "./runner";
 import { statementHash } from "./statement";
@@ -44,6 +46,10 @@ import type {
   Rejection,
   StoredMemory,
 } from "./types";
+
+vi.mock("../logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
+}));
 
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const SESSION_UUID = "0192d4a8-7c1e-7a00-8000-00000000c0de";
@@ -920,7 +926,7 @@ describe("curateMemories", () => {
     expect(store.prs).toEqual([]);
   });
 
-  it("resets today's branch to the head it read when main moves first", async () => {
+  it("starts today's branch at the head it read when main moves first", async () => {
     const { deps, store, gh } = harness();
     const ensure = gh.ensureBranch.bind(gh);
     vi.spyOn(gh, "ensureBranch").mockImplementation((...args) => {
@@ -930,41 +936,9 @@ describe("curateMemories", () => {
     await store.insertMemories(SCOPE, [draft(STATEMENT)]);
     const out = await curateMemories(deps, SCOPE, DAY1);
     expect(out.pullRequest).not.toBeNull();
-    expect(gh.resets).toEqual([{ branch: BRANCH, sha: "base0" }]);
+    expect(gh.resets).toEqual([]);
     expect(first(gh.stamps).parent).toBe("base0");
   });
-
-  it.each([
-    ["moves", (gh: FakeGitHub) => gh.commit(BRANCH, "steering/memory/other.md", "other")],
-    ["is deleted", (gh: FakeGitHub) => gh.heads.delete(BRANCH)],
-  ])(
-    "leaves today's branch alone when it %s while the curator creates it",
-    async (_name, change) => {
-      const { deps, store, gh } = harness();
-      const ensure = gh.ensureBranch.bind(gh);
-      vi.spyOn(gh, "ensureBranch").mockImplementation(async (...args) => {
-        gh.commit(REPO.defaultBranch, "steering/memory/moved.md", "moved");
-        await ensure(...args);
-        change(gh);
-      });
-      const reset = gh.resetBranch.bind(gh);
-      vi.spyOn(gh, "resetBranch").mockImplementation((...args) => {
-        gh.commit(BRANCH, "steering/memory/late.md", "late");
-        return reset(...args);
-      });
-      await store.insertMemories(SCOPE, [draft(STATEMENT)]);
-      expect(await curateMemories(deps, SCOPE, DAY1)).toEqual({
-        outcome: "opened_today",
-        settled: 0,
-        dropped: 0,
-        pullRequest: null,
-      });
-      expect(gh.resets).toEqual([]);
-      expect(gh.stamps).toEqual([]);
-      expect(gh.pulls).toEqual([]);
-      expect(store.prs).toEqual([]);
-    },
-  );
 
   it("settles a merged memory PR and stamps the merged record at the merge", async () => {
     const { deps, store, gh, pull } = await openedMemoryPr();
@@ -1369,5 +1343,70 @@ describe("ingestMemories", () => {
       refused: 0,
     });
     expect(store.memories).toHaveLength(1);
+  });
+});
+
+/** The default branch's head when the curator planned the PR. */
+const PLANNED = "base0";
+
+describe("prepareBranch", () => {
+  beforeEach(() => vi.mocked(logger.warn).mockClear());
+
+  it("creates today's branch at the head the plan read", async () => {
+    const gh = new FakeGitHub();
+    await expect(prepareBranch(gh, REPO, BRANCH, PLANNED)).resolves.toBe(true);
+    expect(gh.heads.get(BRANCH)).toBe(PLANNED);
+    expect(gh.resets).toEqual([]);
+  });
+
+  it("creates the branch at the planned head when the default branch moved after the plan", async () => {
+    const gh = new FakeGitHub();
+    gh.commit(REPO.defaultBranch, "steering/rules/new.md", "a merge");
+    const branchHead = vi.spyOn(gh, "branchHead");
+    await expect(prepareBranch(gh, REPO, BRANCH, PLANNED)).resolves.toBe(true);
+    expect(gh.heads.get(BRANCH)).toBe(PLANNED);
+    // The host creates the branch at the planned commit in one call, so the
+    // curator never reads it back or moves it.
+    expect(gh.resets).toEqual([]);
+    expect(branchHead).not.toHaveBeenCalled();
+  });
+
+  it("recreates a failed pass's branch at the planned head when the default branch moved", async () => {
+    const gh = new FakeGitHub();
+    await gh.ensureBranch(REPO, BRANCH, REPO.defaultBranch);
+    gh.commit(BRANCH, "steering/memory/half.md", "a pass that failed");
+    gh.commit(REPO.defaultBranch, "steering/rules/new.md", "a merge");
+    await expect(prepareBranch(gh, REPO, BRANCH, PLANNED)).resolves.toBe(true);
+    expect(gh.deletedBranches).toEqual([BRANCH]);
+    expect(gh.heads.get(BRANCH)).toBe(PLANNED);
+    expect(gh.resets).toEqual([]);
+  });
+
+  it("replaces a branch a failed pass left without a PR", async () => {
+    const gh = new FakeGitHub();
+    await gh.ensureBranch(REPO, BRANCH, REPO.defaultBranch);
+    gh.commit(BRANCH, "steering/memory/half.md", "a pass that failed");
+    await expect(prepareBranch(gh, REPO, BRANCH, PLANNED)).resolves.toBe(true);
+    expect(gh.deletedBranches).toEqual([BRANCH]);
+    expect(gh.heads.get(BRANCH)).toBe(PLANNED);
+  });
+
+  it("leaves a branch that already has an open PR", async () => {
+    const gh = new FakeGitHub();
+    await gh.ensureBranch(REPO, BRANCH, REPO.defaultBranch);
+    const theirs = gh.commit(BRANCH, "steering/memory/theirs.md", "their PR");
+    await gh.openPullRequest(REPO, {
+      title: "Their memories",
+      head: BRANCH,
+      base: REPO.defaultBranch,
+      body: "",
+    });
+    await expect(prepareBranch(gh, REPO, BRANCH, PLANNED)).resolves.toBe(false);
+    expect(gh.deletedBranches).toEqual([]);
+    expect(gh.heads.get(BRANCH)).toBe(theirs);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: BRANCH }),
+      expect.stringContaining("has an open PR"),
+    );
   });
 });

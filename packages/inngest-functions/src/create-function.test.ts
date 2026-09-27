@@ -546,7 +546,7 @@ describe("createFunction adapter", () => {
       const config: DurableFunctionConfig = {
         id: "privacy.erasure-execute",
         retries: 2,
-        concurrency: { limit: 10 },
+        concurrency: { limit: 5 },
         onFailure: async () => undefined,
       };
       const trigger: DurableFunctionTrigger = {
@@ -563,6 +563,38 @@ describe("createFunction adapter", () => {
       expect(result[1]!.config).not.toHaveProperty("retries");
       expect(result[1]!.config).not.toHaveProperty("concurrency");
       expect(result[1]!.config).not.toHaveProperty("onFailure");
+    });
+  });
+
+  describe("concurrency", () => {
+    it("passes a concurrency limit at Inngest's limit through", () => {
+      const config: DurableFunctionConfig = {
+        id: "bounded-fn",
+        concurrency: { limit: 5, key: "event.data.workspaceId" },
+      };
+      const trigger: DurableFunctionTrigger = { event: "test/bounded" };
+      const handler: DurableFunctionHandler = async () => undefined;
+
+      createFunction(config, trigger, handler);
+
+      expect(capturedConfigs[0]).toMatchObject({
+        id: "bounded-fn",
+        concurrency: { limit: 5, key: "event.data.workspaceId" },
+      });
+    });
+
+    it("refuses a concurrency limit over Inngest's limit, which would fail the whole app's sync", () => {
+      const config: DurableFunctionConfig = {
+        id: "over-concurrency",
+        concurrency: { limit: 10, key: "event.data.workspaceId" },
+      };
+      const trigger: DurableFunctionTrigger = { event: "test/bounded" };
+      const handler: DurableFunctionHandler = async () => undefined;
+
+      expect(() => createFunction(config, trigger, handler)).toThrow(
+        /over-concurrency: concurrency.limit 10 is over Inngest's limit of 5/,
+      );
+      expect(capturedConfigs).toHaveLength(0);
     });
   });
 
