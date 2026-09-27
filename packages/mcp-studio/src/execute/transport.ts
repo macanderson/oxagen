@@ -11,17 +11,18 @@
 // - a local server: through lane M14's local gateway, which receives a
 //   signed local-call-envelope/v1.
 //
-// The HTTP and gRPC requests carry exactly the fields a relay envelope's
-// target carries, so the relay broker builds an envelope with no
-// interpretation. A Transport that cannot carry a kind of request rejects it
-// with TransportError code "unsupported".
+// The HTTP and gRPC targets are exactly a relay envelope's targets, scheme
+// included, so the relay broker builds an envelope with no interpretation.
+// The envelope binds the headers or metadata with headers_hash
+// (relayHeadersHash) and the body with body_hash. A Transport that cannot
+// carry a kind of request rejects it with TransportError code "unsupported".
 import type { z } from "zod";
 import type { relayGrpcTargetSchema, relayHttpTargetSchema } from "../contract/relay-envelope";
 import type { RelayCredential } from "./credentials";
 
-/** The method, host, port, and path of one HTTP request: a relay envelope's http target. */
+/** The scheme, method, host, port, and path of one HTTP request: a relay envelope's http target. */
 export type HttpTarget = z.output<typeof relayHttpTargetSchema>;
-/** The host, port, service, and method of one gRPC call: a relay envelope's grpc target. */
+/** The scheme, host, port, service, and method of one gRPC call: a relay envelope's grpc target. */
 export type GrpcTarget = z.output<typeof relayGrpcTargetSchema>;
 
 /** A header or metadata entry. Names may repeat, so this is a list, not a map. */
@@ -30,8 +31,6 @@ export type HeaderEntry = readonly [name: string, value: string];
 interface RequestCommon {
   /** cloud, or relay:<name>, as the environment resolved it. */
   network: string;
-  /** https, or http for an environment whose url says so. gRPC over http is cleartext HTTP/2. */
-  scheme: "https" | "http";
   /** Every send has one. 30,000 unless tools.toml sets deadline_ms. */
   deadline_ms: number;
   signal: AbortSignal;
@@ -93,6 +92,7 @@ export interface LocalCall {
   package_digest: string;
   /** The upstream arguments, after the input was shaped. */
   arguments: Record<string, unknown>;
+  /** The local call envelope signs it, so the local gateway stops the call when it passes. */
   deadline_ms: number;
   signal: AbortSignal;
 }

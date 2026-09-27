@@ -35,6 +35,9 @@ export const envelopeSignatureSchema = z
   .describe("The cloud gateway's signature.");
 export type EnvelopeSignature = z.output<typeof envelopeSignatureSchema>;
 
+/** How long the receiver lets the call run, in milliseconds. The envelope signs it, so no one can extend it. */
+export const envelopeDeadlineSchema = z.number().int().min(1).max(300_000).optional();
+
 export const issuedAtSchema = instantSchema.describe("When the cloud gateway signed the envelope.");
 export const expiresAtSchema = instantSchema.describe(
   `When the envelope stops being valid: after issued_at, and at most ${ENVELOPE_TTL_MAX_MS / 1000} seconds after it.`,

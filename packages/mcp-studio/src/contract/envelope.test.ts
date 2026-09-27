@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { envelopeSigningBytes, ENVELOPE_TTL_MAX_MS } from "./envelope";
 import { localCallEnvelopeSchema } from "./local-call-envelope";
-import { relayEnvelopeSchema } from "./relay-envelope";
+import { relayEnvelopeSchema, relayHeadersHash } from "./relay-envelope";
 
 const signature = {
   key_id: "0123456789abcdef",
@@ -29,10 +29,12 @@ const relayEnvelope = {
   expires_at: "2026-09-26T12:00:05Z",
   target: {
     kind: "http",
+    scheme: "https",
     method: "POST",
     host: "billing.internal.a-intel.com",
     path: "/v1/refunds",
   },
+  headers_hash: digest,
   body_hash: digest,
   signature,
 };
@@ -59,6 +61,7 @@ describe("relay-envelope/v1", () => {
       ...relayEnvelope,
       target: {
         kind: "grpc",
+        scheme: "http",
         host: "ledger.internal.a-intel.com",
         port: 8443,
         service: "a_intel.ledger.v1.Ledger",
@@ -66,6 +69,22 @@ describe("relay-envelope/v1", () => {
       },
     };
     expect(relayEnvelopeSchema.safeParse(grpc).success).toBe(true);
+  });
+
+  it("refuses a target with no scheme or a scheme other than https and http", () => {
+    const { scheme: _scheme, ...noScheme } = relayEnvelope.target;
+    for (const target of [noScheme, { ...relayEnvelope.target, scheme: "ftp" }]) {
+      expect(pathsAndMessages(relayEnvelopeSchema.safeParse({ ...relayEnvelope, target }))).toStrictEqual([
+        { path: "target", message: "Invalid input" },
+      ]);
+    }
+  });
+
+  it("refuses an envelope with no headers_hash", () => {
+    const { headers_hash: _headersHash, ...unbound } = relayEnvelope;
+    expect(pathsAndMessages(relayEnvelopeSchema.safeParse(unbound))).toStrictEqual([
+      { path: "headers_hash", message: "Required" },
+    ]);
   });
 
   it("refuses an expiry before issue or past the limit", () => {
@@ -126,6 +145,37 @@ describe("relay-envelope/v1", () => {
     expect(pathsAndMessages(relayEnvelopeSchema.safeParse(fragment))).toStrictEqual([
       { path: "target.path", message: "a path starts with / and has no spaces or fragment" },
     ]);
+  });
+});
+
+describe("relayHeadersHash", () => {
+  const headers = [
+    ["Content-Type", "application/json"],
+    ["X-Request-Source", "oxagen"],
+  ] as const;
+
+  it("hashes the RFC 8785 form of the [name, value] list with lowercase names", () => {
+    // shasum -a 256 of [["content-type","application/json"],["x-request-source","oxagen"]]
+    expect(relayHeadersHash(headers)).toBe(
+      "sha256:a5978849699c271aa1eed6b04a1204fe942c5c5ff1859a1545c03f862b2a9820",
+    );
+  });
+
+  it("lowercases names and keeps values as sent", () => {
+    const lower = headers.map(([name, value]) => [name.toLowerCase(), value] as const);
+    expect(relayHeadersHash(lower)).toBe(relayHeadersHash(headers));
+    expect(relayHeadersHash([["x-request-source", "Oxagen"]])).not.toBe(
+      relayHeadersHash([["x-request-source", "oxagen"]]),
+    );
+  });
+
+  it("changes when the order changes", () => {
+    expect(relayHeadersHash([...headers].reverse())).not.toBe(relayHeadersHash(headers));
+  });
+
+  it("hashes no headers as the empty list", () => {
+    // shasum -a 256 of []
+    expect(relayHeadersHash([])).toBe("sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945");
   });
 });
 
