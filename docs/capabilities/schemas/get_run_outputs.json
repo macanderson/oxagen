@@ -56,6 +56,10 @@
                 }
               ]
             },
+            "sessionUuid": {
+              "type": "string",
+              "format": "uuid"
+            },
             "kind": {
               "type": "string",
               "enum": [

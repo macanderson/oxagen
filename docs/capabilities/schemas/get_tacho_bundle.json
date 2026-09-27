@@ -502,6 +502,76 @@
                 ],
                 "additionalProperties": false
               },
+              "unbound_repo": {
+                "type": "object",
+                "properties": {
+                  "policy": {
+                    "const": "ask"
+                  },
+                  "timeout_ms": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "workspace_slug": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "config_version": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "bound_remote_digests": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 4096
+                  },
+                  "link": {
+                    "type": "object",
+                    "properties": {
+                      "skills_pinned": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "linked_repositories": {
+                        "type": "integer",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "skills_pinned",
+                      "linked_repositories"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "policy",
+                  "timeout_ms",
+                  "workspace_slug",
+                  "config_version",
+                  "bound_remote_digests",
+                  "link"
+                ],
+                "additionalProperties": false
+              },
               "signature": {
                 "type": "object",
                 "properties": {

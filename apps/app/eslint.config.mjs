@@ -37,6 +37,7 @@ function restrictedImports(navigationNames) {
         group: [
           "@/features/*/*",
           "!@/features/fleet/client",
+          "!@/features/run/client",
           "!@/features/shell/client",
         ],
         message:

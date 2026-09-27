@@ -521,9 +521,12 @@ export interface GitHubClient {
    * from any other list would offer options that refuse on submit.
    *
    * Walks a bounded number of pages and reports `truncated` rather than
-   * paginating; see `GitHubInstallationRepositories`.
+   * paginating; see `GitHubInstallationRepositories`. `maxPages` raises the
+   * bound for a caller that searches the list rather than showing it.
    */
-  listInstallationRepositories(): Promise<GitHubInstallationRepositories>;
+  listInstallationRepositories(options?: {
+    maxPages?: number;
+  }): Promise<GitHubInstallationRepositories>;
 
   /**
    * Delete a branch (DELETE /git/refs/heads/{branch}). GitHub answers 422

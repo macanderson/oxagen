@@ -1,5 +1,5 @@
 /**
- * The interjection routes (#3839): POST /agent/interjections/list and
+ * The interjection routes (#3839, #3941): POST /agent/interjections/list and
  * /agent/interjections/answer. The adapter seams are mocked as in
  * routes.agent.test.ts. Each route parses its body against the contract,
  * calls invoke once with the contract name and surface "api", and returns
@@ -119,6 +119,10 @@ describe("agent.interjection.answer route", () => {
       runId: "tse_0123456789abcdefghjkmn",
       answeredAt: "2026-09-25T09:10:00.000Z",
       commandIds: ["tcm_1"],
+      receiptId: "rcp_0123456789abcdefghjkmn",
+      path: null,
+      repository: null,
+      workspace: null,
     };
     mocks.invoke.mockResolvedValue(receipt);
     const res = await app.fetch(post(PATH, body));
@@ -138,6 +142,85 @@ describe("agent.interjection.answer route", () => {
         .status,
     ).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("passes a link or a create answer to invoke as the contract parsed it", async () => {
+    mocks.invoke.mockResolvedValue({});
+    const link = { interjectionId: body.interjectionId, path: "link" };
+    await app.fetch(post(PATH, link));
+    expect(mocks.invoke.mock.calls[0]?.[1]).toEqual(link);
+    const create = {
+      interjectionId: body.interjectionId,
+      path: "create",
+      create: { name: "API", slug: "api" },
+    };
+    await app.fetch(post(PATH, create));
+    expect(mocks.invoke.mock.calls[1]?.[1]).toEqual(create);
+  });
+
+  it("returns a path answer's receipt with the repository and the workspace it bound", async () => {
+    const receipt = {
+      interjectionId: body.interjectionId,
+      runId: "tse_0123456789abcdefghjkmn",
+      answeredAt: "2026-09-25T09:10:00.000Z",
+      commandIds: ["tcm_1"],
+      receiptId: "rcp_0123456789abcdefghjkmn",
+      path: "create",
+      repository: {
+        bindingId: "rpb_0123456789abcdef012345",
+        fullName: "acme/api",
+      },
+      workspace: { publicId: "ws_0123456789abcdefghjkmn", slug: "api" },
+    };
+    mocks.invoke.mockResolvedValue(receipt);
+    const res = await app.fetch(
+      post(PATH, {
+        interjectionId: body.interjectionId,
+        path: "create",
+        create: { name: "API", slug: "api" },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(receipt);
+  });
+
+  it("refuses deny, which only the timeout answers, and an unknown field before invoke (negative)", async () => {
+    expect(
+      (
+        await app.fetch(
+          post(PATH, { interjectionId: body.interjectionId, path: "deny" }),
+        )
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await app.fetch(
+          post(PATH, {
+            interjectionId: body.interjectionId,
+            path: "create",
+            create: { name: "API", slug: "api", skills: true },
+          }),
+        )
+      ).status,
+    ).toBe(400);
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
+  it("answers a wrong combination for the question's kind with 409 and its reason (negative)", async () => {
+    mocks.invoke.mockRejectedValue(
+      new HandlerError({
+        code: "conflict",
+        reason: "interjection_answer_shape",
+        message: "This question takes a free-text answer.",
+      }),
+    );
+    const res = await app.fetch(
+      post(PATH, { interjectionId: body.interjectionId, path: "link" }),
+    );
+    expect(res.status).toBe(409);
+    expect(JSON.stringify(await res.json())).toContain(
+      "interjection_answer_shape",
+    );
   });
 
   it("answers a question someone already answered with 409 and its reason (negative)", async () => {

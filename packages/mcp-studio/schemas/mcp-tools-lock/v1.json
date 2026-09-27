@@ -94,16 +94,42 @@
                     "digest": {
                       "type": "string",
                       "pattern": "^sha256:[0-9a-f]{64}$",
-                      "description": "SHA-256 of the package or binary."
+                      "description": "For oci, the image's manifest digest. For the others, the SHA-256 of the package archive."
+                    },
+                    "registry_type": {
+                      "type": "string",
+                      "enum": [
+                        "npm",
+                        "pypi",
+                        "oci",
+                        "nuget"
+                      ],
+                      "description": "source.registry_type: npm, pypi, oci, or nuget."
                     }
                   },
                   "required": [
                     "name",
                     "version",
-                    "digest"
+                    "digest",
+                    "registry_type"
                   ],
                   "additionalProperties": false,
-                  "description": "The package the catalog entry named, for a local entry."
+                  "description": "The package the local gateway runs, when server.toml names machines."
+                },
+                "command": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024,
+                  "description": "For a package: the command the local gateway runs, npx, uvx, docker, or dnx."
+                },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "maxItems": 1024,
+                  "description": "For a package: the command's arguments. ${NAME} stays for the local gateway to fill from the machine, and $$ writes one $."
                 },
                 "server_version": {
                   "type": "string",
@@ -145,6 +171,24 @@
                   "dependentRequired": {
                     "transport": [
                       "url"
+                    ]
+                  }
+                },
+                {
+                  "dependentRequired": {
+                    "package": [
+                      "command",
+                      "args"
+                    ]
+                  }
+                },
+                {
+                  "dependentRequired": {
+                    "command": [
+                      "package"
+                    ],
+                    "args": [
+                      "package"
                     ]
                   }
                 }
@@ -910,6 +954,7 @@
                   },
                   "description": {
                     "type": "string",
+                    "maxLength": 1024,
                     "description": "From the source, cut at 1,024 characters. Absent when the source has none."
                   },
                   "inputSchema": {

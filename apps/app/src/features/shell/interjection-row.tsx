@@ -5,9 +5,12 @@
 // the parked calls, because a paused run is stopped while a parked call is
 // one step of a run that is still waiting.
 //
-// The app has no place to answer yet (`answer_interjection` is on the API and
-// MCP), so the row links to the run and says so. It never offers an answer it
-// cannot send.
+// The row links to the run rather than answering in the drawer. A repository
+// question (`repo_unknown`) is answered on that run's page, which draws the
+// two paths and sends `answer_interjection` (features/run/interjection.tsx,
+// #3941). A free-text question has no answer form in the app yet; it is
+// answered on the API, MCP, or CLI. The row never offers an answer it cannot
+// send.
 import { MessageCircleQuestion } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { InterjectionItem } from "@/data/contracts/interjections";

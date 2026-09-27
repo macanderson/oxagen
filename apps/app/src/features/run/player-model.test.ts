@@ -13,6 +13,7 @@ import {
   releaseTranscript,
 } from "./actions-tab.builders";
 import {
+  controlOf,
   entriesBySeq,
   isApprovalFrame,
   isParked,
@@ -21,6 +22,7 @@ import {
   markOf,
   matchApprovals,
   openFrameOf,
+  presentedType,
   runStateOf,
   stepsOf,
   tickPositions,
@@ -31,6 +33,8 @@ import { runFrame, runRow, transcriptEntry } from "./run.builders";
 
 const frames = releaseFrames();
 const entries = entriesBySeq(readOk(releaseTranscript()));
+/** A subagent chain's session uuid. */
+const CHAIN = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
 
 describe("kindOf", () => {
   it.each([
@@ -173,18 +177,20 @@ describe("turnBands", () => {
     );
   });
 
-  it("leaves a subagent's entries out, since its seq names a frame of another chain", () => {
+  it("keys a subagent's entry by its chain and seq, so it never stands in for the run's frame of that seq (#3823)", () => {
     const transcript: RunTranscript = {
       ...releaseTranscript(),
       entries: [
         transcriptEntry({
           seq: "3",
           turn: 9,
-          subagent: { chainRef: "sess_b", type: null },
+          subagent: { chainRef: CHAIN, type: null },
         }),
       ],
     };
-    expect(entriesBySeq(readOk(transcript)).size).toBe(0);
+    const map = entriesBySeq(readOk(transcript));
+    expect(map.get("3")).toBeUndefined();
+    expect(map.get(`${CHAIN}:3`)?.turn).toBe(9);
   });
 });
 
@@ -197,6 +203,106 @@ describe("timelineMarks", () => {
   });
 });
 
+// #2953: a wrapped run records an operator's command as
+// `oxagen:command_applied`, with the command as the frame's decision
+// (ADR-056). The player looked for a `control.steer` type no store writes, so
+// a real steer drew neither its mark nor the band after it.
+describe("an operator's command on a wrapped run", () => {
+  const COMMAND = "oxagen:command_applied";
+  const instant = (seconds: number) =>
+    new Date(Date.parse("2026-09-15T09:00:00.000Z") + seconds * 1000)
+      .toISOString();
+  const wrapped = (command: string | null) => {
+    const frame = (seq: string, type: string, seconds: number) =>
+      runFrame({ seq, cursor: seq, type, observedAt: instant(seconds) });
+    const page = [
+      frame("1", "llm_call", 0),
+      frame("2", COMMAND, 9),
+      frame("3", "llm_call", 18),
+    ];
+    const byseq = new Map([
+      ["1", transcriptEntry({ seq: "1", turn: 1 })],
+      [
+        "2",
+        transcriptEntry({
+          seq: "2",
+          turn: 2,
+          type: COMMAND,
+          decision:
+            command === null
+              ? null
+              : {
+                  seq: "2",
+                  decision: command,
+                  type: COMMAND,
+                  source: "human",
+                  harness: false,
+                  at: instant(9),
+                  rules: [],
+                  taint: null,
+                },
+        }),
+      ],
+      ["3", transcriptEntry({ seq: "3", turn: 2 })],
+    ]);
+    return { page, byseq };
+  };
+
+  it("marks a steer and draws the band it opens as after a steer (regression)", () => {
+    const { page, byseq } = wrapped("steer");
+    const xs = tickPositions(page);
+    expect(timelineMarks(page, xs, byseq).map((mark) => mark.kind)).toEqual([
+      "steer",
+    ]);
+    expect(
+      turnBands(page, xs, byseq).map((band) => [band.turn, band.afterSteer]),
+    ).toEqual([
+      [1, false],
+      [2, true],
+    ]);
+  });
+
+  it("marks a message the way it marks a steer", () => {
+    const { page, byseq } = wrapped("message");
+    const xs = tickPositions(page);
+    expect(timelineMarks(page, xs, byseq)).toHaveLength(1);
+  });
+
+  it("marks no pause, and nothing when the transcript did not carry the command (negative)", () => {
+    for (const command of ["pause", null]) {
+      const { page, byseq } = wrapped(command);
+      const xs = tickPositions(page);
+      expect(timelineMarks(page, xs, byseq)).toEqual([]);
+      expect(turnBands(page, xs, byseq).some((b) => b.afterSteer)).toBe(false);
+    }
+  });
+
+  it("presents each command as control.<command> and any other frame as recorded", () => {
+    for (const command of [
+      "pause",
+      "resume",
+      "cancel",
+      "steer",
+      "message",
+      "kill",
+    ]) {
+      const { byseq } = wrapped(command);
+      expect(controlOf(COMMAND, byseq.get("2"))).toBe(command);
+      expect(presentedType(COMMAND, byseq.get("2"))).toBe(
+        `control.${command}`,
+      );
+    }
+    expect(controlOf("control.pause", undefined)).toBe("pause");
+    expect(presentedType("llm_call", undefined)).toBe("llm_call");
+    // A command outside the vocabulary, or one the transcript did not carry,
+    // is shown as the store recorded it.
+    const { byseq } = wrapped("refresh_bundle");
+    expect(controlOf(COMMAND, byseq.get("2"))).toBeNull();
+    expect(presentedType(COMMAND, undefined)).toBe(COMMAND);
+    expect(controlOf("control.unknown", undefined)).toBeNull();
+  });
+});
+
 describe("openFrameOf and stepsOf", () => {
   it("opens the first frame shown when the URL names none, or names something that is not a seq", () => {
     expect(openFrameOf(frames, null)).toMatchObject({
@@ -206,6 +312,39 @@ describe("openFrameOf and stepsOf", () => {
     });
     expect(openFrameOf(frames, "../etc")).toMatchObject({ seq: "0", index: 0 });
     expect(openFrameOf([], null)).toBeNull();
+  });
+
+  it("opens a subagent's frame by its chain and seq, which the page of the run's own frames does not hold (#3823)", () => {
+    const open = openFrameOf(frames, `${CHAIN}:3`);
+    expect(open).toEqual({
+      seq: "3",
+      chainRef: CHAIN,
+      index: -1,
+      frame: null,
+      named: true,
+    });
+    if (open === null) throw new Error("no frame");
+    // Its seq counts another chain, so no frame of the page neighbours it.
+    expect(stepsOf(frames, open)).toEqual({
+      first: "0",
+      prev: null,
+      next: null,
+      last: "15",
+    });
+    // A chain spelled in capitals is the same chain.
+    expect(openFrameOf(frames, `${CHAIN.toUpperCase()}:3`)).toMatchObject({
+      chainRef: CHAIN,
+    });
+  });
+
+  it("opens nothing it cannot name: a chain that is not a uuid, or a key with no seq (negative)", () => {
+    for (const body of ["agent-1:3", `${CHAIN}:`, `${CHAIN}:x`, ":3"]) {
+      expect(openFrameOf(frames, body)).toMatchObject({
+        seq: "0",
+        index: 0,
+        named: false,
+      });
+    }
   });
 
   it("steps to the neighbours on the page and ends at its edges", () => {

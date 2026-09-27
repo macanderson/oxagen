@@ -14,6 +14,7 @@ import { runIssuesGet } from "@oxagen/oxagen/contracts/run.issues.get";
 import { runContextGet } from "@oxagen/oxagen/contracts/run.context.get";
 import { runTurnsGet } from "@oxagen/oxagen/contracts/run.turns.get";
 import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
+import { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { kernelRead, captureError } = vi.hoisted(() => ({
@@ -350,6 +351,71 @@ describe("runs.get", () => {
     });
   });
 
+  it("maps a subagent frame's chain to chainRef and leaves the run's own frame without one (#3823)", async () => {
+    const chainRef = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    kernelRead.mockResolvedValue(
+      readOk({
+        run,
+        frames: {
+          frames: [frame, { ...frame, seq: "0", sessionUuid: chainRef }],
+          cursor: null,
+        },
+        witnessFor: null,
+      }),
+    );
+    const read = await runs.get(ctx, "tse_4f0a", { framesAfter: null });
+    expect(
+      read.ok && read.value.frames.frames.map((f) => [f.seq, f.chainRef]),
+    ).toEqual([
+      ["11", undefined],
+      ["0", chainRef],
+    ]);
+  });
+
+  // #3972: the pause get_run answers reaches the header, its issuer's blank
+  // name read as none; a row that carries no pause stays "not read".
+  it("maps the pause get_run answers, a blank issuer name read as none, and leaves an absent one absent", async () => {
+    const pause = {
+      state: "paused",
+      commandId: "tcm_0p",
+      resumeCommandId: null,
+      seq: "41",
+      turn: 3,
+      step: 12,
+      by: { id: "usr_0a", name: " " },
+      issuedAt: "2026-09-15T08:56:00.000Z",
+      appliedAt: "2026-09-15T08:56:04.000Z",
+      reason: "budget review",
+    };
+    kernelRead.mockResolvedValue(
+      readOk({
+        run: { ...run, pause },
+        frames: { frames: [], cursor: null },
+        witnessFor: null,
+      }),
+    );
+    const read = await runs.get(ctx, "tse_4f0a", { framesAfter: null });
+    expect(read.ok && read.value.run.pause).toEqual({
+      ...pause,
+      by: { id: "usr_0a", name: null },
+    });
+    kernelRead.mockResolvedValue(
+      readOk({
+        run: { ...run, pause: null },
+        frames: { frames: [], cursor: null },
+        witnessFor: null,
+      }),
+    );
+    const none = await runs.get(ctx, "tse_4f0a", { framesAfter: null });
+    expect(none.ok && none.value.run.pause).toBeNull();
+    kernelRead.mockResolvedValue(
+      readOk({ run, frames: { frames: [], cursor: null }, witnessFor: null }),
+    );
+    const unread = await runs.get(ctx, "tse_4f0a", { framesAfter: null });
+    expect(unread.ok && "pause" in unread.value.run).toBe(false);
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
   it("passes the frame cursor the URL carried", async () => {
     kernelRead.mockResolvedValue(
       readOk({ run, frames: { frames: [], cursor: null }, witnessFor: null }),
@@ -501,6 +567,31 @@ describe("runs.frameBody", () => {
     expect(await runs.frameBody(ctx, "tse_4f0a", "999")).toEqual(
       readError("not_found", 404),
     );
+  });
+
+  it("reads a subagent's frame by its chain and seq, and keeps the chain on the body (#3823)", async () => {
+    const chainRef = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    kernelRead.mockResolvedValue(
+      readOk({
+        contentType: "text/plain",
+        bytes: Buffer.from("Looking at the repository.", "utf8").toString(
+          "base64",
+        ),
+        digest: "sha256:9a1b",
+        redactions: [],
+      }),
+    );
+    const read = await runs.frameBody(ctx, "tse_4f0a", "0", chainRef);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runFrameBodyGet,
+      input: { runId: "tse_4f0a", seq: "0", sessionUuid: chainRef },
+      page: "run",
+    });
+    expect(read.ok && read.value).toMatchObject({
+      seq: "0",
+      chainRef,
+      text: "Looking at the repository.",
+    });
   });
 });
 
@@ -1548,6 +1639,101 @@ describe("runs.chain", () => {
     expect(read.value.seals[1]?.terminalStatus).toBe("completed");
   });
 
+  // #3823: each subagent chain is walked on its own and mapped with its
+  // session uuids and the harness's subagent id as references.
+  it("maps each subagent chain with its own gaps, checkpoints and seal", async () => {
+    const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    const ROOT = "0192d4a8-7c1e-7a00-8000-00000000c0de";
+    kernelRead.mockResolvedValue(
+      readOk({
+        runId: "tse_4f0a",
+        hashRule: "tacho.sha256_prev_hash_v1",
+        frameCount: 3,
+        firstSeq: "0",
+        lastSeq: "2",
+        merkleRoot: null,
+        checkpoints: [],
+        gaps: {
+          missingSequences: [],
+          missingFrameCount: 0,
+          missingBodies: 0,
+          recorded: [],
+        },
+        seals: [],
+        enforcementTier: "observe",
+        recordedGrade: null,
+        ladder: [],
+        complete: true,
+        chains: [
+          {
+            sessionUuid: CHILD,
+            parentSessionUuid: ROOT,
+            subagentId: "agent-1",
+            subagentType: "Explore",
+            frameCount: 3,
+            firstSeq: "0",
+            lastSeq: "3",
+            gaps: {
+              missingSequences: [{ from: "2", to: "2" }],
+              missingFrameCount: 1,
+              missingBodies: 0,
+            },
+            checkpoints: [
+              {
+                seq: "1",
+                chainHead: `sha256:${"a".repeat(64)}`,
+                eventCount: 2,
+                signedAt: "2026-09-11T09:02:00.000Z",
+                deviceKeyFingerprint: "dk:abc",
+                platformKeyId: "pk:1",
+                countersignedAt: null,
+                anchorRoot: null,
+                anchoredAt: null,
+              },
+            ],
+            finalHash: `sha256:${"b".repeat(64)}`,
+            sealedAt: "2026-09-11T09:04:00.000Z",
+            complete: true,
+          },
+        ],
+      }),
+    );
+    const read = await runs.chain(ctx, "tse_4f0a");
+    if (!read.ok) throw new Error("expected an ok read");
+    expect(read.value.chains).toEqual([
+      {
+        chainRef: CHILD,
+        parentChainRef: ROOT,
+        subagentRef: "agent-1",
+        subagentType: "Explore",
+        frameCount: 3,
+        firstSeq: "0",
+        lastSeq: "3",
+        gaps: {
+          missingSequences: [{ from: "2", to: "2" }],
+          missingFrameCount: 1,
+          missingBodies: 0,
+        },
+        checkpoints: [
+          {
+            seq: "1",
+            chainHead: `sha256:${"a".repeat(64)}`,
+            eventCount: 2,
+            signedAt: "2026-09-11T09:02:00.000Z",
+            deviceKeyFingerprint: "dk:abc",
+            platformKey: "pk:1",
+            countersignedAt: null,
+            anchorRoot: null,
+            anchoredAt: null,
+          },
+        ],
+        finalHash: `sha256:${"b".repeat(64)}`,
+        sealedAt: "2026-09-11T09:04:00.000Z",
+        complete: true,
+      },
+    ]);
+  });
+
   it("carries a signed seal's archive digest and signature, naming the key by reference (#4000)", async () => {
     const signsOver = [
       "run_id",
@@ -2102,11 +2288,159 @@ describe("runs.outputs", () => {
     });
   });
 
+  it("maps a subagent node's chain to chainRef, beside its own chain's seq (#3823)", async () => {
+    const chainRef = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    kernelRead.mockResolvedValue(
+      readOk({
+        ...outputs,
+        nodes: [node, { ...node, seq: "3", sessionUuid: chainRef }],
+      }),
+    );
+    const read = await runs.outputs(ctx, "tse_4f0a");
+    expect(read.ok && read.value.nodes.map((n) => [n.seq, n.chainRef])).toEqual(
+      [
+        ["7", undefined],
+        ["3", chainRef],
+      ],
+    );
+  });
+
   it("answers record_unmappable and reports once for a node the view refuses (negative)", async () => {
     kernelRead.mockResolvedValue(
       readOk({ ...outputs, nodes: [{ ...node, name: "" }] }),
     );
     expect(await runs.outputs(ctx, "tse_4f0a")).toEqual(
+      readError("record_unmappable", 502),
+    );
+    expect(captureError).toHaveBeenCalledOnce();
+  });
+});
+
+describe("runs.commands", () => {
+  const command = {
+    id: "tcm_0s",
+    runId: "tse_4f0a",
+    agentKey: null,
+    command: "steer",
+    status: "applied",
+    requestedMode: "interrupt",
+    deliveryMode: "next_step",
+    degradedReason: "harness_tier",
+    reason: null,
+    issuedAt: "2026-09-15T08:56:00.000Z",
+    expiresAt: "2026-09-15T09:06:00.000Z",
+    sentAt: "2026-09-15T08:56:02.000Z",
+    acknowledgedAt: "2026-09-15T08:56:05.000Z",
+    appliedAt: "2026-09-15T08:56:05.000Z",
+    appliedAtSeq: 41,
+    detail: null,
+    issuedBy: { id: "usr_0a", name: "Ada Park" },
+    text: "Run the migration tests before you push.",
+  };
+
+  it("reads one run's report at the contract's ceiling and keeps the requested and the delivered mode apart", async () => {
+    kernelRead.mockResolvedValue(readOk({ commands: [command] }));
+    const read = await runs.commands(ctx, { runId: "tse_4f0a" });
+    expect(read).toEqual(readOk({ commands: [command] }));
+    expect(read.ok && read.value.commands[0]).toMatchObject({
+      requestedMode: "interrupt",
+      deliveryMode: "next_step",
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: tachoCommandList,
+      input: { runId: "tse_4f0a", limit: 100 },
+      page: "run",
+    });
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it("reads a broadcast's commands by id, one row per id, and reads a blank issuer name as none", async () => {
+    kernelRead.mockResolvedValue(
+      readOk({
+        commands: [{ ...command, issuedBy: { id: "usr_0a", name: "" } }],
+      }),
+    );
+    const read = await runs.commands(ctx, {
+      commandIds: ["tcm_0s", "tcm_0t", "tcm_0u"],
+    });
+    expect(read.ok && read.value.commands[0]?.issuedBy).toEqual({
+      id: "usr_0a",
+      name: null,
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: tachoCommandList,
+      input: { commandIds: ["tcm_0s", "tcm_0t", "tcm_0u"], limit: 3 },
+      page: "run",
+    });
+  });
+
+  it("reads a broadcast of more ids than one read may name in slices, and keeps the report newest first", async () => {
+    const ids = Array.from({ length: 101 }, (_, i) => `tcm_${String(i)}`);
+    const older = {
+      ...command,
+      id: "tcm_0",
+      issuedAt: "2026-09-15T08:56:00.000Z",
+    };
+    const newer = {
+      ...command,
+      id: "tcm_100",
+      issuedAt: "2026-09-15T08:57:00.000Z",
+    };
+    kernelRead
+      .mockResolvedValueOnce(readOk({ commands: [older] }))
+      .mockResolvedValueOnce(readOk({ commands: [newer] }));
+    const read = await runs.commands(ctx, { commandIds: ids });
+    expect(read.ok && read.value.commands.map((row) => row.id)).toEqual([
+      "tcm_100",
+      "tcm_0",
+    ]);
+    expect(kernelRead).toHaveBeenCalledTimes(2);
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: tachoCommandList,
+      input: { commandIds: ids.slice(0, 100), limit: 100 },
+      page: "run",
+    });
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: tachoCommandList,
+      input: { commandIds: ["tcm_100"], limit: 1 },
+      page: "run",
+    });
+  });
+
+  it("orders commands issued at the same instant by id across slices, as one read would", async () => {
+    const ids = Array.from({ length: 101 }, (_, i) => `tcm_${String(i)}`);
+    const at = "2026-09-15T08:57:00.000Z";
+    kernelRead
+      .mockResolvedValueOnce(
+        readOk({ commands: [{ ...command, id: "tcm_a", issuedAt: at }] }),
+      )
+      .mockResolvedValueOnce(
+        readOk({ commands: [{ ...command, id: "tcm_b", issuedAt: at }] }),
+      );
+    const read = await runs.commands(ctx, { commandIds: ids });
+    expect(read.ok && read.value.commands.map((row) => row.id)).toEqual([
+      "tcm_b",
+      "tcm_a",
+    ]);
+  });
+
+  it("answers a refusal in any slice for the whole broadcast (negative)", async () => {
+    const denied = readError("forbidden", 403);
+    kernelRead
+      .mockResolvedValueOnce(readOk({ commands: [command] }))
+      .mockResolvedValueOnce(denied);
+    const ids = Array.from({ length: 101 }, (_, i) => `tcm_${String(i)}`);
+    expect(await runs.commands(ctx, { commandIds: ids })).toEqual(denied);
+  });
+
+  it("passes a refusal through, and answers record_unmappable once for a row the view refuses (negative)", async () => {
+    const denied = readError("forbidden", 403);
+    kernelRead.mockResolvedValue(denied);
+    expect(await runs.commands(ctx, { runId: "tse_4f0a" })).toEqual(denied);
+    kernelRead.mockResolvedValue(
+      readOk({ commands: [{ ...command, status: "pending" }] }),
+    );
+    expect(await runs.commands(ctx, { runId: "tse_4f0a" })).toEqual(
       readError("record_unmappable", 502),
     );
     expect(captureError).toHaveBeenCalledOnce();

@@ -173,6 +173,43 @@ describe("listInstallationRepositories", () => {
     expect(out.truncated).toBe(true);
   });
 
+  it("walks past MAX_PAGES when the caller raises the bound", async () => {
+    const full = Array.from({ length: 100 }, (_, i) => repo(i));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        makeResponse({ total_count: 900, repositories: full }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const out = await createGitHubClient({
+      token: "t",
+    }).listInstallationRepositories({ maxPages: 7 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(7);
+    expect((fetchMock.mock.calls[6] as [string, unknown])[0]).toBe(
+      "https://api.github.com/installation/repositories?per_page=100&page=7",
+    );
+    expect(out.repositories).toHaveLength(700);
+    expect(out.truncated).toBe(true);
+  });
+
+  it("walks at least one page when the caller passes a bound below one (negative)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        makeResponse({ total_count: 1, repositories: [repo(1)] }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const out = await createGitHubClient({
+      token: "t",
+    }).listInstallationRepositories({ maxPages: 0 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(out.truncated).toBe(false);
+  });
+
   it("treats a missing total_count as exactly what it walked", async () => {
     const fetchMock = vi
       .fn()
