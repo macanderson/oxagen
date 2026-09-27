@@ -949,6 +949,26 @@ type Scope = { orgId: string; workspaceId: string };
 /** A `cnv_` public id; anything else `conversationId` carries is the uuid. */
 const CONVERSATION_PUBLIC_ID = /^cnv_/i;
 
+/** The most code points a title keeps from the first question. */
+const TITLE_MAX_CODE_POINTS = 80;
+
+/**
+ * Name a new conversation after its first question. Runs of whitespace
+ * collapse to one space, and a question past 80 code points is cut and ends
+ * in an ellipsis. The cut counts code points, so it never splits an emoji or
+ * other astral character. A question that is only whitespace leaves the
+ * title null.
+ *
+ * Exported for its own test.
+ */
+export function conversationTitleFrom(question: string): string | null {
+  const text = question.replace(/\s+/g, " ").trim();
+  if (text === "") return null;
+  const codePoints = Array.from(text);
+  if (codePoints.length <= TITLE_MAX_CODE_POINTS) return text;
+  return `${codePoints.slice(0, TITLE_MAX_CODE_POINTS).join("").trimEnd()}…`;
+}
+
 /**
  * Resolve or open the conversation and append the person's message, then
  * load the prior turns as the transcript, newest last, without the message
@@ -1012,7 +1032,7 @@ export async function appendUserMessage(
       .values({
         ...scope,
         userId,
-        title: null,
+        title: conversationTitleFrom(request.content),
         status: "active",
         createdById: userId,
         updatedById: userId,

@@ -13,6 +13,7 @@ import {
   appendAssistantMessage,
   appendUserMessage,
   ConversationNotFoundError,
+  conversationTitleFrom,
 } from "./assistant-turn";
 
 const dialect = new PgDialect();
@@ -158,12 +159,63 @@ describe("appendUserMessage", () => {
     ).toHaveLength(0);
     expect(captured.inserts[0]).toMatchObject({
       table: CONVERSATIONS,
-      values: { userId: USER, status: "active", ...SCOPE },
+      values: {
+        userId: USER,
+        title: "what is live?",
+        status: "active",
+        ...SCOPE,
+      },
     });
     expect(out).toMatchObject({
       conversationId: "new-conversation",
       conversationPublicId: "cnv_new",
     });
+  });
+
+  it("names a new conversation after its first question, with whitespace collapsed", async () => {
+    const { tx, captured } = fakeTx([]);
+    const question = {
+      ...ask(null),
+      content: "  why did\n\nthe deploy\t fail?  ",
+    };
+    await appendUserMessage(tx, SCOPE, USER, question, "chat");
+    expect(captured.inserts[0]?.values.title).toBe("why did the deploy fail?");
+  });
+
+  it("leaves the title of a continued conversation alone", async () => {
+    const { tx, captured } = fakeTx([CONVERSATION]);
+    await appendUserMessage(tx, SCOPE, USER, ask(CONVERSATION.id), "chat");
+    expect(captured.inserts.map((i) => i.table)).not.toContain(CONVERSATIONS);
+    expect(captured.updates.filter((u) => "title" in u.set)).toHaveLength(0);
+  });
+});
+
+describe("conversationTitleFrom", () => {
+  it("keeps a question of 80 code points whole", () => {
+    const question = "a".repeat(80);
+    expect(conversationTitleFrom(question)).toBe(question);
+  });
+
+  it("cuts a longer question to 80 code points and ends it in an ellipsis", () => {
+    const title = conversationTitleFrom("b".repeat(100));
+    expect(title).toBe(`${"b".repeat(80)}…`);
+    expect(Array.from(title ?? "")).toHaveLength(81);
+  });
+
+  it("cuts on a code point, so an emoji at the edge stays whole", () => {
+    // Each emoji is two UTF-16 units, so a cut by string length keeps 40.
+    const title = conversationTitleFrom("😀".repeat(90));
+    expect(title).toBe(`${"😀".repeat(80)}…`);
+  });
+
+  it("drops the space the cut leaves before the ellipsis", () => {
+    const title = conversationTitleFrom(`${"c".repeat(79)} ${"d".repeat(30)}`);
+    expect(title).toBe(`${"c".repeat(79)}…`);
+  });
+
+  it("answers null for a question that is only whitespace", () => {
+    expect(conversationTitleFrom(" \n\t ")).toBeNull();
+    expect(conversationTitleFrom("")).toBeNull();
   });
 });
 
