@@ -401,8 +401,8 @@ export const LAND_ATTEMPTS = 3;
  * 4. Squash-merge pinned to the stamped (or checked) commit, with the
  *    Oxagen-Approved-By, Oxagen-Checks, and Oxagen-Version trailers.
  *
- * A merge the host refuses drops the stamp too, so a retry starts from the
- * head the author pushed.
+ * A merge the host refuses drops the stamp too, as does any other failure
+ * after the stamp lands, so a retry starts from the head the author pushed.
  */
 export async function landSteeringPr(input: LandInput): Promise<Landed> {
   const { host, repo } = input;
@@ -437,47 +437,48 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
       checks = again.checks;
     }
 
+    // Any failure after the stamp lands drops it, so the branch goes back to
+    // the head the checks passed on and a retry does not refuse head_moved.
     let stamp: StampResult | null = null;
-    if (input.layout.layout === "steering") {
-      const at = input.now();
-      stamp = await stampHead({
-        host,
-        repo,
-        number: input.number,
-        branch: input.branch,
-        head,
-        main,
-        settings: input.layout.settings,
-        at,
-        approval: input.approval,
-        mergedBy: input.mergedBy,
-      });
-      await host.reportCheckRun(repo, {
-        name: REQUIRED_CHECK_NAME,
-        headSha: stamp.sha,
-        conclusion: "success",
-        title: "Steering checks passed",
-        summary: `The checks passed on ${head}. This commit adds only Oxagen's stamp: the id and hash of each changed steering record, and ledger line ${stamp.seq} in ${stamp.ledgerPath}.`,
-        startedAt: at.toISOString(),
-        completedAt: input.now().toISOString(),
-      });
-    }
-
-    if ((await host.branchHead(repo, repo.defaultBranch)) !== main) {
-      if (stamp) await host.resetBranch(repo, input.branch, head);
-      continue;
-    }
-
-    const mergedHead = stamp?.sha ?? head;
-    const trailers = mergeTrailers({
-      approvedBy: input.approval.approvedBy,
-      withoutReviewBy: input.approval.withoutReview ? input.mergedBy : null,
-      checks,
-      version: input.version,
-    });
-    let commitSha: string;
     try {
-      commitSha = (
+      if (input.layout.layout === "steering") {
+        const at = input.now();
+        stamp = await stampHead({
+          host,
+          repo,
+          number: input.number,
+          branch: input.branch,
+          head,
+          main,
+          settings: input.layout.settings,
+          at,
+          approval: input.approval,
+          mergedBy: input.mergedBy,
+        });
+        await host.reportCheckRun(repo, {
+          name: REQUIRED_CHECK_NAME,
+          headSha: stamp.sha,
+          conclusion: "success",
+          title: "Steering checks passed",
+          summary: `The checks passed on ${head}. This commit adds only Oxagen's stamp: the id and hash of each changed steering record, and ledger line ${stamp.seq} in ${stamp.ledgerPath}.`,
+          startedAt: at.toISOString(),
+          completedAt: input.now().toISOString(),
+        });
+      }
+
+      if ((await host.branchHead(repo, repo.defaultBranch)) !== main) {
+        if (stamp) await host.resetBranch(repo, input.branch, head);
+        continue;
+      }
+
+      const mergedHead = stamp?.sha ?? head;
+      const trailers = mergeTrailers({
+        approvedBy: input.approval.approvedBy,
+        withoutReviewBy: input.approval.withoutReview ? input.mergedBy : null,
+        checks,
+        version: input.version,
+      });
+      const commitSha = (
         await host.mergePullRequest(repo, {
           number: input.number,
           commitTitle: input.commitTitle,
@@ -485,11 +486,17 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
           commitMessage: trailers,
         })
       ).sha;
+      return {
+        commitSha,
+        mergedHead,
+        checkedHead: head,
+        stamp,
+        attempts: attempt,
+      };
     } catch (err) {
       if (stamp) await dropStamp(host, repo, input.branch, head);
       throw err;
     }
-    return { commitSha, mergedHead, checkedHead: head, stamp, attempts: attempt };
   }
   throw new HandlerError({
     code: "conflict",
@@ -498,7 +505,7 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
   });
 }
 
-/** Point the branch back at the checked head after a refused merge; log a failure. */
+/** Point the branch back at the checked head, dropping the stamp; log a failure. */
 async function dropStamp(
   host: SteeringHost,
   repo: SteeringRepository,
@@ -510,7 +517,7 @@ async function dropStamp(
   } catch (err) {
     logger.warn(
       { err, branch, head },
-      "steering merge queue: the merge was refused and the stamp commit could not be dropped; the next merge refuses head_moved until the branch is reset",
+      "steering merge queue: the stamp commit could not be dropped; the next merge refuses head_moved until the branch is reset",
     );
   }
 }

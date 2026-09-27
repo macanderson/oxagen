@@ -744,6 +744,19 @@ describe("landSteeringPr: a refused merge", () => {
     expect(await gh.branchHead(REPO, pr.branch)).toBe(pr.head);
   });
 
+  it("drops the stamp when a step between the stamp and the merge fails", async () => {
+    const gh = steeringRepo();
+    const pr = await openPr(gh, "a-intel.platform.release-notes");
+    gh.reportCheckRun = vi
+      .fn()
+      .mockRejectedValue(new Error("GitHub API error 502: Bad Gateway"));
+    await expect(land(gh, pr)).rejects.toThrow("502");
+    expect(gh.stamps).toHaveLength(1);
+    expect(gh.resets).toEqual([{ branch: pr.branch, sha: pr.head }]);
+    expect(await gh.branchHead(REPO, pr.branch)).toBe(pr.head);
+    expect(gh.merges).toEqual([]);
+  });
+
   it("still answers the merge's refusal when the stamp cannot be dropped", async () => {
     const gh = steeringRepo();
     const pr = await openPr(gh, "a-intel.platform.release-notes");
