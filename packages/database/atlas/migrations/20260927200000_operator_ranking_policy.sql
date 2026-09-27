@@ -22,7 +22,7 @@ CREATE TABLE "workspace"."operator_ranking_policy" (
 	-- The HMAC key for this workspace's pseudonyms. Never returned.
 	"pseudonym_salt" uuid DEFAULT gen_random_uuid() NOT NULL,
 	-- The user who last changed the setting.
-	"updated_by_user_id" uuid,
+	"updated_by_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "operator_ranking_policy_workspace_id_unique" UNIQUE("workspace_id")

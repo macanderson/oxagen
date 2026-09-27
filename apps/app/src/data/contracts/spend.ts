@@ -11,7 +11,8 @@ const Count = z.number().int().nonnegative();
 const Ratio = z.number().min(0).max(1);
 const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 /** A run's public id (`arun_…` for a ledger run, `tse_…` for a wrapped one). */
-const RunPublicId = z.string().regex(/^(arun|tse)_[0-9a-z]+$/);
+const RUN_PUBLIC_ID = /^(arun|tse)_[0-9a-z]+$/;
+const RunPublicId = z.string().regex(RUN_PUBLIC_ID);
 
 /** An inclusive range of UTC days. */
 export const DayRange = z.object({ from: Day, to: Day });
@@ -193,7 +194,12 @@ export const OperatorRanking = z.object({
       unproductiveShare: Ratio.nullable(),
       runs: z.number().int().positive().nullable(),
       /** The runs behind the figure, largest first. */
-      topRuns: z.array(z.object({ runId: RunPublicId, unproductive: Money })),
+      topRuns: z.array(
+        z.object({
+          runId: PublicId.regex(RUN_PUBLIC_ID),
+          unproductive: Money,
+        }),
+      ),
     }),
   ),
 });

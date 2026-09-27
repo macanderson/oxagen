@@ -60,13 +60,13 @@ export async function writePseudonymPolicy(
         orgId: scope.orgId,
         workspaceId: scope.workspaceId,
         pseudonyms: enabled,
-        updatedByUserId: actorUserId,
+        updatedById: actorUserId,
       })
       .onConflictDoUpdate({
         target: policy.workspaceId,
         set: {
           pseudonyms: enabled,
-          updatedByUserId: actorUserId,
+          updatedById: actorUserId,
           updatedAt: new Date(),
         },
       })

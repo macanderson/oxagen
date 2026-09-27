@@ -4245,7 +4245,7 @@
       "writes": []
     }
   ],
-  "contentHash": "ba63af70bd8320687e42babe43f3aec8ffff9c526092286db6a6d26c9c36241c",
+  "contentHash": "215a3eb197a1e644ea1e5cfc434a159a30128b621f64bb8df2d94463edfcd51a",
   "domains": [
     {
       "name": "agent",
@@ -25073,7 +25073,7 @@
           "type": "uuid"
         },
         {
-          "name": "updated_by_user_id",
+          "name": "updated_by_id",
           "nullable": true,
           "primaryKey": false,
           "type": "uuid"

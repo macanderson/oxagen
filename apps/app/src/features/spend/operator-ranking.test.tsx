@@ -123,8 +123,10 @@ function show(ranking: Parameters<typeof OperatorRankingSection>[0]["ranking"]) 
 }
 
 function rowAt(rank: number): HTMLElement {
-  const hit = document.querySelector<HTMLElement>(`tr[data-rank="${rank}"]`);
-  if (hit === null) throw new Error(`no row ${rank}`);
+  const hit = document.querySelector<HTMLElement>(
+    `tr[data-rank="${String(rank)}"]`,
+  );
+  if (hit === null) throw new Error(`no row ${String(rank)}`);
   return hit;
 }
 
@@ -138,7 +140,7 @@ function rowNamed(name: "unattributed" | "total"): HTMLElement {
 function microsIn(row: HTMLElement): bigint {
   const money = row.querySelector("[data-testid=money]");
   if (money === null) throw new Error("no money in row");
-  const dollars = (money.textContent ?? "").replace(/[^0-9.]/g, "");
+  const dollars = money.textContent.replace(/[^0-9.]/g, "");
   const [whole = "0", cents = "0"] = dollars.split(".");
   return BigInt(whole) * 1_000_000n + BigInt(cents.padEnd(2, "0")) * 10_000n;
 }

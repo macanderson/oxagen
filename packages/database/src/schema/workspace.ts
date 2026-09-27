@@ -384,7 +384,7 @@ export const operatorRankingPolicy = workspaceSchema.table(
       .notNull()
       .default(sql`gen_random_uuid()`),
     // The user who last changed the setting.
-    updatedByUserId: uuid("updated_by_user_id"),
+    updatedById: uuid("updated_by_id"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
