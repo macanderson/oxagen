@@ -1387,6 +1387,36 @@ export function buildProgram(): Command {
       },
     );
 
+  // ── check: the steering PR checks, on a clone before you push ─────────────
+
+  program
+    .command("check")
+    .argument(
+      "[paths...]",
+      "Report only the findings in these files and folders",
+    )
+    .description(
+      "Run the steering PR checks on this clone of a steering repo, before you push",
+    )
+    .option(
+      "--base <ref>",
+      "Compare with this ref instead of origin/HEAD, then origin/main",
+    )
+    .option(
+      "--refresh",
+      "Fetch the published index again, even when the cached copy is fresh",
+    )
+    .option("--json", "Print one JSON object per finding")
+    .action(
+      async (
+        paths: string[],
+        opts: { base?: string; refresh?: boolean; json?: boolean },
+      ) => {
+        const { check } = await import("./commands/check.js");
+        await check(paths, opts);
+      },
+    );
+
   // ── logs: see + debug the OXAGEN_CLI_DEBUG .output stream ────────────────────
 
   program
