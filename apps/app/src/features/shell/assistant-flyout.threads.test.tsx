@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-// The assistant's thread across a reload, a workspace rename, and "New
-// thread" (#4163, #3313). The turn's stream and the thread read are fakes: the
-// read answers the thread the record holds and the workspace id the flyout
-// files it under, so each case shows what the person sees.
+// The assistant's thread across a reload, a workspace rename, "New session"
+// and the session list (#4163, #3313, #4435). The turn's stream and the reads
+// are fakes: the thread read answers the thread the record holds and the
+// workspace id the flyout files it under, and the list answers the sessions,
+// so each case shows what the person sees.
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
@@ -31,7 +32,13 @@ vi.mock("./assistant-stream-client", () => ({
 }));
 vi.mock("./assistant-actions", () => ({ readAssistantReply: vi.fn() }));
 const loadAssistantThread = vi.fn();
-vi.mock("./assistant-thread-actions", () => ({ loadAssistantThread }));
+const listAssistantSessions = vi.fn();
+const openAssistantSession = vi.fn();
+vi.mock("./assistant-thread-actions", () => ({
+  loadAssistantThread,
+  listAssistantSessions,
+  openAssistantSession,
+}));
 // The parked cards have their own tests (assistant-parked-approvals.test.tsx).
 // This stand-in records the workspace and run the flyout hands them.
 const parkedApprovals =
@@ -180,6 +187,8 @@ beforeAll(() => {
 beforeEach(() => {
   askAssistant.mockReset();
   loadAssistantThread.mockReset();
+  listAssistantSessions.mockReset();
+  openAssistantSession.mockReset();
   parkedApprovals.mockReset();
   askAssistant.mockResolvedValue(turn());
   loadAssistantThread.mockResolvedValue(loaded(RECORDED));
@@ -287,7 +296,7 @@ describe("the assistant's thread across a reload", () => {
     );
     const { user } = await openFlyout();
     expect(screen.getByTestId("assistant-thread-status")).toHaveTextContent(
-      "Loading your last thread",
+      "Loading your last session",
     );
     await ask(user, "quick question");
     await screen.findByTestId("assistant-answer");
@@ -314,7 +323,7 @@ describe("the assistant's thread across a reload", () => {
     });
     const { user } = await openFlyout();
     expect(
-      await screen.findByText(/Your last thread could not be loaded/),
+      await screen.findByText(/Your last session could not be loaded/),
     ).toBeTruthy();
     expect(screen.getByTestId("assistant-composer")).not.toBeDisabled();
 
@@ -398,7 +407,7 @@ describe("the assistant's thread across a workspace rename (#3313)", () => {
   });
 });
 
-describe("New thread", () => {
+describe("New session", () => {
   it("empties the thread and opens a new conversation with the next question", async () => {
     const { user } = await openFlyout();
     await screen.findByText("what is live?");
@@ -427,7 +436,7 @@ describe("New thread", () => {
     expect(screen.getByTestId("assistant-composer")).toHaveValue("half typed");
   });
 
-  it("cannot start a new thread while a turn is in flight (negative)", async () => {
+  it("cannot start a new session while a turn is in flight (negative)", async () => {
     askAssistant.mockReturnValue(new Promise(() => undefined));
     const { user } = await openFlyout();
     await screen.findByText("what is live?");
@@ -435,7 +444,7 @@ describe("New thread", () => {
     expect(screen.getByTestId("assistant-new-thread")).toBeDisabled();
   });
 
-  it("a new thread started before the read answers is not replaced by it", async () => {
+  it("a new session started before the read answers is not replaced by it", async () => {
     let answer: (value: unknown) => void = () => undefined;
     loadAssistantThread.mockReturnValue(
       new Promise((resolve) => {
@@ -454,5 +463,262 @@ describe("New thread", () => {
 
     expect(screen.queryByText("what is live?")).toBeNull();
     expect(screen.getByTestId("assistant-intro")).toBeTruthy();
+  });
+});
+
+const listed = (...sessions: Record<string, unknown>[]) => ({
+  ok: true,
+  value: sessions,
+});
+
+/** The restored thread's own row, and an older one with no title. */
+const SESSIONS = [
+  {
+    id: "cnv_01k9x2",
+    title: "what is live?",
+    updatedAt: "2026-09-25T10:00:00.000Z",
+  },
+  { id: "cnv_01k8aa", title: null, updatedAt: "2026-09-21T08:30:00.000Z" },
+];
+
+const OLDER: AssistantThread = {
+  id: "cnv_01k8aa",
+  messages: [
+    {
+      id: "msg_b1",
+      role: "user",
+      text: "which budget is closest to its cap?",
+      runId: null,
+      parked: [],
+      toolCalls: [],
+      stopped: false,
+    },
+    {
+      id: "msg_b2",
+      role: "assistant",
+      text: "The staging budget is at 92 percent.",
+      runId: "arun_01k8",
+      parked: [],
+      toolCalls: [],
+      stopped: false,
+    },
+  ],
+  truncated: false,
+};
+
+describe("the session list (#4435)", () => {
+  it("lists the person's sessions and marks the one on screen", async () => {
+    listAssistantSessions.mockResolvedValue(listed(...SESSIONS));
+    const { user } = await openFlyout();
+    await screen.findByText("what is live?");
+
+    const toggle = screen.getByTestId("assistant-sessions-toggle");
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await user.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(listAssistantSessions).toHaveBeenCalledWith("acme", "core-platform");
+    const rows = await screen.findAllByTestId("assistant-session");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveAttribute("aria-current", "true");
+    expect(rows[0]).toHaveTextContent("what is live?");
+    expect(rows[0]).toHaveTextContent("Current");
+    expect(rows[1]).not.toHaveAttribute("aria-current");
+    expect(rows[1]).toHaveTextContent("Untitled session");
+    // The thread steps aside while the list shows.
+    expect(screen.getByTestId("assistant-thread-view")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+    expect(screen.getByTestId("assistant-sessions-view")).not.toHaveAttribute(
+      "aria-hidden",
+    );
+  });
+
+  it("opens a session, and the next question continues it", async () => {
+    listAssistantSessions.mockResolvedValue(listed(...SESSIONS));
+    openAssistantSession.mockResolvedValue({ ok: true, value: OLDER });
+    const { user } = await openFlyout();
+    await screen.findByText("what is live?");
+    await user.click(screen.getByTestId("assistant-sessions-toggle"));
+    const rows = await screen.findAllByTestId("assistant-session");
+
+    await user.click(rows[1] as HTMLElement);
+
+    expect(openAssistantSession).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "cnv_01k8aa",
+    );
+    expect(
+      await screen.findByText("The staging budget is at 92 percent."),
+    ).toBeTruthy();
+    expect(screen.queryByText("Three runs are live.")).toBeNull();
+    expect(screen.getByTestId("assistant-thread-view")).not.toHaveAttribute(
+      "aria-hidden",
+    );
+    expect(screen.getByTestId("assistant-composer")).toHaveFocus();
+
+    await ask(user, "and production?");
+    expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
+      conversationId: "cnv_01k8aa",
+      content: "and production?",
+    });
+  });
+
+  it("goes back to the thread from its own row without reading it again", async () => {
+    listAssistantSessions.mockResolvedValue(listed(...SESSIONS));
+    const { user } = await openFlyout();
+    await screen.findByText("what is live?");
+    await user.click(screen.getByTestId("assistant-sessions-toggle"));
+    const rows = await screen.findAllByTestId("assistant-session");
+
+    await user.click(rows[0] as HTMLElement);
+
+    expect(openAssistantSession).not.toHaveBeenCalled();
+    expect(screen.getByTestId("assistant-thread-view")).not.toHaveAttribute(
+      "aria-hidden",
+    );
+    expect(screen.getByTestId("assistant-answer")).toHaveTextContent(
+      "Three runs are live.",
+    );
+  });
+
+  it("reads the list again each time it is shown", async () => {
+    listAssistantSessions.mockResolvedValue(listed(...SESSIONS));
+    const { user } = await openFlyout();
+    await screen.findByText("what is live?");
+    const toggle = screen.getByTestId("assistant-sessions-toggle");
+
+    await user.click(toggle);
+    await screen.findAllByTestId("assistant-session");
+    await user.click(toggle);
+    await user.click(toggle);
+
+    await waitFor(() => {
+      expect(listAssistantSessions).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("will not open another session while a turn is in flight (negative)", async () => {
+    askAssistant.mockReturnValue(new Promise(() => undefined));
+    listAssistantSessions.mockResolvedValue(listed(...SESSIONS));
+    const { user } = await openFlyout();
+    await screen.findByText("what is live?");
+    await ask(user, "still thinking?");
+
+    await user.click(screen.getByTestId("assistant-sessions-toggle"));
+    const rows = await screen.findAllByTestId("assistant-session");
+
+    expect(rows[1]).toBeDisabled();
+    expect(rows[0]).not.toBeDisabled();
+    expect(screen.getByTestId("assistant-sessions-status")).toHaveTextContent(
+      "stella is answering",
+    );
+    expect(openAssistantSession).not.toHaveBeenCalled();
+  });
+
+  it("says when there are no sessions yet", async () => {
+    loadAssistantThread.mockResolvedValue(loaded(null));
+    listAssistantSessions.mockResolvedValue(listed());
+    const { user } = await openFlyout();
+
+    await user.click(screen.getByTestId("assistant-sessions-toggle"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("assistant-sessions-status")).toHaveTextContent(
+        "No sessions yet",
+      );
+    });
+    expect(screen.queryByTestId("assistant-session")).toBeNull();
+  });
+
+  it("says a failed read failed, and Try again reads it again (negative)", async () => {
+    listAssistantSessions.mockResolvedValueOnce({
+      ok: false,
+      reason: "unavailable",
+      code: "control_plane_unavailable",
+    });
+    listAssistantSessions.mockResolvedValueOnce(listed(...SESSIONS));
+    const { user } = await openFlyout();
+    await screen.findByText("what is live?");
+    await user.click(screen.getByTestId("assistant-sessions-toggle"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("assistant-sessions-status")).toHaveTextContent(
+        "Your sessions could not be loaded.",
+      );
+    });
+    await user.click(screen.getByTestId("assistant-sessions-retry"));
+
+    expect(await screen.findAllByTestId("assistant-session")).toHaveLength(2);
+    expect(listAssistantSessions).toHaveBeenCalledTimes(2);
+  });
+
+  it("says a session archived since the list was read is gone, and drops it (negative)", async () => {
+    listAssistantSessions.mockResolvedValueOnce(listed(...SESSIONS));
+    listAssistantSessions.mockResolvedValueOnce(listed(SESSIONS[0] ?? {}));
+    openAssistantSession.mockResolvedValue({
+      ok: false,
+      reason: "not_found",
+      code: "conversation_not_found",
+    });
+    const { user } = await openFlyout();
+    await screen.findByText("what is live?");
+    await user.click(screen.getByTestId("assistant-sessions-toggle"));
+    const rows = await screen.findAllByTestId("assistant-session");
+
+    await user.click(rows[1] as HTMLElement);
+
+    expect(
+      await screen.findByTestId("assistant-sessions-open-failed"),
+    ).toHaveTextContent("That session was archived or deleted.");
+    await waitFor(() => {
+      expect(screen.getAllByTestId("assistant-session")).toHaveLength(1);
+    });
+    // The thread on screen is left as it was.
+    expect(screen.getByTestId("assistant-answer")).toHaveTextContent(
+      "Three runs are live.",
+    );
+  });
+
+  it("is accessible with the list shown", async () => {
+    listAssistantSessions.mockResolvedValue(listed(...SESSIONS));
+    const { user } = await openFlyout();
+    await screen.findByText("what is live?");
+    await user.click(screen.getByTestId("assistant-sessions-toggle"));
+    await screen.findAllByTestId("assistant-session");
+    await expectNoAxe(screen.getByTestId("assistant-flyout"));
+  });
+});
+
+describe("a question in an archived session", () => {
+  it("says the session is gone, and Ask again opens a new conversation (negative)", async () => {
+    askAssistant.mockResolvedValueOnce({
+      ok: false,
+      reason: "not_found",
+      code: "conversation_not_found",
+    });
+    const { user } = await openFlyout();
+    await screen.findByText("what is live?");
+
+    await ask(user, "still there?");
+
+    expect(
+      await screen.findByText(/This session was archived or deleted/),
+    ).toBeTruthy();
+    expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
+      conversationId: "cnv_01k9x2",
+    });
+
+    await user.click(screen.getByTestId("assistant-retry"));
+
+    await waitFor(() => {
+      expect(askAssistant).toHaveBeenCalledTimes(2);
+    });
+    expect(askAssistant.mock.calls[1]?.[2]).toMatchObject({
+      conversationId: null,
+      content: "still there?",
+    });
   });
 });

@@ -367,7 +367,7 @@ export function toolsSource(reads: ToolsReads) {
     };
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse, named: refuse },
-    conversations: { latest: refuse },
+    conversations: { latest: refuse, list: refuse, byId: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
       context: refuse,

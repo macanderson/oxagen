@@ -116,7 +116,7 @@
 // container renders on every pass and only its contents are conditional: a
 // polite region inserted in the same commit as its own text is announced
 // unreliably.
-import { CircleAlert } from "lucide-react";
+import { CircleAlert, List, SquarePen } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
@@ -158,10 +158,10 @@ import {
   AssistantSendOrStop,
   requestAssistantStop,
 } from "./assistant-send-or-stop";
+import { AssistantSessions } from "./assistant-sessions";
 import { AssistantSuggestions } from "./assistant-suggestions";
 import { AssistantToolCalls } from "./assistant-tool-calls";
 import { AssistantThinking } from "./assistant-thinking";
-import { AssistantThreadBar } from "./assistant-thread-bar";
 import {
   type RestoredEntry,
   type ThreadState,
@@ -308,6 +308,7 @@ type Refusal =
   | "unrecorded"
   | "aborted"
   | "model"
+  | "archived"
   | "unavailable";
 
 /** The refusals worth asking again: the service, not the question, failed. */
@@ -316,6 +317,7 @@ const RETRYABLE: ReadonlySet<Refusal> = new Set([
   "unrecorded",
   "aborted",
   "model",
+  "archived",
   "unavailable",
 ]);
 
@@ -326,6 +328,35 @@ const RETRYABLE: ReadonlySet<Refusal> = new Set([
  * `md` (48rem), the breakpoint the class list below switches on.
  */
 const COVERS_THE_APP = "(max-width: 47.99rem)";
+
+/** The header's icon buttons: the session list, a new session, and close. */
+const HEADER_BUTTON =
+  "grid size-7 flex-none place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 aria-pressed:bg-secondary aria-pressed:text-foreground";
+
+/**
+ * The thread and the session list share the space under the header, one over
+ * the other. The one going out slides a little toward its side and fades, and
+ * the one coming in slides back from the other side. Hidden only once the
+ * slide has finished, so it never blinks out mid-transition. With reduced
+ * motion the two only fade.
+ */
+const PANE_SHOWN =
+  "absolute inset-0 flex flex-col transition-[translate,opacity,visibility] duration-200 ease-out motion-reduce:translate-x-0 visible translate-x-0 opacity-100";
+/** The thread while the list shows: out to the left. */
+const THREAD_AWAY =
+  "absolute inset-0 flex flex-col transition-[translate,opacity,visibility] duration-200 ease-out motion-reduce:translate-x-0 pointer-events-none invisible -translate-x-6 opacity-0";
+/** The list while the thread shows: out to the right. */
+const SESSIONS_AWAY =
+  "absolute inset-0 flex flex-col transition-[translate,opacity,visibility] duration-200 ease-out motion-reduce:translate-x-0 pointer-events-none invisible translate-x-6 opacity-0";
+
+/** Focus the composer, or `fallback` while a turn in flight disables it. */
+function focusComposerOr(
+  composer: HTMLTextAreaElement | null,
+  fallback: HTMLElement | null,
+): void {
+  if (composer !== null && !composer.disabled) composer.focus();
+  else fallback?.focus();
+}
 
 /**
  * How close to the bottom still counts as reading the newest turn. A few
@@ -449,6 +480,8 @@ function refusalKey(result: Refused): Refusal {
       return result.code === "engine_aborted" ? "aborted" : "unavailable";
     case "not_found":
     case "unavailable":
+      // The conversation the turn continues was archived or deleted.
+      if (result.code === "conversation_not_found") return "archived";
       if (result.code === "engine_unavailable") return "engine";
       if (result.code === "assistant_run_not_recorded") return "unrecorded";
       if (result.code === "model_call_failed") return "model";
@@ -527,6 +560,8 @@ function RefusalText({ code, org }: { code: Refusal; org: string | null }) {
       return <>{t("aborted")}</>;
     case "model":
       return <>{t("model")}</>;
+    case "archived":
+      return <>{t("archived")}</>;
     case "unavailable":
       return <>{t("unavailable")}</>;
   }
@@ -563,7 +598,7 @@ export function AssistantFlyout({
   // the person is looking at when it resolves, so a reply cannot land in the
   // wrong conversation at any timing. The routing is structural, not a race
   // the code has to win. `scope` is null on an organization page.
-  const { scope, status, threadOf, updateThread, startNewThread } =
+  const { scope, status, threadOf, updateThread, startNewThread, openThread } =
     useAssistantThreads<Entry>({
       org,
       ws,
@@ -755,6 +790,32 @@ export function AssistantFlyout({
 
   const navigate = useNavigate();
   const inWorkspace = scope !== null;
+
+  // What fills the panel under the header: the thread, or the list of the
+  // person's sessions in the workspace (#4435). An organization page has no
+  // list, so there the thread shows whatever this says.
+  const [view, setView] = useState<"thread" | "sessions">("thread");
+  const listing = view === "sessions" && inWorkspace;
+  const listToggleRef = useRef<HTMLButtonElement>(null);
+  // Back to the thread from inside the list, focus goes to the composer: the
+  // list goes inert, and focus left on one of its rows would fall to the
+  // body. While a turn is in flight the composer is disabled, so focus goes
+  // to the list toggle instead. Moved after the commit, once the thread is no
+  // longer inert.
+  const focusComposerRef = useRef(false);
+  useEffect(() => {
+    if (view !== "thread" || !focusComposerRef.current) return;
+    focusComposerRef.current = false;
+    focusComposerOr(composerRef.current, listToggleRef.current);
+  }, [view]);
+  function showThread() {
+    if (view === "thread") {
+      focusComposerOr(composerRef.current, listToggleRef.current);
+      return;
+    }
+    focusComposerRef.current = true;
+    setView("thread");
+  }
   // Whether stella's engine can take a turn, read when the panel opens and
   // held against Send while it cannot (#3227, use-engine-health.ts).
   const engine = useEngineHealth(org, ws, assistantOpen);
@@ -947,6 +1008,14 @@ export function AssistantFlyout({
         // The turn found the engine down, so read it again past the cache:
         // the line above the composer then says so before the next question.
         if (refusalKey(result) === "engine") void engine.check();
+        // The conversation was archived or deleted, so "Ask again" and the
+        // next question open a new one.
+        if (refusalKey(result) === "archived")
+          updateThread(asked, (t) =>
+            t.conversationId === conversationId
+              ? { ...t, conversationId: null }
+              : t,
+          );
       }
     } catch {
       answering(() => ({
@@ -1061,7 +1130,7 @@ export function AssistantFlyout({
             "invisible -translate-x-full opacity-0 transition-[translate,opacity,visibility]"
       }`}
     >
-      <div className="flex flex-none items-center gap-2.5 border-b border-border px-4 py-3">
+      <div className="flex flex-none items-center gap-1 px-4 py-3">
         {/*
           The heading is the stella wordmark. Its name comes from the mark's
           title, so the dialog is still labelled "stella" to a screen reader,
@@ -1070,7 +1139,7 @@ export function AssistantFlyout({
         */}
         <h2
           id={`${ASSISTANT_PANEL_ID}-title`}
-          className="flex items-center text-app-raised-fg"
+          className="mr-auto flex items-center text-app-raised-fg"
         >
           <StellaWordmark
             title={t("label")}
@@ -1078,299 +1147,402 @@ export function AssistantFlyout({
             data-testid="assistant-wordmark"
           />
         </h2>
+        {/*
+          The session list and a new session, the pair ChatGPT and Claude put
+          at the top of a chat (#4435). Both need a workspace: a session is a
+          conversation in one. A new session is refused while a turn is in
+          flight, and has nothing to do on an empty thread that is already on
+          screen.
+        */}
+        {inWorkspace ? (
+          <>
+            <button
+              ref={listToggleRef}
+              type="button"
+              data-testid="assistant-sessions-toggle"
+              aria-label={t("sessions.title")}
+              title={t("sessions.title")}
+              aria-pressed={listing}
+              aria-controls={`${ASSISTANT_PANEL_ID}-sessions`}
+              onClick={() => {
+                setView(listing ? "thread" : "sessions");
+              }}
+              className={HEADER_BUTTON}
+            >
+              <List aria-hidden="true" className="size-4" />
+            </button>
+            <button
+              type="button"
+              data-testid="assistant-new-thread"
+              aria-label={t("thread.new")}
+              title={t("thread.new")}
+              disabled={
+                pending ||
+                (!listing &&
+                  entries.length === 0 &&
+                  thread.conversationId === null)
+              }
+              onClick={() => {
+                startNewThread();
+                showThread();
+              }}
+              className={HEADER_BUTTON}
+            >
+              <SquarePen aria-hidden="true" className="size-4" />
+            </button>
+          </>
+        ) : null}
         <button
           ref={closeRef}
           type="button"
           aria-label={t("close")}
+          title={t("close")}
           onClick={() => {
             setAssistantOpen(false);
           }}
-          className="ml-auto rounded-sm p-1 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          className={HEADER_BUTTON}
         >
           <span aria-hidden="true">✕</span>
         </button>
       </div>
 
-      {inWorkspace ? (
-        <AssistantThreadBar
-          status={status}
-          canStartNew={
-            !pending && (entries.length > 0 || thread.conversationId !== null)
-          }
-          onNewThread={startNewThread}
-        />
-      ) : null}
-
       {/*
-        The conversation, and the live region that announces it. `role="log"`
-        is polite and reads what is added, which is what an answer arriving
-        while focus is still on the composer needs; a refusal keeps its own
-        `role="alert"`, which is assertive and interrupts.
-
-        The region is this container, which renders on every pass, rather than
-        the list inside it, which appears with the first turn: a polite region
-        inserted in the same commit as the text it holds is announced
-        unreliably, so only the contents may be conditional.
+        Where the thread stands: the read that restores it when the flyout
+        opens is out, or failed (#4163). A polite live region that renders on
+        every pass, with only its text conditional, and no height while it has
+        nothing to say.
       */}
-      <div
-        ref={logRef}
-        role="log"
-        className="min-h-0 flex-1 overflow-y-auto p-4"
-        onScroll={(e) => {
-          const log = e.currentTarget;
-          pinnedRef.current =
-            log.scrollHeight - log.scrollTop - log.clientHeight < PIN_SLACK_PX;
-        }}
+      <p
+        role="status"
+        data-testid="assistant-thread-status"
+        className="flex-none px-4 pb-2 text-[12px] text-muted-foreground empty:pb-0"
       >
-        {entries.length === 0 ? (
+        {status === "loading"
+          ? t("thread.loading")
+          : status === "failed"
+            ? t("thread.loadFailed")
+            : null}
+      </p>
+
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        <div
+          data-testid="assistant-thread-view"
+          inert={listing}
+          aria-hidden={listing ? true : undefined}
+          className={listing ? THREAD_AWAY : PANE_SHOWN}
+        >
+          {/*
+            The conversation, and the live region that announces it.
+            `role="log"` is polite and reads what is added, which is what an
+            answer arriving while focus is still on the composer needs; a
+            refusal keeps its own `role="alert"`, which is assertive and
+            interrupts.
+
+            The region is this container, which renders on every pass, rather
+            than the list inside it, which appears with the first turn: a
+            polite region inserted in the same commit as the text it holds is
+            announced unreliably, so only the contents may be conditional.
+          */}
           <div
-            className="flex flex-col gap-2 py-6"
-            data-testid="assistant-intro"
+            ref={logRef}
+            role="log"
+            className="min-h-0 flex-1 overflow-y-auto p-4"
+            onScroll={(e) => {
+              const log = e.currentTarget;
+              const gap = log.scrollHeight - log.scrollTop - log.clientHeight;
+              pinnedRef.current = gap < PIN_SLACK_PX;
+            }}
           >
-            <h3 className="text-sm font-semibold">{t("intro.title")}</h3>
-            <p className="text-sm text-muted-foreground">{t("intro.body")}</p>
-            <AssistantSuggestions />
-          </div>
-        ) : (
-          <ol className="flex flex-col gap-3" data-testid="assistant-log">
-            {entries.map((entry) => (
-              <li key={entry.id}>
-                {entry.kind === "asked" ? (
-                  <p className="ml-auto w-fit max-w-[85%] rounded-lg bg-secondary px-3 py-2 text-sm text-secondary-foreground">
-                    {entry.text}
-                  </p>
-                ) : entry.kind === "answering" ? (
-                  <AssistantAnswering text={entry.text} tools={entry.tools} />
-                ) : entry.kind === "dropped" ? (
-                  <AssistantDropped
-                    text={entry.text}
-                    runId={entry.runId}
-                    load={entry.load}
-                    org={entry.org}
-                    ws={entry.ws}
-                    retryDisabled={pending}
-                    onLoad={() => {
-                      if (shownScope !== null)
-                        void loadReply(shownScope, entry);
-                    }}
-                    onRetry={() => {
-                      void send(entry.question, { fromDraft: false });
-                    }}
-                  />
-                ) : entry.kind === "answered" ? (
-                  <div data-testid="assistant-answer">
-                    <AssistantMarkdown>{entry.text}</AssistantMarkdown>
-                    {entry.stopped === true ? (
-                      <p
-                        data-testid="assistant-stopped"
-                        className="mt-1 text-[12px] text-muted-foreground"
-                      >
-                        {t("stopped")}
+            {entries.length === 0 ? (
+              <div
+                className="flex flex-col gap-2 py-6"
+                data-testid="assistant-intro"
+              >
+                <h3 className="text-[13px] leading-5 font-semibold">
+                  {t("intro.title")}
+                </h3>
+                <p className="text-[13px] leading-5 text-muted-foreground">
+                  {t("intro.body")}
+                </p>
+                <AssistantSuggestions />
+              </div>
+            ) : (
+              <ol className="flex flex-col gap-3" data-testid="assistant-log">
+                {entries.map((entry) => (
+                  <li key={entry.id}>
+                    {entry.kind === "asked" ? (
+                      <p className="ml-auto w-fit max-w-[85%] rounded-lg bg-secondary px-3 py-2 text-[13px] leading-5 text-secondary-foreground">
+                        {entry.text}
                       </p>
-                    ) : null}
-                    <p
-                      data-testid="assistant-recorded-as"
-                      className="mt-1 font-mono text-[11px] text-muted-foreground"
-                    >
-                      {t("recordedAs")}{" "}
-                      {org !== null && ws !== null ? (
-                        <SafeLink
-                          to={routes.run(org, ws, entry.runId)}
-                          className={linkText}
-                        >
-                          {entry.runId}
-                        </SafeLink>
-                      ) : (
-                        entry.runId
-                      )}
-                    </p>
-                    <AssistantToolCalls calls={entry.toolCalls} />
-                    {/* What the run cost, from its record (#4167). */}
-                    {shownScope === null ? null : (
-                      <AssistantReplyCost
-                        scope={shownScope}
+                    ) : entry.kind === "answering" ? (
+                      <AssistantAnswering
+                        text={entry.text}
+                        tools={entry.tools}
+                      />
+                    ) : entry.kind === "dropped" ? (
+                      <AssistantDropped
+                        text={entry.text}
                         runId={entry.runId}
-                      />
-                    )}
-                    {entry.parked.length === 0 ? null : (
-                      <p
-                        data-testid="assistant-parked"
-                        className="mt-1.5 rounded-md border border-border px-2 py-1.5 text-[12px] text-muted-foreground"
-                      >
-                        {t("parked", { count: entry.parked.length })}
-                      </p>
-                    )}
-                    {/* Each parked write as a card with Approve and Deny (#4162). */}
-                    {entry.parked.length === 0 ||
-                    threadOrg === undefined ||
-                    threadWs === undefined ? null : (
-                      <AssistantParkedApprovals
-                        org={threadOrg}
-                        ws={threadWs}
-                        runId={entry.runId}
-                        cards={entry.parked}
-                      />
-                    )}
-                    {/*
-                      Useful or wrong, recorded against the run (#4169). Only
-                      inside a workspace, like the run link: the vote names the
-                      workspace the thread was asked in. A stopped reply keeps
-                      its controls: the turn still saved an assistant message
-                      under this run (#4164), so the vote resolves to it.
-                    */}
-                    {(() => {
-                      const conversation =
-                        entry.conversationId ?? thread.conversationId;
-                      return org !== null &&
-                        ws !== null &&
-                        conversation !== null ? (
-                        <AssistantReplyFeedback
-                          org={org}
-                          ws={ws}
-                          conversationId={conversation}
-                          runId={entry.runId}
-                        />
-                      ) : null;
-                    })()}
-                  </div>
-                ) : (
-                  <div>
-                    <p
-                      role="alert"
-                      data-testid={`assistant-${entry.code}`}
-                      className="flex items-start gap-2 text-sm text-error-ink"
-                    >
-                      <CircleAlert
-                        aria-hidden="true"
-                        className="mt-0.5 size-4 flex-none text-error"
-                      />
-                      <span>
-                        <RefusalText code={entry.code} org={org} />
-                      </span>
-                    </p>
-                    {entry.detail === null ? null : (
-                      <p
-                        data-testid="assistant-refusal-code"
-                        className="mt-1 ml-6 font-mono text-[11px] text-muted-foreground"
-                      >
-                        {entry.detail}
-                      </p>
-                    )}
-                    {RETRYABLE.has(entry.code) && inWorkspace ? (
-                      <button
-                        type="button"
-                        data-testid="assistant-retry"
-                        disabled={pending || engineDown}
-                        onClick={() => {
+                        load={entry.load}
+                        org={entry.org}
+                        ws={entry.ws}
+                        retryDisabled={pending}
+                        onLoad={() => {
+                          if (shownScope !== null)
+                            void loadReply(shownScope, entry);
+                        }}
+                        onRetry={() => {
                           void send(entry.question, { fromDraft: false });
                         }}
-                        className={`mt-1.5 ml-6 text-[12px] ${linkText} disabled:opacity-60`}
-                      >
-                        {t("retry")}
-                      </button>
-                    ) : null}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
-        {pending ? <AssistantThinking label={t("thinking")} /> : null}
-      </div>
+                      />
+                    ) : entry.kind === "answered" ? (
+                      <div data-testid="assistant-answer">
+                        <AssistantMarkdown>{entry.text}</AssistantMarkdown>
+                        {entry.stopped === true ? (
+                          <p
+                            data-testid="assistant-stopped"
+                            className="mt-1 text-[12px] text-muted-foreground"
+                          >
+                            {t("stopped")}
+                          </p>
+                        ) : null}
+                        <p
+                          data-testid="assistant-recorded-as"
+                          className="mt-1 font-mono text-[11px] text-muted-foreground"
+                        >
+                          {t("recordedAs")}{" "}
+                          {org !== null && ws !== null ? (
+                            <SafeLink
+                              to={routes.run(org, ws, entry.runId)}
+                              className={linkText}
+                            >
+                              {entry.runId}
+                            </SafeLink>
+                          ) : (
+                            entry.runId
+                          )}
+                        </p>
+                        <AssistantToolCalls calls={entry.toolCalls} />
+                        {/* What the run cost, from its record (#4167). */}
+                        {shownScope === null ? null : (
+                          <AssistantReplyCost
+                            scope={shownScope}
+                            runId={entry.runId}
+                          />
+                        )}
+                        {entry.parked.length === 0 ? null : (
+                          <p
+                            data-testid="assistant-parked"
+                            className="mt-1.5 rounded-md border border-border px-2 py-1.5 text-[12px] text-muted-foreground"
+                          >
+                            {t("parked", { count: entry.parked.length })}
+                          </p>
+                        )}
+                        {/* Each parked write as a card, with Approve and Deny
+                            (#4162). */}
+                        {entry.parked.length === 0 ||
+                        threadOrg === undefined ||
+                        threadWs === undefined ? null : (
+                          <AssistantParkedApprovals
+                            org={threadOrg}
+                            ws={threadWs}
+                            runId={entry.runId}
+                            cards={entry.parked}
+                          />
+                        )}
+                        {/*
+                          Useful or wrong, recorded against the run (#4169).
+                          Only inside a workspace, like the run link: the vote
+                          names the workspace the thread was asked in. A
+                          stopped reply keeps its controls: the turn still
+                          saved an assistant message under this run (#4164),
+                          so the vote resolves to it.
+                        */}
+                        {(() => {
+                          const conversation =
+                            entry.conversationId ?? thread.conversationId;
+                          return org !== null &&
+                            ws !== null &&
+                            conversation !== null ? (
+                            <AssistantReplyFeedback
+                              org={org}
+                              ws={ws}
+                              conversationId={conversation}
+                              runId={entry.runId}
+                            />
+                          ) : null;
+                        })()}
+                      </div>
+                    ) : (
+                      <div>
+                        <p
+                          role="alert"
+                          data-testid={`assistant-${entry.code}`}
+                          className="flex items-start gap-2 text-[13px] leading-5 text-error-ink"
+                        >
+                          <CircleAlert
+                            aria-hidden="true"
+                            className="mt-0.5 size-4 flex-none text-error"
+                          />
+                          <span>
+                            <RefusalText code={entry.code} org={org} />
+                          </span>
+                        </p>
+                        {entry.detail === null ? null : (
+                          <p
+                            data-testid="assistant-refusal-code"
+                            className="mt-1 ml-6 font-mono text-[11px] text-muted-foreground"
+                          >
+                            {entry.detail}
+                          </p>
+                        )}
+                        {RETRYABLE.has(entry.code) && inWorkspace ? (
+                          <button
+                            type="button"
+                            data-testid="assistant-retry"
+                            disabled={pending || engineDown}
+                            onClick={() => {
+                              void send(entry.question, { fromDraft: false });
+                            }}
+                            className={`mt-1.5 ml-6 text-[12px] ${linkText} disabled:opacity-60`}
+                          >
+                            {t("retry")}
+                          </button>
+                        ) : null}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+            {pending ? <AssistantThinking label={t("thinking")} /> : null}
+          </div>
 
-      <div className="flex-none border-t border-border px-3 py-3">
-        {inWorkspace ? (
-          <form onSubmit={onSubmit}>
-            <AssistantEngineNotice
-              health={engine}
-              onRecovered={() => {
-                composerRef.current?.focus();
-              }}
-            />
-            <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-3 py-2">
-              <textarea
-                ref={composerRef}
-                rows={2}
-                maxLength={ASSISTANT_CONTENT_MAX}
-                value={draft}
-                disabled={pending}
-                aria-label={t("composer.label")}
-                aria-describedby={`${ASSISTANT_PANEL_ID}-send-hint`}
-                placeholder={t("composer.placeholder")}
-                data-testid="assistant-composer"
-                onChange={(e) => {
-                  if (shownScope === null) return;
-                  const value = e.target.value;
-                  updateThread(shownScope, (t) => ({
-                    ...t,
-                    draft: value,
-                    draftTooLong: false,
-                  }));
-                }}
-                onKeyDown={(e) => {
-                  if (composerKeyAction(e, enterToSubmit) !== "send") return;
-                  // A send adds no line, even when there is nothing to send.
-                  // The submit path refuses an empty draft, a turn in flight,
-                  // and a draft over the limit, as it does for the Send button.
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
-                }}
-                className="min-h-10 flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
-              />
-              <AssistantSendOrStop
-                stop={
-                  running === null
-                    ? null
-                    : {
-                        onStop: () => {
-                          void stop();
-                        },
-                        stopping: stopping === running.id,
-                      }
-                }
-                sendDisabled={pending || engineDown || draft.trim() === ""}
-                unavailableReasonId={
-                  engineDown ? ASSISTANT_ENGINE_REASON_ID : null
-                }
-              />
-            </div>
-            {/*
-              The send key for the person's setting. The app does not detect
-              the platform, so the modifier names both Cmd and Ctrl.
-            */}
-            <p
-              id={`${ASSISTANT_PANEL_ID}-send-hint`}
-              data-testid="assistant-send-hint"
-              className="mt-1.5 px-1 text-[11px] text-muted-foreground"
-            >
-              {enterToSubmit
-                ? t("composer.sendHintEnter")
-                : t("composer.sendHintModEnter")}
-            </p>
-            {running !== null && stopFailed === running.id ? (
+          <div className="flex-none border-t border-border px-3 py-3">
+            {inWorkspace ? (
+              <form onSubmit={onSubmit}>
+                <AssistantEngineNotice
+                  health={engine}
+                  onRecovered={() => {
+                    composerRef.current?.focus();
+                  }}
+                />
+                <div className="flex items-end gap-2 rounded-lg border border-border bg-background px-3 py-2">
+                  <textarea
+                    ref={composerRef}
+                    rows={2}
+                    maxLength={ASSISTANT_CONTENT_MAX}
+                    value={draft}
+                    disabled={pending}
+                    aria-label={t("composer.label")}
+                    aria-describedby={`${ASSISTANT_PANEL_ID}-send-hint`}
+                    placeholder={t("composer.placeholder")}
+                    data-testid="assistant-composer"
+                    onChange={(e) => {
+                      if (shownScope === null) return;
+                      const value = e.target.value;
+                      updateThread(shownScope, (t) => ({
+                        ...t,
+                        draft: value,
+                        draftTooLong: false,
+                      }));
+                    }}
+                    onKeyDown={(e) => {
+                      if (composerKeyAction(e, enterToSubmit) !== "send")
+                        return;
+                      // A send adds no line, even when there is nothing to
+                      // send. The submit path refuses an empty draft, a turn
+                      // in flight, and a draft over the limit, as it does for
+                      // the Send button.
+                      e.preventDefault();
+                      e.currentTarget.form?.requestSubmit();
+                    }}
+                    className="min-h-10 flex-1 resize-none bg-transparent text-[13px] leading-5 text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed"
+                  />
+                  <AssistantSendOrStop
+                    stop={
+                      running === null
+                        ? null
+                        : {
+                            onStop: () => {
+                              void stop();
+                            },
+                            stopping: stopping === running.id,
+                          }
+                    }
+                    sendDisabled={pending || engineDown || draft.trim() === ""}
+                    unavailableReasonId={
+                      engineDown ? ASSISTANT_ENGINE_REASON_ID : null
+                    }
+                  />
+                </div>
+                {/*
+                  The send key for the person's setting. The app does not detect
+                  the platform, so the modifier names both Cmd and Ctrl.
+                */}
+                <p
+                  id={`${ASSISTANT_PANEL_ID}-send-hint`}
+                  data-testid="assistant-send-hint"
+                  className="mt-1.5 px-1 text-[11px] text-muted-foreground"
+                >
+                  {enterToSubmit
+                    ? t("composer.sendHintEnter")
+                    : t("composer.sendHintModEnter")}
+                </p>
+                {running !== null && stopFailed === running.id ? (
+                  <p
+                    role="alert"
+                    data-testid="assistant-stop-failed"
+                    className="mt-2 text-[13px] leading-5 text-muted-foreground"
+                  >
+                    {t("composer.stopFailed")}
+                  </p>
+                ) : null}
+                {thread.draftTooLong ? (
+                  <p
+                    role="alert"
+                    className="mt-2 text-[13px] leading-5 text-muted-foreground"
+                  >
+                    {t("composer.draftTooLong")}
+                  </p>
+                ) : null}
+              </form>
+            ) : (
               <p
-                role="alert"
-                data-testid="assistant-stop-failed"
-                className="mt-2 text-sm text-muted-foreground"
+                data-testid="assistant-needs-workspace"
+                className="flex items-start gap-2 text-[13px] text-muted-foreground"
               >
-                {t("composer.stopFailed")}
+                <StellaIcon className="mt-0.5 size-4 flex-none" />
+                <span>{t("needsWorkspace")}</span>
               </p>
-            ) : null}
-            {thread.draftTooLong ? (
-              <p role="alert" className="mt-2 text-sm text-muted-foreground">
-                {t("composer.draftTooLong")}
-              </p>
-            ) : null}
-          </form>
-        ) : (
-          <p
-            data-testid="assistant-needs-workspace"
-            className="flex items-start gap-2 text-[13px] text-muted-foreground"
+            )}
+          </div>
+        </div>
+        {org !== null && ws !== null ? (
+          <div
+            id={`${ASSISTANT_PANEL_ID}-sessions`}
+            data-testid="assistant-sessions-view"
+            inert={!listing}
+            aria-hidden={listing ? undefined : true}
+            className={listing ? PANE_SHOWN : SESSIONS_AWAY}
           >
-            <StellaIcon className="mt-0.5 size-4 flex-none" />
-            <span>{t("needsWorkspace")}</span>
-          </p>
-        )}
+            <AssistantSessions
+              key={`${org}/${ws}`}
+              org={org}
+              ws={ws}
+              shown={assistantOpen && listing}
+              currentId={thread.conversationId}
+              pending={pending}
+              onOpened={(opened) => {
+                if (scope === null) return;
+                openThread(scope, opened);
+                pinnedRef.current = true;
+                showThread();
+              }}
+              onShowCurrent={showThread}
+            />
+          </div>
+        ) : null}
       </div>
       {/*
         The right edge, last in the tab order, after the composer. A pointer

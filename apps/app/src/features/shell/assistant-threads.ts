@@ -25,11 +25,16 @@
 // typed meanwhile. A stand-in the person has already used is kept as it is,
 // because it now holds a conversation of its own.
 //
-// "New thread" empties the thread on screen and forgets its conversation id,
+// "New session" empties the thread on screen and forgets its conversation id,
 // so the next question opens a new conversation. The old one stays on the
 // record, and the next reload restores whichever of the two was asked in
 // last. A read that fails leaves the stand-in in place and says so. The next
 // time the flyout opens, it reads again.
+//
+// Opening a session from the list (#4435) puts that conversation on screen in
+// place of the thread there, and the next question continues it. A stand-in
+// that holds an opened session counts as used, so the first read does not
+// replace it when it lands.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AssistantThread } from "@/data/contracts/conversations";
 import type { ParkedCard, ToolCallSummary } from "./assistant-stream-client";
@@ -103,7 +108,7 @@ type Store<E> = {
   threads: ReadonlyMap<string, ThreadState<E>>;
   /** `org/ws` to the workspace id a read answered for it. */
   keys: ReadonlyMap<string, string>;
-  /** Stand-in keys the person started a new thread on before the read. */
+  /** Stand-in keys the person started a new session on before the read. */
   fresh: ReadonlySet<string>;
   /** `org/ws` pairs whose read failed since the flyout last opened. */
   failed: ReadonlySet<string>;
@@ -303,5 +308,27 @@ export function useAssistantThreads<E>({
     });
   }, [scope, pair]);
 
-  return { scope, status, threadOf, updateThread, startNewThread };
+  /**
+   * Put `thread` on screen in the workspace `key` names, in place of the
+   * thread there, so the next question continues it. What the person has
+   * typed stays. Refused while a turn is in flight: its reply belongs to the
+   * conversation it was asked in.
+   */
+  const openThread = useCallback((key: string, thread: AssistantThread) => {
+    setStore((prior) => {
+      const target = prior.keys.get(key) ?? key;
+      const current = prior.threads.get(target) ?? emptyThread<E>();
+      if (current.pending) return prior;
+      const threads = new Map(prior.threads).set(target, {
+        ...emptyThread<E>(),
+        entries: restoredEntries(thread).map(restoreRef.current),
+        conversationId: thread.id,
+        draft: current.draft,
+        draftTooLong: current.draftTooLong ?? false,
+      });
+      return { ...prior, threads };
+    });
+  }, []);
+
+  return { scope, status, threadOf, updateThread, startNewThread, openThread };
 }

@@ -579,7 +579,7 @@ export function agentsSource(reads: AgentReads) {
       agents: refuse,
       named: answer(reads.runtimes ?? runtimeList(), "runtimes"),
     },
-    conversations: { latest: refuse },
+    conversations: { latest: refuse, list: refuse, byId: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
       context: refuse,

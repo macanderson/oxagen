@@ -33,7 +33,10 @@ import type {
   PlanCard,
   UsageCredits,
 } from "./contracts/billing";
-import type { AssistantThread } from "./contracts/conversations";
+import type {
+  AssistantSession,
+  AssistantThread,
+} from "./contracts/conversations";
 import type { MandateDetail, MandateList } from "./contracts/mandates";
 import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type {
@@ -176,14 +179,29 @@ export interface DataSource {
     assistantEngine(ctx: WsCtx): Promise<Read<AssistantEngine>>;
   };
   /**
-   * get_conversation with no id: the viewer's latest active conversation in
-   * the workspace, the thread the assistant flyout reopens (#4163), or null
-   * when the viewer has none. Caller:
-   * features/shell/assistant-thread-actions.ts, when the flyout opens in a
-   * workspace it has not read yet.
+   * The assistant flyout's conversations in the workspace, the viewer's own.
+   * Caller: features/shell/assistant-thread-actions.ts.
    */
   conversations: {
+    /**
+     * get_conversation with no id: the viewer's latest active conversation,
+     * the thread the flyout reopens (#4163), or null when the viewer has
+     * none. Read when the flyout opens in a workspace it has not read yet.
+     */
     latest(ctx: WsCtx): Promise<Read<AssistantThread | null>>;
+    /**
+     * list_conversations, active only: the flyout's session list (#4435),
+     * newest activity first, at most fifty. The archive sweep takes a
+     * conversation off it once it has been idle for the workspace's
+     * `[stella] archive_after_days`.
+     */
+    list(ctx: WsCtx): Promise<Read<readonly AssistantSession[]>>;
+    /**
+     * get_conversation with an id: the session the person picked from the
+     * list. An id that is not the viewer's, or was deleted, is a refusal
+     * with code `conversation_not_found`.
+     */
+    byId(ctx: WsCtx, conversationId: string): Promise<Read<AssistantThread>>;
   };
   /**
    * The Billing page's six noBillingGate reads, each Owner, Admin or Billing
