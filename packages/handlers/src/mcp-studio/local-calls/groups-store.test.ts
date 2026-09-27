@@ -209,7 +209,12 @@ describe("postgresMachineGroupStore.listMachineGroups", () => {
 });
 
 describe("postgresMachineGroupReader.groupsOf", () => {
-  beforeEach(() => mocks.withTenantDb.mockReset());
+  // A block body, because vitest runs a function that beforeEach returns as the
+  // test's teardown. mockReset() returns the mock, so an expression body would
+  // call withTenantDb with no callback after each test.
+  beforeEach(() => {
+    mocks.withTenantDb.mockReset();
+  });
 
   it("reads the machine's groups inside the scope and skips a revoked host", async () => {
     const { tx, calls } = fakeTx([[{ group: "ci-runners" }, { group: "dev-laptops" }]]);
