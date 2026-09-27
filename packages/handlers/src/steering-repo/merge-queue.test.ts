@@ -319,7 +319,7 @@ describe("mergeApproval", () => {
     });
   });
 
-  it("lets an owner, or a holder of merge_without_review, merge without an approval", async () => {
+  it("lets an owner, or a holder of merge_pr_without_review, merge without an approval", async () => {
     const gh = steeringRepo();
     gh.approvals = [];
     const withoutReview = { approvedBy: [], withoutReview: true };

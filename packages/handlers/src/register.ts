@@ -1051,6 +1051,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .mergeContextPrHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "merge_pr_without_review",
+    async () =>
+      (await import("./context.pr.merge_without_review"))
+        .mergePrWithoutReviewHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "set_governance_mode",
     async () =>
       (await import("./context.governance_mode.set"))
