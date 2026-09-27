@@ -6,7 +6,7 @@ import { buildContext } from "../context";
 
 export const schema = {
   bindingId: repositoryUnlink.input.shape.bindingId.describe(
-    "The linked repository's binding id (rpb_…) from list_repositories; the main repository is refused",
+    "The linked repository's binding id (rpb_…) from list_repositories. The steering repository is refused",
   ),
 };
 

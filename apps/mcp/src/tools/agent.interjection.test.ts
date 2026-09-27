@@ -142,13 +142,10 @@ describe("answer_interjection tool", () => {
   });
 
   it("passes a create answer through and returns the workspace it made", async () => {
+    // A create leaves the repository unbound, so it answers no repository.
     const created = {
       ...output,
       path: "create",
-      repository: {
-        bindingId: "rpb_0123456789abcdef012345",
-        fullName: "acme/api",
-      },
       workspace: { publicId: "ws_0123456789abcdefghjkmn", slug: "api" },
     };
     mocks.invoke.mockResolvedValue(created);
@@ -165,6 +162,49 @@ describe("answer_interjection tool", () => {
       fakeCtx,
       { surface: "mcp" },
     );
+  });
+
+  it("passes a link answer through and returns the steering PR that proposes the link", async () => {
+    const linked = {
+      ...output,
+      path: "link",
+      repository: {
+        fullName: "acme/api",
+        bindingId: null,
+        steeringPullRequest: {
+          number: 9,
+          url: "https://github.com/acme/platform/pull/9",
+          reused: false,
+        },
+      },
+    };
+    mocks.invoke.mockResolvedValue(linked);
+    const args = {
+      interjectionId: "inj_0123456789abcdefghjkmn",
+      answer: undefined,
+      path: "link" as const,
+      create: undefined,
+    };
+    await expect(answerTool(args)).resolves.toEqual(linked);
+  });
+
+  it("refuses the binding a link answered before ADR-212 (negative)", async () => {
+    mocks.invoke.mockResolvedValue({
+      ...output,
+      path: "link",
+      repository: {
+        bindingId: "rpb_0123456789abcdef012345",
+        fullName: "acme/api",
+      },
+    });
+    await expect(
+      answerTool({
+        interjectionId: "inj_0123456789abcdefghjkmn",
+        answer: undefined,
+        path: "link",
+        create: undefined,
+      }),
+    ).rejects.toThrow();
   });
 
   it("refuses an output with no receipt (negative)", async () => {
