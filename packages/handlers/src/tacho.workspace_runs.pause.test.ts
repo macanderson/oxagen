@@ -152,6 +152,9 @@ class MemoryStore implements CommandStore {
   async cancelLedgerRun(): Promise<string> {
     throw new Error("a workspace pause never cancels a ledger run");
   }
+  async queueForNextRun(): Promise<string | null> {
+    throw new Error("a workspace pause holds nothing for an agent's next run");
+  }
   async insert(row: CommandRowInput) {
     const publicId = `tcm_${++this.n}`;
     this.rows.push({ ...row, publicId });

@@ -14,6 +14,12 @@ const open = {
   answeredAt: null,
   answer: null,
   answeredBy: null,
+  kind: "question",
+  raisedSeq: null,
+  body: null,
+  repository: null,
+  path: null,
+  receiptId: null,
 };
 
 describe("list_interjections contract", () => {

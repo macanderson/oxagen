@@ -10,7 +10,13 @@ export const schema = {
     "The run's public id: arun_… (evidence ledger) or tse_… (wrapped agent session)",
   ),
   framesAfter: runGet.input.shape.framesAfter.describe(
-    "A frame or page cursor from an earlier read; omit to read from the start",
+    "A frame or page cursor from an earlier read of the same chain; omit to read from the start",
+  ),
+  sessionUuid: runGet.input.shape.sessionUuid.describe(
+    "The subagent chain to page, from a frame's or a chain head's sessionUuid; omit to page the run's own chain",
+  ),
+  chainsAfter: runGet.input.shape.chainsAfter.describe(
+    "chains.cursor from an earlier read; with waitMs, the wait also ends when a subagent chain records a frame",
   ),
   frameLimit: runGet.input.shape.frameLimit.describe(
     "Max frames to return (1–500)",

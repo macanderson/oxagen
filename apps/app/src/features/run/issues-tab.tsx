@@ -151,7 +151,9 @@ function issueRow(issue: Issue, place: Place): IssueTableRow {
       <EdgeChip
         key="edge"
         edge={issue.edge}
-        frames={issue.frameSeqs}
+        // `get_run_issues` names each frame by its seq alone, on the run's
+        // own chain.
+        frames={issue.frameSeqs.map((seq) => ({ seq }))}
         place={place}
       />,
       <ViewLink key="view" issue={issue} />,

@@ -19,6 +19,7 @@ import {
 } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
+import { interjectBodySchema } from "@oxagen/tacho";
 
 const mocks = vi.hoisted(() => ({ withTenantDb: vi.fn(), useReal: false }));
 
@@ -59,9 +60,41 @@ function row(over: Partial<InterjectionListRow> = {}): InterjectionListRow {
     answeredAt: null,
     answer: null,
     answeredByPublicId: null,
+    kind: "question",
+    raisedSeq: null,
+    body: null,
+    repository: null,
+    path: null,
+    receiptId: null,
     ...over,
   };
 }
+
+/** A host's `control.interject` body, as the ingest copies it onto the row. */
+const BODY = interjectBodySchema.parse({
+  interjection_key: "01K6Z000000000000000000000",
+  reason: "repo_unknown",
+  question: "Link this repository to core, or create a workspace for it?",
+  remote_digest: `sha256:${"e".repeat(64)}`,
+  timeout_ms: 1_800_000,
+  expires_at: "2026-09-25T09:30:00.000Z",
+  on_timeout: "deny",
+  paths: [
+    {
+      path: "link",
+      workspace_slug: "core",
+      config_version: "skl_v2",
+      skills_pinned: 3,
+      linked_repositories: 1,
+    },
+    {
+      path: "create",
+      proposed_name: "api",
+      proposed_slug: "api",
+      skills_enabled: false,
+    },
+  ],
+});
 
 /** A transaction whose select chain records the WHERE and the limit, and answers `rows`. */
 function recording(rows: InterjectionListRow[]) {
@@ -148,7 +181,7 @@ describe("list_interjections refuses a cursor it did not mint", () => {
 });
 
 describe("list_interjections item", () => {
-  it("carries an open question with null for every answer field", () => {
+  it("carries an open question with null for every answer field, and reads a row from before #3941 as a question", () => {
     expect(toInterjectionListItem(row())).toEqual({
       id: "inj_0123456789abcdefghjkmn",
       runId: "tse_0123456789abcdefghjkmn",
@@ -159,7 +192,65 @@ describe("list_interjections item", () => {
       answeredAt: null,
       answer: null,
       answeredBy: null,
+      kind: "question",
+      raisedSeq: null,
+      body: null,
+      repository: null,
+      path: null,
+      receiptId: null,
     });
+  });
+
+  it("carries a repository question's frame, body, repository, path and receipt, and parses through the contract", () => {
+    const item = toInterjectionListItem(
+      row({
+        question: BODY.question,
+        kind: "repo_unknown",
+        raisedSeq: 7,
+        body: BODY,
+        repository: "acme/api",
+        answeredAt: new Date("2026-09-25T09:04:00.000Z"),
+        answer: "Linked acme/api to the workspace core.",
+        answeredByPublicId: "usr_0123456789abcdefghjkmn",
+        path: "link",
+        receiptId: "rcp_0123456789abcdefghjkmn",
+      }),
+    );
+    expect(item).toMatchObject({
+      kind: "repo_unknown",
+      raisedSeq: "7",
+      body: BODY,
+      repository: "acme/api",
+      path: "link",
+      receiptId: "rcp_0123456789abcdefghjkmn",
+    });
+    expect(
+      agentInterjectionList.output.parse({ items: [item], nextCursor: null }),
+    ).toEqual({ items: [item], nextCursor: null });
+  });
+
+  it("reads a stored body that drifted from its schema as null, so the page still parses (negative)", () => {
+    const item = toInterjectionListItem(
+      row({ kind: "repo_unknown", body: { ...BODY, reason: "curious" } }),
+    );
+    expect(item.body).toBeNull();
+    expect(() =>
+      agentInterjectionList.output.parse({ items: [item], nextCursor: null }),
+    ).not.toThrow();
+  });
+
+  it("reads the timeout's deny, which no person gave", () => {
+    const item = toInterjectionListItem(
+      row({
+        kind: "repo_unknown",
+        body: BODY,
+        answeredAt: new Date("2026-09-25T09:30:00.000Z"),
+        answer: "Nobody answered before the deadline. The session went on without skills.",
+        path: "deny",
+        receiptId: "rcp_0123456789abcdefghjkmn",
+      }),
+    );
+    expect(item).toMatchObject({ path: "deny", answeredBy: null });
   });
 
   it("carries the answer, when it was given and who gave it, and parses through the contract", () => {

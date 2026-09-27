@@ -10,7 +10,7 @@ import { buildContext } from "../context";
 export const schema = {
   ...dispatchCommandFieldsSchema.shape,
   target: dispatchCommandFieldsSchema.shape.target.describe(
-    "One run (kind run, an arun_… or tse_… id), every live run of an agent (kind agent, the agent key as list_runs reports it), or every live run in the workspace (kind workspace, the workspace id)",
+    "One run (kind run, an arun_… or tse_… id), every live run of an agent (kind agent, the agent key as list_runs reports it; a steer or message to an agent with no live run waits for its next run), or every live run in the workspace (kind workspace, the workspace id)",
   ),
   command: dispatchCommandFieldsSchema.shape.command.describe(
     "pause, resume, cancel, steer or message",

@@ -224,3 +224,78 @@ describe("init and pull", () => {
     ]);
   });
 });
+
+// #3942: `oxagen run transcript` is the CLI surface of `get_run_transcript`,
+// so it takes every input the contract does.
+describe("run transcript", () => {
+  const sub = (program = buildProgram()) =>
+    program.commands
+      .find((c) => c.name() === "run")
+      ?.commands.find((c) => c.name() === "transcript");
+
+  it("takes the run id and each input of the capability", () => {
+    const transcript = sub();
+    expect(transcript, "the subcommand must be registered").toBeDefined();
+    expect(transcript?.registeredArguments.map((a) => a.name())).toEqual([
+      "run-id",
+    ]);
+    expect(transcript?.options.map((o) => o.long).sort()).toEqual([
+      "--after",
+      "--json",
+      "--kinds",
+      "--limit",
+      "--query",
+      "--text",
+      "--zoom",
+    ]);
+  });
+
+  it("parses the documented command, reading steps when no zoom is given", () => {
+    const p = buildProgram();
+    p.exitOverride();
+    const transcript = sub(p);
+    transcript?.action(() => {});
+    p.parse(
+      [
+        "run",
+        "transcript",
+        "tse_0a1b2c",
+        "--kinds",
+        "thinking,seal",
+        "--query",
+        "retry",
+        "--limit",
+        "50",
+      ],
+      { from: "user" },
+    );
+    expect(transcript?.opts()).toMatchObject({
+      zoom: "steps",
+      kinds: "thinking,seal",
+      query: "retry",
+      limit: 50,
+    });
+  });
+});
+
+// `get_run` declares the cli surface, so `oxagen run show <run-id>` must be on
+// the tree with the run id required, --json offered (#2951), and the page
+// cursor and subagent chain the API takes (#3823).
+describe("run show", () => {
+  const program = buildProgram();
+  const show = program.commands
+    .find((c) => c.name() === "run")
+    ?.commands.find((c) => c.name() === "show");
+
+  it("takes one required run id and offers --after, --session and --json", () => {
+    expect(show, "run show must be registered").toBeDefined();
+    const args = show?.registeredArguments ?? [];
+    expect(args.map((a) => a.name())).toEqual(["run-id"]);
+    expect(args[0]?.required).toBe(true);
+    expect(show?.options.map((o) => o.long).sort()).toEqual([
+      "--after",
+      "--json",
+      "--session",
+    ]);
+  });
+});

@@ -433,6 +433,75 @@ describe("the daemon's audit wiring", () => {
     ).toEqual(["received", "applied"]);
   });
 
+  // Codex on #4421: the answer released the question and queued its text
+  // before the WAL write, and the chain rollback reached neither.
+  it("keeps a question held when its answer's frames fail to reach the WAL, and settles it on the redelivery", async () => {
+    let clock = 1_000;
+    const { handle, plane } = await boot({ now: () => clock });
+    await handle.api.handleHook(hook("SessionStart"));
+    const record = handle.registry.get(SESSION)!;
+    const uuid = record.recorder.sessionUuid;
+    const question = {
+      key: "01K6Z000000000000000000000",
+      question: "Link this repository to core, or create a workspace for it?",
+      expiresAt: "2026-09-26T10:30:00.000Z",
+      workspaceSlug: "core",
+      configVersion: null,
+    };
+    record.control.interjection = question;
+    const answer = command({
+      id: "tcm_answer1",
+      command: "message",
+      session_uuid: uuid,
+      payload: {
+        text: "Nobody answered in 30 minutes. This session runs without skills.",
+        interjection: {
+          key: question.key,
+          path: "deny",
+          source: "timeout",
+          receipt_id: "rcp_01a2b5",
+          answered_by: null,
+        },
+      },
+    });
+
+    const append = handle.wal.append.bind(handle.wal);
+    handle.wal.append = (events, bodies) => {
+      if (events.some((event) => event.kind === "control.answer"))
+        throw new Error("ENOSPC: no space left on device");
+      append(events, bodies);
+    };
+    plane.queue(answer);
+    await handle.tick();
+    handle.wal.append = append;
+
+    // The question is held again, and the answer's text is not queued.
+    expect(record.control.interjection).toEqual(question);
+    expect(record.control.messages).toEqual([]);
+    expect(
+      handle.wal.read(uuid).some((event) => event.kind === "control.answer"),
+    ).toBe(false);
+
+    // The plane had no acknowledgement, so it delivers the answer again. The
+    // host applies it rather than answering from its ledger.
+    clock += 5_000;
+    plane.queue({ ...answer });
+    await handle.tick();
+    await handle.tick();
+    expect(record.control.interjection).toBeUndefined();
+    expect(record.control.messages.map((m) => m.id)).toEqual(["tcm_answer1"]);
+    expect(
+      handle.wal
+        .read(uuid)
+        .filter((event) => event.kind === "control.answer"),
+    ).toHaveLength(1);
+    expect(
+      plane.acks
+        .filter((a) => a.command_id === "tcm_answer1")
+        .map((a) => a.status),
+    ).toEqual(["received"]);
+  });
+
   it("keeps the baseline across a cd inside the same repository", async () => {
     let head = BASELINE_SHA;
     const { handle } = await boot({ git: () => repoAnswers(head) });

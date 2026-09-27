@@ -7,6 +7,7 @@ import {
   parseNumstat,
   parsePorcelainZ,
   readGitFacts,
+  readRepositoryRemote,
   readWorkingTreeChanges,
   worktreeReconciledBody,
 } from "./git-facts";
@@ -772,5 +773,42 @@ describe("canonicalRemote", () => {
       expect(canonicalRemote(form)).toBe("github.com/acme/repo");
       expect(canonicalRemote(form)).not.toContain("ghp_");
     }
+  });
+});
+
+describe("readRepositoryRemote (#3941)", () => {
+  it("digests the origin both ways and keeps only the repository's name", async () => {
+    const exec = fakeGit({
+      "remote get-url origin":
+        "https://x-access-token:ghs_secret@github.com/Acme/Widgets.git\n",
+      "rev-parse HEAD": "b".repeat(40) + "\n",
+    });
+    expect(await readRepositoryRemote(exec, "/repo")).toEqual({
+      remote_digest: digestBytes("github.com/Acme/Widgets"),
+      remote_digest_folded: digestBytes("github.com/acme/widgets"),
+      name: "Widgets",
+      head_sha: "b".repeat(40),
+    });
+  });
+
+  it("folds nothing on a forge that keeps a path's case", async () => {
+    const exec = fakeGit({
+      "remote get-url origin": "git@git.example.com:Team/Tool.git\n",
+    });
+    const remote = await readRepositoryRemote(exec, "/repo");
+    expect(remote?.remote_digest).toBe(
+      digestBytes("git.example.com/Team/Tool"),
+    );
+    expect(remote?.remote_digest_folded).toBe(remote?.remote_digest);
+    // A repository with no commit yet still names its remote.
+    expect(remote).not.toHaveProperty("head_sha");
+  });
+
+  it("answers undefined for a directory with no origin (negative)", async () => {
+    const exec = fakeGit({
+      "remote get-url origin": FAIL,
+      "rev-parse HEAD": "c".repeat(40) + "\n",
+    });
+    expect(await readRepositoryRemote(exec, "/repo")).toBeUndefined();
   });
 });

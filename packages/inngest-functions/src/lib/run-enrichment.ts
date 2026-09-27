@@ -89,8 +89,9 @@ const CEILING_NOTE =
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
 /**
- * A run's frames in order: one list, or pages a reader pulls one at a time
- * (`runFramePages`). A reader that stops pulling reads no further page.
+ * A run's frames in order: one list, as the enrichment job reads them
+ * (`readTranscriptFramesOf`), or pages a reader pulls one at a time. A
+ * reader that stops pulling reads no further page.
  */
 export type RunFrameSource =
   | readonly RunFrame[]

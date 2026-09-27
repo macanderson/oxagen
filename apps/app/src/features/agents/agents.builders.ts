@@ -604,6 +604,7 @@ export function agentsSource(reads: AgentReads) {
       turns: refuse,
       transcript: refuse,
       chain: refuse,
+      commands: refuse,
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,
@@ -612,7 +613,7 @@ export function agentsSource(reads: AgentReads) {
       findings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
-    interjections: { open: refuse },
+    interjections: { open: refuse, forRun: refuse },
     agents: {
       list: answer(reads.list, "list"),
       get: answer(reads.get, "get"),

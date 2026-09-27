@@ -64,6 +64,8 @@ import {
   runEnrichmentSweep,
 } from "./functions/run.enrich";
 import { runPullRequestBackfill } from "./functions/run.pull-request-backfill";
+import { agentInterjectionTimeout } from "./functions/agent.interjection-timeout";
+import { agentInterjectionTimeoutSweep } from "./functions/agent.interjection-timeout-sweep";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -125,4 +127,6 @@ export const functions: any[] = [
   runEnrichOnFailure,
   runEnrichmentSweep,
   runPullRequestBackfill,
+  agentInterjectionTimeout,
+  agentInterjectionTimeoutSweep,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

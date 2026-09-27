@@ -1,7 +1,10 @@
 // The Postgres command store's ledger seams, against a fake transaction. The
 // pg suite (`lib/run-token.pg.test.ts`) proves the fence, the revocation and
 // the receipt commit or roll back together; this file holds the ordering of
-// the refusals, which needs no database to state.
+// the refusals, and of the lock a next-run steer takes, which need no
+// database to state.
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -187,4 +190,82 @@ describe("setLedgerPaused", () => {
       expect(mocks.setRunIngressPaused).not.toHaveBeenCalled();
     },
   );
+});
+
+describe("queueForNextRun", () => {
+  const AGENT = "acme.api.reviewer";
+  const next = {
+    scope,
+    agentKey: AGENT,
+    command: "steer" as const,
+    payload: { address: "run", text: "Use the staging bucket." },
+    requestedMode: null,
+    reason: null,
+    issuedByUserId: control.userId,
+    issuedAt: NOW,
+    expiresAt: NOW,
+  };
+
+  /** A transaction that answers `hosts` and records each step in order. */
+  function queueTx(hosts: Array<{ id: string }>) {
+    const steps: string[] = [];
+    const locks: SQL[] = [];
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => {
+              steps.push("host");
+              return hosts;
+            },
+          }),
+        }),
+      }),
+      execute: async (query: SQL) => {
+        steps.push("lock");
+        locks.push(query);
+      },
+      insert: () => ({
+        values: () => ({
+          returning: async () => {
+            steps.push("insert");
+            return [{ publicId: "tcm_new" }];
+          },
+        }),
+      }),
+      update: () => ({
+        set: () => ({
+          where: async () => {
+            steps.push("supersede");
+          },
+        }),
+      }),
+    };
+    return { tx: tx as never, steps, locks };
+  }
+
+  it("locks the agent's command kind before it inserts, so a concurrent dispatch cancels this row or is cancelled by it", async () => {
+    // Without the lock, two dispatches each inserted before the other's row
+    // was visible, and both steers stayed queued (Codex review on #4421).
+    const { tx, steps, locks } = queueTx([{ id: "host-uuid" }]);
+
+    await expect(postgresCommandStore(tx).queueForNextRun(next)).resolves.toBe(
+      "tcm_new",
+    );
+    expect(steps).toEqual(["host", "lock", "insert", "supersede"]);
+    const lock = new PgDialect().sqlToQuery(locks[0] as SQL);
+    expect(lock.sql).toContain("pg_advisory_xact_lock(hashtextextended(");
+    expect(lock.params).toEqual([
+      `next_run_command:${scope.workspaceId}:${AGENT}:steer`,
+    ]);
+  });
+
+  it("takes no lock when no host could open the agent's next run (negative)", async () => {
+    const { tx, steps } = queueTx([]);
+
+    await expect(
+      postgresCommandStore(tx).queueForNextRun(next),
+    ).resolves.toBeNull();
+    expect(steps).toEqual(["host"]);
+  });
 });

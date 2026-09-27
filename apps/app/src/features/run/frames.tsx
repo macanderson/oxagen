@@ -41,6 +41,7 @@ import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
 import { ReadFailure } from "@/ui/read-failure";
+import { frameKey } from "./frame-link";
 import { FrameListBox } from "./frame-player";
 import { Fact, Facts, NoValue } from "./parts";
 import { StepLink } from "./player-bar";
@@ -49,6 +50,7 @@ import {
   decisionOf,
   markOf,
   type OpenFrame,
+  presentedType,
   type RunState,
   type Steps,
 } from "./player-model";
@@ -83,8 +85,8 @@ const DECIDES: ReadonlySet<string> = new Set([
   "approval_decision",
 ]);
 
-/** A seq as the one link that opens its frame. */
-type HrefOf = (seq: string) => SafePath;
+/** A frame's key (`frameKey`) as the one link that opens the frame. */
+type HrefOf = (key: string) => SafePath;
 
 function Redactions({
   redactions,
@@ -114,9 +116,12 @@ function Redactions({
 function FrameFacts({
   frame,
   entry,
+  chainRef,
 }: {
   frame: RunFrame | null;
   entry: TranscriptEntry | undefined;
+  /** The subagent chain the frame was recorded on; absent on the run's own. */
+  chainRef: string | undefined;
 }) {
   const t = useTranslations("run.frames");
   const format = useFormatter();
@@ -138,6 +143,11 @@ function FrameFacts({
           </time>
         )}
       </Fact>
+      {chainRef === undefined ? null : (
+        <Fact label={t("chain")} code>
+          {chainRef}
+        </Fact>
+      )}
       {frame === null ? null : (
         <Fact label={t("stage")} code>
           {frame.stage}
@@ -286,6 +296,7 @@ export function FramePanel({
   tier,
   body,
   approvals,
+  control = null,
   kindPanel,
   steps,
   hrefOf,
@@ -299,6 +310,8 @@ export function FramePanel({
   body: Read<RunFrameBody> | null;
   /** The parked call or the decision this frame records, when it is an approval frame. */
   approvals: ReactNode;
+  /** The operator's command this frame records, when it is a command frame (#2953). */
+  control?: ReactNode;
   /**
    * The panel for the frame's kind that the record fills beyond its facts:
    * a model request's window, or the assembler's manifest (ADR-200). Absent
@@ -314,7 +327,9 @@ export function FramePanel({
   const locale = useLocale();
   const format = useFormatter();
   const { frame } = open;
-  const type = frame?.type ?? entry?.type ?? null;
+  const recorded = frame?.type ?? entry?.type ?? null;
+  // An operator's command reads as `control.<command>` (ADR-056).
+  const type = recorded === null ? null : presentedType(recorded, entry);
   const at = frame?.observedAt ?? entry?.at ?? null;
   const summary = frame?.summary ?? entry?.label ?? null;
   return (
@@ -355,7 +370,9 @@ export function FramePanel({
             data-testid="frame-off-page"
             className="m-0 text-[12.5px] text-muted-foreground"
           >
-            {t("offPage", { seq: open.seq })}
+            {open.chainRef === undefined
+              ? t("offPage", { seq: open.seq })
+              : t("chainOffPage", { seq: open.seq })}
           </p>
         ) : null}
         {summary === null ? null : (
@@ -364,8 +381,9 @@ export function FramePanel({
           </p>
         )}
         {approvals}
+        {control}
         {kindPanel}
-        <FrameFacts frame={frame} entry={entry} />
+        <FrameFacts frame={frame} entry={entry} chainRef={open.chainRef} />
         {frame === null || (body !== null && body.ok) ? null : (
           // The body read lists its own redactions; without it, the envelope's.
           <Redactions redactions={frame.body.redactions} />
@@ -374,7 +392,7 @@ export function FramePanel({
           frame={frame}
           seq={open.seq}
           read={body}
-          open={hrefOf(open.seq)}
+          open={hrefOf(frameKey(open))}
         />
         {/* `.row` with `margin-top:16px; border-top:1px solid var(--border); padding-top:13px` */}
         <div className="mt-0.5 flex flex-wrap items-center gap-[9px] border-t border-border pt-[13px]">
@@ -427,7 +445,8 @@ export function FrameList({
 }: {
   frames: readonly RunFrame[];
   entries: ReadonlyMap<string, TranscriptEntry>;
-  openSeq: string;
+  /** The open frame's seq; null when the open frame is on a subagent's chain, which the page does not list. */
+  openSeq: string | null;
   hrefOf: HrefOf;
   state: RunState;
 }) {
@@ -469,7 +488,9 @@ export function FrameList({
                     aria-hidden="true"
                     className={`size-1.5 flex-none rounded-full ${mark === null ? "bg-transparent" : MARK_HUE[mark]}`}
                   />
-                  <span className="min-w-0 truncate">{frame.type}</span>
+                  <span className="min-w-0 truncate">
+                    {presentedType(frame.type, entries.get(frame.seq))}
+                  </span>
                   {frame.cost === null ? null : (
                     <span
                       className={costChip}
