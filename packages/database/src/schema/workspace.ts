@@ -366,6 +366,40 @@ export const noProgressPolicy = workspaceSchema.table(
   }),
 );
 
+// Per-workspace operator ranking setting (spend spec, Operator ranking). With
+// `pseudonyms` on, the ranking shows a stable pseudonym in place of each
+// operator's name, for a workspace where a works council or local law
+// requires it. No row means off. `pseudonym_salt` is written once with the
+// row and keyed into each pseudonym's HMAC, so a pseudonym stays the same
+// across changes and cannot be read back by hashing a known principal id.
+// packages/handlers/src/lib/operator-pseudonyms.ts reads and writes it.
+export const operatorRankingPolicy = workspaceSchema.table(
+  "operator_ranking_policy",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    orgId: uuid("org_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull().unique(),
+    pseudonyms: boolean("pseudonyms").notNull().default(false),
+    pseudonymSalt: uuid("pseudonym_salt")
+      .notNull()
+      .default(sql`gen_random_uuid()`),
+    // The user who last changed the setting.
+    updatedByUserId: uuid("updated_by_user_id"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    orgWorkspaceIdx: index("operator_ranking_policy_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+  }),
+);
+
 /**
  * The wrapped-session policy table, for a database that may not have it yet.
  *

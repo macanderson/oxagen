@@ -40,8 +40,10 @@ export {
 } from "./findings";
 export {
   listWorkspacesForFindings,
+  readUnproductiveClaims,
   readUnproductiveSpend,
   runFindingsPass,
+  type UnproductiveClaim,
 } from "./findings-store";
 export * from "./run-pr-outcomes";
 export {

@@ -1,5 +1,5 @@
 {
-  "generatedCount": 401,
+  "generatedCount": 403,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -1480,6 +1480,16 @@
         "mcp",
         "agent",
         "cli"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "get_operator_ranking",
+      "domain": "spend",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],
@@ -3885,6 +3895,16 @@
       "surfaces": [
         "api",
         "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "set_operator_pseudonyms",
+      "domain": "spend",
+      "surfaces": [
+        "api"
       ],
       "component": null,
       "produces": [],

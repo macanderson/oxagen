@@ -1,0 +1,242 @@
+// audit-exempt: read-only — ranks operators by the claimed frames in cost.finding_claims, with each operator's priced spend from cost.run_totals and the pseudonym setting from workspace.operator_ranking_policy; mutates nothing. The kernel capability.invoke_* audit covers access.
+//
+// `get_operator_ranking` (spend spec, Operator ranking; D15): the operators
+// of the workspace ranked by unproductive spend, highest first. The figures
+// come from the same claim rows as the headline (`readUnproductiveClaims`,
+// ADR-208) and the same count (`countClaims`), so each frame counts once and
+// the operator totals and the unattributed total sum to the headline. A run's
+// figure is `countClaims` over that run's rows. The dedupe key holds the run
+// id, so the run figures partition the headline too.
+//
+// Managers read it: an org Owner or Admin, or the workspace's Owner. With the
+// pseudonym setting on, a pseudonym replaces each name, and the answer drops
+// the key, the facts, and the run ids, since a run page names its operator.
+import {
+  countClaims,
+  dayBounds,
+  readUnproductiveClaims,
+  type UnproductiveClaim,
+} from "@oxagen/billing";
+import { schema, withTenantDb } from "@oxagen/database";
+import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
+import type { CapabilityHandler } from "@oxagen/oxagen";
+import type { OperatorFacts } from "@oxagen/oxagen/contracts/operator.shared";
+import {
+  OPERATOR_RANKING_RUNS_MAX,
+  type OperatorRankingRow,
+  spendOperatorRanking,
+  type SpendOperatorRankingOutput,
+} from "@oxagen/oxagen/contracts/spend.operator_ranking";
+import { and, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import { readOperatorFacts, type ReadOperatorFacts } from "./lib/operator-facts";
+import {
+  operatorPseudonym,
+  type PseudonymPolicy,
+  readPseudonymPolicy,
+} from "./lib/operator-pseudonyms";
+
+export type RankingScope = { orgId: string; workspaceId: string };
+type Window = { start: Date; end: Date };
+
+/** One operator's priced spend in one currency over the window. */
+export type OperatorSpend = {
+  operatorKey: string;
+  currency: string;
+  micros: bigint;
+};
+
+export type OperatorRankingDeps = {
+  readClaims: (
+    scope: RankingScope,
+    window: Window,
+  ) => Promise<UnproductiveClaim[]>;
+  /** Priced spend of the named operators' runs that started in the window. */
+  readOperatorSpend: (
+    scope: RankingScope,
+    window: Window,
+    operatorKeys: readonly string[],
+  ) => Promise<OperatorSpend[]>;
+  readOperatorFacts: ReadOperatorFacts;
+  readPolicy: (scope: RankingScope) => Promise<PseudonymPolicy>;
+};
+
+/** Who may read the ranking: the roles the contract's defaultRoles allow. */
+export const RANKING_ROLES = {
+  org: ["Owner", "Admin"],
+  workspace: ["Owner"],
+} as const;
+
+async function readClaims(
+  scope: RankingScope,
+  window: Window,
+): Promise<UnproductiveClaim[]> {
+  return withTenantDb((tx) => readUnproductiveClaims(tx, scope, window));
+}
+
+async function readOperatorSpend(
+  scope: RankingScope,
+  window: Window,
+  operatorKeys: readonly string[],
+): Promise<OperatorSpend[]> {
+  if (operatorKeys.length === 0) return [];
+  const totals = schema.runTotals;
+  const rows = await withTenantDb((tx) =>
+    tx
+      .select({
+        operatorKey: totals.operatorKey,
+        currency: totals.currency,
+        micros: sql<string>`sum(${totals.costMicros})::text`,
+      })
+      .from(totals)
+      .where(
+        and(
+          eq(totals.orgId, scope.orgId),
+          eq(totals.workspaceId, scope.workspaceId),
+          gte(totals.startedAt, window.start),
+          lt(totals.startedAt, window.end),
+          isNotNull(totals.costMicros),
+          inArray(totals.operatorKey, [...operatorKeys]),
+        ),
+      )
+      .groupBy(totals.operatorKey, totals.currency),
+  );
+  return rows.flatMap((r) =>
+    r.operatorKey === null
+      ? []
+      : [
+          {
+            operatorKey: r.operatorKey,
+            currency: r.currency,
+            micros: BigInt(r.micros),
+          },
+        ],
+  );
+}
+
+const byMicrosDesc = (
+  a: { micros: bigint; id: string },
+  b: { micros: bigint; id: string },
+): number =>
+  a.micros !== b.micros
+    ? a.micros > b.micros
+      ? -1
+      : 1
+    : a.id < b.id
+      ? -1
+      : a.id > b.id
+        ? 1
+        : 0;
+
+/** A ratio of two micros amounts, capped at 1; null when the whole is not positive. */
+function ratio(part: bigint, whole: bigint): number | null {
+  if (whole <= 0n) return null;
+  return Math.min(1, Number(part) / Number(whole));
+}
+
+/**
+ * Each operator's runs with the micros counted under that operator in each.
+ * `countClaims` over one run's rows keeps the headline's dedupe, and a run
+ * whose frames name two operators splits between them the same way.
+ */
+export function runsByOperator(
+  rows: readonly UnproductiveClaim[],
+): Map<string | null, Map<string, bigint>> {
+  const byRun = new Map<string, UnproductiveClaim[]>();
+  for (const row of rows) {
+    const held = byRun.get(row.runId);
+    if (held) held.push(row);
+    else byRun.set(row.runId, [row]);
+  }
+  const out = new Map<string | null, Map<string, bigint>>();
+  for (const [runId, runRows] of byRun) {
+    for (const { operatorKey, micros } of countClaims(runRows).operators) {
+      const runs = out.get(operatorKey) ?? new Map<string, bigint>();
+      runs.set(runId, (runs.get(runId) ?? 0n) + micros);
+      out.set(operatorKey, runs);
+    }
+  }
+  return out;
+}
+
+export function createOperatorRankingHandler(
+  deps: OperatorRankingDeps,
+): CapabilityHandler<typeof spendOperatorRanking> {
+  return async (input, ctx): Promise<SpendOperatorRankingOutput> => {
+    const userId = await resolveActingUserId(ctx);
+    await assertOrgRole(
+      { ...ctx, userId },
+      { org: [...RANKING_ROLES.org], workspace: [...RANKING_ROLES.workspace] },
+    );
+    const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
+    const { from, to } = input.period;
+    const window = { start: dayBounds(from).start, end: dayBounds(to).next };
+
+    const [claims, policy] = await Promise.all([
+      deps.readClaims(scope, window),
+      deps.readPolicy(scope),
+    ]);
+    const headline = countClaims(claims);
+    const currency = claims[0]?.currency ?? "USD";
+    const money = (micros: bigint) => ({ micros: micros.toString(), currency });
+    const runs = runsByOperator(claims);
+    const pseudonyms = policy.pseudonyms && policy.salt !== null;
+
+    const named = headline.operators.flatMap((o) =>
+      o.operatorKey === null ? [] : [{ key: o.operatorKey, micros: o.micros }],
+    );
+    const keys = named.map((o) => o.key);
+    const [spend, facts] = await Promise.all([
+      deps.readOperatorSpend(scope, window, keys),
+      pseudonyms || keys.length === 0
+        ? Promise.resolve(new Map<string, OperatorFacts>())
+        : deps.readOperatorFacts(scope, keys),
+    ]);
+    const spendOf = new Map<string, bigint>();
+    for (const s of spend)
+      if (s.currency === currency) spendOf.set(s.operatorKey, s.micros);
+
+    const operators = named.map((o, i): OperatorRankingRow => {
+      const own = runs.get(o.key) ?? new Map<string, bigint>();
+      const topRuns = pseudonyms
+        ? []
+        : [...own]
+            .map(([id, micros]) => ({ id, micros }))
+            .sort(byMicrosDesc)
+            .slice(0, OPERATOR_RANKING_RUNS_MAX)
+            .map((r) => ({ runId: r.id, unproductive: money(r.micros) }));
+      return {
+        rank: i + 1,
+        operator: pseudonyms
+          ? {
+              kind: "pseudonym",
+              pseudonym: operatorPseudonym(policy.salt as string, o.key),
+            }
+          : { kind: "named", key: o.key, facts: facts.get(o.key) ?? null },
+        unproductive: money(o.micros),
+        shareOfTotal: ratio(o.micros, headline.totalMicros) ?? 0,
+        unproductiveShare: ratio(o.micros, spendOf.get(o.key) ?? 0n),
+        runs: own.size,
+        topRuns,
+      };
+    });
+
+    const unattributed = headline.operators.find((o) => o.operatorKey === null);
+    return {
+      period: { from, to },
+      pseudonyms,
+      unproductive: money(headline.totalMicros),
+      unattributed: {
+        unproductive: money(unattributed?.micros ?? 0n),
+        runs: runs.get(null)?.size ?? 0,
+      },
+      operators,
+    };
+  };
+}
+
+export const spendOperatorRankingHandler = createOperatorRankingHandler({
+  readClaims,
+  readOperatorSpend,
+  readOperatorFacts,
+  readPolicy: readPseudonymPolicy,
+});
