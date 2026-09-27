@@ -19,9 +19,10 @@ vi.mock("@oxagen/database/security", () => ({
   emitSecurityEventIn: mocks.audit,
 }));
 // A transaction fake: each call hands the callback its own tx object and
-// records whether the callback returned (commit) or threw (rollback).
-vi.mock("@oxagen/database", () => ({
-  withTenantDb: async (fn: (tx: object) => Promise<unknown>) => {
+// records whether the callback returned (commit) or threw (rollback). The
+// role gate reads through withOrgDb (ADR-086), so it gets the same fake.
+vi.mock("@oxagen/database", () => {
+  const transaction = async (fn: (tx: object) => Promise<unknown>) => {
     const entry = { tx: {}, outcome: "commit" as "commit" | "rollback" };
     mocks.transactions.push(entry);
     try {
@@ -30,8 +31,9 @@ vi.mock("@oxagen/database", () => ({
       entry.outcome = "rollback";
       throw err;
     }
-  },
-}));
+  };
+  return { withTenantDb: transaction, withOrgDb: transaction };
+});
 
 import { spendOperatorPseudonymsSetHandler } from "./spend.operator_pseudonyms.set";
 
