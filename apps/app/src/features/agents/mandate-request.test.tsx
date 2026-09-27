@@ -121,7 +121,7 @@ describe("RequestMandate", () => {
       "changes_entitlement",
     ]);
     for (const box of chosen) expect(box).not.toBeChecked();
-    expect(dialog()).toHaveTextContent("Name every consequence");
+    expect(dialog()).toHaveTextContent("Name every impact");
     // The six are a starter set; a workspace defines its own, and a tool
     // declaring one of those must still be nameable here.
     expect(dialog()).toHaveTextContent("the starter set");
