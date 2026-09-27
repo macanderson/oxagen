@@ -1,0 +1,104 @@
+{
+  "name": "remember_lesson",
+  "domain": "agent",
+  "description": "Keep one lesson from the current run. Oxagen stores it when the run ends, with the agent and run it recorded, and a curator may propose it as a steering record.",
+  "mode": "sync",
+  "surfaces": [
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "memory"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "statement": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000,
+        "description": "The lesson in one or two sentences, written as advice for the next run."
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "business-rule",
+          "code-rule",
+          "constraint",
+          "procedure",
+          "skill",
+          "fact",
+          "preference",
+          "memory"
+        ],
+        "default": "memory"
+      },
+      "repos": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "minItems": 1,
+        "maxItems": 20
+      },
+      "applies_to": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "minItems": 1,
+        "maxItems": 20
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "minItems": 1,
+        "maxItems": 20
+      },
+      "evidence": {
+        "type": "array",
+        "items": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxItems": 20,
+        "default": []
+      }
+    },
+    "required": [
+      "statement"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "status": {
+        "const": "noted"
+      },
+      "message": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "status",
+      "message"
+    ],
+    "additionalProperties": false
+  }
+}

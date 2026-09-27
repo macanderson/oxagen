@@ -178,6 +178,8 @@ import { agentMemoryList } from "./agent.memory.list";
 import { agentMemoryUpdate } from "./agent.memory.update";
 import { agentMemoryDelete } from "./agent.memory.delete";
 import { agentMemoryRemember } from "./agent.memory.remember";
+import { agentMemoryLessonRemember } from "./agent.memory.lesson.remember";
+import { agentMemoryReflectionRecord } from "./agent.memory.reflection.record";
 // Bulk memory import (parse → editable review grid → commit).
 import { agentMemoryImportParse } from "./agent.memory_import.parse";
 import { agentMemoryImportCommit } from "./agent.memory_import.commit";
@@ -728,6 +730,8 @@ export {
   agentMemoryUpdate,
   agentMemoryDelete,
   agentMemoryRemember,
+  agentMemoryLessonRemember,
+  agentMemoryReflectionRecord,
   agentMemoryImportParse,
   agentMemoryImportCommit,
   agentMemoryPromote,
@@ -1140,6 +1144,8 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentMemoryUpdate,
   agentMemoryDelete,
   agentMemoryRemember,
+  agentMemoryLessonRemember,
+  agentMemoryReflectionRecord,
   agentMemoryImportParse,
   agentMemoryImportCommit,
   agentMemoryPromote,

@@ -2977,6 +2977,15 @@
       "writes": []
     },
     {
+      "domain": "agent",
+      "name": "record_reflection",
+      "reads": [],
+      "surfaces": [
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
       "domain": "assistant",
       "name": "record_reply_feedback",
       "reads": [],
@@ -3021,6 +3030,15 @@
       "reads": [],
       "surfaces": [
         "api",
+        "mcp"
+      ],
+      "writes": []
+    },
+    {
+      "domain": "agent",
+      "name": "remember_lesson",
+      "reads": [],
+      "surfaces": [
         "mcp"
       ],
       "writes": []
@@ -4188,7 +4206,7 @@
       "writes": []
     }
   ],
-  "contentHash": "0859841a2c6749a8b219b66e26bab0c43599b0aeac04b171592c7d557a3c27cf",
+  "contentHash": "5e85849306192ea36a107115f52deded7d32b639186f7f05935aeeaa54dc1f7b",
   "domains": [
     {
       "name": "agent",
@@ -4234,6 +4252,11 @@
         "postgres:agent.context_records",
         "postgres:agent.context_sync_state",
         "postgres:agent.interjections",
+        "postgres:agent.memories",
+        "postgres:agent.memory_prs",
+        "postgres:agent.memory_recalls",
+        "postgres:agent.memory_reflections",
+        "postgres:agent.memory_rejections",
         "postgres:agent.runtimes",
         "postgres:agent.tool_versions",
         "postgres:agent.tools"
@@ -4659,7 +4682,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 158
+      "tableCount": 163
     },
     {
       "domains": [
@@ -9538,6 +9561,406 @@
       "domain": "agent",
       "id": "postgres:agent.interjections",
       "name": "interjections",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "agent_lineage",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "run_public_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "capture",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "statement",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "statement_hash",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "kind",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "repos",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "applies_to",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "tools",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "evidence",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "source",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "dedupe_key",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "reflection_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:agent.memory_reflections",
+          "type": "uuid"
+        },
+        {
+          "name": "memory_pr_id",
+          "nullable": true,
+          "primaryKey": false,
+          "references": "postgres:agent.memory_prs",
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.memories",
+      "name": "memories",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "provider",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "repository",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "branch",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "number",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "url",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "records",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "opened_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "settled_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.memory_prs",
+      "name": "memory_prs",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "lineage",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "recall_count",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "last_recalled_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "reviewed_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.memory_recalls",
+      "name": "memory_recalls",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "run_public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "agent_lineage",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "source",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "outcome",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "summary",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "grades",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "lessons",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "tool_feedback",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "jsonb"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.memory_reflections",
+      "name": "memory_reflections",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "statement_hash",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "memory_pr_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "rejected_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "agent",
+      "id": "postgres:agent.memory_rejections",
+      "name": "memory_rejections",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

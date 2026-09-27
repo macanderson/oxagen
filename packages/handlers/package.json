@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/handlers",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -25,6 +25,7 @@
     "@oxagen/database": "workspace:*",
     "@oxagen/github": "workspace:*",
     "@oxagen/gitlab": "workspace:*",
+    "@oxagen/glob": "workspace:*",
     "@oxagen/iam": "workspace:*",
     "@oxagen/ingestion": "workspace:*",
     "@oxagen/inngest-functions": "workspace:*",

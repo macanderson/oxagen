@@ -30,18 +30,9 @@ import { encodingIssues, schemaIssues, type FileIssue } from "./files";
 import { uniqueArray, withRules } from "./json-schema";
 import { DESCRIPTION_MAX, SKILL_DESCRIPTION_MAX } from "./tokens";
 
-export const RECORD_KINDS = [
-  "business-rule",
-  "code-rule",
-  "constraint",
-  "procedure",
-  "skill",
-  "fact",
-  "preference",
-  "memory",
-] as const;
-export const recordKindSchema = z.enum(RECORD_KINDS);
-export type RecordKind = z.output<typeof recordKindSchema>;
+import { recordKindSchema } from "./record-kind";
+
+export { RECORD_KINDS, recordKindSchema, type RecordKind } from "./record-kind";
 
 /** `must` and `should` reach every request; `may` and `info` reach one they fit. */
 export const recordForceSchema = z.enum(["must", "should", "may", "info"]);
