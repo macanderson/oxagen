@@ -95,6 +95,11 @@
       "uniqueItems": true,
       "description": "Skill lineages. The record reaches a request only when the request's context.skill is on the list. A record cannot target a named agent."
     },
+    "toolbelt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A named toolbelt in tools/toolbelts/. The steering repo spec defers what it does to a later version."
+    },
     "applies_to": {
       "type": "array",
       "items": {
@@ -140,13 +145,83 @@
         },
         "uri": {
           "type": "string"
+        },
+        "agent": {
+          "type": "string",
+          "description": "The agent that proposed the record with steering_propose."
+        },
+        "memories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "agent": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "run": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "statement": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "agent",
+              "run",
+              "statement",
+              "evidence"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "description": "The memories the curator cited for the record. Required when source is run."
         }
       },
       "required": [
         "source",
         "uri"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "const": "run"
+              }
+            },
+            "required": [
+              "source"
+            ]
+          },
+          "then": {
+            "required": [
+              "memories"
+            ]
+          }
+        }
+      ]
     },
     "id": {
       "type": "string",

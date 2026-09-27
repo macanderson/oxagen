@@ -4,6 +4,7 @@ import type { z } from "zod";
 import { agentSchema } from "./agent";
 import { bundleSchema } from "./bundle";
 import { governanceSchema } from "./governance";
+import { memorySchema } from "./memory";
 import { promotionSchema } from "./promotion";
 import { steeringRecordSchema } from "./record";
 import { reflectionSchema } from "./reflection";
@@ -61,6 +62,13 @@ export const STEERING_REPO_SCHEMAS: readonly SchemaEntry[] = [
     description:
       "The memory an agent writes at the end of a run, with grades for the work and its tools. Oxagen stores it.",
     schema: reflectionSchema,
+  },
+  {
+    id: "memory/v1",
+    title: "Memory",
+    description:
+      "One lesson an agent keeps from a run, with the agent and run that wrote it. Oxagen stores it until the curator's memory PR merges or closes.",
+    schema: memorySchema,
   },
   {
     id: "promotion/v1",

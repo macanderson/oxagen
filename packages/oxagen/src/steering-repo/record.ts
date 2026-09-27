@@ -65,12 +65,48 @@ export const recordOriginSchema = z.enum(["user", "inferred"]);
 export const recordLoadSchema = z.enum(["always", "match", "relevant", "mention"]);
 export type RecordLoad = z.output<typeof recordLoadSchema>;
 
-export const recordProvenanceSchema = z
+/**
+ * One memory a record cites, as the curator copied it from `memory/v1`. A
+ * null agent or run stays null. The file keeps the statement after Oxagen
+ * purges the memory.
+ */
+export const provenanceMemorySchema = z
   .object({
-    source: z.enum(["proposal", "run", "import"]),
-    uri: z.string(),
+    agent: z.string().nullable(),
+    run: z.string().nullable(),
+    statement: z.string().min(1),
+    evidence: z.array(z.string()),
   })
   .strict();
+export type ProvenanceMemory = z.output<typeof provenanceMemorySchema>;
+
+/**
+ * Where a record came from. Oxagen sets `agent` from the authenticated run of
+ * the agent that called steering_propose, and such a record has
+ * `source: proposal`. Only the curator writes `source: run`, and it copies
+ * each memory it cites into `memories`. No tool input carries either field.
+ */
+export const recordProvenanceSchema = withRules(
+  z
+    .object({
+      source: z.enum(["proposal", "run", "import"]),
+      uri: z.string(),
+      agent: z
+        .string()
+        .optional()
+        .describe("The agent that proposed the record with steering_propose."),
+      memories: z
+        .array(provenanceMemorySchema)
+        .min(1)
+        .optional()
+        .describe(
+          "The memories the curator cited for the record. Required when source is run.",
+        ),
+    })
+    .strict(),
+  [{ kind: "require", when: { field: "source", is: "run" }, fields: ["memories"] }],
+);
+export type RecordProvenance = z.output<typeof recordProvenanceSchema>;
 
 /** The frontmatter fields, in the order Oxagen writes them. */
 const recordShape = z
@@ -108,6 +144,13 @@ const recordShape = z
       .optional()
       .describe(
         "Skill lineages. The record reaches a request only when the request's context.skill is on the list. A record cannot target a named agent.",
+      ),
+    toolbelt: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "A named toolbelt in tools/toolbelts/. The steering repo spec defers what it does to a later version.",
       ),
     applies_to: z
       .array(z.string().min(1))

@@ -20,6 +20,7 @@ provenance:
   memories:
     - agent: a-intel.core.release-bot
       run: run_01K5QK7D
+      capture: remember
       statement: The CI cache key hashes pnpm-lock.yaml. Update the lockfile with any dependency change, or CI restores a stale cache and typecheck fails.
       evidence:
         - frame:run_01K5QK7D/88
@@ -28,8 +29,6 @@ provenance:
       statement: CI restored a stale pnpm cache after a dependency bump left pnpm-lock.yaml unchanged.
       evidence:
         - github.com/a-intel/platform/pull/412
-id: rec_a_intel_platform_ci_cache_key_873516889942
-hash: sha256:cd6685d7f6a65702d04489d6b7b6647116c8b7787b5022746f2802fc5f88edff
 ---
 
 The CI cache key hashes `pnpm-lock.yaml`. A run that changes dependencies

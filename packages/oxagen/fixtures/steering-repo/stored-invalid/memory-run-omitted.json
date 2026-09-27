@@ -1,0 +1,13 @@
+{
+  "schema": "memory/v1",
+  "id": "mem_01K5W2C4",
+  "agent": "a-intel.core.ci-reviewer",
+  "capture": "local_gateway",
+  "statement": "Run pnpm lint on the files you changed before you push.",
+  "kind": "procedure",
+  "repos": [
+    "github.com/a-intel/platform"
+  ],
+  "evidence": [],
+  "created_at": "2026-09-21T08:00:00Z"
+}

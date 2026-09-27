@@ -17,6 +17,7 @@ export const SCHEMA_IDS = [
   "mcp-tools-lock/v1",
   "tool-manifest/v1",
   "reflection/v1",
+  "memory/v1",
   "promotion/v1",
   "bundle/v1",
 ] as const;
@@ -30,6 +31,7 @@ export const STEERING_REPO_SCHEMA_IDS = [
   "governance/v1",
   "toolbelt/v1",
   "reflection/v1",
+  "memory/v1",
   "promotion/v1",
   "bundle/v1",
 ] as const satisfies readonly SchemaId[];
