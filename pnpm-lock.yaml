@@ -1486,6 +1486,9 @@ importers:
       '@oxagen/steering-assembler':
         specifier: workspace:*
         version: link:../steering-assembler
+      '@oxagen/steering-bundle':
+        specifier: workspace:*
+        version: link:../steering-bundle
       '@oxagen/steering-check':
         specifier: workspace:*
         version: link:../steering-check
@@ -2034,6 +2037,37 @@ importers:
       vitest:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.8)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(supports-color@8.1.1)(terser@5.48.0)
+
+  packages/steering-bundle:
+    dependencies:
+      '@oxagen/glob':
+        specifier: workspace:*
+        version: link:../glob
+      '@oxagen/mcp-studio':
+        specifier: workspace:*
+        version: link:../mcp-studio
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../oxagen
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.8
+        version: 25.9.8
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(supports-color@8.1.1)(vitest@2.1.9)
+      eslint:
+        specifier: 9.39.5
+        version: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.8)(jsdom@30.1.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(supports-color@8.1.1)(terser@5.48.0)
 
   packages/steering-check:
     dependencies:

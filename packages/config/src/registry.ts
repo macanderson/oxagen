@@ -700,6 +700,42 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
   },
 
+  // The Oxagen Steering app (#4450, docs/specs/github-app/github-app-setup.md).
+  // A second GitHub App with the Oxagen app's permissions plus Administration
+  // and Deployments write, used only on steering repos. The steering repo
+  // provision job reads all three. It stops with a typed error when any is
+  // missing.
+  OXAGEN_STEERING_APP_ID: {
+    group: "github",
+    description:
+      "The Oxagen Steering GitHub App's numeric ID. The steering repo provision job uses it with OXAGEN_STEERING_APP_PRIVATE_KEY to mint installation tokens for steering repos. Find it on the app's settings page.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_STEERING_APP_PRIVATE_KEY: {
+    group: "github",
+    description:
+      "PEM-encoded RSA private key for the Oxagen Steering GitHub App. Generate it under the app's settings, Private keys.",
+    secret: true,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+  OXAGEN_STEERING_APP_SLUG: {
+    group: "github",
+    description:
+      "The Oxagen Steering GitHub App's public slug, the path segment in https://github.com/apps/<slug>. The provision job pins the steering check and the ruleset bypass to this app.",
+    secret: false,
+    clientExposed: false,
+    services: ["api"],
+    requiredIn: [],
+    valueOrigin: "manual",
+  },
+
   GITHUB_PERSONAL_ACCESS_TOKEN: {
     group: "github",
     description:

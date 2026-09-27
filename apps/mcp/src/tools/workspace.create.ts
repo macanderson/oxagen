@@ -15,11 +15,14 @@ export const schema = {
   slug: workspaceCreate.input.shape.slug.describe(
     "URL-safe unique slug within the organization",
   ),
-  // The GitHub arm only: the GitLab arm carries a project access token, which
-  // must not pass through an MCP client's transcript (#3762).
-  mainRepo: githubMainRepoInput.describe(
-    "The workspace's main GitHub repository ({ owner, name }), required: a workspace cannot exist without one. The GitHub App must be installed on the owner account and reachable by the organization's connected GitHub account.",
-  ),
+  // Deprecated and ignored (lane S1, #4450). The GitHub arm only: the GitLab
+  // arm carries a project access token, which must not pass through an MCP
+  // client's transcript (#3762).
+  mainRepo: githubMainRepoInput
+    .optional()
+    .describe(
+      "Deprecated and ignored. Leave it out. A workspace no longer takes a main repository: creating one starts provisioning its steering repo, and you link code repositories afterwards with link_repository.",
+    ),
 };
 
 export const metadata: ToolMetadata = {

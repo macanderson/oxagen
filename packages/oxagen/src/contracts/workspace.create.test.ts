@@ -7,13 +7,7 @@ const OUTPUT = {
   slug: "default",
   orgSlug: "acme",
   createdAt: new Date().toISOString(),
-  mainRepo: {
-    bindingId: "rpb_0123abcd",
-    connectionId: "con_abc",
-    provider: "github",
-    fullName: "acme/widgets",
-    defaultRef: "main",
-  },
+  steering_repo: { status: "provisioning" },
 };
 
 describe("workspace.create capability", () => {
@@ -23,7 +17,7 @@ describe("workspace.create capability", () => {
     expect(workspaceCreate.layers).not.toContain("e2e");
   });
 
-  it("parses a valid input, defaulting the repository provider", () => {
+  it("parses a valid input that still sends the deprecated mainRepo, defaulting its provider", () => {
     const parsed = workspaceCreate.input.parse({
       name: "Default",
       slug: "default",
@@ -37,18 +31,21 @@ describe("workspace.create capability", () => {
     });
   });
 
-  // §17 M0: "a workspace cannot be created without a main repo". The contract
-  // is where that holds — a draft without one never reaches the handler.
-  it("refuses a draft with no mainRepo", () => {
-    expect(
-      workspaceCreate.input.safeParse({ name: "Default", slug: "default" })
-        .success,
-    ).toBe(false);
+  // Lane S1 (#4450): a workspace no longer takes a main repository. A draft
+  // with a name and a slug is complete.
+  it("accepts a draft with no mainRepo", () => {
+    const parsed = workspaceCreate.input.parse({
+      name: "Default",
+      slug: "default",
+    });
+    expect(parsed).toEqual({ name: "Default", slug: "default" });
+    expect(parsed.mainRepo).toBeUndefined();
   });
 
   it("refuses a mainRepo that names an installation, or an unknown provider", () => {
-    // An installation id a caller could choose would let one tenant mint
-    // tokens for another account's installation; the object is strict.
+    // The field is ignored, and it still validates: an older caller that sends
+    // a malformed repository gets the refusal it always got. The object is
+    // strict, so an installation id is refused.
     expect(
       workspaceCreate.input.safeParse({
         name: "Default",
@@ -135,14 +132,36 @@ describe("workspace.create capability", () => {
     ).toThrow();
   });
 
-  it("parses a valid output, which carries the main repository it bound", () => {
+  it("parses a valid output, which carries the steering repo status", () => {
     const parsed = workspaceCreate.output.parse(OUTPUT);
     expect(parsed.orgSlug).toBe("acme");
-    expect(parsed.mainRepo.bindingId).toBe("rpb_0123abcd");
+    expect(parsed.steering_repo).toEqual({ status: "provisioning" });
   });
 
-  it("refuses an output with no main repository: the handler never answers one", () => {
-    const { mainRepo: _dropped, ...without } = OUTPUT;
+  it("parses every steering repo status the handler can return", () => {
+    for (const status of ["provisioning", "ready", "failed", "blocked"])
+      expect(
+        workspaceCreate.output.parse({ ...OUTPUT, steering_repo: { status } })
+          .steering_repo.status,
+      ).toBe(status);
+  });
+
+  it("refuses an output with no steering repo status, or an unknown one", () => {
+    const { steering_repo: _dropped, ...without } = OUTPUT;
     expect(workspaceCreate.output.safeParse(without).success).toBe(false);
+    expect(
+      workspaceCreate.output.safeParse({
+        ...OUTPUT,
+        steering_repo: { status: "bound" },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("no longer answers a main repository", () => {
+    const parsed = workspaceCreate.output.parse({
+      ...OUTPUT,
+      mainRepo: { bindingId: "rpb_0123abcd", fullName: "acme/widgets" },
+    });
+    expect(parsed).not.toHaveProperty("mainRepo");
   });
 });

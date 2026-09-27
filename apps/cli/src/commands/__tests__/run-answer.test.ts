@@ -66,10 +66,11 @@ const LINKED: RunAnswerResult = {
   repository: { bindingId: "rpb_0123456789abcdef012345", fullName: "acme/api" },
 };
 
+// A create binds no repository since lane S1 (#4450).
 const CREATED: RunAnswerResult = {
   ...TEXT,
   path: "create",
-  repository: { bindingId: "rpb_fedcba9876543210fedcba", fullName: "acme/api" },
+  repository: null,
   workspace: { publicId: "ws_0123456789abcdefghjkmn", slug: "api" },
 };
 
@@ -118,6 +119,24 @@ describe("oxagen run answer", () => {
       path: "create",
       create: { name: "API", slug: "api" },
     });
+    expect(out).toEqual([
+      `Answered ${ID} on tse_0123456789abcdefghjkmn. Receipt rcp_0123456789abcdefghjkmn.`,
+      "Created the workspace api (ws_0123456789abcdefghjkmn). Its skills are off, and no repository is linked to it yet.",
+      "No host can take the answer now, so it is recorded on the question only.",
+    ]);
+  });
+
+  it("names the repository a create bound when an older server answers with one", async () => {
+    post.mockResolvedValue({
+      ...CREATED,
+      repository: {
+        bindingId: "rpb_fedcba9876543210fedcba",
+        fullName: "acme/api",
+      },
+      commandIds: [],
+    });
+    const { writer, out } = memoryWriter();
+    await runAnswer(ID, { create: "API", slug: "api" }, writer);
     expect(out).toEqual([
       `Answered ${ID} on tse_0123456789abcdefghjkmn. Receipt rcp_0123456789abcdefghjkmn.`,
       "Created the workspace api (ws_0123456789abcdefghjkmn) for acme/api. Its skills are off.",

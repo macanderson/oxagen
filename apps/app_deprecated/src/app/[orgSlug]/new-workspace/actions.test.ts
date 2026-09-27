@@ -201,10 +201,9 @@ vi.mock("@oxagen/handlers/logger", () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-// Mock the workspace.create contract — minimal input schema validation. The
-// action parses `workspaceCreate.input.omit({ mainRepo: true })`, because the
-// real contract requires a main repository this deprecated form never
-// collects (ADR-099); the mock carries the same `omit` so the module loads.
+// Mock the workspace.create contract with minimal input schema validation.
+// The action parses `workspaceCreate.input.omit({ mainRepo: true })`, so the
+// mock carries the same `omit` and the module loads.
 vi.mock("@oxagen/oxagen/contracts/workspace.create", () => {
   const safeParse = (raw: unknown) => {
     const r = raw as { name?: unknown; slug?: unknown };
@@ -246,9 +245,10 @@ function form(fields: Record<string, string>): FormData {
 describe("the shape the action validates against the real contract", () => {
   // The mock above stands in for the contract during the action tests. This
   // block reads the real one, so a contract change that makes the action's
-  // `{ name, slug }` parse fail unconditionally (as requiring `mainRepo` did
-  // before the action omitted it) fails here instead of in production.
-  it("accepts a name and slug once mainRepo is omitted, and refuses them on the full contract", async () => {
+  // `{ name, slug }` parse fail unconditionally fails here instead of in
+  // production. Since lane S1 (#4450) the full contract accepts the draft
+  // too, because `mainRepo` is optional and ignored.
+  it("accepts a name and slug with mainRepo omitted, and on the full contract", async () => {
     const { workspaceCreate: real } = await vi.importActual<
       typeof import("@oxagen/oxagen/contracts/workspace.create")
     >("@oxagen/oxagen/contracts/workspace.create");
@@ -256,7 +256,7 @@ describe("the shape the action validates against the real contract", () => {
     expect(real.input.omit({ mainRepo: true }).safeParse(draft).success).toBe(
       true,
     );
-    expect(real.input.safeParse(draft).success).toBe(false);
+    expect(real.input.safeParse(draft).success).toBe(true);
   });
 });
 

@@ -36,6 +36,7 @@
     "@oxagen/run-evidence": "workspace:*",
     "@oxagen/run-ledger": "workspace:*",
     "@oxagen/steering-assembler": "workspace:*",
+    "@oxagen/steering-bundle": "workspace:*",
     "@oxagen/steering-check": "workspace:*",
     "@oxagen/storage": "workspace:*",
     "@oxagen/tacho": "workspace:*",
