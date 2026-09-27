@@ -234,10 +234,15 @@ export type SteeringSyncPublishOptions = Omit<
 
 /**
  * The repository sync's publish port (`SyncDeps.publish`). Each call resolves
- * the workspace's repository and publishes its production branch's head
+ * the workspace's steering head and publishes its production branch's head
  * through the publisher merge_context_pr uses, so a merge made on the host
  * reaches the same version sequence as one made from Oxagen. A repository in
  * the legacy layout has no bundle to publish, and the port answers null.
+ *
+ * The host resolves a head with either steering role (`STEERING_HEAD_ROLES`):
+ * `steering` for the repository S1 provisions, and `main` for a code
+ * repository bound before S8 moves it. A workspace with only a provisioned
+ * steering repository therefore publishes, and the sync reaches this port.
  *
  * The production sync deps pass `extend: withToolProjection`, so a version the
  * sync publishes also writes the workspace's tool registry.
