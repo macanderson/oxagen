@@ -10,14 +10,21 @@ import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-const { readModelCallFrames, readTachoToolCallFrames } = vi.hoisted(() => ({
-  readModelCallFrames: vi.fn(async () => []),
-  readTachoToolCallFrames: vi.fn(async () => []),
-}));
+const { readModelCallFrames, readRunTokenSources, readTachoToolCallFrames } =
+  vi.hoisted(() => ({
+    readModelCallFrames: vi.fn(async () => []),
+    readRunTokenSources: vi.fn(async () => ({
+      toolDefinitionTokens: 12_400,
+      contextFrameTokens: null,
+      steeringTokens: 900,
+    })),
+    readTachoToolCallFrames: vi.fn(async () => []),
+  }));
 
 vi.mock("@oxagen/telemetry", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/telemetry")>()),
   readModelCallFrames,
+  readRunTokenSources,
   readTachoToolCallFrames,
 }));
 
@@ -100,5 +107,27 @@ describe.skipIf(!enabled)("a wrapped run's session list against Postgres", () =>
       rootSessionUuid: uuids.root,
       sessionUuids: [uuids.root, uuids.child],
     });
+    expect(readRunTokenSources).toHaveBeenCalledWith({ ...scope, run });
+  });
+
+  it("stores the run's token sources, with an unmeasured one as null (#4493)", async () => {
+    await rebuildRunTotals(publicId("root"));
+    const rows = await withSystemDb((tx) =>
+      tx
+        .select({
+          toolDefinitionTokens: schema.runTotals.toolDefinitionTokens,
+          contextFrameTokens: schema.runTotals.contextFrameTokens,
+          steeringTokens: schema.runTotals.steeringTokens,
+        })
+        .from(schema.runTotals)
+        .where(eq(schema.runTotals.runId, publicId("root"))),
+    );
+    expect(rows).toEqual([
+      {
+        toolDefinitionTokens: 12_400,
+        contextFrameTokens: null,
+        steeringTokens: 900,
+      },
+    ]);
   });
 });

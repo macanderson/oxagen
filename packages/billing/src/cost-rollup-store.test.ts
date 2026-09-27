@@ -6,6 +6,7 @@
  * Postgres in packages/handlers/src/lib/proof.pg.test.ts.
  */
 import { schema } from "@oxagen/database";
+import type { RunTokenSources } from "@oxagen/telemetry";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -58,8 +59,10 @@ function deps(over: {
   witnessed?: Record<string, string>;
   modelCalls?: ModelCallFrame[];
   toolCalls?: ToolCallFrame[];
+  sources?: RunTokenSources;
 }) {
   const written: RunTotalsRecord[] = [];
+  const sourcesWritten: (RunTokenSources | undefined)[] = [];
   const scopes: unknown[] = [];
   const d: RunRollupDeps = {
     loadRunSource: async (publicId) => {
@@ -87,12 +90,21 @@ function deps(over: {
       scopes.push(scope);
       return over.witnessed?.[runId] ?? null;
     }),
-    write: async (record) => {
+    readTokenSources: vi.fn(
+      async () =>
+        over.sources ?? {
+          toolDefinitionTokens: null,
+          contextFrameTokens: null,
+          steeringTokens: null,
+        },
+    ),
+    write: async (record, _rolledUpAt, sources) => {
       written.push(record);
+      sourcesWritten.push(sources);
     },
     now: () => new Date("2026-09-15T10:00:00.000Z"),
   };
-  return { d, written, scopes };
+  return { d, written, sourcesWritten, scopes };
 }
 
 describe("rebuildRunTotals", () => {
@@ -189,6 +201,63 @@ describe("rebuildRunTotals", () => {
     expect((await rebuildRunTotals(WITNESS, d))?.operatorKey).toBe(
       "prn_runner_host",
     );
+  });
+});
+
+describe("the token sources a rollup writes (#4493)", () => {
+  it("reads the run's sources in its own scope and writes them beside the record", async () => {
+    const { d, sourcesWritten } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+      sources: {
+        toolDefinitionTokens: 12_400,
+        contextFrameTokens: null,
+        steeringTokens: 900,
+      },
+    });
+    await rebuildRunTotals(WORKER, d);
+    expect(d.readTokenSources).toHaveBeenCalledWith({
+      ...SCOPE,
+      run: {
+        kind: "tacho",
+        rootSessionUuid: WORKER,
+        sessionUuids: [WORKER],
+      },
+    });
+    // A source no call measured stays null beside the two that were.
+    expect(sourcesWritten).toEqual([
+      {
+        toolDefinitionTokens: 12_400,
+        contextFrameTokens: null,
+        steeringTokens: 900,
+      },
+    ]);
+  });
+
+  it("writes every source as null when no call measured any", async () => {
+    const { d, sourcesWritten } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+    await rebuildRunTotals(WORKER, d);
+    expect(sourcesWritten).toEqual([
+      {
+        toolDefinitionTokens: null,
+        contextFrameTokens: null,
+        steeringTokens: null,
+      },
+    ]);
+  });
+
+  it("writes nothing when the sources cannot be read, so the job retries", async () => {
+    const { d, written } = deps({
+      runs: { [WORKER]: meta(WORKER, "prn_worker_operator") },
+    });
+    d.readTokenSources = async () => {
+      throw new Error("clickhouse down");
+    };
+    await expect(rebuildRunTotals(WORKER, d)).rejects.toThrow(
+      "clickhouse down",
+    );
+    expect(written).toHaveLength(0);
   });
 });
 
