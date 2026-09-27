@@ -307,15 +307,14 @@ describe("auth", () => {
     }
   });
 
-  // Pinned as it stands: mode none refuses auth.credential but not a
-  // credential on an environment, which the manifest then carries. PR #4416
-  // lists this as a contract gap.
-  it("accepts an environment credential when the mode is none", () => {
+  it("refuses an environment's credential when the mode is none", () => {
     const value = server(remote, {
       auth: { mode: "none" },
-      environments: { live: { credential: "oxagen:credential/x" } },
+      environments: { live: { credential: "oxagen:credential/x" }, test: { sandbox: true } },
     });
-    expect(issues(value)).toStrictEqual([]);
+    expect(issues(value)).toStrictEqual([
+      { path: "environments.live.credential", message: "credential is not allowed when auth.mode is none" },
+    ]);
   });
 
   it("requires a header for the header scheme, and only for it", () => {

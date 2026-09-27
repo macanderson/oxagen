@@ -298,7 +298,9 @@ function environments(server: McpServer): Record<string, ManifestEnvironment> {
     };
     const url = env.url ?? sourceUrl;
     if (url !== undefined) resolved.url = url;
-    const credential = env.credential ?? server.auth?.credential;
+    // Mode none sends no credential. The schema refuses one, and this keeps
+    // a manifest from carrying one even so.
+    const credential = server.auth?.mode === "none" ? undefined : (env.credential ?? server.auth?.credential);
     if (credential !== undefined) resolved.credential = credential;
     out[name] = resolved;
   }

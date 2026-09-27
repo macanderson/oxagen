@@ -1130,6 +1130,38 @@
     {
       "if": {
         "required": [
+          "auth"
+        ],
+        "properties": {
+          "auth": {
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "const": "none"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "environments": {
+            "additionalProperties": {
+              "not": {
+                "required": [
+                  "credential"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
           "environments"
         ],
         "properties": {

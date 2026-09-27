@@ -404,6 +404,29 @@ const credentialNamed: CustomCheck = {
   },
 };
 
+/** Mode none sends no credential, so no environment names one, as auth.credential cannot. */
+const noneNamesNoCredential: CustomCheck = {
+  issues(value) {
+    const auth = value.auth as Loose | undefined;
+    if (auth?.mode !== "none") return [];
+    return environments(value)
+      .filter(([, env]) => env.credential !== undefined)
+      .map(([name]) => ({
+        path: ["environments", name, "credential"],
+        message: "credential is not allowed when auth.mode is none",
+      }));
+  },
+  json: {
+    if: {
+      required: ["auth"],
+      properties: { auth: { required: ["mode"], properties: { mode: { const: "none" } } } },
+    },
+    then: {
+      properties: { environments: { additionalProperties: { not: { required: ["credential"] } } } },
+    },
+  },
+};
+
 /**
  * Every agent's calls go to the sandbox (Mac, 2026-09-26). A server with two
  * or more environments marks exactly one `sandbox = true`. A server with one
@@ -463,7 +486,14 @@ export const mcpServerSchema = withChecks(
       sync: syncSchema,
     })
     .strict(),
-  [localHasNoAuth, definitionNeedsEnvironments, schemeFitsSource, credentialNamed, oneSandbox],
+  [
+    localHasNoAuth,
+    definitionNeedsEnvironments,
+    schemeFitsSource,
+    credentialNamed,
+    noneNamesNoCredential,
+    oneSandbox,
+  ],
 );
 export type McpServer = z.output<typeof mcpServerSchema>;
 
