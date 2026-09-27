@@ -12,7 +12,7 @@
 // keeps the rows, and the reader skips a revoked host.
 //
 // The migration that creates this table and its tenant policies is
-// 20260927090000_machine_group_members.sql.
+// 20260927170000_machine_group_members.sql.
 import { sql } from "drizzle-orm";
 import { check, index, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { appendOnlyAuditMixin, idMixin, orgScopeMixin } from "./_mixins";
