@@ -102,6 +102,18 @@ type Events = {
     };
   };
 
+  // Provision a steering repo (lane S1, #4450). create_workspace sends it for
+  // the new workspace, and create_organization for `<org>/oxagen`, where
+  // workspaceId is null. Sending it again resumes from the step that stopped.
+  "steering-repo/provision.requested": {
+    data: {
+      orgId: string;
+      workspaceId: string | null;
+      /** The person who created the workspace or the organization. */
+      actorUserId: string;
+    };
+  };
+
   // Manual or polling sync request dispatched by the integration.sync handler.
   // The worker resolves the connector type and dispatches the appropriate sync event.
   "ingestion/sync.requested": {

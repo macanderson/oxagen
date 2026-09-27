@@ -576,6 +576,87 @@ export async function readTachoToolCallFrames(args: {
   }));
 }
 
+/**
+ * One step of a wrapped run as the no-progress check reads it, in the run's
+ * order: a hook tool call, or a file the harness said changed. A file change
+ * carries nothing else, since the check only needs to know one happened.
+ */
+export type ProgressFrameRow =
+  | { fileChanged: true }
+  | {
+      /** Null when the frame names no tool. */
+      name: string | null;
+      /** Null when the hook recorded no digest. */
+      inputDigest: string | null;
+      outputDigest: string | null;
+      /** The classifier's flag; null when it said nothing. */
+      isMutating: boolean | null;
+    };
+
+/**
+ * A wrapped run's hook tool calls and `oxagen:file_changed` frames, oldest
+ * first, in the run's own workspace and sessions (#4490). The no-progress
+ * check counts identical calls in a row, and a file change between two of
+ * them ends the row: the second call may read what the change wrote. The
+ * rollup's read ({@link readTachoToolCallFrames}) leaves file changes out,
+ * so the check reads its own.
+ */
+export async function readTachoProgressFrames(args: {
+  orgId: string;
+  workspaceId: string;
+  rootSessionUuid: string;
+  /** The run's sessions, root first ({@link FrameRunRef}). */
+  sessionUuids: readonly string[];
+}): Promise<ProgressFrameRow[]> {
+  const ch = clickhouse();
+  const result = await ch.query({
+    query: `
+      SELECT
+        kind               AS kind,
+        tool_name          AS name,
+        tool_input_digest  AS input_digest,
+        tool_output_digest AS output_digest,
+        tool_is_mutating   AS is_mutating
+      FROM tacho_events FINAL
+      WHERE org_id = {orgId:UUID}
+        AND workspace_id = {workspaceId:UUID}
+        AND root_session_uuid = {rootSessionUuid:UUID}
+        AND ${RUN_SESSIONS}
+        AND (
+          (kind = 'tool_call' AND source = 'hook')
+          OR kind = 'oxagen:file_changed'
+        )
+      ORDER BY ts, seq
+    `,
+    query_params: {
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      rootSessionUuid: args.rootSessionUuid,
+      sessionUuids: runSessions(args),
+    },
+    format: "JSONEachRow",
+  });
+  type Row = {
+    kind: string;
+    name: string;
+    input_digest: string;
+    output_digest: string;
+    is_mutating: boolean | null;
+  };
+  const rows = (await result.json()) as Row[];
+  return rows.map(
+    (r): ProgressFrameRow =>
+      r.kind === "tool_call"
+        ? {
+            name: r.name === "" ? null : r.name,
+            inputDigest: r.input_digest === "" ? null : r.input_digest,
+            outputDigest: r.output_digest === "" ? null : r.output_digest,
+            isMutating: r.is_mutating,
+          }
+        : { fileChanged: true },
+  );
+}
+
 /** One hook-recorded tool call of a wrapped run, as the findings job reads it. */
 export interface ToolCallObservationRow {
   rootSessionUuid: string;

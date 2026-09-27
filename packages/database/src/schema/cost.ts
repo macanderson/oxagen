@@ -698,3 +698,81 @@ export const findingClaims = costSchema.table(
     costCheck: check("finding_claims_cost_check", sql`${t.costMicros} >= 0`),
   }),
 );
+
+/** The no-progress limit's modes (workspace.no_progress_policy). */
+const NO_PROGRESS_HIT_MODES = ["observe", "enforced"] as const;
+
+/** `paused` only when an enforced limit paused the run. */
+const NO_PROGRESS_HIT_OUTCOMES = ["would_pause", "paused"] as const;
+
+// `no_progress_hits` is one row per loop that reached the workspace's
+// no-progress limit (spend spec, detector 1). A loop is the same call, with
+// the same tool, input digest, and output digest, made again and again in a
+// row. `cost.run-progress` runs the check on every progress rollup and reads
+// the whole run each time, so a loop's row is written once and later passes
+// only raise `repeats` as the loop grows. The mode and outcome are the ones
+// in force when the loop reached the limit, and are never rewritten.
+export const noProgressHits = costSchema.table(
+  "no_progress_hits",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    // The run's public id: `arun_…` (evidence ledger) or `tse_…` (tacho).
+    runId: text("run_id").notNull(),
+    tool: text("tool").notNull(),
+    inputDigest: text("input_digest").notNull(),
+    outputDigest: text("output_digest").notNull(),
+    // 1 for the call's first loop in the run, 2 for its second.
+    loop: integer("loop").notNull(),
+    // The calls in the loop so far, the first one included.
+    repeats: integer("repeats").notNull(),
+    // The limit the loop reached.
+    limitRepeats: integer("limit_repeats").notNull(),
+    // The call that reached the limit, counted from 1 in the run's call order.
+    atCall: integer("at_call").notNull(),
+    mode: text("mode").notNull(),
+    outcome: text("outcome").notNull(),
+    detectedAt: timestamp("detected_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    loopIdx: uniqueIndex("no_progress_hits_loop_idx").on(
+      t.workspaceId,
+      t.runId,
+      t.tool,
+      t.inputDigest,
+      t.outputDigest,
+      t.loop,
+    ),
+    orgWorkspaceIdx: index("no_progress_hits_org_workspace_idx").on(
+      t.orgId,
+      t.workspaceId,
+    ),
+    modeCheck: check(
+      "no_progress_hits_mode_check",
+      sql`${t.mode} IN (${inList(NO_PROGRESS_HIT_MODES)})`,
+    ),
+    outcomeCheck: check(
+      "no_progress_hits_outcome_check",
+      sql`${t.outcome} IN (${inList(NO_PROGRESS_HIT_OUTCOMES)})`,
+    ),
+    // Only an enforced limit pauses a run.
+    pausedCheck: check(
+      "no_progress_hits_paused_check",
+      sql`${t.outcome} = 'would_pause' OR ${t.mode} = 'enforced'`,
+    ),
+    loopCheck: check("no_progress_hits_loop_check", sql`${t.loop} >= 1`),
+    repeatsCheck: check(
+      "no_progress_hits_repeats_check",
+      sql`${t.limitRepeats} >= 2 AND ${t.repeats} >= ${t.limitRepeats}`,
+    ),
+    atCallCheck: check(
+      "no_progress_hits_at_call_check",
+      sql`${t.atCall} >= ${t.limitRepeats}`,
+    ),
+  }),
+);

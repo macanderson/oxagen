@@ -266,7 +266,7 @@ describe("the waiting question", () => {
       ],
     ]);
     expect(screen.getByTestId("interjection-pick-create")).toHaveTextContent(
-      "Create a new workspaceCalled edge-proxy, with this repository as its main repository.",
+      "Create a new workspaceCalled edge-proxy. It starts with no linked repository.",
     );
     expect(linesOf("create")).toEqual([
       [
@@ -369,7 +369,7 @@ describe("the waiting question", () => {
       ],
     ]);
     expect(screen.getByTestId("interjection-pick-create")).toHaveTextContent(
-      "A new workspace with this repository as its main repository.",
+      "A new workspace with no linked repository.",
     );
     await expectNoAxe(container);
   });

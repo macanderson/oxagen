@@ -53,7 +53,6 @@ function post(app: Hono<AppEnv>) {
       body: JSON.stringify({
         name: "First",
         slug: "first",
-        mainRepo: { owner: "acme", name: "widgets" },
       }),
     }),
   );
