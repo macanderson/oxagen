@@ -145,6 +145,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .agentMemoryPolicyWriteHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "remember_lesson",
+    async () =>
+      (await import("./agent.memory.lesson.remember"))
+        .agentMemoryLessonRememberHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "record_reflection",
+    async () =>
+      (await import("./agent.memory.reflection.record"))
+        .agentMemoryReflectionRecordHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "create_api_key",
     async () =>
       (await import("./api.key.create"))

@@ -68,8 +68,10 @@ after the registered name separately when their contract uses a dotted stem.
 | [promote_memory](agent.memory.promote.md) | [agent.memory.promote.ts](../../packages/oxagen/src/contracts/agent.memory.promote.ts) | api, mcp, agent |
 | [recall_memory](agent.memory.recall.md) | [agent.memory.recall.ts](../../packages/oxagen/src/contracts/agent.memory.recall.ts) | api, mcp, agent |
 | [record_execution](agent.execution.record.md) | [agent.execution.record.ts](../../packages/oxagen/src/contracts/agent.execution.record.ts) | api, mcp |
+| [record_reflection](agent.memory.reflection.record.md) | [agent.memory.reflection.record.ts](../../packages/oxagen/src/contracts/agent.memory.reflection.record.ts) | mcp |
 | [register_agent](agent.register.md) | [agent.register.ts](../../packages/oxagen/src/contracts/agent.register.ts) | api, cli |
 | [register_mcp_server](agent.mcp.register.md) | [agent.mcp.register.ts](../../packages/oxagen/src/contracts/agent.mcp.register.ts) | api, mcp |
+| [remember_lesson](agent.memory.lesson.remember.md) | [agent.memory.lesson.remember.ts](../../packages/oxagen/src/contracts/agent.memory.lesson.remember.ts) | mcp |
 | [resolve_approval](agent.approval.resolve.md) | [agent.approval.resolve.ts](../../packages/oxagen/src/contracts/agent.approval.resolve.ts) | api, mcp |
 | [resolve_mcp_consent](agent.mcp_consent.resolve.md) | [agent.mcp_consent.resolve.ts](../../packages/oxagen/src/contracts/agent.mcp_consent.resolve.ts) | api, mcp |
 | `resolve_mcp_servers` | [agent.mcp.resolve.ts](../../packages/oxagen/src/contracts/agent.mcp.resolve.ts) | api |

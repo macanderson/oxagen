@@ -1,5 +1,5 @@
 {
-  "generatedCount": 398,
+  "generatedCount": 400,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -3269,6 +3269,16 @@
       "consumes": []
     },
     {
+      "name": "record_reflection",
+      "domain": "agent",
+      "surfaces": [
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "record_reply_feedback",
       "domain": "assistant",
       "surfaces": [
@@ -3316,6 +3326,16 @@
       "domain": "agent",
       "surfaces": [
         "api",
+        "mcp"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "remember_lesson",
+      "domain": "agent",
+      "surfaces": [
         "mcp"
       ],
       "component": null,
