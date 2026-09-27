@@ -301,7 +301,7 @@ async function requireApprovalsResetOnPush(
     reset = null;
   }
   if (reset === true) return;
-  const fix = `Turn on "Reset approvals on push" (Settings > Merge requests > Approval settings, where GitLab labels it "Remove all approvals when commits are added to the source branch"), or run the steering repo repair.`;
+  const fix = `Turn on "Reset approvals on push" (Settings > Merge requests > Approval settings, where GitLab labels it "Remove all approvals when commits are added to the source branch").`;
   throw new HandlerError({
     code: "conflict",
     reason: "approvals_not_head_bound",

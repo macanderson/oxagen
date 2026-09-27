@@ -906,7 +906,7 @@ describe("the GitLab seam's merge-queue calls", () => {
     await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
       code: "conflict",
       reason: "approvals_not_head_bound",
-      message: expect.stringContaining("steering repo repair"),
+      message: expect.stringContaining("The setting needs GitLab Premium."),
     });
   });
 
