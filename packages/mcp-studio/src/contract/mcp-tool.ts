@@ -72,7 +72,9 @@ export function lockedMcpTool(tool: McpTool): LockedMcpTool {
     for (const key of ANNOTATION_KEYS) {
       if (tool.annotations[key] !== undefined) annotations[key] = tool.annotations[key];
     }
-    locked.annotations = annotations as LockedMcpToolAnnotations;
+    // Annotations with no known hint lock as none, so a hint MCP adds later
+    // changes neither the lock nor its hash.
+    if (Object.keys(annotations).length > 0) locked.annotations = annotations as LockedMcpToolAnnotations;
   }
   return locked;
 }

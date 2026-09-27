@@ -61,6 +61,13 @@ describe("lockedMcpTool", () => {
   it("keeps a bare tool bare", () => {
     expect(lockedMcpTool(bare)).toStrictEqual({ name: "list_charges", inputSchema: { type: "object" } });
   });
+
+  it("locks annotations with no known hint as no annotations", () => {
+    for (const annotations of [{}, { vendorHint: "refunds" }]) {
+      const tool = mcpToolSchema.parse({ name: "list_charges", inputSchema: { type: "object" }, annotations });
+      expect(lockedMcpTool(tool)).toStrictEqual(lockedMcpTool(bare));
+    }
+  });
 });
 
 describe("upstreamFromMcpTool", () => {
