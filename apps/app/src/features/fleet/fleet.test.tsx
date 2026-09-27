@@ -1395,12 +1395,17 @@ describe("the Runs panel", () => {
     await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
     const user = userEvent.setup();
     await user.click(screen.getByTestId("row-pause"));
-    await cancelIngress(
-      user,
-      screen.getByRole("dialog", { name: "Evidence ingress" }),
-    );
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await cancelIngress(user, dialog);
     expect(await screen.findByTestId("pause-failure")).toBeInTheDocument();
     expect(screen.queryByTestId("ledger-applied")).toBeNull();
+    // The failure draws with the buttons it frees, not before them.
+    expect(
+      within(dialog).getByRole("button", {
+        name: "Revoke evidence ingress for good",
+      }),
+    ).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeEnabled();
     expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
   });
 

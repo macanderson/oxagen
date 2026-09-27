@@ -26,7 +26,7 @@
 - Uninstall the wrapper: `tacho unenroll` strips the hooks in every wrapped harness, stops the service, revokes on the control plane and deletes the credentials; `--purge` drops the local event log; the app then removes `~/.config/oxagen` and points at the platform uninstaller.
 - Windows support in Tacho itself: a per-user Task Scheduler service, loopback TCP for the hook, `cmd.exe` quoting.
 - Not yet: signing by default. Code signing runs only when the Apple / Azure secrets exist in CI (§9); a local build is ad-hoc signed and Gatekeeper warns on first open.
-- Not yet: an in-app updater; a new version is a new download (§11).
+- Update in place. The app checks the release feed at launch, every hour, and on focus. A Mac that passes the five gates in ADR-202 installs a new version in the background and shows Restart. Windows, Linux, and any Mac that fails a gate show a prompt with Install and relaunch. Every install restarts the collector. The feed has carried no release yet (§11).
 
 
 ## 2. The rule the app is built on
@@ -230,7 +230,7 @@ Not verified here: an end-to-end enroll against a live control plane from inside
 ## 11. Not in rev 1
 
 - ~~A `codex` runtime.~~ Shipped since this line was written: the `20260914120000_tacho_sessions_runtime_codex` migration widened `tacho.sessions.runtime` from five values to six, and Codex sessions carry `runtime = codex` directly rather than `runtime = custom, harness = codex`. The fleet page filters by Codex without going through the harness column. The `stella` runtime value shipped in the same enum (§6).
-- **Signing secrets and an updater.** The workflow signs when secrets exist; the org's Actions were billing-locked at the last stella release, so the first real build may have to run on a fork. `tauri-plugin-updater` with a minisign key is the next step once releases are signed.
+- **Signing secrets and the first release.** The workflow signs when secrets exist; the org's Actions were billing-locked at the last stella release, so the first real build may have to run on a fork. The updater shipped with a minisign key (#4303, ADR-202), but no `desktop-v*` release exists yet, so `desktop-latest/latest.json` answers 404 and no installed app has anything to update to.
 - **Smaller sidecars.** Two paths: `bun build --compile` (~60 MB per binary, cross-compiles from one runner) or one binary for both CLIs (`oxagen tacho hook` / `oxagen tacho daemon`) once the CLI's start-up is measured on the hook path.
 - **Making the reassigned workspace the CLI default too.** The app changes `host.json`; `config.json`'s workspace stays the CLI's default until the user runs `oxagen login` again. A `--workspace` on `oxagen login` that re-uses the saved token would close that.
 - **A headless Linux server.** `oxagen login` needs a browser; the CLI's `--token` path covers servers and the app is not meant for them.
