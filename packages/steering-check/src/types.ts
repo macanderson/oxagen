@@ -77,13 +77,14 @@ export interface CedarHooks {
 export type ServerFileOutcome = { ok: true } | { ok: false; issues: readonly FileIssue[] };
 
 /**
- * Readers for the three files under tools/servers/<name>/. MCP Studio owns
- * their schemas. Without a reader, the schema check reads only the syntax.
+ * Readers for server.toml and tools.toml under tools/servers/<name>/. MCP
+ * Studio owns their schemas, and the caller passes its readers in. Without a
+ * reader, the schema check reads only the TOML syntax. tools.lock.json needs
+ * no reader, because Oxagen writes it and the owned check refuses any edit.
  */
 export interface ServerReaders {
   server?: (text: string) => ServerFileOutcome;
   tools?: (text: string) => ServerFileOutcome;
-  lock?: (text: string) => ServerFileOutcome;
 }
 
 /** Everything the checks read. */
