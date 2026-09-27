@@ -8869,6 +8869,44 @@ type Messages = {
         selfReported: string;
       };
     };
+    ranking: {
+      title: string;
+      note: string;
+      managersOnly: string;
+      empty: string;
+      mixedCurrency: string;
+      unnamed: string;
+      unattributed: string;
+      total: string;
+      hidden: string;
+      hiddenNote: string;
+      runsBehind: string;
+      definitionsTitle: string;
+      columns: {
+        rank: string;
+        operator: string;
+        unproductive: string;
+        shareOfTotal: string;
+        unproductiveShare: string;
+        runs: string;
+        runsBehind: string;
+      };
+      definitions: {
+        unproductive: string;
+        shareOfTotal: string;
+        unproductiveShare: string;
+        runs: string;
+      };
+      pseudonyms: {
+        on: string;
+        off: string;
+        turnOn: string;
+        turnOff: string;
+        saving: string;
+        denied: string;
+        failed: string;
+      };
+    };
     toolChart: {
       metric: {
         cumulative: string;

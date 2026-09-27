@@ -1490,7 +1490,7 @@
     "set_operator_pseudonyms": {
       "route": "/[org]/[ws]/spend?tab=operator",
       "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
-      "entry": "Spend › By operator › Operator ranking › Pseudonyms: the org Owner or Admin switch that shows a pseudonym in place of each operator's name (features/spend/operator-ranking.tsx, features/spend/operator-ranking-actions.ts)",
+      "entry": "Spend › By operator › Operator ranking › Pseudonyms: the org Owner or Admin switch that shows a pseudonym in place of each operator's name (features/spend/operator-ranking-pseudonyms.tsx, features/spend/operator-ranking-actions.ts)",
       "proof": "apps/app/src/features/spend/operator-ranking.test.tsx",
       "verifiedAt": "2026-09-27",
       "verifiedBy": "session-b2d598df-spend-f5"

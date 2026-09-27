@@ -28,6 +28,10 @@ import { DrillSection } from "./drill";
 import { ExportDialog } from "./export-dialog";
 import { FindingEvidence, FindingsSection } from "./findings";
 import { GatewayPolicySection } from "./gateway-policy";
+import {
+  canReadOperatorRanking,
+  OperatorRankingSection,
+} from "./operator-ranking";
 import { PricingSection } from "./pricing";
 import { SpendEmpty, SpendReadFailure, SpendSectionFailure } from "./states";
 import { SummaryTiles } from "./summary";
@@ -231,8 +235,28 @@ async function body({
       return <TokensSection month={month} agents={agents} at={at} />;
     }
     case "coaching":
-      return <CoachingSection />;
-    case "operator":
+      return <CoachingSection at={at} />;
+    case "operator": {
+      // The ranking is asked only for a manager; anyone else sees who can
+      // read it (D15).
+      const [report, ranking] = await Promise.all([
+        source.spend.byGroup(ctx, "operator", period),
+        canReadOperatorRanking(ctx)
+          ? source.spend.operatorRanking(ctx, period)
+          : Promise.resolve(null),
+      ]);
+      if (!report.ok) return <SpendReadFailure read={report} {...failure} />;
+      return (
+        <>
+          <OperatorRankingSection ranking={ranking} at={at} />
+          <OperatorTable
+            report={report.value}
+            findings={listed(findings)}
+            at={at}
+          />
+        </>
+      );
+    }
     case "agent":
     case "tool":
     case "task": {
@@ -240,10 +264,6 @@ async function body({
       if (!report.ok) return <SpendReadFailure read={report} {...failure} />;
       const list = listed(findings);
       switch (view.tab) {
-        case "operator":
-          return (
-            <OperatorTable report={report.value} findings={list} at={at} />
-          );
         case "agent":
           return <AgentTable report={report.value} findings={list} at={at} />;
         case "tool":
