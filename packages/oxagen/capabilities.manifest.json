@@ -6500,6 +6500,42 @@
       }
     },
     {
+      "name": "add_group_machine",
+      "file": "tacho.machine_group.add.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "list_machine_groups",
+      "file": "tacho.machine_group.list.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
+      "name": "remove_group_machine",
+      "file": "tacho.machine_group.remove.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [],
+      "layers": {
+        "schema": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_tacho_session",
       "file": "tacho.session.get.ts",
       "domain": "tacho",

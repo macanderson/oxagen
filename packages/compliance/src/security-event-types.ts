@@ -273,6 +273,12 @@ export const SECURITY_EVENT_TYPES = [
   // carrying how many runs took the pause and which were skipped and why.
   // Emitted by packages/handlers/src/tacho.workspace_runs.pause.ts (#3862).
   "tacho.workspace_runs_paused",
+  // One row per change to a machine group: an admin added an enrolled machine
+  // to a group or removed it. A group decides which machines may run a local
+  // server. Emitted by
+  // packages/handlers/src/mcp-studio/local-calls/machine-group.add.ts and
+  // machine-group.remove.ts.
+  "tacho.machine_group_changed",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -589,6 +595,19 @@ export interface WorkspaceRunsPausedDetail {
 }
 
 /**
+ * Evidence recorded on `tacho.machine_group_changed`: the group, the machine by
+ * its public id, and whether the admin added or removed it. `changed` is false
+ * when the membership already matched, so the call changed nothing.
+ */
+export interface MachineGroupChangeDetail {
+  change: "added" | "removed";
+  group: string;
+  /** The machine's public id (`tch_…`). */
+  machineId: string;
+  changed: boolean;
+}
+
+/**
  * Evidence recorded when `update_runtime` changes whether a runtime requires
  * the contained launcher (ADR-204). `runtimeId` is the runtime's public id.
  * `previous` is the value the change replaced, so a reader sees a switch
@@ -631,6 +650,7 @@ export interface InterjectionAnsweredDetail {
 export type SecurityEventDetail =
   | InterjectionAnsweredDetail
   | WorkspaceRunsPausedDetail
+  | MachineGroupChangeDetail
   | PasswordChangeDetail
   | ScimTokenDetail
   | ScimUserDetail

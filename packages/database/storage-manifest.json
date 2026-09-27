@@ -23,6 +23,13 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "add_group_machine",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "add_org_member",
       "reads": [],
@@ -2230,6 +2237,13 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "list_machine_groups",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "mandate",
       "name": "list_mandates",
       "reads": [],
@@ -3050,6 +3064,13 @@
       "surfaces": [
         "mcp"
       ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "remove_group_machine",
+      "reads": [],
+      "surfaces": [],
       "writes": []
     },
     {
@@ -4224,7 +4245,7 @@
       "writes": []
     }
   ],
-  "contentHash": "58728aa6a1dd92e83c0daf27f90d552f905bc8375aec8b9eebb0ca042d507205",
+  "contentHash": "ba63af70bd8320687e42babe43f3aec8ffff9c526092286db6a6d26c9c36241c",
   "domains": [
     {
       "name": "agent",
@@ -4613,6 +4634,7 @@
         "postgres:tacho.gateway_chains",
         "postgres:tacho.hosts",
         "postgres:tacho.incidents",
+        "postgres:tacho.machine_group_members",
         "postgres:tacho.run_pull_requests",
         "postgres:tacho.session_commands",
         "postgres:tacho.session_files",
@@ -4704,7 +4726,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 167
+      "tableCount": 168
     },
     {
       "domains": [
@@ -22788,6 +22810,65 @@
       "domain": "tacho",
       "id": "postgres:tacho.incidents",
       "name": "incidents",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "group_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "host_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:tacho.hosts",
+          "type": "uuid"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.machine_group_members",
+      "name": "machine_group_members",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
