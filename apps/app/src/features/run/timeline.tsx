@@ -22,6 +22,7 @@ import {
   isParked,
   kindCounts,
   kindOf,
+  presentedType,
   type TimelineMark,
 } from "./player-model";
 
@@ -202,6 +203,8 @@ export function RunTimeline({
                   ? TICK_HEIGHT.cost
                   : TICK_HEIGHT.rest;
             const on = frame.seq === openSeq;
+            // An operator's command reads as `control.<command>` (ADR-056).
+            const type = presentedType(frame.type, entries.get(frame.seq));
             return (
               <SafeLink
                 key={frame.cursor}
@@ -209,9 +212,9 @@ export function RunTimeline({
                 data-testid="timeline-tick"
                 data-kind={kind}
                 aria-current={on ? "true" : undefined}
-                aria-label={t("tick", { seq: frame.seq, type: frame.type })}
+                aria-label={t("tick", { seq: frame.seq, type })}
                 title={t("tickTitle", {
-                  tick: t("tick", { seq: frame.seq, type: frame.type }),
+                  tick: t("tick", { seq: frame.seq, type }),
                   clock: clock(frame.observedAt),
                   summary: frame.summary,
                 })}

@@ -35,7 +35,7 @@ const preferences = vi.fn<DataSource["shell"]["preferences"]>();
 const resolveViewer = vi.fn();
 const source: DataSource = {
   runtimes: { list: refuse, agents: refuse, named: refuse },
-  conversations: { latest: refuse },
+  conversations: { latest: refuse, list: refuse, byId: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
   shell: {
     context: refuse,
@@ -52,6 +52,7 @@ const source: DataSource = {
     turns: refuse,
     transcript: refuse,
     chain: refuse,
+    commands: refuse,
     outputs: refuse,
     work: refuse,
     outcomesSettings: refuse,
@@ -60,7 +61,7 @@ const source: DataSource = {
     findings: refuse,
   },
   approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
-  interjections: { open: refuse },
+  interjections: { open: refuse, forRun: refuse },
   agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
   billing: {
     plan: refuse,

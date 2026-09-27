@@ -162,7 +162,7 @@ export function runtimesSource(reads: {
   };
   const source: DataSource = {
     runtimes,
-    conversations: { latest: refuse },
+    conversations: { latest: refuse, list: refuse, byId: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
       context: refuse,
@@ -187,6 +187,7 @@ export function runtimesSource(reads: {
       turns: refuse,
       transcript: refuse,
       chain: refuse,
+      commands: refuse,
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,
@@ -195,7 +196,7 @@ export function runtimesSource(reads: {
       findings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
-    interjections: { open: refuse },
+    interjections: { open: refuse, forRun: refuse },
     agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
     mandates: { list: refuse, get: refuse },
     spend: {

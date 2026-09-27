@@ -69,6 +69,10 @@ vi.mock("@/server/session", () => ({
   ),
 }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+// Steer the fleet opens the Run lane's delivery report from its receipt. Its
+// own test covers that path, so here the report is a stub and the Run lane's
+// server actions never load.
+vi.mock("@/features/run/client", () => ({ DeliveryReport: () => null }));
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
@@ -973,6 +977,9 @@ describe("the Runs panel", () => {
     expect(refresh).toHaveBeenCalled();
   });
 
+  // #2953: the row refused Pause on every ledger run, though dispatch_command
+  // has fenced a ledger run's evidence ingress since #3637. The dialog says
+  // the command is recorded as a receipt, not a frame, and sends the reason.
   it("pauses a live ledger run's evidence ingress from its row", async () => {
     dispatchRunCommand.mockResolvedValue({
       ok: true,
@@ -982,9 +989,16 @@ describe("the Runs panel", () => {
     const user = userEvent.setup();
     await user.click(screen.getByTestId("row-pause"));
     const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    expect(screen.queryByTestId("pause-refusal")).toBeNull();
     expect(dialog).toHaveTextContent(
       "Pause refuses new evidence batches at the next ingest boundary.",
     );
+    expect(dialog).toHaveTextContent("command receipt · operator authority");
+    expect(dialog).toHaveTextContent(
+      "The reason is recorded with the command. Oxagen does not send it to the external process.",
+    );
+    expect(dialog).not.toHaveTextContent("control.pause frame");
+    await user.type(within(dialog).getByLabelText("Reason"), "Audit hold");
     await user.click(
       within(dialog).getByRole("button", { name: "Pause evidence ingress" }),
     );
@@ -993,7 +1007,7 @@ describe("the Runs panel", () => {
       "core-platform",
       "arun_ledger",
       "pause",
-      "",
+      "Audit hold",
     );
     const applied = await within(dialog).findByTestId("ledger-applied");
     expect(applied).toHaveTextContent("Evidence ingress is paused.");
@@ -1306,8 +1320,11 @@ describe("the Runs panel", () => {
     expect(await screen.findByTestId("pause-failure")).toBeInTheDocument();
     expect(screen.queryByTestId("ledger-applied")).toBeNull();
     // The confirm step stays, so the person can send it again or go back.
+    // The refusal is set after the action's await, which React renders
+    // before the transition ends, so the button keeps its in-flight name
+    // for one more render.
     expect(
-      within(dialog).getByRole("button", {
+      await within(dialog).findByRole("button", {
         name: "Revoke evidence ingress for good",
       }),
     ).toBeEnabled();

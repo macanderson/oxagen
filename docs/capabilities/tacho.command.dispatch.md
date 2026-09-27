@@ -6,6 +6,17 @@ Queue a run control (Mission Control spec §7.3, §7.4, §7.6; ADR-056): `pause`
 
 A new command supersedes an earlier `queued` command of the same kind on the same run: the earlier row becomes `cancelled` with `superseded_by:<id>`.
 
+## An agent with no run in flight
+
+A `steer` or `message` addressed to an agent that has no run in flight waits for the agent's next run (#2953). Oxagen writes one row addressed to the agent: `target_kind` `agent`, `target_id` the agent key, and no host or session. No host drains it while it is addressed to the agent. When the agent's next root session reaches ingest, the ingest transaction that writes the session moves the row to that run. The row then carries the run's `tse_…` id, its host and session, and `payload.session_uuid`, and its mode is resolved against the run by the rule above. The control envelope on the same ingest response delivers it like any command addressed to a run. The host holds the text for the first boundary its harness can carry: the run's first prompt when the envelope arrives before it, and otherwise the next tool call or the end of the turn.
+
+- The row is written only while a host enrolled as the agent in the workspace, and not revoked, can open the run. Otherwise `commandIds` is empty.
+- A second held `steer` for the same agent supersedes the first, as on a run.
+- A held row past its expiry is marked `expired` when the agent's next run opens, and that run does not take it.
+- A Stella run reads steering text only when its session starts, which has passed by the time the session reaches Oxagen. Its held steer is recorded `failed` with `no_prompt_carrier`.
+- `pause`, `resume` and `cancel` to an agent with no run in flight reach nothing, and `commandIds` is empty.
+- The daemon's own chain (`tachod-…`) is not an agent's run and never takes a held row.
+
 ## Mode
 
 **sync**
@@ -15,7 +26,7 @@ A new command supersedes an earlier `queued` command of the same kind on the sam
 - API: `POST /v1/:org_slug/:workspace_slug/commands`
 - MCP: `dispatch_command`
 - Authentication: session or API key; the handler requires org Owner or Admin, or workspace Owner or Member on the workspace the call is scoped to, of the signed-in user or the key's creator (`assertOrgRole`, `resolveActingUserId`, INV-29), and records that user as the issuer; a key with no recorded creator is refused `forbidden / no_principal` — the kernel's IAM check allows everything for a non-enterprise organisation
-- App: `/[org]/[ws]/runs/[run]` draws Pause, Resume, Steer and Cancel on a live wrapped run, and `/[org]/[ws]` (Fleet) draws Pause, Resume and Cancel on a live wrapped run's row. A run's own Steer stays on the run page, where its text and its delivery mode have room; Fleet's Steer the fleet queues one `steer` per selected agent at `turn_boundary`. A run that is not live draws no controls. A run its host cannot reach (`commandBlock`), a Steer its harness cannot carry (`steerBlock`) and a viewer the handler would refuse each draw the recorded reason in their place, so nobody is sent to a refusal they could have read on the page
+- App: `/[org]/[ws]/runs/[run]` draws Pause, Resume, Steer and Cancel on a live wrapped run, and `/[org]/[ws]` (Fleet) draws Pause, Resume and Cancel on a live wrapped run's row. A run's own Steer stays on the run page, where its text and its delivery mode have room; Fleet's Steer the fleet queues one `steer` per selected agent, at `turn_boundary` or, when a selected agent's run in flight is on the `gateway` or `contained` tier, with `interrupt` as the ceiling. An idle agent's steer waits for its next run. Fleet's Pause on a ledger run's row fences its evidence ingress, as the Run page does. A run that is not live draws no controls. A run its host cannot reach (`commandBlock`), a Steer its harness cannot carry (`steerBlock`) and a viewer the handler would refuse each draw the recorded reason in their place, so nobody is sent to a refusal they could have read on the page
 - Capability name: `dispatch_command`
 - Not billed (`noBillingGate: true`): a lapsed bucket must never leave an agent unstoppable. IAM default-deny; high sensitivity.
 
@@ -34,7 +45,7 @@ A new command supersedes an earlier `queued` command of the same kind on the sam
 
 | Field | Type | Description |
 |---|---|---|
-| `commandIds` | string[] | one `tcm_…` id per recipient run, in the order written; empty for a broadcast that reached no live run |
+| `commandIds` | string[] | one `tcm_…` id per recipient run, in the order written. For a `steer` or `message` to an agent with no run in flight, the one id of the row held for its next run. Empty for a broadcast that reached no live run and held nothing |
 
 ## Recipients and refusals
 

@@ -1,11 +1,14 @@
 // The flyout's thread read (#4163): the viewer resolved from the slugs in the
 // URL, the conversations port read with that viewer, and the workspace's
-// stable id answered beside the thread so a rename cannot strand it.
+// stable id answered beside the thread so a rename cannot strand it. The
+// session list (#4435) reads through the same viewer.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { requireViewer, latest } = vi.hoisted(() => ({
+const { requireViewer, latest, list, byId } = vi.hoisted(() => ({
   requireViewer: vi.fn(),
   latest: vi.fn(),
+  list: vi.fn(),
+  byId: vi.fn(),
 }));
 vi.mock("@oxagen/telemetry", () => ({ captureError: vi.fn() }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
@@ -15,13 +18,14 @@ vi.mock("@/server/viewer", async (importOriginal) => ({
   requireViewer,
 }));
 vi.mock("@/data/source", () => ({
-  dataSource: () => ({ conversations: { latest } }),
+  dataSource: () => ({ conversations: { latest, list, byId } }),
 }));
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const { readError, readOk } = await import("@/data/read");
-const { loadAssistantThread } = await import("./assistant-thread-actions");
+const { loadAssistantThread, listAssistantSessions, openAssistantSession } =
+  await import("./assistant-thread-actions");
 
 const ctx = unsafeMint(WsCtx, {
   userId: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -54,6 +58,8 @@ const THREAD = {
 beforeEach(() => {
   requireViewer.mockReset();
   latest.mockReset();
+  list.mockReset();
+  byId.mockReset();
   requireViewer.mockResolvedValue(ctx);
 });
 
@@ -82,5 +88,55 @@ describe("loadAssistantThread", () => {
     latest.mockResolvedValue(readError("control_plane_unavailable", 503));
     const result = await loadAssistantThread("acme", "core-platform");
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("listAssistantSessions", () => {
+  it("reads the viewer's sessions in the workspace the slugs name", async () => {
+    const sessions = [
+      {
+        id: "cnv_01k9x2",
+        title: "What is live?",
+        updatedAt: "2026-09-25T10:01:00.000Z",
+      },
+    ];
+    list.mockResolvedValue(readOk(sessions));
+    const result = await listAssistantSessions("acme", "core-platform");
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(list).toHaveBeenCalledWith(ctx);
+    expect(result).toEqual({ ok: true, value: sessions });
+  });
+
+  it("carries a refused read out as an ActionResult (negative)", async () => {
+    list.mockResolvedValue(readError("control_plane_unavailable", 503));
+    const result = await listAssistantSessions("acme", "core-platform");
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("openAssistantSession", () => {
+  it("reads the picked session by its id", async () => {
+    byId.mockResolvedValue(readOk(THREAD));
+    const result = await openAssistantSession(
+      "acme",
+      "core-platform",
+      "cnv_01k9x2",
+    );
+    expect(byId).toHaveBeenCalledWith(ctx, "cnv_01k9x2");
+    expect(result).toEqual({ ok: true, value: THREAD });
+  });
+
+  it("names a session that is gone conversation_not_found (negative)", async () => {
+    byId.mockResolvedValue(readError("conversation_not_found", 404));
+    const result = await openAssistantSession(
+      "acme",
+      "core-platform",
+      "cnv_gone",
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "not_found",
+      code: "conversation_not_found",
+    });
   });
 });

@@ -110,7 +110,14 @@ import {
   RUN_ENRICH_EVENT,
   RUN_PROGRESSED_EVENT,
 } from "@oxagen/inngest-functions/events";
+import {
+  isInterjectionFrame,
+  type RaisedInterjection,
+  recordInterjectionFrames,
+  sendInterjectionsRaised,
+} from "./lib/interjection-frames";
 import { recordProofFrames } from "./lib/proof";
+import { readdressNextRunCommands } from "./lib/next-run-commands";
 import { sendPullRequestLinks } from "./lib/run-pull-request-links";
 import {
   type TachoHostRow,
@@ -846,21 +853,39 @@ export function enforcementTierOf(
   return host.mode === "enforce" ? "harness" : "observe";
 }
 
-/** The operator a new session is stamped with (#3999). */
-interface EnrollingOperator {
+/**
+ * The person a session is attributed to (#2951), and that person's role in
+ * this workspace when the session opened (#3999).
+ */
+interface SessionInitiator {
   principalId: string | null;
+  /** Set only when the enroller's principal in this organization resolves. */
+  userId: string | null;
   /** The operator's workspace role, lowercased; null when there is none. */
   role: RunOperatorRole | null;
 }
 
+/** A session no enroller in this organization stands behind. */
+const NO_INITIATOR: SessionInitiator = {
+  principalId: null,
+  userId: null,
+  role: null,
+};
+
 /**
- * The human principal behind the host's enrollment, and that person's role in
- * this workspace. The principal is the row IAM resolves for the host's API key
- * (its creator, `packages/iam/src/fetch-authz.ts`) and the operator the Run
- * header prints (spec section 5.2: the human at the keyboard is the
- * `initiating_principal`). A host row with no recorded enroller, or an
+ * The human principal behind the host's enrollment, that person's user, and
+ * their role in this workspace. The principal is the row IAM resolves for the
+ * host's API key (its creator, `packages/iam/src/fetch-authz.ts`) and the
+ * operator the Run header prints (spec section 5.2: the human at the keyboard
+ * is the `initiating_principal`). A host row with no recorded enroller, or an
  * enroller with no principal in this organization, attributes to nobody and
  * so has no role.
+ *
+ * Both ids come from this lookup, and the lookup names the caller's
+ * organization. The user is written only when their principal here resolves,
+ * so a person who belongs to another organization is never attributed. The
+ * principals a batch names (`agent.initiating_principal_id`,
+ * `agent.agent_principal_id`) are never read: the producer chooses them.
  *
  * The role is read once, here, when the session opens, and stamped on the row
  * (`tacho.sessions.operator_role`, ADR-197). Nothing reads `workspace_users`
@@ -872,8 +897,8 @@ async function enrollingOperator(
   tx: Tx,
   ctx: Scope,
   host: TachoHostRow,
-): Promise<EnrollingOperator> {
-  if (!host.createdById) return { principalId: null, role: null };
+): Promise<SessionInitiator> {
+  if (!host.createdById) return NO_INITIATOR;
   const principal = await tx.query.principals.findFirst({
     where: and(
       eq(schema.principals.orgId, ctx.orgId),
@@ -882,7 +907,7 @@ async function enrollingOperator(
     ),
     columns: { id: true },
   });
-  if (!principal) return { principalId: null, role: null };
+  if (!principal) return NO_INITIATOR;
   const membership = await tx.query.workspaceUsers.findFirst({
     where: and(
       eq(schema.workspaceUsers.workspaceId, ctx.workspaceId),
@@ -890,14 +915,41 @@ async function enrollingOperator(
     ),
     columns: { role: true },
   });
-  return { principalId: principal.id, role: operatorRoleOf(membership?.role) };
+  return {
+    principalId: principal.id,
+    userId: host.createdById,
+    role: operatorRoleOf(membership?.role),
+  };
+}
+
+/**
+ * The cost basis the batch's counted model calls reported
+ * (`llm_call` `cost_basis`, data-model section 2.7), or null when none did.
+ * The last one wins, as `lastRecordedContext` reads the run facts.
+ *
+ * `observed` is never taken from a body. Only a frame that carries all three
+ * marks of `isObservedModelCall` makes a session observed, and a body member
+ * is something any producer can set. A session marked observed stops counting
+ * its self-reported usage, so a claimed `observed` would hide real spend.
+ */
+export function reportedCostBasis(
+  counted: readonly TachoEvent[],
+): string | null {
+  let basis: string | null = null;
+  for (const event of counted) {
+    if (event.kind !== "llm_call") continue;
+    const reported = str((event.body as Body)["cost_basis"]);
+    if (reported === null || reported === TACHO_METERING_OBSERVED) continue;
+    basis = reported;
+  }
+  return basis;
 }
 
 /** The insert values for a session row seen for the first time. */
 function genesisRow(
   host: TachoHostRow,
   ctx: Scope,
-  operator: EnrollingOperator,
+  initiator: SessionInitiator,
   events: TachoEvent[],
   now: Date,
   // Whether `tacho.sessions.gateway_observed_at` exists yet. Naming a column
@@ -946,10 +998,14 @@ function genesisRow(
     // for an operator-enrolled host.
     agentId: host.agentId,
     agentPrincipalId: host.agentPrincipalId,
-    initiatingPrincipalId: operator.principalId,
+    // The host's enroller, as `enrollingOperator` resolved them in this
+    // organization. The batch's own `agent` block names principals too, and
+    // neither is read (#2951).
+    initiatingPrincipalId: initiator.principalId,
+    initiatingUserId: initiator.userId,
     // Stamped here and nowhere else: the existing-session path never writes
     // it, so the role the operator held when the session opened stands.
-    operatorRole: operator.role,
+    operatorRole: initiator.role,
     rootSessionUuid: first.root_session_uuid,
     parentSessionUuid: first.parent_session_uuid ?? null,
     subagentId: subagent?.subagent_id ?? null,
@@ -1586,6 +1642,9 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     };
     // The batch's fresh `proof.observed` frames, by the root session they belong to.
     const proofsByRoot = new Map<string, TachoEvent[]>();
+    // The fresh repository-question frames on each run's own chain, by root
+    // session (#3941). A subagent's chain raises no question.
+    const interjectionsByRoot = new Map<string, TachoEvent[]>();
     // Who each session's tool calls are billed to, read off the rows this
     // transaction wrote. The ledger entries are built after the commit, from
     // every event in the batch (see the billing step below).
@@ -1599,7 +1658,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
     let firstOpenedRunId: string | null = null;
     // Resolved on the first genesis row of the batch; every session a host
     // opens has the same operator, and a batch of continuations never asks.
-    let operator: EnrollingOperator | undefined;
+    let initiator: SessionInitiator | undefined;
     // Asked once for the whole batch rather than per session: the answer is
     // per-process and cached, and a batch cannot straddle a migration it holds
     // a transaction across.
@@ -1793,6 +1852,19 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
         existing?.costBasis === TACHO_METERING_OBSERVED,
       );
       const firstObserved = fresh.find(isObservedModelCall);
+      // The session's cost basis, when this batch changes it (#2951). An
+      // observed call makes it `observed`, and `observed` is never replaced:
+      // it is what stops the session counting its self-reported usage too.
+      // Otherwise the basis the batch's counted calls reported is carried to
+      // the row, and a batch that reported none leaves the row as it was.
+      const reportedBasis = reportedCostBasis(counted);
+      const costBasisPatch: { costBasis?: string } =
+        firstObserved !== undefined
+          ? { costBasis: TACHO_METERING_OBSERVED }
+          : reportedBasis !== null &&
+              existing?.costBasis !== TACHO_METERING_OBSERVED
+            ? { costBasis: reportedBasis }
+            : {};
       const delta = emptyDelta();
       for (const event of counted) foldDelta(delta, event);
       const contentFrames = countContentFrames(fresh);
@@ -2065,9 +2137,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
                 : {}),
             }
           : {}),
-        ...(firstObserved !== undefined
-          ? { costBasis: TACHO_METERING_OBSERVED }
-          : {}),
+        ...costBasisPatch,
         updatedAt: now,
         ...reopen,
         ...terminalColumns,
@@ -2175,12 +2245,12 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           .returning({ id: schema.tachoSessions.id });
         accepted = written.length > 0;
       } else {
-        if (operator === undefined)
-          operator = await enrollingOperator(tx, ctx, host);
+        if (initiator === undefined)
+          initiator = await enrollingOperator(tx, ctx, host);
         const row = genesisRow(
           host,
           ctx,
-          operator,
+          initiator,
           events,
           now,
           sessionGatewayColumn,
@@ -2194,9 +2264,7 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
             ...row,
             ...(machineSnapshot === undefined ? {} : { machineSnapshot }),
             ...terminalColumns,
-            ...(firstObserved !== undefined
-              ? { costBasis: TACHO_METERING_OBSERVED }
-              : {}),
+            ...costBasisPatch,
             chainVerified: ok,
             chainBreakAtSeq: ok ? null : breakSeq,
             lastHash: last.hash,
@@ -2329,6 +2397,30 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       ) {
         firstOpenedRunId = sessionRow.publicId;
       }
+      // A steer queued for this agent's next run while it had none in flight
+      // becomes this run's command, in this transaction, so the control
+      // envelope on this response carries it (#2953).
+      if (
+        sessionRow?.publicId &&
+        inserted &&
+        sessionRow.parentSessionUuid == null
+      ) {
+        await readdressNextRunCommands(tx, {
+          scope: ctx,
+          agentKey: host.agentKey,
+          run: {
+            id: sessionRow.id,
+            publicId: sessionRow.publicId,
+            sessionUuid,
+            harnessSessionId: first.session_id,
+            hostId: host.id,
+            runtime: first.agent.runtime,
+            enforcementTier: derivedTier,
+          },
+          hostFeatures: host.bundleFeatures ?? [],
+          now,
+        });
+      }
       // Everything below is this batch's events landing on the session row, so
       // it is gated on the same answer. A refused batch belongs to a different
       // chain or to a session already sealed; its models, files, commands,
@@ -2355,6 +2447,14 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
           const frames = proofsByRoot.get(lineage.root) ?? [];
           frames.push(event);
           proofsByRoot.set(lineage.root, frames);
+        }
+        if (lineage.root === sessionUuid) {
+          const questions = fresh.filter(isInterjectionFrame);
+          if (questions.length > 0)
+            interjectionsByRoot.set(sessionUuid, [
+              ...(interjectionsByRoot.get(sessionUuid) ?? []),
+              ...questions,
+            ]);
         }
         if (delta.totalCostMicros > 0)
           batchSpendMicros += BigInt(delta.totalCostMicros);
@@ -2452,6 +2552,24 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       });
       if (root && (await isHeldHere(root.hostId)))
         rootIds.set(rootSessionUuid, root.publicId);
+    }
+
+    // Each question a host raised on a run's own chain opens its row, and a
+    // host's own timeout answer closes it (#3941). Only a run this host
+    // holds, as everything read from `rootIds` is.
+    const raisedInterjections: RaisedInterjection[] = [];
+    for (const [rootSessionUuid, frames] of interjectionsByRoot) {
+      const runId = rootIds.get(rootSessionUuid);
+      if (runId === undefined) continue;
+      raisedInterjections.push(
+        ...(await recordInterjectionFrames(
+          tx,
+          { orgId: ctx.orgId, workspaceId: ctx.workspaceId },
+          { publicId: runId, agentKey: host.agentKey },
+          frames,
+          now,
+        )),
+      );
     }
 
     // A run is one piece of work across its chains. When a subagent reports,
@@ -2636,8 +2754,20 @@ const ingestBatch: CapabilityHandler<typeof tachoEventsIngest> = async (
       rootIds,
       sessionRoots,
       promptedRuns,
+      raisedInterjections,
     };
   });
+
+  // Each question the batch raised starts its timeout (#3941, D8). Sent as
+  // soon as the rows commit rather than after the ClickHouse append below: a
+  // re-sent batch folds its frames as already recorded, so an event held
+  // back behind a failed append would never be sent. Best effort, once per
+  // row by its event id.
+  await sendInterjectionsRaised(
+    (events) => eventClient.send(events),
+    ctx,
+    result.raisedInterjections,
+  );
 
   // Every event this batch re-sends below a session's recorded head is
   // compared with the frame ClickHouse holds at that seq (§8.3). The same

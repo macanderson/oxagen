@@ -1,0 +1,18 @@
+{
+  "check": "schema",
+  "rule": "memory-entry-keys",
+  "severity": "error",
+  "description": "A cited memory carries capture, which provenance.memories does not hold.",
+  "refused_by_reader": true,
+  "changed": [
+    "steering/memory/platform/a-intel.platform.ci-cache-key.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/memory/platform/a-intel.platform.ci-cache-key.md",
+      "line": 17,
+      "field": "provenance.memories.0.capture"
+    }
+  ]
+}

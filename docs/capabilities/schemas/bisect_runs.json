@@ -46,6 +46,10 @@
           }
         ]
       },
+      "divergentSessionUuid": {
+        "type": "string",
+        "format": "uuid"
+      },
       "keyA": {
         "anyOf": [
           {

@@ -23,6 +23,12 @@
  * prefix as the gaps of the run. A field that can honestly answer "I did not
  * look at all of it" does not belong on the read a page header depends on.
  *
+ * A wrapped run's subagents each record on a hash chain of their own, with
+ * their own dense `seq` from 0, their own session row and their own
+ * checkpoints (#3823). Gaps cannot be computed over spliced frames, so each
+ * subagent chain is answered on its own in `chains`, and the top-level
+ * figures keep describing the run's own chain.
+ *
  * No new store: the ledger's seal rows, the wrapped session's checkpoints and
  * the frames already recorded are all it reads.
  *
@@ -39,6 +45,9 @@ import { runPublicIdSchema } from "./run.list";
 
 /** The most frames the gap walk reads before it reports a prefix. */
 export const CHAIN_FRAME_CAP = 10_000;
+
+/** The most subagent chains one read answers. */
+export const CHAIN_SUBAGENTS_MAX = 200;
 
 /**
  * How each store chains a frame to the one before it. A verifier recomputes
@@ -106,6 +115,42 @@ export const chainGapsSchema = z
     missingBodies: z.number().int().nonnegative(),
     /** The gaps the seal recorded, from the closed vocabulary (§13.1). */
     recorded: z.array(z.enum(COMPLETENESS_GAP_KINDS)),
+  })
+  .strict();
+
+/**
+ * One subagent chain of a wrapped run, walked on its own: its place in the
+ * run, its frames, its gaps, its checkpoints and its seal.
+ */
+export const chainSubagentSchema = z
+  .object({
+    sessionUuid: z.string().uuid(),
+    /** The chain that spawned this one; null when none was recorded. */
+    parentSessionUuid: z.string().uuid().nullable(),
+    /** The harness's id for the subagent; null when none was recorded. */
+    subagentId: z.string().nullable(),
+    /** The subagent's type (`Explore`, `general-purpose`); null when none was recorded. */
+    subagentType: z.string().nullable(),
+    /** Frames the walk read on this chain. */
+    frameCount: z.number().int().nonnegative(),
+    /** The first and last sequence read on this chain; null when it holds none. */
+    firstSeq: z.string().regex(/^\d+$/).nullable(),
+    lastSeq: z.string().regex(/^\d+$/).nullable(),
+    /** The chain's own gaps, numbered on the chain's own `seq`. */
+    gaps: z
+      .object({
+        missingSequences: z.array(chainSequenceGapSchema),
+        missingFrameCount: z.number().int().nonnegative(),
+        missingBodies: z.number().int().nonnegative(),
+      })
+      .strict(),
+    checkpoints: z.array(chainCheckpointSchema),
+    /** The chain's last hash at its seal; null while it is unsealed. */
+    finalHash: z.string().nullable(),
+    /** RFC 3339; null while the chain is unsealed. */
+    sealedAt: z.string().datetime().nullable(),
+    /** False when the walk stopped before this chain's last frame. */
+    complete: z.boolean(),
   })
   .strict();
 
@@ -178,7 +223,7 @@ export const runChainGet = registerCapability({
   name: "get_run_chain",
   domain: "run",
   description:
-    "Read what makes one run's record tamper-evident: the hash rule, the Merkle root, the signed checkpoints, the sequence and body gaps the recording shows, the seal, and the replay-grade ladder with the reason each rung is or is not reached.",
+    "Read what makes one run's record tamper-evident: the hash rule, the Merkle root, the signed checkpoints, the sequence and body gaps the recording shows, the seal, and the replay-grade ladder with the reason each rung is or is not reached. A wrapped run's subagent chains are answered one by one.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
@@ -200,7 +245,7 @@ export const runChainGet = registerCapability({
     .object({
       runId: runPublicIdSchema,
       hashRule: chainHashRuleSchema,
-      /** Frames the walk read. */
+      /** Frames the walk read on the run's own chain. */
       frameCount: z.number().int().nonnegative(),
       /** The first and last sequence read; null on a run with no frame yet. */
       firstSeq: z.string().regex(/^\d+$/).nullable(),
@@ -234,6 +279,12 @@ export const runChainGet = registerCapability({
        * as the run's.
        */
       complete: z.boolean(),
+      /**
+       * Each subagent chain of a wrapped run, walked on its own, in the order
+       * the chains started. Absent on a ledger run. `frameCount`, `firstSeq`,
+       * `lastSeq` and `gaps` above describe the run's own chain only.
+       */
+      chains: z.array(chainSubagentSchema).max(CHAIN_SUBAGENTS_MAX).optional(),
     })
     .strict(),
 });
@@ -241,3 +292,4 @@ export const runChainGet = registerCapability({
 export type RunChainGetInput = z.output<typeof runChainGet.input>;
 export type RunChainGetOutput = z.output<typeof runChainGet.output>;
 export type ChainCheckpoint = z.output<typeof chainCheckpointSchema>;
+export type ChainSubagent = z.output<typeof chainSubagentSchema>;

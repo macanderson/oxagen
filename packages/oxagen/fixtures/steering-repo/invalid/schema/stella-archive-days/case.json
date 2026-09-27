@@ -1,0 +1,18 @@
+{
+  "check": "schema",
+  "rule": "stella-archive-days",
+  "severity": "error",
+  "description": "A Stella session archive after zero days is below the minimum of one.",
+  "refused_by_reader": true,
+  "changed": [
+    "workspace.toml"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "workspace.toml",
+      "line": 27,
+      "field": "stella.archive_after_days"
+    }
+  ]
+}

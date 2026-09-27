@@ -9,6 +9,12 @@
 // the transcript did not carry draws no band, a decision it did not carry
 // draws no hue, and an approval the record cannot tie to a frame is left
 // unmatched rather than pinned to the nearest one.
+//
+// An operator's command reaches a wrapped run as `oxagen:command_applied`,
+// with the command in `command.name`, which the transcript carries as the
+// frame's decision (ADR-056). No store writes a `control.*` frame, so the
+// player presents that frame as `control.<command>` (`presentedType`), and
+// the steer mark and the band after a steer read the command from there.
 import type { ApprovalItem } from "@/data/contracts/approvals";
 import type {
   RunFrame,
@@ -17,9 +23,7 @@ import type {
 } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
-
-/** A frame's position as the contract spells it (`frameSeqSchema`): decimal, at most 19 digits. */
-const FRAME_SEQ = /^\d{1,19}$/;
+import { frameKey, parseFrameKey } from "./frame-link";
 
 /**
  * The six classes a frame folds into (`FK_ORDER`), in the legend's order.
@@ -66,9 +70,11 @@ export function kindCounts(
 }
 
 /**
- * The run's own frames at `everything`, by seq. A subagent's entries are left
- * out: its chain is numbered from 0 like the run's, so its seq names a frame
- * of another chain, and the page of frames is the run's own.
+ * The run's frames at `everything`, by `frameKey`: a frame of the run's own
+ * chain by its seq, and a subagent's frame by its chain and seq. A subagent's
+ * chain is numbered from 0 like the run's, so its entry never stands in for
+ * the run's frame of that seq, and an open subagent frame still finds the
+ * envelope the transcript carries for it (#3823).
  */
 export function entriesBySeq(
   read: Read<RunTranscript>,
@@ -76,8 +82,8 @@ export function entriesBySeq(
   const map = new Map<string, TranscriptEntry>();
   if (!read.ok) return map;
   for (const entry of read.value.entries) {
-    if (entry.subagent === undefined && !map.has(entry.seq))
-      map.set(entry.seq, entry);
+    const key = frameKey({ seq: entry.seq, chainRef: entry.subagent?.chainRef });
+    if (!map.has(key)) map.set(key, entry);
   }
   return map;
 }
@@ -85,6 +91,58 @@ export function entriesBySeq(
 /** The decision word the transcript recorded for a frame; null when it recorded none. */
 export function decisionOf(entry: TranscriptEntry | undefined): string | null {
   return entry?.decision?.decision ?? null;
+}
+
+/** The operator commands a control frame records (`dispatch_command`'s vocabulary on a run). */
+const CONTROL_COMMANDS = [
+  "pause",
+  "resume",
+  "cancel",
+  "steer",
+  "message",
+  "kill",
+] as const;
+export type ControlCommand = (typeof CONTROL_COMMANDS)[number];
+
+const CONTROL_PREFIX = "control.";
+
+/**
+ * The operator's command a frame records, or null for every other frame. A
+ * wrapped run's `oxagen:command_applied` names it in the decision the
+ * transcript carries for the frame; a frame typed `control.<command>` names
+ * it in its type. `summary` is a label for a person and is never read here
+ * (ADR-182 rule 3).
+ */
+export function controlOf(
+  type: string,
+  entry: TranscriptEntry | undefined,
+): ControlCommand | null {
+  const name =
+    type === COMMAND_APPLIED
+      ? decisionOf(entry)
+      : type.startsWith(CONTROL_PREFIX)
+        ? type.slice(CONTROL_PREFIX.length)
+        : null;
+  return CONTROL_COMMANDS.find((command) => command === name) ?? null;
+}
+
+/** A frame's type as the player names it: an operator's command as `control.<command>`, any other as recorded. */
+export function presentedType(
+  type: string,
+  entry: TranscriptEntry | undefined,
+): string {
+  const command = controlOf(type, entry);
+  return command === null ? type : `${CONTROL_PREFIX}${command}`;
+}
+
+/** A steer or a message: the commands that put an operator's text in front of the model. */
+function isSteer(
+  frame: RunFrame | undefined,
+  entries: ReadonlyMap<string, TranscriptEntry>,
+): boolean {
+  if (frame === undefined) return false;
+  const command = controlOf(frame.type, entries.get(frame.seq));
+  return command === "steer" || command === "message";
 }
 
 /**
@@ -167,7 +225,7 @@ export type Band = {
   width: number;
   /** Every other band is drawn clear. */
   alt: boolean;
-  /** A `control.steer` frame opens the band or sits just before it. */
+  /** A steer or a message (`isSteer`) opens the band or sits just before it. */
   afterSteer: boolean;
 };
 
@@ -197,8 +255,7 @@ export function turnBands(
         width: Math.max(0, right - left),
         alt: bands.length % 2 === 1,
         afterSteer:
-          frames[i]?.type === "control.steer" ||
-          frames[i - 1]?.type === "control.steer",
+          isSteer(frames[i], entries) || isSteer(frames[i - 1], entries),
       });
     }
     i = j;
@@ -209,9 +266,9 @@ export function turnBands(
 export type TimelineMark = { at: number; kind: "steer" | "parked" };
 
 /**
- * "steer" over each `control.steer` frame, and "parked · approval" over each
- * frame that needs a person, once for a pair that sit side by side (the
- * decision that asked, then the request it raised).
+ * "steer" over each steer or message an operator sent (`isSteer`), and
+ * "parked · approval" over each frame that needs a person, once for a pair
+ * that sit side by side (the decision that asked, then the request it raised).
  */
 export function timelineMarks(
   frames: readonly RunFrame[],
@@ -222,7 +279,7 @@ export function timelineMarks(
   let parkedAt = -2;
   frames.forEach((frame, i) => {
     const at = xs[i] ?? 0;
-    if (frame.type === "control.steer") marks.push({ at, kind: "steer" });
+    if (isSteer(frame, entries)) marks.push({ at, kind: "steer" });
     if (
       isParked(frame.type, decisionOf(entries.get(frame.seq)), frame.toolStatus)
     ) {
@@ -236,6 +293,11 @@ export function timelineMarks(
 /** The frame open in the player: `?body=` when it names one, else the first frame shown. */
 export type OpenFrame = {
   seq: string;
+  /**
+   * The subagent chain the frame was recorded on, when `?body=` named one;
+   * absent on the run's own chain.
+   */
+  chainRef?: string;
   /** Its place on the page; -1 when the URL named a frame this page does not hold. */
   index: number;
   /** The frame itself when the page holds it. */
@@ -251,9 +313,12 @@ export function openFrameOf(
   frames: readonly RunFrame[],
   body: string | null,
 ): OpenFrame | null {
-  if (body !== null && FRAME_SEQ.test(body)) {
-    const index = frames.findIndex((frame) => frame.seq === body);
-    return { seq: body, index, frame: frames[index] ?? null, named: true };
+  const at = parseFrameKey(body);
+  if (at !== null) {
+    const index = frames.findIndex(
+      (frame) => frame.seq === at.seq && frame.chainRef === at.chainRef,
+    );
+    return { ...at, index, frame: frames[index] ?? null, named: true };
   }
   const first = frames[0];
   return first === undefined
@@ -279,10 +344,14 @@ export type Steps = {
 /**
  * Where ◀ and ▶ lead from the open frame: its neighbours on the page, or for
  * a frame the page does not hold, the nearest shown frames either side of it.
+ * A subagent's frame the page does not hold has no neighbour on it: its seq
+ * counts another chain, so the page's first and last frames are the way back.
  */
 export function stepsOf(frames: readonly RunFrame[], open: OpenFrame): Steps {
   const first = frames[0]?.seq ?? null;
   const last = frames.at(-1)?.seq ?? null;
+  if (open.index < 0 && open.chainRef !== undefined)
+    return { first, last, prev: null, next: null };
   if (open.index >= 0) {
     return {
       first,

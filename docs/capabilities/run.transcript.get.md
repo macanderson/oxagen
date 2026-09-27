@@ -4,15 +4,7 @@ One run read as a transcript at one of three zoom levels (Mission Control spec �
 
 A wrapped run's subagents record on chains of their own. The transcript reads every chain under the run's root session and places each subagent chain directly after the `subagent_start` that spawned it. An entry from a subagent chain carries `subagent`, and its body halves and decisions carry `sessionUuid`, because a subagent chain numbers its frames from 0 like the run's. `get_run_frame_body` reads the run's own chain only.
 
-The cursor is opaque, and it is at most 256 characters. It names two frames: the opening of the last entry sent, and the latest frame any page has delivered. An entry whose frames grew past that second frame since it was sent (a step that gained its result, a turn that gained a step, a Task call whose subagent recorded more) is sent again once, ahead of the new entries, and no entry after it is sent again (#4048). A reader keeps each entry once by its opening frame, `seq` together with `subagent.sessionUuid`, and replaces a copy it holds with the one sent again.
-
-On a wrapped run the cursor also carries a receipt: the latest time the control plane received a frame of the read (`received_at`), and a digest of the frames it received in the 60 seconds before that. Two frame positions cannot name a subagent frame that lands after later frames were sent. When subagent A records after subagent B's frames were sent, A's new frame sits before the cursor, in an entry that neither opens after it nor ends past it (#4083). The next read sends each such entry once: every entry before the cursor that holds a frame received after the receipt.
-
-The receipt allows for inserts in flight. Ingest stamps `received_at` on a batch before its insert lands, so a batch stamped earlier can become readable after a read saw a later one. When the frames received in the 60 seconds before the receipt are not the ones the cursor saw, the read also sends every entry that holds a frame from that window. That is the documented overlap: entries sent again, whole, which the reader replaces by key. A read that finds nothing new sends nothing again.
-
-When more entries are late than one page holds, the page rewinds rather than holding the receipt back. It sends entries in order from the first late or grown one, and the pages after it go on in order. Some of those entries are unchanged and sent again, which is the same documented overlap. A ledger run records no receipt time, and its cursor carries none.
-
-A cursor written before the receipt, which names two frames, is still accepted. Its next read sends what the two frames alone say, and the cursor it answers carries a receipt. A cursor written before the two-frame form, which names one frame, is still accepted too.
+The cursor is opaque, and it is at most 256 characters. A reader passes it back as `after` unchanged, and a read from it sends each entry the reader lacks or holds in an older state (see Cursor).
 
 A page reads a bounded range of the run's frames rather than the run from the cursor to its end, and a subagent chain is read by its `session_uuid` from the list Postgres keeps, so a read's cost does not grow with the workspace. A whole-run reader pages at the largest `limit` the contract allows. The Cost tab's per-turn ledger is `get_run_turns`, which counts every frame of the run in one grouped read rather than paging this one (#4067).
 
@@ -26,9 +18,11 @@ A compacted ledger attempt is read from its archive segment (spec §13.3, ADR-05
 
 ## Surface
 
+**Surfaces:** api, mcp, cli
+
 - API: `POST /v1/:org_slug/:workspace_slug/runs/transcript`
 - MCP: `get_run_transcript`
-- CLI: none
+- CLI: `oxagen run transcript <run-id> [--zoom <zoom>] [--kinds <kinds>] [--query <words>] [--after <cursor>] [--limit <n>] [--text <excerpt|full>] [--json]` prints one page: each entry with something to show, the count per chip when the read starts at the run's first frame, what a query found, and the `--after` value for the next page. `--kinds` takes the chips comma-separated (see Example).
 - Authentication: session (org Owner, Admin, or Member; workspace Owner or Member)
 - Capability name: `get_run_transcript`
 - Not billed (`noBillingGate: true`): reading a recording is a console read (ADR-052 exclusion 2). IAM default-deny; high sensitivity.
@@ -41,9 +35,21 @@ A compacted ledger attempt is read from its archive segment (spec §13.3, ADR-05
 | `zoom` | `turns` \| `steps` \| `everything` | yes | |
 | `kinds` | string[] | no | the chips pressed; empty (the default) keeps every frame |
 | `after` | string | no | an entry cursor from an earlier read |
+| `before` | string | no | a `before` cursor from an earlier read: the page is the `limit` entries just ahead of the entry it names (see Reading backward) |
+| `from` | `start` \| `end` | no | where a read with no cursor opens: the first entry (`start`, the default) or the last `limit` entries (`end`) |
 | `text` | `excerpt` \| `full` | no | how much of each body to carry; omitted takes the zoom's cap (see below) |
 | `query` | string | no | words to search the entries for, ignoring case; trimmed, 1 to 200 characters (see Search) |
 | `limit` | integer | no | 1–500, default 200 |
+
+## Reading backward
+
+A view that follows a live run opens at its end, and a reader scrolls up from there. `from: "end"` reads the last `limit` entries, and `before` reads the `limit` entries just ahead of the first one a reader holds. Each answers `before`, the cursor for the page ahead of it, which is null once the page opens at the first entry.
+
+A backward page also answers `cursor`, the point a reader would continue from had it paged forward to the page's last entry. A read `from` the end answers the same cursor a reader who read every page would hold, receipt included, so a live view reads `after` it as frames land. A read `before` a cursor answers one with no receipt, and a reader that holds a later cursor keeps its own.
+
+An entry ahead of a tail page that grows after the read is sent again by the next read `after` its cursor, though the reader was never sent it. A reader that holds only a tail places that entry by its time, or leaves it for the page ahead.
+
+A read sends at most one of `after`, `before`, and `from`. Every read, backward or not, folds the run up to its frame cap, so a backward page costs what a first page costs. A `query` on a backward read searches every entry, as a first page does.
 
 ## Zoom levels
 
@@ -88,7 +94,7 @@ Each chip selects what the Run page's Transcript tab draws under it, so the coun
 
 The fold runs over every frame first, and the filter then keeps the entries that answer a chip pressed. A filtered transcript therefore shows the same steps as an unfiltered one, only fewer of them: a `policy` selection at `steps` keeps each governed tool call whole, with both halves. At `everything` the answer is the same as filtering frames. An empty selection keeps everything: no chip pressed is not the same as every chip pressed off.
 
-The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `TRANSCRIPT_KINDS` lists them. `policy` is not among the mockup's chips; it stays a kind because the Policy tab reads it, and the app files it under the tools chip. The contract has no `none` kind. The app's `kinds=none` query opens the Transcript tab with every chip off. The tab hides and shows the rows of the whole-run read the page already made, so no chip setting reads again, and each chip's count is `counts.kinds` from that read.
+The Run page's transcript mockup (`mockups/pages/run-transcript.md`) draws the same chips in the order `TRANSCRIPT_KINDS` lists them. `policy` is not among the mockup's chips; it stays a kind because the Policy tab reads it, and the app files it under the tools chip. The contract has no `none` kind. The app's `kinds=none` query opens the Transcript tab with every chip off. The tab hides and shows the rows of the whole-run read the page already made, so no chip setting reads again, and each chip's count is `counts.kinds` from that read.
 
 ## Output
 
@@ -121,11 +127,12 @@ The run page mockup (`mockups/pages/run.md`) draws the same chips in the order `
 | `entries[].cost` | `{ micros, currency, basis }` or null | the folded frames' cost records summed; null when none carried one. Ledger frames carry no cost record; spend is metered per run |
 | `entries[].cumulativeCost` | `{ micros, currency, basis }` or null | every cost record of the run up to and including this entry (spec §8.4 prefix sum), so a page never restates the run's spend as the page's |
 | `cursor` | string or null | the point to continue from; null when nothing lies past this page |
-| `complete` | boolean | false when the run has more than 10 000 frames, so the transcript is a prefix |
+| `before` | string or null | on a read `from` the end or `before` a cursor, the point to read the page ahead of this one from; null when the page opens at the run's first entry. Absent on every other read |
+| `complete` | boolean | false when the read stopped at its 10 000-frame cap before the run's last frame, so the transcript is a prefix. A read from a cursor reads a window that starts later in the run (see Cursor), so a reader pages past the 10 000th frame and a later page can read true |
 | `frameCursor` | string or null | the `get_run` frame cursor of the last frame on the run's own chain that the read folded; null when it folded none. A reader that follows a live run passes it to the run's stream as `after`, so the stream sends only frames the read did not hold. A subagent's frames are on chains of their own and are passed over |
-| `counts` | object | the run's entries at the zoom read, counted over every entry that is not `quiet`, whatever the chips or query: `kinds` (entries per chip), `entries`, `errors` (entries that failed or were refused, or answer the errors chip), and `policy` (entries that answer the policy chip, except the harness checking itself). A quiet entry draws no row, so no count holds it. The unit is the entry: a model step that said two things counts once. At `everything` the words are not read (see Words), so there a prompt or reply whose words are blank or repeat still counts |
+| `counts` | object or absent | present only on a read from the run's first frame, with no `after`. A read from a cursor reads a window of the run and carries none, so a reader keeps the counts its first read returned (#3823). The counts are the run's entries at the zoom read, counted over every entry that is not `quiet`, whatever the chips or query: `kinds` (entries per chip), `entries`, `errors` (entries that failed or were refused, or answer the errors chip), and `policy` (entries that answer the policy chip, except the harness checking itself). A quiet entry draws no row, so no count holds it. The unit is the entry: a model step that said two things counts once. At `everything` the words are not read (see Words), so there a prompt or reply whose words are blank or repeat still counts |
 | `counts.frames` | object | the same counts at `everything`, where each frame is its own entry, at every zoom: `kinds.policy` and `kinds.recall` (frames those chips keep) and `policy` (the decisions among them a rule or a person made). A reader that lists decisions or recalls frame by frame counts them from any read, so the Run page reads `steps` once and takes its tab badges from it. They need no words: only a prompt or a reply can turn quiet on its words, and neither is a policy or recall frame |
-| `figures` | object | the run's steps, calls and recorded time, whatever the zoom, chips or query (see Figures) |
+| `figures` | object or absent | the run's steps, calls and recorded time, whatever the zoom, chips or query (see Figures). Present only on a read from the run's first frame, like `counts` |
 | `search` | object or absent | on a read with a `query`: `{ query, matched, unsearched }` (see Search) |
 | `entries[].matches` | string[] or absent | on a read with a `query`: where the entry matched, from `label`, `subject`, `target`, `request` and `response` |
 
@@ -153,15 +160,58 @@ The server is the only place a transcript is folded (ADR-182), so every fact a r
 
 ### Words
 
-Two facts need an entry's words, which the fold does not read: whether a prompt or reply has anything to show, and whether a reply repeats words just shown (`echoOf`). At `steps`, every read settles both over the whole run before it counts, so `counts` and the rows a reader draws agree. It reads the half a reader is shown, whole: a prompt's request, a reply's response, and for the model step or reply said right before each reply, its response. A model step's words are the last text block of its reply. Two halves say the same words when the sha256 of their text, trimmed of surrounding whitespace, is equal, and a half whose trimmed text is empty says nothing.
+Two facts need an entry's words, which the fold does not read: whether a prompt or reply has anything to show, and whether a reply repeats words just shown (`echoOf`). At `steps`, every read settles both over the frames it read before it counts, so `counts` and the rows a reader draws agree. A read from the run's first frame settles them over the whole run, and a read from a cursor over its window (see Cursor). It reads the half a reader is shown, whole: a prompt's request, a reply's response, and for the model step or reply said right before each reply, its response. A model step's words are the last text block of its reply. Two halves say the same words when the sha256 of their text, trimmed of surrounding whitespace, is equal, and a half whose trimmed text is empty says nothing.
 
-One read settles at most **2 000** halves of each chain (`TRANSCRIPT_WORDS_HALF_MAX` in the handler), about three a turn: the first 2 000 of that chain in the run's order that kept a body, whether an earlier read already read them or not. The run's own chain and each subagent chain are bounded on their own. A chain only grows at its end, so a frame that lands later never takes the place of a half a chain already settled. A subagent chain that lands after an earlier read is spliced in where it was spawned, ahead of halves the run's own chain settled, and those halves stay settled. An entry past the bound keeps what the fold said about it. So on a run with more word halves than that, the same entries are settled on every page and every live read, and a page's `quiet` marks and `counts` do not change from page to page. A half with no kept body costs no read and does not count against the bound. Because the bound is per chain, one read of a run with subagents can read more than 2 000 halves, up to the 10 000 frames it folds. A subagent chain can run as long as the run's own, so the worst case for one cold read is 10 000 word bodies, five times what one chain's bound allows, and one such run takes about 60 percent of the words cache below. Two reads of one run that run at once, such as the Run page's reads at `steps` and `everything`, open each body once. A read waits on a body the other is reading, and takes the words of a body the other has already read. A read that waits also takes what the other learned about the body's key, so each read learns the keys its words depend on (below). A read joins another's read of a body only while that read is under 15 seconds old. One still in flight after that is taken as stuck, and the next reader opens the body itself instead of joining it. A read that tests a key (below) opens its body itself.
+One read settles at most **2 000** halves of each chain (`TRANSCRIPT_WORDS_HALF_MAX` in the handler), about three a turn: the first 2 000 of that chain in the run's order that kept a body, whether an earlier read already read them or not. The run's own chain and each subagent chain are bounded on their own. A chain only grows at its end, so a frame that lands later never takes the place of a half a chain already settled. A subagent chain that lands after an earlier read is spliced in where it was spawned, ahead of halves the run's own chain settled, and those halves stay settled. An entry past the bound keeps what the fold said about it. A read from the run's first frame settles the same entries every time, so its `quiet` marks and `counts` do not change from read to read. A window (see Cursor) settles the first 2 000 of each chain's halves inside it. So on a run with more word halves than that, an entry past the first read's bound can read `quiet` on a later page. A half with no kept body costs no read and does not count against the bound. Because the bound is per chain, one read of a run with subagents can read more than 2 000 halves, up to the 10 000 frames it folds. A subagent chain can run as long as the run's own, so the worst case for one cold read is 10 000 word bodies, five times what one chain's bound allows, and one such run takes about 60 percent of the words cache below. Two reads of one run that run at once, such as the Run page's reads at `steps` and `everything`, open each body once. A read waits on a body the other is reading, and takes the words of a body the other has already read. A read that waits also takes what the other learned about the body's key, so each read learns the keys its words depend on (below). A read joins another's read of a body only while that read is under 15 seconds old. One still in flight after that is taken as stuck, and the next reader opens the body itself instead of joining it. A read that tests a key (below) opens its body itself.
 
 A body never changes: its reference names the digest of its bytes. So the server keeps, per process, what `markWords` compares for each body it read for words: whether it shows words, and the digest of those words, never the words. The entries are keyed by the organization, the workspace, the reference and the digest, up to 16 384 bodies (`WORDS_CACHE_LIMITS`). A later page or a live run's tail read reads again no body for words that an earlier read in that process read, except one per key to learn that the key still opens bodies (below). No half is ever answered from this cache: every half on a page, and every half a search looks inside, is read from the evidence store, so a body the store no longer returns, such as one erasure crypto-shredded, shows no text. A read therefore reads the word bodies no earlier read in the process has read, plus at most one body per key, plus whichever of its page's halves those did not already read. Within one read each body is read at most once: a half that was read for its words, for the key, or by a search is answered from that read, up to 32 MiB of bodies a read holds. Only a body read whole settles an entry. A body that could not be read, for any reason, leaves its entry as the fold said: a prompt or reply stays shown, and no reply is marked as repeating it. A body that will fail the same way again is not read again for a minute: the store says it is gone, its bytes no longer hash to its digest, its envelope does not open, or KMS says its key is disabled, pending deletion, or deleted. Erasure is the last case: it destroys the key and leaves the object, so the store answers the object and the decrypt fails. A read that failed any other way, such as a timeout, is tried again on the next read.
 
 A kept digest answers only while its body's key still opens bodies. Erasure destroys a key, so a key KMS refuses fails every body under it, and one that opened a body has not been destroyed. A body whose own envelope does not open (its AES-GCM tag fails, or KMS refuses its wrapped data key as damaged or wrapped by another key) fails only itself. A reference names the deployment's KEK, which seals every body, so one damaged body says nothing about the others. Each read learns this from the word bodies it reads, or waits on another read to read. For a key those teach it nothing about, it reads one body under that key again: a key it read no body under, or one whose only bodies failed before KMS answered or were already failed by another read. So after erasure a process that read the run before answers the same `quiet` marks and `counts` as a process that never read it, at the cost of at most one body read per key.
 
-`turns` is a group and settles neither fact. `everything` settles neither either: it lists one entry per frame, and the reader that reads it (the Run page's governed actions, Policy and Context tabs) lists decisions, recalls and calls, none of which turns quiet on its words, while `counts.frames` needs no words. At `everything` a prompt or reply is `quiet` only when it kept no half, `echoOf` is null, and `counts` counts a prompt or reply whose words are blank or repeat. At both, the prompts of the `steps` fold still have their words read, one body per prompt. The bound is counted over the halves `steps` reads, and only the prompts inside it are read, so on a run past the bound the prompts settled are the ones `steps` settles. `figures.prompts` is therefore the same at every zoom. Once the run has been read at `steps`, the cache answers them.
+`turns` is a group and settles neither fact. `everything` settles neither either: it lists one entry per frame, and the reader that reads it (the Run page's governed actions, Policy and Context tabs) lists decisions, recalls and calls, none of which turns quiet on its words, while `counts.frames` needs no words. At `everything` a prompt or reply is `quiet` only when it kept no half, `echoOf` is null, and `counts` counts a prompt or reply whose words are blank or repeat. At both, a read from the run's first frame still reads the words of the `steps` fold's prompts, one body per prompt. The bound is counted over the halves `steps` reads, and only the prompts inside it are read, so on a run past the bound the prompts settled are the ones `steps` settles. `figures.prompts` is therefore the same at every zoom. Once the run has been read at `steps`, the cache answers them. A read from a cursor carries no figures and reads none of them.
+
+## Cursor
+
+The cursor is opaque to a reader, which does not parse it. The server writes four things into it:
+
+| Part | What it names |
+|---|---|
+| `through` | the frame that opens the last entry sent |
+| `high` | the latest frame any page has delivered |
+| `received` | on a wrapped run, how far the reader stands in the order the server received the frames: a receipt time, and how many entries received just after it the reader was already sent. A ledger run has one chain and carries none |
+| `from` | where the next read's window of the run starts: a frame on the run's own chain, and the run's turn and cumulative cost at that frame. Absent when the next read reads the run from its first frame |
+
+A frame is `<seq>` on the run's own chain and `<session uuid>:<seq>` on a subagent's. A cursor written in an older form is still accepted: one frame, two frames, or two frames with the `seen` receipt that came before this one (#4384). A `seen` receipt reads as a receipt the settle margin before its time, so the next read sends again the entries received near it, and it names no window, so that read reads the whole run. A cursor longer than the contract's 256 characters leaves out `from`, and the next read reads the whole run.
+
+### What a read from the cursor sends
+
+A page sends entries in three groups, in this order:
+
+1. **Grown entries.** An entry whose frames grew past `high` since it was sent (a step that gained its result, a turn that gained a step, a Task call whose subagent recorded more) is sent again once (#4048).
+2. **Late entries.** An entry at or before `through` with a frame the server received after the receipt is sent again once (#4083).
+3. **New entries** past `through`.
+
+No entry after a grown or late entry is sent again. A reader keeps each entry once by its opening frame, `seq` together with `subagent.sessionUuid`, and replaces a copy it holds with the one sent again.
+
+### Late subagent frames (#4083)
+
+A subagent chain numbers its frames from 0, so a frame it records after a read can fold before that read's `through`. Its position alone cannot say it is new, and before #4083 a live reader was not sent it until the run sealed. The receipt closes that gap: an entry with a frame received after it is late, and a later read sends it. The server stamps one receipt time on a whole batch of frames, so the receipt also counts the late entries of that batch already sent, and a page that stops inside a batch carries on after it.
+
+Ingest stamps the receipt time before it waits on the ClickHouse insert, so a read can miss a frame whose receipt time is earlier than the read. The insert lands within the ClickHouse client's 30-second default timeout, or it fails and the host resends the batch with a later receipt time, which the table keeps. The receipt therefore trails the read by a settle margin of **60** seconds (`RECEIPT_SETTLE_MS` in the handler), the bound #4384 set. A frame that becomes readable 30 seconds after its stamp is sent on the next read. An entry with a frame received inside the margin is sent again on each read until the margin passes it, and the reader replaces the copy it holds. A live read asks for 500 entries, and a minute of entries at `steps` is far fewer, so these resends do not hold new entries back.
+
+### The window (#3823)
+
+A read from a cursor reads a window of the run, not the run again from its first frame. The window starts at the latest frame on the run's own chain that opens a turn, at or before the last entry the reader was sent. So an entry still open there, one the page had no room for, and on a live run a call still waiting on its result all lie inside it. The window holds every subagent chain spawned inside it, each read whole. When the frame cap cut a read short and no such turn lies ahead of the last window, the next window starts at a turn that leaves a waiting call behind, or else at a step boundary inside a turn. So a long run's reader pages past the 10 000th frame.
+
+A window counts turns and cost from its own first frame, and `from` carries the run's turn and cost there. So a window's entries carry the run's turn numbers and cumulative cost, never the window's own count of them.
+
+A read falls back to the whole run when only the whole run can place its entries:
+
+- a subagent chain that began before the window and has recorded since the receipt, less 10 seconds for the ingest's own Postgres write, or that the cursor names;
+- a subagent chain that names a spawn the window does not hold yet began inside it, as a subagent left running in the background does;
+- a frame the cursor names that the window does not hold.
+
+A read with a `query` is never windowed (see Search). `counts` and `figures` ride only a read from the run's first frame, because a window holds part of the run.
 
 ## Search
 
@@ -177,7 +227,7 @@ Label, subject and target are on the entry. The halves are in the evidence store
 
 A `quiet` entry is not searched: it draws no row, so it can neither match nor count as unsearched, and it spends none of the bound.
 
-A read from a cursor searches only the entries it and the pages after it can still send: those past the cursor, and those before it that grew since they were sent or hold a frame received after the cursor's receipt. The pages before it searched the rest, so paging through a search reads each body once rather than once per page.
+A read with a `query` is not windowed. It reads the run from its first frame up to the 10 000-frame cap, on every page, so a search reaches entries past the page a reader loaded. A read from a cursor searches only the entries it and the pages after it can still send: those past the cursor, and those before it that grew since they were sent or hold a frame received after the cursor's receipt. The pages before it searched the rest, so paging through a search reads each body once rather than once per page.
 
 `search` says what the query found over the entries the read searched: the whole run on a first page, and from the cursor on after it, never only the page:
 
@@ -191,7 +241,7 @@ An entry whose only match sits in an unsearched half is not in the answer. A cal
 
 ## Figures
 
-`figures` counts the Run page's figures on the server, over the `steps` fold of every frame read (ADR-182). They were counted in the browser over its own fold until then. The zoom, the chips and the query do not change them, and they share the read's 10 000-frame cap: when `complete` is false they cover a prefix of the run.
+`figures` counts the Run page's figures on the server, over the `steps` fold of every frame read (ADR-182). They were counted in the browser over its own fold until then. The zoom, the chips and the query do not change them, and they share the read's 10 000-frame cap: when `complete` is false they cover a prefix of the run. They ride only a read from the run's first frame (#3823). A read from a cursor reads a window of the run, and figures counted over it would not be the run's.
 
 | Field | Type | Description |
 |---|---|---|
@@ -250,11 +300,31 @@ leaves every block's cost null rather than drawing a zero.
 
 ## How much body text a zoom carries
 
-`everything` is one entry per frame and carries up to **16 384** characters per half. `turns` and `steps` fold a whole exchange into one entry and carry up to **1 024** — a page of 200 steps at the full cap is several megabytes of body text nobody asked for on that render, and an excerpt plus the entry's `label` is what a folded level is for. A caller that needs the whole of each body at `steps`, as the Run page does for a tool's output, asks for `text: "full"`, and `text: "excerpt"` cuts `everything` to the smaller cap. A half cut at either cap says `truncated: true`, so a reader follows the frame to `get_run_frame_body` for the whole of it.
+`everything` is one entry per frame and carries up to **16 384** characters per half. `turns` and `steps` fold a whole exchange into one entry and carry up to **1 024**. A page of 200 steps at the full cap is several megabytes of body text nobody asked for on that render, and an excerpt plus the entry's `label` is what a folded level is for. A caller that needs the whole of each body at `steps`, as the Run page does for a tool's output, asks for `text: "full"`, and `text: "excerpt"` cuts `everything` to the smaller cap. A half cut at either cap says `truncated: true`, so a reader follows the frame to `get_run_frame_body` for the whole of it.
+
+## Example
+
+Read the model calls that reasoned and the run's stop:
+
+```sh
+oxagen run transcript tse_4q8r1t6v3x5z0b2d7h2k9m --kinds thinking,seal
+```
+
+```text
+tse_4q8r1t6v3x5z0b2d7h2k9m at steps: 2 entries on this page, 14 in the run
+Counts: prompt 1, responses 6, thinking 1, tools 5, policy 0, usage 6, recall 0, seal 1, errors 0
+
+Turn  Key  Row    Name                     Outcome
+1     4    model  anthropic/claude-opus-5  ok
+-     13   seal   agent_stop               -
+```
+
+The counts cover the whole run, whatever `--kinds` keeps. A page read with `--after` carries none. Add `--query <words>` to keep the entries that hold the words, and `--json` to print the contract payload.
 
 ## Errors
 
 - `not_found` (404): no run with that id in the caller's workspace.
 - `invalid_input` (`invalid_cursor`): a cursor this capability did not write. A stale cursor is refused rather than treated as the start, which would silently restart and repeat the run.
+- `invalid_input` (`conflicting_position`): more than one of `after`, `before`, and `from`.
 
 The interface renders the recorded fidelity word and never a stronger one (spec §8.4).

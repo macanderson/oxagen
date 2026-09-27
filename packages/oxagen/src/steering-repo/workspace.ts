@@ -48,6 +48,22 @@ export const embeddingsSchema = withRules(
   ],
 );
 
+/**
+ * Days a Stella session may sit untouched before the nightly sweep archives
+ * it, when `[stella] archive_after_days` is unset.
+ */
+export const STELLA_ARCHIVE_AFTER_DAYS_DEFAULT = 7;
+
+/** The bounds `archive_after_days` accepts. The sweep applies the same ones. */
+export const STELLA_ARCHIVE_AFTER_DAYS_MIN = 1;
+export const STELLA_ARCHIVE_AFTER_DAYS_MAX = 365;
+
+/**
+ * The key in `workspaces.settings` that holds `archive_after_days`. The
+ * steering sync writes it from workspace.toml, and the sweep reads it.
+ */
+export const STELLA_ARCHIVE_AFTER_DAYS_SETTING = "stellaArchiveAfterDays";
+
 export const workspaceSchema = z
   .object({
     schema: z.literal("workspace/v1"),
@@ -95,6 +111,20 @@ export const workspaceSchema = z
       .strict()
       .optional(),
     embeddings: embeddingsSchema.optional(),
+    stella: z
+      .object({
+        archive_after_days: z
+          .number()
+          .int()
+          .min(STELLA_ARCHIVE_AFTER_DAYS_MIN)
+          .max(STELLA_ARCHIVE_AFTER_DAYS_MAX)
+          .optional()
+          .describe(
+            "Archive a Stella thread after this many days with no activity. 7 when unset.",
+          ),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type WorkspaceFile = z.output<typeof workspaceSchema>;

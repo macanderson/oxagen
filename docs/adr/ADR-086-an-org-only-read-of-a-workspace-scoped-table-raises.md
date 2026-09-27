@@ -194,6 +194,20 @@ caller:
 false when the GUC is absent, and `withTenantDb` pins it to `'off'` explicitly
 so a nested call cannot inherit a caller's widening.
 
+**Addendum, 2026-09-26 (#3941): the same read inside an open transaction.** A
+`withOrgDb` called from inside a `withTenantDb` callback holds one pool
+connection while it waits for a second, and enough concurrent callers exhaust
+the pool waiting on each other. The Tacho policy bundle is built inside the
+host's tenant transaction on every poll and ingest batch, and it needs the
+repositories every workspace in the organisation bound. So
+`withTransactionOrgWideRead(tx, fn)` sets `app.org_wide = 'on'` in a savepoint
+on the caller's connection, runs `fn`, and restores the previous value. It
+leaves the org, workspace and bypass GUCs as the caller set them. Every
+property above holds, because the policies enforce them: the widening is the
+`FOR SELECT` policy alone, so a write inside `fn` is judged by the unchanged
+`tenant_isolation` and `WITH CHECK`. A throw rolls the savepoint back, and the
+setting with it.
+
 ### 4. The reads that were correct under the sentinel move to `withOrgDb`
 
 A read that ran under an org-only scope was either already broken — a `standard`

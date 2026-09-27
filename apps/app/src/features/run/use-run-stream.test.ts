@@ -59,6 +59,17 @@ class FakeEventSource {
     this.listeners.get("run")?.(new MessageEvent("run", { data }));
   }
 
+  /** The route sent the subagent chains' heads under this cursor. */
+  chains(cursor: string) {
+    this.chainsRaw(
+      JSON.stringify({ chains: { cursor, heads: [], complete: true } }),
+    );
+  }
+
+  chainsRaw(data: string) {
+    this.listeners.get("chains")?.(new MessageEvent("chains", { data }));
+  }
+
   /** The route closed the stream with its terminator. */
   done(payload: unknown) {
     this.listeners.get("done")?.(
@@ -242,6 +253,54 @@ describe("useRunStream", () => {
     const { result } = follow();
     expect(opened).toHaveLength(0);
     expect(result.current).toBe("off");
+  });
+
+  // #3823: a subagent's frames never arrive as frames past the run's own
+  // cursor. A moved head is the signal to read the tail.
+  it("reads the tail when a subagent chain's head moves, coalesced with frames", () => {
+    const { onFrames } = follow();
+    act(() => {
+      latest().open();
+      latest().chains("h:1");
+      latest().frame();
+      latest().chains("h:2");
+    });
+    expect(onFrames).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(750);
+    });
+    expect(onFrames).toHaveBeenCalledTimes(1);
+    act(() => {
+      latest().chains("h:3");
+      vi.advanceTimersByTime(750);
+    });
+    expect(onFrames).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not read the tail for heads it already saw, a reopen included (negative)", () => {
+    const { onFrames } = follow();
+    act(() => {
+      latest().open();
+      latest().chains("h:1");
+      vi.advanceTimersByTime(750);
+    });
+    expect(onFrames).toHaveBeenCalledTimes(1);
+    act(() => {
+      latest().chains("h:1");
+      latest().done({ reason: "idle", cursor: "cur_1" });
+    });
+    // The idle close reads the tail once, as it always does.
+    expect(onFrames).toHaveBeenCalledTimes(2);
+    act(() => {
+      // The route writes the heads again on every open.
+      latest().open();
+      latest().chains("h:1");
+      latest().chainsRaw("not json");
+      latest().chainsRaw(JSON.stringify({ chains: { heads: [] } }));
+      vi.advanceTimersByTime(5000);
+    });
+    expect(opened).toHaveLength(2);
+    expect(onFrames).toHaveBeenCalledTimes(2);
   });
 
   it("calls back once for a burst of frames, not once per frame", () => {

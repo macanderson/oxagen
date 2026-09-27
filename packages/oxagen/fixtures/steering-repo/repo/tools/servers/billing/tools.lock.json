@@ -2,71 +2,465 @@
   "schema": "mcp-tools-lock/v1",
   "server": "billing",
   "source": {
-    "type": "openapi",
-    "document_hash": "sha256:6fa18a2e480f0eff389b0bde7ced4ec0212eb0c11647444a0eb367f6dae9d902",
-    "repo": "github.com/a-intel/billing-service",
+    "commit": "4be91d2c0a7e5f3b9d18e6a2c4f0b7d95e3a1c86",
+    "document_hash": "sha256:d06755b965f3f9765134f021858a5c24f51f6af3b4de88dea2a0678ca13d0ef4",
+    "from": "repository",
     "path": "openapi/billing.yaml",
-    "ref": "main"
+    "ref": "main",
+    "repo": "github.com/a-intel/billing-service",
+    "security_schemes": {
+      "oauth": {
+        "authorization_url": "https://login.a-intel.com/oauth/authorize",
+        "scopes": [
+          "billing"
+        ],
+        "token_url": "https://login.a-intel.com/oauth/token",
+        "type": "oauth2"
+      }
+    },
+    "type": "openapi"
   },
   "tools": {
     "cancel_refund": {
-      "definition_hash": "sha256:f27ac7b1ff45c24fa848d899d7e80032c1eb8b595cd6d33482c0e4533ccf1bdd",
+      "definition_hash": "sha256:d4208c08b7cd2367efe67b2322b46542c0e4e0dd37b24895455ae8d8cf225ea8",
       "upstream": {
-        "operation": "cancelRefund",
-        "method": "POST",
-        "path": "/refunds/{refund_id}/cancel"
+        "description": "Cancel a pending refund.",
+        "inputSchema": {
+          "properties": {
+            "refund_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "refund_id"
+          ],
+          "type": "object"
+        },
+        "name": "cancel_refund",
+        "outputSchema": {
+          "properties": {
+            "amount": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "pending",
+                "succeeded",
+                "failed",
+                "canceled"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "request": {
+          "kind": "http",
+          "method": "POST",
+          "operation": "cancelRefund",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "refund_id",
+              "property": "refund_id",
+              "required": true
+            }
+          ],
+          "path": "/refunds/{refund_id}/cancel",
+          "response": {
+            "media_type": "application/json",
+            "status": "200"
+          },
+          "security": [
+            {
+              "oauth": [
+                "billing"
+              ]
+            }
+          ]
+        }
       },
-      "upstream_hash": "sha256:52fd294764912bf6fdabed0254ba960e33311a2d5cefde405f0b9ba1eb64d655",
+      "upstream_hash": "sha256:132acad295aa767fccd79d072f35310ca32a84c2032b0de239d3ea1e63fb6d27",
       "version": 1
     },
     "create_refund": {
-      "definition_hash": "sha256:af945200d56d25ff0035152f2f3ecf94a370aa2eb441da4dd769624d8a452e29",
+      "definition_hash": "sha256:625849196feb8dcad44897c429136a41779636bb2e0bbab429f2652f75655d34",
       "upstream": {
-        "operation": "createRefund",
-        "method": "POST",
-        "path": "/refunds"
+        "description": "Refund part or all of a captured charge.",
+        "inputSchema": {
+          "properties": {
+            "X-Request-Source": {
+              "type": "string"
+            },
+            "amount": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "charge_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "charge_id"
+          ],
+          "type": "object"
+        },
+        "name": "create_refund",
+        "outputSchema": {
+          "properties": {
+            "amount": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "pending",
+                "succeeded",
+                "failed",
+                "canceled"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "request": {
+          "body": {
+            "in": "spread",
+            "media_type": "application/json",
+            "properties": [
+              "charge_id",
+              "amount"
+            ],
+            "required": true
+          },
+          "kind": "http",
+          "method": "POST",
+          "operation": "createRefund",
+          "parameters": [
+            {
+              "in": "header",
+              "name": "X-Request-Source",
+              "property": "X-Request-Source",
+              "required": false
+            }
+          ],
+          "path": "/refunds",
+          "response": {
+            "media_type": "application/json",
+            "status": "200"
+          },
+          "security": [
+            {
+              "oauth": [
+                "billing"
+              ]
+            }
+          ]
+        }
       },
-      "upstream_hash": "sha256:eac1ee3a2bf078ac8e83aaccba5daf1c5f1082320018f4476aa8552134be2f0f",
+      "upstream_hash": "sha256:e88a4ff42a4bc667d686b3dd6cac185ad0ed48ec40cbd1e700e5d8c2c387e572",
       "version": 3
     },
     "get_charge": {
-      "definition_hash": "sha256:fef6c725819aed0b91a9487328fa263de9f366b6cf0118438cf540ec6a782864",
+      "definition_hash": "sha256:e9bab5cde94c4a6c4866b89ec32f6348e660eca9140e8fa9751606a714670a66",
       "upstream": {
-        "operation": "getCharge",
-        "method": "GET",
-        "path": "/charges/{charge_id}"
+        "description": "Read one charge.",
+        "inputSchema": {
+          "properties": {
+            "charge_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "charge_id"
+          ],
+          "type": "object"
+        },
+        "name": "get_charge",
+        "outputSchema": {
+          "properties": {
+            "amount": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "pending",
+                "succeeded",
+                "failed"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "request": {
+          "kind": "http",
+          "method": "GET",
+          "operation": "getCharge",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "charge_id",
+              "property": "charge_id",
+              "required": true
+            }
+          ],
+          "path": "/charges/{charge_id}",
+          "response": {
+            "media_type": "application/json",
+            "status": "200"
+          },
+          "security": [
+            {
+              "oauth": [
+                "billing"
+              ]
+            }
+          ]
+        }
       },
-      "upstream_hash": "sha256:58dfbc51092d4fb58be99045f9a123ac5d5cd00591856b6a9a81d63a6d0eca6d",
+      "upstream_hash": "sha256:a139cf3dd5257084d025ac4ef308f414b83de2a5d1d2a482c0840afccf7b9964",
       "version": 1
     },
     "get_refund": {
-      "definition_hash": "sha256:6b50dec802d7233b476944fb853ca753c1a85b96525346818ec270d8c2a6a282",
+      "definition_hash": "sha256:6830a8c5d35b3a392bef06c6f91f196b67016443e566e4976e78312e7034c651",
       "upstream": {
-        "operation": "getRefund",
-        "method": "GET",
-        "path": "/refunds/{refund_id}"
+        "description": "Read one refund.",
+        "inputSchema": {
+          "properties": {
+            "refund_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "refund_id"
+          ],
+          "type": "object"
+        },
+        "name": "get_refund",
+        "outputSchema": {
+          "properties": {
+            "amount": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "pending",
+                "succeeded",
+                "failed",
+                "canceled"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "request": {
+          "kind": "http",
+          "method": "GET",
+          "operation": "getRefund",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "refund_id",
+              "property": "refund_id",
+              "required": true
+            }
+          ],
+          "path": "/refunds/{refund_id}",
+          "response": {
+            "media_type": "application/json",
+            "status": "200"
+          },
+          "security": [
+            {
+              "oauth": [
+                "billing"
+              ]
+            }
+          ]
+        }
       },
-      "upstream_hash": "sha256:ed9803e7da6e4616852c0b92590d7d45d46481ccc5e78ac6b7b8c9af0a22f9d6",
+      "upstream_hash": "sha256:e15860535c4e70a563c328e325718540a92b5fd27ee2bfcee1999c621a2d0578",
       "version": 1
     },
     "list_charges": {
-      "definition_hash": "sha256:3dad5e7ad14b863ed2d9db3389bed06c4728aefd54e05ac9417258d7b999d743",
+      "definition_hash": "sha256:a820e0d4e449a45364ad8a38ca2fd990c041b85d0ea8529a57352225e6d1635b",
       "upstream": {
-        "operation": "listCharges",
-        "method": "GET",
-        "path": "/customers/{customer_id}/charges"
+        "description": "List one customer's charges, newest first.",
+        "inputSchema": {
+          "properties": {
+            "cursor": {
+              "type": "string"
+            },
+            "customer_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "customer_id"
+          ],
+          "type": "object"
+        },
+        "name": "list_charges",
+        "outputSchema": {
+          "properties": {
+            "data": {
+              "items": {
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "pending",
+                      "succeeded",
+                      "failed"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "next_cursor": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "paging": {
+          "input": "cursor",
+          "items": "data",
+          "next": "next_cursor",
+          "style": "cursor"
+        },
+        "request": {
+          "kind": "http",
+          "method": "GET",
+          "operation": "listCharges",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "customer_id",
+              "property": "customer_id",
+              "required": true
+            },
+            {
+              "in": "query",
+              "name": "cursor",
+              "property": "cursor",
+              "required": false
+            }
+          ],
+          "path": "/customers/{customer_id}/charges",
+          "response": {
+            "media_type": "application/json",
+            "status": "200"
+          },
+          "security": [
+            {
+              "oauth": [
+                "billing"
+              ]
+            }
+          ]
+        }
       },
-      "upstream_hash": "sha256:5909e97a7f1fe37cf702e04a23480bef7a82468d763521183ca2545ab526817b",
+      "upstream_hash": "sha256:f9428cde2f82361676b221c4f869c1a82950e790625ac09b3b6770fcbac9755c",
       "version": 2
     },
     "list_refunds": {
-      "definition_hash": "sha256:e0d927ef37d6f24fb4be60239fa2b701f9e8ab52e86227368b5b1095a0ca9956",
+      "definition_hash": "sha256:27b1af33e2ae9b7e3749e4050049d472bcee3a161c74b60375fef06727ba7d96",
       "upstream": {
-        "operation": "listRefunds",
-        "method": "GET",
-        "path": "/charges/{charge_id}/refunds"
+        "description": "List the refunds of one charge.",
+        "inputSchema": {
+          "properties": {
+            "charge_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "charge_id"
+          ],
+          "type": "object"
+        },
+        "name": "list_refunds",
+        "outputSchema": {
+          "properties": {
+            "items": {
+              "items": {
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "pending",
+                      "succeeded",
+                      "failed",
+                      "canceled"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "request": {
+          "kind": "http",
+          "method": "GET",
+          "operation": "listRefunds",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "charge_id",
+              "property": "charge_id",
+              "required": true
+            }
+          ],
+          "path": "/charges/{charge_id}/refunds",
+          "response": {
+            "media_type": "application/json",
+            "status": "200",
+            "wrap": "items"
+          },
+          "security": [
+            {
+              "oauth": [
+                "billing"
+              ]
+            }
+          ]
+        }
       },
-      "upstream_hash": "sha256:f71c20537cfeb3b310c6eca9e5477256d0523217f677198167c26ffd6bdcae21",
+      "upstream_hash": "sha256:dbbebc1c9f49b71454fc8ec41b2fff8c267c2165d8d4d7b9d4a02d96ec5c1aa1",
       "version": 1
     }
   }

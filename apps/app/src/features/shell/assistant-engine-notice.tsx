@@ -51,7 +51,7 @@ export function AssistantEngineNotice({
         id={ASSISTANT_ENGINE_REASON_ID}
         role="alert"
         data-testid={`assistant-engine-${health.down}`}
-        className="flex items-start gap-2 text-sm text-error-ink"
+        className="flex items-start gap-2 text-[13px] leading-5 text-error-ink"
       >
         <CircleAlert
           aria-hidden="true"

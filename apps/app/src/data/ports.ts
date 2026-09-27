@@ -33,7 +33,10 @@ import type {
   PlanCard,
   UsageCredits,
 } from "./contracts/billing";
-import type { AssistantThread } from "./contracts/conversations";
+import type {
+  AssistantSession,
+  AssistantThread,
+} from "./contracts/conversations";
 import type { MandateDetail, MandateList } from "./contracts/mandates";
 import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type {
@@ -65,6 +68,7 @@ import type { RunIssues } from "./contracts/run-issues";
 import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
 import type { InterjectionQueue } from "./contracts/interjections";
 import type {
+  CommandReport,
   EnforcementTier,
   PullRequestFilter,
   RunPage,
@@ -176,14 +180,29 @@ export interface DataSource {
     assistantEngine(ctx: WsCtx): Promise<Read<AssistantEngine>>;
   };
   /**
-   * get_conversation with no id: the viewer's latest active conversation in
-   * the workspace, the thread the assistant flyout reopens (#4163), or null
-   * when the viewer has none. Caller:
-   * features/shell/assistant-thread-actions.ts, when the flyout opens in a
-   * workspace it has not read yet.
+   * The assistant flyout's conversations in the workspace, the viewer's own.
+   * Caller: features/shell/assistant-thread-actions.ts.
    */
   conversations: {
+    /**
+     * get_conversation with no id: the viewer's latest active conversation,
+     * the thread the flyout reopens (#4163), or null when the viewer has
+     * none. Read when the flyout opens in a workspace it has not read yet.
+     */
     latest(ctx: WsCtx): Promise<Read<AssistantThread | null>>;
+    /**
+     * list_conversations, active only: the flyout's session list (#4435),
+     * newest activity first, at most fifty. The archive sweep takes a
+     * conversation off it once it has been idle for the workspace's
+     * `[stella] archive_after_days`.
+     */
+    list(ctx: WsCtx): Promise<Read<readonly AssistantSession[]>>;
+    /**
+     * get_conversation with an id: the session the person picked from the
+     * list. An id that is not the viewer's, or was deleted, is a refusal
+     * with code `conversation_not_found`.
+     */
+    byId(ctx: WsCtx, conversationId: string): Promise<Read<AssistantThread>>;
   };
   /**
    * The Billing page's six noBillingGate reads, each Owner, Admin or Billing
@@ -218,9 +237,12 @@ export interface DataSource {
    * and `transcript` is `get_run_transcript` at one zoom level, each read by
    * its own tab, so a tab nobody opened makes no read. `frameBody` is
    * `get_run_frame_body`, one frame's bytes on demand (§3.5), read only when
-   * the Frames tab has a frame open, caller features/run/run.tsx. `chain` is
-   * `get_run_chain`, read only when the Chain and seal tab is open, because it
-   * walks the recording to find its gaps.
+   * the Frames tab has a frame open, caller features/run/run.tsx; `chainRef`
+   * names the subagent chain a frame was recorded on, and is omitted for the
+   * run's own chain (#3823). `chain` is `get_run_chain`, read only when the
+   * Chain and seal tab is open, because it walks the recording to find its
+   * gaps. `commands` is `list_commands`, the delivery report: one run's
+   * commands, or the commands one broadcast queued (#2953).
    */
   runs: {
     list(
@@ -261,7 +283,12 @@ export interface DataSource {
       ctx: WsCtx,
       runId: string,
       seq: string,
+      chainRef?: string,
     ): Promise<Read<RunFrameBody>>;
+    commands(
+      ctx: WsCtx,
+      q: { runId: string } | { commandIds: string[] },
+    ): Promise<Read<CommandReport>>;
     cost(ctx: WsCtx, runId: string): Promise<Read<RunCost>>;
     /**
      * `get_run_turns`, the run's per-turn ledger over every frame, read only
@@ -275,7 +302,8 @@ export interface DataSource {
      * `limit` is the entries a page carries, the contract's default when
      * omitted. `text` is how much of each body a page carries, the zoom's cap
      * when omitted, and `query` narrows the entries to those that hold it,
-     * searched on the server.
+     * searched on the server. `before` reads the page ahead of a cursor a
+     * backward page carried, and `from: "end"` reads the run's last page.
      */
     transcript(
       ctx: WsCtx,
@@ -284,6 +312,8 @@ export interface DataSource {
       q?: {
         kinds?: TranscriptKind[];
         after?: string | null;
+        before?: string;
+        from?: "start" | "end";
         limit?: number;
         text?: TranscriptText;
         query?: string;
@@ -351,16 +381,24 @@ export interface DataSource {
     ): Promise<Read<{ items: ResolvedApprovalItem[]; more: boolean }>>;
   };
   /**
-   * list_interjections with `open: true`: the questions agents paused to ask
-   * that nobody has answered, walked to the end of the cursor under a bound,
-   * with `more` set when the bound stopped the walk (#3839); callers:
-   * features/fleet/fleet.tsx and features/shell/source.ts.
+   * list_interjections. `open` reads with `open: true`: the questions agents
+   * paused to ask that nobody has answered, walked to the end of the cursor
+   * under a bound, with `more` set when the bound stopped the walk (#3839);
+   * callers: features/fleet/fleet.tsx and features/shell/source.ts.
    */
   interjections: {
     open(
       ctx: WsCtx,
       q: { runId: string | null },
     ): Promise<Read<InterjectionQueue>>;
+    /**
+     * list_interjections with `open: false` for one run: its questions,
+     * answered or not, with each answer's path and receipt, so the Run page
+     * renders the question a host held the run on and how it was settled
+     * (#3941); caller: features/run/run.tsx. The answer itself is a write and
+     * goes through the Run page's server action, not a port.
+     */
+    forRun(ctx: WsCtx, runId: string): Promise<Read<InterjectionQueue>>;
   };
   /**
    * The Agents pages (#2956), each read by the agent's public id or slug:

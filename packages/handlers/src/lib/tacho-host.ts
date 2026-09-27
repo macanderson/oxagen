@@ -28,6 +28,7 @@ import {
   BUNDLE_FEATURE_HOOK_FAIL_OPEN,
   BUNDLE_FEATURE_MODEL_PRICES,
   BUNDLE_FEATURE_STEERING_MANIFEST,
+  BUNDLE_FEATURE_UNBOUND_REPO,
   digestJcs,
   type JsonValue,
   type SteeringManifest,
@@ -61,6 +62,10 @@ import {
   readTachoSessionPolicyIn,
   type SessionPolicyTx,
 } from "./tacho-session-policy";
+import {
+  resolveUnboundRepo,
+  type UnboundRepoClause,
+} from "./tacho-unbound-repo";
 
 export type TachoHostRow = typeof schema.tachoHosts.$inferSelect;
 export type ControlEnvelope = z.output<typeof controlEnvelopeSchema>;
@@ -93,6 +98,12 @@ interface TachoTx {
     // type-checks past the cast and throws at the first call (#3710).
     workspaces: { findFirst: (args: unknown) => Promise<unknown> };
   };
+  // The `unbound_repo` read (`resolveUnboundRepo`, #3941) also runs on a cast
+  // to the real `Tx`, for a host that advertised the field: the head skills
+  // configuration, the workspace's slug and linked repositories, and, in a
+  // savepoint (`transaction`) with the organisation-wide read on, every
+  // repository binding head, binding and connection in the organisation.
+  transaction: (fn: (tx: never) => Promise<unknown>) => Promise<unknown>;
   // The steering read (`readWorkspaceSteering`): the ledger count and the
   // records joined to their pinned versions. The tool-RBAC half of the
   // mandate (`fetchAgentRunAuthzIn`, `@oxagen/iam`) also selects through
@@ -398,6 +409,12 @@ export interface HostMandate {
   models?: PolicyBundle["models"];
   /** The host's runtime requires the contained tier (ADR-152, ADR-204). */
   containment?: { required: true };
+  /**
+   * What the host asks when a session starts in a repository the
+   * organisation has not bound (#3941). Resolved only for a host that
+   * advertised `BUNDLE_FEATURE_UNBOUND_REPO` whose workspace has skills on.
+   */
+  unboundRepo?: UnboundRepoClause;
 }
 
 /**
@@ -550,6 +567,7 @@ export async function resolveHostMandate(
   const containment = (await readRuntimeContainment(tx, host))
     ? { containment: { required: true as const } }
     : {};
+  const unbound = await unboundRepo(tx, ctx, host);
   try {
     const budget = deriveBundleBudget(
       await readAgentVersionBudget(tx, host.agentId),
@@ -558,7 +576,7 @@ export async function resolveHostMandate(
           host.bundleFeatures?.includes(BUNDLE_FEATURE_DAILY_BUDGET) === true,
       },
     );
-    return { permissions, budget, ...models, ...containment };
+    return { permissions, budget, ...models, ...unbound, ...containment };
   } catch (error) {
     if (!isHandlerError(error) || error.reason !== "invalid_agent_config")
       throw error;
@@ -571,9 +589,34 @@ export async function resolveHostMandate(
       budget: { mode: "observed" },
       invalidAgentConfig: true,
       ...models,
+      ...unbound,
       ...containment,
     };
   }
+}
+
+/** Whether this host named `unbound_repo` among the fields it can parse. */
+function parsesUnboundRepo(host: TachoHostRow): boolean {
+  const advertised: unknown = host.bundleFeatures;
+  return (
+    Array.isArray(advertised) &&
+    advertised.includes(BUNDLE_FEATURE_UNBOUND_REPO)
+  );
+}
+
+/**
+ * The `unbound_repo` clause for a host that advertised it can parse one
+ * (#3941). A host that did not is asked nothing and costs no read: the
+ * feature is checked before the transaction is touched.
+ */
+async function unboundRepo(
+  tx: TachoTx,
+  ctx: { orgId: string; workspaceId: string },
+  host: TachoHostRow,
+): Promise<Pick<HostMandate, "unboundRepo">> {
+  if (!parsesUnboundRepo(host)) return {};
+  const clause = await resolveUnboundRepo(tx as unknown as Tx, ctx, true);
+  return clause === undefined ? {} : { unboundRepo: clause };
 }
 
 /**
@@ -655,6 +698,10 @@ export function unsignedBundle(
     ...hookFailOpen(host),
     ...(containment === "signed"
       ? { containment: { required: true as const } }
+      : {}),
+    // Only to a host that can parse it: the host's bundle schema is strict.
+    ...(mandate.unboundRepo !== undefined && parsesUnboundRepo(host)
+      ? { unbound_repo: mandate.unboundRepo }
       : {}),
   };
   const etag = digestJcs(content as unknown as JsonValue).slice(

@@ -17,6 +17,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { RunRow } from "@/data/contracts/runs";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
@@ -736,6 +737,104 @@ describe("pause or resume, never both", () => {
     );
     expect(screen.getByTestId("run-resume")).toBeDisabled();
     expect(screen.queryByTestId("run-pause")).toBeNull();
+  });
+});
+
+// #3972: a pause or a resume on its way draws its disabled word in the first
+// slot, and the rest of the set follows pages/run.md's actions table.
+describe("the pause's in-between states", () => {
+  type Pause = NonNullable<RunRow["pause"]>;
+  function pauseOf(state: Pause["state"]): Pause {
+    return {
+      state,
+      commandId: "tcm_p",
+      resumeCommandId: state === "resuming" ? "tcm_r" : null,
+      seq: state === "pausing" ? null : "41",
+      turn: 3,
+      step: 12,
+      by: { id: "usr_0a", name: "Ada Park" },
+      issuedAt: "2026-09-15T08:56:00.000Z",
+      appliedAt: state === "pausing" ? null : "2026-09-15T08:56:04.000Z",
+      reason: "budget review",
+    };
+  }
+  function controls(
+    pause: Pause | null,
+    over: { orgRole?: "owner" | "viewer"; wsRole?: "owner" | "viewer" } = {},
+  ) {
+    return (
+      <IntlProvider>
+        <RunControls
+          org="acme"
+          ws="core-platform"
+          runId={RUN}
+          status="live"
+          source="tacho"
+          enforcementTier="harness"
+          ingressPaused={pause !== null && pause.state !== "pausing"}
+          pause={pause}
+          orgRole={over.orgRole ?? "owner"}
+          wsRole={over.wsRole ?? "owner"}
+        />
+      </IntlProvider>
+    );
+  }
+
+  it("draws a disabled Pausing and keeps Steer while a pause is on its way", async () => {
+    const { container } = render(controls(pauseOf("pausing")));
+    expect(screen.getByTestId("run-pausing")).toBeDisabled();
+    expect(screen.getByTestId("run-pausing")).toHaveTextContent("❙❙ Pausing…");
+    expect(screen.getByTestId("run-steer")).toBeEnabled();
+    for (const gone of ["pause", "resume", "cancel", "resuming"])
+      expect(screen.queryByTestId(`run-${gone}`)).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("draws a disabled Resuming alone while a resume is on its way", async () => {
+    const { container } = render(controls(pauseOf("resuming")));
+    expect(screen.getByTestId("run-resuming")).toBeDisabled();
+    expect(screen.getByTestId("run-resuming")).toHaveTextContent(
+      "▶ Resuming…",
+    );
+    for (const gone of ["pause", "resume", "steer", "cancel", "pausing"])
+      expect(screen.queryByTestId(`run-${gone}`)).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("offers Resume, Steer and Cancel once the pause is applied, and Pause, Steer and Cancel with none in force", async () => {
+    const paused = render(controls(pauseOf("paused")));
+    expect(screen.getByTestId("run-resume")).toBeEnabled();
+    expect(screen.getByTestId("run-steer")).toBeEnabled();
+    expect(screen.getByTestId("run-cancel")).toBeEnabled();
+    expect(screen.queryByTestId("run-pausing")).toBeNull();
+    await expectNoAxe(paused.container);
+    cleanup();
+    const live = render(controls(null));
+    expect(screen.getByTestId("run-pause")).toBeEnabled();
+    expect(screen.getByTestId("run-steer")).toBeEnabled();
+    expect(screen.getByTestId("run-cancel")).toBeEnabled();
+    await expectNoAxe(live.container);
+  });
+
+  it("draws the in-between set disabled, with the reason, for a viewer no role admits (negative)", () => {
+    render(controls(pauseOf("pausing"), { orgRole: "viewer", wsRole: "viewer" }));
+    expect(screen.getByTestId("run-pausing")).toBeDisabled();
+    expect(screen.getByTestId("run-steer")).toBeDisabled();
+    expect(screen.getByTestId("role-no-control")).toBeTruthy();
+  });
+
+  it("re-reads the run while the pause is on its way, and stops once it is applied", () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    const view = render(controls(pauseOf("pausing")));
+    act(() => {
+      vi.advanceTimersByTime(HALT_FOLLOW_EVERY_MS);
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    view.rerender(controls(pauseOf("paused")));
+    act(() => {
+      vi.advanceTimersByTime(HALT_FOLLOW_EVERY_MS * 5);
+    });
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
 

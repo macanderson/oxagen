@@ -996,16 +996,14 @@ function PauseDialog({
                     frames: run.frames,
                   })}
             </dd>
-            {ledger ? null : (
-              <>
-                <dt className="text-dim">{t("recordedAs")}</dt>
-                <dd>
-                  {t.rich("recordedValue", {
+            <dt className="text-dim">{t("recordedAs")}</dt>
+            <dd>
+              {ledger
+                ? t("ledgerRecordedValue")
+                : t.rich("recordedValue", {
                     mono: (chunks) => <span className={mono}>{chunks}</span>,
                   })}
-                </dd>
-              </>
-            )}
+            </dd>
           </dl>
           {refusal === null ? null : (
             <p

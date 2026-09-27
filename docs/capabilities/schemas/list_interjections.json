@@ -110,6 +110,213 @@
                   "type": "null"
                 }
               ]
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "question",
+                "repo_unknown"
+              ]
+            },
+            "raisedSeq": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "body": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "interjection_key": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "const": "repo_unknown"
+                    },
+                    "question": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "remote_digest": {
+                      "type": "string"
+                    },
+                    "remote_digest_folded": {
+                      "type": "string"
+                    },
+                    "timeout_ms": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+                    },
+                    "on_timeout": {
+                      "const": "deny"
+                    },
+                    "paths": {
+                      "type": "array",
+                      "items": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "const": "link"
+                            },
+                            "workspace_slug": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 64
+                            },
+                            "config_version": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 64
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "skills_pinned": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "linked_repositories": {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": 0
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "workspace_slug",
+                            "config_version",
+                            "skills_pinned",
+                            "linked_repositories"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "path": {
+                              "const": "create"
+                            },
+                            "proposed_name": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 120
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "proposed_slug": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 64
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "skills_enabled": {
+                              "const": false
+                            }
+                          },
+                          "required": [
+                            "path",
+                            "proposed_name",
+                            "proposed_slug",
+                            "skills_enabled"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "interjection_key",
+                    "reason",
+                    "question",
+                    "remote_digest",
+                    "timeout_ms",
+                    "expires_at",
+                    "on_timeout",
+                    "paths"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "repository": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "path": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "link",
+                    "create",
+                    "deny"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "receiptId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -121,7 +328,13 @@
             "expiresAt",
             "answeredAt",
             "answer",
-            "answeredBy"
+            "answeredBy",
+            "kind",
+            "raisedSeq",
+            "body",
+            "repository",
+            "path",
+            "receiptId"
           ],
           "additionalProperties": false
         },

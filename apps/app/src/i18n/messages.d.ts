@@ -2561,16 +2561,23 @@ type Messages = {
       delivery: string;
       boundary: string;
       boundaryBody: string;
+      interruptNow: string;
+      interruptBody: string;
       interrupt: string;
-      interruptUnavailable: string;
+      interruptCarriers: string;
+      interruptNoCarrier: string;
+      interruptNoRun: string;
       interruptHint: string;
       recorded: string;
       note: string;
       footer: string;
       send: string;
+      sendInterrupt: string;
       sending: string;
       cancel: string;
       queued: string;
+      queuedDetail: string;
+      queuedNone: string;
       refused: string;
     };
     stats: {
@@ -2826,6 +2833,7 @@ type Messages = {
       positionNoTurn: string;
       recordedAs: string;
       recordedValue: string;
+      ledgerRecordedValue: string;
       reason: string;
       note: string;
       footer: string;
@@ -5673,6 +5681,9 @@ type Messages = {
       pause: string;
       replay: string;
       speedLabel: string;
+      scrub: string;
+      waited: string;
+      working: string;
       speed: string;
       position: string;
       unpaced: string;
@@ -5715,7 +5726,6 @@ type Messages = {
       parkedApproval: string;
       gate: string;
       frame: string;
-      subagentFrame: string;
       usage: string;
       tokensIn: string;
       tokensCache: string;
@@ -5741,9 +5751,10 @@ type Messages = {
       emptySearch: string;
       emptyErrors: string;
       cut: string;
-      cutLive: string;
       more: string;
       readingMore: string;
+      older: string;
+      readingOlder: string;
       loadedMore: string;
       badCursor: string;
       pageFailed: string;
@@ -5755,6 +5766,7 @@ type Messages = {
     frames: {
       title: string;
       recorded: string;
+      chain: string;
       stage: string;
       turn: string;
       turnValue: string;
@@ -5773,6 +5785,7 @@ type Messages = {
       retainedAt: string;
       redacted: string;
       offPage: string;
+      chainOffPage: string;
       previous: string;
       next: string;
       position: string;
@@ -6202,6 +6215,12 @@ type Messages = {
         pending: string;
         queued: string;
       };
+      pausing: {
+        open: string;
+      };
+      resuming: {
+        open: string;
+      };
       steer: {
         open: string;
         title: string;
@@ -6315,6 +6334,128 @@ type Messages = {
       };
       reread: string;
       roleReason: string;
+    };
+    interjection: {
+      eyebrow: string;
+      meta: string;
+      tier: string;
+      status: {
+        waiting: string;
+        waitingCaption: string;
+      };
+      note: {
+        waiting: string;
+        answered: string;
+        answeredUnrecorded: string;
+        timedOut: string;
+        windowClosed: string;
+      };
+      panes: {
+        agent: string;
+        agentSource: string;
+        operator: string;
+        operatorSource: string;
+        frames: string;
+        framesSource: string;
+      };
+      question: {
+        from: string;
+        label: string;
+      };
+      reply: {
+        timeout: string;
+        label: string;
+      };
+      held: string;
+      repository: string;
+      repositoryUnresolved: string;
+      unavailable: {
+        missing: string;
+        noBody: string;
+      };
+      pick: {
+        legend: string;
+        link: string;
+        linkDescription: string;
+        create: string;
+        createDescription: string;
+        createDescriptionUnnamed: string;
+        name: string;
+        slug: string;
+        slugHelp: string;
+      };
+      consequence: {
+        gain: string;
+        loss: string;
+        same: string;
+        linkVersion: string;
+        linkPinned: string;
+        linkRepositories: string;
+        linkSpend: string;
+        createSkillsOff: string;
+        createOwn: string;
+        createContinues: string;
+      };
+      send: string;
+      sending: string;
+      pickOne: string;
+      answersAs: string;
+      nameFirst: string;
+      roleReason: string;
+      closedReason: string;
+      receipt: {
+        sent: string;
+        linked: string;
+        created: string;
+      };
+      timeout: {
+        title: string;
+        body: string;
+        closes: string;
+      };
+      answer: {
+        title: string;
+        closed: string;
+        by: string;
+        byTimeout: string;
+        path: string;
+        paths: {
+          link: string;
+          create: string;
+          deny: string;
+        };
+        pathNotRecorded: string;
+        receipt: string;
+        receiptNotRecorded: string;
+        waited: string;
+        transcript: string;
+      };
+      frames: {
+        pending: string;
+        firstCall: string;
+        cut: string;
+      };
+      failure: {
+        orgRoleRequired: string;
+        noPrincipal: string;
+        answered: string;
+        expired: string;
+        answerShape: string;
+        repositoryUnresolved: string;
+        slugTaken: string;
+        mainRepoClaimed: string;
+        githubNotConnected: string;
+        githubNotAuthorized: string;
+        installationUnreachable: string;
+        repositoryNotInstalled: string;
+        choice: string;
+        slug: string;
+        name: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
     };
     record: {
       reread: string;
@@ -6620,8 +6761,6 @@ type Messages = {
       ended: string;
       sealNotRecorded: string;
       enrolledBy: string;
-      paused: string;
-      pausedSession: string;
       copyLabel: string;
       copied: string;
       copyFailed: string;
@@ -6650,7 +6789,6 @@ type Messages = {
       pathRecorded: string;
       pathSession: string;
       withFacts: string;
-      pausedTitle: string;
       statusPaused: string;
       statusParked: string;
       fit: {
@@ -6660,6 +6798,21 @@ type Messages = {
         wrongEffort: string;
       };
       runs30d: string;
+      pause: {
+        pausing: string;
+        paused: string;
+        pausingAt: string;
+        pausedAt: string;
+        step: string;
+        checkpoint: string;
+        by: string;
+        at: string;
+        reason: string;
+        openFrame: string;
+        noFrameLedger: string;
+        noFramePending: string;
+        noFrameRecorded: string;
+      };
     };
     summary: {
       title: string;
@@ -6987,6 +7140,55 @@ type Messages = {
         title: string;
         body: string;
       };
+    };
+    report: {
+      open: string;
+      title: string;
+      reading: string;
+      empty: string;
+      failed: string;
+      unanswered: string;
+      applied: string;
+      pending: string;
+      undelivered: string;
+      command: string;
+      heldForNextRun: string;
+      status: {
+        draft: string;
+        queued: string;
+        sent: string;
+        received: string;
+        acknowledged: string;
+        applied: string;
+        cancelled: string;
+        expired: string;
+        failed: string;
+      };
+      requested: string;
+      delivered: string;
+      noMode: string;
+      notResolved: string;
+      downgrade: string;
+      degraded: {
+        harness_tier: string;
+        no_step_carrier: string;
+      };
+      issuedBy: string;
+      notRecorded: string;
+      issued: string;
+      frame: string;
+      frameLink: string;
+      noFrame: string;
+      text: string;
+      reason: string;
+      detail: string;
+    };
+    control: {
+      heading: string;
+      status: string;
+      carriedBy: string;
+      noCarrier: string;
+      unmatched: string;
     };
   };
   runOutcomes: {
@@ -7630,6 +7832,19 @@ type Messages = {
         loading: string;
         loadFailed: string;
       };
+      sessions: {
+        title: string;
+        loading: string;
+        failed: string;
+        retry: string;
+        empty: string;
+        untitled: string;
+        current: string;
+        busy: string;
+        gone: string;
+        openFailed: string;
+        archive: string;
+      };
       suggestions: {
         title: string;
         fleet: {
@@ -7687,6 +7902,7 @@ type Messages = {
         aborted: string;
         model: string;
         unavailable: string;
+        archived: string;
       };
       answering: {
         tool: string;

@@ -1,7 +1,7 @@
 {
   "name": "get_run_frame_body",
   "domain": "run",
-  "description": "Read the redacted body of one frame of a run by its sequence: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only.",
+  "description": "Read the redacted body of one frame of a run by its sequence, and by its chain for a subagent's frame: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -24,6 +24,10 @@
       },
       "seq": {
         "type": "string"
+      },
+      "sessionUuid": {
+        "type": "string",
+        "format": "uuid"
       }
     },
     "required": [

@@ -31,6 +31,7 @@ export {
   withTenantDb,
   withOrgDb,
   withTransactionOrgScope,
+  withTransactionOrgWideRead,
   withSystemDb,
   withOrgPlaneSystemDb,
   setTransactionWorkspaceScope,

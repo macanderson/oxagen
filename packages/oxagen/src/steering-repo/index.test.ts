@@ -7,6 +7,7 @@ import * as governance from "./governance";
 import * as health from "./health";
 import * as barrel from "./index";
 import * as jsonSchema from "./json-schema";
+import * as memory from "./memory";
 import * as names from "./names";
 import * as paths from "./paths";
 import * as promotion from "./promotion";
@@ -31,6 +32,7 @@ const modules: [string, string, object][] = [
   ["governance", "governanceSchema", governance],
   ["health", "repoHealthSchema", health],
   ["json-schema", "toJsonSchema", jsonSchema],
+  ["memory", "memorySchema", memory],
   ["names", "REQUIRED_CHECK_NAME", names],
   ["paths", "agentFilePath", paths],
   ["promotion", "promotionSchema", promotion],

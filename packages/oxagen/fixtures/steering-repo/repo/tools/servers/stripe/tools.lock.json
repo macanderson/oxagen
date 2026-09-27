@@ -8,7 +8,7 @@
   },
   "tools": {
     "create_refund": {
-      "definition_hash": "sha256:010edc9d2bdd77c8abbf1758d51d6944c0798c17cd6dad1bfd468f341077e117",
+      "definition_hash": "sha256:85a690f9248d4663c850f1d79f6876f74253f59368ef948580c08d6897b463c3",
       "upstream": {
         "annotations": {
           "destructiveHint": true
@@ -34,7 +34,7 @@
       "version": 3
     },
     "list_charges": {
-      "definition_hash": "sha256:8f08e7bb1d174a36be6d5a5158858691dc42398e16cbec3a64e6c0450e00f686",
+      "definition_hash": "sha256:163c945663e8ced81e9ca8fc1db95d0a3fe9eaf00703637cae00877f6d23650c",
       "upstream": {
         "annotations": {
           "readOnlyHint": true

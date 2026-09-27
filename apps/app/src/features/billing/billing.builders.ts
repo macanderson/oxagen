@@ -202,7 +202,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
   const refuse = () => Promise.reject(new Error("not a Billing read"));
   const source: DataSource = {
     runtimes: { list: refuse, agents: refuse, named: refuse },
-    conversations: { latest: refuse },
+    conversations: { latest: refuse, list: refuse, byId: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
       context: refuse,
@@ -219,6 +219,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       turns: refuse,
       transcript: refuse,
       chain: refuse,
+      commands: refuse,
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,
@@ -227,7 +228,7 @@ export function billingSource(overrides: Partial<BillingReads> = {}) {
       findings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
-    interjections: { open: refuse },
+    interjections: { open: refuse, forRun: refuse },
     agents: {
       list: refuse,
       get: refuse,

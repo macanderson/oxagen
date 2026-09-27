@@ -183,7 +183,11 @@ export function onboardingSource(reads: Reads): {
       // No runtime named, unless the test hands a list.
       named: () => Promise.resolve(reads.runtimes ?? readOk({ runtimes: [] })),
     },
-    conversations: { latest: refuse("conversations.latest") },
+    conversations: {
+      latest: refuse("conversations.latest"),
+      list: refuse("conversations.list"),
+      byId: refuse("conversations.byId"),
+    },
     onboarding: {
       state: (...args: Parameters<DataSource["onboarding"]["state"]>) => {
         calls.state.push(args);
@@ -232,6 +236,7 @@ export function onboardingSource(reads: Reads): {
         return Promise.resolve(answer(reads.run, "runs.get"));
       },
       frameBody: refuse("runs.frameBody"),
+      commands: refuse("runs.commands"),
       cost: refuse("runs.cost"),
       turns: refuse("runs.turns"),
       transcript: refuse("runs.transcript"),
@@ -251,7 +256,10 @@ export function onboardingSource(reads: Reads): {
       resolved: refuse("approvals.resolved"),
       resolvedSince: refuse("approvals.resolvedSince"),
     },
-    interjections: { open: refuse("interjections.open") },
+    interjections: {
+      open: refuse("interjections.open"),
+      forRun: refuse("interjections.forRun"),
+    },
     billing: {
       plan: refuse("billing.plan"),
       usageCredits: refuse("billing.usageCredits"),

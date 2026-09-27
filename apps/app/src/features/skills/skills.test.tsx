@@ -78,7 +78,7 @@ const read = vi.fn<DataSource["skills"]["inventory"]>();
 const config = vi.fn<DataSource["skills"]["configuration"]>();
 const source: DataSource = {
   runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
-  conversations: { latest: vi.fn() },
+  conversations: { latest: vi.fn(), list: vi.fn(), byId: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: {
     context: vi.fn(),
@@ -103,6 +103,7 @@ const source: DataSource = {
     turns: vi.fn(),
     transcript: vi.fn(),
     chain: vi.fn(),
+    commands: vi.fn(),
     outputs: vi.fn(),
     work: vi.fn(),
     outcomesSettings: vi.fn(),
@@ -111,7 +112,7 @@ const source: DataSource = {
     findings: vi.fn(),
   },
   approvals: { pending: vi.fn(), resolved: vi.fn(), resolvedSince: vi.fn() },
-  interjections: { open: vi.fn() },
+  interjections: { open: vi.fn(), forRun: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),

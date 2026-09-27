@@ -194,6 +194,8 @@
     "--app-link-fg": "color",
     "--app-link-hover-fg": "color",
     "--app-link-active-fg": "color",
+    "--app-link-hover-bg": "color",
+    "--app-link-active-bg": "color",
     "--card-header-bg": "color",
     "--card-header-fg": "color",
     "--tab-fg": "color",

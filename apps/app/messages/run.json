@@ -90,6 +90,9 @@
       "pause": "pause",
       "replay": "replay",
       "speedLabel": "Playback speed",
+      "scrub": "Replay position",
+      "waited": "Waited {time}",
+      "working": "Working…",
       "speed": "{speed}×",
       "position": "{at} / {total}",
       "unpaced": "Search shows every match at once.",
@@ -132,7 +135,6 @@
       "parkedApproval": "Approval <code>{approval}</code>",
       "gate": "{decision} · fr {seq}",
       "frame": "{type} · fr {seq}",
-      "subagentFrame": "On a subagent's chain, which the Governed actions tab does not read",
       "usage": "usage",
       "tokensIn": "in {count}",
       "tokensCache": "cache {count}",
@@ -158,9 +160,10 @@
       "emptySearch": "Nothing matches this search.",
       "emptyErrors": "No failed calls in this run.",
       "cut": "{count} entries. The run has more frames than one read carries and the read offered no resume point, so this stops short of the end.",
-      "cutLive": "{count} entries. The run has more frames than one read carries, so this view stops here. The run is still recording.",
       "more": "Read more",
       "readingMore": "Reading",
+      "older": "Read earlier entries",
+      "readingOlder": "Reading earlier entries",
       "loadedMore": "{count} entries read so far. More lie past this page.",
       "badCursor": "That resume point is not one this read wrote, so the next page was refused. Everything above is still the record.",
       "pageFailed": "The next page could not be read. Everything above is still the record.",
@@ -172,6 +175,7 @@
     "frames": {
       "title": "Frame {seq}",
       "recorded": "Recorded",
+      "chain": "Subagent chain",
       "stage": "Stage",
       "turn": "Turn",
       "turnValue": "turn {turn}",
@@ -190,6 +194,7 @@
       "retainedAt": "Retained at",
       "redacted": "removed {path}: {reason}",
       "offPage": "This page of frames does not hold frame {seq}. What the transcript and the body read carry is shown.",
+      "chainOffPage": "Frame {seq} is on a subagent's chain, which the frame pages do not list. What the transcript and the body read carry is shown.",
       "previous": "Previous",
       "next": "Next",
       "position": "frame {index} of {shown} shown · {total} in the run",
@@ -619,6 +624,12 @@
         "pending": "Queueing",
         "queued": "The resume is queued. The run's status says when the agent has picked it up."
       },
+      "pausing": {
+        "open": "❙❙ Pausing…"
+      },
+      "resuming": {
+        "open": "▶ Resuming…"
+      },
       "steer": {
         "open": "Steer",
         "title": "Steer {run}",
@@ -732,6 +743,128 @@
       },
       "reread": "Re-read the run",
       "roleReason": "Sealing a run needs an organization Owner or Admin role, or the workspace Owner role."
+    },
+    "interjection": {
+      "eyebrow": "Run",
+      "meta": "Run facts",
+      "tier": "{tier} tier",
+      "status": {
+        "waiting": "paused",
+        "waitingCaption": "waiting on a person"
+      },
+      "note": {
+        "waiting": "<strong>The loop is stopped.</strong> The harness is holding before its first model call. Nothing has been charged since {at}.",
+        "answered": "<strong>Answered at {at}.</strong> {answer}",
+        "answeredUnrecorded": "<strong>Answered at {at}.</strong> The answer's text is not recorded.",
+        "timedOut": "<strong>Nobody answered in time.</strong> The question closed at {at}, and the run went on without skills.",
+        "windowClosed": "<strong>The answer window closed at {at}.</strong> Oxagen has not recorded the timeout yet."
+      },
+      "panes": {
+        "agent": "Agent view",
+        "agentSource": "harness",
+        "operator": "Operator question",
+        "operatorSource": "Oxagen",
+        "frames": "Frames",
+        "framesSource": "frames"
+      },
+      "question": {
+        "from": "Oxagen",
+        "label": "question"
+      },
+      "reply": {
+        "timeout": "Timeout",
+        "label": "answer"
+      },
+      "held": "the loop is held",
+      "repository": "{repository} matches no workspace in this organization.",
+      "repositoryUnresolved": "Oxagen has not resolved which repository this run started in.",
+      "unavailable": {
+        "missing": "Oxagen has not recorded this question yet. Re-read the run in a moment.",
+        "noBody": "This question carries no body, so its paths cannot be shown."
+      },
+      "pick": {
+        "legend": "Your answer",
+        "link": "Link it to {ws}",
+        "linkDescription": "Becomes a linked repository of {ws}.",
+        "create": "Create a new workspace",
+        "createDescription": "Called {name}, with this repository as its main repository.",
+        "createDescriptionUnnamed": "A new workspace with this repository as its main repository.",
+        "name": "Workspace name",
+        "slug": "Workspace slug",
+        "slugHelp": "2 to 40 lowercase letters, digits, and single hyphens."
+      },
+      "consequence": {
+        "gain": "Gains",
+        "loss": "Loses",
+        "same": "Unchanged",
+        "linkVersion": "Uses the skills configuration {version}.",
+        "linkPinned": "{count, plural, =0 {{ws} pins no skills.} one {{ws} pins # skill.} other {{ws} pins # skills.}}",
+        "linkRepositories": "{count, plural, =0 {{ws} links no other repository.} one {{ws} links # other repository.} other {{ws} links # other repositories.}}",
+        "linkSpend": "This repository's spend and audit are recorded under {ws}.",
+        "createSkillsOff": "Skills ship off. The run resolves no skills in the new workspace.",
+        "createOwn": "Its own spend, audit, and owner.",
+        "createContinues": "The run goes on with either path."
+      },
+      "send": "Send this answer",
+      "sending": "Sending",
+      "pickOne": "pick one",
+      "answersAs": "answers in your name",
+      "nameFirst": "Name the workspace and give it a slug.",
+      "roleReason": "Answering needs an organization Owner or Admin role, or the workspace Owner role.",
+      "closedReason": "The answer window closed at {at}.",
+      "receipt": {
+        "sent": "Answer recorded. Receipt {receipt}.",
+        "linked": "Linked {repository} to {ws}.",
+        "created": "Created the workspace {slug}."
+      },
+      "timeout": {
+        "title": "Timeout",
+        "body": "At {minutes, plural, one {# minute} other {# minutes}} this times out to deny. The run continues with no skills, and the agent is told why.",
+        "closes": "The window closes at {at}."
+      },
+      "answer": {
+        "title": "Answer",
+        "closed": "closed",
+        "by": "Answered by",
+        "byTimeout": "the timeout",
+        "path": "Path",
+        "paths": {
+          "link": "link",
+          "create": "create",
+          "deny": "deny"
+        },
+        "pathNotRecorded": "not recorded",
+        "receipt": "Receipt",
+        "receiptNotRecorded": "not recorded",
+        "waited": "Waited",
+        "transcript": "Open the transcript"
+      },
+      "frames": {
+        "pending": "waits on a person",
+        "firstCall": "the first model call has not happened",
+        "cut": "This read stopped before the end of the recording, so later frames are not listed."
+      },
+      "failure": {
+        "orgRoleRequired": "Your role cannot answer this question. An organization Owner or Admin, or the workspace Owner, can.",
+        "noPrincipal": "Oxagen could not tell who is signed in. Sign in again and retry.",
+        "answered": "Someone already answered this question. Re-read the run to see the answer.",
+        "expired": "The answer window closed before this answer arrived. Nothing was linked or created.",
+        "answerShape": "Oxagen refused this answer for this kind of question. Re-read the run and try again.",
+        "repositoryUnresolved": "Oxagen could not tell which repository this run started in, so it cannot link or create for it.",
+        "slugTaken": "A workspace in this organization already uses that slug. Choose another.",
+        "mainRepoClaimed": "Another workspace already holds this repository as its main repository.",
+        "githubNotConnected": "This workspace has no GitHub connection, so Oxagen cannot reach the repository. Connect GitHub first.",
+        "githubNotAuthorized": "This organization has no usable GitHub authorization. Connect GitHub from an existing workspace's settings first.",
+        "installationUnreachable": "The GitHub App is not installed on the repository's owner, or Oxagen cannot reach that installation.",
+        "repositoryNotInstalled": "The GitHub App installation cannot see this repository.",
+        "choice": "Pick link or create, then send.",
+        "slug": "A slug takes 2 to 40 lowercase letters, digits, and single hyphens, and cannot be a reserved word.",
+        "name": "A workspace name takes 1 to 120 characters.",
+        "refused": "Oxagen refused the answer: {code}.",
+        "invalid": "Oxagen refused the answer's fields. Check them and retry.",
+        "pendingApproval": "Your answer is waiting for approval. The request is {accessRequestId}.",
+        "unavailable": "Oxagen could not record the answer: {code}. Retry, and report the code if it repeats."
+      }
     },
     "record": {
       "reread": "Re-read the run",
@@ -1037,8 +1170,6 @@
       "ended": "ended",
       "sealNotRecorded": "ended with no seal recorded",
       "enrolledBy": "enrolled the host",
-      "paused": "Evidence ingress is paused. New batches are refused until you resume it. The external process may still be running.",
-      "pausedSession": "The host refuses this agent's tool calls until you resume it. The agent usually ends its turn on the refusal.",
       "copyLabel": "Copy {text}",
       "copied": "Copied {text}",
       "copyFailed": "Copy failed. Select the text and copy it.",
@@ -1067,7 +1198,6 @@
       "pathRecorded": "Oxagen recorded this checkout on {machine}. Click to copy the path.",
       "pathSession": "The session recorded this working directory on {machine}. Click to copy the path.",
       "withFacts": "{reading} {facts}",
-      "pausedTitle": "Paused.",
       "statusPaused": "paused",
       "statusParked": "parked",
       "fit": {
@@ -1076,7 +1206,22 @@
         "effortFit": "Effort fit",
         "wrongEffort": "Wrong effort setting"
       },
-      "runs30d": "{count} runs 30d"
+      "runs30d": "{count} runs 30d",
+      "pause": {
+        "pausing": "Pausing",
+        "paused": "Paused",
+        "pausingAt": "Pausing at turn {turn}",
+        "pausedAt": "Paused at turn {turn}",
+        "step": "step {step}",
+        "checkpoint": "takes effect at the next checkpoint",
+        "by": "by {name} at {time}",
+        "at": "at {time}",
+        "reason": "“{reason}”",
+        "openFrame": "Open the pause frame",
+        "noFrameLedger": "A ledger run's pause fences evidence ingress and seals no frame.",
+        "noFramePending": "The pause frame is written when the host applies the pause.",
+        "noFrameRecorded": "The host recorded no frame for this pause."
+      }
     },
     "summary": {
       "title": "Summary",
@@ -1404,6 +1549,55 @@
         "title": "Your access request is waiting",
         "body": "Reading this run parked for approval. The request is {request}."
       }
+    },
+    "report": {
+      "open": "Delivery report",
+      "title": "Delivery report",
+      "reading": "Reading the report.",
+      "empty": "No command has been sent to this run.",
+      "failed": "The report could not be read: {code}. Open it again to retry.",
+      "unanswered": "The report read did not answer. Open it again to retry.",
+      "applied": "Applied",
+      "pending": "Pending",
+      "undelivered": "Undelivered",
+      "command": "control.{command}",
+      "heldForNextRun": "Held for this agent's next run.",
+      "status": {
+        "draft": "draft",
+        "queued": "queued",
+        "sent": "sent",
+        "received": "received",
+        "acknowledged": "acknowledged",
+        "applied": "applied",
+        "cancelled": "cancelled",
+        "expired": "expired",
+        "failed": "failed"
+      },
+      "requested": "Requested",
+      "delivered": "Delivered",
+      "noMode": "none",
+      "notResolved": "not resolved yet",
+      "downgrade": "Downgrade",
+      "degraded": {
+        "harness_tier": "Nothing on the run's path can cut a call in flight.",
+        "no_step_carrier": "The host delivers steering at the next prompt only."
+      },
+      "issuedBy": "Issued by",
+      "notRecorded": "not recorded",
+      "issued": "Issued",
+      "frame": "Frame",
+      "frameLink": "Frame {seq}",
+      "noFrame": "none yet",
+      "text": "Text",
+      "reason": "Reason",
+      "detail": "Detail"
+    },
+    "control": {
+      "heading": "Command",
+      "status": "Status",
+      "carriedBy": "Carried by",
+      "noCarrier": "not on this page",
+      "unmatched": "No command in the delivery report was applied at this frame."
     }
   }
 }

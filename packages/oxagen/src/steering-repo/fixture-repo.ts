@@ -6,7 +6,9 @@
 //   org-repo/   a-intel/oxagen, the organization's repository
 //   invalid/    one case per rule a check enforces: a case.json and the
 //               files the case adds to or changes in repo/
-//   stored/     what Oxagen stores and never commits: reflections, a bundle
+//   stored/     what Oxagen stores and never commits: reflections, a
+//               memory, a bundle
+//   stored-invalid/  stored documents their schema refuses, one per rule
 //   v0.1/       today's .oxagen/ layout, and its conversion to v1
 //   context.json  what Oxagen knows outside the repository, such as the
 //               enrolled runtimes, for the references check

@@ -23,12 +23,15 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createRunTranscriptGetHandler,
   cursorPosition,
+  decodeBeforeCursor,
   decodeTranscriptCursor,
   elapsedMs,
+  encodeBeforeCursor,
   encodeTranscriptCursor,
+  planPageBefore,
   planTranscriptPage,
+  RECEIPT_SETTLE_MS,
   readWords,
-  RECEIPT_OVERLAP_MS,
   type RunTranscriptGetDeps,
   toolResultsOf,
   unsentFolds,
@@ -41,7 +44,11 @@ import {
   ledgerRun,
   memoryEvents,
   memoryStores,
+  memorySubagentChains,
+  memorySubagentFrames,
   memoryTachoFrames,
+  type SubagentChainFixture,
+  subagentChain,
   summary,
   tachoRow,
   tachoSession,
@@ -72,10 +79,27 @@ function stored(text: string | Uint8Array, contentType = "text/plain") {
 const input = (over: Record<string, unknown>) =>
   runTranscriptGet.input.parse({ runId: TACHO_ID, ...over });
 
+/** The server's clock on every read, so a cursor's receipt is known. */
+const NOW = Date.parse("2026-09-26T12:00:00.000Z");
+
+/** A receipt time as ClickHouse renders `received_at`. */
+const receipt = (ms: number) =>
+  new Date(ms).toISOString().replace("T", " ").replace("Z", "");
+
+/**
+ * A wrapped run's handler over `rows`. `options.chains` lists the subagent
+ * chains in Postgres, which a read needs to read a window of the run;
+ * without them every read reads the whole run.
+ */
 function harness(
   rows: TachoFrameRow[],
-  session?: Partial<{ outcome: string; sealedAt: Date | null }>,
+  session?: Partial<{
+    outcome: string;
+    sealedAt: Date | null;
+    seqCount: number;
+  }>,
   subagentRows: TachoFrameRow[] = [],
+  options: { chains?: SubagentChainFixture[]; now?: () => number } = {},
 ) {
   const stores = memoryStores(
     [],
@@ -91,6 +115,7 @@ function harness(
     if (!object) return Promise.reject(new Error(`no object for ${ref}`));
     return Promise.resolve({ ...object, digestHex: ref.slice(-64) });
   });
+  const tachoFrames = vi.fn(memoryTachoFrames(SESSION_UUID, rows));
   const deps: RunTranscriptGetDeps = {
     queries: stores.queries,
     store: {
@@ -99,46 +124,21 @@ function harness(
     },
     readRunRollups: stores.readRunRollups,
     readWitnessFor: stores.readWitnessFor,
-    tachoFrames: memoryTachoFrames(SESSION_UUID, rows),
-    tachoSubagentFrames: memorySubagentFrames(SESSION_UUID, subagentRows),
+    tachoFrames,
+    tachoSubagentFrames: memorySubagentFrames(subagentRows),
+    ...(options.chains === undefined
+      ? {}
+      : { tachoChains: memorySubagentChains(options.chains) }),
     bodies: { getBody, getAssembly: () => Promise.resolve(null) },
     priceBook: () => Promise.resolve([]),
+    now: options.now ?? (() => NOW),
   };
-  return { transcript: createRunTranscriptGetHandler(deps), getBody, deps };
-}
-
-/**
- * An in-memory `selectTachoSubagentEvents`: every chain under the root, in
- * (session, seq) order, strictly after the position, at most `limit`.
- */
-function memorySubagentFrames(root: string, rows: TachoFrameRow[]) {
-  const ordered = [...rows].sort((a, b) =>
-    a.sessionUuid === b.sessionUuid
-      ? a.seq - b.seq
-      : (a.sessionUuid ?? "") < (b.sessionUuid ?? "")
-        ? -1
-        : 1,
-  );
-  return (args: {
-    rootSessionUuid: string;
-    after: { sessionUuid: string; seq: number } | null;
-    limit: number;
-  }) =>
-    Promise.resolve(
-      args.rootSessionUuid !== root
-        ? []
-        : ordered
-            .filter((r) => {
-              const after = args.after;
-              if (after === null) return true;
-              const session = r.sessionUuid ?? "";
-              return (
-                session > after.sessionUuid ||
-                (session === after.sessionUuid && r.seq > after.seq)
-              );
-            })
-            .slice(0, args.limit),
-    );
+  return {
+    transcript: createRunTranscriptGetHandler(deps),
+    getBody,
+    deps,
+    tachoFrames,
+  };
 }
 
 const rows = [
@@ -694,6 +694,105 @@ describe("get_run_transcript", () => {
     expect(decodeTranscriptCursor(three)).toBeNull();
   });
 
+  it("reads the last page from the end and pages backward to the first entry", async () => {
+    const { transcript } = harness(rows);
+    const whole = await transcript(input({ zoom: "everything" }), ctx());
+    // A read from the start answers no `before`: the reader holds the head.
+    expect("before" in whole).toBe(false);
+    const tail = await transcript(
+      input({ zoom: "everything", limit: 3, from: "end" }),
+      ctx(),
+    );
+    expect(tail.entries.map((e) => e.seq)).toEqual(["4", "5", "6"]);
+    // A sealed run's tail holds its last entry, so nothing lies past it.
+    expect(tail.cursor).toBeNull();
+    expect(tail.before).not.toBeNull();
+    const middle = await transcript(
+      input({ zoom: "everything", limit: 3, before: tail.before as string }),
+      ctx(),
+    );
+    // A backward page is the entries a forward read sends there, the prefix
+    // sum from the run's start included.
+    expect(middle.entries).toEqual(whole.entries.slice(1, 4));
+    const head = await transcript(
+      input({ zoom: "everything", limit: 3, before: middle.before as string }),
+      ctx(),
+    );
+    expect(head.entries.map((e) => e.seq)).toEqual(["0"]);
+    expect(head.before).toBeNull();
+    // The counts and figures are the whole run's on every page.
+    expect(tail.counts).toEqual(whole.counts);
+    expect(tail.figures).toEqual(whole.figures);
+    expect(tail.frameCursor).toBe(whole.frameCursor);
+  });
+
+  it("answers a live run's tail with the cursor a reader of every page holds", async () => {
+    const { transcript } = harness(rows, {
+      outcome: "running",
+      sealedAt: null,
+    });
+    const whole = await transcript(input({ zoom: "everything" }), ctx());
+    const tail = await transcript(
+      input({ zoom: "everything", limit: 2, from: "end" }),
+      ctx(),
+    );
+    expect(tail.entries.map((e) => e.seq)).toEqual(["5", "6"]);
+    expect(decodeTranscriptCursor(tail.cursor as string)).toEqual(
+      decodeTranscriptCursor(whole.cursor as string),
+    );
+    const caughtUp = await transcript(
+      input({ zoom: "everything", after: tail.cursor as string }),
+      ctx(),
+    );
+    expect(caughtUp.entries).toEqual([]);
+  });
+
+  it("refuses a before cursor it did not write, and a read at two positions (negative)", async () => {
+    const { transcript } = harness(rows);
+    const first = await transcript(
+      input({ zoom: "everything", limit: 3 }),
+      ctx(),
+    );
+    const tail = await transcript(
+      input({ zoom: "everything", limit: 3, from: "end" }),
+      ctx(),
+    );
+    await expect(
+      transcript(input({ zoom: "everything", before: "not-ours" }), ctx()),
+    ).rejects.toThrow();
+    // A forward cursor is not a `before` cursor.
+    await expect(
+      transcript(
+        input({ zoom: "everything", before: first.cursor as string }),
+        ctx(),
+      ),
+    ).rejects.toThrow();
+    await expect(
+      transcript(
+        input({
+          zoom: "everything",
+          from: "end",
+          before: tail.before as string,
+        }),
+        ctx(),
+      ),
+    ).rejects.toThrow("conflicting_position");
+    await expect(
+      transcript(
+        input({
+          zoom: "everything",
+          from: "start",
+          after: first.cursor as string,
+        }),
+        ctx(),
+      ),
+    ).rejects.toThrow("conflicting_position");
+    expect(decodeBeforeCursor(encodeBeforeCursor("42"))).toBe("42");
+    expect(
+      decodeBeforeCursor(encodeTranscriptCursor({ through: "1", high: "1" })),
+    ).toBeNull();
+  });
+
   it("a digest_only recording answers every half with text null and says so", async () => {
     const { transcript, getBody } = harness(
       rows.map((r) => ({ ...r, bytesRef: "" })),
@@ -803,9 +902,12 @@ describe("get_run_transcript", () => {
     const out = await transcript(input({ zoom: "everything" }), ctx());
     expect(out.entries).toHaveLength(rows.length);
     expect(out.cursor).not.toBeNull();
-    expect(decodeTranscriptCursor(out.cursor as string)).toEqual({
+    // A live read also carries the receipt watermark, which stands a settle
+    // margin behind the server's clock (#4083).
+    expect(decodeTranscriptCursor(out.cursor as string)).toMatchObject({
       through: out.entries.at(-1)?.seq,
       high: out.entries.at(-1)?.endSeq,
+      received: { after: NOW - RECEIPT_SETTLE_MS, sent: 0 },
     });
   });
 
@@ -821,6 +923,7 @@ describe("get_run_transcript", () => {
     expect(decodeTranscriptCursor(out.cursor as string)).toEqual({
       through: "-1",
       high: "-1",
+      received: { after: NOW - RECEIPT_SETTLE_MS, sent: 0 },
     });
   });
 
@@ -922,6 +1025,10 @@ describe("get_run_transcript", () => {
     );
     expect(first.entries.map((e) => [e.seq, e.endSeq])).toEqual([["1", "3"]]);
     expect(first.cursor).not.toBeNull();
+    // A ledger run has no receipt times, so its cursor carries no watermark.
+    expect(
+      decodeTranscriptCursor(first.cursor as string)?.received,
+    ).toBeUndefined();
     const second = await transcript(
       runTranscriptGet.input.parse({
         runId: LEDGER_ID,
@@ -932,6 +1039,50 @@ describe("get_run_transcript", () => {
       ctx(),
     );
     expect(second.entries.map((e) => [e.seq, e.endSeq])).toEqual([["2", "4"]]);
+  });
+});
+
+describe("planPageBefore", () => {
+  const span = (open: number, end: number) => ({ open, end });
+
+  it("sends the folds just ahead of a point and stands on the last of them", () => {
+    const folds = [span(0, 0), span(1, 2), span(3, 3), span(4, 6)];
+    expect(planPageBefore(folds, 4, 2)).toEqual({
+      indexes: [2, 3],
+      through: 3,
+      high: 6,
+      start: 2,
+    });
+    expect(planPageBefore(folds, 2, 5)).toEqual({
+      indexes: [0, 1],
+      through: 1,
+      high: 2,
+      start: 0,
+    });
+    expect(planPageBefore(folds, 0, 2)).toEqual({
+      indexes: [],
+      through: -1,
+      high: -1,
+      start: 0,
+    });
+    expect(planPageBefore([], 0, 2)).toEqual({
+      indexes: [],
+      through: -1,
+      high: -1,
+      start: 0,
+    });
+  });
+
+  it("stands past a fold ahead of the page that ends after the page does (negative)", () => {
+    // A Task call open across the page: its end is the reader's `high`, so a
+    // read after the page sends it only once it grows again.
+    const folds = [span(0, 9), span(1, 1), span(2, 2)];
+    expect(planPageBefore(folds, 3, 2)).toEqual({
+      indexes: [1, 2],
+      through: 2,
+      high: 9,
+      start: 1,
+    });
   });
 });
 
@@ -1006,7 +1157,13 @@ describe("planTranscriptPage", () => {
   it("leaves grown folds past the limit for the next page, never dropping one", () => {
     const folds = [span(0, 9), span(1, 7), span(2, 8)];
     const first = planTranscriptPage(folds, { through: 2, high: 2 }, 2);
-    expect(first).toEqual({ indexes: [1, 2], through: 2, high: 8 });
+    // The fold that grew to 9 is left, and the plan says so.
+    expect(first).toEqual({
+      indexes: [1, 2],
+      through: 2,
+      high: 8,
+      unsent: 1,
+    });
     expect(planTranscriptPage(folds, first, 2)).toEqual({
       indexes: [0],
       through: 2,
@@ -1014,57 +1171,171 @@ describe("planTranscriptPage", () => {
     });
   });
 
-  it("sends a late fold ahead of the new ones, and a late fold that also grew once (#4083)", () => {
-    const folds = [span(0, 0), span(1, 1), span(2, 2), span(3, 3), span(4, 4)];
-    expect(planTranscriptPage(folds, { through: 3, high: 3 }, 5, [1])).toEqual(
-      { indexes: [1, 4], through: 4, high: 4 },
-    );
-    // A late index past `through` is a new fold, sent once in its place.
-    expect(planTranscriptPage(folds, { through: 3, high: 3 }, 5, [4])).toEqual(
-      { indexes: [4], through: 4, high: 4 },
-    );
-    const grew = [span(0, 5), span(1, 1)];
-    expect(planTranscriptPage(grew, { through: 1, high: 1 }, 5, [0])).toEqual({
-      indexes: [0],
-      through: 1,
-      high: 5,
+  describe("with a receipt (#4083)", () => {
+    /** A fold whose latest frame the server received at `received`. */
+    const at = (open: number, end: number, received: number | null) => ({
+      open,
+      end,
+      received,
     });
-  });
 
-  it("rewinds to the first late fold when more are late than one page holds, and stops (#4083)", () => {
-    const folds = Array.from({ length: 10 }, (_, i) => span(i, i));
-    const first = planTranscriptPage(
-      folds,
-      { through: 9, high: 9 },
-      3,
-      [2, 3, 4, 5],
-    );
-    expect(first).toEqual({ indexes: [2, 3, 4], through: 4, high: 9 });
-    // The cursor after it carries the whole read's receipt, so the pages
-    // that follow find no late fold and page on by position.
-    const pages = [first.indexes];
-    let cursor = first;
-    for (let read = 0; read < 5; read += 1) {
-      cursor = planTranscriptPage(folds, cursor, 3);
-      pages.push(cursor.indexes);
-      if (cursor.indexes.length === 0) break;
-    }
-    expect(pages).toEqual([[2, 3, 4], [5, 6, 7], [8, 9], []]);
-  });
+    it("sends an entry before the cursor with a frame received after the receipt, oldest receipt first", () => {
+      const folds = [100, 300, 200, 50].map((received, i) =>
+        at(i, i, received),
+      );
+      const cursor = { through: 3, high: 3, received: { after: 150, sent: 0 } };
+      expect(planTranscriptPage(folds, cursor, 10, 1000)).toEqual({
+        indexes: [2, 1],
+        through: 3,
+        high: 3,
+        received: { after: 1000, sent: 0 },
+      });
+    });
 
-  it("rewinds from a grown fold before the first late one, so the page cannot pass its end (negative)", () => {
-    // f0 and f1 grew to 10 and 11, f3 is late, and f4 opens at 12. Rewound
-    // from f3, the page would send f3 and f4 and raise `high` to 12, past
-    // both grown folds, and no later read would send them.
-    const folds = [span(0, 10), span(1, 11), span(2, 2), span(3, 3), span(12, 12)];
-    const first = planTranscriptPage(folds, { through: 3, high: 3 }, 2, [3]);
-    expect(first).toEqual({ indexes: [0, 1], through: 1, high: 11 });
-    const second = planTranscriptPage(folds, first, 2);
-    expect(second).toEqual({ indexes: [2, 3], through: 3, high: 11 });
-    expect(planTranscriptPage(folds, second, 2)).toEqual({
-      indexes: [4],
-      through: 4,
-      high: 12,
+    it("sends grown entries first, then late ones, then new ones", () => {
+      const folds = [
+        at(0, 5, 500),
+        at(1, 1, 400),
+        at(2, 2, 100),
+        at(6, 6, 100),
+      ];
+      const cursor = { through: 2, high: 4, received: { after: 200, sent: 0 } };
+      expect(planTranscriptPage(folds, cursor, 10, 1000)).toEqual({
+        indexes: [0, 1, 3],
+        through: 3,
+        high: 6,
+        received: { after: 1000, sent: 0 },
+      });
+    });
+
+    it("stops inside a batch that shares one receipt time, and the next page carries on after it", () => {
+      const folds = [0, 1, 2].map((i) => at(i, i, 500));
+      const cursor = { through: 2, high: 2, received: { after: 100, sent: 0 } };
+      const first = planTranscriptPage(folds, cursor, 2, 1000);
+      expect(first).toEqual({
+        indexes: [0, 1],
+        through: 2,
+        high: 2,
+        received: { after: 499, sent: 2 },
+        unsent: 1,
+      });
+      expect(planTranscriptPage(folds, first, 2, 1000)).toEqual({
+        indexes: [2],
+        through: 2,
+        high: 2,
+        received: { after: 1000, sent: 0 },
+      });
+    });
+
+    it("holds the receipt on a batch a full page ended on until the settle time passes it", () => {
+      const folds = [at(0, 0, 500), at(1, 1, 500)];
+      const cursor = { through: 1, high: 1, received: { after: 100, sent: 0 } };
+      const first = planTranscriptPage(folds, cursor, 2, 400);
+      expect(first).toEqual({
+        indexes: [0, 1],
+        through: 1,
+        high: 1,
+        received: { after: 499, sent: 2 },
+      });
+      // Nothing is sent twice in a row while the batch is inside the margin.
+      const held = planTranscriptPage(folds, first, 2, 400);
+      expect(held).toEqual({
+        indexes: [],
+        through: 1,
+        high: 1,
+        received: { after: 499, sent: 2 },
+      });
+      expect(planTranscriptPage(folds, held, 2, 600)).toEqual({
+        indexes: [],
+        through: 1,
+        high: 1,
+        received: { after: 600, sent: 0 },
+      });
+    });
+
+    it("starts a receipt for a cursor that carries none, and sets none without a settle time (negative)", () => {
+      const folds = [at(0, 0, 500), at(1, 1, 500)];
+      // A cursor written before the receipt existed misses these frames once.
+      expect(planTranscriptPage(folds, { through: 1, high: 1 }, 5, 1000)).toEqual(
+        {
+          indexes: [],
+          through: 1,
+          high: 1,
+          received: { after: 1000, sent: 0 },
+        },
+      );
+      const plain = planTranscriptPage(folds, null, 5);
+      expect(plain).toEqual({ indexes: [0, 1], through: 1, high: 1 });
+      expect(plain).not.toHaveProperty("received");
+    });
+
+    it("never reads an entry with no receipt time as late (negative)", () => {
+      const folds = [at(0, 0, null), span(1, 1)];
+      const cursor = { through: 1, high: 1, received: { after: 100, sent: 0 } };
+      expect(planTranscriptPage(folds, cursor, 5, 1000)).toEqual({
+        indexes: [],
+        through: 1,
+        high: 1,
+        received: { after: 1000, sent: 0 },
+      });
+    });
+
+    // Batch A1 (#4384) answered more late entries than one page holds by
+    // rewinding the page to the first of them. This planner answers it with
+    // the receipt's `sent` count instead, which "stops inside a batch that
+    // shares one receipt time" covers. The two cases below are A1's, on
+    // this planner.
+    it("sends an entry that grew and was received late once, and a late entry past the cursor once, as a new one", () => {
+      const grew = [at(0, 5, 500), at(1, 1, 100)];
+      const cursor = { through: 1, high: 1, received: { after: 200, sent: 0 } };
+      expect(planTranscriptPage(grew, cursor, 5, 1000)).toEqual({
+        indexes: [0],
+        through: 1,
+        high: 5,
+        received: { after: 1000, sent: 0 },
+      });
+      const past = [at(0, 0, 100), at(1, 1, 100), at(2, 2, 500)];
+      expect(planTranscriptPage(past, cursor, 5, 1000)).toEqual({
+        indexes: [2],
+        through: 2,
+        high: 2,
+        received: { after: 1000, sent: 0 },
+      });
+    });
+
+    it("sends grown entries before a late one, so the page cannot pass their ends (negative)", () => {
+      // f0 and f1 grew to 10 and 11, f3 is late, and f4 opens at 12. A page
+      // that sent f3 and f4 first would raise `high` to 12, past both grown
+      // entries, and no later read would send them.
+      const folds = [
+        at(0, 10, 100),
+        at(1, 11, 100),
+        at(2, 2, 100),
+        at(3, 3, 500),
+        at(12, 12, 100),
+      ];
+      const cursor = { through: 3, high: 3, received: { after: 200, sent: 0 } };
+      const first = planTranscriptPage(folds, cursor, 2, 1000);
+      expect(first).toEqual({
+        indexes: [0, 1],
+        through: 3,
+        high: 11,
+        received: { after: 499, sent: 0 },
+        unsent: 1,
+      });
+      const second = planTranscriptPage(folds, first, 2, 1000);
+      expect(second).toEqual({
+        indexes: [3, 4],
+        through: 4,
+        high: 12,
+        received: { after: 1000, sent: 0 },
+      });
+      expect(planTranscriptPage(folds, second, 2, 1000)).toEqual({
+        indexes: [],
+        through: 4,
+        high: 12,
+        received: { after: 1000, sent: 0 },
+      });
     });
   });
 });
@@ -1169,8 +1440,8 @@ describe("get_run_transcript reassembly", () => {
     expect(assembly?.partial).toBe(false);
     expect(assembly?.wire.bytes).toBe(Buffer.byteLength(wire, "utf8"));
     // The point of the change: the entry is a fraction of the transport.
-    // The run's counts and figures ride the page whatever its entries hold,
-    // so the entry is what is measured.
+    // The run's counts and figures ride the first page whatever its entries
+    // hold, so the entry is what is measured.
     expect(JSON.stringify(page.entries[0]).length).toBeLessThan(
       assembly?.wire.bytes ?? 0,
     );
@@ -1604,27 +1875,27 @@ describe("get_run_transcript and subagent chains", () => {
       ),
     ).toBeNull();
     // The longest cursor, two subagent keys at the largest seq and a receipt
-    // at the largest time, fits the contract's 256-character bound.
+    // at the largest time and count, fits the contract's 256-character bound.
     const longest = encodeTranscriptCursor({
       through: `${CHILD}:${"9".repeat(19)}`,
       high: `${CHILD}:${"9".repeat(19)}`,
-      seen: { at: Number("9".repeat(15)), window: "f".repeat(12) },
+      received: { after: 999_999_999_999_999, sent: 999_999_999_999_999 },
     });
     expect(longest.length).toBeLessThanOrEqual(256);
     expect(input({ zoom: "steps", after: longest }).after).toBe(longest);
-    expect(decodeTranscriptCursor(longest)?.seen).toEqual({
-      at: 999_999_999_999_999,
-      window: "ffffffffffff",
+    expect(decodeTranscriptCursor(longest)?.received).toEqual({
+      after: 999_999_999_999_999,
+      sent: 999_999_999_999_999,
     });
   });
 
   it("reads a cursor with a receipt, and still reads the two forms written before it (#4083)", () => {
-    const seen = { at: 1_789_117_265_000, window: "0123456789ab" };
+    const received = { after: 1_789_117_265_000, sent: 0 };
     expect(
       decodeTranscriptCursor(
-        encodeTranscriptCursor({ through: `${CHILD}:2`, high: "4", seen }),
+        encodeTranscriptCursor({ through: `${CHILD}:2`, high: "4", received }),
       ),
-    ).toEqual({ through: `${CHILD}:2`, high: "4", seen });
+    ).toEqual({ through: `${CHILD}:2`, high: "4", received });
     // A cursor written before the receipt carries none, and reads as the
     // positions alone.
     const twoPart = Buffer.from("t:7,9", "utf8").toString("base64url");
@@ -1632,9 +1903,9 @@ describe("get_run_transcript and subagent chains", () => {
       through: "7",
       high: "9",
     });
-    expect(decodeTranscriptCursor(twoPart)).not.toHaveProperty("seen");
+    expect(decodeTranscriptCursor(twoPart)).not.toHaveProperty("received");
     const onePart = Buffer.from("t:7", "utf8").toString("base64url");
-    expect(decodeTranscriptCursor(onePart)).not.toHaveProperty("seen");
+    expect(decodeTranscriptCursor(onePart)).not.toHaveProperty("received");
     // Negative: a receipt this handler did not write is refused, not read as
     // no receipt.
     for (const text of [
@@ -1662,217 +1933,714 @@ describe("get_run_transcript and subagent chains", () => {
   });
 });
 
-describe("get_run_transcript and a subagent frame received late (#4083)", () => {
-  // The run spawns subagents A and B in parallel. Each chain is placed right
-  // after the `subagent_start` that spawned it, so the run reads
-  // 0, 1, 2, A:0, 3, 4, B:0, and a frame A records after B:0 was sent lands
-  // before the cursor.
+describe("the transcript cursor's receipt and window (#4083, #3823)", () => {
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+  const raw = (text: string) => Buffer.from(text, "utf8").toString("base64url");
+
+  it("reads back the receipt and the window start it wrote", () => {
+    const both = {
+      through: "12",
+      high: `${CHILD}:3`,
+      received: { after: 1_790_000_000_000, sent: 2 },
+      from: { seq: "9", turn: 3, cost: -40, observed: true },
+    };
+    expect(decodeTranscriptCursor(encodeTranscriptCursor(both))).toEqual(both);
+    // A window that starts before the run's first turn and first cost.
+    const early = {
+      through: "5",
+      high: "5",
+      from: { seq: "0", turn: null, cost: null, observed: false },
+    };
+    expect(decodeTranscriptCursor(encodeTranscriptCursor(early))).toEqual(
+      early,
+    );
+    const receiptOnly = {
+      through: "5",
+      high: "6",
+      received: { after: 0, sent: 0 },
+    };
+    expect(
+      decodeTranscriptCursor(encodeTranscriptCursor(receiptOnly)),
+    ).toEqual(receiptOnly);
+  });
+
+  it("writes a cursor with neither in the two-field form", () => {
+    expect(
+      encodeTranscriptCursor({
+        through: "42",
+        high: "44",
+        received: null,
+        from: null,
+      }),
+    ).toBe(raw("t:42,44"));
+  });
+
+  it.each([
+    "t:1,2,3,4,5",
+    "t:1,2,,,4,1,,2",
+    "t:1,2,abc,0,,,,",
+    "t:1,2,100,,,,,",
+    "t:1,2,,,,3,,",
+    "t:1,2,,,4,1,1.5,0",
+    "t:1,2,,,4,-1,,0",
+    "t:7,9,soon,0123456789ab",
+    "t:7,9,1789117265000,0123456789AB",
+    "t:7,9,1789117265000,0123",
+    `t:7,9,${"9".repeat(16)},0123456789ab`,
+  ])("refuses the malformed cursor %s (negative)", (text) => {
+    expect(decodeTranscriptCursor(raw(text))).toBeNull();
+  });
+
+  it("reads a cursor from the seen receipt as a receipt the settle margin earlier (#4384)", () => {
+    // A Run page open across the deploy holds a cursor the seen receipt
+    // wrote: two frames, the latest receipt time its read held, and a digest.
+    const seen = decodeTranscriptCursor(
+      raw(`t:7,${CHILD}:3,1789117265000,0123456789ab`),
+    );
+    expect(seen).toEqual({
+      through: "7",
+      high: `${CHILD}:3`,
+      received: { after: 1_789_117_265_000 - RECEIPT_SETTLE_MS, sent: 0 },
+    });
+    // It names no window, so the next read reads the whole run.
+    expect(seen).not.toHaveProperty("from");
+    // A receipt time inside the margin reads as the epoch.
+    expect(
+      decodeTranscriptCursor(raw("t:7,9,5000,0123456789ab"))?.received,
+    ).toEqual({ after: 0, sent: 0 });
+  });
+
+  it("leaves out a window start the contract's cap cannot carry, and keeps the receipt", () => {
+    const key = `${CHILD}:${"9".repeat(19)}`;
+    const received = { after: 999_999_999_999_999, sent: 999_999_999_999_999 };
+    // With the window start this cursor is 270 characters, past the 256 the
+    // contract allows.
+    const longest = encodeTranscriptCursor({
+      through: key,
+      high: key,
+      received,
+      from: {
+        seq: "9".repeat(19),
+        turn: 999_999_999_999_999,
+        cost: -999_999_999_999_999,
+        observed: true,
+      },
+    });
+    expect(longest.length).toBeLessThanOrEqual(256);
+    expect(decodeTranscriptCursor(longest)).toEqual({
+      through: key,
+      high: key,
+      received,
+    });
+    // A cursor a real run writes keeps its window start.
+    const real = {
+      through: `${CHILD}:412`,
+      high: `${CHILD}:415`,
+      received: { after: 1_790_000_000_000, sent: 3 },
+      from: { seq: "1200", turn: 14, cost: 2_500_000, observed: true },
+    };
+    expect(decodeTranscriptCursor(encodeTranscriptCursor(real))).toEqual(real);
+  });
+});
+
+describe("get_run_transcript and a late subagent frame (#4083)", () => {
+  // Batch A1 (#4384) tested these cases against its `seen` receipt. Its
+  // idle-read case is the four-read case below, which sends the frame again
+  // while it is inside the settle margin (`RECEIPT_SETTLE_MS`). Its
+  // unreadable-frame case is the two settle-margin cases, one of them a
+  // frame readable 30 seconds after its stamp, and its paging case is the
+  // planner's "stops inside a batch that shares one receipt time".
   const A = "0192d4a8-7c1e-7a00-8000-00000000a0a0";
   const B = "0192d4a8-7c1e-7a00-8000-00000000b0b0";
+  const bare = { toolName: "", toolStatus: "" };
   const live = { outcome: "running", sealedAt: null };
   /**
-   * When the control plane received a frame: `tick` tenths of the receipt
-   * overlap past 09:01, so each case keeps its shape if the overlap changes.
+   * When the server received every frame the run held at its first read:
+   * before the settle margin of that read, so no read counts them as late.
    */
-  const receivedMs = (tick: number) =>
-    Date.parse("2026-09-11T09:01:00.000Z") + (tick * RECEIPT_OVERLAP_MS) / 10;
-  const received = (tick: number) =>
-    new Date(receivedMs(tick)).toISOString().replace("T", " ").replace("Z", "");
-  const root = [
-    tachoRow(0, {
-      kind: "turn_start",
-      toolName: "",
-      toolStatus: "",
-      turnSeq: 1,
-      receivedAt: received(0),
-    }),
-    tachoRow(1, {
-      kind: "tool_requested",
-      toolName: "Task",
-      toolUseId: "toolu_A",
-      turnSeq: 1,
-      receivedAt: received(1),
-    }),
-    tachoRow(2, {
-      kind: "subagent_start",
-      toolName: "",
-      toolStatus: "",
-      toolUseId: "toolu_A",
-      turnSeq: 1,
-      receivedAt: received(2),
-    }),
-    tachoRow(3, {
-      kind: "tool_requested",
-      toolName: "Task",
-      toolUseId: "toolu_B",
-      turnSeq: 1,
-      receivedAt: received(3),
-    }),
-    tachoRow(4, {
-      kind: "subagent_start",
-      toolName: "",
-      toolStatus: "",
-      toolUseId: "toolu_B",
-      turnSeq: 1,
-      receivedAt: received(4),
-    }),
-  ];
-  const sub = (
-    session: string,
-    seq: number,
-    tick: number,
-    over: Partial<TachoFrameRow>,
-  ): TachoFrameRow =>
-    tachoRow(seq, {
-      sessionUuid: session,
-      rootSessionUuid: SESSION_UUID,
-      parentSessionUuid: SESSION_UUID,
-      subagentId: session === A ? "agent-a" : "agent-b",
-      subagentType: "Explore",
-      spawnToolUseId: session === A ? "toolu_A" : "toolu_B",
-      ts: `2026-09-11 09:00:${String(20 + seq).padStart(2, "0")}.000`,
-      receivedAt: received(tick),
-      ...over,
-    });
-  /** A's Grep call: requested at frame 0, and its result at every frame after. */
-  const a = (seq: number, tick: number) =>
-    sub(A, seq, tick, {
-      kind: seq === 0 ? "tool_requested" : "tool_call",
-      toolName: "Grep",
-      toolUseId: "toolu_g",
-    });
-  const b0 = (tick: number) =>
-    sub(B, 0, tick, {
-      kind: "tool_requested",
-      toolName: "Read",
-      toolUseId: "toolu_r",
-    });
-  const key = (e: { seq: string; subagent?: { sessionUuid: string } }) =>
-    e.subagent === undefined ? e.seq : `${e.subagent.sessionUuid}:${e.seq}`;
+  const early = receipt(NOW - 2 * RECEIPT_SETTLE_MS);
+  const onChain =
+    (sessionUuid: string, subagentId: string, spawnToolUseId: string) =>
+    (seq: number, over: Partial<TachoFrameRow>): TachoFrameRow =>
+      tachoRow(seq, {
+        sessionUuid,
+        rootSessionUuid: SESSION_UUID,
+        parentSessionUuid: SESSION_UUID,
+        subagentId,
+        subagentType: "Explore",
+        spawnToolUseId,
+        receivedAt: early,
+        ...over,
+      });
+  const onA = onChain(A, "agent-1", "toolu_A");
+  const onB = onChain(B, "agent-2", "toolu_B");
 
-  it.each(["everything", "steps", "turns"] as const)(
-    "%s: sends A's frame on the next read, then nothing again while idle",
-    async (zoom) => {
-      const before = harness(root, live, [a(0, 10), b0(20)]);
-      const first = await before.transcript(input({ zoom }), ctx());
-      if (zoom === "everything")
-        expect(first.entries.map(key)).toEqual([
-          "0",
-          "1",
-          "2",
-          `${A}:0`,
-          "3",
-          "4",
-          `${B}:0`,
-        ]);
-      const after = harness(root, live, [a(0, 10), a(1, 30), b0(20)]);
-      const second = await after.transcript(
-        input({ zoom, after: first.cursor as string }),
+  /** A live run in its second turn, with two subagents at work in it. */
+  function twoSubagents() {
+    const root = [
+      tachoRow(0, { kind: "turn_start", ...bare, turnSeq: 1 }),
+      tachoRow(1, {
+        kind: "llm_call",
+        ...bare,
+        model: "haiku",
+        provider: "anthropic",
+        costUsdMicros: 10,
+        turnSeq: 1,
+      }),
+      tachoRow(2, { kind: "turn_end", ...bare, turnSeq: 1 }),
+      tachoRow(3, { kind: "turn_start", ...bare, turnSeq: 2 }),
+      tachoRow(4, {
+        kind: "tool_requested",
+        toolName: "Task",
+        toolUseId: "toolu_A",
+        turnSeq: 2,
+      }),
+      tachoRow(5, {
+        kind: "subagent_start",
+        ...bare,
+        toolUseId: "toolu_A",
+        turnSeq: 2,
+      }),
+      tachoRow(6, {
+        kind: "tool_requested",
+        toolName: "Task",
+        toolUseId: "toolu_B",
+        turnSeq: 2,
+      }),
+      tachoRow(7, {
+        kind: "subagent_start",
+        ...bare,
+        toolUseId: "toolu_B",
+        turnSeq: 2,
+      }),
+    ].map((row) => ({ ...row, receivedAt: early }));
+    const children = [
+      onA(0, { kind: "turn_start", ...bare }),
+      onB(0, { kind: "turn_start", ...bare }),
+      onB(1, {
+        kind: "tool_requested",
+        toolName: "Grep",
+        toolUseId: "toolu_g",
+      }),
+    ];
+    const chains = [
+      subagentChain({
+        sessionUuid: A,
+        rootSessionUuid: SESSION_UUID,
+        subagentId: "agent-1",
+        spawnToolUseId: "toolu_A",
+        seqCount: 2,
+      }),
+      subagentChain({
+        sessionUuid: B,
+        rootSessionUuid: SESSION_UUID,
+        subagentId: "agent-2",
+        spawnToolUseId: "toolu_B",
+        seqCount: 2,
+      }),
+    ];
+    return { root, children, chains };
+  }
+
+  it.each([
+    { read: "a window of the run", windowed: true },
+    { read: "the whole run", windowed: false },
+  ])(
+    "sends a subagent frame that landed before the cursor on the next read, reading $read",
+    async ({ windowed }) => {
+      const { root, children, chains } = twoSubagents();
+      let clock = NOW;
+      const { transcript, tachoFrames } = harness(root, live, children, {
+        ...(windowed ? { chains } : {}),
+        now: () => clock,
+      });
+      const first = await transcript(input({ zoom: "everything" }), ctx());
+      // The run's eight frames and the subagents' three.
+      expect(first.entries).toHaveLength(11);
+      expect(decodeTranscriptCursor(first.cursor as string)).toEqual({
+        through: `${B}:1`,
+        high: `${B}:1`,
+        received: { after: NOW - RECEIPT_SETTLE_MS, sent: 0 },
+        from: { seq: "3", turn: 2, cost: 10, observed: false },
+      });
+
+      // Subagent A records a model call. In fold order it sits inside A's
+      // chain, before B's frames, so before the cursor: a cursor of fold
+      // positions alone never sent it until the page was reloaded.
+      children.push(
+        onA(1, {
+          kind: "llm_call",
+          ...bare,
+          costUsdMicros: 300,
+          receivedAt: receipt(NOW + 1_000),
+        }),
+      );
+      tachoFrames.mockClear();
+      clock = NOW + 5_000;
+      const second = await transcript(
+        input({ zoom: "everything", after: first.cursor as string }),
         ctx(),
       );
-      // The positions alone answered an empty page here at every zoom: A:1's
-      // entry neither opens after the cursor's `through` nor ends past its
-      // `high`. The receipt names it: A:1 was received after B:0.
-      expect(second.entries).toHaveLength(1);
-      const [entry] = second.entries;
-      if (zoom === "turns") expect(entry?.frames).toBe(8);
-      else
-        expect([entry?.subagent?.sessionUuid, entry?.endSeq]).toEqual([A, "1"]);
-      // An idle read sends no entry again (#4048).
-      let cursor = second.cursor as string;
-      for (let poll = 0; poll < 3; poll += 1) {
-        const idle = await after.transcript(
-          input({ zoom, after: cursor }),
-          ctx(),
-        );
-        expect(idle.entries).toEqual([]);
-        cursor = idle.cursor as string;
-      }
+      expect(
+        second.entries.map((e) => [
+          e.seq,
+          e.subagent?.sessionUuid,
+          e.turn,
+          e.cumulativeCost?.micros,
+        ]),
+      ).toEqual([["1", A, 2, "310"]]);
+      // A window reads the run's own chain from the second turn's first
+      // frame, not from the run's first frame.
+      expect(tachoFrames.mock.calls[0]?.[0].afterSeq).toBe(windowed ? 2 : -1);
+      expect(decodeTranscriptCursor(second.cursor as string)).toMatchObject({
+        through: `${B}:1`,
+        high: `${B}:1`,
+        received: { after: NOW + 5_000 - RECEIPT_SETTLE_MS, sent: 0 },
+      });
+
+      // The frame is still inside that receipt's settle margin, so the next
+      // read sends it once more. That read's clock has passed the frame by
+      // the margin, so its receipt passes the frame.
+      clock = NOW + 2_000 + RECEIPT_SETTLE_MS;
+      const third = await transcript(
+        input({ zoom: "everything", after: second.cursor as string }),
+        ctx(),
+      );
+      expect(
+        third.entries.map((e) => [e.seq, e.subagent?.sessionUuid]),
+      ).toEqual([["1", A]]);
+      expect(decodeTranscriptCursor(third.cursor as string)?.received).toEqual(
+        { after: NOW + 2_000, sent: 0 },
+      );
+      // Once the receipt has passed it, it is not sent again.
+      const fourth = await transcript(
+        input({ zoom: "everything", after: third.cursor as string }),
+        ctx(),
+      );
+      expect(fourth.entries).toEqual([]);
     },
   );
 
-  it("sends a frame received inside the window that was not readable yet, and the window's other entries once", async () => {
-    // B:0 is the latest receipt the first read saw. A:1 was received half
-    // an overlap before it, but its insert had not landed when the page was
-    // read.
-    const before = harness(root, live, [a(0, 10), b0(30)]);
-    const first = await before.transcript(input({ zoom: "everything" }), ctx());
-    expect(first.entries).toHaveLength(7);
-    const after = harness(root, live, [a(0, 10), a(1, 25), b0(30)]);
-    const second = await after.transcript(
+  it("keeps a cursor on a sealed run while late entries remain past the limit", async () => {
+    const { root, children } = twoSubagents();
+    const reading = harness(root, live, children);
+    const first = await reading.transcript(
+      input({ zoom: "everything" }),
+      ctx(),
+    );
+    // Subagent A records two model calls, both before the cursor in fold
+    // order, and the run seals.
+    for (const seq of [1, 2]) {
+      children.push(
+        onA(seq, {
+          kind: "llm_call",
+          ...bare,
+          costUsdMicros: 300,
+          receivedAt: receipt(NOW + 1_000),
+        }),
+      );
+    }
+    const { transcript } = harness(root, undefined, children, {
+      now: () => NOW + 5_000,
+    });
+    const second = await transcript(
+      input({ zoom: "everything", limit: 1, after: first.cursor as string }),
+      ctx(),
+    );
+    expect(second.entries.map((e) => [e.seq, e.subagent?.sessionUuid])).toEqual(
+      [["1", A]],
+    );
+    // The page holds every fold, but not every change: a null cursor here
+    // lost the second call (Codex review on #4421).
+    expect(second.cursor).not.toBeNull();
+    const third = await transcript(
+      input({ zoom: "everything", limit: 1, after: second.cursor as string }),
+      ctx(),
+    );
+    expect(third.entries.map((e) => [e.seq, e.subagent?.sessionUuid])).toEqual(
+      [["2", A]],
+    );
+    // Negative control: with nothing left, the sealed run answers no cursor.
+    expect(third.cursor).toBeNull();
+  });
+
+  it("sends a frame received inside the settle margin that the read before it missed", async () => {
+    // Ingest stamps a batch's receipt time before ClickHouse can return the
+    // batch, so a read can miss a frame the server received before the read.
+    const { root, children, chains } = twoSubagents();
+    let clock = NOW;
+    const { transcript } = harness(root, live, children, {
+      chains,
+      now: () => clock,
+    });
+    const first = await transcript(input({ zoom: "everything" }), ctx());
+    const cursor = decodeTranscriptCursor(first.cursor as string);
+    expect(cursor?.received).toEqual({
+      after: NOW - RECEIPT_SETTLE_MS,
+      sent: 0,
+    });
+    // Received 3 seconds before the first read, and readable only after it.
+    children.push(
+      onA(1, {
+        kind: "llm_call",
+        ...bare,
+        costUsdMicros: 300,
+        receivedAt: receipt(NOW - 3_000),
+      }),
+    );
+    clock = NOW + 1_000;
+    const second = await transcript(
       input({ zoom: "everything", after: first.cursor as string }),
       ctx(),
     );
-    // A:1 lies before the receipt, so only the window catches it. B:0, the
-    // window's other frame, goes again with it: the documented overlap.
-    expect(second.entries.map(key)).toEqual([`${A}:1`, `${B}:0`]);
-    let cursor = second.cursor as string;
-    for (let poll = 0; poll < 2; poll += 1) {
-      const idle = await after.transcript(
-        input({ zoom: "everything", after: cursor }),
-        ctx(),
-      );
-      expect(idle.entries).toEqual([]);
-      cursor = idle.cursor as string;
-    }
+    expect(second.entries.map((e) => [e.seq, e.subagent?.sessionUuid])).toEqual(
+      [["1", A]],
+    );
+    // Negative control: a receipt at the first read's own time, with no
+    // margin, never sends the frame.
+    const unsettled = encodeTranscriptCursor({
+      through: `${B}:1`,
+      high: `${B}:1`,
+      received: { after: NOW, sent: 0 },
+      from: cursor?.from ?? null,
+    });
+    const missed = await transcript(
+      input({ zoom: "everything", after: unsettled }),
+      ctx(),
+    );
+    expect(missed.entries).toEqual([]);
   });
 
-  it("pages late frames past the limit in fold order, and stops (negative)", async () => {
-    // Two late entries and a page of one. A receipt held back until both
-    // were sent would find A:1 first on every read, and send it forever.
-    const before = harness(root, live, [a(0, 10), b0(20)]);
-    const first = await before.transcript(input({ zoom: "everything" }), ctx());
-    const after = harness(root, live, [a(0, 10), a(1, 30), a(2, 31), b0(20)]);
-    const sent: string[] = [];
-    let cursor = first.cursor as string;
-    for (let read = 0; read < 10; read += 1) {
-      const page = await after.transcript(
-        input({ zoom: "everything", limit: 1, after: cursor }),
-        ctx(),
-      );
-      sent.push(...page.entries.map(key));
-      cursor = page.cursor as string;
-      if (page.entries.length === 0) break;
-    }
-    // From A:1 on in fold order: 3, 4 and B:0 go again, and nothing loops.
-    expect(sent).toEqual([`${A}:1`, `${A}:2`, "3", "4", `${B}:0`]);
+  it("sends a frame that became readable 30 seconds after its receipt time (#4384)", async () => {
+    // Ingest stamps a batch's receipt time before it awaits the ClickHouse
+    // insert, and the insert can take the client's 30-second default
+    // timeout. The margin this batch first shipped with was 10 seconds, so
+    // an idle read after such an insert never sent the frame.
+    const { root, children, chains } = twoSubagents();
+    let clock = NOW;
+    const { transcript } = harness(root, live, children, {
+      chains,
+      now: () => clock,
+    });
+    const first = await transcript(input({ zoom: "everything" }), ctx());
+    const cursor = decodeTranscriptCursor(first.cursor as string);
+    // Stamped 30 seconds before the first read, and readable only after it.
+    children.push(
+      onA(1, {
+        kind: "llm_call",
+        ...bare,
+        costUsdMicros: 300,
+        receivedAt: receipt(NOW - 30_000),
+      }),
+    );
+    clock = NOW + 5_000;
+    const second = await transcript(
+      input({ zoom: "everything", after: first.cursor as string }),
+      ctx(),
+    );
+    expect(second.entries.map((e) => [e.seq, e.subagent?.sessionUuid])).toEqual(
+      [["1", A]],
+    );
+    // Negative control: the receipt a 10-second margin wrote lies past the
+    // frame, and the read from it never sends it.
+    const tenSeconds = encodeTranscriptCursor({
+      through: `${B}:1`,
+      high: `${B}:1`,
+      received: { after: NOW - 10_000, sent: 0 },
+      from: cursor?.from ?? null,
+    });
+    const missed = await transcript(
+      input({ zoom: "everything", after: tenSeconds }),
+      ctx(),
+    );
+    expect(missed.entries).toEqual([]);
   });
 
   it("reads a cursor written before the receipt, and answers one that carries it", async () => {
-    const before = harness(root, live, [a(0, 10), b0(20)]);
-    const first = await before.transcript(input({ zoom: "everything" }), ctx());
+    const { root, children } = twoSubagents();
+    let clock = NOW;
+    const { transcript } = harness(root, live, children, { now: () => clock });
+    const first = await transcript(input({ zoom: "everything" }), ctx());
     const decoded = decodeTranscriptCursor(first.cursor as string);
-    expect(decoded?.seen?.at).toBe(receivedMs(20));
     const legacy = encodeTranscriptCursor({
       through: decoded?.through as string,
       high: decoded?.high as string,
     });
-    const after = harness(root, live, [a(0, 10), a(1, 30), b0(20)]);
-    const second = await after.transcript(
+    children.push(
+      onA(1, {
+        kind: "llm_call",
+        ...bare,
+        costUsdMicros: 300,
+        receivedAt: receipt(NOW + 1_000),
+      }),
+    );
+    clock = NOW + 5_000;
+    const second = await transcript(
       input({ zoom: "everything", after: legacy }),
       ctx(),
     );
     // With no receipt, the read sends what the positions say, and the
     // cursor it answers carries the receipt from then on.
     expect(second.entries).toEqual([]);
-    expect(decodeTranscriptCursor(second.cursor as string)?.seen?.at).toBe(
-      receivedMs(30),
+    expect(decodeTranscriptCursor(second.cursor as string)?.received).toEqual(
+      { after: NOW + 5_000 - RECEIPT_SETTLE_MS, sent: 0 },
+    );
+  });
+
+  it("reads the whole run when a subagent that began before the window records a frame", async () => {
+    // Subagent A was spawned in the first turn and runs in the background
+    // after that turn ended. The cursor's window opens at the second turn.
+    const root = [
+      tachoRow(0, { kind: "turn_start", ...bare, turnSeq: 1 }),
+      tachoRow(1, {
+        kind: "tool_requested",
+        toolName: "Task",
+        toolUseId: "toolu_A",
+        turnSeq: 1,
+      }),
+      tachoRow(2, {
+        kind: "subagent_start",
+        ...bare,
+        toolUseId: "toolu_A",
+        turnSeq: 1,
+      }),
+      tachoRow(3, {
+        kind: "tool_call",
+        toolName: "Task",
+        toolUseId: "toolu_A",
+        turnSeq: 1,
+      }),
+      tachoRow(4, { kind: "turn_end", ...bare, turnSeq: 1 }),
+      tachoRow(5, { kind: "turn_start", ...bare, turnSeq: 2 }),
+      tachoRow(6, {
+        kind: "llm_call",
+        ...bare,
+        model: "haiku",
+        provider: "anthropic",
+        costUsdMicros: 20,
+        turnSeq: 2,
+      }),
+      tachoRow(7, { kind: "turn_end", ...bare, turnSeq: 2 }),
+    ].map((row) => ({ ...row, receivedAt: early }));
+    const children = [
+      onA(0, { kind: "turn_start", ...bare }),
+      onA(1, { kind: "tool_call", toolName: "Grep", toolUseId: "toolu_g" }),
+    ];
+    const chain = subagentChain({
+      sessionUuid: A,
+      rootSessionUuid: SESSION_UUID,
+      spawnToolUseId: "toolu_A",
+      seqCount: 2,
+      startedAt: new Date("2026-09-11T09:00:02.000Z"),
+      lastEventAt: new Date(NOW - 2 * RECEIPT_SETTLE_MS),
+    });
+    let clock = NOW;
+    const { transcript, tachoFrames } = harness(root, live, children, {
+      chains: [chain],
+      now: () => clock,
+    });
+    const first = await transcript(input({ zoom: "everything" }), ctx());
+    expect(decodeTranscriptCursor(first.cursor as string)?.from).toEqual({
+      seq: "5",
+      turn: 2,
+      cost: null,
+      observed: false,
+    });
+    tachoFrames.mockClear();
+    clock = NOW + 5_000;
+    const idle = await transcript(
+      input({ zoom: "everything", after: first.cursor as string }),
+      ctx(),
+    );
+    expect(idle.entries).toEqual([]);
+    // The chain has not moved, so the window from the second turn answers.
+    expect(tachoFrames.mock.calls.map(([args]) => args.afterSeq)).toEqual([4]);
+
+    children.push(
+      onA(2, {
+        kind: "tool_call",
+        toolName: "Read",
+        toolUseId: "toolu_r",
+        receivedAt: receipt(NOW + 1_000),
+      }),
+    );
+    chain.lastEventAt = new Date(NOW + 1_000);
+    chain.seqCount = 3;
+    tachoFrames.mockClear();
+    clock = NOW + 6_000;
+    const moved = await transcript(
+      input({ zoom: "everything", after: idle.cursor as string }),
+      ctx(),
+    );
+    // The window cannot place the chain's new frame, so the read tries the
+    // window and then reads the whole run.
+    expect(tachoFrames.mock.calls.map(([args]) => args.afterSeq)).toEqual([
+      4, -1,
+    ]);
+    expect(moved.entries.map((e) => [e.seq, e.subagent?.sessionUuid])).toEqual(
+      [["2", A]],
     );
   });
 });
 
-describe("unsentFolds", () => {
-  it("keeps a fold at or before the cursor that holds a frame received late (#4083)", () => {
-    const fold = (open: number, late: boolean) => ({
-      span: { open, end: open },
-      late,
+describe("get_run_transcript reads a window from the cursor (#3823, D6)", () => {
+  const bare = { toolName: "", toolStatus: "" };
+  type Transcript = ReturnType<typeof harness>["transcript"];
+  type Entries = Awaited<ReturnType<Transcript>>["entries"];
+
+  /** Every entry a reader is sent, `limit` at a time, from the first page on. */
+  async function everyPage(
+    transcript: Transcript,
+    zoom: "everything" | "steps" | "turns",
+    limit: number,
+  ): Promise<Entries> {
+    const entries: Entries = [];
+    let after: string | undefined;
+    for (let page = 0; page < 20; page += 1) {
+      const out = await transcript(
+        input({ zoom, limit, ...(after === undefined ? {} : { after }) }),
+        ctx(),
+      );
+      entries.push(...out.entries);
+      if (out.cursor === null) break;
+      after = out.cursor;
+    }
+    return entries;
+  }
+
+  it.each([
+    ["everything", 1],
+    ["everything", 2],
+    ["everything", 3],
+    ["steps", 1],
+    ["steps", 2],
+    ["steps", 3],
+    ["turns", 1],
+    ["turns", 2],
+  ] as const)(
+    "pages %s %i at a time to the same entries as reads of the whole run",
+    async (zoom, limit) => {
+      const windowed = harness(rows, undefined, [], { chains: [] });
+      const whole = harness(rows);
+      expect(await everyPage(windowed.transcript, zoom, limit)).toEqual(
+        await everyPage(whole.transcript, zoom, limit),
+      );
+      // Some page read the run from a frame past its first.
+      expect(
+        windowed.tachoFrames.mock.calls.some(([args]) => args.afterSeq > -1),
+      ).toBe(true);
+    },
+  );
+
+  it("searches the whole run from a cursor that names a window", async () => {
+    const { transcript, tachoFrames } = harness(rows, undefined, [], {
+      chains: [],
     });
-    const folds = [fold(0, false), fold(1, true), fold(2, false), fold(3, false)];
+    const first = await transcript(
+      input({ zoom: "everything", limit: 3 }),
+      ctx(),
+    );
+    expect(decodeTranscriptCursor(first.cursor as string)?.from).toEqual({
+      seq: "1",
+      turn: 1,
+      cost: null,
+      observed: false,
+    });
+    tachoFrames.mockClear();
+    await transcript(
+      input({
+        zoom: "everything",
+        limit: 3,
+        query: "README",
+        after: first.cursor as string,
+      }),
+      ctx(),
+    );
+    expect(tachoFrames.mock.calls.map(([args]) => args.afterSeq)).toEqual([-1]);
+    // Negative control: the same page without a query reads the window.
+    tachoFrames.mockClear();
+    await transcript(
+      input({ zoom: "everything", limit: 3, after: first.cursor as string }),
+      ctx(),
+    );
+    expect(tachoFrames.mock.calls.map(([args]) => args.afterSeq)).toEqual([0]);
+  });
+
+  it("pages past frame 10,000 of a long run", async () => {
+    // 120 turns of 100 frames: a model call and 98 tool calls after each
+    // turn's start, 12,000 frames in all. The first read holds the first
+    // 10,000, and a read that began at seq 0 every page never got past them.
+    const long = Array.from({ length: 120 }, (_, k) => [
+      tachoRow(k * 100, { kind: "turn_start", ...bare, turnSeq: k + 1 }),
+      tachoRow(k * 100 + 1, {
+        kind: "llm_call",
+        ...bare,
+        model: "haiku",
+        provider: "anthropic",
+        costUsdMicros: 1,
+        turnSeq: k + 1,
+      }),
+      ...Array.from({ length: 98 }, (_, t) =>
+        tachoRow(k * 100 + 2 + t, { turnSeq: k + 1 }),
+      ),
+    ]).flat();
+    const { transcript, tachoFrames } = harness(
+      long,
+      { seqCount: long.length },
+      [],
+      { chains: [] },
+    );
+    const first = await transcript(input({ zoom: "turns" }), ctx());
+    expect(first.entries).toHaveLength(100);
+    expect(first.complete).toBe(false);
+    expect(first.counts).toBeDefined();
+    expect(decodeTranscriptCursor(first.cursor as string)).toEqual({
+      through: "9900",
+      high: "9999",
+      received: { after: NOW - RECEIPT_SETTLE_MS, sent: 0 },
+      from: { seq: "9900", turn: 100, cost: 99, observed: false },
+    });
+
+    tachoFrames.mockClear();
+    const second = await transcript(
+      input({ zoom: "turns", after: first.cursor as string }),
+      ctx(),
+    );
+    expect(tachoFrames.mock.calls[0]?.[0].afterSeq).toBe(9899);
+    expect(second.entries.map((e) => e.seq)).toEqual(
+      Array.from({ length: 20 }, (_, k) => String((100 + k) * 100)),
+    );
+    // Turns and cost carry on from the run's count, not the window's.
+    expect(second.entries[0]?.turn).toBe(101);
+    expect(second.entries[0]?.cumulativeCost?.micros).toBe("101");
+    expect(second.entries.at(-1)?.turn).toBe(120);
+    expect(second.complete).toBe(true);
+    expect(second.cursor).toBeNull();
+    // Counts ride only the first read.
+    expect(second.counts).toBeUndefined();
+  }, 30_000);
+});
+
+
+describe("unsentFolds", () => {
+  it("keeps a fold at or before the cursor that holds a frame received after the receipt (#4083)", () => {
+    const fold = (open: number, received: number | null) => ({
+      span: { open, end: open },
+      received,
+    });
+    const folds = [fold(0, 100), fold(1, 500), fold(2, null), fold(3, 100)];
     const cursor = { throughAt: 2, highAt: 2 };
-    expect(unsentFolds(folds, cursor).map((f) => f.span.open)).toEqual([3]);
+    const opens = (kept: readonly { span: { open: number } }[]) =>
+      kept.map((f) => f.span.open);
+    expect(opens(unsentFolds(folds, cursor))).toEqual([3]);
     expect(
-      unsentFolds(folds, cursor, (f) => f.late).map((f) => f.span.open),
+      opens(
+        unsentFolds(folds, { ...cursor, receivedAfter: 200 }, (f) => f.received),
+      ),
     ).toEqual([1, 3]);
+    // Negative: without a receipt on the cursor, a receipt time alone sends
+    // nothing again.
+    expect(opens(unsentFolds(folds, cursor, (f) => f.received))).toEqual([3]);
     expect(unsentFolds(folds, null)).toBe(folds);
   });
 });
@@ -1995,14 +2763,17 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
       policy: 1,
       responses: 0,
     });
-    // A later page says what the whole run holds, not what the page holds.
+    // The first page counts the whole run. A later page carries no counts,
+    // and the reader keeps the first read's (#3823, D6).
     const first = await transcript(input({ zoom: "steps", limit: 2 }), ctx());
+    expect(first.counts).toEqual(all.counts);
     const later = await transcript(
       input({ zoom: "steps", limit: 2, after: first.cursor ?? undefined }),
       ctx(),
     );
     expect(later.entries.map((e) => e.key)).toEqual(["4", "5"]);
-    expect(later.counts).toEqual(all.counts);
+    expect(later.counts).toBeUndefined();
+    expect(later.figures).toBeUndefined();
   });
 
   it("carries the frames' policy and recall counts at every zoom, as everything counts them", async () => {
@@ -3018,7 +3789,7 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
   // Finding P3-2 of the ADR-182 third review: a cached half did not count
   // against the bound, so each page of a long run settled more entries than
   // the one before, and its counts moved from page to page.
-  it("counts the same on every page of a run with more word halves than one read settles", async () => {
+  it("the first page counts the whole run, and later pages carry no counts", async () => {
     // 1,001 turns of a prompt and a reply: 2,002 word halves. The last
     // prompt is blank, and falls past the 2,000 a read settles.
     const turns = 1_001;
@@ -3046,12 +3817,16 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
     } while (after !== undefined);
     expect(pages.length).toBeGreaterThan(2);
     const first = pages[0];
-    for (const page of pages) {
-      expect(page.counts).toEqual(first?.counts);
-      expect(page.figures).toEqual(first?.figures);
+    // Counts and figures ride only the read from the run's first frame
+    // (#3823, D6). The reader keeps them across every later page.
+    expect(first?.counts).toBeDefined();
+    expect(first?.figures).toBeDefined();
+    for (const page of pages.slice(1)) {
+      expect(page.counts).toBeUndefined();
+      expect(page.figures).toBeUndefined();
     }
-    // The blank prompt past the bound keeps what the fold said, on every
-    // page, so the chip counts it on every page.
+    // The blank prompt past the bound keeps what the fold said, so the chip
+    // counts it.
     expect(first?.counts?.kinds?.prompt).toBe(turns);
     const last = pages
       .flatMap((p) => p.entries)
@@ -3062,7 +3837,7 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
       input({ zoom: "steps", after: pages[0]?.cursor ?? undefined }),
       ctx(),
     );
-    expect(fresh.counts).toEqual(first?.counts);
+    expect(fresh.entries).toEqual(pages[1]?.entries);
   });
 
   // #4334: the bound was counted over the run's frames in the order read,
@@ -3843,5 +4618,237 @@ describe("get_run_transcript and a body that cannot be read", () => {
     expect(warmAfter.entries.find((e) => e.key === "2")?.response?.text).toBe(
       "Done.",
     );
+  });
+});
+
+// #3942: the thinking and seal chips select the right entries through the
+// handler, and every chip's count is the whole run's. Each read here starts
+// at the run's first frame, the only read that carries counts (D6 of the live
+// Run page batch), so none of these asserts a count on a cursor page.
+describe("get_run_transcript thinking and seal chips (#3942)", () => {
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c2d0";
+  const blank = { toolName: "", toolStatus: "", toolUseId: "" };
+  const at = (second: number) =>
+    `2026-09-11 09:00:${String(second).padStart(2, "0")}.000`;
+  const model = {
+    kind: "llm_call",
+    ...blank,
+    model: "claude-opus-5",
+    provider: "anthropic",
+  };
+  const root = [
+    tachoRow(0, {
+      kind: "turn_start",
+      ...blank,
+      turnSeq: 1,
+      ...stored("Tighten the retry test."),
+    }),
+    tachoRow(1, {
+      kind: "tool_requested",
+      toolName: "Task",
+      toolStatus: "",
+      toolUseId: "toolu_think",
+      turnSeq: 1,
+    }),
+    tachoRow(2, {
+      kind: "subagent_start",
+      ...blank,
+      toolUseId: "toolu_think",
+      turnSeq: 1,
+    }),
+    tachoRow(3, {
+      kind: "tool_call",
+      toolName: "Task",
+      toolUseId: "toolu_think",
+      turnSeq: 1,
+      ts: at(30),
+    }),
+    // Claude Code's transcript reports the tokens a call spent reasoning.
+    tachoRow(4, {
+      ...model,
+      source: "transcript",
+      turnSeq: 1,
+      ts: at(41),
+      body: JSON.stringify({ thinking_tokens: 12, output_tokens: 40 }),
+      ...stored("Thought it through, then tightened the test."),
+    }),
+    // A call that answered without reasoning (negative).
+    tachoRow(5, {
+      ...model,
+      source: "transcript",
+      turnSeq: 1,
+      ts: at(42),
+      body: JSON.stringify({ thinking_tokens: 0, output_tokens: 8 }),
+      ...stored("Done."),
+    }),
+    // OTel's record carries thinking tokens too, but only the transcript's
+    // split counts (`countsLlmCallSplit`), so this call answers usage and
+    // not thinking (negative).
+    tachoRow(6, {
+      ...model,
+      source: "otel_log",
+      turnSeq: 1,
+      ts: at(43),
+      body: JSON.stringify({ thinking_tokens: 12, output_tokens: 40 }),
+    }),
+    // The chain's own integrity frames, read on the Chain tab (negative).
+    tachoRow(7, { kind: "checkpoint", ...blank, ts: at(44) }),
+    tachoRow(8, { kind: "telemetry_gap", ...blank, ts: at(45) }),
+    // The run's own stop.
+    tachoRow(9, { kind: "agent_stop", ...blank, ts: at(46) }),
+  ];
+  const child = (seq: number, over: Partial<TachoFrameRow>): TachoFrameRow =>
+    tachoRow(seq, {
+      sessionUuid: CHILD,
+      rootSessionUuid: SESSION_UUID,
+      parentSessionUuid: SESSION_UUID,
+      subagentId: "agent-2",
+      subagentType: "Explore",
+      spawnToolUseId: "toolu_think",
+      ts: at(10 + seq),
+      ...over,
+    });
+  const children = [
+    child(0, { kind: "turn_start", ...blank, turnSeq: 1 }),
+    // A subagent that reasoned is thinking of the run's too.
+    child(1, {
+      ...model,
+      source: "transcript",
+      body: JSON.stringify({ thinking_tokens: 5, output_tokens: 20 }),
+      ...stored("Found the flaky test."),
+    }),
+    // A subagent stopping is the subagent's, not the run's (negative).
+    child(2, { kind: "agent_stop", ...blank }),
+  ];
+  const keysOf = (out: { entries: readonly { key?: string }[] }) =>
+    out.entries.map((e) => e.key ?? "").sort();
+
+  it("steps: thinking keeps the model calls that reasoned, on any chain, and nothing else", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const out = await transcript(
+      input({ zoom: "steps", kinds: ["thinking"] }),
+      ctx(),
+    );
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(keysOf(out)).toEqual(["4", `${CHILD}:1`].sort());
+    for (const entry of out.entries) {
+      expect(entry.kinds).toContain("thinking");
+      expect(entry.node).toBe("model");
+    }
+    // The call that reasoned carries its reply, so the chip draws its words.
+    expect(out.entries.find((e) => e.key === "4")?.response?.text).toBe(
+      "Thought it through, then tightened the test.",
+    );
+    // Negative: the call that did not reason, and the OTel record whose
+    // thinking tokens are not counted, answer other chips.
+    const all = await transcript(input({ zoom: "steps" }), ctx());
+    const kindsOf = (key: string) =>
+      all.entries.find((e) => e.key === key)?.kinds ?? [];
+    expect(kindsOf("5")).toEqual(expect.arrayContaining(["responses"]));
+    expect(kindsOf("5")).not.toContain("thinking");
+    expect(kindsOf("6")).toContain("usage");
+    expect(kindsOf("6")).not.toContain("thinking");
+  });
+
+  it("steps: seal keeps the run's own stop and nothing else", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const out = await transcript(
+      input({ zoom: "steps", kinds: ["seal"] }),
+      ctx(),
+    );
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(out.entries.map((e) => [e.key, e.node, e.quiet])).toEqual([
+      ["9", "seal", false],
+    ]);
+    expect(out.entries[0]?.subagent).toBeUndefined();
+    // Negative: the subagent's stop, the checkpoint and the gap answer no
+    // seal on the unfiltered read either.
+    const all = await transcript(input({ zoom: "steps" }), ctx());
+    expect(
+      all.entries.filter((e) => e.kinds.includes("seal")).map((e) => e.key),
+    ).toEqual(["9"]);
+  });
+
+  it("everything: the two chips select the same frames, and the chain's own frames answer no chip", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const thinking = await transcript(
+      input({ zoom: "everything", kinds: ["thinking"] }),
+      ctx(),
+    );
+    expect(keysOf(thinking)).toEqual(["4", `${CHILD}:1`].sort());
+    const seal = await transcript(
+      input({ zoom: "everything", kinds: ["seal"] }),
+      ctx(),
+    );
+    expect(seal.entries.map((e) => [e.key, e.type])).toEqual([
+      ["9", "agent_stop"],
+    ]);
+    const all = await transcript(input({ zoom: "everything" }), ctx());
+    for (const type of ["checkpoint", "telemetry_gap"]) {
+      expect(all.entries.find((e) => e.type === type)?.kinds).toEqual([]);
+    }
+    expect(all.counts?.kinds).toMatchObject({ thinking: 2, seal: 1 });
+  });
+
+  it("counts both chips over the whole run, whatever the chips, the query or the page size", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const all = await transcript(input({ zoom: "steps" }), ctx());
+    expect(all.counts?.kinds.thinking).toBe(2);
+    expect(all.counts?.kinds.seal).toBe(1);
+    // Every read below starts at the run's first frame, so each carries the
+    // whole run's counts, however little of it the page holds.
+    for (const over of [
+      { kinds: ["thinking"] },
+      { kinds: ["seal"] },
+      { kinds: ["tools"] },
+      { query: "tightened" },
+      { limit: 1 },
+    ]) {
+      const out = await transcript(input({ zoom: "steps", ...over }), ctx());
+      expect(out.counts).toEqual(all.counts);
+    }
+  });
+
+  it("ledger run: seal keeps the event that closes the attempt and nothing else", async () => {
+    const events = [
+      event(1),
+      event(2, {
+        eventType: "terminal.attempt_terminated",
+        stage: "terminal",
+        payload: { terminal_status: "completed" },
+      }),
+    ];
+    const stores = memoryStores(
+      [ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID })],
+      [],
+    );
+    const transcript = createRunTranscriptGetHandler({
+      queries: stores.queries,
+      store: {
+        getRunByPublicId: (id) =>
+          Promise.resolve(id === LEDGER_ID ? summary() : null),
+        readAttemptEventsSince: memoryEvents(events),
+      },
+      readRunRollups: stores.readRunRollups,
+      readWitnessFor: stores.readWitnessFor,
+      tachoFrames: memoryTachoFrames(SESSION_UUID, []),
+      bodies: {
+        getBody: () => Promise.reject(new Error("no bodies in this test")),
+        getAssembly: () => Promise.resolve(null),
+      },
+      priceBook: () => Promise.resolve([]),
+    });
+    const out = await transcript(
+      runTranscriptGet.input.parse({
+        runId: LEDGER_ID,
+        zoom: "steps",
+        kinds: ["seal"],
+      }),
+      ctx(),
+    );
+    expect(out.entries.map((e) => [e.key, e.node])).toEqual([["2", "seal"]]);
+    expect(out.counts?.kinds.seal).toBe(1);
+    // Negative: the tool call answers tools, not seal.
+    expect(out.counts?.kinds.tools).toBe(1);
   });
 });

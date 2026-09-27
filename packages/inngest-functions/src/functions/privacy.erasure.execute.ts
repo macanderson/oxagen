@@ -173,12 +173,14 @@ export const [privacyErasureExecute, privacyErasureExecuteOnFailure] =
         scheduledAt: string;
       };
 
-      // Enforce grace period: if we've been triggered before scheduledAt (clock
-      // skew, early retry), sleep until the scheduled time.
+      // Enforce grace period: erase_data sends this event as soon as the
+      // request is recorded, so sleep until the scheduled time. The wake time
+      // is a Date: the ISO string itself reads as a duration, resolves to
+      // none, and the erasure ran at once with the grace period unserved.
       const scheduledMs = new Date(scheduledAt).getTime();
       const nowMs = Date.now();
       if (scheduledMs > nowMs) {
-        await step.sleep("grace-period-wait", scheduledAt);
+        await step.sleep("grace-period-wait", new Date(scheduledAt));
       }
 
       // Step 1: mark processing
