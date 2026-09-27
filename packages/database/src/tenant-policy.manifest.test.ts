@@ -263,7 +263,9 @@ describe("tenant policy manifest", () => {
     // no-progress limit, spend spec detector 1).
     // 139 adds agent.memories, agent.memory_reflections, agent.memory_prs,
     // agent.memory_rejections and agent.memory_recalls (ADR-206, 2026-09-26).
-    expect(POLICY_MANIFEST.length).toBe(139);
+    // 140 adds tacho.machine_group_members (MCP Studio machine groups,
+    // 2026-09-27).
+    expect(POLICY_MANIFEST.length).toBe(140);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

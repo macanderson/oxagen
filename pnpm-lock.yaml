@@ -1465,6 +1465,9 @@ importers:
       '@oxagen/inngest-functions':
         specifier: workspace:*
         version: link:../inngest-functions
+      '@oxagen/mcp-studio':
+        specifier: workspace:*
+        version: link:../mcp-studio
       '@oxagen/notifications':
         specifier: workspace:*
         version: link:../notifications
