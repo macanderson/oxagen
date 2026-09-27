@@ -5,12 +5,13 @@
 -- 1. agent.runtimes.containment_required: false unless an Owner or Admin
 --    turns it on with create_runtime or update_runtime.
 -- 2. Backfill: a runtime requires containment when the active version of any
---    live agent on it required it. An agent is on a runtime when its own
---    runtime_id names the runtime, or when a host enrollment bound to the
---    runtime belongs to the agent, because the host bundle reads the host's
---    runtime and is not revoked. The version configs keep their containment
---    tables. An agent with no runtime yet carries its version's requirement
---    to the runtime its first host enrollment binds (findOrCreateHostRuntime).
+--    live agent on it required it. A live agent is neither deleted nor
+--    archived. An agent is on a runtime when its own runtime_id names the
+--    runtime, or when a host enrollment bound to the runtime belongs to the
+--    agent, because the host bundle reads the host's runtime and is not
+--    revoked. The version configs keep their containment tables. An agent
+--    with no runtime yet carries its version's requirement to the runtime
+--    its first host enrollment binds (findOrCreateHostRuntime).
 --
 -- The backfill runs with the RLS bypass set for this transaction only.
 -- Hand-written, then `atlas migrate hash`.
@@ -30,12 +31,15 @@ COMMENT ON COLUMN "agent"."runtimes"."containment_required" IS
 -- ── 2. Backfill from the active versions ────────────────────────────────────
 SELECT set_config('app.rls_bypass', 'on', true);
 
--- A revoked host does not count: `move_agent` revokes an agent's hosts on
--- the runtime it leaves, and that runtime's other agents must not inherit
--- the moved agent's containment. The notice names how many runtimes now
--- require containment and how many live hosts sit on them, because a host
--- whose tacho cannot read containment is suspended and a host without Docker
--- has its actions refused.
+-- A retired agent does not count: `retire_agent` archives it and revokes its
+-- hosts but keeps its runtime_id, and the agents still on that runtime must
+-- not inherit its containment. This is the live-agent rule list_runtimes and
+-- the runtime and harness uniqueness rule use. A revoked host does not count
+-- either: `move_agent` revokes an agent's hosts on the runtime it leaves, and
+-- that runtime's other agents must not inherit the moved agent's containment.
+-- The notice names how many runtimes now require containment and how many
+-- live hosts sit on them, because a host whose tacho cannot read containment
+-- is suspended and a host without Docker has its actions refused.
 DO $$
 DECLARE
   switched integer;
@@ -50,6 +54,7 @@ BEGIN
         FROM "agent"."agents" AS a
         JOIN "agent"."agent_versions" AS v ON v.id = a.active_version_id
         WHERE a.deleted_at IS NULL
+          AND a.status <> 'archived'
           AND v.config -> 'containment' ->> 'required' = 'true'
           AND (
             a.runtime_id = r.id
