@@ -546,6 +546,55 @@ describe("memoryVersionStore", () => {
     expect(await store.highestVersion(OTHER_REPOSITORY)).toBe(1);
   });
 
+  it("finds no version for a commit it never built", async () => {
+    const store = memoryVersionStore();
+    await store.put(await firstBundle());
+
+    expect(await store.versionAt(REPOSITORY, SECOND_COMMIT)).toBeNull();
+    expect(await store.versionAt(OTHER_REPOSITORY, FIRST_COMMIT)).toBeNull();
+  });
+
+  it("reports a version stored from a commit and never published", async () => {
+    const store = memoryVersionStore();
+    await store.put(await firstBundle());
+
+    expect(await store.versionAt(REPOSITORY, FIRST_COMMIT)).toEqual({
+      version: 1,
+      published: false,
+    });
+  });
+
+  it("reports the newest version built from a commit once it is published", async () => {
+    const store = failNextSetPublished(memoryVersionStore(), new Error("The pointer write failed."));
+    const { deps } = setup({}, store);
+    await expect(publish(deps, IDENTITY, FIRST_COMMIT)).rejects.toThrow(
+      "The pointer write failed.",
+    );
+    published(await publish(deps, IDENTITY, FIRST_COMMIT));
+
+    expect(await store.versionAt(REPOSITORY, FIRST_COMMIT)).toEqual({
+      version: 2,
+      published: true,
+    });
+  });
+
+  it("still reports a version as published after a later one replaces it", async () => {
+    const { deps, store, moveHead } = setup();
+    published(await publish(deps, IDENTITY, FIRST_COMMIT));
+    moveHead(SECOND_COMMIT);
+    const changed = { ...deps, tree: async () => treeFromFiles(changedRepo()) };
+    published(await publish(changed, IDENTITY, SECOND_COMMIT));
+
+    expect(await store.versionAt(REPOSITORY, FIRST_COMMIT)).toEqual({
+      version: 1,
+      published: true,
+    });
+    expect(await store.versionAt(REPOSITORY, SECOND_COMMIT)).toEqual({
+      version: 2,
+      published: true,
+    });
+  });
+
   it("returns null when the published pointer names a version it does not hold", async () => {
     const store = memoryVersionStore();
     await store.put(await firstBundle());
