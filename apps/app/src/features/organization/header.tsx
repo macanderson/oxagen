@@ -19,7 +19,6 @@ export function OrganizationHeader({
   ctx,
   pendingIds,
   twoFactorRequired,
-  enterable,
   avatarUrl,
   after,
 }: {
@@ -28,8 +27,6 @@ export function OrganizationHeader({
   pendingIds: readonly string[];
   /** The organization's two-factor policy, which Invite states. */
   twoFactorRequired: boolean;
-  /** The live workspaces the viewer may enter, whose repositories Create a workspace offers. */
-  enterable: readonly string[];
   /** The organization's stored avatar, which Edit avatar opens on. */
   avatarUrl: string | null;
   /** Where Invite reloads once an invitation was sent. */
@@ -65,7 +62,7 @@ export function OrganizationHeader({
             twoFactorRequired={twoFactorRequired}
             after={after ?? routes.organization(ctx.orgSlug, "invitations")}
           />
-          <CreateWorkspace org={ctx.orgSlug} enterable={enterable} primary />
+          <CreateWorkspace org={ctx.orgSlug} primary />
         </>
       }
     />

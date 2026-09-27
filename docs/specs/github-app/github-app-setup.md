@@ -402,6 +402,19 @@ authorization (OAuth) during installation** on, the install also authorizes that
 stores the owner's user-to-server token in `ingestion.oauth_accounts` with
 `provider = 'github_steering'`.
 
+Onboarding starts the connect at
+`GET /v1/{org_slug}/connections/steering/github?app=steering&mode=install|authorize&return_to=<path>`
+(`apps/api/src/routes/v1/github-oauth.ts`). Only an organization Owner or Admin may call it.
+`mode=install` sends the owner to the app's `installations/new` page. `mode=authorize` sends them to
+`login/oauth/authorize`, for an owner whose organization already has the app installed: GitHub
+returns a code from an install only the first time. Both carry a signed state with purpose
+`steering`, and GitHub returns to the app's Callback URL, `GET /oauth/github/steering`. That route
+exchanges the code with the app's client ID and secret, stores the token, and sends the provision
+event again for each scope that waits on a connection. It then redirects to `return_to` with
+`steering=connected`, or with `steering=error&code=<reason>` when a step after the state check
+fails. The same start route with `app=oxagen&mode=install` installs the Oxagen app and binds no
+repository.
+
 Provisioning reads the owner's installations with that token (`GET /user/installations`) and makes
 one change with it: `PUT /user/installations/{installation_id}/repositories/{repository_id}`. That
 call adds the new repository to an installation limited to selected repositories. The endpoint
@@ -418,14 +431,18 @@ Provisioning needs no webhook. Leave **Active** off under **Webhook**, and subsc
 
 ### Configuration
 
-Set three variables on the **`api`** service, where the provisioning job runs.
-`steeringAppFromEnv()` in `packages/handlers/src/steering_repo.provision.ts` reads them. When any
-is unset, or the App ID is not a positive integer, provisioning stops with
-`steering_app_unconfigured`.
+Set five variables on the **`api`** service, where the connect routes and the provisioning job
+run. `steeringAppFromEnv()` in `packages/handlers/src/steering_repo.provision.ts` reads the App ID,
+the private key and the slug. When any of those is unset, or the App ID is not a positive integer,
+provisioning stops with `steering_app_unconfigured`. The connect routes read all five and
+`GITHUB_APP_INSTALL_STATE_SECRET`, which signs the connect's state. When one is unset, the connect
+answers 503 with `steering_app_unconfigured` and names the variable.
 
 | Variable | Secret | Required where | Dev value (`apps/api/.env.local`) | Prod value (`oxagen-v2-api` on Vercel) |
 | --- | --- | --- | --- | --- |
 | `OXAGEN_STEERING_APP_ID` | no | api (steering provisioning) | Dev Steering App → App ID | Prod Steering App → App ID |
+| `OXAGEN_STEERING_APP_CLIENT_ID` | no | api (steering connect) | Dev Steering App → Client ID | Prod Steering App → Client ID |
+| `OXAGEN_STEERING_APP_CLIENT_SECRET` | yes | api (steering connect) | Dev Steering App → generated client secret | Prod Steering App → generated client secret |
 | `OXAGEN_STEERING_APP_PRIVATE_KEY` | yes | api (steering provisioning) | Dev Steering App → generated private key (PEM) | Prod Steering App → generated private key (PEM) |
 | `OXAGEN_STEERING_APP_SLUG` | no | api (steering provisioning) | Dev Steering App → public slug | Prod Steering App → public slug |
 
@@ -441,8 +458,10 @@ under your organization's settings to own it at the organization level.
 2. Set **Homepage URL** to `https://app.oxagen.sh` for production and `http://localhost:3000` for
    development.
 3. Turn on **Request user authorization (OAuth) during installation**.
-4. Set **Callback URL** to the onboarding route that stores the owner's token. The code does not
-   serve that route yet. Add its path here when it ships.
+4. Set **Callback URL** to `{NEXT_PUBLIC_API_URL}/oauth/github/steering`:
+   `http://localhost:4000/oauth/github/steering` for development and
+   `https://api.oxagen.sh/oauth/github/steering` for production. This route stores the owner's
+   token.
 5. Leave **Expire user authorization tokens** off. Provisioning reuses the stored owner token, and
    no job refreshes it.
 6. Leave **Setup URL** blank.
@@ -451,15 +470,19 @@ under your organization's settings to own it at the organization level.
    write** and **Deployments: Read and write**.
 9. Set **Where can this GitHub App be installed?** to **Any account** for production, so customers
    can install it on their organizations. **Only on this account** is fine for development.
-10. Generate a private key. Copy the App ID and the public slug. Set the three variables in
-    [Configuration](#configuration).
+10. Generate a private key and a client secret. Copy the App ID, the Client ID and the public slug.
+    Set the five variables in [Configuration](#configuration).
 11. Ask an organization owner to install the app on the GitHub organization, on all repositories or
     on selected repositories.
 
 ### GitLab
 
 GitLab has no app. An owner connects a GitLab group with a group access token that has the
-Maintainer role or higher and the `api` scope. Oxagen stores the token in `ingestion.oauth_accounts`
+Maintainer role or higher and the `api` scope. Onboarding sends it to
+`POST /v1/{org_slug}/connections/steering/gitlab` with `{ "group": "<path or id>", "token": "<token>" }`
+(`apps/api/src/routes/v1/gitlab-oauth.ts`). The route checks the token with GitLab first and answers
+422 with `gitlab_token_invalid`, `gitlab_group_unreachable` or `gitlab_token_insufficient` when a
+check fails. Oxagen stores the token in `ingestion.oauth_accounts`
 with `provider = 'gitlab_steering'` and uses it the way it uses Oxagen Steering on GitHub. The
 token's bot user acts on steering repos. The prescribed settings protect `main` so no one pushes
 and only that bot user merges. That protection needs GitLab Premium.

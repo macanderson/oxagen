@@ -35,7 +35,10 @@ import { orgSettingsWrite } from "@oxagen/oxagen/contracts/org.settings.write";
 import { contextGovernanceModeSet } from "@oxagen/oxagen/contracts/context.governance_mode.set";
 import { governanceModeSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { workspaceArchive } from "@oxagen/oxagen/contracts/workspace.archive";
-import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
+import {
+  type SteeringRepoProvisionStatus,
+  workspaceCreate,
+} from "@oxagen/oxagen/contracts/workspace.create";
 import { workspaceInviteSend } from "@oxagen/oxagen/contracts/workspace.invite.send";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import { GrantableOrgRole } from "@/data/contracts/org";
@@ -115,65 +118,55 @@ export async function deleteRole(
 type WorkspaceDraft = { name: string; slug: string };
 
 /**
- * A new workspace's draft: its name, and a repository as the one `owner/name`
- * text the form sends. `create_workspace` no longer binds a main repository
- * (lane S1, #4450): it takes `mainRepo` as a deprecated field and ignores it,
- * and the workspace gets a steering repo instead. The form still collects the
- * repository until the new create flow replaces it.
+ * A new workspace's draft: its name, and nothing else. `create_workspace`
+ * makes the workspace's private steering repo itself (lane S1, #4450), so the
+ * person picks no repository. `mainRepo` is deprecated in the contract and
+ * this action never sends it.
  *
  * The design's form has no slug field, so the slug is made from the name
  * (`slugFromName`) unless a caller names one.
  */
 export type NewWorkspaceDraft = {
   name: string;
-  mainRepo: string;
   slug?: string;
 };
 
 /**
- * `owner/name`, as a person types it or pastes it from GitHub: surrounding
- * space and a trailing `.git` are dropped, and anything that is not exactly two
- * non-empty segments is not a repository. The segments' own spelling is the
- * contract's to judge — `kernelWrite` pre-parses them with
- * `bind_main_repository`'s GitHub-shaped schema — so this only splits.
+ * What the create dialog shows once the write answered: the workspace's name
+ * and slug, and where its steering repo stood when the call returned. The
+ * repository is made by a durable job, so `provisioning` is the usual answer.
  */
-function parseRepository(text: string): { owner: string; name: string } | null {
-  const trimmed = text.trim().replace(/\.git$/, "");
-  const parts = trimmed.split("/");
-  if (parts.length !== 2) return null;
-  const [owner, name] = parts;
-  if (owner === undefined || name === undefined) return null;
-  if (owner === "" || name === "") return null;
-  return { owner, name };
-}
+export type WorkspaceCreated = {
+  slug: string;
+  name: string;
+  steeringRepo: SteeringRepoProvisionStatus;
+};
 
 /**
  * A workspace in this organization: the in-app path to a second one (#2964).
- * The draft carries a repository as `owner/name`, and a value that does not
- * split into the two is refused as `invalid` on `mainRepo` with no capability
- * run. The handler ignores the repository it receives (lane S1, #4450).
+ * The action sends the name and the slug only. The handler starts the steering
+ * repo job and answers before the repository exists.
  */
 export async function createWorkspace(
   org: string,
   draft: NewWorkspaceDraft,
-): Promise<ActionResult<{ slug: string }>> {
+): Promise<ActionResult<WorkspaceCreated>> {
   const ctx = await requireViewer(org);
-  const mainRepo = parseRepository(draft.mainRepo);
-  if (mainRepo === null) {
-    return {
-      ok: false,
-      reason: "invalid",
-      code: "repository_unparsable",
-      field: "mainRepo",
-    };
-  }
   const named = draft.slug?.trim() ?? "";
   const result = await kernelWrite(ctx, workspaceCreate, {
     name: draft.name.trim(),
     slug: named === "" ? slugFromName(draft.name) : named,
-    mainRepo: { provider: "github", ...mainRepo },
   });
-  if (result.ok) return { ok: true, value: { slug: result.value.slug } };
+  if (result.ok) {
+    return {
+      ok: true,
+      value: {
+        slug: result.value.slug,
+        name: result.value.name,
+        steeringRepo: result.value.steering_repo.status,
+      },
+    };
+  }
   // The form has no slug field: a slug the name made is the name's to fix.
   if (named === "" && "field" in result && result.field === "slug")
     return { ...result, field: "name" };

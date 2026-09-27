@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 // Every refusal an onboarding write can meet has its own sentence: each reason
-// register_agent, create_enrollment_token, advance_onboarding and
-// bind_main_repository throw, and the kernel's classifications. Any other code
-// is printed as recorded. Expected sentences are read from the real catalogue,
+// register_agent, create_enrollment_token, and advance_onboarding throw, and
+// the kernel's classifications. Any other code is printed as recorded. Expected sentences are read from the real catalogue,
 // so a test fails when a code is routed to the wrong sentence, not when the
 // copy is reworded.
 import { renderHook } from "@testing-library/react";
@@ -39,9 +38,6 @@ const HANDLER_REASONS = [
   ["gate_not_found", "gateNotFound"],
   ["already_unlocked", "alreadyUnlocked"],
   ["first_frame_required", "firstFrameRequired"],
-  ["github_not_connected", "githubNotConnected"],
-  ["repository_not_installed", "repositoryNotInstalled"],
-  ["main_repo_bound", "mainRepoBound"],
 ] as const;
 
 describe("useOnboardingFailure", () => {

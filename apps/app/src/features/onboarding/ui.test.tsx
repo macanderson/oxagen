@@ -43,7 +43,6 @@ vi.mock("./actions", () => ({
   registerAgent,
   issueEnrollmentToken,
   advanceOnboarding,
-  bindMainRepository: vi.fn(),
 }));
 vi.mock("./register-actions", () => ({
   cancelRegistration,

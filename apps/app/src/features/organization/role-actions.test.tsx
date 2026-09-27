@@ -4,7 +4,9 @@
 // Duplicate. Each write sends what its fields carry, reloads the Roles page
 // once the write answered, and names a refusal without navigating. The
 // selected count follows the ticks, a held role carries the holders banner,
-// and a built-in role opens read-only with Duplicate as custom.
+// and a built-in role opens read-only with Duplicate as custom. Merge without
+// review is its own checkbox, live only while the catalogue lists
+// `pr.merge_without_review`.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -36,6 +38,17 @@ const catalog = [
   }),
 ];
 
+/** The catalogue once Oxagen registers `merge_pr_without_review`. */
+const catalogWithMerge = [
+  ...catalog,
+  permissionEntry({
+    permission: "pr.merge_without_review",
+    group: "Repository",
+    description: "Merge a steering PR without an approval",
+    capabilities: ["merge_pr_without_review"],
+  }),
+];
+
 beforeEach(() => {
   router.replace.mockReset();
   router.refresh.mockReset();
@@ -58,12 +71,13 @@ function editor(
   mode: "create" | "duplicate" | "edit" | "view",
   role?: ReturnType<typeof roleRow>,
   openLabel = "Create role",
+  entries: ReturnType<typeof permissionEntry>[] = catalog,
 ) {
   render(
     <IntlProvider>
       <RoleEditor
         org="acme"
-        catalog={catalog}
+        catalog={entries}
         mode={mode}
         openLabel={openLabel}
         {...(role === undefined ? {} : { role })}
@@ -286,6 +300,105 @@ describe("RoleEditor: view and duplicate", () => {
       "agent.release.copy",
     );
     expect(within(dialog).queryByTestId("role-holders-banner")).toBeNull();
+  });
+});
+
+describe("RoleEditor: merge without review", () => {
+  const id = "rol_7k2m9q4x8r1t5v3w6y0z2a";
+  const merge = "pr.merge_without_review";
+
+  it("keeps the box disabled and unchecked with its reason while the catalogue lacks the permission (negative)", async () => {
+    createRole.mockResolvedValue({
+      ok: true,
+      value: { id: "rol_1", name: "agent.release" },
+    });
+    editor("create");
+    const dialog = await open("Create role", "role-editor-create");
+    const box = within(dialog).getByRole("checkbox", {
+      name: "Merge without review",
+    });
+    expect(box).toBeDisabled();
+    expect(box).not.toBeChecked();
+    expect(box).toHaveAccessibleDescription(
+      "Available when Oxagen registers merge_pr_without_review.",
+    );
+    await userEvent.type(
+      within(dialog).getByLabelText("Role name"),
+      "agent.release",
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Create role" }),
+    );
+    expect(createRole).toHaveBeenCalledWith(
+      "acme",
+      expect.objectContaining({ permissions: [] }),
+    );
+  });
+
+  it("offers the box once the catalogue lists the permission, toggles it and saves it", async () => {
+    setRolePermissions.mockResolvedValue({
+      ok: true,
+      value: { id, name: "agent.release" },
+    });
+    editor("edit", roleRow(), "Edit", catalogWithMerge);
+    const dialog = await open("Edit", `role-editor-edit-${id}`);
+    const box = within(dialog).getByRole("checkbox", {
+      name: "Merge without review",
+    });
+    expect(box).toBeEnabled();
+    expect(box).not.toBeChecked();
+    expect(box).toHaveAccessibleDescription(
+      "Merge a steering PR without an approval. The required check still has to pass.",
+    );
+    await userEvent.click(box);
+    expect(box).toBeChecked();
+    expect(within(dialog).getByTestId("role-selected-count")).toHaveTextContent(
+      "2 selected",
+    );
+    await userEvent.click(box);
+    expect(box).not.toBeChecked();
+    expect(within(dialog).getByTestId("role-selected-count")).toHaveTextContent(
+      "1 selected",
+    );
+    await userEvent.click(box);
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Save changes" }),
+    );
+    expect(setRolePermissions).toHaveBeenCalledWith("acme", id, [
+      "run.read",
+      merge,
+    ]);
+  });
+
+  it("draws the permission once, as the box, and not again in its group", async () => {
+    editor("edit", roleRow(), "Edit", catalogWithMerge);
+    const dialog = await open("Edit", `role-editor-edit-${id}`);
+    const boxes = within(dialog)
+      .getAllByRole("checkbox")
+      .filter((box) => box.getAttribute("value") === merge);
+    expect(boxes).toHaveLength(1);
+    expect(dialog).not.toHaveTextContent(merge);
+    // The Repository group held only this permission, so it draws no heading.
+    expect(dialog).not.toHaveTextContent("Repository");
+  });
+
+  it("shows the box read-only on a built-in role that carries it", async () => {
+    const builtIn = roleRow({
+      id: "rol_builtin00000000000000",
+      name: "org.owner",
+      kind: "human",
+      scope: "org",
+      builtIn: true,
+      heldBy: 0,
+      permissions: ["run.read", merge],
+    });
+    editor("view", builtIn, "View", catalogWithMerge);
+    const dialog = await open("View", `role-editor-view-${builtIn.id}`);
+    const box = within(dialog).getByRole("checkbox", {
+      name: "Merge without review",
+    });
+    expect(box).toBeChecked();
+    expect(box).toBeDisabled();
   });
 });
 

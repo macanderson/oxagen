@@ -1,7 +1,7 @@
 // The design's `.banner` over Fleet (engine.js `obFleetBanners`): a state
 // pill, a bold title with its sentence beside it, and one small action. The
-// pill carries the design's tone (`b-denied` for provisional, `b-q` for the
-// first run) with no dot, as the design draws it.
+// pill carries the design's tone (`b-q` for the first run) with no dot, as the
+// design draws it.
 import type { ReactNode } from "react";
 import { Badge, type BadgeTone } from "@/ui/badge";
 
