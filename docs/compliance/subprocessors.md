@@ -36,7 +36,8 @@ These receive repository content or build output, not customer data. List them f
 | GitHub Actions and GitHub Container Registry | Source, CI runs, and CI images | Unverified | [CI](../../.github/workflows/pipeline.yml), [CI image](../../.github/workflows/ci-image.yml) |
 | Vercel AI Gateway, then Anthropic | Repository and PR diffs for release notes and the vision gate | Unverified | [Release script](../../tools/scripts/release.ts), [vision gate](../../tools/scripts/vision-gate.mjs) |
 | OpenRouter | Nightly end-to-end model calls | Unverified | [Nightly](../../.github/workflows/nightly.yml) |
-| Vercel | Turborepo remote cache artifacts, environment variables, and gateway key rotation | Unverified | [CI](../../.github/workflows/pipeline.yml), [env manager](../../tools/env-manager/src/vercel.ts) |
+| Amazon Web Services | Turborepo cache entries from CI: build outputs and test logs, which expire after 14 days | `us-east-1` ([providers](../../infra/stacks-new/ci-deploy/providers.tf)) | [Cache bucket](../../infra/stacks-new/ci-deploy/turbo-cache.tf), [cache action](../../.github/actions/turbo-cache/action.yml), [ADR-207](../adr/ADR-207-ci-runs-its-own-turbo-cache-on-s3.md) |
+| Vercel | Environment variables and gateway key rotation | Unverified | [Env manager](../../tools/env-manager/src/vercel.ts) |
 | Linear | Release notes and CI failure tickets | Unverified | [Linear release](../../.github/workflows/linear-release.yml), [ticket script](../../tools/scripts/ensure-e2e-failure-ticket.ts) |
 | npm registry and Apple notarization | The published CLI package and signed desktop builds | Unverified | [Release](../../.github/workflows/release.yml), [desktop](../../.github/workflows/desktop.yml) |
 | Stripe | Catalog sync from CI with a live key | Unverified | [Stripe sync](../../.github/workflows/stripe-sync.yml) |
