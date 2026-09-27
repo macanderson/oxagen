@@ -43,6 +43,21 @@ export {
   readUnproductiveSpend,
   runFindingsPass,
 } from "./findings-store";
+export * from "./run-pr-outcomes";
+export {
+  applyOutcomeDelivery,
+  listOutcomeRuns,
+  listWorkspacesForOutcomes,
+  type OutcomeRun,
+  pruneRevertEvidence,
+  readOutcomeRows,
+  readRevertEvidence,
+  readRunTerminalReasons,
+  readTachoRunPrLinks,
+  saveOutcomeRows,
+  saveRevertEvidence,
+  type TachoPrLink,
+} from "./run-pr-outcomes-store";
 export {
   NO_PROGRESS_MODES,
   NO_PROGRESS_OUTCOMES,
