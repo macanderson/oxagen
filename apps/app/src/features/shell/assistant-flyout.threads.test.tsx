@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The assistant's thread across a reload, a workspace rename, "New session"
+// The assistant's thread across a reload, a workspace rename, "New thread"
 // and the session list (#4163, #3313, #4435). The turn's stream and the reads
 // are fakes: the thread read answers the thread the record holds and the
 // workspace id the flyout files it under, and the list answers the sessions,
@@ -297,7 +297,7 @@ describe("the assistant's thread across a reload", () => {
     );
     const { user } = await openFlyout();
     expect(screen.getByTestId("assistant-thread-status")).toHaveTextContent(
-      "Loading your last session",
+      "Loading your last thread",
     );
     await ask(user, "quick question");
     await screen.findByTestId("assistant-answer");
@@ -324,7 +324,7 @@ describe("the assistant's thread across a reload", () => {
     });
     const { user } = await openFlyout();
     expect(
-      await screen.findByText(/Your last session could not be loaded/),
+      await screen.findByText(/Your last thread could not be loaded/),
     ).toBeTruthy();
     expect(screen.getByTestId("assistant-composer")).not.toBeDisabled();
 
@@ -525,7 +525,7 @@ describe("the session list (#4435)", () => {
     expect(rows[0]).toHaveTextContent("what is live?");
     expect(rows[0]).toHaveTextContent("Current");
     expect(rows[1]).not.toHaveAttribute("aria-current");
-    expect(rows[1]).toHaveTextContent("Untitled session");
+    expect(rows[1]).toHaveTextContent("Untitled thread");
     // The thread steps aside while the list shows.
     expect(screen.getByTestId("assistant-thread-view")).toHaveAttribute(
       "aria-hidden",
@@ -628,7 +628,7 @@ describe("the session list (#4435)", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("assistant-sessions-status")).toHaveTextContent(
-        "No sessions yet",
+        "No threads yet",
       );
     });
     expect(screen.queryByTestId("assistant-session")).toBeNull();
@@ -647,7 +647,7 @@ describe("the session list (#4435)", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("assistant-sessions-status")).toHaveTextContent(
-        "Your sessions could not be loaded.",
+        "Your threads could not be loaded.",
       );
     });
     await user.click(screen.getByTestId("assistant-sessions-retry"));
@@ -673,7 +673,7 @@ describe("the session list (#4435)", () => {
 
     expect(
       await screen.findByTestId("assistant-sessions-open-failed"),
-    ).toHaveTextContent("That session was archived or deleted.");
+    ).toHaveTextContent("That thread was archived or deleted.");
     await waitFor(() => {
       expect(screen.getAllByTestId("assistant-session")).toHaveLength(1);
     });
@@ -706,7 +706,7 @@ describe("a question in an archived session", () => {
     await ask(user, "still there?");
 
     expect(
-      await screen.findByText(/This session was archived or deleted/),
+      await screen.findByText(/This thread was archived or deleted/),
     ).toBeTruthy();
     expect(askAssistant.mock.calls[0]?.[2]).toMatchObject({
       conversationId: "cnv_01k9x2",

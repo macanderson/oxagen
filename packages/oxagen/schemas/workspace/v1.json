@@ -181,7 +181,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 365,
-          "description": "Archive a Stella session after this many days with no activity. 7 when unset."
+          "description": "Archive a Stella thread after this many days with no activity. 7 when unset."
         }
       },
       "additionalProperties": false

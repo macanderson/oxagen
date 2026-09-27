@@ -120,7 +120,7 @@ export const workspaceSchema = z
           .max(STELLA_ARCHIVE_AFTER_DAYS_MAX)
           .optional()
           .describe(
-            "Archive a Stella session after this many days with no activity. 7 when unset.",
+            "Archive a Stella thread after this many days with no activity. 7 when unset.",
           ),
       })
       .strict()
