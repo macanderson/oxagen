@@ -33,6 +33,7 @@ import {
   recordPublishDeployment,
   type ApprovalInput,
   type LandInput,
+  type MergeApproval,
   type RecheckResult,
 } from "./merge-queue";
 import { mergeTrailers, steeringBranch } from "./stamp";
@@ -119,7 +120,7 @@ async function land(
     checkedHead: pr.head,
     checks: CHECKS,
     layout: await readSteeringLayout(gh, REPO),
-    approval: { approvedBy: [REVIEWER], withoutReview: false },
+    approve: async () => ({ approvedBy: [REVIEWER], withoutReview: false }),
     mergedBy: REVIEWER,
     commitTitle: `steering: publish (#${pr.number})`,
     version: 21,
@@ -444,7 +445,7 @@ describe("landSteeringPr: stamping", () => {
     const gh = steeringRepo();
     const pr = await openPr(gh, "a-intel.platform.release-notes");
     await land(gh, pr, {
-      approval: { approvedBy: [], withoutReview: true },
+      approve: async () => ({ approvedBy: [], withoutReview: true }),
       mergedBy: MEMBER,
     });
     const line = (await ledgerLines(gh)).at(-1)!;
@@ -681,6 +682,61 @@ describe("landSteeringPr: when main moves", () => {
       land(gh, pr, { recheck: async () => ({ ok: false, checks: [] }) }),
     );
     expect(err).toMatchObject({ reason: "checks_failed" });
+    expect(gh.stamps).toEqual([]);
+    expect(gh.merges).toEqual([]);
+  });
+
+  it("reads the approvals again after the update and records the ones that stand", async () => {
+    const gh = steeringRepo();
+    const pr = await openPr(gh, "a-intel.platform.release-notes");
+    gh.commit("main", "README.md", "moved\n");
+    const approve = vi
+      .fn<() => Promise<MergeApproval>>()
+      .mockResolvedValueOnce({ approvedBy: [REVIEWER], withoutReview: false })
+      .mockResolvedValueOnce({
+        approvedBy: [REVIEWER, MEMBER],
+        withoutReview: false,
+      });
+    await land(gh, pr, { approve });
+
+    expect(approve).toHaveBeenCalledTimes(2);
+    expect((await ledgerLines(gh)).at(-1)).toMatchObject({
+      approved_by: [REVIEWER, MEMBER],
+    });
+    expect(gh.merges[0]!.commitMessage).toContain(
+      `Oxagen-Approved-By: ${REVIEWER}, ${MEMBER}`,
+    );
+  });
+
+  it("refuses when the approval is withdrawn while the branch is brought up to date", async () => {
+    const gh = steeringRepo();
+    const pr = await openPr(gh, "a-intel.platform.release-notes");
+    gh.approvals = [{ userId: REVIEWER, login: "reviewer", commitSha: pr.head }];
+    gh.commit("main", "README.md", "moved\n");
+    const approve = () =>
+      mergeApproval({
+        host: gh,
+        repo: REPO,
+        number: pr.number,
+        mode: "team",
+        checkedHead: pr.head,
+        authorUserId: AUTHOR,
+        merger: { userId: MEMBER, orgRole: null, workspaceRole: "Member" },
+        isMember: async () => true,
+        holdsMergeWithoutReview: async () => false,
+      });
+    const err = await refusal(
+      land(gh, pr, {
+        approve,
+        recheck: async () => {
+          gh.approvals = [];
+          return { ok: true, checks: CHECKS };
+        },
+      }),
+    );
+
+    expect(err).toMatchObject({ reason: "approval_required" });
+    expect(gh.updates).toHaveLength(1);
     expect(gh.stamps).toEqual([]);
     expect(gh.merges).toEqual([]);
   });

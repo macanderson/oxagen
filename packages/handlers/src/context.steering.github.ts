@@ -1220,13 +1220,20 @@ export function createSteeringGitHub(
           branch: args.branch,
         });
         if (current?.sha !== args.expectedHead) throw headMoved(args.branch);
-        const out = await rest.request<{ sha: string } | undefined>(
-          "POST",
-          `${path}/merges`,
-          { base: args.branch, head: repo.defaultBranch },
-        );
+        const out = await rest.request<
+          { sha: string; parents?: { sha: string }[] } | undefined
+        >("POST", `${path}/merges`, {
+          base: args.branch,
+          head: repo.defaultBranch,
+        });
         // 204: the branch already holds the production branch.
-        return { headSha: out.data?.sha ?? args.expectedHead };
+        if (!out.data) return { headSha: args.expectedHead };
+        // GitHub merges into the branch as it is when the request lands. A
+        // push after the read above becomes the first parent, and the
+        // approvals would carry onto a commit nobody reviewed.
+        if (out.data.parents?.[0]?.sha !== args.expectedHead)
+          throw headMoved(args.branch);
+        return { headSha: out.data.sha };
       } catch (err) {
         if (err instanceof GitHubApiError && err.status === 409)
           throw new HandlerError({

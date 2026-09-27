@@ -1130,7 +1130,7 @@ describe("the GitHub seam's merge-queue calls", () => {
   });
 
   it("merges main into the branch and answers the new head, or the old one when nothing changed", async () => {
-    let merged: unknown = { sha: "u1" };
+    let merged: unknown = { sha: "u1", parents: [{ sha: "h1" }, { sha: "m1" }] };
     const getBranch = vi.fn(async () => ({ name: "b", sha: "h1" }));
     const { gh, repo, calls } = await restSeam(
       { [`POST ${REPO_PATH}/merges`]: () => merged },
@@ -1144,6 +1144,24 @@ describe("the GitHub seam's merge-queue calls", () => {
     merged = undefined;
     await expect(gh.updateBranch(repo, args)).resolves.toEqual({
       headSha: "h1",
+    });
+  });
+
+  it("refuses an update that merged main into a push made after the head was read", async () => {
+    let merged: unknown = { sha: "u2", parents: [{ sha: "h2" }, { sha: "m1" }] };
+    const getBranch = vi.fn(async () => ({ name: "b", sha: "h1" }));
+    const { gh, repo } = await restSeam(
+      { [`POST ${REPO_PATH}/merges`]: () => merged },
+      fakeClient({ getBranch }),
+    );
+    const args = { number: 7, branch: "steering/ctx.rule", expectedHead: "h1" };
+    await expect(gh.updateBranch(repo, args)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "head_moved",
+    });
+    merged = { sha: "u2" };
+    await expect(gh.updateBranch(repo, args)).rejects.toMatchObject({
+      reason: "head_moved",
     });
   });
 

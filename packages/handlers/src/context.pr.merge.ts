@@ -237,24 +237,6 @@ export function createMergeContextPrHandler(
         commitSha = pr.mergeCommitSha;
         mergedAt = requireMergedAt(pr.mergedAt, row.prUrl);
       } else {
-        const approval = await mergeApproval({
-          host: deps.github,
-          repo,
-          number: prNumber,
-          mode,
-          checkedHead: recorded.headSha,
-          authorUserId: row.createdById,
-          merger,
-          isMember: async (uid) => {
-            const roles = await roleOf(uid);
-            return (
-              roles.workspaceRole !== null ||
-              roles.orgRole === "Owner" ||
-              roles.orgRole === "Admin"
-            );
-          },
-          holdsMergeWithoutReview: () => holdsMergeWithoutReview(scope, userId),
-        });
         const landed = await landSteeringPr({
           host: deps.github,
           repo,
@@ -263,7 +245,28 @@ export function createMergeContextPrHandler(
           checkedHead: recorded.headSha,
           checks: passedChecks(row),
           layout,
-          approval,
+          // Approvals count at the head the author pushed. landSteeringPr
+          // reads them again after each update.
+          approve: () =>
+            mergeApproval({
+              host: deps.github,
+              repo,
+              number: prNumber,
+              mode,
+              checkedHead: recorded.headSha,
+              authorUserId: recorded.createdById,
+              merger,
+              isMember: async (uid) => {
+                const roles = await roleOf(uid);
+                return (
+                  roles.workspaceRole !== null ||
+                  roles.orgRole === "Owner" ||
+                  roles.orgRole === "Admin"
+                );
+              },
+              holdsMergeWithoutReview: () =>
+                holdsMergeWithoutReview(scope, userId),
+            }),
           mergedBy: userId,
           commitTitle: `steering: publish ${row.lineageId} (#${prNumber})`,
           version,

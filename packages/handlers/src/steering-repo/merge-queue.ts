@@ -170,7 +170,12 @@ export interface ApprovalInput {
   repo: SteeringRepository;
   number: number;
   mode: GovernanceMode;
-  /** The head the checks passed on. An approval of an older head counts for nothing. */
+  /**
+   * The head the checks passed on before any update. An approval of another
+   * head counts for nothing. An update keeps the approval, because it adds
+   * only the production branch, and on GitHub updateBranch refuses one that
+   * would add anything else.
+   */
   checkedHead: string;
   authorUserId: string | null;
   merger: MergeActor;
@@ -365,7 +370,12 @@ export interface LandInput {
   /** The checks that passed on it, by name. */
   checks: readonly string[];
   layout: SteeringLayout;
-  approval: MergeApproval;
+  /**
+   * The approvals the merge carries, or a refusal. It runs before the first
+   * attempt and again after each update, so the stamp and the trailers name
+   * the approvals that stand on the head that merges.
+   */
+  approve: () => Promise<MergeApproval>;
   mergedBy: string;
   commitTitle: string;
   /** The published version the merge becomes. */
@@ -395,7 +405,8 @@ export const LAND_ATTEMPTS = 3;
  * Merge one steering PR at the head of the queue.
  *
  * 1. Read the production branch. When the PR's head does not hold it, bring
- *    the branch up to date and run the checks again on the new head.
+ *    the branch up to date, run the checks again on the new head, and read
+ *    the approvals again.
  * 2. In the steering layout, push the stamp commit and post the required
  *    check on it, naming the commit the checks ran on.
  * 3. Read the production branch again. When it moved, point the branch back
@@ -411,6 +422,7 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
   const attempts = input.maxAttempts ?? LAND_ATTEMPTS;
   let head = input.checkedHead;
   let checks = input.checks;
+  let approval = await input.approve();
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const main = await host.branchHead(repo, repo.defaultBranch);
     if (main === null) {
@@ -437,6 +449,9 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
         });
       }
       checks = again.checks;
+      // A reviewer may withdraw while the update runs, and the host may drop
+      // an approval when the branch moves.
+      approval = await input.approve();
     }
 
     // Any failure after the stamp lands drops it, so the branch goes back to
@@ -454,7 +469,7 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
           main,
           settings: input.layout.settings,
           at,
-          approval: input.approval,
+          approval,
           mergedBy: input.mergedBy,
         });
         await host.reportCheckRun(repo, {
@@ -475,8 +490,8 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
 
       const mergedHead = stamp?.sha ?? head;
       const trailers = mergeTrailers({
-        approvedBy: input.approval.approvedBy,
-        withoutReviewBy: input.approval.withoutReview ? input.mergedBy : null,
+        approvedBy: approval.approvedBy,
+        withoutReviewBy: approval.withoutReview ? input.mergedBy : null,
         checks,
         version: input.version,
       });
