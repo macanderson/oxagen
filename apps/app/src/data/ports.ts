@@ -672,11 +672,13 @@ export interface DataSource {
    * `list_agents` walked until every named key is found, for the Agents on
    * this host table. `named` is `list_runtimes` (ADR-198): the runtimes the
    * workspace named, each with its live agents by harness; callers: the
-   * Runtimes page, the register flow and the agent page's Move control.
+   * Runtimes page, the register flow and the agent page's Move control. An
+   * `id` (`rtm_…`) reads that runtime alone, for the runtime page, since the
+   * unfiltered read stops at 500 runtimes.
    */
   runtimes: {
     list(ctx: WsCtx): Promise<Read<RuntimeList>>;
     agents(ctx: WsCtx, keys: readonly string[]): Promise<Read<RuntimeAgents>>;
-    named(ctx: WsCtx): Promise<Read<NamedRuntimeList>>;
+    named(ctx: WsCtx, id?: string): Promise<Read<NamedRuntimeList>>;
   };
 }

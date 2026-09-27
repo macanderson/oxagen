@@ -207,6 +207,25 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ).toBe(false);
     });
 
+    it("list_runtimes with an id reads that runtime alone, and none for an unknown id", async () => {
+      const wanted = await inScope(() =>
+        runtimeCreateHandler({ name: "Wanted box" }, ctx()),
+      );
+      await inScope(() => runtimeCreateHandler({ name: "Other box" }, ctx()));
+
+      const one = runtimeList.output.parse(
+        await inScope(() => runtimeListHandler({ id: wanted.runtime.id }, ctx())),
+      );
+      expect(one.items.map((i) => i.id)).toEqual([wanted.runtime.id]);
+
+      const none = runtimeList.output.parse(
+        await inScope(() =>
+          runtimeListHandler({ id: "rtm_nosuchruntime" }, ctx()),
+        ),
+      );
+      expect(none.items).toEqual([]);
+    });
+
     it("list_runtimes names each runtime's live agents and host enrollments", async () => {
       const created = await inScope(() =>
         runtimeCreateHandler({ name: "GPU box" }, ctx()),

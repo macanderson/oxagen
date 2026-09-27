@@ -1498,6 +1498,33 @@ describe("A named runtime's page and its containment (ADR-204)", () => {
     ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
+  it("reads the one runtime by its id, so a runtime past the list's 500 cap still opens", async () => {
+    const calls = await renderDetail(
+      { list: runtimeList([enrollment()]), named: namedRuntimeList() },
+      "rtm_macslaptop",
+    );
+    expect(calls.named).toEqual(["rtm_macslaptop"]);
+    expect(screen.getByRole("region", { name: "Containment" })).toBeVisible();
+  });
+
+  it("is a 404 for a malformed runtime id, with no read (negative)", async () => {
+    const { source, calls } = runtimesSource({
+      list: runtimeList([enrollment()]),
+      named: namedRuntimeList(),
+    });
+    await expect(
+      Runtime({
+        ctx,
+        source,
+        org: "acme",
+        ws: "core-platform",
+        runtime: "rtm_Not-An-Id",
+        viewerName: "Marcus Bell",
+      }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(calls.named).toEqual([]);
+  });
+
   it("replaces the body with the error state when the runtimes read fails (negative)", async () => {
     await renderDetail(
       {

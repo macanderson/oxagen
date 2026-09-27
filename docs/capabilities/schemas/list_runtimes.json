@@ -1,7 +1,7 @@
 {
   "name": "list_runtimes",
   "domain": "runtime",
-  "description": "List the runtimes named in this workspace, each with the live agents on it and their harness, the live host enrollments bound to it, when a host last reported, and whether it requires the contained launcher.",
+  "description": "List the runtimes named in this workspace, each with the live agents on it and their harness, the live host enrollments bound to it, when a host last reported, and whether it requires the contained launcher. Pass `id` to read one runtime.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -22,7 +22,11 @@
   "input": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "properties": {},
+    "properties": {
+      "id": {
+        "type": "string"
+      }
+    },
     "additionalProperties": false
   },
   "output": {

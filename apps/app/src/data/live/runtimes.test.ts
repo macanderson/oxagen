@@ -347,6 +347,17 @@ describe("runtimes.named (ADR-198)", () => {
     expect(read).toEqual(readOk({ runtimes: [item] }));
   });
 
+  it("passes an id through, so one runtime is read past the list's cap", async () => {
+    kernelRead.mockResolvedValueOnce(readOk({ items: [item] }));
+    const read = await runtimes.named(ctx, "rtm_macslaptop");
+    expect(kernelRead).toHaveBeenCalledWith(ctx, {
+      contract: runtimeList,
+      input: { id: "rtm_macslaptop" },
+      page: "runtimes",
+    });
+    expect(read).toEqual(readOk({ runtimes: [item] }));
+  });
+
   it("passes a refusal through and reports a record it cannot map (negative)", async () => {
     const error = readError("runtimes_unavailable", 503);
     kernelRead.mockResolvedValueOnce(error);

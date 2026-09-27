@@ -7,12 +7,16 @@
 // harness the chosen runtime already runs, and says which agent holds it.
 // A retired agent frees its pair and is not listed.
 //
+// The runtime page passes `id` to read one runtime. The unfiltered list stops
+// at 500 runtimes, so a page that looked its runtime up in that list would
+// 404 a runtime sorted past the cap.
+//
 // A console read is outside the metering surface (ADR-052 exclusion 2,
 // INV-28): `noBillingGate: true`, `mutates: false`.
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { agentHarnessSchema } from "./agent.list";
-import { runtimeRefSchema } from "./runtime.shared";
+import { runtimeIdSchema, runtimeRefSchema } from "./runtime.shared";
 
 const instant = z.string().datetime({ offset: true });
 
@@ -47,7 +51,7 @@ export const runtimeList = registerCapability({
   name: "list_runtimes",
   domain: "runtime",
   description:
-    "List the runtimes named in this workspace, each with the live agents on it and their harness, the live host enrollments bound to it, when a host last reported, and whether it requires the contained launcher.",
+    "List the runtimes named in this workspace, each with the live agents on it and their harness, the live host enrollments bound to it, when a host last reported, and whether it requires the contained launcher. Pass `id` to read one runtime.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   // `app`: the Runtimes page and the register form's runtime picker.
@@ -66,7 +70,12 @@ export const runtimeList = registerCapability({
     org: { Owner: "allow", Admin: "allow" },
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
-  input: z.object({}).strict(),
+  input: z
+    .object({
+      /** `rtm_…`. Returns that runtime alone, or none. The 500 cap applies to the unfiltered list. */
+      id: runtimeIdSchema.optional(),
+    })
+    .strict(),
   output: z
     .object({
       items: z.array(runtimeListItem).max(500),

@@ -10,6 +10,7 @@
 //
 // The spec's detail has no empty state: an id the workspace does not hold is
 // a 404.
+import { runtimeIdSchema } from "@oxagen/oxagen/contracts/runtime.shared";
 import { notFound } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
@@ -600,13 +601,19 @@ function NamedRuntimeLoaded({
 
 /** A named runtime's id (`rtm_…`, ADR-198), as against a host enrollment's (`tch_…`). */
 const NAMED_RUNTIME_ID = /^rtm_/;
-
+/**
+ * Reads the one runtime by id. Looking it up in the unfiltered list would miss
+ * a runtime sorted past that read's 500 cap and answer 404 for it. An id the
+ * contract would refuse names no runtime, so it is a 404 without a read.
+ */
 async function readNamedRuntime(
   ctx: WsCtx,
   source: DataSource,
   runtime: string,
 ) {
-  const named = await source.runtimes.named(ctx);
+  if (!runtimeIdSchema.safeParse(runtime).success)
+    return { state: "missing" as const, now: Date.now() };
+  const named = await source.runtimes.named(ctx, runtime);
   if (!named.ok)
     return { state: "failed" as const, read: named, now: Date.now() };
   const found = named.value.runtimes.find((row) => row.id === runtime);

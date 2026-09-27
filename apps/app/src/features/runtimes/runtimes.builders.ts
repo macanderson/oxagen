@@ -124,11 +124,21 @@ export function runtimesSource(reads: {
   named?: Read<NamedRuntimeList>;
 }): {
   source: DataSource;
-  calls: { agents: (readonly string[])[]; members: number };
+  calls: {
+    agents: (readonly string[])[];
+    members: number;
+    /** The id each `named` read passed; undefined for an unfiltered read. */
+    named: (string | undefined)[];
+  };
 } {
-  const calls: { agents: (readonly string[])[]; members: number } = {
+  const calls: {
+    agents: (readonly string[])[];
+    members: number;
+    named: (string | undefined)[];
+  } = {
     agents: [],
     members: 0,
+    named: [],
   };
   // Only the runtimes port and the roster are read by these pages; every
   // other read refuses, so a page that reaches for one fails its test.
@@ -141,7 +151,10 @@ export function runtimesSource(reads: {
         reads.agents ?? readOk({ agents: [runtimeAgent()] }),
       );
     },
-    named: () => Promise.resolve(reads.named ?? namedRuntimeList([])),
+    named: (_ctx, id) => {
+      calls.named.push(id);
+      return Promise.resolve(reads.named ?? namedRuntimeList([]));
+    },
   };
   const members: DataSource["org"]["members"] = () => {
     calls.members += 1;

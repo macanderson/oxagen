@@ -16,7 +16,9 @@ The register form reads this to keep a runtime and harness pair from being regis
 
 ## Input
 
-None (`{}`).
+| Field | Type | Notes |
+|---|---|---|
+| `id` | `string` | Optional. `rtm_…`. Returns that runtime alone, or none. The unfiltered list stops at 500 runtimes, sorted by name. The runtime page reads by id so it can open a runtime past that cap. |
 
 ## Output
 

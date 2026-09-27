@@ -33,8 +33,13 @@ describe("list_runtimes contract", () => {
     });
   });
 
-  it("takes no input", () => {
+  it("takes an optional runtime id and nothing else", () => {
     expect(runtimeList.input.parse({})).toEqual({});
+    expect(runtimeList.input.parse({ id: "rtm_abc" })).toEqual({
+      id: "rtm_abc",
+    });
+    expect(runtimeList.input.safeParse({ id: "bad" }).success).toBe(false);
+    expect(runtimeList.input.safeParse({ id: "agt_abc" }).success).toBe(false);
     expect(runtimeList.input.safeParse({ limit: 5 }).success).toBe(false);
   });
 
