@@ -6,7 +6,6 @@ import {
   execute,
   graphqlSender,
   grpcSender,
-  httpSender,
   mcpSender,
   type CallEnvironment,
   type CredentialSource,
@@ -37,7 +36,6 @@ const asyncStubs: Array<[string, () => Promise<unknown>]> = [
       execute(stub<ManifestTool>(), {}, stub<CallEnvironment>(), stub<CredentialSource>(), stub<Transport>()),
   ],
   ["execute/mcp", () => mcpSender.send(stub(), {}, stub<SendContext>())],
-  ["execute/http", () => httpSender.send(stub(), {}, stub<SendContext>())],
   ["execute/graphql", () => graphqlSender.send(stub(), {}, stub<SendContext>())],
 ];
 

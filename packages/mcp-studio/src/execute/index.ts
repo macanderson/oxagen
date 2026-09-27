@@ -8,6 +8,7 @@
 import type { ManifestServer, ManifestTool } from "../contract/manifest";
 import { notBuiltAsync } from "../not-built";
 import type { CredentialSource } from "./credentials";
+import { createHttpSender } from "./http";
 import type { Sender } from "./sender";
 import type { CallToolResult, Transport } from "./transport";
 
@@ -15,6 +16,7 @@ export * from "./credentials";
 export * from "./sender";
 export * from "./transport";
 export { grpcSender, type GrpcStreamResult } from "./grpc";
+export { createHttpSender, type HttpSenderOptions } from "./http";
 
 /** Where a call runs: the server, the environment, and the person running the agent. */
 export interface CallEnvironment {
@@ -47,14 +49,11 @@ export const mcpSender: Sender<"mcp"> = {
 };
 
 /**
- * The request built from an OpenAPI operation. Retries GET, HEAD, PUT,
- * DELETE, and a keyed POST on 429, 502, 503, and 504, up to 3 times, after
- * Retry-After.
+ * The request built from an OpenAPI operation. Retries GET, HEAD, OPTIONS,
+ * PUT, DELETE, and a keyed POST on 429, 502, 503, and 504, up to 3 times,
+ * after Retry-After.
  */
-export const httpSender: Sender<"http"> = {
-  kind: "http",
-  send: (template, args, context) => notBuiltAsync("execute/http", template, args, context),
-};
+export const httpSender: Sender<"http"> = createHttpSender();
 
 /** One POST with the selection set and the arguments as variables. A query retries as GET does. A mutation never does. */
 export const graphqlSender: Sender<"graphql"> = {
