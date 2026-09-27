@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SERVER_DEFINITION_BUDGET } from "@oxagen/oxagen/steering-repo/tokens";
 import { definitionTokens } from "../contract/hashes";
 import { formatJson } from "../contract/json";
-import type { McpToolsLock } from "../contract/lock";
+import { mcpLockSchema, type McpLock, type McpToolsLock } from "../contract/lock";
 import { toolManifestSchema } from "../contract/manifest";
 import { mcpToolsListResultSchema } from "../contract/mcp-tool";
 import { parseLock, parseServerToml, parseToolsToml, type ReadResult } from "../contract/parse";
@@ -43,6 +43,11 @@ type FixtureServer = (typeof SERVERS)[number];
 
 function pinnedLock(name: FixtureServer): McpToolsLock {
   return ok(parseLock(text(`servers/${name}/tools.lock.json`)));
+}
+
+/** stripe's pinned lock as the MCP lock it is, so its tools can be spread and replaced. */
+function stripePin(): McpLock {
+  return mcpLockSchema.parse(pinnedLock("stripe"));
 }
 
 /** A fixture folder's compile input: stripe's tools/list, or the upstream M1 returns for billing. */
@@ -917,14 +922,14 @@ describe("CompileError", () => {
 
 describe("toManifestServer", () => {
   it("refuses a lock for another server", () => {
-    const pinned = pinnedLock("stripe");
+    const pinned = stripePin();
     expect(() => toManifestServer(compile(fixtureInput("stripe")), { ...pinned, server: "billing" })).toThrow(
       "The lock is for billing, and the compiled server is stripe.",
     );
   });
 
   it("refuses a lock with no entry for a compiled tool", () => {
-    const pinned = pinnedLock("stripe");
+    const pinned = stripePin();
     const { create_refund: _refund, ...rest } = pinned.tools;
     expect(() => toManifestServer(compile(fixtureInput("stripe")), { ...pinned, tools: rest })).toThrow(
       "The lock for stripe has no entry for create_refund. Run lock again.",
@@ -932,7 +937,7 @@ describe("toManifestServer", () => {
   });
 
   it("refuses a lock whose definition_hash is not the compiled one", () => {
-    const pinned = pinnedLock("stripe");
+    const pinned = stripePin();
     const stale = { ...pinned.tools.create_refund!, definition_hash: `sha256:${"0".repeat(64)}` };
     const tools = { ...pinned.tools, create_refund: stale };
     expect(() => toManifestServer(compile(fixtureInput("stripe")), { ...pinned, tools })).toThrow(
