@@ -1009,6 +1009,36 @@ describe("the GitHub seam's merge-queue calls", () => {
     await expect(
       failing.gh.changedFiles(failing.repo, "b0", "h1"),
     ).rejects.toMatchObject({ reason: "github_refused" });
+
+    // GitHub's compare stops at 300 files without saying so. A list that
+    // long may be missing paths, so both reads refuse it; 299 still passes.
+    let count = 300;
+    const long = await restSeam(
+      {},
+      fakeClient({
+        compareCommits: async () =>
+          Array.from({ length: count }, (_, i) => file(`r${i}.toml`, "added")),
+      }),
+    );
+    await expect(
+      long.gh.changedFiles(long.repo, "b0", "h1"),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "too_many_files",
+      message: expect.stringContaining(
+        "h1 changes 300 or more files against b0",
+      ),
+    });
+    await expect(
+      long.gh.changedPaths(long.repo, "b0", "h1"),
+    ).rejects.toMatchObject({ reason: "too_many_files" });
+    count = 299;
+    await expect(
+      long.gh.changedFiles(long.repo, "b0", "h1"),
+    ).resolves.toHaveLength(299);
+    await expect(
+      long.gh.changedPaths(long.repo, "b0", "h1"),
+    ).resolves.toHaveLength(299);
   });
 
   const commitRoutes = (patch: Route = () => ({})): Record<string, Route> => ({
@@ -1099,27 +1129,62 @@ describe("the GitHub seam's merge-queue calls", () => {
     });
   });
 
-  it("merges main into the branch and answers the new head, or the old one when nothing changed", async () => {
-    let merged: unknown = { sha: "u1" };
+  it("merges the main head it was given into the branch and answers the new head and its parents, or the old head when nothing changed", async () => {
+    let merged: unknown = { sha: "u1", parents: [{ sha: "h1" }, { sha: "m1" }] };
     const getBranch = vi.fn(async () => ({ name: "b", sha: "h1" }));
     const { gh, repo, calls } = await restSeam(
       { [`POST ${REPO_PATH}/merges`]: () => merged },
       fakeClient({ getBranch }),
     );
-    const args = { number: 7, branch: "steering/ctx.rule", expectedHead: "h1" };
+    const args = {
+      number: 7,
+      branch: "steering/ctx.rule",
+      expectedHead: "h1",
+      base: "m1",
+    };
     await expect(gh.updateBranch(repo, args)).resolves.toEqual({
       headSha: "u1",
+      parents: ["h1", "m1"],
     });
-    expect(calls[0]!.body).toEqual({ base: "steering/ctx.rule", head: "main" });
+    expect(calls[0]!.body).toEqual({ base: "steering/ctx.rule", head: "m1" });
     merged = undefined;
     await expect(gh.updateBranch(repo, args)).resolves.toEqual({
       headSha: "h1",
+      parents: null,
+    });
+  });
+
+  it("refuses an update that merged main into a push made after the head was read", async () => {
+    let merged: unknown = { sha: "u2", parents: [{ sha: "h2" }, { sha: "m1" }] };
+    const getBranch = vi.fn(async () => ({ name: "b", sha: "h1" }));
+    const { gh, repo } = await restSeam(
+      { [`POST ${REPO_PATH}/merges`]: () => merged },
+      fakeClient({ getBranch }),
+    );
+    const args = {
+      number: 7,
+      branch: "steering/ctx.rule",
+      expectedHead: "h1",
+      base: "m1",
+    };
+    await expect(gh.updateBranch(repo, args)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "head_moved",
+    });
+    merged = { sha: "u2" };
+    await expect(gh.updateBranch(repo, args)).rejects.toMatchObject({
+      reason: "head_moved",
     });
   });
 
   it("refuses a branch update on a moved head, a conflict, or any other refusal", async () => {
     const getBranch = vi.fn(async () => ({ name: "b", sha: "h2" }));
-    const args = { number: 7, branch: "steering/ctx.rule", expectedHead: "h1" };
+    const args = {
+      number: 7,
+      branch: "steering/ctx.rule",
+      expectedHead: "h1",
+      base: "m1",
+    };
     const moved = await restSeam({}, fakeClient({ getBranch }));
     await expect(moved.gh.updateBranch(moved.repo, args)).rejects.toMatchObject(
       { reason: "head_moved" },
@@ -1146,15 +1211,110 @@ describe("the GitHub seam's merge-queue calls", () => {
     ).rejects.toMatchObject({ reason: "github_refused" });
   });
 
-  it("resets a branch by forcing its ref back, and wraps a refusal", async () => {
-    const ref = `PATCH ${REPO_PATH}/git/refs/heads/steering/ctx.rule`;
-    const { gh, repo, calls } = await restSeam({ [ref]: () => ({}) });
-    await gh.resetBranch(repo, "steering/ctx.rule", "p1");
-    expect(calls[0]!.body).toEqual({ sha: "p1", force: true });
-    const refused = await restSeam({ [ref]: refuse(422, "Reference missing") });
-    await expect(
-      refused.gh.resetBranch(refused.repo, "steering/ctx.rule", "p1"),
-    ).rejects.toMatchObject({ reason: "github_refused" });
+  describe("resetBranch", () => {
+    const branch = "steering/ctx.rule";
+    const args = { from: "s1", to: "p1" };
+    const repoInfo = { [`GET ${REPO_PATH}`]: () => ({ node_id: "R_1" }) };
+    const at = (sha: string | null) =>
+      fakeClient({
+        getBranch: vi.fn(async () => (sha ? { name: "b", sha } : null)),
+      });
+
+    it("moves the ref back only while it still points at the stamp", async () => {
+      const getBranch = vi.fn();
+      const { gh, repo, calls } = await restSeam(
+        {
+          ...repoInfo,
+          "POST /graphql": () => ({
+            data: { updateRefs: { clientMutationId: null } },
+          }),
+        },
+        fakeClient({ getBranch }),
+      );
+      await expect(gh.resetBranch(repo, branch, args)).resolves.toBe(true);
+      expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+        `GET ${REPO_PATH}`,
+        "POST /graphql",
+      ]);
+      expect(calls[1]!.body).toMatchObject({
+        query: expect.stringContaining("updateRefs"),
+        variables: {
+          repositoryId: "R_1",
+          refUpdates: [
+            {
+              name: "refs/heads/steering/ctx.rule",
+              afterOid: "p1",
+              beforeOid: "s1",
+              force: true,
+            },
+          ],
+        },
+      });
+      expect(getBranch).not.toHaveBeenCalled();
+    });
+
+    it("leaves a branch that moved off the stamp", async () => {
+      const graphql = () => ({
+        data: { updateRefs: null },
+        errors: [{ message: "Ref was not at the expected value" }],
+      });
+      for (const sha of ["h9", null]) {
+        const { gh, repo } = await restSeam(
+          { ...repoInfo, "POST /graphql": graphql },
+          at(sha),
+        );
+        await expect(gh.resetBranch(repo, branch, args)).resolves.toBe(false);
+      }
+    });
+
+    it("answers true when the reset landed but its answer was lost", async () => {
+      const { gh, repo } = await restSeam(
+        { ...repoInfo, "POST /graphql": refuse(502, "Bad Gateway") },
+        at("p1"),
+      );
+      await expect(gh.resetBranch(repo, branch, args)).resolves.toBe(true);
+    });
+
+    it("wraps a refusal when the branch is still at the stamp", async () => {
+      const errors = await restSeam(
+        {
+          ...repoInfo,
+          "POST /graphql": () => ({
+            data: { updateRefs: null },
+            errors: [{ message: "Resource not accessible" }, { message: "x" }],
+          }),
+        },
+        at("s1"),
+      );
+      await expect(
+        errors.gh.resetBranch(errors.repo, branch, args),
+      ).rejects.toMatchObject({
+        reason: "github_refused",
+        message: "Resource not accessible; x",
+      });
+      const http = await restSeam(
+        { [`GET ${REPO_PATH}`]: refuse(403, "Forbidden") },
+        at("s1"),
+      );
+      await expect(
+        http.gh.resetBranch(http.repo, branch, args),
+      ).rejects.toMatchObject({
+        reason: "github_refused",
+        message: expect.stringContaining("Forbidden"),
+      });
+      const unread = await restSeam(
+        { [`GET ${REPO_PATH}`]: refuse(403, "Forbidden") },
+        fakeClient({
+          getBranch: vi.fn().mockRejectedValue(new Error("unreachable")),
+        }),
+      );
+      await expect(
+        unread.gh.resetBranch(unread.repo, branch, args),
+      ).rejects.toMatchObject({
+        reason: "github_refused",
+        message: expect.stringContaining("Forbidden"),
+      });
+    });
   });
 
   it("lists each reviewer's standing approval across pages, with the linked Oxagen user", async () => {

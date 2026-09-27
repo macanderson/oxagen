@@ -252,7 +252,7 @@ describe("dismiss_proposal", () => {
       merged: false,
     });
     expect(h.github.deletedBranches).toEqual([
-      "context/ctx.platform.migration-order",
+      "steering/ctx.platform.migration-order",
     ]);
     expect(h.store.proposals[0]!.status).toBe("rejected");
 
@@ -298,7 +298,7 @@ describe("dismiss_proposal", () => {
       merged: false,
     });
     expect(h.github.deletedBranches).toEqual([
-      "context/ctx.platform.migration-order",
+      "steering/ctx.platform.migration-order",
     ]);
 
     const out = await open({ proposalId: second }, ctx());
