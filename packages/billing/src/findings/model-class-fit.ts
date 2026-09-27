@@ -160,7 +160,7 @@ function runTokens(run: RunTotalsRecord): number {
  * class. Not covered when the rollup could not price the run in full, or the
  * book has no price for a class the smaller model would have billed.
  */
-function measureRun(book: PriceBook, run: RunTotalsRecord): Measure {
+export function measureRun(book: PriceBook, run: RunTotalsRecord): Measure {
   const tokens = runTokens(run);
   const uncovered: Measure = {
     measuredTokens: tokens,
