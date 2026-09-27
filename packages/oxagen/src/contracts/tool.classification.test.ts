@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-  CONSEQUENCE_TAG_STARTER_SET,
+  IMPACT_STARTER_SET,
   toolClassificationSchema,
 } from "./tool.classification";
 
 const base = {
   sideEffect: "irreversible",
   egress: "third_party",
-  consequenceTags: ["moves_money"],
+  impacts: ["moves_money"],
   measures: {
     amount: { path: "$.amount", type: "money", currencyPath: "$.currency" },
     counterparty: { path: "$.recipient", type: "identifier" },
@@ -23,16 +23,16 @@ describe("tool classification schema (spec §6.9 part 1)", () => {
   it("accepts every starter-set tag and a customer tag", () => {
     const parsed = toolClassificationSchema.parse({
       ...base,
-      consequenceTags: [...CONSEQUENCE_TAG_STARTER_SET, "touches_phi"],
+      impacts: [...IMPACT_STARTER_SET, "touches_phi"],
     });
-    expect(parsed.consequenceTags).toHaveLength(7);
+    expect(parsed.impacts).toHaveLength(7);
   });
 
   it("refuses a tag outside snake_case", () => {
     expect(
       toolClassificationSchema.safeParse({
         ...base,
-        consequenceTags: ["Moves Money"],
+        impacts: ["Moves Money"],
       }).success,
     ).toBe(false);
   });
@@ -41,7 +41,7 @@ describe("tool classification schema (spec §6.9 part 1)", () => {
     expect(
       toolClassificationSchema.safeParse({
         ...base,
-        consequenceTags: ["moves_money", "moves_money"],
+        impacts: ["moves_money", "moves_money"],
       }).success,
     ).toBe(false);
   });

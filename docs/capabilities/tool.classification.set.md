@@ -10,7 +10,7 @@
 
 ## Intent
 
-Set a tool version's safety classification (MC spec §6.9 part 1; ADR-072 §1): the risk grade, the side-effect class, the egress class, the consequence tags (the spec's starter set plus any customer tag), the measures the tool exposes as paths into its input, and the data classes it touches. Classification describes the tool and decides nothing by itself; a class kill switch matches a version by its tags at call time, and later approval rules are written against it.
+Set a tool version's safety classification (MC spec §6.9 part 1; ADR-072 §1): the risk grade, the side-effect class, the egress class, the impacts (the spec's starter set plus any customer tag), the measures the tool exposes as paths into its input, and the data classes it touches. Classification describes the tool and decides nothing by itself; a class kill switch matches a version by its tags at call time, and later approval rules are written against it.
 
 The risk grade set here lands on `classified_risk_grade`; the version's declared `risk_grade` and the checksum over its manifest stay as published, so reclassifying never makes an unchanged manifest republish. A changed classification bumps the deny generation in the write's transaction (trigger `tool_versions_classification_deny_generation`), so a kill-switch gate already open for a turn reloads the tags before its next non-read-only call. A new version of the tool (a changed descriptor from `import_tools` or `publish_tool_declaration`) starts with this classification.
 
@@ -22,7 +22,7 @@ The version records who classified it, when and why; every reclassification is a
 |---|---|---|---|
 | `toolVersionId` | string | yes | `tlv_…` in this workspace |
 | `riskGrade` | enum | yes | `low`, `medium`, `high`, `critical` |
-| `classification` | object | yes | `sideEffect` (`read`, `write`, `irreversible`), `egress` (`local`, `org_tenant`, `third_party`), `consequenceTags` (snake_case, unique, ≤32), `measures` (name → `{ path: "$.…", type, currencyPath?, unit? }`; a `money` measure names `currencyPath`), `dataClasses` |
+| `classification` | object | yes | `sideEffect` (`read`, `write`, `irreversible`), `egress` (`local`, `org_tenant`, `third_party`), `impacts` (snake_case, unique, ≤32), `measures` (name → `{ path: "$.…", type, currencyPath?, unit? }`; a `money` measure names `currencyPath`), `dataClasses` |
 | `reason` | string | yes | 1-500 characters; recorded as `classification_reason` |
 
 ## Output

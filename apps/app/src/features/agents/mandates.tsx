@@ -1,7 +1,7 @@
 // Agents › Mandates (#2957; mockup `aMandates`): the mandates this agent
 // holds, and — when it holds none — what that means for a call that carries a
 // consequence. Nothing in a role, a grant or a toolbelt substitutes for a
-// mandate: a call carrying a consequence tag with no mandate is denied before
+// mandate: a call carrying an impact with no mandate is denied before
 // dispatch, before any credential is minted.
 //
 // The section reads `list_mandates` narrowed to the agent. A member without an
@@ -312,7 +312,7 @@ export function MandatesSection({
                               </SafeLink>
                             </td>
                             <td className="px-3 py-2">
-                              {mandate.consequenceTags.join(", ")}
+                              {mandate.impacts.join(", ")}
                             </td>
                             <td className="px-3 py-2">
                               <MandateScope tools={mandate.tools} />

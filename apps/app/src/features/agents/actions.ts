@@ -25,7 +25,7 @@ import { tachoCommandDispatch } from "@oxagen/oxagen/contracts/tacho.command.dis
 import { tachoEnrollmentRevoke } from "@oxagen/oxagen/contracts/tacho.enrollment.revoke";
 import { tachoEnrollmentTokenCreate } from "@oxagen/oxagen/contracts/tacho.enrollment_token.create";
 import {
-  consequenceTagsOf,
+  impactsOf,
   listOf,
   mandateLimitsOf,
 } from "@/data/contracts/mandates";
@@ -556,7 +556,7 @@ export type MandateDraft = {
    * starting point the workspace extends, and a tool declaring a tag of its
    * own must be nameable or it can never be given a mandate.
    */
-  consequenceTags: string;
+  impacts: string;
   /** The measure the tool version declares the limit under (`rows`, `recipients`). */
   measure: string;
   /**
@@ -644,18 +644,18 @@ export async function requestMandate(
   draft: MandateDraft,
 ): Promise<ActionResult<{ mandateId: string; status: string }>> {
   // `findCoveringMandate` (packages/rules/src/mandates.ts) accepts a mandate
-  // only when `tool.consequenceTags.every(t => mandate.consequenceTags.includes(t))`,
+  // only when `tool.impacts.every(t => mandate.impacts.includes(t))`,
   // so a mandate naming one tag of a tool that declares two covers nothing —
   // granted exactly as asked, and every call still denied, at the moment of use
   // and far from here. The form therefore writes the whole set the operator
   // names rather than a single tag. It cannot check the set against the tools:
-  // `consequence_tags` lives on `agent.tool_versions` and appears in exactly
+  // `impacts` lives on `agent.tool_versions` and appears in exactly
   // one contract, `publish_tool_declaration`, as an input — the same wall the
   // measure declaration is behind (INV-05). Naming too few is the safe way to
   // be wrong here, since the mandate then covers nothing rather than more than
   // was meant, and the gate's denial names the tags it wanted.
-  const consequenceTags = consequenceTagsOf(draft.consequenceTags);
-  if (consequenceTags === null) return refuse("consequenceTags");
+  const impacts = impactsOf(draft.impacts);
+  if (impacts === null) return refuse("impacts");
 
   // Verbatim, no currency unit, never `calls`, and the measure optional beside
   // a calls cap: `mandateLimitsOf` holds the rule for both mandate forms, the
@@ -699,7 +699,7 @@ export async function requestMandate(
 
   const result = await kernelWrite(ctx, mandateRequest, {
     agentId: draft.agentId,
-    consequenceTags,
+    impacts,
     limits: limits.limits,
     targets: {},
     tools,

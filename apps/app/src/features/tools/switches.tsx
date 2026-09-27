@@ -8,7 +8,7 @@
 // A card with no row reads allowing, which is what the record says of a
 // target nothing denies. Two of the three class switches, every irreversible
 // tool and every tool with third-party egress, have no deny to write:
-// `set_kill_switch` stops a class by consequence tag, and side effect and
+// `set_kill_switch` stops a class by impact, and side effect and
 // egress are not tags. Those two cards say so and carry no toggle (#3922).
 //
 // A switch someone flipped carries Edit and Remove. Neither has a write: a

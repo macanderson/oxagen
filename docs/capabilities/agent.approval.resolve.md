@@ -76,8 +76,8 @@ Fleet, by another person, or by expiry shows the same way in both places.
 | code        | reason              | meaning                                                                                                                                           |
 | ----------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `forbidden` | `no_principal`      | No signed-in user and no API key with a live creator (403).                                                                                       |
-| `forbidden` | `org_role_required` | The acting user (the signed-in user, or the API key's creator) is not an org Owner or Admin, nor a workspace Owner or Member (403). On a row a mandate parked, also: the acting user holds no org role the workspace names for every consequence tag on the mandate. |
-| `forbidden` | `no_role_covers_all_tags` | On a row a mandate parked: no single org role is named for all of the mandate's consequence tags (403). |
+| `forbidden` | `org_role_required` | The acting user (the signed-in user, or the API key's creator) is not an org Owner or Admin, nor a workspace Owner or Member (403). On a row a mandate parked, also: the acting user holds no org role the workspace names for every impact on the mandate. |
+| `forbidden` | `no_role_covers_all_tags` | On a row a mandate parked: no single org role is named for all of the mandate's impacts (403). |
 | `forbidden` | `not_an_approver` | On a row a mandate parked whose approval rule names `approvers`: the acting user is neither a `user:` entry nor holds a `role:` entry (403). |
 | `forbidden` | `agent_cannot_resolve_own_mandate` | On a row a mandate parked: the caller is an agent principal. A person answers (403). |
 | `forbidden` | `run_cannot_resolve_own_approval` | The call carries the run that raised the approval (`run_public_id` on the row, matched by the run's internal or public id). A person approves or denies it on Fleet (403). |

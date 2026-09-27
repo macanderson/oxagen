@@ -32,7 +32,7 @@ export interface PublishToolArgs {
    * and publishes a version, unlike the `classification` jsonb, which a
    * reclassification edits in place.
    */
-  consequenceTags?: readonly string[];
+  impacts?: readonly string[];
   /**
    * The measure declarations the mandate gate reads limits and targets from.
    * Typed as the contract's own shape so a published version carries measures
@@ -55,7 +55,7 @@ export interface PublishToolArgs {
 
 /** The classification fields the mandate gate reads off the active version. */
 export interface ActiveClassification {
-  consequenceTags: readonly string[];
+  impacts: readonly string[];
   measures: unknown;
   effectIdPath: string | null;
   /**
@@ -100,7 +100,7 @@ export function toolSlugOf(
 export function toolChecksum(
   args: Pick<
     PublishToolArgs,
-    | "consequenceTags"
+    | "impacts"
     | "description"
     | "effectIdPath"
     | "inputSchema"
@@ -114,7 +114,9 @@ export function toolChecksum(
 ): string {
   return sha256Hex(
     canonicalJson({
-      consequence_tags: args.consequenceTags ?? [],
+      // The key keeps its pre-rename spelling. It names a hash input, and
+      // renaming it would change every stored checksum and republish each tool.
+      consequence_tags: args.impacts ?? [],
       description: args.description,
       effect_id_path: args.effectIdPath ?? null,
       input_schema: args.inputSchema,
@@ -147,7 +149,7 @@ export async function publishTool(
     checksum,
     schemaOrigin: args.schemaOrigin,
     // The column is a mutable text[]; copy so a caller's readonly tags fit.
-    consequenceTags: [...(args.consequenceTags ?? [])],
+    impacts: [...(args.impacts ?? [])],
     measures: args.measures ?? {},
     effectIdPath: args.effectIdPath ?? null,
     isLatest: true,
@@ -208,7 +210,7 @@ export async function publishTool(
     await args.beforeNewVersion?.(
       latest
         ? {
-            consequenceTags: latest.consequenceTags ?? [],
+            impacts: latest.impacts ?? [],
             measures: latest.measures,
             effectIdPath: latest.effectIdPath,
             classification: latest.classification,
@@ -220,7 +222,7 @@ export async function publishTool(
       ? {
           slug,
           version: latest.versionNumber,
-          consequenceTags: latest.consequenceTags ?? [],
+          impacts: latest.impacts ?? [],
           measures: latest.measures,
           classification: latest.classification,
         }
@@ -291,7 +293,7 @@ export async function publishTool(
       after: {
         slug,
         version,
-        consequenceTags: versionValues.consequenceTags,
+        impacts: versionValues.impacts,
         measures: versionValues.measures,
         classification: latest?.classification ?? null,
       },

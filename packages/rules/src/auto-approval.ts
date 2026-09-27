@@ -56,10 +56,10 @@ export interface AutoApprovalSubject {
      */
     sideEffect: string | null;
     /**
-     * The union of the declared consequence tags and the classified ones.
+     * The union of the declared impacts and the classified ones.
      * A union, never a replacement: see `loadDeclaredTool`.
      */
-    consequenceTags: string[];
+    impacts: string[];
   } | null;
   /** measure name → the value read from the call, as an integer string. Absent when unreadable. */
   measures: Record<string, string>;
@@ -134,7 +134,7 @@ export const HARD_FLOOR_REASONS: readonly string[] = [
  * (ADR-070 decision 1), so the floor reads the starter-set tag that means the
  * same thing: an action that destroys data cannot be undone.
  */
-export const IRREVERSIBLE_CONSEQUENCE_TAGS: readonly string[] = [
+export const IRREVERSIBLE_IMPACTS: readonly string[] = [
   "destroys_data",
 ];
 
@@ -223,12 +223,12 @@ function floorReasons(subject: AutoApprovalSubject): string[] {
   }
   // Two ways the record says this call cannot be taken back, and either one
   // is the same floor: the side-effect class the classification names, and a
-  // consequence tag the record marks irreversible. One reason, not two, so
+  // impact the record marks irreversible. One reason, not two, so
   // the approval card does not say the same thing twice.
   if (
     subject.tool?.sideEffect === IRREVERSIBLE_SIDE_EFFECT ||
-    subject.tool?.consequenceTags.some((t) =>
-      IRREVERSIBLE_CONSEQUENCE_TAGS.includes(t),
+    subject.tool?.impacts.some((t) =>
+      IRREVERSIBLE_IMPACTS.includes(t),
     )
   ) {
     reasons.push(REASON.irreversibleConsequence);
@@ -256,7 +256,7 @@ function consequencesOutsideStamp(
   rule: AutoApprovalRule,
   subject: AutoApprovalSubject,
 ): boolean {
-  const carried = subject.tool?.consequenceTags ?? [];
+  const carried = subject.tool?.impacts ?? [];
   if (carried.length === 0) return false;
   const stamp = rule.authoredConsequences;
   if (stamp === undefined) return true;

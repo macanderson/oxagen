@@ -79,7 +79,7 @@
               "additionalProperties": {},
               "description": "The full declared manifest body, verbatim"
             },
-            "consequence_tags": {
+            "impacts": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -194,7 +194,7 @@
                 "imported"
               ]
             },
-            "consequenceTags": {
+            "impacts": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -261,7 +261,7 @@
             "version",
             "checksum",
             "schemaOrigin",
-            "consequenceTags",
+            "impacts",
             "measures",
             "effectIdPath",
             "published"

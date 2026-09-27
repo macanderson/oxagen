@@ -85,7 +85,7 @@ export type ClassificationDraft = {
   sideEffect: ToolSideEffect;
   egress: ToolEgress;
   /** One tag per entry, already split; the handler refuses a repeat. */
-  consequenceTags: readonly string[];
+  impacts: readonly string[];
   dataClasses: readonly string[];
   /** The version's measures, carried through unchanged: this page does not author a JSONPath. */
   measures: ToolClassification["measures"];
@@ -108,7 +108,7 @@ export async function setToolClassification(
     classification: {
       sideEffect: draft.sideEffect,
       egress: draft.egress,
-      consequenceTags: [...draft.consequenceTags],
+      impacts: [...draft.impacts],
       dataClasses: [...draft.dataClasses],
       measures: Object.fromEntries(
         draft.measures.map((measure) => [

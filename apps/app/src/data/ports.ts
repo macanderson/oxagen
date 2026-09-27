@@ -667,7 +667,7 @@ export interface DataSource {
   tools: {
     /**
      * list_tool_versions: one cursor page of the registry, optionally one
-     * consequence tag, one server (its `mcs_…` id), or both
+     * impact, one server (its `mcs_…` id), or both
      */
     versions(
       ctx: WsCtx,

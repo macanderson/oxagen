@@ -34,7 +34,7 @@ import {
   CONSEQUENCE_OTHER_MAX,
   MEASURE_NAME_MAX,
   PURPOSE_MAX,
-  STARTER_CONSEQUENCE_TAGS,
+  STARTER_IMPACTS,
   UNIT_MAX,
 } from "@/data/contracts/mandates";
 import { type ReactNode, type SyntheticEvent, useState } from "react";
@@ -56,10 +56,10 @@ const PERIODS = ["daily", "weekly", "monthly"] as const;
  * More than one consequence may be named, and usually must be: a mandate
  * covers a tool only when it names every tag that tool declares, so naming one
  * of a tool's two mints a mandate that authorizes nothing. Nothing the app may
- * call answers a tool version's `consequence_tags`, so the operator states the
+ * call answers a tool version's `impacts`, so the operator states the
  * set and the hint says the rule.
  */
-const CONSEQUENCE_TAGS = STARTER_CONSEQUENCE_TAGS;
+const IMPACTS = STARTER_IMPACTS;
 
 function Field({
   name,
@@ -127,8 +127,8 @@ export function RequestMandate({
     try {
       const result = await requestMandate(org, ws, {
         agentId,
-        consequenceTags: [
-          ...chosen(form, "consequenceTags"),
+        impacts: [
+          ...chosen(form, "impacts"),
           text(form, "consequenceOther"),
         ]
           .filter((tag) => tag !== "")
@@ -181,9 +181,9 @@ export function RequestMandate({
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
           <p className="text-sm text-muted-foreground">{t("body")}</p>
           <fieldset className="flex flex-col gap-1 text-sm text-foreground">
-            <legend>{t("consequenceTags")}</legend>
+            <legend>{t("impacts")}</legend>
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-              {CONSEQUENCE_TAGS.map((tag) => (
+              {IMPACTS.map((tag) => (
                 <label
                   key={tag}
                   htmlFor={id(`consequence-${tag}`)}
@@ -192,7 +192,7 @@ export function RequestMandate({
                   <input
                     id={id(`consequence-${tag}`)}
                     type="checkbox"
-                    name="consequenceTags"
+                    name="impacts"
                     value={tag}
                   />
                   {tag}
@@ -212,7 +212,7 @@ export function RequestMandate({
               className={inputBase}
             />
             <p className="text-xs text-muted-foreground">
-              {t("consequenceTagsHint")}
+              {t("impactsHint")}
             </p>
           </fieldset>
           <Field name="measure" label={t("measure")} hint={t("measureHint")}>

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import {
-  consequenceTagSchema,
+  impactSchema,
   measureDeclarationsSchema,
 } from "../mandates/schemas";
 import { toolDeclarationPublish } from "./tool.declaration.publish";
@@ -61,7 +61,7 @@ export const toolImportInputObject = z
             // mandate gate reads off the active version at decision time, so
             // an imported declaration that cannot state it would leave every
             // mandate over this tool unable to measure or settle a call.
-            consequence_tags: publishInput.consequence_tags,
+            impacts: publishInput.impacts,
             measures: publishInput.measures,
             effect_id_path: publishInput.effect_id_path,
           })
@@ -125,7 +125,7 @@ export const toolImport = registerCapability({
          * an origin `imported` row lands unclassified, and the caller has no
          * other way to read what was stored.
          */
-        consequenceTags: z.array(consequenceTagSchema),
+        impacts: z.array(impactSchema),
         measures: measureDeclarationsSchema,
         effectIdPath: z.string().nullable(),
         /** True when this import created the version; false when it was already there. */

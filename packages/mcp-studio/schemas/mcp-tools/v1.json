@@ -96,7 +96,7 @@
             },
             "maxItems": 32,
             "uniqueItems": true,
-            "description": "What a call can do. Today's consequenceTags."
+            "description": "What a call can do, such as moves_money."
           },
           "measures": {
             "type": "object",

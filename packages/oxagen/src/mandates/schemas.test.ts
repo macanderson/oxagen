@@ -233,7 +233,7 @@ describe("the mandate body", () => {
         .success,
     ).toBe(false);
     expect(
-      mandateBodySchema.safeParse({ ...BODY, consequenceTags: [] }).success,
+      mandateBodySchema.safeParse({ ...BODY, impacts: [] }).success,
     ).toBe(false);
     expect(mandateBodySchema.safeParse({ ...BODY, tools: [] }).success).toBe(
       false,

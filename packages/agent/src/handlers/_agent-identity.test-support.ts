@@ -414,7 +414,7 @@ export async function seedMandate(
         requestedBy: tenant.userId,
         grantedBy: status === "draft" ? null : tenant.userId,
         roleAtGrant: status === "draft" ? null : "Owner",
-        consequenceTags: ["spend"],
+        impacts: ["spend"],
         limits: {},
         tools: ["stripe__*"],
         purpose: "seeded mandate",

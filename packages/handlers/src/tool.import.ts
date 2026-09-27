@@ -173,7 +173,7 @@ export function createToolImportHandler(
           policyGroup: d.policy_group ?? null,
           manifest: d.manifest,
           schemaOrigin: "declared",
-          consequenceTags: d.consequence_tags,
+          impacts: d.impacts,
           measures: d.measures,
           effectIdPath: d.effect_id_path ?? null,
         });
@@ -208,7 +208,7 @@ export function createToolImportHandler(
           schemaOrigin: "imported",
           // A pulled descriptor states no consequences: it lands unclassified
           // and an admin classifies it, the same fail-safe as the risk grade.
-          consequenceTags: [],
+          impacts: [],
           measures: {},
           effectIdPath: null,
         });
@@ -277,7 +277,7 @@ export function createToolImportHandler(
           version: published.version,
           checksum: published.checksum,
           schemaOrigin: p.schemaOrigin,
-          consequenceTags: [...(p.consequenceTags ?? [])],
+          impacts: [...(p.impacts ?? [])],
           measures: p.measures ?? {},
           effectIdPath: p.effectIdPath ?? null,
           published: published.published,

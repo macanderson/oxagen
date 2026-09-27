@@ -63,7 +63,7 @@ export function mandateOutput(
     requestedBy: "usr_marcusbell",
     grantedBy: "usr_priyanatarajan",
     roleAtGrant: "Billing",
-    consequenceTags: ["moves_money"],
+    impacts: ["moves_money"],
     limits: {
       amount: {
         perCall: "250000000",

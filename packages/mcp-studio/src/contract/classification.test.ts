@@ -22,13 +22,13 @@ const full: ToolsClassification = {
 };
 
 describe("toCodeClassification", () => {
-  it("maps every key to its camelCase field, and impacts to consequenceTags", () => {
+  it("maps every key to its camelCase field", () => {
     expect(toCodeClassification(full)).toStrictEqual({
       risk: "high",
       classification: {
         sideEffect: "irreversible",
         egress: "third_party",
-        consequenceTags: ["moves_money"],
+        impacts: ["moves_money"],
         measures: {
           amount: { path: "$.amount", type: "money", currencyPath: "$.currency" },
           recipients: { path: "$.recipients", type: "count", unit: "recipients" },
@@ -45,7 +45,7 @@ describe("toCodeClassification", () => {
       classification: {
         sideEffect: "read",
         egress: "org_tenant",
-        consequenceTags: [],
+        impacts: [],
         measures: {},
         dataClasses: [],
       },
@@ -54,7 +54,7 @@ describe("toCodeClassification", () => {
 
   it("copies the lists, so the result shares no array with the entry", () => {
     const { classification } = toCodeClassification(full);
-    expect(classification.consequenceTags).not.toBe(full.impacts);
+    expect(classification.impacts).not.toBe(full.impacts);
     expect(classification.dataClasses).not.toBe(full.data_classes);
   });
 
@@ -83,7 +83,7 @@ describe("fromCodeClassification", () => {
       fromCodeClassification("medium", {
         sideEffect: "write",
         egress: "local",
-        consequenceTags: [],
+        impacts: [],
         measures: {},
         dataClasses: [],
       }),
@@ -94,7 +94,7 @@ describe("fromCodeClassification", () => {
     const entry = fromCodeClassification("low", {
       sideEffect: "read",
       egress: "org_tenant",
-      consequenceTags: [],
+      impacts: [],
       measures: { rows: { path: "$.limit", type: "count", unit: "rows" } },
       dataClasses: [],
     });

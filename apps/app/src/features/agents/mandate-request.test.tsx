@@ -145,7 +145,7 @@ describe("RequestMandate", () => {
     await ask(user);
     expect(requestMandate).toHaveBeenCalledWith("acme", "core-platform", {
       agentId: "agt_invoicebot",
-      consequenceTags: "moves_money",
+      impacts: "moves_money",
       measure: "rows",
       unit: "rows",
       perCall: "",
@@ -217,7 +217,7 @@ describe("RequestMandate", () => {
     expect(requestMandate).toHaveBeenCalledWith(
       "acme",
       "core-platform",
-      expect.objectContaining({ consequenceTags: "moves_money,ships_code" }),
+      expect.objectContaining({ impacts: "moves_money,ships_code" }),
     );
   });
 

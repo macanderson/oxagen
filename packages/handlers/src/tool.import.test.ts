@@ -267,7 +267,7 @@ describe("import_tools", () => {
             // classification fields carry a default and are therefore always
             // present. A read-only lookup causes no consequence; the measure
             // is what a mandate targeting one invoice reads the id from.
-            consequence_tags: [],
+            impacts: [],
             measures: {
               invoice: { path: "invoice_id", type: "text", unit: "invoice_id" },
             },
@@ -288,7 +288,7 @@ describe("import_tools", () => {
       source: "mcp",
       mcpServerId: SERVER,
       // The declared classification reaches the version the gate later reads.
-      consequenceTags: [],
+      impacts: [],
       measures: {
         invoice: { path: "invoice_id", type: "text", unit: "invoice_id" },
       },
