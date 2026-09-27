@@ -32,6 +32,7 @@ A wrapped run's subagents each record on a hash chain of their own, with their o
 - A chain is bounded from seq 0, unless its frames may have expired from `tacho_events` (#4316), and to its own `seq_count` only when it was read whole: the rules the run's own chain follows.
 - Its checkpoints are read by its session row id, in one query for every chain.
 - The ladder reads every chain. A sequence gap on a subagent's chain is a `chain_break` in the run's record, and a missing body there is a `body_missing`.
+- A gap a subagent chain's seal recorded, such as `unobserved_tail`, caps the ladder too. When the run has more than 200 chains, one more query reads the gaps every chain recorded, so a chain past the list still caps it.
 
 ## Input
 

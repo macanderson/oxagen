@@ -1,6 +1,9 @@
 import { schema } from "@oxagen/database";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
-import { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
+import {
+  CHAIN_SUBAGENTS_MAX,
+  runChainGet,
+} from "@oxagen/oxagen/contracts/run.chain.get";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import { drizzle } from "drizzle-orm/pg-proxy";
 import { describe, expect, it } from "vitest";
@@ -13,6 +16,7 @@ import {
   framesMayHaveExpired,
   sequenceGaps,
   tachoChainCheckpointsQuery,
+  tachoChainGapsQuery,
 } from "./run.chain.get";
 import {
   ctx,
@@ -71,6 +75,8 @@ function tachoHarness(
     /** Their frames, as the subagent read answers them. */
     children?: TachoFrameRow[];
     chainCheckpoints?: ChainCheckpointRow[];
+    /** Told the root each time the walk reads every chain's recorded gaps. */
+    onChainGaps?: (rootSessionUuid: string) => void;
   } = {},
 ) {
   // seqCount is the next expected sequence (last.seq + 1). Default it to the
@@ -106,6 +112,23 @@ function tachoHarness(
           sessionIds.includes(row.sessionId),
         ),
       ),
+    // Like the query: the distinct gap kinds of every chain under the root,
+    // the root's own row left out, from rows whose gaps are a list.
+    chainGaps: (_scope, rootSessionUuid) => {
+      over.onChainGaps?.(rootSessionUuid);
+      const gaps = (over.chains ?? [])
+        .filter(
+          (row) =>
+            row.rootSessionUuid === rootSessionUuid &&
+            row.sessionUuid !== rootSessionUuid,
+        )
+        .flatMap((row) =>
+          Array.isArray(row.completenessGaps)
+            ? row.completenessGaps.map(String)
+            : [],
+        );
+      return Promise.resolve([...new Set(gaps)]);
+    },
     ...(over.chains === undefined
       ? {}
       : {
@@ -167,6 +190,8 @@ function ledgerHarness(
     tachoFrames: memoryTachoFrames(SESSION_UUID, []),
     checkpoints: () => Promise.reject(new Error("a ledger run reads none")),
     chainCheckpoints: () =>
+      Promise.reject(new Error("a ledger run has no subagent chains")),
+    chainGaps: () =>
       Promise.reject(new Error("a ledger run has no subagent chains")),
     ledgerSeals: () => Promise.resolve(attemptSeals),
   };
@@ -861,6 +886,69 @@ describe("get_run_chain subagent chains (#3823)", () => {
     expect(tail.ladder[1]?.reason).toBe("unobserved_tail");
   });
 
+  // Codex review on #4421: the walk lists CHAIN_SUBAGENTS_MAX chains, and a
+  // gap recorded on a chain past the list capped nothing, so a cut read
+  // claimed a rung that chain's seal refused.
+  describe("a run with more chains than the walk lists", () => {
+    /** `count` chains that recorded no frame, the last one started last. */
+    const many = (count: number, lastGaps: unknown) =>
+      Array.from({ length: count }, (_, i) =>
+        chainRow(
+          `0192d4a8-7c1e-7a00-8000-${String(i).padStart(12, "0")}`,
+          i === count - 1
+            ? {
+                startedAt: new Date("2026-09-11T09:05:00.000Z"),
+                sealedAt: SEALED_AT,
+                completenessGaps: lastGaps,
+              }
+            : {},
+        ),
+      );
+    const read = (chains: SubagentChainFixture[]) => {
+      const roots: string[] = [];
+      const out = tachoHarness(root([0, 1]), {
+        session: { completenessGaps: [], enforcementTier: "gateway" },
+        chains,
+        onChainGaps: (rootSessionUuid) => roots.push(rootSessionUuid),
+      })({ runId: TACHO_ID }, ctx());
+      return { out, roots };
+    };
+
+    it("caps the ladder at a gap recorded on a chain past the list", async () => {
+      const { out, roots } = read(
+        many(CHAIN_SUBAGENTS_MAX + 1, ["unobserved_tail"]),
+      );
+      const cut = await out;
+      expect(cut.chains).toHaveLength(CHAIN_SUBAGENTS_MAX);
+      expect(cut.complete).toBe(false);
+      // The run's own seal recorded nothing: the gap is the unlisted chain's.
+      expect(cut.gaps.recorded).toEqual([]);
+      expect(cut.ladder[1]).toMatchObject({
+        grade: "view",
+        met: false,
+        reason: "unobserved_tail",
+      });
+      expect(roots).toEqual([SESSION_UUID]);
+    });
+
+    it("keeps the rung when no chain past the list recorded a gap (negative)", async () => {
+      const cut = await read(many(CHAIN_SUBAGENTS_MAX + 1, [])).out;
+      expect(cut.complete).toBe(false);
+      expect(cut.ladder[1]).toMatchObject({ grade: "view", met: true });
+    });
+
+    it("reads no gap aggregate when every chain is listed (negative)", async () => {
+      const { out, roots } = read(
+        many(CHAIN_SUBAGENTS_MAX, ["unobserved_tail"]),
+      );
+      const whole = await out;
+      expect(whole.chains).toHaveLength(CHAIN_SUBAGENTS_MAX);
+      // The listed row carries the gap, so the ladder still refuses the rung.
+      expect(whole.ladder[1]?.reason).toBe("unobserved_tail");
+      expect(roots).toEqual([]);
+    });
+  });
+
   it("marks the chain the frame cap cut, and every chain past it, incomplete", async () => {
     const spread = (session: string, count: number) =>
       Array.from({ length: count }, (_, seq) => kept(onChain(session, seq)));
@@ -928,6 +1016,31 @@ describe("get_run_chain subagent chains (#3823)", () => {
   it("answers no chains on a ledger run (negative)", async () => {
     const out = await ledgerHarness()({ runId: LEDGER_ID }, ctx());
     expect("chains" in out).toBe(false);
+  });
+
+  it("reads the gap kinds of every chain under the root in one fenced query", () => {
+    const db = drizzle(() => Promise.resolve({ rows: [] }), { schema });
+    const query = tachoChainGapsQuery(db, SCOPE, SESSION_UUID).toSQL();
+    expect(query.sql).toMatch(
+      /^select distinct jsonb_array_elements_text\((?:(?:"tacho"\.)?"sessions"\.)?"completeness_gaps"\)/,
+    );
+    expect(query.sql).toMatch(/"sessions"\."org_id" = \$\d+/);
+    expect(query.sql).toMatch(/"sessions"\."workspace_id" = \$\d+/);
+    expect(query.sql).toMatch(/"sessions"\."root_session_uuid" = \$\d+/);
+    expect(query.sql).toMatch(/"sessions"\."session_uuid" <> \$\d+/);
+    // A row whose gaps are not a list would make the expansion throw.
+    expect(query.sql).toMatch(
+      /jsonb_typeof\((?:"tacho"\.)?"sessions"\."completeness_gaps"\) = 'array'/,
+    );
+    // Every chain, not the listed ones: no cap and no id list.
+    expect(query.sql).not.toMatch(/ limit /);
+    expect(query.sql).not.toMatch(/ in \(/);
+    expect(query.params).toEqual([
+      SCOPE.orgId,
+      SCOPE.workspaceId,
+      SESSION_UUID,
+      SESSION_UUID,
+    ]);
   });
 
   it("reads the chains' checkpoints by their session row ids in one fenced query", () => {
