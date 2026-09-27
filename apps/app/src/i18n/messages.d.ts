@@ -10846,6 +10846,7 @@ type Messages = {
         linuxAppImage: string;
       };
       macosFirstLaunch: string;
+      macosUpdates: string;
       all: string;
     };
     picker: {

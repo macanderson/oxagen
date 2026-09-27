@@ -200,6 +200,7 @@
         "linuxAppImage": "AppImage"
       },
       "macosFirstLaunch": "macOS refuses the first launch until builds are notarized. Choose Done, then click Open Anyway in System Settings > Privacy & Security.",
+      "macosUpdates": "On macOS, the app installs new versions on its own and runs them after your next restart. To turn this off, clear Install updates automatically in the app's Updates panel. Windows and Linux ask first.",
       "all": "Every version, with SHA-256 checksums"
     },
     "picker": {
