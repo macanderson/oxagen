@@ -10,6 +10,17 @@ const signature = {
 };
 const digest = `sha256:${"a".repeat(64)}`;
 
+interface ParseOutcome {
+  success: boolean;
+  error?: { issues: { path: (string | number)[]; message: string }[] };
+}
+
+/** Each issue of a failed parse as its dotted path and message, or [] when the parse passed. */
+function pathsAndMessages(result: ParseOutcome): { path: string; message: string }[] {
+  if (result.success || result.error === undefined) return [];
+  return result.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message }));
+}
+
 const relayEnvelope = {
   schema: "relay-envelope/v1",
   relay: "billing-vpc",
@@ -63,11 +74,31 @@ describe("relay-envelope/v1", () => {
       ...relayEnvelope,
       expires_at: new Date(Date.parse(relayEnvelope.issued_at) + ENVELOPE_TTL_MAX_MS + 1000).toISOString(),
     };
-    for (const envelope of [backwards, tooLong]) {
-      const result = relayEnvelopeSchema.safeParse(envelope);
-      expect(result.success).toBe(false);
-      expect(result.error?.issues[0]?.path).toEqual(["expires_at"]);
+    expect(pathsAndMessages(relayEnvelopeSchema.safeParse(backwards))).toStrictEqual([
+      { path: "expires_at", message: "expires_at must be after issued_at" },
+    ]);
+    expect(pathsAndMessages(relayEnvelopeSchema.safeParse(tooLong))).toStrictEqual([
+      { path: "expires_at", message: "expires_at must be at most 30 seconds after issued_at" },
+    ]);
+    const atLimit = {
+      ...relayEnvelope,
+      expires_at: new Date(Date.parse(relayEnvelope.issued_at) + ENVELOPE_TTL_MAX_MS).toISOString(),
+    };
+    expect(relayEnvelopeSchema.safeParse(atLimit).success).toBe(true);
+  });
+
+  it("refuses an instant whose offset is out of range, which no clock can read", () => {
+    for (const field of ["issued_at", "expires_at"] as const) {
+      const envelope = { ...relayEnvelope, [field]: "2026-09-26T12:00:00+99:99" };
+      expect(pathsAndMessages(relayEnvelopeSchema.safeParse(envelope))).toStrictEqual([
+        { path: field, message: `${field} is not an instant a clock can read` },
+      ]);
     }
+  });
+
+  it("reports a malformed instant once, on its own field", () => {
+    const result = relayEnvelopeSchema.safeParse({ ...relayEnvelope, expires_at: "soon" });
+    expect(pathsAndMessages(result)).toStrictEqual([{ path: "expires_at", message: "Invalid datetime" }]);
   });
 
   it("refuses a relay credential that breaks the header rule", () => {
@@ -76,17 +107,25 @@ describe("relay-envelope/v1", () => {
       ...relayEnvelope,
       credential: { name: "billing-key", scheme: "bearer", header: "X-Api-Key" },
     };
-    expect(relayEnvelopeSchema.safeParse(missingHeader).success).toBe(false);
-    expect(relayEnvelopeSchema.safeParse(strayHeader).success).toBe(false);
+    expect(pathsAndMessages(relayEnvelopeSchema.safeParse(missingHeader))).toStrictEqual([
+      { path: "credential.header", message: "header is required when scheme is header" },
+    ]);
+    expect(pathsAndMessages(relayEnvelopeSchema.safeParse(strayHeader))).toStrictEqual([
+      { path: "credential.header", message: "header is not allowed when scheme is not header" },
+    ]);
     const ok = { ...relayEnvelope, credential: { name: "billing-key", scheme: "header", header: "X-Api-Key" } };
     expect(relayEnvelopeSchema.safeParse(ok).success).toBe(true);
   });
 
   it("refuses an unsigned envelope and a path with a fragment", () => {
     const { signature: _signature, ...unsigned } = relayEnvelope;
-    expect(relayEnvelopeSchema.safeParse(unsigned).success).toBe(false);
+    expect(pathsAndMessages(relayEnvelopeSchema.safeParse(unsigned))).toStrictEqual([
+      { path: "signature", message: "Required" },
+    ]);
     const fragment = { ...relayEnvelope, target: { ...relayEnvelope.target, path: "/v1#x" } };
-    expect(relayEnvelopeSchema.safeParse(fragment).success).toBe(false);
+    expect(pathsAndMessages(relayEnvelopeSchema.safeParse(fragment))).toStrictEqual([
+      { path: "target.path", message: "a path starts with / and has no spaces or fragment" },
+    ]);
   });
 });
 
@@ -94,7 +133,9 @@ describe("local-call-envelope/v1", () => {
   it("accepts a signed call and refuses an expired window", () => {
     expect(localCallEnvelopeSchema.safeParse(localEnvelope).success).toBe(true);
     const same = { ...localEnvelope, expires_at: localEnvelope.issued_at };
-    expect(localCallEnvelopeSchema.safeParse(same).success).toBe(false);
+    expect(pathsAndMessages(localCallEnvelopeSchema.safeParse(same))).toStrictEqual([
+      { path: "expires_at", message: "expires_at must be after issued_at" },
+    ]);
   });
 });
 

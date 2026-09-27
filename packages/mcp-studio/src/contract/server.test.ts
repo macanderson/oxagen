@@ -203,8 +203,12 @@ describe("sources", () => {
   });
 
   it("refuses introspection for OpenAPI and reflection for GraphQL", () => {
-    expect(issues(server({ type: "openapi", from: "introspection" }, rest))).not.toStrictEqual([]);
-    expect(issues(server({ type: "graphql", from: "reflection" }, rest))).not.toStrictEqual([]);
+    // The source union reports a from value its type does not allow as one issue on source.
+    const refused = [{ path: "source", message: "Invalid input" }];
+    expect(issues(server({ type: "openapi", from: "introspection" }, rest))).toStrictEqual(refused);
+    expect(issues(server({ type: "graphql", from: "reflection" }, rest))).toStrictEqual(refused);
+    expect(issues(server({ type: "graphql", from: "introspection" }, rest))).toStrictEqual([]);
+    expect(issues(server({ type: "grpc", from: "reflection" }, rest))).toStrictEqual([]);
   });
 
   it("refuses a local env variable listed twice", () => {
@@ -221,7 +225,14 @@ describe("sources", () => {
       server: "github-mcp-server",
       version: "1.2.0",
     };
-    expect(issues(server(registry, { auth: { mode: "none" } }))).not.toStrictEqual([]);
+    expect(issues(server(registry, { auth: { mode: "none" } }))).toStrictEqual([
+      {
+        path: "source.server",
+        message: "a registry name is <namespace>/<name>, such as io.github.github/github-mcp-server",
+      },
+    ]);
+    const namespaced = { ...registry, server: "io.github.github/github-mcp-server" };
+    expect(issues(server(namespaced, { auth: { mode: "none" } }))).toStrictEqual([]);
   });
 
   it("tells a definition source from an MCP one", () => {
@@ -391,7 +402,12 @@ describe("environments", () => {
 
   it("refuses an environment name that is not snake_case", () => {
     const badName = { ...stripe, environments: { Live: { credential: "oxagen:credential/stripe-live" } } };
-    expect(issues(badName)).not.toStrictEqual([]);
+    expect(issues(badName)).toStrictEqual([
+      {
+        path: "environments.Live",
+        message: "an environment name starts with a letter and has at most 32 lowercase letters, digits, and underscores",
+      },
+    ]);
   });
 });
 
@@ -410,7 +426,10 @@ describe("the rest of the file", () => {
   });
 
   it("refuses a definition budget below one token", () => {
-    expect(issues({ ...stripe, exposure: { mode: "direct", definition_budget: 0 } })).not.toStrictEqual([]);
+    expect(issues({ ...stripe, exposure: { mode: "direct", definition_budget: 0 } })).toStrictEqual([
+      { path: "exposure.definition_budget", message: "Number must be greater than or equal to 1" },
+    ]);
+    expect(issues({ ...stripe, exposure: { mode: "direct", definition_budget: 1 } })).toStrictEqual([]);
   });
 });
 

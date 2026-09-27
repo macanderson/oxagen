@@ -40,15 +40,28 @@ export const expiresAtSchema = instantSchema.describe(
   `When the envelope stops being valid: after issued_at, and at most ${ENVELOPE_TTL_MAX_MS / 1000} seconds after it.`,
 );
 
+const ENVELOPE_INSTANTS = ["issued_at", "expires_at"] as const;
+
 /**
  * expires_at is after issued_at and at most ENVELOPE_TTL_MAX_MS later. JSON
  * Schema cannot compare two dates, so only zod checks it.
+ *
+ * zod's datetime check accepts an offset out of range, such as +99:99, and
+ * Date.parse reads it as NaN. A receiver cannot tell when such an envelope
+ * expires, so the check refuses it rather than passing it.
  */
 export const expiryCheck: CustomCheck = {
   json: undefined,
   issues(value) {
+    const unreadable = ENVELOPE_INSTANTS.filter(
+      (field) => instantSchema.safeParse(value[field]).success && Number.isNaN(Date.parse(String(value[field]))),
+    );
+    if (unreadable.length > 0) {
+      return unreadable.map((field) => ({ path: [field], message: `${field} is not an instant a clock can read` }));
+    }
     const issued = Date.parse(String(value.issued_at));
     const expires = Date.parse(String(value.expires_at));
+    // A field instantSchema refused already carries its own issue.
     if (Number.isNaN(issued) || Number.isNaN(expires)) return [];
     if (expires <= issued) {
       return [{ path: ["expires_at"], message: "expires_at must be after issued_at" }];
