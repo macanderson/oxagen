@@ -116,7 +116,7 @@ const BUNDLE_IDENTITY: BundleIdentity = {
  * can publish an earlier commit first.
  */
 function s5Publisher() {
-  const tip = { head: "merge519" };
+  const tip = { head: "0000000000000000000000000000000000000519" };
   const store = memoryVersionStore();
   const deps: PublishDeps = {
     store,
@@ -910,7 +910,7 @@ describe("merge_context_pr", () => {
     expect(out).toMatchObject({
       status: "merged",
       record: { lineageId: LINEAGE, version: 1, path: PATH },
-      mergedCommit: "merge519",
+      mergedCommit: "0000000000000000000000000000000000000519",
       promotionEvent: { seq: 1 },
       bundleVersion: { before: 0, after: 1 },
     });
@@ -923,7 +923,7 @@ describe("merge_context_pr", () => {
       kind: "rule",
       force: "should",
       sharingScope: "workspace",
-      commitSha: "merge519",
+      commitSha: "0000000000000000000000000000000000000519",
       path: PATH,
       version: 1,
     });
@@ -960,12 +960,12 @@ describe("merge_context_pr", () => {
       ctx(),
     );
     expect(listed.records.map((r) => [r.lineageId, r.kind, r.commit])).toEqual([
-      [LINEAGE, "rule", "merge519"],
+      [LINEAGE, "rule", "0000000000000000000000000000000000000519"],
     ]);
     const view = await createGetContextPrHandler(h)({ proposalId: id }, ctx());
     expect(view.status).toBe("merged");
     expect(view.merged).toMatchObject({
-      commit: "merge519",
+      commit: "0000000000000000000000000000000000000519",
       byUserId: REVIEWER,
       promotionEventId: h.store.ledger[0]!.publicId,
       recordId: record.publicId,
@@ -1182,7 +1182,7 @@ describe("merge_context_pr", () => {
       ctx({ userId: REVIEWER }),
     );
     expect(out.status).toBe("merged");
-    expect(out.mergedCommit).toBe("merge519");
+    expect(out.mergedCommit).toBe("0000000000000000000000000000000000000519");
   });
 
   it("refuses base_moved on the merge and on a re-run once the PR is retargeted off the production branch, and publishes nothing", async () => {
@@ -1235,7 +1235,7 @@ describe("merge_context_pr", () => {
 
     const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
     expect(out.status).toBe("merged");
-    expect(out.mergedCommit).toBe("merge519");
+    expect(out.mergedCommit).toBe("0000000000000000000000000000000000000519");
     expect(h.github.merges).toHaveLength(1);
     expect(h.store.ledger).toHaveLength(1);
     expect(h.store.records).toHaveLength(1);
@@ -1317,7 +1317,7 @@ describe("merge_context_pr", () => {
     github.getPullRequest = read;
     const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
     expect(out.status).toBe("merged");
-    expect(out.mergedCommit).toBe("merge519");
+    expect(out.mergedCommit).toBe("0000000000000000000000000000000000000519");
     expect(h.github.merges).toHaveLength(1);
     const mergedAt = h.github.pulls[0]!.mergedAt!;
     expect(h.store.records[0]!.publishedAt).toEqual(mergedAt);
@@ -1725,7 +1725,7 @@ describe("merge_context_pr", () => {
       async (): Promise<PublishResult> => ({
         status: "current",
         version: 41,
-        commit: "merge519",
+        commit: "0000000000000000000000000000000000000519",
       }),
     );
     await createMergeContextPrHandler(h, {
@@ -1739,7 +1739,7 @@ describe("merge_context_pr", () => {
     expect(h.github.merges[0]!.commitMessage).toMatch(/\nOxagen-Version: 7$/);
     expect(h.github.deployments).toEqual([
       {
-        sha: "merge519",
+        sha: "0000000000000000000000000000000000000519",
         ref: "main",
         environment: "steering",
         description: "Steering version 7 from #519",
@@ -1766,7 +1766,7 @@ describe("merge_context_pr", () => {
       expect(h.store.ledger).toHaveLength(1);
       expect(h.github.deployments).toHaveLength(0);
       expect(warn).toHaveBeenCalledWith(
-        expect.objectContaining({ sha: "merge519", pr: 519 }),
+        expect.objectContaining({ sha: "0000000000000000000000000000000000000519", pr: 519 }),
         expect.stringContaining("refused the deployment record"),
       );
     } finally {
@@ -1799,7 +1799,7 @@ describe("merge_context_pr", () => {
       status: "merged",
       headSha: "head3",
     });
-    expect(h.store.records[0]!.commitSha).toBe("merge519");
+    expect(h.store.records[0]!.commitSha).toBe("0000000000000000000000000000000000000519");
   });
 
   it("team mode: an approval does not carry to an updated head whose parents are not the approved head and the production branch tip", async () => {
@@ -2030,9 +2030,9 @@ describe("merge_context_pr", () => {
       await h.github.readFile(REPO, recordAt, stamp.sha),
     );
     expect(s5.publish).toHaveBeenCalledTimes(1);
-    expect(s5.publish).toHaveBeenCalledWith(REPO, "merge519");
+    expect(s5.publish).toHaveBeenCalledWith(REPO, "0000000000000000000000000000000000000519");
     expect(h.github.deployments).toEqual([
-      expect.objectContaining({ sha: "merge519", environment: "steering" }),
+      expect.objectContaining({ sha: "0000000000000000000000000000000000000519", environment: "steering" }),
     ]);
   });
 
@@ -2041,11 +2041,11 @@ describe("merge_context_pr", () => {
     const { id } = await steeringPrPassed(h);
     const s5 = s5Publisher();
     // Version 1 is an earlier commit, published before this merge.
-    s5.tip.head = "seed0";
+    s5.tip.head = "5eed000000000000000000000000000000000000";
     await expect(
-      publishBundle(s5.deps, BUNDLE_IDENTITY, "seed0"),
+      publishBundle(s5.deps, BUNDLE_IDENTITY, "5eed000000000000000000000000000000000000"),
     ).resolves.toMatchObject({ status: "published", version: 1 });
-    s5.tip.head = "merge519";
+    s5.tip.head = "0000000000000000000000000000000000000519";
 
     const out = await createMergeContextPrHandler(h, {
       nextVersion: async () => 99,
@@ -2057,15 +2057,15 @@ describe("merge_context_pr", () => {
     await expect(s5.publish.mock.results[0]!.value).resolves.toMatchObject({
       status: "published",
       version: 2,
-      commit: "merge519",
+      commit: "0000000000000000000000000000000000000519",
     });
     expect(s5.store.published.get(BUNDLE_IDENTITY.repository)).toMatchObject({
       version: 2,
-      commit: "merge519",
+      commit: "0000000000000000000000000000000000000519",
     });
     expect(h.github.deployments).toEqual([
       expect.objectContaining({
-        sha: "merge519",
+        sha: "0000000000000000000000000000000000000519",
         description: "Steering version 2 from #519",
       }),
     ]);
@@ -2078,7 +2078,7 @@ describe("merge_context_pr", () => {
       async (): Promise<PublishResult> => ({
         status: "current",
         version: 6,
-        commit: "merge519",
+        commit: "0000000000000000000000000000000000000519",
       }),
     );
     await expect(
@@ -2118,15 +2118,15 @@ describe("merge_context_pr", () => {
           store: { current: async () => null, highestVersion: async () => 0 },
           publish: async () => ({
             status: "stale",
-            commit: "merge519",
-            head: "merge520",
+            commit: "0000000000000000000000000000000000000519",
+            head: "0000000000000000000000000000000000000520",
           }),
         },
       })({ proposalId: id }, ctx({ userId: REVIEWER }));
       expect(out.status).toBe("merged");
       expect(h.github.deployments).toHaveLength(1);
       expect(warn).toHaveBeenCalledWith(
-        expect.objectContaining({ commit: "merge519", version: 1 }),
+        expect.objectContaining({ commit: "0000000000000000000000000000000000000519", version: 1 }),
         expect.stringContaining("publish() answered stale"),
       );
     } finally {
@@ -2157,7 +2157,7 @@ describe("merge_context_pr", () => {
     // S5's sync publishes the merge commit before the retry, so the store's
     // highest version is now the one in the trailer.
     await expect(
-      publishBundle(s5.deps, BUNDLE_IDENTITY, "merge519"),
+      publishBundle(s5.deps, BUNDLE_IDENTITY, "0000000000000000000000000000000000000519"),
     ).resolves.toMatchObject({ status: "published", version: 1 });
 
     const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
@@ -2167,11 +2167,11 @@ describe("merge_context_pr", () => {
     expect(s5.publish).not.toHaveBeenCalled();
     expect(s5.store.published.get(BUNDLE_IDENTITY.repository)).toMatchObject({
       version: 1,
-      commit: "merge519",
+      commit: "0000000000000000000000000000000000000519",
     });
     expect(h.github.deployments).toEqual([
       expect.objectContaining({
-        sha: "merge519",
+        sha: "0000000000000000000000000000000000000519",
         description: "Steering version 1 from #519",
       }),
     ]);
@@ -2197,7 +2197,7 @@ describe("merge_context_pr", () => {
       expect(h.store.proposals[0]!.status).toBe("merged");
       expect(h.github.deployments).toHaveLength(1);
       expect(warn).toHaveBeenCalledWith(
-        expect.objectContaining({ commit: "merge519" }),
+        expect.objectContaining({ commit: "0000000000000000000000000000000000000519" }),
         expect.stringContaining("publish() failed"),
       );
     } finally {
