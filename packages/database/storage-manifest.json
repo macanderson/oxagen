@@ -4206,7 +4206,7 @@
       "writes": []
     }
   ],
-  "contentHash": "5baa115526a53fcf695415a147340de9f39cfdbd0a506d9d1a3423e39cab8e2a",
+  "contentHash": "31d3a9659c37790d5aaf2af5636d0b8c6557e010f35fac78ae6a53dcd7c4208c",
   "domains": [
     {
       "name": "agent",
@@ -4378,6 +4378,8 @@
         "postgres:cost.no_progress_hits",
         "postgres:cost.price_book_initializations",
         "postgres:cost.price_entries",
+        "postgres:cost.run_pr_outcomes",
+        "postgres:cost.run_pr_reverts",
         "postgres:cost.run_totals"
       ]
     },
@@ -14827,6 +14829,290 @@
       "id": "postgres:cost.price_entries",
       "name": "price_entries",
       "rls": "org_or_global",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "run_source",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pr_key",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "provider",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "repository",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "number",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "url",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pr_state",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "pr_state_read_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "forge_read_attempted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "closed_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "merged",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "merged_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "merge_commit_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "base_ref",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "head_ref",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "head_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "head_branch_exists",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "head_branch_read_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "ci_state",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "ci_read_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "reverted",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "boolean"
+        },
+        {
+          "name": "reverted_by",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "reverted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "reverted_read_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "terminal_reason",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "terminal_reason_read_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "source_updated_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "cost",
+      "id": "postgres:cost.run_pr_outcomes",
+      "name": "run_pr_outcomes",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "repository",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "number",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "merge_commit_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "branch",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "reverted_by",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "reverted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "read_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "cost",
+      "id": "postgres:cost.run_pr_reverts",
+      "name": "run_pr_reverts",
+      "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
     },
