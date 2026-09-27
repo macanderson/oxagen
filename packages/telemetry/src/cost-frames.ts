@@ -57,6 +57,9 @@
 import {
   LLM_CALL_DUPLICATE_OF_ATTR,
   LLM_CALL_TOKEN_SOURCES,
+  SYSTEM_CONTEXT_PARTS_MAX,
+  systemContextPartSchema,
+  type SystemContextPart,
 } from "@oxagen/tacho";
 import { clickhouse } from "./clickhouse";
 
@@ -100,6 +103,42 @@ export interface ModelCallFrameRow {
   toolDefinitionTokens: number | null;
   contextFrameTokens: number | null;
   steeringTokens: number | null;
+  /**
+   * The digest over the ordered parts of the call's system context
+   * (`system_context_digest`). Absent on a ledger frame and on a wrapped frame
+   * that carried none.
+   */
+  systemContextDigest?: string;
+  /**
+   * The parts that digest covers (`system_context_parts`), in request order.
+   * Absent when the frame listed none, which is usual: the recorder lists them
+   * once per digest, and a reader takes a frame's parts from the latest frame
+   * at or before it whose digest matches and whose list is set. A list that
+   * does not parse is absent too.
+   */
+  systemContextParts?: readonly SystemContextPart[];
+}
+
+const SYSTEM_CONTEXT_PARTS = systemContextPartSchema
+  .array()
+  .max(SYSTEM_CONTEXT_PARTS_MAX);
+
+/**
+ * A frame's system context parts from the column's JSON text, or undefined
+ * when the column is empty or the text is not a valid list.
+ */
+export function parseSystemContextParts(
+  text: string | null | undefined,
+): readonly SystemContextPart[] | undefined {
+  if (text === null || text === undefined || text === "") return undefined;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  const parsed = SYSTEM_CONTEXT_PARTS.safeParse(raw);
+  return parsed.success ? parsed.data : undefined;
 }
 
 /** A count ClickHouse returns for a Nullable column, or null when absent. */
@@ -421,14 +460,16 @@ export async function readModelCallFrames(args: {
         toString(c.session_uuid) AS session_uuid,
         c.tool_definition_tokens AS tool_definition_tokens,
         c.context_frame_tokens AS context_frame_tokens,
-        c.steering_tokens AS steering_tokens
+        c.steering_tokens AS steering_tokens,
+        c.system_context_digest AS system_context_digest,
+        c.system_context_parts AS system_context_parts
       FROM (
         SELECT
           ts, seq, session_uuid, model, provider, input_tokens, output_tokens,
           cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens,
           thinking_tokens, web_search_requests, cost_usd_micros, request_id,
           message_id, tool_definition_tokens, context_frame_tokens,
-          steering_tokens
+          steering_tokens, system_context_digest, system_context_parts
         FROM tacho_events FINAL
         WHERE org_id = {orgId:UUID}
           AND workspace_id = {workspaceId:UUID}
@@ -499,26 +540,35 @@ export async function readModelCallFrames(args: {
     tool_definition_tokens?: string | number | null;
     context_frame_tokens?: string | number | null;
     steering_tokens?: string | number | null;
+    system_context_digest?: string | null;
+    system_context_parts?: string | null;
   };
   const rows = (await result.json()) as Row[];
-  return rows.map((r) => ({
-    at: r.at,
-    model: r.model,
-    provider: r.provider === "" ? null : r.provider,
-    inputUncached: Number(r.input_uncached),
-    cacheRead: Number(r.cache_read),
-    cacheWrite5m: Number(r.cache_write_5m),
-    cacheWrite1h: Number(r.cache_write_1h),
-    output: Number(r.output),
-    reasoning: Number(r.reasoning),
-    serverToolRequests: Number(r.server_tool_request),
-    reportedCostMicros: r.cost_micros,
-    basis: "client_attested",
-    sessionUuid: r.session_uuid,
-    toolDefinitionTokens: nullableCount(r.tool_definition_tokens),
-    contextFrameTokens: nullableCount(r.context_frame_tokens),
-    steeringTokens: nullableCount(r.steering_tokens),
-  }));
+  return rows.map((r): ModelCallFrameRow => {
+    const parts = parseSystemContextParts(r.system_context_parts);
+    return {
+      at: r.at,
+      model: r.model,
+      provider: r.provider === "" ? null : r.provider,
+      inputUncached: Number(r.input_uncached),
+      cacheRead: Number(r.cache_read),
+      cacheWrite5m: Number(r.cache_write_5m),
+      cacheWrite1h: Number(r.cache_write_1h),
+      output: Number(r.output),
+      reasoning: Number(r.reasoning),
+      serverToolRequests: Number(r.server_tool_request),
+      reportedCostMicros: r.cost_micros,
+      basis: "client_attested",
+      sessionUuid: r.session_uuid,
+      toolDefinitionTokens: nullableCount(r.tool_definition_tokens),
+      contextFrameTokens: nullableCount(r.context_frame_tokens),
+      steeringTokens: nullableCount(r.steering_tokens),
+      ...(r.system_context_digest
+        ? { systemContextDigest: r.system_context_digest }
+        : {}),
+      ...(parts === undefined ? {} : { systemContextParts: parts }),
+    };
+  });
 }
 
 /**
