@@ -102,7 +102,7 @@ export const mcpCredentials = mcpSchema.table(
     }),
     // The <name> in `oxagen:credential/<name>`, the reference a steering
     // server folder uses. Unique in a workspace. A path that inserts a row
-    // without one gets credential-<12 hex digits> (migration 20260927030000).
+    // without one gets credential-<12 hex digits> (migration 20260927164200).
     name: text("name")
       .notNull()
       .default(
