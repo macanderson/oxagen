@@ -84,6 +84,34 @@ export function dependentRequired(
   };
 }
 
+/**
+ * Each of `dependents` is allowed only when `field` is set. `reason` follows
+ * the message's colon. JSON Schema says it with `dependentRequired`, from
+ * each dependent to `field`.
+ */
+export function allowedOnlyWith(
+  field: string,
+  dependents: readonly string[],
+  reason: string,
+): CustomCheck {
+  return {
+    issues: (value) =>
+      value[field] !== undefined
+        ? []
+        : dependents
+            .filter((dependent) => value[dependent] !== undefined)
+            .map((dependent) => ({
+              path: [dependent],
+              message: `${dependent} is not allowed without ${field}: ${reason}`,
+            })),
+    json: {
+      dependentRequired: Object.fromEntries(
+        dependents.map((dependent) => [dependent, [field]]),
+      ),
+    },
+  };
+}
+
 /** At most one of `fields` is set. */
 export function atMostOne(fields: readonly string[]): CustomCheck {
   const pairs: [string, string][] = [];

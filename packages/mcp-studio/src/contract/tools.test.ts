@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { toJsonSchema } from "@oxagen/oxagen/steering-repo/json-schema";
 import { manifestShapingSchema } from "./manifest";
-import { MAX_RESULT_BYTES_LIMIT, mcpToolsSchema, toolsEntrySchema } from "./tools";
+import { MAX_DEADLINE_MS, MAX_ITEMS_LIMIT, MAX_RESULT_BYTES_LIMIT, mcpToolsSchema, toolsEntrySchema } from "./tools";
 
 interface Issue {
   path: string;
@@ -292,5 +292,29 @@ describe("fixed and defaults", () => {
       { path: "defaults.limit", message: finite },
     ]);
     expect(issues(manifestShapingSchema, { ...shaping, fixed: { amount: 500 }, defaults: {} })).toStrictEqual([]);
+  });
+});
+
+describe("the manifest's shaping bounds", () => {
+  const shaping = {
+    hide: [],
+    fixed: {},
+    defaults: {},
+    rename: {},
+    select: [],
+    redact: [],
+    max_result_bytes: 65_536,
+    deadline_ms: 30_000,
+    max_items: 100,
+  };
+
+  it.each([
+    ["max_result_bytes", MAX_RESULT_BYTES_LIMIT],
+    ["deadline_ms", MAX_DEADLINE_MS],
+    ["max_items", MAX_ITEMS_LIMIT],
+  ])("holds %s to the bound tools.toml sets", (field, max) => {
+    expect(issues(manifestShapingSchema, { ...shaping, [field]: max })).toStrictEqual([]);
+    const message = `Number must be less than or equal to ${max}`;
+    expect(issues(manifestShapingSchema, { ...shaping, [field]: max + 1 })).toStrictEqual([{ path: field, message }]);
   });
 });

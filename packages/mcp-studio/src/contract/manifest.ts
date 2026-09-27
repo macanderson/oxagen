@@ -33,7 +33,7 @@ import {
   toolKeySchema,
 } from "./primitives";
 import { serverSourceSchema } from "./server";
-import { toolsMeasureSchema } from "./tools";
+import { MAX_DEADLINE_MS, MAX_ITEMS_LIMIT, MAX_RESULT_BYTES_LIMIT, toolsMeasureSchema } from "./tools";
 
 /** The three tools a server in search mode exposes, after its prefix. */
 export const SEARCH_MODE_TOOLS = ["search", "describe", "call"] as const;
@@ -85,10 +85,15 @@ export const manifestShapingSchema = z
     rename: z.record(inputNameSchema, z.string().min(1)).describe("Upstream name to the name the agent sees."),
     select: z.array(resultPathSchema),
     redact: z.array(resultPathSchema),
-    max_result_bytes: z.number().int().min(1),
-    deadline_ms: z.number().int().min(1).describe("Every send has one. 30,000 unless tools.toml sets deadline_ms."),
+    max_result_bytes: z.number().int().min(1).max(MAX_RESULT_BYTES_LIMIT),
+    deadline_ms: z
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_DEADLINE_MS)
+      .describe("Every send has one. 30,000 unless tools.toml sets deadline_ms."),
     paginate: z.enum(["cursor", "page", "offset", "connection"]).optional(),
-    max_items: z.number().int().min(1).optional(),
+    max_items: z.number().int().min(1).max(MAX_ITEMS_LIMIT).optional(),
     idempotency_header: headerNameSchema.optional(),
   })
   .strict();
@@ -112,9 +117,9 @@ export const manifestToolSchema = z
 export type ManifestTool = z.output<typeof manifestToolSchema>;
 
 /**
- * The route a call takes: server.toml's network, or `local` for a local
- * server, which has no [environments] table and runs on an enrolled machine
- * through the local gateway.
+ * The route a call takes: server.toml's network, or `local` for a server the
+ * local gateway runs on an enrolled machine (a local source, or a registry
+ * source with machines), which has no [environments] table.
  */
 export const manifestNetworkSchema = z
   .string()
@@ -123,13 +128,13 @@ export const manifestNetworkSchema = z
     "a network is cloud, local, or relay:<name>",
   );
 
-/** One environment with every default resolved. A local server has one, `default`, on the local network. */
+/** One environment with every default resolved. A server the local gateway runs has one, `default`, on the local network. */
 export const manifestEnvironmentSchema = z
   .object({
     sandbox: z
       .boolean()
       .describe("True for the one environment every agent's calls go to: the one marked sandbox, or the only one."),
-    url: httpUrlSchema.optional().describe("Absent for a local server."),
+    url: httpUrlSchema.optional().describe("Absent for a server the local gateway runs."),
     network: manifestNetworkSchema,
     credential: credentialRefSchema.optional(),
   })
@@ -157,7 +162,7 @@ export const manifestServerSchema = z
       .describe("As tools.lock.json pins it."),
     auth: manifestAuthSchema
       .nullable()
-      .describe("Null when the mode is none or the server is local. Each environment names its credential."),
+      .describe("Null when the mode is none or the local gateway runs the server. Each environment names its credential."),
     environments: z.record(environmentNameSchema, manifestEnvironmentSchema),
     exposure: z
       .object({ mode: z.enum(["direct", "search"]), definition_budget: z.number().int().min(1) })

@@ -5,9 +5,13 @@
 // model, so the lock, compile, and the fixtures agree on it.
 import type { LockedMcpTool, McpTool } from "../contract/mcp-tool";
 import { lockedMcpTool } from "../contract/mcp-tool";
-import type { UpstreamTool, UpstreamToolOf } from "./upstream-tool";
+import { cutDescription, type UpstreamTool, type UpstreamToolOf } from "./upstream-tool";
 
-/** One tools/list entry as the operation model holds it. `_meta` and unknown fields stay out. */
+/**
+ * One tools/list entry as the operation model holds it. `_meta` and unknown
+ * fields stay out, and a description past 1,024 characters is cut, so a
+ * verbose server's text adds at most 1,024 characters per tool to the lock.
+ */
 export function upstreamFromMcpTool(tool: McpTool): UpstreamToolOf<"mcp"> {
   const { name, title, description, inputSchema, outputSchema, annotations } = lockedMcpTool(tool);
   const upstream: UpstreamToolOf<"mcp"> = {
@@ -16,7 +20,7 @@ export function upstreamFromMcpTool(tool: McpTool): UpstreamToolOf<"mcp"> {
     request: { kind: "mcp", tool: name },
   };
   if (title !== undefined) upstream.title = title;
-  if (description !== undefined) upstream.description = description;
+  if (description !== undefined) upstream.description = cutDescription(description);
   if (outputSchema !== undefined) upstream.outputSchema = outputSchema;
   if (annotations !== undefined) upstream.annotations = annotations;
   return upstream;
