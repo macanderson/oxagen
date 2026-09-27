@@ -1,5 +1,6 @@
 import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
+import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
 import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
 import { setSteeringRepoProvisionRunner } from "@oxagen/inngest-functions/steering-repo-provision-runner";
@@ -95,6 +96,41 @@ registerHandlersOnce("@oxagen/handlers", () => {
     );
     return out.outcome;
   });
+  // The memory jobs (ADR-206) read runs and write the steering repo through
+  // this package, so their runner is installed here and loaded on first use.
+  // Each step runs in its workspace's tenant scope. Listing the workspaces
+  // with memory work reads across tenants, as the daily sweep must.
+  const memory = async () => {
+    const [{ runInTenantScope }, runner] = await Promise.all([
+      import("@oxagen/tenancy"),
+      import("./memory/runner"),
+    ]);
+    return { runInTenantScope, runner };
+  };
+  setMemoryRunner({
+    async capture(scope, runPublicId) {
+      const { runInTenantScope, runner } = await memory();
+      return runInTenantScope(scope, () =>
+        runner.captureMemories(runner.defaultMemoryRunnerDeps(), scope, runPublicId),
+      );
+    },
+    async digest(scope, runPublicId) {
+      const { runInTenantScope, runner } = await memory();
+      return runInTenantScope(scope, () =>
+        runner.digestRun(runner.defaultMemoryRunnerDeps(), scope, runPublicId),
+      );
+    },
+    async curate(scope, now) {
+      const { runInTenantScope, runner } = await memory();
+      return runInTenantScope(scope, () =>
+        runner.curateMemories(runner.defaultMemoryRunnerDeps(), scope, now),
+      );
+    },
+    async workspaces() {
+      const { postgresMemoryStore } = await import("./memory/store");
+      return postgresMemoryStore.listCurateWorkspaces();
+    },
+  });
   // The pull request backfill (ADR-192) lives in @oxagen/inngest-functions
   // for the same reason, and is loaded on its first run.
   setPullRequestBackfillRunner(async (request) =>
@@ -171,6 +207,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
     async () =>
       (await import("./agent.memory_policy.write"))
         .agentMemoryPolicyWriteHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "remember_lesson",
+    async () =>
+      (await import("./agent.memory.lesson.remember"))
+        .agentMemoryLessonRememberHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
+    "record_reflection",
+    async () =>
+      (await import("./agent.memory.reflection.record"))
+        .agentMemoryReflectionRecordHandler as CapabilityHandlerFn,
   );
   registerHandler(
     "create_api_key",
