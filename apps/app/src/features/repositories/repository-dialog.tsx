@@ -199,7 +199,7 @@ function Body({
   mainFullName: string | null;
   row: RepositoryRow;
   failure: string | null;
-  /** What the link proposed; null until a link answers. */
+  /** What the link proposed. It is null until a link answers. */
   linked: LinkedRepository | null;
   onChanged: () => void;
 }) {
