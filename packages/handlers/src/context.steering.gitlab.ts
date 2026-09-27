@@ -277,12 +277,43 @@ function describeStatus(title: string, summary: string): string {
     : `${text.slice(0, STATUS_DESCRIPTION_LIMIT - 1)}…`;
 }
 
+/** One diff version of a merge request: the head it showed, and when. */
+interface DiffVersion {
+  sha: string;
+  at: number;
+}
+
 /**
- * Refuse a merge when the project keeps approvals across a push. GitLab does
- * not say which head a reviewer approved, so an approval proves a review of
- * the current head only when "Reset approvals on push" is on. A setting that
- * is off, or that GitLab will not read, refuses with
- * `approvals_not_head_bound`. A rejected token still escapes as a 401, so the
+ * A merge request's diff versions, newest first. GitLab records a version
+ * each time the source branch moves, stamped by its own clock. A version with
+ * no head or no readable time is left out.
+ */
+async function diffVersions(
+  rest: GitLabRest,
+  projectPath: string,
+  iid: number,
+): Promise<DiffVersion[]> {
+  const out = await rest.request<
+    { head_commit_sha?: string | null; created_at?: string | null }[]
+  >("GET", `${projectPath}/merge_requests/${iid}/versions?per_page=100`);
+  return (Array.isArray(out.data) ? out.data : [])
+    .flatMap((v) => {
+      const at = Date.parse(v.created_at ?? "");
+      return v.head_commit_sha && !Number.isNaN(at)
+        ? [{ sha: v.head_commit_sha, at }]
+        : [];
+    })
+    .sort((a, b) => b.at - a.at);
+}
+
+/**
+ * Refuse a merge when the project keeps approvals across a push. The merge
+ * places each approval on the diff version it followed (`listApprovals`), and
+ * this setting is a second guard: a project that keeps every approval on
+ * every push is refused with `approvals_not_head_bound`, and so is one whose
+ * setting GitLab will not show (403, or 404 on a tier without it). Any other
+ * failure, such as a 429 or a 5xx, escapes, so the caller reports GitLab's
+ * error and a retry can pass. A rejected token escapes as a 401, so the
  * caller names the token.
  */
 async function requireApprovalsResetOnPush(
@@ -297,7 +328,7 @@ async function requireApprovalsResetOnPush(
     }>("GET", `${projectPath}/approvals`);
     reset = out.data.reset_approvals_on_push;
   } catch (err) {
-    if (isStatus(err, 401)) throw err;
+    if (!isStatus(err, 403) && !isStatus(err, 404)) throw err;
     reset = null;
   }
   if (reset === true) return;
@@ -856,17 +887,18 @@ export function createSteeringGitLab(
 
     listApprovals(repo, number) {
       return callRest(repo, async (rest, path, gl, project) => {
-        // GitLab does not say which head a reviewer approved. An approval
-        // binds to the current head only when the project drops approvals on
-        // every push, so the merge reads that setting first and refuses
-        // without it.
+        // A project that keeps every approval on every push is refused first.
         await requireApprovalsResetOnPush(rest, path, repo.fullName);
         const out = await rest.request<{
-          approved_by?: { user: { id: number; username: string } | null }[];
+          approved_by?: {
+            user: { id: number; username: string } | null;
+            approved_at?: string | null;
+          }[];
         }>("GET", `${path}/merge_requests/${number}/approvals`);
-        const users = (out.data.approved_by ?? []).flatMap((a) =>
-          a.user ? [a.user] : [],
+        const approvals = (out.data.approved_by ?? []).flatMap((a) =>
+          a.user ? [{ user: a.user, at: Date.parse(a.approved_at ?? "") }] : [],
         );
+        if (approvals.length === 0) return [];
         // The head is read after the approvals. A push between the two reads
         // makes a head the merge queue never produced, so no approval of it
         // counts.
@@ -877,11 +909,30 @@ export function createSteeringGitLab(
             reason: "gitlab_refused",
             message: `GitLab did not report a head commit for !${number}. Merge again once GitLab shows the merge request's commits.`,
           });
+        // GitLab does not say which head a reviewer approved, and it keeps
+        // approvals across a push that leaves the diff's patch unchanged, as
+        // the queue's own rebase does. So each approval is placed on the
+        // newest diff version GitLab recorded strictly before it. A version
+        // recorded at the same instant does not count as seen. An approval
+        // with no time, or older than every version, is dropped. None is
+        // given a null head, because the merge reads null as "any head".
+        const versions = await diffVersions(rest, path, number);
+        if (!versions.some((v) => v.sha === head))
+          throw new HandlerError({
+            code: "conflict",
+            reason: "gitlab_refused",
+            message: `GitLab has not recorded ${head} as a version of !${number} yet, so no approval can be placed on it. Merge again in a minute.`,
+          });
+        const placed = approvals.flatMap(({ user, at }) => {
+          // A missing time parses to NaN, which no version precedes.
+          const seen = versions.find((v) => v.at < at);
+          return seen ? [{ user, commitSha: seen.sha }] : [];
+        });
         return Promise.all(
-          users.map(async (user) => ({
+          placed.map(async ({ user, commitSha }) => ({
             userId: await linkAccount(GITLAB_PROVIDER, String(user.id)),
             login: user.username,
-            commitSha: head,
+            commitSha,
           })),
         );
       });

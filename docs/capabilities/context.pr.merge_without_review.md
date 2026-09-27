@@ -25,7 +25,7 @@ A holder then runs the `merge_context_pr` handler. Every other refusal still app
 - The governance mode must let the caller merge. In `team` mode that is an org Owner or Admin, or a workspace Owner, other than the author. A workspace Member who holds this capability is still refused `org_role_required`.
 - The repository must be healthy.
 - The head must be the commit the checks ran on.
-- On GitLab, the project must reset approvals on push. Otherwise the merge is refused `approvals_not_head_bound`, holders included.
+- On GitLab, the project must reset approvals on push. Otherwise the merge is refused `approvals_not_head_bound`, holders included. An approval counts for the newest diff version GitLab recorded before it, as [`merge_context_pr`](context.pr.merge.md) describes.
 
 An approval that already stands at the head is recorded as that approval. Without one, the `Oxagen-Approved-By` trailer reads `none; merged without review by <user id>`, and in a steering repo the promotion line records `without_review: true`. The `steering.published` audit event carries this capability's name. The trailer and the promotion line, not the event, say whether anybody reviewed the change.
 

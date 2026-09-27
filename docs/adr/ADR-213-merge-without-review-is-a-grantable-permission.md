@@ -72,8 +72,13 @@ it would make every member a holder on most plans.
 - Regulated mode does not exclude the bypass. A holder merges without an
   approval there too, and the trailer names them.
 - On a GitLab project that keeps approvals after a push, holders and owners
-  are refused, because no approval can be bound to the head and the merge
-  cannot tell whether it is bypassing one.
+  are refused, because the merge cannot tell whether it is bypassing an
+  approval.
+- GitLab does not say which commit an approval covers. The merge counts an
+  approval for the newest diff version GitLab recorded before it. GitLab
+  keeps approvals across a rebase, so after the merge queue rebases a
+  GitLab branch the reviewer approves again. A holder who merges then
+  merges without review, and the trailer says so.
 - An API key carries no user and is refused `no_principal`.
 
 ## Alternatives rejected

@@ -50,15 +50,17 @@ A project that moves to another group keeps working, because Oxagen addresses it
 
 ## Approvals
 
-In `team` and `regulated` mode, a Context PR merges only after a workspace member other than the author approves it. GitLab does not record which commit a reviewer approved, so Oxagen relies on the project's **Reset approvals on push** setting. With the setting on, GitLab drops every approval when someone pushes to the merge request, so each approval left covers the current commit.
+In `team` and `regulated` mode, a Context PR merges only after a workspace member other than the author approves it. GitLab does not record which commit a reviewer approved. Oxagen compares when each approval was given with when GitLab recorded each version of the merge request's diff. An approval counts for the newest version GitLab recorded before it.
 
-Oxagen turns the setting on when it provisions a steering repo. The setting needs GitLab Premium. To turn it on yourself:
+GitLab keeps an approval across a rebase, because a rebase leaves the diff unchanged. So when Oxagen rebases the branch onto a newer main before it merges, an approval given before the rebase does not count. The reviewer removes the approval and approves again. The same holds for an approval given in the moment after a push and before GitLab records the push as a new version. When GitLab has not yet recorded the latest push, Oxagen refuses the merge with `gitlab_refused`. Merge again in a minute.
+
+Oxagen also reads the project's **Reset approvals on push** setting. With the setting on, GitLab drops every approval when someone pushes new changes to the merge request. Oxagen turns the setting on when it provisions a steering repo. The setting needs GitLab Premium. To turn it on yourself:
 
 1. On gitlab.com, open the project and go to **Settings → Merge requests → Approval settings**.
 2. Select **Remove all approvals when commits are added to the source branch**, which is the label GitLab gives the setting.
 3. Save the changes.
 
-When the setting is off, or GitLab does not say, Oxagen refuses the merge with `approvals_not_head_bound` and merges nothing. It refuses an owner's merge too.
+When the setting is off, or GitLab answers 403 or 404 when Oxagen reads it, Oxagen refuses the merge with `approvals_not_head_bound` and merges nothing. It refuses an owner's merge too. When GitLab fails the read any other way, Oxagen refuses with `gitlab_refused` and GitLab's error.
 
 ## When the token stops working
 

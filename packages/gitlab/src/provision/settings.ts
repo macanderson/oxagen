@@ -2,8 +2,9 @@
 //
 // The baseline protects main so no one pushes and only the Oxagen bot merges.
 // It requires squash merges and a passing pipeline, and it turns CI/CD off.
-// It also resets approvals on push, so an approval always approves the head
-// it was given on.
+// It also resets approvals on push, so GitLab drops every approval when new
+// commits change the diff. A rebase keeps them, so the merge also dates each
+// approval against the merge request's diff versions.
 // Apply is a diff. It reads the project, writes only what differs, reads
 // again, and returns what still differs.
 //
