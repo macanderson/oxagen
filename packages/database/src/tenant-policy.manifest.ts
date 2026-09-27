@@ -390,4 +390,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // what keeps one organisation's evidence out of another's tier.
   { table: "tacho.gateway_chains", policyClass: "standard" },
   { table: "tacho.contained_launches", policyClass: "standard" },
+  // Machine groups (mcp-studio-spec, Local servers, Machines): which enrolled
+  // hosts may run a local server. Read by the cloud gateway before it signs
+  // a local call envelope.
+  { table: "tacho.machine_group_members", policyClass: "standard" },
 ];

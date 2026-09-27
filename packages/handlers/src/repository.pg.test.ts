@@ -37,6 +37,8 @@ import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, inArray } from "drizzle-orm";
 import { repositoryMainBind } from "@oxagen/oxagen/contracts/repository.main.bind";
 import { readGitHubConnection } from "./context.steering.github";
+import { readMainRepositoryProvider } from "./context.steering.host";
+import { readMainBoundRepository } from "./context.steering.published.get";
 import { GITHUB_PROVIDER } from "./repository.github-connection";
 import { createRepositoryLinkHandler } from "./repository.link";
 import { repositoryListHandler } from "./repository.list";
@@ -638,6 +640,94 @@ describe.skipIf(!enabled)("workspace repositories against Postgres", () => {
     expect(await headsOf(coreWorkspaceId)).toEqual([
       { role: "linked", providerRepositoryId: repoId("acme", "shared") },
       { role: "main", providerRepositoryId: repoId("acme", "orphan") },
+    ]);
+  });
+
+  it("reads a head with the steering role as the workspace's steering repository, and a re-bind keeps the role", async () => {
+    // Lane S1 writes a provisioned steering repository's head with role
+    // `steering`. Until #4517 moves every `main` head to `steering`, both
+    // roles steer, and every reader has to answer the same repository for
+    // either. The update below stands in for S1's write.
+    const steers = await createWithMain("steer-ws", "steers");
+    const steersId = steers.id;
+    await withSystemDb((tx) =>
+      tx
+        .update(schema.repositoryBindingHeads)
+        .set({ role: "steering" })
+        .where(eq(schema.repositoryBindingHeads.workspaceId, steersId)),
+    );
+    expect(await headsOf(steersId)).toEqual([
+      { role: "steering", providerRepositoryId: repoId("acme", "steers") },
+    ]);
+
+    // ── every reader answers the steering head ───────────────────────────
+    const main = await inWorkspace(steersId, () =>
+      getMainRepository({}, ctx(steersId)),
+    );
+    expect(main.repository).toMatchObject({
+      bindingId: steers.main.bindingId,
+      fullName: "acme/steers",
+    });
+    await expect(
+      inWorkspace(steersId, () =>
+        readGitHubConnection({ orgId, workspaceId: steersId }),
+      ),
+    ).resolves.toMatchObject({
+      source: "binding",
+      approvedFullName: "acme/steers",
+    });
+    await expect(
+      inWorkspace(steersId, () =>
+        readMainRepositoryProvider({ orgId, workspaceId: steersId }),
+      ),
+    ).resolves.toBe("github");
+    await expect(
+      inWorkspace(steersId, () =>
+        readMainBoundRepository({ orgId, workspaceId: steersId }),
+      ),
+    ).resolves.toMatchObject({
+      bindingId: steers.main.bindingId,
+      fullName: "acme/steers",
+      role: "main",
+    });
+    // The list contract names the steering head `main`.
+    const listed = await list(steersId);
+    expect(
+      listed.repositories.map((r) => [r.role, r.fullName]),
+    ).toEqual([["main", "acme/steers"]]);
+
+    // ── link refuses it here and elsewhere, and links beside it ──────────
+    await expect(refusal(link(steersId, "steers"))).resolves.toEqual({
+      code: "conflict",
+      reason: "main_repo",
+    });
+    const other = await createWithMain("steer-other", "steers-other");
+    await expect(refusal(link(other.id, "steers"))).resolves.toEqual({
+      code: "conflict",
+      reason: "main_repo_claimed",
+    });
+    const side = await link(steersId, "steers-side");
+    expect(side.role).toBe("linked");
+    expect(await headsOf(steersId)).toEqual([
+      { role: "linked", providerRepositoryId: repoId("acme", "steers-side") },
+      { role: "steering", providerRepositoryId: repoId("acme", "steers") },
+    ]);
+
+    // ── unlink refuses it, and a re-bind neither demotes nor duplicates it ──
+    await expect(
+      refusal(unlink(steersId, steers.main.bindingId)),
+    ).resolves.toEqual({
+      code: "conflict",
+      reason: "main_repo_unlink_refused",
+    });
+    const rebound = await bind(steersId, "steers");
+    expect(rebound.bindingId).toBe(steers.main.bindingId);
+    expect(
+      (await headsOf(steersId)).filter(
+        (h) => h.providerRepositoryId === repoId("acme", "steers"),
+      ),
+    ).toEqual([
+      { role: "steering", providerRepositoryId: repoId("acme", "steers") },
     ]);
   });
 

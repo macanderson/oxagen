@@ -2,7 +2,9 @@
 // request itself (ADR-184). A delivery that names the wrong branch syncs the
 // wrong thing or nothing at all, and a request that drops its event leaves a
 // merged record out of force until the five-minute sweep finds it.
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { logger } from "./logger";
 import {
   githubDeliveryBranch,
@@ -15,8 +17,11 @@ import {
 vi.mock("./logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+// Every predicate the shared-plane reads pass to `where`, in call order.
+const whereCalls = vi.hoisted(() => [] as unknown[]);
 // The shared plane holds no binding head for these tests: every chain the
-// routing builds resolves to no rows.
+// routing builds resolves to no rows. Each `where` predicate is kept, so a
+// test can compile it and read which head roles it asks for.
 vi.mock("@oxagen/database", async (original) => {
   const real = await original<typeof import("@oxagen/database")>();
   const empty = (): unknown =>
@@ -26,7 +31,10 @@ vi.mock("@oxagen/database", async (original) => {
         get: (_t, key) =>
           key === "then"
             ? (resolve: (rows: unknown[]) => void) => resolve([])
-            : () => empty(),
+            : (...args: unknown[]) => {
+                if (key === "where") whereCalls.push(args[0]);
+                return empty();
+              },
       },
     );
   return {
@@ -269,5 +277,47 @@ describe("githubSyncTargets on a dedicated plane", () => {
       },
     );
     expect(targets).toEqual([]);
+  });
+});
+
+// The routing finds a workspace through its steering head. Lane S1 writes a
+// provisioned steering repository's head with role `steering`, and a head
+// bound through `bind_main_repository` still carries `main`, so both shared
+// reads must ask for both roles: the bound read, and the legacy read's check
+// that a workspace holds no steering head of its own.
+describe("githubSyncTargets head roles", () => {
+  beforeEach(() => {
+    whereCalls.length = 0;
+  });
+
+  it("asks for every steering head role on the bound read and the legacy read", async () => {
+    await githubSyncTargets(
+      {
+        eventName: "push",
+        body: {
+          ref: "refs/heads/main",
+          repository: {
+            id: 4242,
+            full_name: "acme/platform",
+            default_branch: "main",
+          },
+        },
+        installationId: "555",
+      },
+      { dedicatedScopes: async () => [], mainRefOnPlane: async () => null },
+    );
+    expect(whereCalls).toHaveLength(2);
+    const dialect = new PgDialect();
+    const [bound, legacy] = whereCalls.map((cond) =>
+      dialect.sqlToQuery(cond as SQL),
+    );
+    expect(bound?.sql).toMatch(/"role" in \(\$\d+, \$\d+\)/);
+    expect(bound?.params).toEqual(
+      expect.arrayContaining(["main", "steering"]),
+    );
+    expect(legacy?.sql).toMatch(/h\.role in \(\$\d+, \$\d+\)/);
+    expect(legacy?.params).toEqual(
+      expect.arrayContaining(["main", "steering"]),
+    );
   });
 });

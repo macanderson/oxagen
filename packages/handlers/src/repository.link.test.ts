@@ -64,8 +64,10 @@ vi.mock("@oxagen/iam/org-role", () => ({
 }));
 
 // The head writer has its own suite (repository.binding-write.test.ts); here
-// it is a seam, so the test can say WHAT the handler asked it to write.
-vi.mock("./repository.binding-write", () => ({
+// it is a seam, so the test can say WHAT the handler asked it to write. The
+// rest of the module, the workspace lock among it, stays real.
+vi.mock("./repository.binding-write", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./repository.binding-write")>()),
   writeRepositoryHead: mocks.writeRepositoryHead,
 }));
 
@@ -304,6 +306,29 @@ describe("link_repository", () => {
     });
     expect(state.locks).toBe(1);
     expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
+  });
+
+  it("refuses this workspace's own steering repository with main_repo, the same as a main one", async () => {
+    wire({
+      connections: [CONNECTION],
+      heads: [{ role: "steering", providerRepositoryId: "9002" }],
+    });
+    await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
+      code: "conflict",
+      reason: "main_repo",
+    });
+    expect(mocks.writeRepositoryHead).not.toHaveBeenCalled();
+  });
+
+  it("links beside a steering head, which stands in for the main one", async () => {
+    wire({
+      connections: [CONNECTION],
+      heads: [{ role: "steering", providerRepositoryId: "1" }],
+    });
+    await expect(handler().run(INPUT, makeCTX())).resolves.toMatchObject({
+      role: "linked",
+    });
+    expect(mocks.writeRepositoryHead).toHaveBeenCalledTimes(1);
   });
 
   it("refuses a repository already linked to this workspace", async () => {

@@ -263,12 +263,14 @@ describe("tenant policy manifest", () => {
     // no-progress limit, spend spec detector 1).
     // 139 adds agent.memories, agent.memory_reflections, agent.memory_prs,
     // agent.memory_rejections and agent.memory_recalls (ADR-206, 2026-09-26).
-    // 141 adds agent.steering_versions and agent.steering_publications (S3,
+    // 140 adds tacho.machine_group_members (MCP Studio machine groups,
+    // 2026-09-27).
+    // 142 adds agent.steering_versions and agent.steering_publications (S3,
     // #4449, 2026-09-27).
-    // 143 adds cost.run_pr_outcomes (#4491), what each run's pull requests
+    // 144 adds cost.run_pr_outcomes (#4491), what each run's pull requests
     // became, and cost.run_pr_reverts, the reverts kept until their rows exist.
-    // 144 adds cost.finding_claims (ADR-208).
-    expect(POLICY_MANIFEST.length).toBe(144);
+    // 145 adds cost.finding_claims (ADR-208).
+    expect(POLICY_MANIFEST.length).toBe(145);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {
