@@ -436,13 +436,14 @@ export function planProjection(
         claimed.add(tool.id);
       }
       const revive = tool !== null && tool.deletedAt !== null;
+      // A new tool's insert already sets enabled, so its UPDATE matches no row.
       const enable =
-        tool !== null &&
-        (revive ||
-          action === "revive" ||
-          action === "insert" ||
-          ((action === "update" || action === "keep") &&
-            !previous.has(upstream)));
+        tool === null ||
+        revive ||
+        action === "revive" ||
+        action === "insert" ||
+        ((action === "update" || action === "keep") &&
+          !previous.has(upstream));
       const facts = versionFacts(entry);
       const base = {
         server: server.name,
