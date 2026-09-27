@@ -51,6 +51,24 @@ describe("runtime.read", () => {
   });
 });
 
+describe("pr.merge_without_review", () => {
+  // A role an owner ticks it on may merge a steering PR with no approval
+  // (ADR-213). It names the one capability and sits with the repository
+  // permissions.
+  it("grants merge_pr_without_review and nothing else", () => {
+    const permission = PERMISSION_CATALOG.find(
+      (p) => p.id === "pr.merge_without_review",
+    );
+    expect(permission?.group).toBe("Repository");
+    expect(capabilitiesOf(["pr.merge_without_review"])).toEqual([
+      "merge_pr_without_review",
+    ]);
+    expect(
+      permissionsHeldBy(new Set(["merge_pr_without_review"])),
+    ).toEqual(["pr.merge_without_review"]);
+  });
+});
+
 describe("capabilitiesOf", () => {
   it("expands permissions to a sorted, deduplicated capability set", () => {
     const out = capabilitiesOf(["run.control", "run.read", "run.control"]);
