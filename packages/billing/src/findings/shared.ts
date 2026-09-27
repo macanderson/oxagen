@@ -28,6 +28,9 @@ import {
   type RunTotalsRecord,
 } from "../cost-rollup";
 import type { PromptRead } from "./prompts";
+import type { TokenCounts } from "../cost-rollup";
+import type { PriceEntry } from "../price-book";
+import type { OutcomeRow } from "../run-pr-outcomes";
 import type { RunView } from "./requests";
 
 /** The most cited frames a finding stores per run; the contract's own cap (#4001). */
@@ -128,6 +131,128 @@ export interface PricedRequestFrame {
    * Absent when the store names no chain.
    */
   sessionUuid?: string | null;
+  /**
+   * The fields below are optional so a frame literal that predates them
+   * still types. The findings store sets every one on each frame it reads.
+   */
+  /** The model the call ran on, as the frame names it. */
+  model?: string;
+  /** The provider the frame names; null when it names none. */
+  provider?: string | null;
+  /** The frame's tokens by class, as the rollup prices them. */
+  classTokens?: TokenCounts;
+  /**
+   * Each class's price entry at the frame's own instant, the one the rollup
+   * would resolve for this model and class. Null for a class the book has no
+   * entry for. Every class is listed, whether or not the frame carried it.
+   */
+  classPrices?: FrameClassPrices;
+  /**
+   * The tokens the call spent on tool definitions, context frames, and
+   * steering, as the recorder measured them (#4493). Null when the frame
+   * carried none. A ledger frame carries none.
+   */
+  toolDefinitionTokens?: number | null;
+  contextFrameTokens?: number | null;
+  steeringTokens?: number | null;
+  /** The digest over the ordered parts of the call's system context; null when the frame carried none. */
+  systemContextDigest?: string | null;
+  /**
+   * The parts that digest covers, in request order. The recorder lists them
+   * once per digest, so the store takes them from the latest frame of the run
+   * at or before this one whose digest matches and whose list is set. Null
+   * when no such frame was read.
+   */
+  systemContextParts?: readonly FrameContextPart[] | null;
+}
+
+/** One class's price at a frame's instant, from the price book. */
+export interface FrameClassPrice {
+  /** The price entry's id. */
+  entryId: string;
+  /** Micro-units per million tokens, or per request for `server_tool_request`. */
+  microsPerMillion: bigint;
+  currency: string;
+  source: PriceEntry["source"];
+}
+
+export type FrameClassPrices = Readonly<
+  Record<keyof TokenCounts, FrameClassPrice | null>
+>;
+
+/**
+ * One part of a call's system context, as ids, digests, and counts (the
+ * tacho `systemContextPartSchema`). The text never travels.
+ */
+export interface FrameContextPart {
+  kind: "system" | "tool" | "steering" | "context";
+  /** The tool's name, the steering record's id, or the system block's position. */
+  name: string;
+  /** On a tool part: the MCP server that serves it, or `builtin`. */
+  provider?: string;
+  digest: string;
+  tokens: number;
+}
+
+/** A run's first prompt on its own chain, from its first `turn_start` frame with a prompt. */
+export interface RunFirstPrompt {
+  at: Date;
+  /** `at` in microseconds since the epoch, from the store's own text. */
+  atMicros: number;
+  /** `prompt_digest`. */
+  digest: string;
+  /** Who sent the prompt (`prompt_source`); null when the recorder set none. */
+  source: string | null;
+  /** `prompt_origin`; null when the recorder set none. */
+  origin: string | null;
+  /** The slash command the prompt ran (`command_name`); null for typed text. */
+  commandName: string | null;
+}
+
+/** One compaction of a run's context, from an `oxagen:compaction` frame. */
+export interface RunCompaction {
+  at: Date;
+  /** `at` in microseconds since the epoch, from the store's own text. */
+  atMicros: number;
+  seq: number;
+  /** Null on the run's own chain, and the subagent's session uuid otherwise. */
+  sessionUuid: string | null;
+  /** `compact_trigger`, such as `auto` or `manual`; null when the frame set none. */
+  trigger: string | null;
+  /** The context size before and after, when the frame carried them. */
+  tokensBefore: number | null;
+  tokensAfter: number | null;
+}
+
+/**
+ * How many of the window's runs the pass read model-call frames for. A run
+ * past the frame read cap is not read, and this counts it, so a detector and
+ * a reader can tell a run with no frames from a run whose frames were not
+ * read (ADR-210).
+ */
+export interface FrameCoverage {
+  /** The window's runs. */
+  runs: number;
+  /** The runs whose frames the pass read. */
+  read: number;
+  /** The runs the cap left unread. */
+  capped: number;
+  /** The runs with no frame source to read: no session row, or no ledger run row. */
+  unmatched: number;
+}
+
+/**
+ * A setting a finding's fix names, with the value it proposes. A detector
+ * sets it through {@link Groups.recommend}, and the evidence stores it, so a
+ * reader can show the change without parsing the fix text.
+ */
+export interface FindingRecommendation {
+  /** What to change, such as `cache_ttl`. */
+  setting: string;
+  /** The proposed value, such as `1h`. */
+  value: string | number;
+  /** The value in effect across the cited runs, when one holds for all of them. */
+  current?: string | number;
 }
 
 /**
@@ -186,6 +311,8 @@ export interface FindingEvidence {
    * `frames: null`.
    */
   frames?: Record<string, { seqs: FindingCitedFrame[]; total: number }>;
+  /** The setting the fix proposes; absent on a finding whose fix names none. */
+  recommendation?: FindingRecommendation;
 }
 
 export interface FindingDraft {
@@ -205,8 +332,16 @@ export interface FindingDraft {
   evidence: FindingEvidence;
   /** The frames a whole-request finding claims; absent on every other finding. */
   claims?: FindingClaim[];
+  /** The setting the fix proposes, as the evidence stores it; absent when the fix names none. */
+  recommendation?: FindingRecommendation;
 }
 
+/**
+ * What the detectors read. The fields past `decidedSince` are optional so a
+ * detector test can build only what it reads. The findings store sets every
+ * one of them ({@link DetectReads}), and a detector treats an absent map as
+ * not read, never as empty.
+ */
 export interface DetectInput {
   window: { start: Date; end: Date };
   /** Where the tool-call read begins; later than `window.start` when the read was capped. */
@@ -223,7 +358,46 @@ export interface DetectInput {
   frames?: ReadonlyMap<string, readonly PricedRequestFrame[]>;
   /** The window's operator prompts, for detector 6; absent when the store read none. */
   prompts?: PromptRead;
+  /**
+   * Each wrapped run's first prompt on its own chain, by run public id. A run
+   * absent here recorded no prompt in the window. A ledger run is never here.
+   */
+  firstPrompts?: ReadonlyMap<string, RunFirstPrompt>;
+  /**
+   * Whether each wrapped run changed a file, by run public id: true when a
+   * session of the run wrote, edited, or deleted a file, or saw one added,
+   * modified, deleted, or renamed, or when a file's digest before and after
+   * differ. False for a run whose sessions recorded no such change. A ledger
+   * run is never here.
+   */
+  fileChanges?: ReadonlyMap<string, boolean>;
+  /**
+   * Each wrapped run's compactions in time order, by run public id, on every
+   * chain of the run. A run with none is absent. A ledger run is never here.
+   */
+  compactions?: ReadonlyMap<string, readonly RunCompaction[]>;
+  /**
+   * Each run's rows of `cost.run_pr_outcomes`, by run public id. A run with
+   * no row is absent.
+   */
+  outcomes?: ReadonlyMap<string, readonly OutcomeRow[]>;
+  /** How many of the window's runs had their model-call frames read. */
+  frameCoverage?: FrameCoverage;
 }
+
+/** The input the findings store builds: every read is set. */
+export type DetectReads = DetectInput &
+  Required<
+    Pick<
+      DetectInput,
+      | "frames"
+      | "firstPrompts"
+      | "fileChanges"
+      | "compactions"
+      | "outcomes"
+      | "frameCoverage"
+    >
+  >;
 
 export function findingFingerprint(
   kind: FindingKind,
@@ -270,6 +444,8 @@ export interface Group {
   /** Whether the finding pins the calls it cites; false for a finding over whole runs. */
   citesCalls: boolean;
   claims: FindingClaim[];
+  /** The setting the finding's fix proposes; see {@link Groups.recommend}. */
+  recommendation?: FindingRecommendation;
 }
 
 /** An item's measured and counterfactual sides; null micros when the counterfactual does not cover it. */
@@ -365,6 +541,20 @@ export class Groups {
         operatorKey: run.operatorKey,
         costMicros: claim.frame.costMicros,
       });
+  }
+
+  /**
+   * Set the setting a finding's fix proposes. The group must exist, so a
+   * detector calls this after its first `add` under the key. Returns false
+   * when no run was added under the key yet.
+   */
+  recommend(key: FindingKey, recommendation: FindingRecommendation): boolean {
+    const group = this.groups.get(
+      findingFingerprint(key.kind, key.level, key.subject),
+    );
+    if (group === undefined) return false;
+    group.recommendation = recommendation;
+    return true;
   }
 
   values(): IterableIterator<Group> {
@@ -546,6 +736,8 @@ export function toDraft(
     evidence.frames = Object.fromEntries(
       accs.map((a) => [a.run.runId, citedFrames(a.frames)]),
     );
+  if (group.recommendation !== undefined)
+    evidence.recommendation = { ...group.recommendation };
   const draft: FindingDraft = {
     kind: group.kind,
     level: group.level,
@@ -562,5 +754,7 @@ export function toDraft(
     evidence,
   };
   if (group.claims.length > 0) draft.claims = group.claims;
+  if (group.recommendation !== undefined)
+    draft.recommendation = { ...group.recommendation };
   return draft;
 }

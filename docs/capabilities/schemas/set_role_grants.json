@@ -44,6 +44,7 @@
             "tool.grant",
             "repo.read",
             "repo.configure",
+            "pr.merge_without_review",
             "graph.search",
             "context.recall",
             "steering.read",

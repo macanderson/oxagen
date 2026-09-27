@@ -75,7 +75,7 @@ function tx(opts: { latest?: unknown[]; inserted?: unknown[] }): {
   return { tx: fake as unknown as Tx, writes };
 }
 
-const args = (role: "main" | "linked") => ({
+const args = (role: "steering" | "linked") => ({
   scope: SCOPE,
   connectionId: "conn-uuid",
   repo: REPO,
@@ -87,7 +87,7 @@ const args = (role: "main" | "linked") => ({
 describe("writeRepositoryHead", () => {
   it("writes version 1 superseding nothing when this connection never bound the repository", async () => {
     const { tx: t, writes } = tx({ latest: [] });
-    const out = await writeRepositoryHead(t, args("main"));
+    const out = await writeRepositoryHead(t, args("steering"));
 
     const binding = writes.inserts.find(
       (w) => w.table === schema.repositoryBindings,
@@ -118,7 +118,7 @@ describe("writeRepositoryHead", () => {
       provider: "github",
       providerRepositoryId: "9001",
       currentBindingId: "binding-new",
-      role: "main",
+      role: "steering",
       createdAt: NOW,
       updatedAt: NOW,
     });
@@ -182,7 +182,7 @@ describe("writeRepositoryHead", () => {
         },
       ],
     });
-    await writeRepositoryHead(t, args("main"));
+    await writeRepositoryHead(t, args("steering"));
     const binding = writes.inserts.find(
       (w) => w.table === schema.repositoryBindings,
     );
@@ -197,7 +197,7 @@ describe("writeRepositoryHead", () => {
 
   it("throws when the bindings insert returns no row, before any head is written", async () => {
     const { tx: t, writes } = tx({ latest: [], inserted: [] });
-    await expect(writeRepositoryHead(t, args("main"))).rejects.toThrow(
+    await expect(writeRepositoryHead(t, args("steering"))).rejects.toThrow(
       "repository_bindings insert returned no row",
     );
     expect(

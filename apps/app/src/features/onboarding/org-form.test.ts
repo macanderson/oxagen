@@ -56,12 +56,31 @@ describe("OrganizationForm", () => {
     name: "Acme Robotics",
     slug: "acme",
     namespace: "acme",
-    workspaceName: "core-platform",
-    workspaceSlug: "core-platform",
   };
 
   it("accepts a complete organization", () => {
     expect(OrganizationForm.safeParse(valid).success).toBe(true);
+  });
+
+  // The first workspace is its own step after Connect (lane S7, #4518): a
+  // workspace needs a steering repo, and the organization form comes before
+  // any code host is connected.
+  it("names no workspace field", () => {
+    expect(OrganizationForm.keyof().options).toEqual([
+      "name",
+      "slug",
+      "namespace",
+    ]);
+    const parsed = OrganizationForm.safeParse({
+      ...valid,
+      workspaceName: "Core platform",
+      workspaceSlug: "core-platform",
+    });
+    expect(parsed.success && Object.keys(parsed.data)).toEqual([
+      "name",
+      "slug",
+      "namespace",
+    ]);
   });
 
   it.each([
@@ -75,20 +94,6 @@ describe("OrganizationForm", () => {
     [{ namespace: "a-intel" }, "namespace", "namespaceInvalid"],
     [{ namespace: "toolong" }, "namespace", "namespaceInvalid"],
     [{ namespace: "ACME" }, "namespace", "namespaceInvalid"],
-    [{ workspaceSlug: "billing" }, "workspaceSlug", "workspaceSlugReserved"],
-    [{ workspaceSlug: "-core" }, "workspaceSlug", "workspaceSlugInvalid"],
-    // The form takes the contract's own spelling now (#3110). It used to take
-    // a doubled hyphen and let `create_org` do the refusing — and worse, a
-    // workspace created that way could never be edited, because
-    // `update_workspace_settings` always rejected it.
-    [
-      { workspaceSlug: "core--platform" },
-      "workspaceSlug",
-      "workspaceSlugInvalid",
-    ],
-    [{ workspaceSlug: "core-" }, "workspaceSlug", "workspaceSlugInvalid"],
-    [{ workspaceSlug: "roles" }, "workspaceSlug", "workspaceSlugReserved"],
-    [{ workspaceSlug: "api-keys" }, "workspaceSlug", "workspaceSlugReserved"],
   ])("refuses %j", (patch, field, key) => {
     const r = OrganizationForm.safeParse({ ...valid, ...patch });
     expect(r.success).toBe(false);
@@ -108,10 +113,6 @@ describe("OrganizationForm", () => {
       "slugInvalid",
       "slugReserved",
       "namespaceInvalid",
-      "workspaceNameRequired",
-      "workspaceNameTooLong",
-      "workspaceSlugInvalid",
-      "workspaceSlugReserved",
       "slugTaken",
       "agentSlugInvalid",
       "agentNameRequired",

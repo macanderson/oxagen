@@ -57,6 +57,16 @@ function Segments({
   );
 }
 
+/**
+ * Whether the page offers Merge without review: to an org or workspace owner.
+ * A member holding `pr.merge_without_review` may merge without review too,
+ * but no read carries that permission yet (#4518), so the page offers it to
+ * owners alone. The merge queue decides either way.
+ */
+function canMergeWithoutReview(ctx: WsCtx): boolean {
+  return ctx.orgRole === "owner" || ctx.wsRole === "owner";
+}
+
 export async function ProposalsTab({
   ctx,
   source,
@@ -100,6 +110,7 @@ export async function ProposalsTab({
           read={read}
           selected={proposal}
           pr={pr}
+          canMergeWithoutReview={canMergeWithoutReview(ctx)}
         />
       ) : (
         <Proposals at={at} offset={offset} read={read} />

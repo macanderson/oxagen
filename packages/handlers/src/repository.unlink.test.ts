@@ -111,7 +111,7 @@ describe("unlink_repository", () => {
 
   it("refuses the main repository with main_repo_unlink_refused, and deletes nothing", async () => {
     const writes = wire({
-      head: [{ id: "head-main", role: "main", fullName: "Acme/Widgets" }],
+      head: [{ id: "head-main", role: "steering", fullName: "Acme/Widgets" }],
     });
     const err = await repositoryUnlinkHandler(INPUT, makeCTX()).then(
       () => null,

@@ -280,17 +280,15 @@ describe("githubSyncTargets on a dedicated plane", () => {
   });
 });
 
-// The routing finds a workspace through its steering head. Lane S1 writes a
-// provisioned steering repository's head with role `steering`, and a head
-// bound through `bind_main_repository` still carries `main`, so both shared
-// reads must ask for both roles: the bound read, and the legacy read's check
-// that a workspace holds no steering head of its own.
+// The routing finds a workspace through its steering head, which carries role
+// `steering`. Both shared reads must ask for that role: the bound read, and
+// the legacy read's check that a workspace holds no steering head of its own.
 describe("githubSyncTargets head roles", () => {
   beforeEach(() => {
     whereCalls.length = 0;
   });
 
-  it("asks for every steering head role on the bound read and the legacy read", async () => {
+  it("asks for the steering role on the bound read and the legacy read", async () => {
     await githubSyncTargets(
       {
         eventName: "push",
@@ -311,13 +309,9 @@ describe("githubSyncTargets head roles", () => {
     const [bound, legacy] = whereCalls.map((cond) =>
       dialect.sqlToQuery(cond as SQL),
     );
-    expect(bound?.sql).toMatch(/"role" in \(\$\d+, \$\d+\)/);
-    expect(bound?.params).toEqual(
-      expect.arrayContaining(["main", "steering"]),
-    );
-    expect(legacy?.sql).toMatch(/h\.role in \(\$\d+, \$\d+\)/);
-    expect(legacy?.params).toEqual(
-      expect.arrayContaining(["main", "steering"]),
-    );
+    expect(bound?.sql).toMatch(/"role" in \(\$\d+\)/);
+    expect(bound?.params).toContain("steering");
+    expect(legacy?.sql).toMatch(/h\.role in \(\$\d+\)/);
+    expect(legacy?.params).toContain("steering");
   });
 });

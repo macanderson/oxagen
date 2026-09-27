@@ -95,7 +95,7 @@ const REPO: GitHubRepoInfo = {
 const INPUT = { provider: "github" as const, owner: "acme", name: "docs" };
 
 /** This workspace's main head, on a different repository than `REPO`. */
-const MAIN_HEAD = { role: "main", providerRepositoryId: "1" };
+const MAIN_HEAD = { role: "steering", providerRepositoryId: "1" };
 
 interface Tx {
   locks: number;
@@ -298,7 +298,7 @@ describe("link_repository", () => {
   it("refuses this workspace's own main repository with main_repo, inside the lock", async () => {
     const state = wire({
       connections: [CONNECTION],
-      heads: [{ role: "main", providerRepositoryId: "9002" }],
+      heads: [{ role: "steering", providerRepositoryId: "9002" }],
     });
     await expect(handler().run(INPUT, makeCTX())).rejects.toMatchObject({
       code: "conflict",
