@@ -5,9 +5,10 @@
  * basis until a replay on the smaller class confirms it. It claims no frame
  * and stays out of the unproductive spend headline (counting rule 2).
  *
- * A run counts when it is sealed, its tool calls were all read (it started at
- * or after the tool-call window), it made at least one tool call, and the
- * classifier marked every call as one that changes nothing. A call the
+ * A run counts when it sealed before the pass's end and started at or after
+ * the tool-call window, the pass read as many of its calls as the rollup
+ * counted, it made at least one tool call, and the classifier marked every
+ * call as one that changes nothing. A call the
  * classifier said nothing about may have written, so it rules the run out. A
  * run with a spin loop is left out, so detector 1 keeps its spend.
  *
@@ -192,10 +193,16 @@ function detectWith(
 ): void {
   for (const view of ctx.views) {
     const { run } = view;
-    // A run still going may write later, and a run that started before the
-    // tool-call window may have written in a call the pass did not read.
+    // A run still going may write later. The pass read calls before its end
+    // and from the tool-call window on, so a run sealed at or after the end,
+    // or started before the window, may have written in a call it never read.
     if (run.sealedAt === null) continue;
+    if (run.sealedAt.getTime() >= input.window.end.getTime()) continue;
     if (run.startedAt.getTime() < input.toolWindowStart.getTime()) continue;
+    // The read skips a hook call with no tool name or input digest, and the
+    // rollup counts it. A run whose calls the read did not see in full is left
+    // out, since the call it skipped may have written.
+    if (view.calls.length !== run.toolCalls) continue;
     if (!view.calls.every((c) => c.call.isMutating === false)) continue;
     if (spinCalls(view.calls).size > 0) continue;
     if (!run.breakdown.models.some((m) => lighterModel(m) !== null)) continue;

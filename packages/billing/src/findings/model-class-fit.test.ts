@@ -289,7 +289,7 @@ describe("model class fit", () => {
   });
 
   it("leaves out a run with a call that changed something", () => {
-    const r = run();
+    const r = run([opus()], { toolCalls: 2 });
     const calls = [call(r, 1), call(r, 2, { tool: "Edit", isMutating: true })];
     expect(detect(input([r], calls))).toEqual([]);
   });
@@ -301,6 +301,16 @@ describe("model class fit", () => {
 
   it("leaves out a run that has not ended", () => {
     const r = run([opus()], { sealedAt: null });
+    expect(detect(input([r], readOnly([r])))).toEqual([]);
+  });
+
+  it("leaves out a run that sealed at or after the pass's end", () => {
+    const r = run([opus()], { sealedAt: END });
+    expect(detect(input([r], readOnly([r])))).toEqual([]);
+  });
+
+  it("leaves out a run with a call the read skipped", () => {
+    const r = run([opus()], { toolCalls: 2 });
     expect(detect(input([r], readOnly([r])))).toEqual([]);
   });
 
@@ -317,7 +327,7 @@ describe("model class fit", () => {
   });
 
   it("leaves out a run with a spin loop, so detector 1 keeps its spend", () => {
-    const r = run();
+    const r = run([opus()], { toolCalls: SPIN_LOOP_REPEATS + 1 });
     const calls = Array.from({ length: SPIN_LOOP_REPEATS + 1 }, (_, i) =>
       call(r, i + 1, { inputDigest: "in-same", outputDigest: "out-same" }),
     );
