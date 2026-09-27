@@ -1,7 +1,7 @@
 // Every module stub throws NotBuiltError naming its module. When a lane
 // builds a module, it deletes that module's row here.
 import { describe, expect, it } from "vitest";
-import { compile, CompileError, toManifestServer, type CompileInput, type CompiledServer } from "./compile";
+import { CompileError } from "./compile";
 import { diff, type DiffInput } from "./diff";
 import {
   execute,
@@ -17,11 +17,9 @@ import {
 import { importGraphql } from "./graphql";
 import { importGrpc } from "./grpc";
 import { lint, type LintContext, type ServerFolder } from "./lint";
-import { lock, type LockInput } from "./lock";
 import { NotBuiltError } from "./not-built";
 import { importOpenApi } from "./openapi";
 import { suggest } from "./suggest";
-import type { McpToolsLock } from "./contract/lock";
 import type { ManifestTool } from "./contract/manifest";
 import type { UpstreamTool } from "./model/upstream-tool";
 
@@ -29,9 +27,6 @@ import type { UpstreamTool } from "./model/upstream-tool";
 const stub = <T>(): T => ({}) as T;
 
 const syncStubs: Array<[string, () => unknown]> = [
-  ["compile", () => compile(stub<CompileInput>())],
-  ["compile/toManifestServer", () => toManifestServer(stub<CompiledServer>(), stub<McpToolsLock>())],
-  ["lock", () => lock(stub<LockInput>())],
   ["diff", () => diff(stub<DiffInput>())],
   ["suggest", () => suggest(stub<UpstreamTool>(), { source: "openapi", network: "cloud" })],
   ["lint", () => lint(stub<ServerFolder>(), stub<LintContext>())],
