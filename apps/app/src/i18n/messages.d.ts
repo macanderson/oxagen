@@ -10405,6 +10405,7 @@ type Messages = {
         provider: string;
         transport: string;
         tools: string;
+        weeklyPrice: string;
         toolbelts: string;
         agents: string;
         health: string;
@@ -10413,6 +10414,11 @@ type Messages = {
         lastImport: string;
         actions: string;
       };
+      weeklyAbsent: string;
+      weeklyUnpriced: string;
+      weeklyTokenCount: string;
+      weeklyTokens: string;
+      weeklyTitle: string;
       transportNote: string;
       open: string;
       openNamed: string;
