@@ -6,16 +6,8 @@
 // server stream until it ends, reaches shaping.max_items, or passes
 // deadline_ms, and returns { items, truncated } for a stream. It retries
 // UNAVAILABLE up to 3 times only for NO_SIDE_EFFECTS and IDEMPOTENT methods.
-import { notBuiltAsync } from "../../not-built";
-import type { Sender } from "../sender";
-
-/** A server stream's result: the messages read, and whether the stream was cut. */
-export interface GrpcStreamResult {
-  items: unknown[];
-  truncated: boolean;
-}
-
-export const grpcSender: Sender<"grpc"> = {
-  kind: "grpc",
-  send: (template, args, context) => notBuiltAsync("execute/grpc", template, args, context),
-};
+//
+// createGrpcCarrier is the part of the cloud Transport that carries gRPC
+// calls over HTTP/2, with TLS for an https environment.
+export { createGrpcCarrier, type GrpcCarrierOptions } from "./carrier";
+export { createGrpcSender, grpcSender, type GrpcSenderOptions, type GrpcStreamResult } from "./sender";
