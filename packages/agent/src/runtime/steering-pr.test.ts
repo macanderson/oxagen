@@ -13,7 +13,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@oxagen/database", async (importOriginal) => {
   const real = await importOriginal<typeof import("@oxagen/database")>();
-  return { ...real, withTenantDb: mocks.withTenantDb };
+  // The organisation seam gets the same mock, so neither runs unmocked (ADR-086).
+  return {
+    ...real,
+    withTenantDb: mocks.withTenantDb,
+    withOrgDb: mocks.withTenantDb,
+  };
 });
 
 import {
