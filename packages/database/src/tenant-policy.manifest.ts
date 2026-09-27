@@ -154,6 +154,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "cost.run_pr_outcomes", policyClass: "standard" },
   // The reverts kept until their outcome rows exist (#4491); org_id + workspace_id NOT NULL.
   { table: "cost.run_pr_reverts", policyClass: "standard" },
+  // The loops that reached a workspace's no-progress limit (spend spec,
+  // detector 1); org_id + workspace_id NOT NULL.
+  { table: "cost.no_progress_hits", policyClass: "standard" },
   // The organization's cost-center labels (ADR-142): org_id NOT NULL, no
   // workspace_id, so org_only.
   { table: "cost.cost_centers", policyClass: "org_only" },
@@ -312,6 +315,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // refuses for a Claude Code or Codex session. org_id + workspace_id both
   // NOT NULL → standard tenant_isolation RLS.
   { table: "workspace.tacho_session_policy", policyClass: "standard" },
+  // The no-progress limit the owning team sets for its runs. org_id +
+  // workspace_id both NOT NULL → standard tenant_isolation RLS.
+  { table: "workspace.no_progress_policy", policyClass: "standard" },
   // Verified-Outcome Market Router governance. org_id NOT NULL + workspace_id
   // NULLABLE → workspace_nullable tenant_isolation RLS.
   { table: "workspace.routing_policy", policyClass: "workspace_nullable" },

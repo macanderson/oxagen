@@ -787,8 +787,8 @@
         "link": "Link it to {ws}",
         "linkDescription": "Becomes a linked repository of {ws}.",
         "create": "Create a new workspace",
-        "createDescription": "Called {name}, with this repository as its main repository.",
-        "createDescriptionUnnamed": "A new workspace with this repository as its main repository.",
+        "createDescription": "Called {name}. It starts with no linked repository.",
+        "createDescriptionUnnamed": "A new workspace with no linked repository.",
         "name": "Workspace name",
         "slug": "Workspace slug",
         "slugHelp": "2 to 40 lowercase letters, digits, and single hyphens."

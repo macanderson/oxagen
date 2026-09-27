@@ -12,7 +12,7 @@
 // at a migrated database — CI's `test` job migrates Postgres with Atlas
 // before `turbo run build test:unit`; a local run without one is skipped, not
 // red. Every row it writes is removed in afterAll.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { isHandlerError, type CapabilityContext } from "@oxagen/oxagen";
 import { iamRoleCreate } from "@oxagen/oxagen/contracts/iam.role.create";
 import { iamRoleDelete } from "@oxagen/oxagen/contracts/iam.role.delete";
@@ -30,31 +30,20 @@ import { iamRoleDeleteHandler } from "./iam.role.delete";
 import { iamRoleGrantsSetHandler } from "./iam.role.grants.set";
 import { iamRoleListHandler } from "./iam.role.list";
 import { workspaceArchiveHandler } from "./workspace.archive";
-import { createWorkspaceCreateHandler } from "./workspace.create";
+import {
+  createWorkspaceCreateHandler,
+  type WorkspaceCreateDeps,
+} from "./workspace.create";
 import { workspaceListHandler } from "./workspace.list";
 
-// `create_workspace` reaches GitHub twice before its transaction — the org's
-// installations and the repository through one of them (ADR-099). This suite
-// proves the Postgres side, so GitHub is answered by a fixture: one
-// installation on `acme`, and a repository it can see.
+// `create_workspace` records the workspace and starts its steering repo job
+// with an Inngest event after the commit (lane S1, #4450). This suite proves
+// the Postgres side, so the event send is a spy and no Inngest is reached.
+const requestProvision = vi.fn<WorkspaceCreateDeps["requestProvision"]>(
+  async () => {},
+);
 const workspaceCreateHandler = createWorkspaceCreateHandler({
-  candidates: async () => [
-    {
-      installationId: "555",
-      accountLogin: "acme",
-      accountType: "Organization",
-      avatarUrl: null,
-      repositorySelection: "all",
-    },
-  ],
-  repository: async (_installationId, owner, name) => ({
-    id: `pg-${owner}-${name}-${Date.now()}`,
-    owner,
-    name,
-    fullName: `${owner}/${name}`,
-    htmlUrl: `https://github.com/${owner}/${name}`,
-    defaultBranch: "main",
-  }),
+  requestProvision,
 });
 
 const enabled = Boolean(process.env.DATABASE_URL);
@@ -221,7 +210,8 @@ describe.skipIf(!enabled)(
             .delete(schema.workspaceSlugHistory)
             .where(inArray(schema.workspaceSlugHistory.workspaceId, wsIds));
         }
-        // The main repository `create_workspace` wrote with the workspace.
+        // `create_workspace` binds no repository since lane S1 (#4450). These
+        // deletes stay so a failed run leaves nothing behind either way.
         await tx
           .delete(schema.repositoryBindingHeads)
           .where(eq(schema.repositoryBindingHeads.orgId, orgId));
@@ -420,42 +410,44 @@ describe.skipIf(!enabled)(
           workspaceCreate.input.parse({
             name: "Data platform",
             slug: "data",
-            mainRepo: { owner: "acme", name: "data-platform" },
           }),
           keyCall,
         ),
       );
       expect(created.orgSlug).toBe(orgSlug);
+      expect(created.steering_repo).toEqual({ status: "provisioning" });
       const [createdRow] = await withSystemDb((tx) =>
         tx
           .select({
             id: schema.workspaces.id,
             createdById: schema.workspaces.createdById,
+            settings: schema.workspaces.settings,
           })
           .from(schema.workspaces)
           .where(eq(schema.workspaces.publicId, created.publicId)),
       );
       expect(createdRow?.createdById).toBe(userId);
-      // §17 M0: the workspace arrived with its main repository, in the same
-      // transaction — one head, role 'main', on a connected GitHub connection.
-      expect(created.mainRepo.fullName).toBe("acme/data-platform");
+      // The transaction wrote the first state of the steering repo setting,
+      // and the handler asked for the job once, after the commit, for the
+      // key's creator.
+      expect(
+        (createdRow?.settings as { steering_repo?: { status?: string } })
+          .steering_repo?.status,
+      ).toBe("provisioning");
+      expect(requestProvision).toHaveBeenCalledTimes(1);
+      expect(requestProvision).toHaveBeenCalledWith({
+        orgId,
+        workspaceId: createdRow!.id,
+        actorUserId: userId,
+      });
+      // The workspace binds no repository: no main head, and no head at all.
       const heads = await withSystemDb((tx) =>
         tx
-          .select({
-            role: schema.repositoryBindingHeads.role,
-            status: schema.sourceConnections.status,
-          })
+          .select({ role: schema.repositoryBindingHeads.role })
           .from(schema.repositoryBindingHeads)
-          .innerJoin(
-            schema.sourceConnections,
-            eq(
-              schema.sourceConnections.id,
-              schema.repositoryBindingHeads.connectionId,
-            ),
-          )
           .where(eq(schema.repositoryBindingHeads.workspaceId, createdRow!.id)),
       );
-      expect(heads).toEqual([{ role: "main", status: "connected" }]);
+      expect(heads).toEqual([]);
       await expect(
         refusal(
           scoped(() =>
@@ -463,13 +455,14 @@ describe.skipIf(!enabled)(
               workspaceCreate.input.parse({
                 name: "Again",
                 slug: "data",
-                mainRepo: { owner: "acme", name: "data-platform" },
               }),
               admin,
             ),
           ),
         ),
       ).resolves.toEqual({ code: "conflict", reason: "slug_taken" });
+      // A refused create sends no event.
+      expect(requestProvision).toHaveBeenCalledTimes(1);
 
       const list = (includeArchived: boolean) =>
         workspaceListHandler(
@@ -550,7 +543,6 @@ describe.skipIf(!enabled)(
               workspaceCreate.input.parse({
                 name: "Data again",
                 slug: "data",
-                mainRepo: { owner: "acme", name: "data-platform" },
               }),
               admin,
             ),

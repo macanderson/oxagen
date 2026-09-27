@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.1.3
+
+Version 2.1.3 carries 6 changes since v2.1.2. The list below is the commit log; a written summary was not available for this release.
+
+- docs(web): scope the story page's pull request count to the account (#4486)
+- fix: clear main's red tacho and app tests (#4468)
+- docs(web): rewrite the story page as a plain journey (#4485)
+- [S12] Decide tool calls with the steering record's Cedar policies (#4466)
+- ci: split the test gate into parallel build and unit lanes (#4464)
+- [S3] One required check, a merge queue, stamping, and deployments for steering PRs (#4459)
+
 ## v2.1.2
 
 The macOS app installs updates on its own. Fleet and the Run page were rebuilt, Stella answers inside the app, and organizations can sign in with SSO and provision people with SCIM.

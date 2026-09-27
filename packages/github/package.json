@@ -1,13 +1,15 @@
 {
   "name": "@oxagen/github",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./workspace-token": "./src/workspace-token.ts"
+    "./workspace-token": "./src/workspace-token.ts",
+    "./provision": "./src/provision/index.ts",
+    "./provision/testing": "./src/provision/testing/fake-github.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -16,6 +16,11 @@ import { bootstrapOrgIAM } from "./iam-provision";
 import { openOnboardingGate } from "./lib/onboarding";
 import { bootstrapWorkspace } from "./workspace-bootstrap";
 import { provisionAssistantModelKey } from "./assistant-key-bootstrap";
+import {
+  initialSteeringRepoState,
+  settingsWithSteeringRepo,
+  startSteeringRepoProvision,
+} from "./steering_repo.provision";
 
 /**
  * The org bootstrap: the organization row, the creator's owner membership,
@@ -172,19 +177,9 @@ export const organizationCreateHandler: CapabilityHandler<
       // The first workspace, on the same transaction: an org with no
       // workspace has no page to land on.
       //
-      // Deliberately WITHOUT a main repository, although §10.1 says a
-      // workspace has exactly one and `create_workspace` refuses to make one
-      // without it (ADR-099). This is the spec's own exception (Mission
-      // Control spec §7, line ~222): onboarding binds the main repo in a LATER
-      // step — the installer offers the git remote of the directory it ran in
-      // and one more click installs the GitHub App — and if that step is
-      // skipped the workspace is provisional for 14 days (the gate
-      // `openOnboardingGate` opens below), with steering, records and agent
-      // definitions off until `bind_main_repository` closes the window. It
-      // cannot be otherwise: the org does not exist until this transaction
-      // commits, so it holds no GitHub authorization and no repository is
-      // reachable to bind. `create_workspace` — a SECOND workspace, in an org
-      // that can already reach GitHub — is the path that requires one.
+      // It has no repository yet. The provision job started below creates
+      // its steering repo once the owner connects GitHub or GitLab, and code
+      // repositories are linked afterwards, the same as `create_workspace`.
       const workspace = await bootstrapWorkspace({
         tx,
         orgId: org.id,
@@ -204,7 +199,30 @@ export const organizationCreateHandler: CapabilityHandler<
         now: org.createdAt,
       });
 
-      return { org, workspace };
+      // The first state of both steering repos (#4450): the organization's
+      // `<org>/oxagen` and the first workspace's own. The provision jobs start
+      // after this commits and record their progress here.
+      const steering = initialSteeringRepoState(org.createdAt);
+      await tx
+        .update(schema.organizations)
+        .set({
+          settings: settingsWithSteeringRepo(
+            schema.organizations.settings,
+            steering,
+          ),
+        })
+        .where(eq(schema.organizations.id, org.id));
+      await tx
+        .update(schema.workspaces)
+        .set({
+          settings: settingsWithSteeringRepo(
+            schema.workspaces.settings,
+            steering,
+          ),
+        })
+        .where(eq(schema.workspaces.id, workspace.id));
+
+      return { org, workspace, steering };
     });
 
     logger.info(
@@ -250,6 +268,26 @@ export const organizationCreateHandler: CapabilityHandler<
         "organization.create: assistant model key provisioning threw",
       );
     });
+
+    // Start both provision jobs. A new organization has no GitHub or GitLab
+    // connection yet, so each job stops at `pick_connection` and records that
+    // it waits for one. Onboarding sends the event again once the owner
+    // connects. A send that fails is recorded on the setting, never thrown:
+    // the organization already exists.
+    await Promise.all([
+      startSteeringRepoProvision(
+        { orgId: created.org.id, workspaceId: null, actorUserId: userId },
+        created.steering,
+      ),
+      startSteeringRepoProvision(
+        {
+          orgId: created.org.id,
+          workspaceId: created.workspace.id,
+          actorUserId: userId,
+        },
+        created.steering,
+      ),
+    ]);
 
     return {
       publicId: created.org.publicId,
