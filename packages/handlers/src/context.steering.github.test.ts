@@ -1194,15 +1194,110 @@ describe("the GitHub seam's merge-queue calls", () => {
     ).rejects.toMatchObject({ reason: "github_refused" });
   });
 
-  it("resets a branch by forcing its ref back, and wraps a refusal", async () => {
-    const ref = `PATCH ${REPO_PATH}/git/refs/heads/steering/ctx.rule`;
-    const { gh, repo, calls } = await restSeam({ [ref]: () => ({}) });
-    await gh.resetBranch(repo, "steering/ctx.rule", "p1");
-    expect(calls[0]!.body).toEqual({ sha: "p1", force: true });
-    const refused = await restSeam({ [ref]: refuse(422, "Reference missing") });
-    await expect(
-      refused.gh.resetBranch(refused.repo, "steering/ctx.rule", "p1"),
-    ).rejects.toMatchObject({ reason: "github_refused" });
+  describe("resetBranch", () => {
+    const branch = "steering/ctx.rule";
+    const args = { from: "s1", to: "p1" };
+    const repoInfo = { [`GET ${REPO_PATH}`]: () => ({ node_id: "R_1" }) };
+    const at = (sha: string | null) =>
+      fakeClient({
+        getBranch: vi.fn(async () => (sha ? { name: "b", sha } : null)),
+      });
+
+    it("moves the ref back only while it still points at the stamp", async () => {
+      const getBranch = vi.fn();
+      const { gh, repo, calls } = await restSeam(
+        {
+          ...repoInfo,
+          "POST /graphql": () => ({
+            data: { updateRefs: { clientMutationId: null } },
+          }),
+        },
+        fakeClient({ getBranch }),
+      );
+      await expect(gh.resetBranch(repo, branch, args)).resolves.toBe(true);
+      expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+        `GET ${REPO_PATH}`,
+        "POST /graphql",
+      ]);
+      expect(calls[1]!.body).toMatchObject({
+        query: expect.stringContaining("updateRefs"),
+        variables: {
+          repositoryId: "R_1",
+          refUpdates: [
+            {
+              name: "refs/heads/steering/ctx.rule",
+              afterOid: "p1",
+              beforeOid: "s1",
+              force: true,
+            },
+          ],
+        },
+      });
+      expect(getBranch).not.toHaveBeenCalled();
+    });
+
+    it("leaves a branch that moved off the stamp", async () => {
+      const graphql = () => ({
+        data: { updateRefs: null },
+        errors: [{ message: "Ref was not at the expected value" }],
+      });
+      for (const sha of ["h9", null]) {
+        const { gh, repo } = await restSeam(
+          { ...repoInfo, "POST /graphql": graphql },
+          at(sha),
+        );
+        await expect(gh.resetBranch(repo, branch, args)).resolves.toBe(false);
+      }
+    });
+
+    it("answers true when the reset landed but its answer was lost", async () => {
+      const { gh, repo } = await restSeam(
+        { ...repoInfo, "POST /graphql": refuse(502, "Bad Gateway") },
+        at("p1"),
+      );
+      await expect(gh.resetBranch(repo, branch, args)).resolves.toBe(true);
+    });
+
+    it("wraps a refusal when the branch is still at the stamp", async () => {
+      const errors = await restSeam(
+        {
+          ...repoInfo,
+          "POST /graphql": () => ({
+            data: { updateRefs: null },
+            errors: [{ message: "Resource not accessible" }, { message: "x" }],
+          }),
+        },
+        at("s1"),
+      );
+      await expect(
+        errors.gh.resetBranch(errors.repo, branch, args),
+      ).rejects.toMatchObject({
+        reason: "github_refused",
+        message: "Resource not accessible; x",
+      });
+      const http = await restSeam(
+        { [`GET ${REPO_PATH}`]: refuse(403, "Forbidden") },
+        at("s1"),
+      );
+      await expect(
+        http.gh.resetBranch(http.repo, branch, args),
+      ).rejects.toMatchObject({
+        reason: "github_refused",
+        message: expect.stringContaining("Forbidden"),
+      });
+      const unread = await restSeam(
+        { [`GET ${REPO_PATH}`]: refuse(403, "Forbidden") },
+        fakeClient({
+          getBranch: vi.fn().mockRejectedValue(new Error("unreachable")),
+        }),
+      );
+      await expect(
+        unread.gh.resetBranch(unread.repo, branch, args),
+      ).rejects.toMatchObject({
+        reason: "github_refused",
+        message: expect.stringContaining("Forbidden"),
+      });
+    });
   });
 
   it("lists each reviewer's standing approval across pages, with the linked Oxagen user", async () => {

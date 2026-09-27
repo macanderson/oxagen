@@ -798,13 +798,18 @@ export function createSteeringGitLab(
       });
     },
 
-    resetBranch(repo, branch, sha) {
+    resetBranch(repo, branch, args) {
       // GitLab has no call that moves a branch backwards, so the branch is
-      // deleted and created again at `sha`. The merge request keeps its
-      // source branch name and picks the branch up again.
+      // deleted and created again at `to`. The merge request keeps its
+      // source branch name and picks the branch up again. Neither call takes
+      // an expected head, so the branch is read first: a branch that moved
+      // off `from` is left alone.
       return call(repo, async (gl, project) => {
+        const head = await gl.getBranch({ project, branch });
+        if (head?.commitSha !== args.from) return false;
         await gl.deleteBranch({ project, branch });
-        await gl.createBranch({ project, branch, ref: sha });
+        await gl.createBranch({ project, branch, ref: args.to });
+        return true;
       });
     },
 

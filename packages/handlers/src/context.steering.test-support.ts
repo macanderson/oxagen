@@ -1142,9 +1142,15 @@ export class FakeGitHub implements SteeringGitHub {
     if (pr && pr.state === "open") pr.headSha = sha;
     return { headSha: sha };
   }
-  async resetBranch(_repo: SteeringRepository, branch: string, sha: string) {
-    this.heads.set(branch, sha);
-    this.resets.push({ branch, sha });
+  async resetBranch(
+    _repo: SteeringRepository,
+    branch: string,
+    args: { from: string; to: string },
+  ) {
+    if (this.heads.get(branch) !== args.from) return false;
+    this.heads.set(branch, args.to);
+    this.resets.push({ branch, sha: args.to });
+    return true;
   }
   async listApprovals(
     _repo: SteeringRepository,

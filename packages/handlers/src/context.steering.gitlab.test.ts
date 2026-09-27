@@ -806,9 +806,25 @@ describe("the GitLab seam's merge-queue calls", () => {
 
   it("resets a branch by deleting it and creating it again at the SHA", async () => {
     const { api, seam, repo, head } = await onBranch();
-    api.commit("b", "a", "stamped");
-    await seam.resetBranch(repo, "b", head);
+    const stamp = api.commit("b", "a", "stamped");
+    await expect(
+      seam.resetBranch(repo, "b", { from: stamp, to: head }),
+    ).resolves.toBe(true);
     expect(api.branches.get("b")).toBe(head);
+  });
+
+  it("leaves a branch that moved off the stamp", async () => {
+    const { api, seam, repo, head } = await onBranch();
+    const stamp = api.commit("b", "a", "stamped");
+    const pushed = api.commit("b", "a", "pushed");
+    await expect(
+      seam.resetBranch(repo, "b", { from: stamp, to: head }),
+    ).resolves.toBe(false);
+    expect(api.branches.get("b")).toBe(pushed);
+    await expect(
+      seam.resetBranch(repo, "gone", { from: stamp, to: head }),
+    ).resolves.toBe(false);
+    expect(api.branches.has("gone")).toBe(false);
   });
 
   it("lists approvals with each reviewer's linked Oxagen user and no head", async () => {
@@ -1004,7 +1020,7 @@ describe("the host dispatcher", () => {
     });
     await host.holdsCommit(repo, "b", "a");
     await host.updateBranch(repo, { number: 1, branch: "b", expectedHead: "a" });
-    await host.resetBranch(repo, "b", "a");
+    await host.resetBranch(repo, "b", { from: "b", to: "a" });
     await host.listApprovals(repo, 1);
     await host.recordDeployment(repo, {
       sha: "a",

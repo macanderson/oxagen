@@ -855,6 +855,8 @@ describe("landSteeringPr: a refused merge", () => {
     expect(gh.resets).toEqual([]);
     expect(await gh.branchHead(REPO, pr.branch)).toBe(pushed);
     expect(gh.merges).toEqual([]);
+    // The refusal settles the stamp, so no second reset is tried.
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it("still answers the merge's refusal when the stamp cannot be dropped", async () => {
