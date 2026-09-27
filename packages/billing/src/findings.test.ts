@@ -228,6 +228,7 @@ describe("the detector registry", () => {
       [["repeated_shell_commands", "duplicate_tool_calls"], 1],
       [["cache_writes_never_read"], null],
       [["unpaged_results"], null],
+      [["model_class_fit"], null],
     ]);
   });
 
