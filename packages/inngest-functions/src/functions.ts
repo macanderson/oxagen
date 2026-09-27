@@ -6,6 +6,8 @@ import { billingUsageDelivery } from "./functions/billing.usage-delivery";
 import { billingGauClose } from "./functions/billing.gau-close";
 import { costRunRollup } from "./functions/cost.run-rollup";
 import { runFit } from "./functions/run.fit";
+import { runReflect } from "./functions/run.reflect";
+import { memoryCurate, memoryCurateDaily } from "./functions/memory.curate";
 import { costRunProgress } from "./functions/cost.run-progress";
 import { tachoSessionIdleClose } from "./functions/tacho.session-idle-close";
 import { runLedgerIdleClose } from "./functions/run.ledger-idle-close";
@@ -83,6 +85,9 @@ export const functions: any[] = [
   billingUsageDelivery,
   costRunRollup,
   runFit,
+  runReflect,
+  memoryCurate,
+  memoryCurateDaily,
   costRunProgress,
   tachoSessionIdleClose,
   runLedgerIdleClose,
