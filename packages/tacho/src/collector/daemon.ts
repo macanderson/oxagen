@@ -1128,16 +1128,20 @@ async function initializeDaemon(
     toRecorded: (result: T) => {
       events: readonly TachoEvent[];
       bodies?: readonly FrameBody[];
+      /** Puts back session state the seal changed beyond the chains. */
+      restore?: () => void;
     },
   ): Promise<T> {
     const marks = markEveryChain();
+    let sealed: ReturnType<typeof toRecorded> | undefined;
     try {
       const result = await seal();
-      const sealedRecord = toRecorded(result);
-      record(sealedRecord.events, sealedRecord.bodies ?? []);
+      sealed = toRecorded(result);
+      record(sealed.events, sealed.bodies ?? []);
       return result;
     } catch (error) {
       rollbackEveryChain(marks);
+      sealed?.restore?.();
       throw error;
     }
   }
@@ -1637,7 +1641,10 @@ async function initializeDaemon(
             },
             now,
           }),
-        (result) => ({ events: result.events }),
+        // A failed write puts back each question an answer released and each
+        // message the batch queued, and forgets their acknowledgements, so
+        // the redelivered commands apply again (#3941).
+        (result) => ({ events: result.events, restore: result.restore }),
       );
       try {
         // Written before the acknowledgements leave. A queued message or

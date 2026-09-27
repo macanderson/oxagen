@@ -30,7 +30,7 @@ import type {
 } from "../wire";
 import type { RepositoryRemote } from "./git-facts";
 import { handleHookEvent, type PolicyView } from "./hook-handler";
-import { applyCommands } from "./inbox";
+import { applyCommands, HandledCommands } from "./inbox";
 import {
   INTERJECTION_TIMED_OUT_TEXT,
   interjectionQuestion,
@@ -596,6 +596,77 @@ describe("an answer from the control plane", () => {
     expect(result.acknowledgements[0]?.status).toBe("received");
     expect(record.control.messages.map((m) => m.text)).toEqual(["hello"]);
     expect(record.control.interjection).toBeDefined();
+  });
+
+  // Codex on #4421: the daemon runs `restore` when the answer's frames fail
+  // to reach the WAL.
+  it("puts the question back, takes the text off the queue, and forgets the acknowledgement on restore", async () => {
+    const h = harness();
+    const { record, key } = await held(h);
+    const heldQuestion = record.control.interjection;
+    const handled = new HandledCommands();
+    const payload = {
+      text: "Oxagen linked this repository to core.",
+      interjection: {
+        key,
+        path: "link",
+        source: "person",
+        receipt_id: "rcp_01a2b3",
+        answered_by: "usr_0123abc",
+      },
+    };
+    const deps = {
+      registry: h.registry,
+      hostRecorder: () => record.recorder,
+      kill: () => true,
+      refreshBundle: async () => undefined,
+      onHostSuspended: () => undefined,
+      now: h.now,
+      handled,
+    };
+    const first = await applyCommands([command(record, { payload })], deps);
+    expect(kinds(first.events)).toEqual(["control.answer", "repo.bound"]);
+    expect(record.control.interjection).toBeUndefined();
+
+    first.restore();
+    expect(record.control.interjection).toEqual(heldQuestion);
+    expect(record.control.messages).toEqual([]);
+    expect(handled.get("tcm_answer1")).toBeUndefined();
+
+    // The redelivery settles the question again instead of failing on it.
+    const again = await applyCommands([command(record, { payload })], deps);
+    expect(kinds(again.events)).toEqual(["control.answer", "repo.bound"]);
+    expect(again.acknowledgements[0]?.status).toBe("received");
+    expect(record.control.messages.map((m) => m.id)).toEqual(["tcm_answer1"]);
+  });
+
+  it("leaves a question another answer settled since, and a queue a hook drained since, as they are (negative)", async () => {
+    const h = harness();
+    const { record, key } = await held(h);
+    const result = await deliver(h, record, {
+      text: "Nobody answered in 30 minutes. This session runs without skills.",
+      interjection: {
+        key,
+        path: "deny",
+        source: "timeout",
+        receipt_id: "rcp_01a2b5",
+        answered_by: null,
+      },
+    });
+    // A later question was raised, and a hook took the text.
+    record.control.interjection = {
+      key: "01K6Z000000000000000000001",
+      question: "Link this repository to core, or create a workspace for it?",
+      expiresAt: "2026-09-26T11:00:00.000Z",
+      workspaceSlug: "core",
+      configVersion: null,
+    };
+    record.control.messages.splice(0);
+    result.restore();
+    expect(record.control.interjection?.key).toBe(
+      "01K6Z000000000000000000001",
+    );
+    expect(record.control.messages).toEqual([]);
   });
 });
 

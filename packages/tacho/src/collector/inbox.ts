@@ -96,6 +96,14 @@ export class HandledCommands {
     }
   }
 
+  /**
+   * Drop a command's acknowledgement, so its next delivery is applied again.
+   * For a command whose frames never reached the WAL.
+   */
+  forget(commandId: string): void {
+    if (this.acks.delete(commandId)) this.changes += 1;
+  }
+
   /** Every remembered acknowledgement, oldest first, for the state file. */
   list(): CommandAcknowledgement[] {
     return [...this.acks.values()].map((ack) => ({ ...ack }));
@@ -126,6 +134,16 @@ export interface InboxResult {
    * recorded it, and cutting the model calls is the rest of that command.
    */
   applied: DeliveredCommand[];
+  /**
+   * Puts back what these commands changed in memory that a chain rollback
+   * does not reach: each question an answer released, each message they
+   * queued, and their acknowledgements in `handled`. The caller runs it when
+   * the WAL write of `events` fails. Without it, the redelivered answer was
+   * answered from the ledger or found no question held, and the chain never
+   * recorded the answer (#3941). A question something else settled or raised
+   * since is left as it is.
+   */
+  restore: () => void;
 }
 
 /**
@@ -227,6 +245,7 @@ function applyToSession(
   record: SessionRecord,
   command: DeliveredCommand,
   deps: InboxDeps,
+  undo: Array<() => void>,
 ): {
   events: TachoEvent[];
   status: CommandAcknowledgement["status"];
@@ -308,6 +327,7 @@ function applyToSession(
           ? interjectionAnswerOf(command.payload)
           : undefined;
       if (answer !== undefined) {
+        const held = record.control.interjection;
         const settled = applyInterjectionAnswer(record, answer, command.id);
         if (settled === undefined)
           return {
@@ -315,6 +335,10 @@ function applyToSession(
             status: "failed",
             detail: "no question under this key is held on the session",
           };
+        undo.push(() => {
+          if (record.control.interjection === undefined)
+            record.control.interjection = held;
+        });
         events.push(...settled);
       }
       const text = textOf(command);
@@ -341,6 +365,12 @@ function applyToSession(
         degradedReason: command.degraded_reason,
         expiresAt: command.expires_at,
         issuedAt: command.issued_at,
+      });
+      undo.push(() => {
+        const at = record.control.messages.findIndex(
+          (queued) => queued.id === command.id,
+        );
+        if (at >= 0) record.control.messages.splice(at, 1);
       });
       return { events, status: "received" };
     }
@@ -427,7 +457,16 @@ export async function applyCommands(
     const ack = deps.handled?.get(id);
     if (ack !== undefined) result.acknowledgements.push(ack);
   }
-  return result;
+  const restoreSessions = result.restore;
+  return {
+    ...result,
+    // A command whose frames never landed is applied again when the plane
+    // delivers it next, rather than answered from the ledger.
+    restore: () => {
+      restoreSessions();
+      for (const command of fresh) deps.handled?.forget(command.id);
+    },
+  };
 }
 
 function sealCommands(
@@ -438,6 +477,7 @@ function sealCommands(
   const events: TachoEvent[] = [];
   const acknowledgements: CommandAcknowledgement[] = [];
   const tookEffect: DeliveredCommand[] = [];
+  const undo: Array<() => void> = [];
   for (const command of commands) {
     if (expiredAt(command, now)) {
       // The host holds the deadline for a command it received: one already
@@ -468,7 +508,7 @@ function sealCommands(
         });
         continue;
       }
-      const result = applyToSession(record, command, deps);
+      const result = applyToSession(record, command, deps, undo);
       events.push(...result.events);
       if (changedSession(result)) tookEffect.push(command);
       const last = result.events[result.events.length - 1];
@@ -526,7 +566,7 @@ function sealCommands(
           // host-level cancel must not make the daemon signal itself.
           if (sessionRefusal(record) !== undefined) continue;
           reached += 1;
-          const result = applyToSession(record, command, deps);
+          const result = applyToSession(record, command, deps, undo);
           events.push(...result.events);
           if (changedSession(result)) changedAny = true;
           last = result.events[result.events.length - 1] ?? last;
@@ -573,5 +613,12 @@ function sealCommands(
         });
     }
   }
-  return { events, acknowledgements, applied: tookEffect };
+  return {
+    events,
+    acknowledgements,
+    applied: tookEffect,
+    restore: () => {
+      for (const step of [...undo].reverse()) step();
+    },
+  };
 }
