@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-// The Context PR panel in every state of its machine: where the state sits,
+// The steering PR panel in every state of its machine: where the state sits,
 // which checks ran and how they came out, what merge will do, the merge that
 // stays disabled until every check passed, the merged record, a dismissed
-// proposal, and a failed read, with an axe check in every one.
+// proposal, and a failed read. It also covers the review each governance mode
+// asks for, a drifted managed block, and a memory PR whose records no read
+// returns yet. Every state gets an axe check.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProposalStatus } from "@/data/contracts/steering";
@@ -20,14 +22,20 @@ vi.mock("./actions", () => ({
   openContextPr: vi.fn(),
   mergeContextPr: vi.fn(),
   dismissProposal: vi.fn(),
+  approveContextPr: vi.fn(),
+  mergePrWithoutReview: vi.fn(),
+  restoreManagedBlock: vi.fn(),
+  dropMemoryRecord: vi.fn(),
 }));
 
 const { ContextPrPanel } = await import("./context-pr-panel");
 
-function renderPanel(read: Read<ContextPr>) {
+type PanelProps = Omit<Parameters<typeof ContextPrPanel>[0], "at" | "read">;
+
+function renderPanel(read: Read<ContextPr>, props: PanelProps = {}) {
   render(
     <IntlProvider>
-      <ContextPrPanel at={AT} read={read} />
+      <ContextPrPanel at={AT} read={read} {...props} />
     </IntlProvider>,
   );
   return screen.getByRole("region");
@@ -38,6 +46,9 @@ const renderState = (status: ProposalStatus) =>
 
 const merge = () =>
   screen.queryByRole("button", { name: "Merge pull request" });
+const approve = () => screen.queryByRole("button", { name: "Approve" });
+const mergeWithoutReview = () =>
+  screen.queryByRole("button", { name: "Merge without review" });
 
 afterEach(async () => {
   try {
@@ -205,6 +216,165 @@ describe("after merge", () => {
     expect(panel.querySelector("[data-on-merge]")).toBeNull();
     expect(merge()).toBeNull();
     expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+  });
+});
+
+describe("the review each governance mode asks for", () => {
+  it("offers Approve beside Merge under the team mode", () => {
+    renderState("checks_passed");
+    expect(approve()).toBeEnabled();
+    expect(merge()).toBeEnabled();
+    expect(mergeWithoutReview()).toBeNull();
+  });
+
+  it("offers Approve under the regulated mode as well", () => {
+    renderPanel(
+      readOk(contextPr("checks_passed", { governanceMode: "regulated" })),
+    );
+    expect(approve()).toBeEnabled();
+    expect(merge()).toBeEnabled();
+  });
+
+  it("offers Merge alone under the solo mode, even to an owner (negative)", () => {
+    const solo = contextPr("checks_passed", { governanceMode: "solo" });
+    renderPanel(readOk(solo), { approvals: 0, canMergeWithoutReview: true });
+    expect(merge()).toBeEnabled();
+    expect(approve()).toBeNull();
+    expect(mergeWithoutReview()).toBeNull();
+  });
+
+  it("offers no Approve before the pull request opens (negative)", () => {
+    renderState("proposed");
+    expect(approve()).toBeNull();
+  });
+
+  it("offers an owner Merge without review while no one has approved", () => {
+    const panel = renderPanel(readOk(contextPr("checks_passed")), {
+      approvals: 0,
+      canMergeWithoutReview: true,
+    });
+    expect(mergeWithoutReview()).toBeEnabled();
+    expect(approve()).toBeEnabled();
+    expect(merge()).toBeEnabled();
+    expect(panel.querySelector('[data-fact="approvals"] dd')).toHaveTextContent(
+      "0",
+    );
+  });
+
+  it("treats an approval count the read does not carry as none", () => {
+    const panel = renderPanel(readOk(contextPr("checks_passed")), {
+      canMergeWithoutReview: true,
+    });
+    expect(mergeWithoutReview()).toBeEnabled();
+    expect(panel.querySelector('[data-fact="approvals"]')).toBeNull();
+  });
+
+  it("keeps Merge without review disabled until the checks pass (negative)", () => {
+    renderPanel(readOk(contextPr("checks_running")), {
+      approvals: 0,
+      canMergeWithoutReview: true,
+    });
+    expect(mergeWithoutReview()).toBeDisabled();
+  });
+
+  it("hides Merge without review once someone has approved (negative)", () => {
+    const panel = renderPanel(readOk(contextPr("checks_passed")), {
+      approvals: 1,
+      canMergeWithoutReview: true,
+    });
+    expect(mergeWithoutReview()).toBeNull();
+    expect(panel.querySelector('[data-fact="approvals"] dd')).toHaveTextContent(
+      "1",
+    );
+  });
+
+  it("hides Merge without review from a member who is not an owner (negative)", () => {
+    renderPanel(readOk(contextPr("checks_passed")), { approvals: 0 });
+    expect(mergeWithoutReview()).toBeNull();
+    expect(approve()).toBeEnabled();
+  });
+});
+
+describe("a drifted managed block", () => {
+  it("names each drifted file once with a Restore block button", () => {
+    renderPanel(readOk(contextPr("checks_failed")), {
+      findings: [
+        {
+          rule: "managed-block",
+          path: "AGENTS.md",
+          message: "The managed block no longer matches the published version.",
+        },
+        { rule: "managed-block", path: "AGENTS.md", message: "" },
+        { rule: "secret-scan", path: "CLAUDE.md", message: "an access key" },
+      ],
+    });
+    const heading = screen.getByRole("heading", { name: "Drift in AGENTS.md" });
+    const drift = heading.closest("[data-drift]");
+    if (!(drift instanceof HTMLElement)) throw new Error("no drift block");
+    expect(drift).toHaveAttribute("data-drift", "AGENTS.md");
+    expect(drift).toHaveTextContent(
+      "The managed block no longer matches the published version.",
+    );
+    expect(
+      within(drift).getByRole("button", { name: "Restore block" }),
+    ).toBeEnabled();
+    expect(document.querySelectorAll("[data-drift]")).toHaveLength(1);
+    expect(screen.queryByText(/Drift in CLAUDE\.md/)).toBeNull();
+  });
+
+  it("shows no drift once the steering PR merged (negative)", () => {
+    renderPanel(readOk(contextPr("merged")), {
+      findings: [{ rule: "managed-block", path: "AGENTS.md", message: "" }],
+    });
+    expect(document.querySelector("[data-drift]")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Restore block" })).toBeNull();
+  });
+});
+
+describe("a memory PR", () => {
+  const memoryPr = (records?: PanelProps["memoryRecords"]) => {
+    const base = contextPr("checks_passed");
+    if (base.pr === null) throw new Error("fixture has a pull request");
+    return renderPanel(
+      readOk({
+        ...base,
+        pr: { ...base.pr, branch: "memory/2026-09-27-release-lessons" },
+      }),
+      records === undefined ? {} : { memoryRecords: records },
+    );
+  };
+
+  it("says no read returns its records yet when none arrive", () => {
+    memoryPr();
+    expect(
+      screen.getByRole("heading", { name: "Memory records" }),
+    ).toBeInTheDocument();
+    const notBacked = screen.getByTestId("memory-pr-records-not-backed");
+    expect(notBacked).toHaveTextContent(
+      "Not recorded yet: the records on this memory branch and the memories each one cites. It needs list_memory_pr_records.",
+    );
+  });
+
+  it("lists each record with a Drop button when the records arrive", () => {
+    memoryPr([
+      {
+        path: ".oxagen/memory/release.no-reread-changelog.toml",
+        lineage: "mem.release.no-reread-changelog",
+        title: "Do not re-read the changelog",
+        summary: "Agents read CHANGELOG.md once per release run.",
+        memories: [],
+        dropped: null,
+      },
+    ]);
+    expect(screen.queryByTestId("memory-pr-records-not-backed")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Drop Do not re-read the changelog" }),
+    ).toBeEnabled();
+  });
+
+  it("shows no memory section on a steering PR from a context branch (negative)", () => {
+    renderState("checks_passed");
+    expect(document.querySelector("[data-memory-pr]")).toBeNull();
   });
 });
 

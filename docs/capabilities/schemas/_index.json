@@ -2946,6 +2946,16 @@
       "consumes": []
     },
     {
+      "name": "merge_pr_without_review",
+      "domain": "context",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
       "name": "move_agent",
       "domain": "agent",
       "surfaces": [

@@ -19,7 +19,7 @@ per capability with its input + output JSON Schema, chain metadata
 - **command** (2): search_command_menu, suggest_commands
 - **configuration** (2): get_clone_draft, propose_configuration_clone
 - **connection** (10): create_connection, delete_connection, get_connection, get_connection_mappings, list_connections, pause_connection, preview_connection, set_connection_mappings, suggest_connection_mappings, update_connection
-- **context** (16): append_record, dismiss_proposal, get_context_pr, get_published_steering, get_record, get_steering_deliveries, get_steering_freshness, list_context_records, list_proposals, list_records, merge_context_pr, open_context_pr, promote_context_record, propose_record, publish_context_record, revise_context_record
+- **context** (17): append_record, dismiss_proposal, get_context_pr, get_published_steering, get_record, get_steering_deliveries, get_steering_freshness, list_context_records, list_proposals, list_records, merge_context_pr, merge_pr_without_review, open_context_pr, promote_context_record, propose_record, publish_context_record, revise_context_record
 - **control** (4): dispatch_command, fetch_commands, list_commands, pause_workspace_runs
 - **conversation** (10): add_conversation_attachment, archive_conversation, delete_conversation, export_conversation, get_conversation, list_conversation_files, list_conversations, post_conversation_message, purge_conversations, rename_conversation
 - **cost** (4): list_price_entries, list_unpriced_models, remove_price_entry, set_price_entry

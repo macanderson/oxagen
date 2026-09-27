@@ -112,7 +112,6 @@ async function workspacesTab(
       org={ctx.orgSlug}
       workspaces={workspaces}
       facts={facts}
-      enterable={enterable}
     />
   );
 }

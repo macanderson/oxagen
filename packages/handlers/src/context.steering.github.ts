@@ -353,8 +353,11 @@ export interface SteeringChangedFile {
  * `userId` is the Oxagen user the host account is linked to, or null when
  * nobody linked it: an approval by a stranger to the workspace counts for
  * nothing. `commitSha` is the head the reviewer approved, or null when the
- * host does not say (GitLab), in which case the approval stands whatever the
- * head is now.
+ * host did not name one, in which case the approval stands whatever the head
+ * is now. GitLab never names one, so its adapter places each approval on the
+ * newest diff version GitLab recorded before `approved_at`, and never reports
+ * null. A GitLab project that keeps approvals on push, or an approval with no
+ * readable `approved_at`, refuses with `approvals_not_head_bound`.
  */
 export interface SteeringApproval {
   userId: string | null;
@@ -529,12 +532,11 @@ export async function readGitHubConnection(scope: {
         and(
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-          // Only the steering head steers. Its role is 'main' (the binder) or
-          // 'steering' (steering repo provisioning), and 'linked' marks a
-          // repository that only receives PRs. A reader that ignores the
-          // column goes on resolving through a linked head, so the
-          // cross-workspace steering collision the index forbids would
-          // survive the reconciliation that was meant to end it.
+          // Only the steering head steers. Its role is 'steering', and
+          // 'linked' marks a repository that only receives PRs. A reader
+          // that ignores the column goes on resolving through a linked
+          // head, so the cross-workspace steering collision the index
+          // forbids would survive the reconciliation meant to end it.
           inArray(
             schema.repositoryBindingHeads.role,
             schema.STEERING_HEAD_ROLES,
@@ -583,7 +585,7 @@ export async function readGitHubConnection(scope: {
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
           eq(schema.repositoryBindingHeads.provider, "github"),
-          // Only a steering head (role 'main' or 'steering') declares the
+          // Only the steering head (role 'steering') declares the
           // steering repository. A linked head (`link_repository`) declares
           // nothing about steering, and counting it would report "bound but
           // retired" for a workspace whose linked repository is all it has.

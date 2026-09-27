@@ -1,15 +1,18 @@
 "use server";
-// The writes behind organization creation and Register an agent (#2967,
-// ADR-065), each through the kernel seam for the viewer the URL names. Every
-// contract here is `noBillingGate` and role-checked in its handler (INV-29):
-// `register_agent`, `create_enrollment_token`, `advance_onboarding` and
-// `bind_main_repository` admit an org Owner or Admin, and a refusal comes back
-// as `denied` with nothing written.
+// The writes behind organization creation, the first workspace and Register an
+// agent (#2967, ADR-065, lane S7 #4518), each through the kernel seam for the
+// viewer the URL names. Every contract here is role-checked in its handler
+// (INV-29): `create_workspace`, `register_agent`, `create_enrollment_token`
+// and `advance_onboarding` admit an org Owner or Admin, and a refusal comes
+// back as `denied` with nothing written.
 import { agentRegister } from "@oxagen/oxagen/contracts/agent.register";
 import { onboardingAdvance } from "@oxagen/oxagen/contracts/onboarding.advance";
-import { organizationCreate } from "@oxagen/oxagen/contracts/org.create";
-import { repositoryMainBind } from "@oxagen/oxagen/contracts/repository.main.bind";
+import {
+  organizationCreate,
+  slugFromName,
+} from "@oxagen/oxagen/contracts/org.create";
 import { tachoEnrollmentTokenCreate } from "@oxagen/oxagen/contracts/tacho.enrollment_token.create";
+import { workspaceCreate } from "@oxagen/oxagen/contracts/workspace.create";
 import type { ActionResult } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireUser, requireViewer } from "@/server/viewer";
@@ -21,8 +24,9 @@ import { OrganizationForm, type OrganizationField } from "./org-form";
  * A field the form refuses is `invalid` with the field and its
  * `onboarding.errors` key as the code, and no capability runs. A taken address
  * is the handler's `conflict` with code `slug_taken`, a taken namespace the
- * same with `namespace_taken`. A created organization continues to the gate's
- * Wrap an agent step.
+ * same with `namespace_taken`. A created organization continues to the connect
+ * step: a workspace needs a steering repo, and a steering repo needs a code
+ * host, so the form names no workspace.
  */
 export async function createOrganizationAction(
   input: Record<OrganizationField, string>,
@@ -38,27 +42,58 @@ export async function createOrganizationAction(
       field: issue?.path.map(String).join(".") ?? "",
     };
   }
-  const { name, slug, namespace, workspaceName, workspaceSlug } = parsed.data;
+  const { name, slug, namespace } = parsed.data;
   const result = await kernelWrite(ctx, organizationCreate, {
     name,
     slug,
     namespace,
-    workspace: { name: workspaceName, slug: workspaceSlug },
   });
-  // The gate's next step is Wrap an agent, outside the app shell; Fleet opens
-  // once the first frame arrives (or on Cancel).
+  // The gate's next step is Connect a code host, outside the app shell. The
+  // first workspace follows it, and Fleet opens once the first frame arrives.
   return result.ok
-    ? {
-        ok: true,
-        value: {
-          to: routes.welcome(
-            result.value.slug,
-            result.value.workspace.slug,
-            "wrap",
-          ),
-        },
-      }
+    ? { ok: true, value: { to: routes.welcomeConnect(result.value.slug) } }
     : result;
+}
+
+/** The longest workspace name `create_workspace` takes. */
+const WORKSPACE_NAME_MAX = 120;
+
+/**
+ * The organization's first workspace, from its name alone. The slug is made
+ * from the name (`slugFromName`), so a slug the contract refuses or finds
+ * taken is the name's to fix: an invalid `slug` comes back on `name`, and a
+ * taken one is the handler's `conflict` with code `slug_taken`.
+ * `create_workspace` starts the steering repo job and answers before the
+ * repository exists. The page then shows the job's progress.
+ */
+export async function createFirstWorkspace(
+  org: string,
+  name: string,
+): Promise<ActionResult<{ slug: string }>> {
+  const ctx = await requireViewer(org);
+  const trimmed = name.trim();
+  if (trimmed === "")
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "name_required",
+      field: "name",
+    };
+  if (trimmed.length > WORKSPACE_NAME_MAX)
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "name_too_long",
+      field: "name",
+    };
+  const result = await kernelWrite(ctx, workspaceCreate, {
+    name: trimmed,
+    slug: slugFromName(trimmed),
+  });
+  if (result.ok) return { ok: true, value: { slug: result.value.slug } };
+  if (result.reason === "invalid" && result.field === "slug")
+    return { ...result, field: "name" };
+  return result;
 }
 
 export type RegisteredAgent = {
@@ -164,42 +199,6 @@ export async function advanceOnboarding(
     ? {
         ok: true,
         value: { step: result.value.step, changedAt: result.value.changedAt },
-      }
-    : result;
-}
-
-export type BoundRepository = {
-  fullName: string;
-  defaultRef: string;
-  boundAt: string;
-  /** True when this call closed the gate's provisional window. */
-  provisionalClosed: boolean;
-};
-
-/**
- * Binds the repository the enrolling host reported as the workspace's main
- * repo and closes the provisional window. The GitHub App installation comes
- * from the workspace's connection, so the caller names only the repository.
- */
-export async function bindMainRepository(
-  org: string,
-  ws: string,
-  repository: { owner: string; name: string },
-): Promise<ActionResult<BoundRepository>> {
-  const ctx = await requireViewer(org, ws);
-  const result = await kernelWrite(ctx, repositoryMainBind, {
-    owner: repository.owner,
-    name: repository.name,
-  });
-  return result.ok
-    ? {
-        ok: true,
-        value: {
-          fullName: result.value.fullName,
-          defaultRef: result.value.defaultRef,
-          boundAt: result.value.boundAt,
-          provisionalClosed: result.value.provisionalClosed,
-        },
       }
     : result;
 }

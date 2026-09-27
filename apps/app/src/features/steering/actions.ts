@@ -12,6 +12,7 @@ import { contextPrOpen } from "@oxagen/oxagen/contracts/context.pr.open";
 import { contextProposalDismiss } from "@oxagen/oxagen/contracts/context.proposal.dismiss";
 import { governanceModeSchema } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
+import { z } from "zod";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelWrite } from "@/server/kernel";
 import { requireViewer } from "@/server/viewer";
@@ -185,5 +186,122 @@ export async function forgetMemory(
   });
   return result.ok
     ? { ok: true, value: { forgotten: result.value.id } }
+    : result;
+}
+
+// The steering PR writes the platform has not registered yet (#4518). Each
+// one is a local contract under the name the platform will register, so the
+// kernel answers `unavailable` with code `tool_not_registered` today, and the
+// same call reaches the handler, unchanged, once the capability lands. The
+// schemas are the proposed shapes. The platform contract replaces each one.
+const PROPOSAL_ID = z.string().regex(/^prp_[0-9A-Za-z]+$/);
+
+const approveContextPrContract = {
+  name: "approve_context_pr",
+  input: z.object({ proposalId: PROPOSAL_ID }).strict(),
+  output: z.object({ approvals: z.number().int().nonnegative() }),
+};
+
+const mergePrWithoutReviewContract = {
+  name: "merge_pr_without_review",
+  input: contextPrMerge.input,
+  output: contextPrMerge.output,
+};
+
+const dropMemoryRecordContract = {
+  name: "drop_memory_record",
+  input: z
+    .object({
+      branch: z.string().startsWith("memory/"),
+      path: z.string().min(1),
+    })
+    .strict(),
+  output: z.object({ commit_sha: z.string(), rejection_id: z.string() }),
+};
+
+const restoreManagedBlockContract = {
+  name: "restore_managed_block",
+  input: z
+    .object({ proposalId: PROPOSAL_ID, path: z.string().min(1) })
+    .strict(),
+  output: z.object({ commit_sha: z.string() }),
+};
+
+/**
+ * Approve the steering PR. Under the team and regulated modes the merge
+ * queue refuses a merge with `approval_required` until a member other than
+ * the author approves. The answer is the approval count after this one.
+ */
+export async function approveContextPr(
+  org: string,
+  ws: string,
+  proposalId: string,
+): Promise<ActionResult<{ approvals: number }>> {
+  const ctx = await requireViewer(org, ws);
+  return kernelWrite(ctx, approveContextPrContract, { proposalId });
+}
+
+/**
+ * Merge a steering PR that holds no approval. The merge queue allows this to
+ * an org or workspace owner, or to a member holding
+ * `pr.merge_without_review`. It takes the same input as merge_context_pr.
+ */
+export async function mergePrWithoutReview(
+  org: string,
+  ws: string,
+  proposalId: string,
+): Promise<ActionResult<{ commit: string }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, mergePrWithoutReviewContract, {
+    proposalId,
+  });
+  return result.ok
+    ? { ok: true, value: { commit: result.value.mergedCommit } }
+    : result;
+}
+
+/**
+ * Drop one proposed steering record from a memory PR. The handler commits
+ * the file's removal to the memory branch and records the rejection.
+ */
+export async function dropMemoryRecord(
+  org: string,
+  ws: string,
+  branch: string,
+  path: string,
+): Promise<ActionResult<{ commitSha: string; rejectionId: string }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, dropMemoryRecordContract, {
+    branch,
+    path,
+  });
+  return result.ok
+    ? {
+        ok: true,
+        value: {
+          commitSha: result.value.commit_sha,
+          rejectionId: result.value.rejection_id,
+        },
+      }
+    : result;
+}
+
+/**
+ * Restore the Oxagen managed block in one file of a steering PR, as a commit
+ * on the pull request's branch. The answer is that commit.
+ */
+export async function restoreManagedBlock(
+  org: string,
+  ws: string,
+  proposalId: string,
+  path: string,
+): Promise<ActionResult<{ commitSha: string }>> {
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, restoreManagedBlockContract, {
+    proposalId,
+    path,
+  });
+  return result.ok
+    ? { ok: true, value: { commitSha: result.value.commit_sha } }
     : result;
 }

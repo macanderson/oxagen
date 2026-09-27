@@ -221,6 +221,7 @@ import { contextProposalDismissRoute } from "./routes/v1/context.proposal.dismis
 import { contextPrOpenRoute } from "./routes/v1/context.pr.open";
 import { contextPrGetRoute } from "./routes/v1/context.pr.get";
 import { contextPrMergeRoute } from "./routes/v1/context.pr.merge";
+import { contextPrMergeWithoutReviewRoute } from "./routes/v1/context.pr.merge_without_review";
 import { agentRoleAssignRoute } from "./routes/v1/agent.role.assign";
 import { agentRoleRevokeRoute } from "./routes/v1/agent.role.revoke";
 import { agentRoleListRoute } from "./routes/v1/agent.role.list";
@@ -271,6 +272,7 @@ import { tachoEnrollmentRevokeRoute } from "./routes/v1/tacho.enrollment.revoke"
 import { tachoHostEnrollRoute } from "./routes/v1/tacho.host.enroll";
 import { tachoEnrollmentTokenCreateRoute } from "./routes/v1/tacho.enrollment_token.create";
 import { onboardingStateGetRoute } from "./routes/v1/onboarding.state.get";
+import { steeringConnectionRoute } from "./routes/v1/gitlab-oauth";
 import { onboardingAdvanceRoute } from "./routes/v1/onboarding.advance";
 import { onboardingFirstFrameGetRoute } from "./routes/v1/onboarding.first_frame.get";
 import { repositoryMainBindRoute } from "./routes/v1/repository.main.bind";
@@ -1155,6 +1157,10 @@ orgScoped.route("/context/proposals/dismiss", contextProposalDismissRoute);
 orgScoped.route("/context/prs/open", contextPrOpenRoute);
 orgScoped.route("/context/prs/get", contextPrGetRoute);
 orgScoped.route("/context/prs/merge", contextPrMergeRoute);
+orgScoped.route(
+  "/context/prs/merge-without-review",
+  contextPrMergeWithoutReviewRoute,
+);
 orgScoped.route("/privacy/export", privacyDataExportRoute);
 orgScoped.route("/privacy/erase", privacyDataEraseRoute);
 orgScoped.route("/connections", connectionRoute);
@@ -1194,6 +1200,7 @@ orgOnlyScoped.route("/onboarding/state", onboardingStateGetRoute);
 // workspace-scoped group above, that URL matched no route and 404'd, leaving
 // the advertised REST surface unreachable (#3097).
 orgOnlyScoped.route("/audit/events/export", auditEventsExportRoute);
+orgOnlyScoped.route("/connections/steering", steeringConnectionRoute);
 app.route("/v1/:org_slug", orgOnlyScoped);
 
 app.route("/v1/:org_slug/:workspace_slug", orgScoped);

@@ -715,6 +715,7 @@ describe("a GitLab workspace", () => {
       { method: "POST", path: "/projects" },
       { method: "POST", path: "/projects/1/repository/commits" },
       { method: "PUT", path: "/projects/1" },
+      { method: "POST", path: "/projects/1/approvals" },
       { method: "POST", path: "/projects/1/protected_branches" },
       { method: "POST", path: "/projects/1/deployments" },
     ]);
@@ -739,6 +740,7 @@ describe("a GitLab workspace", () => {
             squash_option: "always",
             only_allow_merge_if_pipeline_succeeds: true,
             remove_source_branch_after_merge: true,
+            reset_approvals_on_push: true,
             builds_access_level: "disabled",
           },
           protected_branches: {
@@ -1425,6 +1427,12 @@ describe("a rerun after one failure", () => {
       step: "apply_settings",
       inject: (lab) =>
         lab.failNext({ method: "PUT", path: "/projects/1", status: 500 }),
+    },
+    {
+      label: "the approval settings update",
+      step: "apply_settings",
+      inject: (lab) =>
+        lab.failNext({ method: "POST", path: "/projects/1/approvals", status: 500 }),
     },
     {
       label: "the deployment before GitLab records it",
