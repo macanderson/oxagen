@@ -44,7 +44,15 @@
               "cache_writes_never_read",
               "duplicate_tool_calls",
               "repeated_shell_commands",
-              "unpaged_results"
+              "unpaged_results",
+              "spin_loops",
+              "standing_context",
+              "idle_cache_rewrites",
+              "cache_busts",
+              "model_class_fit",
+              "repeated_instructions",
+              "recurring_runs",
+              "spend_with_no_outcome"
             ]
           },
           "level": {

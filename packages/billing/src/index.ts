@@ -32,8 +32,32 @@ export * from "./class-cost";
 export * from "./cache-savings";
 export * from "./cost-rollup";
 export * from "./cost-rollup-store";
-export type { FindingEvidence } from "./findings";
-export { listWorkspacesForFindings, runFindingsPass } from "./findings-store";
+export {
+  countClaims,
+  type ClaimRow,
+  type FindingEvidence,
+  type UnproductiveSpend,
+} from "./findings";
+export {
+  listWorkspacesForFindings,
+  readUnproductiveSpend,
+  runFindingsPass,
+} from "./findings-store";
+export * from "./run-pr-outcomes";
+export {
+  applyOutcomeDelivery,
+  listOutcomeRuns,
+  listWorkspacesForOutcomes,
+  type OutcomeRun,
+  pruneRevertEvidence,
+  readOutcomeRows,
+  readRevertEvidence,
+  readRunTerminalReasons,
+  readTachoRunPrLinks,
+  saveOutcomeRows,
+  saveRevertEvidence,
+  type TachoPrLink,
+} from "./run-pr-outcomes-store";
 export {
   NO_PROGRESS_MODES,
   NO_PROGRESS_OUTCOMES,
