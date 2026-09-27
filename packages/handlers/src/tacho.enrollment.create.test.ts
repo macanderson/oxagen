@@ -87,6 +87,13 @@ function happyDb(clash = false): void {
           // workspace.tacho_session_policy existed, which is what
           // these cases assert the bundle carries.
           tachoSessionPolicy: { findFirst: async () => undefined },
+          // The host bundle reads containment from the host's runtime
+          // (ADR-204). The runtime these cases create does not require it,
+          // so the bundle carries no `containment`.
+          agents: { findFirst: async () => ({ runtimeId: null }) },
+          runtimes: {
+            findFirst: async () => ({ containmentRequired: false }),
+          },
         },
         // The steering read: a workspace with an empty ledger and no records,
         // so the first bundle carries no `context.system`. The runtime reads
