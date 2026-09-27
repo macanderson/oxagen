@@ -8,15 +8,19 @@
 import type { ManifestServer, ManifestTool } from "../contract/manifest";
 import { notBuiltAsync } from "../not-built";
 import type { CredentialSource } from "./credentials";
+import { createGraphqlSender } from "./graphql";
 import { createHttpSender } from "./http";
+import { createMcpSender } from "./mcp";
 import type { Sender } from "./sender";
 import type { CallToolResult, Transport } from "./transport";
 
 export * from "./credentials";
 export * from "./sender";
 export * from "./transport";
+export { createGraphqlSender, type GraphqlSenderOptions } from "./graphql";
 export { grpcSender, type GrpcStreamResult } from "./grpc";
 export { createHttpSender, type HttpSenderOptions } from "./http";
+export { createMcpSender, MCP_PROTOCOL_VERSION, sendLocal, type McpSenderOptions } from "./mcp";
 
 /** Where a call runs: the server, the environment, and the person running the agent. */
 export interface CallEnvironment {
@@ -42,11 +46,11 @@ export function execute(
   return notBuiltAsync("execute", tool, args, environment, credentials, transport);
 }
 
-/** tools/call with the upstream name. Retries only when the Transport failed before the server received the call. */
-export const mcpSender: Sender<"mcp"> = {
-  kind: "mcp",
-  send: (template, args, context) => notBuiltAsync("execute/mcp", template, args, context),
-};
+/**
+ * tools/call with the upstream name, over a streamable HTTP session. Retries
+ * only when the server cannot have received the call.
+ */
+export const mcpSender: Sender<"mcp"> = createMcpSender();
 
 /**
  * The request built from an OpenAPI operation. Retries GET, HEAD, OPTIONS,
@@ -56,7 +60,4 @@ export const mcpSender: Sender<"mcp"> = {
 export const httpSender: Sender<"http"> = createHttpSender();
 
 /** One POST with the selection set and the arguments as variables. A query retries as GET does. A mutation never does. */
-export const graphqlSender: Sender<"graphql"> = {
-  kind: "graphql",
-  send: (template, args, context) => notBuiltAsync("execute/graphql", template, args, context),
-};
+export const graphqlSender: Sender<"graphql"> = createGraphqlSender();

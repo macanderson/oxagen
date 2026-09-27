@@ -3,6 +3,7 @@
 import { vi } from "vitest";
 import type { ManifestAuth, ManifestServer, ManifestShaping } from "../../contract/manifest";
 import { decodeText, encodeText } from "../body";
+import { isRecord } from "../util";
 import type { SendContext, SendCredential } from "../sender";
 import type {
   CallToolResult,
@@ -140,3 +141,98 @@ export function sendContext(options: ContextOptions): SendContext {
     signal: options.signal ?? new AbortController().signal,
   };
 }
+
+// ── MCP ──────────────────────────────────────────────────────────────────────
+
+/** A JSON-RPC response to request id, as a JSON body. */
+export function rpcReply(id: number, result: unknown, headers: HeaderEntry[] = []): FakeResponse {
+  return reply(200, { jsonrpc: "2.0", id, result }, headers);
+}
+
+/** A JSON-RPC error response to request id, as a JSON body. */
+export function rpcFailure(id: number, error: unknown): FakeResponse {
+  return reply(200, { jsonrpc: "2.0", id, error });
+}
+
+/** These JSON-RPC messages as an event stream, one event per chunk. */
+export function eventStream(messages: readonly unknown[], headers: HeaderEntry[] = []): FakeResponse {
+  const text = messages.map((message) => `event: message\ndata: ${JSON.stringify(message)}\n\n`);
+  return streamed(200, text, [["content-type", "text/event-stream"], ...headers]);
+}
+
+/** A response whose body yields these chunks and then never ends. */
+export function hanging(status: number, chunks: readonly string[] = [], headers: HeaderEntry[] = []): FakeResponse {
+  return {
+    status,
+    headers,
+    body: (async function* () {
+      for (const chunk of chunks) yield encodeText(chunk);
+      await new Promise<never>(() => undefined);
+    })(),
+    cancel: vi.fn(),
+  };
+}
+
+export const SESSION_ID = "session-7f3a";
+
+type Answer = Promise<HttpTransportResponse> | HttpTransportResponse;
+
+export interface McpScript {
+  /** The answer to initialize. By default a 200 with a session id and protocol 2025-06-18. */
+  initialize?: (request: HttpTransportRequest) => Answer;
+  /** The answer to notifications/initialized. By default a 202 with no body. */
+  initialized?: (request: HttpTransportRequest) => Answer;
+  /** The answer to tools/call. By default one text item. */
+  call?: (request: HttpTransportRequest) => Answer;
+  /** The answer to the DELETE. By default a 204. */
+  close?: (request: HttpTransportRequest) => Answer;
+}
+
+/** The initialize answer mcpServer gives by default. */
+export function initialized(protocolVersion = "2025-06-18", headers: HeaderEntry[] = [["Mcp-Session-Id", SESSION_ID]]): FakeResponse {
+  return rpcReply(1, { protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "fake", version: "1" } }, headers);
+}
+
+function isDelete(request: HttpTransportRequest): boolean {
+  return request.target.method === "DELETE";
+}
+
+/** The JSON-RPC method of a POST, or DELETE for the DELETE. */
+export function mcpMethod(request: HttpTransportRequest): string {
+  if (isDelete(request)) return "DELETE";
+  const message = bodyJson(request);
+  return isRecord(message) && typeof message.method === "string" ? message.method : "?";
+}
+
+/**
+ * An answer function for fakeHttp that plays a streamable HTTP MCP server.
+ * It routes on the HTTP method and the JSON-RPC method, not on call order,
+ * so a retried initialize gets the same script.
+ */
+export function mcpServer(script: McpScript = {}): (request: HttpTransportRequest) => Promise<HttpTransportResponse> {
+  return async (request) => {
+    switch (mcpMethod(request)) {
+      case "DELETE":
+        return script.close === undefined ? reply(204) : script.close(request);
+      case "initialize":
+        return script.initialize === undefined ? initialized() : script.initialize(request);
+      case "notifications/initialized":
+        return script.initialized === undefined ? reply(202) : script.initialized(request);
+      case "tools/call":
+        return script.call === undefined ? rpcReply(2, { content: [{ type: "text", text: "ok" }] }) : script.call(request);
+      default:
+        throw new Error(`The fake MCP server got an unexpected message: ${bodyText(request)}`);
+    }
+  };
+}
+
+/** A ManifestServer with an MCP source and lock. Only the fields the MCP Sender reads are real. */
+export function mcpManifestServer(source: Record<string, unknown>, pinned: Record<string, unknown>): ManifestServer {
+  return { name: "files", source, pinned } as unknown as ManifestServer;
+}
+
+/** A remote streamable HTTP server. */
+export const REMOTE_MCP = mcpManifestServer(
+  { type: "remote", url: "https://mcp.example.com/mcp", transport: "http" },
+  { type: "remote", url: "https://mcp.example.com/mcp", transport: "http" },
+);

@@ -10,7 +10,6 @@ import {
   mcpSender,
   type CallEnvironment,
   type CredentialSource,
-  type SendContext,
   type Transport,
 } from "./execute";
 import { importGraphql } from "./graphql";
@@ -36,8 +35,6 @@ const asyncStubs: Array<[string, () => Promise<unknown>]> = [
     () =>
       execute(stub<ManifestTool>(), {}, stub<CallEnvironment>(), stub<CredentialSource>(), stub<Transport>()),
   ],
-  ["execute/mcp", () => mcpSender.send(stub(), {}, stub<SendContext>())],
-  ["execute/graphql", () => graphqlSender.send(stub(), {}, stub<SendContext>())],
 ];
 
 describe("module stubs", () => {

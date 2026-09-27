@@ -111,7 +111,8 @@ export const RETRY_STATUSES: ReadonlySet<number> = new Set([429, 502, 503, 504])
 
 const MAX_DETAIL = 1000;
 
-function cut(text: string): string {
+/** An upstream's text for an error detail: trimmed, and cut at 1000 characters. */
+export function cutDetail(text: string): string {
   const trimmed = text.trim();
   return trimmed.length <= MAX_DETAIL ? trimmed : `${trimmed.slice(0, MAX_DETAIL)}…`;
 }
@@ -155,8 +156,8 @@ export function upstreamError(response: HttpTransportResponse, bytes: Uint8Array
         : text
       : firstText(problem, ["detail", "message", "error_description", "error"]);
   return {
-    title: title === undefined ? "Upstream error" : cut(title),
-    detail: detail === undefined ? `The upstream answered ${status}.` : cut(detail),
+    title: title === undefined ? "Upstream error" : cutDetail(title),
+    detail: detail === undefined ? `The upstream answered ${status}.` : cutDetail(detail),
     status,
   };
 }
