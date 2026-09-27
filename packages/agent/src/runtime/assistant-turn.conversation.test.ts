@@ -182,6 +182,26 @@ describe("appendUserMessage", () => {
     expect(captured.inserts[0]?.values.title).toBe("why did the deploy fail?");
   });
 
+  it("marks a continued conversation active when the question is written, before any reply", async () => {
+    // The nightly archive (#4435) reads updated_at. A question whose turn is
+    // still running, or failed, must not leave the conversation looking idle.
+    const { tx, captured } = fakeTx([CONVERSATION]);
+    await appendUserMessage(tx, SCOPE, USER, ask(CONVERSATION.id), "chat");
+    const bumps = captured.updates.filter(
+      (u) => u.table === CONVERSATIONS && "updatedAt" in u.set,
+    );
+    expect(bumps).toHaveLength(1);
+    expect(bumps[0]?.set.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it("writes no activity bump for a new conversation, whose insert sets it", async () => {
+    const { tx, captured } = fakeTx([]);
+    await appendUserMessage(tx, SCOPE, USER, ask(null), "chat");
+    expect(
+      captured.updates.filter((u) => u.table === CONVERSATIONS),
+    ).toHaveLength(0);
+  });
+
   it("leaves the title of a continued conversation alone", async () => {
     const { tx, captured } = fakeTx([CONVERSATION]);
     await appendUserMessage(tx, SCOPE, USER, ask(CONVERSATION.id), "chat");

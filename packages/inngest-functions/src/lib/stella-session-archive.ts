@@ -66,7 +66,7 @@ export function archiveAfterDays(settings: unknown): number {
   return value;
 }
 
-/** The instant before which a session's last reply makes it archivable. */
+/** The instant before which a session's last question or reply makes it archivable. */
 export function archiveCutoff(now: Date, days: number): Date {
   return new Date(now.getTime() - days * DAY_MS);
 }

@@ -775,7 +775,9 @@ describe("the prepared turn", () => {
         runId: "arun_0123456789abcdef012345",
       },
     });
-    expect(captured.updates[0]!.set).toMatchObject({
+    // The question marked the conversation active first (#4435).
+    expect(captured.updates[0]!.set).toEqual({ updatedAt: expect.any(Date) });
+    expect(captured.updates.at(-1)!.set).toMatchObject({
       activeLeafMessageId: "msg-assistant",
     });
   });
@@ -1028,7 +1030,10 @@ describe("the prepared turn", () => {
         .filter((i) => i.table === schema.messages)
         .map((i) => i.values.role),
     ).toEqual(["user"]);
-    expect(captured.updates).toHaveLength(0);
+    // Only the question's activity mark (#4435). No reply moved the leaf.
+    expect(captured.updates.map((u) => u.set)).toEqual([
+      { updatedAt: expect.any(Date) },
+    ]);
   });
 
   describe("a long thread (#4171)", () => {

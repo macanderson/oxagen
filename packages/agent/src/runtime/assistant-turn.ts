@@ -1026,6 +1026,17 @@ export async function appendUserMessage(
       .limit(1);
     if (!existing) throw new ConversationNotFoundError(named);
     conversation = existing;
+    // A question is activity. The nightly archive (#4435) takes a
+    // conversation whose updated_at is older than the workspace's window, so
+    // the question bumps it here rather than waiting for the reply. A turn
+    // still running, or one that failed, then never reads as idle. The
+    // update also locks the row, so this turn and an archive that race on
+    // one conversation cannot both commit: under repeatable read, the later
+    // writer fails.
+    await tx
+      .update(schema.conversations)
+      .set({ updatedAt: new Date() })
+      .where(eq(schema.conversations.id, existing.id));
   } else {
     const [created] = await tx
       .insert(schema.conversations)
