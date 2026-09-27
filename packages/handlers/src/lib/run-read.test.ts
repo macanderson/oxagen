@@ -42,9 +42,10 @@ import {
   readFrames,
   type ResolvedRun,
   runChainReads,
+  runChainWindowReads,
   type RunReadDeps,
 } from "./run-read";
-import { tachoRow } from "../run.test-support";
+import { memorySubagentFrames, tachoRow } from "../run.test-support";
 
 const UUID_RUN = "33333333-3333-4333-8333-333333333333";
 const UUID_ATTEMPT = "44444444-4444-4444-8444-444444444444";
@@ -214,6 +215,89 @@ describe("readFrameAt: a wrapped run", () => {
   });
 });
 
+// A subagent records on a chain of its own, numbered from 0 like the run's,
+// so its frame is named by the chain and the seq together (#3823).
+describe("readFrameAt: a subagent chain of a wrapped run", () => {
+  const child = (seq: number, session = CHILD, root = ROOT) =>
+    tachoRow(seq, {
+      sessionUuid: session,
+      rootSessionUuid: root,
+      parentSessionUuid: root,
+    });
+
+  function deps(rows: ReturnType<typeof child>[]) {
+    const tachoFrames = rootFrames([0, 1, 2]);
+    const tachoSubagentFrames = vi.fn(memorySubagentFrames(rows));
+    return {
+      deps: { tachoFrames, tachoSubagentFrames } as unknown as RunReadDeps,
+      tachoFrames,
+      tachoSubagentFrames,
+    };
+  }
+
+  it("reads the chain's frame 0, which has no position below it", async () => {
+    const h = deps([child(0), child(1)]);
+    const frame = await readFrameAt(h.deps, tachoRun(3), "0", CHILD);
+    expect(frame?.seq).toBe("0");
+    expect(frame?.chain?.sessionUuid).toBe(CHILD);
+    expect(h.tachoSubagentFrames.mock.calls).toEqual([
+      [
+        {
+          rootSessionUuid: ROOT,
+          sessionUuids: [CHILD],
+          after: null,
+          throughSeq: 0,
+          limit: 1,
+        },
+      ],
+    ]);
+    expect(h.tachoFrames).not.toHaveBeenCalled();
+  });
+
+  it("reads a later frame from just below it, bounded at the frame", async () => {
+    const h = deps([child(0), child(1), child(2)]);
+    const frame = await readFrameAt(h.deps, tachoRun(3), "1", CHILD);
+    expect(frame?.seq).toBe("1");
+    expect(h.tachoSubagentFrames.mock.calls[0]?.[0]).toMatchObject({
+      after: { sessionUuid: CHILD, seq: 0 },
+      throughSeq: 1,
+    });
+  });
+
+  it("reads the run's own chain when the session named is the run's own, in any case", async () => {
+    const h = deps([child(1)]);
+    const frame = await readFrameAt(
+      h.deps,
+      tachoRun(3),
+      "1",
+      ROOT.toUpperCase(),
+    );
+    expect(frame?.seq).toBe("1");
+    expect(frame?.chain).toBeUndefined();
+    expect(h.tachoSubagentFrames).not.toHaveBeenCalled();
+  });
+
+  it("answers null for a chain under another root (negative)", async () => {
+    const OTHER_ROOT = "0192d4a8-7c1e-7a00-8000-00000000d0de";
+    const FOREIGN = "0192d4a8-7c1e-7a00-8000-00000000d1d0";
+    const h = deps([child(0, FOREIGN, OTHER_ROOT)]);
+    expect(await readFrameAt(h.deps, tachoRun(3), "0", FOREIGN)).toBeNull();
+  });
+
+  it("answers null when no subagent reader is wired, rather than the run's frame (negative)", async () => {
+    const tachoFrames = rootFrames([0, 1, 2]);
+    const bare = { tachoFrames } as unknown as RunReadDeps;
+    expect(await readFrameAt(bare, tachoRun(3), "1", CHILD)).toBeNull();
+    expect(tachoFrames).not.toHaveBeenCalled();
+  });
+
+  it("answers null for any session on a ledger run, which has one chain (negative)", async () => {
+    const h = deps([child(0)]);
+    expect(await readFrameAt(h.deps, run, "1", CHILD)).toBeNull();
+    expect(h.tachoSubagentFrames).not.toHaveBeenCalled();
+  });
+});
+
 // The composition itself (the splice, the cap over every chain, the listed
 // chains) is `readRunChains` and `subagentChainRead` in @oxagen/run-ledger,
 // tested there. These check that `deps` reaches it: the root chain through
@@ -334,5 +418,82 @@ describe("runChainReads: a wrapped run's subagent chains", () => {
       witnessFor: null,
     };
     expect(runChainReads(wired, ledger).subagents).toBeNull();
+  });
+});
+
+// #3823: a transcript page read from a cursor reads a window of the run. The
+// window's composition is `readTranscriptWindow` in @oxagen/run-ledger,
+// tested there. These check that `deps` reaches it.
+describe("runChainWindowReads", () => {
+  const run = tachoRun(8);
+  const ledger: ResolvedRun = {
+    source: "ledger",
+    runId: UUID_RUN,
+    row: {} as never,
+    record: {} as never,
+    item: {} as never,
+    witnessFor: null,
+  };
+
+  it("reads the run's own chain from the window's first frame, not from seq 0", async () => {
+    const tachoFrames = rootFrames([0, 1, 2, 3, 4, 5, 6, 7]);
+    const reads = runChainWindowReads(
+      { tachoFrames } as unknown as RunReadDeps,
+      run,
+    );
+    const own = await reads?.own("5", 10);
+    expect(own?.frames.map((f) => f.seq)).toEqual(["5", "6", "7"]);
+    expect(own?.complete).toBe(true);
+    expect(tachoFrames.mock.calls).toEqual([
+      [{ sessionUuid: ROOT, afterSeq: 4, throughSeq: 15, limit: 11 }],
+    ]);
+  });
+
+  it("lists the chains from Postgres and reads only the ones the window holds", async () => {
+    const tachoSubagentFrames = memorySubagentFrames([
+      tachoRow(0, {
+        sessionUuid: CHILD,
+        rootSessionUuid: ROOT,
+        parentSessionUuid: ROOT,
+      }),
+    ]);
+    const tachoChains = vi.fn(() => Promise.resolve([]));
+    const reads = runChainWindowReads(
+      {
+        tachoFrames: rootFrames([]),
+        tachoSubagentFrames,
+        tachoChains,
+      } as unknown as RunReadDeps,
+      run,
+    );
+    expect(await reads?.chains?.()).toEqual([]);
+    expect(tachoChains).toHaveBeenCalledWith(ROOT);
+    const held = await reads?.subagents([CHILD], 10);
+    expect(held?.frames.map((f) => f.chain?.sessionUuid)).toEqual([CHILD]);
+  });
+
+  it("answers null when it reads subagent frames but cannot list the chains (negative)", () => {
+    const reads = runChainWindowReads(
+      {
+        tachoFrames: rootFrames([]),
+        tachoSubagentFrames: memorySubagentFrames([]),
+      } as unknown as RunReadDeps,
+      run,
+    );
+    expect(reads).toBeNull();
+  });
+
+  it("lists no chains for a ledger run, and reads its frames after the one before the window", async () => {
+    const readAttemptEventsSince = vi.fn(() => Promise.resolve([]));
+    const reads = runChainWindowReads(
+      {
+        tachoFrames: rootFrames([]),
+        store: { readAttemptEventsSince },
+      } as unknown as RunReadDeps,
+      ledger,
+    );
+    expect(reads?.chains).toBeNull();
+    await reads?.own("12", 10);
+    expect(readAttemptEventsSince).toHaveBeenCalledWith(UUID_RUN, "11", 11);
   });
 });

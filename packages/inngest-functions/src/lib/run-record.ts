@@ -13,6 +13,7 @@ import {
   deferredAttester,
   type FrameRead,
   ledgerFrame,
+  listSubagentChains,
   listSubagentSessions,
   readTranscriptFrames,
   type RunFrame,
@@ -26,6 +27,7 @@ import {
   digestBytes,
   type JsonValue,
   readArchiveSegment,
+  type RunExportAttemptChain,
   type UnflattenReading,
   unflattenEventReading,
   wrappedFrameOf,
@@ -70,6 +72,11 @@ export interface SealedSegment {
    * the seal signed.
    */
   sealAttestation: { keyId: string; sig: string } | null;
+  /**
+   * Set on a wrapped run's subagent chain: where the chain sits in the run.
+   * Absent on the run's own chain and on every ledger attempt.
+   */
+  chain?: RunExportAttemptChain;
 }
 
 type RunRecord =
@@ -80,6 +87,10 @@ type RunRecord =
       enforcementTier: string;
       completenessGaps: string[];
       replayGrade: string | null;
+      /** The chain's next free seq, which ingest moves before ClickHouse. */
+      seqCount: number;
+      /** The hash the seal recorded, or null while the session is open. */
+      finalHash: string | null;
     };
 
 const gapsOf = (value: unknown): string[] =>
@@ -118,6 +129,8 @@ export async function resolveRunRecord(
             enforcementTier: schema.tachoSessions.enforcementTier,
             completenessGaps: schema.tachoSessions.completenessGaps,
             replayGrade: schema.tachoSessions.replayGrade,
+            seqCount: schema.tachoSessions.seqCount,
+            finalHash: schema.tachoSessions.finalHash,
           })
           .from(schema.tachoSessions)
           .where(
@@ -136,6 +149,8 @@ export async function resolveRunRecord(
         enforcementTier: row.enforcementTier,
         completenessGaps: gapsOf(row.completenessGaps),
         replayGrade: row.replayGrade,
+        seqCount: row.seqCount,
+        finalHash: row.finalHash,
       };
     }
     const store = ledgerStore();
@@ -292,10 +307,86 @@ function tachoEnvelope(row: TachoFrameRow): JsonValue {
 }
 
 /**
+ * Refuses a chain whose recorded head ClickHouse cannot return yet. Ingest
+ * moves `seq_count` before the batch's insert is readable, so a read right
+ * after a seal can return a prefix of the chain, or nothing. Signing that
+ * prefix would leave the later frames out of an export that claims to hold
+ * the whole chain. The error is a plain `Error`, so the export job retries
+ * the read, and marks the export failed with this message once its retries
+ * run out.
+ *
+ * The head is the highest seq read, not the last row's, so a chain with a
+ * recorded break below its head still passes. A sealed chain also needs its
+ * seal's frame among the rows. A host's seal holds against later frames, so
+ * that frame is not always the last one.
+ */
+function assertHeadReadable(
+  sessionUuid: string,
+  records: readonly TachoEventRecord[],
+  row: { seqCount: number; finalHash: string | null },
+): void {
+  if (row.seqCount === 0) return;
+  const recorded = row.seqCount - 1;
+  const head = records.reduce(
+    (highest, record) => Math.max(highest, record.frame.seq),
+    -1,
+  );
+  if (head < recorded) {
+    throw new Error(
+      `chain ${sessionUuid} records seq ${recorded} as its head, and the event store returns ${head < 0 ? "no frame" : `frames through seq ${head}`}`,
+    );
+  }
+  if (
+    row.finalHash !== null &&
+    !records.some((record) => record.frame.hash === row.finalHash)
+  ) {
+    throw new Error(
+      `chain ${sessionUuid} sealed at ${row.finalHash}, and the event store returns no frame with that hash`,
+    );
+  }
+}
+
+/** A wrapped chain's segment, built from its stored rows. */
+function tachoSegment(
+  sessionUuid: string,
+  records: readonly TachoEventRecord[],
+  seal: {
+    enforcementTier: string;
+    completenessGaps: string[];
+    replayGrade: string | null;
+  },
+): SealedSegment {
+  return {
+    attemptId: sessionUuid,
+    attemptPublicId: sessionUuid,
+    frameCount: records.length,
+    merkleRoot: "",
+    archiveSegmentDigest: null,
+    eventStreamDigest: null,
+    enforcementTier: seal.enforcementTier,
+    completenessGaps: seal.completenessGaps,
+    replayGrade: seal.replayGrade,
+    envelopes: tachoExportFrames(records),
+    digests: records.map((r) => r.frame.hash),
+    // A wrapped chain's seal is not a ledger row, so it carries no signed
+    // attestation (ADR-195).
+    sealAttestation: null,
+  };
+}
+
+/**
  * The sealed segments of a run: one per sealed ledger attempt, read from the
- * attempt's archive segment; one for a wrapped session, built from its rows.
- * A ledger attempt sealed before the recorder (no segment) fails the read:
- * an export attests what the seal committed to, and that seal committed to
+ * attempt's archive segment. A wrapped run has one for its own chain, built
+ * from its rows, and one more per subagent chain (#3823): a subagent records
+ * on a hash chain of its own, from genesis at its own seq 0, so each chain is
+ * attested and verified as an attempt of its own, with the chain's session
+ * uuid as its id and its tier, gaps and grade from the chain's own row. A
+ * chain that recorded no frame has nothing to attest and is left out. Every
+ * other chain is read through the head its row records
+ * (`assertHeadReadable`). A child that never sealed, such as a crashed
+ * subagent, is signed at that head rather than held until its idle close. A
+ * ledger attempt sealed before the recorder (no segment) fails the read: an
+ * export attests what the seal committed to, and that seal committed to
  * nothing.
  */
 export async function readSealedSegments(
@@ -304,23 +395,30 @@ export async function readSealedSegments(
 ): Promise<SealedSegment[]> {
   return runInTenantScope(scope, async () => {
     if (record.source === "tacho") {
-      const records = await allTachoRecords(record.sessionUuid);
-      return [
-        {
-          attemptId: record.sessionUuid,
-          attemptPublicId: record.sessionUuid,
-          frameCount: records.length,
-          merkleRoot: "",
-          archiveSegmentDigest: null,
-          eventStreamDigest: null,
-          enforcementTier: record.enforcementTier,
-          completenessGaps: record.completenessGaps,
-          replayGrade: record.replayGrade,
-          envelopes: tachoExportFrames(records),
-          digests: records.map((r) => r.frame.hash),
-          sealAttestation: null,
-        },
-      ];
+      const own = await allTachoRecords(record.sessionUuid);
+      assertHeadReadable(record.sessionUuid, own, record);
+      const segments = [tachoSegment(record.sessionUuid, own, record)];
+      const chains = await listSubagentChains(scope, record.sessionUuid);
+      for (const chain of chains) {
+        if (chain.seqCount === 0) continue;
+        const records = await allTachoRecords(chain.sessionUuid);
+        assertHeadReadable(chain.sessionUuid, records, chain);
+        segments.push({
+          ...tachoSegment(chain.sessionUuid, records, {
+            enforcementTier: chain.enforcementTier,
+            completenessGaps: gapsOf(chain.completenessGaps),
+            replayGrade: chain.replayGrade,
+          }),
+          chain: {
+            session_uuid: chain.sessionUuid,
+            parent_session_uuid: chain.parentSessionUuid,
+            subagent_id: chain.subagentId,
+            subagent_type: chain.subagentType,
+            spawn_tool_use_id: chain.spawnToolUseId,
+          },
+        });
+      }
+      return segments;
     }
     const store = evidenceStore();
     const segments: SealedSegment[] = [];
@@ -393,7 +491,9 @@ async function* ownFramePages(record: RunRecord): AsyncGenerator<RunFrame[]> {
 
 /**
  * The run's own chain up to `upTo` frames and past it by at most a page:
- * a wrapped session's `tacho_events` rows, or a ledger run's events.
+ * a wrapped session's `tacho_events` rows, or a ledger run's events. Pages
+ * are read only while the read is short of `upTo`, so a long run costs at
+ * most one page past the cap (#3784).
  */
 async function ownFrames(
   record: RunRecord,
@@ -408,34 +508,18 @@ async function ownFrames(
 }
 
 /**
- * The run's own chain a page at a time, in sequence order, each page read
- * inside the run's tenant scope. A page holds at most 500 frames. Nothing is
- * read until the caller asks for the next page, so a reader that stops
- * early, as the enrichment job does at its text ceiling, holds one page in
- * memory and reads no more (#3784).
- */
-export async function* runFramePages(
-  scope: RunScope,
-  record: RunRecord,
-): AsyncGenerator<RunFrame[]> {
-  const pages = ownFramePages(record);
-  try {
-    for (;;) {
-      const next = await runInTenantScope(scope, () => pages.next());
-      if (next.done === true) return;
-      yield next.value;
-    }
-  } finally {
-    await pages.return(undefined);
-  }
-}
-
-/**
  * The frames the Run page folds for this run, read the same way
  * (`readTranscriptFrames` in `@oxagen/run-ledger`): every subagent chain
  * spliced in where it was spawned, late harness reports uncounted, each model
- * call once, to `TRANSCRIPT_FRAME_CAP` frames. `run.summarize` folds these,
- * so the account it writes covers the steps the page draws.
+ * call once, to `TRANSCRIPT_FRAME_CAP` frames. The enrichment job behind
+ * `summarize_run` (`run.enrich`) reads these, so the account it writes covers
+ * a subagent's work as the page draws it (#3823).
+ *
+ * The read holds up to `TRANSCRIPT_FRAME_CAP` frames across every chain, not
+ * one page (#3784). Splicing a subagent chain in where it was spawned needs
+ * the frame that spawned it, which can sit on any page of the run's own
+ * chain. The frames carry summaries and body references only. The enrichment
+ * job opens bodies later, up to its text and body-read ceilings.
  */
 export async function readTranscriptFramesOf(
   scope: RunScope,

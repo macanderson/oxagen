@@ -10,7 +10,22 @@
 //
 // The migration that creates the table and its tenant policy is written with
 // the change that lands this schema source.
-import { check, index, text, timestamp, uuid } from "drizzle-orm/pg-core";
+//
+// A row has a kind (#3941). `question` is an agent asking in its own words
+// (#3839). `repo_unknown` is a host holding a session that started in a
+// repository the workspace has not bound: the ingest writes it from the
+// host's `control.interject` frame, keyed on that frame so a re-sent batch
+// writes no second row, and copies the frame's body onto it.
+import {
+  bigint,
+  check,
+  index,
+  jsonb,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { agentSchema } from "./_schemas";
 import { auditMixin, idMixin, orgScopeMixin } from "./_mixins";
@@ -38,6 +53,24 @@ export const interjections = agentSchema.table(
     answeredAt: timestamp("answered_at", { withTimezone: true, mode: "date" }),
     answer: text("answer"),
     answeredByUserId: uuid("answered_by_user_id"),
+    // `question` or `repo_unknown`. Every row written before #3941 is a
+    // question.
+    kind: text("kind").notNull().default("question"),
+    // The seq of the `control.interject` frame that raised the row, on the
+    // run's own chain. Null on a question, which no frame raised.
+    raisedSeq: bigint("raised_seq", { mode: "number" }),
+    // The `control.interject` body as the host sealed it. Required on a
+    // `repo_unknown` row, because the Run page renders the question, the
+    // paths and the timeout from it.
+    body: jsonb("body"),
+    // The repository (`owner/name`) resolved from the body's remote digest.
+    // Null until it is resolved, and when no connected repository matches.
+    repository: text("repository"),
+    // How a `repo_unknown` row was settled: `link`, `create` or `deny`.
+    path: text("path"),
+    // The receipt minted with the answer, shared by the row, the audit event
+    // and the host's `control.answer` frame.
+    receiptId: text("receipt_id").unique(),
   },
   (t) => ({
     runPublicIdCheck: check(
@@ -68,6 +101,40 @@ export const interjections = agentSchema.table(
       "interjections_answer_length_check",
       sql`${t.answer} IS NULL OR char_length(${t.answer}) <= 4000`,
     ),
+    kindCheck: check(
+      "interjections_kind_check",
+      sql`${t.kind} IN ('question', 'repo_unknown')`,
+    ),
+    bodyCheck: check(
+      "interjections_body_check",
+      sql`${t.kind} = 'question' OR ${t.body} IS NOT NULL`,
+    ),
+    repositoryCheck: check(
+      "interjections_repository_check",
+      sql`${t.repository} IS NULL OR ${t.repository} <> ''`,
+    ),
+    pathCheck: check(
+      "interjections_path_check",
+      sql`${t.path} IS NULL OR ${t.path} IN ('link', 'create', 'deny')`,
+    ),
+    // Only a repo_unknown row takes a path.
+    pathKindCheck: check(
+      "interjections_path_kind_check",
+      sql`${t.path} IS NULL OR ${t.kind} = 'repo_unknown'`,
+    ),
+    // Only the timeout answers deny, and the timeout is no person.
+    pathDenyCheck: check(
+      "interjections_path_deny_check",
+      sql`${t.path} IS DISTINCT FROM 'deny' OR ${t.answeredByUserId} IS NULL`,
+    ),
+    receiptIdCheck: check(
+      "interjections_receipt_id_check",
+      sql`${t.receiptId} IS NULL OR (${t.receiptId} ~ '^rcp_[0-9a-z]+$' AND ${t.answeredAt} IS NOT NULL)`,
+    ),
+    // One row per raising frame, so a re-sent batch inserts nothing.
+    raisedFrameUq: uniqueIndex("interjections_raised_frame_uq")
+      .on(t.workspaceId, t.runPublicId, t.raisedSeq)
+      .where(sql`raised_seq IS NOT NULL`),
     // The open queue list_interjections and get_nav_counts read.
     openIdx: index("interjections_open_idx")
       .on(t.orgId, t.workspaceId, t.expiresAt)

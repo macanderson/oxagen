@@ -64,11 +64,12 @@ vi.mock("@oxagen/telemetry", () => ({
   selectTachoSubagentEvents: mocks.selectTachoSubagentEvents,
 }));
 
+import { NonRetriableError } from "@oxagen/functions";
+import { TRANSCRIPT_FRAME_CAP } from "@oxagen/run-ledger";
 import {
   readSealedSegments,
   readTranscriptFramesOf,
   resolveRunRecord,
-  runFramePages,
 } from "./run-record";
 
 const SCOPE = {
@@ -77,6 +78,7 @@ const SCOPE = {
 };
 const OTHER_WORKSPACE = "0192d4a8-7c1e-7a00-8000-0000000000b2";
 const SESSION = "0192d4a8-7c1e-7a00-8000-00000000c0de";
+const HEAD_HASH = `sha256:${"f".repeat(64)}`;
 
 function tachoRow(seq: number): TachoFrameRow {
   return {
@@ -139,6 +141,8 @@ describe("resolveRunRecord", () => {
         enforcementTier: "gateway",
         completenessGaps: ["tool_bodies", 3],
         replayGrade: "view",
+        seqCount: 12,
+        finalHash: HEAD_HASH,
       },
     ]);
     const record = await resolveRunRecord(SCOPE, "tse_4q8r1t6v3x5z0b2d7h2k9m");
@@ -148,6 +152,8 @@ describe("resolveRunRecord", () => {
       enforcementTier: "gateway",
       completenessGaps: ["tool_bodies"],
       replayGrade: "view",
+      seqCount: 12,
+      finalHash: HEAD_HASH,
     });
     expect(scopes).toEqual([SCOPE]);
     const [query] = compiled;
@@ -281,6 +287,8 @@ describe("readSealedSegments", () => {
   });
 
   it("builds a wrapped session's one segment from every row, paging past the first 500", async () => {
+    // Postgres lists no subagent chain under the session.
+    mocks.withTenantDb.mockResolvedValue([]);
     const rows = Array.from({ length: 501 }, (_, i) => tachoRow(i));
     mocks.selectTachoEventRecords.mockImplementation(
       ({ afterSeq, limit }: { afterSeq: number; limit: number }) =>
@@ -297,6 +305,8 @@ describe("readSealedSegments", () => {
       enforcementTier: "gateway",
       completenessGaps: [],
       replayGrade: "view",
+      seqCount: 501,
+      finalHash: null,
     });
     expect(segment?.frameCount).toBe(501);
     expect(segment?.digests.at(-1)).toBe(rows[500]?.hash);
@@ -362,12 +372,15 @@ describe("readSealedSegments", () => {
       },
     };
     mocks.selectTachoEventRecords.mockResolvedValue([proven, unproven]);
+    mocks.withTenantDb.mockResolvedValue([]);
     const [segment] = await readSealedSegments(SCOPE, {
       source: "tacho",
       sessionUuid: SESSION,
       enforcementTier: "harness",
       completenessGaps: [],
       replayGrade: null,
+      seqCount: 2,
+      finalHash: null,
     });
     const [carried, bare] = (segment?.envelopes ?? []) as Array<
       Record<string, unknown>
@@ -423,12 +436,15 @@ describe("readSealedSegments", () => {
     mocks.selectTachoEventRecords.mockResolvedValue([
       { frame: { ...tachoRow(0), hash: event.hash, bytesRef: "" }, envelope },
     ]);
+    mocks.withTenantDb.mockResolvedValue([]);
     const [segment] = await readSealedSegments(SCOPE, {
       source: "tacho",
       sessionUuid: SESSION,
       enforcementTier: "harness",
       completenessGaps: [],
       replayGrade: null,
+      seqCount: 1,
+      finalHash: null,
     });
     const [carried] = (segment?.envelopes ?? []) as Array<
       Record<string, JsonValue>
@@ -445,6 +461,189 @@ describe("readSealedSegments", () => {
     expect(carried).toEqual(
       wrappedFrameOf(carried?.["event"] as Record<string, JsonValue>, null),
     );
+  });
+
+  // #3823: a subagent records on a hash chain of its own from genesis, so
+  // each chain is attested and verified as an attempt of its own.
+  describe("subagent chains (#3823)", () => {
+    const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    const EMPTY = "0192d4a8-7c1e-7a00-8000-00000000c1d1";
+    const chainRow = (
+      sessionUuid: string,
+      over: { seqCount?: number; finalHash?: string | null } = {},
+    ) => ({
+      sessionUuid,
+      sessionId: `${sessionUuid.slice(0, 15)}000${sessionUuid.slice(18)}`,
+      parentSessionUuid: SESSION,
+      subagentId: "agent-1",
+      subagentType: "Explore",
+      spawnToolUseId: "toolu_A",
+      seqCount: 2,
+      startedAt: new Date("2026-09-11T09:01:00.000Z"),
+      lastEventAt: new Date("2026-09-11T09:02:00.000Z"),
+      createdAt: new Date("2026-09-11T09:01:00.000Z"),
+      finalHash: null as string | null,
+      sealedAt: null as Date | null,
+      enforcementTier: "observe",
+      completenessGaps: ["tool_bodies", 3],
+      replayGrade: "inspect",
+      ...over,
+    });
+    const ROOT = {
+      source: "tacho" as const,
+      sessionUuid: SESSION,
+      enforcementTier: "gateway",
+      completenessGaps: [] as string[],
+      replayGrade: "view",
+      seqCount: 2,
+      finalHash: null,
+    };
+
+    /**
+     * Postgres lists `chains` under the run, and the event store holds
+     * `bySession`'s rows. Answers the SQL the chain list compiled.
+     */
+    function stored(
+      chains: ReturnType<typeof chainRow>[],
+      bySession: Record<string, TachoFrameRow[]>,
+    ) {
+      const compiled: string[] = [];
+      const db = drizzle.mock({ schema });
+      mocks.withTenantDb.mockImplementation(
+        (fn: (tx: unknown) => { toSQL(): { sql: string } }) => {
+          compiled.push(fn(db).toSQL().sql);
+          return Promise.resolve(chains);
+        },
+      );
+      mocks.selectTachoEventRecords.mockImplementation(
+        ({
+          sessionUuid,
+          afterSeq,
+        }: {
+          sessionUuid: string;
+          afterSeq: number;
+        }) =>
+          Promise.resolve(
+            (bySession[sessionUuid] ?? [])
+              .filter((r) => r.seq > afterSeq)
+              .map((frame) => ({ frame, envelope: {} })),
+          ),
+      );
+      return compiled;
+    }
+
+    const readSessions = () =>
+      mocks.selectTachoEventRecords.mock.calls.map(
+        (call) => (call[0] as { sessionUuid: string }).sessionUuid,
+      );
+
+    it("adds one segment per subagent chain, with its own row's seal and a chain block, and leaves out a chain that recorded nothing", async () => {
+      const compiled = stored(
+        [chainRow(CHILD), chainRow(EMPTY, { seqCount: 0 })],
+        {
+          [SESSION]: [tachoRow(0), tachoRow(1)],
+          [CHILD]: [tachoRow(0), tachoRow(1)],
+        },
+      );
+      const segments = await readSealedSegments(SCOPE, ROOT);
+      expect(
+        segments.map((s) => [s.attemptPublicId, s.frameCount, s.chain]),
+      ).toEqual([
+        [SESSION, 2, undefined],
+        [
+          CHILD,
+          2,
+          {
+            session_uuid: CHILD,
+            parent_session_uuid: SESSION,
+            subagent_id: "agent-1",
+            subagent_type: "Explore",
+            spawn_tool_use_id: "toolu_A",
+          },
+        ],
+      ]);
+      // The child's seal is its own row's, never the run's.
+      expect(segments[1]).toMatchObject({
+        attemptId: CHILD,
+        enforcementTier: "observe",
+        completenessGaps: ["tool_bodies"],
+        replayGrade: "inspect",
+        merkleRoot: "",
+        archiveSegmentDigest: null,
+      });
+      expect(segments[0]).toMatchObject({
+        enforcementTier: "gateway",
+        replayGrade: "view",
+      });
+      // A chain that recorded nothing is not even read.
+      expect(readSessions()).not.toContain(EMPTY);
+      // The chains were listed under the run's root, fenced to the workspace.
+      expect(compiled[0]).toMatch(/"sessions"\."root_session_uuid" = \$\d+/);
+      expect(compiled[0]).toMatch(/"sessions"\."workspace_id" = \$\d+/);
+      expect(scopes).toEqual([SCOPE]);
+    });
+
+    // Codex on #4421: ingest moves seq_count before ClickHouse returns the
+    // batch, so a read right after a seal can see a prefix of a child.
+    it("refuses a child whose recorded head the event store does not return yet, with an error the job retries (negative)", async () => {
+      stored([chainRow(CHILD, { seqCount: 3 })], {
+        [SESSION]: [tachoRow(0), tachoRow(1)],
+        [CHILD]: [tachoRow(0), tachoRow(1)],
+      });
+      const error = await readSealedSegments(SCOPE, ROOT).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(
+        `chain ${CHILD} records seq 2 as its head, and the event store returns frames through seq 1`,
+      );
+      // A plain Error: the export job retries it, where a NonRetriableError
+      // would fail the export at once.
+      expect(error).not.toBeInstanceOf(NonRetriableError);
+    });
+
+    it("refuses a child whose recorded frames the event store returns none of (negative)", async () => {
+      stored([chainRow(CHILD)], {
+        [SESSION]: [tachoRow(0), tachoRow(1)],
+      });
+      await expect(readSealedSegments(SCOPE, ROOT)).rejects.toThrow(
+        `chain ${CHILD} records seq 1 as its head, and the event store returns no frame`,
+      );
+    });
+
+    it("signs a sealed child whose seal frame is followed by a later frame, and refuses one whose seal frame is not returned (negative)", async () => {
+      // A host's seal holds against a late frame, so the seal's frame is
+      // not always the last one.
+      stored([chainRow(CHILD, { finalHash: tachoRow(0).hash })], {
+        [SESSION]: [tachoRow(0), tachoRow(1)],
+        [CHILD]: [tachoRow(0), tachoRow(1)],
+      });
+      const segments = await readSealedSegments(SCOPE, ROOT);
+      expect(segments.map((s) => s.attemptId)).toEqual([SESSION, CHILD]);
+
+      stored([chainRow(CHILD, { finalHash: HEAD_HASH })], {
+        [SESSION]: [tachoRow(0), tachoRow(1)],
+        [CHILD]: [tachoRow(0), tachoRow(1)],
+      });
+      await expect(readSealedSegments(SCOPE, ROOT)).rejects.toThrow(
+        `chain ${CHILD} sealed at ${HEAD_HASH}, and the event store returns no frame with that hash`,
+      );
+    });
+
+    it("refuses the run's own chain read as a prefix, before it lists a child (negative)", async () => {
+      stored([chainRow(CHILD)], {
+        [SESSION]: [tachoRow(0), tachoRow(1)],
+        [CHILD]: [tachoRow(0), tachoRow(1)],
+      });
+      await expect(
+        readSealedSegments(SCOPE, { ...ROOT, seqCount: 3 }),
+      ).rejects.toThrow(
+        `chain ${SESSION} records seq 2 as its head, and the event store returns frames through seq 1`,
+      );
+      expect(mocks.withTenantDb).not.toHaveBeenCalled();
+      expect(readSessions()).toEqual([SESSION]);
+    });
   });
 
   // #3814: each row used to search every reading it leaves open, although
@@ -492,12 +691,16 @@ describe("readSealedSegments", () => {
       };
     });
     mocks.selectTachoEventRecords.mockResolvedValue(records);
+    // The run lists no subagent chain.
+    mocks.withTenantDb.mockResolvedValue([]);
     const [segment] = await readSealedSegments(SCOPE, {
       source: "tacho",
       sessionUuid: SESSION,
       enforcementTier: "harness",
       completenessGaps: [],
       replayGrade: null,
+      seqCount: 2,
+      finalHash: null,
     });
     expect(
       (segment?.envelopes ?? []).map(
@@ -558,12 +761,16 @@ describe("readSealedSegments", () => {
       unproven,
       matching,
     ]);
+    // The run lists no subagent chain.
+    mocks.withTenantDb.mockResolvedValue([]);
     await readSealedSegments(SCOPE, {
       source: "tacho",
       sessionUuid: SESSION,
       enforcementTier: "harness",
       completenessGaps: [],
       replayGrade: null,
+      seqCount: 2,
+      finalHash: null,
     });
     const calls = mocks.unflattenEventReading.mock.calls;
     const first = (
@@ -607,48 +814,29 @@ const WRAPPED = {
   enforcementTier: "harness",
   completenessGaps: [] as string[],
   replayGrade: null,
+  // The transcript read does not check the recorded head. Only the export does.
+  seqCount: 0,
+  finalHash: null,
 };
 
-// #3784: the enrichment job read every frame of a run into one array before
-// it read any text. It now pulls pages and stops at its ceiling.
-describe("runFramePages", () => {
-  /** Every page a reader pulls to the end, as frame seqs. */
-  async function pagesOf(record: Parameters<typeof runFramePages>[1]) {
-    const pages: number[][] = [];
-    for await (const page of runFramePages(SCOPE, record))
-      pages.push(page.map((frame) => Number(frame.seq)));
-    return pages;
-  }
-
-  it("reads a wrapped session a page at a time, each inside the tenant scope", async () => {
-    tachoChain(range(0, 1200));
-    const pages = await pagesOf(WRAPPED);
-    expect(pages.map((page) => page.length)).toEqual([500, 500, 201]);
-    expect(pages.flat()).toEqual(range(0, 1200));
-    expect(scopes.length).toBeGreaterThan(0);
-    expect(scopes.every((scope) => scope === SCOPE)).toBe(true);
+// The run's own chain as the jobs read it, with no subagent chain listed.
+describe("readTranscriptFramesOf: the run's own chain", () => {
+  beforeEach(() => {
+    mocks.withTenantDb.mockResolvedValue([]);
   });
 
-  it("reads no further page once the reader stops", async () => {
-    tachoChain(range(0, 1200));
-    const pages = runFramePages(SCOPE, WRAPPED);
-    const first = await pages.next();
-    expect(first.done).toBe(false);
-    expect(first.value).toHaveLength(500);
-    await pages.return(undefined);
-    expect(mocks.selectTachoEvents).toHaveBeenCalledTimes(1);
-  });
-
-  it("reads past a recorded break in a wrapped session's chain", async () => {
-    const seqs = [...range(0, 299), ...range(800, 1000)];
-    tachoChain(seqs);
-    expect((await pagesOf(WRAPPED)).flat()).toEqual(seqs);
+  it("reads a wrapped session's frames in sequence inside the tenant scope", async () => {
+    tachoChain([0, 1]);
+    const { frames } = await readTranscriptFramesOf(SCOPE, WRAPPED);
+    expect(frames.map((f) => f.seq)).toEqual(["0", "1"]);
+    expect(scopes).toEqual([SCOPE]);
   });
 
   // #4202: under FINAL an unbounded page scans the rest of the chain.
   it("bounds each windowed page of a wrapped session at afterSeq plus the page size", async () => {
     tachoChain(range(0, 1200));
-    expect((await pagesOf(WRAPPED)).flat()).toEqual(range(0, 1200));
+    const { frames } = await readTranscriptFramesOf(SCOPE, WRAPPED);
+    expect(frames.map((f) => Number(f.seq))).toEqual(range(0, 1200));
     const calls = mocks.selectTachoEvents.mock.calls.map(
       ([args]) => args as { afterSeq: number; throughSeq?: number },
     );
@@ -663,9 +851,17 @@ describe("runFramePages", () => {
     ]);
   });
 
+  it("reads past a recorded break in a wrapped session's chain", async () => {
+    const seqs = [...range(0, 299), ...range(800, 1000)];
+    tachoChain(seqs);
+    const { frames } = await readTranscriptFramesOf(SCOPE, WRAPPED);
+    expect(frames.map((f) => Number(f.seq))).toEqual(seqs);
+  });
+
   it("reads a wrapped session one frame past a full page", async () => {
     tachoChain(range(0, 500));
-    expect((await pagesOf(WRAPPED)).flat()).toEqual(range(0, 500));
+    const { frames } = await readTranscriptFramesOf(SCOPE, WRAPPED);
+    expect(frames.map((f) => Number(f.seq))).toEqual(range(0, 500));
   });
 
   it("reads a ledger run's events a page at a time from each page's last run_seq", async () => {
@@ -694,18 +890,40 @@ describe("runFramePages", () => {
         ),
     );
     mocks.createPostgresRunStore.mockReturnValue({ readAttemptEventsSince });
-    const pages = await pagesOf({ source: "ledger", runId: "r1", attempts: [] });
-    expect(pages.map((page) => page.length)).toEqual([500, 3]);
-    expect(pages.flat()).toEqual(range(1, 503));
+    const { frames, complete } = await readTranscriptFramesOf(SCOPE, {
+      source: "ledger",
+      runId: "r1",
+      attempts: [],
+    });
+    expect(frames.map((f) => Number(f.seq))).toEqual(range(1, 503));
+    expect(complete).toBe(true);
     expect(readAttemptEventsSince.mock.calls).toEqual([
       ["r1", "0", 500],
       ["r1", "500", 500],
     ]);
   });
 
+  // #3784: the enrichment job read every frame of a run before it read any
+  // text. The read now stops one page past the cap.
+  it("reads no page past the one that crosses the frame cap", async () => {
+    tachoChain(range(0, TRANSCRIPT_FRAME_CAP + 999));
+    const { frames, complete } = await readTranscriptFramesOf(SCOPE, WRAPPED);
+    expect(frames).toHaveLength(TRANSCRIPT_FRAME_CAP);
+    expect(complete).toBe(false);
+    const after = mocks.selectTachoEvents.mock.calls.map(
+      ([args]) => (args as { afterSeq: number }).afterSeq,
+    );
+    // Pages of 500 from seq 0: the page after seq 9 999 crosses the cap of
+    // 10 000, and nothing after it is read.
+    expect(Math.max(...after)).toBe(TRANSCRIPT_FRAME_CAP - 1);
+  });
+
   it("yields no page for a run with no frames (negative)", async () => {
     tachoChain([]);
-    expect(await pagesOf(WRAPPED)).toEqual([]);
+    expect(await readTranscriptFramesOf(SCOPE, WRAPPED)).toEqual({
+      frames: [],
+      complete: true,
+    });
   });
 });
 

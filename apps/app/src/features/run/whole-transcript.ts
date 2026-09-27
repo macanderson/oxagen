@@ -1,9 +1,11 @@
 // A transcript read to its end. The Run page reads it at `everything` for the
 // tabs that list frames (Governed actions, Policy, Context). The Transcript
 // tab reads its first page only and pages in the rest after it draws, since
-// every page costs a whole refold on the server (#4420). Every page carries
-// the whole run's counts and figures, counted on the server (ADR-182), so the
-// read answers the last page's, which are the most recent.
+// every page costs a whole refold on the server (#4420). The first page
+// carries the whole run's counts and figures, counted on the server
+// (ADR-182). A page read from a cursor may carry them too, newer on a live
+// run, or carry none. The read answers the last page's when it carried them,
+// and the first page's otherwise.
 //
 // `get_run_transcript` answers one page of entries and a cursor. The tabs
 // used to take the first page and call it the run, and they said the list
@@ -107,6 +109,11 @@ export async function readWholeTranscript(
       ...last,
       entries,
       complete: first.value.complete && last.complete,
+      // `get_run_transcript` counts the run only on a read that starts at
+      // its first frame. Taking a later page's absent counts lost every
+      // chip's count, and the page's figures, on a run of two pages or more.
+      counts: last.counts ?? first.value.counts,
+      figures: last.figures ?? first.value.figures,
       ...(short ? { frameCursor: null } : {}),
     },
   };

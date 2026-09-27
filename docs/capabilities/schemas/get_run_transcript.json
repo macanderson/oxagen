@@ -1,11 +1,12 @@
 {
   "name": "get_run_transcript",
   "domain": "run",
-  "description": "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost. A read can search the entries, and carries the run's counts and figures.",
+  "description": "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost. A read can search the entries. A read with no `after` cursor carries the run's counts and figures.",
   "mode": "sync",
   "surfaces": [
     "api",
-    "mcp"
+    "mcp",
+    "cli"
   ],
   "sensitivity": "high",
   "agent": null,

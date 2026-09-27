@@ -148,6 +148,14 @@ export const SECURITY_EVENT_TYPES = [
   "agent.suspended",
   "agent.resumed",
   "agent.retired",
+  // A person answered a question an agent paused to ask, or the timeout
+  // answered it deny (#3941). The row carries the receipt the interjection
+  // row and the host's control.answer frame share. A link or create answer
+  // changes which repositories and workspaces the agent's runs reach, so it
+  // is a logical-access change (SOC2 CC6.1). Emitted by
+  // packages/handlers/src/agent.interjection.answer.ts and the interjection
+  // timeout function in packages/inngest-functions.
+  "agent.interjection_answered",
   // Witness disclosure (MC spec §8.5 invariant 3, ADR-064, #2955). The grain
   // is how much a worker is told when a witness it cannot see fails; raising
   // it above L0 hands the worker detail about the oracle, so only an org
@@ -573,7 +581,33 @@ export interface WorkspaceRunsPausedDetail {
   }[];
 }
 
+/**
+ * Evidence recorded on `agent.interjection_answered`: which interjection, its
+ * run and kind, how it was settled and by whom, the receipt, what a link or
+ * create bound, and the commands that carried the answer to the run. Never
+ * the answer text, which stays on the interjection row.
+ */
+export interface InterjectionAnsweredDetail {
+  /** The interjection's public id (`inj_…`). */
+  interjectionId: string;
+  /** The run that asked (`arun_…` or `tse_…`). */
+  runId: string;
+  kind: "question" | "repo_unknown";
+  /** Null for a free-text answer to a question. */
+  path: "link" | "create" | "deny" | null;
+  source: "person" | "timeout";
+  /** The receipt minted with the answer (`rcp_…`). */
+  receiptId: string;
+  /** The repository binding a link or create wrote. */
+  bindingId?: string;
+  /** The workspace a create made. */
+  workspaceId?: string;
+  /** The queued `message` commands (`tcm_…`); empty when no host could take one. */
+  commandIds: readonly string[];
+}
+
 export type SecurityEventDetail =
+  | InterjectionAnsweredDetail
   | WorkspaceRunsPausedDetail
   | PasswordChangeDetail
   | ScimTokenDetail

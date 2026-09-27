@@ -731,6 +731,27 @@ export function buildProgram(): Command {
       (await import("./commands/run.js")).runList(opts),
     );
   runCmd
+    .command("show")
+    .description(
+      "Show one run: its header, the pause in force, a page of its frames, and its subagent chains",
+    )
+    .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--after <cursor>", "The cursor the previous page printed")
+    .option(
+      "--session <uuid>",
+      "A subagent chain's session id, from the chains the run lists",
+    )
+    .option("--json", "Output the raw contract payload as JSON")
+    .action(
+      async (
+        runId: string,
+        opts: { after?: string; session?: string; json?: boolean },
+      ) => {
+        const { runShow } = await import("./commands/run.js");
+        await runShow(runId, opts);
+      },
+    );
+  runCmd
     .command("chain")
     .description(
       "Show what makes a run's record tamper-evident: the hash rule, the root, the checkpoints, the gaps, and the replay ladder",
@@ -752,6 +773,39 @@ export function buildProgram(): Command {
       const { runTurns } = await import("./commands/run.js");
       await runTurns(runId, opts);
     });
+  runCmd
+    .command("transcript")
+    .description(
+      "Read one page of a run's transcript: its entries, the count per chip over the whole run, and a search of the kept bodies",
+    )
+    .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--zoom <zoom>", "turns, steps, or everything", "steps")
+    .option(
+      "--kinds <kinds>",
+      "The chips to keep, comma-separated (thinking,seal)",
+    )
+    .option("--query <words>", "Words to search the entries for, ignoring case")
+    .option("--after <cursor>", "The cursor the previous page printed")
+    .option("--limit <n>", "Page size, 1 to 500", (v) => Number.parseInt(v, 10))
+    .option("--text <text>", "How much of each body to carry: excerpt or full")
+    .option("--json", "Output the raw contract payload as JSON")
+    .action(
+      async (
+        runId: string,
+        opts: {
+          zoom?: string;
+          kinds?: string;
+          query?: string;
+          after?: string;
+          limit?: number;
+          text?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { runTranscript } = await import("./commands/run.js");
+        await runTranscript(runId, opts);
+      },
+    );
   runCmd
     .command("context")
     .description(
@@ -819,6 +873,38 @@ export function buildProgram(): Command {
       const { runPauseAll } = await import("./commands/run.js");
       await runPauseAll(opts);
     });
+  runCmd
+    .command("answer")
+    .description(
+      "Answer the question a run paused to ask: --text for an agent's own question, --link or --create for a repository the workspace has not bound",
+    )
+    .argument("<interjection-id>", "The question's id (inj_…)")
+    .option("--text <answer>", "A free-text answer to an agent's own question")
+    .option(
+      "--link",
+      "Bind the repository to this workspace. Org Owner or Admin, or workspace Owner",
+    )
+    .option(
+      "--create <name>",
+      "Create a workspace for the repository, with skills off. Needs --slug",
+    )
+    .option("--slug <slug>", "The new workspace's slug, with --create")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        interjectionId: string,
+        opts: {
+          text?: string;
+          link?: boolean;
+          create?: string;
+          slug?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { runAnswer } = await import("./commands/run.js");
+        await runAnswer(interjectionId, opts);
+      },
+    );
 
   // ── verify: check a run export offline ──────────────────────────────────────
 

@@ -32,6 +32,7 @@ import { registryEntrySchema } from "./contract/registry-entry";
 import { agentEnvironment, DEFAULT_ENVIRONMENT, type McpServer } from "./contract/server";
 import type { McpTools } from "./contract/tools";
 import { lockedUpstream, upstreamFromMcpTool } from "./model/from-mcp";
+import { registryLaunch } from "./model/registry-launch";
 import { builtinSecurityScheme } from "./model/security-scheme";
 import { grpcIdempotencyLevelSchema, upstreamToolSchema, type UpstreamTool } from "./model/upstream-tool";
 
@@ -390,6 +391,45 @@ describe("the registry fixtures", () => {
     const pkg = registryEntrySchema.parse(json("registry/package-entry.json"));
     expect(remote.server.remotes?.length).toBeGreaterThan(0);
     expect(pkg.server.packages?.length).toBeGreaterThan(0);
+  });
+});
+
+describe("the files fixtures", () => {
+  const server = ok(parseServerToml(text("servers/files/server.toml")));
+  const lock = ok(parseLock(text("servers/files/tools.lock.json")));
+
+  it("runs the package-entry.json server on the local gateway, with no auth", () => {
+    expect(server.source).toStrictEqual({
+      type: "registry",
+      registry: "https://registry.modelcontextprotocol.io",
+      server: "io.github.modelcontextprotocol/server-filesystem",
+      version: "2026.8.1",
+      machines: ["dev-laptops"],
+      registry_type: "npm",
+      env: ["WORK_DIR"],
+      arguments: { directory: "${WORK_DIR}" },
+    });
+    expect(server.auth).toBeUndefined();
+    expect(server.environments).toBeUndefined();
+  });
+
+  it("locks the launch registryLaunch builds from the entry", () => {
+    if (lock.source.type !== "registry" || server.source.type !== "registry") throw new Error("not a registry source");
+    const pinned = lock.source.package;
+    if (pinned === undefined) throw new Error("the lock pins no package");
+    const launch = registryLaunch({
+      source: server.source,
+      entry: registryEntrySchema.parse(json("registry/package-entry.json")),
+      digest: pinned.digest,
+    });
+    expect(launch).toStrictEqual({ ok: true, command: lock.source.command, args: lock.source.args, package: pinned });
+    expect(lock.source.args).toStrictEqual(["--yes", "@modelcontextprotocol/server-filesystem@2026.8.1", "${WORK_DIR}"]);
+  });
+
+  it("writes the lock in the form lock() writes", () => {
+    const raw = text("servers/files/tools.lock.json");
+    expect(formatJson(JSON.parse(raw))).toBe(raw);
+    expect(lock.server).toBe(server.name);
   });
 });
 

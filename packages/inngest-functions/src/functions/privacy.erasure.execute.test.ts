@@ -212,6 +212,23 @@ describe("privacyErasureExecute Inngest handler", () => {
     expect(statuses).toEqual(["processing"]);
   });
 
+  it("serves the grace period before erasing: it sleeps until scheduledAt as a Date (regression)", async () => {
+    // erase_data sends the event at once. The ISO string passed straight to
+    // sleep read as a duration of nothing, so the erasure ran immediately.
+    const scheduledAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
+    const step = makeStep();
+    await getHandler("privacy.erasure-execute")({
+      event: { data: { ...baseEvent, scheduledAt } },
+      step,
+    }).catch(() => undefined);
+    expect(step.sleep).toHaveBeenCalledWith(
+      "grace-period-wait",
+      new Date(scheduledAt),
+    );
+    const until = (step.sleep.mock.calls[0] as unknown[] | undefined)?.[1];
+    expect(until).toBeInstanceOf(Date);
+  });
+
   it("fail-loud message enumerates every residual store blocking completion", async () => {
     const handler = getHandler("privacy.erasure-execute");
     try {

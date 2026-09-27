@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { toJsonSchema } from "@oxagen/oxagen/steering-repo/json-schema";
-import { atMostOne, dependentRequired, uniqueList, withChecks } from "./checks";
+import { allowedOnlyWith, atMostOne, dependentRequired, uniqueList, withChecks } from "./checks";
 
 const schema = withChecks(
   z
@@ -61,6 +61,22 @@ describe("dependentRequired", () => {
       ["operation"],
     ]);
     expect(check.issues({})).toEqual([]);
+  });
+});
+
+describe("allowedOnlyWith", () => {
+  it("refuses each dependent set without its field", () => {
+    const check = allowedOnlyWith("machines", ["env", "arguments"], "only a package on the local gateway takes it");
+    expect(check.issues({ env: ["HOME"], arguments: {} })).toEqual([
+      { path: ["env"], message: "env is not allowed without machines: only a package on the local gateway takes it" },
+      {
+        path: ["arguments"],
+        message: "arguments is not allowed without machines: only a package on the local gateway takes it",
+      },
+    ]);
+    expect(check.issues({ machines: ["dev"], env: ["HOME"] })).toEqual([]);
+    expect(check.issues({})).toEqual([]);
+    expect(check.json).toEqual({ dependentRequired: { env: ["machines"], arguments: ["machines"] } });
   });
 });
 

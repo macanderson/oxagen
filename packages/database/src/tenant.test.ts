@@ -38,6 +38,7 @@ import { ORG_ONLY_WORKSPACE_ID } from "@oxagen/oxagen/types";
 import {
   withTenantDb,
   withTransactionOrgScope,
+  withTransactionOrgWideRead,
   type Tx,
   withOrgDb,
   withRepeatableReadTenantDb,
@@ -487,4 +488,84 @@ describe("withTransactionOrgScope", () => {
       }
     },
   );
+});
+
+describe("withTransactionOrgWideRead", () => {
+  it.each([false, true])(
+    "widens the read on the caller's transaction and puts the setting back (failure=%s)",
+    async (fails) => {
+      const { PgDialect } = await import("drizzle-orm/pg-core");
+      const dialect = new PgDialect();
+      let orgWide = "off";
+      const settings: string[] = [];
+      const error = new Error("bound repository read failed");
+      const tx = {
+        execute: vi.fn(async (query: import("drizzle-orm").SQL) => {
+          const compiled = dialect.sqlToQuery(query);
+          if (compiled.sql.includes("current_setting"))
+            return [{ org_wide: orgWide }];
+          orgWide = compiled.params.length
+            ? String(compiled.params[0])
+            : compiled.sql.includes("'on'")
+              ? "on"
+              : orgWide;
+          settings.push(orgWide);
+          return [];
+        }),
+        transaction: vi.fn(async (fn: (tx: Tx) => Promise<unknown>) => {
+          const prior = orgWide;
+          try {
+            return await fn(tx as unknown as Tx);
+          } catch (e) {
+            // PostgreSQL ROLLBACK TO SAVEPOINT restores local settings.
+            orgWide = prior;
+            throw e;
+          }
+        }),
+      };
+      const work = withTransactionOrgWideRead(
+        tx as unknown as Tx,
+        async (orgTx) => {
+          // The same connection: no second transaction is opened.
+          expect(orgTx).toBe(tx);
+          expect(orgWide).toBe("on");
+          if (fails) throw error;
+          return ["digest"];
+        },
+      );
+      if (fails) await expect(work).rejects.toBe(error);
+      else await expect(work).resolves.toEqual(["digest"]);
+      expect(orgWide).toBe("off");
+      expect(settings).toEqual(fails ? ["on"] : ["on", "off"]);
+      expect(tx.transaction).toHaveBeenCalledTimes(1);
+      // Only the widening moves. The org fence, the workspace and the bypass
+      // stay as the caller set them.
+      for (const [query] of tx.execute.mock.calls) {
+        const text = dialect.sqlToQuery(query).sql;
+        expect(text).not.toContain("app.current_org_id");
+        expect(text).not.toContain("app.current_workspace_id");
+        expect(text).not.toContain("app.rls_bypass");
+      }
+    },
+  );
+
+  it("restores off when the caller's transaction never set the widening (negative)", async () => {
+    const { PgDialect } = await import("drizzle-orm/pg-core");
+    const dialect = new PgDialect();
+    const restored: unknown[] = [];
+    const tx = {
+      execute: vi.fn(async (query: import("drizzle-orm").SQL) => {
+        const compiled = dialect.sqlToQuery(query);
+        if (compiled.sql.includes("current_setting"))
+          return [{ org_wide: null }];
+        if (compiled.params.length) restored.push(compiled.params[0]);
+        return [];
+      }),
+      transaction: vi.fn(async (fn: (tx: Tx) => Promise<unknown>) =>
+        fn(tx as unknown as Tx),
+      ),
+    };
+    await withTransactionOrgWideRead(tx as unknown as Tx, async () => null);
+    expect(restored).toEqual(["off"]);
+  });
 });

@@ -34,7 +34,7 @@ type RunView = {
   kinds: KindFilter;
   /** `?frames=`, the opaque cursor a later frames page was read from. */
   frames: string | null;
-  /** `?body=`, the seq of the open frame; null when none is open. */
+  /** `?body=`, the open frame's key (`frameKey`); null when none is open. */
   body: string | null;
   /**
    * `?finding=`, the finding whose evidence is open over the Cost tab
@@ -55,7 +55,8 @@ export type RunTabProps = {
   /**
    * The first page of the transcript at `steps` with whole bodies: the
    * Transcript tab's first rows, and the whole run's counts and figures,
-   * which every page carries. The tab reads the pages past it (#4420).
+   * which a read from the run's first frame carries (#3823, D6). The tab
+   * reads the pages past it (#4420).
    */
   transcript: Read<RunTranscript>;
   /**

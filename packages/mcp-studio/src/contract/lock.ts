@@ -13,10 +13,16 @@ import { z } from "zod";
 import { gitObjectIdSchema, repoPathSchema, sha256Schema } from "@oxagen/oxagen/steering-repo/common";
 import { securitySchemeSchema } from "../model/security-scheme";
 import { upstreamToolSchema } from "../model/upstream-tool";
-import { dependentRequired, withChecks, type CustomCheck } from "./checks";
+import { allowedOnlyWith, dependentRequired, withChecks, type CustomCheck } from "./checks";
 import { lockedMcpToolSchema } from "./mcp-tool";
 import { httpUrlSchema, serverNameSchema, toolKeySchema } from "./primitives";
-import { DEFINITION_FROMS, definitionLocationChecks, gitRefSchema, sourceRepoSchema } from "./server";
+import {
+  DEFINITION_FROMS,
+  definitionLocationChecks,
+  gitRefSchema,
+  registryTypeSchema,
+  sourceRepoSchema,
+} from "./server";
 
 /** A lock file is at most 5 MB. */
 export const LOCK_BYTES_MAX = 5 * 1024 * 1024;
@@ -37,6 +43,16 @@ export const lockPackageSchema = z
   })
   .strict();
 export type LockPackage = z.output<typeof lockPackageSchema>;
+
+/**
+ * A registry entry's package, pinned: which of the entry's packages the
+ * source picked, and the digest the local gateway checks before it starts it.
+ */
+export const registryLockPackageSchema = lockPackageSchema.extend({
+  registry_type: registryTypeSchema.describe("source.registry_type: npm, pypi, oci, or nuget."),
+  digest: sha256Schema.describe("For oci, the image's manifest digest. For the others, the SHA-256 of the package archive."),
+});
+export type RegistryLockPackage = z.output<typeof registryLockPackageSchema>;
 
 export const remoteLockSourceSchema = z
   .object({
@@ -69,20 +85,18 @@ const urlOrPackage: CustomCheck = {
 };
 
 /** Only a remote entry is reached by a transport, so a lock source with no url names none. */
-const transportOnlyWithUrl: CustomCheck = {
-  issues: (value) =>
-    value.transport !== undefined && value.url === undefined
-      ? [{ path: ["transport"], message: "transport is not allowed without url: only a remote entry has one" }]
-      : [],
-  json: { dependentRequired: { transport: ["url"] } },
-};
+const transportOnlyWithUrl = allowedOnlyWith("url", ["transport"], "only a remote entry has one");
+
+/** Only a package has a launch, so a lock source with a url names no command or args. */
+const launchOnlyWithPackage = allowedOnlyWith("package", ["command", "args"], "only a package entry has a launch");
 
 /**
  * A registry server's source as the lock pins it. server.toml names only the
  * catalog entry, so the lock records what the entry resolved to. For a remote
  * entry that is the endpoint and how to reach it, so the gateway connects the
  * same way on every call. The catalog's streamable-http is http here, as in
- * server.toml's remote source.
+ * server.toml's remote source. For a package that is the package and the
+ * command and args the local gateway runs, which registryLaunch builds.
  */
 export const registryLockSourceSchema = withChecks(
   z
@@ -96,11 +110,32 @@ export const registryLockSourceSchema = withChecks(
         .enum(["http", "sse"])
         .optional()
         .describe("How the catalog entry reaches url: http (the catalog's streamable-http) or sse."),
-      package: lockPackageSchema.optional().describe("The package the catalog entry named, for a local entry."),
+      package: registryLockPackageSchema
+        .optional()
+        .describe("The package the local gateway runs, when server.toml names machines."),
+      command: z
+        .string()
+        .min(1)
+        .max(1024)
+        .optional()
+        .describe("For a package: the command the local gateway runs, npx, uvx, docker, or dnx."),
+      args: z
+        .array(z.string().max(4096))
+        .max(1024)
+        .optional()
+        .describe(
+          "For a package: the command's arguments. ${NAME} stays for the local gateway to fill from the machine, and $$ writes one $.",
+        ),
       server_version: serverVersionSchema,
     })
     .strict(),
-  [urlOrPackage, dependentRequired("url", ["transport"]), transportOnlyWithUrl],
+  [
+    urlOrPackage,
+    dependentRequired("url", ["transport"]),
+    transportOnlyWithUrl,
+    dependentRequired("package", ["command", "args"]),
+    launchOnlyWithPackage,
+  ],
 );
 
 export const localLockSourceSchema = z

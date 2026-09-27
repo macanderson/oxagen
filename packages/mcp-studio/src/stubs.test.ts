@@ -49,7 +49,6 @@ const asyncStubs: Array<[string, () => Promise<unknown>]> = [
   ["execute/mcp", () => mcpSender.send(stub(), {}, stub<SendContext>())],
   ["execute/http", () => httpSender.send(stub(), {}, stub<SendContext>())],
   ["execute/graphql", () => graphqlSender.send(stub(), {}, stub<SendContext>())],
-  ["execute/grpc", () => grpcSender.send(stub(), {}, stub<SendContext>())],
 ];
 
 describe("module stubs", () => {
