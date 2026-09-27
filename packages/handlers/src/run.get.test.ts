@@ -897,6 +897,48 @@ describe("get_run witnessFor (ADR-064)", () => {
     expect(tacho.run.place?.repository).toBeUndefined();
     expect(ledger.run.place).toBeNull();
   });
+
+  // #4516: ingest stamps the flag when the session opens. The read answers
+  // it as recorded and asks no repository read of its own for it.
+  it("answers the unlinked-repository flag ingest stamped on the session", async () => {
+    const asked: string[] = [];
+    const { get } = harness({
+      tacho: [
+        tachoSession({
+          publicId: TACHO_ID,
+          session: { gitRemoteDigest: DIGEST, repositoryUnlinked: true },
+        }),
+      ],
+      // Linked now: the stamp records the session's start, not today.
+      repositories: { [DIGEST]: PLATFORM },
+      repositoryAsked: asked,
+    });
+    const out = await get(input({ runId: TACHO_ID }), ctx());
+    expect(out.run.repositoryUnlinked).toBe(true);
+    expect(out.run.place?.repository).toEqual(PLATFORM);
+    // One read, for the place. The flag comes from the row.
+    expect(asked).toEqual([DIGEST]);
+    expect(runGet.output.parse(out)).toEqual(out);
+  });
+
+  it("answers false for a session stamped false, a row read without the column, and a ledger run (negative)", async () => {
+    const stamped = await harness({
+      tacho: [
+        tachoSession({
+          publicId: TACHO_ID,
+          session: { gitRemoteDigest: DIGEST, repositoryUnlinked: false },
+        }),
+      ],
+    }).get(input({ runId: TACHO_ID }), ctx());
+    expect(stamped.run.repositoryUnlinked).toBe(false);
+
+    const { get } = harness();
+    const unread = await get(input({ runId: TACHO_ID }), ctx());
+    const ledger = await get(input({ runId: LEDGER_ID }), ctx());
+    expect(unread.run.repositoryUnlinked).toBe(false);
+    expect(ledger.run.repositoryUnlinked).toBe(false);
+    expect(runGet.output.parse(ledger)).toEqual(ledger);
+  });
 });
 
 // #3823: a subagent records on a chain of its own, numbered from 0. get_run

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, type Tx, withTenantDb } from "@oxagen/database";
 import { and, eq, isNull } from "drizzle-orm";
 import { chSelect } from "@oxagen/telemetry";
 import type {
@@ -67,43 +67,80 @@ export const workDigest = (value: string) =>
   `sha256:${createHash("sha256").update(value).digest("hex")}`;
 const nullable = (value: string) => (value.length ? value : null);
 
+/**
+ * The digest a session's `git_remote_digest` carries when it runs in this
+ * repository: sha256 of `host/owner/name`, the form `canonicalRemote` in
+ * `@oxagen/tacho` reduces a remote to. A remote typed in another case than
+ * the binding records digests apart.
+ */
+export const repositoryDigest = (
+  repo: Pick<RunRepository, "host" | "owner" | "name">,
+) => workDigest(`${repo.host}/${repo.owner}/${repo.name}`);
+
 export async function connectedRunRepositories(
   scope: RunScope,
 ): Promise<ConnectedRunRepository[]> {
-  const rows = await withTenantDb((tx) =>
-    tx
-      .select({
-        connectionId: schema.repositoryBindings.connectionId,
-        providerRepositoryId: schema.repositoryBindings.providerRepositoryId,
-        owner: schema.repositoryBindings.providerOwner,
-        name: schema.repositoryBindings.providerName,
-      })
-      .from(schema.repositoryBindingHeads)
-      .innerJoin(
-        schema.repositoryBindings,
-        eq(
-          schema.repositoryBindings.id,
-          schema.repositoryBindingHeads.currentBindingId,
-        ),
-      )
-      .innerJoin(
-        schema.sourceConnections,
-        eq(schema.sourceConnections.id, schema.repositoryBindings.connectionId),
-      )
-      .where(
-        and(
-          eq(schema.repositoryBindingHeads.orgId, scope.orgId),
-          eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-          eq(schema.repositoryBindings.orgId, scope.orgId),
-          eq(schema.repositoryBindings.workspaceId, scope.workspaceId),
-          eq(schema.sourceConnections.orgId, scope.orgId),
-          eq(schema.sourceConnections.workspaceId, scope.workspaceId),
-          eq(schema.repositoryBindings.provider, "github"),
-          eq(schema.sourceConnections.status, "connected"),
-          isNull(schema.sourceConnections.deletedAt),
-        ),
-      ),
+  return withTenantDb((tx) => connectedRunRepositoriesIn(tx, scope));
+}
+
+/**
+ * The digests of the repositories linked to the workspace, as
+ * `connectedRunRepositories` reads them, on the caller's transaction.
+ *
+ * The read runs in a savepoint. A failed statement inside a transaction
+ * aborts the whole transaction, so without one a caller that catches the
+ * error still loses every write it made before. With one, the failure rolls
+ * back to the savepoint and the caller's transaction carries on. It shares
+ * the caller's connection: a second `withTenantDb` here would hold two pool
+ * connections (see `withTransactionOrgScope` in `@oxagen/database`).
+ */
+export async function linkedRepositoryDigestsIn(
+  tx: Tx,
+  scope: RunScope,
+): Promise<Set<string>> {
+  const repositories = await tx.transaction((savepoint) =>
+    connectedRunRepositoriesIn(savepoint, scope),
   );
+  return new Set(repositories.map(repositoryDigest));
+}
+
+/** `connectedRunRepositories` on a transaction the caller holds. */
+export async function connectedRunRepositoriesIn(
+  tx: Tx,
+  scope: RunScope,
+): Promise<ConnectedRunRepository[]> {
+  const rows = await tx
+    .select({
+      connectionId: schema.repositoryBindings.connectionId,
+      providerRepositoryId: schema.repositoryBindings.providerRepositoryId,
+      owner: schema.repositoryBindings.providerOwner,
+      name: schema.repositoryBindings.providerName,
+    })
+    .from(schema.repositoryBindingHeads)
+    .innerJoin(
+      schema.repositoryBindings,
+      eq(
+        schema.repositoryBindings.id,
+        schema.repositoryBindingHeads.currentBindingId,
+      ),
+    )
+    .innerJoin(
+      schema.sourceConnections,
+      eq(schema.sourceConnections.id, schema.repositoryBindings.connectionId),
+    )
+    .where(
+      and(
+        eq(schema.repositoryBindingHeads.orgId, scope.orgId),
+        eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
+        eq(schema.repositoryBindings.orgId, scope.orgId),
+        eq(schema.repositoryBindings.workspaceId, scope.workspaceId),
+        eq(schema.sourceConnections.orgId, scope.orgId),
+        eq(schema.sourceConnections.workspaceId, scope.workspaceId),
+        eq(schema.repositoryBindings.provider, "github"),
+        eq(schema.sourceConnections.status, "connected"),
+        isNull(schema.sourceConnections.deletedAt),
+      ),
+    );
   return rows.map((row) => ({
     ...row,
     host: "github.com",
@@ -577,7 +614,7 @@ export function checkoutOf(
   const recorded = recordedRepository(row.repository);
   const connected = repositories.find(
     (repo) =>
-      workDigest(`${repo.host}/${repo.owner}/${repo.name}`) === row.remote ||
+      repositoryDigest(repo) === row.remote ||
       repo.url === recorded?.url,
   );
   const repository = connected
