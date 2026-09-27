@@ -1,7 +1,7 @@
 {
   "name": "link_repository",
   "domain": "repository",
-  "description": "Link a GitHub repository the workspace's GitHub App installation reaches as a linked (not main) repository of the workspace.",
+  "description": "Open a steering PR that links a GitHub repository to the workspace. The link takes effect when the PR merges.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -45,12 +45,6 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
-      "bindingId": {
-        "type": "string"
-      },
-      "connectionId": {
-        "type": "string"
-      },
       "fullName": {
         "type": "string",
         "minLength": 1
@@ -59,20 +53,48 @@
         "type": "string",
         "minLength": 1
       },
-      "role": {
-        "const": "linked"
+      "status": {
+        "type": "string",
+        "enum": [
+          "proposed",
+          "listed"
+        ]
       },
-      "linkedAt": {
-        "type": "string"
+      "steeringPullRequest": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "reused": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "number",
+              "url",
+              "reused"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
       }
     },
     "required": [
-      "bindingId",
-      "connectionId",
       "fullName",
       "defaultRef",
-      "role",
-      "linkedAt"
+      "status",
+      "steeringPullRequest"
     ],
     "additionalProperties": false
   }
