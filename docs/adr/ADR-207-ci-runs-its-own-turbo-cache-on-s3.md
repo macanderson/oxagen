@@ -34,7 +34,10 @@ S3. Pointing it at a bucket takes a server that speaks that API.
    `gha-turbo-cache`, which any job in `macanderson/oxagen` can assume and
    which can read and write this bucket and nothing else. A fork's pull
    request gets no OIDC token. The credentials go to the server process only.
-   The action exports no `AWS_*` variable, so tests and builds never see them.
+   The action exports no `AWS_*` variable, so tests and builds do not receive
+   them in their environment. The server runs as the same user on the same
+   runner, so this keeps the credentials out of reach by accident, not from a
+   step that goes looking for them.
 4. **The cache fails open.** The action sets `TURBO_API`, `TURBO_TOKEN`, and
    `TURBO_TEAM` only after it writes a test entry and reads the same bytes
    back. On any failure it logs a `Turbo remote cache off` warning and turbo

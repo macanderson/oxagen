@@ -1,5 +1,5 @@
 /**
- * The turbo remote cache for CI (ADR in docs/adr, #4233).
+ * The turbo remote cache for CI (ADR-207, #4233).
  *
  * Turbo speaks an HTTP API, not S3, so each CI job starts a small cache server
  * on its own runner (`.github/actions/turbo-cache`) and that server reads and
@@ -100,8 +100,8 @@ resource "aws_iam_role" "turbo_cache" {
 }
 
 # This bucket and nothing else. `ListBucket` is what makes a lookup of a
-# missing entry answer 404 rather than 403, and turbo reads a 404 as a miss;
-# without it every miss would look like an outage.
+# missing entry answer 404 rather than 403, and turbo reads a 404 as a miss.
+# Without it, every miss would look like an outage.
 #
 # Any branch can write, so a branch could plant an entry that main later
 # restores. No deploy reads this cache (`deploy-node` never gets TURBO_API), so

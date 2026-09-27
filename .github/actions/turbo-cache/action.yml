@@ -33,7 +33,7 @@ runs:
   steps:
     # Credentials go to step outputs only. With `output-env-credentials: false`
     # the action exports no AWS_* variable, so the tests and builds that run
-    # later in the job never see them. Only the server process gets them.
+    # later in the job do not receive them. Only the server process gets them.
     - name: Assume the turbo cache role
       id: aws
       continue-on-error: true
