@@ -544,21 +544,21 @@ export interface SteeringTreeHost {
 export const STEERING_TREE_READS_AT_ONCE = 8;
 
 /** The files at the root of a steering repo that the checks read. */
-const STEERING_ROOT_FILES = [
+const STEERING_ROOT_FILES: readonly string[] = [
   AGENTS_MD_PATH,
   CLAUDE_MD_PATH,
   README_PATH,
   GITATTRIBUTES_PATH,
   WORKSPACE_TOML_PATH,
-] as const;
+];
 
 /** The folders of a steering repo. The checks read every file under them. */
-const STEERING_TREE_DIRS = [
+const STEERING_TREE_DIRS: readonly string[] = [
   AGENTS_DIR,
   STEERING_DIR,
   TOOLS_DIR,
   POLICY_DIR,
-] as const;
+];
 
 /**
  * A SteeringTreeHost over the host a workspace steers through. It lists every
