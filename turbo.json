@@ -92,13 +92,14 @@
   ],
   "globalPassThroughEnv": [
     "CI",
+    "TURBO_API",
     "TURBO_TOKEN",
     "TURBO_TEAM",
     "VERCEL",
     "VERCEL_URL"
   ],
 
-  "remoteCache": { "enabled": true },
+  "remoteCache": { "enabled": true, "timeout": 60, "uploadTimeout": 300 },
 
   "tasks": {
     "build": {
