@@ -401,6 +401,10 @@ export interface SteeringContext {
  * one {@link STEERING_ASSEMBLY_PART} part carries the text digest and the
  * tokens the items leave over. A changed header then changes the
  * whole-context digest. A manifest without both counts its items alone.
+ *
+ * The total follows `spent_tokens`, not the parts. Each item's count rounds
+ * up on its own, so the items can add up to more than the assembled text.
+ * The assembly part then counts zero, and the parts sum past the total.
  */
 export function steeringContext(
   body: Record<string, unknown>,
