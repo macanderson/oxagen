@@ -6,7 +6,7 @@
 // the claims, writes the host, and assembles the document the collector keeps.
 import type { Tx } from "@oxagen/database";
 import { schema } from "@oxagen/database";
-import { eq, getTableColumns } from "drizzle-orm";
+import { and, eq, getTableColumns } from "drizzle-orm";
 import { cryptoRandom } from "@oxagen/database/schema";
 import {
   type EnrollmentClaims,
@@ -133,6 +133,30 @@ async function versionRequiresContainment(
     | null
     | undefined;
   return config?.containment?.required === true;
+}
+
+/**
+ * Whether the agent has held a host enrollment on the runtime before, revoked
+ * or not. The legacy containment carry runs only on an agent's first
+ * enrollment on a runtime: after that, the runtime's own setting is the
+ * answer, including an owner's choice to turn containment off (ADR-204 §4).
+ */
+async function agentHadHostOn(
+  tx: Tx,
+  agentId: string,
+  runtimeId: string,
+): Promise<boolean> {
+  const [prior] = await tx
+    .select({ id: schema.tachoHosts.id })
+    .from(schema.tachoHosts)
+    .where(
+      and(
+        eq(schema.tachoHosts.agentId, agentId),
+        eq(schema.tachoHosts.runtimeId, runtimeId),
+      ),
+    )
+    .limit(1);
+  return prior !== undefined;
 }
 
 /** The facts a host reports about itself, as both contracts accept them. */
@@ -314,6 +338,8 @@ export async function mintHostEnrollment(
   // hostname's runtime require it (ADR-204 §4). The migration that moved
   // containment onto runtimes could not reach an agent with no runtime and
   // no host, so its version config is the one record of the requirement.
+  // The carry runs on the agent's first enrollment on that runtime only, so
+  // revoking and re-enrolling a host does not undo an owner's "off".
   const [agentRuntime] = args.agent
     ? await tx
         .select({
@@ -333,10 +359,13 @@ export async function mintHostEnrollment(
         facts.hostname,
         args.userId,
         {
-          containmentRequired: await versionRequiresContainment(
-            tx,
-            agentRuntime?.activeVersionId ?? null,
-          ),
+          containmentRequired: async (runtime) =>
+            args.agent !== null &&
+            !(await agentHadHostOn(tx, args.agent.id, runtime.id)) &&
+            (await versionRequiresContainment(
+              tx,
+              agentRuntime?.activeVersionId ?? null,
+            )),
         },
       )
     ).id;

@@ -77,8 +77,9 @@ suspended governed actions on the host as an invalid agent config. It now
 suspends nothing. A malformed budget still suspends governed actions.
 
 One read of the table remains. A host enrollment for an agent on no runtime
-reads it once, to carry the requirement to the runtime it binds (§4). Only
-`required: true` counts there, and any other shape carries nothing.
+reads it on the agent's first enrollment on a runtime, to carry the
+requirement to that runtime (§4). Only `required: true` counts there, and
+any other shape carries nothing.
 
 ### 4. The migration carries every requirement over
 
@@ -93,10 +94,20 @@ many live hosts sit on them. The version configs keep their tables, so a
 rollback that drops the column returns the previous answer.
 
 An agent on no runtime has no runtime to carry the requirement to. Its
-version config holds it until its first host enrollment. That enrollment
-binds the runtime named after the host, and turns containment on for that
-runtime when the agent's active version required it
-(`findOrCreateHostRuntime`). An enrollment never turns containment off.
+version config holds it until a host enrollment binds the runtime named
+after the host. The agent's first enrollment on each runtime turns
+containment on for that runtime when the agent's active version required
+it (`findOrCreateHostRuntime`). A later enrollment of the agent on a runtime
+where it already had a host, revoked or not, carries nothing, so an owner
+who turned containment off on that runtime keeps that answer. An enrollment
+never turns containment off.
+
+That rule has one gap. A host revoked before this migration ran was not
+counted by the backfill, and it still counts as the agent's first
+enrollment on its runtime. An agent on no runtime whose every host was
+revoked before the migration, re-enrolled on the same machine, runs
+uncontained until an owner turns containment on for that runtime. A new
+machine is not affected.
 
 ### 5. The budget stays per agent and read-only
 

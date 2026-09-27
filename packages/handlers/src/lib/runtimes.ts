@@ -145,19 +145,28 @@ export async function insertRuntime(
  * numeric suffix when another runtime already holds it.
  *
  * `containmentRequired: true` makes the runtime require containment, whether
- * it is created here or already existed. It never turns containment off.
+ * it is created here or already existed. A function decides once the runtime
+ * is known, and is called only when that runtime does not already require
+ * containment. It never turns containment off.
  */
 export async function findOrCreateHostRuntime(
   tx: Tx,
   scope: Scope,
   hostname: string,
   userId: string | null,
-  opts: { containmentRequired?: boolean } = {},
+  opts: {
+    containmentRequired?: boolean | ((runtime: RuntimeRow) => Promise<boolean>);
+  } = {},
 ): Promise<RuntimeRow> {
   const runtime = await findOrInsertHostRuntime(tx, scope, hostname, userId);
-  if (opts.containmentRequired !== true || runtime.containmentRequired) {
+  if (runtime.containmentRequired || opts.containmentRequired === undefined) {
     return runtime;
   }
+  const required =
+    typeof opts.containmentRequired === "function"
+      ? await opts.containmentRequired(runtime)
+      : opts.containmentRequired;
+  if (!required) return runtime;
   await tx
     .update(schema.runtimes)
     .set({

@@ -326,7 +326,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(fresh.containmentRequired).toBe(true);
     });
 
-    it("an unplaced agent whose version requires containment carries it to the runtime its first host binds, and into that host's mandate", async () => {
+    it("an unplaced agent whose version requires containment carries it to each runtime on its first enrollment there, and into that host's mandate", async () => {
       const { mintHostEnrollment, requireEnrollmentSigning } = await import(
         "./lib/tacho-host-enroll"
       );
@@ -421,6 +421,41 @@ describe.skipIf(!process.env.DATABASE_URL)(
             .where(eq(schema.agents.id, strict.id)),
         );
         expect(agentRow?.runtimeId).toBeNull();
+
+        // An owner turns containment off and the host is revoked. Enrolling
+        // the agent on the same machine again does not carry the requirement
+        // back: the carry runs on the agent's first enrollment on a runtime.
+        // One live host per agent key, so each host is revoked before the
+        // agent enrolls again.
+        const revoke = (hostId: string) =>
+          withSystemDb((tx) =>
+            tx
+              .update(schema.tachoHosts)
+              .set({ status: "revoked", revokedAt: new Date() })
+              .where(eq(schema.tachoHosts.id, hostId)),
+          );
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.runtimes)
+            .set({ containmentRequired: false })
+            .where(eq(schema.runtimes.id, minted.host.runtimeId!)),
+        );
+        await revoke(minted.host.id);
+        const again = await enroll(strict, "Strict-Box.local", 7);
+        expect(again.host.runtimeId).toBe(minted.host.runtimeId);
+        expect(await runtimeOf(again.host.runtimeId)).toEqual({
+          slug: "strict-box",
+          containmentRequired: false,
+        });
+        expect(again.mandate.containment).toBeUndefined();
+
+        // A machine the agent has not run on before still gets the carry.
+        await revoke(again.host.id);
+        const second = await enroll(strict, "Second-Box.local", 8);
+        expect(await runtimeOf(second.host.runtimeId)).toEqual({
+          slug: "second-box",
+          containmentRequired: true,
+        });
 
         const loose = await unplaced("loose-claude", {});
         const open = await enroll(loose, "Loose-Box.local", 6);
