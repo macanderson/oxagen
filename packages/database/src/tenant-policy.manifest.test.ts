@@ -268,7 +268,8 @@ describe("tenant policy manifest", () => {
     // 142 adds cost.run_pr_outcomes (#4491), what each run's pull requests
     // became, and cost.run_pr_reverts, the reverts kept until their rows exist.
     // 143 adds cost.finding_claims (ADR-208).
-    expect(POLICY_MANIFEST.length).toBe(143);
+    // 144 adds agent.steering_repo_health (S2, #4560, 2026-09-27).
+    expect(POLICY_MANIFEST.length).toBe(144);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {
