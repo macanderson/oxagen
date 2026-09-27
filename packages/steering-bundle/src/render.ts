@@ -204,7 +204,8 @@ export async function renderRequest(
     if (bundle === null) continue;
     const block = blockFor(bundle, context.repository);
     if (block !== null && block.text !== "") {
-      parts.push(block.text);
+      // A blank line between the organization's block and the workspace's.
+      parts.push(parts.length === 0 ? block.text : `\n${block.text}`);
       for (const lineage of block.lineages) inBlock.add(`${source}:${lineage}`);
       for (const mention of findMentions(block.text)) {
         if (mention.kind !== "tool") mentioned.add(mention.target);

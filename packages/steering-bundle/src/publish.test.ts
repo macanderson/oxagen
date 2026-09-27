@@ -1,0 +1,388 @@
+import { describe, expect, it, vi } from "vitest";
+import { NotBuiltError } from "@oxagen/mcp-studio";
+import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
+import type { BundleIdentity } from "./build";
+import {
+  memoryVersionStore,
+  publish,
+  versionTag,
+  type PublishDeps,
+  type PublishResult,
+} from "./publish";
+import { treeFromFiles, type BlobCache } from "./tree";
+
+// ── Fixtures ─────────────────────────────────────────────────────────────────
+
+const IDENTITY: BundleIdentity = {
+  repository: "github.com/a-intel/oxagen-core-platform",
+  scope: "workspace",
+  organization: "a-intel",
+  workspace: "core-platform",
+};
+const REPOSITORY = IDENTITY.repository;
+const OTHER_REPOSITORY = "github.com/a-intel/oxagen";
+
+const FIRST_COMMIT = "b5518188b20ddf02f905fadeaa50d9976abdcc90";
+const SECOND_COMMIT = "0123456789abcdef0123456789abcdef01234567";
+
+/** A record in the fixture repo whose body the second merge changes. */
+const PLAIN_WORDS = "steering/brand/a-intel.brand.plain-words.md";
+
+const PROJECT_UNSET_WARNING =
+  "The tool registry was not updated: MCP Studio's project() is not built yet.";
+const PROJECT_NOT_BUILT_WARNING =
+  "The tool registry was not updated: MCP Studio's project is not built yet.";
+
+type MemoryStore = ReturnType<typeof memoryVersionStore>;
+type Published = Extract<PublishResult, { status: "published" }>;
+
+/** MCP Studio's compile() stands here, so no server compiles and the tool manifest stays null. */
+function refuseCompile(): never {
+  throw new NotBuiltError("compile");
+}
+
+/** Deps over the fixture repo, with spies on the tree and the tag. */
+function setup(
+  overrides: Partial<Omit<PublishDeps, "store">> = {},
+  store: MemoryStore = memoryVersionStore(),
+) {
+  const tag = vi.fn<PublishDeps["tag"]>(async () => undefined);
+  const tree = vi.fn<PublishDeps["tree"]>(async () => treeFromFiles(fixtureRepo()));
+  const deps: PublishDeps = {
+    store,
+    health: async () => "healthy",
+    tree,
+    tag,
+    compiler: refuseCompile,
+    now: () => new Date("2026-09-24T10:00:30Z"),
+    ...overrides,
+  };
+  return { deps, store, tag, tree };
+}
+
+function published(result: PublishResult): Published {
+  if (result.status !== "published") {
+    throw new Error(`The publish ended ${result.status}, not published.`);
+  }
+  return result;
+}
+
+/** The fixture repo with one more line in the plain-words record's body. */
+function changedRepo(): Map<string, string> {
+  const files = fixtureRepo();
+  const text = files.get(PLAIN_WORDS);
+  if (text === undefined) throw new Error(`${PLAIN_WORDS} is not in the fixture repo.`);
+  files.set(PLAIN_WORDS, `${text}\nKeep each sentence under 25 words.\n`);
+  return files;
+}
+
+function isRegistryWarning(warning: string): boolean {
+  return warning.startsWith("The tool registry was not updated");
+}
+
+// ── versionTag ───────────────────────────────────────────────────────────────
+
+describe("versionTag", () => {
+  it("names the tag steering/<number>", () => {
+    expect(versionTag(7)).toBe("steering/7");
+    expect(versionTag(1)).toBe("steering/1");
+  });
+});
+
+// ── publish ──────────────────────────────────────────────────────────────────
+
+describe("publish", () => {
+  it.each(["drifted", "disconnected", "diverged"] as const)(
+    "refuses to publish while the repository is %s",
+    async (health) => {
+      const { deps, store, tag, tree } = setup({ health: async () => health });
+
+      const result = await publish(deps, IDENTITY, FIRST_COMMIT);
+
+      expect(result).toEqual({ status: "refused", health });
+      expect(store.versions.size).toBe(0);
+      expect(store.published.size).toBe(0);
+      expect(await store.current(REPOSITORY)).toBeNull();
+      expect(tree).not.toHaveBeenCalled();
+      expect(tag).not.toHaveBeenCalled();
+    },
+  );
+
+  it("publishes the first merge as version 1 and tags its commit", async () => {
+    const { deps, store, tag, tree } = setup();
+
+    const result = published(await publish(deps, IDENTITY, FIRST_COMMIT));
+
+    expect(result.version).toBe(1);
+    expect(result.commit).toBe(FIRST_COMMIT);
+    expect(result.tag).toBe("steering/1");
+    expect(tree).toHaveBeenCalledWith(REPOSITORY, FIRST_COMMIT);
+    expect(tag).toHaveBeenCalledTimes(1);
+    expect(tag).toHaveBeenCalledWith(REPOSITORY, "steering/1", FIRST_COMMIT);
+
+    expect(result.bundle.repository).toBe(REPOSITORY);
+    expect(result.bundle.version).toBe(1);
+    expect(result.bundle.commit).toBe(FIRST_COMMIT);
+    expect(result.bundle.published_at).toBe("2026-09-24T10:00:30.000Z");
+
+    expect(await store.current(REPOSITORY)).toBe(result.bundle);
+    expect(store.published.get(REPOSITORY)).toEqual({
+      version: 1,
+      commit: FIRST_COMMIT,
+      ledger: result.bundle.ledger,
+    });
+    expect(result.warnings).toContain(PROJECT_UNSET_WARNING);
+    expect(result.reads).toBeGreaterThan(0);
+  });
+
+  it("changes nothing when the published commit is published again", async () => {
+    const { deps, store, tag, tree } = setup();
+    published(await publish(deps, IDENTITY, FIRST_COMMIT));
+
+    const again = await publish(deps, IDENTITY, FIRST_COMMIT);
+
+    expect(again).toEqual({ status: "current", version: 1, commit: FIRST_COMMIT });
+    expect(tag).toHaveBeenCalledTimes(1);
+    expect(tree).toHaveBeenCalledTimes(1);
+    expect(store.versions.get(REPOSITORY)?.map((bundle) => bundle.version)).toEqual([1]);
+  });
+
+  it("publishes a second merge as version 2 and fetches only the changed file", async () => {
+    const trees = new Map<string, Map<string, string>>([
+      [FIRST_COMMIT, fixtureRepo()],
+      [SECOND_COMMIT, changedRepo()],
+    ]);
+    const cache: BlobCache = new Map<string, string>();
+    const { deps, store, tag } = setup({
+      cache,
+      tree: async (_repository, commit) => {
+        const files = trees.get(commit);
+        if (files === undefined) throw new Error(`No tree for ${commit}.`);
+        return treeFromFiles(files);
+      },
+    });
+
+    const first = published(await publish(deps, IDENTITY, FIRST_COMMIT));
+    const second = published(await publish(deps, IDENTITY, SECOND_COMMIT));
+
+    expect(second.version).toBe(2);
+    expect(second.commit).toBe(SECOND_COMMIT);
+    expect(second.tag).toBe("steering/2");
+    expect(tag).toHaveBeenLastCalledWith(REPOSITORY, "steering/2", SECOND_COMMIT);
+
+    // The previous version and the cache hold every other file's blob.
+    expect(second.reads).toBeLessThan(first.reads);
+    expect(second.reads).toBe(1);
+
+    expect(await store.current(REPOSITORY)).toBe(second.bundle);
+    expect(store.versions.get(REPOSITORY)?.map((bundle) => bundle.version)).toEqual([1, 2]);
+  });
+
+  it("adds no registry warning when project() updates the registry", async () => {
+    const project = vi.fn<NonNullable<PublishDeps["project"]>>(async () => undefined);
+    const { deps } = setup({ project });
+
+    const result = published(await publish(deps, IDENTITY, FIRST_COMMIT));
+
+    expect(project).toHaveBeenCalledTimes(1);
+    expect(project).toHaveBeenCalledWith(result.bundle);
+    expect(result.warnings.filter(isRegistryWarning)).toEqual([]);
+  });
+
+  it("publishes with a warning when project() is not built", async () => {
+    const { deps, store } = setup({
+      project: async () => {
+        throw new NotBuiltError("project");
+      },
+    });
+
+    const result = published(await publish(deps, IDENTITY, FIRST_COMMIT));
+
+    expect(result.warnings).toContain(PROJECT_NOT_BUILT_WARNING);
+    expect(result.warnings).not.toContain(PROJECT_UNSET_WARNING);
+    expect(await store.current(REPOSITORY)).toBe(result.bundle);
+  });
+
+  it("publishes nothing when project() fails for another reason", async () => {
+    const failure = new Error("The registry refused the write.");
+    const { deps, store, tag } = setup({
+      project: async () => {
+        throw failure;
+      },
+    });
+
+    await expect(publish(deps, IDENTITY, FIRST_COMMIT)).rejects.toBe(failure);
+
+    expect(store.versions.size).toBe(0);
+    expect(store.published.size).toBe(0);
+    expect(tag).not.toHaveBeenCalled();
+  });
+
+  it("keeps the version published when the tag is not written", async () => {
+    const { deps, store } = setup({
+      tag: async () => {
+        throw new Error("the host refused the tag");
+      },
+    });
+
+    const result = published(await publish(deps, IDENTITY, FIRST_COMMIT));
+
+    expect(result.version).toBe(1);
+    expect(result.tag).toBeNull();
+    expect(result.warnings).toContain(
+      "Version 1 is published, but the tag steering/1 was not written: the host refused the tag",
+    );
+    expect(await store.current(REPOSITORY)).toBe(result.bundle);
+  });
+
+  it("never reuses a number that was stored and not published", async () => {
+    const inner = memoryVersionStore();
+    let failNext = true;
+    const store: MemoryStore = {
+      ...inner,
+      setPublished(repository, pointer) {
+        if (failNext) {
+          failNext = false;
+          return Promise.reject(new Error("The pointer write failed."));
+        }
+        return inner.setPublished(repository, pointer);
+      },
+    };
+    const { deps, tag } = setup({}, store);
+
+    await expect(publish(deps, IDENTITY, FIRST_COMMIT)).rejects.toThrow(
+      "The pointer write failed.",
+    );
+    expect(store.versions.get(REPOSITORY)?.map((bundle) => bundle.version)).toEqual([1]);
+    expect(store.published.size).toBe(0);
+    expect(tag).not.toHaveBeenCalled();
+
+    const retry = published(await publish(deps, IDENTITY, FIRST_COMMIT));
+
+    expect(retry.version).toBe(2);
+    expect(retry.tag).toBe("steering/2");
+    expect(store.versions.get(REPOSITORY)?.map((bundle) => bundle.version)).toEqual([1, 2]);
+    expect(store.published.get(REPOSITORY)?.version).toBe(2);
+  });
+
+  it("numbers two concurrent merges 1 and 2 under the publish lock", async () => {
+    const { deps, store } = setup();
+
+    const [first, second] = await Promise.all([
+      publish(deps, IDENTITY, FIRST_COMMIT),
+      publish(deps, IDENTITY, SECOND_COMMIT),
+    ]);
+
+    expect(published(first).version).toBe(1);
+    expect(published(second).version).toBe(2);
+    expect(store.versions.get(REPOSITORY)?.map((bundle) => bundle.version)).toEqual([1, 2]);
+    expect(store.published.get(REPOSITORY)?.commit).toBe(SECOND_COMMIT);
+  });
+});
+
+// ── memoryVersionStore ───────────────────────────────────────────────────────
+
+describe("memoryVersionStore", () => {
+  async function firstBundle() {
+    const { deps } = setup();
+    return published(await publish(deps, IDENTITY, FIRST_COMMIT)).bundle;
+  }
+
+  it("starts with no published version and a highest version of 0", async () => {
+    const store = memoryVersionStore();
+
+    expect(await store.current(REPOSITORY)).toBeNull();
+    expect(await store.highestVersion(REPOSITORY)).toBe(0);
+  });
+
+  it("counts a stored version that was never published", async () => {
+    const store = memoryVersionStore();
+    await store.put(await firstBundle());
+
+    expect(await store.highestVersion(REPOSITORY)).toBe(1);
+    expect(await store.current(REPOSITORY)).toBeNull();
+  });
+
+  it("refuses to store the same repository and version twice", async () => {
+    const store = memoryVersionStore();
+    const bundle = await firstBundle();
+    await store.put(bundle);
+
+    await expect(store.put(bundle)).rejects.toThrow(
+      "github.com/a-intel/oxagen-core-platform already stored version 1.",
+    );
+    expect(store.versions.get(REPOSITORY)).toHaveLength(1);
+  });
+
+  it("stores the same version number for another repository", async () => {
+    const store = memoryVersionStore();
+    const bundle = await firstBundle();
+    await store.put(bundle);
+    await store.put({ ...bundle, repository: OTHER_REPOSITORY });
+
+    expect(await store.highestVersion(REPOSITORY)).toBe(1);
+    expect(await store.highestVersion(OTHER_REPOSITORY)).toBe(1);
+  });
+
+  it("returns null when the published pointer names a version it does not hold", async () => {
+    const store = memoryVersionStore();
+    await store.put(await firstBundle());
+    await store.setPublished(REPOSITORY, { version: 3, commit: FIRST_COMMIT, ledger: null });
+
+    expect(await store.current(REPOSITORY)).toBeNull();
+  });
+
+  it("runs one repository's work one call at a time", async () => {
+    const store = memoryVersionStore();
+    const order: string[] = [];
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const first = store.withLock(REPOSITORY, async () => {
+      order.push("first starts");
+      await gate;
+      order.push("first ends");
+      return 1;
+    });
+    const second = store.withLock(REPOSITORY, async () => {
+      order.push("second starts");
+      return 2;
+    });
+    release();
+
+    expect(await Promise.all([first, second])).toEqual([1, 2]);
+    expect(order).toEqual(["first starts", "first ends", "second starts"]);
+  });
+
+  it("runs the next call after one that rejects", async () => {
+    const store = memoryVersionStore();
+    const failure = new Error("The publish failed.");
+
+    const first = store.withLock(REPOSITORY, async () => {
+      throw failure;
+    });
+    const second = store.withLock(REPOSITORY, async () => "next");
+
+    await expect(first).rejects.toBe(failure);
+    expect(await second).toBe("next");
+  });
+
+  it("does not hold one repository's work behind another's", async () => {
+    const store = memoryVersionStore();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const held = store.withLock(REPOSITORY, async () => {
+      await gate;
+      return "held";
+    });
+
+    expect(await store.withLock(OTHER_REPOSITORY, async () => "other")).toBe("other");
+    release();
+    expect(await held).toBe("held");
+  });
+});

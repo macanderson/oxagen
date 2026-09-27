@@ -23,6 +23,9 @@
 //   6. The Context PRs: a merged one points at its published record, a closed
 //      one is rejected, and one whose head moved has its checks reset.
 //   7. The sync state, and a check on the head commit naming every problem.
+//   8. The head published as the workspace's next steering version (#4447),
+//      when a publisher is wired. A publish that fails is a warning: the
+//      registry already matches the branch, and the next sync tries again.
 import { HandlerError } from "@oxagen/oxagen";
 import {
   CHECK_NAMES,
@@ -58,11 +61,31 @@ import {
 } from "./context.steering.sync.store";
 import { logger } from "./logger";
 
+/** What one publish of the synced head did. */
+export interface SyncPublished {
+  /** `refused` while the repository is not healthy, and `current` when the head is already published. */
+  status: "refused" | "current" | "published";
+  /** The published version's number, or null when the publish was refused. */
+  version: number | null;
+}
+
+/**
+ * Publishes the synced head as the workspace's next steering version
+ * (@oxagen/steering-bundle `publish`). It takes the same scope as the sync
+ * and maps it to the repository's version store itself.
+ */
+export type SyncPublish = (
+  scope: { orgId: string; workspaceId: string },
+  merge: { repository: string; head: string },
+) => Promise<SyncPublished>;
+
 export interface SyncDeps {
   github: SteeringHost;
   store: SyncStore;
   steering: Pick<SteeringStore, "updateProposal">;
   now: () => Date;
+  /** Unset until the version store is wired, and then the sync publishes nothing. */
+  publish?: SyncPublish;
 }
 
 export function syncDeps(): SyncDeps {
@@ -90,6 +113,8 @@ export interface SyncOutcome {
    * until the window passes.
    */
   retryAfterSeconds: number | null;
+  /** What publishing the head did, or null when nothing published it. */
+  published?: SyncPublished | null;
 }
 
 /** How long a merge Oxagen made is left to `merge_context_pr` to publish. */
@@ -550,6 +575,7 @@ export async function syncWorkspaceSteering(
           ? "synced"
           : "current";
     outcome.retryAfterSeconds = defer.size > 0 ? MERGE_GRACE_SECONDS : null;
+    outcome.published = await publishHead(deps, scope, repo, head);
     logger.info(
       {
         workspaceId: scope.workspaceId,
@@ -568,6 +594,29 @@ export async function syncWorkspaceSteering(
   } catch (err) {
     await recordFailure(deps, scope, prior, err, repo);
     throw err;
+  }
+}
+
+/**
+ * 8. Publish the synced head. The registry write above already stands, so a
+ * publish that throws is logged and the sync still succeeds. The next sync
+ * reads the same head and publishes it then.
+ */
+async function publishHead(
+  deps: SyncDeps,
+  scope: { orgId: string; workspaceId: string },
+  repo: SteeringRepository,
+  head: string,
+): Promise<SyncPublished | null> {
+  if (deps.publish === undefined) return null;
+  try {
+    return await deps.publish(scope, { repository: repo.fullName, head });
+  } catch (err) {
+    logger.warn(
+      { err, workspaceId: scope.workspaceId, head },
+      "context.sync: could not publish the steering version; the next sync tries again",
+    );
+    return null;
   }
 }
 
