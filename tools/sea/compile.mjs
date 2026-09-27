@@ -6,7 +6,7 @@
  * and the Homebrew/scoop binaries.
  *
  *   node tools/sea/compile.mjs --entry <bundle.cjs> --name <tacho|oxagen> \
- *        --out <dir> [--triple <rust target triple>]
+ *        --out <dir> [--triple <rust target triple>] [--asset <key>=<path>]...
  *
  * Steps (docs: nodejs.org/api/single-executable-applications.html):
  *   1. write the SEA config and generate the blob with
@@ -21,11 +21,16 @@
  * (`tacho-aarch64-apple-darwin`); Tauri strips it again inside the bundle.
  * The host Node is the runtime that ships, so run this on the target OS
  * and architecture (the release matrix does; there is no cross-compile).
+ *
+ * `--asset` embeds a file the bundle cannot inline, such as a `.wasm`, and
+ * the executable reads it with `require("node:sea").getAsset(<key>)`. tacho
+ * embeds Cedar's evaluator this way. Repeat it for each file.
  */
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
   mkdirSync,
   rmSync,
   statSync,
@@ -34,17 +39,37 @@ import {
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 
+const USAGE =
+  "usage: compile.mjs --entry <bundle.cjs> --name <name> --out <dir> [--triple <triple>] [--asset <key>=<path>]...";
 const args = new Map();
-for (let i = 2; i < process.argv.length; i += 2)
-  args.set(process.argv[i], process.argv[i + 1]);
+const assets = {};
+for (let i = 2; i < process.argv.length; i += 2) {
+  const flag = process.argv[i];
+  const value = process.argv[i + 1];
+  if (flag !== "--asset") {
+    args.set(flag, value);
+    continue;
+  }
+  const split = value?.indexOf("=") ?? -1;
+  if (split <= 0 || split === value.length - 1) {
+    console.error(`✖ --asset takes <key>=<path>, and got ${value ?? "nothing"}.`);
+    console.error(USAGE);
+    process.exit(2);
+  }
+  const key = value.slice(0, split);
+  const path = resolve(value.slice(split + 1));
+  if (!existsSync(path)) {
+    console.error(`✖ The asset ${key} names ${path}, and no file is there.`);
+    process.exit(2);
+  }
+  assets[key] = path;
+}
 const entry = args.get("--entry");
 const name = args.get("--name");
 const out = args.get("--out");
 const triple = args.get("--triple");
 if (!entry || !name || !out) {
-  console.error(
-    "usage: compile.mjs --entry <bundle.cjs> --name <name> --out <dir> [--triple <triple>]",
-  );
+  console.error(USAGE);
   process.exit(2);
 }
 
@@ -81,6 +106,7 @@ writeFileSync(
       disableExperimentalSEAWarning: true,
       // Code cache cuts cold start, which matters for the hook path.
       useCodeCache: true,
+      ...(Object.keys(assets).length > 0 ? { assets } : {}),
     },
     null,
     2,

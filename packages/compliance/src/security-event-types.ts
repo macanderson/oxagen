@@ -582,6 +582,21 @@ export interface WorkspaceRunsPausedDetail {
 }
 
 /**
+ * Evidence recorded when `update_runtime` changes whether a runtime requires
+ * the contained launcher (ADR-204). `runtimeId` is the runtime's public id.
+ * `previous` is the value the change replaced, so a reader sees a switch
+ * turned on apart from one turned off.
+ */
+export interface RuntimeContainmentChangeDetail {
+  feature: "runtime_containment";
+  change: "containment_required";
+  runtimeId: string;
+  previous: boolean;
+  enabled: boolean;
+  reason: string | null;
+}
+
+/**
  * Evidence recorded on `agent.interjection_answered`: which interjection, its
  * run and kind, how it was settled and by whom, the receipt, what a link or
  * create bound, and the commands that carried the answer to the run. Never
@@ -618,6 +633,7 @@ export type SecurityEventDetail =
   | CredentialRevocationDetail
   | RunIssueAuthorizationDetail
   | RunOutcomesPolicyChangeDetail
+  | RuntimeContainmentChangeDetail
   | ApprovalRuleInvalidationDetail
   | GovernanceChangeDetail
   | SsoProviderChangeDetail

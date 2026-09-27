@@ -31,6 +31,7 @@ import {
   reservationArgs,
   sha256SumsText,
   sortInstallers,
+  updatesItself,
 } from "./downloads";
 
 const V = "2.1.1";
@@ -385,6 +386,59 @@ describe("page helpers", () => {
       publishedAt: "d",
     });
     expect(noMac).not.toContain("macos-first-launch");
+  });
+
+  it("says the macOS app updates itself from 2.1.2 on (ADR-202)", () => {
+    const entriesFor = (version: string): PageEntry[] =>
+      FILES.map((f) => ({
+        ...classifyInstaller(f.replace("2.1.1", version), version)!,
+        bytes: 1,
+        sha256: "0".repeat(64),
+      }));
+    for (const version of ["2.1.2", "2.1.2-1075", "2.2.0"]) {
+      const html = renderIndexHtml({
+        version,
+        entries: entriesFor(version),
+        publishedAt: "d",
+      });
+      // Once above the button and the tables, once in full with the off switch.
+      expect(html).toContain('href="#macos-updates"');
+      expect(html).toContain('<div id="macos-updates">');
+      expect(html).toContain("clear Install updates automatically");
+      expect(html).toContain(
+        'href="https://docs.oxagen.sh/docs/cli/desktop#updates"',
+      );
+      const grid = html.indexOf('<div class="grid">');
+      expect(html.indexOf('id="pick"')).toBeGreaterThan(-1);
+      expect(html.indexOf('href="#macos-updates"')).toBeGreaterThan(
+        html.indexOf('id="pick"'),
+      );
+      expect(html.indexOf('href="#macos-updates"')).toBeLessThan(grid);
+    }
+    // 2.1.1 has no updater, so its page promises none.
+    const old = renderIndexHtml({
+      version: V,
+      entries: entriesFor(V),
+      publishedAt: "d",
+    });
+    expect(old).not.toContain("macos-updates");
+    // A version with no macOS build says nothing about macOS updates.
+    const noMac = renderIndexHtml({
+      version: "2.1.2",
+      entries: entriesFor("2.1.2").filter((e) => e.os !== "macOS"),
+      publishedAt: "d",
+    });
+    expect(noMac).not.toContain("macos-updates");
+  });
+
+  it("dates the updater by base version", () => {
+    expect(updatesItself("2.1.1")).toBe(false);
+    expect(updatesItself("2.1.1-40")).toBe(false);
+    expect(updatesItself("2.1.2-1")).toBe(true);
+    expect(updatesItself("2.1.2")).toBe(true);
+    expect(updatesItself("3.0.0")).toBe(true);
+    // Not a version this host publishes, so it promises nothing.
+    expect(updatesItself("v2.1.2")).toBe(false);
   });
 
   it("links an App guide page the docs site carries", () => {

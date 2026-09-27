@@ -87,6 +87,7 @@ describe("holderOf", () => {
     ],
     liveHosts: 1,
     lastSeenAt: null,
+    containmentRequired: false,
   };
 
   it("names the agent that already runs the harness on the runtime", () => {

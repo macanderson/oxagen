@@ -11,6 +11,9 @@ export const schema = {
   slug: runtimeCreate.input.shape.slug.describe(
     "Lowercase letters and digits joined by hyphens; derived from the name when omitted",
   ),
+  containmentRequired: runtimeCreate.input.shape.containmentRequired.describe(
+    "Whether every agent on the runtime must run under the contained launcher; false when omitted",
+  ),
 };
 
 export const metadata: ToolMetadata = {
