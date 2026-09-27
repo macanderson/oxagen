@@ -2,7 +2,6 @@
 // builds a module, it deletes that module's row here.
 import { describe, expect, it } from "vitest";
 import { CompileError } from "./compile";
-import { diff, type DiffInput } from "./diff";
 import {
   execute,
   graphqlSender,
@@ -19,16 +18,12 @@ import { importGrpc } from "./grpc";
 import { lint, type LintContext, type ServerFolder } from "./lint";
 import { NotBuiltError } from "./not-built";
 import { importOpenApi } from "./openapi";
-import { suggest } from "./suggest";
 import type { ManifestTool } from "./contract/manifest";
-import type { UpstreamTool } from "./model/upstream-tool";
 
 // The stubs never read their arguments, so an empty object stands in for each.
 const stub = <T>(): T => ({}) as T;
 
 const syncStubs: Array<[string, () => unknown]> = [
-  ["diff", () => diff(stub<DiffInput>())],
-  ["suggest", () => suggest(stub<UpstreamTool>(), { source: "openapi", network: "cloud" })],
   ["lint", () => lint(stub<ServerFolder>(), stub<LintContext>())],
 ];
 
