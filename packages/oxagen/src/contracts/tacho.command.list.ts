@@ -128,6 +128,11 @@ export const tachoCommandList = registerCapability({
         .min(1)
         .max(LIST_COMMANDS_IDS_MAX)
         .optional(),
+      /**
+       * The most rows a `runId` read returns. A `commandIds` read returns
+       * every row its ids name, because the output carries no cursor to
+       * say a limit cut it short.
+       */
       limit: z.number().int().min(1).max(100).default(50),
     })
     .strict(),

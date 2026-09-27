@@ -25,7 +25,7 @@ Each command names its run, the person who issued it, and, for a `steer` or a `m
 |---|---|---|---|
 | `runId` | string | one of the two | `arun_…` or `tse_…` |
 | `commandIds` | string[] | one of the two | 1 to 100 `tcm_…` ids, such as the ids a broadcast `dispatch_command` returned |
-| `limit` | integer | no | 1 to 100, default 50; it bounds a read by `commandIds` too |
+| `limit` | integer | no | 1 to 100, default 50. It bounds a read by `runId`. A read by `commandIds` returns every row its ids name. |
 
 Send `runId` or `commandIds`. A read with both, or with neither, is refused as `invalid_input` (`run_or_commands`).
 

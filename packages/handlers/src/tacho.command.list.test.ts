@@ -286,7 +286,7 @@ describe("list_commands handler", () => {
 });
 
 describe("list_commands by command ids", () => {
-  it("reads the rows the ids name, once each, with the limit passed through, and fences no run", async () => {
+  it("reads the rows the ids name, once each, and fences no run", async () => {
     const other = "tse_9zzzzzzzzzzzzzzzzzzzzz";
     const { handler, commandsForRun, commandsByIds } = handlerOver({
       tacho: [],
@@ -314,6 +314,45 @@ describe("list_commands by command ids", () => {
     );
     expect(commandsForRun).not.toHaveBeenCalled();
     expect(tachoCommandList.output.safeParse(output).success).toBe(true);
+  });
+
+  it("reads every id a broadcast returned when the ids outnumber the default limit of 50", async () => {
+    const ids = Array.from({ length: 80 }, (_, i) => `tcm_${i + 1}`);
+    const { handler, commandsByIds } = handlerOver({
+      tacho: [],
+      ledger: [],
+      rows: ids.map((publicId) => row({ publicId })),
+    });
+    const output = await handler(
+      tachoCommandList.input.parse({ commandIds: ids }),
+      CTX,
+    );
+    expect(commandsByIds).toHaveBeenCalledWith(
+      { orgId: CTX.orgId, workspaceId: CTX.workspaceId },
+      ids,
+      80,
+    );
+    expect(output.commands).toHaveLength(80);
+  });
+
+  it("does not let a limit under the id count cut named rows (negative)", async () => {
+    const { handler, commandsByIds } = handlerOver({
+      tacho: [],
+      ledger: [],
+      rows: [row({ publicId: "tcm_2" }), row({ publicId: "tcm_1" })],
+    });
+    await handler(
+      tachoCommandList.input.parse({
+        commandIds: ["tcm_1", "tcm_2", "tcm_3"],
+        limit: 1,
+      }),
+      CTX,
+    );
+    expect(commandsByIds).toHaveBeenCalledWith(
+      { orgId: CTX.orgId, workspaceId: CTX.workspaceId },
+      ["tcm_1", "tcm_2", "tcm_3"],
+      3,
+    );
   });
 
   it("refuses a read that names both a run and command ids, or neither, as run_or_commands (negative)", async () => {

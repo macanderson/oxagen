@@ -129,7 +129,8 @@ type ListCommandsDeps = {
   ) => Promise<CommandRow[]>;
   /**
    * The rows among `commandIds` in the scope's workspace that are addressed
-   * to a run, or held for an agent's next run, newest first.
+   * to a run, or held for an agent's next run, newest first. The handler
+   * passes the distinct id count as `limit`.
    */
   commandsByIds: (
     scope: RunScope,
@@ -160,11 +161,11 @@ export function createListCommandsHandler(
     const scope = runScope(ctx);
     if (commandIds !== undefined) {
       const now = deps.now();
-      const rows = await deps.commandsByIds(
-        scope,
-        [...new Set(commandIds)],
-        input.limit,
-      );
+      // The ids bound the read, so it asks for one row per distinct id. A
+      // limit under the id count would drop named rows with nothing in the
+      // answer to say so, because the output carries no cursor.
+      const ids = [...new Set(commandIds)];
+      const rows = await deps.commandsByIds(scope, ids, ids.length);
       return { commands: rows.map((row) => toReportItem(row, now)) };
     }
     if (runId === undefined) throw runOrCommands();
