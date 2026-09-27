@@ -117,16 +117,36 @@ async function readPromptRows(
 
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
+type EvidenceModule = typeof import("@oxagen/run-ledger/evidence-store");
+
+/**
+ * The evidence store module, loaded once per read and only when the pass
+ * reads bodies. Concurrent dynamic imports of one module can race each
+ * other, so the batch reads below share this one. Null when it cannot load:
+ * every prompt then reads as no text.
+ */
+async function loadEvidenceModule(): Promise<EvidenceModule | null> {
+  try {
+    return await import("@oxagen/run-ledger/evidence-store");
+  } catch (err) {
+    logger.warn(
+      { err },
+      "findings: evidence store failed to load; prompts read without text",
+    );
+    return null;
+  }
+}
+
 /** A prompt body as text; null when it is missing, altered, or not UTF-8. */
 async function bodyText(
   scope: Scope,
+  store: EvidenceModule,
   row: PromptRow,
 ): Promise<string | null> {
   if (row.bytes_ref === "" || row.content_digest === "") return null;
   try {
-    const { evidenceStore } = await import("@oxagen/run-ledger/evidence-store");
     const { bytes } = await runInTenantScope(scope, () =>
-      evidenceStore().getBody(scope, row.bytes_ref),
+      store.evidenceStore().getBody(scope, row.bytes_ref),
     );
     const digest = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
     if (digest !== row.content_digest) return null;
@@ -164,11 +184,17 @@ export async function readRunPrompts(
     return runId !== undefined && runIds.has(runId) ? [{ row, runId }] : [];
   });
   const texts: (string | null)[] = kept.map(() => null);
-  if (mode === "content_exact") {
+  const store =
+    mode === "content_exact" && kept.length > 0
+      ? await loadEvidenceModule()
+      : null;
+  if (store !== null) {
     const reads = Math.min(kept.length, PROMPT_BODIES_MAX);
     for (let i = 0; i < reads; i += BODY_READ_CONCURRENCY) {
       const batch = kept.slice(i, Math.min(i + BODY_READ_CONCURRENCY, reads));
-      const read = await Promise.all(batch.map((k) => bodyText(scope, k.row)));
+      const read = await Promise.all(
+        batch.map((k) => bodyText(scope, store, k.row)),
+      );
       read.forEach((text, j) => (texts[i + j] = text));
     }
   }
