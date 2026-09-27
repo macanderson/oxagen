@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   rebuildRunTotals: vi.fn(),
   rebuildDailyTotals: vi.fn(),
+  checkNoProgress: vi.fn(),
   createFunction: vi.fn(),
 }));
 
 vi.mock("@oxagen/billing", () => ({
   rebuildRunTotals: mocks.rebuildRunTotals,
   rebuildDailyTotals: mocks.rebuildDailyTotals,
+  checkNoProgress: mocks.checkNoProgress,
   utcDay: (at: Date) => at.toISOString().slice(0, 10),
 }));
 vi.mock("../logger", () => ({
@@ -42,16 +44,23 @@ mocks.createFunction.mockImplementation(
 await import("./cost.run-progress");
 
 const sendEvent = vi.fn(async () => {});
+const steps: string[] = [];
 const step = {
-  run: (_: string, fn: () => Promise<unknown>) => fn(),
+  run: (name: string, fn: () => Promise<unknown>) => {
+    steps.push(name);
+    return fn();
+  },
   sendEvent,
 };
+const NO_LIMIT = { checked: false, loops: 0, newLoops: 0, paused: false };
 
 describe("cost.run-progress", () => {
   beforeEach(() => {
     mocks.rebuildRunTotals.mockReset();
     mocks.rebuildDailyTotals.mockReset().mockResolvedValue([]);
+    mocks.checkNoProgress.mockReset().mockResolvedValue(NO_LIMIT);
     sendEvent.mockClear();
+    steps.length = 0;
   });
 
   it("runs on cost/run.progressed", () => {
@@ -101,7 +110,49 @@ describe("cost.run-progress", () => {
       step,
     });
     expect(mocks.rebuildDailyTotals).not.toHaveBeenCalled();
+    expect(mocks.checkNoProgress).not.toHaveBeenCalled();
     expect(out).toEqual({ runId: "tse_missing", rolledUp: false });
+  });
+
+  it("checks the run against the no-progress limit after the rollup steps", async () => {
+    mocks.rebuildRunTotals.mockResolvedValue({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      startedAt: new Date("2026-09-26T10:00:00.000Z"),
+      sealedAt: null,
+      costMicros: 900n,
+      costBasis: "client_attested",
+    });
+    mocks.checkNoProgress.mockResolvedValue({
+      checked: true,
+      loops: 1,
+      newLoops: 1,
+      paused: false,
+    });
+    const out = await handler!({ event: { data: { runId: "tse_loop" } }, step });
+    expect(mocks.checkNoProgress).toHaveBeenCalledWith({
+      runId: "tse_loop",
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      sealed: false,
+    });
+    expect(steps).toEqual(["run-totals", "daily-totals", "no-progress"]);
+    expect(out).toEqual({ runId: "tse_loop", rolledUp: true });
+  });
+
+  it("tells the check a sealed run is sealed, so an enforced limit does not pause it", async () => {
+    mocks.rebuildRunTotals.mockResolvedValue({
+      orgId: "org-1",
+      workspaceId: "ws-1",
+      startedAt: new Date("2026-09-26T10:00:00.000Z"),
+      sealedAt: new Date("2026-09-26T10:30:00.000Z"),
+      costMicros: 900n,
+      costBasis: "client_attested",
+    });
+    await handler!({ event: { data: { runId: "tse_sealed" } }, step });
+    expect(mocks.checkNoProgress).toHaveBeenCalledWith(
+      expect.objectContaining({ runId: "tse_sealed", sealed: true }),
+    );
   });
 
   it("refuses an event with no run id without a retry (negative)", async () => {
