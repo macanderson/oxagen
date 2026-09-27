@@ -21,9 +21,12 @@
 // the instant the host recorded, and a call that cannot read that instant is
 // refused rather than stamping the record with its own clock. Only a merge
 // the host confirmed publishes the record into the registry, appends the
-// promotion event to the hash-chained ledger (the ledger length is the
-// workspace's steering version), calls publish(), records the publish as a
-// deployment to the steering environment, and emits `steering.published`.
+// promotion event to the hash-chained ledger, calls publish(), records the
+// publish as a deployment to the steering environment, and emits
+// `steering.published`. In a steering repo the Oxagen-Version trailer is the
+// version publish() assigns next, read from its own version store. When
+// publish() assigns another version, the merge is refused after it lands.
+// In a legacy repository the version is the ledger length plus one.
 // The head branch is deleted before the publication so the next proposal on
 // the lineage branches from the production branch.
 //
@@ -34,6 +37,7 @@
 import { HandlerError, type CapabilityHandler } from "@oxagen/oxagen";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
 import type { RepoHealth } from "@oxagen/oxagen/steering-repo/health";
+import type { PublishResult, VersionStore } from "@oxagen/steering-bundle";
 import { recheckContextPr } from "./context.pr.open";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
 import {
@@ -58,24 +62,42 @@ import {
 type Scope = { orgId: string; workspaceId: string };
 
 /**
+ * S5's publish() and the version store it assigns versions from. Both must
+ * be bound to the same store: the merge reads the next version from `store`
+ * and checks that publish() assigned that version.
+ */
+export interface SteeringPublisher {
+  /** The key the store and publish() use for this repository. */
+  repository: (repo: SteeringRepository) => string;
+  /** The version store publish() assigns versions from. */
+  store: Pick<VersionStore, "highestVersion">;
+  /** S5's publish() at `commit`, bound to `store` and the repository. */
+  publish: (repo: SteeringRepository, commit: string) => Promise<PublishResult>;
+}
+
+/**
  * The parts of a merge other lanes supply. Each has a default until its lane
  * lands: every repository reads healthy, nobody holds merge_without_review,
- * the version is the ledger length plus one, and publish() does nothing.
+ * the version is the ledger length plus one, and nothing is published.
  */
 export interface MergeSeams {
   /** The steering repo's health (S2). */
   readHealth?: (scope: Scope, repo: SteeringRepository) => Promise<RepoHealth>;
   /** Whether the user holds merge_without_review in the workspace. */
   holdsMergeWithoutReview?: (scope: Scope, userId: string) => Promise<boolean>;
-  /** The published version this merge becomes. */
+  /**
+   * The version a merge becomes when no publisher assigns it: in a legacy
+   * repository, or in a steering repo before S5's publish() is wired.
+   */
   nextVersion?: (scope: Scope) => Promise<number>;
   /**
-   * Publish the steering repo at the merge commit (S5's publish(repo, sha)).
-   * Called in a steering repo only: a legacy repository is the main code
-   * repository, which S5's sync never publishes. A failure is logged, not
-   * thrown.
+   * Publish the steering repo at the merge commit (S5). Called in a steering
+   * repo only: a legacy repository is the main code repository, which S5's
+   * sync never publishes. A thrown error, a refusal, or a stale commit is
+   * logged and the merge stands. A version other than the one in the
+   * Oxagen-Version trailer refuses the call.
    */
-  publish?: (repo: SteeringRepository, commit: string) => Promise<void>;
+  publisher?: SteeringPublisher;
 }
 
 /** A proposal row whose pull request is recorded, so it can merge. */
@@ -205,7 +227,12 @@ export function createMergeContextPrHandler(
       assertProductionBase(repo, pr.baseRef, row.prUrl);
       // The published body is the file at the merged commit.
       let body = await readBody(deps, repo, path, recorded.headSha);
-      const version = await nextVersion(scope);
+      // Only a steering repo publishes. Its trailer carries the version
+      // publish() assigns next, read from the store it assigns versions from.
+      const publisher = layout.layout === "steering" ? seams.publisher : null;
+      const version = publisher
+        ? await nextPublishedVersion(publisher, repo)
+        : await nextVersion(scope);
 
       let commitSha: string;
       let attempts = 0;
@@ -324,9 +351,7 @@ export function createMergeContextPrHandler(
         mergedByUserId: userId,
         policyVersion: `governance:${mode}`,
       });
-      if (layout.layout === "steering") {
-        await publishQuietly(seams.publish, repo, commitSha, version);
-      }
+      if (publisher) await publishSteering(publisher, repo, commitSha, version);
       const deploymentUrl = await recordPublishDeployment(deps.github, repo, {
         sha: commitSha,
         version,
@@ -402,25 +427,53 @@ async function readBody(
   return body;
 }
 
+/** The version publish() assigns next: one past the highest in its store. */
+async function nextPublishedVersion(
+  publisher: SteeringPublisher,
+  repo: SteeringRepository,
+): Promise<number> {
+  return (await publisher.store.highestVersion(publisher.repository(repo))) + 1;
+}
+
 /**
- * Call publish() after the registry holds the merge. The merge has landed and
- * the row is merged, so a failure here cannot be retried through this
- * capability: it is logged for the publish lane's own retry.
+ * Call publish() after the registry holds the merge, and check that it
+ * assigned the version in the Oxagen-Version trailer.
+ *
+ * The merge has landed and the row is merged, so nothing here can be retried
+ * through this capability. A thrown error, a refusal, or a stale commit is
+ * logged for the publish lane's own retry. A different version is refused
+ * before the deployment and `steering.published` repeat the wrong number; a
+ * retry then refuses `already_merged`, so the trailer is corrected by hand.
  */
-async function publishQuietly(
-  publish: MergeSeams["publish"],
+async function publishSteering(
+  publisher: SteeringPublisher,
   repo: SteeringRepository,
   commit: string,
   version: number,
 ): Promise<void> {
-  if (!publish) return;
+  let result: PublishResult;
   try {
-    await publish(repo, commit);
+    result = await publisher.publish(repo, commit);
   } catch (err) {
     logger.warn(
       { err, repository: repo.fullName, commit, version },
       "context.pr.merge: merged and recorded, but publish() failed",
     );
+    return;
+  }
+  if (result.status === "refused" || result.status === "stale") {
+    logger.warn(
+      { repository: repo.fullName, commit, version, result },
+      `context.pr.merge: merged and recorded, but publish() answered ${result.status}`,
+    );
+    return;
+  }
+  if (result.version !== version) {
+    throw new HandlerError({
+      code: "conflict",
+      reason: "version_mismatch",
+      message: `${repo.fullName} merged ${commit} with Oxagen-Version: ${version}, but publish() assigned version ${result.version}. The merge and its record stand. Correct the published version before the next merge.`,
+    });
   }
 }
 

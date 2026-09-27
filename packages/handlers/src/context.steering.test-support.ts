@@ -635,8 +635,11 @@ export class FakeGitHub implements SteeringGitHub {
   deploymentRefused = false;
   /**
    * The approvals every PR holds, or null for the default: one approval by
-   * REVIEWER at the PR's current head, standing for "a linked reviewer
-   * approved on the host". A test about approvals sets its own list.
+   * REVIEWER, standing for "a linked reviewer approved on the host". The
+   * default approval sits at the last head someone other than the merge queue
+   * pushed. A merge the queue made on top of that head never moves it, so a
+   * queue test proves the approval carries rather than being given again. A
+   * test about approvals sets its own list.
    */
   approvals: SteeringApproval[] | null = null;
   /** Runs right after each stamp commit, so a test can move main then. */
@@ -1167,8 +1170,21 @@ export class FakeGitHub implements SteeringGitHub {
     const pr = this.pull(number);
     if (pr.state !== "open") return [];
     return [
-      { userId: REVIEWER, login: "reviewer", commitSha: this.shaOf(pr.head) },
+      {
+        userId: REVIEWER,
+        login: "reviewer",
+        commitSha: this.pushedHead(this.shaOf(pr.head)),
+      },
     ];
+  }
+  /** `sha`, walked back through every merge the queue made on top of it. */
+  private pushedHead(sha: string): string {
+    let head = sha;
+    for (;;) {
+      const update = this.updates.find((u) => u.to === head);
+      if (!update) return head;
+      head = update.from;
+    }
   }
   async recordDeployment(
     _repo: SteeringRepository,
