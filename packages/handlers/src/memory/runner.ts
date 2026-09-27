@@ -544,11 +544,12 @@ async function settleOne(
 }
 
 /**
- * Put today's branch at `head`. A branch left by a pass that failed before
- * it opened its PR is replaced, and a branch that already has an open PR is
- * left alone: the function returns false.
+ * Create today's branch at `head`, the default branch's commit the plan read.
+ * A branch left by a pass that failed before it opened its PR is replaced.
+ * The function returns false and leaves the branch alone when it already has
+ * an open PR.
  */
-async function prepareBranch(
+export async function prepareBranch(
   host: SteeringHost,
   repo: SteeringRepository,
   branch: string,
@@ -557,6 +558,7 @@ async function prepareBranch(
   try {
     await host.ensureBranch(repo, branch, repo.defaultBranch, {
       exclusive: true,
+      at: head,
     });
   } catch (err) {
     if (!(isHandlerError(err) && err.reason === "proposal_branch_exists"))
@@ -577,12 +579,13 @@ async function prepareBranch(
     await host.deleteBranch(repo, branch);
     await host.ensureBranch(repo, branch, repo.defaultBranch, {
       exclusive: true,
+      at: head,
     });
   }
-  // The default branch can move between the read and the branch's creation.
-  // The commit's parent is the head the plan read.
-  if ((await host.branchHead(repo, branch)) !== head)
-    await host.resetBranch(repo, branch, head);
+  // The default branch can move after the plan read it. The branch starts at
+  // the head the plan read, because that head is the commit's parent. The
+  // host creates it there in one call, so no reset follows and no push to the
+  // branch can land between a read and a move.
   return true;
 }
 

@@ -387,6 +387,22 @@ describe("the GitLab seam", () => {
     ).rejects.toMatchObject({ reason: "proposal_branch_exists" });
   });
 
+  it("creates a branch at the commit it is given, not at the base branch's head", async () => {
+    const api = new FakeGitLabApi();
+    const { seam, repo } = await resolved(api);
+    const planned = api.branches.get("main")!;
+    await seam.ensureBranch(repo, "other", "main");
+    const { commitSha: moved } = await seam.putFile(repo, {
+      path: "a.toml",
+      content: "1",
+      message: "m",
+      branch: "other",
+    });
+    api.branches.set("main", moved);
+    await seam.ensureBranch(repo, "b", "main", { exclusive: true, at: planned });
+    expect(api.branches.get("b")).toBe(planned);
+  });
+
   it("creates, updates, and answers the head for an identical write", async () => {
     const api = new FakeGitLabApi();
     const { seam, repo } = await resolved(api);

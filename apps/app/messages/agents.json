@@ -948,7 +948,15 @@
             "cache_writes_never_read": "Cache writes never read",
             "duplicate_tool_calls": "Duplicate tool calls",
             "repeated_shell_commands": "Repeated shell commands",
-            "unpaged_results": "Unpaged results"
+            "unpaged_results": "Unpaged results",
+            "spin_loops": "Spin loops",
+            "standing_context": "Standing context",
+            "idle_cache_rewrites": "Idle cache rewrites",
+            "cache_busts": "Cache busts",
+            "model_class_fit": "Model class fit",
+            "repeated_instructions": "Repeated instructions",
+            "recurring_runs": "Recurring runs",
+            "spend_with_no_outcome": "Spend with no outcome"
           }
         }
       },
