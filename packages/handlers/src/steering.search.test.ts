@@ -45,7 +45,18 @@ describe("steering_search", () => {
     expect(published).not.toHaveBeenCalled();
   });
 
+  it("searches the versions a run was delivered when a run calls it", async () => {
+    const published = vi.fn(() => Promise.resolve(delivery));
+    const handler = createSteeringSearchHandler({ published });
+    await handler({ query: "refund" }, steeringCtx("run_1"));
+    expect(published).toHaveBeenCalledWith({ ...SCOPE, runId: "run_1" });
+  });
+
   it("scopes a read to the caller's organization and workspace", () => {
     expect(steeringScope(steeringCtx())).toEqual(SCOPE);
+  });
+
+  it("scopes a read from a run to that run", () => {
+    expect(steeringScope(steeringCtx("run_1"))).toEqual({ ...SCOPE, runId: "run_1" });
   });
 });

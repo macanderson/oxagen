@@ -3,6 +3,7 @@ import { HandlerError } from "@oxagen/oxagen";
 import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
 import type { Delivery } from "@oxagen/steering-bundle";
 import { createSteeringReadHandler, steeringReadMiss } from "./steering.read";
+import type { SteeringScope } from "./steering.search";
 import {
   fixtureDelivery,
   readFixtureFile,
@@ -93,6 +94,30 @@ describe("steering_read", () => {
     expect(error.message).toBe(
       "a-intel.brand.voice has no file named missing.md. Name a file in the skill's folder, such as words.md.",
     );
+  });
+
+  it("reads the version a run was delivered after a newer version drops the record", async () => {
+    const workspace = delivery.workspace;
+    if (workspace === null) throw new Error("The fixture delivery has no workspace version.");
+    const newer: Delivery = {
+      ...delivery,
+      workspace: {
+        ...workspace,
+        version: 22,
+        records: workspace.records.filter((record) => record.lineage !== "a-intel.domain.refund"),
+      },
+    };
+    const published = vi.fn((scope: SteeringScope) =>
+      Promise.resolve(scope.runId === "run_1" ? delivery : newer),
+    );
+    const read = createSteeringReadHandler({ published, readFile: readFixtureFile });
+
+    const output = await read({ lineage: "a-intel.domain.refund" }, steeringCtx("run_1"));
+    expect(published).toHaveBeenCalledWith({ ...SCOPE, runId: "run_1" });
+    expect(output.version).toBe(21);
+
+    const error = await refusal(read({ lineage: "a-intel.domain.refund" }, steeringCtx()));
+    expect(error.reason).toBe("steering_record_not_found");
   });
 
   it("refuses input the tool does not take, before it reads a version", async () => {

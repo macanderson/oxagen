@@ -16,9 +16,14 @@ import {
 } from "@oxagen/steering-bundle";
 import type { SteeringScope } from "./steering.search";
 
-export const SCOPE: SteeringScope = { orgId: "org_steering", workspaceId: "ws_steering" };
+export const SCOPE: SteeringScope = {
+  orgId: "org_steering",
+  workspaceId: "ws_steering",
+  runId: null,
+};
 
-export function steeringCtx(): CheckedContext {
+/** A checked MCP context, from a run when `runId` is given. */
+export function steeringCtx(runId?: string): CheckedContext {
   return {
     orgId: SCOPE.orgId,
     workspaceId: SCOPE.workspaceId,
@@ -27,6 +32,7 @@ export function steeringCtx(): CheckedContext {
     requestId: "req_1",
     surface: "mcp",
     messageId: null,
+    ...(runId === undefined ? {} : { runId }),
   };
 }
 

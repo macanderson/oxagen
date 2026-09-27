@@ -81,12 +81,27 @@ export function skillsRoot(
  * Code and Codex take lowercase letters, digits, and hyphens. A name past 64
  * characters keeps its first 55 and ends with 8 characters of the lineage's
  * hash, so two long lineages stay apart.
+ *
+ * With `digest`, every name ends with the hash. runSkills asks for it when two
+ * of a run's lineages differ only in a dot and a hyphen, such as
+ * `a-intel.brand.voice` and `a-intel.brand-voice`, which would share a folder.
  */
-export function skillFolderName(lineage: string): string {
+export function skillFolderName(lineage: string, options: { digest?: boolean } = {}): string {
   const name = lineage.toLowerCase().replace(/[^a-z0-9-]/g, "-");
-  if (name.length <= SKILL_NAME_MAX) return name;
+  if (options.digest !== true && name.length <= SKILL_NAME_MAX) return name;
   const digest = createHash("sha256").update(lineage).digest("hex").slice(0, 8);
   return `${name.slice(0, SKILL_NAME_MAX - 9).replace(/-+$/, "")}-${digest}`;
+}
+
+/** Give each skill that shares its folder name with another the name that ends with its lineage's hash. */
+function separateNames(skills: SessionSkill[]): void {
+  const counts = new Map<string, number>();
+  for (const skill of skills) counts.set(skill.name, (counts.get(skill.name) ?? 0) + 1);
+  for (const skill of skills) {
+    if ((counts.get(skill.name) ?? 0) > 1) {
+      skill.name = skillFolderName(skill.lineage, { digest: true });
+    }
+  }
 }
 
 /** One file of a skill, by its path inside the skill's folder. */
@@ -172,6 +187,7 @@ export async function runSkills(
       version: bundle.version,
     });
   }
+  separateNames(skills);
   return skills.sort((a, b) => compareText(a.name, b.name));
 }
 
@@ -275,8 +291,18 @@ export async function placeSkills(
 ): Promise<PlaceResult> {
   const result: PlaceResult = { placed: [], skipped: [], warnings: [] };
   await mkdir(root, { recursive: true });
+  const taken = new Set<string>();
   for (const skill of skills) {
     const folder = join(root, skill.name);
+    // A second skill with the same folder name would replace the first.
+    if (taken.has(skill.name)) {
+      result.skipped.push(skill.name);
+      result.warnings.push(
+        `${skill.lineage} was not placed, because another skill of this session already uses ${folder}.`,
+      );
+      continue;
+    }
+    taken.add(skill.name);
     const digest = skillDigest(skill);
     const found = await readMarker(folder);
     if (found.state === "foreign") {

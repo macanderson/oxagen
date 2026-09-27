@@ -279,6 +279,19 @@ describe("buildTools", () => {
     expect(result.imported).toEqual(BILLING_TOOLS);
   });
 
+  it("lists no tools from a tools.toml with no tools table", async () => {
+    const tree = new Map(files);
+    tree.set("tools/servers/stripe/tools.toml", 'schema = "mcp-tools/v1"\n');
+    const result = await buildTools(await reader(tree), () => {
+      throw new NotBuiltError("compile");
+    });
+    expect(result.imported).toEqual(BILLING_TOOLS);
+    expect(result.warnings).toEqual([
+      "tools/servers/billing is left out: MCP Studio's compile is not built yet.",
+      "tools/servers/stripe is left out: MCP Studio's compile is not built yet.",
+    ]);
+  });
+
   it("warns when a folder's name is not a server name", async () => {
     const tree = new Map<string, string>();
     for (const name of ["server.toml", "tools.toml", "tools.lock.json"]) {

@@ -192,6 +192,20 @@ describe("skillFolderName", () => {
     expect(two).toHaveLength(SKILL_NAME_MAX);
   });
 
+  it("ends a short name with the lineage's hash when asked for the digest", () => {
+    expect(skillFolderName("a-intel.brand-voice", { digest: true })).toBe(
+      `a-intel-brand-voice-${hash8("a-intel.brand-voice")}`,
+    );
+    expect(skillFolderName("a-intel.brand.voice", { digest: true })).toBe(
+      `a-intel-brand-voice-${hash8("a-intel.brand.voice")}`,
+    );
+  });
+
+  it("keeps a long name's hash once when asked for the digest", () => {
+    const lineage = `a-intel.${"x".repeat(60)}`;
+    expect(skillFolderName(lineage, { digest: true })).toBe(skillFolderName(lineage));
+  });
+
   it("drops a hyphen the cut leaves at the end, so the name never holds two in a row", () => {
     // Character 55 of the name is the hyphen that stood for the dot.
     const lineage = `${"a".repeat(54)}.${"b".repeat(20)}`;
@@ -495,6 +509,29 @@ describe("runSkills", () => {
       },
     ]);
     expect(skills[0]?.body).toContain("# Brand voice");
+  });
+
+  it("gives two skills whose lineages make one folder name a name each that ends with its lineage's hash", async () => {
+    const { workspace, workspaceFiles: files } = await fixtures();
+    const voice = workspace.records.find((record) => record.lineage === "a-intel.brand.voice");
+    if (voice === undefined) throw new Error("The fixture has no a-intel.brand.voice skill.");
+    const twin = { ...voice, lineage: "a-intel.brand-voice" };
+    const skills = await runSkills(
+      { workspace: { ...workspace, records: [...workspace.records, twin] }, organization: null },
+      "github.com/a-intel/platform",
+      assetReader({ workspace: files }),
+    );
+    const names = new Map(skills.map((entry) => [entry.lineage, entry.name]));
+    expect(names.get("a-intel.brand.voice")).toBe(
+      skillFolderName("a-intel.brand.voice", { digest: true }),
+    );
+    expect(names.get("a-intel.brand-voice")).toBe(
+      skillFolderName("a-intel.brand-voice", { digest: true }),
+    );
+    expect(names.get("a-intel.brand.voice")).not.toBe(names.get("a-intel.brand-voice"));
+    // A skill whose name no other skill shares keeps the plain name.
+    expect(names.get("a-intel.design.house-ui")).toBe("a-intel-design-house-ui");
+    expect(new Set(skills.map((entry) => entry.name)).size).toBe(skills.length);
   });
 
   it("leaves out a skill whose repos names another repository, and every such skill on a run with no repository", async () => {
@@ -893,10 +930,7 @@ describe("placeSkills", () => {
     });
   });
 
-  it("lets a second skill whose lineage makes the same folder name replace the first", async () => {
-    // Characterization: runSkills keeps skills apart by lineage, and two
-    // lineages that differ only in a dot and a hyphen share one folder. The
-    // second rewrites the first, and both report placed.
+  it("places the first of two skills that share a folder name and warns about the second", async () => {
     const dotted = skill({ lineage: "a-intel.brand.voice", body: "# Dotted\n" });
     const hyphenated = skill({
       lineage: "a-intel.brand-voice",
@@ -905,8 +939,14 @@ describe("placeSkills", () => {
     });
     expect(hyphenated.name).toBe(dotted.name);
     const result = await placeSkills(root, "s1", [dotted, hyphenated], T0);
-    expect(result).toEqual({ placed: [VOICE_NAME, VOICE_NAME], skipped: [], warnings: [] });
-    expect(await readFile(join(folder, "SKILL.md"), "utf8")).toBe(skillMarkdown(hyphenated));
+    expect(result).toEqual({
+      placed: [VOICE_NAME],
+      skipped: [VOICE_NAME],
+      warnings: [
+        `a-intel.brand-voice was not placed, because another skill of this session already uses ${folder}.`,
+      ],
+    });
+    expect(await readFile(join(folder, "SKILL.md"), "utf8")).toBe(skillMarkdown(dotted));
   });
 
   it("reads the clock when no time is given", async () => {

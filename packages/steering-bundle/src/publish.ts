@@ -6,14 +6,20 @@
 //      the last published version.
 //   2. Under the repository's publish lock: a commit that is already
 //      published is done, so a repeated webhook changes nothing.
-//   3. The next number: one more than the highest ever stored, so a number is
+//   3. A commit that is no longer the branch head is stale and is not
+//      published. Two syncs can finish in either order, and without this the
+//      older merge would publish last and roll every run back to it.
+//   4. The next number: one more than the highest ever stored, so a number is
 //      never reused, even for a version that stored and never published.
-//   4. The bundle, built from the merged tree. Files whose blob the previous
+//   5. The bundle, built from the merged tree. Files whose blob the previous
 //      version or the cache already holds are not read again.
-//   5. MCP Studio's project() (lane M13), so the tool registry follows the
+//   6. MCP Studio's project() (lane M13), so the tool registry follows the
 //      merge. Until M13 builds it, publish goes on with a warning.
-//   6. Store the version, then switch the published version in one write.
-//   7. Tag the merge commit steering/<number>. The version is already live,
+//   7. Store the version, then switch the published version in one write.
+//      When either write fails after project() ran, the registry is projected
+//      back to the published version, so runs never get tools from a version
+//      they were not delivered. The next sync publishes the head again.
+//   8. Tag the merge commit steering/<number>. The version is already live,
 //      so a tag that fails is a warning.
 import { NotBuiltError } from "@oxagen/mcp-studio";
 import type { Bundle } from "@oxagen/oxagen/steering-repo/bundle";
@@ -47,6 +53,8 @@ export interface PublishDeps {
   store: VersionStore;
   /** The repository's health (lane S2). */
   health: (repository: string) => Promise<RepoHealth>;
+  /** The commit the repository's production branch points at now. */
+  head: (repository: string) => Promise<string>;
   /** The merged tree, listed with blob ids. */
   tree: (repository: string, commit: string) => Promise<SteeringTree>;
   /** Tags the commit. */
@@ -63,6 +71,8 @@ export interface PublishDeps {
 export type PublishResult =
   | { status: "refused"; health: Exclude<RepoHealth, "healthy"> }
   | { status: "current"; version: number; commit: string }
+  /** `commit` is no longer the branch head, so it was not published. `head` is the commit the branch points at now. */
+  | { status: "stale"; commit: string; head: string }
   | {
       status: "published";
       version: number;
@@ -95,6 +105,8 @@ export async function publish(
     if (current !== null && current.commit === commit) {
       return { status: "current", version: current.version, commit };
     }
+    const head = await deps.head(repository);
+    if (head !== commit) return { status: "stale", commit, head };
     const version = (await deps.store.highestVersion(repository)) + 1;
     const reader = await TreeReader.open(await deps.tree(repository, commit), deps.cache);
     const { bundle, warnings } = await buildBundle({
@@ -107,21 +119,14 @@ export async function publish(
       compiler: deps.compiler,
     });
 
-    if (deps.project === undefined) {
-      warnings.push("The tool registry was not updated: MCP Studio's project() is not built yet.");
-    } else {
-      try {
-        await deps.project(bundle);
-      } catch (error) {
-        if (!(error instanceof NotBuiltError)) throw error;
-        warnings.push(
-          `The tool registry was not updated: MCP Studio's ${error.module} is not built yet.`,
-        );
-      }
+    const projected = await projectBundle(deps, bundle, warnings);
+    try {
+      await deps.store.put(bundle);
+      await deps.store.setPublished(repository, { version, commit, ledger: bundle.ledger });
+    } catch (error) {
+      if (projected) await restoreProjection(deps, current, version, error);
+      throw error;
     }
-
-    await deps.store.put(bundle);
-    await deps.store.setPublished(repository, { version, commit, ledger: bundle.ledger });
 
     let tag: string | null = versionTag(version);
     try {
@@ -142,6 +147,55 @@ export async function publish(
       reads: reader.reads,
     };
   });
+}
+
+/**
+ * Project the bundle into MCP Studio's tool registry. Returns true when the
+ * registry now holds the bundle's tools, and false when project() is not
+ * built, with a warning.
+ */
+async function projectBundle(
+  deps: PublishDeps,
+  bundle: Bundle,
+  warnings: string[],
+): Promise<boolean> {
+  if (deps.project === undefined) {
+    warnings.push("The tool registry was not updated: MCP Studio's project() is not built yet.");
+    return false;
+  }
+  try {
+    await deps.project(bundle);
+    return true;
+  } catch (error) {
+    if (!(error instanceof NotBuiltError)) throw error;
+    warnings.push(
+      `The tool registry was not updated: MCP Studio's ${error.module} is not built yet.`,
+    );
+    return false;
+  }
+}
+
+/**
+ * Project the published version back after the store refused the new one.
+ * Before the first version there is nothing to put back, and the next sync
+ * publishes the head again. When this projection fails too, both failures
+ * are thrown together.
+ */
+async function restoreProjection(
+  deps: PublishDeps,
+  previous: Bundle | null,
+  version: number,
+  failure: unknown,
+): Promise<void> {
+  if (deps.project === undefined || previous === null) return;
+  try {
+    await deps.project(previous);
+  } catch (undone) {
+    throw new AggregateError(
+      [failure, undone],
+      `Version ${version} was not published, and MCP Studio's registry could not be put back on version ${previous.version}. The next publish projects the registry again.`,
+    );
+  }
 }
 
 /**

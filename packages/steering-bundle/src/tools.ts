@@ -140,7 +140,8 @@ export async function buildTools(
     };
     const tools = parseToolsToml(folder.tools);
     if (tools.ok) {
-      for (const key of Object.keys(tools.value.tools)) {
+      // A tools.toml may hold no [tools] table yet, which imports nothing.
+      for (const key of Object.keys(tools.value.tools ?? {})) {
         try {
           result.imported.push(toolName(name, key));
         } catch (error) {

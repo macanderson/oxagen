@@ -41,23 +41,46 @@ function refuseCompile(): never {
   throw new NotBuiltError("compile");
 }
 
-/** Deps over the fixture repo, with spies on the tree and the tag. */
+/**
+ * Deps over the fixture repo, with spies on the head, the tree, and the tag.
+ * The branch head starts at FIRST_COMMIT, and `moveHead` moves it.
+ */
 function setup(
   overrides: Partial<Omit<PublishDeps, "store">> = {},
   store: MemoryStore = memoryVersionStore(),
 ) {
+  let branchHead = FIRST_COMMIT;
+  const head = vi.fn<PublishDeps["head"]>(async () => branchHead);
   const tag = vi.fn<PublishDeps["tag"]>(async () => undefined);
   const tree = vi.fn<PublishDeps["tree"]>(async () => treeFromFiles(fixtureRepo()));
   const deps: PublishDeps = {
     store,
     health: async () => "healthy",
+    head,
     tree,
     tag,
     compiler: refuseCompile,
     now: () => new Date("2026-09-24T10:00:30Z"),
     ...overrides,
   };
-  return { deps, store, tag, tree };
+  const moveHead = (commit: string): void => {
+    branchHead = commit;
+  };
+  return { deps, store, tag, tree, head, moveHead };
+}
+
+/** Make the store's next `setPublished` reject with `failure`. The one after works. */
+function failNextSetPublished(store: MemoryStore, failure: Error): MemoryStore {
+  const inner = store.setPublished.bind(store);
+  let failNext = true;
+  store.setPublished = (repository, pointer) => {
+    if (failNext) {
+      failNext = false;
+      return Promise.reject(failure);
+    }
+    return inner(repository, pointer);
+  };
+  return store;
 }
 
 function published(result: PublishResult): Published {
@@ -109,13 +132,14 @@ describe("publish", () => {
   );
 
   it("publishes the first merge as version 1 and tags its commit", async () => {
-    const { deps, store, tag, tree } = setup();
+    const { deps, store, tag, tree, head } = setup();
 
     const result = published(await publish(deps, IDENTITY, FIRST_COMMIT));
 
     expect(result.version).toBe(1);
     expect(result.commit).toBe(FIRST_COMMIT);
     expect(result.tag).toBe("steering/1");
+    expect(head).toHaveBeenCalledWith(REPOSITORY);
     expect(tree).toHaveBeenCalledWith(REPOSITORY, FIRST_COMMIT);
     expect(tag).toHaveBeenCalledTimes(1);
     expect(tag).toHaveBeenCalledWith(REPOSITORY, "steering/1", FIRST_COMMIT);
@@ -153,7 +177,7 @@ describe("publish", () => {
       [SECOND_COMMIT, changedRepo()],
     ]);
     const cache: BlobCache = new Map<string, string>();
-    const { deps, store, tag } = setup({
+    const { deps, store, tag, moveHead } = setup({
       cache,
       tree: async (_repository, commit) => {
         const files = trees.get(commit);
@@ -163,6 +187,7 @@ describe("publish", () => {
     });
 
     const first = published(await publish(deps, IDENTITY, FIRST_COMMIT));
+    moveHead(SECOND_COMMIT);
     const second = published(await publish(deps, IDENTITY, SECOND_COMMIT));
 
     expect(second.version).toBe(2);
@@ -236,18 +261,7 @@ describe("publish", () => {
   });
 
   it("never reuses a number that was stored and not published", async () => {
-    const inner = memoryVersionStore();
-    let failNext = true;
-    const store: MemoryStore = {
-      ...inner,
-      setPublished(repository, pointer) {
-        if (failNext) {
-          failNext = false;
-          return Promise.reject(new Error("The pointer write failed."));
-        }
-        return inner.setPublished(repository, pointer);
-      },
-    };
+    const store = failNextSetPublished(memoryVersionStore(), new Error("The pointer write failed."));
     const { deps, tag } = setup({}, store);
 
     await expect(publish(deps, IDENTITY, FIRST_COMMIT)).rejects.toThrow(
@@ -265,18 +279,153 @@ describe("publish", () => {
     expect(store.published.get(REPOSITORY)?.version).toBe(2);
   });
 
-  it("numbers two concurrent merges 1 and 2 under the publish lock", async () => {
-    const { deps, store } = setup();
+  it("publishes one version when two syncs of the same head run at once", async () => {
+    const { deps, store, tag } = setup();
+
+    const [first, second] = await Promise.all([
+      publish(deps, IDENTITY, FIRST_COMMIT),
+      publish(deps, IDENTITY, FIRST_COMMIT),
+    ]);
+
+    expect(published(first).version).toBe(1);
+    expect(second).toEqual({ status: "current", version: 1, commit: FIRST_COMMIT });
+    expect(store.versions.get(REPOSITORY)?.map((bundle) => bundle.version)).toEqual([1]);
+    expect(tag).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not publish a merge the branch has moved past", async () => {
+    const { deps, store, tag, tree, moveHead } = setup();
+    moveHead(SECOND_COMMIT);
+
+    const result = await publish(deps, IDENTITY, FIRST_COMMIT);
+
+    expect(result).toEqual({ status: "stale", commit: FIRST_COMMIT, head: SECOND_COMMIT });
+    expect(store.versions.size).toBe(0);
+    expect(store.published.size).toBe(0);
+    expect(tree).not.toHaveBeenCalled();
+    expect(tag).not.toHaveBeenCalled();
+  });
+
+  it("keeps the newer merge published when an older merge's sync finishes after it", async () => {
+    // Syncs for FIRST_COMMIT and then SECOND_COMMIT start, and the second
+    // finishes first. The first must not publish over it.
+    const { deps, store, tag, moveHead } = setup();
+    moveHead(SECOND_COMMIT);
+
+    const newer = published(await publish(deps, IDENTITY, SECOND_COMMIT));
+    const older = await publish(deps, IDENTITY, FIRST_COMMIT);
+
+    expect(newer.version).toBe(1);
+    expect(older).toEqual({ status: "stale", commit: FIRST_COMMIT, head: SECOND_COMMIT });
+    expect(store.published.get(REPOSITORY)).toEqual({
+      version: 1,
+      commit: SECOND_COMMIT,
+      ledger: newer.bundle.ledger,
+    });
+    expect(store.versions.get(REPOSITORY)?.map((bundle) => bundle.version)).toEqual([1]);
+    expect(tag).toHaveBeenCalledTimes(1);
+  });
+
+  it("publishes only the head when two merges race under the publish lock", async () => {
+    const { deps, store, moveHead } = setup();
+    moveHead(SECOND_COMMIT);
 
     const [first, second] = await Promise.all([
       publish(deps, IDENTITY, FIRST_COMMIT),
       publish(deps, IDENTITY, SECOND_COMMIT),
     ]);
 
-    expect(published(first).version).toBe(1);
-    expect(published(second).version).toBe(2);
-    expect(store.versions.get(REPOSITORY)?.map((bundle) => bundle.version)).toEqual([1, 2]);
+    expect(first).toEqual({ status: "stale", commit: FIRST_COMMIT, head: SECOND_COMMIT });
+    expect(published(second).version).toBe(1);
     expect(store.published.get(REPOSITORY)?.commit).toBe(SECOND_COMMIT);
+  });
+
+  it("projects the published version back when the pointer write fails", async () => {
+    const failure = new Error("The pointer write failed.");
+    const store = memoryVersionStore();
+    const project = vi.fn<NonNullable<PublishDeps["project"]>>(async () => undefined);
+    const { deps, moveHead } = setup({ project }, store);
+    const first = published(await publish(deps, IDENTITY, FIRST_COMMIT));
+
+    failNextSetPublished(store, failure);
+    moveHead(SECOND_COMMIT);
+
+    await expect(publish(deps, IDENTITY, SECOND_COMMIT)).rejects.toBe(failure);
+
+    expect(project.mock.calls.map(([bundle]) => bundle.version)).toEqual([1, 2, 1]);
+    expect(project).toHaveBeenLastCalledWith(first.bundle);
+    expect(await store.current(REPOSITORY)).toBe(first.bundle);
+  });
+
+  it("projects the published version back when the store refuses the version", async () => {
+    const failure = new Error("The version write failed.");
+    const store = memoryVersionStore();
+    const project = vi.fn<NonNullable<PublishDeps["project"]>>(async () => undefined);
+    const { deps, moveHead } = setup({ project }, store);
+    const first = published(await publish(deps, IDENTITY, FIRST_COMMIT));
+    store.put = () => Promise.reject(failure);
+    moveHead(SECOND_COMMIT);
+
+    await expect(publish(deps, IDENTITY, SECOND_COMMIT)).rejects.toBe(failure);
+
+    expect(project).toHaveBeenCalledTimes(3);
+    expect(project).toHaveBeenLastCalledWith(first.bundle);
+    expect(store.published.get(REPOSITORY)?.version).toBe(1);
+  });
+
+  it("throws both failures when the registry cannot be projected back", async () => {
+    const failure = new Error("The pointer write failed.");
+    const undone = new Error("The registry refused the write.");
+    const store = memoryVersionStore();
+    let projections = 0;
+    const project: NonNullable<PublishDeps["project"]> = async () => {
+      projections += 1;
+      if (projections === 3) throw undone;
+    };
+    const { deps, moveHead } = setup({ project }, store);
+    published(await publish(deps, IDENTITY, FIRST_COMMIT));
+    failNextSetPublished(store, failure);
+    moveHead(SECOND_COMMIT);
+
+    const error = await publish(deps, IDENTITY, SECOND_COMMIT).then(
+      () => {
+        throw new Error("expected the publish to fail");
+      },
+      (thrown: unknown) => thrown,
+    );
+
+    expect(error).toBeInstanceOf(AggregateError);
+    expect((error as AggregateError).errors).toEqual([failure, undone]);
+    expect((error as AggregateError).message).toBe(
+      "Version 2 was not published, and MCP Studio's registry could not be put back on version 1. The next publish projects the registry again.",
+    );
+    expect(store.published.get(REPOSITORY)?.version).toBe(1);
+  });
+
+  it("has nothing to project back when the first version's pointer write fails", async () => {
+    const failure = new Error("The pointer write failed.");
+    const project = vi.fn<NonNullable<PublishDeps["project"]>>(async () => undefined);
+    const { deps } = setup({ project }, failNextSetPublished(memoryVersionStore(), failure));
+
+    await expect(publish(deps, IDENTITY, FIRST_COMMIT)).rejects.toBe(failure);
+
+    expect(project).toHaveBeenCalledTimes(1);
+  });
+
+  it("projects nothing back when project() is not built", async () => {
+    const failure = new Error("The pointer write failed.");
+    const store = memoryVersionStore();
+    const project = vi.fn<NonNullable<PublishDeps["project"]>>(async () => {
+      throw new NotBuiltError("project");
+    });
+    const { deps, moveHead } = setup({ project }, store);
+    published(await publish(deps, IDENTITY, FIRST_COMMIT));
+    failNextSetPublished(store, failure);
+    moveHead(SECOND_COMMIT);
+
+    await expect(publish(deps, IDENTITY, SECOND_COMMIT)).rejects.toBe(failure);
+
+    expect(project).toHaveBeenCalledTimes(2);
   });
 });
 

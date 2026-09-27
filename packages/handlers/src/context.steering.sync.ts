@@ -63,9 +63,13 @@ import { logger } from "./logger";
 
 /** What one publish of the synced head did. */
 export interface SyncPublished {
-  /** `refused` while the repository is not healthy, and `current` when the head is already published. */
-  status: "refused" | "current" | "published";
-  /** The published version's number, or null when the publish was refused. */
+  /**
+   * `refused` while the repository is not healthy, `current` when the head is
+   * already published, and `stale` when the branch moved past the synced head
+   * before the publish ran. The sync of the newer head publishes it.
+   */
+  status: "refused" | "current" | "stale" | "published";
+  /** The published version's number, or null when the publish was refused or stale. */
   version: number | null;
 }
 
