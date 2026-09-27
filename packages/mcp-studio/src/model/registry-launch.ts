@@ -59,56 +59,59 @@ interface Slot {
   argument: RegistryArgument;
   /** runtimeArguments[0] or packageArguments[2], for messages. */
   label: string;
-  /** The source.arguments key, or undefined for an argument whose value the entry fixes. */
+  /** A named argument's name, or a positional argument's valueHint. */
+  name: string | undefined;
+  /** The source.arguments key: the name, or undefined when the entry fixes the value. */
   key: string | undefined;
 }
 
 function slots(pkg: RegistryPackage): { runtime: Slot[]; packaged: Slot[] } {
   const slot =
     (list: string) =>
-    (argument: RegistryArgument, index: number): Slot => ({
-      argument,
-      label: `${list}[${index}]`,
-      key:
-        argument.value !== undefined ? undefined : argument.type === "named" ? argument.name : argument.valueHint,
-    });
+    (argument: RegistryArgument, index: number): Slot => {
+      const name = argument.type === "named" ? argument.name : argument.valueHint;
+      return { argument, label: `${list}[${index}]`, name, key: argument.value === undefined ? name : undefined };
+    };
   return {
     runtime: (pkg.runtimeArguments ?? []).map(slot("runtimeArguments")),
     packaged: (pkg.packageArguments ?? []).map(slot("packageArguments")),
   };
 }
 
-/** Problems with the keys source.arguments sets arguments by: missing, shared, or unknown. */
+/**
+ * Problems with the keys source.arguments sets arguments by: missing, shared,
+ * or unknown. A fixed argument counts toward a shared key. An entry with a
+ * fixed --port and a settable --port passes both flags, and the package picks
+ * one by its own rule. Arguments that are all fixed may share a name, since
+ * source.arguments sets none of them.
+ */
 function keyProblems(all: readonly Slot[], given: Readonly<Record<string, string>>, type: RegistryType): LaunchProblem[] {
   const problems: LaunchProblem[] = [];
   const counts = new Map<string, number>();
-  for (const { argument, label, key } of all) {
-    if (argument.value === undefined && key === undefined) {
+  const settable = new Set<string>();
+  for (const { argument, label, name, key } of all) {
+    if (argument.value === undefined && name === undefined) {
       problems.push({
         field: "source.registry_type",
         message: `the ${type} package's positional argument ${label} has no valueHint, so source.arguments cannot set it`,
       });
     }
-    if (key !== undefined) counts.set(key, (counts.get(key) ?? 0) + 1);
+    if (name !== undefined) counts.set(name, (counts.get(name) ?? 0) + 1);
+    if (key !== undefined) settable.add(key);
   }
-  for (const [key, count] of counts) {
-    if (count > 1) {
+  for (const [name, count] of counts) {
+    if (count > 1 && settable.has(name)) {
       problems.push({
-        field: `source.arguments.${key}`,
-        message: `the ${type} package has ${count} arguments keyed ${key}, so source.arguments cannot tell them apart`,
+        field: `source.arguments.${name}`,
+        message: `the ${type} package has ${count} arguments keyed ${name}, so source.arguments cannot tell them apart`,
       });
     }
   }
-  const fixed = new Set(
-    all.flatMap(({ argument }) =>
-      argument.value === undefined ? [] : [argument.type === "named" ? argument.name : argument.valueHint],
-    ),
-  );
   for (const key of Object.keys(given)) {
-    if (counts.has(key)) continue;
+    if (settable.has(key)) continue;
     problems.push({
       field: `source.arguments.${key}`,
-      message: fixed.has(key)
+      message: counts.has(key)
         ? `the ${type} package fixes ${key}, so source.arguments cannot set it`
         : `the ${type} package takes no argument keyed ${key}`,
     });
@@ -129,6 +132,17 @@ function words(slot: Slot, given: Readonly<Record<string, string>>, problems: La
     value = set;
   } else {
     const fromEntry = argument.value ?? argument.default;
+    // The lock is committed, so a secret never takes its value from the entry.
+    if (fromEntry !== undefined && argument.isSecret === true) {
+      problems.push({
+        field,
+        message:
+          key === undefined
+            ? `${label} is secret, and the entry fixes its value, so the lock would hold the secret in plain text`
+            : `${label} is secret, so the entry's default cannot fill it. Set ${key} in source.arguments to one \${NAME} from source.env.`,
+      });
+      return [];
+    }
     if (fromEntry !== undefined && Object.keys(argument.variables ?? {}).length > 0) {
       problems.push({
         field,

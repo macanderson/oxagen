@@ -270,6 +270,57 @@ describe("launch problems", () => {
     });
   });
 
+  it("refuses a key a fixed argument shares with a settable one", () => {
+    const pkg = npm({
+      packageArguments: [
+        { type: "named", name: "--port", value: "8000" },
+        { type: "named", name: "--port" },
+      ],
+    });
+    expect(registryLaunch({ source: onNpm({ arguments: { "--port": "9000" } }), entry: entry(pkg), digest })).toStrictEqual({
+      ok: false,
+      problems: [
+        {
+          field: "source.arguments.--port",
+          message: "the npm package has 2 arguments keyed --port, so source.arguments cannot tell them apart",
+        },
+      ],
+    });
+    const volumes = npm({
+      packageArguments: [
+        { type: "named", name: "--volume", value: "/a" },
+        { type: "named", name: "--volume", value: "/b" },
+      ],
+    });
+    const launch = registryLaunch({ source: onNpm(), entry: entry(volumes), digest });
+    expect(launch.ok && launch.args).toStrictEqual(["--yes", "@acme/files@1.4.0", "--volume", "/a", "--volume", "/b"]);
+  });
+
+  it("refuses a secret whose value comes from the entry", () => {
+    const key = [{ type: "named", name: "--key", default: "abc123", isSecret: true }];
+    const pkg = npm({
+      runtimeArguments: [{ type: "named", name: "--token", value: "hunter2", isSecret: true }],
+      packageArguments: key,
+    });
+    expect(registryLaunch({ source: onNpm(), entry: entry(pkg), digest })).toStrictEqual({
+      ok: false,
+      problems: [
+        {
+          field: "source.registry_type",
+          message: "runtimeArguments[0] is secret, and the entry fixes its value, so the lock would hold the secret in plain text",
+        },
+        {
+          field: "source.arguments.--key",
+          message:
+            "packageArguments[0] is secret, so the entry's default cannot fill it. Set --key in source.arguments to one ${NAME} from source.env.",
+        },
+      ],
+    });
+    const set = onNpm({ env: ["KEY"], arguments: { "--key": "${KEY}" } });
+    const launch = registryLaunch({ source: set, entry: entry(npm({ packageArguments: key })), digest });
+    expect(launch.ok && launch.args).toStrictEqual(["--yes", "@acme/files@1.4.0", "--key", "${KEY}"]);
+  });
+
   it("refuses a registry variable the local gateway would have to fill", () => {
     const variables = { variables: { region: { default: "us" } } };
     const region = [{ type: "named", name: "--region", default: "{region}", ...variables }];
