@@ -108,8 +108,9 @@ export function createGithubRest(opts: GithubRestOptions): GithubRest {
       if (res.status >= 200 && res.status < 300)
         return { status: res.status, data: parsed as T | null, message: null };
       const message = messageOf(parsed, res.status);
-      if (accept.includes(res.status))
-        return { status: res.status, data: null, message };
+      // A rate limit throws even when the caller accepts its status. A caller
+      // that accepts 403 reads it as a refused authorization, and a limit is
+      // not one.
       if (
         res.status === 429 ||
         (res.status === 403 && /rate limit/i.test(message))
@@ -119,6 +120,8 @@ export function createGithubRest(opts: GithubRestOptions): GithubRest {
           message,
           RATE_LIMIT_RETRY_MS,
         );
+      if (accept.includes(res.status))
+        return { status: res.status, data: null, message };
       throw new GitHubApiError(res.status, message);
     },
   };
