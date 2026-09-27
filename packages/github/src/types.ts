@@ -250,13 +250,15 @@ export interface GitHubClient {
   }): Promise<{ fullName: string; htmlUrl: string; defaultBranch: string }>;
 
   /**
-   * Create a new branch from an existing branch (default: main).
+   * Create a new branch from an existing branch (default: main). With
+   * `fromSha`, the branch starts at that commit and no branch is read.
    */
   createBranch(args: {
     owner: string;
     repo: string;
     branch: string;
     fromBranch?: string;
+    fromSha?: string;
   }): Promise<{ ref: string; sha: string }>;
 
   /**
