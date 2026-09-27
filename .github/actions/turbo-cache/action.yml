@@ -4,9 +4,9 @@ description: >-
   infra/stacks-new/ci-deploy/turbo-cache.tf, and point every later turbo run
   in the job at it. The job assumes the gha-turbo-cache role over GitHub OIDC,
   so it needs `id-token: write`. The action fails open: when there is no OIDC
-  token (a fork's pull request), STS refuses the role, the server does not
-  start, or a test entry does not come back from the bucket, it warns and sets
-  nothing, and turbo runs with its local cache only. A cache outage costs
+  token (a fork's pull request), STS refuses the role, a command that starts
+  the server fails, the server does not answer, or a test entry does not come
+  back from the bucket, it warns and sets nothing, and turbo runs with its local cache only. A cache outage costs
   time, never a red job.
 
 inputs:
@@ -60,6 +60,14 @@ runs:
         CACHE_PORT: ${{ inputs.port }}
       run: |
         set -euo pipefail
+
+        # continue-on-error hides this step's failure, so every way out of it
+        # must warn. give_up covers the checks below. This trap covers any
+        # other command that fails, such as npm ci, cp, or node, which would
+        # otherwise stop the step with no annotation. give_up leaves by exit,
+        # which does not fire the trap, so no failure warns twice.
+        pid=""
+        trap 'echo "::warning title=Turbo remote cache off::Starting the cache server failed at: $BASH_COMMAND. Turbo runs with its local cache only."; [ -z "$pid" ] || kill "$pid" 2>/dev/null || true' ERR
 
         # Install outside the checkout, so no node_modules lands in the tree
         # turbo hashes. The lockfile pins every package by integrity hash, and
