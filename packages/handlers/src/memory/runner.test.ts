@@ -163,14 +163,16 @@ class FakeMemoryStore implements MemoryStore {
   }
 
   async insertReflection(
-    _scope: MemoryScope,
+    scope: MemoryScope,
     draft: ReflectionDraft,
+    lessons: MemoryDraft[] = [],
   ): Promise<string | null> {
     if (this.reflections.some((r) => r.runPublicId === draft.runPublicId))
       return null;
     this.ids.reflection += 1;
     const id = `rfl-uuid-${this.ids.reflection}`;
     this.reflections.push({ ...draft, id, createdAt: this.now });
+    await this.insertMemories(scope, lessons, id);
     return id;
   }
 
