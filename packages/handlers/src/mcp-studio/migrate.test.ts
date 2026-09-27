@@ -227,6 +227,15 @@ describe("which servers move", () => {
     const again = only(plan([row], [], [], []));
     expect(again.folder).toBe("linear");
   });
+
+  it("lists a named sse row whose folder never merged instead of moving it as http (ADR-211)", () => {
+    // A migration PR from before ADR-211 could name an sse row. Re-planning
+    // it would write its sse URL under transport http.
+    const row = server({ name: "Legacy SSE", transportType: "sse", steeringName: "legacy_sse" });
+    const p = plan([row], [], [], []);
+    expect(p.batches).toEqual([]);
+    expect(p.notMoved).toEqual([{ name: "Legacy SSE", reason: expect.stringContaining("older HTTP+SSE transport") }]);
+  });
 });
 
 describe("folder names", () => {

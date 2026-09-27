@@ -536,14 +536,15 @@ function select(server: MigrationServer, existing: ReadonlySet<string> | null): 
   if (server.deletedAt !== null || server.origin !== "legacy") return { kind: "skip" };
   if (!server.enabled) return { kind: "skip" };
   if (server.orgListingId !== null && server.installActive !== true) return { kind: "skip" };
-  if (server.steeringName !== null) {
-    if (existing !== null && !existing.has(server.steeringName)) {
-      return { kind: "move", folder: server.steeringName };
-    }
+  // A row an earlier migration PR named moves again under that name when its
+  // folder never merged. It must still have a folder form: a row named before
+  // ADR-211 can be sse, and moving it would write its sse URL as http.
+  if (server.steeringName !== null && (existing === null || existing.has(server.steeringName))) {
     return { kind: "skip" };
   }
   const reason = unmovableReason(server);
-  return reason === null ? { kind: "move", folder: null } : { kind: "list", reason };
+  if (reason !== null) return { kind: "list", reason };
+  return { kind: "move", folder: server.steeringName };
 }
 
 /** Why a row's transport or endpoint has no server folder form, or null when it has one. */

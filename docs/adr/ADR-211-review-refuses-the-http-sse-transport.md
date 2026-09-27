@@ -59,7 +59,12 @@ streamable-http endpoint, or run its package on the local gateway.
    workspace, `set_plugin_enabled` writes a plugin whose listing names sse as a
    legacy row, as it writes a `stdio` plugin, because a server folder cannot
    hold it. `register_mcp_server` already opened a steering PR for a
-   streamable-http server only, so both paths now follow the same rule.
+   streamable-http server only, so both paths now follow the same rule. When
+   the plugin already has a row, `set_plugin_enabled` makes it an unnamed
+   legacy row. A row that steering held before this record would otherwise
+   stay under projection, which retires it once someone removes the folder
+   review now refuses. `migrate()` also lists, instead of moving, a row that an
+   earlier migration PR named when that row's transport has no folder form.
 
 ## Consequences
 

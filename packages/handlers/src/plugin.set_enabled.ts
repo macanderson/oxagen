@@ -315,7 +315,8 @@ const setWorkspaceEnabled: CapabilityHandlerFn = async (input, ctx) => {
     // Once the workspace's tools live in its steering repo, a new server is
     // a steering PR. steeringWriter() is null until then.
     const transportType = listing.transport ?? "sse";
-    const writer = (MOVABLE_TRANSPORTS as readonly string[]).includes(transportType)
+    const movable = (MOVABLE_TRANSPORTS as readonly string[]).includes(transportType);
+    const writer = movable
       ? await steeringWriter({ orgId: ctx.orgId, workspaceId: ctx.workspaceId })
       : null;
     if (writer !== null) {
@@ -370,11 +371,23 @@ const setWorkspaceEnabled: CapabilityHandlerFn = async (input, ctx) => {
           set: {
             enabled: true,
             healthStatus: "unknown",
-            // A proposal enabled here, while the workspace writes rows
-            // directly, becomes an ordinary legacy row. Left proposed, the
-            // migration would never count it and no publish would take it
-            // over unless a steering PR named it.
-            origin: sql`CASE WHEN ${schema.mcpServers.origin} = 'proposed' THEN 'legacy' ELSE ${schema.mcpServers.origin} END`,
+            ...(movable
+              ? {
+                  // A proposal enabled here, while the workspace writes rows
+                  // directly, becomes an ordinary legacy row. Left proposed,
+                  // the migration would never count it and no publish would
+                  // take it over unless a steering PR named it.
+                  origin: sql`CASE WHEN ${schema.mcpServers.origin} = 'proposed' THEN 'legacy' ELSE ${schema.mcpServers.origin} END`,
+                }
+              : {
+                  // The migration moves no row with this transport, sse or
+                  // stdio (ADR-211), so the row becomes an unnamed legacy row
+                  // whatever it was. An sse row steering held before ADR-211
+                  // would otherwise stay under projection, which retires it
+                  // once its folder goes.
+                  origin: "legacy",
+                  steeringName: null,
+                }),
             updatedAt: new Date(),
           },
         })
