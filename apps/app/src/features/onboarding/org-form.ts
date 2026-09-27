@@ -1,15 +1,13 @@
-// The organization form (onboarding step 1): name the organization, its
-// namespace and the first workspace. The address is derived from the name and
-// the workspace's address from its name, so neither is typed. Issues carry
-// keys under `onboarding.errors.*`. The `create_org` contract owns the
-// reserved org and workspace slug sets and the namespace's shape, and stores a
-// chosen namespace verbatim.
+// The organization form (onboarding step 1): name the organization and its
+// namespace. The address is derived from the name, so it is not typed. Issues
+// carry keys under `onboarding.errors.*`. The `create_org` contract owns the
+// reserved org slug set and the namespace's shape, and stores a chosen
+// namespace verbatim. The first workspace comes two steps later, once a code
+// host is connected, because a workspace needs a steering repo.
 import { z } from "zod";
 import {
   ORG_NAMESPACE_PATTERN,
   RESERVED_ORG_SLUGS,
-  RESERVED_WORKSPACE_SLUGS,
-  WORKSPACE_SLUG_PATTERN,
   slugFromName,
 } from "@oxagen/oxagen/contracts/org.create";
 
@@ -41,21 +39,17 @@ const ORG_FORM_ERROR_KEYS = [
   "slugReserved",
   "namespaceInvalid",
   "namespaceTaken",
-  "workspaceNameRequired",
-  "workspaceNameTooLong",
-  "workspaceSlugInvalid",
-  "workspaceSlugReserved",
   "slugTaken",
 ] as const;
 export type OrgFormErrorKey = (typeof ORG_FORM_ERROR_KEYS)[number];
 
-const slug = (key: OrgFormErrorKey, pattern: RegExp = SLUG_PATTERN) =>
+const slug = (key: OrgFormErrorKey) =>
   z
     .string()
     .trim()
     .min(2, { error: key })
     .max(40, { error: key })
-    .regex(pattern, { error: key });
+    .regex(SLUG_PATTERN, { error: key });
 
 export const OrganizationForm = z.object({
   name: z
@@ -70,19 +64,6 @@ export const OrganizationForm = z.object({
     .string()
     .trim()
     .regex(ORG_NAMESPACE_PATTERN, { error: "namespaceInvalid" }),
-  workspaceName: z
-    .string()
-    .trim()
-    .min(1, { error: "workspaceNameRequired" })
-    .max(80, { error: "workspaceNameTooLong" }),
-  // The contract's own spelling, so a doubled hyphen is named here as an
-  // invalid address rather than refused by `create_org` after the form passed.
-  workspaceSlug: slug("workspaceSlugInvalid", WORKSPACE_SLUG_PATTERN).refine(
-    (s) => !RESERVED_WORKSPACE_SLUGS.has(s),
-    {
-      error: "workspaceSlugReserved",
-    },
-  ),
 });
 type OrganizationFormInput = z.input<typeof OrganizationForm>;
 export type OrganizationField = keyof OrganizationFormInput;

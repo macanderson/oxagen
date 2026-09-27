@@ -5,10 +5,6 @@
       "orgNameTooLong": "Use at most 120 characters.",
       "slugInvalid": "Use 2–40 lowercase letters, digits and hyphens, starting and ending with a letter or digit.",
       "slugReserved": "That address is used by an Oxagen page. Pick another.",
-      "workspaceNameRequired": "Enter a name for the first workspace.",
-      "workspaceNameTooLong": "Use at most 80 characters.",
-      "workspaceSlugInvalid": "Use 2–40 lowercase letters, digits and hyphens.",
-      "workspaceSlugReserved": "That address is used by an organization page. Pick another.",
       "slugTaken": "That address belongs to another organization. Change the organization name to change the address.",
       "agentSlugInvalid": "Use up to 18 lowercase letters, digits and hyphens, starting and ending with a letter or digit.",
       "agentNameRequired": "Enter a name for the agent.",
@@ -21,7 +17,7 @@
       "namespaceInvalid": "Use 2–6 lowercase letters or digits."
     },
     "organization": {
-      "eyebrow": "Step 1 of 3",
+      "eyebrow": "Step 1 of 5",
       "title": "Name your organization",
       "lead": "The organization is the tenant: it owns its own graph database, its own encryption key, its billing account, and the namespace that appears in every agent key.",
       "name": "Organization name",
@@ -30,16 +26,6 @@
       "addressHint": "Derived from the name. You can change it later.",
       "namespace": "Namespace",
       "namespaceHint": "2–6 characters, <b>immutable</b>. Every agent key starts with it: <k>{namespace}.'<'workspace'>'.'<'agent'>'</k>",
-      "workspaceTitle": "First workspace",
-      "workspaceName": "Workspace name",
-      "governance": "Governance mode",
-      "governanceModes": {
-        "solo": "solo",
-        "team": "team",
-        "regulated": "regulated"
-      },
-      "governanceNotBacked": "The governance mode is not recorded yet. The workspace has no column for it, so the choice is not saved.",
-      "workspaceHint": "A workspace is a governance partition: one main repo, one steering set, its own agents, tool grants and budgets.",
       "creates": "Creates <ns>org_{namespace}</ns> and its graph database.",
       "cancel": "Cancel",
       "submit": "Continue",
@@ -52,6 +38,8 @@
         "railLabel": "Onboarding",
         "steps": {
           "organization": "Name the organization",
+          "connect": "Connect a code host",
+          "workspace": "Create the first workspace",
           "wrap": "Wrap an agent",
           "run": "Start a run"
         },
@@ -78,8 +66,67 @@
         "dialogNotBacked": "Access requests are not recorded yet: no capability lets a person ask for a role, so nothing is sent. Ask an organization owner directly.",
         "close": "Close"
       },
+      "connect": {
+        "pageTitle": "Connect a code host",
+        "eyebrow": "Step 2 of 5",
+        "title": "Connect a code host",
+        "lead": "Each workspace keeps its steering record in a steering repo on GitHub or GitLab, so connect one before you create the first workspace.",
+        "github": {
+          "heading": "GitHub",
+          "steeringName": "Oxagen Steering",
+          "steeringBody": "Creates your steering repos and holds admin only on the repositories Oxagen creates.",
+          "steeringInstall": "Install Oxagen Steering",
+          "oxagenName": "Oxagen",
+          "oxagenBody": "Reads and checks your code repositories.",
+          "oxagenInstall": "Install Oxagen"
+        },
+        "gitlab": {
+          "heading": "GitLab",
+          "groupLabel": "Group path",
+          "tokenLabel": "Group access token",
+          "hint": "A group access token with the api scope and the Maintainer role. Group access tokens need GitLab Premium on GitLab.com.",
+          "submit": "Connect GitLab",
+          "pending": "Connecting…",
+          "errors": {
+            "tokenInvalid": "GitLab did not accept the token. Create a new group access token and try again.",
+            "groupUnreachable": "GitLab found no group at that path that this token can reach. Check the group path.",
+            "tokenInsufficient": "The token needs the api scope and the Maintainer role on the group.",
+            "forbidden": "Your role on this organization cannot connect a code host. An owner or admin can.",
+            "badInput": "Enter the group path and the token.",
+            "failed": "GitLab did not connect ({code}). Try again."
+          }
+        },
+        "continue": "Continue"
+      },
+      "workspace": {
+        "pageTitle": "Create the first workspace",
+        "eyebrow": "Step 3 of 5",
+        "title": "Create the first workspace",
+        "titleExisting": "Your first workspace",
+        "lead": "Oxagen creates the workspace and its steering repo on the code host you connected.",
+        "leadExisting": "Oxagen provisions the steering repo for {workspace} on the code host you connected.",
+        "readFailed": "The workspace list did not load ({code}). Reload the page before you create one.",
+        "nameLabel": "Workspace name",
+        "create": "Create",
+        "pending": "Creating…",
+        "errors": {
+          "nameRequired": "Enter a name for the workspace.",
+          "nameTooLong": "Use at most 120 characters.",
+          "nameInvalid": "Oxagen cannot make an address from that name. Use at least two letters or digits.",
+          "slugTaken": "A workspace in this organization already uses that address. Choose another name.",
+          "denied": "Your role on this organization cannot create a workspace. An owner or admin can.",
+          "failed": "The workspace was not created ({code}). Try again."
+        },
+        "back": "Back",
+        "continue": "Continue"
+      },
+      "steeringResult": {
+        "connected": "GitHub is connected.",
+        "error": "GitHub did not connect ({code}). Install the app again.",
+        "errorNoCode": "GitHub did not connect. Install the app again."
+      },
       "wrap": {
-        "eyebrow": "Step 2 of 3",
+        "eyebrow": "Step 4 of 5",
         "title": "Wrap an agent",
         "lead": "The installer carries a one-time enrollment token for <k>{key}</k>, so nothing is copied or pasted.",
         "leadNoKey": "The installer carries a one-time enrollment token for the agent, so nothing is copied or pasted.",
@@ -143,7 +190,7 @@
         "cancel": "Cancel",
         "back": "Back",
         "caption": "Nothing completes until a frame arrives.",
-        "continue": "I have already installed it — continue",
+        "continue": "I have already installed it. Continue",
         "advancing": "Moving on…",
         "noAgentTitle": "No agent to wrap yet",
         "noAgentBody": "The gate does not name a first agent, and this workspace has no Claude Code, Codex, Cursor or stella agent registered. An enrollment token is minted for a registered agent, so register one first.",
@@ -151,7 +198,7 @@
         "credentialValue": "{prefix}••••"
       },
       "run": {
-        "eyebrow": "Step 3 of 3",
+        "eyebrow": "Step 5 of 5",
         "title": "Start a run",
         "lead": "The operator console opens the moment the first frame from <k>{key}</k> reaches Oxagen, and lands you on Fleet looking at your own run.",
         "leadNoKey": "The operator console opens the moment the agent’s first frame reaches Oxagen, and lands you on Fleet looking at your own run.",
@@ -179,7 +226,7 @@
         "cancel": "Cancel",
         "back": "Back",
         "openInstaller": "Open the installer",
-        "noDone": "There is no Done button — the frame is the completion.",
+        "noDone": "There is no Done button. The frame is the completion.",
         "opening": "Opening automatically in {n}…",
         "openOxagen": "Open Oxagen",
         "errorTitle": "The collector cannot reach Oxagen",
@@ -187,30 +234,7 @@
         "errorFix": "Check that outbound 443 to <mono>api.oxagen.sh</mono> is allowed on the host, then start the agent again.",
         "errorRequest": "host enrollment {id}",
         "checkAgain": "Check again",
-        "checkedAgain": "Checked again. Still no heartbeat from the host.",
-        "repo": {
-          "detectedTitle": "Repository detected",
-          "reported": "reported by the installer",
-          "remote": "git@github.com:{repository}.git",
-          "remoteBody": "Read from the git remote of the directory the installer ran in.",
-          "bind": "Bind {repository} as the main repo",
-          "binding": "Binding…",
-          "bindBody": "Binding uses the workspace’s GitHub App installation on <mono>{repository}</mono>: repo binding, Context PRs, checks, merge handling and the code graph.",
-          "skip": "Skip for now",
-          "skipBody": "— {workspace} stays <b>provisional for {days} days</b>. Runs record and spend counts, but steering, context records and agent definitions stay off until a main repo is bound.",
-          "boundTitle": "Main repo",
-          "bound": "bound",
-          "branch": "production branch: {branch}",
-          "appInstalled": "GitHub App installed",
-          "boundBody": "Steering, context records and agent definitions will live in <mono>{repository}</mono> under <mono>.oxagen/</mono>, published through Context PRs.",
-          "boundToast": "GitHub App installed on {repository}. Main repo bound — Context PRs, checks and the code graph are on.",
-          "skippedTitle": "No main repo bound",
-          "provisional": "provisional",
-          "skippedBody": "<b>{workspace} is provisional until {until}</b> ({days} days). Runs record and spend counts. Steering, context records, and agent definitions stay off until a main repo is bound.",
-          "bindNow": "Bind {repository} now",
-          "noneTitle": "No repository detected",
-          "noneBody": "The enrolling host reported no GitHub remote. <b>{workspace} is provisional until {until}</b>. Bind a main repo from Repositories when one exists."
-        }
+        "checkedAgain": "Checked again. Still no heartbeat from the host."
       },
       "installer": {
         "title": "Oxagen Agent Installer",
@@ -275,11 +299,15 @@
       "railLabel": "Onboarding",
       "steps": {
         "organization": "Name the organization",
+        "connect": "Connect a code host",
+        "workspace": "Create the first workspace",
         "wrap": "Wrap an agent",
         "run": "Start a run"
       },
       "subs": {
-        "organization": "Tenant, namespace and the first workspace",
+        "organization": "Tenant and namespace",
+        "connect": "GitHub or GitLab",
+        "workspace": "Its name and its steering repo",
         "wrap": "Claude Code, an SDK agent or your own loop",
         "run": "The first frame is what opens Oxagen"
       },
@@ -287,14 +315,6 @@
         "done": "done",
         "current": "current step",
         "todo": "not started"
-      },
-      "provisional": {
-        "badge": "provisional",
-        "title": "{workspace} is provisional until {until}.",
-        "body": "Runs record and spend counts. Steering, context records and agent definitions stay off until a main repo is bound, because there is nowhere to publish them to.",
-        "detected": "Bind {repository}",
-        "binding": "Binding…",
-        "noRepository": "No enrolled host has reported a GitHub remote for this workspace. Bind its main repository from Workspace settings, or from the register flow once a host has reported one."
       },
       "firstRun": {
         "badge": "first run",
@@ -492,9 +512,6 @@
         "gateNotFound": "This workspace is not the organization's onboarding workspace, so it has no gate to move.",
         "alreadyUnlocked": "The gate is already open. Oxagen is unlocked.",
         "firstFrameRequired": "The run step completes when the first frame arrives. It cannot be skipped.",
-        "githubNotConnected": "No GitHub App installation reaches this workspace. Connect GitHub, then bind the repository.",
-        "repositoryNotInstalled": "This workspace's GitHub App installation cannot see that repository.",
-        "mainRepoBound": "This workspace already binds a different main repository.",
         "refused": "The write was refused: {code}. Nothing was changed.",
         "invalid": "The form was refused before the write ran. Check the fields above.",
         "pendingApproval": "The write is waiting for approval, request {accessRequestId}.",

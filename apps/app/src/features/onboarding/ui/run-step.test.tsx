@@ -1,17 +1,9 @@
 // @vitest-environment jsdom
-// Onboarding step 3 as an operator meets it: the wait with the chips and the
+// Onboarding step 5 as an operator meets it: the wait with the chips and the
 // log the record holds, the re-read a second after each read, the received
 // card with only the trust words the run recorded and the countdown to Fleet,
-// the silent-host error, and the repository panel's detected, bound, skipped
-// and no-remote forms, with Bind answered ok and refused.
-import {
-  act,
-  cleanup,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+// and the silent-host error.
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,9 +11,8 @@ import { routes } from "@/shared/safe-path";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 
-const { router, bindMainRepository } = vi.hoisted(() => ({
+const { router } = vi.hoisted(() => ({
   router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn() },
-  bindMainRepository: vi.fn(),
 }));
 vi.mock("next/link", () => ({
   default: ({ children, ...rest }: { children: ReactNode; href: string }) => (
@@ -29,7 +20,6 @@ vi.mock("next/link", () => ({
   ),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
-vi.mock("../actions", () => ({ bindMainRepository }));
 
 const { RunStep, COUNTDOWN_SECONDS } = await import("./run-step");
 
@@ -45,12 +35,6 @@ const HOST = {
   enrolledAt: "2026-09-23T14:01:48.000Z",
   lastHeartbeatAt: "2026-09-23T14:01:52.000Z",
   hooksOk: true,
-};
-const REPOSITORY = {
-  detected: { provider: "github" as const, owner: "a-intel", name: "platform" },
-  until: "2026-10-07T00:00:00.000Z",
-  daysLeft: 14,
-  boundAt: null,
 };
 const RECEIVED = {
   runId: "run_01",
@@ -80,16 +64,12 @@ function renderStep(props: Partial<Props> = {}): void {
   render(
     <IntlProvider>
       <RunStep
-        org="aintel"
-        ws="core"
-        workspace="core-platform"
         fleet={FLEET}
         back={routes.welcome("aintel", "core", "wrap", { agent: "agt_rm" })}
         installer={routes.welcome("aintel", "core", "installer", {
           agent: "agt_rm",
         })}
         register={routes.register("aintel", "core", "name")}
-        repository={REPOSITORY}
         pollRevision="r1"
         agent={AGENT}
         host={HOST}
@@ -109,7 +89,6 @@ const goldButtons = () =>
 beforeEach(() => {
   router.push.mockReset();
   router.refresh.mockReset();
-  bindMainRepository.mockReset();
 });
 afterEach(async () => {
   vi.useRealTimers();
@@ -123,7 +102,7 @@ afterEach(async () => {
 describe("RunStep while waiting", () => {
   it("draws the header, the waiting card with the chips and the log the record holds, and the waiting footer", () => {
     renderStep();
-    expect(screen.getByText("Step 3 of 3")).toBeInTheDocument();
+    expect(screen.getByText("Step 5 of 5")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { level: 1, name: "Start a run" }),
     ).toBeInTheDocument();
@@ -150,13 +129,11 @@ describe("RunStep while waiting", () => {
       [...footer.querySelectorAll("a, button")].map((el) => el.textContent),
     ).toEqual(["Cancel", "Back", "Open the installer"]);
     expect(footer).toHaveTextContent(
-      "There is no Done button — the frame is the completion.",
+      "There is no Done button. The frame is the completion.",
     );
     expect(screen.queryByRole("button", { name: /Done|Finish/ })).toBeNull();
-    // The one gold action while waiting is Bind.
-    expect(goldButtons().map((el) => el.textContent)).toEqual([
-      "Bind a-intel/platform as the main repo",
-    ]);
+    // Nothing is gold while waiting: the frame is the completion.
+    expect(goldButtons()).toHaveLength(0);
   });
 
   it("re-reads a second after each read", () => {
@@ -249,7 +226,7 @@ describe("RunStep once the frame is in", () => {
 });
 
 describe("RunStep when the host is silent", () => {
-  it("says the collector cannot reach Oxagen, drops the repository panel and the gold action, and checks again", async () => {
+  it("says the collector cannot reach Oxagen, drops the gold action, and checks again", async () => {
     renderStep({ silentFor: 94 });
     const error = screen.getByTestId("first-frame-error");
     expect(
@@ -262,7 +239,6 @@ describe("RunStep when the host is silent", () => {
       "no heartbeat from its collector has reached Oxagen for 94 seconds",
     );
     expect(error).toHaveTextContent("host enrollment hen_01");
-    expect(screen.queryByTestId("repo-detected")).toBeNull();
     expect(goldButtons()).toHaveLength(0);
     expect(
       [...screen.getByTestId("gate-footer").querySelectorAll("a, button")].map(
@@ -273,86 +249,6 @@ describe("RunStep when the host is silent", () => {
     expect(router.refresh).toHaveBeenCalled();
     expect(error).toHaveTextContent(
       "Checked again. Still no heartbeat from the host.",
-    );
-  });
-});
-
-describe("the repository panel", () => {
-  it("names the detected remote, and Bind turns it into the bound main repo", async () => {
-    bindMainRepository.mockResolvedValueOnce({
-      ok: true,
-      value: {
-        fullName: "a-intel/platform",
-        defaultRef: "main",
-        boundAt: "2026-09-23T14:03:00.000Z",
-        provisionalClosed: true,
-      },
-    });
-    renderStep();
-    const panel = screen.getByTestId("repo-detected");
-    expect(
-      within(panel).getByRole("heading", { name: "Repository detected" }),
-    ).toBeInTheDocument();
-    expect(panel).toHaveTextContent("reported by the installer");
-    expect(panel).toHaveTextContent("git@github.com:a-intel/platform.git");
-    expect(panel).toHaveTextContent(
-      "stays provisional for 14 days. Runs record and spend counts, but steering, context records and agent definitions stay off until a main repo is bound.",
-    );
-    await userEvent.click(
-      screen.getByRole("button", {
-        name: "Bind a-intel/platform as the main repo",
-      }),
-    );
-    expect(bindMainRepository).toHaveBeenCalledWith("aintel", "core", {
-      owner: "a-intel",
-      name: "platform",
-    });
-    const bound = await screen.findByTestId("repo-bound");
-    expect(
-      within(bound).getByRole("heading", { name: "Main repo" }),
-    ).toBeInTheDocument();
-    expect(bound).toHaveTextContent("bound");
-    expect(bound).toHaveTextContent("production branch: main");
-    expect(bound).toHaveTextContent("GitHub App installed");
-    expect(screen.getByTestId("run-status")).toHaveTextContent(
-      "GitHub App installed on a-intel/platform. Main repo bound — Context PRs, checks and the code graph are on.",
-    );
-  });
-
-  it("Skip for now keeps the window open and offers Bind now; a refused bind says why (negative)", async () => {
-    bindMainRepository.mockResolvedValueOnce({
-      ok: false,
-      reason: "conflict",
-      code: "github_not_connected",
-    });
-    renderStep();
-    await userEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-    const skipped = screen.getByTestId("repo-skipped");
-    expect(
-      within(skipped).getByRole("heading", { name: "No main repo bound" }),
-    ).toBeInTheDocument();
-    expect(skipped).toHaveTextContent("provisional");
-    expect(skipped).toHaveTextContent("(14 days)");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Bind a-intel/platform now" }),
-    );
-    expect(await screen.findByTestId("bind-failure")).toBeInTheDocument();
-    await waitFor(() => {
-      expect(screen.getByTestId("repo-skipped")).toBeInTheDocument();
-    });
-  });
-
-  it("a window already closed reads as bound, and no remote reads as none", () => {
-    renderStep({
-      repository: { ...REPOSITORY, boundAt: "2026-09-23T14:03:00.000Z" },
-    });
-    expect(screen.getByTestId("repo-bound")).not.toHaveTextContent(
-      "production branch",
-    );
-    cleanup();
-    renderStep({ repository: { ...REPOSITORY, detected: null } });
-    expect(screen.getByTestId("repo-none")).toHaveTextContent(
-      "The enrolling host reported no GitHub remote.",
     );
   });
 });

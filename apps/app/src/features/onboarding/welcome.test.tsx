@@ -38,7 +38,7 @@ vi.mock("./actions", () => ({
   registerAgent: vi.fn(),
   issueEnrollmentToken: vi.fn(),
   advanceOnboarding: vi.fn(),
-  bindMainRepository: vi.fn(),
+  createFirstWorkspace: vi.fn(),
 }));
 vi.mock("@/server/session", () => ({
   getSession: vi.fn(),
@@ -106,14 +106,14 @@ describe("who may see the gate's later steps", () => {
     });
     render(<IntlProvider>{element}</IntlProvider>);
     expect(screen.getByTestId("page-state-denied")).toHaveTextContent(
-      "repo.bind on core-platform",
+      "onboarding.advance on core-platform",
     );
     expect(calls.firstFrame).toEqual([]);
   });
 });
 
 describe("Wrap an agent", () => {
-  it("reads the named agent and the gate, and draws the rail with step 2 current", async () => {
+  it("reads the named agent and the gate, and draws the rail with step 4 current", async () => {
     const { source, calls } = onboardingSource({
       state: readOk(onboardingGate()),
       agent: readOk(agentDetail()),
@@ -125,7 +125,7 @@ describe("Wrap an agent", () => {
     });
     render(<IntlProvider>{element}</IntlProvider>);
     expect(calls.agent).toEqual([[ctxAs("admin"), "agt_releasebot"]]);
-    expect(screen.getByText("Step 2 of 3")).toBeInTheDocument();
+    expect(screen.getByText("Step 4 of 5")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { level: 1, name: "Wrap an agent" }),
     ).toBeInTheDocument();
@@ -152,7 +152,6 @@ describe("Start a run", () => {
     expect(calls.firstFrame).toHaveLength(1);
     expect(screen.getByTestId("first-frame-waiting")).toBeInTheDocument();
     expect(screen.queryByTestId("first-frame-error")).toBeNull();
-    expect(screen.getByTestId("repo-detected")).toBeInTheDocument();
   });
 
   it("reads a host silent for longer than the heartbeat window as the error state", async () => {
@@ -170,7 +169,6 @@ describe("Start a run", () => {
     });
     render(<IntlProvider>{element}</IntlProvider>);
     expect(screen.getByTestId("first-frame-error")).toBeInTheDocument();
-    expect(screen.queryByTestId("repo-detected")).toBeNull();
   });
 });
 

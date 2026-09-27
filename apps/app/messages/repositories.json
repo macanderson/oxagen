@@ -102,7 +102,8 @@
       "gitlabRefused": "GitLab refused the write. Nothing was published. Check that the project access token still has the api scope and the Developer role, then try again.",
       "gitlabCredentialRejected": "GitLab no longer accepts the project access token stored for this project. Nothing was changed. Connect the project again with a new token.",
       "gitlabNotConnected": "This workspace has no GitLab project connected. Connect the project with a project access token first.",
-      "repositoryHostUnsupported": "This is a GitLab project. This action works on GitHub repositories only today. Context PRs and steering publication work on GitLab."
+      "repositoryHostUnsupported": "This is a GitLab project. This action works on GitHub repositories only today. Context PRs and steering publication work on GitLab.",
+      "toolNotRegistered": "This deployment does not run {capability} yet, so Oxagen changed nothing."
     },
     "page": {
       "title": "Repositories",
@@ -634,6 +635,99 @@
         "reused": "{repository}#{number} already adds .oxagen/. Nothing new was pushed.",
         "merge": "Merging it is yours. Once it merges, this repository reads as governed here.",
         "link": "Open #{number} on GitHub"
+      }
+    },
+    "drift": {
+      "heading": "Instruction files",
+      "notBacked": "Oxagen cannot read instruction files in code repositories yet, so this section lists none. The read needs <code>{capability}</code>.",
+      "detected": "<code>{path}</code> differs from the steering records.",
+      "promote": "Promote to steering",
+      "promoting": "Promoting…",
+      "promoted": "Oxagen opened steering proposal {proposalId}. The file steers runs once its steering PR merges."
+    },
+    "steeringRepo": {
+      "heading": "Steering repo",
+      "loading": "Reading the steering repo…",
+      "unavailable": {
+        "body": "No capability answers the steering repo read yet, so this panel shows no state.",
+        "capability": "The read needs <code>{capability}</code>."
+      },
+      "card": {
+        "repository": "Repository",
+        "notCreated": "Not created yet",
+        "version": "Published version",
+        "notPublished": "None yet",
+        "versionNumber": "Version {version}",
+        "health": "Health"
+      },
+      "health": {
+        "healthy": "Healthy",
+        "drifted": "Settings drift",
+        "disconnected": "Disconnected",
+        "diverged": "Unmerged commit on main",
+        "unknown": "Unread"
+      },
+      "healthNote": {
+        "healthy": "Every prescribed setting matches, and main holds only merged steering PRs.",
+        "drifted": "A prescribed setting differs, so Oxagen merges and publishes nothing until an owner or admin repairs it.",
+        "disconnected": "Oxagen Steering lost its grant, so Oxagen merges and publishes nothing until an owner or admin authorizes it again.",
+        "diverged": "Main has a commit no steering PR merged, so Oxagen opened a steering PR that reverts it.",
+        "unknown": "Oxagen has not read the repository's health yet."
+      },
+      "provisioning": {
+        "stepsLabel": "Provisioning steps",
+        "steps": {
+          "pick_connection": "Host connection",
+          "create_repository": "Repository",
+          "add_to_installation": "Oxagen app access",
+          "write_first_commit": "First commit",
+          "apply_settings": "Prescribed settings",
+          "publish_version": "First version",
+          "bind_repository": "Workspace binding"
+        },
+        "state": {
+          "done": "Done",
+          "running": "Running",
+          "failed": "Failed",
+          "blocked": "Blocked",
+          "waiting": "Waiting"
+        },
+        "retry": "Retry",
+        "retrying": "Retrying…",
+        "ready": "The steering repo is ready at"
+      },
+      "reauthorize": {
+        "heading": "Authorization needed",
+        "body": "Oxagen Steering lost its grant on the host. An owner or admin authorizes it again, and provisioning continues from the step that stopped.",
+        "action": "Re-authorize"
+      },
+      "banner": {
+        "heading": {
+          "drifted": "Settings drift",
+          "disconnected": "Repository disconnected",
+          "diverged": "Unmerged commit on main"
+        },
+        "body": "Oxagen merges and publishes nothing until you repair the repository.",
+        "differencesLabel": "Settings that differ",
+        "columns": {
+          "setting": "Setting",
+          "expected": "Prescribed",
+          "actual": "Current",
+          "changed": "Changed by"
+        },
+        "changedByAt": "{name} at {at}",
+        "changedUnknown": "Unknown",
+        "repair": "Repair settings",
+        "repairing": "Repairing…",
+        "reverting": "Oxagen opened a steering PR that reverts main."
+      },
+      "failure": {
+        "denied": "Only an organization owner or admin can change the steering repo.",
+        "invalid": "The platform refused the request as malformed.",
+        "refused": "This was refused: {code}.",
+        "pendingApproval": "This needs a person to approve it. Request {accessRequestId} is waiting.",
+        "unavailable": "The steering repo did not answer ({code}). Try again in a moment.",
+        "toolNotRegistered": "This deployment does not run {capability} yet, so Oxagen changed nothing."
       }
     }
   }

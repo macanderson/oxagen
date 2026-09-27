@@ -122,6 +122,40 @@
           "fix": {
             "type": "string"
           },
+          "recommendation": {
+            "type": "object",
+            "properties": {
+              "setting": {
+                "type": "string",
+                "minLength": 1
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              },
+              "current": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "setting",
+              "value"
+            ],
+            "additionalProperties": false
+          },
           "runs": {
             "type": "integer",
             "exclusiveMinimum": 0

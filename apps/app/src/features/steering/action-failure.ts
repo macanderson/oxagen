@@ -1,7 +1,9 @@
-// The sentence a refused Context PR write shows. The kernel classified the
+// The sentence a refused steering PR write shows. The kernel classified the
 // refusal and put the handler's HandlerError reason in `code` (§3.2). Each
-// reason open_context_pr, merge_context_pr and dismiss_proposal throw has its
-// own sentence; any other code is printed as recorded.
+// reason open_context_pr, merge_context_pr, dismiss_proposal and the merge
+// queue throw has its own sentence. A write the platform has not registered
+// yet answers `tool_not_registered` and says so. Any other code is printed as
+// recorded.
 import { useTranslations } from "next-intl";
 import type { ActionResult } from "@/server/kernel";
 
@@ -31,6 +33,10 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("repositoryMissing");
           case "checks_not_passed":
             return t("checksNotPassed");
+          case "approval_required":
+            return t("approvalRequired");
+          case "approvals_not_head_bound":
+            return t("approvalsNotHeadBound");
           case "head_moved":
             return t("headMoved");
           case "base_moved":
@@ -49,6 +55,22 @@ export function useActionFailure(): (failure: ActionFailure) => string {
             return t("mergedOutsideOxagen");
           case "already_merged":
             return t("proposalMoved");
+          case "approval_required":
+            return t("approvalRequired");
+          case "repository_unhealthy":
+            return t("repositoryUnhealthy");
+          case "too_many_files":
+            return t("tooManyFiles");
+          case "version_mismatch":
+            return t("versionMismatch");
+          case "record_file_missing":
+            return t("recordFileMissing");
+          case "production_branch_missing":
+            return t("productionBranchMissing");
+          case "production_branch_moving":
+            return t("productionBranchMoving");
+          case "checks_failed":
+            return t("checksFailed");
           default:
             // The status writes refuse with proposal_<status> when another
             // call moved the proposal first.
@@ -64,7 +86,11 @@ export function useActionFailure(): (failure: ActionFailure) => string {
         });
       case "exhausted":
       case "unavailable":
-        return t("unavailable", { code: failure.code });
+        // The kernel answers a capability no handler registered with
+        // `tool_not_registered`, before it reads the input (#4518).
+        return failure.code === "tool_not_registered"
+          ? t("toolNotRegistered")
+          : t("unavailable", { code: failure.code });
     }
   };
 }

@@ -11,6 +11,7 @@ const BASELINE = EXAMPLE_GITLAB_BASELINE;
 const PROJECT = "/projects/1";
 const PROTECTIONS = "/projects/1/protected_branches";
 const PROTECTION_MAIN = "/projects/1/protected_branches/main";
+const APPROVALS = "/projects/1/approvals";
 
 /** A project with main and GitLab's defaults, as the first commit leaves it. */
 async function freshProject(): Promise<FakeGitlab> {
@@ -88,6 +89,7 @@ const OBSERVED_BASELINE: ObservedGitlabSettings = {
     squash_option: "always",
     only_allow_merge_if_pipeline_succeeds: true,
     remove_source_branch_after_merge: true,
+    reset_approvals_on_push: true,
   },
   ci_cd: { builds_access_level: "disabled" },
 };
@@ -113,12 +115,14 @@ describe("applyGitlabSettings", () => {
         expected: true,
         actual: false,
       },
+      { setting: "merge_requests.reset_approvals_on_push", expected: true, actual: false },
       { setting: "ci_cd.builds_access_level", expected: "disabled", actual: "enabled" },
     ]);
     expect(result.remaining).toEqual([]);
     expect(result.observed).toEqual(OBSERVED_BASELINE);
     expect(writesAfter(fake, 1)).toEqual([
       { method: "PUT", path: PROJECT },
+      { method: "POST", path: APPROVALS },
       { method: "POST", path: PROTECTIONS },
     ]);
   });
@@ -137,6 +141,7 @@ describe("applyGitlabSettings", () => {
           builds_access_level: "disabled",
         },
       },
+      { method: "POST", path: APPROVALS, body: { reset_approvals_on_push: true } },
       {
         method: "POST",
         path: PROTECTIONS,
@@ -173,6 +178,7 @@ describe("applyGitlabSettings", () => {
       "merge_requests.squash_option",
       "merge_requests.only_allow_merge_if_pipeline_succeeds",
       "merge_requests.remove_source_branch_after_merge",
+      "merge_requests.reset_approvals_on_push",
       "ci_cd.builds_access_level",
     ]);
     expect(result.changed[2]).toEqual({
@@ -183,6 +189,7 @@ describe("applyGitlabSettings", () => {
     expect(result.remaining).toEqual([]);
     expect(writesAfter(fake, setup)).toEqual([
       { method: "PUT", path: PROJECT },
+      { method: "POST", path: APPROVALS },
       { method: "DELETE", path: PROTECTION_MAIN },
       { method: "POST", path: PROTECTIONS },
     ]);
@@ -211,6 +218,34 @@ describe("applyGitlabSettings", () => {
       { method: "POST", path: PROTECTIONS },
     ]);
     expect(fake.snapshot()).toEqual(await cleanSnapshot());
+  });
+
+  it("turns approval reset back on when only it differs", async () => {
+    const fake = await freshProject();
+    await apply(fake);
+    await fake.rest().request("POST", APPROVALS, { reset_approvals_on_push: false });
+    const setup = fake.writes().length;
+    const result = await apply(fake);
+    expect(result.changed).toEqual([
+      { setting: "merge_requests.reset_approvals_on_push", expected: true, actual: false },
+    ]);
+    expect(writesAfter(fake, setup)).toEqual([{ method: "POST", path: APPROVALS }]);
+    expect(fake.snapshot()).toEqual(await cleanSnapshot());
+  });
+
+  it("reports approval reset as remaining when GitLab will not read it", async () => {
+    const fake = await freshProject();
+    // A tier without approval settings refuses the read.
+    fake.failNext({ method: "GET", path: APPROVALS, status: 403, times: 2 });
+    const result = await apply(fake);
+    expect(result.changed).toContainEqual({
+      setting: "merge_requests.reset_approvals_on_push",
+      expected: true,
+      actual: null,
+    });
+    expect(result.remaining).toEqual([
+      { setting: "merge_requests.reset_approvals_on_push", expected: true, actual: null },
+    ]);
   });
 
   it("returns what a second read still finds different", async () => {
@@ -270,8 +305,10 @@ describe("applyGitlabSettings after a failure", () => {
   }
   const cases: WriteCase[] = [
     { scenario: "a fresh project", setup: freshProject, method: "PUT", path: PROJECT },
+    { scenario: "a fresh project", setup: freshProject, method: "POST", path: APPROVALS },
     { scenario: "a fresh project", setup: freshProject, method: "POST", path: PROTECTIONS },
     { scenario: "a drifted project", setup: driftedProject, method: "PUT", path: PROJECT },
+    { scenario: "a drifted project", setup: driftedProject, method: "POST", path: APPROVALS },
     { scenario: "a drifted project", setup: driftedProject, method: "DELETE", path: PROTECTION_MAIN },
     { scenario: "a drifted project", setup: driftedProject, method: "POST", path: PROTECTIONS },
   ];
@@ -321,11 +358,15 @@ describe("applyGitlabSettings after a failure", () => {
 });
 
 describe("readGitlabSettings", () => {
-  /** A rest helper that answers the two reads with fixed bodies. */
-  function reading(project: unknown, branches: unknown): GitlabRest {
+  /** A rest helper that answers the three reads with fixed bodies. */
+  function reading(project: unknown, branches: unknown, approvals: unknown): GitlabRest {
     return {
       request<T>(_method: string, path: string): Promise<GitlabResponse<T>> {
-        const data = path.includes("/protected_branches") ? branches : project;
+        const data = path.includes("/protected_branches")
+          ? branches
+          : path.endsWith("/approvals")
+            ? approvals
+            : project;
         return Promise.resolve({ status: 200, data: data as T, message: null });
       },
     };
@@ -365,6 +406,7 @@ describe("readGitlabSettings", () => {
           allow_force_push: true,
         },
       ],
+      { reset_approvals_on_push: false },
     );
     expect(await readGitlabSettings(rest, 5, BOT)).toEqual({
       visibility: "private",
@@ -381,9 +423,17 @@ describe("readGitlabSettings", () => {
         squash_option: "never",
         only_allow_merge_if_pipeline_succeeds: false,
         remove_source_branch_after_merge: false,
+        reset_approvals_on_push: false,
       },
       ci_cd: { builds_access_level: "private" },
     });
+  });
+
+  it("reads approval reset as unknown when GitLab will not say", async () => {
+    const fake = await freshProject();
+    fake.failNext({ method: "GET", path: APPROVALS, status: 404 });
+    const observed = await readGitlabSettings(fake.rest(), 1, BOT);
+    expect(observed.merge_requests.reset_approvals_on_push).toBeNull();
   });
 
   it("reads the level entry GitLab keeps beside the bot as nothing extra", async () => {
@@ -395,9 +445,10 @@ describe("readGitlabSettings", () => {
       merge_access: "oxagen-steering",
       allow_force_push: false,
     });
-    expect(fake.calls.slice(-2)).toEqual([
+    expect(fake.calls.slice(-3)).toEqual([
       { method: "GET", path: PROJECT },
       { method: "GET", path: `${PROTECTIONS}?per_page=100` },
+      { method: "GET", path: APPROVALS },
     ]);
   });
 });
@@ -458,6 +509,20 @@ describe("compareGitlabSettings", () => {
       "merge_requests.remove_source_branch_after_merge",
       true,
       false,
+    ],
+    [
+      "approval reset",
+      (o) => (o.merge_requests.reset_approvals_on_push = false),
+      "merge_requests.reset_approvals_on_push",
+      true,
+      false,
+    ],
+    [
+      "unknown approval reset",
+      (o) => (o.merge_requests.reset_approvals_on_push = null),
+      "merge_requests.reset_approvals_on_push",
+      true,
+      null,
     ],
     [
       "CI/CD access",

@@ -70,7 +70,7 @@ export const promotionSchema = z
     without_review: z
       .boolean()
       .describe(
-        "True when the owner, or a role with merge_without_review, merged without an approval.",
+        "True when the owner, or a role with merge_pr_without_review, merged without an approval.",
       ),
     changes: z.array(promotionChangeSchema).min(1),
     prev: sha256Schema
