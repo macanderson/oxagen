@@ -18,4 +18,10 @@ export type {
   SteeringCheckName,
   SteeringTree,
 } from "./types";
+export { runChecks, STEERING_CHECK_NAMES } from "./run";
+export { findingPlace, formatHuman, formatJson } from "./format";
 export { findSecretsAndPii } from "./secrets";
+export { settingsDifferences } from "./settings-diff";
+export { alwaysOnBlocks, type AlwaysOnBlock, type AlwaysOnEntry } from "./always-on";
+export { alwaysOnBudget, definitionBudget, directDefinitions, type ServerDefinitions } from "./checks/budget";
+export { closest } from "./checks/references";

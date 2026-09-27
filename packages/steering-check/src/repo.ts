@@ -194,6 +194,16 @@ export function parseTomlLoose(text: string | undefined): Record<string, unknown
   }
 }
 
+/** A value as JSON with its object keys sorted, so two equal values print the same. */
+export function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${(value as unknown[]).map(canonicalJson).join(",")}]`;
+  if (isRecord(value)) {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
 /** A JSON file parsed with no schema, or null when it is not JSON. */
 export function parseJsonLoose(text: string | undefined): Record<string, unknown> | null {
   if (text === undefined) return null;

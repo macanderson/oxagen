@@ -16,6 +16,8 @@ export default defineConfig({
         ...coverageConfigDefaults.exclude,
         "src/**/*.test.ts",
         "src/index.ts",
+        // Test support: a stand-in Cedar evaluator and fixture loaders.
+        "src/testing/**",
       ],
       // A first measure. Raise each to CI's number less 2.5 points, capped at 90.
       thresholds: { lines: 85, branches: 80, functions: 85, statements: 85 },
