@@ -15,6 +15,7 @@ import { z } from "zod";
 import { PublicId } from "./common";
 import { Cost } from "./money";
 import { EnforcementTier, ReplayGrade, RunRow, RunTokenCounts } from "./runs";
+import { FINDING_KINDS } from "./spend";
 
 const Count = z.number().int().nonnegative();
 const Ratio = z.number().min(0).max(1);
@@ -316,12 +317,7 @@ export const RunFindings = z.object({
   findings: z.array(
     z.object({
       id: PublicId,
-      kind: z.enum([
-        "cache_writes_never_read",
-        "duplicate_tool_calls",
-        "repeated_shell_commands",
-        "unpaged_results",
-      ]),
+      kind: z.enum(FINDING_KINDS),
       /** The level's key: a tool name, an agent key, an operator, or the workspace. */
       subject: z.string(),
       saving: Cost,
