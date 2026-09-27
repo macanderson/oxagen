@@ -118,6 +118,28 @@ export const checkNameSchema = z.enum([
 export type CheckName = z.infer<typeof checkNameSchema>;
 export const CHECK_NAMES = checkNameSchema.options;
 
+/**
+ * The eleven checks a steering PR runs, in the order they run
+ * (steering-repo-spec, Steering PR flow). `@oxagen/steering-check` runs them
+ * for the server and the CLI. The six names above stay for the v0.1 Context
+ * PR until lane S10 moves every workspace.
+ */
+export const steeringCheckNameSchema = z.enum([
+  "schema",
+  "lineage",
+  "hash",
+  "secrets",
+  "conflicts",
+  "authority",
+  "settings",
+  "references",
+  "budget",
+  "compile",
+  "owned",
+]);
+export type SteeringCheckName = z.infer<typeof steeringCheckNameSchema>;
+export const STEERING_CHECK_NAMES = steeringCheckNameSchema.options;
+
 const instant = z.string().datetime({ offset: true });
 
 /** One check's recorded outcome, as stored on the proposal and mirrored to GitHub. */
