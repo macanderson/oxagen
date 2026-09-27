@@ -385,6 +385,30 @@ describe("refreshRunPrOutcomes", () => {
     expect(t.rows.size).toBe(61);
   });
 
+  it("moves a pull request GitHub refused, or a read that failed, behind one never asked", async () => {
+    const links = Array.from({ length: 61 }, (_, i) => link("tse_a1", i + 1));
+    const t = fake({
+      runs: [run("tse_a1")],
+      links,
+      forge: {
+        "github:acme/app#1": new Error("socket hang up"),
+        "github:acme/app#61": forge("open", { ci: "pending", branch: true }),
+      },
+    });
+    await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(t.reads).not.toContain("github:acme/app#61");
+    expect(rowOf(t.rows, "tse_a1", "github:acme/app#1")?.forgeReadAttemptedAt).toEqual(NOW);
+    expect(rowOf(t.rows, "tse_a1", "github:acme/app#2")?.forgeReadAttemptedAt).toEqual(NOW);
+    t.reads.length = 0;
+    const second = await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(t.reads[0]).toBe("github:acme/app#61");
+    expect(second.forgeReads).toBe(1);
+    expect(rowOf(t.rows, "tse_a1", "github:acme/app#61")).toMatchObject({
+      prStateReadAt: NOW,
+      ciState: "pending",
+    });
+  });
+
   it("does not count a pull request no GitHub source reads against the cap", async () => {
     const links = Array.from({ length: 61 }, (_, i) => link("tse_a1", i + 1));
     const forgeByKey: Record<string, ForgeOutcome> = {};

@@ -55,6 +55,8 @@ export interface OutcomeRow {
   url: string | null;
   prState: RunPrState | null;
   prStateReadAt: Date | null;
+  /** When the refresh last asked GitHub for the pull request, whether or not GitHub answered. */
+  forgeReadAttemptedAt: Date | null;
   closedAt: Date | null;
   merged: boolean;
   mergedAt: Date | null;
@@ -101,6 +103,7 @@ export function blankOutcome(
     url: pr?.url ?? null,
     prState: null,
     prStateReadAt: null,
+    forgeReadAttemptedAt: null,
     closedAt: null,
     merged: false,
     mergedAt: null,

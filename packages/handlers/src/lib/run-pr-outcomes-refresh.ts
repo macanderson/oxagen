@@ -160,9 +160,22 @@ export function foldForgeRead(row: OutcomeRow, read: ForgeOutcomeRead): OutcomeR
 interface DueRead {
   prKey: string;
   pr: RunPr;
-  /** The oldest state read among the rows, or 0 for a row never read. */
+  /** The oldest `lastAskedAt` among the rows. */
   readAt: number;
   group: Candidate[];
+}
+
+/**
+ * When the refresh last asked GitHub about the row's pull request, or last
+ * learned its state: the later of the two, or 0 for neither. A pull request
+ * GitHub refuses, or a read that fails, still counts as asked, so it moves to
+ * the back of the queue.
+ */
+function lastAskedAt(row: OutcomeRow): number {
+  return Math.max(
+    row.prStateReadAt?.getTime() ?? 0,
+    row.forgeReadAttemptedAt?.getTime() ?? 0,
+  );
 }
 
 /** One refresh pass over a workspace. */
@@ -238,14 +251,14 @@ export async function refreshRunPrOutcomes(
     }
   }
 
-  // One GitHub read per pull request, however many runs name it, oldest
-  // read first so a backlog past the cap rotates. A pull request in a
-  // repository no GitHub source reads costs no API call, so it does not
+  // One GitHub read per pull request, however many runs name it, least
+  // recently asked first so a backlog past the cap rotates. A pull request in
+  // a repository no GitHub source reads costs no API call, so it does not
   // count against the cap.
   const due = new Map<string, DueRead>();
   for (const c of candidates.values()) {
     if (c.pr.provider !== "github" || !needsForgeRead(c.row)) continue;
-    const readAt = c.row.prStateReadAt?.getTime() ?? 0;
+    const readAt = lastAskedAt(c.row);
     const found = due.get(c.row.prKey);
     if (found) {
       found.group.push(c);
@@ -257,6 +270,9 @@ export async function refreshRunPrOutcomes(
   let forgeReads = 0;
   let spent = 0;
   let next = 0;
+  const asked = (item: DueRead): void => {
+    for (const c of item.group) c.row = { ...c.row, forgeReadAttemptedAt: now };
+  };
   const readOne = async (item: DueRead): Promise<void> => {
     let read: ForgeOutcome;
     try {
@@ -266,12 +282,14 @@ export async function refreshRunPrOutcomes(
         { workspaceId: scope.workspaceId, prKey: item.prKey, err },
         "run-pr-outcomes: GitHub read failed",
       );
+      asked(item);
       return;
     }
     if (read === "no_connection") {
       spent -= 1;
       return;
     }
+    asked(item);
     if (read === "unreadable") return;
     forgeReads += 1;
     for (const c of item.group) c.row = foldForgeRead(c.row, read);

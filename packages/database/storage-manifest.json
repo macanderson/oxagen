@@ -4188,7 +4188,7 @@
       "writes": []
     }
   ],
-  "contentHash": "4f4c32eb49e8afa01a31fd7dd4a9ef34358d278129b871ad50d8c9fda0815bee",
+  "contentHash": "80de6ea9db996e050aa08ba05d285419e5af6793614b0d937d99e244a42aa3ab",
   "domains": [
     {
       "name": "agent",
@@ -14246,6 +14246,12 @@
         },
         {
           "name": "pr_state_read_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "forge_read_attempted_at",
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"

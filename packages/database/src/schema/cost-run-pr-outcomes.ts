@@ -56,6 +56,12 @@ export const runPrOutcomes = costSchema.table(
     prState: text("pr_state"),
     prStateReadAt: ts("pr_state_read_at"),
     /**
+     * When the hourly refresh last asked GitHub for this pull request, read or
+     * not. The refresh reads the oldest first, so a pull request GitHub
+     * refuses moves to the back of the queue instead of holding its front.
+     */
+    forgeReadAttemptedAt: ts("forge_read_attempted_at"),
+    /**
      * When the pull request closed or merged. A delivery carries GitHub's own
      * `closed_at`. The scheduled read has no close time for a pull request
      * closed without merging, so it writes the `updated_at` it read on the

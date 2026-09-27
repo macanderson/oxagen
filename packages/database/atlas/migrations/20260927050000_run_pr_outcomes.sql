@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS cost.run_pr_outcomes (
   url text,
   pr_state text,
   pr_state_read_at timestamptz,
+  forge_read_attempted_at timestamptz,
   closed_at timestamptz,
   merged boolean NOT NULL DEFAULT false,
   merged_at timestamptz,
