@@ -107,6 +107,19 @@ describe("list_repositories", () => {
     expect(repositoryList.output.safeParse(out).success).toBe(true);
   });
 
+  it("lists a steering head as the main repository, first, and the output parses", async () => {
+    wire([
+      row({ bindingId: "rpb_0000000a", fullName: "acme/alpha", name: "alpha" }),
+      { ...MAIN, role: "steering" },
+    ]);
+    const out = await repositoryListHandler({}, makeCTX());
+    expect(out.repositories.map((r) => [r.role, r.fullName])).toEqual([
+      ["main", "acme/widgets"],
+      ["linked", "acme/alpha"],
+    ]);
+    expect(repositoryList.output.safeParse(out).success).toBe(true);
+  });
+
   it("lists a GitLab project with its host, a gitlab.com link, and webhook delivery (#3762)", async () => {
     const gitlab = (webhookId: number | null) =>
       row({
