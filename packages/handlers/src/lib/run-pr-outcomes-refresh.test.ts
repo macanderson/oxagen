@@ -597,4 +597,13 @@ describe("readLedgerRunPrs", () => {
     );
     expect(out.size).toBe(0);
   });
+
+  it("leaves out a run when one receipt names a connected repository and another does not", async () => {
+    const out = await readLedgerRunPrs(
+      store({ arun_d4: [opened(1, "R_1", 12), opened(2, "R_gone", 13)] }),
+      SCOPE,
+      ["arun_d4"],
+    );
+    expect(out.size).toBe(0);
+  });
 });

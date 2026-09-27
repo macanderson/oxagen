@@ -100,8 +100,11 @@ export interface OutcomeRefreshDeps {
   ): Promise<TachoPrLink[]>;
   /**
    * Per ledger run, the pull requests its receipts name. A run is absent when
-   * its receipts could not all be named: a receipt names a repository the
-   * workspace no longer connects, or the walk stopped at its bound with none.
+   * a receipt names a repository the workspace no longer connects, since a
+   * reconnect can name it on a later pass. A run whose walk stopped at its
+   * bound keeps the pull requests the walk named: a sealed run's receipts do
+   * not change, so a second walk stops at the same place. It is absent only
+   * when that walk named none.
    */
   ledgerPrs(
     scope: OutcomeScope,
@@ -474,7 +477,10 @@ export async function readLedgerRunPrs(
         headSha: receipt.headSha,
       });
     }
-    if (prs.length === 0 && (unnamed || !complete)) continue;
+    // A run with a receipt the workspace cannot name gets no rows yet: rows
+    // for the named part would read as the whole run, and the pass reads a
+    // run's receipts only while it has no row.
+    if (unnamed || (prs.length === 0 && !complete)) continue;
     out.set(publicId, prs);
   }
   return out;
