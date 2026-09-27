@@ -10,6 +10,7 @@ import {
   withTenantDb,
 } from "@oxagen/database";
 import { contextRecordLabel } from "@oxagen/oxagen/context-record-label";
+import { STELLA_ARCHIVE_AFTER_DAYS_SETTING } from "@oxagen/oxagen/steering-repo/workspace";
 import { and, desc, eq, inArray, isNotNull, max, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import {
@@ -71,6 +72,12 @@ export interface AppliedSync {
   retired: number;
 }
 
+/** The settings a sync publishes from workspace.toml into the workspace row. */
+export interface PublishedWorkspaceSettings {
+  /** `[stella] archive_after_days`, or null when the file sets none. */
+  stellaArchiveAfterDays: number | null;
+}
+
 export interface SyncStore {
   readState(scope: Scope): Promise<SyncState | null>;
   /** Stamp `requested_at`, creating the row on the first request. */
@@ -97,6 +104,14 @@ export interface SyncStore {
     proposalId: string,
     args: { lineageId: string; mergedCommit: string; mergedAt: Date },
   ): Promise<boolean>;
+  /**
+   * Write the settings workspace.toml sets into `workspaces.settings`. A null
+   * value removes its key, so the reader falls back to its default.
+   */
+  publishWorkspaceSettings(
+    scope: Scope,
+    settings: PublishedWorkspaceSettings,
+  ): Promise<void>;
 }
 
 /** The ledger's policy version for a publication the repository made. */
@@ -451,5 +466,36 @@ export const postgresSyncStore: SyncStore = {
         .returning({ id: schema.contextProposals.id });
       return row !== undefined;
     });
+  },
+
+  async publishWorkspaceSettings(scope, settings) {
+    const key = STELLA_ARCHIVE_AFTER_DAYS_SETTING;
+    const days = settings.stellaArchiveAfterDays;
+    const column = schema.workspaces.settings;
+    // The bag holds keys other writers own, so this merges one key in or
+    // takes one out. A bag that is not an object becomes one, as it does in
+    // `workspace.settings.write`. The WHERE clause skips a row that already
+    // holds the value, so a sync with nothing new writes nothing.
+    const bag = sql`CASE WHEN jsonb_typeof(${column}) = 'object' THEN ${column} ELSE '{}'::jsonb END`;
+    await withTenantDb((tx) =>
+      tx
+        .update(schema.workspaces)
+        .set({
+          settings:
+            days === null
+              ? sql`${bag} - ${key}::text`
+              : sql`${bag} || jsonb_build_object(${key}::text, ${days}::int)`,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.workspaces.id, scope.workspaceId),
+            eq(schema.workspaces.orgId, scope.orgId),
+            days === null
+              ? sql`${column} -> ${key}::text is not null`
+              : sql`${column} -> ${key}::text is distinct from to_jsonb(${days}::int)`,
+          ),
+        ),
+    );
   },
 };

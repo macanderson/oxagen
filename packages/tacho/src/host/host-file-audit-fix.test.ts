@@ -13,9 +13,10 @@ import {
   withRecordedHarnessFiles,
   writeHostFile,
 } from "./host-file";
-import { tachoPaths } from "./paths";
+import { agentPaths, tachoHome } from "./paths";
 import {
   bundleSigner,
+  TEST_AGENT_ID,
   TEST_ENROLLMENT,
   testHostFile,
   unsignedBundle,
@@ -28,17 +29,20 @@ describe("harness_files", () => {
   // The terminal that enrolled had the variables; the desktop app that
   // unenrolls does not.
   const home = "/Users/dev";
-  const enrolled = tachoPaths(
-    {
-      CLAUDE_CONFIG_DIR: "/Users/dev/claude-work",
-      CODEX_HOME: "/Users/dev/codex-work",
-      CURSOR_CONFIG_DIR: "/Users/dev/cursor-work",
-      STELLA_HOME: "/Users/dev/stella-work",
-    },
-    home,
-    "darwin",
+  const enrolled = agentPaths(
+    tachoHome(
+      {
+        CLAUDE_CONFIG_DIR: "/Users/dev/claude-work",
+        CODEX_HOME: "/Users/dev/codex-work",
+        CURSOR_CONFIG_DIR: "/Users/dev/cursor-work",
+        STELLA_HOME: "/Users/dev/stella-work",
+      },
+      home,
+      "darwin",
+    ),
+    TEST_AGENT_ID,
   );
-  const unenrolling = tachoPaths({}, home, "darwin");
+  const unenrolling = agentPaths(tachoHome({}, home, "darwin"), TEST_AGENT_ID);
 
   it("round-trips through host.json and moves the paths back to the enrolled ones", () => {
     const path = join(mkdtempSync(join(tmpdir(), "tacho-host-")), "host.json");
@@ -56,7 +60,7 @@ describe("harness_files", () => {
     expect(paths.stellaSettingsJson).toBe(enrolled.stellaSettingsJson);
     expect(paths.claudeDesktopConfig).toBe(enrolled.claudeDesktopConfig);
     // Tacho's own state stays where this process resolved it.
-    expect(paths.root).toBe(unenrolling.root);
+    expect(paths.dir).toBe(unenrolling.dir);
     expect(paths.hostFile).toBe(unenrolling.hostFile);
   });
 
@@ -70,10 +74,13 @@ describe("harness_files", () => {
   });
 
   it("records a platform with no Claude Desktop build as null and reads it back", () => {
-    const linux = tachoPaths({}, "/home/dev", "linux");
+    const linux = agentPaths(tachoHome({}, "/home/dev", "linux"), TEST_AGENT_ID);
     const record = harnessFilesRecord(linux);
     expect(record.claude_desktop_config).toBeNull();
-    const darwin = tachoPaths({}, "/home/dev", "darwin");
+    const darwin = agentPaths(
+      tachoHome({}, "/home/dev", "darwin"),
+      TEST_AGENT_ID,
+    );
     expect(
       withRecordedHarnessFiles(darwin, { harness_files: record })
         .claudeDesktopConfig,

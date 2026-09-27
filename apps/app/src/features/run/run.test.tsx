@@ -49,6 +49,7 @@ import {
 } from "./run.builders";
 import { runIssue, runIssues } from "./issues.builders";
 import { releaseTranscript } from "./transcript.builders";
+import { TRANSCRIPT_PAGE } from "./transcript-rows";
 
 /**
  * The page's two transcript reads, told apart by zoom: the run at `steps`,
@@ -117,6 +118,14 @@ const ctx = unsafeMint(WsCtx, {
   wsName: "Core platform",
   wsRole: "member",
 });
+
+/** The Transcript tab's read of a stopped run: its first page (#4427). */
+const TRANSCRIPT_TAB_READ = {
+  kinds: [],
+  limit: TRANSCRIPT_PAGE,
+  text: "full",
+  from: "start",
+};
 
 const DENIED = {
   ok: false,
@@ -1871,7 +1880,7 @@ describe("the outputs spine", () => {
 });
 
 describe("tabs", () => {
-  it("opens Transcript by default, and reads the run once, at steps, whole", async () => {
+  it("opens Transcript by default, and reads the run's first page once, at steps", async () => {
     const { calls } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
@@ -1880,8 +1889,9 @@ describe("tabs", () => {
     // The Transcript tab, the stat row and every tab count share the steps
     // read, with whole bodies. No open tab lists frames, and the counts of
     // the frames ride the steps read, so the run is not read at everything.
+    // A stopped run's tab reads its first page and replays it (#4427).
     expect(calls.transcript).toEqual([
-      [ctx, "tse_7k2m9q", "steps", { kinds: [], limit: 500, text: "full" }],
+      [ctx, "tse_7k2m9q", "steps", TRANSCRIPT_TAB_READ],
     ]);
     expect(calls.cost).toHaveLength(1);
     expect(calls.chain).toHaveLength(0);
@@ -2118,6 +2128,8 @@ describe("transcript", () => {
     // come from the page's one read at steps.
     expect(calls.transcript.map((call) => call[2])).toEqual(["steps"]);
     const tab = screen.getByRole("region", { name: "Transcript" });
+    // A stopped run replays from its first row; the test reads its end.
+    fireEvent.click(within(tab).getByRole("button", { name: "To the end" }));
     const chips = within(screen.getByTestId("transcript-chips"))
       .getAllByRole("button", { pressed: true })
       .map((chip) => chip.getAttribute("data-testid"));
@@ -2157,7 +2169,7 @@ describe("transcript", () => {
   // Carried from #4026, which added rewind and to-the-end buttons and the
   // mockup's speeds to the turn-and-step transport this page replaced. The
   // feed's transport counts rows drawn (`at / total`) rather than frames.
-  it("rewinds to the first row, jumps to the last, and offers the mockup's four speeds", async () => {
+  it("plays a stopped run as it opens, jumps to the last row, rewinds to the first, and offers the mockup's four speeds", async () => {
     await renderRun(
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { tab: "transcript" },
@@ -2167,7 +2179,10 @@ describe("transcript", () => {
     if (total === undefined) throw new Error("no total in the readout");
     const rewind = screen.getByRole("button", { name: "Rewind" });
     const end = screen.getByRole("button", { name: "To the end" });
-    // A sealed run opens at its end.
+    // A stopped run plays from its first row as the page opens (#4427).
+    expect(screen.getByTestId("tx-play")).toHaveTextContent("pause");
+    fireEvent.click(end);
+    expect(readout).toHaveTextContent(`${total} / ${total}`);
     expect(end).toBeDisabled();
     fireEvent.click(rewind);
     expect(readout).toHaveTextContent(`0 / ${total}`);
@@ -2593,11 +2608,7 @@ describe("chips", () => {
     );
     // The chips show and hide rows; the read keeps every entry.
     expect(calls.transcript[0]?.[2]).toBe("steps");
-    expect(calls.transcript[0]?.[3]).toEqual({
-      kinds: [],
-      limit: 500,
-      text: "full",
-    });
+    expect(calls.transcript[0]?.[3]).toEqual(TRANSCRIPT_TAB_READ);
     expect(screen.getByTestId("chip-tools")).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -2650,11 +2661,7 @@ describe("chips", () => {
       { detail: ok(runDetail()), transcript: byZoom(releaseTranscript()) },
       { tab: "transcript", kinds: "none" },
     );
-    expect(calls.transcript[0]?.[3]).toEqual({
-      kinds: [],
-      limit: 500,
-      text: "full",
-    });
+    expect(calls.transcript[0]?.[3]).toEqual(TRANSCRIPT_TAB_READ);
     expect(screen.getByTestId("chip-tools")).toHaveAttribute(
       "aria-pressed",
       "false",

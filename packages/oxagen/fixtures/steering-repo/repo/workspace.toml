@@ -23,3 +23,6 @@ provider = "custom"                           # oxagen (the default), custom, or
 url = "https://embeddings.a-intel.com/v1/embeddings"
 model = "bge-large-en-v1.5"
 credential = "oxagen:credential/embeddings"
+
+[stella]
+archive_after_days = 7                        # days with no activity before a session archives

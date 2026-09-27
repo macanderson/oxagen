@@ -41,7 +41,7 @@ describe("the compaction stage", () => {
       now: () => clock,
       log: (line) => logs.push(line),
       listen: false,
-      transcriptRoots: [`${paths.root}/no-transcripts`],
+      transcriptRoots: [`${paths.tachoDir}/no-transcripts`],
       timers: {
         detectorMs: 60 * 60_000,
         sweepMs: 60 * 60_000,

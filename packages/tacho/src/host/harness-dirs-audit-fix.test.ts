@@ -29,7 +29,7 @@ import {
   readCodexApiKeyMember,
   restoreModelCredentials,
 } from "./model-credential";
-import { harnessConfigDirs, tachoPaths } from "./paths";
+import { harnessConfigDirs, tachoHome } from "./paths";
 
 const BOM = "﻿";
 const KEY = "sk-ant-api03-FAKE-MOVED-DIR-0001";
@@ -55,9 +55,9 @@ const noManaged = (home: string) => ({
 });
 
 describe("harnessConfigDirs", () => {
-  it("resolves the variables for the running user's own home, as tachoPaths does", () => {
+  it("resolves the variables for the running user's own home, as tachoHome does", () => {
     const env = { CLAUDE_CONFIG_DIR: "/c", CODEX_HOME: "/x" };
-    const paths = tachoPaths(env, homedir());
+    const paths = tachoHome(env, homedir());
     expect(harnessConfigDirs(homedir(), env)).toEqual({
       claudeConfigDir: dirname(paths.claudeSettings),
       codexHome: dirname(paths.codexHooks),

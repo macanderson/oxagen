@@ -17,8 +17,14 @@ origin: inferred
 provenance:
   source: run
   uri: frame:run_01K5R8QZ/412
-id: rec_a_intel_platform_tenant_queries_3ddd68163052
-hash: sha256:79d6c8139f4ad5cec29df5f0684d0bca92eef3beecbcd93793d9b2b56273c030
+  memories:
+    - agent: a-intel.core.ci-reviewer
+      run: run_01K5R8QZ
+      statement: A handler query that called db() directly skipped the tenant filter. Route every tenant table query through withTenantDb.
+      evidence:
+        - frame:run_01K5R8QZ/412
+id: rec_a_intel_platform_tenant_queries_c6f214d8974e
+hash: sha256:059c1e341ca21c13fe046257f0e6adda01d31ff7924235680b81fa07d53224d2
 ---
 
 Every query that reads or writes a tenant table goes through

@@ -246,6 +246,8 @@ export const runs: DataSource["runs"] = {
         // Omitted rather than null: the contract refuses a cursor it did not
         // write, and `undefined` is what "read from the start" means there.
         ...(q?.after ? { after: q.after } : {}),
+        ...(q?.before ? { before: q.before } : {}),
+        ...(q?.from === undefined ? {} : { from: q.from }),
         ...(q?.text === undefined ? {} : { text: q.text }),
         ...(q?.query === undefined ? {} : { query: q.query }),
       },

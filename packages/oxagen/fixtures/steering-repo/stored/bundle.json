@@ -4,14 +4,14 @@
   "scope": "workspace",
   "organization": "a-intel",
   "workspace": "core-platform",
-  "version": 20,
-  "commit": "78054f71905114b4bb66a30dfdbb922f98a5cd4d",
+  "version": 21,
+  "commit": "b5518188b20ddf02f905fadeaa50d9976abdcc90",
   "ledger": {
     "path": "steering/promotions/2026-09.jsonl",
-    "seq": 19,
-    "hash": "sha256:40e5bf95410dd3f5dfcbedf5e8e5a3a09ded8233065b13dc2f7fad05bba9005d"
+    "seq": 20,
+    "hash": "sha256:50cbbe698cb887bc28af63fe00d92e8c5d2f39bc1f324fbb4e8e7b7589073a91"
   },
-  "published_at": "2026-09-22T13:45:30Z",
+  "published_at": "2026-09-24T10:00:30Z",
   "records": [
     {
       "lineage": "a-intel.billing.refunds-over-100",
@@ -122,9 +122,9 @@
     {
       "lineage": "a-intel.platform.ci-cache-key",
       "path": "steering/memory/platform/a-intel.platform.ci-cache-key.md",
-      "blob": "8c287f1063569d2d59d0a6140087fa32eba61a53",
-      "id": "rec_a_intel_platform_ci_cache_key_6a3ca3b476bf",
-      "hash": "sha256:1b03ba4276a68736bf4c47f0a83a39b414f2effd27760d977ba99e9ecaccf243",
+      "blob": "c6f0092fce984d68c24419d3034bc84ab3c07823",
+      "id": "rec_a_intel_platform_ci_cache_key_873516889942",
+      "hash": "sha256:cd6685d7f6a65702d04489d6b7b6647116c8b7787b5022746f2802fc5f88edff",
       "label": "CI cache key includes the lockfile",
       "description": "A dependency change without a lockfile update breaks CI.",
       "kind": "memory",
@@ -232,9 +232,9 @@
     {
       "lineage": "a-intel.platform.tenant-queries",
       "path": "steering/platform/a-intel.platform.tenant-queries.md",
-      "blob": "ca6b41a3d45467495ec90c93b88b5d9221e8df11",
-      "id": "rec_a_intel_platform_tenant_queries_3ddd68163052",
-      "hash": "sha256:79d6c8139f4ad5cec29df5f0684d0bca92eef3beecbcd93793d9b2b56273c030",
+      "blob": "92dfecf05291e053023b86332a78bd5a175b7fbc",
+      "id": "rec_a_intel_platform_tenant_queries_c6f214d8974e",
+      "hash": "sha256:059c1e341ca21c13fe046257f0e6adda01d31ff7924235680b81fa07d53224d2",
       "label": "Tenant queries use withTenantDb",
       "description": "Every tenant table query goes through withTenantDb.",
       "kind": "code-rule",

@@ -1,0 +1,20 @@
+{
+  "schema": "memory/v1",
+  "id": "mem_01K5QK9A",
+  "agent": "a-intel.core.release-bot",
+  "run": "run_01K5QK7D",
+  "capture": "remember",
+  "statement": "The CI cache key hashes pnpm-lock.yaml. Update the lockfile with any dependency change, or CI restores a stale cache and typecheck fails.",
+  "kind": "memory",
+  "repos": [
+    "github.com/a-intel/platform"
+  ],
+  "applies_to": [
+    ".github/workflows/**",
+    "pnpm-lock.yaml"
+  ],
+  "evidence": [
+    "frame:run_01K5QK7D/88"
+  ],
+  "created_at": "2026-09-19T14:02:11Z"
+}

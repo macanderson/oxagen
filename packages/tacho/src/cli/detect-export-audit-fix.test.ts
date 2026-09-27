@@ -6,7 +6,8 @@ import { mkdirSync, mkdtempSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { tachoPaths } from "../host/paths";
+import { agentPaths, tachoHome } from "../host/paths";
+import { TEST_AGENT_ID } from "../host/test-support";
 import { Wal } from "../host/wal";
 import { minimalSession } from "../test-helpers";
 import { defaultCliDeps } from "./deps";
@@ -18,7 +19,7 @@ function deps() {
   const env = { HOME: home, TACHO_HOME: join(home, "tacho") };
   const lines: string[] = [];
   return defaultCliDeps({
-    paths: tachoPaths(env, home, "darwin"),
+    paths: agentPaths(tachoHome(env, home, "darwin"), TEST_AGENT_ID),
     env,
     home,
     platform: "darwin",
@@ -35,7 +36,7 @@ function deps() {
 describe("detect", () => {
   it("lists the apps when host.json is cut short or does not validate", () => {
     const d = deps();
-    mkdirSync(d.paths.root, { recursive: true });
+    mkdirSync(d.paths.dir, { recursive: true });
     for (const text of ['{"schema":', '{"schema":"tacho.host.v1"}']) {
       writeFileSync(d.paths.hostFile, text);
       const report = detect({}, d);
@@ -50,7 +51,7 @@ describe("export --out", () => {
     const d = deps();
     const events = minimalSession();
     new Wal(d.paths.wal).append(events);
-    const out = join(d.paths.root, "session.ndjson");
+    const out = join(d.paths.dir, "session.ndjson");
     expect(
       await exportCommand(
         { session: events[0]?.session_uuid as string, out },

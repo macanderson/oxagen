@@ -95,7 +95,7 @@ export interface ModelBaseUrlOptions {
   stellaHome?: string;
   /**
    * Claude Code's config directory, `$CLAUDE_CONFIG_DIR`. When absent it is
-   * resolved as `tachoPaths` resolves the hooks file (`harnessConfigDirs`),
+   * resolved as `tachoHome` resolves the hooks file (`harnessConfigDirs`),
    * so the base URL lands in the same `settings.json` as the hooks.
    */
   claudeConfigDir?: string;

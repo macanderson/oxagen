@@ -8,10 +8,16 @@
 // `conversations` port and answers the workspace's stable id beside it, which
 // the flyout keys its thread by instead of the slug.
 //
+// The session list (#4435) reads the viewer's other active conversations in
+// the workspace, and opens one by its id.
+//
 // The one read of the `DataSource` from a feature action beside
 // `choice-actions.ts` (ADR-167): the port holds the kernel call, the mapping
 // and the view-model check that keeps every id a public id (INV-11).
-import type { AssistantThread } from "@/data/contracts/conversations";
+import type {
+  AssistantSession,
+  AssistantThread,
+} from "@/data/contracts/conversations";
 import { dataSource } from "@/data/source";
 import type { ActionResult } from "@/server/kernel";
 import { readToActionResult } from "@/server/kernel";
@@ -40,4 +46,24 @@ export async function loadAssistantThread(
     ok: true,
     value: { workspaceKey: ctx.workspaceId, thread: read.value },
   };
+}
+
+/** The viewer's active sessions in `ws`, newest activity first. */
+export async function listAssistantSessions(
+  org: string,
+  ws: string,
+): Promise<ActionResult<readonly AssistantSession[]>> {
+  const ctx = await requireViewer(org, ws);
+  return readToActionResult(await dataSource().conversations.list(ctx));
+}
+
+/** Read one session the person picked from the list, to continue it. */
+export async function openAssistantSession(
+  org: string,
+  ws: string,
+  conversationId: string,
+): Promise<ActionResult<AssistantThread>> {
+  const ctx = await requireViewer(org, ws);
+  const { conversations } = dataSource();
+  return readToActionResult(await conversations.byId(ctx, conversationId));
 }

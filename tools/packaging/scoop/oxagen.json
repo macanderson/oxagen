@@ -32,7 +32,7 @@
     ["oxagen-x86_64-pc-windows-msvc.exe", "oxagen"]
   ],
   "pre_uninstall": [
-    "if (Test-Path \"$env:USERPROFILE\\.config\\oxagen\\tacho\\host.json\") { & \"$dir\\tacho-x86_64-pc-windows-msvc.exe\" unenroll }"
+    "if ($cmd -eq 'uninstall' -and (Test-Path \"$env:USERPROFILE\\.config\\oxagen\\tacho\")) { & \"$dir\\tacho-x86_64-pc-windows-msvc.exe\" unenroll --all }"
   ],
   "checkver": {
     "url": "https://github.com/macanderson/oxagen/releases.atom",

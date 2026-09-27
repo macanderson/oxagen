@@ -95,7 +95,7 @@
   },
   {
     "sidecar": "tacho",
-    "args": ["unenroll"]
+    "args": ["unenroll", "--harness", "claude-code"]
   },
   {
     "sidecar": "tacho",
@@ -107,10 +107,10 @@
   },
   {
     "sidecar": "tacho",
-    "args": ["unenroll"]
+    "args": ["unenroll", "--all"]
   },
   {
     "sidecar": "tacho",
-    "args": ["unenroll", "--purge"]
+    "args": ["unenroll", "--all", "--purge"]
   }
 ]

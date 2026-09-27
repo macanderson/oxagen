@@ -949,6 +949,26 @@ type Scope = { orgId: string; workspaceId: string };
 /** A `cnv_` public id; anything else `conversationId` carries is the uuid. */
 const CONVERSATION_PUBLIC_ID = /^cnv_/i;
 
+/** The most code points a title keeps from the first question. */
+const TITLE_MAX_CODE_POINTS = 80;
+
+/**
+ * Name a new conversation after its first question. Runs of whitespace
+ * collapse to one space, and a question past 80 code points is cut and ends
+ * in an ellipsis. The cut counts code points, so it never splits an emoji or
+ * other astral character. A question that is only whitespace leaves the
+ * title null.
+ *
+ * Exported for its own test.
+ */
+export function conversationTitleFrom(question: string): string | null {
+  const text = question.replace(/\s+/g, " ").trim();
+  if (text === "") return null;
+  const codePoints = Array.from(text);
+  if (codePoints.length <= TITLE_MAX_CODE_POINTS) return text;
+  return `${codePoints.slice(0, TITLE_MAX_CODE_POINTS).join("").trimEnd()}…`;
+}
+
 /**
  * Resolve or open the conversation and append the person's message, then
  * load the prior turns as the transcript, newest last, without the message
@@ -1006,13 +1026,36 @@ export async function appendUserMessage(
       .limit(1);
     if (!existing) throw new ConversationNotFoundError(named);
     conversation = existing;
+    // A question is activity. The nightly archive (#4435) takes a
+    // conversation whose updated_at is older than the workspace's window, so
+    // the question bumps it here rather than waiting for the reply. A turn
+    // still running, or one that failed, then never reads as idle.
+    //
+    // The archive can land between the read above and this update. The
+    // update repeats the archived and deleted checks, and Postgres checks
+    // them again on the row the archive committed, so the turn then finds
+    // no row and refuses as it would for an archived conversation. When
+    // this update commits first, the archive's own check on updated_at
+    // skips the row.
+    const [bumped] = await tx
+      .update(schema.conversations)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.conversations.id, existing.id),
+          isNull(schema.conversations.deletedAt),
+          isNull(schema.conversations.archivedAt),
+        ),
+      )
+      .returning({ id: schema.conversations.id });
+    if (!bumped) throw new ConversationNotFoundError(named);
   } else {
     const [created] = await tx
       .insert(schema.conversations)
       .values({
         ...scope,
         userId,
-        title: null,
+        title: conversationTitleFrom(request.content),
         status: "active",
         createdById: userId,
         updatedById: userId,

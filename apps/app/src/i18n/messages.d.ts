@@ -5662,6 +5662,9 @@ type Messages = {
       pause: string;
       replay: string;
       speedLabel: string;
+      scrub: string;
+      waited: string;
+      working: string;
       speed: string;
       position: string;
       unpaced: string;
@@ -5733,6 +5736,8 @@ type Messages = {
       cutLive: string;
       more: string;
       readingMore: string;
+      older: string;
+      readingOlder: string;
       loadedMore: string;
       badCursor: string;
       pageFailed: string;
@@ -7597,6 +7602,19 @@ type Messages = {
         loading: string;
         loadFailed: string;
       };
+      sessions: {
+        title: string;
+        loading: string;
+        failed: string;
+        retry: string;
+        empty: string;
+        untitled: string;
+        current: string;
+        busy: string;
+        gone: string;
+        openFailed: string;
+        archive: string;
+      };
       suggestions: {
         title: string;
         fleet: {
@@ -7654,6 +7672,7 @@ type Messages = {
         aborted: string;
         model: string;
         unavailable: string;
+        archived: string;
       };
       answering: {
         tool: string;

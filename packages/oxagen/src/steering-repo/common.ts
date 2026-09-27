@@ -74,8 +74,25 @@ export const gitObjectIdSchema = z
   .string()
   .regex(/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/);
 
-/** An ISO 8601 time with its offset. */
-export const instantSchema = z.string().datetime({ offset: true });
+const datetimeWithOffset = z.string().datetime({ offset: true });
+
+/** The offset RFC 3339 allows: `Z`, or a sign, hours 00-23, a colon, and minutes 00-59. */
+const RFC3339_OFFSET = /(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
+
+/**
+ * An RFC 3339 time with its offset. zod's datetime check reads any four
+ * digits as an offset, so it passes `+99:99` and `+24:00`, which `Date.parse`
+ * reads as NaN, and `+0200`, which the published `date-time` format refuses.
+ * The refinement refuses those, and any other time `Date.parse` cannot read.
+ * It judges only a value the datetime check passed, so a malformed time
+ * reports one issue. The published schema keeps `format: date-time`.
+ */
+export const instantSchema = datetimeWithOffset.refine(
+  (value) =>
+    !datetimeWithOffset.safeParse(value).success ||
+    (RFC3339_OFFSET.test(value) && !Number.isNaN(Date.parse(value))),
+  "the offset must be Z, or +HH:MM or -HH:MM with hours 00 to 23 and minutes 00 to 59",
+);
 
 /** An organization's slug, the owner of every record lineage in it. */
 export const organizationSlugSchema = z
