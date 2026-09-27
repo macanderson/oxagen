@@ -12,6 +12,17 @@
  * nothing has to come back to edit it.
  */
 
+import { AutoUpdateNotice } from "./latest-downloads";
+
+/** 2.1.2 is the first app with the updater (ADR-202). An older build never updates itself. */
+function updatesItself(version: string): boolean {
+  // parseInt reads "3" out of a build suffix such as "2.1.3-5".
+  const [major = 0, minor = 0, patch = 0] = version
+    .split(".")
+    .map((part) => Number.parseInt(part, 10) || 0);
+  return major * 1e6 + minor * 1e3 + patch >= 2 * 1e6 + 1 * 1e3 + 2;
+}
+
 const DOWNLOADS = "https://downloads.oxagen.sh";
 const REPO = "https://github.com/macanderson/oxagen";
 
@@ -163,6 +174,8 @@ export function ReleaseDownloads({
           </div>
         ))}
       </div>
+
+      {updatesItself(version) ? <AutoUpdateNotice /> : null}
 
       {cli ? (
         <>

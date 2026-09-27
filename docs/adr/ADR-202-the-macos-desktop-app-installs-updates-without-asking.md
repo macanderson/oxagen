@@ -186,7 +186,11 @@ Recorded here, not built:
   condition to be met anyway, so the disclosure lives on the page you
   download the app from (`apps/docs/content/docs/cli/desktop.mdx`, under
   Updates). It says what installs, when, how to turn it off, and that
-  Windows and Linux ask first. When Oxagen writes terms of service, they
+  Windows and Linux ask first. Every other block that hands out an
+  installer carries a short notice. In the docs, `LatestDownloads` and
+  `ReleaseDownloads` link to that section (`ReleaseDownloads` from 2.1.2,
+  the first app with the updater). In the web app, `DesktopDownloads` on
+  the enrollment and onboarding screens names the off switch. When Oxagen writes terms of service, they
   carry this sentence: "On macOS, the Oxagen desktop app downloads and
   installs new versions automatically unless you turn automatic updates
   off."

@@ -70,6 +70,24 @@ const link =
   "font-medium text-fd-foreground underline decoration-fd-border underline-offset-4 hover:decoration-fd-foreground";
 const mono = "font-mono text-xs text-fd-muted-foreground break-all";
 
+/**
+ * ADR-202: every block that hands out an installer says that the macOS app
+ * updates itself, and links to the Updates section of the desktop page for
+ * the details and the off switch. `ReleaseDownloads` renders it too.
+ */
+export function AutoUpdateNotice() {
+  return (
+    <p className="text-sm text-fd-muted-foreground">
+      On macOS, the app installs new versions on its own and runs them after
+      your next restart. Windows and Linux ask first.{" "}
+      <a className={link} href="/docs/cli/desktop#updates">
+        How updates work and how to turn them off
+      </a>
+      .
+    </p>
+  );
+}
+
 export function LatestDownloads() {
   return (
     <section
@@ -113,6 +131,8 @@ export function LatestDownloads() {
         <code className="font-mono">tacho</code> commands onto your PATH, so a
         new terminal can run them.
       </p>
+
+      <AutoUpdateNotice />
     </section>
   );
 }
