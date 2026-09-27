@@ -406,14 +406,24 @@ describe("the Gateway line", () => {
 });
 
 describe("the Policy line", () => {
-  it("says observe records a rule match and lets the call go ahead", () => {
-    expect(policyText("observe")).toBe("observe: recorded, not enforced");
+  it("says observe records a permission rule match and lets the call go ahead", () => {
+    expect(policyText("observe")).toBe(
+      "observe: a matching permission rule is recorded and the call goes ahead",
+    );
   });
 
   it("says enforce can deny a governed call or ask first", () => {
     expect(policyText("enforce")).toBe(
-      "enforce: a matching rule can deny a governed call or ask first",
+      "enforce: a matching permission rule can deny a governed call or ask first",
     );
+  });
+
+  // The model proxy refuses on its model allowlist and an enforced budget in
+  // either mode, so the observe line must not say nothing is enforced.
+  it("scopes both modes to permission rules", () => {
+    expect(policyText("observe")).toContain("permission rule");
+    expect(policyText("enforce")).toContain("permission rule");
+    expect(policyText("observe")).not.toContain("not enforced");
   });
 
   it("never names the gateway, whose tier is a separate line", () => {

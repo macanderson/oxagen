@@ -276,7 +276,7 @@ describe("the window", () => {
       )?.nextElementSibling?.textContent;
     expect(row("Status")).toBe("active");
     expect(row("Policy")).toBe(
-      "enforce: a matching rule can deny a governed call or ask first",
+      "enforce: a matching permission rule can deny a governed call or ask first",
     );
     expect(row("Bundle")).toContain("v3, fetched");
     expect(row("Gateway")).not.toContain("enforce");

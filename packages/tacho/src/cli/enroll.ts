@@ -1709,7 +1709,7 @@ async function enrollSteps(
     // on the end of this line read as "not routed through the gateway", so
     // the line names it as the policy and points at where the tier is shown.
     deps.out(
-      `Done. This machine reports to Oxagen as ${host.agent_key}. Every ${listLabels(hooked)} session from now on is recorded. Policy is in ${host.bundle.mode === "enforce" ? "enforce mode: a matching rule can deny a governed call or ask first" : "observe mode: rules are recorded, not enforced"}. \`tacho status\` shows each agent's tier.`,
+      `Done. This machine reports to Oxagen as ${host.agent_key}. Every ${listLabels(hooked)} session from now on is recorded. Policy is in ${host.bundle.mode === "enforce" ? "enforce mode: a matching permission rule can deny a governed call or ask first" : "observe mode: a matching permission rule is recorded and the call goes ahead"}. \`tacho status\` shows each agent's tier.`,
     );
   }
   return {
