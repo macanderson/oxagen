@@ -329,9 +329,9 @@ const RETRYABLE: ReadonlySet<Refusal> = new Set([
  */
 const COVERS_THE_APP = "(max-width: 47.99rem)";
 
-/** The header's icon buttons: the session list, a new session, and close. */
+/** The header's icon buttons: the thread list, a new thread, and close. */
 const HEADER_BUTTON =
-  "grid size-7 flex-none place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 aria-pressed:bg-secondary aria-pressed:text-foreground";
+  "grid size-7 flex-none place-items-center rounded-md text-app-link-fg transition-colors hover:bg-app-link-hover-bg hover:text-app-link-hover-fg focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 aria-pressed:bg-app-link-active-bg aria-pressed:text-app-link-active-fg";
 
 /**
  * The thread and the session list share the space under the header, one over
