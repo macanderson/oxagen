@@ -1,0 +1,119 @@
+/**
+ * Standing context (detector 2): the context every turn of a run re-sends,
+ * priced as `standing_tokens × read_price × (requests − 1)` per run and split
+ * by source (spec detector 2). The sources are the run-totals columns F3
+ * writes (#4493): tool definitions, context frames, and steering. Each column
+ * holds a sum over the run's model calls, so one call's share is the sum over
+ * the calls, and every call after the first re-sent it.
+ *
+ * The price is the run's prompt-cache read price, since a re-sent prefix is a
+ * cache read. A run that read nothing from the cache sent its prefix
+ * uncached, so it falls back to the run's input price.
+ *
+ * Every recorder today estimates the sources, and the run-totals row keeps no
+ * basis per source, so the finding's basis is `estimated`. It prices a part
+ * of each request, so it claims no frame (ADR-208, counting rule 2). It is
+ * cited at the run's agent, or at its operator when it names no agent.
+ */
+import {
+  priceInputTokens,
+  runInputPrice,
+  type RunTotalsRecord,
+} from "../cost-rollup";
+import type { RunTokenSources } from "../cost-rollup-store";
+import {
+  resentStandingTokens,
+  runReadPrice,
+  type StandingContextSources,
+} from "../standing-context-price";
+import {
+  agentOrOperator,
+  plural,
+  type DetectContext,
+  type Detector,
+  type DetectInput,
+  type Group,
+} from "./shared";
+
+/**
+ * The sources a run row carries. The store reads `StoredRunTotals`, and the
+ * detector input is typed as the record alone, so a source a row does not
+ * carry reads as unreported.
+ */
+export function sourcesOf(run: RunTotalsRecord): StandingContextSources {
+  const row = run as RunTotalsRecord & Partial<RunTokenSources>;
+  return {
+    toolDefinitionTokens: row.toolDefinitionTokens ?? null,
+    contextFrameTokens: row.contextFrameTokens ?? null,
+    steeringTokens: row.steeringTokens ?? null,
+  };
+}
+
+function detect(input: DetectInput, ctx: DetectContext): void {
+  for (const run of input.runs) {
+    const resent = resentStandingTokens(sourcesOf(run), run.modelCalls);
+    if (resent === null || resent === 0) continue;
+    const key = agentOrOperator("standing_context", run);
+    if (key === null || !ctx.groups.admits(key, run)) continue;
+    const price = runReadPrice(run) ?? runInputPrice(run);
+    ctx.groups.add(
+      key,
+      input.window.start,
+      run,
+      {
+        measuredTokens: resent,
+        counterfactualTokens: 0,
+        micros:
+          price === null
+            ? null
+            : { measured: priceInputTokens(price, resent), counterfactual: 0n },
+        basis: "estimated",
+      },
+      // The finding is about each run's prefix as a whole, not a call.
+      null,
+    );
+  }
+}
+
+/** The re-sent tokens of one source over a group's runs; null when no run reported it. */
+function resentOf(
+  group: Group,
+  source: keyof StandingContextSources,
+): number | null {
+  let total: number | null = null;
+  for (const { run } of group.runs.values()) {
+    const tokens = sourcesOf(run)[source];
+    if (tokens === null || run.modelCalls <= 1) continue;
+    total =
+      (total ?? 0) +
+      Math.round((tokens * (run.modelCalls - 1)) / run.modelCalls);
+  }
+  return total;
+}
+
+/** The split by source, in the order the run page lists it, leaving out a source no run reported. */
+export function standingSplit(group: Group): string {
+  const parts = [
+    ["toolDefinitionTokens", "tool definitions"],
+    ["steeringTokens", "steering"],
+    ["contextFrameTokens", "context frames"],
+  ] as const;
+  const named = parts.flatMap(([source, label]) => {
+    const tokens = resentOf(group, source);
+    return tokens === null
+      ? []
+      : [`${tokens.toLocaleString("en-US")} of ${label}`];
+  });
+  if (named.length <= 2) return named.join(" and ");
+  return `${named.slice(0, -1).join(", ")}, and ${named.at(-1)}`;
+}
+
+export const standingContext: Detector = {
+  kinds: ["standing_context"],
+  counting: null,
+  detect,
+  prose: (group, evidence) => ({
+    why: `${plural(group.runs.size, "run", "runs")} re-sent ${plural(evidence.measuredTokens, "estimated token", "estimated tokens")} of standing context on every turn after the first: ${standingSplit(group)}.`,
+    fix: "Move a tool provider whose tools agents rarely call to Searchable, and hold the steering prefix to its budget.",
+  }),
+};

@@ -24,6 +24,7 @@ import {
   type Prose,
 } from "./shared";
 import { spinLoops } from "./spin-loops";
+import { standingContext } from "./standing-context";
 import { unpagedResults } from "./unpaged-results";
 
 export * from "./shared";
@@ -42,6 +43,7 @@ export const DETECTORS: readonly Detector[] = [
   repeats,
   cacheWritesNeverRead,
   unpagedResults,
+  standingContext,
 ];
 
 /** The kinds the registered detectors write. */
