@@ -275,6 +275,18 @@ export const postgresMemoryStore: MemoryStore = {
     }));
   },
 
+  async openedPrFrom(scope, branch) {
+    const pr = schema.memoryPullRequests;
+    const [row] = await inScope(scope, (tx) =>
+      tx
+        .select({ id: pr.id })
+        .from(pr)
+        .where(and(scoped(pr, scope), eq(pr.branch, branch)))
+        .limit(1),
+    );
+    return row !== undefined;
+  },
+
   async insertMemoryPr(scope, input) {
     const pr = schema.memoryPullRequests;
     const m = schema.memories;

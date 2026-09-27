@@ -311,6 +311,11 @@ export interface MemoryStore {
   listWaiting(scope: MemoryScope): Promise<StoredMemory[]>;
   deleteMemories(scope: MemoryScope, ids: string[]): Promise<number>;
   listOpenPrs(scope: MemoryScope): Promise<OpenMemoryPr[]>;
+  /**
+   * Has the workspace opened a memory PR from this branch, whatever became of
+   * it? The curator opens one PR a day, and the branch names the day.
+   */
+  openedPrFrom(scope: MemoryScope, branch: string): Promise<boolean>;
   /** Record an opened memory PR and mark the memories it cites, in one transaction. */
   insertMemoryPr(
     scope: MemoryScope,

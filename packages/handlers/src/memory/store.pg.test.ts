@@ -177,14 +177,18 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
     expect(await store.insertMemories(scope, [twice, { ...twice }])).toBe(1);
     expect(await store.countWaiting(scope)).toBe(4);
 
+    // The first call cited the reflection, so both of its rows carry it. The
+    // later calls cited none, and the kept row keeps the id it was written with.
     const waiting = await store.listWaiting(scope);
-    const stored = waiting.find((m) => m.dedupeKey === kept.dedupeKey);
-    expect(stored?.reflectionId).toBe(reflectionId);
-    expect(
-      waiting
-        .filter((m) => m.dedupeKey !== kept.dedupeKey)
-        .map((m) => m.reflectionId),
-    ).toEqual([null, null, null]);
+    const reflectionOf = new Map(
+      waiting.map((m) => [m.statement, m.reflectionId]),
+    );
+    expect(Object.fromEntries(reflectionOf)).toEqual({
+      "Prefer rg over grep.": reflectionId,
+      "Pin the lockfile.": reflectionId,
+      "Write the test first.": null,
+      "Read the failing step first.": null,
+    });
   });
 
   it("lists waiting memories oldest first and keeps nulls as null", async () => {
@@ -253,6 +257,27 @@ describe.skipIf(!enabled)("memory store against Postgres", () => {
     expect(await store.listOpenPrs(scope)).toEqual([
       { id: prId, ...pullRequest(7, records), openedAt: expect.any(Date) },
     ]);
+  });
+
+  it("knows the branches a workspace opened a memory PR from, settled or not", async () => {
+    const scope = newScope();
+    const other = newScope();
+    const prId = await store.insertMemoryPr(scope, pullRequest(9, []));
+
+    expect(await store.openedPrFrom(scope, "memory/2026-09-09")).toBe(true);
+    expect(await store.openedPrFrom(scope, "memory/2026-09-10")).toBe(false);
+    expect(await store.openedPrFrom(other, "memory/2026-09-09")).toBe(false);
+
+    await store.settlePr(scope, {
+      prId,
+      status: "closed",
+      settledAt: new Date(),
+      mergedLineages: [],
+      reviewedLineages: [],
+      rejectedHashes: [],
+      purgeMemoryIds: [],
+    });
+    expect(await store.openedPrFrom(scope, "memory/2026-09-09")).toBe(true);
   });
 
   it("settles a memory PR: purges, rejects, and stamps recall rows", async () => {
