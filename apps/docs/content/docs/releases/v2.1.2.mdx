@@ -21,7 +21,7 @@ These notes cover the 518 changes merged to main since the v2.1.1 app build of 2
 - The Run page was rebuilt. Its transcript shows each step as the thing the agent did, with the prompt, the tool input and output, and the tokens and cost of each turn (#3660, #3789, #4033).
 - A frame player replays a run with play, pause, and speed controls (#4146). A long run loads one transcript page at a time, so the page opens without reading the whole run first (#4423, #4428).
 - The header shows the checkout, subagents, and usage. The page shows checkout evidence, pull request CI, and what the run produced (#4018, #3778, #3632).
-- A live run's clock ticks, and a finished run seals and stops its agent (#4074).
+- A live run's clock ticks. Sealing a finished run queues a kill for its agent when the host is reachable, and the page says when no kill was sent (#4074).
 
 ### Fleet
 
@@ -47,7 +47,7 @@ These notes cover the 518 changes merged to main since the v2.1.1 app build of 2
 ### Agents and tools
 
 - An agent is registered once per runtime and harness, with its toolbelt and versions, and a Runtimes page lists them (#4376, #3914).
-- Stop an agent from its page with the kill switch (#3708). A deregistered agent leaves every list and takes no new work (#4333).
+- Queue a kill for an agent from its page with the kill switch (#3708). A deregistered agent leaves the default lists and takes no new work. "Show deregistered agents" on the Agents page still lists it (#4333).
 - Search the MCP Registry and authorize a provider over OAuth from the tool wizard (#4134). Tool pickers show the provider's logo and the tool's risk, and forms pick records by name instead of by id (#4235, #4240, #4045).
 
 ### Sign-in and roles
