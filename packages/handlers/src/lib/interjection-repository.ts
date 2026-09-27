@@ -14,12 +14,25 @@
  * reads through. A repository only another installation of the organisation
  * can see is not found here, and the answer then refuses both paths as
  * `interjection_repository_unresolved`.
+ *
+ * The search walks up to `INTERJECTION_REPOSITORY_PAGES` pages, well past the
+ * five the repository picker shows, because a repository past the picker's
+ * bound is still one the installation reaches. A miss in a listing that
+ * stopped short is logged as a warning, since the repository may lie past it.
  */
 import { canonicalRemote, digestBytes, foldedRemote } from "@oxagen/tacho";
 import type { GitHubInstallationRepositories } from "@oxagen/github";
 import { logger } from "../logger";
 import { resolveWorkspaceGithubInstallation } from "../repository.github-connection";
 import { githubInstallationRepositoriesDeps } from "../repository.installation.list";
+
+/**
+ * Pages of 100 the search walks: 5,000 repositories. The picker's bound is
+ * five pages, and a miss past it would refuse a repository the installation
+ * reaches. The walk stops at the first under-full page, so an installation
+ * under the bound pays only for the pages it has.
+ */
+export const INTERJECTION_REPOSITORY_PAGES = 50;
 
 /** The organisation and workspace the run belongs to. */
 export interface InterjectionRepositoryScope {
@@ -38,14 +51,17 @@ export interface InterjectionRepositoryDeps {
   /** The workspace's GitHub installation id, or null when it has none. */
   installation(scope: InterjectionRepositoryScope): Promise<string | null>;
   /** What the installation can reach, and whether the walk stopped short. */
-  repositories(installationId: string): Promise<GitHubInstallationRepositories>;
+  repositories(
+    installationId: string,
+    options: { maxPages: number },
+  ): Promise<GitHubInstallationRepositories>;
 }
 
 export const GITHUB_INTERJECTION_REPOSITORY_DEPS: InterjectionRepositoryDeps = {
   installation: async (scope) =>
     (await resolveWorkspaceGithubInstallation(scope))?.installationId ?? null,
-  repositories: (installationId) =>
-    githubInstallationRepositoriesDeps.repositories(installationId),
+  repositories: (installationId, options) =>
+    githubInstallationRepositoriesDeps.repositories(installationId, options),
 };
 
 /**
@@ -89,20 +105,29 @@ export async function resolveInterjectionRepository(
 ): Promise<string | null> {
   const installationId = await deps.installation(scope);
   if (installationId === null) return null;
-  const { repositories, truncated } = await deps.repositories(installationId);
+  const { repositories, truncated } = await deps.repositories(installationId, {
+    maxPages: INTERJECTION_REPOSITORY_PAGES,
+  });
   const match = matchRepository(
     repositories.map((repository) => repository.fullName),
     remote,
   );
-  if (match === null)
+  if (match !== null) return match;
+  const detail = {
+    orgId: scope.orgId,
+    workspaceId: scope.workspaceId,
+    repositories: repositories.length,
+    truncated,
+  };
+  if (truncated)
+    logger.warn(
+      detail,
+      "interjection: no repository matches the frame's remote digest in a listing that stopped short; the repository may lie past it, so narrow the GitHub App's repository access",
+    );
+  else
     logger.info(
-      {
-        orgId: scope.orgId,
-        workspaceId: scope.workspaceId,
-        repositories: repositories.length,
-        truncated,
-      },
+      detail,
       "interjection: no repository the workspace's installation reaches matches the frame's remote digest",
     );
-  return match;
+  return null;
 }

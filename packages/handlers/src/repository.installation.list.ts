@@ -35,12 +35,18 @@ import { resolveWorkspaceGithubInstallation } from "./repository.github-connecti
 const MAIN_REPOSITORY_ROLES = ["Owner", "Admin"] as const;
 
 export interface InstallationRepositoriesDeps {
-  /** What the installation can reach, and whether the walk was bounded short. */
-  repositories(installationId: string): Promise<GitHubInstallationRepositories>;
+  /**
+   * What the installation can reach, and whether the walk was bounded short.
+   * `maxPages` raises the client's bound of five pages of 100.
+   */
+  repositories(
+    installationId: string,
+    options?: { maxPages?: number },
+  ): Promise<GitHubInstallationRepositories>;
 }
 
 export const githubInstallationRepositoriesDeps: InstallationRepositoriesDeps = {
-  async repositories(installationId) {
+  async repositories(installationId, options) {
     const appId = process.env["GITHUB_APP_ID"];
     const privateKey = process.env["GITHUB_APP_PRIVATE_KEY"];
     if (!appId || !privateKey) {
@@ -53,7 +59,7 @@ export const githubInstallationRepositoriesDeps: InstallationRepositoriesDeps = 
       privateKey,
       installationId,
     });
-    return createGitHubClient({ token }).listInstallationRepositories();
+    return createGitHubClient({ token }).listInstallationRepositories(options);
   },
 };
 

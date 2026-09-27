@@ -1204,13 +1204,16 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
       : null;
   }
 
-  async function listInstallationRepositories(): Promise<GitHubInstallationRepositories> {
+  async function listInstallationRepositories(
+    options: { maxPages?: number } = {},
+  ): Promise<GitHubInstallationRepositories> {
+    const maxPages = Math.max(1, Math.floor(options.maxPages ?? MAX_PAGES));
     const repositories: GitHubInstallationRepo[] = [];
     // GitHub reports the installation's true total on every page; the last
     // page read is the figure `truncated` is judged against.
     let totalCount = 0;
 
-    for (let page = 1; page <= MAX_PAGES; page++) {
+    for (let page = 1; page <= maxPages; page++) {
       const data = await request<GHInstallationReposResponse>(
         "GET",
         `/installation/repositories?per_page=${INSTALLATION_REPOS_PER_PAGE}&page=${page}`,

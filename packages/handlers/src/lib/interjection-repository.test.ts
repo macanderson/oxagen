@@ -3,14 +3,16 @@
 // see exactly as the host digests its remote, so every remote form a host
 // may hold (scp, https, a token in the userinfo, another case) finds its
 // repository, and nothing else does.
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { canonicalRemote, digestBytes, foldedRemote } from "@oxagen/tacho";
 
 vi.mock("../logger", () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
 
+import { logger } from "../logger";
 import {
+  INTERJECTION_REPOSITORY_PAGES,
   type InterjectionRepositoryDeps,
   matchRepository,
   repositoryDigests,
@@ -101,12 +103,23 @@ describe("matchRepository", () => {
 describe("resolveInterjectionRepository", () => {
   const remote = hostDigests("git@github.com:acme/api.git");
 
+  beforeEach(() => {
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(logger.info).mockClear();
+  });
+
   it("answers the matching repository the workspace's installation reaches", async () => {
     const d = deps("123", ["acme/web", "acme/api"]);
     await expect(resolveInterjectionRepository(SCOPE, remote, d)).resolves.toBe(
       "acme/api",
     );
-    expect(d.repositories).toHaveBeenCalledWith("123");
+    expect(d.repositories).toHaveBeenCalledWith("123", {
+      maxPages: INTERJECTION_REPOSITORY_PAGES,
+    });
+  });
+
+  it("searches well past the five pages the repository picker shows", () => {
+    expect(INTERJECTION_REPOSITORY_PAGES).toBeGreaterThanOrEqual(50);
   });
 
   it("answers null for a workspace with no installation, and reads nothing from GitHub (negative)", async () => {
@@ -117,10 +130,23 @@ describe("resolveInterjectionRepository", () => {
     expect(d.repositories).not.toHaveBeenCalled();
   });
 
-  it("answers null when the installation reaches no match, even a listing cut short (negative)", async () => {
+  it("answers null when the installation reaches no match, and logs it as info (negative)", async () => {
+    await expect(
+      resolveInterjectionRepository(SCOPE, remote, deps("123", ["acme/web"])),
+    ).resolves.toBeNull();
+    expect(logger.info).toHaveBeenCalledTimes(1);
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it("warns on a miss in a listing that stopped short, since the repository may lie past it (negative)", async () => {
     await expect(
       resolveInterjectionRepository(SCOPE, remote, deps("123", [], true)),
     ).resolves.toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ truncated: true }),
+      expect.stringContaining("stopped short"),
+    );
+    expect(logger.info).not.toHaveBeenCalled();
   });
 
   it("lets a GitHub failure through for the caller to decide", async () => {
