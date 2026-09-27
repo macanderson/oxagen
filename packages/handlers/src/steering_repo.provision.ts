@@ -1163,14 +1163,17 @@ export function steeringRepoProvisionDeps(options: {
   };
 }
 
-/** What the provision event carries. */
-export interface SteeringRepoProvisionRequest {
+/**
+ * What the provision event carries. A type alias, not an interface, so it
+ * fits the event client's `Record<string, unknown>` data.
+ */
+export type SteeringRepoProvisionRequest = {
   orgId: string;
   /** Null for the organization repository. */
   workspaceId: string | null;
   /** The person who created the workspace or the organization. */
   actorUserId: string;
-}
+};
 
 /** Start the durable job, or resume it from the step that stopped. */
 export async function requestSteeringRepoProvision(
