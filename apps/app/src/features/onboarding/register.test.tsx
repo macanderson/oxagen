@@ -251,6 +251,7 @@ describe("the name step", () => {
             agents: [],
             liveHosts: 0,
             lastSeenAt: null,
+            containmentRequired: false,
           },
         ],
       }),

@@ -84,6 +84,7 @@ export function namedRuntime(
     ],
     liveHosts: 1,
     lastSeenAt: "2026-09-23T09:12:44.000Z",
+    containmentRequired: false,
     ...overrides,
   };
 }

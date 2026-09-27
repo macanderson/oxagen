@@ -333,9 +333,10 @@ describe("runtimes.named (ADR-198)", () => {
     ],
     liveHosts: 1,
     lastSeenAt: null,
+    containmentRequired: true,
   };
 
-  it("reads list_runtimes once and maps each runtime with its agents", async () => {
+  it("reads list_runtimes once and maps each runtime with its agents and containment (ADR-204)", async () => {
     kernelRead.mockResolvedValueOnce(readOk({ items: [item] }));
     const read = await runtimes.named(ctx);
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
