@@ -1,5 +1,6 @@
 import { contextLabelsBackfill } from "./functions/context.labels-backfill";
 import { steeringSync, steeringSyncSweep } from "./functions/steering.sync";
+import { steeringRepoProvision } from "./functions/steering-repo.provision";
 import { billingDunningSweep } from "./functions/billing.dunning-sweep";
 import { billingUsageDelivery } from "./functions/billing.usage-delivery";
 import { billingGauClose } from "./functions/billing.gau-close";
@@ -78,6 +79,7 @@ export const functions: any[] = [
   contextLabelsBackfill,
   steeringSync,
   steeringSyncSweep,
+  steeringRepoProvision,
   billingDunningSweep,
   billingGauClose,
   billingUsageDelivery,

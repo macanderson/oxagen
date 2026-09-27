@@ -259,9 +259,11 @@ describe("tenant policy manifest", () => {
     // (#4129), 2026-09-25.
     // 132 adds agent.runtimes, tools.toolbelts and tools.toolbelt_tools
     // (ADR-198, 2026-09-26).
-    // 137 adds agent.memories, agent.memory_reflections, agent.memory_prs,
+    // 134 adds workspace.no_progress_policy and cost.no_progress_hits (the
+    // no-progress limit, spend spec detector 1).
+    // 139 adds agent.memories, agent.memory_reflections, agent.memory_prs,
     // agent.memory_rejections and agent.memory_recalls (ADR-206, 2026-09-26).
-    expect(POLICY_MANIFEST.length).toBe(137);
+    expect(POLICY_MANIFEST.length).toBe(139);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

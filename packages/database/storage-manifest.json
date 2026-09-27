@@ -4206,7 +4206,7 @@
       "writes": []
     }
   ],
-  "contentHash": "0501e032b7b6cbd72d0c88432ca1ce3fddf1313a004b8fc7e58c597d24002a24",
+  "contentHash": "20a19d38b72cfd718a2c8e0ad846fc9ec646b00919cc57256c36b52cb5c14f35",
   "domains": [
     {
       "name": "agent",
@@ -4373,6 +4373,7 @@
         "postgres:cost.cost_centers",
         "postgres:cost.daily_totals",
         "postgres:cost.findings",
+        "postgres:cost.no_progress_hits",
         "postgres:cost.price_book_initializations",
         "postgres:cost.price_entries",
         "postgres:cost.run_totals"
@@ -4640,6 +4641,7 @@
       ],
       "tables": [
         "neo4j:Workspace",
+        "postgres:workspace.no_progress_policy",
         "postgres:workspace.routing_policy",
         "postgres:workspace.tacho_session_policy",
         "postgres:workspace.workspace_budget_policy",
@@ -4680,7 +4682,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 161
+      "tableCount": 163
     },
     {
       "domains": [
@@ -14412,6 +14414,106 @@
       "domain": "cost",
       "id": "postgres:cost.findings",
       "name": "findings",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "tool",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "input_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "output_digest",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "loop",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "repeats",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "limit_repeats",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "at_call",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "mode",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "outcome",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "detected_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "cost",
+      "id": "postgres:cost.no_progress_hits",
+      "name": "no_progress_hits",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -24400,6 +24502,58 @@
       "domain": "tools",
       "id": "postgres:tools.toolbelts",
       "name": "toolbelts",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "repeats",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "mode",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "workspace",
+      "id": "postgres:workspace.no_progress_policy",
+      "name": "no_progress_policy",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

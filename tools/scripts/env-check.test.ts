@@ -151,6 +151,7 @@ describe("reconcile — PLATFORM_ALLOWLIST", () => {
       "CI",
       "GITHUB_ACTIONS",
       "PLATFORM_VERSION",
+      "TURBO_API",
       "TURBO_TOKEN",
       "TURBO_TEAM",
       "E2E_TEST",

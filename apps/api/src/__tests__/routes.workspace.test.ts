@@ -149,13 +149,13 @@ describe("workspace.create route", () => {
       publicId: "ws-1",
       name: "Dev Workspace",
       slug: "dev",
+      steering_repo: { status: "provisioning" },
     };
     mocks.invoke.mockResolvedValue(invokeResult);
     const res = await app.fetch(
       post(PATH, {
         name: "Dev Workspace",
         slug: "dev",
-        mainRepo: { owner: "acme", name: "widgets" },
       }),
     );
     expect(res.status).toBe(201);
@@ -167,12 +167,26 @@ describe("workspace.create route", () => {
       post(PATH, {
         name: "Dev",
         slug: "dev",
-        mainRepo: { owner: "acme", name: "widgets" },
       }),
     );
     expect(mocks.invoke.mock.calls[0]?.[0]).toBe("create_workspace");
     const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
-    expect(body.slug).toBe("dev");
+    expect(body).toEqual({ name: "Dev", slug: "dev" });
+  });
+
+  // Lane S1 (#4450): a workspace no longer takes a main repository. An older
+  // caller that still sends one reaches the handler, which ignores it.
+  it("still accepts the deprecated mainRepo and passes it through", async () => {
+    const res = await app.fetch(
+      post(PATH, {
+        name: "Dev",
+        slug: "dev",
+        mainRepo: { owner: "acme", name: "widgets" },
+      }),
+    );
+    expect(res.status).toBe(201);
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+    const body = mocks.invoke.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(body.mainRepo).toEqual({
       provider: "github",
       owner: "acme",
@@ -180,10 +194,14 @@ describe("workspace.create route", () => {
     });
   });
 
-  // §17 M0: a workspace cannot be created without a main repo. The contract
-  // refuses the body before the kernel is reached.
-  it("no mainRepo → 400, nothing invoked (negative)", async () => {
-    const res = await app.fetch(post(PATH, { name: "Dev", slug: "dev" }));
+  it("a malformed deprecated mainRepo → 400, nothing invoked (negative)", async () => {
+    const res = await app.fetch(
+      post(PATH, {
+        name: "Dev",
+        slug: "dev",
+        mainRepo: { owner: "acme", name: "widgets", installationId: "555" },
+      }),
+    );
     expect(res.status).toBe(400);
     expect(mocks.invoke).not.toHaveBeenCalled();
   });

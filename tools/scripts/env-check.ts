@@ -68,7 +68,9 @@ export const PLATFORM_ALLOWLIST = new Set<string>([
   "HUSKY",
   // Oxagen internal platform version tag
   "PLATFORM_VERSION",
-  // Turborepo remote-cache credentials (set via GitHub Actions Secrets, not app env)
+  // Turborepo remote cache. .github/actions/turbo-cache sets all three in CI
+  // jobs, pointing turbo at a loopback server backed by S3. No app reads them.
+  "TURBO_API",
   "TURBO_TOKEN",
   "TURBO_TEAM",
   // Set inside the contained tier's container by packages/tacho/container/

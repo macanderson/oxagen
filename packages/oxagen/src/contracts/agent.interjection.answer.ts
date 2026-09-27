@@ -7,8 +7,10 @@
 // `answer`. A `repo_unknown` row, raised when a session starts in a
 // repository the workspace has not bound, takes a `path`: `link` binds the
 // repository to the run's workspace, and `create` makes a new workspace for
-// it from `create`. Which fields a call must send depends on the row, so the
-// handler checks the combination and refuses a wrong one as
+// it from `create`. Since lane S1 (#4450) the new workspace binds no
+// repository, so a create leaves the repository unbound. Which fields a call
+// must send depends on the row, so the handler checks the combination and
+// refuses a wrong one as
 // `HandlerError { code: "conflict", reason: "interjection_answer_shape" }`.
 // A `deny` is never a person's answer: the timeout writes it.
 //
@@ -108,7 +110,7 @@ export const agentInterjectionAnswer = registerCapability({
       receiptId: z.string().regex(INTERJECTION_RECEIPT_ID_PATTERN),
       /** The path taken; null for a free-text answer. */
       path: z.enum(INTERJECTION_ANSWER_PATHS).nullable(),
-      /** The repository a link or create bound; null for a free-text answer. */
+      /** The repository a link bound; null for a free-text answer and a create. */
       repository: z
         .object({
           bindingId: z.string(),
