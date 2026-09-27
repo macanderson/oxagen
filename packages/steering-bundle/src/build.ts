@@ -27,7 +27,7 @@ import {
 } from "@oxagen/oxagen/steering-repo/record";
 import { countTokens } from "@oxagen/oxagen/steering-repo/tokens";
 import { workspaceSchema } from "@oxagen/oxagen/steering-repo/workspace";
-import type { ToolModes } from "./mentions";
+import { toolModesOf } from "./mentions";
 import {
   blockHeading,
   indexTokens,
@@ -265,7 +265,13 @@ export async function buildBundle(input: BuildInput): Promise<BuildResult> {
   }
   records.sort((a, b) => compareText(a.lineage, b.lineage));
 
-  const modes: ToolModes = tools.modes;
+  const manifest: Bundle["tools"] =
+    tools.servers.length === 0
+      ? null
+      : { schema: "tool-manifest/v1", servers: tools.servers };
+  // The modes the manifest records. steering_read and each request read the
+  // same ones, so a record's mentions render the same wherever it appears.
+  const modes = toolModesOf({ tools: manifest });
   const always_on: Bundle["always_on"] = [];
   for (const repository of blockRepositories(identity.scope, linked, records)) {
     const members = records.filter((entry) => inBlock(entry, repository, tools.imported));
@@ -296,10 +302,7 @@ export async function buildBundle(input: BuildInput): Promise<BuildResult> {
     always_on,
     policies: await buildPolicies(reader, warnings),
     agents: await buildAgents(reader),
-    tools:
-      tools.servers.length === 0
-        ? null
-        : { schema: "tool-manifest/v1" as const, servers: tools.servers },
+    tools: manifest,
   };
   const checked = bundleSchema.safeParse(bundle);
   if (!checked.success) {

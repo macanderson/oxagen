@@ -30,7 +30,6 @@ import {
   toolsLockPath,
   toolsTomlPath,
 } from "@oxagen/oxagen/steering-repo/paths";
-import type { ExposureMode } from "./mentions";
 import type { TreeReader } from "./tree";
 
 /** One server folder's files, as publish reads them. */
@@ -101,8 +100,6 @@ export const compileServerFolder: ToolCompiler = (folder) => {
 export interface ToolsResult {
   /** The compiled servers, ordered by name. */
   servers: ManifestServer[];
-  /** Each server's exposure mode, from its server.toml. */
-  modes: Map<string, ExposureMode>;
   /** Every imported tool's name, from each tools.toml. */
   imported: string[];
   warnings: string[];
@@ -125,7 +122,7 @@ export async function buildTools(
   reader: TreeReader,
   compiler: ToolCompiler,
 ): Promise<ToolsResult> {
-  const result: ToolsResult = { servers: [], modes: new Map(), imported: [], warnings: [] };
+  const result: ToolsResult = { servers: [], imported: [], warnings: [] };
   for (const name of serverNames(reader.paths)) {
     const serverPath = serverTomlPath(name);
     const toolsPath = toolsTomlPath(name);
@@ -141,8 +138,6 @@ export async function buildTools(
       tools: await reader.read(toolsPath),
       lock: reader.has(toolsLockPath(name)) ? await reader.read(toolsLockPath(name)) : undefined,
     };
-    const server = parseServerToml(folder.server);
-    if (server.ok) result.modes.set(name, server.value.exposure.mode);
     const tools = parseToolsToml(folder.tools);
     if (tools.ok) {
       for (const key of Object.keys(tools.value.tools)) {
