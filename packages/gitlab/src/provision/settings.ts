@@ -2,6 +2,8 @@
 //
 // The baseline protects main so no one pushes and only the Oxagen bot merges.
 // It requires squash merges and a passing pipeline, and it turns CI/CD off.
+// It also resets approvals on push, so an approval always approves the head
+// it was given on.
 // Apply is a diff. It reads the project, writes only what differs, reads
 // again, and returns what still differs.
 //
@@ -27,6 +29,11 @@ interface ProjectSettingsBody {
   only_allow_merge_if_pipeline_succeeds: boolean | null;
   remove_source_branch_after_merge: boolean | null;
   builds_access_level: string;
+}
+
+/** The part of `GET /projects/:id/approvals` the baseline holds. */
+interface ProjectApprovalsBody {
+  reset_approvals_on_push?: boolean | null;
 }
 
 interface AccessLevelBody {
@@ -94,6 +101,15 @@ export async function readGitlabSettings(
     ),
     "protected branches",
   );
+  // Approval settings need GitLab Premium. A tier without them answers 403
+  // or 404, which reads as "unknown" so compare reports it as a difference.
+  const approvals = await rest.request<ProjectApprovalsBody>(
+    "GET",
+    `${root}/approvals`,
+    undefined,
+    [403, 404],
+  );
+  const reset = approvals.data?.reset_approvals_on_push;
   const protected_branches: Record<string, ObservedProtectedBranch> = {};
   for (const branch of branches) {
     protected_branches[branch.name] = {
@@ -112,6 +128,7 @@ export async function readGitlabSettings(
         project.only_allow_merge_if_pipeline_succeeds === true,
       remove_source_branch_after_merge:
         project.remove_source_branch_after_merge === true,
+      reset_approvals_on_push: typeof reset === "boolean" ? reset : null,
     },
     ci_cd: { builds_access_level: project.builds_access_level },
   };
@@ -167,6 +184,11 @@ export function compareGitlabSettings(
     "merge_requests.remove_source_branch_after_merge",
     mr.remove_source_branch_after_merge,
     actual.merge_requests.remove_source_branch_after_merge,
+  );
+  check(
+    "merge_requests.reset_approvals_on_push",
+    mr.reset_approvals_on_push,
+    actual.merge_requests.reset_approvals_on_push,
   );
   check(
     "ci_cd.builds_access_level",
@@ -241,6 +263,10 @@ export async function applyGitlabSettings(
   for (const [setting, field, value] of PROJECT_FIELDS)
     if (touches(changed, setting)) update[field] = value(baseline);
   if (Object.keys(update).length > 0) await rest.request("PUT", root, update);
+  if (touches(changed, "merge_requests.reset_approvals_on_push"))
+    await rest.request("POST", `${root}/approvals`, {
+      reset_approvals_on_push: baseline.merge_requests.reset_approvals_on_push,
+    });
 
   for (const [name, branch] of Object.entries(baseline.protected_branches)) {
     if (!touches(changed, `protected_branches.${name}`)) continue;
