@@ -1,13 +1,19 @@
 "use client";
-// The Runtimes pages' client islands: the dialogs the page opens and its two
-// writes, Add a runtime and Unenroll.
+// The Runtimes pages' client islands: the dialogs the page opens and its three
+// writes, Add a runtime, the Containment switch and Unenroll.
 //
 // Add a runtime asks for a name and a slug and names the runtime
 // (`create_runtime`, ADR-198). The slug fills from the name by the one rule
 // every name-made slug follows (`slugFromName`: spaces become hyphens, every
 // other special character is dropped) until the person types one of their
-// own. The only way on is registering the runtime's first agent: the dialog
-// lands on the register flow with the runtime chosen.
+// own. A checkbox asks whether the runtime requires the contained launcher
+// (ADR-204), off unless the person ticks it. The only way on is registering
+// the runtime's first agent: the dialog lands on the register flow with the
+// runtime chosen.
+//
+// The Containment switch on a named runtime's page sets the same field later
+// (`update_runtime`, ADR-204). It writes at once, with no dialog, because the
+// change is reversible and a host reads it only at its next bundle fetch.
 //
 // Nothing here enrolls a host or writes a hook (runtimes.md: enrollment is an
 // installer, run on the host itself). Show the CLI path links the Oxagen app's
@@ -36,7 +42,11 @@ import { Field } from "@/ui/field";
 import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { createRuntime, unenrollRuntime } from "./actions";
+import {
+  createRuntime,
+  setRuntimeContainment,
+  unenrollRuntime,
+} from "./actions";
 
 /** `.btn.danger`: the ink and the border carry the red; the word carries the meaning. */
 const buttonDanger = `${buttonSecondary} border-error/50! text-error-ink! hover:bg-error/10!`;
@@ -71,6 +81,8 @@ export function AddRuntime({
   const [slug, setSlug] = useState("");
   // The slug follows the name until the person edits the slug by hand.
   const [slugEdited, setSlugEdited] = useState(false);
+  // Off by default, the handler's default too (ADR-204).
+  const [containment, setContainment] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [slugError, setSlugError] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -80,6 +92,7 @@ export function AddRuntime({
     setName("");
     setSlug("");
     setSlugEdited(false);
+    setContainment(false);
     setNameError(null);
     setSlugError(null);
     setFailure(null);
@@ -123,6 +136,7 @@ export function AddRuntime({
       const result = await createRuntime(org, ws, {
         name: trimmedName,
         slug: trimmedSlug,
+        ...(containment ? { containmentRequired: true } : {}),
       });
       if (result.ok) {
         setOpen(false);
@@ -215,6 +229,34 @@ export function AddRuntime({
               setSlug(event.target.value);
             }}
           />
+          <div className="flex flex-col gap-1">
+            {/* The label wraps the checkbox so its whole row is the 44px phone target. */}
+            <label
+              htmlFor={`${baseId}-containment`}
+              data-touch-target=""
+              className="flex items-center gap-2 font-medium"
+            >
+              <input
+                id={`${baseId}-containment`}
+                name="containmentRequired"
+                type="checkbox"
+                data-testid="runtimes-add-containment"
+                checked={containment}
+                aria-describedby={`${baseId}-containment-hint`}
+                onChange={(event) => {
+                  setContainment(event.target.checked);
+                }}
+                className="size-4"
+              />
+              {t("containment")}
+            </label>
+            <p
+              id={`${baseId}-containment-hint`}
+              className="text-xs text-muted-foreground"
+            >
+              {t("containmentHint")}
+            </p>
+          </div>
           <p className="border-l-2 border-gold py-0.5 pl-3 text-[13px] text-foreground">
             {t("next")}
           </p>
@@ -388,6 +430,115 @@ export function SmokeSession({ hostname }: { hostname: string }) {
         {t("stub.smokeBody", { hostname })}
       </p>
     </DialogButton>
+  );
+}
+
+/** A refused or failed containment write, as the seam classified it (§3.2). */
+type ContainmentFailure = Exclude<
+  Awaited<ReturnType<typeof setRuntimeContainment>>,
+  { ok: true }
+>;
+
+/**
+ * The Containment switch (ADR-204): whether every agent on this runtime runs
+ * only under the contained launcher. It shows the value the record holds and
+ * moves when the page reads the record again, so it never shows a setting the
+ * record does not carry. A refusal leaves it where it was and names the
+ * reason. Rendered only for an org Owner or Admin; the handler checks the
+ * role again.
+ */
+export function ContainmentSwitch({
+  org,
+  ws,
+  runtimeId,
+  required,
+}: {
+  org: string;
+  ws: string;
+  runtimeId: string;
+  /** The value `list_runtimes` answered for this runtime. */
+  required: boolean;
+}) {
+  const t = useTranslations("runtimes.containment");
+  const navigate = useNavigate();
+  const id = useId();
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  function failureText(result: ContainmentFailure): string {
+    switch (result.reason) {
+      case "denied":
+        return t("failure.denied");
+      case "not_found":
+        return t("failure.notFound");
+      case "conflict":
+        return t("failure.refused", { code: result.code });
+      case "invalid":
+        return t("failure.invalid");
+      case "pending_approval":
+        return t("failure.pendingApproval", {
+          accessRequestId: result.accessRequestId,
+        });
+      case "unavailable":
+      case "exhausted":
+        return t("failure.unavailable", { code: result.code });
+    }
+  }
+
+  async function toggle(next: boolean) {
+    if (pending) return;
+    setPending(true);
+    setFailure(null);
+    try {
+      const result = await setRuntimeContainment(org, ws, runtimeId, next);
+      if (result.ok) navigate.refresh();
+      else setFailure(failureText(result));
+    } catch {
+      setFailure(failureText(unanswered("action_failed")));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        {/* The label wraps the switch so its whole row is the 44px phone target. */}
+        <label
+          htmlFor={id}
+          data-touch-target=""
+          className="flex items-center gap-2 font-medium"
+        >
+          <input
+            id={id}
+            type="checkbox"
+            role="switch"
+            data-testid="runtime-containment-switch"
+            checked={required}
+            aria-disabled={pending || undefined}
+            aria-describedby={`${id}-state`}
+            onChange={(event) => {
+              void toggle(event.target.checked);
+            }}
+            className="size-4"
+          />
+          {t("label")}
+        </label>
+        {pending ? (
+          <span className="text-muted-foreground">{t("saving")}</span>
+        ) : null}
+      </div>
+      <p
+        id={`${id}-state`}
+        data-testid="runtime-containment-value"
+        className="text-sm text-muted-foreground"
+      >
+        {required ? t("required") : t("notRequired")}
+      </p>
+      {failure === null ? null : (
+        <FormAlert testId="runtime-containment-failure">{failure}</FormAlert>
+      )}
+    </div>
   );
 }
 

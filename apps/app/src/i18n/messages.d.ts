@@ -7023,6 +7023,8 @@ type Messages = {
       nameHint: string;
       slug: string;
       slugHint: string;
+      containment: string;
+      containmentHint: string;
       next: string;
       submit: string;
       pending: string;
@@ -7051,7 +7053,27 @@ type Messages = {
       noAgent: string;
       register: string;
       registerOn: string;
+      open: string;
       never: string;
+    };
+    containment: {
+      title: string;
+      lead: string;
+      label: string;
+      term: string;
+      required: string;
+      notRequired: string;
+      readOnly: string;
+      saving: string;
+      note: string;
+      failure: {
+        denied: string;
+        notFound: string;
+        refused: string;
+        invalid: string;
+        pendingApproval: string;
+        unavailable: string;
+      };
     };
     notRecorded: string;
     notReported: string;
