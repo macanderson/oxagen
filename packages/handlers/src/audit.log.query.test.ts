@@ -186,12 +186,12 @@ describe("query_audit_log from the organization (the org-only sentinel)", () => 
       tool: "publish_release",
       reason: "classification_changed",
       before: {
-        consequenceTags: ["read"],
+        impacts: ["read"],
         measures: null,
         classification: "read",
       },
       after: {
-        consequenceTags: ["write"],
+        impacts: ["write"],
         measures: null,
         classification: "write",
       },

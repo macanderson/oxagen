@@ -32,7 +32,7 @@ import {
 } from "./kill-switch-gate";
 import {
   registryCapabilityId,
-  unionConsequenceTags,
+  unionImpacts,
 } from "./tool-registry-facts";
 
 const ORG = "0192d4a8-7c1e-7a00-8000-00000000ac3e";
@@ -317,7 +317,7 @@ describe("registryCapabilityId", () => {
   });
 });
 
-describe("unionConsequenceTags", () => {
+describe("unionImpacts", () => {
   it("takes the declared column and the classified jsonb together, deduped and SORTED", () => {
     // The order is part of the contract, not an artefact of which half
     // contributed a tag first (ADR-070). It became load-bearing when a rule's
@@ -325,34 +325,34 @@ describe("unionConsequenceTags", () => {
     // later one, so the union sorts once at the point it is formed and every
     // reader gets the same answer. These assertions are exact on purpose.
     expect(
-      unionConsequenceTags({
-        consequenceTags: ["moves_money"],
+      unionImpacts({
+        impacts: ["moves_money"],
         classification: null,
       }),
     ).toEqual(["moves_money"]);
     expect(
-      unionConsequenceTags({
-        consequenceTags: null,
-        classification: { consequenceTags: ["sends_external"] },
+      unionImpacts({
+        impacts: null,
+        classification: { impacts: ["sends_external"] },
       }),
     ).toEqual(["sends_external"]);
     expect(
-      unionConsequenceTags({
-        consequenceTags: ["moves_money", "deletes_data"],
-        classification: { consequenceTags: ["moves_money", "sends_external"] },
+      unionImpacts({
+        impacts: ["moves_money", "deletes_data"],
+        classification: { impacts: ["moves_money", "sends_external"] },
       }),
     ).toEqual(["deletes_data", "moves_money", "sends_external"]);
   });
 
   it("ignores a classification that is not the schema's shape", () => {
     expect(
-      unionConsequenceTags({
-        consequenceTags: ["moves_money"],
-        classification: { consequenceTags: "moves_money" },
+      unionImpacts({
+        impacts: ["moves_money"],
+        classification: { impacts: "moves_money" },
       }),
     ).toEqual(["moves_money"]);
     expect(
-      unionConsequenceTags({ consequenceTags: [], classification: 7 }),
+      unionImpacts({ impacts: [], classification: 7 }),
     ).toEqual([]);
   });
 });
@@ -360,8 +360,8 @@ describe("unionConsequenceTags", () => {
 describe("a class kill switch and a tool whose tags were declared, not classified", () => {
   /**
    * The regression this file exists for. `import_tools` and
-   * `publish_tool_declaration` write consequence tags to
-   * `agent.tool_versions.consequence_tags`; only `set_tool_classification`
+   * `publish_tool_declaration` write impacts to
+   * `agent.tool_versions.impacts`; only `set_tool_classification`
    * writes the `classification` jsonb. The gate's index used to read the jsonb
    * alone, filtered on `classification IS NOT NULL`, so an admin could publish
    * a tool tagged `moves_money`, flip a `class` kill switch on `moves_money`,
@@ -379,8 +379,8 @@ describe("a class kill switch and a tool whose tags were declared, not classifie
         tags: new Map([
           [
             capabilityId,
-            unionConsequenceTags({
-              consequenceTags: ["moves_money"],
+            unionImpacts({
+              impacts: ["moves_money"],
               classification: null,
             }),
           ],

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import {
-  consequenceTagSchema,
+  impactSchema,
   toolClassificationSchema,
   toolRiskGradeSchema,
 } from "./tool.classification";
@@ -48,7 +48,7 @@ export const toolVersionList = registerCapability({
   name: "list_tool_versions",
   domain: "tool",
   description:
-    "List the workspace registry's active tool versions with their safety classification, schema origin and digest, the kill switch that stops each one today, and 30-day call counts; cursor-paged, optionally filtered by consequence tag, by the server the tools were imported from, or both.",
+    "List the workspace registry's active tool versions with their safety classification, schema origin and digest, the kill switch that stops each one today, and 30-day call counts; cursor-paged, optionally filtered by impact, by the server the tools were imported from, or both.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -69,8 +69,8 @@ export const toolVersionList = registerCapability({
     workspace: { Owner: "allow", Member: "allow", Viewer: "allow" },
   },
   input: z.object({
-    /** Only versions carrying this consequence tag. */
-    category: consequenceTagSchema.optional(),
+    /** Only versions carrying this impact. */
+    category: impactSchema.optional(),
     /** Only versions imported from this `mcs_…` server. */
     serverId: z.string().min(1).optional(),
     limit: z.number().int().min(1).max(100).default(50),

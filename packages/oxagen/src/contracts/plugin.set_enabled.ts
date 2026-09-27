@@ -15,7 +15,7 @@ export const pluginSetEnabled = registerCapability({
   name: "set_plugin_enabled",
   domain: "plugin",
   description:
-    "Enable or disable a plugin listing. scope='org' toggles the org listing's enabled flag; scope='workspace' upserts/disables an agent.mcp_servers row for this workspace from the org listing.",
+    "Enable or disable a plugin listing. scope='org' toggles the org listing's enabled flag; scope='workspace' upserts/disables an agent.mcp_servers row for this workspace from the org listing. Once the workspace's tools live in its steering repo, enabling a remote plugin the repo does not hold opens a steering PR instead, and the server stays off until that PR merges.",
   mode: "sync",
   surfaces: ["api", "mcp", "agent"],
   agent: { requiresApproval: true, riskLevel: "medium", category: "plugin" },
@@ -39,5 +39,13 @@ export const pluginSetEnabled = registerCapability({
     // upserted agent.mcp_servers row (null on workspace disable, and always null
     // for scope="org").
     workspaceServerId: z.string().nullable(),
+    /**
+     * Set when the workspace's tools live in its steering repo and the enable
+     * opened a steering PR that adds the server. The server stays off until
+     * the PR merges and the next publish connects it.
+     */
+    steeringPr: z
+      .object({ number: z.number().int().positive(), url: z.string().url() })
+      .optional(),
   }),
 });

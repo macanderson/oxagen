@@ -9,7 +9,7 @@ import { mandateList, mandateRow } from "@/test/mandate-views";
 import {
   blindSpotOf,
   CONSEQUENCE_OTHER_MAX,
-  CONSEQUENCE_TAG,
+  IMPACT,
   isChangeable,
   isEffective,
   isUpcoming,
@@ -222,31 +222,31 @@ describe("blindSpotOf", () => {
 // maxLength, truncates — a request the platform would have taken. These pin
 // each copy against the rule it was taken from, quoted in the assertion.
 describe("the contract bounds this app mirrors", () => {
-  /** `consequenceTagSchema`: 2 to 64 characters. Quoted, not imported, so the
+  /** `impactSchema`: 2 to 64 characters. Quoted, not imported, so the
    * assertions below read as the rule rather than as the copy of it. */
-  const CONSEQUENCE_TAG_MAX = 64;
+  const IMPACT_MAX = 64;
 
-  /** `mandateSchema.consequenceTags`: `.min(1).max(16)`. Quoted for the same
+  /** `mandateSchema.impacts`: `.min(1).max(16)`. Quoted for the same
    * reason, and it is the app's copy of the rule that has to hold: the derived
    * `CONSEQUENCE_OTHER_MAX` below is imported, so a change to either ceiling in
    * the source shows up there as a length this file no longer agrees with. */
-  const MAX_CONSEQUENCE_TAGS = 16;
+  const MAX_IMPACTS = 16;
 
-  describe("CONSEQUENCE_TAG mirrors consequenceTagSchema", () => {
+  describe("IMPACT mirrors impactSchema", () => {
     // /^[a-z][a-z0-9_]{1,63}$/ — snake_case, 2 to 64 characters.
     it.each([
       ["ab"],
       ["moves_money"],
       ["ships_code"],
       ["a1_b2"],
-      ["a".repeat(CONSEQUENCE_TAG_MAX)],
+      ["a".repeat(IMPACT_MAX)],
     ])("admits %s", (tag) => {
-      expect(CONSEQUENCE_TAG.test(tag)).toBe(true);
+      expect(IMPACT.test(tag)).toBe(true);
     });
 
     it.each([
       ["a"],
-      ["a".repeat(CONSEQUENCE_TAG_MAX + 1)],
+      ["a".repeat(IMPACT_MAX + 1)],
       ["Moves_money"],
       ["1moves"],
       ["_moves"],
@@ -254,13 +254,13 @@ describe("the contract bounds this app mirrors", () => {
       ["moves money"],
       [""],
     ])("refuses %s (negative)", (tag) => {
-      expect(CONSEQUENCE_TAG.test(tag)).toBe(false);
+      expect(IMPACT.test(tag)).toBe(false);
     });
 
     it("puts its ceiling at 64, the schema's", () => {
-      expect(CONSEQUENCE_TAG_MAX).toBe(64);
-      expect(CONSEQUENCE_TAG.test("a".repeat(64))).toBe(true);
-      expect(CONSEQUENCE_TAG.test("a".repeat(65))).toBe(false);
+      expect(IMPACT_MAX).toBe(64);
+      expect(IMPACT.test("a".repeat(64))).toBe(true);
+      expect(IMPACT.test("a".repeat(65))).toBe(false);
     });
   });
 
@@ -343,13 +343,13 @@ describe("the contract bounds this app mirrors", () => {
   // legal set, or the browser truncates it and the truncated set is still
   // syntactically valid — requested, granted, and covering nothing.
   it("sizes the free consequence field for every tag at its ceiling", () => {
-    const longest = Array.from({ length: MAX_CONSEQUENCE_TAGS }, () =>
-      "a".repeat(CONSEQUENCE_TAG_MAX),
+    const longest = Array.from({ length: MAX_IMPACTS }, () =>
+      "a".repeat(IMPACT_MAX),
     ).join(", ");
     expect(longest.length).toBe(CONSEQUENCE_OTHER_MAX);
     expect(CONSEQUENCE_OTHER_MAX).toBeGreaterThan(256);
     for (const tag of longest.split(", ")) {
-      expect(CONSEQUENCE_TAG.test(tag)).toBe(true);
+      expect(IMPACT.test(tag)).toBe(true);
     }
   });
 });

@@ -63,7 +63,7 @@ function stubRole(roleName: string | null) {
 const classification = {
   sideEffect: "irreversible" as const,
   egress: "third_party" as const,
-  consequenceTags: ["moves_money"],
+  impacts: ["moves_money"],
   measures: {
     amount: {
       path: "$.amount",

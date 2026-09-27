@@ -100,11 +100,27 @@ export const mcpCredentials = mcpSchema.table(
       withTimezone: true,
       mode: "date",
     }),
+    // The <name> in `oxagen:credential/<name>`, the reference a steering
+    // server folder uses. Unique in a workspace. A path that inserts a row
+    // without one gets credential-<12 hex digits> (migration 20260927164200).
+    name: text("name")
+      .notNull()
+      .default(
+        sql`('credential-' || left(replace(gen_random_uuid()::text, '-', ''), 12))`,
+      ),
   },
   (t) => ({
     uniqueListingWs: uniqueIndex("credentials_workspace_listing_uniq").on(
       t.workspaceId,
       t.orgListingId,
+    ),
+    workspaceNameUniq: uniqueIndex("credentials_workspace_name_uniq").on(
+      t.workspaceId,
+      t.name,
+    ),
+    nameCheck: check(
+      "credentials_name_check",
+      sql`${t.name} ~ '^[a-z0-9][a-z0-9-]{0,62}$'`,
     ),
     orgIdx: index("credentials_org_idx").on(t.orgId),
     // OAuth refresh watcher: a 30-min cross-tenant cron scans for expiring
@@ -165,9 +181,24 @@ export const mcpServers = mcpSchema.table(
       mode: "date",
     }),
     lastImportDigest: text("last_import_digest"),
+    // steering when publishing a steering version wrote the row (M13,
+    // packages/handlers/src/mcp-studio/project.ts); legacy when
+    // agent.mcp.register, a plugin install or import_tools wrote it; proposed
+    // when one of those opened a steering PR that adds the server
+    // (packages/agent/src/runtime/steering-pr.ts). A proposed row stays
+    // disabled until the first publish after its PR merges takes it over.
+    // The in-app agent's reader skips steering rows.
+    origin: text("origin").notNull().default("legacy"),
+    // The server folder under tools/servers/ in the steering repo. Set on
+    // every steering row, and on a legacy row the migration PR moves, so the
+    // first publish after that PR merges takes the row over and keeps its id.
+    steeringName: text("steering_name"),
   },
   (t) => ({
     orgIdx: index("mcp_servers_org_idx").on(t.orgId, t.workspaceId),
+    wsSteeringNameUniq: uniqueIndex("mcp_servers_ws_steering_name_uniq")
+      .on(t.workspaceId, t.steeringName)
+      .where(sql`steering_name IS NOT NULL AND deleted_at IS NULL`),
     enabledIdx: index("mcp_servers_enabled_idx").on(t.workspaceId, t.enabled),
     wsListingUniq: uniqueIndex("mcp_servers_ws_listing_uniq")
       .on(t.workspaceId, t.orgListingId)
@@ -182,6 +213,8 @@ export const mcpServers = mcpSchema.table(
     //                    plugin.org.install -> plugin.set_enabled.ts) also
     //                    writes 'sse' — the UI explicitly offers SSE, so it
     //                    MUST be included or that flow starts throwing.
+    //                    openapi, graphql and grpc are the definition
+    //                    sources a steering server folder names (M13).
     //   authStrategy  — agent.mcp.resolve.ts / plugin-types/mcp.ts /
     //                    file-mcp.ts.
     healthStatusCheck: check(
@@ -190,7 +223,7 @@ export const mcpServers = mcpSchema.table(
     ),
     transportTypeCheck: check(
       "mcp_servers_transport_type_check",
-      sql`${t.transportType} IN ('streamable-http', 'sse', 'stdio')`,
+      sql`${t.transportType} IN ('streamable-http', 'sse', 'stdio', 'openapi', 'graphql', 'grpc')`,
     ),
     lastImportCheck: check(
       "mcp_servers_last_import_check",
@@ -199,6 +232,18 @@ export const mcpServers = mcpSchema.table(
     authStrategyCheck: check(
       "mcp_servers_auth_strategy_check",
       sql`${t.authStrategy} IN ('none', 'bearer', 'header')`,
+    ),
+    originCheck: check(
+      "mcp_servers_origin_check",
+      sql`${t.origin} IN ('steering', 'legacy', 'proposed')`,
+    ),
+    steeringNameCheck: check(
+      "mcp_servers_steering_name_check",
+      sql`${t.steeringName} IS NULL OR ${t.steeringName} ~ '^[a-z][a-z0-9_]{0,23}$'`,
+    ),
+    steeringOriginCheck: check(
+      "mcp_servers_steering_origin_check",
+      sql`${t.origin} <> 'steering' OR ${t.steeringName} IS NOT NULL`,
     ),
   }),
 );

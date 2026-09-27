@@ -4,7 +4,7 @@ import {
   type CapabilityHandler,
 } from "@oxagen/oxagen";
 import { toolDeclarationPublish } from "@oxagen/oxagen/contracts/tool.declaration.publish";
-import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classification";
+import { unionImpacts } from "@oxagen/oxagen/contracts/tool.classification";
 import type { Tx } from "@oxagen/database";
 import {
   assertConsequenceRole,
@@ -20,7 +20,7 @@ import { publishTool, type ActiveClassification } from "./lib/tool-registry";
  * (lib/tool-registry.ts), shared with `import_tools`.
  *
  * Roles (INV-29): org Owner or Admin, or workspace Owner or Admin (the
- * contract's defaultRoles). The version's `consequence_tags`, `measures` and
+ * contract's defaultRoles). The version's `impacts`, `measures` and
  * `effect_id_path` are what the mandate gate reads (ADR-059 decision 6), so a
  * publish that changes them against the active version also needs an org
  * role the workspace names for every tag before and after the change
@@ -55,25 +55,25 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
   const workspaceId = ctx.workspaceId;
   const slug = input.name.trim().toLowerCase();
   const classified =
-    input.consequence_tags.length > 0 ||
+    input.impacts.length > 0 ||
     Object.keys(input.measures).length > 0 ||
     input.effect_id_path !== undefined;
   if (classified && getCapability(slug) === undefined) {
     throw new HandlerError({
       code: "conflict",
       reason: "consequence_not_gated",
-      message: `"${slug}" names no capability invoke() dispatches, so the mandate gate never sees its calls; publish it without consequence_tags, measures or effect_id_path`,
+      message: `"${slug}" names no capability invoke() dispatches, so the mandate gate never sees its calls; publish it without impacts, measures or effect_id_path`,
     });
   }
 
   const classificationKey = (c: ActiveClassification) =>
     canonicalJson({
-      consequence_tags: [...new Set(c.consequenceTags)].sort(),
+      impacts: [...new Set(c.impacts)].sort(),
       effect_id_path: c.effectIdPath,
       measures: c.measures,
     });
   const declared: ActiveClassification = {
-    consequenceTags: input.consequence_tags,
+    impacts: input.impacts,
     measures: input.measures,
     effectIdPath: input.effect_id_path ?? null,
     // The incoming declaration carries no classification of its own; the
@@ -86,7 +86,7 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
     tx: Tx,
   ) => {
     const before = active ?? {
-      consequenceTags: [],
+      impacts: [],
       measures: {},
       effectIdPath: null,
       classification: null,
@@ -101,8 +101,8 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
     // could be rewritten by someone not accountable for money.
     const tags = [
       ...new Set([
-        ...unionConsequenceTags(before),
-        ...declared.consequenceTags,
+        ...unionImpacts(before),
+        ...declared.impacts,
       ]),
     ];
     if (tags.length === 0) return;
@@ -129,7 +129,7 @@ export const toolDeclarationPublishHandler: CapabilityHandler<
     source: input.source,
     mcpServerId: null,
     schemaOrigin: "declared",
-    consequenceTags: input.consequence_tags,
+    impacts: input.impacts,
     measures: input.measures,
     effectIdPath: input.effect_id_path ?? null,
     beforeNewVersion: assertClassificationRole,

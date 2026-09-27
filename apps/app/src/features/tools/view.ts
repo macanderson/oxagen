@@ -67,7 +67,7 @@ export type ToolNameStyle = (typeof TOOL_NAME_STYLES)[number];
 
 export type ToolsView = {
   tab: ToolsTab;
-  /** Only on the Tools tab: the consequence tag the chips filter by. */
+  /** Only on the Tools tab: the impact the chips filter by. */
   category: string | null;
   /** Only on the Tools tab: the `mcs_…` id of the provider the rows came from. */
   provider: string | null;
@@ -204,7 +204,7 @@ export function versionLabel(version: ToolVersion): string {
  * anyone saved the form for any reason. One value per line is the one
  * separator a data class cannot itself contain.
  *
- * No de-duplication: the contract permits a repeat here (only consequence tags
+ * No de-duplication: the contract permits a repeat here (only impacts
  * are refined to appear once), and dropping one would edit a record the person
  * did not ask to change.
  */

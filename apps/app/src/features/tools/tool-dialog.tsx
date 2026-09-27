@@ -11,7 +11,7 @@
 // open, so a half-filled form survives a look at another tab.
 //
 // The form sets the four axes the mandate gate and the class kill switches
-// read — risk grade, side effect, egress, consequence tags — plus the data
+// read — risk grade, side effect, egress, impacts — plus the data
 // classes. The version's measures are carried through unchanged: a measure is
 // a JSONPath into the tool's input, authored where the tool is declared or
 // imported, and this page has no safe way to write one.
@@ -140,7 +140,7 @@ function ClassificationForm({
           read("egress"),
           version.classification?.egress ?? "local",
         ),
-        consequenceTags: splitTags(read("consequenceTags")),
+        impacts: splitTags(read("impacts")),
         // One class per line, never split on whitespace: a data class is free
         // text and `customer financial data` is one class, not three.
         dataClasses: splitLines(read("dataClasses")),
@@ -192,15 +192,15 @@ function ClassificationForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-1.5">
           <label
-            htmlFor="consequenceTags"
+            htmlFor="impacts"
             className="text-sm font-medium text-foreground"
           >
-            {t("classify.consequenceTags")}
+            {t("classify.impacts")}
           </label>
           <input
-            id="consequenceTags"
-            name="consequenceTags"
-            defaultValue={(version.classification?.consequenceTags ?? []).join(
+            id="impacts"
+            name="impacts"
+            defaultValue={(version.classification?.impacts ?? []).join(
               " ",
             )}
             placeholder={t("classify.tagsPlaceholder")}

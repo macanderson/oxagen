@@ -8,7 +8,7 @@ import { toolClassificationSet } from "./tool.classification.set";
 const classification = {
   sideEffect: "write",
   egress: "third_party",
-  consequenceTags: ["communicates_externally"],
+  impacts: ["communicates_externally"],
   measures: { recipients: { path: "$.to", type: "count", unit: "recipients" } },
   dataClasses: [],
 };
@@ -38,7 +38,7 @@ describe("set_tool_classification", () => {
       classification,
       reason: "sends mail to customers",
     });
-    expect(parsed.classification.consequenceTags).toEqual([
+    expect(parsed.classification.impacts).toEqual([
       "communicates_externally",
     ]);
   });
