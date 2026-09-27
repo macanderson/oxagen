@@ -1573,6 +1573,64 @@ describe("merge_context_pr", () => {
     );
   });
 
+  it("team mode: an approval does not carry across a push the queue did not make, so the merge waits for an approval of the new head", async () => {
+    const h = harness();
+    const id = await opened(h);
+    h.roleOf.set("u_member", { org: null, workspace: "Member" });
+    h.github.approvals = [
+      { userId: "u_member", login: "member", commitSha: "head1" },
+    ];
+    // The author then edits the record on the branch and stamps it again,
+    // and the checks pass on the new head.
+    const committed = parseChecked(
+      (await h.github.readFile(REPO, PATH, BRANCH))!,
+    );
+    if (!committed.ok) throw new Error(committed.reason);
+    const edited = {
+      ...committed.file.raw[0]!,
+      provenance: { source_kind: "proposal", source_uri: "oxagen:proposal/x" },
+    };
+    h.github.commit(
+      BRANCH,
+      PATH,
+      `${stringify({
+        schema: "context-record/v0.1",
+        set_id: committed.file.set_id,
+        record: [{ ...edited, ...stampRecordObject(edited) }],
+      })}\n`,
+    );
+    const rerun = await createOpenContextPrHandler(h)(
+      { proposalId: id },
+      ctx(),
+    );
+    expect(rerun.status).toBe("checks_passed");
+    expect(rerun.pr?.headSha).toBe("head2");
+
+    const merge = createMergeContextPrHandler(h);
+    await expect(
+      merge({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "approval_required",
+      message: expect.stringContaining("approves it at head2."),
+    });
+    expect(h.github.updates).toHaveLength(0);
+    expect(h.github.merges).toHaveLength(0);
+    expect(h.store.ledger).toHaveLength(0);
+
+    h.github.approvals = [
+      { userId: "u_member", login: "member", commitSha: "head2" },
+    ];
+    const out = await merge({ proposalId: id }, ctx({ userId: REVIEWER }));
+    expect(out.status).toBe("merged");
+    expect(h.github.merges).toEqual([
+      expect.objectContaining({ number: 519, sha: "head2" }),
+    ]);
+    expect(h.github.merges[0]!.commitMessage).toMatch(
+      /^Oxagen-Approved-By: u_member\n/,
+    );
+  });
+
   it("lets an owner, or a merger holding merge_without_review, merge without an approval, and the trailer says nobody reviewed it", async () => {
     const owner = harness();
     const ownerPr = await opened(owner);

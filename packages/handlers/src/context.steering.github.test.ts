@@ -1129,21 +1129,28 @@ describe("the GitHub seam's merge-queue calls", () => {
     });
   });
 
-  it("merges main into the branch and answers the new head, or the old one when nothing changed", async () => {
+  it("merges the main head it was given into the branch and answers the new head and its parents, or the old head when nothing changed", async () => {
     let merged: unknown = { sha: "u1", parents: [{ sha: "h1" }, { sha: "m1" }] };
     const getBranch = vi.fn(async () => ({ name: "b", sha: "h1" }));
     const { gh, repo, calls } = await restSeam(
       { [`POST ${REPO_PATH}/merges`]: () => merged },
       fakeClient({ getBranch }),
     );
-    const args = { number: 7, branch: "steering/ctx.rule", expectedHead: "h1" };
+    const args = {
+      number: 7,
+      branch: "steering/ctx.rule",
+      expectedHead: "h1",
+      base: "m1",
+    };
     await expect(gh.updateBranch(repo, args)).resolves.toEqual({
       headSha: "u1",
+      parents: ["h1", "m1"],
     });
-    expect(calls[0]!.body).toEqual({ base: "steering/ctx.rule", head: "main" });
+    expect(calls[0]!.body).toEqual({ base: "steering/ctx.rule", head: "m1" });
     merged = undefined;
     await expect(gh.updateBranch(repo, args)).resolves.toEqual({
       headSha: "h1",
+      parents: null,
     });
   });
 
@@ -1154,7 +1161,12 @@ describe("the GitHub seam's merge-queue calls", () => {
       { [`POST ${REPO_PATH}/merges`]: () => merged },
       fakeClient({ getBranch }),
     );
-    const args = { number: 7, branch: "steering/ctx.rule", expectedHead: "h1" };
+    const args = {
+      number: 7,
+      branch: "steering/ctx.rule",
+      expectedHead: "h1",
+      base: "m1",
+    };
     await expect(gh.updateBranch(repo, args)).rejects.toMatchObject({
       code: "conflict",
       reason: "head_moved",
@@ -1167,7 +1179,12 @@ describe("the GitHub seam's merge-queue calls", () => {
 
   it("refuses a branch update on a moved head, a conflict, or any other refusal", async () => {
     const getBranch = vi.fn(async () => ({ name: "b", sha: "h2" }));
-    const args = { number: 7, branch: "steering/ctx.rule", expectedHead: "h1" };
+    const args = {
+      number: 7,
+      branch: "steering/ctx.rule",
+      expectedHead: "h1",
+      base: "m1",
+    };
     const moved = await restSeam({}, fakeClient({ getBranch }));
     await expect(moved.gh.updateBranch(moved.repo, args)).rejects.toMatchObject(
       { reason: "head_moved" },

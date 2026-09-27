@@ -1093,19 +1093,26 @@ export class FakeGitHub implements SteeringGitHub {
     return this.lineage(this.shaOf(head)).includes(ancestor);
   }
   /**
-   * Merge the production branch into the PR's branch, as GitHub's "Update
-   * branch" does. Each path the branch changed since the merge base keeps the
-   * branch's version; a path both sides changed differently is a conflict.
+   * Merge `base`, a production branch head, into the PR's branch, as GitHub's
+   * merges endpoint does. Each path the branch changed since the merge base
+   * keeps the branch's version; a path both sides changed differently is a
+   * conflict.
    */
   async updateBranch(
     repo: SteeringRepository,
-    args: { number: number; branch: string; expectedHead: string },
-  ) {
+    args: {
+      number: number;
+      branch: string;
+      expectedHead: string;
+      base: string;
+    },
+  ): Promise<{ headSha: string; parents: string[] | null }> {
     const head = this.heads.get(args.branch);
     if (head !== args.expectedHead) return this.headMovedOn(args.branch);
-    const main = this.shaOf(repo.defaultBranch);
-    if (this.lineage(head).includes(main)) return { headSha: head };
-    const mergeBase = this.mergeBase(repo.defaultBranch, head);
+    const main = args.base;
+    if (this.lineage(head).includes(main))
+      return { headSha: head, parents: null };
+    const mergeBase = this.mergeBase(main, head);
     const baseTree = mergeBase
       ? this.tree(mergeBase)
       : new Map<string, string>();
@@ -1140,7 +1147,7 @@ export class FakeGitHub implements SteeringGitHub {
     this.updates.push({ branch: args.branch, from: head, to: sha });
     const pr = this.pulls.find((p) => p.number === args.number);
     if (pr && pr.state === "open") pr.headSha = sha;
-    return { headSha: sha };
+    return { headSha: sha, parents: [head, main] };
   }
   async resetBranch(
     _repo: SteeringRepository,

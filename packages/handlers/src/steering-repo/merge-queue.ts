@@ -171,12 +171,15 @@ export interface ApprovalInput {
   number: number;
   mode: GovernanceMode;
   /**
-   * The head the checks passed on before any update. An approval of another
-   * head counts for nothing. An update keeps the approval, because it adds
-   * only the production branch, and on GitHub updateBranch refuses one that
-   * would add anything else.
+   * The heads an approval counts at, oldest first. The first is the head the
+   * checks passed on. Each one after it is a merge commit the queue made to
+   * bring the branch up to date: its first parent is the head before it, and
+   * its second is the production branch head. The PR's own diff is the same
+   * at each, so an approval of one carries to the rest. An approval of any
+   * other commit counts for nothing, so a push by anyone else needs a fresh
+   * approval.
    */
-  checkedHead: string;
+  heads: readonly string[];
   authorUserId: string | null;
   merger: MergeActor;
   /** True when the user holds a role in the workspace or its organization. */
@@ -189,11 +192,11 @@ export interface ApprovalInput {
  * The approvals a merge carries, or `approval_required`.
  *
  * In solo mode no approval is needed and the merger is the approver. In team
- * and regulated mode the PR needs an approval on the host, at the head the
- * checks passed on, by a workspace member other than the author whose host
- * account is linked to an Oxagen user. Without one, an owner of the
- * organization or workspace, or a member holding merge_without_review, may
- * still merge, and the ledger and trailers record that nobody reviewed it.
+ * and regulated mode the PR needs an approval on the host, at one of
+ * `heads`, by a workspace member other than the author whose host account is
+ * linked to an Oxagen user. Without one, an owner of the organization or
+ * workspace, or a member holding merge_without_review, may still merge, and
+ * the ledger and trailers record that nobody reviewed it.
  */
 export async function mergeApproval(
   input: ApprovalInput,
@@ -208,7 +211,10 @@ export async function mergeApproval(
   )) {
     const userId = approval.userId;
     if (userId === null || approvedBy.includes(userId)) continue;
-    if (approval.commitSha !== null && approval.commitSha !== input.checkedHead)
+    if (
+      approval.commitSha !== null &&
+      !input.heads.includes(approval.commitSha)
+    )
       continue;
     if (userId === input.authorUserId) continue;
     if (!(await input.isMember(userId))) continue;
@@ -223,7 +229,7 @@ export async function mergeApproval(
   throw new HandlerError({
     code: "forbidden",
     reason: "approval_required",
-    message: `Governance mode ${input.mode} merges a steering PR only after a workspace member other than the author approves it at ${input.checkedHead}. An owner, or a member with merge_without_review, may merge without one.`,
+    message: `Governance mode ${input.mode} merges a steering PR only after a workspace member other than the author approves it at ${input.heads[input.heads.length - 1]}. An owner, or a member with merge_without_review, may merge without one.`,
   });
 }
 
@@ -371,11 +377,14 @@ export interface LandInput {
   checks: readonly string[];
   layout: SteeringLayout;
   /**
-   * The approvals the merge carries, or a refusal. It runs before the first
-   * attempt and again after each update, so the stamp and the trailers name
-   * the approvals that stand on the head that merges.
+   * The approvals the merge carries at any of `heads`, or a refusal. `heads`
+   * starts as the checked head. Each update that merges the production branch
+   * head into the last of them adds its merge commit. Any other update starts
+   * the list again at the new head. It runs before the first attempt and
+   * again after each update, so the stamp and the trailers name the approvals
+   * that stand on the head that merges.
    */
-  approve: () => Promise<MergeApproval>;
+  approve: (heads: readonly string[]) => Promise<MergeApproval>;
   mergedBy: string;
   commitTitle: string;
   /** The published version the merge becomes. */
@@ -402,11 +411,33 @@ export interface Landed {
 export const LAND_ATTEMPTS = 3;
 
 /**
+ * The heads an approval counts at once an update moved the branch off the
+ * last of `heads`. A merge commit whose first parent is that head and whose
+ * second is `main` leaves the PR's own diff unchanged, so it joins the list.
+ * Any other new head starts the list again, so it needs a fresh approval.
+ */
+function headsAfterUpdate(
+  heads: string[],
+  main: string,
+  update: { headSha: string; parents: string[] | null },
+): string[] {
+  const last = heads[heads.length - 1];
+  // The branch already held `main`: nothing moved.
+  if (update.headSha === last) return heads;
+  const parents = update.parents ?? [];
+  const merged =
+    parents.length === 2 && parents[0] === last && parents[1] === main;
+  return merged ? [...heads, update.headSha] : [update.headSha];
+}
+
+/**
  * Merge one steering PR at the head of the queue.
  *
  * 1. Read the production branch. When the PR's head does not hold it, bring
  *    the branch up to date, run the checks again on the new head, and read
- *    the approvals again.
+ *    the approvals again. An approval carries onto the new head only when
+ *    that head is a merge commit of the approved head and the production
+ *    branch head, so the PR's own diff is unchanged.
  * 2. In the steering layout, push the stamp commit and post the required
  *    check on it, naming the commit the checks ran on.
  * 3. Read the production branch again. When it moved, point the branch back
@@ -425,8 +456,9 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
   const { host, repo } = input;
   const attempts = input.maxAttempts ?? LAND_ATTEMPTS;
   let head = input.checkedHead;
+  let heads: string[] = [head];
   let checks = input.checks;
-  let approval = await input.approve();
+  let approval = await input.approve(heads);
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const main = await host.branchHead(repo, repo.defaultBranch);
     if (main === null) {
@@ -437,13 +469,14 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
       });
     }
     if (!(await host.holdsCommit(repo, head, main))) {
-      head = (
-        await host.updateBranch(repo, {
-          number: input.number,
-          branch: input.branch,
-          expectedHead: head,
-        })
-      ).headSha;
+      const update = await host.updateBranch(repo, {
+        number: input.number,
+        branch: input.branch,
+        expectedHead: head,
+        base: main,
+      });
+      heads = headsAfterUpdate(heads, main, update);
+      head = update.headSha;
       const again = await input.recheck(head);
       if (!again.ok) {
         throw new HandlerError({
@@ -455,7 +488,7 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
       checks = again.checks;
       // A reviewer may withdraw while the update runs, and the host may drop
       // an approval when the branch moves.
-      approval = await input.approve();
+      approval = await input.approve(heads);
     }
 
     // Any failure after the stamp lands drops it, so the branch goes back to

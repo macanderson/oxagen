@@ -273,7 +273,7 @@ describe("mergeApproval", () => {
       repo: REPO,
       number: pr.number,
       mode: "team",
-      checkedHead: pr.head,
+      heads: [pr.head],
       authorUserId: AUTHOR,
       merger: { userId: MEMBER, orgRole: null, workspaceRole: "Member" },
       isMember: async (userId) => userId !== GUEST,
@@ -303,14 +303,15 @@ describe("mergeApproval", () => {
   it("ignores strangers, the author, guests, and approvals of an older head", async () => {
     const gh = steeringRepo();
     const args = await input(gh);
+    const head = args.heads[0]!;
     gh.approvals = [
-      { userId: null, login: "stranger", commitSha: args.checkedHead },
-      { userId: AUTHOR, login: "author", commitSha: args.checkedHead },
+      { userId: null, login: "stranger", commitSha: head },
+      { userId: AUTHOR, login: "author", commitSha: head },
       { userId: MEMBER, login: "member", commitSha: "an-older-head" },
-      { userId: GUEST, login: "guest", commitSha: args.checkedHead },
+      { userId: GUEST, login: "guest", commitSha: head },
       // GitLab does not say which head was approved, so the approval stands.
       { userId: REVIEWER, login: "reviewer", commitSha: null },
-      { userId: REVIEWER, login: "reviewer", commitSha: args.checkedHead },
+      { userId: REVIEWER, login: "reviewer", commitSha: head },
     ];
     await expect(mergeApproval(args)).resolves.toEqual({
       approvedBy: [REVIEWER],
@@ -355,6 +356,26 @@ describe("mergeApproval", () => {
     await expect(refusal(mergeApproval(await input(gh)))).resolves.toMatchObject({
       code: "forbidden",
       reason: "approval_required",
+    });
+  });
+
+  it("counts an approval at any of the heads, and a refusal names the last one", async () => {
+    const gh = steeringRepo();
+    const args = await input(gh);
+    const heads = [args.heads[0]!, "queue-merge"];
+    gh.approvals = [
+      { userId: REVIEWER, login: "reviewer", commitSha: "queue-merge" },
+    ];
+    await expect(mergeApproval({ ...args, heads })).resolves.toEqual({
+      approvedBy: [REVIEWER],
+      withoutReview: false,
+    });
+    gh.approvals = [{ userId: REVIEWER, login: "reviewer", commitSha: "a-push" }];
+    await expect(
+      refusal(mergeApproval({ ...args, heads })),
+    ).resolves.toMatchObject({
+      reason: "approval_required",
+      message: expect.stringContaining("approves it at queue-merge."),
     });
   });
 });
@@ -691,7 +712,7 @@ describe("landSteeringPr: when main moves", () => {
     const pr = await openPr(gh, "a-intel.platform.release-notes");
     gh.commit("main", "README.md", "moved\n");
     const approve = vi
-      .fn<() => Promise<MergeApproval>>()
+      .fn<(heads: readonly string[]) => Promise<MergeApproval>>()
       .mockResolvedValueOnce({ approvedBy: [REVIEWER], withoutReview: false })
       .mockResolvedValueOnce({
         approvedBy: [REVIEWER, MEMBER],
@@ -708,18 +729,77 @@ describe("landSteeringPr: when main moves", () => {
     );
   });
 
+  describe("the heads an approval counts at", () => {
+    type Update = { headSha: string; parents: string[] | null };
+    /** Land a PR after main moved, with `answer` in place of the update. */
+    async function approvedHeads(
+      answer?: (
+        args: { expectedHead: string },
+        update: () => Promise<Update>,
+      ) => Promise<Update>,
+    ) {
+      const gh = steeringRepo();
+      const pr = await openPr(gh, "a-intel.platform.release-notes");
+      gh.commit("main", "README.md", "moved\n");
+      if (answer) {
+        const update = gh.updateBranch.bind(gh);
+        gh.updateBranch = (repo, args) =>
+          answer(args, () => update(repo, args));
+      }
+      const approve = vi.fn(async (_heads: readonly string[]) => ({
+        approvedBy: [REVIEWER],
+        withoutReview: false,
+      }));
+      await land(gh, pr, { approve });
+      return {
+        pr,
+        updated: gh.updates[0]?.to,
+        calls: approve.mock.calls.map(([heads]) => heads),
+      };
+    }
+
+    it("adds the merge commit the update made on top of the approved head", async () => {
+      const { pr, updated, calls } = await approvedHeads();
+      expect(calls).toEqual([[pr.head], [pr.head, updated]]);
+    });
+
+    it("starts again at a new head that is no merge of the approved head and main", async () => {
+      // GitLab rebases, which makes no merge commit.
+      const rebased = await approvedHeads(async (_args, update) => ({
+        ...(await update()),
+        parents: null,
+      }));
+      expect(rebased.calls).toEqual([[rebased.pr.head], [rebased.updated]]);
+      // A merge of another production branch head.
+      const other = await approvedHeads(async (args, update) => ({
+        ...(await update()),
+        parents: [args.expectedHead, "another-main"],
+      }));
+      expect(other.calls).toEqual([[other.pr.head], [other.updated]]);
+    });
+
+    it("keeps the heads when the update answers the head it was given", async () => {
+      const { pr, updated, calls } = await approvedHeads(async (args) => ({
+        headSha: args.expectedHead,
+        parents: null,
+      }));
+      expect(updated).toBeUndefined();
+      expect(calls).toEqual([[pr.head], [pr.head]]);
+    });
+  });
+
   it("refuses when the approval is withdrawn while the branch is brought up to date", async () => {
     const gh = steeringRepo();
     const pr = await openPr(gh, "a-intel.platform.release-notes");
     gh.approvals = [{ userId: REVIEWER, login: "reviewer", commitSha: pr.head }];
     gh.commit("main", "README.md", "moved\n");
-    const approve = () =>
+    const approve = (heads: readonly string[]) =>
       mergeApproval({
         host: gh,
         repo: REPO,
         number: pr.number,
         mode: "team",
-        checkedHead: pr.head,
+        heads,
         authorUserId: AUTHOR,
         merger: { userId: MEMBER, orgRole: null, workspaceRole: "Member" },
         isMember: async () => true,

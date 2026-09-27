@@ -746,12 +746,15 @@ describe("the GitLab seam's merge-queue calls", () => {
       number: mr.number,
       branch: "b",
       expectedHead: head,
+      base: main,
     });
     expect(api.rebases).toEqual([mr.number]);
     expect(sleep).toHaveBeenCalledTimes(2);
     expect(sleep).toHaveBeenCalledWith(1000);
     expect(out.headSha).toBe(api.branches.get("b"));
     expect(out.headSha).not.toBe(head);
+    // A rebase makes no merge commit, so no approval carries onto it.
+    expect(out.parents).toBeNull();
     await expect(seam.holdsCommit(repo, out.headSha, main)).resolves.toBe(true);
     expect(Object.fromEntries(api.tree(out.headSha))).toEqual({
       a: "1",
@@ -766,6 +769,7 @@ describe("the GitLab seam's merge-queue calls", () => {
         number: mr.number,
         branch: "b",
         expectedHead: "c0",
+        base: "main",
       }),
     ).rejects.toMatchObject({ reason: "head_moved" });
     expect(api.rebases).toEqual([]);
@@ -779,6 +783,7 @@ describe("the GitLab seam's merge-queue calls", () => {
         number: mr.number,
         branch: "b",
         expectedHead: head,
+        base: "main",
       }),
     ).rejects.toMatchObject({
       code: "conflict",
@@ -796,6 +801,7 @@ describe("the GitLab seam's merge-queue calls", () => {
         number: mr.number,
         branch: "b",
         expectedHead: head,
+        base: "main",
       }),
     ).rejects.toMatchObject({
       reason: "update_conflict",
@@ -1019,7 +1025,12 @@ describe("the host dispatcher", () => {
       files: [],
     });
     await host.holdsCommit(repo, "b", "a");
-    await host.updateBranch(repo, { number: 1, branch: "b", expectedHead: "a" });
+    await host.updateBranch(repo, {
+      number: 1,
+      branch: "b",
+      expectedHead: "a",
+      base: "c",
+    });
     await host.resetBranch(repo, "b", { from: "b", to: "a" });
     await host.listApprovals(repo, 1);
     await host.recordDeployment(repo, {

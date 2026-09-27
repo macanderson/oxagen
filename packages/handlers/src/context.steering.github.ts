@@ -281,12 +281,23 @@ export interface SteeringHost {
    * Bring the steering PR's branch up to date with the production branch.
    * Refuses with `head_moved` when the branch is not at `expectedHead`, and
    * with `update_conflict` when the production branch does not merge in
-   * cleanly. Answers the branch's new head.
+   * cleanly. Answers the branch's new head. When the update made a merge
+   * commit, it also answers that commit's parents in order.
+   *
+   * GitHub merges `base`, the production branch head Oxagen read, so the
+   * parents are `expectedHead` and then `base`. GitLab rebases onto the
+   * production branch as it is when the rebase runs. A rebase makes no merge
+   * commit, so `parents` is null there.
    */
   updateBranch(
     repo: SteeringRepository,
-    args: { number: number; branch: string; expectedHead: string },
-  ): Promise<{ headSha: string }>;
+    args: {
+      number: number;
+      branch: string;
+      expectedHead: string;
+      base: string;
+    },
+  ): Promise<{ headSha: string; parents: string[] | null }>;
   /**
    * Point `branch` back at `to` while it still points at `from`, discarding
    * the commits between them. The answer is false when the branch has moved
@@ -1245,16 +1256,18 @@ export function createSteeringGitHub(
           { sha: string; parents?: { sha: string }[] } | undefined
         >("POST", `${path}/merges`, {
           base: args.branch,
-          head: repo.defaultBranch,
+          // The sha, not the branch name, so the second parent is the head
+          // Oxagen read even when the production branch moves meanwhile.
+          head: args.base,
         });
         // 204: the branch already holds the production branch.
-        if (!out.data) return { headSha: args.expectedHead };
+        if (!out.data) return { headSha: args.expectedHead, parents: null };
         // GitHub merges into the branch as it is when the request lands. A
         // push after the read above becomes the first parent, and the
         // approvals would carry onto a commit nobody reviewed.
-        if (out.data.parents?.[0]?.sha !== args.expectedHead)
-          throw headMoved(args.branch);
-        return { headSha: out.data.sha };
+        const parents = out.data.parents?.map((p) => p.sha) ?? [];
+        if (parents[0] !== args.expectedHead) throw headMoved(args.branch);
+        return { headSha: out.data.sha, parents };
       } catch (err) {
         if (err instanceof GitHubApiError && err.status === 409)
           throw new HandlerError({

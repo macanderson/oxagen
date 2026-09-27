@@ -765,7 +765,8 @@ export function createSteeringGitLab(
             message: `The steering PR's branch ${args.branch} moved while Oxagen was merging it. Merge again to check the new head.`,
           });
         // GitLab brings a merge request up to date by rebasing it onto the
-        // target branch. The rebase runs in the background, so poll it.
+        // target branch as it is now, so it cannot pin `args.base`. The
+        // rebase runs in the background, so poll it.
         await rest.request(
           "PUT",
           `${path}/merge_requests/${args.number}/rebase`,
@@ -786,7 +787,8 @@ export function createSteeringGitLab(
                 reason: "update_conflict",
                 message: `${repo.defaultBranch} does not rebase cleanly under ${args.branch}: ${mr.data.merge_error}. Resolve the conflict on the steering PR, then merge again.`,
               });
-            return { headSha: mr.data.sha ?? args.expectedHead };
+            // A rebase makes no merge commit, so it has no parents to answer.
+            return { headSha: mr.data.sha ?? args.expectedHead, parents: null };
           }
           await deps.sleep(1000);
         }

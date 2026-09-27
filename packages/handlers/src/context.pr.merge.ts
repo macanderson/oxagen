@@ -245,15 +245,16 @@ export function createMergeContextPrHandler(
           checkedHead: recorded.headSha,
           checks: passedChecks(row),
           layout,
-          // Approvals count at the head the author pushed. landSteeringPr
-          // reads them again after each update.
-          approve: () =>
+          // Approvals count at the head the author pushed and at each merge
+          // the queue makes on top of it. landSteeringPr reads them again
+          // after each update.
+          approve: (heads) =>
             mergeApproval({
               host: deps.github,
               repo,
               number: prNumber,
               mode,
-              checkedHead: recorded.headSha,
+              heads,
               authorUserId: recorded.createdById,
               merger,
               isMember: async (uid) => {
