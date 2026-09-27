@@ -177,18 +177,19 @@ describe("context carry", () => {
       ]),
     });
     expect(rest).toEqual([]);
+    // Each carry saves the 2,000 tokens past a 4,000-token page.
     expect(finding).toMatchObject({
       kind: "unpaged_results",
       level: "tool",
       subject: TOOL,
-      savingMicros: 3n * 6_000n * 3n,
+      savingMicros: 3n * BigInt(6_000 - PAGE_TOKENS) * 3n,
       confidence: "high",
     });
     expect(finding!.evidence).toMatchObject({
       calls: 3,
       coveredCalls: 3,
       measuredTokens: 18_000,
-      counterfactualTokens: 0,
+      counterfactualTokens: 3 * PAGE_TOKENS,
     });
     expect(finding!.evidence.frames).toEqual({
       [r.runId]: { seqs: [{ seq: "1" }], total: 1 },
@@ -210,6 +211,21 @@ describe("context carry", () => {
           frames: new Map([[r.runId, frames]]),
         }),
       ).toEqual([]);
+  });
+
+  it("writes nothing when the tokens past the page cost under a cent", () => {
+    // One request carries the result: 2,000 tokens past the page at 3 micros
+    // each is 6,000 micros, under MIN_SAVING_MICROS.
+    const r = run();
+    expect(
+      detect({
+        runs: [r],
+        toolCalls: [call(r, 1, 6_000)],
+        frames: new Map([
+          [r.runId, [frame(r, 0.5, 40_000), frame(r, 2, 47_000)]],
+        ]),
+      }),
+    ).toEqual([]);
   });
 
   it("keeps carrying through a drop smaller than the result, and to the end of the run", () => {
@@ -253,6 +269,7 @@ describe("context carry", () => {
     expect(finding!.evidence).toMatchObject({
       calls: 5,
       measuredTokens: 6_000 * 3 + 8_000 * 2,
+      counterfactualTokens: 5 * PAGE_TOKENS,
     });
     expect(finding!.evidence.frames?.[r.runId]?.total).toBe(2);
     expect(finding!.why).toBe(
@@ -272,10 +289,12 @@ describe("context carry", () => {
   });
 
   it("counts only the call's own chain", () => {
+    // One carry of a 10,000-token result saves 6,000 tokens past the page,
+    // which clears MIN_SAVING_MICROS.
     const r = run();
     const [rootFinding] = detect({
       runs: [r],
-      toolCalls: [call(r, 1, 6_000)],
+      toolCalls: [call(r, 1, 10_000)],
       frames: new Map([
         [
           r.runId,
@@ -283,7 +302,7 @@ describe("context carry", () => {
             frame(r, 0.5, 40_000, null),
             frame(r, 2, 9_000, SUBAGENT),
             frame(r, 3, 16_000, SUBAGENT),
-            frame(r, 4, 47_000, null),
+            frame(r, 4, 51_000, null),
           ],
         ],
       ]),
@@ -293,14 +312,14 @@ describe("context carry", () => {
     const s = run();
     const [subagentFinding] = detect({
       runs: [s],
-      toolCalls: [call(s, 1, 6_000, { sessionUuid: SUBAGENT })],
+      toolCalls: [call(s, 1, 10_000, { sessionUuid: SUBAGENT })],
       frames: new Map([
         [
           s.runId,
           [
             frame(s, 0.5, 9_000, SUBAGENT),
             frame(s, 2, 40_000, null),
-            frame(s, 3, 16_000, SUBAGENT),
+            frame(s, 3, 20_000, SUBAGENT),
             frame(s, 4, 47_000, null),
           ],
         ],
@@ -334,21 +353,22 @@ describe("context carry", () => {
     expect(detect({ runs: [r], toolCalls: [call(r, 1, 6_000)] })).toEqual([]);
   });
 
-  it("prices each carry at the run's cache read price", () => {
-    // Cache reads cost 0.3 micros a token here, a tenth of uncached input.
+  it("prices each carry and its page at the run's cache read price", () => {
+    // Cache reads cost 0.3 micros a token here, a tenth of uncached input. A
+    // carry of 15,000 tokens costs 4,500 micros, and its page costs 1,200.
     const r = run({ cacheRead: { tokens: 100_000, micros: 30_000n } });
     const [finding] = detect({
       runs: [r],
-      toolCalls: [call(r, 1, 10_000)],
+      toolCalls: [call(r, 1, 15_000)],
       frames: new Map([
         [
           r.runId,
-          [0.5, 2, 3, 4, 5].map((at, i) => frame(r, at, 40_000 + i * 11_000)),
+          [0.5, 2, 3, 4, 5].map((at, i) => frame(r, at, 40_000 + i * 16_000)),
         ],
       ]),
     });
     expect(finding!.evidence.calls).toBe(4);
-    expect(finding!.savingMicros).toBe(4n * 3_000n);
+    expect(finding!.savingMicros).toBe(4n * (4_500n - 1_200n));
   });
 });
 

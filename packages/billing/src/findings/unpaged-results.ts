@@ -2,11 +2,11 @@
  * Unpaged results (detector 5, context carry). A tool result stays in the
  * context until the context sheds it, and every later request on the call's
  * chain re-reads it. For a result over `CARRY_RESULT_TOKENS`, the finding
- * prices each of those re-reads at the run's read price, against nothing: a
- * paged result, an earlier compaction, or a subagent would each keep most of
- * it out. It prices a part of a request, so it claims no frame (ADR-208,
- * counting rule 2). A call a repeat finding can cite is left to that finding,
- * whether or not its request counted.
+ * prices each of those re-reads at the run's read price, against a page of
+ * `PAGE_TOKENS` at the same price: the fix pages the result, and the page
+ * stays in the context. It prices a part of a request, so it claims no frame
+ * (ADR-208, counting rule 2). A call a repeat finding can cite is left to
+ * that finding, whether or not its request counted.
  *
  * Each re-read is one cited item, so `evidence.calls` counts re-reads, and a
  * result cites its call's frame once. The count needs the run's model-call
@@ -119,15 +119,22 @@ function chainsOf(
   return out;
 }
 
-/** One re-read of a result at the run's read price, against nothing. */
+/**
+ * One re-read of a result at the run's read price, against a re-read of one
+ * page at that price. `CARRY_RESULT_TOKENS` is above `PAGE_TOKENS`, so every
+ * carry saves the tokens past the page.
+ */
 function carryMeasure(price: InputPrice | null, tokens: number): Measure {
   return {
     measuredTokens: tokens,
-    counterfactualTokens: 0,
+    counterfactualTokens: PAGE_TOKENS,
     micros:
       price === null
         ? null
-        : { measured: priceInputTokens(price, tokens), counterfactual: 0n },
+        : {
+            measured: priceInputTokens(price, tokens),
+            counterfactual: priceInputTokens(price, PAGE_TOKENS),
+          },
   };
 }
 
