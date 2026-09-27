@@ -71,8 +71,20 @@ export const MCP_STUDIO_SCHEMAS: readonly McpStudioSchemaEntry[] = [
   },
 ];
 
-/** Where the published schemas are committed: packages/mcp-studio/schemas. */
-export const SCHEMAS_DIR = fileURLToPath(new URL("../../schemas", import.meta.url));
+/**
+ * Where the published schemas are committed: packages/mcp-studio/schemas.
+ *
+ * Built with path.join, not `new URL("../../schemas", import.meta.url)`. The
+ * app's bundler reads that URL form as an asset import and cannot resolve a
+ * directory, so the app build fails once the app imports this package, as the
+ * steering publisher does through @oxagen/steering-bundle.
+ */
+export const SCHEMAS_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "schemas",
+);
 
 /** The draft every published schema follows. */
 export const JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema";
