@@ -15,9 +15,11 @@ import { describeHarness } from "./credential";
 import { tachoHookPresence } from "../host/settings-writer";
 import { stellaHookPresence } from "../host/stella-writer";
 import { Wal } from "../host/wal";
+import { describeAgent, listAgents } from "../host/agents";
 import { isBrokerableHarness, isModelRoutedHarness } from "../wire";
 import { type CliDeps, cursorAppFacts } from "./deps";
 import { CURSOR_COVERAGE_NOTE, wrappedCursor } from "./detect";
+import { depsForAgent } from "./agent-deps";
 
 export interface StatusOptions {
   json?: boolean;
@@ -130,7 +132,20 @@ export interface StatusReport {
    * not enrolled here. `tacho status` exits 1 when `healthy` is false.
    */
   shipping?: ShippingHealth;
+  /**
+   * Every agent on this machine, one report each, oldest enrollment first
+   * (ADR-203). Empty when nothing is enrolled. The rest of this report
+   * repeats the first live one, so a reader that knows one enrollment still
+   * reads a working agent.
+   */
+  enrollments?: EnrollmentStatus[];
 }
+
+/** One agent's report, with its id and the directory it lives in. */
+export type EnrollmentStatus = Omit<StatusReport, "enrollments"> & {
+  id: string;
+  dir: string;
+};
 
 /**
  * How long events may wait with nothing shipped before the host is called
@@ -279,24 +294,58 @@ export async function status(
   options: StatusOptions,
   deps: CliDeps,
 ): Promise<StatusReport> {
+  const agents = listAgents(deps.paths).map((agent) => ({
+    agent,
+    deps: depsForAgent(deps, agent),
+  }));
+  const reports: StatusReport[] = [];
+  for (const { deps: bound } of agents) reports.push(await agentStatus(bound));
+  // With no agent, the paths the command started with report that this
+  // machine is not enrolled.
+  const primary =
+    reports.find((entry) => entry.enrolled) ??
+    reports[0] ??
+    (await agentStatus(deps));
+  const report: StatusReport = {
+    ...primary,
+    enrollments: reports.map((entry, index) => ({
+      id: agents[index]?.agent.id ?? "",
+      dir: agents[index]?.agent.paths.dir ?? "",
+      ...entry,
+    })),
+  };
+  if (options.json === true) {
+    deps.out(JSON.stringify(report, null, 2));
+    return report;
+  }
+  if (agents.length <= 1) {
+    printStatus(primary, agents[0]?.deps ?? deps);
+    return report;
+  }
+  deps.out(`This machine holds ${agents.length} enrollments.`);
+  for (const [index, { agent, deps: bound }] of agents.entries()) {
+    deps.out("");
+    deps.out(`Agent       ${describeAgent(agent)} in ${agent.paths.dir}`);
+    printStatus(reports[index] as StatusReport, bound);
+  }
+  return report;
+}
+
+/**
+ * One agent's report, read through `deps` bound to that agent: its own
+ * host.json, daemon, WAL and credential store, and the harness files it
+ * hooks.
+ */
+async function agentStatus(deps: CliDeps): Promise<StatusReport> {
   // Lenient: `status` is what a person runs when something is wrong, so a
   // host.json that does not validate is a finding to print, not a throw.
   const read = readHostFileLenient(deps.paths.hostFile);
   const host = read.host;
-  if (host === undefined) {
-    const report: StatusReport = {
+  if (host === undefined)
+    return {
       enrolled: false,
       ...(read.error !== undefined ? { problems: [read.error] } : {}),
     };
-    if (options.json === true) deps.out(JSON.stringify(report, null, 2));
-    else
-      deps.out(
-        read.error !== undefined
-          ? `Not enrolled: ${read.error}. Run \`tacho unenroll\` to clear it, then \`tacho enroll\`.`
-          : `Not enrolled (no ${deps.paths.hostFile}). Run \`tacho enroll\`.`,
-      );
-    return report;
-  }
   // Each harness file is read on its own: one the user has broken is named
   // under `problems`, and the rest of the report still comes out as JSON the
   // desktop app can parse.
@@ -458,17 +507,45 @@ export async function status(
     },
     ...(shipping !== undefined ? { shipping } : {}),
   };
-  if (options.json === true) {
-    deps.out(JSON.stringify(report, null, 2));
-    return report;
+  return report;
+}
+
+/** `report` as text, one line per finding. */
+function printStatus(report: StatusReport, deps: CliDeps): void {
+  const h = report.host;
+  if (h === undefined) {
+    const error = report.problems?.[0];
+    deps.out(
+      error !== undefined
+        ? `Not enrolled: ${error}. Run \`tacho unenroll\` to clear it, then \`tacho enroll\`.`
+        : `Not enrolled (no ${deps.paths.hostFile}). Run \`tacho enroll\`.`,
+    );
+    return;
   }
-  const h = report.host as NonNullable<StatusReport["host"]>;
+  // An enrolled report always carries these; see `agentStatus`.
   const b = report.bundle as NonNullable<StatusReport["bundle"]>;
-  if (retired)
+  const service = report.service as NonNullable<StatusReport["service"]>;
+  const hooks = report.hooks as NonNullable<StatusReport["hooks"]>;
+  const wal = report.wal as NonNullable<StatusReport["wal"]>;
+  const daemon = report.daemon ?? null;
+  const tiers = report.tiers ?? {};
+  const {
+    gateway,
+    modelBaseUrls,
+    modelCredentials,
+    claudeDesktop,
+    codexHooks,
+    cursorInstall,
+    cursorHooks,
+    stellaHooks,
+    shipping,
+  } = report;
+  if (report.retired === true)
     deps.out(
       `Not enrolled. ${h.host_enrollment_id} was unenrolled here on ${h.revoked_at ?? ""}. The server-side revoke is still pending: run \`tacho unenroll\` again while signed in, or revoke it from the fleet page.`,
     );
-  for (const problem of problems) deps.out(`Unreadable  ${problem}`);
+  for (const problem of report.problems ?? [])
+    deps.out(`Unreadable  ${problem}`);
   if (gateway !== undefined)
     deps.out(
       `Gateway     model proxy ${gateway.listening ? `listening on 127.0.0.1:${gateway.port}` : "NOT LISTENING"}, ${gateway.calls_observed} model call${gateway.calls_observed === 1 ? "" : "s"} observed since the collector started`,
@@ -489,7 +566,7 @@ export async function status(
     deps.out(`Credential  ${describeHarness(entry)}`);
   // The tier is what runs earned, not what is installed (ADR-095). `contained`
   // is the fourth word and is not available yet.
-  for (const harness of host.harnesses)
+  for (const harness of h.harnesses)
     deps.out(
       `Tier        ${harness}: ${tiers[harness] ?? "no run since the collector started"}`,
     );
@@ -503,7 +580,7 @@ export async function status(
     `Bundle      v${b.version} (${b.etag}) fetched ${b.age_s}s ago, expires ${b.expires_at}`,
   );
   deps.out(
-    `Service     ${deps.serviceManager.kind}: ${service.installed ? "installed" : "not installed"}, ${service.running === null ? `state unknown${service.detail ? `: ${service.detail}` : ""}` : service.running ? "running" : "not running"}`,
+    `Service     ${service.kind}: ${service.installed ? "installed" : "not installed"}, ${service.running === null ? `state unknown${service.detail ? `: ${service.detail}` : ""}` : service.running ? "running" : "not running"}`,
   );
   if (daemon === null) {
     deps.out(`Daemon      not answering on 127.0.0.1:${h.port}`);
@@ -525,7 +602,7 @@ export async function status(
   }
   // Only for a host that hooks Claude Code: a Codex-only host used to read
   // "Hooks INCOMPLETE: 0 present, 33 missing" about a harness it never asked for.
-  if (host.harnesses.includes("claude-code")) {
+  if (h.harnesses.includes("claude-code")) {
     deps.out(
       `Hooks       ${hooks.complete ? "complete" : "INCOMPLETE"}: ${hooks.present.length} present, ${hooks.missing.length} missing${hooks.disabledByFlag ? ", disableAllHooks is set" : ""}${hooks.envOk ? "" : ", env block missing"}`,
     );
@@ -591,11 +668,10 @@ export async function status(
       deps.out(`            missing: ${stellaHooks.missing.join(", ")}`);
   }
   deps.out(
-    `WAL         ${walStats.sessions} session files, ${walStats.unshipped} events unshipped${walStats.oldestUnshippedAt !== undefined ? ` (oldest ${walStats.oldestUnshippedAt})` : ""}`,
+    `WAL         ${wal.sessions} session files, ${wal.unshipped} events unshipped${wal.oldest_unshipped_at !== undefined ? ` (oldest ${wal.oldest_unshipped_at})` : ""}`,
   );
   if (shipping !== undefined)
     deps.out(
       `Shipping    ${shipping.healthy ? "ok" : "FAILING"}: ${shipping.detail}`,
     );
-  return report;
 }

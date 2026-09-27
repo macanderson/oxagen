@@ -19,6 +19,7 @@ import {
   readFixtureTree,
 } from "./fixture-repo";
 import { governanceSchema } from "./governance";
+import { memorySchema } from "./memory";
 import {
   findMentions,
   parseCredentialRef,
@@ -428,6 +429,7 @@ describe("the fixture references", () => {
 // The schema each file in stored/ follows.
 const STORED: Record<string, z.ZodTypeAny> = {
   "bundle.json": bundleSchema,
+  "memory.json": memorySchema,
   "reflection-clean.json": reflectionSchema,
   "reflection.json": reflectionSchema,
 };

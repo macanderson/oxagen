@@ -141,7 +141,7 @@ describe("tachod and the transcript", () => {
       exec: () => ({ status: 0, stdout: "", stderr: "" }),
       log: (line) => log.push(line),
       port: 0,
-      transcriptRoots: [join(paths.root, "no-transcripts")],
+      transcriptRoots: [join(paths.tachoDir, "no-transcripts")],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
     });
     handles.push(handle);
@@ -411,7 +411,7 @@ describe("tachod and the transcript", () => {
       exec: () => ({ status: 0, stdout: "", stderr: "" }),
       log: () => undefined,
       port: 0,
-      transcriptRoots: [join(paths.root, "no-transcripts")],
+      transcriptRoots: [join(paths.tachoDir, "no-transcripts")],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
     });
     handles.push(restarted);

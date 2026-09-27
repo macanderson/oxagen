@@ -186,7 +186,7 @@ describe("tachod and frame bodies", () => {
       exec: () => ({ status: 0, stdout: "", stderr: "" }),
       log: (line) => log.push(line),
       port: 0,
-      transcriptRoots: [paths.root],
+      transcriptRoots: [paths.tachoDir],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
       ...(now !== undefined ? { now } : {}),
     });
@@ -1292,7 +1292,7 @@ describe("tachod and frame bodies", () => {
       log: (line) => restartLog.push(line),
       port: 0,
       listen: false,
-      transcriptRoots: [paths.root],
+      transcriptRoots: [paths.tachoDir],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
     });
     handles.push(restarted);

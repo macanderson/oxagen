@@ -1,0 +1,161 @@
+# a-intel support desk. Queries, mutations, a subscription, and a Relay
+# connection, with input types, an enum, a custom scalar, an interface, a
+# union, and a deprecated field.
+
+"""
+An ISO 8601 date and time with an offset.
+"""
+scalar DateTime
+
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+
+enum IssueState {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+interface Node {
+  id: ID!
+}
+
+type User implements Node {
+  id: ID!
+  name: String!
+  email: String
+}
+
+type Team implements Node {
+  id: ID!
+  name: String!
+  members(first: Int = 20): [User!]!
+}
+
+"""
+The person or team an issue is assigned to.
+"""
+union Assignee = User | Team
+
+type Comment implements Node {
+  id: ID!
+  body: String!
+  author: User!
+  createdAt: DateTime!
+}
+
+type Issue implements Node {
+  id: ID!
+  number: Int!
+  title: String!
+  body: String
+  state: IssueState!
+  priority: Priority!
+  assignee: Assignee
+  labels: [String!]!
+  comments(first: Int = 20, after: String): CommentConnection!
+  createdAt: DateTime!
+  closedAt: DateTime
+  "Use priority."
+  urgent: Boolean @deprecated(reason: "Use priority.")
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+type IssueEdge {
+  cursor: String!
+  node: Issue!
+}
+
+type IssueConnection {
+  edges: [IssueEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type CommentEdge {
+  cursor: String!
+  node: Comment!
+}
+
+type CommentConnection {
+  edges: [CommentEdge!]!
+  pageInfo: PageInfo!
+}
+
+input IssueFilter {
+  state: IssueState
+  priority: Priority
+  assigneeId: ID
+  label: String
+}
+
+input CreateIssueInput {
+  title: String!
+  body: String
+  priority: Priority = NORMAL
+  assigneeId: ID
+  labels: [String!]
+}
+
+input UpdateIssueInput {
+  id: ID!
+  title: String
+  body: String
+  state: IssueState
+  priority: Priority
+}
+
+type CreateIssuePayload {
+  issue: Issue!
+}
+
+type UpdateIssuePayload {
+  issue: Issue!
+}
+
+type DeleteIssuePayload {
+  deletedId: ID!
+}
+
+type Query {
+  "Read any record by its global id."
+  node(id: ID!): Node
+  "Read one issue by its number."
+  issue(number: Int!): Issue
+  "List issues, newest first, as a Relay connection."
+  issues(first: Int, after: String, last: Int, before: String, filter: IssueFilter): IssueConnection!
+  "Search issues and people by text."
+  search(text: String!, first: Int = 10): [SearchResult!]!
+  viewer: User!
+}
+
+union SearchResult = Issue | User
+
+type Mutation {
+  createIssue(input: CreateIssueInput!): CreateIssuePayload!
+  updateIssue(input: UpdateIssueInput!): UpdateIssuePayload!
+  "Delete an issue and its comments. This cannot be undone."
+  deleteIssue(id: ID!): DeleteIssuePayload!
+  addComment(issueId: ID!, body: String!): Comment!
+}
+
+type Subscription {
+  "Sent each time an issue changes. A subscription never becomes a tool."
+  issueChanged(number: Int): Issue!
+}

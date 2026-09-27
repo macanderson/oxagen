@@ -395,8 +395,8 @@ describe("the loopback model proxy", () => {
       exec: () => ({ status: 0, stdout: "", stderr: "" }),
       log: (line) => log.push(line),
       port: 0,
-      home: join(paths.root, ".."),
-      transcriptRoots: [join(paths.root, "no-transcripts")],
+      home: join(paths.tachoDir, ".."),
+      transcriptRoots: [join(paths.tachoDir, "no-transcripts")],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
       modelUpstreams: {
         anthropic: vendorUrl,
@@ -584,7 +584,7 @@ describe("the loopback model proxy", () => {
     );
 
     const haystacks = [
-      ...walkFiles(paths.root).map((file) => readFileSync(file, "latin1")),
+      ...walkFiles(paths.tachoDir).map((file) => readFileSync(file, "latin1")),
       JSON.stringify(plane.ingested),
       log.join("\n"),
       JSON.stringify(handle.api.status()),
@@ -1022,7 +1022,7 @@ describe("the loopback model proxy", () => {
     // would be a digest of a body that never ships, and an oracle for the
     // secret besides.
     expect(frame!.content?.digest).toBe(sha(bytes));
-    for (const file of walkFiles(paths.root))
+    for (const file of walkFiles(paths.tachoDir))
       expect(readFileSync(file, "latin1").includes(LEAKED_KEY)).toBe(false);
   });
 
@@ -2409,7 +2409,7 @@ describe("the loopback model proxy", () => {
   it("computes the gateway tier from traffic, never from a written base URL", async () => {
     const fake = await vendor(streamingAnthropic(1));
     const paths = scratchPaths();
-    const home = join(paths.root, "..");
+    const home = join(paths.tachoDir, "..");
     // The base URL is written for both harnesses before any session runs.
     await applyModelBaseUrls({
       home,
@@ -2449,7 +2449,7 @@ describe("the loopback model proxy", () => {
   it("forwards to the base URL enrollment displaced, so a corporate gateway still gets the call", async () => {
     const fake = await vendor(streamingAnthropic(1));
     const paths = scratchPaths();
-    const home = join(paths.root, "..");
+    const home = join(paths.tachoDir, "..");
     const { mkdirSync, writeFileSync } = await import("node:fs");
     mkdirSync(join(home, ".claude"), { recursive: true });
     writeFileSync(
@@ -2819,8 +2819,8 @@ describe("the credential seam (ADR-143)", () => {
       exec: () => ({ status: 0, stdout: "", stderr: "" }),
       log: (line) => log.push(line),
       port: 0,
-      home: join(paths.root, ".."),
-      transcriptRoots: [join(paths.root, "no-transcripts")],
+      home: join(paths.tachoDir, ".."),
+      transcriptRoots: [join(paths.tachoDir, "no-transcripts")],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
       modelUpstreams: {
         anthropic: vendorUrl,
@@ -2916,7 +2916,7 @@ describe("the credential seam (ADR-143)", () => {
 
     await handle.tick();
     const haystacks = [
-      ...walkFiles(paths.root).map((file) => readFileSync(file, "latin1")),
+      ...walkFiles(paths.tachoDir).map((file) => readFileSync(file, "latin1")),
       JSON.stringify(plane.ingested),
       log.join("\n"),
       JSON.stringify(handle.api.status()),
@@ -3287,7 +3287,7 @@ describe("the credential seam (ADR-143)", () => {
       {},
       { harnesses: ["claude-code", "codex"] },
     );
-    const home = join(paths.root, "..");
+    const home = join(paths.tachoDir, "..");
     const key = readRunTokenKey(paths.runTokenKey)!;
     const nearlyOver = mintRunToken({
       key,

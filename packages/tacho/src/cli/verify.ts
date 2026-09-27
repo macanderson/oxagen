@@ -14,6 +14,7 @@ import {
   type WrappedHarness,
 } from "../wire";
 import type { CliDeps } from "./deps";
+import { depsForHarness } from "./agent-deps";
 
 export interface VerifyOptions {
   prompt?: string;
@@ -142,8 +143,11 @@ function configPathFor(harness: TachoHarness, deps: CliDeps): string {
 
 export async function verify(
   options: VerifyOptions,
-  deps: CliDeps,
+  rootDeps: CliDeps,
 ): Promise<VerifyResult> {
+  // The turn is checked against the collector of the agent that hooks the
+  // harness, which is where its events land (ADR-203).
+  const deps = depsForHarness(rootDeps, options.harness ?? "claude-code");
   const host = readHostFile(deps.paths.hostFile);
   if (host === undefined) {
     return { ok: false, detail: "not enrolled" };

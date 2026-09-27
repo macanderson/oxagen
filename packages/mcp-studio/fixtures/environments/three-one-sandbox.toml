@@ -1,0 +1,32 @@
+#:schema https://oxagen.sh/schemas/mcp-server/v1.json
+# Three environments and one sandbox mark: every agent's calls go to staging.
+schema = "mcp-server/v1"
+name = "orders"
+label = "Orders API"
+description = "Orders and shipments in the a-intel order service."
+
+[source]
+type = "openapi"
+from = "upload"
+
+[auth]
+mode = "service"
+scheme = "apiKey"
+credential = "oxagen:credential/orders"
+
+[environments.dev]
+url = "https://orders.dev.a-intel.com"
+
+[environments.staging]
+sandbox = true
+url = "https://orders.staging.a-intel.com"
+
+[environments.production]
+url = "https://orders.a-intel.com"
+network = "relay:a-intel-east"
+
+[exposure]
+mode = "search"
+
+[sync]
+schedule = "manual"

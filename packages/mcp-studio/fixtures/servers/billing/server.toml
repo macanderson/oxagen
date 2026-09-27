@@ -1,0 +1,32 @@
+#:schema https://oxagen.sh/schemas/mcp-server/v1.json
+schema = "mcp-server/v1"
+name = "billing"
+label = "Billing API"
+description = "Charges, refunds, and invoices in the a-intel billing service."
+
+[source]
+type = "openapi"
+from = "repository"                        # repository, url, or upload
+repo = "github.com/a-intel/billing-service"
+path = "openapi/billing.yaml"
+ref = "main"
+
+[auth]
+mode = "operator-oauth"
+scheme = "oauth"                           # a key of components.securitySchemes
+credential = "oxagen:credential/billing-oauth-client"
+
+[environments.sandbox]
+sandbox = true
+url = "https://billing-sandbox.a-intel.com/v2"
+
+[environments.production]
+url = "https://billing.internal.a-intel.com/v2"
+network = "relay:a-intel-east"
+
+[exposure]
+mode = "direct"
+definition_budget = 8000
+
+[sync]
+schedule = "on-change"

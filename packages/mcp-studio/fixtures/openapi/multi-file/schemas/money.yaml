@@ -1,0 +1,9 @@
+type: object
+required: [amount, currency]
+properties:
+  amount:
+    type: integer
+    description: The amount in the currency's minor unit.
+  currency:
+    type: string
+    pattern: "^[A-Z]{3}$"

@@ -1,0 +1,439 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/mcp-tools/v1.json",
+  "title": "MCP tools",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "mcp-tools/v1"
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "max_result_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1048576
+        }
+      },
+      "additionalProperties": false,
+      "description": "Values every tool takes unless its own table sets them."
+    },
+    "tools": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 61,
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "upstream": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "MCP: the server's own tool name. Defaults to the table key."
+          },
+          "operation": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "description": "OpenAPI: the operationId, or \"POST /refunds/{id}/cancel\" when the operation has none."
+          },
+          "field": {
+            "type": "string",
+            "pattern": "^[_A-Za-z][_0-9A-Za-z]*\\.[_A-Za-z][_0-9A-Za-z]*$",
+            "description": "GraphQL: the root field, such as Mutation.createRefund."
+          },
+          "selection": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16384,
+            "description": "GraphQL: the selection set sent with every call."
+          },
+          "method": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*\\/[A-Za-z_][A-Za-z0-9_]*$",
+            "description": "gRPC: the full method name, such as a_intel.ledger.v1.Ledger/PostEntry."
+          },
+          "deadline_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300000,
+            "description": "gRPC: the call's deadline. 30000 when omitted."
+          },
+          "risk": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "side_effect": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write",
+              "irreversible"
+            ]
+          },
+          "egress": {
+            "type": "string",
+            "enum": [
+              "local",
+              "org_tenant",
+              "third_party"
+            ]
+          },
+          "impacts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,63}$"
+            },
+            "maxItems": 32,
+            "uniqueItems": true,
+            "description": "What a call can do. Today's consequenceTags."
+          },
+          "measures": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "pattern": "^\\$(\\.[A-Za-z_][A-Za-z0-9_]*|\\[\\d+\\])+$"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "money",
+                    "count",
+                    "identifier",
+                    "environment",
+                    "table",
+                    "text"
+                  ]
+                },
+                "currency_path": {
+                  "type": "string",
+                  "pattern": "^\\$(\\.[A-Za-z_][A-Za-z0-9_]*|\\[\\d+\\])+$"
+                },
+                "unit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "money"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ]
+                  },
+                  "then": {
+                    "required": [
+                      "currency_path"
+                    ]
+                  }
+                }
+              ]
+            },
+            "description": "Named paths into the input, each with a type."
+          },
+          "data_classes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "maxItems": 64,
+            "description": "Up to 64 names of data the tool touches."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024,
+            "description": "Replaces the source's description."
+          },
+          "hide": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "maxItems": 256,
+            "uniqueItems": true,
+            "description": "Inputs that leave the schema."
+          },
+          "fixed": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "additionalProperties": {},
+            "description": "Inputs set on every call. A fixed input leaves the schema."
+          },
+          "defaults": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "additionalProperties": {},
+            "description": "Values for inputs the model leaves out."
+          },
+          "rename": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "additionalProperties": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+            },
+            "description": "Upstream input name to the name the agent sees. The gateway maps it back on the call."
+          },
+          "select": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\[\\])?(?:\\.[A-Za-z_][A-Za-z0-9_]*(?:\\[\\])?)*$"
+            },
+            "maxItems": 256,
+            "uniqueItems": true,
+            "description": "The result paths kept."
+          },
+          "redact": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\[\\])?(?:\\.[A-Za-z_][A-Za-z0-9_]*(?:\\[\\])?)*$"
+            },
+            "maxItems": 256,
+            "uniqueItems": true,
+            "description": "The result paths removed."
+          },
+          "max_result_bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1048576,
+            "description": "The result's size cap after select and redact."
+          },
+          "paginate": {
+            "type": "string",
+            "enum": [
+              "cursor",
+              "page",
+              "offset",
+              "connection"
+            ],
+            "description": "cursor, page, or offset for OpenAPI, and connection for GraphQL."
+          },
+          "max_items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000,
+            "description": "Caps auto paging and a gRPC server stream."
+          },
+          "idempotency_header": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,128}$",
+            "description": "OpenAPI: the header that carries an idempotency key on a POST."
+          }
+        },
+        "required": [
+          "risk",
+          "side_effect",
+          "egress"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "upstream",
+                    "operation"
+                  ]
+                },
+                {
+                  "required": [
+                    "upstream",
+                    "field"
+                  ]
+                },
+                {
+                  "required": [
+                    "upstream",
+                    "method"
+                  ]
+                },
+                {
+                  "required": [
+                    "operation",
+                    "field"
+                  ]
+                },
+                {
+                  "required": [
+                    "operation",
+                    "method"
+                  ]
+                },
+                {
+                  "required": [
+                    "field",
+                    "method"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "dependentRequired": {
+              "selection": [
+                "field"
+              ]
+            }
+          },
+          {
+            "dependentRequired": {
+              "idempotency_header": [
+                "operation"
+              ]
+            }
+          },
+          {
+            "dependentRequired": {
+              "deadline_ms": [
+                "method"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "paginate": {
+                  "const": "connection"
+                }
+              },
+              "required": [
+                "paginate"
+              ]
+            },
+            "then": {
+              "required": [
+                "field"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "paginate": {
+                  "const": "cursor"
+                }
+              },
+              "required": [
+                "paginate"
+              ]
+            },
+            "then": {
+              "required": [
+                "operation"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "paginate": {
+                  "const": "page"
+                }
+              },
+              "required": [
+                "paginate"
+              ]
+            },
+            "then": {
+              "required": [
+                "operation"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "paginate": {
+                  "const": "offset"
+                }
+              },
+              "required": [
+                "paginate"
+              ]
+            },
+            "then": {
+              "required": [
+                "operation"
+              ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "max_items"
+              ]
+            },
+            "then": {
+              "anyOf": [
+                {
+                  "required": [
+                    "paginate"
+                  ]
+                },
+                {
+                  "required": [
+                    "method"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "description": "The imported tools, keyed by the name after the server prefix."
+    }
+  },
+  "required": [
+    "schema"
+  ],
+  "additionalProperties": false,
+  "description": "tools/servers/<name>/tools.toml: the imported tools, with each one's classification and shaping."
+}

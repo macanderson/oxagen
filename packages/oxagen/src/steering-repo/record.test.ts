@@ -37,6 +37,17 @@ const BASE = {
   provenance: { source: "proposal", uri: "oxagen:proposal/prp_1" },
 } as const;
 
+/** A memory the curator cites, as `provenance.memories` holds it. */
+const CITED = {
+  agent: "a-intel.core.release-bot",
+  run: "run_01K5QK7D",
+  statement: "The CI cache key hashes pnpm-lock.yaml.",
+  evidence: ["frame:run_01K5QK7D/88"],
+} as const;
+
+/** The provenance of a record the curator proposed from one memory. */
+const FROM_RUN = { source: "run", uri: "frame:run_01K5QK7D/88", memories: [CITED] } as const;
+
 /** BASE as frontmatter lines. Line `i` sits on file line `i + 2`. */
 const BASE_LINES = [
   "schema: steering-record/v1",
@@ -91,6 +102,7 @@ describe("steering record schema", () => {
       "repos",
       "tools",
       "skills",
+      "toolbelt",
       "applies_to",
       "load",
       "status",
@@ -113,8 +125,10 @@ describe("steering record schema", () => {
         repos: ["github.com/a-intel/platform"],
         tools: ["billing__create_refund", "stripe__*"],
         skills: ["a-intel.brand.voice"],
+        toolbelt: "a-intel.core.review",
         applies_to: ["src/**"],
         load: "match",
+        provenance: { ...BASE.provenance, agent: "a-intel.core.ci-reviewer" },
         id: "rec_a_intel_test_rule_0123456789ab",
         hash: `sha256:${"a".repeat(64)}`,
       }),
@@ -145,6 +159,31 @@ describe("steering record schema", () => {
     expect(
       issuesOf({ ...BASE, scope: "repository", repos: ["github.com/a-intel/platform"] }),
     ).toEqual([]);
+  });
+
+  it("requires memories when the source is run", () => {
+    const { memories: _memories, ...bare } = FROM_RUN;
+    expect(issuesOf({ ...BASE, provenance: bare })).toEqual([
+      { path: ["provenance", "memories"], message: "memories is required when source is run" },
+    ]);
+    expect(issuesOf({ ...BASE, provenance: FROM_RUN })).toEqual([]);
+  });
+
+  it.each(["proposal", "import"])("does not require memories when the source is %s", (source) => {
+    expect(issuesOf({ ...BASE, provenance: { source, uri: "oxagen:proposal/prp_1" } })).toEqual([]);
+  });
+
+  it("keeps a cited memory's null agent and null run", () => {
+    const unknown = { ...CITED, agent: null, run: null, evidence: [] };
+    const parsed = record({ provenance: { ...FROM_RUN, memories: [CITED, unknown] } });
+    expect(parsed.provenance.memories).toEqual([CITED, unknown]);
+  });
+
+  it("accepts the agent that proposed the record", () => {
+    const parsed = record({
+      provenance: { ...BASE.provenance, agent: "a-intel.core.ci-reviewer" },
+    });
+    expect(parsed.provenance.agent).toBe("a-intel.core.ci-reviewer");
   });
 
   it("holds a description to 200 characters on every kind but a skill", () => {
@@ -185,6 +224,29 @@ describe("steering record schema", () => {
     ["an empty applies_to entry", { applies_to: [""] }, ["applies_to", 0]],
     ["an unknown load", { load: "never" }, ["load"]],
     ["a provenance field it does not know", { provenance: { ...BASE.provenance, by: "x" } }, ["provenance"]],
+    ["a provenance agent that is not a string", { provenance: { ...BASE.provenance, agent: 7 } }, ["provenance", "agent"]],
+    ["an empty memories list", { provenance: { ...FROM_RUN, memories: [] } }, ["provenance", "memories"]],
+    [
+      "a cited memory with a field it does not hold",
+      { provenance: { ...FROM_RUN, memories: [{ ...CITED, capture: "remember" }] } },
+      ["provenance", "memories", 0],
+    ],
+    [
+      "a cited memory with an empty statement",
+      { provenance: { ...FROM_RUN, memories: [{ ...CITED, statement: "" }] } },
+      ["provenance", "memories", 0, "statement"],
+    ],
+    [
+      "a cited memory with no run",
+      { provenance: { ...FROM_RUN, memories: [{ agent: CITED.agent, statement: CITED.statement, evidence: [] }] } },
+      ["provenance", "memories", 0, "run"],
+    ],
+    [
+      "a cited memory with no evidence list",
+      { provenance: { ...FROM_RUN, memories: [{ agent: null, run: null, statement: CITED.statement }] } },
+      ["provenance", "memories", 0, "evidence"],
+    ],
+    ["an empty toolbelt", { toolbelt: "" }, ["toolbelt"]],
     ["an id Oxagen would not write", { id: "rec_x" }, ["id"]],
     ["a hash with no sha256 prefix", { hash: "a".repeat(64) }, ["hash"]],
     ["another schema", { schema: "steering-record/v2" }, ["schema"]],
@@ -420,6 +482,16 @@ describe("readSteeringRecord", () => {
     });
   });
 
+  it("puts a provenance rule on the provenance line and names the nested field", () => {
+    const lines = BASE_LINES.map((line) => (line === "  source: proposal" ? "  source: run" : line));
+    expect(readSteeringRecord(recordFile(lines))).toEqual({
+      ok: false,
+      issues: [
+        { line: 10, field: "provenance.memories", message: "memories is required when source is run" },
+      ],
+    });
+  });
+
   it("puts a cross-field rule on the line of the field it limits", () => {
     const lines = [...BASE_LINES, `description: ${"x".repeat(201)}`];
     expect(readSteeringRecord(recordFile(lines))).toEqual({
@@ -565,6 +637,20 @@ describe("fixture steering records", () => {
     if (!read.ok) throw new Error(JSON.stringify(read.issues));
     expect(read.record.id).toMatch(/^rec_/);
     expect(read.record.hash).toMatch(/^sha256:/);
+  });
+
+  it("keeps both cited memories of the CI cache key record, one with no agent or run", () => {
+    const text = fixtureRepo().get("steering/memory/platform/a-intel.platform.ci-cache-key.md");
+    if (text === undefined) throw new Error("the fixture repo has no CI cache key record");
+    const read = readSteeringRecord(text);
+    if (!read.ok) throw new Error(JSON.stringify(read.issues));
+    expect(read.record.provenance).toMatchObject({
+      source: "run",
+      memories: [
+        { agent: "a-intel.core.release-bot", run: "run_01K5QK7D" },
+        { agent: null, run: null, evidence: ["github.com/a-intel/platform/pull/412"] },
+      ],
+    });
   });
 
   it.each(FIXTURE_RECORDS)("$name stamps to the id and hash in its own frontmatter", ({ text }) => {

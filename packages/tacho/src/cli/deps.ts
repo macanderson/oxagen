@@ -55,7 +55,8 @@ import {
   type StellaHooksFile,
   type StellaHooksFormat,
 } from "../host/stella-writer";
-import { oxagenConfigPath, type TachoPaths, tachoPaths } from "../host/paths";
+import { defaultAgentPaths } from "../host/agents";
+import { oxagenConfigPath, type TachoPaths, tachoHome } from "../host/paths";
 import {
   type Exec,
   type ServiceManager,
@@ -369,7 +370,20 @@ export interface ClaudeFacts {
 export type HarnessFacts = ClaudeFacts;
 
 export interface CliDeps {
+  /**
+   * The agent the command acts on (ADR-203), plus the machine's paths: the
+   * tacho directory, the service's pid and log, and the harness files.
+   * `defaultAgentPaths` picks the agent when nothing names one.
+   */
   paths: TachoPaths;
+  /**
+   * The same deps rebound to another agent's paths: its `host.json`, daemon
+   * ports, credential store and install receipts. `agentDeps` in
+   * `cli/agent-deps.ts` is the one caller.
+   */
+  atAgent?: (paths: TachoPaths) => CliDeps;
+  /** Mints the id of a new agent's directory. Tests pin it. */
+  newAgentId?: () => string;
   env: Record<string, string | undefined>;
   home: string;
   platform: NodeJS.Platform;
@@ -854,7 +868,7 @@ export function defaultCliDeps(
       : {}),
   };
   const credentialInternals = { managedSettingsFile: claudeManaged };
-  // `platform` is resolved BEFORE the paths and handed to `tachoPaths`, which
+  // `platform` is resolved BEFORE the paths and handed to `tachoHome`, which
   // derives one field from it — `claudeDesktopConfig`, undefined where Claude
   // Desktop has no build. Omitting it let that one field read `process.platform`
   // while `claudeDesktop()`, `runtimeCommands()` and the service manager beside
@@ -862,8 +876,9 @@ export function defaultCliDeps(
   // reported the app installed and had nowhere to write its config. Benign on a
   // real host, where the two agree; the same disagreement in `scratchPaths` is
   // what made the detect tests pass on macOS and fail on Linux CI.
-  const paths = overrides.paths ?? tachoPaths(env, home, platform);
-  const harnessFiles = new HarnessFiles(paths.root);
+  const paths =
+    overrides.paths ?? defaultAgentPaths(tachoHome(env, home, platform));
+  const harnessFiles = new HarnessFiles(paths.dir);
   const harnessDirs = {
     claudeConfigDir: dirname(paths.claudeSettings),
     codexHome: dirname(paths.codexHooks),
@@ -1051,6 +1066,8 @@ export function defaultCliDeps(
     sleep: (ms) =>
       new Promise((resolvePromise) => setTimeout(resolvePromise, ms)),
     wrapperVersion: TACHO_VERSION,
+    atAgent: (agentPaths) =>
+      defaultCliDeps({ ...overrides, paths: agentPaths }, managed),
     ...overrides,
   };
 }

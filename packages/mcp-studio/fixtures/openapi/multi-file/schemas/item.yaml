@@ -1,0 +1,11 @@
+type: object
+required: [sku, name]
+properties:
+  sku:
+    type: string
+  name:
+    type: string
+  price:
+    $ref: "./money.yaml"
+  stock:
+    $ref: "./stock.yaml#/StockLevel"

@@ -43,7 +43,7 @@ describe("the sweep's idle bound", () => {
       now: () => clock,
       log: () => {},
       listen: false,
-      transcriptRoots: [`${paths.root}/no-transcripts`],
+      transcriptRoots: [`${paths.tachoDir}/no-transcripts`],
       timers: {
         detectorMs: 24 * HOUR,
         sweepMs: 0,

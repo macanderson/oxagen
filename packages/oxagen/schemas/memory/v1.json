@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/memory/v1.json",
+  "title": "Memory",
+  "description": "One lesson an agent keeps from a run, with the agent and run that wrote it. Oxagen stores it until the curator's memory PR merges or closes.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "memory/v1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^mem_[0-9A-Za-z]+$"
+    },
+    "agent": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The agent that wrote the memory, as agents/<name>.toml names it. Null when Oxagen cannot tell."
+    },
+    "run": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^run_[0-9A-Za-z]+$"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The run the memory came from. Null for a memory the local gateway read, or one found in a pull request whose run Oxagen did not record."
+    },
+    "capture": {
+      "type": "string",
+      "enum": [
+        "remember",
+        "pull_request",
+        "local_gateway"
+      ],
+      "description": "remember during a run, pull_request from the code repository check, or local_gateway from a harness's memory folder."
+    },
+    "statement": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "business-rule",
+        "code-rule",
+        "constraint",
+        "procedure",
+        "skill",
+        "fact",
+        "preference",
+        "memory"
+      ],
+      "description": "What the memory would be as a record. Most are memory."
+    },
+    "repos": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+(?:\\.[a-z0-9-]+)+(?:\\/(?!\\.\\.?(?:\\/|$))[a-z0-9_.-]+){2,}$"
+      },
+      "minItems": 1
+    },
+    "applies_to": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "minItems": 1
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^(?=[a-z0-9_*]{4,64}$)[a-z][a-z0-9_]{0,23}__(?:\\*|[a-z][a-z0-9_]*)$"
+      },
+      "minItems": 1
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "What backs the memory, such as frame:run_<id>/<n>. A memory with a null run cites no frame."
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "schema",
+    "id",
+    "agent",
+    "run",
+    "capture",
+    "statement",
+    "kind",
+    "evidence",
+    "created_at"
+  ],
+  "additionalProperties": false
+}

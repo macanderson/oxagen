@@ -247,7 +247,7 @@ pub fn cli_install_dir() -> PathBuf {
     Roots::real().cli_install_dir()
 }
 
-fn read_json_object(path: &Path) -> Map<String, Value> {
+pub(crate) fn read_json_object(path: &Path) -> Map<String, Value> {
     crate::read_json(path)
         .and_then(|v| v.as_object().cloned())
         .unwrap_or_default()
@@ -259,7 +259,7 @@ const CONFIG_DIR_CREATED: &str = "configDirCreated";
 /// Write `desktop.json`. When `~/.config` is not there yet, this write is what
 /// creates it, and the file records that under `configDirCreated`, so
 /// Uninstall removes an empty `~/.config` only when Oxagen made it.
-fn write_desktop_config(roots: &Roots, config: &Map<String, Value>) -> Result<(), String> {
+pub(crate) fn write_desktop_config(roots: &Roots, config: &Map<String, Value>) -> Result<(), String> {
     let mut config = config.clone();
     if !roots.home.join(".config").exists() {
         config.insert(CONFIG_DIR_CREATED.to_string(), Value::Bool(true));
@@ -845,10 +845,13 @@ impl Default for CliInstallView {
 /// window is undone the moment the probe returns.
 static INSTALL_LOCK: Mutex<()> = Mutex::new(());
 
-/// The guard every install/uninstall pass holds. A panic in an earlier pass
-/// must not lock out every later one, and there is no state to be poisoned:
-/// the lock guards `()`, not data.
-fn install_guard() -> std::sync::MutexGuard<'static, ()> {
+/// The guard every install/uninstall pass holds, and every other writer of
+/// `desktop.json` (`update::write_auto_update`), so no read-modify-write of
+/// that file lands on top of another's. A panic in an earlier pass must not
+/// lock out every later one, and there is no state to be poisoned: the lock
+/// guards `()`, not data. It is not reentrant, so a caller that already holds
+/// it must not call a function that takes it.
+pub(crate) fn install_guard() -> std::sync::MutexGuard<'static, ()> {
     INSTALL_LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
@@ -1775,20 +1778,22 @@ pub struct RemovalReport {
     pub removed: Vec<String>,
     /// Still on the machine, each with why.
     pub left: Vec<String>,
-    /// The revoke a retired `host.json` still owed when Uninstall removed it.
-    /// Nothing on the machine can finish it after that, so the report names
-    /// the agent key for the person to revoke on the fleet page (audit D-06).
+    /// The revoke a retired agent's `host.json` still owed when Uninstall
+    /// removed it. Nothing on the machine can finish it after that, so the
+    /// report names the agent key for the person to revoke on the fleet page
+    /// (audit D-06). With more than one retired agent this names the first:
+    /// see `machine::pending_revoke`.
     pub pending_revoke: Option<crate::machine::PendingRevoke>,
 }
 
 /// Everything the app itself put on this machine, after `tacho unenroll` has
 /// taken out the hooks and the service: the PATH links and the profile block,
 /// the durable copy of the sidecars, and `~/.config/oxagen`. Refused while
-/// the machine is still enrolled. A host `tacho unenroll` has retired (the
-/// revoke could not reach the control plane) is not enrolled: refusing it
-/// made an offline uninstall impossible, forever. What `desktop_state`
-/// reports afterward goes into `state` before the lock is released: see
-/// `CliInstallState::set`.
+/// any agent on the machine is still enrolled. A host `tacho unenroll` has
+/// retired (the revoke could not reach the control plane) is not enrolled:
+/// refusing it made an offline uninstall impossible, forever. What
+/// `desktop_state` reports afterward goes into `state` before the lock is
+/// released: see `CliInstallState::set`.
 pub(crate) fn remove_everything_in(env: &InstallEnv, state: &CliInstallState) -> Result<RemovalReport, String> {
     use crate::machine::Enrollment;
     let _guard = install_guard();
@@ -1797,7 +1802,7 @@ pub(crate) fn remove_everything_in(env: &InstallEnv, state: &CliInstallState) ->
         return Err("this machine is still enrolled; unenroll first".into());
     }
     let mut report = RemovalReport {
-        // Read now: `host.json` goes with the Tacho root below.
+        // Read now: every agent's `host.json` goes with the Tacho root below.
         pending_revoke: crate::machine::pending_revoke(roots),
         ..RemovalReport::default()
     };

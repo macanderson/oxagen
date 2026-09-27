@@ -8,9 +8,11 @@
  *
  * The watch reads the feed at launch, every hour, and when the window takes
  * focus with the last check at least 15 minutes old. When the feed offers a
- * newer version, it calls `offer` once for that version. It never
- * downloads, installs, or relaunches anything: the person's click on
- * Install does that, through `installUpdate` in updater.ts.
+ * newer version, it calls `offer` once for that version. The watch itself
+ * never downloads, installs, or relaunches anything. The app decides what an
+ * offer does (ADR-202): a Mac that passes the gates in update.rs installs it
+ * in the background through `installInBackground`, and every other install
+ * waits for the person's click on Install, through `installUpdate`.
  *
  * Everything the watch touches in the webview (timers, the focus event, the
  * clock) comes in through `UpdateWatchEnv`, so the tests drive it directly.

@@ -21,6 +21,7 @@ describe("schema ids", () => {
       "mcp-tools-lock/v1",
       "tool-manifest/v1",
       "reflection/v1",
+      "memory/v1",
       "promotion/v1",
       "bundle/v1",
     ]);
@@ -31,7 +32,7 @@ describe("schema ids", () => {
   });
 
   it("keeps the steering repo ids a subset of the contract ids", () => {
-    expect(STEERING_REPO_SCHEMA_IDS).toHaveLength(8);
+    expect(STEERING_REPO_SCHEMA_IDS).toHaveLength(9);
     for (const id of STEERING_REPO_SCHEMA_IDS) {
       expect(SCHEMA_IDS).toContain(id);
     }
