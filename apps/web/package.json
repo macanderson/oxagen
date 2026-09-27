@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/web-v2",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "private": true,
   "description": "oxagen.sh public website (v2). Hand-authored HTML plus a blog built from MDX content; `pnpm build` assembles the publishable site into dist/.",
   "type": "module",
