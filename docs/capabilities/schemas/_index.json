@@ -1,5 +1,5 @@
 {
-  "generatedCount": 404,
+  "generatedCount": 405,
   "capabilities": [
     {
       "name": "accept_member_invite",
@@ -2061,6 +2061,16 @@
     },
     {
       "name": "ingest_tacho_events",
+      "domain": "tacho",
+      "surfaces": [
+        "api"
+      ],
+      "component": null,
+      "produces": [],
+      "consumes": []
+    },
+    {
+      "name": "ingest_tacho_memories",
       "domain": "tacho",
       "surfaces": [
         "api"

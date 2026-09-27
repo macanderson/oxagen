@@ -408,6 +408,20 @@ export function collectApiRoutes(
   const mounts: { router: string; prefix: string; target: string }[] = [];
   for (const m of appSrc.matchAll(/^(\w+)\.route\("([^"]*)",\s*(\w+)\)/gm))
     mounts.push({ router: m[1]!, prefix: m[2]!, target: m[3]! });
+  // A mount helper mounts the routes its own module imports onto the router
+  // app.ts hands it. `mountTachoHostRoutes(tachoScoped)` mounts the Tacho host
+  // routes in body-limit order (routes/v1/tacho.host-routes.ts). Its mounts
+  // count as that router's, and its imports resolve from its own directory.
+  for (const call of appSrc.matchAll(/^(\w+)\((\w+)\);/gm)) {
+    const helper = imports.get(call[1]!);
+    if (!helper || !existsSync(join(root, helper))) continue;
+    const src = read(join(root, helper));
+    const dir = helper.slice(0, helper.lastIndexOf("/"));
+    for (const m of src.matchAll(/import \{ (\w+) \} from "\.\/([^"]+)"/g))
+      imports.set(m[1]!, `${dir}/${m[2]}.ts`);
+    for (const m of src.matchAll(/^\s*\w+\.route\("([^"]*)",\s*(\w+)\)/gm))
+      mounts.push({ router: call[2]!, prefix: m[1]!, target: m[2]! });
+  }
   const routerPrefix = new Map<string, string>([["app", ""]]);
   for (const m of mounts)
     if (!imports.has(m.target))

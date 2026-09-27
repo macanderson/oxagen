@@ -1358,6 +1358,12 @@ registerHandlersOnce("@oxagen/handlers", () => {
         .tachoGithubTokenIssueHandler as CapabilityHandlerFn,
   );
   registerHandler(
+    "ingest_tacho_memories",
+    async () =>
+      (await import("./tacho.memories.ingest"))
+        .tachoMemoriesIngestHandler as CapabilityHandlerFn,
+  );
+  registerHandler(
     "dispatch_command",
     async () =>
       (await import("./tacho.command.dispatch"))

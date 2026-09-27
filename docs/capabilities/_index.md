@@ -588,6 +588,7 @@ after the registered name separately when their contract uses a dotted stem.
 | [get_tacho_bundle](tacho.bundle.get.md) | [tacho.bundle.get.ts](../../packages/oxagen/src/contracts/tacho.bundle.get.ts) | api |
 | [get_tacho_session](tacho.session.get.md) | [tacho.session.get.ts](../../packages/oxagen/src/contracts/tacho.session.get.ts) | api |
 | [ingest_tacho_events](tacho.events.ingest.md) | [tacho.events.ingest.ts](../../packages/oxagen/src/contracts/tacho.events.ingest.ts) | api |
+| [ingest_tacho_memories](tacho.memories.ingest.md) | [tacho.memories.ingest.ts](../../packages/oxagen/src/contracts/tacho.memories.ingest.ts) | api |
 | [list_incidents](tacho.incident.list.md) | [tacho.incident.list.ts](../../packages/oxagen/src/contracts/tacho.incident.list.ts) | api, mcp |
 | [list_machine_groups](tacho.machine_group.list.md) | [tacho.machine_group.list.ts](../../packages/oxagen/src/contracts/tacho.machine_group.list.ts) | none |
 | [list_tacho_hosts](tacho.host.list.md) | [tacho.host.list.ts](../../packages/oxagen/src/contracts/tacho.host.list.ts) | api, mcp |

@@ -6504,6 +6504,21 @@
       }
     },
     {
+      "name": "ingest_tacho_memories",
+      "file": "tacho.memories.ingest.ts",
+      "domain": "tacho",
+      "mode": "sync",
+      "surfaces": [
+        "api"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "unit": true,
+        "docs": true
+      }
+    },
+    {
       "name": "get_tacho_session",
       "file": "tacho.session.get.ts",
       "domain": "tacho",

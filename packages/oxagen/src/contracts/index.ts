@@ -76,6 +76,7 @@ import { tachoEventsIngest } from "./tacho.events.ingest";
 import { tachoContainedLaunchRegister } from "./tacho.contained_launch.register";
 import { tachoBundleGet } from "./tacho.bundle.get";
 import { tachoGithubTokenIssue } from "./tacho.github_token.issue";
+import { tachoMemoriesIngest } from "./tacho.memories.ingest";
 import { tachoCommandDispatch } from "./tacho.command.dispatch";
 import { pauseWorkspaceRuns } from "./tacho.workspace_runs.pause";
 import { tachoMachineGroupAdd } from "./tacho.machine_group.add";
@@ -756,6 +757,7 @@ export {
   tachoEventsIngest,
   tachoBundleGet,
   tachoGithubTokenIssue,
+  tachoMemoriesIngest,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   pauseWorkspaceRuns,
@@ -1173,6 +1175,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   tachoEventsIngest,
   tachoBundleGet,
   tachoGithubTokenIssue,
+  tachoMemoriesIngest,
   tachoContainedLaunchRegister,
   tachoCommandDispatch,
   pauseWorkspaceRuns,
