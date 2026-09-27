@@ -1,4 +1,4 @@
-# ADR-204: A run's reads cover every chain it recorded
+# ADR-205: A run's reads cover every chain it recorded
 
 - **Status:** Accepted
 - **Date:** 2026-09-26
