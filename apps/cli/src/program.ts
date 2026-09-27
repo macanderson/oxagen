@@ -733,14 +733,24 @@ export function buildProgram(): Command {
   runCmd
     .command("show")
     .description(
-      "Show one run: its header, the pause in force, and the first page of its frames",
+      "Show one run: its header, the pause in force, a page of its frames, and its subagent chains",
     )
     .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--after <cursor>", "The cursor the previous page printed")
+    .option(
+      "--session <uuid>",
+      "A subagent chain's session id, from the chains the run lists",
+    )
     .option("--json", "Output the raw contract payload as JSON")
-    .action(async (runId: string, opts: { json?: boolean }) => {
-      const { runShow } = await import("./commands/run.js");
-      await runShow(runId, opts);
-    });
+    .action(
+      async (
+        runId: string,
+        opts: { after?: string; session?: string; json?: boolean },
+      ) => {
+        const { runShow } = await import("./commands/run.js");
+        await runShow(runId, opts);
+      },
+    );
   runCmd
     .command("chain")
     .description(

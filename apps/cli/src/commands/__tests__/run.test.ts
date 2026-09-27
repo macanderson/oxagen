@@ -587,8 +587,9 @@ describe("oxagen run transcript", () => {
     );
     expect(out[1]).toContain("thinking 1+, tools 1+");
     expect(out[1]).toContain("seal 1+, errors 1+");
-    expect(out.slice(-2)).toEqual([
-      "More entries: pass --after c2 for the next page.",
+    expect(out.slice(-3)).toEqual([
+      "Next page: pass --after c2.",
+      "A live run keeps a cursor after its last entry. Its next page reads what the run records next and can repeat entries from the last minute.",
       "The run is longer than one read carries. These entries cover its first part.",
     ]);
   });
@@ -602,6 +603,17 @@ describe("oxagen run transcript", () => {
     const { writer, out } = memoryWriter();
     await runTranscript("tse_0a1b2c", { query: "retry" }, writer);
     expect(out[2]).toBe('Search "retry": 2+ matched');
+  });
+
+  it("names a live run's tail cursor without promising more entries", async () => {
+    post.mockResolvedValue({ ...TRANSCRIPT, cursor: "c_tail" });
+    const { writer, out } = memoryWriter();
+    await runTranscript("tse_0a1b2c", {}, writer);
+    expect(out.join("\n")).not.toContain("More entries");
+    expect(out.slice(-2)).toEqual([
+      "Next page: pass --after c_tail.",
+      "A live run keeps a cursor after its last entry. Its next page reads what the run records next and can repeat entries from the last minute.",
+    ]);
   });
 
   it("prints no counts for a page read from a cursor, which carries none (negative)", async () => {

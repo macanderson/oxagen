@@ -754,8 +754,12 @@ export async function runTranscript(
     );
   }
   if (result.cursor !== null) {
+    // A live run answers a cursor on every read, past its last entry too, and
+    // its next page resends the entries whose frames arrived in the last
+    // minute (RECEIPT_SETTLE_MS). The output does not say which case this is.
+    writer.write(`Next page: pass --after ${result.cursor}.`);
     writer.write(
-      `More entries: pass --after ${result.cursor} for the next page.`,
+      "A live run keeps a cursor after its last entry. Its next page reads what the run records next and can repeat entries from the last minute.",
     );
   }
   if (!complete) {
@@ -775,6 +779,17 @@ interface RunShowPause {
   issuedAt: string;
   appliedAt: string | null;
   reason: string | null;
+}
+
+/** Mirrors the `get_run` contract's subagent chain head. */
+interface RunShowChainHead {
+  sessionUuid: string;
+  parentSessionUuid: string | null;
+  subagentId: string | null;
+  subagentType: string | null;
+  spawnCallId: string | null;
+  lastSeq: string | null;
+  frameCount: number;
 }
 
 /** Mirrors the `get_run` contract output, as far as `oxagen run show` prints it. */
@@ -809,6 +824,8 @@ export interface RunShowResult {
     cursor: string | null;
   };
   framesError?: { code: string; message: string };
+  /** Every subagent chain's head; absent on a ledger run. */
+  chains?: { cursor: string; heads: RunShowChainHead[]; complete: boolean };
 }
 
 /** What a pause state still waits on, for the states that wait on something. */
@@ -849,22 +866,66 @@ function pauseLines(pause: RunShowPause): string[] {
   return lines;
 }
 
+/** The subagent chain heads, one row each, and how to read one. */
+function writeChainHeads(
+  runId: string,
+  chains: NonNullable<RunShowResult["chains"]>,
+  writer: CommandWriter,
+): void {
+  const n = chains.heads.length;
+  writer.write("");
+  writer.write(`Subagent chains: ${chains.complete ? n : `${n}+`}`);
+  writeColumns(
+    [
+      ["Session", "Type", "Frames", "Last seq"],
+      ...chains.heads.map((head) => [
+        head.sessionUuid,
+        head.subagentType ?? NOT_RECORDED,
+        String(head.frameCount),
+        head.lastSeq ?? "none",
+      ]),
+    ],
+    writer,
+  );
+  if (!chains.complete) {
+    writer.write("The run has more subagent chains than one read lists.");
+  }
+  writer.write(
+    `Read a chain's frames with \`oxagen run show ${runId} --session <session>\`.`,
+  );
+}
+
+/** What `oxagen run show` reads: a page of one chain, from a cursor. */
+export interface RunShowOptions {
+  json?: boolean;
+  /** A frame cursor an earlier page printed, sent as `framesAfter`. */
+  after?: string;
+  /** A subagent chain's session id, sent as `sessionUuid`. */
+  session?: string;
+}
+
 /**
- * `oxagen run show <run-id>`: one run's header and the first page of its
- * frames, from `get_run`. It prints the run's name, agent, status, outcome,
+ * `oxagen run show <run-id>`: one run's header and a page of its frames,
+ * from `get_run`. It prints the run's name, agent, status, outcome,
  * operator, tier, replay grade, times, counts and cost, one fact per line.
- * Then it prints the pause in force when there is one, and a line per frame.
- * A fact the record does not carry prints as not recorded, never as a zero.
+ * Then it prints the pause in force when there is one, a line per frame, the
+ * cursor for the next page, and a wrapped run's subagent chains. `--after`
+ * reads the page past a cursor and `--session` reads a subagent chain. A
+ * fact the record does not carry prints as not recorded, never as a zero.
  */
 export async function runShow(
   runId: string,
-  opts: { json?: boolean } = {},
+  opts: RunShowOptions = {},
   writer: CommandWriter = stdoutWriter,
 ): Promise<void> {
   const out = createOutput({ json: opts.json }, writer);
   let result: RunShowResult;
   try {
-    result = await apiPostOrThrow<RunShowResult>("runs/get", { runId });
+    result = await apiPostOrThrow<RunShowResult>("runs/get", {
+      runId,
+      ...(opts.after === undefined ? {} : { framesAfter: opts.after }),
+      ...(opts.session === undefined ? {} : { sessionUuid: opts.session }),
+    });
   } catch (err) {
     out.error(err, "api");
     return;
@@ -892,13 +953,23 @@ export async function runShow(
   if (run.pause) for (const line of pauseLines(run.pause)) writer.write(line);
 
   writer.write("");
+  if (opts.session !== undefined) writer.write(`Chain: ${opts.session}`);
   const page = result.frames.frames;
+  // Only a read from the start of the run's own chain can set its page
+  // against the run's frame count.
+  const firstPage = opts.after === undefined && opts.session === undefined;
   if (result.framesError) {
     writer.write(
       `The frames could not be read: ${result.framesError.message}`,
     );
   } else if (page.length === 0) {
-    writer.write("The run has recorded no frame yet.");
+    writer.write(
+      opts.after !== undefined
+        ? "No frame lies past that cursor yet."
+        : opts.session !== undefined
+          ? "The chain has recorded no frame yet."
+          : "The run has recorded no frame yet.",
+    );
   } else {
     const rows = [
       ["Seq", "Observed", "Type", "Summary"],
@@ -916,12 +987,26 @@ export async function runShow(
           .join("  "),
       );
     }
-    if (run.frames > page.length) {
+    if (firstPage && run.frames > page.length) {
       writer.write("");
       writer.write(
         `The run holds ${run.frames} frames. These are its first ${page.length}.`,
       );
     }
+  }
+  const cursor = result.frames.cursor;
+  if (!result.framesError && cursor !== null) {
+    const session =
+      opts.session === undefined ? "" : ` --session ${opts.session}`;
+    writer.write(`Next page: pass --after ${cursor}${session}.`);
+    if (run.status === "live") {
+      writer.write(
+        "A live run keeps a cursor after its last frame. Its next page holds what the run records next.",
+      );
+    }
+  }
+  if (result.chains !== undefined && result.chains.heads.length > 0) {
+    writeChainHeads(run.id, result.chains, writer);
   }
   writer.write("");
   writer.write(

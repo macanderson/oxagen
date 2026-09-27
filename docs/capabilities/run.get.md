@@ -14,7 +14,7 @@ A wrapped run's subagents each record on a chain of their own, numbered from 0 (
 
 - API: `POST /v1/:org_slug/:workspace_slug/runs/get`
 - MCP: `get_run`
-- CLI: `oxagen run show <run-id> [--json]`
+- CLI: `oxagen run show <run-id> [--after <cursor>] [--session <uuid>] [--json]`. `--after` sends `framesAfter` and `--session` sends `sessionUuid`. Pretty mode prints the next page's cursor and one row per subagent chain head.
 - Agent: one of the in-app assistant's seven pins, offered on every turn (`INTERACTIVE_AGENT_CAPABILITIES`). Low risk, no approval.
 - Authentication: session (org Owner, Admin, or Member; workspace Owner or Member)
 - Capability name: `get_run`

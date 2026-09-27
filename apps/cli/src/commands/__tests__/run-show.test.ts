@@ -1,9 +1,10 @@
 /**
  * `oxagen run show <run-id>` over `get_run` (#2951): --json emits the exact
- * contract payload, pretty mode prints the run's header, the pause in force
- * and one line per frame, a fact the record does not hold reads as "not
- * recorded", and an API failure goes to stderr. The API client is mocked; no
- * network.
+ * contract payload, pretty mode prints the run's header, the pause in force,
+ * one line per frame, the next page's cursor and the subagent chains, a fact
+ * the record does not hold reads as "not recorded", and an API failure goes
+ * to stderr. --after and --session page a chain (#3823). The API client is
+ * mocked; no network.
  */
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import type { CommandWriter } from "../../lib/capture-writer.js";
@@ -93,6 +94,22 @@ const PAUSED: Pause = {
   appliedAt: "2026-09-25T09:05:02.000Z",
   reason: "Check the diff first",
 };
+
+const CHAIN_A = "6f1d2c3b-4a59-4e8f-9a0b-1c2d3e4f5a6b";
+const CHAIN_B = "7a2e3d4c-5b6a-4f90-8b1c-2d3e4f5a6b7c";
+
+type Head = NonNullable<RunShowResult["chains"]>["heads"][number];
+
+const head = (overrides: Partial<Head> = {}): Head => ({
+  sessionUuid: CHAIN_A,
+  parentSessionUuid: null,
+  subagentId: "agent-1",
+  subagentType: "Explore",
+  spawnCallId: "toolu_1",
+  lastSeq: "11",
+  frameCount: 12,
+  ...overrides,
+});
 
 /**
  * The header prints one fact per line: the id, agent, status, outcome,
@@ -317,6 +334,127 @@ describe("oxagen run show", () => {
     const text = out.join("\n");
     expect(text).not.toContain("—");
     expect(text).not.toContain("–");
+  });
+
+  it("sends --after as framesAfter and --session as sessionUuid", async () => {
+    post.mockResolvedValue(shown());
+    const { writer } = memoryWriter();
+    await runShow("tse_0a1b2c", { after: "cur_2", session: CHAIN_A }, writer);
+    expect(post).toHaveBeenCalledWith("runs/get", {
+      runId: "tse_0a1b2c",
+      framesAfter: "cur_2",
+      sessionUuid: CHAIN_A,
+    });
+  });
+
+  it("names the next page's cursor, with the chain it pages", async () => {
+    post.mockResolvedValue(shown({ status: "sealed" }));
+    const first = memoryWriter();
+    await runShow("tse_0a1b2c", {}, first.writer);
+    expect(first.out).toContain("Next page: pass --after cur_2.");
+    expect(first.out.join("\n")).not.toContain("A live run keeps a cursor");
+
+    const chain = memoryWriter();
+    await runShow("tse_0a1b2c", { session: CHAIN_A }, chain.writer);
+    expect(chain.out).toContain(`Chain: ${CHAIN_A}`);
+    expect(chain.out).toContain(
+      `Next page: pass --after cur_2 --session ${CHAIN_A}.`,
+    );
+  });
+
+  it("says a live run's cursor also reads what the run records next", async () => {
+    post.mockResolvedValue(shown());
+    const { writer, out } = memoryWriter();
+    await runShow("tse_0a1b2c", {}, writer);
+    expect(out).toContain(
+      "A live run keeps a cursor after its last frame. Its next page holds what the run records next.",
+    );
+  });
+
+  it("prints no next page when the read answers no cursor (negative)", async () => {
+    post.mockResolvedValue(
+      shown(
+        { status: "sealed", frames: 2 },
+        { frames: { ...FRAMES, cursor: null } },
+      ),
+    );
+    const { writer, out } = memoryWriter();
+    await runShow("tse_0a1b2c", {}, writer);
+    expect(out.join("\n")).not.toContain("Next page");
+  });
+
+  it("does not set a later page, or a subagent chain, against the run's frame count (negative)", async () => {
+    post.mockResolvedValue(shown());
+    const later = memoryWriter();
+    await runShow("tse_0a1b2c", { after: "cur_2" }, later.writer);
+    expect(later.out.join("\n")).not.toContain("The run holds");
+
+    const chain = memoryWriter();
+    await runShow("tse_0a1b2c", { session: CHAIN_A }, chain.writer);
+    expect(chain.out.join("\n")).not.toContain("The run holds");
+  });
+
+  it("says nothing lies past the cursor, rather than that the run recorded nothing (negative)", async () => {
+    post.mockResolvedValue(shown({}, { frames: { frames: [], cursor: null } }));
+    const { writer, out } = memoryWriter();
+    await runShow("tse_0a1b2c", { after: "cur_9" }, writer);
+    expect(out).toContain("No frame lies past that cursor yet.");
+    expect(out.join("\n")).not.toContain("The run has recorded no frame yet.");
+  });
+
+  it("lists each subagent chain's head and how to read its frames", async () => {
+    post.mockResolvedValue(
+      shown(
+        {},
+        {
+          chains: {
+            cursor: "ch_1",
+            complete: false,
+            heads: [
+              head({ sessionUuid: CHAIN_A, subagentType: "Explore" }),
+              head({
+                sessionUuid: CHAIN_B,
+                subagentType: null,
+                lastSeq: null,
+                frameCount: 0,
+              }),
+            ],
+          },
+        },
+      ),
+    );
+    const { writer, out } = memoryWriter();
+    await runShow("tse_0a1b2c", {}, writer);
+    const at = out.indexOf("Subagent chains: 2+");
+    expect(at).toBeGreaterThan(HEADER_LINES);
+    expect(out[at + 1]).toMatch(/^Session\s+Type\s+Frames\s+Last seq$/);
+    expect((out[at + 2] ?? "").split(/\s{2,}/)).toEqual([
+      CHAIN_A,
+      "Explore",
+      "12",
+      "11",
+    ]);
+    expect((out[at + 3] ?? "").split(/\s{2,}/)).toEqual([
+      CHAIN_B,
+      "not recorded",
+      "0",
+      "none",
+    ]);
+    expect(out[at + 4]).toBe(
+      "The run has more subagent chains than one read lists.",
+    );
+    expect(out[at + 5]).toBe(
+      "Read a chain's frames with `oxagen run show tse_0a1b2c --session <session>`.",
+    );
+  });
+
+  it("prints no chains section for a run with no subagent chain (negative)", async () => {
+    post.mockResolvedValue(
+      shown({}, { chains: { cursor: "ch_0", complete: true, heads: [] } }),
+    );
+    const { writer, out } = memoryWriter();
+    await runShow("tse_0a1b2c", {}, writer);
+    expect(out.join("\n")).not.toContain("Subagent chains");
   });
 
   it("routes an API failure to stderr and writes nothing to stdout (negative)", async () => {
