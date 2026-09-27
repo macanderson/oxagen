@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
 import { repoRefSchema, toolTargetSchema } from "../steering-repo/common";
-import { recordKindSchema } from "../steering-repo/record";
+import { recordKindSchema } from "../steering-repo/record-kind";
 
 /**
  * remember_lesson: an agent keeps one lesson from the run it is in

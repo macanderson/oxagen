@@ -101,6 +101,10 @@ export interface ActiveRecord {
   status: "active" | "archived";
   /** The record's body, as `recordStatement` gives it. */
   statement: string;
+  /** The record's `repos`, `applies_to`, and `tools`, which recall scopes by. */
+  repos: string[] | null;
+  appliesTo: string[] | null;
+  tools: string[] | null;
   /** The whole file, so a retirement can rewrite its status. */
   text: string;
 }
@@ -228,10 +232,12 @@ export interface CuratePlan {
   drops: Array<{ memoryId: string; reason: DropReason }>;
   /** Memories left waiting: a rejected statement with no new evidence, or one an open PR already proposes. */
   held: string[];
-  /** Memories left for a later day because the batch is full. */
+  /** Memories left for a later day because the batch or the PR's file limit is full. */
   deferred: string[];
   records: PlannedRecord[];
   retirements: PlannedRetirement[];
+  /** Lineages of records to archive that did not fit in the PR. A later pass proposes them again. */
+  queuedRetirements: string[];
   /** Memory records with no recall row. The store stamps one now, which starts their stale clock. */
   stampRecalls: string[];
 }
@@ -282,6 +288,11 @@ export interface RecallItem {
 
 /** The reads and writes of the five memory tables. store.ts is the Postgres implementation. */
 export interface MemoryStore {
+  /**
+   * Every workspace the daily curator has work in: waiting memories, an open
+   * memory PR, or a recall row for the retirement check. Reads across tenants.
+   */
+  listCurateWorkspaces(): Promise<MemoryScope[]>;
   /** Store the run's reflection. Returns its id, or null when the run already has one. */
   insertReflection(
     scope: MemoryScope,

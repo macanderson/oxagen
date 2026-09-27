@@ -175,11 +175,18 @@ describe("handleHookEvent over the recorded session", () => {
     for (const name of [
       "05-PostToolUse.json",
       "13-SubagentStart.json",
-      "16-Stop.json",
       "24-SessionEnd.json",
     ]) {
       expect(decisions[name]).toEqual({});
     }
+    // The policy denied the Write above, which is a signal, so the first Stop
+    // asks once for a reflection before the agent finishes (ADR-206).
+    expect(decisions["16-Stop.json"]).toEqual({
+      decision: "block",
+      reason: expect.stringContaining(
+        "This run had a call the policy denied (Write).",
+      ),
+    });
     // The denied call chained policy_decision + token_denied, no tool_requested.
     const write = all.filter(
       (e) =>
