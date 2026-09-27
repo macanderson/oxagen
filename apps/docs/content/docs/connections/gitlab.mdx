@@ -48,6 +48,18 @@ The API equivalent is two calls: `POST /v1/{orgSlug}/{workspaceSlug}/repository/
 
 A project that moves to another group keeps working, because Oxagen addresses it by its numeric id. Records stay stamped with the path you approved when you bound it.
 
+## Approvals
+
+In `team` and `regulated` mode, a Context PR merges only after a workspace member other than the author approves it. GitLab does not record which commit a reviewer approved, so Oxagen relies on the project's **Reset approvals on push** setting. With the setting on, GitLab drops every approval when someone pushes to the merge request, so each approval left covers the current commit.
+
+Oxagen turns the setting on when it provisions a steering repo. The setting needs GitLab Premium. To turn it on yourself:
+
+1. On gitlab.com, open the project and go to **Settings → Merge requests → Approval settings**.
+2. Select **Remove all approvals when commits are added to the source branch**, which is the label GitLab gives the setting.
+3. Save the changes.
+
+When the setting is off, or GitLab does not say, Oxagen refuses the merge with `approvals_not_head_bound` and merges nothing. It refuses an owner's merge too.
+
 ## When the token stops working
 
 Revoking or expiring the token stops steering on the project. Oxagen refuses with `gitlab_credential_rejected` and names the project. It never names the token. To repair it, create a new token and paste it into the form on **Repositories**. The binding stays on the same project.

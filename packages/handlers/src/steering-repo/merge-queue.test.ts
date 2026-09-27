@@ -309,7 +309,7 @@ describe("mergeApproval", () => {
       { userId: AUTHOR, login: "author", commitSha: head },
       { userId: MEMBER, login: "member", commitSha: "an-older-head" },
       { userId: GUEST, login: "guest", commitSha: head },
-      // GitLab does not say which head was approved, so the approval stands.
+      // A host that names no head leaves the approval standing.
       { userId: REVIEWER, login: "reviewer", commitSha: null },
       { userId: REVIEWER, login: "reviewer", commitSha: head },
     ];

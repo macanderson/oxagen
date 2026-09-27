@@ -109,7 +109,11 @@ while the row's head is the one the checks read (`head_moved` otherwise).
 `merge_context_pr` is refused until `checks_passed`, unless the caller is a
 reviewer the governance mode allows, when the PR's head is no longer the
 commit the checks ran on (`head_moved`), and when the PR no longer targets the
-production branch (`base_moved`). GitHub merges first (squash, pinned
+production branch (`base_moved`). Outside solo mode it is refused
+`approval_required` when no approval stands at the head that merges, unless
+the merger is an owner or holds `merge_pr_without_review`. On GitLab it is
+refused `approvals_not_head_bound` when the project keeps approvals after a
+push, or GitLab will not say whether it does. GitHub merges first (squash, pinned
 to that commit); a PR GitHub already holds merged is resumed from its merge
 commit. The head branch is deleted, then a confirmed merge publishes: the
 registry row, a new immutable version holding the file at that commit, the
