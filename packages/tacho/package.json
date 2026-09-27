@@ -13,7 +13,8 @@
     "./host": "./src/host/index.ts",
     "./cli": "./src/cli/index.ts",
     "./trace": "./src/trace/index.ts",
-    "./policy": "./src/policy/index.ts"
+    "./policy": "./src/policy/index.ts",
+    "./local-servers": "./src/collector/local-servers/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

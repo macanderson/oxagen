@@ -59,6 +59,13 @@ describe("readBoundRepository", () => {
     ).resolves.toMatchObject({ provider: "github", fullName: "acme/widgets" });
   });
 
+  it("reads a steering head as the main repository, not a linked one", async () => {
+    answer({ ...ROW, role: "steering" });
+    await expect(
+      readBoundRepository(SCOPE, "rpb_0123abcd"),
+    ).resolves.toMatchObject({ role: "main" });
+  });
+
   it("refuses a GitLab binding by name rather than reaching for GitHub", async () => {
     answer({ ...ROW, provider: "gitlab", fullName: "acme/platform/rules" });
     await expect(

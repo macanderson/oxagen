@@ -27,7 +27,7 @@ import {
 } from "@oxagen/oxagen/contracts/context.steering.published.get";
 import { WORKSPACE_LINK_PATH } from "@oxagen/oxagen/steering-repo/paths";
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   readBoundRepository,
   repositoryHostUnsupported,
@@ -88,7 +88,10 @@ export async function readMainBoundRepository(
         and(
           eq(schema.repositoryBindingHeads.orgId, scope.orgId),
           eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
-          eq(schema.repositoryBindingHeads.role, "main"),
+          inArray(
+            schema.repositoryBindingHeads.role,
+            schema.STEERING_HEAD_ROLES,
+          ),
         ),
       )
       .limit(1);

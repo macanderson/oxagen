@@ -20,7 +20,7 @@ interface DeclaredRow {
   slug: string;
   version: number;
   measures: Record<string, { path: string; type: string; unit: string }>;
-  consequenceTags: string[];
+  impacts: string[];
   classification: null;
 }
 
@@ -45,7 +45,7 @@ const PAYMENT_TOOL: DeclaredRow = {
   measures: {
     amount: { path: "amount.value", type: "amount", unit: "USD" },
   },
-  consequenceTags: ["moves_money"],
+  impacts: ["moves_money"],
   classification: null,
 };
 
@@ -86,7 +86,7 @@ describe("assertToolsDeclareMeasures, kind (ADR-108)", () => {
       measures: {
         batch_size: { path: "batchSize", type: "count", unit: "USD" },
       },
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       classification: null,
     };
     const limits: MandateLimits = {
@@ -138,7 +138,7 @@ describe("assertToolsDeclareMeasures, kind (ADR-108)", () => {
         amount: { path: "amount", type: "amount", unit: "USD" },
         rows: { path: "rowCount", type: "count", unit: "rows" },
       },
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       classification: null,
     };
     const limits: MandateLimits = {
@@ -164,7 +164,7 @@ describe("assertToolsDeclareMeasures, kind (ADR-108)", () => {
       measures: {
         amount: { path: "amount", type: "count", unit: "USD" },
       },
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       classification: null,
     };
     const limits: MandateLimits = {
@@ -203,7 +203,7 @@ describe("assertToolsDeclareMeasures, kind (ADR-108)", () => {
       measures: {
         amount: { path: "amount.value", type: "amount", unit: "USDC" },
       },
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       classification: null,
     };
     const limits: MandateLimits = {
@@ -239,7 +239,7 @@ describe("assertToolsDeclareMeasures, kind (ADR-108)", () => {
         },
         rows: { path: "rowCount", type: "count", unit: "rows" },
       },
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       classification: null,
     };
     const limits: MandateLimits = {
@@ -265,7 +265,7 @@ describe("assertToolsDeclareMeasures, kind (ADR-108)", () => {
       measures: {
         amount: { path: "amount.value", type: "amount", unit: "USDC" },
       },
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       classification: null,
     };
     const limits: MandateLimits = {
@@ -296,7 +296,7 @@ describe("assertToolsDeclareMeasures, kind (ADR-108)", () => {
       measures: {
         amount: { path: "amount.value", type: "amount", unit: "USDC" },
       },
-      consequenceTags: ["moves_money"],
+      impacts: ["moves_money"],
       classification: null,
     };
     const limits: MandateLimits = {

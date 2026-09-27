@@ -1,5 +1,5 @@
 import { schema, withTenantDb } from "@oxagen/database";
-import { and, desc, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { HandlerError } from "@oxagen/oxagen";
 import { skillConfigSchema, type SkillConfig } from "@oxagen/oxagen/skills";
 
@@ -137,7 +137,7 @@ export const postgresSkillConfigStore: SkillConfigStore = {
           and(
             eq(heads.orgId, scope.orgId),
             eq(heads.workspaceId, scope.workspaceId),
-            eq(heads.role, "main"),
+            inArray(heads.role, schema.STEERING_HEAD_ROLES),
             eq(heads.currentBindingId, snapshot.repositoryBindingId),
             eq(connections.orgId, scope.orgId),
             eq(connections.workspaceId, scope.workspaceId),

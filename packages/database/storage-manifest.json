@@ -23,6 +23,13 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "add_group_machine",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "org",
       "name": "add_org_member",
       "reads": [],
@@ -2221,6 +2228,13 @@
       "writes": []
     },
     {
+      "domain": "tacho",
+      "name": "list_machine_groups",
+      "reads": [],
+      "surfaces": [],
+      "writes": []
+    },
+    {
       "domain": "mandate",
       "name": "list_mandates",
       "reads": [],
@@ -3041,6 +3055,13 @@
       "surfaces": [
         "mcp"
       ],
+      "writes": []
+    },
+    {
+      "domain": "tacho",
+      "name": "remove_group_machine",
+      "reads": [],
+      "surfaces": [],
       "writes": []
     },
     {
@@ -4206,7 +4227,7 @@
       "writes": []
     }
   ],
-  "contentHash": "c321fa1cbcedf1f3427109601b18c1ac2866b011dbf26647caa83a255e89a3ad",
+  "contentHash": "c8dbef4d7a8c985e1248fb1e0cc159198b4dcb9cdb0d73262d43366f69d9b0ea",
   "domains": [
     {
       "name": "agent",
@@ -4595,6 +4616,7 @@
         "postgres:tacho.gateway_chains",
         "postgres:tacho.hosts",
         "postgres:tacho.incidents",
+        "postgres:tacho.machine_group_members",
         "postgres:tacho.run_pull_requests",
         "postgres:tacho.session_commands",
         "postgres:tacho.session_files",
@@ -4685,7 +4707,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 166
+      "tableCount": 167
     },
     {
       "domains": [
@@ -10209,7 +10231,7 @@
           "type": "text"
         },
         {
-          "name": "consequence_tags",
+          "name": "impacts",
           "nullable": false,
           "primaryKey": false,
           "type": "text[]"
@@ -18758,6 +18780,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "mcp",
@@ -18897,6 +18925,18 @@
         },
         {
           "name": "last_import_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "origin",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "steering_name",
           "nullable": true,
           "primaryKey": false,
           "type": "text"
@@ -22776,6 +22816,65 @@
           "type": "timestamp with time zone"
         },
         {
+          "name": "created_by_id",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "group_name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "host_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:tacho.hosts",
+          "type": "uuid"
+        }
+      ],
+      "domain": "tacho",
+      "id": "postgres:tacho.machine_group_members",
+      "name": "machine_group_members",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "public_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "citext"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
           "name": "updated_at",
           "nullable": false,
           "primaryKey": false,
@@ -24619,7 +24718,7 @@
           "type": "text"
         },
         {
-          "name": "consequence_tags",
+          "name": "impacts",
           "nullable": false,
           "primaryKey": false,
           "type": "text[]"

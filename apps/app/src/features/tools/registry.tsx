@@ -11,7 +11,7 @@
 //    waits on approval and the banner says the proposals are not recorded
 //    (#3921). The tab's count is the registry's, never "N to approve".
 //  - The ten categories the design groups by are not a registry attribute yet
-//    (#3921). The chips and the Category column show the consequence tags the
+//    (#3921). The chips and the Category column show the impacts the
 //    classification records, which is what `list_tool_versions` filters on.
 //  - Toolbelts and Agents: belts are stored (ADR-198) and listed on their own
 //    tab, but no read answers which belts hold one tool version (#3852).
@@ -52,7 +52,7 @@ import { ToolDialog } from "./tool-dialog";
 import { type ToolNameStyle, type ToolsAt, toolsLink } from "./view";
 
 /**
- * Every consequence tag the versions in `items` carry in their classification,
+ * Every impact the versions in `items` carry in their classification,
  * with its count. Not the registry's tags (the read is a page with no facet
  * aggregate), not an unfiltered tally while a tag narrows the page, and not
  * the declared tags a filter also matches: the chips say each of these.
@@ -62,7 +62,7 @@ function categoryCounts(
 ): readonly { tag: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const item of items) {
-    for (const tag of item.classification?.consequenceTags ?? []) {
+    for (const tag of item.classification?.impacts ?? []) {
       counts.set(tag, (counts.get(tag) ?? 0) + 1);
     }
   }

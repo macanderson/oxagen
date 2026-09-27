@@ -5,7 +5,7 @@ export const agentMcpRegister = registerCapability({
   name: "register_mcp_server",
   domain: "agent",
   description:
-    "Register an external MCP server with the workspace; its tools become available to the agent after health check",
+    "Register an external MCP server with the workspace; its tools become available to the agent after health check. Once the workspace's tools live in its steering repo, a remote server is proposed through a steering PR instead and stays off until that PR merges.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "e2e", "docs", "app"],
@@ -27,6 +27,14 @@ export const agentMcpRegister = registerCapability({
     mcpServerId: z.string(),
     healthStatus: z.enum(["healthy", "degraded", "unreachable"]),
     discoveredTools: z.array(z.string()),
+    /**
+     * Set when the workspace's tools live in its steering repo: the steering
+     * PR that adds the server. The server stays off until the PR merges and
+     * the next publish connects it.
+     */
+    steeringPr: z
+      .object({ number: z.number().int().positive(), url: z.string().url() })
+      .optional(),
   }),
 });
 

@@ -24,6 +24,7 @@ import {
   type FindingDraft,
   type Prose,
 } from "./shared";
+import { spendWithNoOutcome } from "./spend-with-no-outcome";
 import { spinLoops } from "./spin-loops";
 import { unpagedResults } from "./unpaged-results";
 
@@ -41,6 +42,7 @@ export { SPIN_LOOP_REPEATS, spinCalls } from "./spin-loops";
 export const DETECTORS: readonly Detector[] = [
   spinLoops,
   repeats,
+  spendWithNoOutcome,
   cacheWritesNeverRead,
   unpagedResults,
   modelClassFit,

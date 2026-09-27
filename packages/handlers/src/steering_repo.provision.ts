@@ -40,8 +40,15 @@ import {
 } from "@oxagen/oxagen/steering-repo";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import {
+  GITHUB_STEERING_PROVIDER,
+  GITLAB_STEERING_PROVIDER,
+  STEERING_APP_UNCONFIGURED_MESSAGE,
+  steeringAppFromEnv,
+} from "./lib/steering-app";
 import { logger } from "./logger";
 import {
+  workspaceRepositoriesLock,
   writeRepositoryHead,
   type RepositoryHeadRole,
 } from "./repository.binding-write";
@@ -58,14 +65,14 @@ export const STEERING_REPO_SETTING = "steering_repo";
 /** The key in `organizations.settings` that names the chosen connection. */
 export const STEERING_CONNECTION_SETTING = "steering_connection";
 
-/** `oauth_accounts.provider` of the owner's Oxagen Steering user token. */
-export const GITHUB_STEERING_PROVIDER = "github_steering";
-
-/**
- * `oauth_accounts.provider` of a GitLab group access token for steering repos.
- * `provider_user_id` holds the group's numeric id.
- */
-export const GITLAB_STEERING_PROVIDER = "gitlab_steering";
+// The provider names and the app's settings live in `lib/steering-app.ts`, so
+// the readers that open a steering head can share them without importing this
+// module. They are re-exported here for this module's callers.
+export {
+  GITHUB_STEERING_PROVIDER,
+  GITLAB_STEERING_PROVIDER,
+  steeringAppFromEnv,
+};
 
 /** The steps, in the order the job runs them. */
 export const STEERING_REPO_STEPS = [
@@ -304,7 +311,7 @@ function requireGithub(ctx: StepContext): GithubSteeringClients {
   if (clients === null)
     throw new SteeringProvisionBlockedError(
       "steering_app_unconfigured",
-      "The Oxagen Steering app is not configured on this deployment. Set OXAGEN_STEERING_APP_ID, OXAGEN_STEERING_APP_PRIVATE_KEY, and OXAGEN_STEERING_APP_SLUG.",
+      STEERING_APP_UNCONFIGURED_MESSAGE,
     );
   return clients;
 }
@@ -769,17 +776,6 @@ function bagValue(settings: unknown, key: string): unknown {
   return (settings as Record<string, unknown>)[key] ?? null;
 }
 
-/** The Oxagen Steering app's settings, or null when any is unset. */
-export function steeringAppFromEnv(
-  env: Readonly<Record<string, string | undefined>> = process.env,
-): { app: gh.SteeringApp; privateKey: string } | null {
-  const id = Number(env["OXAGEN_STEERING_APP_ID"]);
-  const privateKey = env["OXAGEN_STEERING_APP_PRIVATE_KEY"];
-  const slug = env["OXAGEN_STEERING_APP_SLUG"];
-  if (!Number.isInteger(id) || id <= 0 || !privateKey || !slug) return null;
-  return { app: { symbol: OXAGEN_STEERING_APP, id, slug }, privateKey };
-}
-
 /** Mint an installation token for the Oxagen Steering app. */
 export async function steeringInstallationRest(
   config: { app: gh.SteeringApp; privateKey: string },
@@ -806,6 +802,21 @@ interface StoredToken {
   /** The GitHub user id, or the GitLab group id. */
   provider_user_id: string;
   token: string;
+}
+
+/**
+ * The stored group access token for one GitLab group, or null when none is
+ * stored or it cannot be used. `provider_user_id` holds the group's id. The
+ * steering readers call this for a head whose connection is `gitlab_steering`,
+ * because that token lives on the organization, not on the connection.
+ */
+export async function steeringGroupToken(
+  orgId: string,
+  groupId: number,
+): Promise<string | null> {
+  for (const stored of await storedTokens(orgId, GITLAB_STEERING_PROVIDER))
+    if (Number(stored.provider_user_id) === groupId) return stored.token;
+  return null;
 }
 
 /**
@@ -1070,6 +1081,60 @@ export function steeringRepoProvisionDeps(options: {
       const tenant = { orgId: scope.orgId, workspaceId: scope.workspaceId };
       return runInTenantScope(tenant, () =>
         withTenantDb(async (tx) => {
+          // The lock every writer of the workspace's heads takes, so a
+          // concurrent bind_main_repository cannot write a main head between
+          // the demotion below and the steering head's insert.
+          await tx.execute(workspaceRepositoriesLock(scope.workspaceId));
+          // A workspace holds one steering source, main or steering. No
+          // index holds that per workspace: every writer checks it under the
+          // lock above. A main head that bind_main_repository wrote before
+          // this step ran becomes a linked repository, the rank S8's
+          // migration gives it, so the workspace keeps one steering source.
+          // Transitional: once no head can be main, this matches nothing.
+          const demoted = await tx
+            .update(schema.repositoryBindingHeads)
+            .set({ role: "linked", updatedAt: now })
+            .where(
+              and(
+                eq(schema.repositoryBindingHeads.orgId, scope.orgId),
+                eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
+                eq(schema.repositoryBindingHeads.role, "main"),
+              ),
+            )
+            .returning({ id: schema.repositoryBindingHeads.id });
+          if (demoted.length > 0)
+            logger.info(
+              { ...tenant, demoted: demoted.length },
+              "steering_repo.provision: the workspace's main repository is now a linked repository",
+            );
+          // A steering head for another repository means an earlier run bound
+          // a different steering repo. A second one would leave the readers
+          // to pick between them, so the job stops for a person to decide.
+          const steering = await tx
+            .select({
+              provider: schema.repositoryBindingHeads.provider,
+              providerRepositoryId:
+                schema.repositoryBindingHeads.providerRepositoryId,
+            })
+            .from(schema.repositoryBindingHeads)
+            .where(
+              and(
+                eq(schema.repositoryBindingHeads.orgId, scope.orgId),
+                eq(schema.repositoryBindingHeads.workspaceId, scope.workspaceId),
+                eq(schema.repositoryBindingHeads.role, "steering"),
+              ),
+            );
+          if (
+            steering.some(
+              (h) =>
+                h.provider !== provider ||
+                h.providerRepositoryId !== providerRepositoryId,
+            )
+          )
+            throw new SteeringProvisionBlockedError(
+              "steering_repo_already_bound",
+              `Workspace ${scope.workspaceId} already has a steering repository, so this job does not bind ${repository.full_name} as a second one.`,
+            );
           const [existing] = await tx
             .select({ id: schema.sourceConnections.id })
             .from(schema.sourceConnections)

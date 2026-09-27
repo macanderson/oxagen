@@ -121,7 +121,7 @@ describe("RequestMandate", () => {
       "changes_entitlement",
     ]);
     for (const box of chosen) expect(box).not.toBeChecked();
-    expect(dialog()).toHaveTextContent("Name every consequence");
+    expect(dialog()).toHaveTextContent("Name every impact");
     // The six are a starter set; a workspace defines its own, and a tool
     // declaring one of those must still be nameable here.
     expect(dialog()).toHaveTextContent("the starter set");
@@ -145,7 +145,7 @@ describe("RequestMandate", () => {
     await ask(user);
     expect(requestMandate).toHaveBeenCalledWith("acme", "core-platform", {
       agentId: "agt_invoicebot",
-      consequenceTags: "moves_money",
+      impacts: "moves_money",
       measure: "rows",
       unit: "rows",
       perCall: "",
@@ -217,7 +217,7 @@ describe("RequestMandate", () => {
     expect(requestMandate).toHaveBeenCalledWith(
       "acme",
       "core-platform",
-      expect.objectContaining({ consequenceTags: "moves_money,ships_code" }),
+      expect.objectContaining({ impacts: "moves_money,ships_code" }),
     );
   });
 

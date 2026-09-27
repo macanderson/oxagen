@@ -4,7 +4,7 @@
  * declarations name paths for.
  *
  * Both decisions use them. The mandate check (ADR-059) reads the tool's
- * consequence tags and the measures a mandate limits; the auto-approval
+ * impacts and the measures a mandate limits; the auto-approval
  * evaluator (ADR-070) reads the same tool's safety classification and every
  * measure a rule may cap or allow-list. They live here so neither module has
  * to import the other.
@@ -17,7 +17,7 @@ import {
 } from "@oxagen/oxagen/mandates/schemas";
 import {
   effectiveSideEffect,
-  unionConsequenceTags,
+  unionImpacts,
 } from "@oxagen/oxagen/contracts/tool.classification";
 import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import type { AutoApprovalRule } from "@oxagen/oxagen/approval-rules/schemas";
@@ -35,8 +35,8 @@ export interface DeclaredTool {
   riskGrade: string;
   /** The effective side-effect class: the more severe of declared and classified. */
   sideEffect: string | null;
-  /** The declared consequence tags unioned with the classified ones. */
-  consequenceTags: string[];
+  /** The declared impacts unioned with the classified ones. */
+  impacts: string[];
   measures: MeasureDeclarations;
   effectIdPath: string | null;
 }
@@ -54,7 +54,7 @@ export async function loadDeclaredTool(
       riskGrade: schema.toolVersions.riskGrade,
       classifiedRiskGrade: schema.toolVersions.classifiedRiskGrade,
       classification: schema.toolVersions.classification,
-      consequenceTags: schema.toolVersions.consequenceTags,
+      impacts: schema.toolVersions.impacts,
       measures: schema.toolVersions.measures,
       effectIdPath: schema.toolVersions.effectIdPath,
     })
@@ -93,7 +93,7 @@ export async function loadDeclaredTool(
     // rule-authoring gate read the same union, so a rule cannot be authored
     // under a gate that cannot see a tag the floor will later enforce.
     sideEffect: effectiveSideEffect(row),
-    consequenceTags: unionConsequenceTags(row),
+    impacts: unionImpacts(row),
     // Read-time schema (ADR-111): a version published before the ISO 4217
     // check landed can still carry a legacy non-ISO unit on disk, and this
     // is on the path every mandate-gated call takes. Refusing it here
@@ -369,7 +369,7 @@ export async function buildAutoApprovalSubject(
             version: tool.version,
             riskGrade: tool.riskGrade,
             sideEffect: tool.sideEffect,
-            consequenceTags: tool.consequenceTags,
+            impacts: tool.impacts,
           },
   };
   // The standing-approval lookup is a scan of approval history sorted by

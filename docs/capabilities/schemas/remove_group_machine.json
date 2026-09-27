@@ -1,0 +1,53 @@
+{
+  "name": "remove_group_machine",
+  "domain": "tacho",
+  "description": "Take a machine out of a machine group, so it stops running the local servers that name only that group.",
+  "mode": "sync",
+  "surfaces": [],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "group": {
+        "type": "string"
+      },
+      "machineId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "group",
+      "machineId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "group": {
+        "type": "string"
+      },
+      "machineId": {
+        "type": "string"
+      },
+      "removed": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "group",
+      "machineId",
+      "removed"
+    ],
+    "additionalProperties": false
+  }
+}
