@@ -813,6 +813,50 @@ describe("landSteeringPr: a refused merge", () => {
     expect(gh.merges).toEqual([]);
   });
 
+  it("leaves a push that lands on the stamp when a later step fails", async () => {
+    const gh = steeringRepo();
+    const lineage = "a-intel.platform.release-notes";
+    const pr = await openPr(gh, lineage);
+    let pushed = "";
+    gh.onCommitFiles = () => {
+      if (pushed) return;
+      pushed = gh.commit(pr.branch, pr.path, record(lineage, "Dated notes."));
+    };
+    gh.reportCheckRun = vi
+      .fn()
+      .mockRejectedValue(new Error("GitHub API error 502: Bad Gateway"));
+    await expect(land(gh, pr)).rejects.toThrow("502");
+    expect(gh.resets).toEqual([]);
+    expect(await gh.branchHead(REPO, pr.branch)).toBe(pushed);
+    expect(gh.merges).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: pr.branch, stamp: gh.stamps[0]!.sha }),
+      expect.stringContaining("Oxagen left it"),
+    );
+  });
+
+  it("refuses head_moved and leaves the branch when main moves and a push lands on the stamp", async () => {
+    const gh = steeringRepo();
+    const lineage = "a-intel.platform.release-notes";
+    const pr = await openPr(gh, lineage);
+    let pushed = "";
+    gh.onCommitFiles = () => {
+      if (pushed) return;
+      gh.commit("main", "README.md", "moved\n");
+      pushed = gh.commit(pr.branch, pr.path, record(lineage, "Dated notes."));
+    };
+    const err = await refusal(land(gh, pr));
+    expect(err).toMatchObject({
+      code: "conflict",
+      reason: "head_moved",
+      message: expect.stringContaining(`steering: stamp #${pr.number}`),
+    });
+    expect(gh.stamps).toHaveLength(1);
+    expect(gh.resets).toEqual([]);
+    expect(await gh.branchHead(REPO, pr.branch)).toBe(pushed);
+    expect(gh.merges).toEqual([]);
+  });
+
   it("still answers the merge's refusal when the stamp cannot be dropped", async () => {
     const gh = steeringRepo();
     const pr = await openPr(gh, "a-intel.platform.release-notes");

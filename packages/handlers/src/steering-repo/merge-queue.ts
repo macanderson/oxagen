@@ -416,6 +416,8 @@ export const LAND_ATTEMPTS = 3;
  *
  * A merge the host refuses drops the stamp too, as does any other failure
  * after the stamp lands, so a retry starts from the head the author pushed.
+ * A stamp is dropped only while the branch still points at it, so a push
+ * that lands on top of the stamp is never discarded.
  */
 export async function landSteeringPr(input: LandInput): Promise<Landed> {
   const { host, repo } = input;
@@ -484,7 +486,12 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
       }
 
       if ((await host.branchHead(repo, repo.defaultBranch)) !== main) {
-        if (stamp) await host.resetBranch(repo, input.branch, head);
+        if (
+          stamp &&
+          !(await dropStamp(host, repo, input.branch, stamp.sha, head))
+        ) {
+          throw stampedBranchMoved(input.branch, input.number);
+        }
         continue;
       }
 
@@ -511,7 +518,8 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
         attempts: attempt,
       };
     } catch (err) {
-      if (stamp) await dropStamp(host, repo, input.branch, head);
+      if (stamp)
+        await dropStampQuietly(host, repo, input.branch, stamp.sha, head);
       throw err;
     }
   }
@@ -522,21 +530,56 @@ export async function landSteeringPr(input: LandInput): Promise<Landed> {
   });
 }
 
-/** Point the branch back at the checked head, dropping the stamp; log a failure. */
+/**
+ * Point the branch back at the checked head, dropping the stamp. The reset
+ * forces the branch backwards, so it runs only while the branch is still at
+ * the stamp. A branch that moved holds a push Oxagen did not make, and it is
+ * left alone: the answer is false. Neither host client offers a
+ * compare-and-swap for a reset, so a push in the moment between the read and
+ * the reset is still lost (#4504).
+ */
 async function dropStamp(
   host: SteeringHost,
   repo: SteeringRepository,
   branch: string,
+  stamp: string,
+  head: string,
+): Promise<boolean> {
+  if ((await host.branchHead(repo, branch)) !== stamp) return false;
+  await host.resetBranch(repo, branch, head);
+  return true;
+}
+
+/** {@link dropStamp} on the way out of a failure: it logs and never throws. */
+async function dropStampQuietly(
+  host: SteeringHost,
+  repo: SteeringRepository,
+  branch: string,
+  stamp: string,
   head: string,
 ): Promise<void> {
   try {
-    await host.resetBranch(repo, branch, head);
+    if (!(await dropStamp(host, repo, branch, stamp, head))) {
+      logger.warn(
+        { branch, stamp, head },
+        "steering merge queue: the branch moved after the stamp, so Oxagen left it; the stamp commit stays on the branch until someone removes it",
+      );
+    }
   } catch (err) {
     logger.warn(
       { err, branch, head },
       "steering merge queue: the stamp commit could not be dropped; the next merge refuses head_moved until the branch is reset",
     );
   }
+}
+
+/** A push reached the branch after the stamp, so the stamp stays under it. */
+function stampedBranchMoved(branch: string, number: number): HandlerError {
+  return new HandlerError({
+    code: "conflict",
+    reason: "head_moved",
+    message: `${branch} moved after Oxagen stamped it, so Oxagen left the branch alone. Remove the commit "steering: stamp #${number}" from the branch, then run the checks and merge again.`,
+  });
 }
 
 // ── After the merge ──────────────────────────────────────────────────────────
