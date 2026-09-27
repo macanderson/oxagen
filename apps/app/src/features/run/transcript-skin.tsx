@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import type { RunRow } from "@/data/contracts/runs";
 
 /** Claude Code, Codex, Cursor, or stella. */
-export type Skin = "cc" | "cx" | "cu" | "st";
+type Skin = "cc" | "cx" | "cu" | "st";
 
 type Harness = NonNullable<RunRow["harness"]>;
 
