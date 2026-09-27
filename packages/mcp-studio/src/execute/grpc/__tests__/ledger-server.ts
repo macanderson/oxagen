@@ -17,9 +17,9 @@ import {
 } from "@bufbuild/protobuf";
 import { FileDescriptorSetSchema } from "@bufbuild/protobuf/wkt";
 import {
+  Metadata,
   Server,
   ServerCredentials,
-  type Metadata,
   type MethodDefinition,
   type sendUnaryData,
   type ServerUnaryCall,
@@ -31,19 +31,23 @@ import { LEDGER_DESCRIPTOR_SET } from "./ledger-descriptor-set";
 
 export const LEDGER_SERVICE = "a_intel.ledger.v1.Ledger";
 
-/** Throw it from a handler to end the call with this status. */
+/** Throw it from a handler to end the call with this status and these trailers. */
 export class GrpcFailure extends Error {
   readonly code: number;
+  readonly trailers: Record<string, string | Buffer>;
 
-  constructor(code: number, message: string) {
+  constructor(code: number, message: string, trailers: Record<string, string | Buffer> = {}) {
     super(message);
     this.name = "GrpcFailure";
     this.code = code;
+    this.trailers = trailers;
   }
 }
 
 export interface ReceivedCall {
   method: string;
+  /** The :authority the client sent. */
+  host: string;
   request: JsonValue;
   metadata: Record<string, string[]>;
 }
@@ -115,9 +119,13 @@ function metadataMap(metadata: Metadata): Record<string, string[]> {
   return map;
 }
 
-function failureStatus(error: unknown): { code: number; details: string } {
-  if (error instanceof GrpcFailure) return { code: error.code, details: error.message };
-  return { code: STATUS_INTERNAL, details: error instanceof Error ? error.message : String(error) };
+function failureStatus(error: unknown): { code: number; details: string; metadata: Metadata } {
+  const metadata = new Metadata();
+  if (!(error instanceof GrpcFailure)) {
+    return { code: STATUS_INTERNAL, details: error instanceof Error ? error.message : String(error), metadata };
+  }
+  for (const [name, value] of Object.entries(error.trailers)) metadata.add(name, value);
+  return { code: error.code, details: error.message, metadata };
 }
 
 const identity = (bytes: Buffer): Buffer => bytes;
@@ -145,16 +153,21 @@ export async function startLedgerServer(options: LedgerServerOptions = {}): Prom
     close: () => server.forceShutdown(),
   };
 
-  const receive = (name: string, requestType: string, request: Buffer, metadata: Metadata): ReceivedCall => {
-    const call: ReceivedCall = { method: name, request: decode(requestType, request), metadata: metadataMap(metadata) };
-    calls.push(call);
-    return call;
+  const receive = (name: string, requestType: string, call: ServerUnaryCall<Buffer, Buffer>): ReceivedCall => {
+    const received: ReceivedCall = {
+      method: name,
+      host: call.getHost(),
+      request: decode(requestType, call.request),
+      metadata: metadataMap(call.metadata),
+    };
+    calls.push(received);
+    return received;
   };
 
   const unary =
     (name: "GetEntry" | "PostEntry" | "ReverseEntry", requestType: string) =>
     (call: ServerUnaryCall<Buffer, Buffer>, callback: sendUnaryData<Buffer>): void => {
-      const received = receive(name, requestType, call.request, call.metadata);
+      const received = receive(name, requestType, call);
       const cancelled = new Promise<void>((resolve) => call.once("cancelled", () => resolve()));
       const handler = state.handlers[name];
       if (handler === undefined) {
@@ -171,7 +184,7 @@ export async function startLedgerServer(options: LedgerServerOptions = {}): Prom
 
   const listEntries = (call: ServerWritableStream<Buffer, Buffer>): void => {
     const requestType = "a_intel.ledger.v1.ListEntriesRequest";
-    const received = receive("ListEntries", requestType, call.request, call.metadata);
+    const received = receive("ListEntries", requestType, call);
     const cancelled = new Promise<void>((resolve) => call.once("cancelled", () => resolve()));
     const handler = state.handlers.ListEntries;
     if (handler === undefined) {

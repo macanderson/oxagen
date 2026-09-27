@@ -34,7 +34,10 @@ export function buildTarget(url: string | undefined, method: GrpcRequest["method
     throw new RequestError("Invalid environment", `The environment url ${url} does not parse.`);
   }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    throw new RequestError("Invalid environment", `A gRPC environment url is https or http, not ${parsed.protocol}.`);
+    throw new RequestError(
+      "Invalid environment",
+      `A gRPC environment url is https or http, not ${parsed.protocol.slice(0, -1)}.`,
+    );
   }
   if (parsed.pathname !== "/" || parsed.search !== "" || parsed.hash !== "" || parsed.username !== "" || parsed.password !== "") {
     throw new RequestError(
