@@ -216,6 +216,12 @@ describe("noOutcomeReason", () => {
     expect(noOutcomeReason([merged(r)])).toBeNull();
   });
 
+  it("keeps the merged outcome for a revert dated before the merge", () => {
+    const r = run();
+    expect(noOutcomeReason([revertedAfter(r, -1)])).toBeNull();
+    expect(noOutcomeReason([revertedAfter(r, 0)])).toBe("reverted");
+  });
+
   it("is null while a pull request is unread or open", () => {
     const r = run();
     expect(noOutcomeReason([])).toBeNull();
@@ -419,6 +425,52 @@ describe("spend with no outcome", () => {
     });
     expect(finding!.evidence).toMatchObject({ calls: 4, coveredCalls: 3 });
     expect(finding!.claims).toHaveLength(3);
+  });
+
+  it("cites a run whose read found none of the model calls it counted", () => {
+    const priced = run();
+    const missed = run();
+    const [finding] = detect({
+      runs: [priced, missed],
+      outcomes: byRun([closedUnmerged(priced), closedUnmerged(missed)]),
+      frames: new Map([
+        [priced.runId, framesOf(priced)],
+        [missed.runId, []],
+      ]),
+    });
+    expect(finding).toMatchObject({
+      savingMicros: 3n * TURN_MICROS,
+      confidence: "medium",
+      citedRuns: [priced.runId, missed.runId],
+    });
+    expect(finding!.evidence).toMatchObject({ calls: 4, coveredCalls: 3 });
+  });
+
+  it("leaves out a run with no model call, so it does not pull coverage down", () => {
+    const priced = run();
+    const idle = () =>
+      run({ modelCalls: 0, steps: 0, tokens: ZERO_TOKENS, costMicros: null });
+    // Two idle runs were read and had no frames, and two were not read. Were
+    // the four cited, coverage would be 3 of 7, under half, and no finding
+    // would be written.
+    const read = [idle(), idle()];
+    const unread = [idle(), idle()];
+    const idleRuns = [...read, ...unread];
+    const [finding, ...rest] = detect({
+      runs: [priced, ...idleRuns],
+      outcomes: byRun([priced, ...idleRuns].map((r) => closedUnmerged(r))),
+      frames: new Map([
+        [priced.runId, framesOf(priced)],
+        ...read.map((r): [string, PricedRequestFrame[]] => [r.runId, []]),
+      ]),
+    });
+    expect(rest).toEqual([]);
+    expect(finding).toMatchObject({
+      savingMicros: 3n * TURN_MICROS,
+      confidence: "high",
+      citedRuns: [priced.runId],
+    });
+    expect(finding!.evidence).toMatchObject({ calls: 3, coveredCalls: 3 });
   });
 
   it("cites an unpriced frame and claims none for it", () => {

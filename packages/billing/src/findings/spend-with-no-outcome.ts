@@ -8,12 +8,15 @@
  * The finding prices each of the run's model-call frames whole, against
  * nothing, and claims it as detector 8. It runs after detectors 1 and 7, so a
  * frame either of them claimed this pass is skipped and counts once. A run
- * whose frames were not read is cited and not priced.
+ * whose frames were not read, or whose read found none of the model calls its
+ * rollup counted, is cited and not priced. A run whose rollup counted no model
+ * call spent nothing, so it is left out.
  *
  * A run stays unpriced until its outcome is read: a pull request whose state
  * is not read yet, or one still open, leaves the whole run out. A merged pull
- * request that no revert undid within the window is an outcome, and so is one
- * whose merge or revert time is unknown.
+ * request that no revert undid within the window is an outcome. So is one
+ * whose merge or revert time is unknown, and one whose revert is dated before
+ * its merge.
  */
 import { NO_PR_KEY, type OutcomeRow } from "../run-pr-outcomes";
 import { claimKey } from "./requests";
@@ -57,10 +60,10 @@ type PrOutcome = NoOutcomeReason | "landed" | "unread";
 function revertedInWindow(row: OutcomeRow): boolean {
   if (!row.reverted || row.mergedAt === null || row.revertedAt === null)
     return false;
-  return (
-    row.revertedAt.getTime() - row.mergedAt.getTime() <=
-    REVERT_WINDOW_DAYS * DAY_MS
-  );
+  const delta = row.revertedAt.getTime() - row.mergedAt.getTime();
+  // No check on `cost.run_pr_outcomes` puts a revert after its merge. A
+  // revert dated before its merge has no timing to trust, so the merge stands.
+  return delta >= 0 && delta <= REVERT_WINDOW_DAYS * DAY_MS;
 }
 
 function prOutcome(row: OutcomeRow): PrOutcome {
@@ -111,7 +114,11 @@ export const spendWithNoOutcome: Detector = {
       if (key === null || !ctx.groups.admits(key, run)) continue;
       const frames = input.frames?.get(run.runId);
       if (frames === undefined || frames.length === 0) {
-        // No frames were read for the run: it is cited, and nothing prices it.
+        // The rollup counted no model call, so the run spent nothing. Citing
+        // it would add an unpriced call and pull the group's coverage down.
+        if (run.modelCalls === 0) continue;
+        // The frames were not read, or the read missed the calls the rollup
+        // counted: the run is cited, and nothing prices it.
         ctx.groups.add(
           key,
           input.window.start,
