@@ -7,8 +7,8 @@
  * (`tool_definition_tokens`, `context_frame_tokens`, `steering_tokens`). This
  * read sums them over the calls the rollup prices, by the predicate
  * `readModelCallFrames` in ./cost-frames.ts prices them by: a token-bearing
- * source, no duplicate stamp, and a model. A call is counted once, so a source is summed
- * once per call.
+ * source, no duplicate stamp, and a model. Each call counts once, so a source
+ * is summed once per call.
  *
  * Null means absent, never zero. A column is null in the result when no
  * priced call of the run carried it, which is the case for every run the
