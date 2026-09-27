@@ -133,6 +133,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           VERSION: ${{ steps.bump.outputs.version }}
+          NOTES_SOURCE: ${{ steps.bump.outputs.notes_source }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
           branch="release/v$VERSION"
@@ -152,7 +154,11 @@ jobs:
           {
             echo "Release v$VERSION. Merging this PR tags \`v$VERSION\` and \`desktop-v$VERSION\`, opens the GitHub release, publishes \`@oxagen/cli\`, builds the desktop app and publishes it to downloads.oxagen.sh, and puts the notes at https://docs.oxagen.sh/docs/releases/v$VERSION."
             echo
-            echo "The notes below were written by a model from the diff since the previous tag, under the clear-prose and oxagen-branding skills, and checked by \`check:prose\`. Read them once before this merges; edit the docs page on this branch if a line is wrong."
+            if [ "$NOTES_SOURCE" = "model" ]; then
+              echo "The notes below were written by a model from the diff since the previous tag, under the clear-prose and oxagen-branding skills, and checked by \`check:prose\`. Read them once before this merges, and edit the docs page on this branch if a line is wrong."
+            else
+              echo "The notes below are the commit log, because no model wrote a summary. The \"Bump the version and write the notes\" step of $RUN_URL says why. Read them once before this merges, and rewrite the docs page on this branch if the list is not fit to publish."
+            fi
             echo
             cat "releases/v$VERSION.md"
           } > pr-body.md

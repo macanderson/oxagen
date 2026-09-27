@@ -236,7 +236,7 @@ describe("revise_context_record", () => {
     const changed = await h.github.changedPaths(
       h.github.repository!,
       "main",
-      `context/${LINEAGE}`,
+      `steering/${LINEAGE}`,
     );
     expect(changed).toEqual([PATH]);
 
@@ -264,7 +264,7 @@ describe("revise_context_record", () => {
       { recordId: LINEAGE, statement: "Keep a diff under 200 lines." },
       ctx(),
     );
-    const branchHead = h.github.heads.get(`context/${LINEAGE}`)!;
+    const branchHead = h.github.heads.get(`steering/${LINEAGE}`)!;
     const revised = readRecordFile(
       h.github.files.get(`${branchHead}:${PATH}`)!,
     )!;

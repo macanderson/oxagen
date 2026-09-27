@@ -40,7 +40,9 @@ const manifest = {
   version: src.version,
   description: src.description,
   type: "module",
-  bin: { oxagen: "./oxagen.mjs" },
+  // No leading "./": npm 11 strips it and warns that the bin "was invalid and
+  // removed", though it keeps the entry.
+  bin: { oxagen: "oxagen.mjs" },
   files: ["oxagen.mjs", "README.md"],
   engines: { node: ">=20" },
   keywords: src.keywords,
@@ -59,5 +61,5 @@ copyFileSync(resolve(cliRoot, "README.md"), resolve(distDir, "README.md"));
 console.log(
   `✔ standalone publish manifest written to ${resolve(distDir, "package.json")}`,
 );
-console.log(`  ${manifest.name}@${manifest.version}  (bin → ./oxagen.mjs)`);
+console.log(`  ${manifest.name}@${manifest.version}  (bin → oxagen.mjs)`);
 console.log(`  publish with:  npm publish ${distDir}`);
