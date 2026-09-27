@@ -449,7 +449,11 @@ export function createSteeringGitLab(
     ensureBranch(repo, branch, fromBranch, options) {
       return call(repo, async (gl, project) => {
         try {
-          await gl.createBranch({ project, branch, ref: fromBranch });
+          await gl.createBranch({
+            project,
+            branch,
+            ref: options?.at ?? fromBranch,
+          });
         } catch (err) {
           if (
             isStatus(err, 400) &&

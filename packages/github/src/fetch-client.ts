@@ -688,26 +688,31 @@ export function createGitHubClient(opts: GitHubClientOptions): GitHubClient {
     repo: string;
     branch: string;
     fromBranch?: string;
+    fromSha?: string;
   }): Promise<{ ref: string; sha: string }> {
     const repoPath = `/repos/${seg(args.owner)}/${seg(args.repo)}`;
 
-    // When fromBranch is not provided, fetch the repo to discover default_branch.
-    let baseBranch = args.fromBranch;
-    if (!baseBranch) {
-      const repo = await request<GHRepo>("GET", repoPath);
-      baseBranch = repo.default_branch;
-    }
+    let sha = args.fromSha;
+    if (!sha) {
+      // When fromBranch is not provided, fetch the repo to discover default_branch.
+      let baseBranch = args.fromBranch;
+      if (!baseBranch) {
+        const repo = await request<GHRepo>("GET", repoPath);
+        baseBranch = repo.default_branch;
+      }
 
-    // A branch name may legitimately contain `/` (`feature/x`), so encode it
-    // segment by segment rather than as one opaque value.
-    const refData = await request<GHRef>(
-      "GET",
-      `${repoPath}/git/ref/heads/${filePath(baseBranch)}`,
-    );
+      // A branch name may legitimately contain `/` (`feature/x`), so encode it
+      // segment by segment rather than as one opaque value.
+      const refData = await request<GHRef>(
+        "GET",
+        `${repoPath}/git/ref/heads/${filePath(baseBranch)}`,
+      );
+      sha = refData.object.sha;
+    }
 
     const newRef = await request<GHRef>("POST", `${repoPath}/git/refs`, {
       ref: `refs/heads/${args.branch}`,
-      sha: refData.object.sha,
+      sha,
     });
 
     return { ref: newRef.ref, sha: newRef.object.sha };
