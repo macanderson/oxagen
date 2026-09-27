@@ -9,7 +9,7 @@
  *   node e2e-smoke.mjs --login                          + browser sign-in
  *   node e2e-smoke.mjs --enroll --org acme --workspace core [--harness claude-code,codex,cursor]
  *                                                       + register, record a first run
- *   node e2e-smoke.mjs --cleanup                        + unenroll --purge at the end
+ *   node e2e-smoke.mjs --cleanup                        + unenroll --all --purge at the end
  *
  * Steps, in wizard order:
  *   0. find the app's sidecars (`/Applications/Oxagen.app/Contents/MacOS` by
@@ -314,11 +314,13 @@ if (has("--enroll") && status?.enrolled) {
 
 // Whether or not status says enrolled: an enroll that failed part way can
 // leave hooks on the machine with no host.json, and `unenroll` strips those
-// too. Skipping it left the test machine half installed.
+// too. Skipping it left the test machine half installed. `--all` covers a
+// machine that holds more than one agent, which bare `unenroll` refuses
+// (ADR-203). It is the argv the wizard's Uninstall sends.
 if (has("--cleanup")) {
-  const un = run("tacho", ["unenroll", "--purge"]);
+  const un = run("tacho", ["unenroll", "--all", "--purge"]);
   record(
-    "tacho unenroll --purge",
+    "tacho unenroll --all --purge",
     un.code === 0,
     un.code === 0
       ? "hooks, service, credentials removed"

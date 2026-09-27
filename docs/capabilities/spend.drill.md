@@ -37,6 +37,7 @@ One operator, agent or tool over a trailing window: the Spend drill page (Missio
 | `averages.perRun` | money or null | cost ÷ runs, half-even; null without cost or runs |
 | `share` | number or null | the key's priced spend over the workspace's priced spend in the window; null when either is unpriced |
 | `byTool` | object[] | `{ name, calls, runs }`, most calls first |
+| `unmeteredRuns` | object, optional | `{ total, byHarness: [{ harness, runs }] }`: the key's wrapped runs in the window whose rollup found no model call, by harness, the same count `get_spend` answers for the workspace. Absent on a tool drill, which carries no money |
 
 ## Honesty
 

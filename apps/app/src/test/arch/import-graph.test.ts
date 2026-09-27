@@ -196,7 +196,7 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   "oxagen-skill-frontmatter.ts": [
     { at: "src/features/create/skill-file.ts", expect: null },
     { at: "src/shared/skill-source-identity.ts", expect: null },
-    { at: "src/features/create/agent-wizard.tsx", expect: "platform" },
+    { at: "src/features/create/record-wizard.tsx", expect: "platform" },
   ],
   // INV-03: one probe per @oxagen/oxagen subpath.
   "oxagen-barrel.ts": [
@@ -385,6 +385,8 @@ const PROBES: Readonly<Record<string, readonly Placement[]>> = {
   "fleet-client.ts": [
     { at: "src/features/shell/assistant-parked-approvals.tsx", expect: null },
   ],
+  // #2953: Fleet's steer receipt opens the delivery report through Run's client entry.
+  "run-client.ts": [{ at: "src/features/fleet/steer-fleet.tsx", expect: null }],
   "kernel-write-use-server.ts": [
     { at: "src/features/fleet/actions.ts", expect: null },
   ],

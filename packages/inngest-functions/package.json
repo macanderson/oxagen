@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/inngest-functions",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -12,7 +12,10 @@
     "./events": "./src/events.ts",
     "./tacho-idle-close": "./src/lib/tacho-idle-close.ts",
     "./client": "./src/inngest.ts",
-    "./steering-sync-runner": "./src/lib/steering-sync-runner.ts"
+    "./steering-sync-runner": "./src/lib/steering-sync-runner.ts",
+    "./run-fit-runner": "./src/lib/run-fit-runner.ts",
+    "./run-pull-request-backfill-runner": "./src/lib/run-pull-request-backfill-runner.ts",
+    "./interjection-timeout-runner": "./src/lib/interjection-timeout-runner.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

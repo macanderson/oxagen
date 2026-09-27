@@ -31,8 +31,8 @@ const ctx = unsafeMint(PretenantCtx, { userId: "usr_marcusbell" });
 const orgs = vi.fn();
 const workspaces = vi.fn();
 const source = {
-  runtimes: { list: vi.fn(), agents: vi.fn() },
-  conversations: { latest: vi.fn() },
+  runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
+  conversations: { latest: vi.fn(), list: vi.fn(), byId: vi.fn() },
   pretenant: { orgs, workspaces },
   shell: {
     context: vi.fn(),
@@ -57,11 +57,16 @@ const source = {
     turns: vi.fn(),
     transcript: vi.fn(),
     chain: vi.fn(),
+    commands: vi.fn(),
     outputs: vi.fn(),
     work: vi.fn(),
     outcomesSettings: vi.fn(),
+    issues: vi.fn(),
+    context: vi.fn(),
+    findings: vi.fn(),
   },
   approvals: { pending: vi.fn(), resolved: vi.fn(), resolvedSince: vi.fn() },
+  interjections: { open: vi.fn(), forRun: vi.fn() },
   agents: {
     list: vi.fn(),
     get: vi.fn(),
@@ -118,11 +123,13 @@ const source = {
     approvalRules: vi.fn(),
     connections: vi.fn(),
     mcpServers: vi.fn(),
+    toolbelts: vi.fn(),
+    toolbelt: vi.fn(),
   },
 };
 
-const acme = { slug: "acme", name: "Acme Robotics" };
-const globex = { slug: "globex", name: "Globex" };
+const acme = { slug: "acme", name: "Acme Robotics", avatarUrl: null };
+const globex = { slug: "globex", name: "Globex", avatarUrl: null };
 
 beforeEach(() => {
   requireUser.mockReset();
@@ -143,8 +150,8 @@ describe("the / landing", () => {
     orgs.mockResolvedValue(readOk([acme]));
     workspaces.mockResolvedValue(
       readOk([
-        { slug: "core-platform", name: "Core platform" },
-        { slug: "finops", name: "FinOps" },
+        { slug: "core-platform", name: "Core platform", avatarUrl: null },
+        { slug: "finops", name: "FinOps", avatarUrl: null },
       ]),
     );
     expect(await landsOn()).toBe("/acme/core-platform");
@@ -154,7 +161,9 @@ describe("the / landing", () => {
 
   it("opens the first organization list_orgs returns, the one joined first, and reads no other", async () => {
     orgs.mockResolvedValue(readOk([globex, acme]));
-    workspaces.mockResolvedValue(readOk([{ slug: "ops", name: "Ops" }]));
+    workspaces.mockResolvedValue(
+      readOk([{ slug: "ops", name: "Ops", avatarUrl: null }]),
+    );
     expect(await landsOn()).toBe("/globex/ops");
     expect(workspaces).toHaveBeenCalledTimes(1);
   });

@@ -142,9 +142,11 @@ const ALLOWED: Record<
     // A lane's `client` entry is its public surface for client components in
     // another lane, which may not import a barrel (INV-21). Fleet's carries
     // the approval decision the assistant flyout's parked cards make (#4162).
+    // Run's carries the delivery report Fleet's steer receipt opens (#2953).
     if (
       isFeatureBarrel(target) ||
       target === "features/fleet/client" ||
+      target === "features/run/client" ||
       target === "features/shell/client"
     )
       return true;
@@ -375,6 +377,10 @@ const PLATFORM_NAMED_ROWS: Readonly<
   "src/ui/command-failure.ts": {
     "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
   },
+  // ⌘K's pause dialog caps its reason at the limit pause_workspace_runs enforces.
+  "src/features/shell/pause-workspace-dialog.tsx": {
+    "@oxagen/oxagen/tacho/command-limits": ["COMMAND_REASON_MAX"],
+  },
   // The record wizard shows the label and file name a slug will get, using
   // the same pure functions the publish handler runs, so the preview matches.
   // Both files check a slug against the pattern the contract enforces, and
@@ -393,6 +399,18 @@ const PLATFORM_NAMED_ROWS: Readonly<
   },
   "src/features/create/record-file.ts": {
     "@oxagen/oxagen/context-record-label": ["CONTEXT_RECORD_LINEAGE"],
+  },
+  // The On disk panel strips the steering tree's folder from each path, and
+  // reads the folder's name from the one module that names every steering
+  // path, which imports nothing (lane S0, #4387).
+  "src/data/live/mappers/steering.ts": {
+    "@oxagen/oxagen/steering-repo/paths": ["LEGACY_OXAGEN_DIR"],
+  },
+  // A failed read carries the trace id active when it failed, so a person can
+  // hand support one handle (#3841). The kernel seam reads it from the tracer
+  // at classification, through this one named export.
+  "src/server/failure-facts.ts": {
+    "@oxagen/telemetry": ["currentTraceIds"],
   },
   "instrumentation.ts": {
     "@oxagen/telemetry": ["initTracer", "recordSecurityEvent"],

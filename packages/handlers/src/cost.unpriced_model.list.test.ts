@@ -34,6 +34,8 @@ const DEFAULT_WINDOWS = [
     tokenClass as UnpricedModel["missingClassWindows"][number]["tokenClass"],
   unpricedFrom: new Date("2026-09-02T09:00:00.000Z"),
   unpricedTo: new Date("2026-09-13T21:30:00.000Z"),
+  calls: 0,
+  units: 0,
 }));
 
 function model(over: Partial<UnpricedModel> = {}): UnpricedModel {
@@ -161,6 +163,8 @@ describe("list_unpriced_models", () => {
             tokenClass: "cache_read",
             unpricedFrom: new Date("2026-09-02T09:00:00.000Z"),
             unpricedTo: new Date("2026-09-13T21:30:00.000Z"),
+            calls: 0,
+            units: 0,
           },
         ],
         fullyUnpriced: false,
@@ -185,6 +189,8 @@ describe("list_unpriced_models", () => {
           tokenClass: w.tokenClass,
           unpricedFrom: w.unpricedFrom.toISOString(),
           unpricedTo: w.unpricedTo.toISOString(),
+          calls: w.calls,
+          units: w.units,
         })),
         fullyUnpriced: true,
       },
@@ -201,6 +207,8 @@ describe("list_unpriced_models", () => {
             tokenClass: "cache_read",
             unpricedFrom: "2026-09-02T09:00:00.000Z",
             unpricedTo: "2026-09-13T21:30:00.000Z",
+            calls: 0,
+            units: 0,
           },
         ],
         fullyUnpriced: false,

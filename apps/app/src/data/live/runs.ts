@@ -4,6 +4,10 @@
 // Every one is a noBillingGate read, so no page load is refused for lack of
 // GAUs, and each is mapped into its view model at the boundary.
 //
+// `list_commands` is the delivery report (#2953): one run's commands, read
+// for the Run page's report dialog and a control frame's inspector, or the
+// commands one broadcast queued, read by their ids.
+//
 // `get_run_chain` is its own read because it walks the recording: it belongs
 // to the Chain and seal tab and is made only when that tab is open, so the
 // long poll on `get_run` never pays for a gap walk nobody asked for.
@@ -14,14 +18,23 @@
 // for `FRAME_PAGE` frames by name, because the mapper needs the size it asked
 // for to tell a full page from the end of the recording.
 import "server-only";
+import { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
 import { FRAME_LIMIT_DEFAULT, runGet } from "@oxagen/oxagen/contracts/run.get";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
+import { runContextGet } from "@oxagen/oxagen/contracts/run.context.get";
+import { runIssuesGet } from "@oxagen/oxagen/contracts/run.issues.get";
 import { runTurnsGet } from "@oxagen/oxagen/contracts/run.turns.get";
 import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
+import {
+  LIST_COMMANDS_IDS_MAX,
+  tachoCommandList,
+} from "@oxagen/oxagen/contracts/tacho.command.list";
 import { runOutcomesSettingsGet } from "@oxagen/oxagen/contracts/run.outcomes.settings.get";
+import { RunContext } from "@/data/contracts/run-context";
+import { RunIssues } from "@/data/contracts/run-issues";
 import { RunWork, RunOutcomesPolicy } from "@/data/contracts/run-work";
 import { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import {
@@ -34,35 +47,53 @@ import {
   RunChain,
   RunCost,
   RunDetail,
+  RunFindings,
   RunFrameBody,
   RunOutputs,
   RunTranscript,
   RunTurns,
 } from "@/data/contracts/run";
-import { RunPage } from "@/data/contracts/runs";
+import { CommandReport, RunPage } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { type Read, readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 import {
+  toCommandReport,
   toRunChain,
   toRunCost,
   toRunDetail,
+  toRunFindings,
   toRunFrameBody,
   toRunOutputs,
   toRunTranscript,
   toRunTurns,
 } from "./mappers/run";
+import { toRunContext } from "./mappers/run-context";
+import { toRunListInput } from "./mappers/run-list-input";
 import { toRunPage } from "./mappers/runs";
-
-/**
- * Runs per read when the caller names no page size: the contract's ceiling.
- * Fleet names one (its page-size choice); the agents page and the choice
- * dialogs read the ceiling.
- */
-const RUN_PAGE = 100;
 
 /** Frames per page of the Frames tab: the contract's own default, named so the mapper can see it. */
 const FRAME_PAGE = FRAME_LIMIT_DEFAULT;
+
+/**
+ * The most commands one report reads for a run: the contract's ceiling, so a
+ * control frame's inspector finds its command among a run's recent ones.
+ */
+const RUN_REPORT_LIMIT = 100;
+
+/**
+ * Orders commands newest first, then by id descending: the order the
+ * list_commands handler reads in, so a report merged from several reads keeps
+ * the order one read would give.
+ */
+function newestFirst(
+  a: { issuedAt: string; id: string },
+  b: { issuedAt: string; id: string },
+): number {
+  if (a.issuedAt !== b.issuedAt) return a.issuedAt < b.issuedAt ? 1 : -1;
+  if (a.id === b.id) return 0;
+  return a.id < b.id ? 1 : -1;
+}
 
 /** The mapped value parsed at the boundary; a record the view refuses is `record_unmappable`, reported once. */
 function view<S extends z.ZodType>(
@@ -129,16 +160,51 @@ export const runs: DataSource["runs"] = {
       "runs.work",
     );
   },
+  async issues(ctx, runId) {
+    const read = await kernelRead(ctx, {
+      contract: runIssuesGet,
+      input: { runId },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    // The view is the contract's shape, field for field.
+    return view(ctx.orgId, RunIssues, read.value, "runs.issues");
+  },
+  // Each model request's window, block by block, and the assembler's
+  // manifests (ADR-200, #3894).
+  async context(ctx, runId) {
+    const read = await kernelRead(ctx, {
+      contract: runContextGet,
+      input: { runId },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      RunContext,
+      toRunContext(read.value),
+      "runs.context",
+    );
+  },
+  // The open findings that cite this run, with the frames each cites (#4001).
+  async findings(ctx, runId) {
+    const read = await kernelRead(ctx, {
+      contract: findingList,
+      input: { status: "open", runId },
+      page: "run",
+    });
+    if (!read.ok) return read;
+    return view(
+      ctx.orgId,
+      RunFindings,
+      toRunFindings(read.value),
+      "runs.findings",
+    );
+  },
   async list(ctx, q) {
     const read = await kernelRead(ctx, {
       contract: runList,
-      input: {
-        limit: q.limit ?? RUN_PAGE,
-        ...(q.cursor === null ? {} : { cursor: q.cursor }),
-        ...(q.pullRequests === undefined || q.pullRequests === "any"
-          ? {}
-          : { pullRequests: q.pullRequests }),
-      },
+      input: toRunListInput(q),
       page: "fleet",
     });
     if (!read.ok) return read;
@@ -166,17 +232,21 @@ export const runs: DataSource["runs"] = {
       "runs.get",
     );
   },
-  async frameBody(ctx, runId, seq) {
+  async frameBody(ctx, runId, seq, chainRef) {
+    // A subagent's frame is named by its chain beside the seq (#3823).
     const read = await kernelRead(ctx, {
       contract: runFrameBodyGet,
-      input: { runId, seq },
+      input:
+        chainRef === undefined
+          ? { runId, seq }
+          : { runId, seq, sessionUuid: chainRef },
       page: "run",
     });
     if (!read.ok) return read;
     return view(
       ctx.orgId,
       RunFrameBody,
-      toRunFrameBody(seq, read.value),
+      toRunFrameBody(seq, read.value, chainRef),
       "runs.frameBody",
     );
   },
@@ -209,6 +279,8 @@ export const runs: DataSource["runs"] = {
         // Omitted rather than null: the contract refuses a cursor it did not
         // write, and `undefined` is what "read from the start" means there.
         ...(q?.after ? { after: q.after } : {}),
+        ...(q?.before ? { before: q.before } : {}),
+        ...(q?.from === undefined ? {} : { from: q.from }),
         ...(q?.text === undefined ? {} : { text: q.text }),
         ...(q?.query === undefined ? {} : { query: q.query }),
       },
@@ -234,6 +306,52 @@ export const runs: DataSource["runs"] = {
       RunOutputs,
       toRunOutputs(read.value),
       "runs.outputs",
+    );
+  },
+  async commands(ctx, q) {
+    if ("runId" in q) {
+      const read = await kernelRead(ctx, {
+        contract: tachoCommandList,
+        input: { runId: q.runId, limit: RUN_REPORT_LIMIT },
+        page: "run",
+      });
+      if (!read.ok) return read;
+      return view(
+        ctx.orgId,
+        CommandReport,
+        toCommandReport(read.value),
+        "runs.commands",
+      );
+    }
+    // A broadcast can queue more commands than one read may name: up to 100
+    // agents, each with any number of runs in flight. So the ids are read in
+    // slices of the contract's ceiling, each asking for one row per id (the
+    // contract's default of 50 would cut a slice short), and the first
+    // refusal answers for the report.
+    const slices: string[][] = [];
+    for (let at = 0; at < q.commandIds.length; at += LIST_COMMANDS_IDS_MAX)
+      slices.push(q.commandIds.slice(at, at + LIST_COMMANDS_IDS_MAX));
+    const reads = await Promise.all(
+      slices.map((commandIds) =>
+        kernelRead(ctx, {
+          contract: tachoCommandList,
+          input: { commandIds, limit: commandIds.length },
+          page: "run",
+        }),
+      ),
+    );
+    for (const read of reads) if (!read.ok) return read;
+    // Each slice answers newest first, then by id descending, and the report
+    // keeps that order across slices. One broadcast issues its commands in one
+    // write, so ties on issuedAt are common.
+    const commands = reads
+      .flatMap((read) => (read.ok ? read.value.commands : []))
+      .sort(newestFirst);
+    return view(
+      ctx.orgId,
+      CommandReport,
+      toCommandReport({ commands }),
+      "runs.commands",
     );
   },
   async chain(ctx, runId) {

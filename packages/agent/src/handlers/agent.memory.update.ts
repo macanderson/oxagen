@@ -48,6 +48,7 @@ export async function agentMemoryUpdateHandler(
         surface: ctx.surface,
         executionStepId: ctx.executionStepId ?? null,
       },
+      inputType: "document",
     });
   }
 

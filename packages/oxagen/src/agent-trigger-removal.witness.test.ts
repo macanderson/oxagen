@@ -2,10 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { extname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import {
-  agentDefinitionConfigSchema,
-  agentDefinitionSchema,
-} from "./agent-schema";
+import { agentDefinitionConfigSchema } from "./agent-schema";
 
 /**
  * Witness that the agent.trigger.* subsystem stays removed and triggering
@@ -76,10 +73,7 @@ describe("portable agent definitions", () => {
   // parallel worker threads). Give it generous headroom over the 5s default so
   // it stays a deterministic assertion rather than a load-dependent timeout.
   it("have no trigger configuration or legacy trigger subsystem", async () => {
-    // 1. The agent definition itself is trigger-free.
-    expect
-      .soft(agentDefinitionSchema.keyof().options)
-      .not.toContain("triggers");
+    // 1. The agent version config is trigger-free.
     expect
       .soft(agentDefinitionConfigSchema.keyof().options)
       .not.toContain("triggers");

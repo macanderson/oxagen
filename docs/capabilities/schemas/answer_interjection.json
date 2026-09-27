@@ -1,0 +1,168 @@
+{
+  "name": "answer_interjection",
+  "domain": "agent",
+  "description": "Answer the question an agent paused to ask: with text, or, for a repository the workspace has not bound, by linking it or creating a workspace for it. The answer is recorded on the question with a receipt, and a wrapped run whose host can take it receives the answer as a message.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp",
+    "cli"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "approval"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "interjectionId": {
+        "type": "string",
+        "x-server-validated": true,
+        "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+      },
+      "answer": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4000
+      },
+      "path": {
+        "type": "string",
+        "enum": [
+          "link",
+          "create"
+        ]
+      },
+      "create": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 40,
+            "x-server-validated": true,
+            "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+          }
+        },
+        "required": [
+          "name",
+          "slug"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "required": [
+      "interjectionId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "interjectionId": {
+        "type": "string"
+      },
+      "runId": {
+        "type": "string"
+      },
+      "answeredAt": {
+        "type": "string"
+      },
+      "commandIds": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "receiptId": {
+        "type": "string"
+      },
+      "path": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "link",
+              "create"
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "repository": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "bindingId": {
+                "type": "string"
+              },
+              "fullName": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "bindingId",
+              "fullName"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "workspace": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "publicId": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "publicId",
+              "slug"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "required": [
+      "interjectionId",
+      "runId",
+      "answeredAt",
+      "commandIds",
+      "receiptId",
+      "path",
+      "repository",
+      "workspace"
+    ],
+    "additionalProperties": false
+  }
+}

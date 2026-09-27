@@ -1,0 +1,16 @@
+{
+  "check": "schema",
+  "rule": "skill-lines",
+  "severity": "warning",
+  "description": "A SKILL.md passes 500 lines. Its stamped hash is also stale, so the hash check fails on it too.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/skills/a-intel.platform.write-migration/SKILL.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/skills/a-intel.platform.write-migration/SKILL.md"
+    }
+  ]
+}

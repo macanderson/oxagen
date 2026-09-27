@@ -32,6 +32,10 @@ export interface WorkDiffRow extends WorkContextRow {
   complete: string;
   limitations: string;
   omitted: string;
+  /** The frame's `content.redactions`, as the JSON text the row holds. */
+  redactions: string;
+  /** How many redactions the recorder made, from the frame's attrs. */
+  redaction_count: number | string;
 }
 export interface WorkSubagentRow {
   id: string;
@@ -46,6 +50,14 @@ export interface WorkPrLinkRow {
   repository: string;
   first_seq: number | string;
   first_ts: string;
+}
+/** A PR a run linked: on its own chain, or a subagent's. */
+export interface RunPrLinkRow extends WorkPrLinkRow {
+  /**
+   * The chain whose frame the row points at: the run's own when it linked
+   * the PR. `first_seq` counts this chain's frames.
+   */
+  session_uuid: string;
 }
 export const WORK_CONTEXT_CAP = 200;
 export const WORK_PR_LINK_CAP = 50;
@@ -189,6 +201,54 @@ export async function readWorkPrLinks(
   return result.data;
 }
 /**
+ * The pull requests a run's chains linked, one row per URL: the run's own
+ * chain, and each listed subagent chain under it. A subagent chain is read
+ * only under `root_session_uuid`, so a chain of another run reads nothing.
+ * A URL linked on several chains is one row, at its first frame on the
+ * run's own chain when that chain linked it, and otherwise at its first
+ * frame on the subagent chain whose id sorts first. Grouping by URL keeps
+ * the limit a count of pull requests, so a PR the run and a subagent both
+ * linked takes one place under `WORK_PR_LINK_CAP`, not two. Each row's
+ * `first_seq` counts its own chain's frames (#3823). The list names the
+ * chains, which puts `session_uuid` in the primary key's range. The rows are
+ * ordered with the run's own chain first, then by chain and frame.
+ */
+export async function readRunPrLinks(
+  rootSessionUuid: string,
+  subagentChains: readonly string[],
+): Promise<RunPrLinkRow[]> {
+  // The first frame of each URL: the run's own chain ranks ahead of every
+  // subagent chain, then the chain, then the frame. `chain` is the alias,
+  // because an alias named `session_uuid` would shadow the column it reads.
+  const first = "(session_uuid != {rootSessionUuid:UUID}, session_uuid, seq)";
+  const result = await chSelect<WorkPrLinkRow & { chain: string }>({
+    query: `SELECT ${prAttr("url")} AS url,
+      argMin(session_uuid, ${first}) AS chain,
+      argMin(${prAttr("number")}, ${first}) AS number,
+      argMaxIf(${prAttr("repository")}, seq, ${prAttr("repository")} != '') AS repository,
+      argMin(seq, ${first}) AS first_seq,
+      toString(argMin(ts, ${first})) AS first_ts
+      FROM tacho_events FINAL
+      WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
+        AND session_uuid IN {sessionUuids:Array(UUID)}
+        AND (session_uuid = {rootSessionUuid:UUID}
+          OR root_session_uuid = {rootSessionUuid:UUID})
+        AND kind = 'oxagen:pr_link' AND ${prAttr("url")} != ''
+      GROUP BY url
+      ORDER BY chain != {rootSessionUuid:UUID}, chain, first_seq
+      LIMIT {limit:UInt32}`,
+    params: {
+      rootSessionUuid,
+      sessionUuids: [rootSessionUuid, ...subagentChains],
+      limit: WORK_PR_LINK_CAP + 1,
+    },
+  });
+  return result.data.map(({ chain, ...row }) => ({
+    ...row,
+    session_uuid: chain,
+  }));
+}
+/**
  * A linked PR as `owner`, `name` and `number`. The frame's repository attr
  * wins, and the URL's `/owner/name/pull/N` path fills what it leaves out.
  * Null when neither names a repository and a positive number.
@@ -220,24 +280,45 @@ export function prLinkOf(
     return null;
   return { owner, name, number, url: row.url };
 }
-/** The effort and thinking settings a wrapped session last recorded. */
-export type SessionConfig = { effort: string | null; thinking: boolean | null };
+/** Where a run's effort was read (#3891). */
+export type EffortSource = "request" | "harness";
 
 /**
- * The session's effort and thinking settings. Effort is the latest
- * `effort_level_setting` from a session config frame, falling back to the
- * latest non-empty `effort` any frame carried. Thinking is the latest
- * `always_thinking_enabled`. Each is null when no frame recorded it.
+ * The effort and thinking settings a wrapped session last recorded.
+ * `effortSource` says where `effort` was read (#3891): `request` from a
+ * proxied request body, which wins, or `harness`. It is null exactly when
+ * `effort` is.
+ */
+export type SessionConfig = {
+  effort: string | null;
+  effortSource: EffortSource | null;
+  thinking: boolean | null;
+};
+
+/**
+ * The session's effort and thinking settings.
+ *
+ * Effort is read in this order, and the first one recorded wins:
+ * 1. The latest `request_effort`: the setting a proxied model request's body
+ *    carried, which is what the vendor received (source `request`).
+ * 2. The latest `effort_level_setting` from a session config frame.
+ * 3. The latest non-empty `effort` any frame carried.
+ *
+ * The last two are the harness's own report (source `harness`). Thinking is
+ * the latest `always_thinking_enabled`. Each is null when no frame recorded
+ * it.
  */
 export async function readSessionConfig(
   sessionUuid: string,
 ): Promise<SessionConfig> {
   const result = await chSelect<{
+    requested: string;
     setting: string;
     reported_effort: string;
     thinking: string;
   }>({
     query: `SELECT
+        argMaxIf(request_effort, seq, request_effort != '') AS requested,
         argMaxIf(effort_level_setting, seq, effort_level_setting != '') AS setting,
         argMaxIf(effort, seq, effort != '') AS reported_effort,
         ifNull(toString(argMaxIf(always_thinking_enabled, seq,
@@ -248,8 +329,14 @@ export async function readSessionConfig(
     params: { sessionUuid },
   });
   const row = result.data[0];
+  const requested = row?.requested.trim() ?? "";
+  const reported = row?.setting.trim() || row?.reported_effort.trim() || "";
   return {
-    effort: row?.setting.trim() || row?.reported_effort.trim() || null,
+    ...(requested !== ""
+      ? { effort: requested, effortSource: "request" as const }
+      : reported !== ""
+        ? { effort: reported, effortSource: "harness" as const }
+        : { effort: null, effortSource: null }),
     thinking:
       row?.thinking === "true"
         ? true
@@ -257,6 +344,28 @@ export async function readSessionConfig(
           ? false
           : null,
   };
+}
+
+/**
+ * A run's effort and where it was read, as `get_run` answers it and the Model
+ * fit reading reads it (#3891, #3893). The session's own frames win; the
+ * effort the session row carries (the harness's report ingest folded) stands
+ * in when the frames could not be read or recorded none. One function, so the
+ * Run page's rig and the reading's effort card cannot disagree.
+ */
+export function runEffortOf(
+  config: SessionConfig | null,
+  rowEffort: string | null | undefined,
+): { effort: string | null; effortSource: EffortSource | null } {
+  if (config?.effort != null)
+    return {
+      effort: config.effort,
+      effortSource: config.effortSource ?? "harness",
+    };
+  const reported = rowEffort?.trim() ?? "";
+  return reported === ""
+    ? { effort: null, effortSource: null }
+    : { effort: reported, effortSource: "harness" };
 }
 
 /**
@@ -297,7 +406,8 @@ export async function readWorkDiffs(
       attrs['diff_head_sha'] AS head, attrs['repository_url'] AS repository, seq, toString(ts) AS observed_at,
       attrs['diff_base_sha'] AS base, content_digest, bytes_ref,
       attrs['diff_complete'] AS complete, attrs['diff_limitations'] AS limitations,
-      attrs['body_omitted'] AS omitted
+      attrs['body_omitted'] AS omitted, redactions,
+      toUInt32OrZero(attrs['oxagen.content_redactions_total']) AS redaction_count
       FROM tacho_events FINAL
       WHERE org_id = {orgId:UUID} AND workspace_id = {workspaceId:UUID}
         AND session_uuid = {sessionUuid:UUID}
@@ -312,6 +422,128 @@ export function checkoutId(
   row: Pick<WorkContextRow, "path" | "branch" | "remote">,
 ): string {
   return workDigest(JSON.stringify([row.path, row.branch, row.remote]));
+}
+
+/**
+ * A context that names a path and nothing else. The daemon seals a session's
+ * first hook before its first Git read, so that frame carries the `cwd` with
+ * no branch, remote, head, or repository (#3791). A detached HEAD still
+ * records its head and remote, so it is never path-only.
+ */
+function pathOnly(row: WorkContextRow): boolean {
+  return (
+    row.branch === "" &&
+    row.remote === "" &&
+    row.head === "" &&
+    row.repository === ""
+  );
+}
+
+/**
+ * The Git context a path-only frame at `seq` belongs to, among `others`,
+ * every context the read returned but the path-only row the frame is in.
+ * First choice is a Git context at `path` whose recorded span contains the
+ * frame. The read groups a context's frames into one row, so a context the
+ * session left and came back to keeps its early start, and only its span
+ * shows the session was back in it. When several contexts span the frame,
+ * the one that started last wins. A fold into a span that holds the frame
+ * stretches nothing.
+ *
+ * Next is the context that starts next after the frame, when it is a Git
+ * context at `path`: the Git read the daemon ran right after that hook.
+ * Failing that, it is the context that started last before the frame, when
+ * that is a Git context at `path`: the one in effect when the frame was
+ * sealed. When another context starts in between, it separates the frame
+ * from that Git context, and the frame folds into neither.
+ */
+function foldTarget(
+  path: string,
+  seq: number,
+  others: readonly WorkContextRow[],
+): WorkContextRow | undefined {
+  const gitAt = (row: WorkContextRow | undefined) =>
+    row !== undefined && row.path === path && !pathOnly(row) ? row : undefined;
+  let around: WorkContextRow | undefined;
+  let next: WorkContextRow | undefined;
+  let previous: WorkContextRow | undefined;
+  for (const candidate of others) {
+    const start = Number(candidate.first_seq);
+    if (
+      gitAt(candidate) !== undefined &&
+      start <= seq &&
+      seq <= Number(candidate.last_seq) &&
+      (around === undefined || start > Number(around.first_seq))
+    )
+      around = candidate;
+    if (start > seq) {
+      if (next === undefined || start < Number(next.first_seq))
+        next = candidate;
+    } else if (previous === undefined || start > Number(previous.first_seq))
+      previous = candidate;
+  }
+  return around ?? gitAt(next) ?? gitAt(previous);
+}
+
+/**
+ * Fold each path-only context into the Git context recorded at the same path,
+ * so a session's first hook is not a checkout of its own that no repository
+ * or branch can match. The merged row keeps the Git context's branch, remote,
+ * head, and repository, and spans both rows' sequences. Contexts that name a
+ * branch or remote are never merged with each other, so a branch switch or a
+ * second repository stays its own checkout. A path-only row with no Git
+ * context at its path stays too: a directory outside Git is a real location.
+ *
+ * The read groups every path-only frame at a path into one row, which can
+ * cover frames seen at different times: a first hook, and a later one after
+ * the session moved elsewhere. So the row's first and last frames, the two
+ * it knows, each fold on their own (`foldTarget`), and neither stretches a
+ * Git context past the start of another context. A frame that folds into
+ * nothing stays a path-only checkout. Every decision reads the spans the
+ * read returned, never one an earlier fold widened.
+ *
+ * `alias` maps a row that folded whole to the checkout id its first frame
+ * folded into, so a captured diff never points at a checkout the read no
+ * longer returns. A row that stays in part keeps its own id.
+ */
+export function foldProvisionalContexts(rows: readonly WorkContextRow[]): {
+  rows: WorkContextRow[];
+  alias: Map<string, string>;
+} {
+  const alias = new Map<string, string>();
+  // Each Git context's merged copy, by the row the read returned.
+  const merged = new Map<WorkContextRow, WorkContextRow>();
+  for (const row of rows) if (!pathOnly(row)) merged.set(row, { ...row });
+  const folded: WorkContextRow[] = [...merged.values()];
+  for (const row of rows) {
+    if (!pathOnly(row)) continue;
+    const others = rows.filter((other) => other !== row);
+    // Fold the frame at `seq` into its Git context's merged copy, and answer
+    // that copy, or undefined when the frame stays.
+    const place = (seq: number | string): WorkContextRow | undefined => {
+      const target = foldTarget(row.path, Number(seq), others);
+      const copy = target === undefined ? undefined : merged.get(target);
+      if (copy === undefined) return undefined;
+      if (Number(seq) < Number(copy.first_seq)) copy.first_seq = seq;
+      if (Number(seq) > Number(copy.last_seq)) copy.last_seq = seq;
+      return copy;
+    };
+    const first = place(row.first_seq);
+    const last =
+      Number(row.last_seq) === Number(row.first_seq)
+        ? first
+        : place(row.last_seq);
+    if (first !== undefined && last !== undefined) {
+      alias.set(checkoutId(row), checkoutId(first));
+      continue;
+    }
+    folded.push({
+      ...row,
+      first_seq: first === undefined ? row.first_seq : row.last_seq,
+      last_seq: last === undefined ? row.last_seq : row.first_seq,
+    });
+  }
+  folded.sort((a, b) => Number(a.first_seq) - Number(b.first_seq));
+  return { rows: folded, alias };
 }
 export function recordedRepository(url: string): RunRepository | null {
   try {
@@ -368,11 +600,33 @@ export function checkoutOf(
     lastSeq: String(row.last_seq),
   };
 }
+/**
+ * Whether the recorder redacted the frame's bytes before it sealed them. The
+ * collector sets `diff_complete` from the snapshot, before the seal redacts a
+ * credential out of the patch, so the flag alone calls a sanitized patch
+ * exact (#3791). The attr counts every redaction and the column lists at most
+ * the first few, so either one shows it.
+ */
+function redactedOf(
+  row: Pick<WorkDiffRow, "redactions" | "redaction_count">,
+): boolean {
+  if (Number(row.redaction_count) > 0) return true;
+  try {
+    const listed: unknown = JSON.parse(row.redactions);
+    return Array.isArray(listed) && listed.length > 0;
+  } catch {
+    // A frame with no content leaves the column empty. It lists nothing.
+    return false;
+  }
+}
+
 export function capturedDiffOf(row: WorkDiffRow): RunCapturedDiff {
   const digest = nullable(row.content_digest);
   const bodyAvailable = Boolean(row.bytes_ref);
   const limitations = row.limitations.split(",").filter(Boolean);
   if (row.omitted) limitations.push(row.omitted);
+  const redacted = redactedOf(row);
+  if (redacted) limitations.push("content_redacted");
   return {
     checkoutId: checkoutId(row),
     seq: String(row.seq),
@@ -384,7 +638,7 @@ export function capturedDiffOf(row: WorkDiffRow): RunCapturedDiff {
       ? "not_captured"
       : !bodyAvailable
         ? "not_retained"
-        : row.complete === "true"
+        : row.complete === "true" && !redacted
           ? "complete"
           : "partial",
     limitations,

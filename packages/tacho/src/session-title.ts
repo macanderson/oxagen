@@ -67,10 +67,12 @@ function countPart(count: number, one: string, many: string): string {
 }
 
 /**
- * `text` cut to `max` units with an ellipsis, never between the two halves of
- * a surrogate pair, which would leave a character that is not Unicode.
+ * `text` cut to `max` UTF-16 units with an ellipsis, never between the two
+ * halves of a surrogate pair, which would leave a character that is not
+ * Unicode. Text within `max` comes back as it was. Run reads cut a run's name
+ * and task reference with it to `RUN_LABEL_MAX` (#4224).
  */
-function shorten(text: string, max: number): string {
+export function cutLabel(text: string, max: number): string {
   if (text.length <= max) return text;
   let end = max - 1;
   const code = text.charCodeAt(end - 1);
@@ -113,10 +115,10 @@ export function deriveSessionTitle(
         : undefined;
 
   if (where === undefined) return size;
-  if (size === undefined) return shorten(where, TITLE_MAX);
+  if (size === undefined) return cutLabel(where, TITLE_MAX);
   // A long place or branch gives way, so the size is always read whole.
   const suffix = ` (${size})`;
-  return `${shorten(where, TITLE_MAX - suffix.length)}${suffix}`;
+  return `${cutLabel(where, TITLE_MAX - suffix.length)}${suffix}`;
 }
 
 const TITLE_PROMPT_CHARS = 60;

@@ -35,6 +35,13 @@
  * OTel records carry no `agent_id`, so a record that names only the
  * `tool_use_id` of a call a subagent's hook claimed is routed to that
  * subagent's chain rather than the root's.
+ *
+ * The local MCP gateway is a fourth source. Claude Code sends the call's
+ * `tool_use_id` in the `tools/call` request's `_meta`, and the call reaches
+ * the gateway after its `PreToolUse` and before its `PostToolUse`. The
+ * `PreToolUse` claims the id here, so the daemon can find the session that
+ * is waiting on the call and seal the gateway's frame on that session's
+ * chain as the call's first sighting (ADR-189).
  */
 
 /** The attr a stamped sighting carries, naming the source sealed first. */
@@ -109,18 +116,34 @@ export class ToolCallLedger {
   }
 
   /**
-   * Note that a subagent owns a call before any row of it is sealed: its
-   * `PreToolUse` names the call first, and the OTel records that follow name
-   * only the `tool_use_id`. Registers no sighting.
+   * Note a call before any row of it is sealed: its `PreToolUse` names the
+   * call first. `owner` is the subagent that made it, when one did, because
+   * the OTel records that follow name only the `tool_use_id`. Registers no
+   * sighting.
    */
-  claim(toolUseId: string, owner: string): void {
+  claim(toolUseId: string, owner?: string): void {
     const entry = this.entries.get(toolUseId);
     if (entry !== undefined) {
-      entry.owner ??= owner;
+      if (owner !== undefined) entry.owner ??= owner;
       return;
     }
-    this.entries.set(toolUseId, { sources: [], body: false, owner });
+    this.entries.set(toolUseId, {
+      sources: [],
+      body: false,
+      ...(owner !== undefined ? { owner } : {}),
+    });
     this.trim();
+  }
+
+  /**
+   * Whether a call was claimed and no source has sealed it yet: the harness
+   * asked for it and is still waiting on it. The MCP gateway seals a call on
+   * a session's chain only then, so its frame is the first sighting, and a
+   * gateway call that names an id the chain already holds is recorded where
+   * it would have been without one rather than dropped as a repeat.
+   */
+  awaits(toolUseId: string): boolean {
+    return this.entries.get(toolUseId)?.sources.length === 0;
   }
 
   /**
@@ -129,9 +152,10 @@ export class ToolCallLedger {
    * envelope then refuses must leave no trace, or the source that reports the
    * call next is judged against a frame the chain does not hold.
    *
-   * A row with no `tool_use_id` is nothing this can join on (the MCP
-   * gateway's own `tool_call` is one), so it is always a first sighting and
-   * registers nothing. `owner` is the subagent whose chain the row seals on.
+   * A row with no `tool_use_id` is nothing this can join on (an MCP gateway
+   * call from a client that sends none is one), so it is always a first
+   * sighting and registers nothing. `owner` is the subagent whose chain the
+   * row seals on.
    */
   judge(
     toolUseId: string | undefined,

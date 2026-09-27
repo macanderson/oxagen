@@ -67,6 +67,8 @@ vi.mock("./assistant-thread-actions", () => ({
       ok: true,
       value: { workspaceKey: `id-${ws}`, thread: null },
     }),
+  listAssistantSessions: vi.fn(),
+  openAssistantSession: vi.fn(),
 }));
 
 // The parked cards read approval rows and decide through Fleet's action; they

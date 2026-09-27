@@ -269,7 +269,8 @@ export function ShellMobileNav({ data }: { data: ShellData }) {
                   label={t("sidebar.countNotRecordedShort")}
                 />
               ) : waiting !== null && waiting > 0 ? (
-                // The name reads "Fleet, 3 approvals waiting".
+                // The name reads "Fleet, 3 waiting on a person": parked
+                // calls plus open interjections (#3839), as the sidebar counts.
                 <SlotCount
                   count={waiting}
                   more={counts.fleetMore}

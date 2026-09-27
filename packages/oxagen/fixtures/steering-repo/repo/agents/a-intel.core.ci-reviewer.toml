@@ -1,0 +1,7 @@
+#:schema https://oxagen.sh/schemas/agent/v1.json
+schema = "agent/v1"
+name = "a-intel.core.ci-reviewer"
+label = "CI reviewer"
+operator = "platform-team"
+runtime = "ci-linux-01"
+harness = "codex"

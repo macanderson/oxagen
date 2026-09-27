@@ -3,6 +3,8 @@
 // with what a test hands it. Importable from tests only (`testOnlyTarget` in
 // src/test/arch/layers.ts).
 import type {
+  NamedRuntime,
+  NamedRuntimeList,
   RuntimeAgent,
   RuntimeAgents,
   RuntimeEnrollment,
@@ -63,6 +65,36 @@ export function runtimeList(
   return readOk({ enrollments, more });
 }
 
+/** A runtime the workspace named (ADR-198), running Claude Code as `mac-claude`. */
+export function namedRuntime(
+  overrides: Partial<NamedRuntime> = {},
+): NamedRuntime {
+  return {
+    id: "rtm_macslaptop",
+    name: "Mac's laptop",
+    slug: "macs-laptop",
+    createdAt: "2026-09-20T10:00:00.000Z",
+    agents: [
+      {
+        id: "agt_macclaude",
+        name: "Mac Claude",
+        slug: "mac-claude",
+        harness: "claude-code",
+      },
+    ],
+    liveHosts: 1,
+    lastSeenAt: "2026-09-23T09:12:44.000Z",
+    containmentRequired: false,
+    ...overrides,
+  };
+}
+
+export function namedRuntimeList(
+  runtimes: NamedRuntime[] = [namedRuntime()],
+): Read<NamedRuntimeList> {
+  return readOk({ runtimes });
+}
+
 /** The organization's roster, holding the operator `runtimeAgent()` names. */
 export function memberList(
   members: MemberList["members"] = [
@@ -70,6 +102,7 @@ export function memberList(
       id: "usr_marcusbell",
       name: "Marcus Bell",
       email: "marcus@acme.test",
+      avatarUrl: null,
       role: "owner",
       joinedAt: "2026-01-05T09:00:00.000Z",
     },
@@ -87,13 +120,25 @@ export function runtimesSource(reads: {
   list: Read<RuntimeList>;
   agents?: Read<RuntimeAgents>;
   members?: Read<MemberList>;
+  /** `list_runtimes`; no runtime named when absent. */
+  named?: Read<NamedRuntimeList>;
 }): {
   source: DataSource;
-  calls: { agents: (readonly string[])[]; members: number };
+  calls: {
+    agents: (readonly string[])[];
+    members: number;
+    /** The id each `named` read passed; undefined for an unfiltered read. */
+    named: (string | undefined)[];
+  };
 } {
-  const calls: { agents: (readonly string[])[]; members: number } = {
+  const calls: {
+    agents: (readonly string[])[];
+    members: number;
+    named: (string | undefined)[];
+  } = {
     agents: [],
     members: 0,
+    named: [],
   };
   // Only the runtimes port and the roster are read by these pages; every
   // other read refuses, so a page that reaches for one fails its test.
@@ -106,6 +151,10 @@ export function runtimesSource(reads: {
         reads.agents ?? readOk({ agents: [runtimeAgent()] }),
       );
     },
+    named: (_ctx, id) => {
+      calls.named.push(id);
+      return Promise.resolve(reads.named ?? namedRuntimeList([]));
+    },
   };
   const members: DataSource["org"]["members"] = () => {
     calls.members += 1;
@@ -113,7 +162,7 @@ export function runtimesSource(reads: {
   };
   const source: DataSource = {
     runtimes,
-    conversations: { latest: refuse },
+    conversations: { latest: refuse, list: refuse, byId: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
       context: refuse,
@@ -138,11 +187,16 @@ export function runtimesSource(reads: {
       turns: refuse,
       transcript: refuse,
       chain: refuse,
+      commands: refuse,
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,
+      issues: refuse,
+      context: refuse,
+      findings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+    interjections: { open: refuse, forRun: refuse },
     agents: { list: refuse, get: refuse, toolbelt: refuse, incidents: refuse },
     mandates: { list: refuse, get: refuse },
     spend: {
@@ -194,6 +248,8 @@ export function runtimesSource(reads: {
       approvalRules: refuse,
       connections: refuse,
       mcpServers: refuse,
+      toolbelts: refuse,
+      toolbelt: refuse,
     },
   };
 

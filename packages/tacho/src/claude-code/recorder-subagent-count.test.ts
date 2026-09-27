@@ -12,6 +12,8 @@
  * subagent type must not be filed on one of two parallel subagents of that
  * type as though it were known to be that one's.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { TachoEvent } from "../envelope";
 import type { ClaudeCodeContext } from "./context";
@@ -135,6 +137,24 @@ function family(root: SessionRecorder): TachoEvent[] {
 /** One member of an event's body, whatever the kind's body type. */
 function field(event: TachoEvent, key: string): unknown {
   return (event.body as Record<string, unknown>)[key];
+}
+
+/** The SubagentStart payload captured from Claude Code 2.1.263. */
+function subagentStartFixture(): Record<string, unknown> {
+  const path = join(
+    __dirname,
+    "..",
+    "..",
+    "fixtures",
+    "claude-code",
+    "hooks",
+    "13-SubagentStart.json",
+  );
+  return (
+    JSON.parse(readFileSync(path, "utf8")) as {
+      stdin: Record<string, unknown>;
+    }
+  ).stdin;
 }
 
 function countedCalls(events: readonly TachoEvent[]): TachoEvent[] {
@@ -518,5 +538,88 @@ describe("the tokens a session family counts", () => {
     );
     expect(countedCalls(after.sealedEvents)).toEqual([]);
     expect(countedTools(after.sealedEvents)).toEqual([]);
+  });
+});
+
+describe("a child chain the transcript opened before its SubagentStart", () => {
+  /** A root chain whose transcript opened `agent_id`'s child chain first. */
+  function openedByTranscript(agentId: string): SessionRecorder {
+    const root = new SessionRecorder({
+      context,
+      harnessSessionId: ID,
+      scope: SCOPE,
+    });
+    root.ingestHook(
+      { session_id: ID, hook_event_name: "SessionStart" },
+      {},
+      at,
+    );
+    root.ingestTranscriptLine(transcriptReply("req_1", "msg_1"), agentId);
+    return root;
+  }
+
+  it("stamps the type the captured SubagentStart names on every frame after it", () => {
+    // The tailer reads a subagent's transcript as it grows, so its first line
+    // can open the child chain before SubagentStart lands. The hook set the
+    // type only for routing, and the child's frames carried no type. The
+    // captured payload (Claude Code 2.1.263) names the agent and its type,
+    // and no spawning call.
+    const start = subagentStartFixture();
+    const agentId = start["agent_id"] as string;
+    const root = openedByTranscript(agentId);
+    root.ingestHook({ ...start, session_id: ID }, {}, at);
+    root.ingestTranscriptLine(transcriptReply("req_2", "msg_2"), agentId);
+    const second = chainOf(root, agentId).sealedEvents.find(
+      (event) =>
+        event.kind === "llm_call" && field(event, "request_id") === "req_2",
+    );
+    expect(second?.subagent).toMatchObject({
+      subagent_id: agentId,
+      subagent_type: start["agent_type"],
+    });
+    expect(second?.subagent?.spawn_tool_use_id).toBeUndefined();
+    // A restart continues the chain with the type.
+    expect(root.state().children[agentId]).toMatchObject({
+      type: start["agent_type"],
+    });
+  });
+
+  it("fills in a spawning call only when the hook names one", () => {
+    // Hand-written: no captured SubagentStart carries a tool_use_id. When
+    // one does, it names the parent's spawning call, and a later hook of the
+    // subagent's own call does not replace it.
+    const root = openedByTranscript("agent-late");
+    root.ingestHook(
+      {
+        session_id: ID,
+        hook_event_name: "SubagentStart",
+        agent_id: "agent-late",
+        agent_type: "Explore",
+        tool_use_id: "toolu_spawn",
+      },
+      {},
+      at,
+    );
+    root.ingestHook(
+      {
+        session_id: ID,
+        hook_event_name: "PreToolUse",
+        agent_id: "agent-late",
+        agent_type: "Explore",
+        tool_name: "Read",
+        tool_input: { file_path: "/repo/a" },
+        tool_use_id: "toolu_own",
+      },
+      {},
+      at,
+    );
+    const own = chainOf(root, "agent-late").sealedEvents.find(
+      (event) => event.kind === "tool_requested",
+    );
+    expect(own?.subagent?.spawn_tool_use_id).toBe("toolu_spawn");
+    expect(root.state().children["agent-late"]).toMatchObject({
+      type: "Explore",
+      spawnToolUseId: "toolu_spawn",
+    });
   });
 });

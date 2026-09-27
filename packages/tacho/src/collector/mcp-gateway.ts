@@ -42,9 +42,12 @@
  *      the limit and the count — the shape `TooManyToolsForProviderError` uses
  *      on the control plane — rather than a gateway error about a number
  *      nobody can inspect.
- *   3. **Evidence.** Every proxied call is sealed on this connection's chain
- *      with `enforcement_tier: "gateway"`, so the record says what it is: a
- *      call Oxagen served and could refuse, not a step it merely observed.
+ *   3. **Evidence.** Every proxied call is sealed with
+ *      `enforcement_tier: "gateway"`, so the record says what it is: a call
+ *      Oxagen served and could refuse, not a step it merely observed. It
+ *      lands on the daemon's chain, or on the session chain of the hooked
+ *      agent that asked for it when the client names the call's
+ *      `tool_use_id` (ADR-189).
  *
  * The browser guard lives in `loopback-guard.ts` and runs for every request on
  * the TCP listener, not only these.
@@ -187,17 +190,39 @@ export interface McpGatewayDeps {
   now?: () => number;
 }
 
+/**
+ * The `_meta` key Claude Code puts a tool call's `tool_use_id` under in every
+ * MCP `tools/call` request it sends. Read from the 2.1.283 binary, which
+ * spreads `{"claudecode/toolUseId": <id>}` into the request's `_meta`.
+ */
+export const CLAUDE_CODE_TOOL_USE_ID_META = "claudecode/toolUseId";
+
+/** The longest `tool_use_id` the envelope accepts. */
+const MAX_TOOL_USE_ID_LENGTH = 512;
+
 /** One proxied call, as the daemon needs it to seal an event. */
 export interface GatewayCallRecord {
-  /** The MCP session the call arrived on, which is the chain it lands on. */
+  /** The MCP session the call arrived on, sealed as `oxagen.mcp_session`. */
   sessionId: string;
   /** The connected app, from the `initialize` handshake. */
   client: string;
   toolName: string;
+  /**
+   * The harness's own id for this call, when the client sent one in the
+   * request's `_meta` (Claude Code does). The daemon seals the call on the
+   * session that requested it, as that call's one `tool_call` (ADR-189).
+   */
+  toolUseId?: string;
   status: "ok" | "error" | "rejected";
   durationMs: number;
   /** Set when the control plane refused the call. */
   refusedReason?: string;
+  /**
+   * The rules that refused it, from a -32002 refusal's `error.data.ruleIds`,
+   * at most 64 of at most 512 characters each (#3971). The daemon seals them
+   * as `policy_rules` on the `policy_decision` frame.
+   */
+  ruleIds?: string[];
   /** JCS digest of the call's arguments, for `tool_input_digest`. */
   inputDigest?: Sha256Digest;
   inputBytes?: number;
@@ -373,6 +398,32 @@ export function outcomeOf(
     return rpc.error.code === RPC_REFUSED ? "rejected" : "error";
   if (status < 200 || status >= 300) return "error";
   return "ok";
+}
+
+/** The most rules one refusal names, and the longest each may be: the envelope's bounds. */
+const REFUSAL_RULES_MAX = 64;
+const REFUSAL_RULE_MAX = 512;
+
+/**
+ * The rules a control-plane refusal names, in evaluation order (#3971,
+ * ADR-201): a `-32002` answer's `error.data.ruleIds`, strings only, at most
+ * 64 of at most 512 characters each. Undefined for any other answer, and for
+ * a refusal that names none, such as the gateway's own tool ceiling.
+ */
+export function refusalRulesOf(
+  rpc: JsonRpcResponse | undefined,
+): string[] | undefined {
+  const error = rpc?.error;
+  if (error === undefined || error.code !== RPC_REFUSED) return undefined;
+  const data = error.data;
+  if (typeof data !== "object" || data === null) return undefined;
+  const listed = (data as { ruleIds?: unknown }).ruleIds;
+  if (!Array.isArray(listed)) return undefined;
+  const rules = listed
+    .filter((rule): rule is string => typeof rule === "string" && rule !== "")
+    .slice(0, REFUSAL_RULES_MAX)
+    .map((rule) => rule.slice(0, REFUSAL_RULE_MAX));
+  return rules.length > 0 ? rules : undefined;
 }
 
 /** How many tools a `tools/list` result carries, or undefined if not one. */
@@ -661,13 +712,17 @@ export function createMcpGateway(deps: McpGatewayDeps): McpGateway {
     // `tools/list` is the exception: a refusal is a decision.
     const isCall = request.method === "tools/call";
     if (!isCall && status !== "rejected") return;
+    const ruleIds = status === "rejected" ? refusalRulesOf(rpc) : undefined;
+    const toolUseId = isCall ? toolUseIdOf(request.params) : undefined;
     deps.record({
       sessionId: context.sessionId,
       client: clients.get(context.sessionId) ?? "unknown",
       toolName: isCall ? toolNameOf(request.params) : request.method,
+      ...(toolUseId === undefined ? {} : { toolUseId }),
       status,
       durationMs,
       ...(refusedReason === undefined ? {} : { refusedReason }),
+      ...(ruleIds === undefined ? {} : { ruleIds }),
       ...exchangeOf(request, rpc, log),
     });
   }
@@ -754,6 +809,23 @@ function clientNameOf(
   if (info === null || typeof info !== "object") return undefined;
   const name = (info as { name?: unknown }).name;
   return typeof name === "string" && name.length > 0 ? name : undefined;
+}
+
+/**
+ * The `tool_use_id` a `tools/call` carries in `_meta`, or undefined when it
+ * carries none the envelope would accept.
+ */
+export function toolUseIdOf(
+  params: Record<string, unknown> | undefined,
+): string | undefined {
+  const meta = params?.["_meta"];
+  if (meta === null || typeof meta !== "object") return undefined;
+  const id = (meta as Record<string, unknown>)[CLAUDE_CODE_TOOL_USE_ID_META];
+  return typeof id === "string" &&
+    id.length > 0 &&
+    id.length <= MAX_TOOL_USE_ID_LENGTH
+    ? id
+    : undefined;
 }
 
 function toolNameOf(params: Record<string, unknown> | undefined): string {

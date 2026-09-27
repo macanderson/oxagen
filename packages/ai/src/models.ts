@@ -2,7 +2,7 @@ import { createGateway, gateway } from "@ai-sdk/gateway";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { wrapLanguageModel } from "ai";
 import type { LanguageModel } from "ai";
-import type { EmbeddingModelV4, LanguageModelV4 } from "@ai-sdk/provider";
+import type { LanguageModelV4 } from "@ai-sdk/provider";
 import { requireEnv } from "@oxagen/config/env";
 import { fetchWithoutRedirects } from "@oxagen/config/public-url";
 import type { ModelCredentialProvider } from "@oxagen/oxagen/contracts/org.model_credential.shared";
@@ -430,41 +430,6 @@ interface LanguageProviderClient {
 }
 
 /**
- * The provider that serves embeddings, and who paid for it.
- *
- * Not every BYOK provider serves embeddings, and the ones that do not are not
- * a failure — they fall back to the platform key and the embedding is billed.
- * The caller learns which happened from `fundedBy`, so it bills an embedding
- * Oxagen paid for and not one the customer did. Getting this backwards in
- * either direction is a billing error, which is why the answer is returned
- * rather than inferred.
- *
- *   gateway     serves embeddings; the customer's key answers
- *   openrouter  language models only — platform key, billed
- *   anthropic   has no embeddings API at all — platform key, billed
- *   openai      serves them, and openai_compatible endpoints often do, but
- *   openai_compatible
- *               the embedding model id is a gateway id their namespace does
- *               not have, and `modelMap` has no embedding dimension. The
- *               platform key answers rather than sending an id the endpoint
- *               would reject. Widening this needs an embedding entry in the
- *               model map, not a change here — and it is a billing change,
- *               because those tokens stop being Oxagen's to charge for.
- */
-export function embeddingProvider(credential?: ModelCredential): {
-  provider: { embeddingModel: (id: string) => EmbeddingModelV4 };
-  fundedBy: "platform" | "org";
-} {
-  if (credential?.provider === "gateway") {
-    return {
-      provider: createGateway({ apiKey: credential.apiKey }),
-      fundedBy: "org",
-    };
-  }
-  return { provider: gateway, fundedBy: "platform" };
-}
-
-/**
  * The language-model provider.
  *
  * The gateway is the default and remains the platform's metered path. Setting
@@ -477,9 +442,8 @@ export function embeddingProvider(credential?: ModelCredential): {
  * the metering the gateway exists to provide, and the first anyone would know
  * of it is the invoice. An operator opting out says so in the environment.
  *
- * Only the language path is redirected. `embeddingModel` stays on the gateway
- * because OpenRouter does not serve it — so embedding calls still fail on such
- * a deployment, and that is visible rather than papered over.
+ * Only the language path is redirected. Embeddings never use this provider:
+ * they go to Voyage on the platform key (packages/ai/src/embed.ts).
  *
  * Model ids are NOT rewritten between providers. The gateway spells a version
  * `claude-sonnet-4-6` and OpenRouter spells it `claude-sonnet-4.6`; mapping

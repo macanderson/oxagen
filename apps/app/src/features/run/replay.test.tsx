@@ -2,14 +2,16 @@
 // Fork replay and Bisect (spec §8.4): the two writes that read one recording
 // to start another piece of work.
 //
-// Fork is offered only on a sealed LEDGER run graded fork or retry, and it is
-// drawn disabled with the reason everywhere else, so a person is not sent to
-// a refusal the row already answers. Bisect reads receipts alone, so it is
+// Fork is offered only on a sealed LEDGER run graded fork or retry, to a
+// viewer whose organization role is Owner, Admin or Member, and it is drawn
+// disabled with the reason everywhere else, so a person is not sent to a
+// refusal the row or their role already answers. Bisect reads receipts alone, so it is
 // offered on every run, and its other run is picked by name or typed as an id.
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RunRow } from "@/data/contracts/runs";
+import type { OrgRole } from "@/server/viewer";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import { runRow } from "./run.builders";
@@ -24,10 +26,15 @@ vi.mock("@/features/shell/client", () => choices);
 
 const { ReplayActions } = await import("./replay-actions");
 
-function renderReplay(run: RunRow) {
+function renderReplay(run: RunRow, orgRole: OrgRole = "owner") {
   return render(
     <IntlProvider>
-      <ReplayActions org="acme" ws="core-platform" run={run} />
+      <ReplayActions
+        org="acme"
+        ws="core-platform"
+        run={run}
+        orgRole={orgRole}
+      />
     </IntlProvider>,
   );
 }
@@ -93,6 +100,51 @@ describe("Fork", () => {
     renderReplay(run);
     expect(screen.getByTestId("run-fork")).not.toBeDisabled();
     expect(screen.getByTestId("run-fork")).not.toHaveAttribute("title");
+  });
+
+  it("offers Fork to an organization Member", () => {
+    const run = runRow({ source: "ledger", replayGrade: "fork" });
+    renderReplay(run, "member");
+    expect(screen.getByTestId("run-fork")).not.toBeDisabled();
+    expect(screen.queryByTestId("fork-refused")).toBeNull();
+  });
+
+  it("draws Fork disabled for an organization Viewer on a run it could fork, and opens no dialog and calls nothing (negative)", async () => {
+    // A Viewer who owns the workspace can read the run, and fork_run still
+    // refuses them: it checks the organization role alone.
+    const user = userEvent.setup();
+    const run = runRow({ source: "ledger", replayGrade: "fork" });
+    const { container } = renderReplay(run, "viewer");
+    const button = screen.getByTestId("run-fork");
+    expect(button).toBeDisabled();
+    const reason =
+      "Forking needs an organization Owner, Admin or Member role. A workspace role does not grant it.";
+    expect(button).toHaveAttribute("title", reason);
+    expect(screen.getByTestId("fork-refused")).toHaveTextContent(reason);
+    await user.click(button);
+    expect(screen.queryByTestId("run-fork-dialog")).toBeNull();
+    expect(forkRun).not.toHaveBeenCalled();
+    await expectNoAxe(container);
+  });
+
+  it.each(["billing", "compliance"] as const)(
+    "draws Fork disabled for an organization %s role (negative)",
+    (orgRole) => {
+      const run = runRow({ source: "ledger", replayGrade: "retry" });
+      renderReplay(run, orgRole);
+      expect(screen.getByTestId("run-fork")).toBeDisabled();
+      expect(screen.getByTestId("fork-refused")).toHaveTextContent(
+        "Owner, Admin or Member",
+      );
+    },
+  );
+
+  it("names the recording's reason before the role's when both refuse (negative)", () => {
+    const run = runRow({ source: "tacho", replayGrade: "fork" });
+    renderReplay(run, "viewer");
+    expect(screen.getByTestId("fork-refused")).toHaveTextContent(
+      "recorded by a wrapped agent",
+    );
   });
 
   it("draws Fork disabled with the needs-a-ledger-run reason on a tacho run, and opens no dialog and calls nothing (negative)", async () => {

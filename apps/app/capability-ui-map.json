@@ -27,6 +27,15 @@
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
+    "answer_interjection": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "the Run page of a run whose host held the loop on a repository question: pick Link it to the workspace or Create a new workspace, then Send this answer, which shows the receipt (features/run/interjection.tsx, features/run/interjection-answer.tsx, features/run/actions.ts)",
+      "testid": "interjection-send",
+      "proof": "apps/app/src/features/run/interjection.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "session_035c2e7b-fbe1-4333-ba43-83a8243eea28"
+    },
     "archive_workspace": {
       "route": "/[org]",
       "page": "apps/app/src/app/[org]/page.tsx",
@@ -107,14 +116,6 @@
       "page": "apps/app/src/app/[org]/page.tsx",
       "entry": "/[org] \u2014 the rev1 surface that invokes change_member_role (features/organization/actions.ts)",
       "proof": "apps/app/src/features/organization/member-row-actions.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
-    },
-    "commit_agent_definition": {
-      "route": "/[org]/[ws]/agents/[agent]/source",
-      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/source/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent]/source \u2014 the rev1 surface that invokes commit_agent_definition (features/agents/actions.ts, features/agents/agent-source.tsx)",
-      "proof": "apps/app/src/features/agents/agent-source.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
     },
@@ -245,7 +246,7 @@
     "dispatch_command": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] \u2014 Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command, and an observe-tier run draws all four disabled with the recorded reason (features/run/actions.ts, features/run/run-controls.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 Pause, Resume, Steer and Cancel on a live wrapped run queue dispatch_command. A run its host cannot reach draws them disabled with the recorded reason, and an observe-tier run on a polling host takes all four (ADR-163) (features/run/actions.ts, features/run/run-controls.tsx)",
       "proof": "apps/app/src/features/run/controls.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "session-018UrgFq-mc1-columns",
@@ -253,7 +254,7 @@
         {
           "route": "/[org]/[ws]",
           "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-          "entry": "/[org]/[ws] (Fleet) \u2014 Pause on a live run's row opens the pause dialog, which queues dispatch_command for that run, and Steer in the header queues one steer per selected agent at the turn boundary (features/fleet/actions.ts, features/fleet/board.tsx, features/fleet/steer-fleet.tsx)",
+          "entry": "/[org]/[ws] (Fleet) \u2014 Pause on a live run's row opens the pause dialog, which queues dispatch_command for that run and fences a ledger run's evidence ingress, and Steer in the header queues one steer per selected agent at the turn boundary, with Interrupt as the ceiling where a selected run is on the gateway or contained tier, and holds it for the next run of an idle agent (features/fleet/actions.ts, features/fleet/board.tsx, features/fleet/steer-fleet.tsx)",
           "proof": "apps/app/src/features/fleet/fleet.test.tsx",
           "verifiedAt": "2026-09-23",
           "verifiedBy": "session-01GDv3vs-fleet-rev1"
@@ -338,7 +339,7 @@
     "get_agent": {
       "route": "/[org]/[ws]/agents/[agent]",
       "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/page.tsx",
-      "entry": "/[org]/[ws]/agents/[agent] \u2014 the rev1 surface that invokes get_agent (data/live/agents.ts, data/live/mappers/agents.ts, data/live/mappers/mappers.type-test.ts)",
+      "entry": "/[org]/[ws]/agents/[agent] — the agent page: identity, runtime, toolbelt and versions (data/live/agents.ts, data/live/mappers/agents.ts, features/agents/versions.tsx)",
       "proof": "apps/app/src/features/agents/agent.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -521,7 +522,7 @@
     "get_run": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run] \u2014 the Run page's header, figures and Governed actions tab read get_run once per render (data/live/runs.ts, features/run/run.tsx)",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 the Run page's header, figures and Governed actions tab read get_run once per render, and the pause banner and the header's Pausing and Resuming states read its pause (data/live/runs.ts, features/run/run.tsx, features/run/header.tsx)",
       "proof": "apps/app/src/features/run/run.test.tsx",
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
@@ -529,10 +530,10 @@
     "get_run_chain": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=chain \u2014 the Chain and seal tab reads get_run_chain: the hash rule, the Merkle root, the checkpoints, the gaps and the replay ladder (data/live/runs.ts, features/run/chain.tsx)",
+      "entry": "/[org]/[ws]/runs/[run]?tab=chain \u2014 the Chain and seal tab reads get_run_chain: the hash rule, the Merkle root, the seal's attestation (the key, the signature and the fields it signs), the checkpoints, the gaps and the replay ladder, under the Compacted note on a run read from its archive segment (data/live/runs.ts, features/run/chain.tsx)",
       "proof": "apps/app/src/features/run/chain.test.tsx",
-      "verifiedAt": "2026-09-18",
-      "verifiedBy": "session-replay-ui"
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "run-evidence-tabs-archive-and-replay"
     },
     "get_run_cost": {
       "route": "/[org]/[ws]/runs/[run]",
@@ -551,12 +552,32 @@
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_01QEwd1CHGAXDubLiTupVwv3"
     },
+    "get_run_context": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=actions&body=<seq>: the Governed actions tab reads get_run_context when the open frame is a model request or a steering.manifest and draws its window (tools offered, context frames, prompt tokens, prompt composition, message stack) or the assembler's budget and counts; the Context tab reads it for the Prompt panel, the Prompt window and Retrieval stats (data/live/runs.ts, features/run/actions-tab.tsx, features/run/request-window.tsx, features/run/context-tab.tsx)",
+      "testid": "window-panel",
+      "proof": "apps/app/src/features/run/actions-tab.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "session-b7da3f21-context-window",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runs/[run]",
+          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+          "entry": "/[org]/[ws]/runs/[run]?tab=context: the Prompt panel's bars and tok sent, the Prompt window's composition, and Retrieval stats read get_run_context (features/run/context-tab.tsx)",
+          "testid": "run-context-window",
+          "proof": "apps/app/src/features/run/context-tab.test.tsx",
+          "verifiedAt": "2026-09-26",
+          "verifiedBy": "session-b7da3f21-context-window"
+        }
+      ]
+    },
     "get_run_frame_body": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
-      "entry": "/[org]/[ws]/runs/[run]?tab=actions&body=<seq> \u2014 the Governed actions tab's frame player reads get_run_frame_body for the open frame when the URL names it (data/live/runs.ts, features/run/actions-tab.tsx, features/run/frame-player.tsx)",
+      "entry": "/[org]/[ws]/runs/[run]?tab=actions&body=<seq> \u2014 the Governed actions tab's frame player reads get_run_frame_body for the open frame when the URL names it, and a subagent's frame by its chain and seq as body=<chain>:<seq> (data/live/runs.ts, features/run/actions-tab.tsx, features/run/frame-link.ts, features/run/frame-player.tsx)",
       "proof": "apps/app/src/features/run/actions-tab.test.tsx",
-      "verifiedAt": "2026-09-24",
+      "verifiedAt": "2026-09-26",
       "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
     },
     "get_run_outputs": {
@@ -736,6 +757,30 @@
         }
       ]
     },
+    "list_commands": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run] \u2014 Delivery report in the Run header opens the delivery report: each command's status, the mode requested and the mode delivered as two facts, the issuer, a steer's text, and the frame an applied command landed on. A command frame on the Governed actions tab reads the same report for its inspector (features/run/delivery-report.tsx, features/run/control-inspector.tsx, features/run/actions.ts, data/live/runs.ts)",
+      "testid": "delivery-report-open",
+      "proof": "apps/app/src/features/run/delivery-report.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "session-live-run-page-controls",
+      "also": [
+        {
+          "route": "/[org]/[ws]/runs/[run]",
+          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+          "entry": "/[org]/[ws]/runs/[run]?tab=actions&body=<seq> \u2014 an open oxagen:command_applied frame reads list_commands and shows its command's status, modes, issuer, text and carrier (features/run/actions-tab.tsx, features/run/control-inspector.tsx)",
+          "proof": "apps/app/src/features/run/actions-tab.test.tsx"
+        },
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+          "entry": "/[org]/[ws] \u2014 Steer the fleet's receipt opens the delivery report for the command ids the send returned, through the dialog and read the Run page uses (features/fleet/steer-fleet.tsx, features/run/client.ts)",
+          "testid": "steer-report-open",
+          "proof": "apps/app/src/features/fleet/steer-fleet.test.tsx"
+        }
+      ]
+    },
     "list_connections": {
       "route": "/[org]/[ws]/tools/providers",
       "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
@@ -743,6 +788,15 @@
       "proof": "apps/app/src/features/tools/connections.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session_01BgZ1geHLLuub8kPYfH8Qup"
+    },
+    "list_conversations": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/layout.tsx",
+      "entry": "The shell's assistant flyout lists the viewer's active threads in the workspace behind its Threads button, and a row opens that thread (features/shell/assistant-sessions.tsx, features/shell/assistant-thread-actions.ts)",
+      "testid": "assistant-sessions",
+      "proof": "apps/app/src/features/shell/assistant-flyout.threads.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "session-2ce52f08-stella-session-list"
     },
     "list_credential_grants": {
       "route": "/[org]/[ws]/tools/providers",
@@ -755,7 +809,7 @@
     "list_findings": {
       "route": "/[org]/[ws]/spend",
       "page": "apps/app/src/app/[org]/[ws]/spend/[[...tab]]/page.tsx",
-      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes list_findings (data/live/mappers/spend.ts, data/live/spend.ts)",
+      "entry": "/[org]/[ws]/spend \u2014 the rev1 surface that invokes list_findings (data/live/mappers/spend.ts, data/live/spend.ts). The Run page's Cost tab also reads it for one run, /[org]/[ws]/runs/[run]?tab=cost, and pins each finding to the turns it cites (data/live/runs.ts, features/run/cost.tsx, features/run/waterfall.tsx; proof features/run/waterfall.test.tsx)",
       "proof": "apps/app/src/features/spend/spend.test.tsx",
       "verifiedAt": "2026-09-16",
       "verifiedBy": "session-20daa43b-cutover"
@@ -799,6 +853,34 @@
           "proof": "apps/app/src/features/organization/workspace-actions.test.tsx",
           "verifiedAt": "2026-09-24",
           "verifiedBy": "session_01Q41TYoTUbgPir4sajMJP42"
+        }
+      ]
+    },
+    "list_interjections": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "Fleet: the Waiting on a human tile adds the open questions list_interjections returns to the pending approvals, and its basis line names them (data/live/interjections.ts, features/fleet/waiting.ts, features/fleet/waiting-tile.tsx, features/fleet/fleet.tsx)",
+      "proof": "apps/app/src/features/fleet/fleet.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session_69a4a70c-08c7-498d-8bcc-8ec9c9335dbf",
+      "also": [
+        {
+          "route": "/[org]/[ws]",
+          "page": "apps/app/src/app/[org]/layout.tsx",
+          "entry": "the approvals drawer lists each open question first, links it to its run, and counts it in the topbar button, the sidebar's Fleet count and the phone's Fleet slot (features/shell/source.ts, features/shell/approvals-drawer.tsx, features/shell/interjection-row.tsx, features/shell/use-activity.ts)",
+          "testid": "interjection-row",
+          "proof": "apps/app/src/features/shell/approvals-drawer.test.tsx",
+          "verifiedAt": "2026-09-25",
+          "verifiedBy": "session_69a4a70c-08c7-498d-8bcc-8ec9c9335dbf"
+        },
+        {
+          "route": "/[org]/[ws]/runs/[run]",
+          "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+          "entry": "the Run page of a run whose recording carries control.interject reads that run's questions, answered or not, and draws the question, its two paths, its window and its answer (data/live/interjections.ts, features/run/run.tsx, features/run/interjection.tsx)",
+          "testid": "run-interjection",
+          "proof": "apps/app/src/features/run/interjection.test.tsx",
+          "verifiedAt": "2026-09-26",
+          "verifiedBy": "session_035c2e7b-fbe1-4333-ba43-83a8243eea28"
         }
       ]
     },
@@ -924,10 +1006,10 @@
     "list_runs": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
-      "entry": "/[org]/[ws] \u2014 the Fleet Runs panel and the four summary tiles rolled up from its rows: the Tier and Replay columns render list_runs' recorded enforcementTier and replayGrade, and Spend shown sums the recorded cost with its basis (features/fleet/board.tsx, features/fleet/view.ts, data/live/mappers/runs.ts, data/live/mappers/mappers.type-test.ts, data/live/runs.ts)",
+      "entry": "/[org]/[ws] \u2014 the Fleet Runs panel and the summary tiles: Live runs reads list_runs' workspace count (liveRuns), the Tier and Replay columns render list_runs' recorded enforcementTier and replayGrade, Spend shown sums the recorded cost with its basis, and Tokens shown sums each row's tokens with the share served from cache weighted by spend (#3834). Rows draw the Tokens column with its cached share, the pull request links with the state a forge last reported and when Oxagen read it (#4129), the lines changed and the summary (#4128), and the paused and compacted status words from ingressPaused and compacted (#3835). The search, facets, sort and page drive list_runs on the server with a bounded total (#3837), the page-size picker drives list_runs' limit, the column picker and page size persist in the fleet_view cookie, and ?prs= carries the pull-request filter (features/fleet/board.tsx, features/fleet/view.ts, features/fleet/run-cells.tsx, features/fleet/tokens.ts, features/fleet/list-query.ts, features/fleet/pager.tsx, features/fleet/prefs.ts, data/live/mappers/runs.ts, data/live/mappers/mappers.type-test.ts, data/live/runs.ts; component tests in features/fleet/runs-columns.test.tsx, features/fleet/row-facts.test.tsx, features/fleet/run-cells.test.tsx, features/fleet/pager.test.tsx, features/fleet/prefs.test.ts)",
       "proof": "apps/app/src/features/fleet/fleet.test.tsx",
-      "verifiedAt": "2026-09-23",
-      "verifiedBy": "session-01GDv3vs-fleet-rev1"
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session-69a4a70c-fleet-a3-run-rows"
     },
     "list_skills": {
       "route": "/[org]/[ws]/steering?tab=skills",
@@ -1036,6 +1118,15 @@
       "verifiedAt": "2026-09-19",
       "verifiedBy": "session-mc-repositories-page"
     },
+    "pause_workspace_runs": {
+      "route": "/[org]/[ws]",
+      "page": "apps/app/src/app/[org]/[ws]/(fleet)/page.tsx",
+      "entry": "every workspace page: ⌘K › “Pause every live run in this workspace” opens a dialog that asks for the reason, queues pause_workspace_runs through features/shell/pause-workspace-actions.ts, and shows the receipt of queued and skipped runs (features/shell/pause-workspace-dialog.tsx, features/shell/command-menu.tsx)",
+      "testid": "pause-workspace-dialog",
+      "proof": "apps/app/src/features/shell/pause-workspace-dialog.test.tsx",
+      "verifiedAt": "2026-09-25",
+      "verifiedBy": "session-69a4a70c-fleet-command-menu"
+    },
     "preview_skill_search": {
       "route": "/[org]/[ws]/steering?tab=skills",
       "page": "apps/app/src/app/[org]/[ws]/steering/page.tsx",
@@ -1043,14 +1134,6 @@
       "proof": "apps/app/src/features/skills/search.test.tsx",
       "verifiedAt": "2026-09-20",
       "verifiedBy": "skills-console-ci"
-    },
-    "propose_agent": {
-      "route": "/[org]/[ws]/agents",
-      "page": "apps/app/src/app/[org]/[ws]/agents/page.tsx",
-      "entry": "Agents \u203a New agent, and \u2318K Create \u203a Agent: the agent wizard's pull request step (features/create/agent-wizard.tsx, features/create/actions.ts); Agents \u203a Register an agent opens the same pull request from its dialog (features/agents/register-agent.tsx, features/agents/actions.ts)",
-      "proof": "apps/app/src/features/create/agent-wizard.test.tsx",
-      "verifiedAt": "2026-09-19",
-      "verifiedBy": "session-wizard-agent"
     },
     "propose_configuration_clone": {
       "route": "/[org]/[ws]/steering",
@@ -1121,10 +1204,10 @@
     "register_agent": {
       "route": "/[org]/[ws]/register/[step]",
       "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
-      "entry": "/[org]/[ws]/register/[step] \u2014 the rev1 surface that invokes register_agent (features/onboarding/actions.ts)",
-      "proof": "apps/app/src/features/onboarding/register.test.tsx",
-      "verifiedAt": "2026-09-16",
-      "verifiedBy": "session-20daa43b-cutover"
+      "entry": "/[org]/[ws]/register/name — Define the agent: its name, slug, harness, runtime and toolbelt, then Continue (features/onboarding/ui/register-form.tsx, features/onboarding/actions.ts)",
+      "proof": "apps/app/src/features/onboarding/ui.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
     },
     "register_mcp_server": {
       "route": "/[org]/[ws]/tools/providers",
@@ -1654,6 +1737,15 @@
       "verifiedAt": "2026-09-24",
       "verifiedBy": "session_014z7BMxb5guRYRar9qDcvQn"
     },
+    "get_run_issues": {
+      "route": "/[org]/[ws]/runs/[run]",
+      "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
+      "entry": "/[org]/[ws]/runs/[run]?tab=issues Issues: the run's task, the issues its recorded pull requests close and the issues its frames name, each with its state on GitHub, its relation, its edge and the frames that show it. The tab strip's Issues count reads the same answer (data/live/runs.ts, features/run/run-issues.ts, features/run/issues-tab.tsx).",
+      "testid": "run-issues",
+      "proof": "apps/app/src/features/run/issues-tab.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "run-evidence-tabs-repository-and-issues"
+    },
     "get_run_outcomes_settings": {
       "route": "/[org]/[ws]/runs/[run]",
       "page": "apps/app/src/app/[org]/[ws]/runs/[run]/page.tsx",
@@ -1749,6 +1841,131 @@
       "proof": "apps/app/src/features/organization/sso.test.tsx",
       "verifiedAt": "2026-09-23",
       "verifiedBy": "session-scim-provisioning"
+    },
+    "create_runtime": {
+      "route": "/[org]/[ws]/runtimes",
+      "page": "apps/app/src/app/[org]/[ws]/runtimes/page.tsx",
+      "entry": "Runtimes › Add a runtime: name, slug, and whether it requires the contained launcher, then on to registering its agent (features/runtimes/controls.tsx, features/runtimes/actions.ts)",
+      "testid": "runtimes-add",
+      "proof": "apps/app/src/features/runtimes/actions.test.ts",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-containment (#4372)"
+    },
+    "update_runtime": {
+      "route": "/[org]/[ws]/runtimes/[runtime]",
+      "page": "apps/app/src/app/[org]/[ws]/runtimes/[runtime]/page.tsx",
+      "entry": "Runtime › Containment: an Owner or Admin requires the contained launcher on a named runtime's page, others read it (features/runtimes/runtime.tsx, features/runtimes/controls.tsx ContainmentSwitch, features/runtimes/actions.ts)",
+      "testid": "runtime-containment-switch",
+      "proof": "apps/app/src/features/runtimes/runtimes.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-containment (#4372)"
+    },
+    "list_runtimes": {
+      "route": "/[org]/[ws]/runtimes",
+      "page": "apps/app/src/app/[org]/[ws]/runtimes/page.tsx",
+      "entry": "Runtimes › the Runtimes panel: each named runtime with its agents by harness (data/live/runtimes.ts, features/runtimes/named.tsx)",
+      "testid": "named-runtime",
+      "proof": "apps/app/src/features/runtimes/runtimes.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)",
+      "also": [
+        {
+          "route": "/[org]/[ws]/register/[step]",
+          "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+          "entry": "Define the agent › Runtime: the runtimes to choose from, a runtime already running the harness disabled with its reason (features/onboarding/ui/register-form.tsx)",
+          "testid": "register-runtime",
+          "proof": "apps/app/src/features/onboarding/ui.test.tsx"
+        },
+        {
+          "route": "/[org]/[ws]/agents/[agent]/[tab]",
+          "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/[tab]/page.tsx",
+          "entry": "Agent › Runtime › Runtime placement: the runtimes to move the agent to (features/agents/binding-controls.tsx)",
+          "testid": "agent-runtime",
+          "proof": "apps/app/src/features/agents/agent.test.tsx"
+        }
+      ]
+    },
+    "move_agent": {
+      "route": "/[org]/[ws]/agents/[agent]/[tab]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/[tab]/page.tsx",
+      "entry": "Agent › Runtime › Runtime placement › Move (features/agents/binding-controls.tsx, features/agents/actions.ts)",
+      "testid": "agent-runtime-save",
+      "proof": "apps/app/src/features/agents/actions.test.ts",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "assign_agent_toolbelt": {
+      "route": "/[org]/[ws]/agents/[agent]/[tab]",
+      "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/[tab]/page.tsx",
+      "entry": "Agent › Toolbelt › Assigned toolbelt › Save (features/agents/binding-controls.tsx, features/agents/actions.ts)",
+      "testid": "agent-belt-save",
+      "proof": "apps/app/src/features/agents/actions.test.ts",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "list_toolbelts": {
+      "route": "/[org]/[ws]/tools/toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Toolbelts: the All tools belt, then the clones (features/tools/toolbelts.tsx)",
+      "proof": "apps/app/src/features/tools/toolbelts.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)",
+      "also": [
+        {
+          "route": "/[org]/[ws]/register/[step]",
+          "page": "apps/app/src/app/[org]/[ws]/register/[step]/page.tsx",
+          "entry": "Define the agent › Toolbelt: the belts to choose from, or the step done with a link to import MCP servers when the workspace has no tools (features/onboarding/ui/register-form.tsx)",
+          "testid": "register-toolbelt",
+          "proof": "apps/app/src/features/onboarding/ui.test.tsx"
+        },
+        {
+          "route": "/[org]/[ws]/agents/[agent]/[tab]",
+          "page": "apps/app/src/app/[org]/[ws]/agents/[agent]/[tab]/page.tsx",
+          "entry": "Agent › Toolbelt › Assigned toolbelt (features/agents/binding-controls.tsx)",
+          "testid": "agent-belt",
+          "proof": "apps/app/src/features/agents/agent.test.tsx"
+        }
+      ]
+    },
+    "get_toolbelt": {
+      "route": "/[org]/[ws]/tools/toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Toolbelts › one belt, its tools grouped by server (features/tools/toolbelts.tsx, features/tools/belt-view.tsx)",
+      "proof": "apps/app/src/features/tools/tools.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "clone_toolbelt": {
+      "route": "/[org]/[ws]/tools/toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Toolbelts › Clone (features/tools/clone-toolbelt.tsx)",
+      "proof": "apps/app/src/features/tools/clone-toolbelt.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "update_toolbelt": {
+      "route": "/[org]/[ws]/tools/toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Toolbelts › a custom belt's server and tool switches (features/tools/belt-view.tsx)",
+      "proof": "apps/app/src/features/tools/belt-view.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "delete_toolbelt": {
+      "route": "/[org]/[ws]/tools/toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Toolbelts › Delete on a custom belt no agent carries (features/tools/belt-view.tsx)",
+      "proof": "apps/app/src/features/tools/belt-view.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
+    },
+    "set_tool_state": {
+      "route": "/[org]/[ws]/tools/toolbelts",
+      "page": "apps/app/src/app/[org]/[ws]/tools/[[...tab]]/page.tsx",
+      "entry": "Tools › Toolbelts › All tools: each tool's or server's availability and default (features/tools/belt-view.tsx)",
+      "proof": "apps/app/src/features/tools/belt-view.test.tsx",
+      "verifiedAt": "2026-09-26",
+      "verifiedBy": "runtime-agent-enrollment (#4369)"
     }
   }
 }

@@ -20,7 +20,7 @@
  * Two of three is the failure. Declaring none is fine — a package may
  * legitimately not gate on coverage, and this says nothing about that choice.
  *
- * A fourth fact ties the unit suite to the same task. PR CI's `test` job
+ * A fourth fact ties the unit suite to the same task. PR CI's `unit` job
  * (`.github/workflows/pipeline.yml`) runs `turbo run test:coverage` and not
  * `test:unit`, so a package with a `test:unit` script and no `test:coverage`
  * script has a suite no PR runs. `@oxagen/desktop` shipped that way: its

@@ -14,7 +14,9 @@
         "operatorId": null,
         "operatorKind": "agent",
         "operatorName": "release-bot",
+        "operatorAvatarUrl": null,
         "operatorAttribution": null,
+        "operatorRole": null,
         "status": "halted",
         "outcome": "failed",
         "turns": 3,
@@ -36,6 +38,7 @@
         "canSummarize": false,
         "model": null,
         "machine": null,
+        "harness": null,
         "name": "Release notes",
         "summary": null
       },

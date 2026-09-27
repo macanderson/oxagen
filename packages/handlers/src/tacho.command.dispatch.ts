@@ -39,6 +39,16 @@
 // A new command supersedes an earlier `queued` command of the same kind on the
 // same run: the earlier row becomes `cancelled` with the successor's id, so a
 // run never receives two steers where the operator meant a correction.
+//
+// A `steer` or `message` to an agent with no run in flight is queued for the
+// agent's next run (#2953). The row is addressed to the agent (`target_kind`
+// `agent`, `target_id` the agent key) and names no host and no session, so no
+// host drains it: a host-level command carries no session, and the host would
+// fan it out to whatever runs it holds, or to none. When the agent's next root
+// session opens, ingest re-addresses the row to that run
+// (`lib/next-run-commands.ts`), and the host delivers it like any steer. It is
+// queued only while a host enrolled as the agent can open that run. Pause,
+// resume and cancel to an idle agent reach nothing, as before.
 import type { CapabilityHandler } from "@oxagen/oxagen";
 import { HandlerError } from "@oxagen/oxagen/handler-error";
 import {
@@ -64,7 +74,8 @@ import {
   type SteerBlock,
   steerBlockOf,
 } from "@oxagen/oxagen/contracts/run.list";
-import { and, desc, eq, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { writeRecipientCommand } from "./lib/run-command-recipients";
 import { logger } from "./logger";
 import { ledgerIdentityQuery, type RunScope, runScope } from "./run.list";
 
@@ -234,6 +245,23 @@ export function addressOf(target: CommandTarget): string {
  */
 export type StoredCommand = RunCommand | "kill";
 
+/**
+ * A prompt command held for an agent's next run: the row `dispatch_command`
+ * writes for an agent with no run in flight (#2953).
+ */
+export type NextRunCommandInput = {
+  scope: RunScope;
+  /** The agent key the command is addressed to (`org_ns.ws_ns.slug`). */
+  agentKey: string;
+  command: RunCommand;
+  payload: Record<string, unknown>;
+  requestedMode: TachoDeliveryMode | null;
+  reason: string | null;
+  issuedByUserId: string | null;
+  issuedAt: Date;
+  expiresAt: Date;
+};
+
 export type CommandRowInput = {
   scope: RunScope;
   session: RecipientSession;
@@ -279,6 +307,13 @@ export interface CommandStore {
     reason: string | null;
   }): Promise<string>;
   insert(row: CommandRowInput): Promise<{ publicId: string }>;
+  /**
+   * Queue a prompt command for the next run of an agent with no run in
+   * flight, and cancel an earlier `queued` one of the same command for the
+   * same agent. Returns the row's `tcm_…` id, or null when no host enrolled
+   * as the agent in the scope could open that run.
+   */
+  queueForNextRun(row: NextRunCommandInput): Promise<string | null>;
   /** Cancel earlier `queued` rows of the same command on the run; returns how many. */
   supersede(args: {
     scope: RunScope;
@@ -398,6 +433,28 @@ export function createDispatchCommandHandler(
         input.command,
         now,
       );
+      if (
+        sessions.length === 0 &&
+        input.target.kind === "agent" &&
+        carriesPrompt &&
+        input.payload
+      ) {
+        // No run in flight: the steer waits for the agent's next run. The
+        // mode is resolved when that run is known, so only the request is
+        // recorded here.
+        const queued = await store.queueForNextRun({
+          scope,
+          agentKey: input.target.id,
+          command: input.command,
+          payload: { address, text: input.payload.text },
+          requestedMode,
+          reason: input.reason ?? null,
+          issuedByUserId: actingUserId,
+          issuedAt: now,
+          expiresAt,
+        });
+        return queued === null ? [] : [queued];
+      }
       const ids: string[] = [];
       for (const session of sessions) {
         const reason = commandUndeliverable(session, input.command, now);
@@ -415,30 +472,23 @@ export function createDispatchCommandHandler(
           session_uuid: session.sessionUuid,
           ...(input.payload ? { text: input.payload.text } : {}),
         };
-        const { publicId } = await store.insert({
-          scope,
-          session,
-          command: input.command,
-          payload,
-          requestedMode,
-          deliveryMode: resolved?.deliveryMode ?? null,
-          degradedReason: resolved?.degradedReason ?? null,
-          reason: input.reason ?? null,
-          outcome: reason === null ? "queued" : "failed",
-          outcomeDetail: reason,
-          issuedByUserId: actingUserId,
-          issuedAt: now,
-          expiresAt,
-        });
-        if (reason === null) {
-          await store.supersede({
+        const { publicId } = await writeRecipientCommand(
+          store,
+          {
             scope,
-            runPublicId: session.publicId,
+            session,
             command: input.command,
-            successorPublicId: publicId,
-            now,
-          });
-        }
+            payload,
+            requestedMode,
+            deliveryMode: resolved?.deliveryMode ?? null,
+            degradedReason: resolved?.degradedReason ?? null,
+            reason: input.reason ?? null,
+            issuedByUserId: actingUserId,
+            issuedAt: now,
+            expiresAt,
+          },
+          reason,
+        );
         ids.push(publicId);
       }
       return ids;
@@ -515,6 +565,18 @@ function recipientOf(row: RecipientRow): RecipientSession {
             bundleFeatures: hostBundleFeatures ?? [],
           },
   };
+}
+
+/**
+ * The advisory lock key that orders the commands of one kind queued for one
+ * idle agent's next run.
+ */
+function nextRunCommandLockKey(row: {
+  scope: RunScope;
+  agentKey: string;
+  command: RunCommand;
+}): string {
+  return `next_run_command:${row.scope.workspaceId}:${row.agentKey}:${row.command}`;
 }
 
 export function postgresCommandStore(tx: Tx): CommandStore {
@@ -713,6 +775,76 @@ export function postgresCommandStore(tx: Tx): CommandStore {
       if (!inserted)
         throw new Error("dispatch_command: insert returned no row");
       return inserted;
+    },
+    queueForNextRun: async (row) => {
+      // A host enrolled as the agent is what can open its next run. Without
+      // one the row would only wait for its expiry.
+      const [host] = await tx
+        .select({ id: hosts.id })
+        .from(hosts)
+        .where(
+          and(
+            eq(hosts.orgId, row.scope.orgId),
+            eq(hosts.workspaceId, row.scope.workspaceId),
+            eq(hosts.agentKey, row.agentKey),
+            ne(hosts.status, "revoked"),
+          ),
+        )
+        .limit(1);
+      if (!host) return null;
+      // Two dispatches for one idle agent and command would each insert
+      // before the other's row is visible, and both rows would stay queued.
+      // The lock orders them, so the later one cancels the earlier (Codex
+      // review on #4421). A run's commands are ordered by the run's row lock.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${nextRunCommandLockKey(row)}, 0))`,
+      );
+      const [inserted] = await tx
+        .insert(commands)
+        .values({
+          orgId: row.scope.orgId,
+          workspaceId: row.scope.workspaceId,
+          // No host and no session until the agent's next run opens, so no
+          // host drains the row as a host-level command.
+          hostId: null,
+          sessionId: null,
+          targetKind: "agent",
+          targetId: row.agentKey,
+          command: row.command,
+          payload: row.payload,
+          requestedMode: row.requestedMode,
+          deliveryMode: null,
+          degradedReason: null,
+          reason: row.reason,
+          issuedByUserId: row.issuedByUserId,
+          issuedAt: row.issuedAt,
+          expiresAt: row.expiresAt,
+          outcome: "queued",
+          createdById: row.issuedByUserId,
+          updatedById: row.issuedByUserId,
+        })
+        .returning({ publicId: commands.publicId });
+      if (!inserted)
+        throw new Error("dispatch_command: next-run insert returned no row");
+      await tx
+        .update(commands)
+        .set({
+          outcome: "cancelled",
+          outcomeDetail: `superseded_by:${inserted.publicId}`,
+          updatedAt: row.issuedAt,
+        })
+        .where(
+          and(
+            eq(commands.orgId, row.scope.orgId),
+            eq(commands.workspaceId, row.scope.workspaceId),
+            eq(commands.targetKind, "agent"),
+            eq(commands.targetId, row.agentKey),
+            eq(commands.command, row.command),
+            eq(commands.outcome, "queued"),
+            ne(commands.publicId, inserted.publicId),
+          ),
+        );
+      return inserted.publicId;
     },
     supersede: async ({
       scope,

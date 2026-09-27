@@ -1,6 +1,7 @@
 # ADR-140: One tool call seals one frame, sealed by the source that reports it first
 
 - Status: accepted; amended 2026-09-25 (the #3651 fold stays, see the amendment at the end)
+- Amended by: ADR-168 (a session and its subagents share one call ledger), ADR-189 (a gateway call a hooked session makes seals one frame on its chain)
 - Date: 2026-09-22
 - Related: ADR-058 (run record placement and digest-only retention), ADR-100 (frame bodies), ADR-101 (four wrapped harnesses), #3661 (the defect), #3651 (the read-side fold this replaces)
 

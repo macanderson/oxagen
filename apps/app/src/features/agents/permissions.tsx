@@ -7,9 +7,15 @@
 // from the organization's role catalogue when the viewer may read it. Assign
 // and Revoke are drawn only for an organization Owner or Admin on a live
 // identity, the set `assign_agent_role` and `revoke_agent_role` accept
-// (INV-29). The ceilings are the definition file's per-run and per-day
-// budgets, read from the committed file, and the organization and workspace
-// ceilings above them. The mandates are `list_mandates` narrowed to the agent.
+// (INV-29). The agent's own per-run and per-day budgets are `get_agent`'s
+// `limits`, read from its active version's config the way the host bundle
+// reads them (ADR-198), and the organization and workspace ceilings above
+// them are read too. The agent's own budgets stay read-only, and the tab says
+// a field for them comes later (ADR-204 §5). Containment is the runtime's
+// setting, not the agent's: `limits.containmentRequired` is read from the
+// agent's current runtime and shown read-only with a link to that runtime's
+// page, where an Owner or Admin changes it (ADR-204 §6). The mandates are
+// `list_mandates` narrowed to the agent.
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {
@@ -20,19 +26,14 @@ import type {
 import type { OrgRole } from "@/data/contracts/common";
 import type { MandateList } from "@/data/contracts/mandates";
 import { isEffective } from "@/data/contracts/mandates";
-import {
-  compareMicros,
-  type Money as MoneyValue,
-  ratioOfMicros,
-} from "@/data/contracts/money";
+import { compareMicros, ratioOfMicros } from "@/data/contracts/money";
 import type { RoleCatalog } from "@/data/contracts/org";
 import type { RunRow } from "@/data/contracts/runs";
 import type { SpendBudgets } from "@/data/contracts/spend";
 import type { Read } from "@/data/read";
 import { routes } from "@/shared/safe-path";
-import { parseTomlSubset, tomlGet } from "@/shared/toml-subset";
 import { Badge } from "@/ui/badge";
-import { buttonSecondary, mono } from "@/ui/control-styles";
+import { linkText, mono } from "@/ui/control-styles";
 import { Money } from "@/ui/money";
 import { formatCount, ratioWidth } from "@/ui/money-format";
 import { SafeLink } from "@/ui/navigation";
@@ -50,23 +51,6 @@ import {
 import { AssignRole, type RoleTarget, RevokeRole } from "./role-controls";
 
 type Place = { org: string; ws: string; agent: string };
-
-/** A micros budget the definition file names under `[budget]` or `budget = {…}`, in USD. */
-function definitionBudget(
-  detail: AgentDetail,
-  key: "per_run_micros" | "per_day_micros",
-): MoneyValue | null {
-  const source = detail.definition?.source;
-  if (source === undefined) return null;
-  const parsed = parseTomlSubset(source);
-  if (!parsed.ok) return null;
-  const budget = tomlGet(parsed.doc, "budget");
-  if (typeof budget !== "object" || Array.isArray(budget)) return null;
-  const value = tomlGet(budget, key);
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
-    return null;
-  return { micros: String(value), currency: "USD" };
-}
 
 function WireNode({ label, sub }: { label: string; sub?: string }) {
   return (
@@ -96,8 +80,6 @@ function Roles({
 }) {
   const t = useTranslations("agents.detail.permissions.roles");
   const locale = useLocale();
-  const perRun = definitionBudget(detail, "per_run_micros");
-  const perDay = definitionBudget(detail, "per_day_micros");
   const permissionsOf = (id: string, name: string) => {
     if (catalog === null || !catalog.ok) return null;
     return (
@@ -172,21 +154,23 @@ function Roles({
             term: t("spendCeiling"),
             value: (
               <span className="flex flex-col">
-                {perRun === null ? (
+                {detail.limits.perRun === null ? (
                   <NotRecordedValue />
                 ) : (
                   <span>
-                    <Money value={perRun} />{" "}
-                    <span className="text-xs text-dim">{perRun.currency}</span>
+                    <Money value={detail.limits.perRun} />{" "}
+                    <span className="text-xs text-dim">
+                      {detail.limits.perRun.currency}
+                    </span>
                   </span>
                 )}
                 <Sub>{t("perRunSub")}</Sub>
-                {perDay === null ? null : (
+                {detail.limits.perDay === null ? null : (
                   <>
                     <span>
-                      <Money value={perDay} />{" "}
+                      <Money value={detail.limits.perDay} />{" "}
                       <span className="text-xs text-dim">
-                        {perDay.currency}
+                        {detail.limits.perDay.currency}
                       </span>
                     </span>
                     <Sub>{t("perDaySub")}</Sub>
@@ -255,21 +239,20 @@ function Meter({
 }
 
 function Budgets({
-  detail,
+  limits,
   runs,
   toolbelt,
   budgets,
   place,
 }: {
-  detail: AgentDetail;
+  limits: AgentDetail["limits"];
   runs: readonly RunRow[];
   toolbelt: Read<Toolbelt>;
   budgets: Read<SpendBudgets> | null;
   place: Place;
 }) {
   const t = useTranslations("agents.detail.permissions.budgets");
-  const perRun = definitionBudget(detail, "per_run_micros");
-  const perDay = definitionBudget(detail, "per_day_micros");
+  const { perRun, perDay } = limits;
   const priced = runs.filter(
     (run): run is RunRow & { cost: NonNullable<RunRow["cost"]> } =>
       run.cost !== null,
@@ -280,21 +263,12 @@ function Budgets({
     null,
   );
   return (
-    <Panel
-      id="agent-budgets"
-      title={t("title")}
-      lead={t("lead")}
-      aside={
-        <SafeLink
-          to={routes.agent(place.org, place.ws, place.agent, {
-            tab: "definition",
-          })}
-          className={buttonSecondary}
-        >
-          {t("set")}
-        </SafeLink>
-      }
-    >
+    <Panel id="agent-budgets" title={t("title")} lead={t("lead")}>
+      {limits.invalid ? (
+        <p role="alert" className="text-[13px] text-foreground">
+          {t("invalid")}
+        </p>
+      ) : null}
       <Meter
         label={t("perRun")}
         value={
@@ -344,12 +318,85 @@ function Budgets({
           },
         ]}
       />
+      {/* No surface sets the agent's own budgets yet (ADR-204 §5). */}
+      <p
+        data-testid="agent-budget-field-later"
+        className="text-xs text-muted-foreground"
+      >
+        {t("fieldLater")}
+      </p>
       {budgets === null ? null : (
         <BudgetSection
           read={budgets}
           spend={routes.spend(place.org, place.ws, { tab: "budgets" })}
         />
       )}
+    </Panel>
+  );
+}
+
+/**
+ * Whether the agent runs only under the contained launcher (ADR-204 §6).
+ * The value is its current runtime's, so the tab names that runtime and links
+ * to its page, where an Owner or Admin changes it for every agent on it. An
+ * agent on no named runtime reads not required, as `get_agent` answers it.
+ */
+function Containment({
+  detail,
+  place,
+}: {
+  detail: AgentDetail;
+  place: Place;
+}) {
+  const t = useTranslations("agents.detail.permissions.containment");
+  const { runtime } = detail;
+  return (
+    <Panel
+      id="agent-containment-title"
+      testId="agent-containment"
+      title={t("title")}
+      lead={t("lead")}
+    >
+      <Facts
+        rows={[
+          {
+            term: t("term"),
+            value: (
+              <span
+                className="flex flex-col"
+                data-testid="agent-containment-value"
+              >
+                <span>
+                  {detail.limits.containmentRequired
+                    ? t("required")
+                    : t("notRequired")}
+                </span>
+                <Sub>
+                  {runtime === null
+                    ? t("noRuntime")
+                    : t.rich("setOn", {
+                        name: runtime.name,
+                        runtime: (chunks) => (
+                          <SafeLink
+                            to={routes.runtime(
+                              place.org,
+                              place.ws,
+                              runtime.id,
+                            )}
+                            data-testid="agent-containment-runtime"
+                            className={linkText}
+                          >
+                            {chunks}
+                          </SafeLink>
+                        ),
+                      })}
+                </Sub>
+              </span>
+            ),
+          },
+        ]}
+      />
+      <Note>{t("note")}</Note>
     </Panel>
   );
 }
@@ -407,12 +454,13 @@ export function PermissionsSection({
           manage={manage}
         />
         <Budgets
-          detail={detail}
+          limits={detail.limits}
           runs={runs}
           toolbelt={toolbelt}
           budgets={budgets}
           place={place}
         />
+        <Containment detail={detail} place={place} />
       </div>
       <MandatesSection
         read={mandates}

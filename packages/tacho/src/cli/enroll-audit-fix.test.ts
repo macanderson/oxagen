@@ -19,7 +19,7 @@ import {
   writeHostFile,
 } from "../host/host-file";
 import { acquireInstallLock } from "../host/install-lock";
-import { tachoPaths } from "../host/paths";
+import { tachoHome } from "../host/paths";
 import {
   bundleSigner,
   TEST_ENROLLMENT,
@@ -409,7 +409,7 @@ describe("a host revoked from the fleet page", () => {
 describe("enroll --print-managed", () => {
   it("waits for the install lock like any enroll", async () => {
     const rig = buildRig(seedHome());
-    const lock = acquireInstallLock(rig.deps.paths.root, rig.deps.now);
+    const lock = acquireInstallLock(rig.deps.paths.tachoDir, rig.deps.now);
     if ("heldBy" in lock) throw new Error("lock already held");
     try {
       const result = await enroll({ printManaged: true }, rig.deps);
@@ -691,9 +691,9 @@ describe("the harness files host.json records", () => {
     // The shell that runs unenroll moved Claude Code's config directory;
     // the deps it gets still name the file the hooks went into.
     vi.stubEnv("HOME", rig.home);
-    vi.stubEnv("TACHO_HOME", rig.deps.paths.root);
+    vi.stubEnv("TACHO_HOME", rig.deps.paths.tachoDir);
     vi.stubEnv("CLAUDE_CONFIG_DIR", join(rig.home, "elsewhere"));
-    expect(tachoPaths().claudeSettings).toBe(
+    expect(tachoHome().claudeSettings).toBe(
       join(rig.home, "elsewhere", "settings.json"),
     );
     const recorded = recordedCliDeps();

@@ -56,12 +56,12 @@ afterEach(async () => {
 
 const listed = readOk({
   orgs: [
-    { slug: "acme", name: "Acme Robotics" },
-    { slug: "globex", name: "Globex" },
+    { slug: "acme", name: "Acme Robotics", avatarUrl: null },
+    { slug: "globex", name: "Globex", avatarUrl: null },
   ],
   workspaces: [
-    { slug: "core-platform", name: "Core platform" },
-    { slug: "finops", name: "FinOps" },
+    { slug: "core-platform", name: "Core platform", avatarUrl: null },
+    { slug: "finops", name: "FinOps", avatarUrl: null },
   ],
 });
 
@@ -189,6 +189,116 @@ describe("workspace switcher", () => {
     expect(
       screen.getByRole("button", { name: /^Switch organization/ }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("switcher avatars", () => {
+  const withAvatars = readOk({
+    orgs: [
+      {
+        slug: "acme",
+        name: "Acme Robotics",
+        avatarUrl: "https://example.test/acme.png",
+      },
+      {
+        slug: "globex",
+        name: "Globex",
+        avatarUrl: 'avatar:v1:{"kind":"icon","icon":"rocket","tone":"gold"}',
+      },
+    ],
+    workspaces: [
+      {
+        slug: "core-platform",
+        name: "Core platform",
+        avatarUrl: 'avatar:v1:{"kind":"icon","icon":"satellite","tone":"soft"}',
+      },
+      {
+        slug: "finops",
+        name: "FinOps",
+        avatarUrl: "https://example.test/finops.png",
+      },
+    ],
+  });
+
+  it("draws the organization's and the workspace's stored avatars on the tiles", () => {
+    renderSwitchers(withAvatars, "finops");
+    const org = screen.getByTestId("org-switcher-avatar");
+    expect(org).toHaveAttribute("data-avatar", "image");
+    expect(org).toHaveAttribute("src", "https://example.test/acme.png");
+    const ws = screen.getByTestId("workspace-switcher-avatar");
+    expect(ws).toHaveAttribute("data-avatar", "image");
+    expect(ws).toHaveAttribute("src", "https://example.test/finops.png");
+  });
+
+  it("draws a designed avatar as its glyph on the workspace tile", () => {
+    renderSwitchers(withAvatars, "core-platform");
+    const ws = screen.getByTestId("workspace-switcher-avatar");
+    expect(ws).toHaveAttribute("data-avatar", "icon");
+    expect(ws).toHaveAttribute("data-icon", "satellite");
+  });
+
+  it("draws each row's avatar in the organization dialog", async () => {
+    renderSwitchers(withAvatars, "finops");
+    const orgs = await openDialog("Switch organization");
+    const [acme, globex] = within(orgs).getAllByRole("link");
+    expect(acme?.querySelector("[data-avatar]")).toHaveAttribute(
+      "data-avatar",
+      "image",
+    );
+    expect(globex?.querySelector("[data-avatar]")).toHaveAttribute(
+      "data-icon",
+      "rocket",
+    );
+  });
+
+  it("draws each row's avatar in the workspace dialog", async () => {
+    renderSwitchers(withAvatars, "finops");
+    const wss = await openDialog("Switch workspace");
+    const [core, finops] = within(wss)
+      .getAllByRole("link")
+      .filter((l) => !l.hasAttribute("data-testid"));
+    expect(core?.querySelector("[data-avatar]")).toHaveAttribute(
+      "data-icon",
+      "satellite",
+    );
+    expect(finops?.querySelector("[data-avatar]")).toHaveAttribute(
+      "data-avatar",
+      "image",
+    );
+  });
+
+  it("keeps the letter tiles when none is set: one letter on gold, two mono letters (negative)", async () => {
+    renderSwitchers(listed, "finops");
+    const org = screen.getByTestId("org-switcher-avatar");
+    expect(org).toHaveAttribute("data-avatar", "initials");
+    expect(org).toHaveAttribute("data-tone", "gold");
+    expect(org).toHaveTextContent(/^A$/);
+    const ws = screen.getByTestId("workspace-switcher-avatar");
+    expect(ws).toHaveAttribute("data-avatar", "initials");
+    expect(ws).toHaveAttribute("data-font", "mono");
+    expect(ws).toHaveTextContent(/^fi$/);
+    const dialog = await openDialog("Switch workspace");
+    for (const link of within(dialog)
+      .getAllByRole("link")
+      .filter((l) => !l.hasAttribute("data-testid")))
+      expect(link.querySelector("[data-avatar]")).toHaveAttribute(
+        "data-avatar",
+        "initials",
+      );
+  });
+
+  it("falls back to the letter tiles when the read did not list (negative)", () => {
+    renderSwitchers(
+      readError("control_plane_unavailable", 503),
+      "core-platform",
+    );
+    expect(screen.getByTestId("org-switcher-avatar")).toHaveAttribute(
+      "data-avatar",
+      "initials",
+    );
+    expect(screen.getByTestId("workspace-switcher-avatar")).toHaveTextContent(
+      /^co$/,
+    );
   });
 });
 

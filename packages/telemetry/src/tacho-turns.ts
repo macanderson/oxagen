@@ -27,6 +27,13 @@
  * - A tool call is one per call id on its chain, however many frames record
  *   it (the gate, the request, the harness check, the result and the copies
  *   an OTel log and a transcript add).
+ * - A tool call with no call id is the fold's rule 3, read from the chain's
+ *   frames in seq order: a request pairs with the receipt of its own spelling
+ *   when nothing but gates sits between them, and any other request or
+ *   receipt is a call of its own. The caller passes the fold's vocabulary for
+ *   that rule (`UNKEYED_TOOL_PAIRING` in @oxagen/run-ledger), so the two read
+ *   the same kinds (ADR-191). A later sighting of a model call is left out of
+ *   that reading, as the fold hides it before it pairs.
  *
  * Both reads go through `chSelect`, so each is fenced to the caller's
  * organization and workspace and served from the organization's data plane.
@@ -119,6 +126,41 @@ export interface TachoSpawnFact {
   subagentId: string | null;
 }
 
+/** Rule 3's vocabulary: each request with its receipt, and the gates between. */
+export interface UnkeyedToolPairing {
+  readonly closes: ReadonlyArray<readonly [request: string, receipt: string]>;
+  readonly gates: readonly string[];
+}
+
+/**
+ * A gate's letter, and every other frame's, in the rule 3 pattern. Neither is
+ * a letter of the alphabet, so neither can be read as a request or a receipt
+ * whatever the number of spellings, and neither means anything to a regular
+ * expression outside a bracket.
+ */
+export const RULE3_GATE_LETTER = "-";
+export const RULE3_OTHER_LETTER = "_";
+
+/**
+ * The pattern an unkeyed tool call makes in a chain's frames, one letter per
+ * frame: the kth request spelling is the kth capital, its receipt the same
+ * lowercase letter, a gate `-`, and anything else `_`. `A-*a` is a request,
+ * any gates, and its receipt.
+ */
+export function unkeyedToolPattern(pairing: UnkeyedToolPairing): string {
+  if (pairing.closes.length === 0 || pairing.closes.length > 26) {
+    throw new Error(
+      `rule 3 needs between 1 and 26 request spellings, got ${pairing.closes.length}`,
+    );
+  }
+  return pairing.closes
+    .map((_, k) => {
+      const letter = String.fromCharCode(65 + k);
+      return `${letter}${RULE3_GATE_LETTER}*${letter.toLowerCase()}`;
+    })
+    .join("|");
+}
+
 /** One chain's frames within one turn, counted. */
 export interface TachoTurnGroup {
   sessionUuid: string;
@@ -134,13 +176,12 @@ export interface TachoTurnGroup {
   frames: number;
   /** Model calls, each counted once: `llm_call` frames that are no later sighting. */
   modelCalls: number;
-  /** `model.request` and `model.response` frames, which a harness writes as the two halves of one call. */
-  modelRequests: number;
-  modelResponses: number;
   /** Distinct tool call ids among the tool frames. */
   keyedToolCalls: number;
-  /** Tool frames that carry no call id, by half. */
-  unkeyedToolRequests: number;
+  /**
+   * Tool calls among the frames that carry no call id, paired by rule 3:
+   * requests and receipts, less the pairs a request and its receipt make.
+   */
   unkeyedToolCalls: number;
   /** The group's cost records summed, micro-USD; null when none counts. */
   costMicros: number | null;
@@ -162,11 +203,8 @@ interface RawTurnGroup {
   first_at: string;
   frames: string | number;
   model_calls: string | number;
-  model_requests: string | number;
-  model_responses: string | number;
   keyed_tools: string | number;
-  unkeyed_requests: string | number;
-  unkeyed_calls: string | number;
+  unkeyed_tools: string | number;
   cost_micros: string | number | null;
   priced: string | number;
   input_uncached: string | number | null;
@@ -203,6 +241,29 @@ const nullableCount = (
 ): number | null =>
   Number(reported) > 0 && value !== null ? Number(value) : null;
 
+/** A tool frame that carries no call id: a request, a receipt, or neither. */
+const UNKEYED = `tool_use_id = ''`;
+
+/**
+ * A decision about a call, as the fold reads it. An OTel adapter once sealed
+ * Claude Code's own permission check as `policy_decision` with a policy
+ * source of `harness`, and the fold reads that row as `harness_permission`
+ * (`tachoKind`), which is not a gate.
+ */
+const GATE = `has({gates:Array(String)}, kind)
+  AND NOT (kind = 'policy_decision' AND startsWith(source, 'otel')
+    AND JSONExtractString(body, 'policy_source') = 'harness')`;
+
+/** Each frame's letter in the rule 3 pattern (`unkeyedToolPattern`). */
+const LETTER = `multiIf(
+  tool_use_id != '', '${RULE3_OTHER_LETTER}',
+  indexOf({toolRequests:Array(String)}, kind) > 0,
+    char(64 + indexOf({toolRequests:Array(String)}, kind)),
+  indexOf({toolReceipts:Array(String)}, kind) > 0,
+    char(96 + indexOf({toolReceipts:Array(String)}, kind)),
+  ${GATE}, '${RULE3_GATE_LETTER}',
+  '${RULE3_OTHER_LETTER}')`;
+
 /**
  * Every frame of a wrapped run, counted per chain and turn.
  *
@@ -210,6 +271,7 @@ const nullableCount = (
  * A root frame falls in the turn of the largest of them at or below its own
  * seq; one before the first falls in none. `observedFrom` is each chain's
  * first proxy-observed model call, from {@link selectTachoTurnFacts}.
+ * `pairing` is the fold's rule 3 vocabulary (`UNKEYED_TOOL_PAIRING`).
  */
 export async function selectTachoTurnGroups(args: {
   rootSessionUuid: string;
@@ -217,8 +279,12 @@ export async function selectTachoTurnGroups(args: {
   sessionUuids: readonly string[];
   turnStarts: readonly number[];
   observedFrom: readonly { sessionUuid: string; seq: number }[];
+  pairing: UnkeyedToolPairing;
 }): Promise<TachoTurnGroup[]> {
   if (args.sessionUuids.length === 0 || args.turnStarts.length === 0) return [];
+  const pattern = unkeyedToolPattern(args.pairing);
+  const toolRequests = args.pairing.closes.map(([request]) => request);
+  const toolReceipts = args.pairing.closes.map(([, receipt]) => receipt);
   const res = await chSelect<RawTurnGroup>({
     query: `
       SELECT
@@ -229,11 +295,15 @@ export async function selectTachoTurnGroups(args: {
         toString(argMin(ts, seq)) AS first_at,
         count() AS frames,
         countIf(kind = 'llm_call' AND NOT (${LATER_SIGHTING})) AS model_calls,
-        countIf(kind = 'model.request') AS model_requests,
-        countIf(kind = 'model.response') AS model_responses,
-        uniqExactIf(tool_use_id, kind IN ('tool_requested', 'tool_call') AND tool_use_id != '') AS keyed_tools,
-        countIf(kind = 'tool_requested' AND tool_use_id = '') AS unkeyed_requests,
-        countIf(kind = 'tool_call' AND tool_use_id = '') AS unkeyed_calls,
+        uniqExactIf(tool_use_id,
+          (has({toolRequests:Array(String)}, kind) OR has({toolReceipts:Array(String)}, kind))
+          AND tool_use_id != '') AS keyed_tools,
+        countIf((has({toolRequests:Array(String)}, kind) OR has({toolReceipts:Array(String)}, kind))
+          AND ${UNKEYED})
+          - countMatches(
+              arrayStringConcat(arrayMap(f -> f.2, arraySort(f -> f.1,
+                groupArrayIf((seq, ${LETTER}), NOT (${LATER_SIGHTING}))))),
+              {pattern:String}) AS unkeyed_tools,
         sumIf(cost_usd_micros, ${PRICED}) AS cost_micros,
         countIf(${PRICED}) AS priced,
         sumIf(input_tokens, ${COUNTED} AND input_tokens IS NOT NULL) AS input_uncached,
@@ -261,6 +331,10 @@ export async function selectTachoTurnGroups(args: {
       observed: TACHO_METERING_OBSERVED,
       duplicateAttr: LLM_CALL_DUPLICATE_OF_ATTR,
       sources: [...LLM_CALL_TOKEN_SOURCES],
+      toolRequests,
+      toolReceipts,
+      gates: [...args.pairing.gates],
+      pattern,
     },
   });
   return res.data.map((r) => {
@@ -272,11 +346,8 @@ export async function selectTachoTurnGroups(args: {
       firstAt: r.first_at,
       frames: Number(r.frames),
       modelCalls: Number(r.model_calls),
-      modelRequests: Number(r.model_requests),
-      modelResponses: Number(r.model_responses),
       keyedToolCalls: Number(r.keyed_tools),
-      unkeyedToolRequests: Number(r.unkeyed_requests),
-      unkeyedToolCalls: Number(r.unkeyed_calls),
+      unkeyedToolCalls: Number(r.unkeyed_tools),
       costMicros: nullableCount(r.cost_micros, r.priced),
       inputUncached: nullableCount(r.input_uncached, r.input_reported),
       cacheRead: nullableCount(r.cache_read, r.cache_reported),

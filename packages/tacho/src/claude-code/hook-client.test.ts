@@ -1308,11 +1308,11 @@ describe("Codex approval translation", () => {
       paths,
       env: {},
       stdin: "not json at all",
-      hookId: "hook_bad_json",
+      hookId: "01J00000000000000000000001",
     });
     expect(result.path).toBe("invalid");
     const [file] = readdirSync(paths.quarantine);
-    expect(file).toContain("hook_bad_json");
+    expect(file).toBe("01J00000000000000000000001.hook-payload.json");
     const quarantined = JSON.parse(
       readFileSync(join(paths.quarantine, file as string), "utf8"),
     ) as { schema: string; raw: string; reason: string };
@@ -1327,11 +1327,11 @@ describe("Codex approval translation", () => {
       paths,
       env: {},
       stdin: "{}",
-      hookId: "hook_bad_shape",
+      hookId: "01J00000000000000000000002",
     });
     expect(result.path).toBe("invalid");
     const [file] = readdirSync(paths.quarantine);
-    expect(file).toContain("hook_bad_shape");
+    expect(file).toBe("01J00000000000000000000002.hook-payload.json");
     const quarantined = JSON.parse(
       readFileSync(join(paths.quarantine, file as string), "utf8"),
     ) as { schema: string; raw: string };

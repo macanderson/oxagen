@@ -35,7 +35,7 @@ Mint the single-use enrollment token a machine presents to `enroll_host` to beco
 
 ## Refusals
 
-`forbidden: no_principal` / `org_role_required`; `not_found: agent_not_found`; `conflict: agent_retired` (the agent is retired, so no machine can enroll as it, and the handler writes no token).
+`forbidden: no_principal` / `org_role_required`; `forbidden: agent_managed_read_only` (the agent is the built-in assistant stella acts as, which runs inside Oxagen and on no host, #4350); `not_found: agent_not_found`; `conflict: agent_retired` (the agent is retired, so no machine can enroll as it, and the handler writes no token).
 
 ## Honesty
 

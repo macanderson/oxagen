@@ -1,0 +1,1477 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/mcp-tools-lock/v1.json",
+  "title": "MCP tools lock",
+  "anyOf": [
+    {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "mcp-tools-lock/v1"
+        },
+        "server": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,23}$",
+          "not": {
+            "const": "builtin"
+          }
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "remote"
+                },
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)"
+                },
+                "server_version": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "description": "The version the server reported in initialize, when it reported one."
+                }
+              },
+              "required": [
+                "type",
+                "url"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "registry"
+                },
+                "registry": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)"
+                },
+                "server": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 200
+                },
+                "version": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
+                  "description": "The endpoint the catalog entry named, for a remote entry."
+                },
+                "transport": {
+                  "type": "string",
+                  "enum": [
+                    "http",
+                    "sse"
+                  ],
+                  "description": "How the catalog entry reaches url: http (the catalog's streamable-http) or sse."
+                },
+                "package": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 214,
+                      "description": "The package or binary: @modelcontextprotocol/server-filesystem."
+                    },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "digest": {
+                      "type": "string",
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "description": "For oci, the image's manifest digest. For the others, the SHA-256 of the package archive."
+                    },
+                    "registry_type": {
+                      "type": "string",
+                      "enum": [
+                        "npm",
+                        "pypi",
+                        "oci",
+                        "nuget"
+                      ],
+                      "description": "source.registry_type: npm, pypi, oci, or nuget."
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "version",
+                    "digest",
+                    "registry_type"
+                  ],
+                  "additionalProperties": false,
+                  "description": "The package the local gateway runs, when server.toml names machines."
+                },
+                "command": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024,
+                  "description": "For a package: the command the local gateway runs, npx, uvx, docker, or dnx."
+                },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  "maxItems": 1024,
+                  "description": "For a package: the command's arguments. ${NAME} stays for the local gateway to fill from the machine, and $$ writes one $."
+                },
+                "server_version": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "description": "The version the server reported in initialize, when it reported one."
+                }
+              },
+              "required": [
+                "type",
+                "registry",
+                "server",
+                "version"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "oneOf": [
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "package"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "dependentRequired": {
+                    "url": [
+                      "transport"
+                    ]
+                  }
+                },
+                {
+                  "dependentRequired": {
+                    "transport": [
+                      "url"
+                    ]
+                  }
+                },
+                {
+                  "dependentRequired": {
+                    "package": [
+                      "command",
+                      "args"
+                    ]
+                  }
+                },
+                {
+                  "dependentRequired": {
+                    "command": [
+                      "package"
+                    ],
+                    "args": [
+                      "package"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "local"
+                },
+                "command": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                },
+                "package": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 214,
+                      "description": "The package or binary: @modelcontextprotocol/server-filesystem."
+                    },
+                    "version": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "digest": {
+                      "type": "string",
+                      "pattern": "^sha256:[0-9a-f]{64}$",
+                      "description": "SHA-256 of the package or binary."
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "version",
+                    "digest"
+                  ],
+                  "additionalProperties": false
+                },
+                "server_version": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "description": "The version the server reported in initialize, when it reported one."
+                }
+              },
+              "required": [
+                "type",
+                "command",
+                "package"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "tools": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 61,
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "definition_hash": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "description": "SHA-256 over the RFC 8785 form of the effective name, description, and schemas."
+              },
+              "upstream": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "object"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "description": "A JSON Schema whose type is object."
+                  },
+                  "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "object"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "description": "A JSON Schema whose type is object."
+                  },
+                  "annotations": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string"
+                      },
+                      "readOnlyHint": {
+                        "type": "boolean"
+                      },
+                      "destructiveHint": {
+                        "type": "boolean"
+                      },
+                      "idempotentHint": {
+                        "type": "boolean"
+                      },
+                      "openWorldHint": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "name",
+                  "inputSchema"
+                ],
+                "additionalProperties": false
+              },
+              "upstream_hash": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "description": "SHA-256 over the RFC 8785 form of upstream."
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Rises by one when definition_hash changes. Never for a classification change."
+              }
+            },
+            "required": [
+              "definition_hash",
+              "upstream",
+              "upstream_hash",
+              "version"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "schema",
+        "server",
+        "source",
+        "tools"
+      ],
+      "additionalProperties": false,
+      "description": "The lock of an MCP server: remote, registry, or local."
+    },
+    {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "mcp-tools-lock/v1"
+        },
+        "server": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,23}$",
+          "not": {
+            "const": "builtin"
+          }
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "openapi",
+                "graphql",
+                "grpc"
+              ]
+            },
+            "from": {
+              "type": "string",
+              "enum": [
+                "repository",
+                "url",
+                "upload",
+                "introspection",
+                "reflection"
+              ]
+            },
+            "document_hash": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "description": "SHA-256 of the definition's bytes as committed, or of the bundle for many files."
+            },
+            "repo": {
+              "type": "string",
+              "pattern": "^(?:github\\.com|gitlab\\.com)\\/[A-Za-z0-9_.-]+(?:\\/[A-Za-z0-9_.-]+)+$"
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^(?!\\/)(?!.*\\/$)(?!.*\\/\\/)(?!(?:.*\\/)?\\.\\.?(?:\\/|$)).+$"
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[^\\s~^:?*[\\\\]+$"
+            },
+            "commit": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}(?:[0-9a-f]{24})?$",
+              "description": "The commit ref resolved to when the lock was written."
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)"
+            },
+            "security_schemes": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.-]{1,64}$"
+              },
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "oauth2",
+                      "openIdConnect",
+                      "http_bearer",
+                      "http_basic",
+                      "api_key",
+                      "mutual_tls"
+                    ]
+                  },
+                  "in": {
+                    "type": "string",
+                    "enum": [
+                      "header",
+                      "query",
+                      "cookie"
+                    ],
+                    "description": "Where an API key goes. api_key only."
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "description": "The header, query parameter, or cookie that carries an API key. api_key only."
+                  },
+                  "authorization_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
+                    "description": "oauth2: the authorization code flow's authorizationUrl."
+                  },
+                  "token_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
+                    "description": "oauth2: the tokenUrl of the authorization code or client credentials flow."
+                  },
+                  "refresh_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
+                    "description": "oauth2: the refreshUrl, when it differs from token_url."
+                  },
+                  "openid_connect_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "pattern": "^https?:\\/\\/[^/?#@]*(?:[/?#]|$)",
+                    "description": "openIdConnect: the discovery document."
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "maxItems": 256,
+                    "uniqueItems": true,
+                    "description": "oauth2 and openIdConnect: the scopes the flow offers."
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "api_key"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "in",
+                        "name"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "not": {
+                        "properties": {
+                          "type": {
+                            "const": "api_key"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ]
+                      }
+                    },
+                    "then": {
+                      "not": {
+                        "anyOf": [
+                          {
+                            "required": [
+                              "in"
+                            ]
+                          },
+                          {
+                            "required": [
+                              "name"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "openIdConnect"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "openid_connect_url"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "description": "OpenAPI only: components.securitySchemes as import read them, so compile resolves auth.scheme without the document."
+            }
+          },
+          "required": [
+            "type",
+            "from",
+            "document_hash"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "openapi"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "from": {
+                        "enum": [
+                          "repository",
+                          "url",
+                          "upload"
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "graphql"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "from": {
+                        "enum": [
+                          "repository",
+                          "url",
+                          "upload",
+                          "introspection"
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "grpc"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ]
+                  },
+                  "then": {
+                    "properties": {
+                      "from": {
+                        "enum": [
+                          "repository",
+                          "url",
+                          "upload",
+                          "reflection"
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "repository"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "required": [
+                  "repo",
+                  "path",
+                  "ref",
+                  "commit"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "repository"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "url"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "required": [
+                  "url"
+                ]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "url"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "repo"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "ref"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "commit"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "upload"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "repo"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "ref"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "commit"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "introspection"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "repo"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "ref"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "commit"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "from": {
+                    "const": "reflection"
+                  }
+                },
+                "required": [
+                  "from"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "repo"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "path"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "ref"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "commit"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "type": {
+                    "const": "graphql"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "security_schemes"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "type": {
+                    "const": "grpc"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "security_schemes"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "tools": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "maxLength": 61,
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "definition_hash": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "description": "SHA-256 over the RFC 8785 form of the effective name, description, and schemas."
+              },
+              "upstream": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "description": "An MCP tool's own name, or the suggested tool key for an operation, field, or method: create_refund."
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 1024,
+                    "description": "From the source, cut at 1,024 characters. Absent when the source has none."
+                  },
+                  "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "object"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "description": "Every input in one object, before tools.toml applies."
+                  },
+                  "outputSchema": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "const": "object"
+                      }
+                    },
+                    "required": [
+                      "type"
+                    ],
+                    "description": "A JSON Schema whose type is object."
+                  },
+                  "annotations": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string"
+                      },
+                      "readOnlyHint": {
+                        "type": "boolean"
+                      },
+                      "destructiveHint": {
+                        "type": "boolean"
+                      },
+                      "idempotentHint": {
+                        "type": "boolean"
+                      },
+                      "openWorldHint": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "description": "An MCP server's hints, or the ones a format implies, such as idempotentHint for PUT and DELETE."
+                  },
+                  "deprecated": {
+                    "type": "boolean"
+                  },
+                  "suggestion": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "maxLength": 61,
+                        "pattern": "^[a-z][a-z0-9_]*$"
+                      },
+                      "description": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1024
+                      },
+                      "risk": {
+                        "type": "string",
+                        "enum": [
+                          "low",
+                          "medium",
+                          "high",
+                          "critical"
+                        ]
+                      },
+                      "side_effect": {
+                        "type": "string",
+                        "enum": [
+                          "read",
+                          "write",
+                          "irreversible"
+                        ]
+                      },
+                      "egress": {
+                        "type": "string",
+                        "enum": [
+                          "local",
+                          "org_tenant",
+                          "third_party"
+                        ]
+                      },
+                      "impacts": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9_]{1,63}$"
+                        },
+                        "maxItems": 32,
+                        "uniqueItems": true
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "paging": {
+                    "type": "object",
+                    "properties": {
+                      "style": {
+                        "type": "string",
+                        "enum": [
+                          "cursor",
+                          "page",
+                          "offset",
+                          "connection"
+                        ]
+                      },
+                      "input": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128,
+                        "description": "The input that carries the cursor, page, or offset: cursor, page, after."
+                      },
+                      "next": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\[\\])?(?:\\.[A-Za-z_][A-Za-z0-9_]*(?:\\[\\])?)*$",
+                        "description": "Where the result holds the next cursor: next_cursor, pageInfo.endCursor."
+                      },
+                      "has_more": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\[\\])?(?:\\.[A-Za-z_][A-Za-z0-9_]*(?:\\[\\])?)*$",
+                        "description": "Where the result says more pages remain: has_more, pageInfo.hasNextPage."
+                      },
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\[\\])?(?:\\.[A-Za-z_][A-Za-z0-9_]*(?:\\[\\])?)*$",
+                        "description": "The array the pages add to: data, edges."
+                      },
+                      "limit": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128,
+                        "description": "The input that sets the page size."
+                      }
+                    },
+                    "required": [
+                      "style",
+                      "input",
+                      "items"
+                    ],
+                    "additionalProperties": false,
+                    "description": "How to page the operation, when import found a paging pattern."
+                  },
+                  "request": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "const": "mcp"
+                          },
+                          "tool": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128,
+                            "description": "The name tools/call sends: the server's own name."
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "tool"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "const": "http"
+                          },
+                          "operation": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 256,
+                            "description": "The operationId, or \"POST /refunds/{id}/cancel\" when the operation has none."
+                          },
+                          "method": {
+                            "type": "string",
+                            "enum": [
+                              "GET",
+                              "PUT",
+                              "POST",
+                              "DELETE",
+                              "OPTIONS",
+                              "HEAD",
+                              "PATCH",
+                              "TRACE"
+                            ]
+                          },
+                          "path": {
+                            "type": "string",
+                            "pattern": "^\\/[^\\s?#]*$",
+                            "description": "The path template, relative to the environment's url."
+                          },
+                          "parameters": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 128,
+                                  "description": "The parameter's name as the API spells it."
+                                },
+                                "in": {
+                                  "type": "string",
+                                  "enum": [
+                                    "path",
+                                    "query",
+                                    "header",
+                                    "cookie"
+                                  ]
+                                },
+                                "property": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 128,
+                                  "description": "The inputSchema property that carries the value."
+                                },
+                                "required": {
+                                  "type": "boolean"
+                                },
+                                "style": {
+                                  "type": "string",
+                                  "enum": [
+                                    "simple",
+                                    "label",
+                                    "matrix",
+                                    "form",
+                                    "spaceDelimited",
+                                    "pipeDelimited",
+                                    "deepObject"
+                                  ],
+                                  "description": "OpenAPI's serialization style, when it differs from the default for `in`."
+                                },
+                                "explode": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "in",
+                                "property",
+                                "required"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "description": "Parameters a security scheme names are never here."
+                          },
+                          "body": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "in": {
+                                    "const": "spread"
+                                  },
+                                  "media_type": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9!#$&^_.+-]+\\/[a-z0-9!#$&^_.+-]+$"
+                                  },
+                                  "required": {
+                                    "type": "boolean"
+                                  },
+                                  "properties": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 128
+                                    },
+                                    "description": "The inputSchema properties that make up the body.",
+                                    "uniqueItems": true
+                                  }
+                                },
+                                "required": [
+                                  "in",
+                                  "media_type",
+                                  "required",
+                                  "properties"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "in": {
+                                    "const": "property"
+                                  },
+                                  "media_type": {
+                                    "type": "string",
+                                    "pattern": "^[a-z0-9!#$&^_.+-]+\\/[a-z0-9!#$&^_.+-]+$"
+                                  },
+                                  "required": {
+                                    "type": "boolean"
+                                  },
+                                  "property": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 128,
+                                    "description": "The inputSchema property that carries the body: body."
+                                  }
+                                },
+                                "required": [
+                                  "in",
+                                  "media_type",
+                                  "required",
+                                  "property"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          "response": {
+                            "type": "object",
+                            "properties": {
+                              "status": {
+                                "type": "string",
+                                "pattern": "^2(?:[0-9]{2}|XX)$",
+                                "description": "The response the outputSchema describes: 200, 201, or 2XX."
+                              },
+                              "media_type": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9!#$&^_.+-]+\\/[a-z0-9!#$&^_.+-]+$"
+                              },
+                              "wrap": {
+                                "const": "items",
+                                "description": "An array response arrives as { items }, because MCP requires an object result."
+                              }
+                            },
+                            "required": [
+                              "status",
+                              "media_type"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Absent when no 2xx response has a JSON schema."
+                          },
+                          "security": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "additionalProperties": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "description": "The operation's security requirements, as OpenAPI writes them. The gateway adds these."
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "operation",
+                          "method",
+                          "path",
+                          "parameters"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "const": "graphql"
+                          },
+                          "operation_type": {
+                            "type": "string",
+                            "enum": [
+                              "query",
+                              "mutation"
+                            ]
+                          },
+                          "field": {
+                            "type": "string",
+                            "pattern": "^[_A-Za-z][_0-9A-Za-z]*\\.[_A-Za-z][_0-9A-Za-z]*$"
+                          },
+                          "arguments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string",
+                                  "pattern": "^[_A-Za-z][_0-9A-Za-z]*$"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "pattern": "^[[\\]!_A-Za-z0-9]+$",
+                                  "description": "The argument's type as the operation declares its variable."
+                                },
+                                "property": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 128,
+                                  "description": "The inputSchema property that carries the value."
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "type",
+                                "property"
+                              ],
+                              "additionalProperties": false
+                            }
+                          },
+                          "selection": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 16384,
+                            "description": "The generated selection set, to depth 2. tools.toml's selection replaces it. Absent for a scalar field."
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "operation_type",
+                          "field",
+                          "arguments"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "const": "grpc"
+                          },
+                          "method": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*\\/[A-Za-z_][A-Za-z0-9_]*$"
+                          },
+                          "streaming": {
+                            "type": "string",
+                            "enum": [
+                              "unary",
+                              "server"
+                            ],
+                            "description": "A server-streaming result is { items, truncated }. Client and bidirectional streams never become tools."
+                          },
+                          "idempotency_level": {
+                            "type": "string",
+                            "enum": [
+                              "IDEMPOTENCY_UNKNOWN",
+                              "NO_SIDE_EFFECTS",
+                              "IDEMPOTENT"
+                            ]
+                          },
+                          "request_type": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$"
+                          },
+                          "response_type": {
+                            "type": "string",
+                            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "method",
+                          "streaming",
+                          "idempotency_level",
+                          "request_type",
+                          "response_type"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "inputSchema",
+                  "request"
+                ],
+                "additionalProperties": false
+              },
+              "upstream_hash": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$",
+                "description": "SHA-256 over the RFC 8785 form of upstream."
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Rises by one when definition_hash changes. Never for a classification change."
+              }
+            },
+            "required": [
+              "definition_hash",
+              "upstream",
+              "upstream_hash",
+              "version"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "schema",
+        "server",
+        "source",
+        "tools"
+      ],
+      "additionalProperties": false,
+      "description": "The lock of a server built from an OpenAPI, GraphQL, or gRPC definition."
+    }
+  ],
+  "description": "tools/servers/<name>/tools.lock.json: the upstream definition of every imported tool as a person reviewed it. Oxagen writes it."
+}

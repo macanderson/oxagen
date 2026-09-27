@@ -22,7 +22,7 @@ export async function embedText(
 }
 
 /**
- * Embed several texts in one gateway call, metered once for the batch.
+ * Embed several texts in one provider call, metered once for the batch.
  *
  * Prefer this wherever the caller already holds the whole list — one round trip
  * and one line in the usage ledger, instead of one of each per item.

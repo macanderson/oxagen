@@ -1,4 +1,5 @@
-import { withTenantDb, withSystemDb, schema, type Tx } from "@oxagen/database";
+import { withSystemDb, schema, type Tx } from "@oxagen/database";
+import { withBillingDb } from "./internal/platform-db";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { and, eq, sql } from "drizzle-orm";
 import { deterministicUuid } from "./internal/deterministic-uuid";
@@ -393,7 +394,7 @@ export async function hasPlanUpgradeGrant(
   const referenceId = deterministicUuid(
     `plan_upgrade:${orgId}:${toPlanId}:${periodStart.toISOString()}`,
   );
-  const row = await withTenantDb((tx) =>
+  const row = await withBillingDb((tx) =>
     tx.query.creditLedger.findFirst({
       where: and(
         eq(schema.creditLedger.orgId, orgId),
@@ -415,8 +416,8 @@ export async function grantProratedPlanUpgradeCredits(
 
   // billing.plans is a shared platform catalog (no org_id, RLS not enabled) —
   // read via withSystemDb to match the catalog-read convention used in
-  // grantPlanCreditsForInvoicePaid. reads/writes to credit_* tables stay on
-  // withTenantDb (org_only).
+  // grantPlanCreditsForInvoicePaid. Reads and writes of the credit_* tables
+  // run under withBillingDb, on the shared plane with RLS on.
   const [fromPlan, toPlan] = await withSystemDb((tx) =>
     Promise.all([
       tx.query.plans.findFirst({
@@ -443,7 +444,7 @@ export async function grantProratedPlanUpgradeCredits(
   }
 
   // Find the active subscription to get period bounds.
-  const sub = await withTenantDb((tx) =>
+  const sub = await withBillingDb((tx) =>
     tx.query.subscriptions.findFirst({
       where: and(
         eq(schema.subscriptions.orgId, orgId),
@@ -491,7 +492,7 @@ export async function grantProratedPlanUpgradeCredits(
   const expiresAt = endOfGrantMonth(now);
 
   let granted = false;
-  await withTenantDb(async (tx) => {
+  await withBillingDb(async (tx) => {
     granted = await tryInsertGrantLedger(
       tx,
       orgId,

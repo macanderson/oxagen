@@ -148,6 +148,14 @@ export const SECURITY_EVENT_TYPES = [
   "agent.suspended",
   "agent.resumed",
   "agent.retired",
+  // A person answered a question an agent paused to ask, or the timeout
+  // answered it deny (#3941). The row carries the receipt the interjection
+  // row and the host's control.answer frame share. A link or create answer
+  // changes which repositories and workspaces the agent's runs reach, so it
+  // is a logical-access change (SOC2 CC6.1). Emitted by
+  // packages/handlers/src/agent.interjection.answer.ts and the interjection
+  // timeout function in packages/inngest-functions.
+  "agent.interjection_answered",
   // Witness disclosure (MC spec §8.5 invariant 3, ADR-064, #2955). The grain
   // is how much a worker is told when a witness it cannot see fails; raising
   // it above L0 hands the worker detail about the oracle, so only an org
@@ -261,6 +269,10 @@ export const SECURITY_EVENT_TYPES = [
   // removal transaction (packages/database/src/member-lifecycle.ts) for each
   // host the removed person enrolled.
   "tacho.host_revoked",
+  // One row per decision to pause every live wrapped run in a workspace,
+  // carrying how many runs took the pause and which were skipped and why.
+  // Emitted by packages/handlers/src/tacho.workspace_runs.pause.ts (#3862).
+  "tacho.workspace_runs_paused",
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -553,7 +565,65 @@ export interface PasswordChangeDetail {
   sessionsRevoked: boolean;
 }
 
+/**
+ * Evidence recorded on `tacho.workspace_runs_paused`: the reason the person
+ * gave, how many runs took the pause, the queued command ids, and each live
+ * run no host could reach with why. The skip reasons are spelled out because
+ * this leaf package cannot import `CommandBlock` from @oxagen/oxagen.
+ */
+export interface WorkspaceRunsPausedDetail {
+  reason: string;
+  queued: number;
+  commandIds: readonly string[];
+  skipped: readonly {
+    runId: string;
+    reason: "run_sealed" | "no_host" | "host_revoked" | "host_offline";
+  }[];
+}
+
+/**
+ * Evidence recorded when `update_runtime` changes whether a runtime requires
+ * the contained launcher (ADR-204). `runtimeId` is the runtime's public id.
+ * `previous` is the value the change replaced, so a reader sees a switch
+ * turned on apart from one turned off.
+ */
+export interface RuntimeContainmentChangeDetail {
+  feature: "runtime_containment";
+  change: "containment_required";
+  runtimeId: string;
+  previous: boolean;
+  enabled: boolean;
+  reason: string | null;
+}
+
+/**
+ * Evidence recorded on `agent.interjection_answered`: which interjection, its
+ * run and kind, how it was settled and by whom, the receipt, what a link or
+ * create bound, and the commands that carried the answer to the run. Never
+ * the answer text, which stays on the interjection row.
+ */
+export interface InterjectionAnsweredDetail {
+  /** The interjection's public id (`inj_…`). */
+  interjectionId: string;
+  /** The run that asked (`arun_…` or `tse_…`). */
+  runId: string;
+  kind: "question" | "repo_unknown";
+  /** Null for a free-text answer to a question. */
+  path: "link" | "create" | "deny" | null;
+  source: "person" | "timeout";
+  /** The receipt minted with the answer (`rcp_…`). */
+  receiptId: string;
+  /** The repository binding a link or create wrote. */
+  bindingId?: string;
+  /** The workspace a create made. */
+  workspaceId?: string;
+  /** The queued `message` commands (`tcm_…`); empty when no host could take one. */
+  commandIds: readonly string[];
+}
+
 export type SecurityEventDetail =
+  | InterjectionAnsweredDetail
+  | WorkspaceRunsPausedDetail
   | PasswordChangeDetail
   | ScimTokenDetail
   | ScimUserDetail
@@ -563,6 +633,7 @@ export type SecurityEventDetail =
   | CredentialRevocationDetail
   | RunIssueAuthorizationDetail
   | RunOutcomesPolicyChangeDetail
+  | RuntimeContainmentChangeDetail
   | ApprovalRuleInvalidationDetail
   | GovernanceChangeDetail
   | SsoProviderChangeDetail

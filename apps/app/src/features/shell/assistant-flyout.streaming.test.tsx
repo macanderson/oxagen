@@ -59,6 +59,8 @@ vi.mock("./assistant-thread-actions", () => ({
       ok: true,
       value: { workspaceKey: `id-${ws}`, thread: null },
     }),
+  listAssistantSessions: vi.fn(),
+  openAssistantSession: vi.fn(),
 }));
 
 const refresh = vi.fn();

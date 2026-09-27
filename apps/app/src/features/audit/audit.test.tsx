@@ -89,6 +89,7 @@ const roster: Read<MemberList> = readOk({
       id: ADA,
       name: "Ada Lovelace",
       email: "ada@acme.test",
+      avatarUrl: null,
       role: "admin",
       joinedAt: "2026-01-04T09:00:00.000Z",
     },
@@ -105,8 +106,8 @@ const members = vi.fn<DataSource["org"]["members"]>();
 const workspaces = vi.fn<DataSource["org"]["workspaces"]>();
 const refuse = () => Promise.reject(new Error("not an Audit read"));
 const source: DataSource = {
-  runtimes: { list: refuse, agents: refuse },
-  conversations: { latest: refuse },
+  runtimes: { list: refuse, agents: refuse, named: refuse },
+  conversations: { latest: refuse, list: refuse, byId: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
   shell: {
     context: refuse,
@@ -123,11 +124,16 @@ const source: DataSource = {
     turns: refuse,
     transcript: refuse,
     chain: refuse,
+    commands: refuse,
     outputs: refuse,
     work: refuse,
     outcomesSettings: refuse,
+    issues: refuse,
+    context: refuse,
+    findings: refuse,
   },
   approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+  interjections: { open: refuse, forRun: refuse },
   agents: {
     list: refuse,
     get: refuse,
@@ -187,6 +193,8 @@ const source: DataSource = {
     approvalRules: refuse,
     connections: refuse,
     mcpServers: refuse,
+    toolbelts: refuse,
+    toolbelt: refuse,
   },
 };
 
@@ -793,6 +801,7 @@ describe("Events", () => {
             id: ADA,
             name: null,
             email: "ada@acme.test",
+            avatarUrl: null,
             role: "admin",
             joinedAt: "2026-01-04T09:00:00.000Z",
           },

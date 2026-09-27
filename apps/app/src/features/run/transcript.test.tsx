@@ -23,7 +23,7 @@ import {
 } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TRANSCRIPT_ENTRY_DEFAULT, RunTranscript } from "@/data/contracts/run";
+import { TRANSCRIPT_ENTRY_MAX, RunTranscript } from "@/data/contracts/run";
 import type { RunRow } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { readError, readOk } from "@/data/read";
@@ -46,6 +46,7 @@ import {
   type StepSpec,
   stepsOf,
 } from "./transcript.builders";
+import { TRANSCRIPT_PAGE } from "./transcript-rows";
 
 /** A page-action refusal the player shows under the feed. */
 const pageFailed = (code: string): ActionResult<RunTranscript> => ({
@@ -91,6 +92,12 @@ type SectionView = {
   kinds?: KindFilter;
   status?: RunRow["status"];
   run?: Partial<RunRow>;
+  /**
+   * True to leave a stopped run's replay playing from its first row, as the
+   * page opens it. Otherwise the test starts at the run's end, every row
+   * drawn, so a row's own behaviour is read without waiting on the replay.
+   */
+  replay?: boolean;
 };
 
 function renderSection(view: SectionView = {}) {
@@ -99,8 +106,9 @@ function renderSection(view: SectionView = {}) {
     kinds = [],
     status = RUN.status,
     run = {},
+    replay = false,
   } = view;
-  return render(
+  const drawn = render(
     <IntlProvider>
       <TranscriptSection
         read={read}
@@ -115,6 +123,9 @@ function renderSection(view: SectionView = {}) {
       />
     </IntlProvider>,
   );
+  const end = screen.queryByRole("button", { name: "To the end" });
+  if (status !== "live" && !replay && end !== null) fireEvent.click(end);
+  return drawn;
 }
 
 afterEach(() => {
@@ -257,7 +268,13 @@ describe("the kind chips", () => {
         stepsOf(
           releaseSteps().map((spec) =>
             spec.seq === 12
-              ? { ...spec, kinds: ["tools"], outcome: "ok", label: "Bash ok" }
+              ? {
+                  ...spec,
+                  kinds: ["tools"],
+                  outcome: "ok",
+                  error: false,
+                  label: "Bash ok",
+                }
               : spec,
           ),
           { counts: { ...releaseCounts(), errors: 0 } },
@@ -454,7 +471,7 @@ describe("the rows", () => {
       within(bash).getByRole("button", { name: "Show the call" }),
     );
     expect(within(bash).getByTestId("tx-out").className).toContain(
-      "text-error",
+      "tx-err",
     );
   });
 
@@ -551,10 +568,10 @@ describe("the rows", () => {
   it("reads the agent's last words as the answer once the run has stopped, and not while it runs", () => {
     renderSection();
     const agents = screen.getAllByTestId("transcript-agent");
-    // The catalogue says the role in sentence case; the tag's style sets it
-    // in capitals (#3375).
+    // On screen the role is the skin's glyph, so its word is for a screen
+    // reader.
     expect(agents.at(-1)?.querySelector("span")?.className).toContain(
-      "uppercase",
+      "sr-only",
     );
     expect(agents.at(-1)).toHaveTextContent(/^Answer/);
     expect(agents[0]).toHaveTextContent(/^Agent/);
@@ -690,7 +707,7 @@ describe("the rows", () => {
     expect(time?.getAttribute("title")).toBe("+7.8 s from the run's start");
   });
 
-  it("marks a subagent's row and links no frame of its chain (negative: the run's own frame still links)", () => {
+  it("marks a subagent's row and links its frame by its chain and seq, not the run's frame of that seq (#3823)", () => {
     const CHAIN = "0192d4a8-7c1e-7a00-8000-0000000000c1";
     const grep = (seq: number, t: number, body: string): StepSpec => ({
       seq,
@@ -726,11 +743,19 @@ describe("the rows", () => {
       "subagent Explore",
     );
     fireEvent.click(within(sub).getByRole("button", { name: "Show the call" }));
-    expect(within(sub).queryAllByRole("link")).toHaveLength(0);
+    expect(
+      within(sub).getByRole("link", { name: "tool_call · fr 3" }),
+    ).toHaveAttribute(
+      "href",
+      `/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=${CHAIN}%3A3`,
+    );
     fireEvent.click(within(own).getByRole("button", { name: "Show the call" }));
     expect(
       within(own).getByRole("link", { name: "tool_call · fr 4" }),
-    ).toBeTruthy();
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=4",
+    );
   });
 
   it("shows a step's result as its output and its request as the call, never one for the other (#3375)", () => {
@@ -873,6 +898,7 @@ describe("event rows", () => {
       label: "deny Bash",
       subject: "Bash",
       outcome: "denied",
+      error: true,
       gates: [{ seq: 2, decision: "deny", type: "policy_decision" }],
       turn: 1,
     },
@@ -898,6 +924,7 @@ describe("event rows", () => {
       turn: 1,
       kinds: ["errors"],
       outcome: "failed",
+      error: true,
     },
   ];
   const events = () =>
@@ -920,7 +947,8 @@ describe("event rows", () => {
     renderSection({ read: readOk(stepsOf(EVENTS)) });
     const [, notice] = events();
     if (notice === undefined) throw new Error("a notice row");
-    expect(notice).toHaveTextContent("●");
+    // The skin draws the call's glyph; only a failure's ✗ is in the text.
+    expect(notice).not.toHaveTextContent("✗");
     expect(within(notice).getByText("notification")).toBeTruthy();
     expect(within(notice).getByTestId("tx-event-line")).toHaveAttribute(
       "title",
@@ -1032,6 +1060,24 @@ describe("the search", () => {
     });
   });
 
+  // A read that stopped short of the run's end counted and searched only the
+  // part it read. The chips print their counts as floors, and the search line
+  // printed exact ones. The footer counted the run's entries under the
+  // matches drawn (#3942).
+  it("marks the search's counts as floors on a read that stopped short, and counts the matches drawn (negative)", async () => {
+    readTranscriptPage.mockResolvedValue(found("changelog", [8, 9]));
+    renderSection({ read: readOk(releaseTranscript({ complete: false })) });
+    search("changelog");
+    await waitFor(() => {
+      expect(screen.getByTestId("tx-matches")).toHaveTextContent(
+        "2+ of 13+ entries",
+      );
+    });
+    expect(screen.getByTestId("transcript-count")).toHaveTextContent(
+      /^2 entries\. The run has more frames than one read carries/,
+    );
+  });
+
   it("says nothing matches rather than showing an empty feed (negative)", async () => {
     readTranscriptPage.mockResolvedValue(found("no such words", []));
     renderSection();
@@ -1080,7 +1126,23 @@ describe("the transport", () => {
     expect(paceMs(-5, 1)).toBe(90);
   });
 
-  it("opens a sealed run at its end, ready to replay", () => {
+  it("plays a stopped run from its first row as the page opens (#4427)", () => {
+    vi.useFakeTimers();
+    try {
+      renderSection({ replay: true });
+      expect(readout()).toHaveTextContent("0 / 20");
+      expect(rows()).toHaveLength(0);
+      expect(screen.getByTestId("tx-play")).toHaveTextContent("pause");
+      act(() => {
+        vi.advanceTimersByTime(90);
+      });
+      expect(readout()).toHaveTextContent("1 / 20");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("holds a stopped run's end once the replay reaches it, ready to replay", () => {
     renderSection();
     expect(readout()).toHaveTextContent("20 / 20");
     expect(screen.getByTestId("tx-play")).toHaveTextContent("replay");
@@ -1209,7 +1271,7 @@ describe("paging past the cursor", () => {
       "core-platform",
       "tse_7k2m9q",
       "steps",
-      { after: "ZjoxMQ", text: "full" },
+      { after: "ZjoxMQ", text: "full", limit: TRANSCRIPT_PAGE },
     );
     // The release call is now one row carrying the answer that landed with the
     // appended page.
@@ -1230,6 +1292,44 @@ describe("paging past the cursor", () => {
     );
   });
 
+  /** The chips pressed, each with the count it shows. */
+  const pressedChips = () =>
+    within(screen.getByRole("group", { name: "Filter the transcript" }))
+      .getAllByRole("button", { pressed: true })
+      .map((chip) => chip.textContent);
+
+  it("keeps each chip's whole-run count when the next page carries none (#3823, D6)", async () => {
+    // Only the read from the run's first frame counts the whole run. A page
+    // read from the cursor reads a window of the run and counts nothing.
+    readTranscriptPage.mockResolvedValue(
+      pageOk({ ...tailPage, cursor: null, complete: true, counts: null }),
+    );
+    renderSection({ read: paged });
+    const before = pressedChips();
+    expect(before).toContain("tools6");
+    fireEvent.click(screen.getByTestId("transcript-more"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("transcript-more")).toBeNull();
+    });
+    expect(pressedChips()).toEqual(before);
+    expect(screen.getByTestId("chip-errors")).toHaveTextContent("✗ errors1");
+  });
+
+  it("takes the counts a page carries when it carries some (negative)", async () => {
+    const counts = releaseCounts();
+    const { counts: recounted } = releaseTranscript({
+      counts: { ...counts, kinds: { ...counts.kinds, tools: 7 } },
+    });
+    readTranscriptPage.mockResolvedValue(
+      pageOk({ ...tailPage, cursor: null, complete: true, counts: recounted }),
+    );
+    renderSection({ read: paged });
+    fireEvent.click(screen.getByTestId("transcript-more"));
+    await waitFor(() => {
+      expect(pressedChips()).toContain("tools7");
+    });
+  });
+
   it("stops offering more once the page it read carried no cursor", async () => {
     readTranscriptPage.mockResolvedValue(
       pageOk({ ...tailPage, cursor: null, complete: true }),
@@ -1239,6 +1339,35 @@ describe("paging past the cursor", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("transcript-more")).toBeNull();
     });
+  });
+
+  // A page read from a cursor carries no counts: `get_run_transcript` counts
+  // the run only on a read that starts at its first frame. Every chip keeps
+  // the whole run's count the tab opened with (#3942).
+  it("keeps every chip's whole-run count after a page that carries none", async () => {
+    readTranscriptPage.mockResolvedValue(
+      pageOk({ ...tailPage, counts: null, cursor: null, complete: true }),
+    );
+    renderSection({ read: paged });
+    const chipCounts = () =>
+      [
+        "prompt",
+        "responses",
+        "thinking",
+        "tools",
+        "usage",
+        "recall",
+        "seal",
+      ].map((chip) => screen.getByTestId(`chip-${chip}-count`).textContent);
+    // releaseCounts(): the whole run's count per chip.
+    const whole = ["1", "5", "2", "6", "5", "1", "0"];
+    expect(chipCounts()).toEqual(whole);
+    fireEvent.click(screen.getByTestId("transcript-more"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("transcript-more")).toBeNull();
+    });
+    expect(chipCounts()).toEqual(whole);
+    expect(screen.getByTestId("chip-errors-count")).toHaveTextContent("1");
   });
 
   it("names a cursor the capability did not write, and keeps every row already read (negative)", async () => {
@@ -1291,6 +1420,7 @@ describe("paging past the cursor", () => {
 /** An EventSource the test drives, capturing each one the hook opens. */
 function fakeEventSource(state: number) {
   const instances: {
+    url: string;
     onmessage: ((event: MessageEvent<string>) => void) | null;
   }[] = [];
   class FakeEventSource {
@@ -1306,7 +1436,7 @@ function fakeEventSource(state: number) {
     }
     addEventListener(): void {}
     removeEventListener(): void {}
-    constructor() {
+    constructor(readonly url: string) {
       instances.push(this);
     }
   }
@@ -1327,7 +1457,44 @@ describe("following a live run", () => {
     }
   });
 
+  it("opens the stream after the last frame the transcript folded, not at the run's first (A-06)", () => {
+    const instances = fakeEventSource(1);
+    try {
+      renderSection({
+        read: readOk(
+          mockupTranscript({
+            cursor: "ZjoxMQ",
+            complete: false,
+            frameCursor: "Zjo3OTk5",
+          }),
+        ),
+        status: "live",
+      });
+      expect(instances).toHaveLength(1);
+      expect(instances[0]?.url).toMatch(/\/stream\?after=Zjo3OTk5$/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("draws no footer while following an open stream, and the transport stays reachable", () => {
+    fakeEventSource(1);
+    try {
+      renderSection({
+        read: readOk(mockupTranscript({ cursor: "ZjoxMQ", complete: true })),
+        status: "live",
+      });
+      expect(screen.queryByTestId("transcript-count")).toBeNull();
+      expect(readout()).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("follows a live run past the read's frame cap, with no line saying the view stops there (#3823, negative)", () => {
+    // Batch A1 (#3375) said such a view stopped at the cap, because every
+    // tail read folded the same first frames. A tail read now reads a window
+    // from the cursor, so the view keeps following the run past the cap.
     fakeEventSource(1);
     try {
       renderSection({
@@ -1335,6 +1502,9 @@ describe("following a live run", () => {
         status: "live",
       });
       expect(screen.queryByTestId("transcript-count")).toBeNull();
+      expect(
+        screen.getByRole("region", { name: "Transcript" }),
+      ).not.toHaveTextContent("this view stops here");
       expect(readout()).toBeInTheDocument();
     } finally {
       vi.unstubAllGlobals();
@@ -1396,15 +1566,7 @@ describe("following a live run", () => {
       pageOk(
         runTranscript({
           zoom: "everything",
-          entries: Array.from({ length: TRANSCRIPT_ENTRY_DEFAULT }, (_, i) =>
-            transcriptEntry({
-              seq: String(seqFrom + i),
-              endSeq: String(seqFrom + i),
-              turn: null,
-              request: null,
-              response: null,
-            }),
-          ),
+          entries: bareEntries(seqFrom, TRANSCRIPT_ENTRY_MAX),
           cursor,
           complete: false,
         }),
@@ -1412,22 +1574,14 @@ describe("following a live run", () => {
     const shortPage = pageOk(
       runTranscript({
         zoom: "everything",
-        entries: [
-          transcriptEntry({
-            seq: "450",
-            endSeq: "450",
-            turn: null,
-            request: null,
-            response: null,
-          }),
-        ],
+        entries: bareEntries(1100, 1),
         cursor: null,
         complete: true,
       }),
     );
     readTranscriptPage
       .mockResolvedValueOnce(fullPage("page2", 100))
-      .mockResolvedValueOnce(fullPage("page3", 300))
+      .mockResolvedValueOnce(fullPage("page3", 600))
       .mockResolvedValueOnce(shortPage);
     vi.useFakeTimers();
     try {
@@ -1445,10 +1599,167 @@ describe("following a live run", () => {
       expect(
         readTranscriptPage.mock.calls.map((call) => call[4].after),
       ).toEqual(["page1", "page2", "page3"]);
+      // Every page past the first is read at the most a page holds, since
+      // each one costs a whole refold on the server (#4340).
+      expect(
+        readTranscriptPage.mock.calls.map((call) => call[4].limit),
+      ).toEqual([
+        TRANSCRIPT_ENTRY_MAX,
+        TRANSCRIPT_ENTRY_MAX,
+        TRANSCRIPT_ENTRY_MAX,
+      ]);
     } finally {
       vi.useRealTimers();
       vi.unstubAllGlobals();
     }
+  });
+});
+
+/**
+ * `count` steps from `seqFrom` on, one seq each, with no turn or bodies: a
+ * page's worth of rows that differ only by seq.
+ */
+function bareEntries(seqFrom: number, count: number) {
+  return Array.from({ length: count }, (_, i) =>
+    transcriptEntry({
+      seq: String(seqFrom + i),
+      endSeq: String(seqFrom + i),
+      turn: null,
+      request: null,
+      response: null,
+    }),
+  );
+}
+
+describe("reading a stopped run a page at a time (#4427)", () => {
+  const paged = () =>
+    readOk(releaseTranscript({ cursor: "ZjoxMQ", complete: true }));
+
+  it("reads the next page once the replay passes half of what it holds, with no click and no stream signal", async () => {
+    readTranscriptPage.mockResolvedValueOnce(
+      pageOk(
+        runTranscript({
+          entries: bareEntries(600, 3),
+          cursor: null,
+          complete: true,
+        }),
+      ),
+    );
+    renderSection({ read: paged(), replay: true });
+    // At the first row, nothing is read ahead.
+    expect(screen.getByTestId("transcript-more")).toBeInTheDocument();
+    expect(readTranscriptPage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "To the end" }));
+    await waitFor(() => {
+      expect(readTranscriptPage).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId("transcript-more")).toBeNull();
+    });
+    expect(readTranscriptPage).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "tse_7k2m9q",
+      "steps",
+      { after: "ZjoxMQ", text: "full", limit: TRANSCRIPT_PAGE },
+    );
+  });
+
+  it("reads nothing ahead while the replay is short of half the rows it holds (negative)", () => {
+    vi.useFakeTimers();
+    try {
+      renderSection({ read: paged(), replay: true });
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(readout()).toHaveTextContent("1 / 20");
+      expect(readTranscriptPage).not.toHaveBeenCalled();
+      expect(screen.getByTestId("transcript-more")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("reading a live run from its end (#4427)", () => {
+  it("reads the page before the rows it holds when the reader asks, and stops once none lies before", async () => {
+    readTranscriptPage.mockResolvedValueOnce(
+      pageOk(
+        runTranscript({
+          entries: bareEntries(1, 2),
+          cursor: null,
+          complete: true,
+          before: null,
+        }),
+      ),
+    );
+    renderSection({
+      read: readOk(releaseTranscript({ before: "YjoxMA" })),
+      status: "live",
+    });
+    fireEvent.click(screen.getByTestId("transcript-older"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("transcript-older")).toBeNull();
+    });
+    expect(readTranscriptPage).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "tse_7k2m9q",
+      "steps",
+      { before: "YjoxMA", text: "full", limit: TRANSCRIPT_PAGE },
+    );
+    expect(screen.queryByTestId("transcript-page-failed")).toBeNull();
+  });
+
+  it("offers no page before on a stopped run, which reads from its first entry (negative)", () => {
+    renderSection({ read: readOk(releaseTranscript({ before: "YjoxMA" })) });
+    expect(screen.queryByTestId("transcript-older")).toBeNull();
+  });
+
+  it("reads the page before when the reader scrolls to the top of the feed", async () => {
+    readTranscriptPage.mockResolvedValueOnce(
+      pageOk(
+        runTranscript({
+          entries: bareEntries(1, 2),
+          cursor: null,
+          complete: true,
+          before: null,
+        }),
+      ),
+    );
+    renderSection({
+      read: readOk(releaseTranscript({ before: "YjoxMA" })),
+      status: "live",
+    });
+    // The feed opens at scrollTop 0, which is within OLDER_PX of the top.
+    fireEvent.scroll(screen.getByTestId("tx-feed"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("transcript-older")).toBeNull();
+    });
+    expect(readTranscriptPage).toHaveBeenCalledTimes(1);
+    expect(readTranscriptPage).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "tse_7k2m9q",
+      "steps",
+      { before: "YjoxMA", text: "full", limit: TRANSCRIPT_PAGE },
+    );
+  });
+
+  it("reads no page before while the reader is scrolled below the top (negative)", () => {
+    renderSection({
+      read: readOk(releaseTranscript({ before: "YjoxMA" })),
+      status: "live",
+    });
+    const feed = screen.getByTestId("tx-feed");
+    Object.defineProperty(feed, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 10_000,
+    });
+    fireEvent.scroll(feed);
+    expect(readTranscriptPage).not.toHaveBeenCalled();
+    expect(screen.getByTestId("transcript-older")).toBeEnabled();
   });
 });
 
@@ -1522,6 +1833,7 @@ describe("a call the in-app assistant parked", () => {
         outcome,
         ...(approvalId === undefined ? {} : { approvalId }),
         kinds: outcome === "denied" ? ["tools", "errors"] : ["tools"],
+        error: outcome === "denied",
         request: {
           seq: 3,
           type: "tool.engine_call_started",
@@ -1569,6 +1881,43 @@ describe("a call the in-app assistant parked", () => {
     );
     expect(call).not.toHaveTextContent("Held at Oxagen until someone answers.");
     expect(within(call).queryByTestId("tx-parked-approval")).toBeNull();
+  });
+});
+
+describe("a compacted run (ADR-058, #4000)", () => {
+  it("says the transcript is read from the archive, above the same rows a hot run draws", async () => {
+    const { container } = renderSection({ run: { compacted: true } });
+    const note = screen.getByTestId("transcript-compacted");
+    expect(note).toHaveTextContent(
+      "Compacted. This transcript is read from the archive.",
+    );
+    expect(note.querySelector("b")).toHaveTextContent("Compacted.");
+    const compactedRows = kinds();
+    expect(compactedRows.length).toBeGreaterThan(0);
+    await expectNoAxe(container);
+    cleanup();
+    renderSection({ run: { compacted: false } });
+    expect(kinds()).toEqual(compactedRows);
+  });
+
+  it("draws no note on a run whose frames are still in the log, or a wrapped session (negative)", () => {
+    renderSection({ run: { compacted: false } });
+    expect(screen.queryByTestId("transcript-compacted")).toBeNull();
+    cleanup();
+    // A wrapped session's row carries no `compacted` at all.
+    renderSection();
+    expect(screen.queryByTestId("transcript-compacted")).toBeNull();
+  });
+
+  it("names a refused read without claiming the archive was read (negative)", () => {
+    renderSection({
+      read: readError("frame_store_unreachable", 502),
+      run: { compacted: true },
+    });
+    expect(screen.queryByTestId("transcript-compacted")).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "Transcript" }),
+    ).toHaveTextContent(/could not be loaded|frame_store_unreachable/);
   });
 });
 
@@ -1858,6 +2207,55 @@ describe("a subagent's steps under its Task call", () => {
       );
       expect(prompts).toHaveLength(1);
       expect(prompts[0]).toHaveTextContent("quarantine nothing");
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("draws a subagent call that landed before the cursor inside its Task row on the next live read (#4083)", async () => {
+    const instances = fakeEventSource(1);
+    // The view holds the run through its last Bash call. The subagent's Read
+    // reached the server after that read, and sits before the cursor.
+    const late = steps.find((step) => step.subject === "Read");
+    if (late === undefined) throw new Error("the subagent's Read");
+    const held = stepsOf(
+      steps.filter((step) => step !== late),
+      { cursor: "c1", complete: false },
+    );
+    readTranscriptPage.mockResolvedValueOnce(
+      pageOk(stepsOf([late], { cursor: "c2", complete: false })),
+    );
+    vi.useFakeTimers();
+    try {
+      renderSection({ read: readOk(held), status: "live" });
+      expect(rows()).toHaveLength(5);
+      const [source] = instances;
+      if (source === undefined) throw new Error("no EventSource opened");
+      source.onmessage?.(new MessageEvent("message", { data: "{}" }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(750);
+        for (let i = 0; i < 20; i += 1) await Promise.resolve();
+      });
+      expect(readTranscriptPage.mock.calls.map((c) => c[4].after)).toEqual([
+        "c1",
+      ]);
+      // No reload: the tail read drew it under the Task call, after the
+      // subagent's Grep and before the run's next Bash call.
+      const inner = within(
+        screen.getByTestId("transcript-subagent-steps"),
+      ).getAllByTestId("tx-row");
+      expect(inner.map((row) => row.textContent)).toEqual([
+        expect.stringContaining("Grep"),
+        expect.stringContaining("Read"),
+      ]);
+      expect(rows()).toHaveLength(6);
+      expect(
+        rows().flatMap((row) => {
+          const name = row.querySelector('[data-testid="tx-tool-name"]');
+          return name === null ? [] : [name.textContent];
+        }),
+      ).toEqual(["Bash", "Task", "Grep", "Read", "Bash"]);
     } finally {
       vi.useRealTimers();
       vi.unstubAllGlobals();
@@ -2253,7 +2651,8 @@ describe("a read the page makes again", () => {
       return name === null ? [] : [name];
     });
 
-  it("takes the page's new read, so a subagent frame recorded behind the cursor shows under its call once the run seals (#4083)", () => {
+  it("reads its own end again once the run seals, so a subagent frame recorded behind the cursor shows under its call (#4083)", async () => {
+    readTranscriptPage.mockResolvedValue(pageOk(stepsOf(specs(true))));
     const { rerender } = render(
       view(
         readOk(stepsOf(specs(false), { cursor: "c1", complete: true })),
@@ -2261,9 +2660,19 @@ describe("a read the page makes again", () => {
       ),
     );
     expect(names()).toEqual(["Task", "Grep", "Bash"]);
-    // The seal refreshes the page, which reads the whole run again.
+    // The seal refreshes the page, which reads the run from its first entry.
+    // This view opened at the run's end, so it reads that end again.
     rerender(view(readOk(stepsOf(specs(true))), "sealed"));
-    expect(names()).toEqual(["Task", "Grep", "Read", "Bash"]);
+    await waitFor(() => {
+      expect(names()).toEqual(["Task", "Grep", "Read", "Bash"]);
+    });
+    expect(readTranscriptPage).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "tse_7k2m9q",
+      "steps",
+      { from: "end", text: "full", limit: TRANSCRIPT_PAGE },
+    );
     const nested = screen.getByTestId("transcript-subagent-steps");
     expect(
       within(nested)
@@ -2277,7 +2686,10 @@ describe("a read the page makes again", () => {
   it("keeps the rows it holds when the page renders again with the same read (negative)", () => {
     const read = readOk(stepsOf(specs(false)));
     const { rerender } = render(view(read, "sealed"));
+    // A stopped run plays from its first row; the test starts at its end.
+    fireEvent.click(screen.getByRole("button", { name: "To the end" }));
     rerender(view(read, "sealed"));
     expect(names()).toEqual(["Task", "Grep", "Bash"]);
+    expect(readTranscriptPage).not.toHaveBeenCalled();
   });
 });

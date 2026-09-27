@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/oxagen",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -35,8 +35,11 @@
     "./configuration-clone": "./src/configuration-clone.ts",
     "./run-outcomes": "./src/run-outcomes.ts",
     "./context-record-label": "./src/context-record-label.ts",
-    "./agent-definition-source": "./src/agent-definition-source.ts",
-    "./run-enrichment": "./src/run-enrichment.ts"
+    "./agent-version-config": "./src/agent-version-config.ts",
+    "./run-enrichment": "./src/run-enrichment.ts",
+    "./run-fit": "./src/run-fit.ts",
+    "./steering-repo": "./src/steering-repo/index.ts",
+    "./steering-repo/*": "./src/steering-repo/*.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

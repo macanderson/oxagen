@@ -1,0 +1,11 @@
+# Which Oxagen workspace this repository belongs to. Committed and
+# reviewed; .oxagen/workspace.json is one machine's link and is gitignored.
+[workspace]
+organization = "a-intel"
+slug = "core-platform"
+name = "Core platform"
+
+[repository]
+name = "a-intel/platform"
+role = "main"
+production_branch = "main"

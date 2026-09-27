@@ -190,7 +190,8 @@ a decision of the operator's always does.
   spent since the last control poll, plus what they have not yet shipped. The
   poll and ship intervals bound that lag. A single-host agent has no lag.
 - Every control poll for a host with a daily ceiling costs one ClickHouse
-  aggregate over one day of one workspace's frames, bounded by the
-  `toYYYYMM(ts)` partition.
+  aggregate over one day of one workspace's frames. The table partitions by
+  the month of `received_at` (#4297), so the read also bounds `received_at` to
+  one day before the day starts, which keeps it within one or two partitions.
 - `packages/tacho/README.md` lists `daily_budget_exceeded` with the other
   refusals.

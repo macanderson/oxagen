@@ -10,7 +10,7 @@
 // instead (fleet.md prints live, sealed and halted in its Status column), and
 // the outcome moves to the badge's hover text.
 import { useTranslations } from "next-intl";
-import type { RunOutcome, RunStatus } from "@/data/contracts/runs";
+import type { RunOutcome, RunStatus, StaleReason } from "@/data/contracts/runs";
 import { Badge, type BadgeTone } from "./badge";
 
 // The three readings `status` already had are unchanged: an open run is
@@ -38,9 +38,17 @@ export function StatusBadge({
   status,
   outcome,
   vocabulary = "outcome",
+  stale = null,
 }: {
   status: RunStatus;
   outcome: RunOutcome;
+  /**
+   * Why an open run reads stale (`staleReason`), or null when it does not.
+   * A stale run draws a still dot and says stale, because a breathing dot on
+   * a run whose host went quiet reads as a run that is moving. The hover line
+   * says which of the two happened. Ignored once the run has ended.
+   */
+  stale?: StaleReason | null;
   /**
    * Which word the pill prints. `outcome` (the Run page) says how an ended run
    * ended. `lifecycle` (Fleet's Status column and its facet, fleet.md) prints
@@ -51,6 +59,19 @@ export function StatusBadge({
 }) {
   const t = useTranslations("ui.runStatus");
   const lifecycle = vocabulary === "lifecycle";
+  if (status === "live" && stale !== null)
+    return (
+      <Badge
+        tone="quiet"
+        dot
+        data-status={status}
+        data-stale="true"
+        data-outcome={outcome}
+        title={t(stale === "host_revoked" ? "staleRevokedWhy" : "staleWhy")}
+      >
+        {t("stale")}
+      </Badge>
+    );
   // `.live { font-size:11px; font-weight:600; color:var(--st-allowed) }` and
   // `.live .p { width:6px; height:6px; animation:pulse }`: an open run is
   // not a pill but a breathing dot and the word, in the allowed hue.

@@ -58,15 +58,15 @@ describe("handler registry", () => {
     30_000,
   );
 
-  // Exercise every agent-lifecycle loader so the lazy import() arrows are
+  // Exercise every agent-identity loader so the lazy import() arrows are
   // covered and each handler module's expected export name is verified.
   it.each([
-    "create_agent_def",
-    "update_agent_def",
-    "publish_agent_def",
-    "get_agent_def",
-    "list_agent_defs",
-    "deploy_agent",
+    "list_agents",
+    "get_agent",
+    "assign_agent_role",
+    "revoke_agent_role",
+    "list_agent_roles",
+    "get_agent_role",
   ])(
     "resolves a handler function for %s",
     async (cap) => {

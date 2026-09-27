@@ -15,6 +15,7 @@ import {
   runTurnsGet,
   type RunTurnsGetOutput,
 } from "@oxagen/oxagen/contracts/run.turns.get";
+import { UNKEYED_TOOL_PAIRING } from "@oxagen/run-ledger";
 import { selectTachoTurnFacts, selectTachoTurnGroups } from "@oxagen/telemetry";
 import {
   defaultRunReadDeps,
@@ -54,6 +55,8 @@ export function createRunTurnsGetHandler(
         runId: input.runId,
         turns: ledger.turns,
         complete: ledger.complete && read.complete,
+        // A ledger run records no subagent chains (#4001).
+        chains: [],
       };
     }
     const children =
@@ -67,7 +70,7 @@ export function createRunTurnsGetHandler(
       facts.find((f) => f.sessionUuid === run.sessionUuid),
     );
     if (starts.length === 0)
-      return { runId: input.runId, turns: [], complete: true };
+      return { runId: input.runId, turns: [], complete: true, chains: [] };
     // One start past the cap is enough to tell a longer run from one that
     // fits, and it keeps the list the query binds bounded.
     const kept = starts.slice(0, RUN_TURNS_MAX + 1);
@@ -80,9 +83,13 @@ export function createRunTurnsGetHandler(
           ? []
           : [{ sessionUuid: f.sessionUuid, seq: f.firstObservedSeq }],
       ),
+      // The fold's rule 3, so the query pairs unkeyed tool halves as the
+      // transcript does (#4308, ADR-191).
+      pairing: UNKEYED_TOOL_PAIRING,
     });
     return {
       runId: input.runId,
+      // The turns, and the turn each subagent chain counts toward (#4001).
       ...tachoTurns({
         rootSessionUuid: run.sessionUuid,
         starts: kept,

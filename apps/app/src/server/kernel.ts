@@ -15,7 +15,9 @@
 //      carries, so this module never does;
 //   5. a write's input is parsed with the contract's own schema first;
 //   6. the output is parsed with the contract's own schema;
-//   7. a failure is classified by its `code` property alone.
+//   7. a failure is classified by its `code` property alone, and the seam
+//      reads what it records about it (failure-facts.ts, #3841): the rule
+//      that refused it, the trace id, the region and the request id.
 //
 // The in-app agent's refusals have rows of their own (#3227). Before them,
 // `engine_unavailable`, `insufficient_credits` and `assistant_spend_cap` fell
@@ -39,7 +41,15 @@ import type { orgMemberInviteAccept } from "@oxagen/oxagen/contracts/org.member_
 import type { orgMemberInviteDecline } from "@oxagen/oxagen/contracts/org.member_invite.decline";
 import { captureError } from "@oxagen/telemetry";
 import { cache } from "react";
-import { PAGE_FAILURES, type PageKey, type Read, readError } from "@/data/read";
+import {
+  type DecidedBy,
+  PAGE_FAILURES,
+  type PageKey,
+  type Read,
+  type ReadFailureFacts,
+  readError,
+} from "@/data/read";
+import { decidedByOf, failureFacts } from "./failure-facts";
 import { InviteeCtx, OrgCtx, PretenantCtx, WsCtx } from "./viewer";
 
 type SafeParse<T> =
@@ -83,14 +93,27 @@ type InvitationContract =
   | typeof orgMemberInviteAccept
   | typeof orgMemberInviteDecline;
 
+/**
+ * What a failed write carries about its failure, each only when it was
+ * recorded (#3841).
+ */
+type ActionFailureFacts = {
+  /** The rule that refused a denied write, when the refusal named one. */
+  decidedBy?: DecidedBy;
+  /** The trace the failed write ran under, when a tracer recorded one. */
+  traceId?: string;
+  /** The region that answered, when the process knows it. */
+  region?: string;
+};
+
 export type ActionResult<O> =
   | { ok: true; value: O }
-  | {
+  | ({
       ok: false;
       reason: "denied" | "invalid" | "not_found" | "conflict" | "unavailable";
       code: string;
       field?: string;
-    }
+    } & ActionFailureFacts)
   | { ok: false; reason: "pending_approval"; accessRequestId: string }
   | {
       ok: false;
@@ -110,7 +133,7 @@ type ExhaustedCode = Extract<
 >["code"];
 
 /** One classified failure, rendered by kernelRead as a Read and by kernelWrite as an ActionResult. */
-type Failure =
+type FailureKind =
   | { kind: "denied"; code: string }
   | { kind: "pending_approval"; accessRequestId: string }
   | { kind: "invalid"; field?: string }
@@ -118,6 +141,17 @@ type Failure =
   | { kind: "exhausted"; code: ExhaustedCode }
   | { kind: "unavailable"; code: string; status: number }
   | { kind: "unclassified" };
+
+/**
+ * A failure and what the seam recorded about it (#3841). `facts` is present
+ * when the kernel ran and failed, and absent for a refusal the seam made
+ * before it (an unbranded ctx, an unregistered contract). `decidedBy` is the
+ * rule a denial names, null when it names none.
+ */
+type Failure = FailureKind & {
+  facts?: ReadFailureFacts;
+  decidedBy?: DecidedBy | null;
+};
 
 type Outcome<O> = { ok: true; value: O } | { ok: false; failure: Failure };
 
@@ -164,13 +198,20 @@ const stringField = (value: object, key: string): string | null => {
  * evaluated twice in one process (RSC and SSR graphs, a test's fresh graph), so
  * no row uses `instanceof`, and no row reads message text.
  */
-function classifyKernelFailure(err: unknown): Failure {
+function classifyKernelFailure(err: unknown): FailureKind {
   if (typeof err !== "object" || err === null) return { kind: "unclassified" };
   const code = stringField(err, "code");
   switch (code) {
     case "authz_denied":
     case "capability_not_installed":
     case "no_handler":
+      return { kind: "denied", code };
+    // A workspace decision rule refused the call (@oxagen/rules). The app has
+    // no approval channel for a rule, so one that wants a person refuses too.
+    // Before these rows a rule's refusal read as the page's outage and was
+    // reported to telemetry as unclassified (#3841).
+    case "decision_rule_denied":
+    case "decision_rule_approval_required":
       return { kind: "denied", code };
     case "pending_approval": {
       // The kernel still denies when it could not create the access request;
@@ -302,15 +343,22 @@ async function invokeKernel(
     }
   }
 
+  const context = capabilityContext(ctx);
   try {
     return {
       ok: true,
-      raw: await invoke(contract.name, input, capabilityContext(ctx)),
+      raw: await invoke(contract.name, input, context),
     };
   } catch (err) {
-    const failure = classifyKernelFailure(err);
-    if (failure.kind === "unavailable" || failure.kind === "unclassified")
+    const kind = classifyKernelFailure(err);
+    if (kind.kind === "unavailable" || kind.kind === "unclassified")
       report(err, contract.name);
+    // Read now, inside the request that failed, while its trace is active.
+    const failure: Failure = {
+      ...kind,
+      facts: failureFacts(context.requestId),
+      ...(kind.kind === "denied" ? { decidedBy: decidedByOf(err) } : {}),
+    };
     return { ok: false, failure };
   }
 }
@@ -381,7 +429,12 @@ export function readToActionResult<T>(read: Read<T>): ActionResult<T> {
   if (read.ok) return read;
   switch (read.reason) {
     case "denied":
-      return { ok: false, reason: "denied", code: read.permission };
+      return {
+        ok: false,
+        reason: "denied",
+        code: read.permission,
+        ...(read.decidedBy ? { decidedBy: read.decidedBy } : {}),
+      };
     case "pending_approval":
       return {
         ok: false,
@@ -393,6 +446,8 @@ export function readToActionResult<T>(read: Read<T>): ActionResult<T> {
         ok: false,
         reason: READ_REASON_BY_STATUS[read.status] ?? "unavailable",
         code: read.code,
+        ...(read.traceId ? { traceId: read.traceId } : {}),
+        ...(read.region ? { region: read.region } : {}),
       };
   }
 }
@@ -400,12 +455,17 @@ export function readToActionResult<T>(read: Read<T>): ActionResult<T> {
 function toRead<O>(outcome: Outcome<O>, page: PageKey): Read<O> {
   if (outcome.ok) return outcome;
   const { failure } = outcome;
+  // The facts ride every denial and error the kernel answered (#3841).
+  const facts = failure.facts;
   switch (failure.kind) {
     case "denied":
       return {
         ok: false,
         reason: "denied",
         permission: PAGE_FAILURES[page].permission,
+        ...(facts === undefined
+          ? {}
+          : { decidedBy: failure.decidedBy ?? null, ...facts }),
       };
     case "pending_approval":
       return {
@@ -414,22 +474,39 @@ function toRead<O>(outcome: Outcome<O>, page: PageKey): Read<O> {
         accessRequestId: failure.accessRequestId,
       };
     case "invalid":
-      return readError("invalid_input", 400);
+      return readError("invalid_input", 400, facts);
     // The handler's reason rides in `code`; the status carries the kind.
     case "not_found":
-      return readError(failure.code, 404);
+      return readError(failure.code, 404, facts);
     case "conflict":
-      return readError(failure.code, 409);
+      return readError(failure.code, 409, facts);
     case "unavailable":
-      return readError(failure.code, failure.status);
+      return readError(failure.code, failure.status, facts);
     // No read the app binds can be refused for GAUs (every one is noBillingGate).
     case "exhausted":
     case "unclassified":
       return readError(
         PAGE_FAILURES[page].error.code,
         PAGE_FAILURES[page].error.status,
+        facts,
       );
   }
+}
+
+/**
+ * The facts a write's failure carries: only those recorded. An action result
+ * crosses to the browser, and a field that says "not recorded" helps no
+ * toast, so a null fact is left out rather than sent (#3841).
+ */
+function recordedFacts(failure: Failure): ActionFailureFacts {
+  const decidedBy = failure.decidedBy ?? null;
+  const traceId = failure.facts?.traceId ?? null;
+  const region = failure.facts?.region ?? null;
+  return {
+    ...(decidedBy === null ? {} : { decidedBy }),
+    ...(traceId === null ? {} : { traceId }),
+    ...(region === null ? {} : { region }),
+  };
 }
 
 function toActionResult<O>(outcome: Outcome<O>): ActionResult<O> {
@@ -439,7 +516,12 @@ function toActionResult<O>(outcome: Outcome<O>): ActionResult<O> {
     case "denied":
     case "not_found":
     case "conflict":
-      return { ok: false, reason: failure.kind, code: failure.code };
+      return {
+        ok: false,
+        reason: failure.kind,
+        code: failure.code,
+        ...recordedFacts(failure),
+      };
     case "exhausted":
       return { ok: false, reason: "exhausted", code: failure.code };
     case "pending_approval":
@@ -456,9 +538,19 @@ function toActionResult<O>(outcome: Outcome<O>): ActionResult<O> {
         ...(failure.field === undefined ? {} : { field: failure.field }),
       };
     case "unavailable":
-      return { ok: false, reason: "unavailable", code: failure.code };
+      return {
+        ok: false,
+        reason: "unavailable",
+        code: failure.code,
+        ...recordedFacts(failure),
+      };
     case "unclassified":
-      return { ok: false, reason: "unavailable", code: "kernel_failure" };
+      return {
+        ok: false,
+        reason: "unavailable",
+        code: "kernel_failure",
+        ...recordedFacts(failure),
+      };
   }
 }
 

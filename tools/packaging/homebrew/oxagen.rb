@@ -37,11 +37,13 @@ cask "oxagen" do
   # The uninstall order the app enforces: stop the collector, unenroll (strips
   # the hooks in every wrapped harness, removes the service, revokes on the
   # control plane, deletes the host credentials), then remove the app.
+  # `--all` unenrolls every agent on the machine. Without it, tacho refuses a
+  # machine that holds more than one (ADR-203).
   # must_succeed is off because an unenrolled machine has nothing to unenroll.
   uninstall launchctl: "sh.oxagen.tachod",
             script:    {
               executable:   "#{appdir}/Oxagen.app/Contents/MacOS/tacho",
-              args:         ["unenroll"],
+              args:         ["unenroll", "--all"],
               sudo:         false,
               must_succeed: false,
             }

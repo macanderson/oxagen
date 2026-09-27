@@ -100,6 +100,16 @@ vi.mock("./clickhouse", () => ({
   clickhouse: clickhouseSingletonMock,
   closeClickhouse: closeClickhouseMock,
 }));
+/** The rebuild a `REBUILD TABLE` directive is handed to (#4297). */
+const rebuildMock = vi.hoisted(() =>
+  vi.fn<(store: unknown, directive: unknown) => Promise<string>>(),
+);
+const rebuildStore = vi.hoisted(() => ({ rebuild: "store" }));
+vi.mock("./table-rebuild", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./table-rebuild")>()),
+  rebuildPartitionKey: rebuildMock,
+  clickhouseRebuildStore: () => rebuildStore,
+}));
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return {
@@ -168,6 +178,74 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// migrate() — a REBUILD TABLE directive (#4297)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("migrate() — a REBUILD TABLE directive", () => {
+  const REBUILD_FILE =
+    "ALTER TABLE t ADD COLUMN IF NOT EXISTS x String;\n" +
+    "REBUILD TABLE t PARTITION BY toYYYYMM(received_at);";
+
+  beforeEach(() => {
+    readdirSyncMock.mockReturnValue(["0001_rebuild.sql"]);
+    readFileSyncMock.mockImplementation((p: unknown) =>
+      String(p).endsWith("0001_rebuild.sql") ? REBUILD_FILE : SCHEMA_SQL,
+    );
+  });
+
+  it("hands the directive to the rebuild on a client of its own, and sends it to no server as SQL", async () => {
+    rebuildMock.mockResolvedValue("rebuilt");
+    const write = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+    let said: string[] = [];
+    try {
+      await migrate();
+      said = write.mock.calls.map((c) => String(c[0]));
+    } finally {
+      write.mockRestore();
+    }
+
+    const queries = chCommandMock.mock.calls.map(
+      (c) => (c[0] as { query: string }).query,
+    );
+    expect(queries.some((q) => q.includes("ADD COLUMN IF NOT EXISTS x"))).toBe(
+      true,
+    );
+    expect(queries.some((q) => /REBUILD/i.test(q))).toBe(false);
+    expect(rebuildMock).toHaveBeenCalledWith(rebuildStore, {
+      table: "t",
+      partitionBy: "toYYYYMM(received_at)",
+      column: "received_at",
+    });
+    // The second client is the rebuild's: bound to the database, with a wait
+    // long enough for a partition copy, progress headers on the tunnel, and
+    // room for 30 minutes of them (#4354 review).
+    expect(createClientMock).toHaveBeenCalledTimes(2);
+    expect(createClientMock.mock.calls[1]![0]).toMatchObject({
+      database: "telemetry",
+      request_timeout: 30 * 60_000,
+      max_response_headers_size: 1024 * 1024,
+      clickhouse_settings: { send_progress_in_http_headers: 1 },
+    });
+    expect(bootstrapCloseMock).toHaveBeenCalledTimes(2);
+    expect(recordedFilenames()).toEqual(["0001_rebuild.sql"]);
+    expect(
+      said.some((line) => line.includes("ClickHouse rebuild finished")),
+    ).toBe(true);
+  });
+
+  it("records nothing and closes the rebuild client when the rebuild fails", async () => {
+    rebuildMock.mockRejectedValue(new Error("copy failed"));
+
+    await expect(migrate()).rejects.toThrow("copy failed");
+
+    expect(recordedFilenames()).toEqual([]);
+    expect(bootstrapCloseMock).toHaveBeenCalledTimes(2);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

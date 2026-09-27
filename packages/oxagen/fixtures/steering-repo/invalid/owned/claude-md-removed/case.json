@@ -1,0 +1,16 @@
+{
+  "check": "owned",
+  "rule": "managed-block",
+  "severity": "error",
+  "description": "The managed block in CLAUDE.md was removed.",
+  "refused_by_reader": false,
+  "changed": [
+    "CLAUDE.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "CLAUDE.md"
+    }
+  ]
+}

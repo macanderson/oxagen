@@ -1,0 +1,52 @@
+{
+  "name": "delete_toolbelt",
+  "domain": "toolbelt",
+  "description": "Delete a custom toolbelt that no live agent carries. The All tools belt cannot be deleted.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": true,
+    "riskLevel": "medium",
+    "category": "tools"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "toolbeltId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "toolbeltId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "toolbeltId": {
+        "type": "string"
+      },
+      "deleted": {
+        "const": true
+      }
+    },
+    "required": [
+      "toolbeltId",
+      "deleted"
+    ],
+    "additionalProperties": false
+  }
+}

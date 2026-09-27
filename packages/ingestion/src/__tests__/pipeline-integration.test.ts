@@ -38,6 +38,7 @@ vi.mock("@oxagen/ontology/tenant", () => ({
 vi.mock("@oxagen/ai", () => ({
   embedText: mocks.embedText,
   generateObjectFor: mocks.generateObjectFor,
+  EMBEDDING_MODEL: "voyage-4-large",
 }));
 
 // Register built-in connectors before importing pipeline
@@ -109,7 +110,7 @@ function setupNeo4jMocks() {
 
   // embedText (called during Pass B dedup)
   mocks.embedText.mockResolvedValue(
-    Array.from({ length: 1536 }, (_, i) => i / 1536),
+    Array.from({ length: 1024 }, (_, i) => i / 1024),
   );
 
   // Pass B: vector similarity search — no similar candidates (creates new principal)
@@ -306,7 +307,7 @@ describe("runPipeline — full 6-stage integration", () => {
 
     // embedText for embedEntity (Pass B embedding is skipped = only one embedText call)
     mocks.embedText.mockResolvedValue(
-      Array.from({ length: 1536 }, (_, i) => i / 1536),
+      Array.from({ length: 1024 }, (_, i) => i / 1024),
     );
 
     // upsertEmbedding (SET embedding on existing node)

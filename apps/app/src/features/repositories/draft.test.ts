@@ -1,4 +1,4 @@
-import { parseTomlSubset, type TomlTable } from "@/shared/toml-subset";
+import { parseTomlSubset, type TomlTable } from "@/test/toml-subset";
 import { describe, expect, it } from "vitest";
 import {
   draftGovernanceToml,
@@ -68,7 +68,7 @@ describe("draftWorkspaceToml", () => {
 describe("the init pull request", () => {
   it("comes from oxagen/init and carries six files, .gitignore last", () => {
     expect(INIT_BRANCH).toBe("oxagen/init");
-    expect(INIT_FILES).toHaveLength(6);
+    expect(INIT_FILES).toHaveLength(5);
     expect(INIT_FILES.at(-1)).toBe(".gitignore");
   });
 });

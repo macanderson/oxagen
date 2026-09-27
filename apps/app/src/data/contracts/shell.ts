@@ -7,6 +7,8 @@ import { PublicId } from "./common";
 export const OrgChoice = z.object({
   slug: z.string().min(1),
   name: z.string(),
+  /** The stored avatar the switchers draw: an https URL or a designed avatar; null when it has none. */
+  avatarUrl: z.string().min(1).nullable(),
 });
 
 export type OrgChoice = z.infer<typeof OrgChoice>;
@@ -14,6 +16,8 @@ export type OrgChoice = z.infer<typeof OrgChoice>;
 export const WorkspaceChoice = z.object({
   slug: z.string().min(1),
   name: z.string(),
+  /** The stored avatar the switchers draw: an https URL or a designed avatar; null when it has none. */
+  avatarUrl: z.string().min(1).nullable(),
 });
 export type WorkspaceChoice = z.infer<typeof WorkspaceChoice>;
 
@@ -40,13 +44,15 @@ const Count = z.number().int().nonnegative();
 
 /**
  * The sidebar's counts for one workspace (`get_nav_counts`, mockup
- * `sidebar()`): what waits on a person there. Pending approvals, open
- * steering proposals and open critical incidents, each read from the store
- * that owns it. A null is a read that answered no figure, and the sidebar
- * draws it as not recorded rather than as a zero.
+ * `sidebar()`): what waits on a person there. Pending approvals, open agent
+ * questions (interjections), open steering proposals and open critical
+ * incidents, each read from the store that owns it. A null is a read that
+ * answered no figure, and the sidebar draws it as not recorded rather than as
+ * a zero.
  */
 export const NavCounts = z.object({
   approvals: Count.nullable(),
+  interjections: Count.nullable(),
   proposals: Count.nullable(),
   incidents: Count.nullable(),
 });

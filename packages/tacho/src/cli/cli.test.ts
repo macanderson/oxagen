@@ -16,12 +16,13 @@ import {
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { agentHolding } from "../host/agents";
 import type { FetchLike } from "../host/control-client";
 import { readJsonFileIfExists, writeSensitiveFileAtomic } from "../host/fs";
 import { mcpEndpointFor, readHostFile, writeHostFile } from "../host/host-file";
-import { oxagenConfigPath, tachoPaths } from "../host/paths";
+import { agentPaths, oxagenConfigPath, tachoHome } from "../host/paths";
 import type { Exec, ServiceManager, ServiceSpec } from "../host/service";
 import {
   bundleSigner,
@@ -106,6 +107,12 @@ function fakeService(): ServiceManager & {
   uninstalled: number;
   running: boolean;
 } {
+  // `installed` keeps the last spec so a test can read what was installed.
+  // `present` is what the OS reports: launchd's uninstall removes the plist,
+  // so status says not installed after it (`host/service.test.ts`). A fake
+  // that kept saying installed hid every path that restarts a removed
+  // service, such as `restartForRemaining`.
+  let present = false;
   const manager = {
     kind: "launchd" as const,
     unitPath: "/fake/sh.oxagen.tachod.plist",
@@ -115,14 +122,16 @@ function fakeService(): ServiceManager & {
     install(spec: ServiceSpec) {
       manager.installed = spec;
       manager.running = true;
+      present = true;
     },
     uninstall() {
       manager.uninstalled += 1;
       manager.running = false;
+      present = false;
     },
     status() {
       return {
-        installed: manager.installed !== undefined,
+        installed: present,
         running: manager.running,
       };
     },
@@ -271,8 +280,8 @@ function deps(overrides: Partial<CliDeps> = {}): CliDeps & {
   };
   const base: CliDeps = {
     paths,
-    env: { PATH: "/usr/bin", SHELL: "/bin/zsh", TACHO_HOME: paths.root },
-    home: join(paths.root, ".."),
+    env: { PATH: "/usr/bin", SHELL: "/bin/zsh", TACHO_HOME: paths.tachoDir },
+    home: join(paths.tachoDir, ".."),
     platform: "darwin",
     fetch,
     exec: (command, args) => {
@@ -415,7 +424,7 @@ async function seedTrustedCodexHooks(
 describe("credentials", () => {
   it("prefers flags, then env, then the CLI's config file", () => {
     const paths = scratchPaths();
-    const home = join(paths.root, "home");
+    const home = join(paths.tachoDir, "home");
     writeSensitiveFileAtomic(
       oxagenConfigPath(home),
       JSON.stringify({
@@ -443,7 +452,7 @@ describe("credentials", () => {
         apiUrl: "https://cfg.test",
       },
     });
-    expect(resolveCredentials({}, {}, join(paths.root, "nowhere"))).toEqual({
+    expect(resolveCredentials({}, {}, join(paths.tachoDir, "nowhere"))).toEqual({
       missing: ["--token (or `oxagen login`)", "--org", "--workspace"],
     });
     expect(shellQuote("/plain/path")).toBe("/plain/path");
@@ -538,7 +547,7 @@ describe("enroll → status → unenroll", () => {
     ).toMatch(/^ed25519:/);
     expect(d.service.installed).toMatchObject({
       command: ["node", "/opt/tacho/tachod.mjs"],
-      env: { TACHO_HOME: d.paths.root, HOME: d.home },
+      env: { TACHO_HOME: d.paths.tachoDir, HOME: d.home },
     });
     const settings = readJsonFileIfExists(d.paths.claudeSettings) as {
       hooks: Record<string, unknown[]>;
@@ -675,7 +684,7 @@ describe("enroll → status → unenroll", () => {
       env: {
         PATH: "/usr/bin",
         SHELL: "/bin/zsh",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -731,7 +740,7 @@ describe("enroll → status → unenroll", () => {
     const bad = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "4100",
       },
     });
@@ -889,7 +898,7 @@ describe("enroll → status → unenroll", () => {
     const d = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -975,7 +984,7 @@ describe("enroll → status → unenroll", () => {
     const pinned = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -998,7 +1007,7 @@ describe("enroll → status → unenroll", () => {
 
     const forced = deps({
       paths: pinned.paths,
-      env: { PATH: "/usr/bin", TACHO_HOME: pinned.paths.root },
+      env: { PATH: "/usr/bin", TACHO_HOME: pinned.paths.tachoDir },
       fetch: signedMcpClaimFetch("https://mcp.other.test/mcp"),
     });
     const result = await enroll(
@@ -1026,7 +1035,7 @@ describe("enroll → status → unenroll", () => {
     const pinned = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -1078,7 +1087,7 @@ describe("enroll → status → unenroll", () => {
     const d = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -1131,7 +1140,7 @@ describe("enroll → status → unenroll", () => {
     const d = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -1176,7 +1185,7 @@ describe("enroll → status → unenroll", () => {
     const d = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -1221,7 +1230,7 @@ describe("enroll → status → unenroll", () => {
     const pinned = deps({
       env: {
         PATH: "/usr/bin",
-        TACHO_HOME: scratchPaths().root,
+        TACHO_HOME: scratchPaths().tachoDir,
         TACHO_MCP_ENDPOINT: "http://127.0.0.1:4100/mcp",
       },
     });
@@ -1241,7 +1250,7 @@ describe("enroll → status → unenroll", () => {
 
     const repair = deps({
       paths: pinned.paths,
-      env: { PATH: "/usr/bin", TACHO_HOME: pinned.paths.root },
+      env: { PATH: "/usr/bin", TACHO_HOME: pinned.paths.tachoDir },
     });
     expect(
       (
@@ -1349,7 +1358,7 @@ describe("enroll → status → unenroll", () => {
   });
 
   it("fails clearly without credentials, on a refusal, and on a bad bundle", async () => {
-    const none = deps({ env: {}, home: join(scratchPaths().root, "empty") });
+    const none = deps({ env: {}, home: join(scratchPaths().tachoDir, "empty") });
     expect((await enroll({}, none)).ok).toBe(false);
     expect(none.errors[0]).toContain("Not logged in");
     const refused = deps({
@@ -1518,7 +1527,7 @@ describe("enroll → status → unenroll", () => {
   });
 
   it("keeps the host file when the revoke cannot be made, and purges on request", async () => {
-    const d = deps({ env: {}, home: join(scratchPaths().root, "nohome") });
+    const d = deps({ env: {}, home: join(scratchPaths().tachoDir, "nohome") });
     const signer = bundleSigner();
     writeHostFile(
       d.paths.hostFile,
@@ -1542,12 +1551,21 @@ describe("enroll → status → unenroll", () => {
     // A deferred session end that never reached the WAL holds run content,
     // so the purge takes it with the WAL.
     writeSensitiveFileAtomic(d.paths.pendingEnds, "[]");
-    // The hook-id journal belongs to the daemon state and goes with it.
+    // The hook-id journal and the sealed-state file belong to the daemon
+    // state and go with it.
     writeSensitiveFileAtomic(d.paths.hookIdJournal, "");
+    writeSensitiveFileAtomic(d.paths.daemonSealedState, "{}");
+    // A Stella hook left its identity cache behind.
+    writeSensitiveFileAtomic(join(d.paths.stellaIdentity, "4242.json"), "{}");
     const second = await unenroll({ token: "t", purge: true }, d);
     expect(second.revoked).toBe(true);
     expect(existsSync(d.paths.pendingEnds)).toBe(false);
     expect(existsSync(d.paths.hookIdJournal)).toBe(false);
+    expect(existsSync(d.paths.daemonSealedState)).toBe(false);
+    expect(existsSync(d.paths.stellaIdentity)).toBe(false);
+    // Nothing is left, so the machine looks like one that was never enrolled.
+    expect(existsSync(d.paths.dir)).toBe(false);
+    expect(existsSync(d.paths.tachoDir)).toBe(false);
     expect(d.lines.join("\n")).toContain("pending session ends");
     expect(d.requests.map((r) => r.url)).toEqual([
       "https://api.example.test/v1/acme/core/tacho/enrollments/revoke",
@@ -1571,6 +1589,22 @@ describe("enroll → status → unenroll", () => {
     expect(
       (await unenroll({ token: "t" }, failing)).warnings.join("\n"),
     ).toContain("service removal failed");
+  });
+
+  it("removes the pre-session copies without --purge, since no daemon is left to", async () => {
+    const d = deps();
+    const signer = bundleSigner();
+    writeHostFile(
+      d.paths.hostFile,
+      testHostFile(signer, signer.sign(unsignedBundle())),
+    );
+    const session = join(d.paths.preSessionCopies, "session-uuid");
+    mkdirSync(session, { recursive: true });
+    writeFileSync(join(session, "0".repeat(32)), "a person's edit\n");
+    const removed = await unenroll({ token: "t" }, d);
+    expect(removed.ok).toBe(true);
+    expect(existsSync(d.paths.preSessionCopies)).toBe(false);
+    expect(d.lines.join("\n")).toContain("pre-session copies removed");
   });
 });
 
@@ -1806,7 +1840,7 @@ describe("harnesses and reassign", () => {
     // Without a token the addition is refused before anything is revoked.
     const offline = deps({
       env: {},
-      home: join(scratchPaths().root, "nohome"),
+      home: join(scratchPaths().tachoDir, "nohome"),
     });
     await enroll(
       {
@@ -1851,8 +1885,10 @@ describe("harnesses and reassign", () => {
       d,
     );
     expect(refused.ok).toBe(false);
+    // Both ways forward, and neither is "revoke this host": a token that
+    // names codex alone enrolls it beside this agent (ADR-203).
     expect(d.errors.join("\n")).toContain(
-      "Adding a harness to an enrolled host needs the CLI's session",
+      "Adding a harness to an enrolled agent needs the CLI's session: this token names codex beside a harness acme.core.cc-laptop already hooks. To add codex to acme.core.cc-laptop, run `oxagen login` and enroll again without the token. To enroll the token's agent separately, run the token again with only `--harness codex`.",
     );
     // Nothing was revoked or minted, and the live enrollment is untouched.
     expect(d.requests).toEqual([]);
@@ -2006,7 +2042,7 @@ describe("harnesses and reassign", () => {
       "Reassign failed after revoking the old enrollment",
     );
     expect(refusing.errors.at(-1)).toContain(
-      "tacho enroll --force --org acme --workspace edge --api-url https://api.test",
+      "tacho enroll --force --org acme --workspace edge --api-url https://api.test --harness claude-code`",
     );
     const left = readHostFile(refusing.paths.hostFile);
     expect(left?.host_enrollment_id).toBe(TEST_ENROLLMENT);
@@ -2311,7 +2347,9 @@ describe("session scope (ADR-179)", () => {
     const d = mintingDeps();
     await enroll(WHERE_CORE, d);
     expect((await enroll({ ...WHERE_CORE, force: true }, d)).ok).toBe(true);
-    expect(d.lines.join("\n")).toContain(`previous enrollment ${FIRST} revoked`);
+    expect(d.lines.join("\n")).toContain(
+      `previous enrollment ${FIRST} revoked`,
+    );
     expect(readHostFile(d.paths.hostFile)).toMatchObject({
       host_enrollment_id: SECOND,
       session_scope: FIRST,
@@ -2425,7 +2463,7 @@ describe("export and verify", () => {
       await exportCommand({ session: sessionId, format: "trace" }, d),
     ).toBe(true);
     expect(d.lines.at(-1)).toContain("session_start");
-    const out = join(d.paths.root, "out.json");
+    const out = join(d.paths.dir, "out.json");
     expect(await exportCommand({ session: uuid, format: "otlp", out }, d)).toBe(
       true,
     );
@@ -2736,6 +2774,62 @@ describe("export and verify", () => {
       "SessionEnd never arrived",
     );
   });
+
+  it("verify waits longer once SessionEnd has arrived", async () => {
+    // tachod reports `ending` while the chain waits for its final worktree
+    // read. A daemon shipping its first backlog took minutes to get there, and
+    // verify used to fail at the timeout saying SessionEnd never arrived.
+    const signer = bundleSigner();
+    const ending = {
+      session_id: "sess-verify",
+      session_uuid: "u",
+      sealed: false,
+      ending: true,
+      seq: 2,
+    };
+    // Each clock read moves eight seconds, so a 10 s timeout ends after the
+    // first poll unless the grace extends it.
+    function sessionsThen(answers: unknown[]) {
+      let clock = 0;
+      const d = deps({ now: () => (clock += 8_000) });
+      d.service.running = true;
+      const getter = d.daemonGet;
+      let polls = 0;
+      d.daemonGet = async (path) => {
+        if (path !== "/sessions") return getter(path);
+        polls += 1;
+        // The first listing is the one taken before the turn.
+        if (polls === 1) return { sessions: [] };
+        return { sessions: [answers[Math.min(polls - 2, answers.length - 1)]] };
+      };
+      writeHostFile(
+        d.paths.hostFile,
+        testHostFile(signer, signer.sign(unsignedBundle())),
+      );
+      return { d, polls: () => polls - 1 };
+    }
+
+    const sealsLate = sessionsThen([ending, { ...ending, sealed: true }]);
+    expect(await verify({ timeoutMs: 10_000 }, sealsLate.d)).toMatchObject({
+      ok: true,
+      sessionId: "sess-verify",
+    });
+
+    // The grace applies once: 10 s plus 30 s at eight seconds a read is four
+    // polls, and then verify names the read it was still waiting for.
+    const neverSeals = sessionsThen([ending]);
+    const result = await verify({ timeoutMs: 10_000 }, neverSeals.d);
+    expect(result.ok).toBe(false);
+    expect(result.detail).toContain("final worktree read");
+    expect(result.detail).not.toContain("never arrived");
+    expect(neverSeals.polls()).toBe(4);
+
+    // Without `ending` there is no grace: one poll, then the old message.
+    const notEnding = sessionsThen([{ ...ending, ending: false }]);
+    const plain = await verify({ timeoutMs: 10_000 }, notEnding.d);
+    expect(plain.detail).toContain("never arrived");
+    expect(notEnding.polls()).toBe(1);
+  });
 });
 
 describe("defaultCliDeps", () => {
@@ -2786,11 +2880,14 @@ describe("defaultCliDeps", () => {
         return { status: 0, stdout: "tool 9.8.7\n", stderr: "" };
       },
     });
-    // The platform has to travel here too. `tachoPaths` resolves the Claude
+    // The platform has to travel here too. `tachoHome` resolves the Claude
     // Desktop config from it (there is none on Linux), so an expectation that
     // omits it asserts the host OS's answer against a deps object built for
-    // another one -- the same disagreement `defaultCliDeps` itself had.
-    expect(d.paths).toEqual(tachoPaths(env, home, "linux"));
+    // another one -- the same disagreement `defaultCliDeps` itself had. With
+    // no agent enrolled, the command gets a new agent's directory.
+    const machine = tachoHome(env, home, "linux");
+    expect(dirname(d.paths.dir)).toBe(machine.agents);
+    expect(d.paths).toEqual(agentPaths(machine, basename(d.paths.dir)));
     expect(d.home).toBe(home);
     expect(d.platform).toBe("linux");
     expect(d.serviceManager.kind).toBe("systemd");
@@ -4164,7 +4261,7 @@ describe("brokered credentials (ADR-143)", () => {
       staticTokenStillGood(undefined, host, d.paths.runTokenKey, d.now()),
     ).toBe(false);
     expect(
-      staticTokenStillGood(token, host, join(d.paths.root, "none"), d.now()),
+      staticTokenStillGood(token, host, join(d.paths.dir, "none"), d.now()),
     ).toBe(false);
 
     // A re-enroll well before the window leaves the token alone; one a day
@@ -4202,5 +4299,382 @@ describe("brokered credentials (ADR-143)", () => {
         ?.commands.map((c) => c.name())
         .sort(),
     ).toEqual(["issue", "status"]);
+  });
+});
+
+describe("two agents on one machine (ADR-203)", () => {
+  const TOKEN = "oxe_1time_0123456789abcdefghjkmnpqrs";
+  const BOTH =
+    "claude-code as acme.core.cc-laptop; codex as acme.core.codex-agent";
+
+  /**
+   * Claude Code enrolled by an operator, then Codex enrolled a minute later
+   * by a one-time token for a second agent. The fake control plane answers
+   * the token with an enrollment of its own, and the OS hands out the next
+   * port on each ask.
+   */
+  async function twoAgents(findFreePort?: () => Promise<number>) {
+    const d = deps();
+    let next = 47123;
+    d.findFreePort = findFreePort ?? (async () => next++);
+    const first = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(first.ok, d.errors.join("\n")).toBe(true);
+    d.now = () => Date.parse("2026-09-10T12:01:00.000Z");
+    const signer = bundleSigner();
+    const controlPlane = d.fetch;
+    d.fetch = async (url, init) => {
+      const answer = await controlPlane(url, init);
+      if (!url.endsWith("/v1/tacho/enroll") || !answer.ok) return answer;
+      const base = enrollmentResponse(signer, "core", OTHER_ENROLLMENT);
+      const claims = {
+        ...base.enrollment.claims,
+        agent_key: "acme.core.codex-agent",
+        harnesses: ["codex"],
+      };
+      return {
+        ...answer,
+        text: async () =>
+          JSON.stringify({
+            ...base,
+            agentKey: "acme.core.codex-agent",
+            agentId: "agt_codex",
+            orgSlug: "acme",
+            workspaceSlug: "core",
+            enrollment: { ...base.enrollment, claims },
+          }),
+      };
+    };
+    d.requests.length = 0;
+    const second = await enroll(
+      {
+        enrollmentToken: TOKEN,
+        harnesses: ["codex"],
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(second.ok, d.errors.join("\n")).toBe(true);
+    const codex = agentHolding(d.paths, "codex")?.paths;
+    if (codex === undefined) throw new Error("Codex did not enroll");
+    return { d, codex };
+  }
+
+  /** The enrollment ids the fake control plane was asked to revoke. */
+  function revoked(d: ReturnType<typeof deps>): unknown[] {
+    return d.requests
+      .filter((r) => r.url.endsWith("/tacho/enrollments/revoke"))
+      .map((r) => (r.body as { hostEnrollmentId?: string }).hostEnrollmentId);
+  }
+
+  function claudeSettings(d: ReturnType<typeof deps>) {
+    return readJsonFileIfExists(d.paths.claudeSettings) as
+      | { hooks?: Record<string, unknown[]>; env?: Record<string, string> }
+      | undefined;
+  }
+
+  it("enrolls a second agent in a directory of its own and revokes nothing", async () => {
+    const { d, codex } = await twoAgents();
+    expect(revoked(d)).toEqual([]);
+    // Both agents keep their files the same way, side by side under agents/.
+    expect(dirname(d.paths.dir)).toBe(d.paths.agents);
+    expect(dirname(codex.dir)).toBe(d.paths.agents);
+    expect(codex.dir).not.toBe(d.paths.dir);
+    expect(existsSync(join(d.paths.tachoDir, "host.json"))).toBe(false);
+
+    const first = readHostFile(d.paths.hostFile);
+    const second = readHostFile(codex.hostFile);
+    expect(first).toMatchObject({
+      host_enrollment_id: TEST_ENROLLMENT,
+      agent_key: "acme.core.cc-laptop",
+      harnesses: ["claude-code"],
+      revoked_at: null,
+    });
+    expect(second).toMatchObject({
+      host_enrollment_id: OTHER_ENROLLMENT,
+      agent_key: "acme.core.codex-agent",
+      harnesses: ["codex"],
+      revoked_at: null,
+    });
+    // Its own device key, and a collector and model proxy port clear of the
+    // first agent's.
+    expect(second?.device_key_fingerprint).not.toBe(
+      first?.device_key_fingerprint,
+    );
+    const firstPorts = [first?.port, (first?.port ?? 0) + 1];
+    expect(firstPorts).not.toContain(second?.port);
+    expect(firstPorts).not.toContain((second?.port ?? 0) + 1);
+
+    // The Codex hooks carry the second enrollment, so Codex sessions report
+    // as the second agent. Claude Code's still carry the first.
+    const codexHooks = d.readCodexHooks() as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    expect(codexHookPresence(codexHooks, OTHER_ENROLLMENT).complete).toBe(true);
+    expect(
+      codexHooks.hooks["PreToolUse"]?.map((g) => g.hooks[0]?.command),
+    ).toEqual([
+      `node /opt/tacho/tacho-hook.mjs --enrollment ${OTHER_ENROLLMENT} --harness codex`,
+    ]);
+    const settings = claudeSettings(d);
+    expect(settings?.env?.TACHO_ENROLLMENT).toBe(TEST_ENROLLMENT);
+    expect(settings?.hooks?.SessionEnd).toHaveLength(1);
+    expect(d.service.running).toBe(true);
+
+    // Enrolling Codex again re-applies its agent and mints nothing.
+    d.requests.length = 0;
+    expect((await enroll({ harnesses: ["codex"] }, d)).ok).toBe(true);
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(codex.hostFile)?.host_enrollment_id).toBe(
+      OTHER_ENROLLMENT,
+    );
+  });
+
+  it("lists both enrollments in status", async () => {
+    const { d, codex } = await twoAgents();
+    d.lines.length = 0;
+    const report = await status({ json: true }, d);
+    expect(
+      report.enrollments?.map((entry) => [
+        entry.id,
+        entry.dir,
+        entry.host?.host_enrollment_id,
+      ]),
+    ).toEqual([
+      [basename(d.paths.dir), d.paths.dir, TEST_ENROLLMENT],
+      [basename(codex.dir), codex.dir, OTHER_ENROLLMENT],
+    ]);
+    expect(report.host?.host_enrollment_id).toBe(TEST_ENROLLMENT);
+
+    d.lines.length = 0;
+    await status({}, d);
+    expect(d.lines[0]).toBe("This machine holds 2 enrollments.");
+    expect(d.lines).toContain(
+      `Agent       codex as acme.core.codex-agent in ${codex.dir}`,
+    );
+  });
+
+  it("lists a lone agent in status with its directory", async () => {
+    const d = deps();
+    const first = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(first.ok, d.errors.join("\n")).toBe(true);
+    const report = await status({ json: true }, d);
+    expect(
+      report.enrollments?.map((entry) => [entry.id, entry.dir]),
+    ).toEqual([[basename(d.paths.dir), d.paths.dir]]);
+  });
+
+  it("removes a new agent's directory when its enroll fails, and keeps the first agent", async () => {
+    const d = deps();
+    const first = await enroll(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "core",
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(first.ok, d.errors.join("\n")).toBe(true);
+    d.newAgentId = () => "c0dec0de";
+    const failed = await enroll(
+      {
+        enrollmentToken: "oxe_1time_zyxwvutsrqpnmkjhgfedcba987",
+        harnesses: ["codex"],
+        apiUrl: "https://api.test",
+      },
+      d,
+    );
+    expect(failed.ok).toBe(false);
+    expect(existsSync(agentPaths(d.paths, "c0dec0de").dir)).toBe(false);
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: TEST_ENROLLMENT,
+      revoked_at: null,
+    });
+  });
+
+  it("steps a new agent's ports past the first agent's when the OS keeps offering them", async () => {
+    // The OS answers with the first agent's collector port every time. The
+    // first agent holds 47123 and its model proxy 47124, so the second gets
+    // 47125 and 47126.
+    const { codex } = await twoAgents(async () => 47123);
+    expect(readHostFile(codex.hostFile)?.port).toBe(47125);
+  });
+
+  it("unenrolls one agent by its harness and keeps the other", async () => {
+    const { d, codex } = await twoAgents();
+    d.requests.length = 0;
+    const bare = await unenroll({ token: "tok" }, d);
+    expect(bare.ok).toBe(false);
+    expect(d.errors.at(-1)).toBe(
+      `error: this machine holds 2 enrollments: ${BOTH}. Pass --harness to name the one to remove, or --all to remove them all`,
+    );
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(codex.hostFile)?.revoked_at).toBeNull();
+
+    const result = await unenroll({ token: "tok", harness: "codex" }, d);
+    expect(result.ok, d.errors.join("\n")).toBe(true);
+    expect(revoked(d)).toEqual([OTHER_ENROLLMENT]);
+    expect(agentHolding(d.paths, "codex")).toBeUndefined();
+    expect(JSON.stringify(d.readCodexHooks() ?? {})).not.toContain(
+      OTHER_ENROLLMENT,
+    );
+
+    // The first agent is untouched, and the service still runs for it.
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: TEST_ENROLLMENT,
+      revoked_at: null,
+    });
+    const settings = claudeSettings(d);
+    expect(settings?.env?.TACHO_ENROLLMENT).toBe(TEST_ENROLLMENT);
+    expect(settings?.hooks?.SessionEnd).toHaveLength(1);
+    expect(d.service.running).toBe(true);
+    expect(d.service.installed).toBeDefined();
+  });
+
+  it("unenrolls every agent with --all", async () => {
+    const { d } = await twoAgents();
+    d.requests.length = 0;
+    const both = await unenroll(
+      { token: "tok", harness: "codex", all: true },
+      d,
+    );
+    expect(both.ok).toBe(false);
+    expect(d.errors.at(-1)).toBe("error: pass --harness or --all, not both");
+    expect(d.requests).toEqual([]);
+
+    const result = await unenroll({ token: "tok", all: true }, d);
+    expect(result.ok, d.errors.join("\n")).toBe(true);
+    // Oldest first.
+    expect(revoked(d)).toEqual([TEST_ENROLLMENT, OTHER_ENROLLMENT]);
+    expect(agentHolding(d.paths, "codex")).toBeUndefined();
+    expect(agentHolding(d.paths, "claude-code")).toBeUndefined();
+    expect(JSON.stringify(d.readCodexHooks() ?? {})).not.toContain(
+      OTHER_ENROLLMENT,
+    );
+    expect(claudeSettings(d)?.env?.TACHO_ENROLLMENT).toBeUndefined();
+    expect(d.service.running).toBe(false);
+  });
+
+  it("says how to put the service back when it cannot start again for the agent that stays", async () => {
+    const { d } = await twoAgents();
+    const install = d.service.install;
+    d.service.install = () => {
+      throw new Error("launchctl missing");
+    };
+    const result = await unenroll({ token: "tok", harness: "codex" }, d);
+    const warning =
+      "the service could not be started again, so acme.core.cc-laptop has no collector or model proxy: launchctl missing. Run `tacho enroll --harness claude-code` to install it again";
+    expect(result.ok).toBe(false);
+    expect(result.warnings).toContain(warning);
+    expect(d.errors).toContain(`warning: ${warning}`);
+    expect(d.service.running).toBe(false);
+
+    // The command it names re-applies the first agent and mints nothing.
+    d.service.install = install;
+    d.requests.length = 0;
+    const again = await enroll({ harnesses: ["claude-code"] }, d);
+    expect(again.ok, d.errors.join("\n")).toBe(true);
+    expect(d.requests).toEqual([]);
+    expect(readHostFile(d.paths.hostFile)?.host_enrollment_id).toBe(
+      TEST_ENROLLMENT,
+    );
+    expect(d.service.running).toBe(true);
+  });
+
+  it("warns before a reassign unlinks a token-enrolled agent", async () => {
+    const { d } = await twoAgents();
+    // What the terminal held when the revoke went out.
+    let beforeRevoke: string[] | undefined;
+    const controlPlane = d.fetch;
+    d.fetch = async (url, init) => {
+      if (url.endsWith("/tacho/enrollments/revoke"))
+        beforeRevoke = [...d.errors];
+      return controlPlane(url, init);
+    };
+    await reassign(
+      { token: "tok", org: "acme", workspace: "edge", harnesses: ["codex"] },
+      d,
+    );
+    const warning =
+      "acme.core.codex-agent was enrolled with a one-time token from the Agents page. A reassign enrolls it again with your CLI session, which links the new enrollment to no agent, so its sessions stop reaching that agent's page (#4410). To keep the link, run `tacho unenroll --harness codex`, register the agent in acme/edge, and run the command its page shows.";
+    expect(beforeRevoke).toContain(`warning: ${warning}`);
+
+    // The operator's own enrollment has no agent to lose.
+    d.errors.length = 0;
+    await reassign(
+      {
+        token: "tok",
+        org: "acme",
+        workspace: "edge",
+        harnesses: ["claude-code"],
+      },
+      d,
+    );
+    expect(d.errors.join("\n")).not.toContain("one-time token");
+  });
+
+  it("sends a token-enrolled agent whose reassign failed back to the Agents page", async () => {
+    const { d, codex } = await twoAgents();
+    const controlPlane = d.fetch;
+    d.fetch = async (url, init) => {
+      if (url.endsWith("/tacho/enrollments"))
+        return { ok: false, status: 403, text: async () => "workspace closed" };
+      return controlPlane(url, init);
+    };
+    d.requests.length = 0;
+    d.lines.length = 0;
+    const failed = await reassign(
+      { token: "tok", org: "acme", workspace: "edge", harnesses: ["codex"] },
+      d,
+    );
+    expect(failed.ok).toBe(false);
+    // An enroll through the CLI session would unlink it from its agent
+    // (#4410), so the advice names the Agents page instead.
+    expect(d.errors).toContain(
+      "Reassign failed after revoking the old enrollment; acme.core.codex-agent is now unenrolled (host.json kept, marked retired). It was enrolled with a one-time token, so once the cause is fixed, register the agent in acme/edge on the Agents page and run the command its page shows.",
+    );
+    expect(d.errors.join("\n")).not.toContain("tacho enroll --force");
+    expect(revoked(d)).toEqual([OTHER_ENROLLMENT]);
+    expect(readHostFile(codex.hostFile)?.revoked_at).not.toBeNull();
+
+    // The first agent keeps its enrollment and gets the service back.
+    expect(readHostFile(d.paths.hostFile)).toMatchObject({
+      host_enrollment_id: TEST_ENROLLMENT,
+      revoked_at: null,
+    });
+    expect(d.lines).toContain(
+      `Starting the ${d.serviceManager.kind} service again for acme.core.cc-laptop`,
+    );
+    expect(d.service.running).toBe(true);
+  });
+
+  it("refuses a reassign that names neither agent", async () => {
+    const { d } = await twoAgents();
+    d.requests.length = 0;
+    const result = await reassign(
+      { token: "tok", org: "acme", workspace: "edge" },
+      d,
+    );
+    expect(result.ok).toBe(false);
+    expect(d.errors.at(-1)).toBe(
+      `This machine holds 2 enrollments: ${BOTH}. Pass --harness with the harnesses of the one to reassign.`,
+    );
+    expect(d.requests).toEqual([]);
   });
 });

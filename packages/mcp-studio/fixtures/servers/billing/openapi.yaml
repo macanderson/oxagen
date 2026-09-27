@@ -1,0 +1,171 @@
+openapi: 3.1.0
+info:
+  title: a-intel billing service
+  version: 2.4.0
+servers:
+  - url: https://billing-sandbox.a-intel.com/v2
+    description: Sandbox
+  - url: https://billing.internal.a-intel.com/v2
+    description: Production, reached through the a-intel-east relay
+security:
+  - oauth:
+      - billing
+paths:
+  /customers/{customer_id}/charges:
+    get:
+      operationId: listCharges
+      summary: List a customer's charges.
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          description: The customer whose charges to list.
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          description: The next_cursor from the previous page.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: One page of charges, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        amount:
+                          type: integer
+                        currency:
+                          type: string
+                        status:
+                          type: string
+                          enum:
+                            - pending
+                            - succeeded
+                            - failed
+                  next_cursor:
+                    type: string
+  /charges/{charge_id}:
+    get:
+      operationId: getCharge
+      summary: Read one charge.
+      x-oxagen-tool:
+        risk: low
+        side_effect: read
+        egress: org_tenant
+      parameters:
+        - name: charge_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The charge.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  amount:
+                    type: integer
+                  currency:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                      - pending
+                      - succeeded
+                      - failed
+        "404":
+          description: No charge has that id.
+          content:
+            application/problem+json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  detail:
+                    type: string
+  /refunds:
+    post:
+      operationId: createRefund
+      summary: Create a refund for a charge.
+      parameters:
+        - name: X-Request-Source
+          in: header
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                charge_id:
+                  type: string
+                  description: The charge to refund.
+                amount:
+                  type: integer
+                  minimum: 1
+                reason:
+                  type: string
+                  enum:
+                    - duplicate
+                    - fraudulent
+                    - requested_by_customer
+              required:
+                - charge_id
+      responses:
+        "201":
+          description: The refund.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  amount:
+                    type: integer
+                  status:
+                    type: string
+                    enum:
+                      - pending
+                      - succeeded
+                      - failed
+                      - canceled
+        "400":
+          description: The refund is not allowed.
+          content:
+            application/problem+json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  detail:
+                    type: string
+components:
+  securitySchemes:
+    oauth:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://login.a-intel.com/oauth/authorize
+          tokenUrl: https://login.a-intel.com/oauth/token
+          scopes:
+            billing: Read charges and create refunds.

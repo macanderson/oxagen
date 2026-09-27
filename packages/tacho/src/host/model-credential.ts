@@ -66,7 +66,7 @@ export interface ModelCredentialOptions {
   home: string;
   /**
    * Claude Code's config directory, `$CLAUDE_CONFIG_DIR`. When absent it is
-   * resolved as `tachoPaths` resolves the hooks file (`harnessConfigDirs`),
+   * resolved as `tachoHome` resolves the hooks file (`harnessConfigDirs`),
    * so the key is taken from the `settings.json` Claude Code reads.
    */
   claudeConfigDir?: string;

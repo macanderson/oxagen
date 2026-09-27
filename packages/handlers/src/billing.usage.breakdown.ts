@@ -22,7 +22,7 @@ import { billingUsageBreakdown } from "@oxagen/oxagen/contracts/billing.usage.br
 import { readObservedModels, readUsageBreakdown } from "@oxagen/telemetry";
 import {
   CACHE_SAVING_TOKEN_CLASSES,
-  loadPriceBookInTenantScope,
+  loadPriceBookSliceInTenantScope,
   netCacheSavingsFromBook,
   priceBookBoundaries,
   type NetCacheSavings,
@@ -36,19 +36,25 @@ import { logger } from "./logger";
  * price, less each cache write's premium over input_uncached, every bucket
  * priced at the entries in force when its calls ran. The arithmetic is
  * `netCacheSavingsFromBook` in @oxagen/billing, the helper the run rollup
- * prices each frame with. The in-code rate card no longer prices this figure;
- * it still prices credit charges, which ADR-060 §1 keeps on it.
+ * prices each frame with. The in-code rate card no longer prices this figure.
+ * It still prices credit charges, which ADR-060 §1 keeps on it.
  *
  * Population. The class-bucket read here is `readObservedModels` with
  * `frameStores: "gateway"`: it reads `metered_token_usage`, the view
- * `readUsageBreakdown` aggregates, over the same org, workspace and window,
- * so the saving covers the calls the breakdown's `cachedTokens` and
+ * `readUsageBreakdown` aggregates, over the same org, workspace and window.
+ * So the saving covers the calls the breakdown's `cachedTokens` and
  * `cacheWriteTokens` count and no wrapped-agent call they leave out. Two
  * differences remain. The bucket read skips rows with an empty model id,
  * which no price entry could price anyway. Its upper bound is inclusive, so
  * the window's exclusive `end` is passed as the millisecond before it.
  *
- * A bucket the book cannot price adds nothing and is logged as a count; the
+ * The book is a slice (#4202): the rows that could price `models`, the ids
+ * the breakdown's `byModel` names, over the window. The whole book is every
+ * list row's full history, 28,246 rows in production on 2026-09-24, and each
+ * usage page loaded all of it. The bucket read draws its models from the same
+ * rows as `byModel`, so every model it can return is in `models`.
+ *
+ * A bucket the book cannot price adds nothing and is logged as a count. The
  * contract's figure is a plain integer, so a gap is never priced from a
  * guessed rate.
  */
@@ -57,9 +63,15 @@ async function bookCacheSavings(args: {
   workspaceId?: string;
   start: Date;
   end: Date;
+  models: readonly string[];
 }): Promise<NetCacheSavings> {
-  const book = await loadPriceBookInTenantScope({ orgId: args.orgId });
   const until = new Date(args.end.getTime() - 1);
+  const book = await loadPriceBookSliceInTenantScope({
+    orgId: args.orgId,
+    models: args.models,
+    from: args.start,
+    to: until,
+  });
   const observed = await readObservedModels({
     orgId: args.orgId,
     workspaceId: args.workspaceId,
@@ -86,20 +98,23 @@ export const billingUsageBreakdownHandler: CapabilityHandler<
   const start = new Date(input.start);
   const end = new Date(input.end);
 
-  const [breakdown, savings] = await Promise.all([
-    readUsageBreakdown({
-      orgId: ctx.orgId,
-      workspaceId: input.workspaceId,
-      start,
-      end,
-    }),
-    bookCacheSavings({
-      orgId: ctx.orgId,
-      workspaceId: input.workspaceId,
-      start,
-      end,
-    }),
-  ]);
+  // The breakdown is read first because its `byModel` names the models the
+  // cache saving loads price rows for. The two reads run one after the other.
+  const breakdown = await readUsageBreakdown({
+    orgId: ctx.orgId,
+    workspaceId: input.workspaceId,
+    start,
+    end,
+  });
+  const savings = await bookCacheSavings({
+    orgId: ctx.orgId,
+    workspaceId: input.workspaceId,
+    start,
+    end,
+    // The empty model id groups calls no price entry could price, and the
+    // bucket read skips them.
+    models: breakdown.byModel.map((r) => r.key).filter((key) => key !== ""),
+  });
 
   logger.info(
     {

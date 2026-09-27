@@ -1,0 +1,150 @@
+{
+  "name": "list_toolbelts",
+  "domain": "toolbelt",
+  "description": "List the workspace's toolbelts, its All tools belt first, with each belt's tool, active tool, server and agent counts, and how many tools the workspace has made available.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": {
+    "requiresApproval": false,
+    "riskLevel": "low",
+    "category": "introspection"
+  },
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "slug": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "all_tools",
+                "custom"
+              ]
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "clonedFrom": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "slug": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "all_tools",
+                        "custom"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "slug",
+                    "kind"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tools": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "activeTools": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "servers": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "agents": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "updatedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "slug",
+            "kind",
+            "description",
+            "clonedFrom",
+            "tools",
+            "activeTools",
+            "servers",
+            "agents",
+            "updatedAt"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 500
+      },
+      "availableTools": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "items",
+      "availableTools"
+    ],
+    "additionalProperties": false
+  }
+}

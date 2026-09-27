@@ -50,6 +50,8 @@ describe("messages/shell.json", () => {
     // is the words a record picker's tool rows carry (choice-actions.ts).
     // The avatar editor's words live in `ui.avatarEditor`, because one editor
     // serves people, agents, workspaces, and organizations (@/ui/avatar-editor).
+    // `pauseWorkspace` is the command menu's pause dialog and its receipt
+    // (pause_workspace_runs, #3862).
     expect(Object.keys(messages).sort()).toEqual([
       "account",
       "approvals",
@@ -62,6 +64,7 @@ describe("messages/shell.json", () => {
       "mobileNav",
       "nav",
       "notifications",
+      "pauseWorkspace",
       "sidebar",
       "skipToContent",
       "switcher",

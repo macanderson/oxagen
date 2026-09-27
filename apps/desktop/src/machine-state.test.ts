@@ -10,6 +10,7 @@ import {
   createPoller,
   describeInstallResult,
   describeRemoval,
+  pendingRevokeText,
   uninstallFinished,
   uninstallToast,
   isEnrolled,
@@ -55,6 +56,37 @@ describe("what an uninstall reports", () => {
     expect(describeRemoval({ removed: [], left: [] }, "Hint.")).toBe(
       "Nothing of Oxagen's was left on this machine. Hint.",
     );
+  });
+
+  // Audit D-06: the uninstall deleted a retired host.json and said nothing
+  // about the revoke it still owed.
+  it("names the agent key whose revoke never reached Oxagen", () => {
+    const pending_revoke = {
+      agent_key: "acme.core.cc-laptop",
+      host_enrollment_id: "tch_1",
+    };
+    expect(
+      describeRemoval(
+        { removed: ["/h/.config/oxagen"], left: [], pending_revoke },
+        "Hint.",
+      ),
+    ).toBe(
+      "Removed 1 item from this machine. The revoke for acme.core.cc-laptop did not reach Oxagen, so the fleet page still lists this machine as active. Revoke it there. Hint.",
+    );
+    expect(
+      describeRemoval({ removed: [], left: ["x"], pending_revoke }, "Hint."),
+    ).toContain("Revoke it there. Hint.");
+    expect(
+      describeRemoval({ removed: [], left: [], pending_revoke }, "Hint."),
+    ).toContain("acme.core.cc-laptop");
+    expect(pendingRevokeText("k")).toContain("Revoke it there.");
+    // A report with no pending revoke reads as before.
+    expect(
+      describeRemoval(
+        { removed: ["/h/.config/oxagen"], left: [], pending_revoke: null },
+        "Hint.",
+      ),
+    ).toBe("Removed 1 item from this machine. Hint.");
   });
 });
 

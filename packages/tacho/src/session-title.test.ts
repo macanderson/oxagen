@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveSessionTitle } from "./session-title";
+import { cutLabel, deriveSessionTitle } from "./session-title";
 
 describe("deriveSessionTitle", () => {
   it("leads with the place, because that is what tells two runs apart", () => {
@@ -113,5 +113,33 @@ describe("deriveSessionTitle", () => {
     expect(deriveSessionTitle({ cwd: "/work/_/__" })).toBe("work/_/__");
     // Nothing above it to name: the folder is all there is.
     expect(deriveSessionTitle({ cwd: "/_" })).toBe("_");
+  });
+});
+
+describe("cutLabel", () => {
+  it("returns a label within the limit as it was", () => {
+    expect(cutLabel("Fix the billing proration", 256)).toBe(
+      "Fix the billing proration",
+    );
+    expect(cutLabel("x".repeat(256), 256)).toBe("x".repeat(256));
+  });
+
+  it("cuts a longer label to the limit, ending in an ellipsis", () => {
+    const cut = cutLabel("g".repeat(8192), 256);
+    expect(cut).toBe(`${"g".repeat(255)}…`);
+    expect(cut).toHaveLength(256);
+  });
+
+  it("never leaves half of a surrogate pair", () => {
+    // The emoji's halves sit at 254 and 255, where the cut falls.
+    const cut = cutLabel(`${"a".repeat(254)}😀${"a".repeat(44)}`, 256);
+    expect(cut).toBe(`${"a".repeat(254)}…`);
+    expect(cut).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/u);
+  });
+
+  it("drops the space the cut leaves before the ellipsis", () => {
+    expect(cutLabel(`${"a".repeat(9)} ${"b".repeat(20)}`, 11)).toBe(
+      `${"a".repeat(9)}…`,
+    );
   });
 });

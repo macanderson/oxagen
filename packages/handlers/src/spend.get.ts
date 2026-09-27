@@ -11,7 +11,10 @@ import {
   type SpendGetOutput,
   type SpendRow,
 } from "@oxagen/oxagen/contracts/spend.get";
-import type { TokenCounts } from "@oxagen/oxagen/contracts/spend.shared";
+import type {
+  TokenCounts,
+  UnmeteredRuns,
+} from "@oxagen/oxagen/contracts/spend.shared";
 import type { DailyTotalsRecord, RunTotalsRecord } from "@oxagen/billing";
 import {
   noOperatorFacts,
@@ -22,6 +25,7 @@ import {
   addTokens,
   readDailyTotals,
   readRunTotals,
+  readUnmeteredRuns,
   runFigure,
   type SpendScope,
   sumFigures,
@@ -36,6 +40,11 @@ export type SpendGetDeps = {
   ) => Promise<RunTotalsRecord[]>;
   /** Who each operator key names; a harness that has no store leaves it out. */
   readOperatorFacts?: ReadOperatorFacts;
+  /** The period's wrapped runs that recorded no usage, by harness (#3304). */
+  readUnmeteredRuns: (
+    scope: SpendScope,
+    q: { from: string; to: string },
+  ) => Promise<UnmeteredRuns>;
 };
 
 /** Sum a level's day rows into one row per key. */
@@ -81,9 +90,10 @@ export function createSpendGetHandler(
   return async (input, ctx): Promise<SpendGetOutput> => {
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
     const { from, to } = input.period;
-    const [rows, runs] = await Promise.all([
+    const [rows, runs, unmeteredRuns] = await Promise.all([
       deps.readDailyTotals(scope, { from, to, groupKind: input.groupBy }),
       deps.readRunTotals(scope, { from, to }),
+      deps.readUnmeteredRuns(scope, { from, to }),
     ]);
     const grouped = groupRows(rows);
     // An operator row's key is a principal id, which is a key and not a
@@ -105,6 +115,10 @@ export function createSpendGetHandler(
       estimatedRuns: runs.filter(
         (run) => run.sealedAt === null && run.costMicros !== null,
       ).length,
+      // `total.runs` counts these runs and `total.cost` cannot: nothing
+      // reported what they spent. The page says how many, and on which
+      // harness, wherever it prints the total.
+      unmeteredRuns,
       rows: grouped.map((row) => ({
         ...row,
         operator: facts.get(row.key) ?? null,
@@ -118,4 +132,6 @@ export const spendGetHandler = createSpendGetHandler({
   readRunTotals: (scope, q) =>
     readRunTotals(scope, { ...q, filter: { kind: "all" } }),
   readOperatorFacts,
+  readUnmeteredRuns: (scope, q) =>
+    readUnmeteredRuns(scope, { ...q, filter: { kind: "all" } }),
 });

@@ -5,6 +5,7 @@
 //
 // The header maps through `toRunRow`, the same function the Fleet table's rows
 // go through, so the two surfaces cannot disagree about one run.
+import type { findingList } from "@oxagen/oxagen/contracts/finding.list";
 import type { runChainGet } from "@oxagen/oxagen/contracts/run.chain.get";
 import type { runCostGet } from "@oxagen/oxagen/contracts/run.cost";
 import type { runFrameBodyGet } from "@oxagen/oxagen/contracts/run.frame_body.get";
@@ -12,17 +13,20 @@ import type { runGet } from "@oxagen/oxagen/contracts/run.get";
 import type { runOutputsGet } from "@oxagen/oxagen/contracts/run.outputs.get";
 import type { runTranscriptGet } from "@oxagen/oxagen/contracts/run.transcript.get";
 import type { runTurnsGet } from "@oxagen/oxagen/contracts/run.turns.get";
+import type { tachoCommandList } from "@oxagen/oxagen/contracts/tacho.command.list";
 import type { z } from "zod";
 import { Cost, moneyFromMicros } from "@/data/contracts/money";
 import type {
   RunChain,
   RunCost,
   RunDetail,
+  RunFindings,
   RunFrameBody,
   RunOutputs,
   RunTranscript,
   RunTurns,
 } from "@/data/contracts/run";
+import type { CommandReport } from "@/data/contracts/runs";
 import type { ContractOutput } from "@/server/kernel";
 import { toRunRow } from "./runs";
 
@@ -33,6 +37,7 @@ type RunFrameBodyOutput = ContractOutput<typeof runFrameBodyGet>;
 type RunChainOutput = ContractOutput<typeof runChainGet>;
 type RunOutputsOutput = ContractOutput<typeof runOutputsGet>;
 type RunTurnsOutput = ContractOutput<typeof runTurnsGet>;
+type FindingListOutput = ContractOutput<typeof findingList>;
 
 /** The contract's own cost shape: its `basis` is the closed set the view also keys on. */
 type ContractCost = NonNullable<RunGetOutput["run"]["cost"]>;
@@ -46,6 +51,26 @@ function toCost(cost: ContractCost | null): z.input<typeof Cost> | null {
   return cost === null ? null : costOf(cost);
 }
 
+/**
+ * A model's search cost, or null when its searches went unpriced. The rollup
+ * writes a zero figure for a class no entry priced, so a model that searched,
+ * carries unpriced usage, and shows a zero search cost had no search rate.
+ * The page then shows no value, never an exact $0 (#3721).
+ */
+function searchCostOf(row: {
+  tokens: { server_tool_request: number };
+  costByClass: { server_tool_request: ContractCost } | null;
+  hasUnpriced: boolean;
+}): z.input<typeof Cost> | null {
+  if (row.costByClass === null) return null;
+  const search = row.costByClass.server_tool_request;
+  const unpriced =
+    row.tokens.server_tool_request > 0 &&
+    row.hasUnpriced &&
+    Number(search.micros) === 0;
+  return unpriced ? null : costOf(search);
+}
+
 type ContractTokens = {
   input_uncached: number;
   cache_read: number;
@@ -53,6 +78,8 @@ type ContractTokens = {
   cache_write_1h: number;
   output: number;
   reasoning: number;
+  /** Web search requests, not tokens: `toTokens` leaves them out. */
+  server_tool_request: number;
 };
 
 /** The rollup's snake_case token classes, in the app's own spelling. */
@@ -98,6 +125,9 @@ export function toRunDetail(
       frames: out.frames.frames.map((frame) => ({
         cursor: frame.cursor,
         seq: frame.seq,
+        ...(frame.sessionUuid === undefined
+          ? {}
+          : { chainRef: frame.sessionUuid }),
         type: frame.type,
         stage: frame.stage,
         observedAt: frame.observedAt,
@@ -140,10 +170,13 @@ function decodeBody(base64: string): { text: string | null; bytes: number } {
 export function toRunFrameBody(
   seq: string,
   out: RunFrameBodyOutput,
+  /** The subagent chain the frame was read from; absent on the run's own. */
+  chainRef?: string,
 ): z.input<typeof RunFrameBody> {
   const decoded = out.bytes === null ? null : decodeBody(out.bytes);
   return {
     seq,
+    ...(chainRef === undefined ? {} : { chainRef }),
     contentType: out.contentType,
     text: decoded === null ? null : decoded.text,
     bytes: decoded === null ? null : decoded.bytes,
@@ -157,8 +190,18 @@ export function toRunFrameBody(
 }
 
 export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
-  const { rollup, provisional } = out;
+  const { rollup, provisional, baseline } = out;
   return {
+    baseline:
+      baseline === null
+        ? null
+        : {
+            windowDays: baseline.windowDays,
+            before: baseline.before,
+            runs: baseline.runs,
+            medianCost: toCost(baseline.medianCost),
+            productiveRatio: baseline.productiveRatio,
+          },
     provisional:
       provisional === undefined || provisional === null
         ? null
@@ -178,6 +221,7 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
         : {
             cost: toCost(rollup.cost),
             tokens: toTokens(rollup.tokens),
+            searchRequests: rollup.tokens.server_tool_request,
             cacheHitRate: rollup.cacheHitRate,
             turns: rollup.turns,
             steps: rollup.steps,
@@ -185,6 +229,9 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
             toolCalls: rollup.toolCalls,
             retries: rollup.retries,
             productiveRatio: rollup.productiveRatio,
+            advancedSteps: rollup.advancedSteps,
+            unproductiveSteps: rollup.unproductiveSteps,
+            unproductiveCauses: rollup.unproductiveCauses,
             byModel: rollup.byModel.map((row) => ({
               model: row.model,
               provider: row.provider,
@@ -192,6 +239,8 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
               cost: toCost(row.cost),
               tokens: toTokens(row.tokens),
               costByClass: toCostByClass(row.costByClass),
+              searchRequests: row.tokens.server_tool_request,
+              searchCost: searchCostOf(row),
               // A row rolled up before savings were recorded answers null,
               // and the page says "not recorded" for it, never a zero.
               cacheSaving: toCost(row.cacheSaving),
@@ -200,6 +249,8 @@ export function toRunCost(out: RunCostOutput): z.input<typeof RunCost> {
             byTool: rollup.byTool.map((row) => ({
               name: row.name,
               calls: row.calls,
+              resultTokens: row.resultTokens,
+              cost: toCost(row.cost),
             })),
             priceEntryIds: rollup.priceEntryIds,
             rolledUpAt: rollup.rolledUpAt,
@@ -358,6 +409,7 @@ export function toRunTranscript(
       node: entry.node ?? null,
       quiet: entry.quiet ?? false,
       outcome: entry.outcome ?? null,
+      error: entry.error ?? false,
       approvalId: entry.approvalId ?? null,
       gates: (entry.gates ?? []).map(toDecisionView),
       subject: entry.subject ?? null,
@@ -370,7 +422,9 @@ export function toRunTranscript(
       matches: entry.matches ?? [],
     })),
     cursor: out.cursor,
+    ...(out.before === undefined ? {} : { before: out.before }),
     complete: out.complete,
+    frameCursor: out.frameCursor ?? null,
     counts: countsOf(out.counts),
     figures: out.figures ?? null,
     search: out.search ?? null,
@@ -400,6 +454,65 @@ export function toRunTurns(out: RunTurnsOutput): z.input<typeof RunTurns> {
       },
     })),
     complete: out.complete,
+    chains: out.chains.map((chain) => ({
+      sessionUuid: chain.sessionUuid,
+      turn: chain.turn,
+    })),
+  };
+}
+
+/**
+ * `list_findings` read for one run to the Cost tab's findings: each finding
+ * with its saving and what it cites in the run. A read that names a run
+ * carries a citation on every finding; one without it is not about this run,
+ * so it is left out rather than drawn with no turn.
+ */
+export function toRunFindings(
+  out: FindingListOutput,
+): z.input<typeof RunFindings> {
+  return {
+    findings: out.findings.flatMap((finding) => {
+      const { citation } = finding;
+      if (citation === undefined) return [];
+      return [
+        {
+          id: finding.id,
+          kind: finding.kind,
+          subject: finding.subject,
+          saving: costOf(finding.saving),
+          confidence: finding.confidence,
+          citation: {
+            runLevel: citation.runLevel,
+            frames:
+              citation.frames === null
+                ? null
+                : citation.frames.map((frame) =>
+                    frame.sessionUuid === undefined
+                      ? { seq: frame.seq }
+                      : { seq: frame.seq, sessionUuid: frame.sessionUuid },
+                  ),
+            framesTotal: citation.framesTotal,
+          },
+        },
+      ];
+    }),
+  };
+}
+
+/** One signed checkpoint, on the run's own chain or a subagent's. */
+function toChainCheckpoint(
+  checkpoint: RunChainOutput["checkpoints"][number],
+): z.input<typeof RunChain>["checkpoints"][number] {
+  return {
+    seq: checkpoint.seq,
+    chainHead: checkpoint.chainHead,
+    eventCount: checkpoint.eventCount,
+    signedAt: checkpoint.signedAt,
+    deviceKeyFingerprint: checkpoint.deviceKeyFingerprint,
+    platformKey: checkpoint.platformKeyId,
+    countersignedAt: checkpoint.countersignedAt,
+    anchorRoot: checkpoint.anchorRoot,
+    anchoredAt: checkpoint.anchoredAt,
   };
 }
 
@@ -410,17 +523,7 @@ export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
     firstSeq: out.firstSeq,
     lastSeq: out.lastSeq,
     merkleRoot: out.merkleRoot,
-    checkpoints: out.checkpoints.map((checkpoint) => ({
-      seq: checkpoint.seq,
-      chainHead: checkpoint.chainHead,
-      eventCount: checkpoint.eventCount,
-      signedAt: checkpoint.signedAt,
-      deviceKeyFingerprint: checkpoint.deviceKeyFingerprint,
-      platformKey: checkpoint.platformKeyId,
-      countersignedAt: checkpoint.countersignedAt,
-      anchorRoot: checkpoint.anchorRoot,
-      anchoredAt: checkpoint.anchoredAt,
-    })),
+    checkpoints: out.checkpoints.map(toChainCheckpoint),
     gaps: {
       missingSequences: out.gaps.missingSequences.map((gap) => ({
         from: gap.from,
@@ -441,6 +544,16 @@ export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
       eventStreamDigest: seal.eventStreamDigest,
       merkleRoot: seal.merkleRoot,
       archiveSegmentRef: seal.archiveSegmentRef,
+      archiveSegmentDigest: seal.archiveSegmentDigest,
+      attestation:
+        seal.attestation === null
+          ? null
+          : {
+              alg: seal.attestation.alg,
+              keyRef: seal.attestation.keyId,
+              sig: seal.attestation.sig,
+              signsOver: [...seal.attestation.signsOver],
+            },
     })),
     enforcementTier: out.enforcementTier,
     recordedGrade: out.recordedGrade,
@@ -450,6 +563,33 @@ export function toRunChain(out: RunChainOutput): z.input<typeof RunChain> {
       reason: rung.reason,
     })),
     complete: out.complete,
+    // Each subagent chain walked on its own (#3823). Its session uuid, its
+    // parent's and the harness's subagent id are references, not public ids.
+    ...(out.chains === undefined
+      ? {}
+      : {
+          chains: out.chains.map((chain) => ({
+            chainRef: chain.sessionUuid,
+            parentChainRef: chain.parentSessionUuid,
+            subagentRef: chain.subagentId,
+            subagentType: chain.subagentType,
+            frameCount: chain.frameCount,
+            firstSeq: chain.firstSeq,
+            lastSeq: chain.lastSeq,
+            gaps: {
+              missingSequences: chain.gaps.missingSequences.map((gap) => ({
+                from: gap.from,
+                to: gap.to,
+              })),
+              missingFrameCount: chain.gaps.missingFrameCount,
+              missingBodies: chain.gaps.missingBodies,
+            },
+            checkpoints: chain.checkpoints.map(toChainCheckpoint),
+            finalHash: chain.finalHash,
+            sealedAt: chain.sealedAt,
+            complete: chain.complete,
+          })),
+        }),
   };
 }
 
@@ -465,6 +605,7 @@ export function toRunOutputs(
     source: out.source,
     nodes: out.nodes.map((node) => ({
       seq: node.seq,
+      ...(node.sessionUuid === undefined ? {} : { chainRef: node.sessionUuid }),
       kind: node.kind,
       name: node.name,
       nameIsLocator: node.nameIsLocator,
@@ -478,5 +619,49 @@ export function toRunOutputs(
     })),
     tally: out.tally,
     complete: out.complete,
+  };
+}
+
+type CommandListOutput = ContractOutput<typeof tachoCommandList>;
+
+/**
+ * `list_commands` as the delivery report reads it (#2953). The requested mode
+ * and the mode achieved stay two fields, never one (INV-10), and a blank
+ * issuer name reads as none, since the view refuses an empty one.
+ */
+export function toCommandReport(
+  out: CommandListOutput,
+): z.input<typeof CommandReport> {
+  return {
+    commands: out.commands.map((command) => ({
+      id: command.id,
+      runId: command.runId,
+      agentKey: command.agentKey,
+      command: command.command,
+      status: command.status,
+      requestedMode: command.requestedMode,
+      deliveryMode: command.deliveryMode,
+      degradedReason: command.degradedReason,
+      reason: command.reason,
+      issuedAt: command.issuedAt,
+      expiresAt: command.expiresAt,
+      sentAt: command.sentAt,
+      acknowledgedAt: command.acknowledgedAt,
+      appliedAt: command.appliedAt,
+      appliedAtSeq: command.appliedAtSeq,
+      detail: command.detail,
+      issuedBy:
+        command.issuedBy === null
+          ? null
+          : {
+              id: command.issuedBy.id,
+              name:
+                command.issuedBy.name === null ||
+                command.issuedBy.name.trim() === ""
+                  ? null
+                  : command.issuedBy.name,
+            },
+      text: command.text,
+    })),
   };
 }

@@ -434,6 +434,24 @@ export function buildProgram(): Command {
       await billingStatement(opts as Parameters<typeof billingStatement>[0]);
     });
 
+  // ── findings: the workspace's costed findings (list_findings, ADR-062) ─────
+
+  const findingsCmd = program
+    .command("findings")
+    .description("The workspace's costed findings and what each would save");
+  findingsCmd
+    .command("list")
+    .description(
+      "List the findings by the money at stake; with --run, only those citing the run, with the frames each cites",
+    )
+    .option("--run <id>", "A run id (arun_… or tse_…)")
+    .option("--status <status>", "open (default) | applied | dismissed")
+    .option("--json", "Output JSON")
+    .action(async (opts: { run?: string; status?: string; json?: boolean }) => {
+      const { findingsList } = await import("./commands/findings.js");
+      await findingsList(opts);
+    });
+
   // ── context: a steering proposal on a lineage (propose_record) ──────────────
 
   const contextCmd = program
@@ -704,6 +722,36 @@ export function buildProgram(): Command {
       },
     );
   runCmd
+    .command("list")
+    .description("List the workspace's runs, newest first")
+    .option("--limit <n>", "Page size, 1 to 100", (v) => Number.parseInt(v, 10))
+    .option("--cursor <cursor>", "The cursor the previous page printed")
+    .option("--json", "Output the raw contract payload as JSON")
+    .action(async (opts: { limit?: number; cursor?: string; json?: boolean }) =>
+      (await import("./commands/run.js")).runList(opts),
+    );
+  runCmd
+    .command("show")
+    .description(
+      "Show one run: its header, the pause in force, a page of its frames, and its subagent chains",
+    )
+    .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--after <cursor>", "The cursor the previous page printed")
+    .option(
+      "--session <uuid>",
+      "A subagent chain's session id, from the chains the run lists",
+    )
+    .option("--json", "Output the raw contract payload as JSON")
+    .action(
+      async (
+        runId: string,
+        opts: { after?: string; session?: string; json?: boolean },
+      ) => {
+        const { runShow } = await import("./commands/run.js");
+        await runShow(runId, opts);
+      },
+    );
+  runCmd
     .command("chain")
     .description(
       "Show what makes a run's record tamper-evident: the hash rule, the root, the checkpoints, the gaps, and the replay ladder",
@@ -724,6 +772,50 @@ export function buildProgram(): Command {
     .action(async (runId: string, opts: { json?: boolean }) => {
       const { runTurns } = await import("./commands/run.js");
       await runTurns(runId, opts);
+    });
+  runCmd
+    .command("transcript")
+    .description(
+      "Read one page of a run's transcript: its entries, the count per chip over the whole run, and a search of the kept bodies",
+    )
+    .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--zoom <zoom>", "turns, steps, or everything", "steps")
+    .option(
+      "--kinds <kinds>",
+      "The chips to keep, comma-separated (thinking,seal)",
+    )
+    .option("--query <words>", "Words to search the entries for, ignoring case")
+    .option("--after <cursor>", "The cursor the previous page printed")
+    .option("--limit <n>", "Page size, 1 to 500", (v) => Number.parseInt(v, 10))
+    .option("--text <text>", "How much of each body to carry: excerpt or full")
+    .option("--json", "Output the raw contract payload as JSON")
+    .action(
+      async (
+        runId: string,
+        opts: {
+          zoom?: string;
+          kinds?: string;
+          query?: string;
+          after?: string;
+          limit?: number;
+          text?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { runTranscript } = await import("./commands/run.js");
+        await runTranscript(runId, opts);
+      },
+    );
+  runCmd
+    .command("context")
+    .description(
+      "Show what each of a run's model requests carried: the prompt tokens and each block's share of them",
+    )
+    .argument("<run-id>", "The run's public id (arun_… or tse_…)")
+    .option("--json", "Output JSON")
+    .action(async (runId: string, opts: { json?: boolean }) => {
+      const { runContext } = await import("./commands/run-context.js");
+      await runContext(runId, opts);
     });
   runCmd
     .command("export")
@@ -768,6 +860,49 @@ export function buildProgram(): Command {
       async (exportId: string, opts: { json?: boolean; out?: string }) => {
         const { runDownload } = await import("./commands/run.js");
         await runDownload(exportId, opts);
+      },
+    );
+  runCmd
+    .command("pause-all")
+    .description(
+      "Pause every live wrapped run in the workspace as one recorded decision. Org Owner or Admin, or workspace Owner",
+    )
+    .requiredOption("--reason <text>", "Why the runs are paused (recorded)")
+    .option("--json", "Output JSON")
+    .action(async (opts: { reason: string; json?: boolean }) => {
+      const { runPauseAll } = await import("./commands/run.js");
+      await runPauseAll(opts);
+    });
+  runCmd
+    .command("answer")
+    .description(
+      "Answer the question a run paused to ask: --text for an agent's own question, --link or --create for a repository the workspace has not bound",
+    )
+    .argument("<interjection-id>", "The question's id (inj_…)")
+    .option("--text <answer>", "A free-text answer to an agent's own question")
+    .option(
+      "--link",
+      "Bind the repository to this workspace. Org Owner or Admin, or workspace Owner",
+    )
+    .option(
+      "--create <name>",
+      "Create a workspace for the repository, with skills off. Needs --slug",
+    )
+    .option("--slug <slug>", "The new workspace's slug, with --create")
+    .option("--json", "Output JSON")
+    .action(
+      async (
+        interjectionId: string,
+        opts: {
+          text?: string;
+          link?: boolean;
+          create?: string;
+          slug?: string;
+          json?: boolean;
+        },
+      ) => {
+        const { runAnswer } = await import("./commands/run.js");
+        await runAnswer(interjectionId, opts);
       },
     );
 
@@ -1397,8 +1532,19 @@ export function buildProgram(): Command {
     .option("--token <apiKey>", "Operator token for the server-side revoke")
     .option("--purge", "Also delete the local WAL, spool, and quarantine")
     .option("--reason <text>", "Reason recorded with the revoke")
+    .option(
+      "--harness <name>",
+      "The agent to unenroll, by the harness it hooks, when this machine holds more than one enrollment",
+    )
+    .option("--all", "Unenroll every agent on this machine")
     .action(
-      async (opts: { token?: string; purge?: boolean; reason?: string }) => {
+      async (opts: {
+        token?: string;
+        purge?: boolean;
+        reason?: string;
+        harness?: string;
+        all?: boolean;
+      }) => {
         const { handleTachoUnenroll } = await import("./commands/tacho.js");
         if (!(await handleTachoUnenroll(opts))) process.exitCode = 1;
       },
@@ -1458,8 +1604,8 @@ export function buildProgram(): Command {
   // ── agent env: bind agents to environments ──────────────────────────────────
   //
   // Server-scoped: the <agent> arg is an agent's public id (agt_…), slug, or
-  // agent-key, resolved against the workspace's agent definitions. Environments
-  // are governed configuration records — binding one does not run anything.
+  // agent key, resolved against the workspace's registered agents. Environments
+  // are governed configuration records: binding one does not run anything.
 
   const agent = program
     .command("agent")
@@ -1470,22 +1616,32 @@ export function buildProgram(): Command {
   agent
     .command("register")
     .description(
-      "Register an agent identity and print its credential once — Owner/Admin only",
+      "Register an agent: one harness on one runtime, carrying a toolbelt. Prints its credential once. Owner or Admin only",
     )
-    .requiredOption("--slug <slug>", "Lowercase words joined by hyphens")
     .requiredOption("--name <name>", "Display name")
     .requiredOption(
       "--harness <harness>",
       "stella | claude-code | codex | cursor | claude-agent-sdk | custom",
     )
+    .requiredOption("--runtime <rtm_id>", "The runtime it runs on (rtm_…)")
+    .option(
+      "--slug <slug>",
+      "Lowercase words joined by hyphens; derived from --name when omitted",
+    )
+    .option(
+      "--toolbelt <tbt_id>",
+      "The toolbelt it carries (tbt_…); the All tools belt when omitted",
+    )
     .option("--description <text>", "What the agent is for")
-    .option("--validity-days <n>", "Credential lifetime in days (1–365)")
+    .option("--validity-days <n>", "Credential lifetime in days (1 to 365)")
     .option("--json", "Output JSON")
     .action(
       async (opts: {
         slug?: string;
         name?: string;
         harness?: string;
+        runtime?: string;
+        toolbelt?: string;
         description?: string;
         validityDays?: string;
         json?: boolean;
@@ -1501,7 +1657,7 @@ export function buildProgram(): Command {
       "An agent id or slug. Omit it to report this machine instead",
     )
     .description(
-      "With an agent: its identity, credentials, roles, hosts and definition of record. Without one: this machine's enrollment, daemon, hooks, bundle and spool",
+      "With an agent: its identity, runtime, toolbelt, versions, credentials, roles and hosts. Without one: this machine's enrollment, daemon, hooks, bundle and spool",
     )
     .option("--json", "Output JSON")
     .action(
@@ -1535,6 +1691,11 @@ export function buildProgram(): Command {
       "--purge",
       "Without an agent: also delete the local WAL, spool, and quarantine",
     )
+    .option(
+      "--harness <name>",
+      "Without an agent: the one to unenroll, by the harness it hooks, when this machine holds more than one enrollment",
+    )
+    .option("--all", "Without an agent: unenroll every agent on this machine")
     .action(
       async (
         agentHandle: string | undefined,
@@ -1544,6 +1705,8 @@ export function buildProgram(): Command {
           json?: boolean;
           token?: string;
           purge?: boolean;
+          harness?: string;
+          all?: boolean;
         },
       ) => {
         if (agentHandle === undefined) {
@@ -1571,6 +1734,8 @@ export function buildProgram(): Command {
             [
               ["--token", opts.token !== undefined],
               ["--purge", opts.purge === true],
+              ["--harness", opts.harness !== undefined],
+              ["--all", opts.all === true],
             ],
           )
         ) {

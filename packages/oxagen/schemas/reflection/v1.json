@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oxagen.sh/schemas/reflection/v1.json",
+  "title": "Reflection",
+  "description": "The memory an agent writes at the end of a run, with grades for the work and its tools. Oxagen stores it.",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "reflection/v1"
+    },
+    "run": {
+      "type": "string",
+      "pattern": "^run_[0-9A-Za-z]+$"
+    },
+    "agent": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]*[a-z0-9]$",
+      "description": "The agent's name, as agents/<name>.toml gives it."
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "failed",
+        "cancelled",
+        "crashed",
+        "unknown"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "grades": {
+      "type": "object",
+      "properties": {
+        "work": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "tools": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^(?=[a-z0-9_]{4,64}(?:@|$))[a-z][a-z0-9_]{0,23}__[a-z][a-z0-9_]*(?:@[1-9][0-9]{0,8})?$"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "description": "A grade per tool the agent was given, pinned to its version where known."
+        }
+      },
+      "required": [
+        "work",
+        "tools"
+      ],
+      "additionalProperties": false
+    },
+    "lessons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "statement": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "business-rule",
+              "code-rule",
+              "constraint",
+              "procedure",
+              "skill",
+              "fact",
+              "preference",
+              "memory"
+            ],
+            "description": "What the lesson would be as a record. Most are memory."
+          },
+          "repos": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9-]+(?:\\.[a-z0-9-]+)+(?:\\/(?!\\.\\.?(?:\\/|$))[a-z0-9_.-]+){2,}$"
+            },
+            "minItems": 1
+          },
+          "applies_to": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^(?=[a-z0-9_*]{4,64}$)[a-z][a-z0-9_]{0,23}__(?:\\*|[a-z][a-z0-9_]*)$"
+            },
+            "minItems": 1
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^frame:run_[0-9A-Za-z]+\\/[0-9]+$"
+            },
+            "minItems": 1,
+            "description": "The frames that taught the lesson."
+          }
+        },
+        "required": [
+          "statement",
+          "kind",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 50
+    },
+    "tool_feedback": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tool": {
+            "type": "string",
+            "pattern": "^(?=[a-z0-9_]{4,64}(?:@|$))[a-z][a-z0-9_]{0,23}__[a-z][a-z0-9_]*(?:@[1-9][0-9]{0,8})?$"
+          },
+          "problem": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "tool",
+          "problem"
+        ],
+        "additionalProperties": false
+      },
+      "description": "What went wrong with a tool. MCP Studio shows it beside the tool."
+    }
+  },
+  "required": [
+    "schema",
+    "run",
+    "agent",
+    "outcome",
+    "summary",
+    "grades",
+    "lessons"
+  ],
+  "additionalProperties": false
+}

@@ -11,6 +11,7 @@ import type {
   RunTranscript,
   TranscriptKind,
 } from "@/data/contracts/run";
+import type { RunIssues } from "@/data/contracts/run-issues";
 import type { RunWork } from "@/data/contracts/run-work";
 import type { RunRow } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
@@ -33,8 +34,13 @@ type RunView = {
   kinds: KindFilter;
   /** `?frames=`, the opaque cursor a later frames page was read from. */
   frames: string | null;
-  /** `?body=`, the seq of the open frame; null when none is open. */
+  /** `?body=`, the open frame's key (`frameKey`); null when none is open. */
   body: string | null;
+  /**
+   * `?finding=`, the finding whose evidence is open over the Cost tab
+   * (#4001). Absent or null when none is open.
+   */
+  finding?: string | null;
 };
 
 export type RunTabProps = {
@@ -47,8 +53,10 @@ export type RunTabProps = {
   view: RunView;
   metrics: RunMetrics;
   /**
-   * The whole-run transcript at `steps` with whole bodies, read to its end:
-   * the Transcript tab's rows, and the counts and figures the page draws.
+   * The first page of the transcript at `steps` with whole bodies: the
+   * Transcript tab's first rows, and the whole run's counts and figures,
+   * which a read from the run's first frame carries (#3823, D6). The tab
+   * reads the pages past it (#4420).
    */
   transcript: Read<RunTranscript>;
   /**
@@ -62,6 +70,11 @@ export type RunTabProps = {
   outputs: Read<RunOutputs>;
   /** `get_run_work`, started by the page and awaited where it is drawn. */
   work: Promise<Read<RunWork>>;
+  /**
+   * `get_run_issues`, started by the page beside the work read and awaited by
+   * the Issues tab and its count in the tab strip (#3970).
+   */
+  issues: Promise<Read<RunIssues>>;
   /** `get_agent` for the run's agent; null when the run names none. */
   agent: Read<AgentDetail> | null;
   /**

@@ -3,8 +3,7 @@ import { z } from "zod";
 /**
  * Canonical avatar-value validation, shared by every contract that carries a
  * person, agent, workspace, or organization avatar (user.profile.update,
- * agent.definition.create/update, workspace.settings.write, and
- * org.settings.write).
+ * workspace.settings.write, and org.settings.write).
  *
  * An avatar value is a nullable text field that is EITHER:
  *  - an `https://` URL to a hosted image (the `photo` kind), OR

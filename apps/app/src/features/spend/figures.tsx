@@ -13,6 +13,7 @@ import {
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type { Cost, Money as MoneyValue } from "@/data/contracts/money";
+import type { UnmeteredRuns } from "@/data/contracts/spend";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import type { MoneyPrecision } from "@/ui/money-format";
@@ -108,6 +109,35 @@ export function RatioFigure({ ratio }: { ratio: number | null }) {
 export function CountFigure({ count }: { count: number }) {
   const locale = useLocale();
   return <span className="tabular-nums">{formatCount(count, locale)}</span>;
+}
+
+/**
+ * The runs a total counts and leaves out of its cost, because no frame
+ * reported what they spent, with the harness that ran them (#3304). Nothing
+ * when every run reported usage, or the read did not say.
+ */
+export function UnmeteredNote({
+  unmetered,
+  className,
+  testId,
+}: {
+  unmetered: UnmeteredRuns | undefined;
+  className: string;
+  testId: string;
+}) {
+  const t = useTranslations("spend");
+  const locale = useLocale();
+  if (unmetered === undefined || unmetered.total === 0) return null;
+  return (
+    <span className={className} data-testid={testId}>
+      {t("unmetered", {
+        count: unmetered.total,
+        harnesses: unmetered.byHarness
+          .map((row) => `${row.harness} ${formatCount(row.runs, locale)}`)
+          .join(", "),
+      })}
+    </span>
+  );
 }
 
 /** One tile of a figure strip: a term, its figure and an optional note. */

@@ -1,0 +1,26 @@
+-- 0033_tacho_events_part_settings.sql
+--
+-- Keep every write to tacho_events inside the app node's memory cap (#4316).
+--
+-- The table has about 385 columns. A part ClickHouse writes in the wide
+-- layout opens a buffer for every column stream at once, and on ClickHouse
+-- 24.8 that took about 1.3 GiB for this table, against a 1.5 GiB cap for the
+-- whole server (ADR-181). By default an insert of more than 10 MiB of
+-- uncompressed data writes a wide part. A full ingest request, 5,692 small
+-- frames in 4 MiB of JSON, failed with code 241 under the insert's 512 MiB
+-- bound, every time, so the host would re-send a batch that could never land.
+-- A merge below 131,072 rows that produces a wide part writes every column at
+-- once too, and while the partition rebuild in 0034 copied rows, those merges
+-- took the server to its cap.
+--
+-- min_bytes_for_wide_part = 64 MiB: an insert, which is at most 4 MiB of
+-- JSON, writes a compact part, with every column in one file. The same
+-- 5,692-frame request then landed with a peak of 76 MiB.
+--
+-- vertical_merge_algorithm_min_rows_to_activate = 1: a merge that produces a
+-- wide part writes one column at a time.
+--
+-- 0027 carries the same settings for a cluster created from today on, and
+-- tacho-events-ddl.ts generates both lines from one list. Existing parts keep
+-- their layout. The settings apply from the next insert and the next merge.
+ALTER TABLE tacho_events MODIFY SETTING min_bytes_for_wide_part = 67108864, vertical_merge_algorithm_min_rows_to_activate = 1;

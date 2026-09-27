@@ -205,14 +205,22 @@ function sortKeys(value: unknown): unknown {
   );
 }
 
+/** The receipts file and backups directory `HarnessFiles` keeps in an agent's directory. */
+export const HARNESS_RECEIPTS = "install-receipts.json";
+export const HARNESS_BACKUPS = "backups";
+
 export class HarnessFiles {
   private readonly receiptsPath: string;
   private readonly backupsDir: string;
 
-  /** `root` is `TachoPaths.root`; the receipts and backups live under it. */
+  /**
+   * `root` is the agent's directory (`TachoPaths.dir`). Each agent keeps the
+   * receipts for the files its own enroll touched, so its unenroll settles
+   * those and no other agent's.
+   */
   constructor(private readonly root: string) {
-    this.receiptsPath = join(root, "install-receipts.json");
-    this.backupsDir = join(root, "backups");
+    this.receiptsPath = join(root, HARNESS_RECEIPTS);
+    this.backupsDir = join(root, HARNESS_BACKUPS);
   }
 
   /** The file's text, or undefined when it does not exist. */

@@ -1,7 +1,7 @@
 {
   "name": "get_nav_counts",
   "domain": "shell",
-  "description": "The sidebar's counts for this workspace: pending approvals, open steering proposals and open critical incidents, each null when its read answered nothing.",
+  "description": "The sidebar's counts for this workspace: pending approvals, open agent questions, open steering proposals and open critical incidents, each null when its read answered nothing.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -41,6 +41,17 @@
           }
         ]
       },
+      "interjections": {
+        "anyOf": [
+          {
+            "type": "integer",
+            "minimum": 0
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
       "proposals": {
         "anyOf": [
           {
@@ -66,6 +77,7 @@
     },
     "required": [
       "approvals",
+      "interjections",
       "proposals",
       "incidents"
     ],

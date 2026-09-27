@@ -1,10 +1,23 @@
+import { runWorkGet } from "@oxagen/oxagen/contracts/run.work.get";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { prLinkOf } from "./lib/run-work";
+import type { CommandRefFrameRow } from "./lib/run-command-refs";
+import {
+  checkoutId,
+  prLinkOf,
+  WORK_CONTEXT_CAP,
+  workDigest,
+  type WorkContextRow,
+  type WorkDiffRow,
+} from "./lib/run-work";
+import { readWorkPullRequests, type WorkPrDeps } from "./lib/run-work-prs";
+import { readWorkReleases } from "./lib/run-work-releases";
 import { createRunWorkGetHandler, type RunWorkDeps } from "./run.work.get";
 import type { TachoSessionColumns } from "./run.list";
 import {
   ctx,
+  ledgerRun,
   memoryStores,
+  summary,
   tachoSession,
   OTHER_WORKSPACE,
   roleTx,
@@ -21,6 +34,9 @@ beforeEach(() => {
   role.current = "Owner";
 });
 const RUN_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
+const LEDGER_ID = "arun_5f0c2e9a1b7d4c3e8f6a02";
+// `summary()`'s run: the ledger store answers it for LEDGER_ID.
+const LEDGER_UUID = "0192d4a8-7c1e-7a00-8000-0000000000a1";
 function setup(session: Partial<TachoSessionColumns> = {}) {
   const stores = memoryStores(
     [],
@@ -70,9 +86,225 @@ function setup(session: Partial<TachoSessionColumns> = {}) {
       complete: false,
       warnings: ["repository_not_connected"],
     }),
+    commandFrames: vi.fn().mockResolvedValue([]),
+    // The real release read over a fake GitHub, so the handler's wiring and
+    // the read's rules are tested together.
+    releases: (scope, frames, checkouts, repositories) =>
+      readWorkReleases(scope, frames, checkouts, repositories, {
+        client: async () => ({ listReleases: github.listReleases }),
+      }),
   };
   return { deps, handler: createRunWorkGetHandler(deps) };
 }
+
+const github = vi.hoisted(() => ({ listReleases: vi.fn() }));
+beforeEach(() => {
+  github.listReleases.mockReset();
+  github.listReleases.mockResolvedValue([]);
+});
+
+const CONNECTED = {
+  connectionId: "conn_1",
+  providerRepositoryId: "R_1",
+  host: "github.com",
+  owner: "acme",
+  name: "app",
+  url: "https://github.com/acme/app",
+  connected: true,
+};
+
+/** A command frame, as `readRunCommandRefFrames` returns it. */
+function commandFrame(
+  seq: number,
+  command: string,
+  path = "/repo",
+): CommandRefFrameRow {
+  return {
+    seq,
+    command,
+    path,
+    observed_at: "2026-09-26 10:00:05.000",
+    issue_repository: "",
+    issue_number: "",
+    issue_url: "",
+    issue_action: "",
+    release_repository: "",
+    release_tag: "",
+  };
+}
+
+// #3890: the Changes panel's Release row draws a release only when one
+// exists, with GitHub's state for it.
+describe("get_run_work releases", () => {
+  it("returns a release the session created, with the state GitHub reads for it now", async () => {
+    const { handler, deps } = setup();
+    vi.mocked(deps.repositories).mockResolvedValue([CONNECTED]);
+    vi.mocked(deps.commandFrames).mockResolvedValue([
+      commandFrame(31, "gh release create v4.11.0 --draft -R acme/app"),
+      // The same release again adds no second row.
+      commandFrame(33, "gh release create v4.11.0 --draft -R acme/app"),
+    ]);
+    github.listReleases.mockResolvedValue([
+      {
+        tagName: "v4.11.0",
+        name: "4.11.0",
+        htmlUrl: "https://github.com/acme/app/releases/tag/untagged-1",
+        draft: true,
+        prerelease: false,
+        publishedAt: null,
+      },
+    ]);
+    const result = await handler({ runId: RUN_ID }, ctx());
+    expect(runWorkGet.output.parse(result)).toEqual(result);
+    expect(result.releases).toEqual([
+      {
+        repository: {
+          host: "github.com",
+          owner: "acme",
+          name: "app",
+          url: "https://github.com/acme/app",
+          connected: true,
+        },
+        tag: "v4.11.0",
+        name: "4.11.0",
+        url: "https://github.com/acme/app/releases/tag/untagged-1",
+        state: "draft",
+        frameSeq: "31",
+        observedAt: "2026-09-26T10:00:05.000Z",
+      },
+    ]);
+    expect(github.listReleases).toHaveBeenCalledOnce();
+    expect(github.listReleases).toHaveBeenCalledWith({
+      owner: "acme",
+      repo: "app",
+    });
+  });
+
+  it("reads a published and a prerelease state, and resolves a bare command from the checkout it ran in", async () => {
+    const { handler, deps } = setup();
+    vi.mocked(deps.repositories).mockResolvedValue([CONNECTED]);
+    vi.mocked(deps.contexts).mockResolvedValue([
+      {
+        path: "/repo",
+        branch: "release/4.11",
+        head: "abc",
+        remote: "",
+        repository: "https://github.com/acme/app",
+        first_seq: 0,
+        last_seq: 40,
+      },
+    ]);
+    vi.mocked(deps.commandFrames).mockResolvedValue([
+      commandFrame(31, "gh release create v4.11.0"),
+      commandFrame(32, "gh release create v4.12.0-rc.1 --prerelease"),
+    ]);
+    github.listReleases.mockResolvedValue([
+      {
+        tagName: "v4.12.0-rc.1",
+        name: null,
+        htmlUrl: "https://github.com/acme/app/releases/tag/v4.12.0-rc.1",
+        draft: false,
+        prerelease: true,
+        publishedAt: "2026-09-26T10:01:00Z",
+      },
+      {
+        tagName: "v4.11.0",
+        name: "v4.11.0",
+        htmlUrl: "https://github.com/acme/app/releases/tag/v4.11.0",
+        draft: false,
+        prerelease: false,
+        publishedAt: "2026-09-26T10:00:30Z",
+      },
+    ]);
+    const result = await handler({ runId: RUN_ID }, ctx());
+    expect(result.releases.map(({ tag, state }) => [tag, state])).toEqual([
+      ["v4.11.0", "published"],
+      ["v4.12.0-rc.1", "prerelease"],
+    ]);
+  });
+
+  it("keeps a release in an unconnected repository with a null state and a warning (negative)", async () => {
+    const { handler, deps } = setup();
+    vi.mocked(deps.commandFrames).mockResolvedValue([
+      commandFrame(31, "gh release create v1.0.0 -R other/lib"),
+    ]);
+    const result = await handler({ runId: RUN_ID }, ctx());
+    expect(result.releases).toEqual([
+      expect.objectContaining({
+        tag: "v1.0.0",
+        state: null,
+        url: null,
+        repository: expect.objectContaining({
+          owner: "other",
+          name: "lib",
+          connected: false,
+        }),
+      }),
+    ]);
+    expect(result.warnings).toContain("recorded_repository_not_connected");
+    expect(result.complete).toBe(false);
+    expect(github.listReleases).not.toHaveBeenCalled();
+  });
+
+  it("says GitHub has no such release, or could not be read, rather than guessing a state (negative)", async () => {
+    const { handler, deps } = setup();
+    vi.mocked(deps.repositories).mockResolvedValue([CONNECTED]);
+    vi.mocked(deps.commandFrames).mockResolvedValue([
+      commandFrame(31, "gh release create v9.9.9 -R acme/app"),
+    ]);
+    const missing = await handler({ runId: RUN_ID }, ctx());
+    expect(missing.releases[0]?.state).toBeNull();
+    expect(missing.warnings).toContain("release_not_found");
+    github.listReleases.mockRejectedValue(new Error("GitHub API error 502"));
+    const failed = await handler({ runId: RUN_ID }, ctx());
+    expect(failed.releases[0]?.state).toBeNull();
+    expect(failed.warnings).toContain("release_read_failed");
+  });
+
+  it("leaves out a release whose repository the record does not name, and says so (negative)", async () => {
+    const { handler, deps } = setup();
+    // The one checkout recorded no repository, and the command names none.
+    vi.mocked(deps.commandFrames).mockResolvedValue([
+      commandFrame(31, "gh release create v1.0.0"),
+    ]);
+    const result = await handler({ runId: RUN_ID }, ctx());
+    expect(result.releases).toEqual([]);
+    expect(result.warnings).toContain("release_repository_unknown");
+  });
+
+  it("returns no release when the session created none", async () => {
+    const { handler, deps } = setup();
+    vi.mocked(deps.commandFrames).mockResolvedValue([
+      commandFrame(31, "gh release view v4.11.0"),
+      commandFrame(32, "gh issue view 482"),
+    ]);
+    const result = await handler({ runId: RUN_ID }, ctx());
+    expect(result.releases).toEqual([]);
+    expect(result.warnings).toEqual(["repository_not_connected"]);
+  });
+
+  it("returns no release for a ledger run, which records no command", async () => {
+    const stores = memoryStores(
+      [ledgerRun({ publicId: LEDGER_ID, runId: LEDGER_UUID })],
+      [],
+    );
+    const { deps } = setup();
+    const handler = createRunWorkGetHandler({
+      ...deps,
+      queries: stores.queries,
+      readRunRollups: stores.readRunRollups,
+      readWitnessFor: stores.readWitnessFor,
+      store: {
+        getRunByPublicId: async (publicId) =>
+          publicId === LEDGER_ID ? summary() : null,
+        readAttemptEventsSince: async () => [],
+      },
+    });
+    const result = await handler({ runId: LEDGER_ID }, ctx());
+    expect(result.releases).toEqual([]);
+    expect(deps.commandFrames).not.toHaveBeenCalled();
+  });
+});
 describe("get_run_work", () => {
   it("denies viewers before reading checkout or provider evidence", async () => {
     role.current = "Viewer";
@@ -183,6 +415,153 @@ describe("get_run_work", () => {
       { repositoryId: "R_1", number: 42, headSha: null },
     ]);
     expect(result.warnings).toContain("recorded_repository_not_connected");
+  });
+  // #3791: the daemon seals a session's first hook before its first Git read,
+  // so that frame names the path alone. As a checkout of its own it matched
+  // no repository or branch, and the work read incomplete for good.
+  it("folds the path-only first frame into the Git context at its path, and the work reads complete", async () => {
+    const { handler, deps } = setup({ chainVerified: true });
+    const pathOnly: WorkContextRow = {
+      path: "/work/app",
+      branch: "",
+      head: "",
+      remote: "",
+      repository: "",
+      first_seq: 0,
+      last_seq: 0,
+    };
+    const located: WorkContextRow = {
+      path: "/work/app",
+      branch: "fix/run",
+      head: "b".repeat(40),
+      remote: workDigest("github.com/acme/app"),
+      repository: "https://github.com/acme/app",
+      first_seq: 1,
+      last_seq: 9,
+    };
+    const diff = (context: WorkContextRow, seq: number): WorkDiffRow => ({
+      ...context,
+      seq,
+      observed_at: "2026-09-25 10:00:00.000",
+      base: "c".repeat(40),
+      content_digest: "sha256:diff",
+      bytes_ref: "blob",
+      complete: "true",
+      limitations: "",
+      omitted: "",
+      redactions: "[]",
+      redaction_count: 0,
+    });
+    vi.mocked(deps.contexts).mockResolvedValue([pathOnly, located]);
+    vi.mocked(deps.diffs).mockResolvedValue([
+      diff(located, 9),
+      diff(pathOnly, 0),
+    ]);
+    vi.mocked(deps.repositories).mockResolvedValue([
+      {
+        connectionId: "conn_1",
+        providerRepositoryId: "R_1",
+        host: "github.com",
+        owner: "acme",
+        name: "app",
+        url: "https://github.com/acme/app",
+        connected: true,
+      },
+    ]);
+    // The real PR read over a GitHub that holds no PR for the branch, so
+    // every warning comes from the checkouts the handler passes it.
+    const github: WorkPrDeps = {
+      client: vi.fn().mockResolvedValue({
+        getRepoInfo: vi.fn().mockResolvedValue({ defaultBranch: "main" }),
+        listPullRequests: vi.fn().mockResolvedValue([]),
+      }),
+      now: () => "2026-09-25T10:00:00Z",
+    };
+    vi.mocked(deps.pullRequests).mockImplementation(
+      (scope, checkouts, repositories, _deps, recorded) =>
+        readWorkPullRequests(scope, checkouts, repositories, github, recorded),
+    );
+    const result = await handler({ runId: RUN_ID }, ctx());
+    const merged = checkoutId(located);
+    expect(result.checkouts).toMatchObject([
+      {
+        id: merged,
+        path: "/work/app",
+        branch: "fix/run",
+        firstSeq: "0",
+        lastSeq: "9",
+        repository: { connected: true },
+      },
+    ]);
+    expect(result.warnings).toEqual([]);
+    expect(result.complete).toBe(true);
+    // A diff sealed on the path-only frame names the checkout it folded into.
+    expect(result.diffs.map((d) => d.checkoutId)).toEqual([merged, merged]);
+  });
+  it("keeps a path-only location with no Git context, and still says what it lacks (negative)", async () => {
+    const { handler, deps } = setup({ chainVerified: true });
+    vi.mocked(deps.contexts).mockResolvedValue([
+      {
+        path: "/tmp/scratch",
+        branch: "",
+        head: "",
+        remote: "",
+        repository: "",
+        first_seq: 0,
+        last_seq: 4,
+      },
+    ]);
+    vi.mocked(deps.pullRequests).mockImplementation(
+      (scope, checkouts, repositories, _deps, recorded) =>
+        readWorkPullRequests(
+          scope,
+          checkouts,
+          repositories,
+          { client: vi.fn(), now: () => "2026-09-25T10:00:00Z" },
+          recorded,
+        ),
+    );
+    const result = await handler({ runId: RUN_ID }, ctx());
+    expect(result.checkouts).toMatchObject([{ path: "/tmp/scratch" }]);
+    expect(result.warnings).toEqual(["repository_not_connected"]);
+    expect(result.complete).toBe(false);
+  });
+  // #3791: the fold can leave fewer checkouts than the read returned. A read
+  // that returned one row past its limit may have cut rows the fold never
+  // saw, so the limit is judged on the rows read.
+  it("warns checkout_limit when the read hit its limit, though the fold leaves no more checkouts than the limit (negative)", async () => {
+    const { handler, deps } = setup({ chainVerified: true });
+    const pathOnly: WorkContextRow = {
+      path: "/work/app",
+      branch: "",
+      head: "",
+      remote: "",
+      repository: "",
+      first_seq: 0,
+      last_seq: 0,
+    };
+    const branches = Array.from(
+      { length: WORK_CONTEXT_CAP },
+      (_, n): WorkContextRow => ({
+        path: "/work/app",
+        branch: `fix/${String(n)}`,
+        head: "b".repeat(40),
+        remote: workDigest("github.com/acme/app"),
+        repository: "https://github.com/acme/app",
+        first_seq: n + 1,
+        last_seq: n + 1,
+      }),
+    );
+    vi.mocked(deps.contexts).mockResolvedValue([pathOnly, ...branches]);
+    const result = await handler({ runId: RUN_ID }, ctx());
+    // The path-only row folded into the first branch read after it.
+    expect(result.checkouts).toHaveLength(WORK_CONTEXT_CAP);
+    expect(result.checkouts[0]).toMatchObject({
+      branch: "fix/0",
+      firstSeq: "0",
+    });
+    expect(result.warnings).toContain("checkout_limit");
+    expect(result.complete).toBe(false);
   });
   it("reads a PR link from the frame first and its URL second", () => {
     expect(

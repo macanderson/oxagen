@@ -265,6 +265,64 @@ export function tachoEventsCreatedColumns(): TachoEventsColumn[] {
   ]);
 }
 
+/**
+ * The storage settings that keep a write to this table inside the app node's
+ * memory cap (#4316).
+ *
+ * The table has about 385 columns. ClickHouse writes a part in one of two
+ * layouts. A compact part keeps every column in one file. A wide part keeps
+ * one file per column stream, and its writer opens a buffer for every stream
+ * at once: measured on ClickHouse 24.8, that is about 1.3 GiB for this table,
+ * against a 1.5 GiB cap for the whole server (ADR-181). By default a part
+ * becomes wide once it holds 10 MiB of uncompressed data, and a full ingest
+ * request of small frames passes that: 5,692 frames in 4 MiB of JSON failed
+ * with code 241 under the insert's 512 MiB bound.
+ *
+ * - `min_bytes_for_wide_part` raises that threshold to 64 MiB, so an insert
+ *   (at most 4 MiB of JSON, `TACHO_MAX_REQUEST_BYTES`) always writes a compact
+ *   part. The same request then landed with a peak of 76 MiB.
+ * - `vertical_merge_algorithm_min_rows_to_activate = 1` makes every merge that
+ *   produces a wide part write one column at a time. The default waits for
+ *   131,072 rows, and a merge below that writes every column at once, which
+ *   is the same 1.3 GiB.
+ *
+ * `index_granularity` is the one setting 0027 carried from the start, and it
+ * cannot be changed on an existing table, so the forward migration leaves it
+ * out (`TACHO_EVENTS_MODIFIABLE_SETTINGS`).
+ */
+export const TACHO_EVENTS_TABLE_SETTINGS: ReadonlyArray<
+  readonly [name: string, value: string]
+> = [
+  ["index_granularity", "8192"],
+  ["min_bytes_for_wide_part", "67108864"],
+  ["vertical_merge_algorithm_min_rows_to_activate", "1"],
+];
+
+/** The settings `0033_tacho_events_part_settings.sql` applies to an existing table. */
+export const TACHO_EVENTS_MODIFIABLE_SETTINGS =
+  TACHO_EVENTS_TABLE_SETTINGS.filter(([name]) => name !== "index_granularity");
+
+const settingsList = (settings: ReadonlyArray<readonly [string, string]>) =>
+  settings.map(([name, value]) => `${name} = ${value}`).join(", ");
+
+/** The ALTER that brings an existing table to `TACHO_EVENTS_TABLE_SETTINGS`. */
+export function tachoEventsModifySettings(): string {
+  return `ALTER TABLE ${TACHO_EVENTS_TABLE} MODIFY SETTING ${settingsList(TACHO_EVENTS_MODIFIABLE_SETTINGS)};`;
+}
+
+/**
+ * The month the control plane received a row in (#4297).
+ *
+ * The table first partitioned by `ts`, the producer's clock. A host whose
+ * clock was wrong filed its frames into the wrong month, and one whose clock
+ * jumped filed one batch into several, one part per month. The retention TTL
+ * (0032) reads `received_at`, so partitioning by `ts` also left rows of
+ * different expiry in one partition, and expiry rewrote parts instead of
+ * dropping a month. A cluster created from 0027 today gets this key, and
+ * 0034 rebuilds a table created with the old one.
+ */
+export const TACHO_EVENTS_PARTITION_KEY = "toYYYYMM(received_at)";
+
 /** The CREATE TABLE statement the migration carries. */
 export function tachoEventsCreateTable(): string {
   const lines = tachoEventsCreatedColumns().map(
@@ -275,9 +333,9 @@ export function tachoEventsCreateTable(): string {
     lines.join(",\n"),
     ")",
     "ENGINE = ReplacingMergeTree(received_at)",
-    "PARTITION BY toYYYYMM(ts)",
+    `PARTITION BY ${TACHO_EVENTS_PARTITION_KEY}`,
     "ORDER BY (org_id, workspace_id, session_uuid, seq)",
-    "SETTINGS index_granularity = 8192;",
+    `SETTINGS ${settingsList(TACHO_EVENTS_TABLE_SETTINGS)};`,
   ].join("\n");
 }
 

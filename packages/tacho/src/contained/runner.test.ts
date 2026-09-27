@@ -11,7 +11,7 @@ import type { SessionRegistry } from "../collector/registry";
 import type { HookEnvelope } from "../collector/server";
 import type { ModelProxy } from "../collector/model-proxy";
 import type { IssueRunTokenAnswer } from "../collector/credential-issuer";
-import type { TachoEvent } from "../envelope";
+import { KIND_BODIES, type TachoEvent } from "../envelope";
 import type { HostFile } from "../host/host-file";
 import type { FetchLike } from "../host/control-client";
 import {
@@ -473,7 +473,7 @@ describe("a contained run's lifecycle", () => {
         body: expect.objectContaining({
           policy_decision: "allow",
           policy_source: "kernel",
-          policy_reason: "contained_launch_registered",
+          policy_reason_code: "contained_launch_registered",
         }),
       }),
     );
@@ -540,7 +540,7 @@ describe("a contained run's lifecycle", () => {
         body: {
           policy_decision: "allow",
           policy_source: "bundle",
-          policy_reason: "contained_github_route",
+          policy_reason_code: "contained_github_route",
           tool_name: "GET /github/api/repos/acme/app/pulls",
         },
       }),
@@ -548,11 +548,18 @@ describe("a contained run's lifecycle", () => {
         body: {
           policy_decision: "deny",
           policy_source: "bundle",
-          policy_reason: "contained_gateway_route",
+          policy_reason_code: "contained_gateway_route",
           tool_name: "/elsewhere",
         },
       }),
     ]);
+    // Every member is one the strict envelope declares. An undeclared
+    // `policy_reason` was moved into `attrs` by the recorder, where no
+    // reader of the decision looked.
+    for (const event of records.flat())
+      expect(KIND_BODIES.policy_decision.safeParse(event.body).success).toBe(
+        true,
+      );
   });
 
   it("aborts the launch signal on stop(sessionUuid) and on the caller's signal", async () => {

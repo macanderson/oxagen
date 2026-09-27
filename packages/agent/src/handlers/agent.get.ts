@@ -1,22 +1,28 @@
-// get_agent — one identity with its credentials, roles, hosts and the
-// definition of record. Field semantics are on the contract
-// (packages/oxagen/src/contracts/agent.get.ts).
+// get_agent — one agent with its credentials, roles, hosts, the runtime and
+// toolbelt it is bound to, and its versions (ADR-198). Field semantics are on
+// the contract (packages/oxagen/src/contracts/agent.get.ts).
 import { schema, withTenantDb, type Tx } from "@oxagen/database";
 import { HandlerError } from "@oxagen/oxagen";
 import { AGENT_CREDENTIAL_SCOPE_PURPOSE } from "@oxagen/oxagen/agent-credential";
+import { agentVersionBudget } from "@oxagen/oxagen/agent-version-config";
+import { isHandlerError } from "@oxagen/oxagen/handler-error";
+import { isManagedAgentType } from "@oxagen/oxagen/interactive-agent";
 import type {
   AgentGetInput,
   AgentGetOutput,
 } from "@oxagen/oxagen/contracts/agent.get";
-import { and, desc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import type { CapabilityContext } from "../types";
 import {
   activeCredentialsByAgent,
   agentKeysFor,
+  bindingRefs,
   identityStatus,
   liveHostsByAgentKey,
   resolveAgentIdentity,
   runFiguresByAgent,
+  runtimeRef,
+  toolbeltRef,
 } from "./_agent-identity";
 
 export type { AgentGetInput, AgentGetOutput };
@@ -149,47 +155,152 @@ async function hostsFor(
   }));
 }
 
-/** The latest version row that cached a commit, or null. */
-async function definitionFor(
+/** The most versions one read returns (`agentGet.output.versions`). */
+const VERSIONS_READ_LIMIT = 100;
+
+/** The agent's version rows, newest first. */
+async function versionRowsFor(
   tx: Tx,
   agentId: string,
-): Promise<AgentGetOutput["definition"]> {
+): Promise<
+  {
+    version: number;
+    changeKind: string;
+    runtimeId: string | null;
+    toolbeltId: string | null;
+    createdById: string;
+    createdAt: Date;
+  }[]
+> {
   const v = schema.agentVersions;
-  const [row] = await tx
+  return tx
     .select({
       version: v.version,
-      path: v.definitionPath,
-      digest: v.definitionDigest,
-      source: v.definitionSource,
-      commitSha: v.commitSha,
-      branch: v.branch,
-      pullRequestUrl: v.pullRequestUrl,
+      changeKind: v.changeKind,
+      runtimeId: v.runtimeId,
+      toolbeltId: v.toolbeltId,
+      createdById: v.createdById,
       createdAt: v.createdAt,
     })
     .from(v)
-    .where(and(eq(v.agentId, agentId), isNotNull(v.commitSha)))
+    .where(eq(v.agentId, agentId))
     .orderBy(desc(v.version))
+    .limit(VERSIONS_READ_LIMIT);
+}
+
+/** `usr_…` of each user id, for the version writers. */
+async function userPublicIds(
+  tx: Tx,
+  userIds: readonly string[],
+): Promise<Map<string, string>> {
+  const ids = [...new Set(userIds)];
+  if (ids.length === 0) return new Map();
+  const rows = await tx
+    .select({ id: schema.users.id, publicId: schema.users.publicId })
+    .from(schema.users)
+    .where(inArray(schema.users.id, ids));
+  return new Map(rows.map((r) => [r.id, r.publicId]));
+}
+
+const NO_LIMITS: AgentGetOutput["limits"] = {
+  perRun: null,
+  perDay: null,
+  containmentRequired: false,
+  invalid: false,
+};
+
+/** Integer micros in the one currency the budget is stored in. */
+function usd(micros: number | undefined): AgentGetOutput["limits"]["perRun"] {
+  return micros === undefined
+    ? null
+    : { micros: String(micros), currency: "USD" };
+}
+
+/**
+ * Whether the agent's current runtime requires the contained launcher
+ * (ADR-204). The host bundle reads the same column for a host bound to this
+ * runtime, and for a host that binds none. Like the bundle's read, this one
+ * keeps a deleted runtime's setting, because a host still bound to it keeps
+ * enforcing it.
+ */
+async function runtimeContainmentFor(
+  tx: Tx,
+  scope: { orgId: string; workspaceId: string },
+  runtimeId: string | null,
+): Promise<boolean> {
+  if (runtimeId === null) return false;
+  const [runtime] = await tx
+    .select({ containmentRequired: schema.runtimes.containmentRequired })
+    .from(schema.runtimes)
+    .where(
+      and(
+        eq(schema.runtimes.id, runtimeId),
+        eq(schema.runtimes.orgId, scope.orgId),
+        eq(schema.runtimes.workspaceId, scope.workspaceId),
+      ),
+    )
     .limit(1);
-  if (
-    !row ||
-    row.path === null ||
-    row.digest === null ||
-    row.source === null ||
-    row.commitSha === null ||
-    row.branch === null ||
-    row.pullRequestUrl === null
+  return runtime?.containmentRequired === true;
+}
+
+/**
+ * The limits the host bundle signs for this agent: the budget from the
+ * active version's config (ADR-198), read by the function the bundle reads
+ * it with (`resolveHostMandate`), and containment from the agent's current
+ * runtime (ADR-204). A budget that function refuses is reported as invalid,
+ * the state in which the host suspends governed actions. Containment is
+ * read apart from the budget, so an invalid budget does not hide it.
+ */
+async function limitsFor(
+  tx: Tx,
+  scope: { orgId: string; workspaceId: string },
+  agent: { id: string; runtimeId: string | null },
+): Promise<AgentGetOutput["limits"]> {
+  const containmentRequired = await runtimeContainmentFor(
+    tx,
+    scope,
+    agent.runtimeId,
+  );
+  const [active] = await tx
+    .select({ config: schema.agentVersions.config })
+    .from(schema.agents)
+    .innerJoin(
+      schema.agentVersions,
+      eq(schema.agentVersions.id, schema.agents.activeVersionId),
+    )
+    .where(eq(schema.agents.id, agent.id))
+    .limit(1);
+  if (!active) return { ...NO_LIMITS, containmentRequired };
+  try {
+    const budget = agentVersionBudget(active.config);
+    return {
+      perRun: usd(budget?.perRunMicros),
+      perDay: usd(budget?.perDayMicros),
+      containmentRequired,
+      invalid: false,
+    };
+  } catch (error) {
+    if (isHandlerError(error) && error.reason === "invalid_agent_config")
+      return { ...NO_LIMITS, containmentRequired, invalid: true };
+    throw error;
+  }
+}
+
+const CHANGE_KINDS = new Set<AgentGetOutput["versions"][number]["changeKind"]>([
+  "registered",
+  "runtime_changed",
+  "toolbelt_changed",
+  "legacy",
+]);
+
+function changeKindOf(
+  stored: string,
+): AgentGetOutput["versions"][number]["changeKind"] {
+  return CHANGE_KINDS.has(
+    stored as AgentGetOutput["versions"][number]["changeKind"],
   )
-    return null;
-  return {
-    version: row.version,
-    path: row.path,
-    digest: row.digest,
-    commitSha: row.commitSha,
-    branch: row.branch,
-    pullRequestUrl: row.pullRequestUrl,
-    source: row.source,
-    committedAt: row.createdAt.toISOString(),
-  };
+    ? (stored as AgentGetOutput["versions"][number]["changeKind"])
+    : "legacy";
 }
 
 export async function agentGetHandler(
@@ -212,7 +323,31 @@ export async function agentGetHandler(
       ? await rolesFor(tx, scope, row.principalId)
       : [];
     const hosts = agentKey ? await hostsFor(tx, scope, agentKey) : [];
-    const definition = await definitionFor(tx, row.id);
+    const versionRows = await versionRowsFor(tx, row.id);
+    const bindings = await bindingRefs(tx, scope, {
+      runtimeIds: [row.runtimeId, ...versionRows.map((v) => v.runtimeId)],
+      toolbeltIds: [row.toolbeltId, ...versionRows.map((v) => v.toolbeltId)],
+    });
+    const writers = await userPublicIds(
+      tx,
+      versionRows.map((v) => v.createdById),
+    );
+    // A legacy version recorded no binding, so it names none rather than
+    // borrowing the agent's current one.
+    const versions = versionRows.map((v) => ({
+      version: v.version,
+      changeKind: changeKindOf(v.changeKind),
+      runtime:
+        v.runtimeId === null
+          ? null
+          : runtimeRef(bindings.runtimes.get(v.runtimeId)),
+      toolbelt:
+        v.toolbeltId === null
+          ? null
+          : toolbeltRef(bindings.toolbelts.get(v.toolbeltId)),
+      createdBy: writers.get(v.createdById) ?? null,
+      createdAt: v.createdAt.toISOString(),
+    }));
     const figures = (
       await runFiguresByAgent(
         tx,
@@ -239,6 +374,7 @@ export async function agentGetHandler(
         description: row.description,
         agentKey,
         harness: row.harness as AgentGetOutput["identity"]["harness"],
+        managed: isManagedAgentType(row.agentType),
         principalId: row.principalPublicId,
         operatorId: row.operatorPublicId,
         status: identityStatus(row, held),
@@ -246,10 +382,20 @@ export async function agentGetHandler(
         firstFrameAt: iso(figures?.earliestStartedAt ?? null),
         costCenter: row.costCenter,
       },
+      runtime:
+        row.runtimeId === null
+          ? null
+          : runtimeRef(bindings.runtimes.get(row.runtimeId)),
+      toolbelt: toolbeltRef(
+        row.toolbeltId === null
+          ? bindings.allTools
+          : bindings.toolbelts.get(row.toolbeltId),
+      ),
+      versions,
+      limits: await limitsFor(tx, scope, row),
       credentials,
       roles,
       hosts,
-      definition,
     };
   });
 }

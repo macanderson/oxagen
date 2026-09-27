@@ -13,7 +13,9 @@
 //
 // A later transcript page is read here too, through the `runs.transcript`
 // port rather than the kernel seam, so the Run page maps every page of a
-// transcript with one mapper (ADR-167, ADR-182).
+// transcript with one mapper (ADR-167, ADR-182). So is the delivery report,
+// through `runs.commands`, the read a control frame's inspector makes.
+import { agentInterjectionAnswer } from "@oxagen/oxagen/contracts/agent.interjection.answer";
 import { workspaceSettingsWrite } from "@oxagen/oxagen/contracts/workspace.settings.write";
 import {
   COMMAND_REASON_MAX,
@@ -26,14 +28,16 @@ import { runExportGet } from "@oxagen/oxagen/contracts/run.export.get";
 import { runSeal } from "@oxagen/oxagen/contracts/run.seal";
 import { runFork } from "@oxagen/oxagen/contracts/run.fork";
 import { runSummarize } from "@oxagen/oxagen/contracts/run.summarize";
-import { TRANSCRIPT_ENTRY_DEFAULT } from "@oxagen/oxagen/contracts/run.transcript.get";
-import type {
-  RunTranscript,
-  TranscriptKind,
-  TranscriptText,
-  TranscriptZoom,
+import { z } from "zod";
+import {
+  type RunTranscript,
+  TRANSCRIPT_ENTRY_DEFAULT,
+  TRANSCRIPT_ENTRY_MAX,
+  type TranscriptKind,
+  type TranscriptText,
+  type TranscriptZoom,
 } from "@/data/contracts/run";
-import { DeliveryMode } from "@/data/contracts/runs";
+import { type CommandReport, DeliveryMode } from "@/data/contracts/runs";
 import { dataSource } from "@/data/source";
 import type { ActionResult, ContractOutput } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
@@ -254,19 +258,40 @@ export async function readTranscriptPage(
   q: {
     kinds?: readonly TranscriptKind[];
     after?: string;
+    /** A cursor a backward page carried: the read answers the page ahead of it. */
+    before?: string;
+    /** `"end"` reads the run's last page, as a live run's tab opens on it. */
+    from?: "start" | "end";
     text?: TranscriptText;
     query?: string;
+    /**
+     * Entries on the page, at most the contract's `TRANSCRIPT_ENTRY_MAX`. A
+     * live view catches up with the run at the most a page holds, since
+     * every page costs a whole refold on the server (#4340); a replay and a
+     * page ahead read `TRANSCRIPT_PAGE`. A search reads the default.
+     */
+    limit?: number;
   },
 ): Promise<ActionResult<RunTranscript>> {
   const ctx = await requireViewer(org, ws);
   const read = await dataSource().runs.transcript(ctx, runId, zoom, {
     kinds: [...(q.kinds ?? [])],
-    limit: TRANSCRIPT_ENTRY_DEFAULT,
+    limit: Math.min(q.limit ?? TRANSCRIPT_ENTRY_DEFAULT, TRANSCRIPT_ENTRY_MAX),
     ...(q.after === undefined ? {} : { after: q.after }),
+    ...(q.before === undefined ? {} : { before: q.before }),
+    ...(q.from === undefined ? {} : { from: q.from }),
     ...(q.text === undefined ? {} : { text: q.text }),
     ...(q.query === undefined ? {} : { query: q.query }),
   });
   if (!read.ok && read.reason === "error" && read.code === "invalid_input") {
+    if (q.before !== undefined) {
+      return {
+        ok: false,
+        reason: "invalid",
+        code: "invalid_cursor",
+        field: "before",
+      };
+    }
     return q.after === undefined
       ? { ok: false, reason: "invalid", code: "invalid_query", field: "query" }
       : {
@@ -277,6 +302,54 @@ export async function readTranscriptPage(
         };
   }
   return readToActionResult(read);
+}
+
+/** Which commands a delivery report reads: one run's, or the ids a broadcast returned. */
+export type ReportQuery = { runId: string } | { commandIds: string[] };
+
+/**
+ * The most command ids one report reads. The port reads them 100 at a time,
+ * so this bounds a report at ten reads. A broadcast reaches at most 100
+ * agents, and 1,000 ids leaves each of them ten runs in flight.
+ */
+const REPORT_IDS_MAX = 1_000;
+
+/** The query as the report reads it, or null for anything else a caller sent. */
+function reportQueryOf(q: unknown): ReportQuery | null {
+  if (typeof q !== "object" || q === null) return null;
+  if ("runId" in q && !("commandIds" in q) && typeof q.runId === "string")
+    return { runId: q.runId };
+  if (
+    "commandIds" in q &&
+    !("runId" in q) &&
+    Array.isArray(q.commandIds) &&
+    q.commandIds.length > 0 &&
+    q.commandIds.length <= REPORT_IDS_MAX &&
+    q.commandIds.every((id: unknown) => typeof id === "string")
+  )
+    return { commandIds: q.commandIds };
+  return null;
+}
+
+/**
+ * The delivery report (`list_commands`, #2953), read when a person opens it:
+ * one run's commands, or the commands one broadcast queued, each with its
+ * status, the mode asked for and the mode carried, and the frame an applied
+ * one landed on. It reads the `runs.commands` port, the read and the mapper a
+ * control frame's inspector uses, so the two cannot disagree about a command.
+ * A query that names neither a run nor a command id is refused as `invalid`
+ * before anything is read.
+ */
+export async function readDeliveryReport(
+  org: string,
+  ws: string,
+  q: ReportQuery,
+): Promise<ActionResult<CommandReport>> {
+  const ctx = await requireViewer(org, ws);
+  const query = reportQueryOf(q);
+  if (query === null)
+    return { ok: false, reason: "invalid", code: "report_query", field: "q" };
+  return readToActionResult(await dataSource().runs.commands(ctx, query));
 }
 
 /**
@@ -343,6 +416,71 @@ export async function bisectRuns(
         },
       }
     : result;
+}
+
+/** What answering a question did, exactly as `answer_interjection` answers it. */
+export type AnsweredInterjection = ContractOutput<
+  typeof agentInterjectionAnswer
+>;
+
+/**
+ * The two answers a person can give a repository question: link the
+ * repository to the workspace the host named, or create a workspace for it
+ * under the name and slug the person typed.
+ */
+export type InterjectionChoice =
+  | { path: "link" }
+  | { path: "create"; name: string; slug: string };
+
+const Choice = z.discriminatedUnion("path", [
+  z.object({ path: z.literal("link") }).strict(),
+  z
+    .object({ path: z.literal("create"), name: z.string(), slug: z.string() })
+    .strict(),
+]);
+
+/**
+ * Answer the question a host held this run on (`answer_interjection`,
+ * #3941). The answer is one governed write: it links the repository or
+ * creates the workspace, records the answer on the question with a receipt,
+ * and queues the release the host reads to let the run go on.
+ *
+ * A server action is an endpoint, so the choice is parsed here rather than
+ * trusted from the page: anything but the two shapes comes back as `invalid`
+ * on `path` before the kernel runs. The name and slug are trimmed and then
+ * left to the contract, which `kernelWrite` parses before the handler runs,
+ * so a slug the contract refuses comes back naming `create.slug`. Every
+ * refusal the handler makes keeps its reason as the code: someone answered
+ * first, the run stopped waiting, or the viewer's role cannot link or create.
+ */
+export async function answerInterjection(
+  org: string,
+  ws: string,
+  interjectionId: string,
+  choice: InterjectionChoice,
+): Promise<ActionResult<AnsweredInterjection>> {
+  const ctx = await requireViewer(org, ws);
+  const parsed = Choice.safeParse(choice);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      reason: "invalid",
+      code: "interjection_choice",
+      field: "path",
+    };
+  }
+  const picked = parsed.data;
+  return kernelWrite(
+    ctx,
+    agentInterjectionAnswer,
+    picked.path === "create"
+      ? {
+          interjectionId,
+          path: "create",
+          create: { name: picked.name.trim(), slug: picked.slug.trim() },
+        }
+      : { interjectionId, path: "link" },
+  );
 }
 
 export async function setRunEnrichment(

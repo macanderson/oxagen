@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 // The Runtimes pages over a fake DataSource (roadmap mockups/pages/runtimes.md):
 // the list and one runtime in every state the spec lists, the dialogs the page
-// opens, and the one write, with an axe check in every render. A value no
-// store records renders as not recorded and names its gap.
+// opens, the named runtimes and Add a runtime (ADR-198), a named runtime's page
+// and its Containment switch (ADR-204), and the writes, with an axe check in
+// every render. A value no store records renders as not recorded and names its
+// gap.
 import {
   cleanup,
   fireEvent,
@@ -21,12 +23,15 @@ import { phoneWidth } from "@/test/phone";
 import {
   enrollment,
   memberList,
+  namedRuntime,
+  namedRuntimeList,
   runtimeAgent,
   runtimeList,
   runtimesSource,
 } from "./runtimes.builders";
 
 const refresh = vi.fn();
+const push = vi.fn();
 const notFound = vi.fn(() => {
   throw new Error("NEXT_NOT_FOUND");
 });
@@ -36,12 +41,17 @@ vi.mock("next/link", () => ({
   ),
 }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh }),
+  useRouter: () => ({ push, replace: vi.fn(), refresh }),
   notFound: () => notFound(),
 }));
 const unenrollRuntime = vi.fn<(...args: unknown[]) => unknown>();
+const createRuntime = vi.fn<(...args: unknown[]) => unknown>();
+const setRuntimeContainment = vi.fn<(...args: unknown[]) => unknown>();
 vi.mock("./actions", () => ({
   unenrollRuntime: (...args: unknown[]) => unenrollRuntime(...args),
+  createRuntime: (...args: unknown[]) => createRuntime(...args),
+  setRuntimeContainment: (...args: unknown[]) =>
+    setRuntimeContainment(...args),
 }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
@@ -112,7 +122,10 @@ const goldButtons = () =>
 
 beforeEach(() => {
   unenrollRuntime.mockReset();
+  createRuntime.mockReset();
+  setRuntimeContainment.mockReset();
   refresh.mockReset();
+  push.mockReset();
 });
 
 afterEach(async () => {
@@ -156,10 +169,10 @@ describe("Runtimes, loaded", () => {
         "The hosts agents run on, and what each host’s seam earns.",
       ),
     ).toBeInTheDocument();
-    const enroll = screen.getByTestId("runtimes-enroll");
-    expect(enroll).toHaveTextContent("Enroll a runtime");
-    expect(enroll).toHaveAttribute("href", "/acme/core-platform/register/name");
-    expect(goldButtons()).toEqual([enroll]);
+    const add = screen.getByTestId("runtimes-add");
+    expect(add).toHaveTextContent("Add a runtime");
+    expect(add).toHaveAttribute("aria-haspopup", "dialog");
+    expect(goldButtons()).toEqual([add]);
 
     const tiles = screen.getByTestId("runtimes-tiles");
     expect(
@@ -517,10 +530,10 @@ describe("Runtimes, not loaded", () => {
     expect(empty).toHaveTextContent(
       "Until a host enrolls, an agent has an identity and a toolbelt but no hook is installed. Its runs are graded observe, and no report can say more.",
     );
-    // The header keeps Enroll a runtime; the empty state's copy of it is the gold one.
-    const enrolls = screen.getAllByTestId("runtimes-enroll");
-    expect(enrolls).toHaveLength(2);
-    expect(goldButtons()).toEqual([nth(enrolls, 1, "enroll link")]);
+    // The header keeps Add a runtime; the empty state's copy of it is the gold one.
+    const adds = screen.getAllByTestId("runtimes-add");
+    expect(adds).toHaveLength(2);
+    expect(goldButtons()).toEqual([nth(adds, 1, "add button")]);
     fireEvent.click(
       within(empty).getByRole("button", { name: "Show the CLI path" }),
     );
@@ -748,7 +761,7 @@ describe("One runtime", () => {
     expect(
       within(rollback).getByRole("button", { name: "Unenroll" }),
     ).toBeInTheDocument();
-    expect(goldButtons()).toEqual([screen.getByTestId("runtimes-enroll")]);
+    expect(goldButtons()).toEqual([screen.getByTestId("runtimes-add")]);
   });
 
   it("says a host with no agent records nothing, and reads no agent", async () => {
@@ -779,6 +792,28 @@ describe("One runtime", () => {
     expect(screen.getByTestId("runtime-operator")).toHaveTextContent(
       /^Operator$/,
     );
+  });
+
+  it("draws the operator's avatar from the roster in the hover card", async () => {
+    await renderDetail({
+      list: runtimeList([enrollment()]),
+      members: memberList([
+        {
+          id: "usr_marcusbell",
+          name: "Marcus Bell",
+          email: "marcus@acme.test",
+          avatarUrl: "https://avatars.example.com/marcus.png",
+          role: "owner",
+          joinedAt: "2026-01-05T09:00:00.000Z",
+        },
+      ]),
+    });
+    fireEvent.mouseEnter(screen.getByTestId("runtime-operator"));
+    expect(
+      screen
+        .getByTestId("operator-card")
+        .querySelector('[data-avatar="image"]'),
+    ).toHaveAttribute("src", "https://avatars.example.com/marcus.png");
   });
 
   it("lists the five command hooks when the collector read them back", async () => {
@@ -1056,6 +1091,462 @@ describe("Runtimes on a phone", () => {
       expect(link).toHaveAttribute("data-touch-target");
       expect(getComputedStyle(link).minHeight).toBe("44px");
       expect(link.className).toContain("after:inset-0");
+    } finally {
+      phone.restore();
+    }
+  });
+});
+
+describe("Named runtimes and Add a runtime (ADR-198)", () => {
+  it("lists each named runtime with its agents by harness, and Register an agent on one with none", async () => {
+    await renderList({
+      list: runtimeList([enrollment()]),
+      named: namedRuntimeList([
+        namedRuntime(),
+        namedRuntime({
+          id: "rtm_gpubox",
+          name: "GPU box",
+          slug: "gpu-box",
+          agents: [],
+          liveHosts: 0,
+          lastSeenAt: null,
+        }),
+      ]),
+    });
+    const rows = screen.getAllByTestId("named-runtime");
+    expect(rows.map((row) => row.getAttribute("data-runtime"))).toEqual([
+      "rtm_macslaptop",
+      "rtm_gpubox",
+    ]);
+    const laptop = nth(rows, 0, "laptop row");
+    expect(laptop).toHaveTextContent("Mac's laptop");
+    expect(laptop).toHaveTextContent("mac-claude");
+    expect(laptop).toHaveTextContent("Claude Code");
+    const gpu = nth(rows, 1, "gpu row");
+    expect(gpu).toHaveTextContent("No agent yet");
+    expect(gpu).toHaveTextContent("never");
+    expect(
+      within(gpu).getByRole("link", { name: "Register an agent on GPU box" }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/core-platform/register/name?runtime=rtm_gpubox",
+    );
+  });
+
+  it("lists a named runtime with no enrollment rather than the empty state", async () => {
+    await renderList({ list: runtimeList([]), named: namedRuntimeList() });
+    expect(screen.queryByTestId("runtimes-empty")).toBeNull();
+    expect(screen.getAllByTestId("named-runtime")).toHaveLength(1);
+  });
+
+  it("names the runtimes read's failure in its panel and keeps the page (negative)", async () => {
+    await renderList({
+      list: runtimeList([enrollment()]),
+      named: readError("runtimes_unavailable", 503),
+    });
+    expect(screen.queryByTestId("named-runtime")).toBeNull();
+    expect(screen.getByRole("region", { name: "Runtimes" })).toHaveTextContent(
+      "runtimes_unavailable",
+    );
+  });
+
+  it("fills the slug from the name, dropping apostrophes, until the slug is edited", async () => {
+    await renderList({ list: runtimeList([enrollment()]) });
+    fireEvent.click(screen.getByTestId("runtimes-add"));
+    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    fireEvent.change(within(dialog).getByLabelText("Name"), {
+      target: { value: "Mac's Laptop" },
+    });
+    expect(within(dialog).getByLabelText("Slug")).toHaveValue("macs-laptop");
+    fireEvent.change(within(dialog).getByLabelText("Slug"), {
+      target: { value: "laptop-one" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Name"), {
+      target: { value: "Mac's Laptop 2" },
+    });
+    expect(within(dialog).getByLabelText("Slug")).toHaveValue("laptop-one");
+  });
+
+  it("names the runtime and goes straight on to registering its agent", async () => {
+    createRuntime.mockResolvedValue({
+      ok: true,
+      value: {
+        id: "rtm_macslaptop",
+        name: "Mac's Laptop",
+        slug: "macs-laptop",
+        register: "/acme/core-platform/register/name?runtime=rtm_macslaptop",
+      },
+    });
+    await renderList({ list: runtimeList([enrollment()]) });
+    fireEvent.click(screen.getByTestId("runtimes-add"));
+    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    fireEvent.change(within(dialog).getByLabelText("Name"), {
+      target: { value: "Mac's Laptop" },
+    });
+    fireEvent.click(within(dialog).getByTestId("runtimes-add-submit"));
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith(
+        "/acme/core-platform/register/name?runtime=rtm_macslaptop",
+      );
+    });
+    expect(createRuntime).toHaveBeenCalledWith("acme", "core-platform", {
+      name: "Mac's Laptop",
+      slug: "macs-laptop",
+    });
+  });
+
+  it("names a taken slug on the Slug field and writes nothing else (negative)", async () => {
+    createRuntime.mockResolvedValue({
+      ok: false,
+      reason: "conflict",
+      code: "runtime_slug_taken",
+    });
+    await renderList({ list: runtimeList([enrollment()]) });
+    fireEvent.click(screen.getByTestId("runtimes-add"));
+    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    fireEvent.change(within(dialog).getByLabelText("Name"), {
+      target: { value: "GPU box" },
+    });
+    fireEvent.click(within(dialog).getByTestId("runtimes-add-submit"));
+    await waitFor(() => {
+      expect(within(dialog).getByLabelText("Slug")).toHaveAttribute(
+        "aria-invalid",
+        "true",
+      );
+    });
+    expect(within(dialog).getByLabelText("Slug")).toHaveAccessibleDescription(
+      /Another runtime in this workspace has this slug/,
+    );
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("asks for the contained launcher only when the person ticks it (ADR-204)", async () => {
+    createRuntime.mockResolvedValue({
+      ok: true,
+      value: {
+        id: "rtm_gpubox",
+        name: "GPU box",
+        slug: "gpu-box",
+        register: "/acme/core-platform/register/name?runtime=rtm_gpubox",
+      },
+    });
+    await renderList({ list: runtimeList([enrollment()]) });
+    fireEvent.click(screen.getByTestId("runtimes-add"));
+    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    fireEvent.change(within(dialog).getByLabelText("Name"), {
+      target: { value: "GPU box" },
+    });
+    const contained = within(dialog).getByRole("checkbox", {
+      name: "Require the contained launcher",
+    });
+    expect(contained).not.toBeChecked();
+    expect(contained).toHaveAccessibleDescription(
+      "Every agent on this runtime then runs only under the contained launcher. You can change this later on the runtime’s page.",
+    );
+    fireEvent.click(contained);
+    expect(contained).toBeChecked();
+    fireEvent.click(within(dialog).getByTestId("runtimes-add-submit"));
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith(
+        "/acme/core-platform/register/name?runtime=rtm_gpubox",
+      );
+    });
+    expect(createRuntime).toHaveBeenCalledWith("acme", "core-platform", {
+      name: "GPU box",
+      slug: "gpu-box",
+      containmentRequired: true,
+    });
+  });
+
+  it("opens a named runtime's page from its name", async () => {
+    await renderList({
+      list: runtimeList([enrollment()]),
+      named: namedRuntimeList(),
+    });
+    const row = nth(screen.getAllByTestId("named-runtime"), 0, "laptop row");
+    expect(row).toHaveClass("relative", "cursor-pointer");
+    const open = within(row).getByRole("link", { name: "Open Mac's laptop" });
+    expect(open).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runtimes/rtm_macslaptop",
+    );
+    expect(open).toHaveTextContent(/^Mac's laptop$/);
+    expect(open.className).toContain("after:inset-0");
+  });
+
+  it("refuses an empty name without calling the write (negative)", async () => {
+    await renderList({ list: runtimeList([enrollment()]) });
+    fireEvent.click(screen.getByTestId("runtimes-add"));
+    const dialog = await screen.findByTestId("runtimes-add-dialog");
+    fireEvent.click(within(dialog).getByTestId("runtimes-add-submit"));
+    expect(await within(dialog).findByText("Name the runtime.")).toBeVisible();
+    expect(createRuntime).not.toHaveBeenCalled();
+  });
+
+  it("offers a member no Add a runtime and no Register an agent (negative)", async () => {
+    const { source } = runtimesSource({
+      list: runtimeList([enrollment()]),
+      named: namedRuntimeList([namedRuntime({ agents: [] })]),
+    });
+    const element = await Runtimes({
+      ctx: unsafeMint(WsCtx, {
+        userId: "usr_marcusbell",
+        orgId: "7a000000-0000-4000-8000-0000000000a1",
+        orgSlug: "acme",
+        orgName: "Acme Robotics",
+        orgRole: "member",
+        workspaceId: "7b000000-0000-4000-8000-000000000001",
+        wsSlug: "core-platform",
+        wsName: "Core platform",
+        wsRole: "member",
+      }),
+      source,
+      org: "acme",
+      ws: "core-platform",
+      viewerName: "Marcus Bell",
+    });
+    render(<IntlProvider>{element}</IntlProvider>);
+    expect(screen.queryByTestId("runtimes-add")).toBeNull();
+    expect(screen.queryByTestId("runtime-register-agent")).toBeNull();
+  });
+});
+
+describe("A named runtime's page and its containment (ADR-204)", () => {
+  const memberCtx = unsafeMint(WsCtx, {
+    userId: "usr_marcusbell",
+    orgId: "7a000000-0000-4000-8000-0000000000a1",
+    orgSlug: "acme",
+    orgName: "Acme Robotics",
+    orgRole: "member",
+    workspaceId: "7b000000-0000-4000-8000-000000000001",
+    wsSlug: "core-platform",
+    wsName: "Core platform",
+    wsRole: "member",
+  });
+
+  /** One named runtime's page, for the owner unless another viewer is given. */
+  async function renderNamed(
+    runtime = namedRuntime(),
+    viewer = ctx,
+    options: { container?: HTMLElement } = {},
+  ) {
+    const { source } = runtimesSource({
+      list: runtimeList([enrollment()]),
+      named: namedRuntimeList([runtime]),
+    });
+    const element = await Runtime({
+      ctx: viewer,
+      source,
+      org: "acme",
+      ws: "core-platform",
+      runtime: runtime.id,
+      viewerName: "Marcus Bell",
+    });
+    render(<IntlProvider>{element}</IntlProvider>, options);
+  }
+
+  const containmentSwitch = () =>
+    screen.getByRole("switch", { name: "Require the contained launcher" });
+
+  it("draws the runtime's facts and, for an owner, the Containment switch", async () => {
+    await renderNamed();
+    expect(screen.getByTestId("runtime-back")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runtimes",
+    );
+    const facts = screen.getByRole("region", { name: "Mac's laptop" });
+    expect(
+      within(facts)
+        .getAllByRole("term")
+        .map((dt) => dt.textContent),
+    ).toEqual(["Slug", "Agents", "Live hosts", "Last seen"]);
+    expect(screen.getByTestId("fact-slug")).toHaveTextContent("macs-laptop");
+    expect(screen.getByTestId("fact-agents")).toHaveTextContent(
+      "mac-claudeClaude Code",
+    );
+    expect(screen.getByTestId("fact-live-hosts")).toHaveTextContent(/^1$/);
+    expect(
+      screen.getByTestId("fact-last-seen").querySelector("time"),
+    ).toHaveAttribute("datetime", "2026-09-23T09:12:44.000Z");
+
+    const containment = screen.getByRole("region", { name: "Containment" });
+    expect(containment).toHaveTextContent(
+      "When containment is required, every agent on this runtime runs only under the contained launcher, including agents registered later.",
+    );
+    expect(containment).toHaveTextContent(
+      "A change reaches each host on its next bundle fetch.",
+    );
+    const toggle = within(containment).getByRole("switch", {
+      name: "Require the contained launcher",
+    });
+    expect(toggle).not.toBeChecked();
+    expect(toggle).toHaveAccessibleDescription("Not required");
+    // The host page's panels belong to an enrollment, not to a named runtime.
+    expect(screen.queryByRole("region", { name: "Rollback" })).toBeNull();
+    expect(setRuntimeContainment).not.toHaveBeenCalled();
+  });
+
+  it("requires the contained launcher through update_runtime and reads the page again", async () => {
+    setRuntimeContainment.mockResolvedValue({
+      ok: true,
+      value: { containmentRequired: true },
+    });
+    await renderNamed();
+    fireEvent.click(containmentSwitch());
+    await waitFor(() => {
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
+    expect(setRuntimeContainment).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "rtm_macslaptop",
+      true,
+    );
+    expect(screen.queryByTestId("runtime-containment-failure")).toBeNull();
+  });
+
+  it("turns a required containment off by sending false", async () => {
+    setRuntimeContainment.mockResolvedValue({
+      ok: true,
+      value: { containmentRequired: false },
+    });
+    await renderNamed(namedRuntime({ containmentRequired: true }));
+    const toggle = containmentSwitch();
+    expect(toggle).toBeChecked();
+    expect(toggle).toHaveAccessibleDescription("Required");
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
+    expect(setRuntimeContainment).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "rtm_macslaptop",
+      false,
+    );
+  });
+
+  it("names a refusal and leaves the switch where the record has it (negative)", async () => {
+    setRuntimeContainment.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "authz_denied",
+    });
+    await renderNamed();
+    fireEvent.click(containmentSwitch());
+    expect(
+      await screen.findByTestId("runtime-containment-failure"),
+    ).toHaveTextContent(
+      "Your roles do not let you change containment. An organization Owner or Admin can. Nothing was changed.",
+    );
+    expect(containmentSwitch()).not.toBeChecked();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("says a runtime that is gone no longer exists (negative)", async () => {
+    setRuntimeContainment.mockResolvedValue({
+      ok: false,
+      reason: "not_found",
+      code: "runtime_not_found",
+    });
+    await renderNamed();
+    fireEvent.click(containmentSwitch());
+    expect(
+      await screen.findByTestId("runtime-containment-failure"),
+    ).toHaveTextContent("This runtime no longer exists. Nothing was changed.");
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("names a write that never answered (negative)", async () => {
+    setRuntimeContainment.mockRejectedValue(new Error("network down"));
+    await renderNamed();
+    fireEvent.click(containmentSwitch());
+    expect(
+      await screen.findByTestId("runtime-containment-failure"),
+    ).toHaveTextContent(
+      "This write could not be answered: action_failed. Nothing was changed.",
+    );
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("shows a member the value read-only, with no switch and no Add a runtime (negative)", async () => {
+    await renderNamed(namedRuntime({ containmentRequired: true }), memberCtx);
+    const containment = screen.getByRole("region", { name: "Containment" });
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(within(containment).getByRole("term")).toHaveTextContent(
+      "Contained launcher",
+    );
+    const value = screen.getByTestId("runtime-containment-value");
+    expect(value).toHaveTextContent(/^Required/);
+    expect(value).toHaveTextContent(
+      "An organization Owner or Admin can change it.",
+    );
+    expect(screen.queryByTestId("runtimes-add")).toBeNull();
+    cleanup();
+    await renderNamed(namedRuntime(), memberCtx);
+    expect(screen.getByTestId("runtime-containment-value")).toHaveTextContent(
+      /^Not required/,
+    );
+  });
+
+  it("is a 404 for a named runtime the workspace does not hold", async () => {
+    await expect(
+      renderDetail(
+        { list: runtimeList([enrollment()]), named: namedRuntimeList() },
+        "rtm_nosuchruntime",
+      ),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("reads the one runtime by its id, so a runtime past the list's 500 cap still opens", async () => {
+    const calls = await renderDetail(
+      { list: runtimeList([enrollment()]), named: namedRuntimeList() },
+      "rtm_macslaptop",
+    );
+    expect(calls.named).toEqual(["rtm_macslaptop"]);
+    expect(screen.getByRole("region", { name: "Containment" })).toBeVisible();
+  });
+
+  it("is a 404 for a malformed runtime id, with no read (negative)", async () => {
+    const { source, calls } = runtimesSource({
+      list: runtimeList([enrollment()]),
+      named: namedRuntimeList(),
+    });
+    await expect(
+      Runtime({
+        ctx,
+        source,
+        org: "acme",
+        ws: "core-platform",
+        runtime: "rtm_Not-An-Id",
+        viewerName: "Marcus Bell",
+      }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(calls.named).toEqual([]);
+  });
+
+  it("replaces the body with the error state when the runtimes read fails (negative)", async () => {
+    await renderDetail(
+      {
+        list: runtimeList([enrollment()]),
+        named: readError("runtimes_unavailable", 503),
+      },
+      "rtm_macslaptop",
+    );
+    expect(screen.getByTestId("runtimes-error")).toBeInTheDocument();
+    expect(screen.queryByRole("switch")).toBeNull();
+  });
+
+  it("keeps the switch's row a 44px touch target on a phone", async () => {
+    const phone = phoneWidth();
+    try {
+      await renderNamed(namedRuntime(), ctx, { container: phone.container });
+      const label = within(phone.container)
+        .getByRole("switch", { name: "Require the contained launcher" })
+        .closest("label");
+      if (label === null) throw new Error("the switch has no label");
+      expect(label).toHaveAttribute("data-touch-target");
+      expect(getComputedStyle(label).minHeight).toBe("44px");
     } finally {
       phone.restore();
     }

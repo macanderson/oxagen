@@ -11,6 +11,7 @@ import type { SQL } from "drizzle-orm";
 import { schema } from "@oxagen/database";
 import { digestJcs } from "@oxagen/run-evidence";
 import {
+  deferredAttester,
   digestOfCanonicalJson,
   RETENTION_CONTENT_CLASSES,
   validateInlineEventPayload,
@@ -76,6 +77,7 @@ import {
   ASSISTANT_RETENTION_POLICY,
   assistantRunStore,
   AssistantRunNotRecordedError,
+  type ContextProjector,
   HISTORY_SUMMARY_PROVIDER,
   openAssistantRun,
   readAssistantAgentState,
@@ -100,8 +102,15 @@ const AGENT = {
 };
 
 interface World {
-  agent: { principalId: string | null; activeVersionId: string | null } | null;
+  agent: {
+    principalId: string | null;
+    activeVersionId: string | null;
+    /** `agent.agents.status`; the identity read refuses `archived`. */
+    status?: string;
+  } | null;
   operatorPrincipalId: string | null;
+  /** The linked `oxagen.assistant` principal's status; null: no such row. */
+  assistantPrincipalStatus: string | null;
   retention: { id: string; publicId: string; digest: string } | null;
   /** Whether the principal link UPDATE matches (false: another turn won). */
   linkWins: boolean;
@@ -129,10 +138,17 @@ function makeTx(world: World, captured: Captured) {
     }
     if (table === schema.agentVersions)
       return [{ id: AGENT.versionId, config: { graph: { mode: "read" } } }];
-    if (table === schema.principals)
+    if (table === schema.principals) {
+      // The operator read pins the asking user; the assistant principal's
+      // status read pins the principal's id alone.
+      if (!/"parent_user_id" = \$/.test(sql))
+        return world.assistantPrincipalStatus
+          ? [{ status: world.assistantPrincipalStatus }]
+          : [];
       return world.operatorPrincipalId
         ? [{ id: world.operatorPrincipalId }]
         : [];
+    }
     if (table === schema.retentionPolicyVersions)
       return world.retention ? [world.retention] : [];
     throw new Error("unexpected table");
@@ -204,6 +220,7 @@ function setup(overrides: Partial<World> = {}): {
   const world: World = {
     agent: { principalId: "asst-principal", activeVersionId: AGENT.versionId },
     operatorPrincipalId: "human-principal",
+    assistantPrincipalStatus: "active",
     retention: {
       id: "rpv-row",
       publicId: "rpv_0123456789abcdef0123",
@@ -411,16 +428,19 @@ describe("resolveAssistantRunIdentity", () => {
       retention: { rowId: "rpv-row", publicId: "rpv_0123456789abcdef0123" },
     });
     expect(identity.agentVersionChecksum).toMatch(/^sha256:[0-9a-f]{64}$/);
-    // The agent read pins the workspace and the managed slug; the operator
-    // read pins the org, the user and kind = human.
+    // The agent read pins the workspace and the managed slug; the assistant
+    // principal's status read pins its id; the operator read pins the org,
+    // the user and kind = human.
     const agentRead = captured.selects.find((s) => s.table === schema.agents)!;
     expect(agentRead.where).toMatch(/"workspace_id" = \$/);
     expect(agentRead.where).toMatch(/"slug" = \$/);
-    const operatorRead = captured.selects.find(
+    const [assistantRead, operatorRead] = captured.selects.filter(
       (s) => s.table === schema.principals,
-    )!;
-    expect(operatorRead.where).toMatch(/"parent_user_id" = \$/);
-    expect(operatorRead.where).toMatch(/"kind" = \$/);
+    );
+    expect(assistantRead!.where).toMatch(/"id" = \$/);
+    expect(assistantRead!.where).not.toMatch(/"parent_user_id"/);
+    expect(operatorRead!.where).toMatch(/"parent_user_id" = \$/);
+    expect(operatorRead!.where).toMatch(/"kind" = \$/);
     expect(captured.inserts).toHaveLength(0);
   });
 
@@ -505,6 +525,57 @@ describe("resolveAssistantRunIdentity", () => {
     ).rejects.toMatchObject({
       name: "AssistantRunNotRecordedError",
       reason: "assistant_agent_missing",
+    });
+  });
+
+  // #4350: a person retired the assistant agent from the Agents page, which
+  // archived it and suspended its principal. Every turn then failed deep in
+  // the authorization snapshot as a bare `ledger_refused`. The identity read
+  // names the cause before anything is written.
+  it("refuses a retired assistant agent before it writes anything", async () => {
+    const { captured } = setup({
+      agent: {
+        principalId: "asst-principal",
+        activeVersionId: AGENT.versionId,
+        status: "archived",
+      },
+    });
+    await expect(
+      mocks.withTenantDb((tx: never) =>
+        resolveAssistantRunIdentity(tx, SCOPE, USER),
+      ),
+    ).rejects.toMatchObject({
+      name: "AssistantRunNotRecordedError",
+      reason: "assistant_agent_inactive",
+      message: expect.stringContaining("retired"),
+    });
+    expect(captured.inserts).toEqual([]);
+    expect(captured.updates).toEqual([]);
+  });
+
+  it("refuses when the assistant's principal is suspended", async () => {
+    const { captured } = setup({ assistantPrincipalStatus: "suspended" });
+    await expect(
+      mocks.withTenantDb((tx: never) =>
+        resolveAssistantRunIdentity(tx, SCOPE, USER),
+      ),
+    ).rejects.toMatchObject({
+      name: "AssistantRunNotRecordedError",
+      reason: "assistant_agent_inactive",
+      message: expect.stringContaining("suspended"),
+    });
+    expect(captured.inserts).toEqual([]);
+  });
+
+  it("refuses when the assistant's linked principal row is gone", async () => {
+    setup({ assistantPrincipalStatus: null });
+    await expect(
+      mocks.withTenantDb((tx: never) =>
+        resolveAssistantRunIdentity(tx, SCOPE, USER),
+      ),
+    ).rejects.toMatchObject({
+      reason: "assistant_agent_inactive",
+      message: expect.stringContaining("missing"),
     });
   });
 
@@ -1087,6 +1158,51 @@ describe("openAssistantRun", () => {
     ]);
   });
 
+  it("records the request's context window on the intention (ADR-200)", async () => {
+    // The witness for #3894: before it, the frame said which model was asked
+    // and nothing about what the request carried, so no read could draw the
+    // window a model call was sent.
+    setupRun();
+    const ledger = fakeStore();
+    const recorder = await openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      originMessageId: MESSAGE,
+      surface: "chat",
+      instruction: "hi",
+      maxSteps: 4,
+      toolAllowlist: ["recall_memory"],
+      store: ledger.store,
+    });
+    const window = {
+      blocks: [
+        { kind: "system" as const, bytes: 1204, items: 1 },
+        { kind: "steering" as const, bytes: 310, items: 1 },
+        { kind: "tools" as const, bytes: 9120, items: 14 },
+        { kind: "context" as const, bytes: 412, items: 2 },
+        { kind: "conversation" as const, bytes: 90, items: 1 },
+      ],
+    };
+
+    await recorder.modelCallStarted({
+      seq: 1,
+      requestId: "prov-1-0",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      window,
+    });
+
+    expect(ledger.batches[1]!.events[0]!.payload).toEqual({
+      engine_seq: 1,
+      model_call_id: "prov-1-0",
+      role: "worker",
+      provider: "oxagen",
+      model: "anthropic/claude-sonnet-4",
+      window,
+    });
+  });
+
   // seal() reads the chain once and then takes a seq. An append that arrived
   // during that await would chain onto the older value and could take a seq at
   // or past the terminal event's, which the store refuses. No caller reaches it
@@ -1136,6 +1252,74 @@ describe("openAssistantRun", () => {
       }),
     ).rejects.toMatchObject({ reason: "operator_principal_missing" });
     expect(mocks.snapshot).not.toHaveBeenCalled();
+  });
+});
+
+describe("the seal projects the run's context windows (ADR-200)", () => {
+  async function openRun(
+    ledger: ReturnType<typeof fakeStore>,
+    projectContext?: ContextProjector,
+    originMessageId: string | null = MESSAGE,
+  ) {
+    setupRun();
+    return openAssistantRun({
+      ...SCOPE,
+      userId: USER,
+      originMessageId,
+      surface: "chat",
+      instruction: "what went into the window?",
+      maxSteps: 4,
+      toolAllowlist: ["recall_memory"],
+      store: ledger.store,
+      ...(projectContext ? { projectContext } : {}),
+    });
+  }
+
+  it("hands the projection the run, the turn's message and a reader of the sealed ledger", async () => {
+    const ledger = fakeStore();
+    const project = vi.fn<ContextProjector>(async () => 1);
+    const recorder = await openRun(ledger, project);
+
+    await recorder.seal({ status: "completed", text: "done" });
+    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(1));
+
+    const [args, readEvents] = project.mock.calls[0] ?? [];
+    expect(args).toEqual({
+      runId: "run-uuid",
+      runPublicId: "arun_0123456789abcdef012345",
+      executionRef: MESSAGE,
+    });
+    // The reader is the store's own, so the projection reads what was sealed.
+    const read = vi.spyOn(ledger.store, "readAttemptEventsSince");
+    await readEvents?.("run-uuid", "0", 500);
+    expect(read).toHaveBeenCalledWith("run-uuid", "0", 500);
+  });
+
+  it("anchors a run no message asked for on its own public id", async () => {
+    const project = vi.fn<ContextProjector>(async () => 0);
+    const recorder = await openRun(fakeStore(), project, null);
+    await recorder.seal({ status: "completed", text: "done" });
+    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(1));
+    expect(project.mock.calls[0]?.[0].executionRef).toBe(
+      "arun_0123456789abcdef012345",
+    );
+  });
+
+  it("seals the run when the projection fails, and projects nothing without one (negative)", async () => {
+    const ledger = fakeStore();
+    const project = vi.fn<ContextProjector>(async () => {
+      throw new Error("neo4j unavailable");
+    });
+    await (await openRun(ledger, project)).seal({
+      status: "completed",
+      text: "done",
+    });
+    expect(ledger.seals).toHaveLength(1);
+    await vi.waitFor(() => expect(project).toHaveBeenCalledTimes(1));
+
+    const bare = fakeStore();
+    await (await openRun(bare)).seal({ status: "completed", text: "done" });
+    expect(bare.seals).toHaveLength(1);
   });
 });
 
@@ -1662,5 +1846,11 @@ describe("assistantRunStore", () => {
     const options = storeOptions.at(-1);
     expect(options?.["bodies"]).toBeDefined();
     expect(options?.["archive"]).toBeDefined();
+  });
+
+  it("signs its seals with the process-wide attester (ADR-195)", () => {
+    storeOptions.length = 0;
+    assistantRunStore();
+    expect(storeOptions.at(-1)?.["attester"]).toBe(deferredAttester);
   });
 });

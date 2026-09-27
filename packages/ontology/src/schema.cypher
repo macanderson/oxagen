@@ -71,6 +71,15 @@ CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (n:Evidence) REQUIRE n.id IS UNI
 //   DEMOTED              :Demotion -> :Memory (auditable class demotion)
 //   DISPATCHED           :SubagentFanout -> :SubagentRun (direct child)
 //   SPAWNED_FANOUT       :SubagentRun -> :SubagentFanout (nested dispatch)
+//   USED_CONTEXT         :Execution -> :ContextManifest (one per measured window, ADR-200)
+
+// --- Context-window lineage (ADR-200) ---
+// A best-effort projection at seal of the context windows a run's model
+// requests recorded: one :ContextManifest per window, carrying block kinds and
+// item counts, never bytes or tokens. See
+// packages/agent/src/dispatch/context-projection.ts.
+CREATE CONSTRAINT context_manifest_public_id IF NOT EXISTS FOR (n:ContextManifest) REQUIRE n.publicId IS UNIQUE;
+CREATE INDEX context_manifest_org IF NOT EXISTS FOR (n:ContextManifest) ON (n.orgId);
 
 // --- Org-scope range indexes for fast filtering ---
 // Runtime writes/filters nodes on `orgId` (see packages/agent/src/memory/neo4j.ts
@@ -113,13 +122,15 @@ CREATE INDEX entity_node_connection IF NOT EXISTS FOR (n:EntityNode) ON (n.conne
 CREATE INDEX ingestion_org_source IF NOT EXISTS FOR (n:SourceConnection) ON (n.orgId);
 
 // --- Vector indexes (spec §8.1) ---
+// 1024 dims = voyage-4-large (#4148). migrate.ts drops an index of any other
+// size before these statements run, since IF NOT EXISTS never resizes one.
 CREATE VECTOR INDEX document_embedding_index IF NOT EXISTS
 FOR (n:Document) ON (n.embedding)
-OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+OPTIONS { indexConfig: { `vector.dimensions`: 1024, `vector.similarity_function`: 'cosine' } };
 
 CREATE VECTOR INDEX memory_embedding_index IF NOT EXISTS
 FOR (n:AgentMemory) ON (n.embedding)
-OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+OPTIONS { indexConfig: { `vector.dimensions`: 1024, `vector.similarity_function`: 'cosine' } };
 
 // Retire the automatic EngramMemory projection without deleting legacy nodes.
 DROP INDEX engram_memory_org IF EXISTS;
@@ -127,7 +138,7 @@ DROP INDEX engram_memory_embedding_index IF EXISTS;
 
 CREATE VECTOR INDEX message_embedding_index IF NOT EXISTS
 FOR (n:Message) ON (n.embedding)
-OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+OPTIONS { indexConfig: { `vector.dimensions`: 1024, `vector.similarity_function`: 'cosine' } };
 
 // Retire semantic execution-summary projection/recall without deleting
 // :Execution nodes used by the explicit memory-citation model.
@@ -136,10 +147,9 @@ DROP INDEX execution_embedding_index IF EXISTS;
 // Universal vector index for all ingested entity nodes.
 // All customer ontology nodes carry the :EntityNode label regardless of entityType.
 // Workspace-scoped queries pre-filter by workspaceId before vector search.
-// 1536 dims = text-embedding-3-small via Vercel AI Gateway.
 CREATE VECTOR INDEX entity_node_embedding_index IF NOT EXISTS
 FOR (n:EntityNode) ON (n.embedding)
-OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+OPTIONS { indexConfig: { `vector.dimensions`: 1024, `vector.similarity_function`: 'cosine' } };
 
 // Retired launch surface: detailed source-code graphs stay checkout-local.
 // Drop legacy server indexes/constraints; derived nodes can be removed by the
@@ -188,10 +198,10 @@ CREATE INDEX graph_node_label IF NOT EXISTS FOR (n:GraphNode) ON (n.label);
 // db.index.vector.queryNodes('graph_node_embedding_index', ...) call performs
 // natural-language semantic search across customer data, agent
 // memories, executions, messages and documents at once, post-filtered by
-// orgId/workspaceId + optional is_system/label. 1536 dims = text-embedding-3-small.
+// orgId/workspaceId + optional is_system/label. 1024 dims = voyage-4-large.
 CREATE VECTOR INDEX graph_node_embedding_index IF NOT EXISTS
 FOR (n:GraphNode) ON (n.embedding)
-OPTIONS { indexConfig: { `vector.dimensions`: 1536, `vector.similarity_function`: 'cosine' } };
+OPTIONS { indexConfig: { `vector.dimensions`: 1024, `vector.similarity_function`: 'cosine' } };
 
 // --- One-time relabel: :KnowledgeNode -> :GraphNode + is_system backfill ---------
 // Each statement is gated `WHERE NOT n:GraphNode` so it scans only un-migrated nodes

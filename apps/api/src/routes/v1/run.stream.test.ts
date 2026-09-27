@@ -199,6 +199,44 @@ describe("GET /runs/:run_id/stream", () => {
     });
   });
 
+  // A-06: the Run page opened the stream with no cursor, so the route sent the
+  // run from its first frame, 200 to a read, before anything new arrived. The
+  // page now opens it after the last frame its transcript read folded
+  // (`frameCursor`); this counts the reads each way on a live run of 8,000.
+  it("reaches the head of an 8,000-frame live run in one read from the reader's last frame, and in 41 from the start (A-06)", async () => {
+    const RUN_FRAMES = 8_000;
+    /** `get_run` over the run by cursor: the next 200 frames, and a seal at the head so the stream ends. */
+    const serveRun = () =>
+      mocks.invoke.mockImplementation(
+        (_name: string, input: { framesAfter?: string }) => {
+          const from =
+            input.framesAfter === undefined
+              ? 0
+              : Number(input.framesAfter.slice("cur_".length)) + 1;
+          if (from >= RUN_FRAMES)
+            return Promise.resolve(page([], null, "sealed"));
+          const seqs = Array.from(
+            { length: Math.min(200, RUN_FRAMES - from) },
+            (_, i) => String(from + i),
+          );
+          return Promise.resolve(page(seqs, `cur_${seqs.at(-1)}`));
+        },
+      );
+
+    serveRun();
+    const replay = await open();
+    expect(ids(replay.text)).toHaveLength(RUN_FRAMES);
+    expect(mocks.invoke).toHaveBeenCalledTimes(41);
+
+    vi.clearAllMocks();
+    mocks.capabilityContext.mockReturnValue(CTX);
+    serveRun();
+    const head = await open({}, `?after=cur_${RUN_FRAMES - 1}`);
+    // Nothing the reader holds is sent again, and one read reaches the head.
+    expect(ids(head.text)).toEqual([]);
+    expect(mocks.invoke).toHaveBeenCalledTimes(1);
+  });
+
   it("answers a refusal before the stream is open as a status, not as a 200 (negative)", async () => {
     mocks.invoke.mockRejectedValueOnce(
       new HandlerError({ code: "not_found", reason: "run_not_found" }),
@@ -401,6 +439,111 @@ describe("GET /runs/:run_id/stream", () => {
       );
       expect(await statusOf(code), code).toBe(500);
     }
+  });
+
+  // #3823: a subagent records on a chain of its own, so its frames are not
+  // frames past the run's own cursor. The heads are the only signal.
+  describe("subagent chains (#3823)", () => {
+    const chains = (cursor: string) => ({
+      cursor,
+      heads: [
+        {
+          sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d0",
+          parentSessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c0de",
+          subagentId: "agent-1",
+          subagentType: "Explore",
+          spawnCallId: "toolu_A",
+          lastSeq: "0",
+          frameCount: 1,
+        },
+      ],
+      complete: true,
+    });
+    const withChains = (p: ReturnType<typeof page>, cursor: string) => ({
+      ...p,
+      chains: chains(cursor),
+    });
+
+    it("writes the heads when the stream opens and each time they move, and waits on the last one it wrote", async () => {
+      mocks.invoke
+        .mockResolvedValueOnce(withChains(page(["1"], "cur_1"), "h:1"))
+        // Only a subagent recorded: no frame on the run's own chain.
+        .mockResolvedValueOnce(withChains(page([], null), "h:2"))
+        // Nothing moved: no second event for the same heads.
+        .mockResolvedValueOnce(withChains(page([], null), "h:2"))
+        .mockResolvedValueOnce(withChains(page([], null, "sealed"), "h:2"));
+      const { status, text } = await open();
+      expect(status).toBe(200);
+      expect(events(text)).toEqual(["run", "chains", "chains", "done"]);
+      expect(text).toContain(
+        `event: chains\ndata: ${JSON.stringify({ chains: chains("h:2") })}\n\n`,
+      );
+      // The first read waits on nothing; each read after it waits on the
+      // last heads the route wrote.
+      expect(mocks.invoke.mock.calls[0]?.[1]).not.toHaveProperty(
+        "chainsAfter",
+      );
+      expect(
+        mocks.invoke.mock.calls.slice(1).map((call) => call[1].chainsAfter),
+      ).toEqual(["h:1", "h:2", "h:2"]);
+      // The run's own cursor is untouched by a subagent's frame.
+      expect(mocks.invoke.mock.calls[3]?.[1]).toMatchObject({
+        framesAfter: "cur_1",
+      });
+    });
+
+    it("keeps a stream open past its idle deadline while only a subagent records", async () => {
+      const clock = vi.spyOn(Date, "now");
+      let now = 0;
+      clock.mockImplementation(() => now);
+      mocks.invoke
+        .mockResolvedValueOnce(withChains(page(["1"], "cur_1"), "h:1"))
+        .mockImplementationOnce(async () => {
+          now = 240_000;
+          return withChains(page([], null), "h:2");
+        })
+        .mockImplementationOnce(async () => {
+          now = 480_000;
+          return withChains(page([], null), "h:3");
+        })
+        .mockResolvedValueOnce(withChains(page([], null, "sealed"), "h:3"));
+      try {
+        const { text } = await open();
+        expect(text).toContain('"reason":"sealed"');
+        expect(text).not.toContain('"reason":"idle"');
+        expect(mocks.invoke).toHaveBeenCalledTimes(4);
+      } finally {
+        clock.mockRestore();
+      }
+    });
+
+    it("closes idle when the heads stay where they were (negative)", async () => {
+      const clock = vi.spyOn(Date, "now");
+      let now = 0;
+      clock.mockImplementation(() => now);
+      mocks.invoke
+        .mockResolvedValueOnce(withChains(page(["1"], "cur_1"), "h:1"))
+        .mockImplementationOnce(async () => {
+          now = 300_000;
+          return withChains(page([], null), "h:1");
+        });
+      try {
+        const { text } = await open();
+        expect(events(text)).toEqual(["run", "chains", "done"]);
+        expect(text).toContain('"reason":"idle","cursor":"cur_1"');
+      } finally {
+        clock.mockRestore();
+      }
+    });
+
+    it("writes no heads for a ledger run, whose read answers none (negative)", async () => {
+      mocks.invoke
+        .mockResolvedValueOnce(page(["1"], "cur_1"))
+        .mockResolvedValueOnce(page([], null, "sealed"));
+      const { text } = await open();
+      expect(events(text)).toEqual(["run", "done"]);
+      expect(mocks.invoke.mock.calls[1]?.[1].chainsAfter).toBeUndefined();
+    });
   });
 
   it("refuses a run id the contract does not accept (negative)", async () => {

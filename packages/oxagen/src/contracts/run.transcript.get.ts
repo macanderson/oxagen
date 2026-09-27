@@ -50,7 +50,19 @@
  * `counts` and `figures` are counted over the whole run read, whatever the
  * chips or the query, so a reader's counts and figures never move when it
  * narrows the transcript. They share the read's frame cap: when `complete`
- * is false they cover a prefix of the run.
+ * is false they cover a prefix of the run. They ride only a read that starts
+ * at the run's first frame (#3823): a read from a cursor reads a window of
+ * the run and carries neither, so a reader keeps the ones its first read
+ * returned. A read with `query` set is not windowed: it searches the run up
+ * to the read's frame cap, as it did before, so a search still reaches
+ * entries past the page a reader loaded.
+ *
+ * The cursor is opaque. It names the opening of the last entry sent, the
+ * latest frame any page delivered, when the read was taken, and where the
+ * window it reads from starts. An entry that grew since it was sent, or that
+ * a subagent chain reported late, is sent again once, ahead of the new
+ * entries (#4048, #4083). A cursor written in an older form is still
+ * accepted.
  *
  * A `digest_only` recording produces halves with `text: null` and
  * `fidelity: "digest_only"`, and the transcript says so on every half; the
@@ -338,7 +350,8 @@ export const transcriptBodySchema = z
     /**
      * The subagent chain the frame was recorded on; absent on the run's own
      * chain. A subagent's chain is numbered from 0 like the run's, so `seq`
-     * names a frame only together with this.
+     * names a frame only together with this. `get_run_frame_body` opens the
+     * frame when passed both.
      */
     sessionUuid: z.string().uuid().optional(),
     /** The frame's recorded type or kind. */
@@ -398,6 +411,21 @@ export const transcriptDecisionSchema = z
     harness: z.boolean(),
     /** RFC 3339. */
     at: z.string().datetime(),
+    /**
+     * The rule ids or permission patterns that matched, in evaluation order
+     * (#3971). Empty when the frame names none.
+     */
+    rules: z.array(z.string().min(1).max(512)).max(64).default([]),
+    /**
+     * The taint labels a producer assessed on the call's inputs (#3971). Null
+     * when no producer assessed taint, and an empty list when one assessed
+     * the inputs as untainted.
+     */
+    taint: z
+      .array(z.string().min(1).max(128))
+      .max(32)
+      .nullable()
+      .default(null),
   })
   .strict();
 
@@ -473,7 +501,8 @@ export const transcriptEntrySchema = z
      * their own, each numbered from 0, and the transcript places each chain
      * directly after the `subagent_start` that spawned it. `seq` and `endSeq`
      * are positions on that chain, so they name a frame only together with
-     * `sessionUuid`; `get_run_frame_body` reads the run's own chain.
+     * `sessionUuid`. `get_run_frame_body` opens such a frame when passed
+     * `sessionUuid` beside `seq`.
      */
     subagent: z
       .object({
@@ -570,12 +599,14 @@ export const transcriptEntrySchema = z
     node: transcriptNodeSchema.nullable().optional(),
     /**
      * True when the entry has nothing to show a reader beyond its frames: a
-     * prompt or reply with no words to show, a reply that repeats words the
-     * reader was just shown (`echoOf`), a model step that kept no reply and
-     * carried no cost, tokens or effort, or an event with no decision and no
-     * failure. `counts` counts no quiet entry. The words are read at `steps`
-     * only: at `everything` a prompt or reply is quiet only when it kept no
-     * half at all, so one whose words are blank or repeat is not quiet there.
+     * prompt or reply whose body was read and holds no words, a reply that
+     * repeats words the reader was just shown (`echoOf`), a model step that
+     * kept no reply, carried no cost, tokens or effort, and did not fail, or
+     * an event with no decision and no failure. A body that could not be
+     * read does not make its entry quiet. `counts` counts no quiet entry.
+     * The words are read at `steps` only: at `everything` a prompt or reply
+     * is quiet only when it kept no half at all, so one whose words are
+     * blank or repeat is not quiet there.
      */
     quiet: z.boolean().optional(),
     /**
@@ -584,6 +615,12 @@ export const transcriptEntrySchema = z
      * its entry's outcome is null too.
      */
     outcome: transcriptOutcomeSchema.nullable().optional(),
+    /**
+     * True when `counts.errors` counts the entry: it failed, it was refused,
+     * or a frame in it answers the errors chip. A reader marks the entry's
+     * rows failed by this and keeps no rule of its own.
+     */
+    error: z.boolean().optional(),
     /** The approval a parked call waits on (`apr_…`); null otherwise. */
     approvalId: z.string().nullable().optional(),
     /**
@@ -637,8 +674,9 @@ export const transcriptEntrySchema = z
 const entryCount = z.number().int().nonnegative();
 
 /**
- * One count for every chip. The server counts each chip on every read, so
- * none is optional: a reader never has to guess a missing count as zero.
+ * One count for every chip. A read that carries counts (one from the run's
+ * first frame) counts each chip, so none is optional: a reader never has to
+ * guess a missing count as zero.
  */
 const transcriptKindCountsSchema = z
   .object(
@@ -809,10 +847,10 @@ export const runTranscriptGet = registerCapability({
   name: "get_run_transcript",
   domain: "run",
   description:
-    "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost. A read can search the entries, and carries the run's counts and figures.",
+    "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost. A read can search the entries. A read with no `after` cursor carries the run's counts and figures.",
   mode: "sync",
-  surfaces: ["api", "mcp"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  surfaces: ["api", "mcp", "cli"],
+  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
@@ -831,8 +869,23 @@ export const runTranscriptGet = registerCapability({
         .array(transcriptKindSchema)
         .max(TRANSCRIPT_KINDS.length)
         .default([]),
-      /** An entry cursor from an earlier read; omitted reads from the start. */
+      /**
+       * An entry cursor from an earlier read; omitted reads from the start.
+       * A read from a cursor carries no `counts` or `figures`. With no
+       * `query`, it reads a window of the run past the cursor.
+       */
       after: z.string().max(256).optional(),
+      /**
+       * A `before` cursor from an earlier read: the page is the `limit`
+       * entries just ahead of the entry it names. Not sent with `after`.
+       */
+      before: z.string().max(256).optional(),
+      /**
+       * Where a read with no cursor opens: at the run's first entry (`start`,
+       * the default) or at its last `limit` entries (`end`), as a view that
+       * follows a live run opens. Not sent with a cursor.
+       */
+      from: z.enum(["start", "end"]).optional(),
       /** How much of each body to carry; omitted takes the zoom's cap. */
       text: transcriptTextSchema.optional(),
       /**
@@ -857,14 +910,35 @@ export const runTranscriptGet = registerCapability({
       /** The point to continue from; null when nothing lies past this page. */
       cursor: z.string().nullable(),
       /**
+       * The point to read the page ahead of this one from, on a read `from`
+       * the end or `before` a cursor; null when this page opens at the run's
+       * first entry. Absent on a read from the start or after a cursor.
+       */
+      before: z.string().nullable().optional(),
+      /**
        * False when the run has more frames than the read could fold, so the
        * transcript is a prefix and the caller says so rather than presenting
-       * it as the whole.
+       * it as the whole. It describes what this read reached: a read from a
+       * cursor that reached the run's last frame answers true.
        */
       complete: z.boolean(),
-      /** The run's entries counted at this zoom, whatever the chips. */
+      /**
+       * The `get_run` frame cursor of the last frame on the run's own chain
+       * that this read folded; null when it folded none. A reader that follows
+       * the run opens its stream after this frame, so the stream sends only
+       * the frames this read did not hold rather than the whole run again.
+       */
+      frameCursor: z.string().nullable().optional(),
+      /**
+       * The run's entries counted at this zoom, whatever the chips. Present
+       * only on a read that starts at the run's first frame, and absent on a
+       * read from a cursor.
+       */
       counts: transcriptCountsSchema.optional(),
-      /** The run's figures, whatever the zoom, chips or query. */
+      /**
+       * The run's figures, whatever the zoom, chips or query. Present only
+       * on a read that starts at the run's first frame, like `counts`.
+       */
       figures: transcriptFiguresSchema.optional(),
       /** What the query found; absent on a read with no query. */
       search: transcriptSearchSchema.optional(),

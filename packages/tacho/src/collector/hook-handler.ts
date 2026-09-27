@@ -33,17 +33,28 @@ import {
   type TachoHarness,
 } from "../wire";
 import {
+  type CedarCallInput,
   type Evaluation,
   type EvaluationInput,
   evaluatePreToolUse,
   type MatchContext,
 } from "../host/bundle";
+import type { BuiltinAction } from "../policy/builtins";
+import type { CedarRuntime } from "../policy/runtime";
 import {
   rememberHookId,
   sawHookId,
   type SessionRecord,
   type SessionRegistry,
 } from "./registry";
+import type { RepositoryRemote } from "./git-facts";
+import {
+  expireInterjection,
+  INTERJECTION_TIMED_OUT_TEXT,
+  isBound,
+  raiseInterjection,
+  showsRefusedPrompt,
+} from "./interjection";
 
 export interface PolicyView {
   bundle: PolicyBundle;
@@ -110,6 +121,21 @@ export interface HookHandlerDeps {
     command: string,
     cwd: string | undefined,
   ) => Promise<TachoCredentialBasis>;
+  /**
+   * The repository a session runs in, read from its `origin` remote
+   * (`readRepositoryRemote` in `./git-facts`): the digests the host looks
+   * for in the bundle's `unbound_repo.bound_remote_digests`, and the name the
+   * create path proposes (#3941). Absent, or answering undefined, the host
+   * asks nothing.
+   */
+  repositoryRemote?: (cwd: string) => Promise<RepositoryRemote | undefined>;
+  /**
+   * Cedar's evaluator (`loadCedarRuntime` in `../policy/runtime`), called
+   * only when the bundle carries Cedar policies, so a host without them
+   * never loads it. Absent, the hook decides with the permission rules
+   * alone.
+   */
+  cedar?: () => Promise<CedarRuntime | null>;
 }
 
 export interface HookReplay {
@@ -175,6 +201,11 @@ function policyFacts(
     deny_generation_org: view.denyGeneration.org,
     deny_generation_ws: view.denyGeneration.workspace,
     ...(evaluation.rule !== undefined ? { policy_rule: evaluation.rule } : {}),
+    // The list is what the Run page's Policy tab prints (#3971); the joined
+    // `policy_rule` stays for older readers and `tacho.session_commands`.
+    ...(evaluation.rules !== undefined && evaluation.rules.length > 0
+      ? { policy_rules: evaluation.rules.slice(0, 64) }
+      : {}),
     ...(evaluation.capability_id !== undefined
       ? { capability_id: evaluation.capability_id }
       : {}),
@@ -252,6 +283,67 @@ function operatorBlock(
     };
   }
   return undefined;
+}
+
+/**
+ * The block a prompt meets: an operator's (`operatorBlock`), or the question
+ * the host is holding the session's loop to ask (#3941). The question refuses
+ * prompts only. A `SessionStart` answered `continue: false` would end the
+ * session, where the hold only waits for an answer.
+ */
+function promptBlock(
+  view: PolicyView,
+  record: SessionRecord,
+): { code: string; reason: string; source: "human" | "bundle" } | undefined {
+  const block = operatorBlock(view, record);
+  if (block !== undefined) return block;
+  const held = record.control.interjection;
+  if (held === undefined) return undefined;
+  return { code: "interjection_open", reason: held.question, source: "bundle" };
+}
+
+/**
+ * Ask, once per session, whether its repository is one the organisation
+ * bound, and hold the loop on the question when it is not (#3941). Runs at
+ * the session's first prompt and never again, so a later or replayed prompt
+ * raises no second question.
+ *
+ * Nothing is asked when the verified bundle carries no `unbound_repo` (the
+ * workspace's skills are off, or the control plane predates the field), for
+ * a harness that cannot show a refused prompt's reason, once the chain has
+ * recorded a model call, for a replay (the harness went on without the
+ * daemon), or when the directory has no `origin` or the remote is bound.
+ * Answers the `repo.unknown` and `control.interject` frames it sealed.
+ */
+async function askAboutRepository(
+  record: SessionRecord,
+  view: PolicyView,
+  deps: HookHandlerDeps,
+  replay: HookReplay | undefined,
+  fields: { hook_event_name: string; attrs: Record<string, string> },
+): Promise<TachoEvent[]> {
+  if (record.control.repoChecked === true) return [];
+  record.control.repoChecked = true;
+  const clause = view.verified ? view.bundle.unbound_repo : undefined;
+  if (
+    clause === undefined ||
+    replay !== undefined ||
+    !showsRefusedPrompt(record.harness) ||
+    record.recorder.hasModelCall ||
+    record.cwd === undefined ||
+    deps.repositoryRemote === undefined
+  )
+    return [];
+  let remote: RepositoryRemote | undefined;
+  try {
+    remote = await deps.repositoryRemote(record.cwd);
+  } catch {
+    // A failed read proves nothing about the repository, and the prompt it
+    // was read for must still go through.
+    remote = undefined;
+  }
+  if (remote === undefined || isBound(clause, remote)) return [];
+  return raiseInterjection(record, clause, remote, deps.now(), fields) ?? [];
 }
 
 /**
@@ -632,6 +724,37 @@ export async function handleHookEvent(
  * builder, reading the view it is handed, is what stops the parent and the
  * subagent drifting apart again.
  */
+/**
+ * What Cedar needs to decide a call in this session, or undefined when the
+ * bundle carries no Cedar policies. A custom agent is picked by its name,
+ * and any other session by its harness. Claude Code names the subagent a
+ * call runs in (`agent_type`), and that name is the call's skill. Cursor's
+ * own tool name reaches Cedar as `context.harness_tool`.
+ */
+async function cedarCallFor(
+  view: PolicyView,
+  record: SessionRecord,
+  input: HookInput,
+  deps: HookHandlerDeps,
+  action?: BuiltinAction,
+): Promise<CedarCallInput | undefined> {
+  if (view.bundle.cedar === undefined) return undefined;
+  const custom = record.customAgent;
+  return {
+    // No loader means no evaluator: a mutating tool is refused rather than
+    // decided without the bundle's policies.
+    runtime: deps.cedar !== undefined ? await deps.cedar() : null,
+    harness: custom !== undefined ? "custom" : (record.harness ?? "claude-code"),
+    ...(custom !== undefined ? { agent: custom } : {}),
+    ...(input.agent_type !== undefined ? { skill: input.agent_type } : {}),
+    ...(action !== undefined ? { action } : {}),
+    // Cursor's adapter renames `Shell` to `Bash` and keeps Cursor's own name here.
+    ...(typeof input["cursor_tool_name"] === "string"
+      ? { harness_tool: input["cursor_tool_name"] }
+      : {}),
+  };
+}
+
 function evaluationRequestFor(
   view: PolicyView,
   toolName: string,
@@ -639,8 +762,10 @@ function evaluationRequestFor(
   record: SessionRecord,
   deps: HookHandlerDeps,
   input: HookInput,
+  cedar?: CedarCallInput,
 ): EvaluationInput {
   return {
+    ...(cedar !== undefined ? { cedar } : {}),
     bundle: view.bundle,
     bundleVerified: view.verified,
     toolName,
@@ -908,12 +1033,39 @@ async function routeHook(
     }
 
     case "UserPromptSubmit": {
-      const block = operatorBlock(view, record);
+      // The repository question (#3941). A held question whose deadline
+      // passed is answered `deny` by the host before the prompt is judged,
+      // and the first prompt asks it. Either seals its frames ahead of the
+      // prompt they decide.
+      const questionFields = {
+        hook_event_name: "UserPromptSubmit",
+        attrs: replayed,
+      };
+      const timedOut =
+        replay === undefined
+          ? expireInterjection(record, deps.now(), questionFields)
+          : undefined;
+      if (timedOut !== undefined) events.push(...timedOut);
+      const asked = await askAboutRepository(
+        record,
+        view,
+        deps,
+        replay,
+        questionFields,
+      );
+      events.push(...asked);
+      const block = promptBlock(view, record);
+      // Why the session goes on without skills, told once, at the prompt
+      // the timeout let through.
+      const notice =
+        block === undefined && timedOut !== undefined
+          ? INTERJECTION_TIMED_OUT_TEXT
+          : undefined;
       const messages =
         block === undefined &&
         replay === undefined &&
         deliversMessages(record.harness, input.hook_event_name)
-          ? drainMessages(record, deps, events)
+          ? drainMessages(record, deps, events, notice?.length ?? 0)
           : [];
       // A person prompting supersedes a resume's continuation.
       if (block === undefined) record.control.resumeOwed = undefined;
@@ -939,16 +1091,18 @@ async function routeHook(
           record,
         };
       }
+      const context = [
+        ...(notice !== undefined ? [notice] : []),
+        ...messages.map((m) => m.text),
+      ];
       return {
         events,
         response:
-          messages.length > 0
+          context.length > 0
             ? {
                 hookSpecificOutput: {
                   hookEventName: "UserPromptSubmit",
-                  additionalContext: messages
-                    .map((m) => m.text)
-                    .join(CONTEXT_JOINER),
+                  additionalContext: context.join(CONTEXT_JOINER),
                 },
               }
             : {},
@@ -970,6 +1124,7 @@ async function routeHook(
             record,
             deps,
             input,
+            await cedarCallFor(currentView, record, input, deps),
           ),
         );
       if (evaluation.decision === "defer" && deps.refreshBundle) {
@@ -983,6 +1138,7 @@ async function routeHook(
             record,
             deps,
             input,
+            await cedarCallFor(currentView, record, input, deps),
           ),
         );
       }
@@ -1119,6 +1275,9 @@ async function routeHook(
                 : {}),
             }
           : undefined;
+      // Every harness's subagent start is one Cedar action, whatever the
+      // harness calls the tool.
+      const startSubagent: BuiltinAction = "builtin__start_subagent";
       let currentView = view;
       let evaluation =
         replay?.evaluation ??
@@ -1130,6 +1289,7 @@ async function routeHook(
             record,
             deps,
             input,
+            await cedarCallFor(currentView, record, input, deps, startSubagent),
           ),
         );
       if (evaluation.decision === "defer" && deps.refreshBundle) {
@@ -1143,6 +1303,7 @@ async function routeHook(
             record,
             deps,
             input,
+            await cedarCallFor(currentView, record, input, deps, startSubagent),
           ),
         );
       }

@@ -139,3 +139,85 @@ describe("the Changes panel's Base row", () => {
     expect(within(panel).getAllByText(/github_unreachable/)).toHaveLength(1);
   });
 });
+
+type Release = NonNullable<RunWork["releases"]>[number];
+
+function release(overrides: Partial<Release> = {}): Release {
+  return {
+    repository: {
+      host: "github.com",
+      owner: "acme",
+      name: "platform",
+      url: "https://github.com/acme/platform",
+      connected: true,
+    },
+    tag: "v4.11.0",
+    name: "4.11.0",
+    url: "https://github.com/acme/platform/releases/tag/untagged-1",
+    state: "draft",
+    frameSeq: "31",
+    observedAt: "2026-09-26T10:00:05.000Z",
+    ...overrides,
+  };
+}
+
+/** The terms the Changes panel's definition list draws, in order. */
+function terms(panel: HTMLElement): (string | null)[] {
+  return within(panel)
+    .getAllByRole("term")
+    .map((node) => node.textContent);
+}
+
+// #3890: pages/run.md draws Release only when one exists, "v4.11.0 · draft".
+describe("the Changes panel's Release row", () => {
+  it("draws each release the session created, linked, with GitHub's state", async () => {
+    const panel = await renderChanges(
+      readOk(
+        runWork({
+          releases: [
+            release(),
+            release({
+              tag: "v4.10.4",
+              state: "published",
+              url: "https://github.com/acme/platform/releases/tag/v4.10.4",
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(terms(panel)).toContain("Release");
+    const row = within(screen.getByTestId("run-release"));
+    expect(row.getByRole("link", { name: "v4.11.0" })).toHaveAttribute(
+      "href",
+      "https://github.com/acme/platform/releases/tag/untagged-1",
+    );
+    expect(row.getByText("draft")).toBeTruthy();
+    expect(row.getByRole("link", { name: "v4.10.4" })).toBeTruthy();
+    expect(row.getByText("published")).toBeTruthy();
+    await expectNoAxe(panel);
+  });
+
+  it("says the state was not read when GitHub gave none, and links nothing it cannot name (negative)", async () => {
+    const panel = await renderChanges(
+      readOk(runWork({ releases: [release({ state: null, url: null })] })),
+    );
+    const row = within(screen.getByTestId("run-release"));
+    expect(row.getByText("v4.11.0")).toBeTruthy();
+    expect(row.queryByRole("link")).toBeNull();
+    expect(row.getByText("state not read")).toBeTruthy();
+    await expectNoAxe(panel);
+  });
+
+  it("draws no Release row when the session created no release (negative)", async () => {
+    for (const work of [
+      runWork({ releases: [] }),
+      // An answer from before the field says nothing about releases.
+      runWork({ releases: undefined }),
+    ]) {
+      const panel = await renderChanges(readOk(work));
+      expect(terms(panel)).not.toContain("Release");
+      expect(screen.queryByTestId("run-release")).toBeNull();
+      cleanup();
+    }
+  });
+});

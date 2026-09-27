@@ -54,6 +54,18 @@ export function sumClasses(rows: readonly { tokens: Tokens }[]): TokenClasses {
   return total;
 }
 
+/**
+ * The web search requests the rows ran, summed over one level (#3721). The
+ * book prices them per request, so they sit beside the token classes and
+ * never inside {@link totalOf}.
+ */
+export function searchRequestsOf(rows: readonly { tokens: Tokens }[]): number {
+  return rows.reduce(
+    (sum, { tokens }) => sum + (tokens.server_tool_request ?? 0),
+    0,
+  );
+}
+
 export function totalOf(classes: TokenClasses): number {
   return TOKEN_CLASSES.reduce((sum, key) => sum + classes[key], 0);
 }
@@ -65,6 +77,18 @@ export function totalOf(classes: TokenClasses): number {
 export function cacheHitRate(classes: TokenClasses): number | null {
   const input = classes.input_uncached + classes.cache_read;
   return input === 0 ? null : classes.cache_read / input;
+}
+
+/**
+ * cache_write ÷ (input_uncached + cache_read + cache_write): the share of input
+ * written to the cache. The hit rate leaves writes out of its denominator, so a
+ * month that rebuilt its cache can read a high hit rate beside a high share
+ * here (A-08). Null when no input token was read.
+ */
+export function cacheWriteShare(classes: TokenClasses): number | null {
+  const input =
+    classes.input_uncached + classes.cache_read + classes.cache_write;
+  return input === 0 ? null : classes.cache_write / input;
 }
 
 /** The share of completion tokens that were reasoning; null with no completion. */

@@ -28,7 +28,8 @@ import type {
   RunFrameBody,
   RunTranscript,
 } from "@/data/contracts/run";
-import type { RunRow } from "@/data/contracts/runs";
+import type { RunContext } from "@/data/contracts/run-context";
+import type { CommandReport, RunRow } from "@/data/contracts/runs";
 import { type Read, readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
@@ -40,8 +41,12 @@ import {
   releaseFrames,
   releaseTranscript,
 } from "./actions-tab.builders";
+import { runIssues } from "./issues.builders";
 import {
+  contextAssembly,
+  contextWindow,
   NOW,
+  runContext,
   runCost,
   runDetail,
   runFrame,
@@ -50,6 +55,7 @@ import {
   runRow,
   runSource,
   runTranscript,
+  transcriptEntry,
 } from "./run.builders";
 
 const push = vi.fn();
@@ -70,6 +76,8 @@ vi.mock("../fleet/actions", () => ({
   resolveApprovalAction,
   readApprovalEligibility,
 }));
+const readDeliveryReport = vi.fn();
+vi.mock("./actions", () => ({ readDeliveryReport }));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
 
@@ -104,11 +112,15 @@ type Setup = {
   resolvedMore?: boolean;
   mandates?: Read<MandateList>;
   frameBody?: Read<RunFrameBody>;
+  /** `list_commands`, read only while a command frame is open (#2953). */
+  commands?: Read<CommandReport>;
   run?: Partial<RunRow>;
   /** `?frames=` */
   page?: string;
   /** `?body=` */
   body?: string;
+  /** `get_run_context`, read only when a model request or a manifest is open. */
+  context?: Read<RunContext>;
 };
 
 /** The tab as the Run page calls it: a function over the page's props bundle. */
@@ -131,6 +143,7 @@ async function renderTab(setup: Setup = {}) {
   const { source, calls } = runSource({
     detail: ok(detail),
     frameBody: setup.frameBody,
+    commands: setup.commands,
     approvals: setup.approvals,
     resolvedApprovals:
       setup.resolved === undefined || !setup.resolved.ok
@@ -140,6 +153,7 @@ async function renderTab(setup: Setup = {}) {
             more: setup.resolvedMore ?? false,
           }),
     mandates: setup.mandates,
+    context: setup.context,
   });
   const everything = setup.everything ?? ok(releaseTranscript());
   const cost = ok(runCost());
@@ -161,6 +175,7 @@ async function renderTab(setup: Setup = {}) {
     cost,
     outputs: ok(runOutputs()),
     work: source.runs.work(ctx, run.id),
+    issues: Promise.resolve(ok(runIssues())),
     agent: null,
     now: NOW,
   });
@@ -440,6 +455,87 @@ describe("the open frame", () => {
       "Bodyno content",
     );
     expect(screen.queryByTestId("frame-body")).toBeNull();
+  });
+});
+
+describe("a subagent's frame (#3823)", () => {
+  // A subagent records on a chain of its own, numbered from 0 like the run's,
+  // so its frame 3 is not the run's frame 3 (`model.response`, turn 1).
+  const CHAIN = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+  function withSubagent(): RunTranscript {
+    const base = releaseTranscript();
+    return {
+      ...base,
+      entries: [
+        ...base.entries,
+        transcriptEntry({
+          seq: "3",
+          endSeq: "3",
+          at: releaseAt(3),
+          kind: "tool_call",
+          type: "tool_call",
+          label: "Grep ok",
+          kinds: ["tools"],
+          turn: 2,
+          frames: 1,
+          request: null,
+          response: null,
+          cost: { micros: "300", currency: "USD", basis: "gateway_observed" },
+          cumulativeCost: null,
+          subagent: { chainRef: CHAIN, type: "Explore" },
+        }),
+      ],
+    };
+  }
+
+  it("opens ?body=<chain>:<seq>, reads the body on that chain, and shows the envelope the transcript carries for it", async () => {
+    const { calls, container } = await renderTab({
+      body: `${CHAIN}:3`,
+      everything: ok(withSubagent()),
+      frameBody: ok(
+        runFrameBody({
+          seq: "3",
+          chainRef: CHAIN,
+          contentType: "text/plain",
+          text: "a.test.ts",
+          bytes: 9,
+        }),
+      ),
+    });
+    expect(calls.frameBody).toEqual([[ctx, "tse_7k2m9q", "3", CHAIN]]);
+    const open = screen.getByTestId("frame-open");
+    expect(open).toHaveAttribute("data-seq", "3");
+    expect(screen.getByTestId("frame-off-page")).toHaveTextContent(
+      "Frame 3 is on a subagent's chain",
+    );
+    expect(open).toHaveTextContent(`Subagent chain${CHAIN}`);
+    // The subagent's own envelope, not the run's frame 3's.
+    expect(open).toHaveTextContent("Turnturn 2");
+    expect(screen.getByTestId("frame-cost")).toHaveTextContent(
+      "gateway_observed",
+    );
+    expect(screen.getByTestId("frame-cost")).not.toHaveTextContent("$0.4126");
+    expect(screen.getByTestId("frame-body")).toHaveTextContent("a.test.ts");
+    // The page lists the run's own frames, and none of them is the open one.
+    for (const row of screen.getAllByTestId("frame-row"))
+      expect(row).not.toHaveAttribute("aria-current");
+    for (const tick of screen.getAllByTestId("timeline-tick"))
+      expect(tick).not.toHaveAttribute("aria-current");
+    // Its seq counts another chain, so no frame of the page neighbours it.
+    expect(screen.getByTestId("frame-previous")).toBeDisabled();
+    expect(screen.getByTestId("frame-next")).toBeDisabled();
+    await expectNoAxe(container);
+  });
+
+  it("reads the run's own frame 3 by its seq alone (negative)", async () => {
+    const { calls } = await renderTab({
+      body: "3",
+      everything: ok(withSubagent()),
+      frameBody: ok(runFrameBody({ seq: "3" })),
+    });
+    expect(calls.frameBody).toEqual([[ctx, "tse_7k2m9q", "3"]]);
+    expect(screen.getByTestId("frame-open")).toHaveTextContent("Turnturn 1");
+    expect(screen.queryByTestId("frame-off-page")).toBeNull();
   });
 });
 
@@ -908,5 +1004,344 @@ describe("decided calls", () => {
     });
     expect(screen.queryByTestId("resolved-approval")).toBeNull();
     expect(screen.queryByTestId("approval-unmatched")).toBeNull();
+  });
+});
+
+// #2953: a wrapped run records an operator's command as
+// `oxagen:command_applied`, with the command as the frame's decision. The
+// open frame reads as control.<command>, and its inspector reads the
+// delivery report's row the host applied at that frame.
+describe("a command frame's inspector", () => {
+  const COMMAND = "oxagen:command_applied";
+  const noBody = {
+    digest: null,
+    bytesRef: null,
+    redactions: [],
+    fidelity: "full" as const,
+  };
+  const frames = [
+    runFrame({ seq: "0", cursor: "c0", type: "agent_start", body: noBody }),
+    runFrame({ seq: "1", cursor: "c1", type: "llm_call", body: noBody }),
+    runFrame({ seq: "2", cursor: "c2", type: COMMAND, body: noBody }),
+    runFrame({ seq: "3", cursor: "c3", type: "llm_call", body: noBody }),
+  ];
+  const everything = ok({
+    ...releaseTranscript(),
+    entries: frames.map((frame) =>
+      transcriptEntry({
+        seq: frame.seq,
+        endSeq: frame.seq,
+        type: frame.type,
+        turn: 1,
+        frames: 1,
+        decision:
+          frame.type === COMMAND
+            ? {
+                seq: frame.seq,
+                decision: "steer",
+                type: COMMAND,
+                source: "human",
+                harness: false,
+                at: frame.observedAt,
+                rules: [],
+                taint: null,
+              }
+            : null,
+      }),
+    ),
+  });
+  const row: CommandReport["commands"][number] = {
+    id: "tcm_s",
+    runId: "tse_7k2m9q",
+    agentKey: null,
+    command: "steer",
+    status: "applied",
+    requestedMode: "interrupt",
+    deliveryMode: "next_step",
+    degradedReason: "harness_tier",
+    reason: null,
+    issuedAt: "2026-09-15T09:14:30.000Z",
+    expiresAt: null,
+    sentAt: "2026-09-15T09:14:31.000Z",
+    acknowledgedAt: "2026-09-15T09:14:33.000Z",
+    appliedAt: "2026-09-15T09:14:33.000Z",
+    appliedAtSeq: 2,
+    detail: null,
+    issuedBy: { id: "usr_0a", name: "Ada Park" },
+    text: "Run the migration tests before you push.",
+  };
+
+  it("names the frame control.steer and shows its status, both modes, the issuer, the text and the call that carried it", async () => {
+    const { container, calls } = await renderTab({
+      frames,
+      everything,
+      body: "2",
+      commands: ok({ commands: [row] }),
+    });
+    expect(screen.getByTestId("frame-open")).toHaveTextContent(
+      "control.steer",
+    );
+    const inspector = screen.getByTestId("control-inspector");
+    expect(inspector).toHaveAttribute("data-command", "steer");
+    expect(within(inspector).getByText("applied")).toBeTruthy();
+    // The mode asked for and the mode carried are two facts (INV-10).
+    expect(within(inspector).getByTestId("control-requested")).toHaveTextContent(
+      "Interrupt the step in flight",
+    );
+    expect(within(inspector).getByTestId("control-delivered")).toHaveTextContent(
+      "Before the next model call",
+    );
+    expect(within(inspector).getByTestId("control-issuer")).toHaveTextContent(
+      "Ada Park",
+    );
+    expect(within(inspector).getByTestId("control-text")).toHaveTextContent(
+      "Run the migration tests before you push.",
+    );
+    expect(
+      within(within(inspector).getByTestId("control-carrier")).getByRole(
+        "link",
+      ),
+    ).toHaveAttribute("href", frameLink("3"));
+    expect(calls.commands).toEqual([[ctx, { runId: "tse_7k2m9q" }]]);
+    await expectNoAxe(container);
+  });
+
+  it("says no command in the report was applied at the frame when none names it (negative)", async () => {
+    await renderTab({
+      frames,
+      everything,
+      body: "2",
+      commands: ok({ commands: [{ ...row, appliedAtSeq: 99 }] }),
+    });
+    expect(screen.getByTestId("control-unmatched")).toHaveTextContent(
+      "No command in the delivery report was applied at this frame.",
+    );
+    expect(screen.queryByTestId("control-text")).toBeNull();
+  });
+
+  it("names its own failure when the report read is refused (negative)", async () => {
+    await renderTab({
+      frames,
+      everything,
+      body: "2",
+      commands: { ok: false, reason: "denied", permission: "run.read" },
+    });
+    const inspector = screen.getByTestId("control-inspector");
+    expect(inspector).toHaveTextContent(/run\.read/);
+    expect(within(inspector).queryByTestId("control-issuer")).toBeNull();
+  });
+
+  it("reads no report for a frame that records no command (negative)", async () => {
+    const { calls } = await renderTab({ frames, everything, body: "1" });
+    expect(screen.queryByTestId("control-inspector")).toBeNull();
+    expect(calls.commands).toEqual([]);
+  });
+
+  it("reads no report for a subagent's frame whose seq a command frame holds on the run's chain (negative, #3823)", async () => {
+    // A subagent's chain numbers its frames from 0, so its frame 2 is not the
+    // run's frame 2, the steer. A command is applied on the run's own chain.
+    const chain = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    const { calls } = await renderTab({
+      frames,
+      everything,
+      body: `${chain}:2`,
+      frameBody: ok(
+        runFrameBody({
+          seq: "2",
+          chainRef: chain,
+          contentType: "text/plain",
+          text: "a.test.ts",
+          bytes: 9,
+        }),
+      ),
+      commands: ok({ commands: [row] }),
+    });
+    expect(calls.frameBody).toEqual([[ctx, "tse_7k2m9q", "2", chain]]);
+    expect(screen.queryByTestId("control-inspector")).toBeNull();
+    expect(screen.getByTestId("frame-open")).not.toHaveTextContent(
+      "control.steer",
+    );
+    expect(calls.commands).toEqual([]);
+  });
+});
+
+describe("the open frame's window (ADR-200)", () => {
+  it("draws a model request's window: its tools, context, prompt tokens, composition and message stack", async () => {
+    const { calls, container } = await renderTab({
+      body: "2",
+      frameBody: ok(runFrameBody({ seq: "2" })),
+      context: ok(
+        runContext({
+          windows: [contextWindow({ seq: "2", responseSeq: "3" })],
+        }),
+      ),
+    });
+    expect(calls.context).toEqual([[ctx, "tse_7k2m9q"]]);
+    const panel = within(screen.getByTestId("window-panel"));
+    expect(panel.getByText("Tools offered").nextSibling).toHaveTextContent(
+      "14 tools, 4,800 tok",
+    );
+    expect(panel.getByText("Context frames", { selector: "dt" }).nextSibling).toHaveTextContent(
+      "2 messages, 1,200 tok",
+    );
+    // The blocks are the provider's total split by bytes, so they sum to it.
+    expect(screen.getByTestId("window-prompt-tokens")).toHaveTextContent(
+      "12,000",
+    );
+    expect(
+      panel.getByText("12,000 tok as the provider reported them"),
+    ).toBeTruthy();
+    expect(
+      panel.getByRole("link", { name: "answered at frame 3" }),
+    ).toHaveAttribute("href", frameLink("3"));
+    expect(
+      screen
+        .getAllByTestId("window-part")
+        .map((part) => part.getAttribute("data-kind")),
+    ).toEqual(["system", "steering", "tools", "context", "conversation"]);
+    const stack = screen.getAllByTestId("window-stack-row");
+    expect(stack).toHaveLength(5);
+    expect(stack[4]).toHaveTextContent("Conversation5 messages4,200 tok");
+    await expectNoAxe(container);
+  });
+
+  it("says a wrapped window's context was counted with the conversation, and draws no band for it", async () => {
+    await renderTab({
+      body: "2",
+      frameBody: ok(runFrameBody({ seq: "2" })),
+      context: ok(
+        runContext({
+          source: "wrapped",
+          windows: [
+            contextWindow({
+              seq: "2",
+              responseSeq: "2",
+              promptTokens: 1000,
+              bytes: 1000,
+              blocks: [
+                { kind: "system", bytes: 100, items: 1, tokens: 100 },
+                { kind: "tools", bytes: 300, items: 4, tokens: 300 },
+                { kind: "conversation", bytes: 600, items: 7, tokens: 600 },
+              ],
+            }),
+          ],
+        }),
+      ),
+    });
+    const panel = within(screen.getByTestId("window-panel"));
+    expect(panel.getByText("Context frames", { selector: "dt" }).nextSibling).toHaveTextContent(
+      "Counted with the conversation",
+    );
+    // The call answered on the frame that asked it, so no link leads away.
+    expect(panel.queryByRole("link")).toBeNull();
+    expect(screen.getAllByTestId("window-part")).toHaveLength(3);
+  });
+
+  it("draws bytes, not tokens, for a call that reported no input (negative)", async () => {
+    await renderTab({
+      body: "2",
+      frameBody: ok(runFrameBody({ seq: "2" })),
+      context: ok(
+        runContext({
+          windows: [
+            contextWindow({
+              seq: "2",
+              responseSeq: null,
+              promptTokens: null,
+              bytes: 400,
+              blocks: [
+                { kind: "system", bytes: 100, items: 1, tokens: null },
+                { kind: "conversation", bytes: 300, items: 2, tokens: null },
+              ],
+            }),
+          ],
+        }),
+      ),
+    });
+    const panel = within(screen.getByTestId("window-panel"));
+    expect(panel.getByText("Prompt tokens").nextSibling).toHaveTextContent(
+      "not recorded",
+    );
+    expect(
+      panel.getByText("The provider reported no input"),
+    ).toBeTruthy();
+    expect(screen.getAllByTestId("window-part")[1]).toHaveTextContent(
+      "Conversation 300 bytes",
+    );
+  });
+
+  it("says a model request the record measured no window for has none (negative)", async () => {
+    const { container } = await renderTab({
+      body: "2",
+      frameBody: ok(runFrameBody({ seq: "2" })),
+      context: ok(runContext({ unmeasured: 3 })),
+    });
+    expect(screen.getByTestId("window-none")).toHaveTextContent(
+      "No window is on record for this request.",
+    );
+    expect(screen.queryByTestId("window-panel")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("names the context read's failure inside the frame (negative)", async () => {
+    const { container } = await renderTab({
+      body: "2",
+      frameBody: ok(runFrameBody({ seq: "2" })),
+      context: readError("frame_store_unreachable", 502),
+    });
+    expect(screen.getByTestId("frame-open")).toHaveTextContent(
+      "frame_store_unreachable",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("draws the assembler's budget, spend and headroom on the frame it sealed", async () => {
+    const { container } = await renderTab({
+      body: "1",
+      frameBody: ok(runFrameBody({ seq: "1" })),
+      context: ok(runContext({ assemblies: [contextAssembly({ seq: "1" })] })),
+    });
+    expect(screen.getByTestId("assembled-used")).toHaveTextContent(
+      "600 tok, 30% of budget, 1,400 tok headroom",
+    );
+    const panel = within(screen.getByTestId("assembled-panel"));
+    expect(panel.getByText("Context frames", { selector: "dt" }).nextSibling).toHaveTextContent(
+      "4 included, 5 cut",
+    );
+    expect(panel.getByText("Assembled by").nextSibling).toHaveTextContent(
+      "The steering assembler",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("reads no context for a frame that is neither a model request nor a manifest (negative)", async () => {
+    const { calls } = await renderTab({
+      body: "4",
+      frameBody: ok(runFrameBody({ seq: "4" })),
+    });
+    expect(calls.context).toEqual([]);
+    expect(screen.queryByTestId("window-panel")).toBeNull();
+    expect(screen.queryByTestId("assembled-panel")).toBeNull();
+  });
+
+  it("reads no context for a subagent's model request whose seq a window holds on the run's chain (negative, #3823)", async () => {
+    // A subagent's chain numbers its frames from 0, so its frame 2 is not the
+    // run's frame 2, and `get_run_context` reads the run's own chain alone.
+    const chain = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+    const own = releaseFrames();
+    const request = own.find((frame) => frame.seq === "2");
+    if (request === undefined) throw new Error("expected the run's frame 2");
+    const { calls } = await renderTab({
+      frames: [...own, { ...request, cursor: "c-sub-2", chainRef: chain }],
+      body: `${chain}:2`,
+      frameBody: ok(runFrameBody({ seq: "2", chainRef: chain })),
+      context: ok(
+        runContext({
+          windows: [contextWindow({ seq: "2", responseSeq: "3" })],
+        }),
+      ),
+    });
+    expect(calls.context).toEqual([]);
+    expect(screen.queryByTestId("window-panel")).toBeNull();
   });
 });

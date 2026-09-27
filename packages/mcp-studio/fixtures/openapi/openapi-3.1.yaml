@@ -1,0 +1,128 @@
+# OpenAPI 3.1: oneOf with a discriminator and a mapping, type arrays in place
+# of nullable, a $ref with a sibling description, exclusiveMinimum as a
+# number, a webhook, and an http bearer scheme.
+openapi: 3.1.0
+info:
+  title: a-intel payments
+  version: 3.0.0
+jsonSchemaDialect: https://spec.openapis.org/oas/3.1/dialect/base
+servers:
+  - url: https://payments.a-intel.com
+security:
+  - bearer: []
+paths:
+  /payments:
+    post:
+      operationId: createPayment
+      summary: Take a payment by card or bank transfer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, currency, method]
+              properties:
+                amount:
+                  type: integer
+                  exclusiveMinimum: 0
+                  description: The amount in the currency's minor unit.
+                currency:
+                  type: string
+                  pattern: "^[A-Z]{3}$"
+                method:
+                  $ref: "#/components/schemas/PaymentMethod"
+                  description: How the customer pays.
+                note:
+                  type: [string, "null"]
+      responses:
+        "201":
+          description: The payment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+  /payments/{payment_id}:
+    get:
+      operationId: getPayment
+      summary: Read one payment.
+      parameters:
+        - name: payment_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The payment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+webhooks:
+  paymentSucceeded:
+    post:
+      summary: Sent when a payment succeeds. A webhook never becomes a tool.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Payment"
+      responses:
+        "200":
+          description: Received.
+components:
+  schemas:
+    PaymentMethod:
+      oneOf:
+        - $ref: "#/components/schemas/Card"
+        - $ref: "#/components/schemas/BankTransfer"
+      discriminator:
+        propertyName: type
+        mapping:
+          card: "#/components/schemas/Card"
+          bank_transfer: "#/components/schemas/BankTransfer"
+    Card:
+      type: object
+      required: [type, token]
+      properties:
+        type:
+          const: card
+        token:
+          type: string
+        save:
+          type: boolean
+          default: false
+    BankTransfer:
+      type: object
+      required: [type, iban]
+      properties:
+        type:
+          const: bank_transfer
+        iban:
+          type: string
+        reference:
+          type: [string, "null"]
+          maxLength: 140
+    Payment:
+      type: object
+      required: [id, amount, currency, status, method]
+      properties:
+        id:
+          type: string
+        amount:
+          type: integer
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [pending, succeeded, failed]
+        method:
+          $ref: "#/components/schemas/PaymentMethod"
+        note:
+          type: [string, "null"]
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -16,6 +16,12 @@
 // frame": `search_tools` here is a kernel read the audit log records, and no
 // run is open to hold a frame until the assistant records its turns as runs
 // (#2968), so "frame" would claim a record that does not exist.
+//
+// "Pause every live run in this workspace" is the one action the menu carries
+// out itself: choosing it closes the menu and opens its confirm dialog
+// (pause-workspace-dialog.tsx), which asks for the reason and shows the
+// receipt. The dialog sits beside the menu rather than inside it, because the
+// menu's popup unmounts when it closes.
 import { Dialog } from "@base-ui/react/dialog";
 import { Search } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -34,6 +40,7 @@ import {
 } from "./commands";
 import type { ShellData } from "./shell-data";
 import { useShellState } from "./shell-state";
+import { PauseWorkspaceDialog } from "./pause-workspace-dialog";
 import { useSidebarSections } from "./sidebar";
 import { openAssistantDraft } from "@/shared/assistant-draft";
 import { openApprovals } from "@/shared/approvals-drawer";
@@ -46,21 +53,37 @@ const SEARCH_DEBOUNCE_MS = 150;
 
 export function CommandMenu({ data }: { data: ShellData }) {
   const { commandOpen, setCommandOpen } = useShellState();
+  const { ws } = useSidebarSections(data);
+  const [pauseOpen, setPauseOpen] = useState(false);
   return (
-    <Dialog.Root open={commandOpen} onOpenChange={setCommandOpen}>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-50 bg-overlay-scrim" />
-        {/* Always rendered inside the portal: Base UI unmounts the portal once the
-            popup has closed, which resets the query. Unmounting the popup itself
-            on close leaves the backdrop stuck in its ending style, over the page. */}
-        <CommandPalette
-          data={data}
+    <>
+      <Dialog.Root open={commandOpen} onOpenChange={setCommandOpen}>
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 z-50 bg-overlay-scrim" />
+          {/* Always rendered inside the portal: Base UI unmounts the portal once the
+              popup has closed, which resets the query. Unmounting the popup itself
+              on close leaves the backdrop stuck in its ending style, over the page. */}
+          <CommandPalette
+            data={data}
+            onClose={() => {
+              setCommandOpen(false);
+            }}
+            onPauseWorkspace={() => {
+              setPauseOpen(true);
+            }}
+          />
+        </Dialog.Portal>
+      </Dialog.Root>
+      {pauseOpen && ws !== null ? (
+        <PauseWorkspaceDialog
+          org={data.org.slug}
+          ws={ws}
           onClose={() => {
-            setCommandOpen(false);
+            setPauseOpen(false);
           }}
         />
-      </Dialog.Portal>
-    </Dialog.Root>
+      ) : null}
+    </>
   );
 }
 
@@ -108,9 +131,12 @@ function useSearch(org: string, ws: string | null, query: string): Remote {
 function CommandPalette({
   data,
   onClose,
+  onPauseWorkspace,
 }: {
   data: ShellData;
   onClose: () => void;
+  /** Opens the confirm dialog for "Pause every live run in this workspace". */
+  onPauseWorkspace: () => void;
 }) {
   const t = useTranslations("shell");
   const navigate = useNavigate();
@@ -152,9 +178,9 @@ function CommandPalette({
   const active = ordered[highlight] ?? null;
 
   const open = (c: Command) => {
-    if ("gap" in c) return;
     onClose();
-    if ("href" in c) navigate.push(c.href);
+    if ("pauseWorkspace" in c) onPauseWorkspace();
+    else if ("href" in c) navigate.push(c.href);
     else if ("create" in c) openCreate(c.create);
     else if ("approvals" in c) openApprovals();
     else if (c.assistant !== null && ws !== null)
@@ -253,16 +279,13 @@ function CommandPalette({
               {items.map((c) => {
                 const i = ordered.indexOf(c);
                 const selected = active?.id === c.id;
-                const disabled = "gap" in c;
                 return (
                   <div
                     key={c.id}
                     id={optionId(c)}
                     role="option"
                     aria-selected={selected}
-                    aria-disabled={disabled ? true : undefined}
                     data-command={c.id}
-                    data-gap={disabled ? c.gap : undefined}
                     tabIndex={-1}
                     onMouseMove={() => {
                       if (i !== highlight) setHighlight(i);
@@ -270,11 +293,9 @@ function CommandPalette({
                     onClick={() => {
                       open(c);
                     }}
-                    className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm ${
-                      disabled
-                        ? "cursor-default text-muted-foreground"
-                        : "cursor-pointer"
-                    } ${selected ? "bg-accent text-accent-foreground" : ""}`}
+                    className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm ${
+                      selected ? "bg-accent text-accent-foreground" : ""
+                    }`}
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{c.label}</span>

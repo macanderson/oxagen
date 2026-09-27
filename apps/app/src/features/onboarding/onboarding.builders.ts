@@ -6,8 +6,10 @@ import type { AgentDetail } from "@/data/contracts/agents";
 import type { FirstFrame, OnboardingGate } from "@/data/contracts/onboarding";
 import type { RunChain, RunDetail } from "@/data/contracts/run";
 import type { RunPage } from "@/data/contracts/runs";
+import type { NamedRuntimeList } from "@/data/contracts/runtimes";
+import type { ToolbeltList } from "@/data/contracts/toolbelts";
 import type { DataSource } from "@/data/ports";
-import type { Read } from "@/data/read";
+import { type Read, readOk } from "@/data/read";
 
 export function onboardingGate(
   overrides: Partial<OnboardingGate> = {},
@@ -79,6 +81,8 @@ export function runsPage(
         enforcementTier: "harness",
         completenessGaps: [],
         canSummarize: false,
+        effortSource: null,
+        fit: null,
         startedAt: "2026-09-15T14:02:11.000Z",
         sealedAt: "2026-09-15T14:02:40.000Z",
       })),
@@ -94,7 +98,54 @@ type Reads = {
   runs?: Read<RunPage>;
   run?: Read<RunDetail>;
   chain?: Read<RunChain>;
+  /** `list_runtimes`, which the name step's runtime picker reads (ADR-198). */
+  runtimes?: Read<NamedRuntimeList>;
+  /** `list_toolbelts`, which the name step's toolbelt section reads. */
+  toolbelts?: Read<ToolbeltList>;
 };
+
+/** The workspace's belts: the All tools belt and, when `tools` is above zero, one clone. */
+export function toolbeltList(availableTools = 12): ToolbeltList {
+  const all = {
+    id: "tbt_alltools",
+    name: "All tools",
+    slug: "all-tools",
+    kind: "all_tools" as const,
+    description: null,
+    clonedFrom: null,
+    tools: availableTools,
+    activeTools: availableTools,
+    servers: availableTools === 0 ? 0 : 2,
+    agents: 1,
+    updatedAt: "2026-09-20T10:00:00.000Z",
+  };
+  return {
+    belts:
+      availableTools === 0
+        ? [all]
+        : [
+            all,
+            {
+              ...all,
+              id: "tbt_reviewbelt",
+              name: "Review belt",
+              slug: "review-belt",
+              kind: "custom",
+              clonedFrom: {
+                id: all.id,
+                name: all.name,
+                slug: all.slug,
+                kind: all.kind,
+              },
+              tools: 4,
+              activeTools: 3,
+              servers: 1,
+              agents: 0,
+            },
+          ],
+    availableTools,
+  };
+}
 
 type Calls = {
   state: Parameters<DataSource["onboarding"]["state"]>[];
@@ -129,8 +180,14 @@ export function onboardingSource(reads: Reads): {
     runtimes: {
       list: refuse("runtimes.list"),
       agents: refuse("runtimes.agents"),
+      // No runtime named, unless the test hands a list.
+      named: () => Promise.resolve(reads.runtimes ?? readOk({ runtimes: [] })),
     },
-    conversations: { latest: refuse("conversations.latest") },
+    conversations: {
+      latest: refuse("conversations.latest"),
+      list: refuse("conversations.list"),
+      byId: refuse("conversations.byId"),
+    },
     onboarding: {
       state: (...args: Parameters<DataSource["onboarding"]["state"]>) => {
         calls.state.push(args);
@@ -179,6 +236,7 @@ export function onboardingSource(reads: Reads): {
         return Promise.resolve(answer(reads.run, "runs.get"));
       },
       frameBody: refuse("runs.frameBody"),
+      commands: refuse("runs.commands"),
       cost: refuse("runs.cost"),
       turns: refuse("runs.turns"),
       transcript: refuse("runs.transcript"),
@@ -189,11 +247,18 @@ export function onboardingSource(reads: Reads): {
       outputs: refuse("runs.transcript"),
       work: refuse("runs.transcript"),
       outcomesSettings: refuse("runs.transcript"),
+      issues: refuse("runs.issues"),
+      context: refuse("runs.context"),
+      findings: refuse("runs.findings"),
     },
     approvals: {
       pending: refuse("approvals.pending"),
       resolved: refuse("approvals.resolved"),
       resolvedSince: refuse("approvals.resolvedSince"),
+    },
+    interjections: {
+      open: refuse("interjections.open"),
+      forRun: refuse("interjections.forRun"),
     },
     billing: {
       plan: refuse("billing.plan"),
@@ -254,6 +319,10 @@ export function onboardingSource(reads: Reads): {
       approvalRules: refuse("tools.approvalRules"),
       connections: refuse("tools.connections"),
       mcpServers: refuse("tools.mcpServers"),
+      // The All tools belt and one clone, unless the test hands a list.
+      toolbelts: () =>
+        Promise.resolve(reads.toolbelts ?? readOk(toolbeltList())),
+      toolbelt: refuse("tools.toolbelt"),
     },
   };
   return { source, calls };

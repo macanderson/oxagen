@@ -35,6 +35,19 @@ vi.mock("@oxagen/iam/machine-key-scope", () => ({
   gatewayMandateTools: () => gatewayMandateTools(),
 }));
 
+// The clause's reads have their own suite (tacho-unbound-repo.test.ts). Here
+// the question is who asks for it and where it lands.
+const resolveUnboundRepo = vi.hoisted(() => vi.fn());
+vi.mock("./tacho-unbound-repo", () => ({ resolveUnboundRepo }));
+
+// The agent's toolbelt (ADR-198), read through tables this file's fake
+// transaction does not carry. Its rule is covered in `toolbelts.test.ts`;
+// here it only has to reach the bundle's deny list.
+const agentBeltDenyPatterns = vi.hoisted(() =>
+  vi.fn(async (): Promise<string[]> => []),
+);
+vi.mock("./toolbelts", () => ({ agentBeltDenyPatterns }));
+
 const { agentDaySpend, resolveHostMandate, signBundle, unsignedBundle } =
   await import("./tacho-host");
 const { policyBundleSchema } = await import("@oxagen/oxagen/tacho/schemas");
@@ -46,6 +59,7 @@ const {
   BUNDLE_FEATURE_INDEPENDENT_MODELS,
   BUNDLE_FEATURE_MODEL_PRICES,
   BUNDLE_FEATURE_STEERING_MANIFEST,
+  BUNDLE_FEATURE_UNBOUND_REPO,
 } = await import("@oxagen/tacho");
 const { assembleWorkspaceSteering } = await import("./tacho-steering");
 const { PROVIDER_RATE_CARD } = await import("@oxagen/billing");
@@ -405,41 +419,69 @@ describe("the wrapped-session policy on the bundle", () => {
   });
 });
 
-describe("the active definition budget on the signed bundle", () => {
-  function budgetTransaction(
-    definitionSource: string,
-    activeVersionId: string | null = "version-active",
-  ) {
-    const findVersion = vi.fn(async (args: unknown) => {
-      const { columns } = args as { columns: Record<string, boolean> };
-      const row: Record<string, unknown> = { config: {}, definitionSource };
-      return Object.fromEntries(
-        Object.keys(columns).map((key) => [key, row[key]]),
-      );
-    });
-    const tx = {
-      query: {
-        agents: { findFirst: vi.fn(async () => ({ activeVersionId })) },
-        agentVersions: { findFirst: findVersion },
-        workspaces: { findFirst: vi.fn(async () => undefined) },
-      },
-    } as unknown as Parameters<typeof resolveHostMandate>[0];
-    return { tx, findVersion };
-  }
-
-  const ctx = { orgId: "org-1", workspaceId: "workspace-1" };
-  const governedHost = () => ({
-    ...host(),
-    agentId: "agent-1",
-    agentPrincipalId: null,
-  });
-
-  it("signs the editor's TOML budget from the selected active version", async () => {
-    // The form writes this inline table. The commit handler preserves config
-    // and stores the text as definitionSource; publishing selects this row.
-    const { tx, findVersion } = budgetTransaction(
-      'schema = "agent-definition/v0.1"\nslug = "review"\nbudget = { per_run_micros = 2500000 }\n[instructions]\nbody = "Review."\n',
+/**
+ * A transaction for `resolveHostMandate`. The version's config is the one
+ * source of the budget table (ADR-198), and the runtime row is the one
+ * source of containment (ADR-204). `runtimes` maps a runtime id to its
+ * `containmentRequired`; `agentRuntimeId` is the agent's current runtime.
+ */
+function budgetTransaction(
+  config: unknown,
+  activeVersionId: string | null = "version-active",
+  {
+    runtimes = {},
+    agentRuntimeId = null,
+  }: {
+    runtimes?: Record<string, boolean>;
+    agentRuntimeId?: string | null;
+  } = {},
+) {
+  const project = (row: Record<string, unknown>, args: unknown) => {
+    const { columns } = args as { columns: Record<string, boolean> };
+    return Object.fromEntries(
+      Object.keys(columns).map((key) => [key, row[key]]),
     );
+  };
+  const findVersion = vi.fn(async (args: unknown) =>
+    project({ config }, args),
+  );
+  const findAgent = vi.fn(async (args: unknown) =>
+    project({ activeVersionId, runtimeId: agentRuntimeId }, args),
+  );
+  const findRuntime = vi.fn(async (args: unknown) => {
+    const { where } = args as { where: SQL };
+    const [id] = new PgDialect().sqlToQuery(where).params as string[];
+    return id !== undefined && id in runtimes
+      ? project({ containmentRequired: runtimes[id] }, args)
+      : undefined;
+  });
+  const tx = {
+    query: {
+      agents: { findFirst: findAgent },
+      agentVersions: { findFirst: findVersion },
+      runtimes: { findFirst: findRuntime },
+      workspaces: { findFirst: vi.fn(async () => undefined) },
+    },
+  } as unknown as Parameters<typeof resolveHostMandate>[0];
+  return { tx, findVersion, findRuntime };
+}
+
+const mandateCtx = { orgId: "org-1", workspaceId: "workspace-1" };
+/** A host bound to an agent and to no runtime. */
+const governedHost = () => ({
+  ...host(),
+  agentId: "agent-1",
+  agentPrincipalId: null,
+  runtimeId: null as string | null,
+});
+
+describe("the active version's budget on the signed bundle", () => {
+  const ctx = mandateCtx;
+
+  it("signs the budget from the selected active version's config", async () => {
+    const { tx, findVersion } = budgetTransaction({
+      budget: { per_run_micros: 2_500_000 },
+    });
     const mandate = await resolveHostMandate(tx, ctx, governedHost());
     const lookup = findVersion.mock.calls[0]?.[0] as { where: SQL };
     expect(new PgDialect().sqlToQuery(lookup.where).params).toEqual([
@@ -474,13 +516,13 @@ describe("the active definition budget on the signed bundle", () => {
   });
 
   it.each([
-    "[budget",
-    "budget = { per_run_micros = nan }",
-    "budget = { per_run_micros = 1.5 }",
+    { budget: "none" },
+    { budget: { per_run_micros: Number.NaN } },
+    { budget: { per_run_micros: 1.5 } },
   ])(
-    "signs a suspension for an invalid persisted definition: %s",
-    async (source) => {
-      const { tx } = budgetTransaction(source);
+    "signs a suspension for an invalid persisted config: %j",
+    async (config) => {
+      const { tx } = budgetTransaction(config);
       const mandate = await resolveHostMandate(tx, ctx, governedHost());
       const { privateKey } = generateKeyPairSync("ed25519");
       const signer = bundleSignerFromPem(
@@ -518,9 +560,9 @@ describe("the active definition budget on the signed bundle", () => {
     },
   );
 
-  it("does not arm an unpublished definition when there is no active version", async () => {
+  it("does not arm a budget when there is no active version", async () => {
     const { tx, findVersion } = budgetTransaction(
-      "budget = { per_run_micros = 2500000 }",
+      { budget: { per_run_micros: 2_500_000 } },
       null,
     );
     expect((await resolveHostMandate(tx, ctx, governedHost())).budget).toEqual({
@@ -530,14 +572,18 @@ describe("the active definition budget on the signed bundle", () => {
   });
 
   it("keeps a daily-only declaration observed for a host that does not enforce a day (negative)", async () => {
-    const { tx } = budgetTransaction("budget = { per_day_micros = 20000000 }");
+    const { tx } = budgetTransaction({
+      budget: { per_day_micros: 20_000_000 },
+    });
     expect((await resolveHostMandate(tx, ctx, governedHost())).budget).toEqual({
       mode: "observed",
     });
   });
 
   it("signs a daily-only declaration, enforced, to a host that advertises daily_budget (ADR-160)", async () => {
-    const { tx } = budgetTransaction("budget = { per_day_micros = 20000000 }");
+    const { tx } = budgetTransaction({
+      budget: { per_day_micros: 20_000_000 },
+    });
     const dailyHost = {
       ...governedHost(),
       bundleFeatures: [BUNDLE_FEATURE_DAILY_BUDGET],
@@ -560,47 +606,150 @@ describe("the active definition budget on the signed bundle", () => {
       ...governedHost(),
       bundleFeatures: [BUNDLE_FEATURE_DAILY_BUDGET],
     };
-    const both = budgetTransaction(
-      "budget = { per_run_micros = 2500000, per_day_micros = 20000000 }",
-    );
+    const both = budgetTransaction({
+      budget: { per_run_micros: 2_500_000, per_day_micros: 20_000_000 },
+    });
     expect((await resolveHostMandate(both.tx, ctx, dailyHost)).budget).toEqual({
       mode: "enforced",
       session_limit_usd: 2.5,
       daily_limit_usd: 20,
     });
-    const zero = budgetTransaction("budget = { per_day_micros = 0 }");
+    const zero = budgetTransaction({ budget: { per_day_micros: 0 } });
     expect((await resolveHostMandate(zero.tx, ctx, dailyHost)).budget).toEqual({
       mode: "observed",
     });
   });
 
-  it("reads a containment requirement from the active definition", async () => {
-    const { tx } = budgetTransaction(
-      'slug = "review"\n[containment]\nrequired = true\n',
-    );
+  it("denies on the host every imported tool the agent's toolbelt leaves out (ADR-198)", async () => {
+    agentBeltDenyPatterns.mockResolvedValueOnce([
+      "github:delete_repo",
+      "linear:*",
+    ]);
+    const { tx } = budgetTransaction({});
     const mandate = await resolveHostMandate(tx, ctx, governedHost());
-    expect(mandate.containment).toEqual({ required: true });
-    expect(mandate.invalidDefinition).toBeUndefined();
+    expect(agentBeltDenyPatterns).toHaveBeenLastCalledWith(tx, ctx, "agent-1");
+    expect(mandate.permissions.deny).toEqual([
+      "mcp__github__delete_repo",
+      "mcp__linear__*",
+    ]);
+    expect(mandate.permissions.allow).toEqual([]);
   });
 
-  it("reads required = false as no requirement", async () => {
-    const { tx } = budgetTransaction("[containment]\nrequired = false\n");
+  it("reads no toolbelt for a host that names no agent", async () => {
+    agentBeltDenyPatterns.mockClear();
+    const { tx } = budgetTransaction({});
+    await resolveHostMandate(tx, ctx, { ...governedHost(), agentId: null });
+    expect(agentBeltDenyPatterns).not.toHaveBeenCalled();
+  });
+});
+
+describe("containment from the host's runtime (ADR-204)", () => {
+  const ctx = mandateCtx;
+  const onRuntime = (runtimeId: string | null) => ({
+    ...governedHost(),
+    runtimeId,
+  });
+
+  it("signs the requirement when the host's runtime requires it", async () => {
+    const { tx, findRuntime } = budgetTransaction({}, "version-active", {
+      runtimes: { "runtime-1": true },
+    });
+    const bound = {
+      ...onRuntime("runtime-1"),
+      bundleFeatures: [...CURRENT, BUNDLE_FEATURE_CONTAINMENT],
+    };
+    const mandate = await resolveHostMandate(tx, ctx, bound);
+    expect(mandate.containment).toEqual({ required: true });
+    expect(mandate.invalidAgentConfig).toBeUndefined();
+    const lookup = findRuntime.mock.calls[0]?.[0] as { where: SQL };
+    expect(new PgDialect().sqlToQuery(lookup.where).params).toEqual([
+      "runtime-1",
+    ]);
+    const signed = unsignedBundle(
+      bound,
+      { org: 1, workspace: 1 },
+      { mode: "digest_only", classes: [] },
+      STEERING,
+      mandate,
+      NOW,
+    );
+    expect(signed.containment).toEqual({ required: true });
+    expect(signed.host_status).toBe("active");
+  });
+
+  it("states nothing when the host's runtime does not require it", async () => {
+    const { tx } = budgetTransaction({}, "version-active", {
+      runtimes: { "runtime-1": false },
+    });
     expect(
-      (await resolveHostMandate(tx, ctx, governedHost())).containment,
+      (await resolveHostMandate(tx, ctx, onRuntime("runtime-1"))).containment,
     ).toBeUndefined();
   });
 
+  it("reads the runtime the host binds, not the agent's current one", async () => {
+    const { tx } = budgetTransaction({}, "version-active", {
+      runtimes: { "runtime-1": false, "runtime-2": true },
+      agentRuntimeId: "runtime-2",
+    });
+    expect(
+      (await resolveHostMandate(tx, ctx, onRuntime("runtime-1"))).containment,
+    ).toBeUndefined();
+  });
+
+  it("falls back to the agent's current runtime for a host that binds none", async () => {
+    const { tx } = budgetTransaction({}, "version-active", {
+      runtimes: { "runtime-2": true },
+      agentRuntimeId: "runtime-2",
+    });
+    expect(
+      (await resolveHostMandate(tx, ctx, onRuntime(null))).containment,
+    ).toEqual({ required: true });
+  });
+
+  it("reads no runtime for a host that binds none and names no agent", async () => {
+    const { tx, findRuntime } = budgetTransaction({}, "version-active", {
+      runtimes: { "runtime-2": true },
+      agentRuntimeId: "runtime-2",
+    });
+    const mandate = await resolveHostMandate(tx, ctx, {
+      ...onRuntime(null),
+      agentId: null,
+    });
+    expect(mandate.containment).toBeUndefined();
+    expect(findRuntime).not.toHaveBeenCalled();
+  });
+
+  it("keeps the requirement of a deleted runtime: the read filters on the id alone", async () => {
+    const { tx, findRuntime } = budgetTransaction({}, "version-active", {
+      runtimes: { "runtime-1": true },
+    });
+    await resolveHostMandate(tx, ctx, onRuntime("runtime-1"));
+    const lookup = findRuntime.mock.calls[0]?.[0] as { where: SQL };
+    const query = new PgDialect().sqlToQuery(lookup.where);
+    expect(query.sql).not.toContain("deleted_at");
+    expect(query.params).toEqual(["runtime-1"]);
+  });
+
+  it("keeps the requirement when the budget cannot be read", async () => {
+    const { tx } = budgetTransaction({ budget: "none" }, "version-active", {
+      runtimes: { "runtime-1": true },
+    });
+    const mandate = await resolveHostMandate(tx, ctx, onRuntime("runtime-1"));
+    expect(mandate.invalidAgentConfig).toBe(true);
+    expect(mandate.containment).toEqual({ required: true });
+  });
+
   it.each([
-    '[containment]\nrequired = "yes"\n',
-    '[containment]\nrequired = true\ntier = "gateway"\n',
-    'containment = "required"\n',
+    { containment: { required: true } },
+    { containment: { required: "yes" } },
+    { containment: "required" },
   ])(
-    "suspends governed actions for an invalid containment table: %s",
-    async (source) => {
-      const { tx } = budgetTransaction(source);
-      const mandate = await resolveHostMandate(tx, ctx, governedHost());
-      expect(mandate.invalidDefinition).toBe(true);
+    "ignores a containment table left in the version's config: %j",
+    async (config) => {
+      const { tx } = budgetTransaction(config);
+      const mandate = await resolveHostMandate(tx, ctx, onRuntime(null));
       expect(mandate.containment).toBeUndefined();
+      expect(mandate.invalidAgentConfig).toBeUndefined();
     },
   );
 });
@@ -733,5 +882,109 @@ describe("the agent's day spend on the control envelope (ADR-160)", () => {
     const { tx } = hostsTransaction(["tch_ours"]);
     selectAgentDaySpend.mockRejectedValueOnce(new Error("store degraded"));
     expect(await agentDaySpend(tx, ours, NOON)).toBeUndefined();
+  });
+});
+
+describe("the unbound repository clause on the bundle (#3941)", () => {
+  const CLAUSE = {
+    policy: "ask" as const,
+    timeout_ms: 30 * 60 * 1000,
+    workspace_slug: "payments",
+    config_version: "skl_v3",
+    bound_remote_digests: [`sha256:${"a".repeat(64)}`],
+    link: { skills_pinned: 4, linked_repositories: 2 },
+  };
+  const WITH_CLAUSE = { ...NO_MANDATE, unboundRepo: CLAUSE };
+  const ASKS = [...CURRENT, BUNDLE_FEATURE_UNBOUND_REPO];
+
+  function withMandate(
+    features: string[],
+    mandate: Parameters<typeof unsignedBundle>[4],
+  ) {
+    return unsignedBundle(
+      host(features),
+      { org: 1, workspace: 1 },
+      { mode: "digest_only", classes: [] },
+      STEERING,
+      mandate,
+      NOW,
+    );
+  }
+  const signature = { key_id: "k", alg: "ed25519", sig: "s" };
+
+  beforeEach(() => resolveUnboundRepo.mockReset());
+
+  it("signs the clause for a host that advertised it, and the host's schema parses it", () => {
+    const result = withMandate(ASKS, WITH_CLAUSE);
+    expect(result.unbound_repo).toEqual(CLAUSE);
+    expect(
+      policyBundleSchema.parse({ ...result, signature }).unbound_repo,
+    ).toEqual(CLAUSE);
+  });
+
+  it("withholds it from a host that did not, whose strict parser would refuse the whole mandate", () => {
+    const older = policyBundleSchema.omit({ unbound_repo: true }).strict();
+    const plain = withMandate(CURRENT, WITH_CLAUSE);
+    expect(plain).not.toHaveProperty("unbound_repo");
+    expect(() => older.parse({ ...plain, signature })).not.toThrow();
+    expect(() =>
+      older.parse({ ...withMandate(ASKS, WITH_CLAUSE), signature }),
+    ).toThrow();
+  });
+
+  it("states nothing when the mandate resolved no clause (skills off)", () => {
+    expect(withMandate(ASKS, NO_MANDATE)).not.toHaveProperty("unbound_repo");
+  });
+
+  it("moves the etag with the clause, so the host refetches when a repository is bound", () => {
+    const before = withMandate(ASKS, WITH_CLAUSE).etag;
+    expect(withMandate(ASKS, NO_MANDATE).etag).not.toBe(before);
+    const bound = {
+      ...NO_MANDATE,
+      unboundRepo: {
+        ...CLAUSE,
+        bound_remote_digests: [
+          ...CLAUSE.bound_remote_digests,
+          `sha256:${"b".repeat(64)}`,
+        ],
+      },
+    };
+    expect(withMandate(ASKS, bound).etag).not.toBe(before);
+    expect(withMandate(ASKS, WITH_CLAUSE).etag).toBe(before);
+  });
+
+  it("resolves the clause only for a host that advertised it, and puts it on the mandate", async () => {
+    const tx = {
+      query: { workspaces: { findFirst: async () => undefined } },
+    } as unknown as Parameters<typeof resolveHostMandate>[0];
+    const ctx = { orgId: "o", workspaceId: "w" };
+    const plainHost = {
+      ...host(CURRENT),
+      agentId: null,
+      agentPrincipalId: null,
+    };
+    resolveUnboundRepo.mockResolvedValue(CLAUSE);
+    const plain = await resolveHostMandate(tx, ctx, plainHost);
+    expect(resolveUnboundRepo).not.toHaveBeenCalled();
+    expect(plain).not.toHaveProperty("unboundRepo");
+
+    const asking = { ...host(ASKS), agentId: null, agentPrincipalId: null };
+    const mandate = await resolveHostMandate(tx, ctx, asking);
+    expect(resolveUnboundRepo).toHaveBeenCalledWith(tx, ctx, true);
+    expect(mandate.unboundRepo).toEqual(CLAUSE);
+    expect(withMandate(ASKS, mandate).unbound_repo).toEqual(CLAUSE);
+  });
+
+  it("leaves the mandate without a clause when the read resolves none (negative)", async () => {
+    const tx = {
+      query: { workspaces: { findFirst: async () => undefined } },
+    } as unknown as Parameters<typeof resolveHostMandate>[0];
+    resolveUnboundRepo.mockResolvedValue(undefined);
+    const mandate = await resolveHostMandate(
+      tx,
+      { orgId: "o", workspaceId: "w" },
+      { ...host(ASKS), agentId: null, agentPrincipalId: null },
+    );
+    expect(mandate).not.toHaveProperty("unboundRepo");
   });
 });

@@ -30,6 +30,20 @@ describe("host and environment facts", () => {
     expect(snapshotEnv({ CLAUDE_SPECIAL: "x" }, /SPECIAL/)).toEqual({});
   });
 
+  it("keeps git identity variables out, because the reconciliation rule needs none", () => {
+    // ADR-188, amended for #4320: a commit no remote-tracking ref reaches
+    // counts as the session's whatever its email, so no email rides a hook.
+    expect(
+      snapshotEnv({
+        GIT_COMMITTER_EMAIL: "agent@example.com",
+        GIT_AUTHOR_EMAIL: "agent@example.com",
+        GIT_COMMITTER_NAME: "agent",
+        EMAIL: "agent@example.com",
+        CLAUDE_CODE_ENTRYPOINT: "cli",
+      }),
+    ).toEqual({ CLAUDE_CODE_ENTRYPOINT: "cli" });
+  });
+
   it("never ships the daemon's own bearer header, the exact value the installer writes", () => {
     const localToken = "tlt_0123456789abcdef0123456789abcdef";
     const snapshot = snapshotEnv(

@@ -373,6 +373,10 @@
     --app-link-fg: var(--muted-foreground);
     --app-link-hover-fg: var(--foreground);
     --app-link-active-fg: var(--foreground);
+    /* The fill behind an app-chrome icon button on hover and while it is
+       pressed, such as the assistant flyout's header buttons. */
+    --app-link-hover-bg: var(--secondary);
+    --app-link-active-bg: var(--secondary);
 
     /* ── Headers. CARD header is FLAT — it matches the card surface exactly (no
      *    shaded band), with just the hairline `border-b` in card.tsx separating
@@ -862,6 +866,8 @@
   --color-app-link-fg: var(--app-link-fg);
   --color-app-link-hover-fg: var(--app-link-hover-fg);
   --color-app-link-active-fg: var(--app-link-active-fg);
+  --color-app-link-hover-bg: var(--app-link-hover-bg);
+  --color-app-link-active-bg: var(--app-link-active-bg);
 
   /* Headers (card) */
   --color-card-header-bg: var(--card-header-bg);

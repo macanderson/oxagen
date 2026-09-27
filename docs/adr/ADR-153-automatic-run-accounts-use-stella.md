@@ -39,3 +39,13 @@ A named run that changed after its account now waits `LIVE_ENRICHMENT_INTERVAL_M
 Old runs are worked through newest first whenever no newer run is waiting. The paragraphs above that give 500 rows per store per pass and a dedup id without a window describe the sweep before this amendment.
 
 A model call that fails inside the turn is now recorded by the provider's status (`model_refused`, `rate_limited`, `provider_error`, `request_rejected`, `provider_unreachable`) rather than as `empty_account`. A refusal other than a timeout or a rate limit ends the job without its retries.
+
+## Amendment 2026-09-26: retry backoff for failed and partial runs
+
+A run whose last attempt failed, or whose last read found bodies missing, stayed due for as long as it existed. The sweep queued an unchanged failed run every 30 minutes and an unchanged partial run every 5. Each pass read every frame and body of the run again and wrote its evidence chunks again, under the organization's single slot. Under the newest-first order, three recently sealed partial runs could take all of an organization's slots at every sweep.
+
+`dueForEnrichment` now backs off both retries. A retry of an unchanged run waits at least 5 minutes after missing bodies and 30 after a failure, as before. It also waits at least as long as the run had gone unchanged before the previous attempt. The sweep derives that from two columns it already has: `summary_observed_at`, the time of the attempt, and `summary_observed_revision`, the run's `updated_at` as that attempt read it. On a run that does not change, each wait is about twice the one before, so the run is read fewer than 20 times in its first year. No column and no migration were added.
+
+The rest of the rule holds. New frames move `updated_at` and bring a failed or partial run back through the revision rule, under the 30-minute hold on a named run. A person's `summarize_run` request does not go through the sweep and is never held back. The wait depends on the sweep's clock, so an index over due runs must leave it out of its predicate.
+
+Two alternatives were rejected. A retry counter would bound retries too, but it needs a new column and a migration on both run stores. Checking the credit gate before the read would spare a refused workspace the read, but that workspace would then lose its fallback title, which the read writes before any model call.

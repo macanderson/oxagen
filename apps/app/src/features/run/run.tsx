@@ -3,21 +3,28 @@
 // generated summary, the six figures and the tabs with Transcript open; the
 // side column, "The work", holds the Changes panel and the Outputs spine.
 //
-// The page makes the reads every part shares (the run, the whole-run
-// transcript at `steps`, the cost rollup, the outputs, the work, the agent
-// and the approvals parked on the run), shapes the figures once
+// The page makes the reads every part shares (the run, the first page of the
+// transcript at `steps`, the cost rollup, the outputs, the work, the issues,
+// the agent and the approvals parked on the run), shapes the figures once
 // (`runMetrics`), and hands the open tab the whole bundle. The transcript is
 // folded and counted on the server (ADR-182): the tab counts are its
-// `counts`, and the figures its `figures`. The run at `everything`, one entry
-// per frame, is read to its end only for a tab that lists frames. The badges
-// of those tabs count frames, and the `steps` read carries those counts too
+// `counts`, and the figures its `figures`. A read that starts at the run's
+// first frame carries both for the whole run: the first page, and every page
+// read from the end or before a cursor (#3823, D6). So the page draws from
+// one page, and the Transcript tab reads the rest a page at a time as the
+// reader goes (#4420, #4427). The run at `everything`, one entry per frame,
+// is read to its end only for a tab that lists frames. The badges of those
+// tabs count frames, and the `steps` read carries those counts too
 // (`counts.frames`), so no other tab reads the run a second time. A tab's own
 // heavy read (the chain, a frame body) happens only when that tab is open.
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, type ReactNode } from "react";
 import type { DataSource } from "@/data/ports";
-import type { TranscriptCounts } from "@/data/contracts/run";
+import {
+  TRANSCRIPT_ENTRY_MAX,
+  type TranscriptCounts,
+} from "@/data/contracts/run";
 import { PAGE_FAILURES, readError } from "@/data/read";
 import { PageRecord } from "@/features/shell";
 import type { WsCtx } from "@/server/viewer";
@@ -26,6 +33,7 @@ import { GovernedActionsTab } from "./actions-tab";
 import { ChainTab } from "./chain";
 import { CostTab } from "./cost";
 import { RunHeader } from "./header";
+import { interjectionOf, RunInterjection } from "./interjection";
 import { IssuesCount } from "./issues-tab";
 import { runMetrics } from "./metrics";
 import { OutputsSpine } from "./outputs";
@@ -41,9 +49,11 @@ import {
   type TabFigure,
   tabOf,
 } from "./tabs";
-import { parseKinds, TranscriptTab } from "./transcript";
+import { parseKinds, TranscriptTab, transcriptFrom } from "./transcript";
+import { TRANSCRIPT_PAGE } from "./transcript-rows";
 import { readWholeTranscript } from "./whole-transcript";
 import { ChangesLoading, ChangesPanel } from "./work";
+import { readRunIssues } from "./run-issues";
 import { readRunWork } from "./work-ci";
 
 /** The tab strip, with what each tab carries beside its name, from the reads the page already made. */
@@ -81,14 +91,14 @@ function Tabs({
     // The entries the Transcript tab draws, which its header line counts
     // too, so the tab and the line cannot disagree.
     transcript: { count: countOf((counts) => counts.entries) },
-    // The task reference now, and the issues the run's pull requests close
-    // once GitHub answers; the table under the tab counts the same rows.
+    // The task reference now, and every issue `get_run_issues` lists once it
+    // answers; the table under the tab counts the same rows (#3970).
     issues: {
       count: (
         <Suspense
           fallback={t("atLeast", { count: run.taskRef === null ? 0 : 1 })}
         >
-          <IssuesCount run={run} work={props.work} />
+          <IssuesCount run={run} issues={props.issues} />
         </Suspense>
       ),
     },
@@ -193,6 +203,7 @@ export async function Run({
   kinds,
   frames,
   body,
+  finding,
   reads,
   spine,
   now,
@@ -207,8 +218,13 @@ export async function Run({
   kinds: string | null;
   /** `?frames=`, the opaque cursor a later frames page was read from. */
   frames: string | null;
-  /** `?body=`, the seq of the frame whose body is open; anything but a seq opens none. */
+  /**
+   * `?body=`, the frame whose body is open: its seq, or `<chain>:<seq>` for a
+   * subagent's frame. Anything else opens none.
+   */
   body: string | null;
+  /** `?finding=`, the finding whose evidence is open over the Cost tab; absent opens none. */
+  finding?: string | null;
   /** `?reads=hide` folds the spine's read marks away. */
   reads: string | null;
   /** `?spine=`, the spine groups a person opened, comma-separated. */
@@ -221,6 +237,7 @@ export async function Run({
     kinds: parseKinds(kinds),
     frames,
     body,
+    finding: finding ?? null,
   };
   const { read, at } = await readRun(source, ctx, runId, frames, now);
   if (!read.ok) {
@@ -253,11 +270,42 @@ export async function Run({
         <RunEmpty run={run} org={place.org} ws={place.ws} />
       </>
     );
+  // A run whose host held the loop on a repository question opens on the
+  // question (#3941). Any tab opens the ordinary page, which is how the
+  // answered page's transcript link reaches the rest of the run.
+  const interject = tab === null ? interjectionOf(detail) : null;
+  if (interject !== null) {
+    // A thrown read folds to the Run page's own read error, so the question's
+    // pane says the read failed rather than the page throwing.
+    const question = await source.interjections
+      .forRun(ctx, run.id)
+      .catch(() =>
+        readError(PAGE_FAILURES.run.error.code, PAGE_FAILURES.run.error.status),
+      );
+    return (
+      <>
+        {record}
+        <RunInterjection
+          detail={detail}
+          interject={interject}
+          question={question}
+          place={place}
+          orgRole={ctx.orgRole}
+          wsRole={ctx.wsRole}
+          now={at}
+        />
+      </>
+    );
+  }
   const agentSlug = run.agentKey?.split(".").at(-1) ?? null;
   // Started, never awaited here: provider latency (GitHub pull requests,
   // checks, diffs) streams inside the boundaries that draw it and cannot hold
   // the rest of the page.
   const work = readRunWork(ctx, source, run.id);
+  // The Issues tab's read, started beside the work read for the same reason:
+  // its count is in the tab strip on every tab, and GitHub's latency streams
+  // inside the boundaries that draw it (#3970).
+  const issues = readRunIssues(ctx, source, run.id);
   // The tabs that list the run's frames read them to their end. Every other
   // tab needs only their counts, which the `steps` read carries.
   const listsFrames =
@@ -274,7 +322,26 @@ export async function Run({
             PAGE_FAILURES.run.error.status,
           ),
         ),
-      readWholeTranscript(source, ctx, run.id, "steps", { text: "full" }),
+      // One page, not the run to its end: every page rereads and refolds the
+      // whole run on the server (#4340), so a run of 15 pages held the page
+      // for 15 reads in a row (#4420). The page's `frameCursor` is where the
+      // stream opens, and the tab pages the rest in after it draws. The
+      // Transcript tab reads one screen's worth, from a live run's end or
+      // any other run's first entry (#4427). Every other tab reads the head
+      // at the most a page holds, as the Context tab's first request needs.
+      source.runs.transcript(
+        ctx,
+        run.id,
+        "steps",
+        selected === "transcript"
+          ? {
+              kinds: [],
+              limit: TRANSCRIPT_PAGE,
+              text: "full",
+              from: transcriptFrom(run),
+            }
+          : { kinds: [], limit: TRANSCRIPT_ENTRY_MAX, text: "full" },
+      ),
       listsFrames
         ? readWholeTranscript(source, ctx, run.id, "everything")
         : null,
@@ -311,6 +378,7 @@ export async function Run({
     cost,
     outputs,
     work,
+    issues,
     agent,
     now,
   };
@@ -329,7 +397,6 @@ export async function Run({
             ? outputs.value.nodes.filter((node) => node.kind === "pr")
             : null
         }
-        metrics={metrics}
         orgRole={ctx.orgRole}
         wsRole={ctx.wsRole}
         place={place}
@@ -381,11 +448,16 @@ export async function Run({
   );
 }
 
-/** `.run-side`: the work the run touched, beside the main column. */
+/**
+ * `.run-side`: the work the run touched, beside the main column. The column
+ * template is `minmax(0,1fr)` on purpose: an implicit `auto` column grows to
+ * its widest child's unwrapped width, so one long output path pushed both
+ * panels past the page and its `truncate` never cut it.
+ */
 function RunSide({ children }: { children: ReactNode }) {
   const t = useTranslations("run.work");
   return (
-    <aside aria-label={t("label")} className="grid min-w-0 gap-3">
+    <aside aria-label={t("label")} className="grid min-w-0 grid-cols-1 gap-3">
       {children}
     </aside>
   );

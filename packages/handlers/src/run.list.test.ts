@@ -1,10 +1,13 @@
 import { schema } from "@oxagen/database";
 import { CapabilityError } from "@oxagen/oxagen/kernel";
-import { runList } from "@oxagen/oxagen/contracts/run.list";
+import {
+  HOST_POLL_WINDOW_MS,
+  runList,
+} from "@oxagen/oxagen/contracts/run.list";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   beforeCursor,
   addCompactedRollup,
@@ -25,6 +28,9 @@ import {
   tachoRunStatus,
   costIsEstimate,
   recordedSealSource,
+  LEDGER_LIVE_STATUSES,
+  liveCountQueries,
+  TACHO_LIVE_OUTCOMES,
 } from "./run.list";
 import {
   ctx,
@@ -36,6 +42,9 @@ import {
   seal,
   tachoSession,
 } from "./run.test-support";
+
+/** The clock the live count is read against. */
+const NOW = new Date("2026-09-25T12:00:00.000Z");
 
 const RUN_A = "0192d4a8-7c1e-7a00-8000-0000000000a1";
 const RUN_B = "0192d4a8-7c1e-7a00-8000-0000000000a2";
@@ -118,6 +127,85 @@ describe("list_runs", () => {
     const out = await list({ limit: 50 }, ctx());
     expect(runList.output.parse(out)).toEqual(out);
     expect(out.runs[0]?.name).toBe("tacho installer daemon reliability");
+  });
+
+  // #4224: neither a harness title nor a ledger run's goal has a bound where
+  // it is written, so a page could carry a name or task reference of any
+  // length.
+  describe("a run's name and task reference", () => {
+    const long = `${"a".repeat(254)}😀${"a".repeat(44)}`;
+    const cut = `${"a".repeat(254)}…`;
+
+    it("cuts a long harness title to the display cap on a code-point boundary", async () => {
+      const { list } = handlerOver(
+        [],
+        [
+          tachoSession({
+            publicId: "tse_long",
+            session: { harnessTitle: long },
+          }),
+        ],
+      );
+      const out = await list({ limit: 50 }, ctx());
+      expect(out.runs[0]?.name).toBe(cut);
+      expect(runList.output.parse(out)).toEqual(out);
+    });
+
+    it("cuts a long harness title when enrichment is off", async () => {
+      const stores = memoryStores(
+        [],
+        [
+          tachoSession({
+            publicId: "tse_long",
+            session: { harnessTitle: long },
+          }),
+        ],
+      );
+      const list = createRunListHandler({
+        ...stores,
+        readEnrichmentEnabled: async () => false,
+      });
+      const out = await list({ limit: 50 }, ctx());
+      expect(out.runs[0]?.name).toBe(cut);
+      expect(runList.output.parse(out)).toEqual(out);
+    });
+
+    it("cuts a ledger run's goal and name to the display cap", async () => {
+      const { list } = handlerOver(
+        [
+          ledgerRun({
+            publicId: "arun_long",
+            runId: RUN_A,
+            run: {
+              runId: RUN_A,
+              publicId: "arun_long",
+              status: "completed",
+              createdAt: at("2026-09-11T10:00:00.000Z"),
+              startedAt: at("2026-09-11T10:00:01.000Z"),
+              name: "n".repeat(300),
+              summary: null,
+              summaryGeneratedAt: null,
+              summaryModel: null,
+            },
+            identity: {
+              orgNamespace: "acme",
+              workspaceNamespace: "core",
+              agentSlug: "reviewer",
+              operatorPublicId: null,
+              operatorKind: null,
+              operatorUserName: null,
+              operatorUserAvatarUrl: null,
+              goal: "g".repeat(8192),
+            },
+          }),
+        ],
+        [],
+      );
+      const out = await list({ limit: 50 }, ctx());
+      expect(out.runs[0]?.taskRef).toBe(`${"g".repeat(255)}…`);
+      expect(out.runs[0]?.name).toBe(`${"n".repeat(255)}…`);
+      expect(runList.output.parse(out)).toEqual(out);
+    });
   });
 
   it("merges ledger runs and root wrapped sessions newest first, in the caller's workspace only", async () => {
@@ -304,6 +392,62 @@ describe("list_runs", () => {
     expect(out.runs[0]?.startedAt).toBe("2026-09-11T11:00:00.000Z");
   });
 
+  it("shows a reported zero only when the gateway observed it, whatever basis the session reported", async () => {
+    // Ingest now carries a self-reported basis to the session row (#2951).
+    // Before that the row held `observed` or nothing, and the reader took any
+    // basis for `observed`.
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_observedzero",
+          session: { totalCostMicros: 0, costBasis: "observed" },
+        }),
+        tachoSession({
+          publicId: "tse_unpricedzero",
+          session: {
+            startedAt: at("2026-09-11T09:01:00.000Z"),
+            totalCostMicros: 0,
+            costBasis: "observed_unpriced",
+          },
+        }),
+        tachoSession({
+          publicId: "tse_unknownzero",
+          session: {
+            startedAt: at("2026-09-11T09:02:00.000Z"),
+            totalCostMicros: 0,
+            costBasis: "unknown",
+          },
+        }),
+        tachoSession({
+          publicId: "tse_listpriced",
+          session: {
+            startedAt: at("2026-09-11T09:03:00.000Z"),
+            totalCostMicros: 5_000,
+            costBasis: "list",
+          },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(runList.output.parse(out)).toEqual(out);
+    const reported = Object.fromEntries(
+      out.runs.map((r) => [r.id, r.reportedCost]),
+    );
+    expect(reported["tse_observedzero"]).toEqual({
+      micros: "0",
+      currency: "USD",
+      basis: "client_attested",
+    });
+    expect(reported["tse_unpricedzero"]).toBeNull();
+    expect(reported["tse_unknownzero"]).toBeNull();
+    expect(reported["tse_listpriced"]).toEqual({
+      micros: "5000",
+      currency: "USD",
+      basis: "client_attested",
+    });
+  });
+
   it("leaves the operator and the agent key null when the row recorded neither", async () => {
     const { list } = handlerOver(
       [
@@ -317,6 +461,7 @@ describe("list_runs", () => {
             operatorPublicId: null,
             operatorKind: null,
             operatorUserName: null,
+            operatorUserAvatarUrl: null,
             goal: null,
           },
         }),
@@ -641,6 +786,21 @@ describe("list_runs", () => {
     expect(decodeRunCursor(encodeRunCursor(cursor))).toEqual(cursor);
   });
 
+  it("refuses a signed year Date.parse accepts and Postgres does not (negative)", () => {
+    // The filtered read casts the instant to timestamptz, which refuses this
+    // year, so a cursor that passed a Date.parse check came back as a 500.
+    const crafted = Buffer.from(
+      JSON.stringify(["-000001-01-01T00:00:00.000Z", "tse_x"]),
+      "utf8",
+    ).toString("base64url");
+    expect(decodeRunCursor(crafted)).toBeNull();
+    expect(
+      decodeRunCursor(
+        encodeRunCursor({ at: "2026-09-11 10:00:00+00", id: "tse_x" }),
+      ),
+    ).toBeNull();
+  });
+
   it("binds the cursor instant as a string the driver can send (negative)", () => {
     // Production paged with a JS Date in a raw `sql` fragment. postgres.js has
     // no serializer for that param and threw "The string argument must be of
@@ -690,6 +850,120 @@ describe("list_runs queries name the tenant", () => {
     expect(query.sql).toMatch(/"workspace_id" = \$\d+/);
     expect(query.params).toContain(SCOPE.orgId);
     expect(query.params).toContain(SCOPE.workspaceId);
+  });
+
+  // #4224. A ledger run's goal can run to kilobytes and the page shows at
+  // most 256 characters of it. The select cuts it at 257, one past the cap,
+  // which is enough for `runLabel` to draw the same label.
+  it("cuts a ledger run's goal in the select, one past the label cap", () => {
+    for (const query of [
+      ledgerPageQuery(db, SCOPE, page).toSQL(),
+      ledgerIdentityQuery(db, SCOPE, RUN).toSQL(),
+    ]) {
+      expect(query.sql).toMatch(
+        /left\((?:"agent"\."agent_runs"\.)?"spec"->>'goal', 257\)/,
+      );
+    }
+  });
+
+  it("counts live runs over the same runs the pages list, with no cursor and no page size (A-04)", () => {
+    const counts = liveCountQueries(
+      db,
+      SCOPE,
+      { withoutWitnessRuns: false },
+      NOW,
+    );
+    const ledger = counts.ledger.toSQL();
+    expect(ledger.sql).toMatch(
+      /^select count\(\*\)::int from "agent"\."agent_runs"/,
+    );
+    expect(ledger.sql).toContain('"agent"."agent_runs"."spec_version" = $');
+    expect(ledger.sql).toContain('"agent"."agent_runs"."surface" not in');
+    expect(ledger.sql).toContain('"agent"."agent_runs"."status" in');
+    expect(ledger.params).toEqual(
+      expect.arrayContaining([
+        SCOPE.orgId,
+        SCOPE.workspaceId,
+        "pending",
+        "running",
+      ]),
+    );
+    const tacho = counts.tacho.toSQL();
+    expect(tacho.sql).toMatch(
+      /^select count\(\*\)::int from "tacho"\."sessions"/,
+    );
+    expect(tacho.sql).toContain(
+      '"tacho"."sessions"."parent_session_uuid" is null',
+    );
+    expect(tacho.sql).toContain('"tacho"."sessions"."outcome" in');
+    expect(tacho.params).toEqual(
+      expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId, "running"]),
+    );
+    // Negative: a count is the workspace's, so no cursor, order or limit.
+    for (const query of [ledger, tacho]) {
+      expect(query.sql).not.toMatch(/\border by\b|\blimit\b/);
+      expect(query.sql).not.toMatch(/"evidence"\."verdicts"/);
+    }
+    // An API-key caller's count leaves witness runs out, as its pages do.
+    const hidden = liveCountQueries(
+      db,
+      SCOPE,
+      { withoutWitnessRuns: true },
+      NOW,
+    );
+    for (const query of [hidden.ledger.toSQL(), hidden.tacho.toSQL()])
+      expect(query.sql).toMatch(
+        /not exists \(select 1 from "evidence"\."verdicts"/,
+      );
+  });
+
+  it("leaves out of the count a session whose row reads stale: its host revoked or quiet past the poll window (#4343 review)", () => {
+    // The tile counted three live runs above three rows that said stale.
+    const tacho = liveCountQueries(
+      db,
+      SCOPE,
+      { withoutWitnessRuns: false },
+      NOW,
+    ).tacho.toSQL();
+    expect(tacho.sql).toContain('left join "tacho"."hosts"');
+    expect(tacho.sql).toMatch(
+      /"tacho"\."hosts"\."id" is null or \("tacho"\."hosts"\."status" <> \$\d+ and "tacho"\."hosts"\."last_seen_at" >= \$\d+\)/,
+    );
+    expect(tacho.params).toContain("revoked");
+    // The same window `commandBlockOf` reads, on the handler's clock.
+    const cutoff = new Date(NOW.getTime() - HOST_POLL_WINDOW_MS);
+    expect(
+      tacho.params.some(
+        (param) =>
+          param instanceof Date && param.getTime() === cutoff.getTime(),
+      ) || tacho.params.includes(cutoff.toISOString()),
+    ).toBe(true);
+    // The ledger records no host, so its count is unchanged.
+    const ledger = liveCountQueries(
+      db,
+      SCOPE,
+      { withoutWitnessRuns: false },
+      NOW,
+    ).ledger.toSQL();
+    expect(ledger.sql).not.toContain('"tacho"."hosts"');
+  });
+
+  it("counts as live exactly the statuses and outcomes a row reads as live (A-04)", () => {
+    expect([...LEDGER_LIVE_STATUSES].sort()).toEqual(["pending", "running"]);
+    for (const status of [
+      "pending",
+      "running",
+      "completed",
+      "failed",
+      "cancelled",
+    ])
+      expect(LEDGER_LIVE_STATUSES.includes(status)).toBe(
+        ledgerRunStatus(status) === "live",
+      );
+    for (const outcome of schema.TACHO_SESSION_OUTCOMES)
+      expect(TACHO_LIVE_OUTCOMES.includes(outcome)).toBe(
+        tachoRunStatus(outcome) === "live",
+      );
   });
 
   it("leaves witness runs out of both pages only when the page asks", () => {
@@ -1252,6 +1526,15 @@ describe("a run row names who ran it, on what, with which model", () => {
     expect(query.sql).toContain('left join "auth"."users"');
   });
 
+  it("reads the operator's avatar from the same joined user row as the name", () => {
+    for (const query of [
+      tachoPageQuery(db, SCOPE, page).toSQL(),
+      ledgerPageQuery(db, SCOPE, page).toSQL(),
+    ]) {
+      expect(query.sql).toContain('"auth"."users"."avatar_url"');
+    }
+  });
+
   it("names the person only through a human principal", () => {
     // A delegated agent principal carries its creator's parent_user_id, so
     // the kind is part of the join and not a filter applied afterwards.
@@ -1284,6 +1567,159 @@ describe("a run row names who ran it, on what, with which model", () => {
     });
   });
 
+  it("answers the workspace's live runs, not the page's, whatever the filter (A-04)", async () => {
+    // Fleet's Live runs tile counted the live rows of one page after the
+    // state chip, under a label that claims the workspace.
+    const stores = memoryStores(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_a",
+          session: { outcome: "running", sealedAt: null },
+        }),
+        tachoSession({
+          publicId: "tse_b",
+          session: { outcome: "running", sealedAt: null },
+        }),
+      ],
+    );
+    const asked: unknown[] = [];
+    const list = createRunListHandler({
+      ...stores,
+      readLiveCount: (scope, q, now) => {
+        asked.push({ scope, q, now: now instanceof Date });
+        return Promise.resolve(7);
+      },
+    });
+    const out = await list({ limit: 1, countLive: true }, ctx());
+    expect(runList.output.parse(out)).toEqual(out);
+    expect(out.runs).toHaveLength(1);
+    expect(out.liveRuns).toBe(7);
+    expect(asked).toEqual([
+      { scope: SCOPE, q: { withoutWitnessRuns: false }, now: true },
+    ]);
+    const filtered = await list(
+      { limit: 1, pullRequests: "with", countLive: true },
+      ctx(),
+    );
+    expect(filtered.liveRuns).toBe(7);
+  });
+
+  it("counts nothing for a caller that does not ask for the count (negative, #4343 review)", async () => {
+    // The count read every root session on every list_runs call: each page,
+    // each cursor, the API, MCP and agent surfaces, and the Agents page.
+    const stores = memoryStores([], [tachoSession({ publicId: "tse_a" })]);
+    const readLiveCount = vi.fn(() => Promise.resolve(7));
+    const list = createRunListHandler({ ...stores, readLiveCount });
+    const out = await list({ limit: 50 }, ctx());
+    const declined = await list({ limit: 50, countLive: false }, ctx());
+    expect(readLiveCount).not.toHaveBeenCalled();
+    expect(out).not.toHaveProperty("liveRuns");
+    expect(declined).not.toHaveProperty("liveRuns");
+    expect(out.runs).toHaveLength(1);
+  });
+
+  it("leaves the live count out, and still answers the page, when the count fails (negative)", async () => {
+    const stores = memoryStores([], [tachoSession({ publicId: "tse_a" })]);
+    const list = createRunListHandler({
+      ...stores,
+      readLiveCount: () => Promise.reject(new Error("postgres timeout")),
+    });
+    const out = await list({ limit: 50, countLive: true }, ctx());
+    expect(out.runs).toHaveLength(1);
+    expect(out).not.toHaveProperty("liveRuns");
+  });
+
+  it("says where a wrapped session ran, as its start recorded it, and nothing for a ledger run (A-05)", async () => {
+    // The Run header drew "repository and branch not captured" whenever the
+    // work read was pending or failed, though the session row held both.
+    const { list } = handlerOver(
+      [ledgerRun({ publicId: "arun_place", runId: RUN_A })],
+      [
+        tachoSession({
+          publicId: "tse_place",
+          session: { cwd: "/Users/mb/src/platform", gitBranch: "main" },
+        }),
+        tachoSession({
+          publicId: "tse_worktree",
+          session: {
+            cwd: "/Users/mb/src/platform/.worktrees/fix",
+            gitBranch: "main",
+            worktreeBranch: "fix/tags",
+          },
+        }),
+        tachoSession({
+          publicId: "tse_nowhere",
+          session: { cwd: " ", gitBranch: null, worktreeBranch: null },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(runList.output.parse(out)).toEqual(out);
+    const place = (id: string) => out.runs.find((r) => r.id === id)?.place;
+    expect(place("tse_place")).toEqual({
+      path: "/Users/mb/src/platform",
+      branch: "main",
+    });
+    // A session in a worktree worked on the worktree's branch.
+    expect(place("tse_worktree")).toEqual({
+      path: "/Users/mb/src/platform/.worktrees/fix",
+      branch: "fix/tags",
+    });
+    // Negative: a blank column is unrecorded, and a ledger run has no host.
+    expect(place("tse_nowhere")).toBeNull();
+    expect(place("arun_place")).toBeNull();
+  });
+
+  it("names the path in get_run_work's order: the worktree, the project, then the working directory (#4343 review)", async () => {
+    // The strip paired the worktree's branch with the working directory, so
+    // before the work read answered it named a folder that read did not.
+    const { list } = handlerOver(
+      [],
+      [
+        tachoSession({
+          publicId: "tse_nested",
+          session: {
+            cwd: "/Users/mb/src/platform/packages/api",
+            projectDir: "/Users/mb/src/platform",
+            worktreePath: "/Users/mb/src/platform/.worktrees/tags",
+            gitBranch: "main",
+            worktreeBranch: "fix/tags",
+          },
+        }),
+        tachoSession({
+          publicId: "tse_project",
+          session: {
+            cwd: "/Users/mb/src/platform/packages/api",
+            projectDir: "/Users/mb/src/platform",
+            worktreePath: "",
+            gitBranch: "main",
+          },
+        }),
+      ],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    const place = (id: string) => out.runs.find((r) => r.id === id)?.place;
+    expect(place("tse_nested")).toEqual({
+      path: "/Users/mb/src/platform/.worktrees/tags",
+      branch: "fix/tags",
+    });
+    // Negative: a blank worktree path falls through to the project directory.
+    expect(place("tse_project")).toEqual({
+      path: "/Users/mb/src/platform",
+      branch: "main",
+    });
+  });
+
+  it("selects the session's place in the page's own statement (A-05)", () => {
+    const query = tachoPageQuery(db, SCOPE, page).toSQL();
+    expect(query.sql).toContain('"tacho"."sessions"."cwd"');
+    expect(query.sql).toContain('"tacho"."sessions"."project_dir"');
+    expect(query.sql).toContain('"tacho"."sessions"."worktree_path"');
+    expect(query.sql).toContain('"tacho"."sessions"."git_branch"');
+    expect(query.sql).toContain('"tacho"."sessions"."worktree_branch"');
+  });
+
   // #4024: ingest attributes a wrapped session to whoever enrolled the host,
   // so the row says so; a ledger run names the principal it was admitted for.
   it("marks a wrapped session's operator as the host's enroller", async () => {
@@ -1305,6 +1741,83 @@ describe("a run row names who ran it, on what, with which model", () => {
     expect(byId["tse_op"]?.operatorAttribution).toBe("host_enroller");
     expect(byId["tse_noop"]?.operatorAttribution).toBeNull();
     expect(byId["arun_op"]?.operatorAttribution).toBe("initiator");
+  });
+
+  // #3999: the operator's workspace role is the value stamped when the run
+  // opened (ADR-197), read back as stamped.
+  describe("the operator's role", () => {
+    const stampedLedger = (publicId: string, runId: string, role: string) => {
+      const base = ledgerRun({ publicId, runId });
+      return { ...base, run: { ...base.run, operatorRole: role } };
+    };
+
+    it("answers the stamped role on a wrapped session and a ledger run", async () => {
+      const { list } = handlerOver(
+        [stampedLedger("arun_role", RUN_A, "member")],
+        [
+          tachoSession({
+            publicId: "tse_role",
+            session: { operatorRole: "admin" },
+          }),
+        ],
+      );
+      const byId = Object.fromEntries(
+        (await list({ limit: 50 }, ctx())).runs.map((r) => [r.id, r]),
+      );
+      expect(byId["tse_role"]?.operatorRole).toBe("admin");
+      expect(byId["arun_role"]?.operatorRole).toBe("member");
+    });
+
+    it("answers null for a run recorded before the stamp", async () => {
+      // The fixtures carry no `operatorRole`, as a row from before the column
+      // reads: not recorded, never today's role.
+      const { list } = handlerOver(
+        [ledgerRun({ publicId: "arun_old", runId: RUN_A })],
+        [tachoSession({ publicId: "tse_old" })],
+      );
+      for (const run of (await list({ limit: 50 }, ctx())).runs)
+        expect(run.operatorRole).toBeNull();
+    });
+
+    it("answers null for an operator who is not a person, whatever the column holds", async () => {
+      const { list } = handlerOver(
+        [],
+        [
+          tachoSession({
+            publicId: "tse_agent",
+            operatorKind: "agent",
+            session: { operatorRole: "owner" },
+          }),
+        ],
+      );
+      expect((await list({ limit: 50 }, ctx())).runs[0]?.operatorRole).toBeNull();
+    });
+
+    it("reads a value outside the six roles as not recorded", async () => {
+      const { list } = handlerOver(
+        [],
+        [
+          tachoSession({
+            publicId: "tse_odd",
+            session: { operatorRole: "superuser" },
+          }),
+        ],
+      );
+      expect((await list({ limit: 50 }, ctx())).runs[0]?.operatorRole).toBeNull();
+    });
+
+    it("never joins the membership table, so a later role change cannot reach the row", () => {
+      // The stamp wins over a role changed after the run opened because the
+      // read has no other source: both queries select the stamped column and
+      // neither names `workspace_users`.
+      for (const query of [
+        tachoPageQuery(db, SCOPE, page).toSQL(),
+        ledgerPageQuery(db, SCOPE, page).toSQL(),
+      ]) {
+        expect(query.sql).toMatch(/"operator_role"/);
+        expect(query.sql).not.toContain("workspace_users");
+      }
+    });
   });
 
   // #4024: `sealed_at` is when the server received the stop; the wall clock
@@ -1487,6 +2000,31 @@ describe("a run row names who ran it, on what, with which model", () => {
     ).toBeNull();
   });
 
+  it("answers every row's harness key, null where none was recorded (#3790)", async () => {
+    const { list } = handlerOver(
+      [ledgerRun({ publicId: "arun_ledger", runId: RUN_A })],
+      [
+        tachoSession({ publicId: "tse_wrapped" }),
+        tachoSession({
+          publicId: "tse_unrecorded",
+          session: { harness: "", harnessVersion: null },
+        }),
+      ],
+    );
+    const out = runList.output.parse(await list({ limit: 50 }, ctx()));
+    const byId = new Map(out.runs.map((run) => [run.id, run]));
+    // The key is present on each row, so an API or MCP reader sees null
+    // rather than a missing field.
+    for (const run of out.runs) expect(run).toHaveProperty("harness");
+    expect(byId.get("arun_ledger")?.harness).toBeNull();
+    expect(byId.get("tse_unrecorded")?.harness).toBeNull();
+    expect(byId.get("tse_wrapped")?.harness).toEqual({
+      name: "Claude Code",
+      version: "2.1.0",
+      runtime: "claude-code",
+    });
+  });
+
   it("answers a null machine when the session names no host (negative)", async () => {
     const { list } = handlerOver(
       [],
@@ -1530,6 +2068,46 @@ describe("a run row names who ran it, on what, with which model", () => {
       [tachoSession({ publicId: "tse_bad", operatorKind: "robot" })],
     );
     expect((await list({ limit: 50 }, ctx())).runs[0]?.operatorKind).toBeNull();
+  });
+
+  it("carries the person's avatar on a ledger run and on a wrapped session", async () => {
+    const avatar = "https://avatars.example.com/marcus.png";
+    const { list } = handlerOver(
+      [
+        ledgerRun({
+          publicId: "arun_face",
+          runId: RUN_A,
+          identity: {
+            orgNamespace: "acme",
+            workspaceNamespace: "core",
+            agentSlug: "reviewer",
+            operatorPublicId: "prn_0123456789abcdefghjkmn",
+            operatorKind: "human",
+            operatorUserName: "Marcus Bell",
+            operatorUserAvatarUrl: avatar,
+            goal: null,
+          },
+        }),
+      ],
+      [tachoSession({ publicId: "tse_face", operatorUserAvatarUrl: avatar })],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(runList.output.parse(out)).toEqual(out);
+    const byId = Object.fromEntries(out.runs.map((r) => [r.id, r]));
+    expect(byId["arun_face"]?.operatorAvatarUrl).toBe(avatar);
+    expect(byId["tse_face"]?.operatorAvatarUrl).toBe(avatar);
+  });
+
+  it("reads a blank avatar as none, so the page still passes the contract (negative)", async () => {
+    // `users.avatar_url` has no CHECK, and the contract's `min(1)` would
+    // refuse the whole page over one blank value.
+    const { list } = handlerOver(
+      [],
+      [tachoSession({ publicId: "tse_blank", operatorUserAvatarUrl: "  " })],
+    );
+    const out = await list({ limit: 50 }, ctx());
+    expect(out.runs[0]?.operatorAvatarUrl).toBeNull();
+    expect(runList.output.safeParse(out).success).toBe(true);
   });
 
   it("names no model and no machine on a ledger run", async () => {
@@ -1647,6 +2225,11 @@ describe("tachoRunName", () => {
       "oxagen · 6 files",
     ],
     [{ name: null }, null],
+    // #4224: the name is cut to the display cap.
+    [
+      { harnessTitle: "t".repeat(300), name: "Model name", title: "dir" },
+      `${"t".repeat(255)}…`,
+    ],
   ])("names %o as %s", (session, expected) => {
     expect(tachoRunName(session)).toBe(expected);
   });

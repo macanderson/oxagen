@@ -30,6 +30,8 @@ export interface SuccessionHost {
   orgId: string;
   workspaceId: string;
   deviceKeyFingerprint: string;
+  /** The agent key the enrollment was minted for; its frames carry it. */
+  agentKey: string;
 }
 
 /**
@@ -100,6 +102,7 @@ export async function readSuccessionHosts(
       orgId: schema.tachoHosts.orgId,
       workspaceId: schema.tachoHosts.workspaceId,
       deviceKeyFingerprint: schema.tachoHosts.deviceKeyFingerprint,
+      agentKey: schema.tachoHosts.agentKey,
     })
     .from(schema.tachoHosts)
     .where(inArray(schema.tachoHosts[key], [...wanted]))) as SuccessionHost[];

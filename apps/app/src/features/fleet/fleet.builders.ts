@@ -4,6 +4,10 @@
 // src/test/arch/layers.ts).
 import type { AgentPage } from "@/data/contracts/agents";
 import type { ApprovalItem, ApprovalQueue } from "@/data/contracts/approvals";
+import type {
+  InterjectionItem,
+  InterjectionQueue,
+} from "@/data/contracts/interjections";
 import type { RunPage } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import { type Read, readOk } from "@/data/read";
@@ -48,6 +52,8 @@ export function runRow(overrides: Partial<RunRow> = {}): RunRow {
     enforcementTier: "harness",
     completenessGaps: [],
     canSummarize: false,
+    effortSource: null,
+    fit: null,
     startedAt: at(-3600),
     sealedAt: null,
     ...overrides,
@@ -84,11 +90,52 @@ export function approvalQueue(
   return readOk({ items, more });
 }
 
+/** One open question, raised 3m 36s before NOW with a 30-minute window. */
+export function interjectionItem(
+  overrides: Partial<InterjectionItem> = {},
+): InterjectionItem {
+  return {
+    id: "inj_4r7t2w",
+    runId: "tse_9d3k1f",
+    agentKey: "acme.core.release-bot",
+    question: "Which branch should the release cut from?",
+    raisedAt: at(-216),
+    expiresAt: at(-216 + 1800),
+    answeredAt: null,
+    answer: null,
+    answeredBy: null,
+    kind: "question",
+    raisedSeq: null,
+    body: null,
+    repository: null,
+    path: null,
+    receiptId: null,
+    ...overrides,
+  };
+}
+
+/** The open questions as `interjections.open` answers them. */
+export function interjectionQueue(
+  items: InterjectionItem[],
+  more = false,
+): Read<InterjectionQueue> {
+  return readOk({ items, more });
+}
+
+/** No question open: what every Fleet test reads unless it says otherwise. */
+export const NO_INTERJECTIONS: Read<InterjectionQueue> = interjectionQueue([]);
+
 export function runPage(
   runs: RunRow[],
   nextCursor: string | null = null,
+  /** The workspace's live runs, as `list_runs` counts them; omitted when not counted. */
+  liveRuns?: number,
 ): Read<RunPage> {
-  return readOk({ runs, nextCursor });
+  return readOk({
+    runs,
+    nextCursor,
+    ...(liveRuns === undefined ? {} : { liveRuns }),
+  });
 }
 
 /**
@@ -107,8 +154,12 @@ export function agentPage(
       description: null,
       agentKey,
       harness: "claude-code",
+      managed: false,
+      runtime: null,
+      toolbelt: null,
       operatorId: null,
       operatorName: null,
+      operatorAvatarUrl: null,
       principalId: null,
       credentials: 0,
       hosts: 0,
@@ -140,6 +191,8 @@ export function agentPage(
 type FleetReads = {
   runs: Read<RunPage>;
   approvals: Read<ApprovalQueue>;
+  /** The open questions; none when absent. */
+  interjections?: Read<InterjectionQueue>;
   /**
    * The workspace's agents; an empty page when absent. A function answers
    * each page by the cursor it was asked for, for the roster's walk.
@@ -152,16 +205,18 @@ export function fleetSource(reads: FleetReads) {
   const calls: {
     runs: unknown[][];
     approvals: unknown[][];
+    interjections: unknown[][];
     agents: unknown[][];
   } = {
     runs: [],
     approvals: [],
+    interjections: [],
     agents: [],
   };
   const refuse = () => Promise.reject(new Error("not a Fleet read"));
   const source: DataSource = {
-    runtimes: { list: refuse, agents: refuse },
-    conversations: { latest: refuse },
+    runtimes: { list: refuse, agents: refuse, named: refuse },
+    conversations: { latest: refuse, list: refuse, byId: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
       context: refuse,
@@ -180,9 +235,13 @@ export function fleetSource(reads: FleetReads) {
       cost: refuse,
       turns: refuse,
       chain: refuse,
+      commands: refuse,
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,
+      issues: refuse,
+      context: refuse,
+      findings: refuse,
       transcript: refuse,
     },
     approvals: {
@@ -194,6 +253,14 @@ export function fleetSource(reads: FleetReads) {
       // page read (#3153).
       resolved: refuse,
       resolvedSince: refuse,
+    },
+    interjections: {
+      open: (...args) => {
+        calls.interjections.push(args);
+        return Promise.resolve(reads.interjections ?? NO_INTERJECTIONS);
+      },
+      // Fleet reads the open queue only; one run's questions are the Run page's.
+      forRun: refuse,
     },
     agents: {
       list: (...args) => {
@@ -269,6 +336,8 @@ export function fleetSource(reads: FleetReads) {
       approvalRules: refuse,
       connections: refuse,
       mcpServers: refuse,
+      toolbelts: refuse,
+      toolbelt: refuse,
     },
   };
   return { source, calls };

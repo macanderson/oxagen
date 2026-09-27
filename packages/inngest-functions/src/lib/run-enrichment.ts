@@ -12,6 +12,15 @@ export const ENRICHMENT_CHUNK_CHARS = 24_000;
 export const ENRICHMENT_TEXT_CEILING_CHARS = 40 * ENRICHMENT_CHUNK_CHARS;
 
 /**
+ * The most frame bodies one read of a run opens (#3784). The read opens
+ * bodies one at a time from blob storage, inside one durable step, so a run
+ * of many short bodies held that step for minutes before the text reached
+ * its ceiling. Past this count the text stops, as it does at the text
+ * ceiling.
+ */
+export const ENRICHMENT_BODY_READ_CEILING = 2_000;
+
+/**
  * The most one enrichment job spends on summarizing one run, in US dollars,
  * priced from the tokens each call reports (#3944, E-01). No setting or doc
  * named a figure, so this is a conservative default. At the text ceiling a
@@ -25,11 +34,43 @@ export const ENRICHMENT_TEXT_CEILING_CHARS = 40 * ENRICHMENT_CHUNK_CHARS;
  * says it covers only the start of the run. The account is persisted with
  * its input digest, so an unchanged run is not summarized again.
  *
- * The budget is per job. A live run is enriched again every
- * `LIVE_ENRICHMENT_INTERVAL_MS` while it changes, and each job starts with the
- * full budget, so nothing yet caps one run's total (#4312).
+ * A live run is enriched again every `LIVE_ENRICHMENT_INTERVAL_MS` while it
+ * changes, so this budget alone does not bound a run. The run's total is
+ * held to {@link ENRICHMENT_RUN_TOTAL_BUDGET_USD}: a job whose run has less
+ * than this left spends only what is left.
  */
 export const ENRICHMENT_RUN_BUDGET_USD = 1;
+
+/**
+ * The most enrichment spends on one run across all of its jobs, in US
+ * dollars (#4312). Five jobs at the per-job budget, or about a dozen at the
+ * text ceiling on the default fast tier, which covers about six hours of a
+ * busy live run summarized every half hour.
+ *
+ * Each call's price is added to the run's `summary_spent_usd_micros` inside
+ * the step that made the call, so the total outlives the job and a replayed
+ * step adds nothing. A job starts with what the run has left, and stops
+ * reducing when that is spent, as it does at the per-job budget: the account
+ * is written from the part it has read and says it covers only the start.
+ * The budget is checked before each reduction call and not before the
+ * account call, so a job can take the run past the cap by at most two calls:
+ * the reduction call that crossed it and the account call, each over at most
+ * one chunk. Once the run's total reaches the cap, the sweep no longer queues the
+ * run, a job asked for it anyway makes no model call, and the last account
+ * stays.
+ */
+export const ENRICHMENT_RUN_TOTAL_BUDGET_USD = 5;
+
+/** {@link ENRICHMENT_RUN_TOTAL_BUDGET_USD} in the micro-dollars the column holds. */
+export const ENRICHMENT_RUN_TOTAL_BUDGET_MICROS =
+  ENRICHMENT_RUN_TOTAL_BUDGET_USD * 1_000_000;
+
+/** A call's price in whole micro-dollars; a missing or negative price is 0. */
+export function usdMicros(usd: number | undefined): number {
+  return usd !== undefined && Number.isFinite(usd) && usd > 0
+    ? Math.round(usd * 1_000_000)
+    : 0;
+}
 
 /** The account's last sentence when the budget stopped the job early. */
 export const ENRICHMENT_BUDGET_NOTE =
@@ -44,32 +85,58 @@ export interface NarrativeTurn {
   costUsd: number;
 }
 const CEILING_NOTE =
-  "\n[The transcript stops here. It reached its length limit, and later frames were not read. Do not infer what they contain.]\n";
+  "\n[The transcript stops here. It reached its length or read limit, and later frames were not read. Do not infer what they contain.]\n";
 const decoder = new TextDecoder("utf-8", { fatal: true });
 
 /**
+ * A run's frames in order: one list, as the enrichment job reads them
+ * (`readTranscriptFramesOf`), or pages a reader pulls one at a time. A
+ * reader that stops pulling reads no further page.
+ */
+export type RunFrameSource =
+  | readonly RunFrame[]
+  | AsyncIterable<readonly RunFrame[]>;
+
+function isFrameList(frames: RunFrameSource): frames is readonly RunFrame[] {
+  return Array.isArray(frames);
+}
+
+async function* pagesOf(
+  frames: RunFrameSource,
+): AsyncGenerator<readonly RunFrame[]> {
+  if (isFrameList(frames)) {
+    yield frames;
+    return;
+  }
+  yield* frames;
+}
+
+/**
  * Every retained frame participates, including prompts and messages outside
- * tool steps, until the text reaches {@link ENRICHMENT_TEXT_CEILING_CHARS}.
- * Past that point no body is read and no frame is added. The text ends with a
+ * tool steps, until the text reaches {@link ENRICHMENT_TEXT_CEILING_CHARS} or
+ * the read has opened {@link ENRICHMENT_BODY_READ_CEILING} bodies. Past that
+ * point no body is read, no frame is added, and no further page is pulled:
+ * the read stops one frame past the ceiling (#3784). The text ends with a
  * note that it stops, `frames` counts the frames the text covers, and
- * `truncated` counts the frames left out.
+ * `truncated` says whether the text stopped short of the run.
  *
  * The fingerprint covers only what the text covers, plus a fixed mark when
- * the ceiling was reached. A run that keeps recording past the ceiling feeds
+ * a ceiling was reached. A run that keeps recording past the ceiling feeds
  * the model the same text, so its digest stays put and the job does not pay
- * for the same account again. A run under the ceiling fingerprints exactly as
- * it did before the ceiling existed.
+ * for the same account again. A run under both ceilings fingerprints exactly
+ * as it did before either existed.
  */
 export async function collectRunText(
   scope: RunScope,
-  frames: readonly RunFrame[],
+  frames: RunFrameSource,
   getBody: (scope: RunScope, ref: string) => Promise<{ bytes: Uint8Array }>,
 ) {
   const chunks: string[] = [];
   let buffer = "";
   let written = 0;
   let stopped = false;
-  let truncated = 0;
+  let covered = 0;
+  let bodyReads = 0;
   let retained = 0;
   let missing = 0;
   let unavailable = 0;
@@ -97,52 +164,61 @@ export async function collectRunText(
     chunk(kept);
   }
   const full = () => written >= ENRICHMENT_TEXT_CEILING_CHARS;
-  for (const frame of frames) {
-    if (full()) {
-      stopped = true;
-      truncated += 1;
-      continue;
-    }
-    fingerprint.update(
-      JSON.stringify([
-        frame.seq,
-        frame.digest,
-        frame.body.bodyDigest,
-        frame.body.bodyRef,
-      ]),
-    );
-    append(`\nFrame ${frame.seq}: ${frame.summary}\n`);
-    const { bodyRef, bodyDigest } = frame.body;
-    if (bodyRef === null || bodyDigest === null) {
-      if (bodyDigest !== null) missing += 1;
-      continue;
-    }
-    // The frame's own line filled the text, so its body is never read.
-    if (full()) {
-      stopped = true;
-      continue;
-    }
-    try {
-      const { bytes } = await getBody(scope, bodyRef);
-      if (digestBytes(bytes) !== bodyDigest)
-        throw new Error("body digest mismatch");
-      const text = decoder.decode(bytes);
-      if (firstPrompt === null && frame.type === "turn_start" && !frame.chain)
-        firstPrompt = text;
-      const firstSeq = firstBodyFrame.get(bodyDigest);
-      if (firstSeq === undefined) {
-        append(text);
-        firstBodyFrame.set(bodyDigest, frame.seq);
-      } else {
-        append(`[Same retained body as frame ${firstSeq}.]\n`);
+  const opensBody = (frame: RunFrame) =>
+    frame.body.bodyRef !== null && frame.body.bodyDigest !== null;
+  pages: for await (const page of pagesOf(frames)) {
+    for (const frame of page) {
+      if (
+        full() ||
+        (opensBody(frame) && bodyReads >= ENRICHMENT_BODY_READ_CEILING)
+      ) {
+        // Leaving the loop stops the page source, so no later page is read.
+        stopped = true;
+        break pages;
       }
-      retained += 1;
-      fingerprint.update("retained");
-    } catch {
-      missing += 1;
-      unavailable += 1;
-      fingerprint.update("unavailable");
-      append("[Body unavailable; do not infer its contents.]\n");
+      covered += 1;
+      fingerprint.update(
+        JSON.stringify([
+          frame.seq,
+          frame.digest,
+          frame.body.bodyDigest,
+          frame.body.bodyRef,
+        ]),
+      );
+      append(`\nFrame ${frame.seq}: ${frame.summary}\n`);
+      const { bodyRef, bodyDigest } = frame.body;
+      if (bodyRef === null || bodyDigest === null) {
+        if (bodyDigest !== null) missing += 1;
+        continue;
+      }
+      // The frame's own line filled the text, so its body is never read.
+      if (full()) {
+        stopped = true;
+        continue;
+      }
+      bodyReads += 1;
+      try {
+        const { bytes } = await getBody(scope, bodyRef);
+        if (digestBytes(bytes) !== bodyDigest)
+          throw new Error("body digest mismatch");
+        const text = decoder.decode(bytes);
+        if (firstPrompt === null && frame.type === "turn_start" && !frame.chain)
+          firstPrompt = text;
+        const firstSeq = firstBodyFrame.get(bodyDigest);
+        if (firstSeq === undefined) {
+          append(text);
+          firstBodyFrame.set(bodyDigest, frame.seq);
+        } else {
+          append(`[Same retained body as frame ${firstSeq}.]\n`);
+        }
+        retained += 1;
+        fingerprint.update("retained");
+      } catch {
+        missing += 1;
+        unavailable += 1;
+        fingerprint.update("unavailable");
+        append("[Body unavailable; do not infer its contents.]\n");
+      }
     }
   }
   if (stopped) {
@@ -155,8 +231,8 @@ export async function collectRunText(
     retained,
     missing,
     unavailable,
-    frames: frames.length - truncated,
-    truncated,
+    frames: covered,
+    truncated: stopped,
     digest: fingerprint.digest("hex"),
     firstPrompt,
   };

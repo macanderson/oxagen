@@ -195,16 +195,40 @@ export const routes = {
   /**
    * Fleet; `cursor` opens a later page of its runs table, and `prs` lists
    * only the runs `with` or `without` pull requests (`any`, or absent, is all).
+   * `q` is the search, `status`, `tier` and `replay` each carry a
+   * comma-joined list, `sort` and `dir` the order, and `page` the page number
+   * from 1 (#3837). A default is left out of the URL: `prs` `any`, the
+   * `started` descending order, and page 1.
    */
   fleet: (
     org: string,
     ws: string,
-    q?: { cursor?: string; prs?: "any" | "with" | "without" },
-  ): SafePath =>
-    withQuery(pathOf(org, ws), {
+    q?: {
+      cursor?: string;
+      prs?: "any" | "with" | "without";
+      q?: string;
+      status?: string;
+      tier?: string;
+      replay?: string;
+      sort?: string;
+      dir?: "asc" | "desc";
+      page?: number;
+    },
+  ): SafePath => {
+    const defaultOrder =
+      (q?.sort ?? "started") === "started" && (q?.dir ?? "desc") === "desc";
+    return withQuery(pathOf(org, ws), {
       prs: q?.prs === "any" ? undefined : q?.prs,
+      q: q?.q === "" ? undefined : q?.q,
+      status: q?.status === "" ? undefined : q?.status,
+      tier: q?.tier === "" ? undefined : q?.tier,
+      replay: q?.replay === "" ? undefined : q?.replay,
+      sort: defaultOrder ? undefined : q?.sort,
+      dir: defaultOrder ? undefined : q?.dir,
+      page: q?.page === undefined || q.page <= 1 ? undefined : String(q.page),
       cursor: q?.cursor,
-    }),
+    });
+  },
   /**
    * Agent IAM; `cursor` opens a later page of the identities table, and
    * `deregistered` lists retired agents beside the live ones.
@@ -242,9 +266,6 @@ export const routes = {
         cursor: q?.cursor,
       },
     ),
-  /** The agent's definition file in the source editor. */
-  agentSource: (org: string, ws: string, agent: string): SafePath =>
-    pathOf(org, ws, "agents", agent, "source"),
   /**
    * One mandate (#2957), at the flat route ARCHITECTURE.md §1.2 states:
    * `/{org}/{ws}/mandates/{mandate}`.
@@ -275,15 +296,20 @@ export const routes = {
   /**
    * One step of Register an agent (#2967, ADR-065 decision 1). `agent` carries
    * the identity `register_agent` minted from the name step to the wrap and
-   * run steps, so a reload lands back on the same registration.
+   * run steps, so a reload lands back on the same registration. `runtime`
+   * opens the name step with that runtime chosen (`rtm_…`, ADR-198), which is
+   * where Add a runtime lands.
    */
   register: (
     org: string,
     ws: string,
     step: string,
-    q?: { agent: string },
+    q?: { agent?: string; runtime?: string },
   ): SafePath =>
-    withQuery(pathOf(org, ws, "register", step), { agent: q?.agent }),
+    withQuery(pathOf(org, ws, "register", step), {
+      agent: q?.agent,
+      runtime: q?.runtime,
+    }),
   /**
    * Billing; `cursor` opens a later page of its invoices, `checkout` is where
    * a Stripe Checkout returns. The two meters return to different values —
@@ -339,7 +365,8 @@ export const routes = {
    * `tab` picks the section, `kinds` the chips the transcript opens with
    * (comma-separated) and `frames` a later page of the frames. The spine above the tabs adds `reads`, which folds its read marks
    * away, and `spine`, the folded groups a person opened (comma-separated
-   * indexes). Each is a query value, so the run keeps one route (§1.2).
+   * indexes). `finding` opens one finding's evidence over the Cost tab
+   * (#4001). Each is a query value, so the run keeps one route (§1.2).
    */
   run: (
     org: string,
@@ -352,6 +379,7 @@ export const routes = {
       body?: string;
       reads?: string;
       spine?: string;
+      finding?: string;
     },
   ): SafePath =>
     withQuery(pathOf(org, ws, "runs", run), {
@@ -361,6 +389,7 @@ export const routes = {
       body: q?.body,
       reads: q?.reads,
       spine: q?.spine,
+      finding: q?.finding,
     }),
   /**
    * Spend on one tab, with one key's drill or one finding's evidence open. The
@@ -393,7 +422,8 @@ export const routes = {
   /**
    * Tools; its tabs are path segments (`/tools/providers`), as the mockup's
    * route names them, and the first tab is the bare path. A category chip, a
-   * provider chip, the API-names toggle and a cursor are query values.
+   * provider chip, the API-names toggle, a cursor and the toolbelt open on the
+   * Toolbelts tab (`belt`, ADR-198) are query values.
    */
   tools: (
     org: string,
@@ -404,6 +434,7 @@ export const routes = {
       provider?: string;
       names?: string;
       cursor?: string;
+      belt?: string;
     } = {},
   ): SafePath =>
     withQuery(
@@ -415,6 +446,7 @@ export const routes = {
         provider: q.provider,
         names: q.names,
         cursor: q.cursor,
+        belt: q.belt,
       },
     ),
   /**
@@ -435,7 +467,11 @@ export const routes = {
         : pathOf(org, ws, "repositories", tab),
   /** Runtimes: the hosts agents run on (roadmap mockups/pages/runtimes.md). */
   runtimes: (org: string, ws: string): SafePath => pathOf(org, ws, "runtimes"),
-  /** One runtime, addressed by its enrollment's public id (`tch_…`). */
+  /**
+   * One runtime: a host enrollment by its public id (`tch_…`), or a named
+   * runtime by its id (`rtm_…`, ADR-198), whose page carries its containment
+   * (ADR-204).
+   */
   runtime: (org: string, ws: string, runtime: string): SafePath =>
     pathOf(org, ws, "runtimes", runtime),
   /**

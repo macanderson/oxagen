@@ -9,6 +9,11 @@
  * recorder wrote them after redaction, so a caller can recompute `digest`
  * and prove what it read is what was recorded.
  *
+ * A wrapped run's subagents record on chains of their own, each numbered from
+ * 0, so a subagent's frame is read by its chain and its seq together
+ * (`sessionUuid`, #3823). Without it, `seq` names a frame on the run's own
+ * chain.
+ *
  * A frame recorded under a `digest_only` retention policy answers its digest
  * and `bytes: null`: the workspace chose to keep no bodies, and the read says
  * so rather than failing. A frame that carried no content at all is
@@ -28,7 +33,7 @@ export const runFrameBodyGet = registerCapability({
   name: "get_run_frame_body",
   domain: "run",
   description:
-    "Read the redacted body of one frame of a run by its sequence: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only.",
+    "Read the redacted body of one frame of a run by its sequence, and by its chain for a subagent's frame: the content type and bytes when the workspace retained bodies, the digest and no bytes under digest_only.",
   mode: "sync",
   surfaces: ["api", "mcp"],
   layers: ["schema", "api", "mcp", "unit", "docs", "app"],
@@ -45,6 +50,14 @@ export const runFrameBodyGet = registerCapability({
     .object({
       runId: runPublicIdSchema,
       seq: frameSeqSchema,
+      /**
+       * The chain the frame was recorded on, from a transcript half's or
+       * entry's `sessionUuid` or a `get_run` frame's. Omitted, or the run's
+       * own session, reads the run's own chain. A session that is not a
+       * subagent chain under this run answers `not_found`
+       * (`frame_not_found`), and so does any session on a ledger run.
+       */
+      sessionUuid: z.string().uuid().optional(),
     })
     .strict(),
   output: z

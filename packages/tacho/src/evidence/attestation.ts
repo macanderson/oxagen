@@ -31,6 +31,36 @@ export interface AttestationPayload {
   replay_grade: string | null;
 }
 
+/**
+ * The payload fields a run attestation signs over, in payload order (#4000).
+ * A reader names them beside the signature, because a seal carries the values
+ * and the attestation carries only the field names.
+ */
+export const RUN_ATTESTATION_FIELDS = [
+  "run_id",
+  "attempt_id",
+  "frame_count",
+  "merkle_root",
+  "archive_segment_digest",
+  "enforcement_tier",
+  "completeness_gaps",
+  "replay_grade",
+] as const satisfies readonly (keyof AttestationPayload)[];
+
+/**
+ * Fails to compile when `AttestationPayload` gains a field the list above
+ * does not name, so the names a reader prints cannot fall behind what is
+ * signed.
+ */
+type UnlistedAttestationField = Exclude<
+  keyof AttestationPayload,
+  (typeof RUN_ATTESTATION_FIELDS)[number]
+>;
+const everyAttestationFieldListed: [UnlistedAttestationField] extends [never]
+  ? true
+  : never = true;
+void everyAttestationFieldListed;
+
 export interface Attestation {
   payload: AttestationPayload;
   key_id: string;

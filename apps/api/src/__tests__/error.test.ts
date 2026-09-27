@@ -413,6 +413,47 @@ describe("errorMiddleware store backpressure", () => {
   });
 });
 
+// ── Embeddings unavailable → 503 (#4148) ─────────────────────────────────────
+
+describe("errorMiddleware embedding_unavailable", () => {
+  function unavailable(): Error {
+    return Object.assign(
+      new Error("Embeddings are unavailable: Voyage answered 401"),
+      {
+        code: "embedding_unavailable" as const,
+        statusCode: 401,
+        providerMessage: '{"detail":"Provided API key is invalid."}',
+      },
+    );
+  }
+
+  it("answers 503 with the stable code, never a 500", async () => {
+    const { status, body } = await triggerError(unavailable());
+    expect(status).toBe(503);
+    expect((body as { error: { code: string } }).error.code).toBe(
+      "embedding_unavailable",
+    );
+  });
+
+  it("keeps Voyage's own words out of the response", async () => {
+    const { body } = await triggerError(unavailable());
+    expect(JSON.stringify(body)).not.toContain("Provided API key is invalid");
+  });
+
+  it("logs Voyage's status and message for the operator", async () => {
+    const { logger } = await import("../middleware/logger");
+    vi.mocked(logger.error).mockClear();
+    await triggerError(unavailable());
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerStatus: 401,
+        providerMessage: '{"detail":"Provided API key is invalid."}',
+      }),
+      "embeddings unavailable",
+    );
+  });
+});
+
 // ── CapabilityError → HTTP status codes ──────────────────────────────────────
 
 describe("errorMiddleware CapabilityError", () => {

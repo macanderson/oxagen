@@ -26,7 +26,12 @@ afterEach(async () => {
 function activity(slug: string, unread: number): WorkspaceActivity {
   return {
     slug,
-    counts: readOk({ approvals: 0, proposals: unread, incidents: 0 }),
+    counts: readOk({
+      approvals: 0,
+      interjections: null,
+      proposals: unread,
+      incidents: 0,
+    }),
     feed: readOk({ items: [], unread }),
   };
 }

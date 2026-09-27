@@ -39,10 +39,12 @@ const kernel =
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
+  answerInterjection,
   bisectRuns,
   exportRun,
   forkRun,
   haltRun,
+  readDeliveryReport,
   readRunExport,
   readTranscriptPage,
   sealRun,
@@ -90,6 +92,16 @@ class HandlerRefusal extends Error {
   }
 }
 const refused = (reason: string) => new HandlerRefusal(reason);
+
+/** What `assertOrgRole` throws: `code: "forbidden"` with the rule it missed in `reason`. */
+class HandlerForbidden extends Error {
+  readonly code = "forbidden";
+
+  constructor(readonly reason: string) {
+    super(reason);
+    this.name = "HandlerForbidden";
+  }
+}
 
 beforeEach(() => {
   invoke.mockReset();
@@ -571,6 +583,8 @@ describe("readTranscriptPage", () => {
       entries: [],
       cursor: null,
       complete: true,
+      // Where a live reader's stream opens (A-06); it maps through as is.
+      frameCursor: "Zjo0",
     });
     const read = await readTranscriptPage(
       "acme",
@@ -587,6 +601,7 @@ describe("readTranscriptPage", () => {
         entries: [],
         cursor: null,
         complete: true,
+        frameCursor: "Zjo0",
         counts: null,
         figures: null,
         search: null,
@@ -944,6 +959,8 @@ describe("readTranscriptPage", () => {
             decision: "allow",
             type: "policy_decision",
             harness: false,
+            rules: [],
+            taint: null,
             at: "2026-09-15T08:10:01.000Z",
           },
           frames: 2,
@@ -992,4 +1009,217 @@ describe("readTranscriptPage", () => {
   // port maps it, so a value that clears that gate always clears the app's
   // looser view schema too. The `captureError` report on that branch belongs
   // to the port's `view()` helper and is proved in `data/live/runs.test.ts`.
+});
+
+// #2953: the delivery report reads list_commands through the runs port, one
+// run's commands or a broadcast's by id, and never reads for a query that
+// names neither.
+describe("readDeliveryReport", () => {
+  const command = {
+    id: "tcm_1",
+    runId: RUN,
+    agentKey: null,
+    command: "steer",
+    status: "applied",
+    requestedMode: "interrupt",
+    deliveryMode: "next_step",
+    degradedReason: "harness_tier",
+    reason: null,
+    issuedAt: "2026-09-15T08:10:00.000Z",
+    expiresAt: null,
+    sentAt: "2026-09-15T08:10:02.000Z",
+    acknowledgedAt: "2026-09-15T08:10:05.000Z",
+    appliedAt: "2026-09-15T08:10:05.000Z",
+    appliedAtSeq: 41,
+    detail: null,
+    issuedBy: { id: "usr_0a", name: "Ada Park" },
+    text: "Run the migration tests before you push.",
+  };
+
+  it("reads one run's commands and answers them with both modes", async () => {
+    invoke.mockResolvedValue({ commands: [command] });
+    expect(
+      await readDeliveryReport("acme", "core-platform", { runId: RUN }),
+    ).toEqual({ ok: true, value: { commands: [command] } });
+    expect(invoke).toHaveBeenCalledWith(
+      "list_commands",
+      { runId: RUN, limit: 100 },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("reads a broadcast's commands by their ids", async () => {
+    invoke.mockResolvedValue({ commands: [command] });
+    await readDeliveryReport("acme", "core-platform", {
+      commandIds: ["tcm_1", "tcm_2"],
+    });
+    expect(invoke).toHaveBeenCalledWith(
+      "list_commands",
+      { commandIds: ["tcm_1", "tcm_2"], limit: 2 },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("refuses more command ids than one report reads, before any read (negative)", async () => {
+    const commandIds = Array.from(
+      { length: 1_001 },
+      (_, i) => `tcm_${String(i)}`,
+    );
+    expect(
+      await readDeliveryReport("acme", "core-platform", { commandIds }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "report_query",
+      field: "q",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("refuses a query that names neither a run nor a command, before any read (negative)", async () => {
+    for (const q of [{}, { commandIds: [] }, { runId: RUN, commandIds: ["tcm_1"] }]) {
+      expect(
+        // A server action is an endpoint: the page's types do not bind a caller.
+        await Reflect.apply(readDeliveryReport, undefined, [
+          "acme",
+          "core-platform",
+          q,
+        ]),
+      ).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "report_query",
+        field: "q",
+      });
+    }
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("answers a denied read as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("list_commands"));
+    expect(
+      await readDeliveryReport("acme", "core-platform", { runId: RUN }),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
+});
+
+describe("answerInterjection", () => {
+  const QUESTION = "inj_7w2k9d";
+  const linked = {
+    interjectionId: QUESTION,
+    runId: RUN,
+    answeredAt: "2026-09-15T09:02:00.000Z",
+    commandIds: ["tcm_release1"],
+    receiptId: "rcp_01k6qw44",
+    path: "link" as const,
+    repository: { bindingId: "rbd_4t8e", fullName: "acme/edge-proxy" },
+    workspace: null,
+  };
+
+  it("links the repository through answer_interjection and answers the receipt", async () => {
+    invoke.mockResolvedValue(linked);
+    expect(
+      await answerInterjection("acme", "core-platform", QUESTION, {
+        path: "link",
+      }),
+    ).toEqual({ ok: true, value: linked });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(invoke).toHaveBeenCalledWith(
+      "answer_interjection",
+      { interjectionId: QUESTION, path: "link" },
+      expect.objectContaining(TENANT),
+    );
+  });
+
+  it("creates the workspace under the trimmed name and slug the person typed", async () => {
+    const created = {
+      ...linked,
+      receiptId: "rcp_01k6qw45",
+      path: "create" as const,
+      workspace: { publicId: "wsp_9e2c", slug: "edge-proxy" },
+    };
+    invoke.mockResolvedValue(created);
+    expect(
+      await answerInterjection("acme", "core-platform", QUESTION, {
+        path: "create",
+        name: "  Edge proxy ",
+        slug: " edge-proxy  ",
+      }),
+    ).toEqual({ ok: true, value: created });
+    expect(invoke.mock.calls[0]?.[1]).toEqual({
+      interjectionId: QUESTION,
+      path: "create",
+      create: { name: "Edge proxy", slug: "edge-proxy" },
+    });
+  });
+
+  it("refuses a choice that is neither shape before the kernel runs (negative)", async () => {
+    for (const choice of [
+      { path: "deny" },
+      { path: "create", name: "Edge proxy" },
+      { path: "link", slug: "edge-proxy" },
+      null,
+    ]) {
+      expect(
+        // A server action is an endpoint: the page's types do not bind a caller.
+        await Reflect.apply(answerInterjection, undefined, [
+          "acme",
+          "core-platform",
+          QUESTION,
+          choice,
+        ]),
+      ).toEqual({
+        ok: false,
+        reason: "invalid",
+        code: "interjection_choice",
+        field: "path",
+      });
+    }
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("names create.slug when the contract refuses the slug, before the handler runs (negative)", async () => {
+    expect(
+      await answerInterjection("acme", "core-platform", QUESTION, {
+        path: "create",
+        name: "Edge proxy",
+        slug: "Edge Proxy",
+      }),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "create.slug",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns the role the handler asked for as denied with its reason (negative)", async () => {
+    invoke.mockRejectedValue(new HandlerForbidden("org_role_required"));
+    expect(
+      await answerInterjection("acme", "core-platform", QUESTION, {
+        path: "link",
+      }),
+    ).toMatchObject({ ok: false, reason: "denied", code: "org_role_required" });
+  });
+
+  it("keeps a question someone else answered, or one the run stopped waiting on, as a conflict with its reason (negative)", async () => {
+    for (const reason of ["interjection_answered", "interjection_expired"]) {
+      invoke.mockRejectedValueOnce(refused(reason));
+      expect(
+        await answerInterjection("acme", "core-platform", QUESTION, {
+          path: "link",
+        }),
+      ).toMatchObject({ ok: false, reason: "conflict", code: reason });
+    }
+  });
+
+  it("returns a kernel denial as denied (negative)", async () => {
+    invoke.mockRejectedValue(denied("answer_interjection"));
+    expect(
+      await answerInterjection("acme", "core-platform", QUESTION, {
+        path: "link",
+      }),
+    ).toMatchObject({ ok: false, reason: "denied" });
+  });
 });

@@ -7,22 +7,34 @@ import {
 import { digestBytes } from "@oxagen/tacho";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import {
+  type RunFrame,
+  spliceSubagentChains,
   stepFolds,
   tachoFrame as tachoFrameOf,
+  type TranscriptFold,
   wordsDigest,
 } from "@oxagen/run-ledger";
+import {
+  BodyKeyGoneError,
+  BodyUnopenableError,
+} from "@oxagen/run-ledger/evidence-store";
 import { StorageNotFoundError } from "@oxagen/storage";
 import { describe, expect, it, vi } from "vitest";
 import {
   createRunTranscriptGetHandler,
   cursorPosition,
+  decodeBeforeCursor,
   decodeTranscriptCursor,
   elapsedMs,
+  encodeBeforeCursor,
   encodeTranscriptCursor,
+  planPageBefore,
   planTranscriptPage,
+  RECEIPT_SETTLE_MS,
   readWords,
   type RunTranscriptGetDeps,
   toolResultsOf,
+  unsentFolds,
   withToolUseFacts,
 } from "./run.transcript.get";
 import {
@@ -32,12 +44,21 @@ import {
   ledgerRun,
   memoryEvents,
   memoryStores,
+  memorySubagentChains,
+  memorySubagentFrames,
   memoryTachoFrames,
+  type SubagentChainFixture,
+  subagentChain,
   summary,
   tachoRow,
   tachoSession,
 } from "./run.test-support";
-import { createWordsCache } from "./lib/transcript-words-cache";
+import {
+  createWordsCache,
+  UNREADABLE,
+  type WordsCache,
+} from "./lib/transcript-words-cache";
+import { decodeFrameCursor, encodeFrameCursor } from "./run.get";
 
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const SESSION_UUID = "0192d4a8-7c1e-7a00-8000-00000000c0de";
@@ -58,10 +79,27 @@ function stored(text: string | Uint8Array, contentType = "text/plain") {
 const input = (over: Record<string, unknown>) =>
   runTranscriptGet.input.parse({ runId: TACHO_ID, ...over });
 
+/** The server's clock on every read, so a cursor's receipt is known. */
+const NOW = Date.parse("2026-09-26T12:00:00.000Z");
+
+/** A receipt time as ClickHouse renders `received_at`. */
+const receipt = (ms: number) =>
+  new Date(ms).toISOString().replace("T", " ").replace("Z", "");
+
+/**
+ * A wrapped run's handler over `rows`. `options.chains` lists the subagent
+ * chains in Postgres, which a read needs to read a window of the run;
+ * without them every read reads the whole run.
+ */
 function harness(
   rows: TachoFrameRow[],
-  session?: Partial<{ outcome: string; sealedAt: Date | null }>,
+  session?: Partial<{
+    outcome: string;
+    sealedAt: Date | null;
+    seqCount: number;
+  }>,
   subagentRows: TachoFrameRow[] = [],
+  options: { chains?: SubagentChainFixture[]; now?: () => number } = {},
 ) {
   const stores = memoryStores(
     [],
@@ -77,6 +115,7 @@ function harness(
     if (!object) return Promise.reject(new Error(`no object for ${ref}`));
     return Promise.resolve({ ...object, digestHex: ref.slice(-64) });
   });
+  const tachoFrames = vi.fn(memoryTachoFrames(SESSION_UUID, rows));
   const deps: RunTranscriptGetDeps = {
     queries: stores.queries,
     store: {
@@ -85,46 +124,21 @@ function harness(
     },
     readRunRollups: stores.readRunRollups,
     readWitnessFor: stores.readWitnessFor,
-    tachoFrames: memoryTachoFrames(SESSION_UUID, rows),
-    tachoSubagentFrames: memorySubagentFrames(SESSION_UUID, subagentRows),
+    tachoFrames,
+    tachoSubagentFrames: memorySubagentFrames(subagentRows),
+    ...(options.chains === undefined
+      ? {}
+      : { tachoChains: memorySubagentChains(options.chains) }),
     bodies: { getBody, getAssembly: () => Promise.resolve(null) },
     priceBook: () => Promise.resolve([]),
+    now: options.now ?? (() => NOW),
   };
-  return { transcript: createRunTranscriptGetHandler(deps), getBody, deps };
-}
-
-/**
- * An in-memory `selectTachoSubagentEvents`: every chain under the root, in
- * (session, seq) order, strictly after the position, at most `limit`.
- */
-function memorySubagentFrames(root: string, rows: TachoFrameRow[]) {
-  const ordered = [...rows].sort((a, b) =>
-    a.sessionUuid === b.sessionUuid
-      ? a.seq - b.seq
-      : (a.sessionUuid ?? "") < (b.sessionUuid ?? "")
-        ? -1
-        : 1,
-  );
-  return (args: {
-    rootSessionUuid: string;
-    after: { sessionUuid: string; seq: number } | null;
-    limit: number;
-  }) =>
-    Promise.resolve(
-      args.rootSessionUuid !== root
-        ? []
-        : ordered
-            .filter((r) => {
-              const after = args.after;
-              if (after === null) return true;
-              const session = r.sessionUuid ?? "";
-              return (
-                session > after.sessionUuid ||
-                (session === after.sessionUuid && r.seq > after.seq)
-              );
-            })
-            .slice(0, args.limit),
-    );
+  return {
+    transcript: createRunTranscriptGetHandler(deps),
+    getBody,
+    deps,
+    tachoFrames,
+  };
 }
 
 const rows = [
@@ -374,6 +388,21 @@ describe("get_run_transcript", () => {
     ]);
   });
 
+  it("carries a proxied request's effort ahead of the harness's report on the same frame (#3891)", async () => {
+    const { transcript } = harness([
+      tachoRow(0, {
+        kind: "llm_call",
+        toolName: "",
+        toolStatus: "",
+        effort: "medium",
+        body: JSON.stringify({ request_effort: "low" }),
+      }),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(out.entries.map((entry) => entry.effort)).toEqual(["low"]);
+  });
+
   it("steps: a second response of the same kind opens a new step, it does not join the first", async () => {
     const { transcript } = harness([
       tachoRow(0, {
@@ -510,6 +539,33 @@ describe("get_run_transcript", () => {
     ]);
   });
 
+  it("names the rules each decision fired, in order, and says no producer assessed taint (#3971)", async () => {
+    const decided = (seq: number, body: Record<string, unknown>) =>
+      tachoRow(seq, {
+        kind: "policy_decision",
+        toolName: "",
+        toolStatus: "",
+        policyDecision: "allow",
+        body: JSON.stringify({ policy_source: "bundle", ...body }),
+      });
+    const { transcript } = harness([
+      decided(0, {
+        policy_rule: "Bash(git add:*) and Bash(git commit:*)",
+        policy_rules: ["Bash(git add:*)", "Bash(git commit:*)"],
+      }),
+      // A decision no rule made names none.
+      decided(1, {}),
+    ]);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(
+      out.entries.map((e) => [e.decision?.rules, e.decision?.taint]),
+    ).toEqual([
+      [["Bash(git add:*)", "Bash(git commit:*)"], null],
+      [[], null],
+    ]);
+  });
+
   // #3370: `kinds` is the union over every folded frame. A turn whose model
   // call filled its response slot still holds the failed tool call after it,
   // and that call is the entry's only sign of an error.
@@ -638,6 +694,105 @@ describe("get_run_transcript", () => {
     expect(decodeTranscriptCursor(three)).toBeNull();
   });
 
+  it("reads the last page from the end and pages backward to the first entry", async () => {
+    const { transcript } = harness(rows);
+    const whole = await transcript(input({ zoom: "everything" }), ctx());
+    // A read from the start answers no `before`: the reader holds the head.
+    expect("before" in whole).toBe(false);
+    const tail = await transcript(
+      input({ zoom: "everything", limit: 3, from: "end" }),
+      ctx(),
+    );
+    expect(tail.entries.map((e) => e.seq)).toEqual(["4", "5", "6"]);
+    // A sealed run's tail holds its last entry, so nothing lies past it.
+    expect(tail.cursor).toBeNull();
+    expect(tail.before).not.toBeNull();
+    const middle = await transcript(
+      input({ zoom: "everything", limit: 3, before: tail.before as string }),
+      ctx(),
+    );
+    // A backward page is the entries a forward read sends there, the prefix
+    // sum from the run's start included.
+    expect(middle.entries).toEqual(whole.entries.slice(1, 4));
+    const head = await transcript(
+      input({ zoom: "everything", limit: 3, before: middle.before as string }),
+      ctx(),
+    );
+    expect(head.entries.map((e) => e.seq)).toEqual(["0"]);
+    expect(head.before).toBeNull();
+    // The counts and figures are the whole run's on every page.
+    expect(tail.counts).toEqual(whole.counts);
+    expect(tail.figures).toEqual(whole.figures);
+    expect(tail.frameCursor).toBe(whole.frameCursor);
+  });
+
+  it("answers a live run's tail with the cursor a reader of every page holds", async () => {
+    const { transcript } = harness(rows, {
+      outcome: "running",
+      sealedAt: null,
+    });
+    const whole = await transcript(input({ zoom: "everything" }), ctx());
+    const tail = await transcript(
+      input({ zoom: "everything", limit: 2, from: "end" }),
+      ctx(),
+    );
+    expect(tail.entries.map((e) => e.seq)).toEqual(["5", "6"]);
+    expect(decodeTranscriptCursor(tail.cursor as string)).toEqual(
+      decodeTranscriptCursor(whole.cursor as string),
+    );
+    const caughtUp = await transcript(
+      input({ zoom: "everything", after: tail.cursor as string }),
+      ctx(),
+    );
+    expect(caughtUp.entries).toEqual([]);
+  });
+
+  it("refuses a before cursor it did not write, and a read at two positions (negative)", async () => {
+    const { transcript } = harness(rows);
+    const first = await transcript(
+      input({ zoom: "everything", limit: 3 }),
+      ctx(),
+    );
+    const tail = await transcript(
+      input({ zoom: "everything", limit: 3, from: "end" }),
+      ctx(),
+    );
+    await expect(
+      transcript(input({ zoom: "everything", before: "not-ours" }), ctx()),
+    ).rejects.toThrow();
+    // A forward cursor is not a `before` cursor.
+    await expect(
+      transcript(
+        input({ zoom: "everything", before: first.cursor as string }),
+        ctx(),
+      ),
+    ).rejects.toThrow();
+    await expect(
+      transcript(
+        input({
+          zoom: "everything",
+          from: "end",
+          before: tail.before as string,
+        }),
+        ctx(),
+      ),
+    ).rejects.toThrow("conflicting_position");
+    await expect(
+      transcript(
+        input({
+          zoom: "everything",
+          from: "start",
+          after: first.cursor as string,
+        }),
+        ctx(),
+      ),
+    ).rejects.toThrow("conflicting_position");
+    expect(decodeBeforeCursor(encodeBeforeCursor("42"))).toBe("42");
+    expect(
+      decodeBeforeCursor(encodeTranscriptCursor({ through: "1", high: "1" })),
+    ).toBeNull();
+  });
+
   it("a digest_only recording answers every half with text null and says so", async () => {
     const { transcript, getBody } = harness(
       rows.map((r) => ({ ...r, bytesRef: "" })),
@@ -712,6 +867,7 @@ describe("get_run_transcript", () => {
       entries: [],
       cursor: null,
       complete: true,
+      frameCursor: null,
       counts: {
         kinds: {
           prompt: 0,
@@ -746,9 +902,12 @@ describe("get_run_transcript", () => {
     const out = await transcript(input({ zoom: "everything" }), ctx());
     expect(out.entries).toHaveLength(rows.length);
     expect(out.cursor).not.toBeNull();
-    expect(decodeTranscriptCursor(out.cursor as string)).toEqual({
+    // A live read also carries the receipt watermark, which stands a settle
+    // margin behind the server's clock (#4083).
+    expect(decodeTranscriptCursor(out.cursor as string)).toMatchObject({
       through: out.entries.at(-1)?.seq,
       high: out.entries.at(-1)?.endSeq,
+      received: { after: NOW - RECEIPT_SETTLE_MS, sent: 0 },
     });
   });
 
@@ -764,6 +923,7 @@ describe("get_run_transcript", () => {
     expect(decodeTranscriptCursor(out.cursor as string)).toEqual({
       through: "-1",
       high: "-1",
+      received: { after: NOW - RECEIPT_SETTLE_MS, sent: 0 },
     });
   });
 
@@ -865,6 +1025,10 @@ describe("get_run_transcript", () => {
     );
     expect(first.entries.map((e) => [e.seq, e.endSeq])).toEqual([["1", "3"]]);
     expect(first.cursor).not.toBeNull();
+    // A ledger run has no receipt times, so its cursor carries no watermark.
+    expect(
+      decodeTranscriptCursor(first.cursor as string)?.received,
+    ).toBeUndefined();
     const second = await transcript(
       runTranscriptGet.input.parse({
         runId: LEDGER_ID,
@@ -875,6 +1039,50 @@ describe("get_run_transcript", () => {
       ctx(),
     );
     expect(second.entries.map((e) => [e.seq, e.endSeq])).toEqual([["2", "4"]]);
+  });
+});
+
+describe("planPageBefore", () => {
+  const span = (open: number, end: number) => ({ open, end });
+
+  it("sends the folds just ahead of a point and stands on the last of them", () => {
+    const folds = [span(0, 0), span(1, 2), span(3, 3), span(4, 6)];
+    expect(planPageBefore(folds, 4, 2)).toEqual({
+      indexes: [2, 3],
+      through: 3,
+      high: 6,
+      start: 2,
+    });
+    expect(planPageBefore(folds, 2, 5)).toEqual({
+      indexes: [0, 1],
+      through: 1,
+      high: 2,
+      start: 0,
+    });
+    expect(planPageBefore(folds, 0, 2)).toEqual({
+      indexes: [],
+      through: -1,
+      high: -1,
+      start: 0,
+    });
+    expect(planPageBefore([], 0, 2)).toEqual({
+      indexes: [],
+      through: -1,
+      high: -1,
+      start: 0,
+    });
+  });
+
+  it("stands past a fold ahead of the page that ends after the page does (negative)", () => {
+    // A Task call open across the page: its end is the reader's `high`, so a
+    // read after the page sends it only once it grows again.
+    const folds = [span(0, 9), span(1, 1), span(2, 2)];
+    expect(planPageBefore(folds, 3, 2)).toEqual({
+      indexes: [1, 2],
+      through: 2,
+      high: 9,
+      start: 1,
+    });
   });
 });
 
@@ -949,11 +1157,185 @@ describe("planTranscriptPage", () => {
   it("leaves grown folds past the limit for the next page, never dropping one", () => {
     const folds = [span(0, 9), span(1, 7), span(2, 8)];
     const first = planTranscriptPage(folds, { through: 2, high: 2 }, 2);
-    expect(first).toEqual({ indexes: [1, 2], through: 2, high: 8 });
+    // The fold that grew to 9 is left, and the plan says so.
+    expect(first).toEqual({
+      indexes: [1, 2],
+      through: 2,
+      high: 8,
+      unsent: 1,
+    });
     expect(planTranscriptPage(folds, first, 2)).toEqual({
       indexes: [0],
       through: 2,
       high: 9,
+    });
+  });
+
+  describe("with a receipt (#4083)", () => {
+    /** A fold whose latest frame the server received at `received`. */
+    const at = (open: number, end: number, received: number | null) => ({
+      open,
+      end,
+      received,
+    });
+
+    it("sends an entry before the cursor with a frame received after the receipt, oldest receipt first", () => {
+      const folds = [100, 300, 200, 50].map((received, i) =>
+        at(i, i, received),
+      );
+      const cursor = { through: 3, high: 3, received: { after: 150, sent: 0 } };
+      expect(planTranscriptPage(folds, cursor, 10, 1000)).toEqual({
+        indexes: [2, 1],
+        through: 3,
+        high: 3,
+        received: { after: 1000, sent: 0 },
+      });
+    });
+
+    it("sends grown entries first, then late ones, then new ones", () => {
+      const folds = [
+        at(0, 5, 500),
+        at(1, 1, 400),
+        at(2, 2, 100),
+        at(6, 6, 100),
+      ];
+      const cursor = { through: 2, high: 4, received: { after: 200, sent: 0 } };
+      expect(planTranscriptPage(folds, cursor, 10, 1000)).toEqual({
+        indexes: [0, 1, 3],
+        through: 3,
+        high: 6,
+        received: { after: 1000, sent: 0 },
+      });
+    });
+
+    it("stops inside a batch that shares one receipt time, and the next page carries on after it", () => {
+      const folds = [0, 1, 2].map((i) => at(i, i, 500));
+      const cursor = { through: 2, high: 2, received: { after: 100, sent: 0 } };
+      const first = planTranscriptPage(folds, cursor, 2, 1000);
+      expect(first).toEqual({
+        indexes: [0, 1],
+        through: 2,
+        high: 2,
+        received: { after: 499, sent: 2 },
+        unsent: 1,
+      });
+      expect(planTranscriptPage(folds, first, 2, 1000)).toEqual({
+        indexes: [2],
+        through: 2,
+        high: 2,
+        received: { after: 1000, sent: 0 },
+      });
+    });
+
+    it("holds the receipt on a batch a full page ended on until the settle time passes it", () => {
+      const folds = [at(0, 0, 500), at(1, 1, 500)];
+      const cursor = { through: 1, high: 1, received: { after: 100, sent: 0 } };
+      const first = planTranscriptPage(folds, cursor, 2, 400);
+      expect(first).toEqual({
+        indexes: [0, 1],
+        through: 1,
+        high: 1,
+        received: { after: 499, sent: 2 },
+      });
+      // Nothing is sent twice in a row while the batch is inside the margin.
+      const held = planTranscriptPage(folds, first, 2, 400);
+      expect(held).toEqual({
+        indexes: [],
+        through: 1,
+        high: 1,
+        received: { after: 499, sent: 2 },
+      });
+      expect(planTranscriptPage(folds, held, 2, 600)).toEqual({
+        indexes: [],
+        through: 1,
+        high: 1,
+        received: { after: 600, sent: 0 },
+      });
+    });
+
+    it("starts a receipt for a cursor that carries none, and sets none without a settle time (negative)", () => {
+      const folds = [at(0, 0, 500), at(1, 1, 500)];
+      // A cursor written before the receipt existed misses these frames once.
+      expect(planTranscriptPage(folds, { through: 1, high: 1 }, 5, 1000)).toEqual(
+        {
+          indexes: [],
+          through: 1,
+          high: 1,
+          received: { after: 1000, sent: 0 },
+        },
+      );
+      const plain = planTranscriptPage(folds, null, 5);
+      expect(plain).toEqual({ indexes: [0, 1], through: 1, high: 1 });
+      expect(plain).not.toHaveProperty("received");
+    });
+
+    it("never reads an entry with no receipt time as late (negative)", () => {
+      const folds = [at(0, 0, null), span(1, 1)];
+      const cursor = { through: 1, high: 1, received: { after: 100, sent: 0 } };
+      expect(planTranscriptPage(folds, cursor, 5, 1000)).toEqual({
+        indexes: [],
+        through: 1,
+        high: 1,
+        received: { after: 1000, sent: 0 },
+      });
+    });
+
+    // Batch A1 (#4384) answered more late entries than one page holds by
+    // rewinding the page to the first of them. This planner answers it with
+    // the receipt's `sent` count instead, which "stops inside a batch that
+    // shares one receipt time" covers. The two cases below are A1's, on
+    // this planner.
+    it("sends an entry that grew and was received late once, and a late entry past the cursor once, as a new one", () => {
+      const grew = [at(0, 5, 500), at(1, 1, 100)];
+      const cursor = { through: 1, high: 1, received: { after: 200, sent: 0 } };
+      expect(planTranscriptPage(grew, cursor, 5, 1000)).toEqual({
+        indexes: [0],
+        through: 1,
+        high: 5,
+        received: { after: 1000, sent: 0 },
+      });
+      const past = [at(0, 0, 100), at(1, 1, 100), at(2, 2, 500)];
+      expect(planTranscriptPage(past, cursor, 5, 1000)).toEqual({
+        indexes: [2],
+        through: 2,
+        high: 2,
+        received: { after: 1000, sent: 0 },
+      });
+    });
+
+    it("sends grown entries before a late one, so the page cannot pass their ends (negative)", () => {
+      // f0 and f1 grew to 10 and 11, f3 is late, and f4 opens at 12. A page
+      // that sent f3 and f4 first would raise `high` to 12, past both grown
+      // entries, and no later read would send them.
+      const folds = [
+        at(0, 10, 100),
+        at(1, 11, 100),
+        at(2, 2, 100),
+        at(3, 3, 500),
+        at(12, 12, 100),
+      ];
+      const cursor = { through: 3, high: 3, received: { after: 200, sent: 0 } };
+      const first = planTranscriptPage(folds, cursor, 2, 1000);
+      expect(first).toEqual({
+        indexes: [0, 1],
+        through: 3,
+        high: 11,
+        received: { after: 499, sent: 0 },
+        unsent: 1,
+      });
+      const second = planTranscriptPage(folds, first, 2, 1000);
+      expect(second).toEqual({
+        indexes: [3, 4],
+        through: 4,
+        high: 12,
+        received: { after: 1000, sent: 0 },
+      });
+      expect(planTranscriptPage(folds, second, 2, 1000)).toEqual({
+        indexes: [],
+        through: 4,
+        high: 12,
+        received: { after: 1000, sent: 0 },
+      });
     });
   });
 });
@@ -1058,8 +1440,8 @@ describe("get_run_transcript reassembly", () => {
     expect(assembly?.partial).toBe(false);
     expect(assembly?.wire.bytes).toBe(Buffer.byteLength(wire, "utf8"));
     // The point of the change: the entry is a fraction of the transport.
-    // The run's counts and figures ride the page whatever its entries hold,
-    // so the entry is what is measured.
+    // The run's counts and figures ride the first page whatever its entries
+    // hold, so the entry is what is measured.
     expect(JSON.stringify(page.entries[0]).length).toBeLessThan(
       assembly?.wire.bytes ?? 0,
     );
@@ -1203,13 +1585,12 @@ describe("get_run_transcript and one unreadable body", () => {
         bytesRef: `evb:v1:k:${"5".repeat(64)}`,
       }),
     ];
-    // Each half on the page is read once, at either zoom, and the prompt
-    // once more for its words (`readWords`): the words cache keeps a digest,
-    // not the text a half shows.
+    // Each half on the page is read once, at either zoom. The prompt's read
+    // for its words (`readWords`) is the read its half is answered from.
     for (const zoom of ["steps", "everything"] as const) {
       const { transcript, getBody } = harness(rows);
       await transcript(input({ zoom }), ctx());
-      expect(getBody).toHaveBeenCalledTimes(3);
+      expect(getBody).toHaveBeenCalledTimes(2);
       expect(new Set(getBody.mock.calls.map(([, ref]) => ref)).size).toBe(2);
     }
     const { transcript } = harness(rows);
@@ -1386,6 +1767,35 @@ describe("get_run_transcript and subagent chains", () => {
     expect(out.entries[0]?.subagent).toBeUndefined();
   });
 
+  it("answers the frame cursor of the run's own last frame, so the stream opens past what the read held (A-06)", async () => {
+    // The Run stream reads the run's own chain. Opened with no cursor it
+    // sent every frame from the first, 200 to a read, before it reached
+    // anything new. The transcript names the last frame it folded instead.
+    const { transcript } = harness(root, undefined, children);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(out.frameCursor).toBe(encodeFrameCursor("4"));
+  });
+
+  it("passes over a subagent's frames spliced in after the run's last frame (negative)", async () => {
+    // The root recorded up to the spawn, and the subagent's chain is spliced
+    // in after it, so the read's last frame is the subagent's seq 3. That seq
+    // names no frame on the run's own chain, and a stream opened there would
+    // skip the root's frames 3 and 4 when they land.
+    const { transcript } = harness(root.slice(0, 3), undefined, children);
+    const out = await transcript(input({ zoom: "everything" }), ctx());
+    expect(out.entries.at(-1)?.subagent?.sessionUuid).toBe(CHILD);
+    expect(out.frameCursor).toBe(encodeFrameCursor("2"));
+    expect(decodeFrameCursor(out.frameCursor ?? "")).toBe("2");
+  });
+
+  it("answers no frame cursor for a run that recorded no frame (negative)", async () => {
+    const { transcript } = harness([]);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    expect(out.entries).toEqual([]);
+    expect(out.frameCursor).toBeNull();
+  });
+
   it("steps: the parent's Task call pairs with its result across the subagent's steps", async () => {
     const { transcript } = harness(root, undefined, children);
     const out = await transcript(input({ zoom: "steps" }), ctx());
@@ -1464,13 +1874,52 @@ describe("get_run_transcript and subagent chains", () => {
         encodeTranscriptCursor({ through: "not-a-uuid:2", high: "2" }),
       ),
     ).toBeNull();
-    // The longest cursor, two subagent keys at the largest seq, fits the
-    // contract's 256-character bound.
+    // The longest cursor, two subagent keys at the largest seq and a receipt
+    // at the largest time and count, fits the contract's 256-character bound.
     const longest = encodeTranscriptCursor({
       through: `${CHILD}:${"9".repeat(19)}`,
       high: `${CHILD}:${"9".repeat(19)}`,
+      received: { after: 999_999_999_999_999, sent: 999_999_999_999_999 },
     });
     expect(longest.length).toBeLessThanOrEqual(256);
+    expect(input({ zoom: "steps", after: longest }).after).toBe(longest);
+    expect(decodeTranscriptCursor(longest)?.received).toEqual({
+      after: 999_999_999_999_999,
+      sent: 999_999_999_999_999,
+    });
+  });
+
+  it("reads a cursor with a receipt, and still reads the two forms written before it (#4083)", () => {
+    const received = { after: 1_789_117_265_000, sent: 0 };
+    expect(
+      decodeTranscriptCursor(
+        encodeTranscriptCursor({ through: `${CHILD}:2`, high: "4", received }),
+      ),
+    ).toEqual({ through: `${CHILD}:2`, high: "4", received });
+    // A cursor written before the receipt carries none, and reads as the
+    // positions alone.
+    const twoPart = Buffer.from("t:7,9", "utf8").toString("base64url");
+    expect(decodeTranscriptCursor(twoPart)).toEqual({
+      through: "7",
+      high: "9",
+    });
+    expect(decodeTranscriptCursor(twoPart)).not.toHaveProperty("received");
+    const onePart = Buffer.from("t:7", "utf8").toString("base64url");
+    expect(decodeTranscriptCursor(onePart)).not.toHaveProperty("received");
+    // Negative: a receipt this handler did not write is refused, not read as
+    // no receipt.
+    for (const text of [
+      "t:7,9,1789117265000",
+      "t:7,9,1789117265000,0123456789ab,1",
+      "t:7,9,soon,0123456789ab",
+      "t:7,9,1789117265000,0123456789AB",
+      "t:7,9,1789117265000,0123",
+      `t:7,9,${"9".repeat(16)},0123456789ab`,
+    ]) {
+      expect(
+        decodeTranscriptCursor(Buffer.from(text, "utf8").toString("base64url")),
+      ).toBeNull();
+    }
   });
 
   it("resumes a cursor whose frame is no longer shown before the next frame of its chain", () => {
@@ -1481,6 +1930,718 @@ describe("get_run_transcript and subagent chains", () => {
     expect(cursorPosition(frames, "3")).toBe(2);
     expect(cursorPosition(frames, "-1")).toBe(-1);
     expect(cursorPosition(frames, "9")).toBe(2);
+  });
+});
+
+describe("the transcript cursor's receipt and window (#4083, #3823)", () => {
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
+  const raw = (text: string) => Buffer.from(text, "utf8").toString("base64url");
+
+  it("reads back the receipt and the window start it wrote", () => {
+    const both = {
+      through: "12",
+      high: `${CHILD}:3`,
+      received: { after: 1_790_000_000_000, sent: 2 },
+      from: { seq: "9", turn: 3, cost: -40, observed: true },
+    };
+    expect(decodeTranscriptCursor(encodeTranscriptCursor(both))).toEqual(both);
+    // A window that starts before the run's first turn and first cost.
+    const early = {
+      through: "5",
+      high: "5",
+      from: { seq: "0", turn: null, cost: null, observed: false },
+    };
+    expect(decodeTranscriptCursor(encodeTranscriptCursor(early))).toEqual(
+      early,
+    );
+    const receiptOnly = {
+      through: "5",
+      high: "6",
+      received: { after: 0, sent: 0 },
+    };
+    expect(
+      decodeTranscriptCursor(encodeTranscriptCursor(receiptOnly)),
+    ).toEqual(receiptOnly);
+  });
+
+  it("writes a cursor with neither in the two-field form", () => {
+    expect(
+      encodeTranscriptCursor({
+        through: "42",
+        high: "44",
+        received: null,
+        from: null,
+      }),
+    ).toBe(raw("t:42,44"));
+  });
+
+  it.each([
+    "t:1,2,3,4,5",
+    "t:1,2,,,4,1,,2",
+    "t:1,2,abc,0,,,,",
+    "t:1,2,100,,,,,",
+    "t:1,2,,,,3,,",
+    "t:1,2,,,4,1,1.5,0",
+    "t:1,2,,,4,-1,,0",
+    "t:7,9,soon,0123456789ab",
+    "t:7,9,1789117265000,0123456789AB",
+    "t:7,9,1789117265000,0123",
+    `t:7,9,${"9".repeat(16)},0123456789ab`,
+  ])("refuses the malformed cursor %s (negative)", (text) => {
+    expect(decodeTranscriptCursor(raw(text))).toBeNull();
+  });
+
+  it("reads a cursor from the seen receipt as a receipt the settle margin earlier (#4384)", () => {
+    // A Run page open across the deploy holds a cursor the seen receipt
+    // wrote: two frames, the latest receipt time its read held, and a digest.
+    const seen = decodeTranscriptCursor(
+      raw(`t:7,${CHILD}:3,1789117265000,0123456789ab`),
+    );
+    expect(seen).toEqual({
+      through: "7",
+      high: `${CHILD}:3`,
+      received: { after: 1_789_117_265_000 - RECEIPT_SETTLE_MS, sent: 0 },
+    });
+    // It names no window, so the next read reads the whole run.
+    expect(seen).not.toHaveProperty("from");
+    // A receipt time inside the margin reads as the epoch.
+    expect(
+      decodeTranscriptCursor(raw("t:7,9,5000,0123456789ab"))?.received,
+    ).toEqual({ after: 0, sent: 0 });
+  });
+
+  it("leaves out a window start the contract's cap cannot carry, and keeps the receipt", () => {
+    const key = `${CHILD}:${"9".repeat(19)}`;
+    const received = { after: 999_999_999_999_999, sent: 999_999_999_999_999 };
+    // With the window start this cursor is 270 characters, past the 256 the
+    // contract allows.
+    const longest = encodeTranscriptCursor({
+      through: key,
+      high: key,
+      received,
+      from: {
+        seq: "9".repeat(19),
+        turn: 999_999_999_999_999,
+        cost: -999_999_999_999_999,
+        observed: true,
+      },
+    });
+    expect(longest.length).toBeLessThanOrEqual(256);
+    expect(decodeTranscriptCursor(longest)).toEqual({
+      through: key,
+      high: key,
+      received,
+    });
+    // A cursor a real run writes keeps its window start.
+    const real = {
+      through: `${CHILD}:412`,
+      high: `${CHILD}:415`,
+      received: { after: 1_790_000_000_000, sent: 3 },
+      from: { seq: "1200", turn: 14, cost: 2_500_000, observed: true },
+    };
+    expect(decodeTranscriptCursor(encodeTranscriptCursor(real))).toEqual(real);
+  });
+});
+
+describe("get_run_transcript and a late subagent frame (#4083)", () => {
+  // Batch A1 (#4384) tested these cases against its `seen` receipt. Its
+  // idle-read case is the four-read case below, which sends the frame again
+  // while it is inside the settle margin (`RECEIPT_SETTLE_MS`). Its
+  // unreadable-frame case is the two settle-margin cases, one of them a
+  // frame readable 30 seconds after its stamp, and its paging case is the
+  // planner's "stops inside a batch that shares one receipt time".
+  const A = "0192d4a8-7c1e-7a00-8000-00000000a0a0";
+  const B = "0192d4a8-7c1e-7a00-8000-00000000b0b0";
+  const bare = { toolName: "", toolStatus: "" };
+  const live = { outcome: "running", sealedAt: null };
+  /**
+   * When the server received every frame the run held at its first read:
+   * before the settle margin of that read, so no read counts them as late.
+   */
+  const early = receipt(NOW - 2 * RECEIPT_SETTLE_MS);
+  const onChain =
+    (sessionUuid: string, subagentId: string, spawnToolUseId: string) =>
+    (seq: number, over: Partial<TachoFrameRow>): TachoFrameRow =>
+      tachoRow(seq, {
+        sessionUuid,
+        rootSessionUuid: SESSION_UUID,
+        parentSessionUuid: SESSION_UUID,
+        subagentId,
+        subagentType: "Explore",
+        spawnToolUseId,
+        receivedAt: early,
+        ...over,
+      });
+  const onA = onChain(A, "agent-1", "toolu_A");
+  const onB = onChain(B, "agent-2", "toolu_B");
+
+  /** A live run in its second turn, with two subagents at work in it. */
+  function twoSubagents() {
+    const root = [
+      tachoRow(0, { kind: "turn_start", ...bare, turnSeq: 1 }),
+      tachoRow(1, {
+        kind: "llm_call",
+        ...bare,
+        model: "haiku",
+        provider: "anthropic",
+        costUsdMicros: 10,
+        turnSeq: 1,
+      }),
+      tachoRow(2, { kind: "turn_end", ...bare, turnSeq: 1 }),
+      tachoRow(3, { kind: "turn_start", ...bare, turnSeq: 2 }),
+      tachoRow(4, {
+        kind: "tool_requested",
+        toolName: "Task",
+        toolUseId: "toolu_A",
+        turnSeq: 2,
+      }),
+      tachoRow(5, {
+        kind: "subagent_start",
+        ...bare,
+        toolUseId: "toolu_A",
+        turnSeq: 2,
+      }),
+      tachoRow(6, {
+        kind: "tool_requested",
+        toolName: "Task",
+        toolUseId: "toolu_B",
+        turnSeq: 2,
+      }),
+      tachoRow(7, {
+        kind: "subagent_start",
+        ...bare,
+        toolUseId: "toolu_B",
+        turnSeq: 2,
+      }),
+    ].map((row) => ({ ...row, receivedAt: early }));
+    const children = [
+      onA(0, { kind: "turn_start", ...bare }),
+      onB(0, { kind: "turn_start", ...bare }),
+      onB(1, {
+        kind: "tool_requested",
+        toolName: "Grep",
+        toolUseId: "toolu_g",
+      }),
+    ];
+    const chains = [
+      subagentChain({
+        sessionUuid: A,
+        rootSessionUuid: SESSION_UUID,
+        subagentId: "agent-1",
+        spawnToolUseId: "toolu_A",
+        seqCount: 2,
+      }),
+      subagentChain({
+        sessionUuid: B,
+        rootSessionUuid: SESSION_UUID,
+        subagentId: "agent-2",
+        spawnToolUseId: "toolu_B",
+        seqCount: 2,
+      }),
+    ];
+    return { root, children, chains };
+  }
+
+  it.each([
+    { read: "a window of the run", windowed: true },
+    { read: "the whole run", windowed: false },
+  ])(
+    "sends a subagent frame that landed before the cursor on the next read, reading $read",
+    async ({ windowed }) => {
+      const { root, children, chains } = twoSubagents();
+      let clock = NOW;
+      const { transcript, tachoFrames } = harness(root, live, children, {
+        ...(windowed ? { chains } : {}),
+        now: () => clock,
+      });
+      const first = await transcript(input({ zoom: "everything" }), ctx());
+      // The run's eight frames and the subagents' three.
+      expect(first.entries).toHaveLength(11);
+      expect(decodeTranscriptCursor(first.cursor as string)).toEqual({
+        through: `${B}:1`,
+        high: `${B}:1`,
+        received: { after: NOW - RECEIPT_SETTLE_MS, sent: 0 },
+        from: { seq: "3", turn: 2, cost: 10, observed: false },
+      });
+
+      // Subagent A records a model call. In fold order it sits inside A's
+      // chain, before B's frames, so before the cursor: a cursor of fold
+      // positions alone never sent it until the page was reloaded.
+      children.push(
+        onA(1, {
+          kind: "llm_call",
+          ...bare,
+          costUsdMicros: 300,
+          receivedAt: receipt(NOW + 1_000),
+        }),
+      );
+      tachoFrames.mockClear();
+      clock = NOW + 5_000;
+      const second = await transcript(
+        input({ zoom: "everything", after: first.cursor as string }),
+        ctx(),
+      );
+      expect(
+        second.entries.map((e) => [
+          e.seq,
+          e.subagent?.sessionUuid,
+          e.turn,
+          e.cumulativeCost?.micros,
+        ]),
+      ).toEqual([["1", A, 2, "310"]]);
+      // A window reads the run's own chain from the second turn's first
+      // frame, not from the run's first frame.
+      expect(tachoFrames.mock.calls[0]?.[0].afterSeq).toBe(windowed ? 2 : -1);
+      expect(decodeTranscriptCursor(second.cursor as string)).toMatchObject({
+        through: `${B}:1`,
+        high: `${B}:1`,
+        received: { after: NOW + 5_000 - RECEIPT_SETTLE_MS, sent: 0 },
+      });
+
+      // The frame is still inside that receipt's settle margin, so the next
+      // read sends it once more. That read's clock has passed the frame by
+      // the margin, so its receipt passes the frame.
+      clock = NOW + 2_000 + RECEIPT_SETTLE_MS;
+      const third = await transcript(
+        input({ zoom: "everything", after: second.cursor as string }),
+        ctx(),
+      );
+      expect(
+        third.entries.map((e) => [e.seq, e.subagent?.sessionUuid]),
+      ).toEqual([["1", A]]);
+      expect(decodeTranscriptCursor(third.cursor as string)?.received).toEqual(
+        { after: NOW + 2_000, sent: 0 },
+      );
+      // Once the receipt has passed it, it is not sent again.
+      const fourth = await transcript(
+        input({ zoom: "everything", after: third.cursor as string }),
+        ctx(),
+      );
+      expect(fourth.entries).toEqual([]);
+    },
+  );
+
+  it("keeps a cursor on a sealed run while late entries remain past the limit", async () => {
+    const { root, children } = twoSubagents();
+    const reading = harness(root, live, children);
+    const first = await reading.transcript(
+      input({ zoom: "everything" }),
+      ctx(),
+    );
+    // Subagent A records two model calls, both before the cursor in fold
+    // order, and the run seals.
+    for (const seq of [1, 2]) {
+      children.push(
+        onA(seq, {
+          kind: "llm_call",
+          ...bare,
+          costUsdMicros: 300,
+          receivedAt: receipt(NOW + 1_000),
+        }),
+      );
+    }
+    const { transcript } = harness(root, undefined, children, {
+      now: () => NOW + 5_000,
+    });
+    const second = await transcript(
+      input({ zoom: "everything", limit: 1, after: first.cursor as string }),
+      ctx(),
+    );
+    expect(second.entries.map((e) => [e.seq, e.subagent?.sessionUuid])).toEqual(
+      [["1", A]],
+    );
+    // The page holds every fold, but not every change: a null cursor here
+    // lost the second call (Codex review on #4421).
+    expect(second.cursor).not.toBeNull();
+    const third = await transcript(
+      input({ zoom: "everything", limit: 1, after: second.cursor as string }),
+      ctx(),
+    );
+    expect(third.entries.map((e) => [e.seq, e.subagent?.sessionUuid])).toEqual(
+      [["2", A]],
+    );
+    // Negative control: with nothing left, the sealed run answers no cursor.
+    expect(third.cursor).toBeNull();
+  });
+
+  it("sends a frame received inside the settle margin that the read before it missed", async () => {
+    // Ingest stamps a batch's receipt time before ClickHouse can return the
+    // batch, so a read can miss a frame the server received before the read.
+    const { root, children, chains } = twoSubagents();
+    let clock = NOW;
+    const { transcript } = harness(root, live, children, {
+      chains,
+      now: () => clock,
+    });
+    const first = await transcript(input({ zoom: "everything" }), ctx());
+    const cursor = decodeTranscriptCursor(first.cursor as string);
+    expect(cursor?.received).toEqual({
+      after: NOW - RECEIPT_SETTLE_MS,
+      sent: 0,
+    });
+    // Received 3 seconds before the first read, and readable only after it.
+    children.push(
+      onA(1, {
+        kind: "llm_call",
+        ...bare,
+        costUsdMicros: 300,
+        receivedAt: receipt(NOW - 3_000),
+      }),
+    );
+    clock = NOW + 1_000;
+    const second = await transcript(
+      input({ zoom: "everything", after: first.cursor as string }),
+      ctx(),
+    );
+    expect(second.entries.map((e) => [e.seq, e.subagent?.sessionUuid])).toEqual(
+      [["1", A]],
+    );
+    // Negative control: a receipt at the first read's own time, with no
+    // margin, never sends the frame.
+    const unsettled = encodeTranscriptCursor({
+      through: `${B}:1`,
+      high: `${B}:1`,
+      received: { after: NOW, sent: 0 },
+      from: cursor?.from ?? null,
+    });
+    const missed = await transcript(
+      input({ zoom: "everything", after: unsettled }),
+      ctx(),
+    );
+    expect(missed.entries).toEqual([]);
+  });
+
+  it("sends a frame that became readable 30 seconds after its receipt time (#4384)", async () => {
+    // Ingest stamps a batch's receipt time before it awaits the ClickHouse
+    // insert, and the insert can take the client's 30-second default
+    // timeout. The margin this batch first shipped with was 10 seconds, so
+    // an idle read after such an insert never sent the frame.
+    const { root, children, chains } = twoSubagents();
+    let clock = NOW;
+    const { transcript } = harness(root, live, children, {
+      chains,
+      now: () => clock,
+    });
+    const first = await transcript(input({ zoom: "everything" }), ctx());
+    const cursor = decodeTranscriptCursor(first.cursor as string);
+    // Stamped 30 seconds before the first read, and readable only after it.
+    children.push(
+      onA(1, {
+        kind: "llm_call",
+        ...bare,
+        costUsdMicros: 300,
+        receivedAt: receipt(NOW - 30_000),
+      }),
+    );
+    clock = NOW + 5_000;
+    const second = await transcript(
+      input({ zoom: "everything", after: first.cursor as string }),
+      ctx(),
+    );
+    expect(second.entries.map((e) => [e.seq, e.subagent?.sessionUuid])).toEqual(
+      [["1", A]],
+    );
+    // Negative control: the receipt a 10-second margin wrote lies past the
+    // frame, and the read from it never sends it.
+    const tenSeconds = encodeTranscriptCursor({
+      through: `${B}:1`,
+      high: `${B}:1`,
+      received: { after: NOW - 10_000, sent: 0 },
+      from: cursor?.from ?? null,
+    });
+    const missed = await transcript(
+      input({ zoom: "everything", after: tenSeconds }),
+      ctx(),
+    );
+    expect(missed.entries).toEqual([]);
+  });
+
+  it("reads a cursor written before the receipt, and answers one that carries it", async () => {
+    const { root, children } = twoSubagents();
+    let clock = NOW;
+    const { transcript } = harness(root, live, children, { now: () => clock });
+    const first = await transcript(input({ zoom: "everything" }), ctx());
+    const decoded = decodeTranscriptCursor(first.cursor as string);
+    const legacy = encodeTranscriptCursor({
+      through: decoded?.through as string,
+      high: decoded?.high as string,
+    });
+    children.push(
+      onA(1, {
+        kind: "llm_call",
+        ...bare,
+        costUsdMicros: 300,
+        receivedAt: receipt(NOW + 1_000),
+      }),
+    );
+    clock = NOW + 5_000;
+    const second = await transcript(
+      input({ zoom: "everything", after: legacy }),
+      ctx(),
+    );
+    // With no receipt, the read sends what the positions say, and the
+    // cursor it answers carries the receipt from then on.
+    expect(second.entries).toEqual([]);
+    expect(decodeTranscriptCursor(second.cursor as string)?.received).toEqual(
+      { after: NOW + 5_000 - RECEIPT_SETTLE_MS, sent: 0 },
+    );
+  });
+
+  it("reads the whole run when a subagent that began before the window records a frame", async () => {
+    // Subagent A was spawned in the first turn and runs in the background
+    // after that turn ended. The cursor's window opens at the second turn.
+    const root = [
+      tachoRow(0, { kind: "turn_start", ...bare, turnSeq: 1 }),
+      tachoRow(1, {
+        kind: "tool_requested",
+        toolName: "Task",
+        toolUseId: "toolu_A",
+        turnSeq: 1,
+      }),
+      tachoRow(2, {
+        kind: "subagent_start",
+        ...bare,
+        toolUseId: "toolu_A",
+        turnSeq: 1,
+      }),
+      tachoRow(3, {
+        kind: "tool_call",
+        toolName: "Task",
+        toolUseId: "toolu_A",
+        turnSeq: 1,
+      }),
+      tachoRow(4, { kind: "turn_end", ...bare, turnSeq: 1 }),
+      tachoRow(5, { kind: "turn_start", ...bare, turnSeq: 2 }),
+      tachoRow(6, {
+        kind: "llm_call",
+        ...bare,
+        model: "haiku",
+        provider: "anthropic",
+        costUsdMicros: 20,
+        turnSeq: 2,
+      }),
+      tachoRow(7, { kind: "turn_end", ...bare, turnSeq: 2 }),
+    ].map((row) => ({ ...row, receivedAt: early }));
+    const children = [
+      onA(0, { kind: "turn_start", ...bare }),
+      onA(1, { kind: "tool_call", toolName: "Grep", toolUseId: "toolu_g" }),
+    ];
+    const chain = subagentChain({
+      sessionUuid: A,
+      rootSessionUuid: SESSION_UUID,
+      spawnToolUseId: "toolu_A",
+      seqCount: 2,
+      startedAt: new Date("2026-09-11T09:00:02.000Z"),
+      lastEventAt: new Date(NOW - 2 * RECEIPT_SETTLE_MS),
+    });
+    let clock = NOW;
+    const { transcript, tachoFrames } = harness(root, live, children, {
+      chains: [chain],
+      now: () => clock,
+    });
+    const first = await transcript(input({ zoom: "everything" }), ctx());
+    expect(decodeTranscriptCursor(first.cursor as string)?.from).toEqual({
+      seq: "5",
+      turn: 2,
+      cost: null,
+      observed: false,
+    });
+    tachoFrames.mockClear();
+    clock = NOW + 5_000;
+    const idle = await transcript(
+      input({ zoom: "everything", after: first.cursor as string }),
+      ctx(),
+    );
+    expect(idle.entries).toEqual([]);
+    // The chain has not moved, so the window from the second turn answers.
+    expect(tachoFrames.mock.calls.map(([args]) => args.afterSeq)).toEqual([4]);
+
+    children.push(
+      onA(2, {
+        kind: "tool_call",
+        toolName: "Read",
+        toolUseId: "toolu_r",
+        receivedAt: receipt(NOW + 1_000),
+      }),
+    );
+    chain.lastEventAt = new Date(NOW + 1_000);
+    chain.seqCount = 3;
+    tachoFrames.mockClear();
+    clock = NOW + 6_000;
+    const moved = await transcript(
+      input({ zoom: "everything", after: idle.cursor as string }),
+      ctx(),
+    );
+    // The window cannot place the chain's new frame, so the read tries the
+    // window and then reads the whole run.
+    expect(tachoFrames.mock.calls.map(([args]) => args.afterSeq)).toEqual([
+      4, -1,
+    ]);
+    expect(moved.entries.map((e) => [e.seq, e.subagent?.sessionUuid])).toEqual(
+      [["2", A]],
+    );
+  });
+});
+
+describe("get_run_transcript reads a window from the cursor (#3823, D6)", () => {
+  const bare = { toolName: "", toolStatus: "" };
+  type Transcript = ReturnType<typeof harness>["transcript"];
+  type Entries = Awaited<ReturnType<Transcript>>["entries"];
+
+  /** Every entry a reader is sent, `limit` at a time, from the first page on. */
+  async function everyPage(
+    transcript: Transcript,
+    zoom: "everything" | "steps" | "turns",
+    limit: number,
+  ): Promise<Entries> {
+    const entries: Entries = [];
+    let after: string | undefined;
+    for (let page = 0; page < 20; page += 1) {
+      const out = await transcript(
+        input({ zoom, limit, ...(after === undefined ? {} : { after }) }),
+        ctx(),
+      );
+      entries.push(...out.entries);
+      if (out.cursor === null) break;
+      after = out.cursor;
+    }
+    return entries;
+  }
+
+  it.each([
+    ["everything", 1],
+    ["everything", 2],
+    ["everything", 3],
+    ["steps", 1],
+    ["steps", 2],
+    ["steps", 3],
+    ["turns", 1],
+    ["turns", 2],
+  ] as const)(
+    "pages %s %i at a time to the same entries as reads of the whole run",
+    async (zoom, limit) => {
+      const windowed = harness(rows, undefined, [], { chains: [] });
+      const whole = harness(rows);
+      expect(await everyPage(windowed.transcript, zoom, limit)).toEqual(
+        await everyPage(whole.transcript, zoom, limit),
+      );
+      // Some page read the run from a frame past its first.
+      expect(
+        windowed.tachoFrames.mock.calls.some(([args]) => args.afterSeq > -1),
+      ).toBe(true);
+    },
+  );
+
+  it("searches the whole run from a cursor that names a window", async () => {
+    const { transcript, tachoFrames } = harness(rows, undefined, [], {
+      chains: [],
+    });
+    const first = await transcript(
+      input({ zoom: "everything", limit: 3 }),
+      ctx(),
+    );
+    expect(decodeTranscriptCursor(first.cursor as string)?.from).toEqual({
+      seq: "1",
+      turn: 1,
+      cost: null,
+      observed: false,
+    });
+    tachoFrames.mockClear();
+    await transcript(
+      input({
+        zoom: "everything",
+        limit: 3,
+        query: "README",
+        after: first.cursor as string,
+      }),
+      ctx(),
+    );
+    expect(tachoFrames.mock.calls.map(([args]) => args.afterSeq)).toEqual([-1]);
+    // Negative control: the same page without a query reads the window.
+    tachoFrames.mockClear();
+    await transcript(
+      input({ zoom: "everything", limit: 3, after: first.cursor as string }),
+      ctx(),
+    );
+    expect(tachoFrames.mock.calls.map(([args]) => args.afterSeq)).toEqual([0]);
+  });
+
+  it("pages past frame 10,000 of a long run", async () => {
+    // 120 turns of 100 frames: a model call and 98 tool calls after each
+    // turn's start, 12,000 frames in all. The first read holds the first
+    // 10,000, and a read that began at seq 0 every page never got past them.
+    const long = Array.from({ length: 120 }, (_, k) => [
+      tachoRow(k * 100, { kind: "turn_start", ...bare, turnSeq: k + 1 }),
+      tachoRow(k * 100 + 1, {
+        kind: "llm_call",
+        ...bare,
+        model: "haiku",
+        provider: "anthropic",
+        costUsdMicros: 1,
+        turnSeq: k + 1,
+      }),
+      ...Array.from({ length: 98 }, (_, t) =>
+        tachoRow(k * 100 + 2 + t, { turnSeq: k + 1 }),
+      ),
+    ]).flat();
+    const { transcript, tachoFrames } = harness(
+      long,
+      { seqCount: long.length },
+      [],
+      { chains: [] },
+    );
+    const first = await transcript(input({ zoom: "turns" }), ctx());
+    expect(first.entries).toHaveLength(100);
+    expect(first.complete).toBe(false);
+    expect(first.counts).toBeDefined();
+    expect(decodeTranscriptCursor(first.cursor as string)).toEqual({
+      through: "9900",
+      high: "9999",
+      received: { after: NOW - RECEIPT_SETTLE_MS, sent: 0 },
+      from: { seq: "9900", turn: 100, cost: 99, observed: false },
+    });
+
+    tachoFrames.mockClear();
+    const second = await transcript(
+      input({ zoom: "turns", after: first.cursor as string }),
+      ctx(),
+    );
+    expect(tachoFrames.mock.calls[0]?.[0].afterSeq).toBe(9899);
+    expect(second.entries.map((e) => e.seq)).toEqual(
+      Array.from({ length: 20 }, (_, k) => String((100 + k) * 100)),
+    );
+    // Turns and cost carry on from the run's count, not the window's.
+    expect(second.entries[0]?.turn).toBe(101);
+    expect(second.entries[0]?.cumulativeCost?.micros).toBe("101");
+    expect(second.entries.at(-1)?.turn).toBe(120);
+    expect(second.complete).toBe(true);
+    expect(second.cursor).toBeNull();
+    // Counts ride only the first read.
+    expect(second.counts).toBeUndefined();
+  }, 30_000);
+});
+
+
+describe("unsentFolds", () => {
+  it("keeps a fold at or before the cursor that holds a frame received after the receipt (#4083)", () => {
+    const fold = (open: number, received: number | null) => ({
+      span: { open, end: open },
+      received,
+    });
+    const folds = [fold(0, 100), fold(1, 500), fold(2, null), fold(3, 100)];
+    const cursor = { throughAt: 2, highAt: 2 };
+    const opens = (kept: readonly { span: { open: number } }[]) =>
+      kept.map((f) => f.span.open);
+    expect(opens(unsentFolds(folds, cursor))).toEqual([3]);
+    expect(
+      opens(
+        unsentFolds(folds, { ...cursor, receivedAfter: 200 }, (f) => f.received),
+      ),
+    ).toEqual([1, 3]);
+    // Negative: without a receipt on the cursor, a receipt time alone sends
+    // nothing again.
+    expect(opens(unsentFolds(folds, cursor, (f) => f.received))).toEqual([3]);
+    expect(unsentFolds(folds, null)).toBe(folds);
   });
 });
 
@@ -1602,14 +2763,17 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
       policy: 1,
       responses: 0,
     });
-    // A later page says what the whole run holds, not what the page holds.
+    // The first page counts the whole run. A later page carries no counts,
+    // and the reader keeps the first read's (#3823, D6).
     const first = await transcript(input({ zoom: "steps", limit: 2 }), ctx());
+    expect(first.counts).toEqual(all.counts);
     const later = await transcript(
       input({ zoom: "steps", limit: 2, after: first.cursor ?? undefined }),
       ctx(),
     );
     expect(later.entries.map((e) => e.key)).toEqual(["4", "5"]);
-    expect(later.counts).toEqual(all.counts);
+    expect(later.counts).toBeUndefined();
+    expect(later.figures).toBeUndefined();
   });
 
   it("carries the frames' policy and recall counts at every zoom, as everything counts them", async () => {
@@ -1694,11 +2858,10 @@ describe("get_run_transcript states what the fold says about each entry (ADR-182
       input({ zoom: "everything", limit: 1 }),
       ctx(),
     );
-    // Only the prompt's body is read: once for its words, for the figures,
-    // and once for the page's one half. The words cache keeps no text, so no
-    // half is answered from it. The reply is never read.
+    // Only the prompt's body is read, once: for its words, for the figures,
+    // and for the page's one half from that same read. The reply is never
+    // read.
     expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([
-      stored("Ship it.").bytesRef,
       stored("Ship it.").bytesRef,
     ]);
     const next = await transcript(
@@ -2185,11 +3348,6 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
   const blank = { toolName: "", toolStatus: "", toolUseId: "" };
   // The Read call's request was kept as a digest only; its result was kept.
   const readRequest = { ...stored('{"path":"src/limits.ts"}'), bytesRef: "" };
-  const forged = stored("the real words");
-  objects.set(forged.bytesRef, {
-    bytes: enc.encode("words the record does not vouch for"),
-    contentType: "text/plain",
-  });
   const run = [
     tachoRow(0, {
       kind: "turn_start",
@@ -2234,10 +3392,15 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
       turnSeq: 1,
       ...stored("The runner calls retry three times."),
     }),
-    // A prompt whose body no longer hashes to its digest shows no words, so
-    // it is quiet (`markWords`), draws no row, and the search skips it: it is
-    // neither matched nor counted as unsearched.
-    tachoRow(6, { kind: "turn_start", ...blank, turnSeq: 2, ...forged }),
+    // A prompt of only whitespace shows no words, so it is quiet
+    // (`markWords`), draws no row, and the search skips it: it is neither
+    // matched nor counted as unsearched.
+    tachoRow(6, {
+      kind: "turn_start",
+      ...blank,
+      turnSeq: 2,
+      ...stored("  \n\t"),
+    }),
   ];
 
   it("finds the query in any half, ignoring case, and says where it matched", async () => {
@@ -2305,12 +3468,14 @@ describe("get_run_transcript search and figures (#3942, ADR-182)", () => {
     // second prompt, whose body no longer hashes, is quiet and not searched.
     expect(later.search).toEqual({ query: "retry", matched: 1, unsearched: 0 });
     // The words of the whole run were settled by the first page's word read,
-    // so this read reads no body for its words. The prompt that no longer
-    // hashes is remembered as showing none, and is not read again. The reply
-    // is read by the search and again for the page, because the words cache
-    // keeps no text to answer either from.
+    // so this read reads one body for its words: the first it holds, to learn
+    // that its key still opens bodies. The reply is read once, by the
+    // search, and the page's half is answered from that read.
     const reply = run[5]?.bytesRef;
-    expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([reply, reply]);
+    expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([
+      run[0]?.bytesRef,
+      reply,
+    ]);
   });
 
   it("sends a match that grew behind the cursor once, and never moves the cursor back to it", async () => {
@@ -2495,12 +3660,12 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
     const rows = [0, 1, 2, 3].flatMap(turn);
     const { transcript, getBody } = harness(rows);
     const first = await transcript(input({ zoom: "steps", limit: 3 }), ctx());
-    // The first read reads the whole run's words, once each, and then its
-    // page's halves, once each: the words cache keeps digests, not text.
+    // The first read reads the whole run's words and its page's halves, and
+    // no body twice: a half it read for words is not read again for the page.
     const firstRefs = getBody.mock.calls.map(([, ref]) => ref);
     const twice = firstRefs.filter((ref, i) => firstRefs.indexOf(ref) !== i);
-    expect(new Set(twice)).toEqual(pageRefs(first));
-    expect(twice).toHaveLength(pageRefs(first).size);
+    expect(twice).toEqual([]);
+    for (const ref of pageRefs(first)) expect(firstRefs).toContain(ref);
 
     getBody.mockClear();
     const second = await transcript(
@@ -2510,10 +3675,13 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
     expect(second.entries.map((e) => e.key)).toEqual(["3", "4", "5"]);
     const read = getBody.mock.calls.map(([, ref]) => ref);
     const onPage = pageRefs(second);
-    expect(read.filter((ref) => !onPage.has(ref))).toEqual([]);
-    // Each half on the page is read once, and no body is read for words.
-    expect(read).toHaveLength(onPage.size);
-    expect(new Set(read)).toEqual(onPage);
+    // One body is read for words: the first the cache holds, to learn that
+    // its key still opens bodies.
+    const probe = stored("Prompt 0.").bytesRef;
+    expect(read.filter((ref) => !onPage.has(ref))).toEqual([probe]);
+    // Each half on the page is read once.
+    expect(read).toHaveLength(onPage.size + 1);
+    expect(new Set(read)).toEqual(new Set([probe, ...onPage]));
     // What the read settled is what a read with no cache settles.
     const fresh = await harness(rows).transcript(
       input({ zoom: "steps", limit: 3, after: first.cursor ?? undefined }),
@@ -2574,7 +3742,10 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
     await transcript(input({ zoom: "steps", query: "absent" }), ctx());
     expect(cache.size()).toBe(6);
 
-    // A later read reads no body for its words: only its page's halves.
+    // A later read reads one body for its words, the first the cache holds,
+    // to learn that its key still opens bodies. That body is also the page's
+    // one half, and a read reads each body once (finding P3-2 of the ADR-182
+    // fifth review).
     getBody.mockClear();
     const page = await transcript(input({ zoom: "steps", limit: 1 }), ctx());
     expect(page.entries.map((e) => e.key)).toEqual(["0"]);
@@ -2618,7 +3789,7 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
   // Finding P3-2 of the ADR-182 third review: a cached half did not count
   // against the bound, so each page of a long run settled more entries than
   // the one before, and its counts moved from page to page.
-  it("counts the same on every page of a run with more word halves than one read settles", async () => {
+  it("the first page counts the whole run, and later pages carry no counts", async () => {
     // 1,001 turns of a prompt and a reply: 2,002 word halves. The last
     // prompt is blank, and falls past the 2,000 a read settles.
     const turns = 1_001;
@@ -2646,12 +3817,16 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
     } while (after !== undefined);
     expect(pages.length).toBeGreaterThan(2);
     const first = pages[0];
-    for (const page of pages) {
-      expect(page.counts).toEqual(first?.counts);
-      expect(page.figures).toEqual(first?.figures);
+    // Counts and figures ride only the read from the run's first frame
+    // (#3823, D6). The reader keeps them across every later page.
+    expect(first?.counts).toBeDefined();
+    expect(first?.figures).toBeDefined();
+    for (const page of pages.slice(1)) {
+      expect(page.counts).toBeUndefined();
+      expect(page.figures).toBeUndefined();
     }
-    // The blank prompt past the bound keeps what the fold said, on every
-    // page, so the chip counts it on every page.
+    // The blank prompt past the bound keeps what the fold said, so the chip
+    // counts it.
     expect(first?.counts?.kinds?.prompt).toBe(turns);
     const last = pages
       .flatMap((p) => p.entries)
@@ -2662,7 +3837,121 @@ describe("get_run_transcript reads each body once per process (ADR-182)", () => 
       input({ zoom: "steps", after: pages[0]?.cursor ?? undefined }),
       ctx(),
     );
-    expect(fresh.counts).toEqual(first?.counts);
+    expect(fresh.entries).toEqual(pages[1]?.entries);
+  });
+
+  // #4334: the bound was counted over the run's frames in the order read,
+  // and a subagent chain is spliced in where it was spawned. A chain that
+  // landed after an earlier read took the slots of the run's own last
+  // settled halves, and those entries turned back to what the fold said.
+  it("keeps what a read settled when a subagent chain lands late, ahead of the bound (negative)", async () => {
+    // 1,001 turns of a prompt and a reply on the run's own chain: 2,002 word
+    // halves, two past the 2,000 a chain settles. Turn 999's prompt is
+    // blank, and its halves are the last two inside the bound.
+    const turns = 1_001;
+    const task = "toolu_late_task";
+    const rows: TachoFrameRow[] = [];
+    let seq = 0;
+    for (let n = 0; n < turns; n += 1) {
+      rows.push(
+        tachoRow(seq++, {
+          kind: "turn_start",
+          ...blank,
+          turnSeq: n + 1,
+          ...stored(n === 999 ? "  \n" : `Late ask ${String(n)}.`),
+        }),
+      );
+      if (n === 0) {
+        // The first turn spawns a subagent.
+        rows.push(
+          tachoRow(seq++, {
+            kind: "tool_requested",
+            toolName: "Task",
+            toolUseId: task,
+            turnSeq: 1,
+          }),
+          tachoRow(seq++, {
+            kind: "subagent_start",
+            ...blank,
+            toolUseId: task,
+            turnSeq: 1,
+          }),
+          tachoRow(seq++, {
+            kind: "tool_call",
+            toolName: "Task",
+            toolUseId: task,
+            turnSeq: 1,
+          }),
+        );
+      }
+      rows.push(
+        tachoRow(seq++, {
+          kind: "turn_end",
+          ...blank,
+          turnSeq: n + 1,
+          ...stored(`Late answer ${String(n)}.`),
+        }),
+      );
+    }
+    // The subagent's chain, which arrives after the first read. Its two
+    // replies are blank, so they draw no row and count nowhere once read.
+    const child = (n: number, text: string): TachoFrameRow =>
+      tachoRow(n, {
+        kind: "turn_end",
+        ...blank,
+        sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d1",
+        rootSessionUuid: SESSION_UUID,
+        parentSessionUuid: SESSION_UUID,
+        subagentId: "agent-late",
+        subagentType: "Explore",
+        spawnToolUseId: task,
+        ...stored(text),
+      });
+    const early = await harness(rows).transcript(
+      input({ zoom: "steps" }),
+      ctx(),
+    );
+    const late = await harness(rows, undefined, [
+      child(0, " \t"),
+      child(1, "\n\n"),
+    ]).transcript(input({ zoom: "steps" }), ctx());
+    // The chain landed: its entries are in the run.
+    expect(late.entries.some((e) => e.subagent !== undefined)).toBe(true);
+    // Turn 999's blank prompt is settled both times, so no count moves.
+    expect(early.counts?.kinds?.prompt).toBe(turns - 1);
+    expect(late.counts).toEqual(early.counts);
+    expect(early.figures?.prompts).toBe(turns - 1);
+    expect(late.figures?.prompts).toBe(early.figures?.prompts);
+  });
+
+  // #4334: at `turns` and `everything` only the prompts were read, so the
+  // bound reached 2,000 prompts there and fewer at `steps`.
+  it("counts the operator's prompts the same at every zoom on a run past the bound (negative)", async () => {
+    // 1,001 turns of a prompt and a reply. The last prompt is blank, and at
+    // `steps` it falls past the 2,000 halves a chain settles, so it counts.
+    const turns = 1_001;
+    const rows = Array.from({ length: turns }, (_, n) => [
+      tachoRow(n * 2, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: n + 1,
+        ...stored(n === turns - 1 ? "  \n" : `Ask ${String(n)}.`),
+      }),
+      tachoRow(n * 2 + 1, {
+        kind: "turn_end",
+        ...blank,
+        turnSeq: n + 1,
+        ...stored(`Answer ${String(n)}.`),
+      }),
+    ]).flat();
+    for (const zoom of ["steps", "turns", "everything"] as const) {
+      // A process that has read nothing, so no zoom leans on another's read.
+      const out = await harness(rows).transcript(input({ zoom }), ctx());
+      expect({ zoom, prompts: out.figures?.prompts }).toEqual({
+        zoom,
+        prompts: turns,
+      });
+    }
   });
 });
 
@@ -2702,8 +3991,10 @@ describe("readWords remembers a body it cannot read for good", () => {
     const once = await readWords(bodies, SCOPE, folds, { cache });
     const again = await readWords(bodies, SCOPE, folds, { cache });
     expect(getBody).toHaveBeenCalledTimes(1);
-    expect([...once.values()]).toEqual([null]);
-    expect([...again.values()]).toEqual([null]);
+    // A body that could not be read answers nothing, so the prompt keeps
+    // what the fold said rather than reading as blank.
+    expect(once.size).toBe(0);
+    expect(again.size).toBe(0);
     at = 1_000;
     await readWords(bodies, SCOPE, folds, { cache });
     expect(getBody).toHaveBeenCalledTimes(2);
@@ -2730,6 +4021,38 @@ describe("readWords remembers a body it cannot read for good", () => {
     expect(getBody).toHaveBeenCalledTimes(1);
   });
 
+  it("reads no body under a key the read already found gone, and remembers each as unreadable", async () => {
+    const cache = createWordsCache();
+    const folds = stepFolds([prompt("Erased.")]);
+    const { bodies, getBody } = bodiesThat(() => new Error("not asked"));
+    const keys = { opened: new Set<string>(), gone: new Set(["k"]) };
+    const words = await readWords(bodies, SCOPE, folds, { cache, keys });
+    expect(getBody).not.toHaveBeenCalled();
+    expect(words.size).toBe(0);
+    const [fold] = folds;
+    const frame = fold === undefined ? null : fold.request;
+    expect(frame === null ? null : cache.get(SCOPE, frame)).toBe("unreadable");
+  });
+
+  // Finding P2-A of the ADR-182 fifth review: the body read again to learn
+  // its key is itself one this read finds does not open. Its kept digest no
+  // longer answers, as a read with no cache would not settle it.
+  it("answers no kept digest of a body this read found does not open", async () => {
+    const cache = createWordsCache();
+    const folds = stepFolds([prompt(" \n ")]);
+    const [fold] = folds;
+    const frame = fold === undefined ? null : fold.request;
+    if (frame === null) throw new Error("no prompt half");
+    cache.set(SCOPE, frame, { stream: false, words: null });
+    const { bodies, getBody } = bodiesThat(
+      () => new BodyUnopenableError("k", { cause: new Error("tag") }),
+    );
+    const words = await readWords(bodies, SCOPE, folds, { cache });
+    expect(getBody).toHaveBeenCalledTimes(1);
+    expect(words.size).toBe(0);
+    expect(cache.get(SCOPE, frame)).toBe("unreadable");
+  });
+
   it("reads a body again after a failure that may pass (negative)", async () => {
     const cache = createWordsCache();
     const folds = stepFolds([prompt("Flaky.")]);
@@ -2737,5 +4060,795 @@ describe("readWords remembers a body it cannot read for good", () => {
     await readWords(bodies, SCOPE, folds, { cache });
     await readWords(bodies, SCOPE, folds, { cache });
     expect(getBody).toHaveBeenCalledTimes(2);
+  });
+});
+
+// #4334: the Run page reads `steps` and `everything` at once. On a cold words
+// cache, both reads opened every body they shared.
+describe("readWords beside another read of the same run", () => {
+  const blank = { toolName: "", toolStatus: "", toolUseId: "" };
+  /** `turns` turns of a prompt and a streamed model step, each body its own. */
+  const frames = (turns: number, tag: string): RunFrame[] =>
+    Array.from({ length: turns }, (_, n) => [
+      tachoRow(n * 2, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: n + 1,
+        ...stored(`${tag} ask ${String(n)}.`),
+      }),
+      tachoRow(n * 2 + 1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        turnSeq: n + 1,
+        ...stored(
+          modelStream([`${tag} said ${String(n)}.`]),
+          "text/event-stream",
+        ),
+      }),
+    ])
+      .flat()
+      .map((row) => tachoFrameOf(row));
+  const refsOf = (folds: readonly TranscriptFold[]) =>
+    folds.map((fold) =>
+      fold.node === "prompt"
+        ? fold.request?.body.bodyRef
+        : fold.response?.body.bodyRef,
+    );
+
+  it("opens each body once when two reads of the same halves meet a cold cache (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const folds = stepFolds(frames(12, "Same"));
+    const cache = createWordsCache();
+    const [one, two] = await Promise.all([
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+    ]);
+    expect([...two.entries()]).toEqual([...one.entries()]);
+    expect(one.size).toBe(24);
+    const opened = getBody.mock.calls.map(([, ref]) => ref);
+    expect(opened.sort()).toEqual(refsOf(folds).sort());
+  });
+
+  it("opens each body once when a prompts-only read runs beside a read of every half (negative)", async () => {
+    // The prompts-only read runs ahead, and has read a prompt by the time
+    // the other reaches it. The other finds its words in the cache rather
+    // than opening the body again.
+    const { deps, getBody } = harness([]);
+    const folds = stepFolds(frames(12, "Beside"));
+    const cache = createWordsCache();
+    const [prompts, every] = await Promise.all([
+      readWords(deps.bodies, SCOPE, folds, {
+        cache,
+        only: (fold) => fold.node === "prompt",
+      }),
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+    ]);
+    expect(prompts.size).toBe(12);
+    expect(every.size).toBe(24);
+    for (const [fold, words] of prompts) expect(every.get(fold)).toBe(words);
+    const opened = getBody.mock.calls.map(([, ref]) => ref);
+    expect(opened.sort()).toEqual(refsOf(folds).sort());
+  });
+
+  it("reads the halves the bound holds when asked for fewer, and counts the rest in their places", async () => {
+    const { deps, getBody } = harness([]);
+    // A prompt, its model step, then a second prompt: with room for two,
+    // the second prompt is past the bound whatever `only` asks for.
+    const folds = stepFolds(frames(2, "Only")).slice(0, 3);
+    const answer = await readWords(deps.bodies, SCOPE, folds, {
+      halfMax: 2,
+      only: (fold) => fold.node === "prompt",
+    });
+    expect(folds.map((fold) => answer.has(fold))).toEqual([
+      true,
+      false,
+      false,
+    ]);
+    expect(getBody).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives each chain its own bound, so a subagent chain spliced in ahead takes no slot from the run's own chain (negative)", async () => {
+    const { deps } = harness([]);
+    const root = [
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Find the flaky test."),
+      }),
+      tachoRow(1, {
+        kind: "tool_requested",
+        toolName: "Task",
+        toolUseId: "toolu_bound",
+        turnSeq: 1,
+      }),
+      tachoRow(2, {
+        kind: "subagent_start",
+        ...blank,
+        toolUseId: "toolu_bound",
+        turnSeq: 1,
+      }),
+      tachoRow(3, {
+        kind: "tool_call",
+        toolName: "Task",
+        toolUseId: "toolu_bound",
+        turnSeq: 1,
+      }),
+      tachoRow(4, {
+        kind: "turn_end",
+        ...blank,
+        turnSeq: 1,
+        ...stored("It was the clock."),
+      }),
+    ].map((row) => tachoFrameOf(row));
+    const child = tachoFrameOf(
+      tachoRow(0, {
+        kind: "turn_end",
+        ...blank,
+        sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d2",
+        rootSessionUuid: SESSION_UUID,
+        parentSessionUuid: SESSION_UUID,
+        subagentId: "agent-bound",
+        subagentType: "Explore",
+        spawnToolUseId: "toolu_bound",
+        ...stored("The test reads the wall clock."),
+      }),
+    );
+    // The keys of the prompts and replies a read with room for two halves a
+    // chain settles.
+    const settled = async (frames: RunFrame[]) => {
+      const folds = stepFolds(frames).filter(
+        (fold) => fold.node === "prompt" || fold.node === "reply",
+      );
+      const words = await readWords(deps.bodies, SCOPE, folds, {
+        halfMax: 2,
+      });
+      return folds
+        .filter((fold) => words.has(fold))
+        .map((fold) => fold.key);
+    };
+    const before = await settled(root);
+    expect(before).toEqual(["0", "4"]);
+    // The child's reply is spliced in after the spawn, ahead of the run's
+    // reply, and settles within its own chain's bound.
+    const after = await settled(spliceSubagentChains(root, [child]));
+    expect(after).toEqual([
+      "0",
+      "0192d4a8-7c1e-7a00-8000-00000000c1d2:0",
+      "4",
+    ]);
+  });
+
+  // `markWords` asks for the model step before a reply after the reply
+  // itself. The bound takes halves in the run's order, so where it falls
+  // between the two, the earlier model step keeps its place (#4334).
+  it("takes the halves in the run's order when the bound falls between a model step and its reply", async () => {
+    const { deps, getBody } = harness([]);
+    const frames = [
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Ship it."),
+      }),
+      tachoRow(1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        turnSeq: 1,
+        ...stored(modelStream(["Shipped it."]), "text/event-stream"),
+      }),
+      tachoRow(2, {
+        kind: "turn_end",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Shipped it, and tagged v2."),
+      }),
+    ].map((row) => tachoFrameOf(row));
+    const [prompt, model, reply] = stepFolds(frames);
+    if (!prompt || !model || !reply) throw new Error("no folds");
+    expect([prompt.node, model.node, reply.node]).toEqual([
+      "prompt",
+      "model",
+      "reply",
+    ]);
+    const asked = [prompt, reply, model];
+    const answer = await readWords(deps.bodies, SCOPE, asked, { halfMax: 2 });
+    expect([prompt, model, reply].map((fold) => answer.has(fold))).toEqual([
+      true,
+      true,
+      false,
+    ]);
+    expect(getBody).toHaveBeenCalledTimes(2);
+  });
+
+  // `only` narrows the answer as well as the reads. A half with no kept body
+  // that `only` leaves out is not answered as showing no words, so a
+  // prompts-only read leaves the fold's own word on every other entry.
+  it("leaves a half with no kept body out of the answer when `only` leaves it out (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const frames = [
+      tachoRow(0, {
+        kind: "turn_start",
+        ...blank,
+        turnSeq: 1,
+        ...stored("Ship it."),
+      }),
+      // A model step the recorder kept no body for.
+      tachoRow(1, {
+        kind: "llm_call",
+        ...blank,
+        model: "claude-opus-5",
+        provider: "anthropic",
+        turnSeq: 1,
+      }),
+    ].map((row) => tachoFrameOf(row));
+    const [prompt, model] = stepFolds(frames);
+    if (!prompt || !model) throw new Error("no folds");
+    expect([prompt.node, model.node]).toEqual(["prompt", "model"]);
+    expect(model.response?.body.bodyRef ?? null).toBeNull();
+    const prompts = await readWords(deps.bodies, SCOPE, [prompt, model], {
+      only: (fold) => fold.node === "prompt",
+    });
+    expect(prompts.has(prompt)).toBe(true);
+    expect(prompts.has(model)).toBe(false);
+    // Asked for every half, the same half answers as showing no words.
+    const every = await readWords(deps.bodies, SCOPE, [prompt, model]);
+    expect(every.has(model)).toBe(true);
+    expect(every.get(model)).toBeNull();
+    // The prompt's body, once for each read. The model step has none to open.
+    expect(getBody).toHaveBeenCalledTimes(2);
+  });
+
+  // A read that tests a key learns the key's state for itself. Were the test
+  // shared, the read that waited on it would learn nothing, and would answer
+  // its kept digests after erasure.
+  it("tests the key in each of two reads at once, so neither answers a kept digest after erasure (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const folds = stepFolds(frames(2, "Erased"));
+    const cache = createWordsCache();
+    const warm = await readWords(deps.bodies, SCOPE, folds, { cache });
+    expect(warm.size).toBe(4);
+    getBody.mockClear();
+    getBody.mockImplementation(() =>
+      Promise.reject(
+        new BodyKeyGoneError("k", {
+          cause: Object.assign(new Error("pending deletion"), {
+            name: "KMSInvalidStateException",
+          }),
+        }),
+      ),
+    );
+    const [one, two] = await Promise.all([
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+    ]);
+    expect(one.size).toBe(0);
+    expect(two.size).toBe(0);
+    // One body for each read: its own test of the key.
+    expect(getBody).toHaveBeenCalledTimes(2);
+  });
+
+  /** A store whose KEK erasure has destroyed: KMS refuses the key itself. */
+  const erasedKey = () =>
+    Promise.reject(
+      new BodyKeyGoneError("k", {
+        cause: Object.assign(new Error("pending deletion"), {
+          name: "KMSInvalidStateException",
+        }),
+      }),
+    );
+
+  // Review round 1 on #4382: a read that waited on another's read of a body
+  // learned nothing about the body's key, since the shared read wrote what
+  // it learned into the other read's keys. So after erasure the read that
+  // waited answered the digests it kept under that key.
+  it("learns an erased key from the read it waits on, so neither of two reads at once answers a kept digest (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const folds = stepFolds(frames(2, "Joined"));
+    const prompts = folds.filter((fold) => fold.node === "prompt");
+    const cache = createWordsCache();
+    // Only the prompts are kept. Each full read below then holds the prompts
+    // as kept digests and misses the model steps, all under one key.
+    const warm = await readWords(deps.bodies, SCOPE, folds, {
+      cache,
+      only: (fold) => fold.node === "prompt",
+    });
+    expect(warm.size).toBe(2);
+    getBody.mockClear();
+    getBody.mockImplementation(erasedKey);
+    const [one, two] = await Promise.all([
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+      readWords(deps.bodies, SCOPE, folds, { cache }),
+    ]);
+    for (const answer of [one, two]) {
+      expect(prompts.filter((fold) => answer.has(fold))).toEqual([]);
+      expect(answer.size).toBe(0);
+    }
+    // Each model step's body is opened once, by the read that got there
+    // first. The other read waits on those reads and learns the key there.
+    expect(getBody).toHaveBeenCalledTimes(2);
+  });
+
+  // Review round 1 on #4382: a read that found a body it missed already
+  // failed by another read took that as the key's test, and learned nothing
+  // about the key from it.
+  it("tests the key itself when a body it missed was failed by another read meanwhile (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const [prompt, model] = stepFolds(frames(1, "Beaten"));
+    if (!prompt || !model) throw new Error("no folds");
+    const modelRef = model.response?.body.bodyRef;
+    const kept = createWordsCache();
+    await readWords(deps.bodies, SCOPE, [prompt], { cache: kept });
+    // The model step's body misses when the read looks first, and reads as
+    // failed by the time the read would open it.
+    let asked = 0;
+    const cache: WordsCache = {
+      ...kept,
+      get: (scope, frame) => {
+        if (frame.body.bodyRef !== modelRef) return kept.get(scope, frame);
+        asked += 1;
+        return asked === 1 ? undefined : UNREADABLE;
+      },
+    };
+    getBody.mockClear();
+    getBody.mockImplementation(erasedKey);
+    const words = await readWords(deps.bodies, SCOPE, [prompt, model], {
+      cache,
+    });
+    expect(words.has(prompt)).toBe(false);
+    expect(words.has(model)).toBe(false);
+    // The prompt's body, read again to learn the key.
+    expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([
+      prompt.request?.body.bodyRef,
+    ]);
+  });
+
+  // Review round 2 on #4382: no test covered the case where the only body a
+  // read opens under a key fails before KMS answers. That read learns
+  // nothing about the key, and a kept digest leans on it, so the test of the
+  // key must still run once the reads are done.
+  it("tests the key after the reads when the only body it read under the key failed before KMS answered (negative)", async () => {
+    const { deps, getBody } = harness([]);
+    const [prompt, model] = stepFolds(frames(1, "Unanswered"));
+    if (!prompt || !model) throw new Error("no folds");
+    const promptRef = prompt.request?.body.bodyRef;
+    const modelRef = model.response?.body.bodyRef;
+    const cache = createWordsCache();
+    // Only the prompt is kept. The read below then holds the prompt as a
+    // kept digest and opens the model step's body, the one body it reads
+    // under the key.
+    await readWords(deps.bodies, SCOPE, [prompt], { cache });
+    getBody.mockClear();
+    // The store drops the model step's read before KMS is asked, and KMS
+    // refuses the key for any body that reaches it.
+    getBody.mockImplementation((_scope: unknown, ref: string) =>
+      ref === modelRef
+        ? Promise.reject(new Error("socket hang up"))
+        : erasedKey(),
+    );
+    const words = await readWords(deps.bodies, SCOPE, [prompt, model], {
+      cache,
+    });
+    expect(words.has(model)).toBe(false);
+    // The retest found the key gone, so the kept digest does not answer.
+    expect(words.has(prompt)).toBe(false);
+    // The model step's body, then the prompt's, read again once the reads
+    // were done to learn the key.
+    expect(getBody.mock.calls.map(([, ref]) => ref)).toEqual([
+      modelRef,
+      promptRef,
+    ]);
+  });
+});
+
+// Findings P2-1 and P3-1 of the ADR-182 fourth review. A read that failed set
+// `quiet`, so an entry vanished from its chip on a live run while the rows
+// the page held stayed; and erasure, which destroys the key and leaves the
+// object, was modelled as a deleted object, so a process that had kept a
+// digest before erasure answered differently from one that had not.
+describe("get_run_transcript and a body that cannot be read", () => {
+  const blank = { toolName: "", toolStatus: "", toolUseId: "" };
+  /**
+   * Two turns: a prompt, a model step that says "Done.", and a closing
+   * message that repeats it, which is an echo and so quiet; then a prompt of
+   * only whitespace, which is quiet too.
+   */
+  const run = [
+    tachoRow(0, {
+      kind: "turn_start",
+      ...blank,
+      turnSeq: 1,
+      ...stored("Ship the fix."),
+    }),
+    tachoRow(1, {
+      kind: "llm_call",
+      ...blank,
+      model: "claude-opus-5",
+      provider: "anthropic",
+      turnSeq: 1,
+      ...stored(modelStream(["Done."]), "text/event-stream"),
+    }),
+    tachoRow(2, {
+      kind: "turn_end",
+      ...blank,
+      turnSeq: 1,
+      ...stored("Done."),
+    }),
+    tachoRow(3, {
+      kind: "turn_start",
+      ...blank,
+      turnSeq: 2,
+      ...stored(" \n "),
+    }),
+  ];
+  const marks = (out: { entries: { key?: string; quiet?: boolean }[] }) =>
+    out.entries.map((e) => [e.key, e.quiet]);
+
+  it("keeps a prompt whose read timed out shown, with the same count on every read", async () => {
+    const { transcript, getBody } = harness(run);
+    const prompt = run[0]?.bytesRef;
+    const read = getBody.getMockImplementation();
+    getBody.mockImplementation((scope, ref) =>
+      ref === prompt
+        ? Promise.reject(new Error("timeout"))
+        : (read?.(scope, ref) ?? Promise.reject(new Error("no body"))),
+    );
+    const first = await transcript(input({ zoom: "steps" }), ctx());
+    const second = await transcript(input({ zoom: "steps" }), ctx());
+    expect(first.entries.find((e) => e.key === "0")?.quiet).toBe(false);
+    expect(second.entries.find((e) => e.key === "0")?.quiet).toBe(false);
+    expect(first.counts?.kinds?.prompt).toBe(1);
+    expect(second.counts).toEqual(first.counts);
+    // The read that failed is tried again on the next read, since a timeout
+    // may pass. Within one read it is asked for once, for its words and its
+    // half alike.
+    expect(getBody.mock.calls.filter(([, ref]) => ref === prompt)).toHaveLength(
+      2,
+    );
+  });
+
+  it("settles blank words and an echo only from a body read whole (negative)", async () => {
+    const { transcript } = harness(run);
+    const out = await transcript(input({ zoom: "steps" }), ctx());
+    expect(marks(out)).toEqual([
+      ["0", false],
+      ["1", false],
+      ["2", true],
+      ["3", true],
+    ]);
+    expect(out.entries.find((e) => e.key === "2")?.echoOf).toBe("1");
+  });
+
+  it("answers the same after erasure whether the process read the run before or not", async () => {
+    const erased = () =>
+      Promise.reject(
+        new BodyKeyGoneError("k", {
+          cause: Object.assign(new Error("pending deletion"), {
+            name: "KMSInvalidStateException",
+          }),
+        }),
+      );
+    const warm = harness(run);
+    const before = await warm.transcript(input({ zoom: "steps" }), ctx());
+    expect(marks(before)).toEqual([
+      ["0", false],
+      ["1", false],
+      ["2", true],
+      ["3", true],
+    ]);
+
+    warm.getBody.mockImplementation(erased);
+    const cold = harness(run);
+    cold.getBody.mockImplementation(erased);
+    const warmAfter = await warm.transcript(input({ zoom: "steps" }), ctx());
+    const coldAfter = await cold.transcript(input({ zoom: "steps" }), ctx());
+    expect(warmAfter).toEqual(coldAfter);
+    // No body can be read, so no entry is settled by its words: each keeps
+    // what the fold said, and no reply is read as an echo.
+    expect(marks(warmAfter)).toEqual([
+      ["0", false],
+      ["1", false],
+      ["2", false],
+      ["3", false],
+    ]);
+    expect(warmAfter.entries.every((e) => e.echoOf === null)).toBe(true);
+    expect(warmAfter.entries.every((e) => e.request?.text == null)).toBe(true);
+
+    // Each erased body is remembered for the failure TTL, so a later read
+    // reads no body for its words, only its page's halves.
+    warm.getBody.mockClear();
+    const again = await warm.transcript(input({ zoom: "steps" }), ctx());
+    expect(again).toEqual(warmAfter);
+    const halves = again.entries.flatMap((e) =>
+      [e.request?.bytesRef, e.response?.bytesRef].filter(
+        (ref): ref is string => typeof ref === "string",
+      ),
+    );
+    expect(warm.getBody).toHaveBeenCalledTimes(halves.length);
+  });
+
+  // Finding P2-A of the ADR-182 fifth review: a reference names the
+  // deployment KEK, so one body that did not open marked the key gone, and
+  // every other body under it lost its words for a minute.
+  it("fails only the body that does not open, and settles the rest under its key", async () => {
+    const tampered = run[0]?.bytesRef;
+    const unopenable = (read: ReturnType<typeof harness>) => {
+      const real = read.getBody.getMockImplementation();
+      read.getBody.mockImplementation((scope, ref) =>
+        ref === tampered
+          ? Promise.reject(
+              new BodyUnopenableError("k", {
+                cause: new Error(
+                  "Unsupported state or unable to authenticate data",
+                ),
+              }),
+            )
+          : (real?.(scope, ref) ?? Promise.reject(new Error("no body"))),
+      );
+    };
+    const settled = [
+      ["0", false],
+      ["1", false],
+      ["2", true],
+      ["3", true],
+    ];
+    const warm = harness(run);
+    const before = await warm.transcript(input({ zoom: "steps" }), ctx());
+    expect(marks(before)).toEqual(settled);
+
+    unopenable(warm);
+    const cold = harness(run);
+    unopenable(cold);
+    const warmAfter = await warm.transcript(input({ zoom: "steps" }), ctx());
+    const coldAfter = await cold.transcript(input({ zoom: "steps" }), ctx());
+    expect(warmAfter).toEqual(coldAfter);
+    // The blank prompt and the echo under the same key still settle, so
+    // nothing the tampered prompt did not decide moves.
+    expect(marks(warmAfter)).toEqual(settled);
+    expect(warmAfter.counts).toEqual(before.counts);
+    expect(warmAfter.entries.find((e) => e.key === "2")?.echoOf).toBe("1");
+    expect(warmAfter.entries.find((e) => e.key === "0")?.request?.text).toBe(
+      null,
+    );
+    // The key was not marked gone: the other bodies' texts are shown.
+    expect(warmAfter.entries.find((e) => e.key === "2")?.response?.text).toBe(
+      "Done.",
+    );
+  });
+});
+
+// #3942: the thinking and seal chips select the right entries through the
+// handler, and every chip's count is the whole run's. Each read here starts
+// at the run's first frame, the only read that carries counts (D6 of the live
+// Run page batch), so none of these asserts a count on a cursor page.
+describe("get_run_transcript thinking and seal chips (#3942)", () => {
+  const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c2d0";
+  const blank = { toolName: "", toolStatus: "", toolUseId: "" };
+  const at = (second: number) =>
+    `2026-09-11 09:00:${String(second).padStart(2, "0")}.000`;
+  const model = {
+    kind: "llm_call",
+    ...blank,
+    model: "claude-opus-5",
+    provider: "anthropic",
+  };
+  const root = [
+    tachoRow(0, {
+      kind: "turn_start",
+      ...blank,
+      turnSeq: 1,
+      ...stored("Tighten the retry test."),
+    }),
+    tachoRow(1, {
+      kind: "tool_requested",
+      toolName: "Task",
+      toolStatus: "",
+      toolUseId: "toolu_think",
+      turnSeq: 1,
+    }),
+    tachoRow(2, {
+      kind: "subagent_start",
+      ...blank,
+      toolUseId: "toolu_think",
+      turnSeq: 1,
+    }),
+    tachoRow(3, {
+      kind: "tool_call",
+      toolName: "Task",
+      toolUseId: "toolu_think",
+      turnSeq: 1,
+      ts: at(30),
+    }),
+    // Claude Code's transcript reports the tokens a call spent reasoning.
+    tachoRow(4, {
+      ...model,
+      source: "transcript",
+      turnSeq: 1,
+      ts: at(41),
+      body: JSON.stringify({ thinking_tokens: 12, output_tokens: 40 }),
+      ...stored("Thought it through, then tightened the test."),
+    }),
+    // A call that answered without reasoning (negative).
+    tachoRow(5, {
+      ...model,
+      source: "transcript",
+      turnSeq: 1,
+      ts: at(42),
+      body: JSON.stringify({ thinking_tokens: 0, output_tokens: 8 }),
+      ...stored("Done."),
+    }),
+    // OTel's record carries thinking tokens too, but only the transcript's
+    // split counts (`countsLlmCallSplit`), so this call answers usage and
+    // not thinking (negative).
+    tachoRow(6, {
+      ...model,
+      source: "otel_log",
+      turnSeq: 1,
+      ts: at(43),
+      body: JSON.stringify({ thinking_tokens: 12, output_tokens: 40 }),
+    }),
+    // The chain's own integrity frames, read on the Chain tab (negative).
+    tachoRow(7, { kind: "checkpoint", ...blank, ts: at(44) }),
+    tachoRow(8, { kind: "telemetry_gap", ...blank, ts: at(45) }),
+    // The run's own stop.
+    tachoRow(9, { kind: "agent_stop", ...blank, ts: at(46) }),
+  ];
+  const child = (seq: number, over: Partial<TachoFrameRow>): TachoFrameRow =>
+    tachoRow(seq, {
+      sessionUuid: CHILD,
+      rootSessionUuid: SESSION_UUID,
+      parentSessionUuid: SESSION_UUID,
+      subagentId: "agent-2",
+      subagentType: "Explore",
+      spawnToolUseId: "toolu_think",
+      ts: at(10 + seq),
+      ...over,
+    });
+  const children = [
+    child(0, { kind: "turn_start", ...blank, turnSeq: 1 }),
+    // A subagent that reasoned is thinking of the run's too.
+    child(1, {
+      ...model,
+      source: "transcript",
+      body: JSON.stringify({ thinking_tokens: 5, output_tokens: 20 }),
+      ...stored("Found the flaky test."),
+    }),
+    // A subagent stopping is the subagent's, not the run's (negative).
+    child(2, { kind: "agent_stop", ...blank }),
+  ];
+  const keysOf = (out: { entries: readonly { key?: string }[] }) =>
+    out.entries.map((e) => e.key ?? "").sort();
+
+  it("steps: thinking keeps the model calls that reasoned, on any chain, and nothing else", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const out = await transcript(
+      input({ zoom: "steps", kinds: ["thinking"] }),
+      ctx(),
+    );
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(keysOf(out)).toEqual(["4", `${CHILD}:1`].sort());
+    for (const entry of out.entries) {
+      expect(entry.kinds).toContain("thinking");
+      expect(entry.node).toBe("model");
+    }
+    // The call that reasoned carries its reply, so the chip draws its words.
+    expect(out.entries.find((e) => e.key === "4")?.response?.text).toBe(
+      "Thought it through, then tightened the test.",
+    );
+    // Negative: the call that did not reason, and the OTel record whose
+    // thinking tokens are not counted, answer other chips.
+    const all = await transcript(input({ zoom: "steps" }), ctx());
+    const kindsOf = (key: string) =>
+      all.entries.find((e) => e.key === key)?.kinds ?? [];
+    expect(kindsOf("5")).toEqual(expect.arrayContaining(["responses"]));
+    expect(kindsOf("5")).not.toContain("thinking");
+    expect(kindsOf("6")).toContain("usage");
+    expect(kindsOf("6")).not.toContain("thinking");
+  });
+
+  it("steps: seal keeps the run's own stop and nothing else", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const out = await transcript(
+      input({ zoom: "steps", kinds: ["seal"] }),
+      ctx(),
+    );
+    expect(runTranscriptGet.output.parse(out)).toEqual(out);
+    expect(out.entries.map((e) => [e.key, e.node, e.quiet])).toEqual([
+      ["9", "seal", false],
+    ]);
+    expect(out.entries[0]?.subagent).toBeUndefined();
+    // Negative: the subagent's stop, the checkpoint and the gap answer no
+    // seal on the unfiltered read either.
+    const all = await transcript(input({ zoom: "steps" }), ctx());
+    expect(
+      all.entries.filter((e) => e.kinds.includes("seal")).map((e) => e.key),
+    ).toEqual(["9"]);
+  });
+
+  it("everything: the two chips select the same frames, and the chain's own frames answer no chip", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const thinking = await transcript(
+      input({ zoom: "everything", kinds: ["thinking"] }),
+      ctx(),
+    );
+    expect(keysOf(thinking)).toEqual(["4", `${CHILD}:1`].sort());
+    const seal = await transcript(
+      input({ zoom: "everything", kinds: ["seal"] }),
+      ctx(),
+    );
+    expect(seal.entries.map((e) => [e.key, e.type])).toEqual([
+      ["9", "agent_stop"],
+    ]);
+    const all = await transcript(input({ zoom: "everything" }), ctx());
+    for (const type of ["checkpoint", "telemetry_gap"]) {
+      expect(all.entries.find((e) => e.type === type)?.kinds).toEqual([]);
+    }
+    expect(all.counts?.kinds).toMatchObject({ thinking: 2, seal: 1 });
+  });
+
+  it("counts both chips over the whole run, whatever the chips, the query or the page size", async () => {
+    const { transcript } = harness(root, undefined, children);
+    const all = await transcript(input({ zoom: "steps" }), ctx());
+    expect(all.counts?.kinds.thinking).toBe(2);
+    expect(all.counts?.kinds.seal).toBe(1);
+    // Every read below starts at the run's first frame, so each carries the
+    // whole run's counts, however little of it the page holds.
+    for (const over of [
+      { kinds: ["thinking"] },
+      { kinds: ["seal"] },
+      { kinds: ["tools"] },
+      { query: "tightened" },
+      { limit: 1 },
+    ]) {
+      const out = await transcript(input({ zoom: "steps", ...over }), ctx());
+      expect(out.counts).toEqual(all.counts);
+    }
+  });
+
+  it("ledger run: seal keeps the event that closes the attempt and nothing else", async () => {
+    const events = [
+      event(1),
+      event(2, {
+        eventType: "terminal.attempt_terminated",
+        stage: "terminal",
+        payload: { terminal_status: "completed" },
+      }),
+    ];
+    const stores = memoryStores(
+      [ledgerRun({ publicId: LEDGER_ID, runId: RUN_UUID })],
+      [],
+    );
+    const transcript = createRunTranscriptGetHandler({
+      queries: stores.queries,
+      store: {
+        getRunByPublicId: (id) =>
+          Promise.resolve(id === LEDGER_ID ? summary() : null),
+        readAttemptEventsSince: memoryEvents(events),
+      },
+      readRunRollups: stores.readRunRollups,
+      readWitnessFor: stores.readWitnessFor,
+      tachoFrames: memoryTachoFrames(SESSION_UUID, []),
+      bodies: {
+        getBody: () => Promise.reject(new Error("no bodies in this test")),
+        getAssembly: () => Promise.resolve(null),
+      },
+      priceBook: () => Promise.resolve([]),
+    });
+    const out = await transcript(
+      runTranscriptGet.input.parse({
+        runId: LEDGER_ID,
+        zoom: "steps",
+        kinds: ["seal"],
+      }),
+      ctx(),
+    );
+    expect(out.entries.map((e) => [e.key, e.node])).toEqual([["2", "seal"]]);
+    expect(out.counts?.kinds.seal).toBe(1);
+    // Negative: the tool call answers tools, not seal.
+    expect(out.counts?.kinds.tools).toBe(1);
   });
 });

@@ -23,7 +23,7 @@ import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
-import { assertNotRetired } from "./lib/agent-identity";
+import { assertNotManaged, assertNotRetired } from "./lib/agent-identity";
 import { hashEnrollmentToken, parseRepositoryRemote } from "./lib/onboarding";
 import {
   enrollmentDocument,
@@ -139,6 +139,7 @@ export const tachoHostEnrollHandler: CapabilityHandler<
             id: schema.agents.id,
             publicId: schema.agents.publicId,
             slug: schema.agents.slug,
+            agentType: schema.agents.agentType,
             status: schema.agents.status,
             principalId: schema.agents.principalId,
             orgNamespace: schema.organizations.namespace,
@@ -173,6 +174,9 @@ export const tachoHostEnrollHandler: CapabilityHandler<
         // token issued before the retirement still finds it. The refusal
         // rolls back the transaction, which leaves the token unused.
         assertNotRetired(agent);
+        // A token minted for the built-in assistant before
+        // create_enrollment_token refused it binds no host to it (#4350).
+        assertNotManaged(agent);
         const agentKey = `${agent.orgNamespace}.${agent.workspaceNamespace}.${agent.slug}`;
 
         const [existingHost] = await tx

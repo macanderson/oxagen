@@ -1,6 +1,8 @@
 // run.handlers.test.ts — handler invocation tests for the run recorder tools
-// (#2952, ADR-058): get_run_frame_body, get_run_transcript, get_run_turns,
-// get_run_chain, bisect_runs, get_run_export, and seal_run (#4073, ADR-169).
+// (#2952, ADR-058): list_runs, get_run, get_run_frame_body,
+// get_run_transcript, get_run_turns, get_run_context (ADR-200),
+// get_run_chain, bisect_runs, get_run_export, seal_run (#4073, ADR-169), and
+// get_run_issues (#3970).
 // fork_run, export_run and summarize_run check an org role in the handler and
 // an MCP context carries no user, so they have no MCP tool. get_run_export and
 // seal_run check a role too but their contracts declare the mcp surface; the
@@ -27,6 +29,14 @@ vi.mock("@oxagen/oxagen/kernel", () => ({ invoke: mocks.invoke }));
 vi.mock("../context", () => ({ buildContext: mocks.buildContext }));
 vi.mock("xmcp/headers", () => ({ headers: mocks.headers }));
 
+import runListTool, {
+  schema as listSchema,
+  metadata as listMetadata,
+} from "./run.list";
+import runGetTool, {
+  schema as getSchema,
+  metadata as getMetadata,
+} from "./run.get";
 import runFrameBodyGetTool, {
   schema as frameBodySchema,
   metadata as frameBodyMetadata,
@@ -43,6 +53,10 @@ import runTurnsGetTool, {
   schema as turnsSchema,
   metadata as turnsMetadata,
 } from "./run.turns.get";
+import runContextGetTool, {
+  schema as contextSchema,
+  metadata as contextMetadata,
+} from "./run.context.get";
 import runChainGetTool, {
   schema as chainSchema,
   metadata as chainMetadata,
@@ -55,6 +69,10 @@ import runSealTool, {
   schema as sealSchema,
   metadata as sealMetadata,
 } from "./run.seal";
+import runIssuesGetTool, {
+  schema as issuesSchema,
+  metadata as issuesMetadata,
+} from "./run.issues.get";
 
 const fakeCtx = {
   orgId: "org_test",
@@ -71,6 +89,54 @@ const LEDGER_ID = "arun_5f0c2e9a1b7d4c3e8f6a02";
 const TACHO_ID = "tse_4q8r1t6v3x5z0b2d7h2k9m";
 const DIGEST = `sha256:${"a".repeat(64)}`;
 const EXPORT_ID = "rexp_0a1b2c3d";
+
+/**
+ * A ledger run's row. The ledger records no harness, so the key is present
+ * and null (#3790).
+ */
+const LEDGER_ROW = {
+  id: LEDGER_ID,
+  source: "ledger",
+  agentKey: "acme.core.release-bot",
+  operatorId: null,
+  operatorKind: null,
+  operatorName: null,
+  operatorAvatarUrl: null,
+  operatorAttribution: null,
+  operatorRole: null,
+  status: "sealed",
+  outcome: "completed",
+  turns: 2,
+  steps: 7,
+  frames: 40,
+  cost: null,
+  model: null,
+  machine: null,
+  harness: null,
+  taskRef: null,
+  startedAt: "2026-09-08T10:06:03.000Z",
+  sealedAt: "2026-09-08T10:06:30.000Z",
+  endedAt: "2026-09-08T10:06:30.000Z",
+  replayGrade: null,
+  verdict: null,
+  enforcementTier: "harness",
+  completenessGaps: [],
+  canSummarize: true,
+  name: null,
+  summary: null,
+};
+
+/** A wrapped session's row, which names the harness it recorded. */
+const WRAPPED_ROW = {
+  ...LEDGER_ROW,
+  id: TACHO_ID,
+  source: "tacho",
+  enforcementTier: "observe",
+  harness: { name: "Claude Code", version: "2.1.0", runtime: "claude-code" },
+};
+
+/** A row with no harness key, which the contract refuses (#3790). */
+const { harness: _harness, ...ROW_WITHOUT_HARNESS } = LEDGER_ROW;
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -96,13 +162,67 @@ interface ToolCase {
 
 const CASES: ToolCase[] = [
   {
+    name: "list_runs",
+    handler: runListTool,
+    schema: listSchema,
+    metadata: listMetadata,
+    fields: [
+      "limit",
+      "cursor",
+      "pullRequests",
+      "status",
+      "tier",
+      "replayGrade",
+      "query",
+      "sort",
+      "offset",
+      "count",
+      "countLive",
+    ],
+    readOnly: true,
+    args: { limit: 50 },
+    validOutput: { runs: [LEDGER_ROW, WRAPPED_ROW], nextCursor: null },
+    invalidOutput: { runs: [ROW_WITHOUT_HARNESS], nextCursor: null },
+  },
+  {
+    name: "get_run",
+    handler: runGetTool,
+    schema: getSchema,
+    metadata: getMetadata,
+    fields: [
+      "runId",
+      "framesAfter",
+      "frameLimit",
+      "waitMs",
+      "sessionUuid",
+      "chainsAfter",
+    ],
+    readOnly: true,
+    args: { runId: LEDGER_ID, frameLimit: 100, waitMs: 0 },
+    validOutput: {
+      run: LEDGER_ROW,
+      frames: { frames: [], cursor: null },
+      witnessFor: null,
+    },
+    invalidOutput: {
+      run: ROW_WITHOUT_HARNESS,
+      frames: { frames: [], cursor: null },
+      witnessFor: null,
+    },
+  },
+  {
     name: "get_run_frame_body",
     handler: runFrameBodyGetTool,
     schema: frameBodySchema,
     metadata: frameBodyMetadata,
-    fields: ["runId", "seq"],
+    fields: ["runId", "seq", "sessionUuid"],
     readOnly: true,
-    args: { runId: LEDGER_ID, seq: "7" },
+    // A subagent's frame, named by its chain and seq (#3823).
+    args: {
+      runId: TACHO_ID,
+      seq: "7",
+      sessionUuid: "0192d4a8-7c1e-7a00-8000-00000000c1d0",
+    },
     validOutput: {
       contentType: "text/plain",
       bytes: "aGVsbG8=",
@@ -153,6 +273,58 @@ const CASES: ToolCase[] = [
     },
   },
   {
+    name: "get_run_context",
+    handler: runContextGetTool,
+    schema: contextSchema,
+    metadata: contextMetadata,
+    fields: ["runId"],
+    readOnly: true,
+    args: { runId: TACHO_ID },
+    validOutput: {
+      runId: TACHO_ID,
+      source: "wrapped",
+      windows: [
+        {
+          seq: "12",
+          responseSeq: "12",
+          modelCallId: "req_12",
+          provider: "anthropic",
+          model: "claude-opus-5",
+          promptTokens: 1000,
+          bytes: 2000,
+          blocks: [
+            { kind: "system", bytes: 200, items: 1, tokens: 100 },
+            { kind: "tools", bytes: 600, items: 18, tokens: 300 },
+            { kind: "conversation", bytes: 1200, items: 40, tokens: 600 },
+          ],
+        },
+      ],
+      unmeasured: 1,
+      assemblies: [],
+      complete: true,
+    },
+    // A block outside the window's five kinds.
+    invalidOutput: {
+      runId: TACHO_ID,
+      source: "wrapped",
+      windows: [
+        {
+          seq: "12",
+          responseSeq: "12",
+          modelCallId: null,
+          provider: null,
+          model: null,
+          promptTokens: null,
+          bytes: 1,
+          blocks: [{ kind: "memory", bytes: 1, items: 1, tokens: null }],
+        },
+      ],
+      unmeasured: 0,
+      assemblies: [],
+      complete: true,
+    },
+  },
+  {
     name: "get_run_turns",
     handler: runTurnsGetTool,
     schema: turnsSchema,
@@ -176,6 +348,7 @@ const CASES: ToolCase[] = [
         },
       ],
       complete: true,
+      chains: [],
     },
     // A turn numbered from 0: the transcript's turns are 1-based.
     invalidOutput: {
@@ -194,6 +367,7 @@ const CASES: ToolCase[] = [
         },
       ],
       complete: true,
+      chains: [],
     },
   },
   {
@@ -323,6 +497,67 @@ const CASES: ToolCase[] = [
       sealedAt: "2026-09-24T16:00:00.000Z",
       sessionsSealed: 0,
       kill: { status: "not_sent", reason: "host_offline" },
+    },
+  },
+  // #3970: the Run page's Issues tab, readable from MCP by an API key.
+  {
+    name: "get_run_issues",
+    handler: runIssuesGetTool,
+    schema: issuesSchema,
+    metadata: issuesMetadata,
+    fields: ["runId"],
+    readOnly: true,
+    args: { runId: TACHO_ID },
+    validOutput: {
+      runId: TACHO_ID,
+      issues: [
+        {
+          ref: "acme/app#482",
+          repository: {
+            host: "github.com",
+            owner: "acme",
+            name: "app",
+            url: "https://github.com/acme/app",
+            connected: true,
+          },
+          number: 482,
+          title: "Release notes for 4.11.0",
+          status: "open",
+          statusRead: "read",
+          readAt: "2026-09-26T10:00:00.000Z",
+          relation: "referenced",
+          resolvedBy: [],
+          actions: ["viewed", "commented"],
+          edge: "observed",
+          frameSeqs: ["12", "15"],
+          url: "https://github.com/acme/app/issues/482",
+        },
+      ],
+      complete: true,
+      warnings: [],
+    },
+    // An inferred edge: no producer writes one, and the contract refuses it.
+    invalidOutput: {
+      runId: TACHO_ID,
+      issues: [
+        {
+          ref: "acme/app#482",
+          repository: null,
+          number: 482,
+          title: null,
+          status: null,
+          statusRead: "repository_unknown",
+          readAt: null,
+          relation: "referenced",
+          resolvedBy: [],
+          actions: [],
+          edge: "inferred",
+          frameSeqs: [],
+          url: null,
+        },
+      ],
+      complete: true,
+      warnings: [],
     },
   },
 ];

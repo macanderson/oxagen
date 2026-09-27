@@ -7,8 +7,8 @@
 //! `packages/tacho/src/cli/install-rig.test.ts`.
 
 use crate::cli_install::{
-    ensure_cli_installed_in, link_cli_in, remove_everything_in, unlink_cli_in, write_auto_link_cli, CliInstallState,
-    InstallEnv,
+    ensure_cli_installed_in, link_cli_in, record_config_dir, remove_everything_in, unlink_cli_in, write_auto_link_cli,
+    CliInstallState, InstallEnv,
 };
 use crate::machine::test_support::{scratch_roots, snapshot};
 use crate::machine::Roots;
@@ -213,7 +213,7 @@ fn fish_gets_its_own_file_and_loses_it_again() {
 fn uninstall_is_refused_while_enrolled_and_allowed_once_the_host_is_retired() {
     let env = env_for(scratch_roots("retired", "/bin/zsh"), false);
     link_cli_in(&env, &CliInstallState::default()).unwrap();
-    let host = env.roots.tacho_root().join("host.json");
+    let host = env.roots.tacho_root().join("agents/0a1b2c3d/host.json");
     put(&host, br#"{"host_enrollment_id":"tch_1","revoked_at":null}"#);
     let enrolled = snapshot(&env.roots.home);
     assert!(remove_everything_in(&env, &CliInstallState::default())
@@ -228,6 +228,36 @@ fn uninstall_is_refused_while_enrolled_and_allowed_once_the_host_is_retired() {
     remove_everything_in(&env, &CliInstallState::default()).unwrap();
     assert!(!env.roots.oxagen_dir().exists());
     assert!(!env.roots.home.join(".local/bin/tacho").exists());
+}
+
+/// ADR-203: each agent keeps its own enrollment under `agents/`. One live
+/// agent refuses Uninstall whatever else is there, and so does the legacy
+/// root file tachod has not moved yet.
+#[cfg(unix)]
+#[test]
+fn uninstall_is_refused_while_any_agent_is_still_enrolled() {
+    let env = env_for(scratch_roots("two-agents", "/bin/zsh"), false);
+    let root = env.roots.tacho_root();
+    put(
+        &root.join("agents/ffff0001/host.json"),
+        br#"{"host_enrollment_id":"tch_1","revoked_at":"2026-09-18T00:00:00Z"}"#,
+    );
+    let live = root.join("agents/0000aaaa/host.json");
+    put(&live, br#"{"host_enrollment_id":"tch_2","revoked_at":null}"#);
+    assert!(remove_everything_in(&env, &CliInstallState::default())
+        .unwrap_err()
+        .contains("still enrolled"));
+    fs::remove_file(&live).unwrap();
+    let legacy = root.join("host.json");
+    put(&legacy, br#"{"host_enrollment_id":"tch_3","revoked_at":null}"#);
+    assert!(remove_everything_in(&env, &CliInstallState::default())
+        .unwrap_err()
+        .contains("still enrolled"));
+    fs::remove_file(&legacy).unwrap();
+    // Only the retired agent is left, and its revoke is reported.
+    let report = remove_everything_in(&env, &CliInstallState::default()).unwrap();
+    assert_eq!(report.pending_revoke.unwrap().host_enrollment_id, "tch_1");
+    assert!(!root.exists());
 }
 
 #[cfg(unix)]
@@ -297,4 +327,74 @@ fn every_pass_stores_its_outcome_while_it_still_holds_the_lock() {
     assert!(removed.is_ok(), "{removed:?}");
     let linked = fs::symlink_metadata(env.roots.home.join(".local/bin/tacho")).is_ok();
     assert_eq!(current(&state) == "linked", linked, "{launch:?}");
+}
+
+/// #4318: an empty `~/.config` the person had before Oxagen is still there
+/// after Uninstall. Only a launch that found no `~/.config` records that the
+/// app made it, and only then does Uninstall remove it.
+#[cfg(unix)]
+#[test]
+fn an_empty_config_directory_the_person_already_had_is_kept() {
+    let roots = scratch_roots("config-kept", "/bin/zsh");
+    fs::create_dir_all(roots.home.join(".config")).unwrap();
+    let env = env_for(roots, false);
+    let before = snapshot(&env.roots.home);
+    // Launch, then what `oxagen login` writes, then Link into PATH.
+    record_config_dir(&env.roots).unwrap();
+    put(&env.roots.oxagen_dir().join("config.json"), b"{\"token\":\"t\"}\n");
+    link_cli_in(&env, &CliInstallState::default()).unwrap();
+    remove_everything_in(&env, &CliInstallState::default()).unwrap();
+    assert!(env.roots.home.join(".config").is_dir());
+    assert_eq!(snapshot(&env.roots.home), before);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_config_directory_the_app_created_goes_with_it() {
+    let env = env_for(scratch_roots("config-created", "/bin/zsh"), false);
+    let before = snapshot(&env.roots.home);
+    assert!(!env.roots.home.join(".config").exists());
+    record_config_dir(&env.roots).unwrap();
+    assert!(env.roots.home.join(".config").is_dir());
+    // A second launch finds `~/.config` and changes nothing.
+    let launched = snapshot(&env.roots.home);
+    record_config_dir(&env.roots).unwrap();
+    assert_eq!(snapshot(&env.roots.home), launched);
+    put(&env.roots.oxagen_dir().join("config.json"), b"{\"token\":\"t\"}\n");
+    let report = remove_everything_in(&env, &CliInstallState::default()).unwrap();
+    assert!(!env.roots.home.join(".config").exists());
+    assert!(
+        report.removed.iter().any(|path| path.ends_with(".config")),
+        "{report:?}"
+    );
+    assert_eq!(snapshot(&env.roots.home), before);
+}
+
+/// Audit D-06: an offline `tacho unenroll` keeps a retired `host.json` so the
+/// revoke can be finished, and Uninstall then deletes it. The report names
+/// the agent key the fleet page still lists, read before the file goes.
+#[cfg(unix)]
+#[test]
+fn uninstall_names_the_revoke_a_retired_host_still_owes() {
+    let env = env_for(scratch_roots("pending-revoke", "/bin/zsh"), false);
+    let host = env.roots.tacho_root().join("agents/0a1b2c3d/host.json");
+    put(
+        &host,
+        br#"{"host_enrollment_id":"tch_1","agent_key":"acme.core.cc-laptop","revoked_at":"2026-09-18T00:00:00Z"}"#,
+    );
+    let report = remove_everything_in(&env, &CliInstallState::default()).unwrap();
+    assert!(!host.exists());
+    let pending = report
+        .pending_revoke
+        .as_ref()
+        .expect("the retired host's revoke is reported");
+    assert_eq!(pending.agent_key, "acme.core.cc-laptop");
+    assert_eq!(pending.host_enrollment_id, "tch_1");
+    assert!(report.left.is_empty(), "{report:?}");
+    // Nothing retired, nothing owed.
+    let clean = env_for(scratch_roots("no-revoke", "/bin/zsh"), false);
+    assert!(remove_everything_in(&clean, &CliInstallState::default())
+        .unwrap()
+        .pending_revoke
+        .is_none());
 }

@@ -18,7 +18,13 @@ export function ReadFailure({
   let text: string;
   switch (read.reason) {
     case "denied":
-      text = t("denied", { section, permission: read.permission });
+      // A workspace decision rule refuses a person who holds the role, so
+      // telling them their roles are missing sends them to ask for a grant
+      // they already have. The rule is named instead.
+      text =
+        read.decidedBy?.source === "decision_rule"
+          ? t("deniedByRule", { section, rule: read.decidedBy.id })
+          : t("denied", { section, permission: read.permission });
       break;
     case "pending_approval":
       text = t("pendingApproval", {

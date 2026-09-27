@@ -6,6 +6,8 @@ import {
   RESERVED_WORKSPACE_SLUGS,
   WORKSPACE_SLUG_MAX,
   WORKSPACE_SLUG_MIN,
+  WORKSPACE_SLUG_PATTERN,
+  slugFromName,
   workspaceSlug,
 } from "./workspace-slug";
 
@@ -99,5 +101,30 @@ describe("every contract that accepts a workspace slug takes the same one", () =
 
   it.each(slugFields)("%s takes a plain slug", (_name, parse) => {
     expect(() => parse("team-one")).not.toThrow();
+  });
+});
+
+describe("slugFromName", () => {
+  it.each([
+    ["Mac's Laptop", "macs-laptop"],
+    ["Mac’s Laptop", "macs-laptop"],
+    ["R&D box", "rd-box"],
+    ["  Build   Runner  ", "build-runner"],
+    ["build - runner", "build-runner"],
+    ["Café Staging", "cafe-staging"],
+    ["gpu_01.local", "gpu01local"],
+    ["123", "123"],
+  ])("derives %j as %j", (name, slug) => {
+    expect(slugFromName(name)).toBe(slug);
+    expect(slug).toMatch(WORKSPACE_SLUG_PATTERN);
+  });
+
+  it("returns an empty slug for a name with no letter or digit", () => {
+    expect(slugFromName("'&!")).toBe("");
+  });
+
+  it("cuts to the limit without leaving a trailing hyphen", () => {
+    expect(slugFromName("abcdefghij klmnopq", 11)).toBe("abcdefghij");
+    expect(slugFromName("a".repeat(60))).toHaveLength(WORKSPACE_SLUG_MAX);
   });
 });

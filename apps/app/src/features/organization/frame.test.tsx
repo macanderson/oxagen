@@ -63,6 +63,7 @@ const roster = {
       id: "usr_7k2m9q4x8r1t5v3w6y0z2a",
       name: "Marcus Bell",
       email: "marcus@acme.example",
+      avatarUrl: null,
       role: "owner" as const,
       joinedAt: "2026-03-02T09:15:00.000Z",
     },
@@ -145,6 +146,10 @@ describe("loaded", () => {
         screen.getByRole("heading", { level: 1, name: "Acme Robotics" }),
       ).toBeInTheDocument();
       expect(screen.getByText("Organization", { selector: "p" })).toBeTruthy();
+      // No avatar is set, so the header keeps the gold letter tile.
+      const avatar = screen.getByTestId("organization-avatar");
+      expect(avatar).toHaveAttribute("data-tone", "gold");
+      expect(avatar).toHaveTextContent(/^A$/);
       expect(
         screen.getByText(
           "People, roles, workspaces, model routes, the data plane, and API keys.",
@@ -215,6 +220,11 @@ describe("loaded", () => {
         workspaces: [workspaceRow()],
       }),
     });
+    // The header draws the stored avatar before the name.
+    expect(screen.getByTestId("organization-avatar")).toHaveAttribute(
+      "data-icon",
+      "rocket",
+    );
     await userEvent.click(screen.getByTestId("edit-org-avatar"));
     const dialog = await screen.findByTestId("edit-org-avatar-dialog");
     expect(dialog).toHaveTextContent("Avatar for Acme Robotics");

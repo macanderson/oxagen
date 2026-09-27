@@ -289,5 +289,81 @@ describe("bootstrapIAMRuntime()", () => {
       "Forbidden: outside the mandate",
     );
     expect(mocks.checkIAM).not.toHaveBeenCalled();
+    // The machine-key gate is the rule that decided (#3841).
+    expect((result as Record<string, unknown>)["decidedBy"]).toBe(
+      "machine_key_scope",
+    );
+  });
+
+  // #3841: the adapter dropped `trace.decidedBy`, so a denied page could never
+  // name the rule that refused it.
+  it.each([
+    ["deny", "7:role_grant"],
+    ["pending_approval", "5:workspace_require_approval"],
+    ["allow", "tier_gate"],
+  ] as const)(
+    "forwards the rule id that decided a %s, and not its description",
+    async (outcome, rule) => {
+      const step = {
+        rule,
+        description: "role 0192d4a8-7c1e-7a00-8000-0000000000aa grants it",
+        decided: true,
+        outcome,
+      };
+      mocks.checkIAM.mockResolvedValue({
+        result: {
+          outcome,
+          ...(outcome === "deny" ? { reason: "no_grant" } : {}),
+          trace: { steps: [step], decidedBy: step },
+        },
+        principal: null,
+      });
+
+      bootstrapIAMRuntime();
+      const [kernelFn] = mocks.setKernelIAMRuntime.mock.calls[0] ?? [];
+      const result = await (kernelFn as (args: unknown) => Promise<unknown>)({
+        capability: "list_runs",
+        ctx: {
+          orgId: "org_1",
+          workspaceId: "ws_1",
+          userId: "usr_1",
+          apiKeyId: null,
+          requestId: "req_1",
+          surface: "app",
+          messageId: null,
+        },
+        defaultEffect: "deny",
+        rawInputJson: "{}",
+      });
+
+      expect((result as Record<string, unknown>)["decidedBy"]).toBe(rule);
+      expect(JSON.stringify(result)).not.toContain("0192d4a8");
+    },
+  );
+
+  it("reads null when the trace names no deciding step", async () => {
+    mocks.checkIAM.mockResolvedValue({
+      result: { outcome: "allow", trace: { steps: [], decidedBy: undefined } },
+      principal: null,
+    });
+
+    bootstrapIAMRuntime();
+    const [kernelFn] = mocks.setKernelIAMRuntime.mock.calls[0] ?? [];
+    const result = await (kernelFn as (args: unknown) => Promise<unknown>)({
+      capability: "list_runs",
+      ctx: {
+        orgId: "org_1",
+        workspaceId: "ws_1",
+        userId: "usr_1",
+        apiKeyId: null,
+        requestId: "req_1",
+        surface: "app",
+        messageId: null,
+      },
+      defaultEffect: "deny",
+      rawInputJson: "{}",
+    });
+
+    expect((result as Record<string, unknown>)["decidedBy"]).toBeNull();
   });
 });

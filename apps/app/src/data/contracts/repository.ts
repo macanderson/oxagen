@@ -3,11 +3,11 @@
 // the set of repositories that installation reaches, what each bound
 // repository holds under `.oxagen/`, and the pull requests Oxagen has open.
 //
-// The main repo is where `.oxagen/` lives — published steering records, the
-// promotion ledger, and every agent definition under `.oxagen/agents/`. A
-// workspace has exactly one, and until it is bound the workspace is
-// provisional: runs record and spend counts, but steering and agent
-// definitions stay off.
+// The main repo is where `.oxagen/` lives — published steering records and
+// the promotion ledger. An agent is an identity on a runtime, not a file
+// there (ADR-198). A workspace has exactly one main repo, and until it is
+// bound the workspace is provisional: runs record and spend counts, but
+// steering stays off.
 //
 // These are types rather than zod schemas, and deliberately so. Every other
 // view model in this directory exists because its port maps a contract record

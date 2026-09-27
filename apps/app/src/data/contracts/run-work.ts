@@ -159,6 +159,24 @@ export const RunSubagent = z
   .strict();
 export type RunSubagent = z.infer<typeof RunSubagent>;
 
+/**
+ * A release the session created, from the command frame that created it, with
+ * its state as GitHub reads it now. `state` is null when GitHub has no release
+ * with the tag or could not be read, and the page then says so.
+ */
+const RunRelease = z
+  .object({
+    repository: runRepositorySchema,
+    tag: z.string().min(1),
+    name: z.string().nullable(),
+    url: z.url().nullable(),
+    state: z.enum(["draft", "prerelease", "published"]).nullable(),
+    /** The command frame that created the release. */
+    frameSeq: z.string().regex(/^\d+$/),
+    observedAt: z.iso.datetime({ offset: true }).nullable(),
+  })
+  .strict();
+
 export const RunWork = z
   .object({
     runId: PublicId,
@@ -167,6 +185,8 @@ export const RunWork = z
     diffs: z.array(runCapturedDiffSchema),
     pullRequests: z.array(runWorkPrSchema),
     subagents: z.array(RunSubagent).optional(),
+    /** The releases the session created; optional so an older answer parses. */
+    releases: z.array(RunRelease).optional(),
     complete: z.boolean(),
     warnings: z.array(z.string()),
   })

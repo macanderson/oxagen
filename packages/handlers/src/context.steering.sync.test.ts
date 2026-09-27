@@ -11,6 +11,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HandlerError } from "@oxagen/oxagen";
 import { contextProposalCreate } from "@oxagen/oxagen/contracts/context.proposal.create";
+import { schemaDirective } from "@oxagen/oxagen/steering-repo/schema-ids";
 
 vi.mock("@oxagen/iam/org-role", () => ({
   resolveActorOrgRole: async () => null,
@@ -562,5 +563,143 @@ describe("Context PRs on the host", () => {
     });
     expect(r.h.store.versions).toHaveLength(1);
     expect(r.h.github.deletedBranches).toContain(`context/${LINEAGE}`);
+  });
+});
+
+/** A workspace/v1 file, with `[stella]` when `stella` is given. */
+function workspaceToml(stella?: string): string {
+  return [
+    schemaDirective("workspace/v1"),
+    'schema = "workspace/v1"',
+    'organization = "a-intel"',
+    'workspace = "core-platform"',
+    ...(stella === undefined ? [] : ["", "[stella]", stella]),
+    "",
+  ].join("\n");
+}
+
+describe("workspace.toml settings (#4435)", () => {
+  it("publishes the Stella archive window workspace.toml sets", async () => {
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      "workspace.toml",
+      workspaceToml("archive_after_days = 30"),
+    );
+    const out = await r.run();
+    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: 30 }]);
+    expect(out.findings).toEqual([]);
+  });
+
+  it("clears the window when workspace.toml sets none or is removed", async () => {
+    const r = rig();
+    await r.run();
+    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: null }]);
+    r.h.github.commit(
+      "main",
+      "workspace.toml",
+      workspaceToml("archive_after_days = 14"),
+    );
+    await r.run();
+    r.h.github.commit("main", "workspace.toml", workspaceToml());
+    await r.run();
+    r.h.github.commit(
+      "main",
+      "workspace.toml",
+      workspaceToml("archive_after_days = 21"),
+    );
+    await r.run();
+    r.h.github.remove("main", "workspace.toml");
+    await r.run();
+    expect(r.sync.published.map((p) => p.stellaArchiveAfterDays)).toEqual([
+      null,
+      14,
+      null,
+      21,
+      null,
+    ]);
+  });
+
+  it("reads nothing when the head has not moved", async () => {
+    const r = rig();
+    await r.run();
+    await r.run();
+    expect(r.sync.published).toHaveLength(1);
+  });
+
+  it("leaves a workspace.toml that is not workspace/v1 to its own tool", async () => {
+    const r = rig();
+    r.h.github.commit("main", "workspace.toml", '[tool]\nname = "other"\n');
+    const out = await r.run();
+    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: null }]);
+    expect(out.findings).toEqual([]);
+  });
+
+  // The file can sit at the root of a code repository. A mistake in it must
+  // not fail that repository's check, and the sweep keeps the last window.
+  it("keeps the last window and warns when workspace.toml does not read", async () => {
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      "workspace.toml",
+      workspaceToml("archive_after_days = 30"),
+    );
+    await r.run();
+    r.h.github.commit(
+      "main",
+      "workspace.toml",
+      workspaceToml("archive_after_days = 0"),
+    );
+    const out = await r.run();
+    expect(r.sync.published).toEqual([{ stellaArchiveAfterDays: 30 }]);
+    expect(out.outcome).toBe("problems");
+    expect(r.sync.state?.findings).toEqual([
+      expect.objectContaining({
+        level: "warning",
+        path: "workspace.toml",
+        code: "schema",
+      }),
+    ]);
+    expect(r.sync.state?.findings[0]?.message).toContain(
+      "workspace.toml at line 6, stella.archive_after_days:",
+    );
+    expect(r.h.github.checkRuns.at(-1)).toMatchObject({
+      name: SYNC_CHECK_NAME,
+      conclusion: "success",
+    });
+
+    // A push elsewhere reads the file again and finds the same warning, so
+    // it posts no new check.
+    r.h.github.commit("main", "src/index.ts", "export {};\n");
+    await r.run();
+    expect(r.sync.state?.findings).toHaveLength(1);
+    expect(r.sync.published).toHaveLength(1);
+    expect(r.h.github.checkRuns).toHaveLength(2);
+
+    r.h.github.commit(
+      "main",
+      "workspace.toml",
+      workspaceToml("archive_after_days = 45"),
+    );
+    await r.run();
+    expect(r.sync.published.at(-1)).toEqual({ stellaArchiveAfterDays: 45 });
+    expect(r.sync.state?.findings).toEqual([]);
+  });
+
+  it("reports a workspace.toml that is not TOML without quoting it", async () => {
+    const r = rig();
+    r.h.github.commit(
+      "main",
+      "workspace.toml",
+      `${schemaDirective("workspace/v1")}\n[stella\n`,
+    );
+    await r.run();
+    expect(r.sync.published).toEqual([]);
+    expect(r.sync.state?.findings).toEqual([
+      expect.objectContaining({ level: "warning", code: "not_toml" }),
+    ]);
+    expect(r.sync.state?.findings[0]?.message).toMatch(
+      /^workspace\.toml is not valid TOML/,
+    );
   });
 });

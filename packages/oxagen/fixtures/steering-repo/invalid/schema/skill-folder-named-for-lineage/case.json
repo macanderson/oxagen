@@ -1,0 +1,18 @@
+{
+  "check": "schema",
+  "rule": "skill-folder-named-for-lineage",
+  "severity": "error",
+  "description": "A skill's folder is not named for its lineage.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/skills/code-reviewer/SKILL.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/skills/code-reviewer/SKILL.md",
+      "line": 3,
+      "field": "lineage"
+    }
+  ]
+}

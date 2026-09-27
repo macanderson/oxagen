@@ -48,4 +48,11 @@ does not run every command path. A library loaded later with `dlopen`, for
 example a native addon a sidecar loads for one command, would pass it and
 fail on a customer's machine.
 
+When any of the three binaries lacks the hardened runtime, the script checks
+a copy it re-signs ad hoc with `--options runtime` and this plist. tauri
+signs every binary with the flag, so a second step in `desktop.yml` signs a
+copy without it and runs the script on that copy. The re-sign branch then
+runs on every macOS build too, and the script fails if a binary of the
+re-signed copy still lacks the flag (#4313).
+
 Add the key back only with the library that needs it named here.

@@ -2,7 +2,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { tachoPaths } from "../host/paths";
+import { agentPaths, tachoHome } from "../host/paths";
+import { TEST_AGENT_ID } from "../host/test-support";
 import { type CliDeps, defaultCliDeps } from "./deps";
 import { detect, type DetectedHarness } from "./detect";
 
@@ -21,7 +22,7 @@ function deps(overrides: Partial<CliDeps> = {}): {
   return {
     lines,
     deps: defaultCliDeps({
-      paths: tachoPaths(env, home, "darwin"),
+      paths: agentPaths(tachoHome(env, home, "darwin"), TEST_AGENT_ID),
       env,
       home,
       platform: "darwin",

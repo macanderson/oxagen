@@ -1,10 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  withTenantDb,
-  withSystemDb,
-  schema,
-  isUniqueViolation,
-} from "@oxagen/database";
+import { withSystemDb, schema, isUniqueViolation } from "@oxagen/database";
 import { and, eq, isNull, lt, or, sql } from "drizzle-orm";
 import {
   notifyOrgManagers,
@@ -17,6 +12,7 @@ import { logger } from "./logger";
 import { getOrgBillingSettings } from "./billing-settings";
 import { readRecordedCustomerId } from "./recorded-customer";
 import { deterministicUuid } from "./internal/deterministic-uuid";
+import { withBillingDb } from "./internal/platform-db";
 
 // ---------------------------------------------------------------------------
 // Low balance detection
@@ -114,7 +110,7 @@ async function claimReloadEpisode(
   now: Date,
 ): Promise<ReloadEpisode | null> {
   const candidate = `auto_reload:${orgId}:${randomUUID()}`;
-  const rows = await withTenantDb((tx) =>
+  const rows = await withBillingDb((tx) =>
     tx
       .update(schema.orgBillingSettings)
       .set({
@@ -155,7 +151,7 @@ async function closeReloadEpisode(
   now: Date,
   idempotencyKey: string,
 ): Promise<void> {
-  await withTenantDb((tx) =>
+  await withBillingDb((tx) =>
     tx
       .update(schema.orgBillingSettings)
       .set({
@@ -379,7 +375,7 @@ export async function maybeAutoReload(
     let alreadyGranted = false;
     if (isUniqueViolation(err)) {
       try {
-        const grant = await withTenantDb((tx) =>
+        const grant = await withBillingDb((tx) =>
           tx.query.creditLedger.findFirst({
             where: and(
               eq(schema.creditLedger.orgId, orgId),

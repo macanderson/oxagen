@@ -21,14 +21,6 @@ vi.mock("@oxagen/oxagen", async (importOriginal) => ({
   invoke,
 }));
 vi.mock("@oxagen/telemetry", () => ({ captureError: vi.fn() }));
-// registerAgent drafts the wizard's file with the catalog's comment lines.
-vi.mock("next-intl/server", async () => {
-  const { translator } = await import("@/test/intl");
-  return {
-    getTranslations: (namespace: string) =>
-      Promise.resolve(translator(namespace)),
-  };
-});
 vi.mock("@oxagen/handlers/register", () => ({}));
 vi.mock("@oxagen/agent/register", () => ({}));
 vi.mock("@/server/session", () => ({ getSession: vi.fn() }));
@@ -50,13 +42,13 @@ const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
 const {
   assignAgentRole,
-  commitAgentDefinition,
+  assignAgentToolbelt,
   issueAgentEnrollmentToken,
+  moveAgent,
   pauseAgent,
   readAgentRoleNames,
   readAssignableRoles,
   readCostCenters,
-  registerAgent,
   setAgentCostCenter,
   requestMandate,
   retireAgent,
@@ -459,157 +451,99 @@ describe("pauseAgent", () => {
   });
 });
 
-describe("commitAgentDefinition", () => {
-  const draft = {
-    agentId: "agt_releasebot",
-    branch: " agents/release-bot ",
-    message: " Light tier ",
-    source: 'slug = "release-bot"\n',
-  };
-
-  it("commits the trimmed branch and message with the file as written, and returns the pull request", async () => {
+describe("moveAgent (ADR-198)", () => {
+  it("moves the agent to the runtime for the workspace viewer and answers the version and the hosts it revoked", async () => {
     invoke.mockResolvedValue({
       agentId: "agt_releasebot",
-      version: 2,
-      path: ".oxagen/agents/release-bot.toml",
-      digest: "b".repeat(64),
-      commitSha: "4d5e6f7",
-      branch: "agents/release-bot",
-      pullRequest: { number: 12, url: "https://github.com/acme/core/pull/12" },
+      runtime: { id: "rtm_gpubox", name: "GPU box", slug: "gpu-box" },
+      version: 3,
+      revokedHosts: 1,
     });
-    expect(await commitAgentDefinition("acme", "core-platform", draft)).toEqual(
-      {
-        ok: true,
-        value: {
-          branch: "agents/release-bot",
-          commitSha: "4d5e6f7",
-          pullRequest: {
-            number: 12,
-            url: "https://github.com/acme/core/pull/12",
-          },
-        },
-      },
-    );
+    expect(
+      await moveAgent("acme", "core-platform", "release-bot", "rtm_gpubox"),
+    ).toEqual({ ok: true, value: { version: 3, revokedHosts: 1 } });
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
     expect(invoke).toHaveBeenCalledWith(
-      "commit_agent_definition",
-      {
-        agentId: "agt_releasebot",
-        branch: "agents/release-bot",
-        message: "Light tier",
-        source: 'slug = "release-bot"\n',
-      },
+      "move_agent",
+      { agentId: "release-bot", runtimeId: "rtm_gpubox" },
       expect.objectContaining(TENANT),
     );
   });
 
-  it("leaves a blank message to the handler", async () => {
-    invoke.mockRejectedValue(denied("commit_agent_definition"));
-    await commitAgentDefinition("acme", "core-platform", {
-      ...draft,
-      message: "   ",
+  it("refuses a runtime id that is not one before the kernel runs (negative)", async () => {
+    expect(
+      await moveAgent("acme", "core-platform", "release-bot", "gpu-box"),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "runtimeId",
     });
-    expect(invoke.mock.calls[0]?.[1]).toEqual({
-      agentId: "agt_releasebot",
-      branch: "agents/release-bot",
-      source: 'slug = "release-bot"\n',
-    });
+    expect(invoke).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["a qualified ref", { branch: "refs/heads/main" }, "branch"],
-    ["an empty file", { source: "" }, "source"],
-  ])(
-    "refuses %s before the kernel runs (negative)",
-    async (_what, change, field) => {
-      expect(
-        await commitAgentDefinition("acme", "core-platform", {
-          ...draft,
-          ...change,
-        }),
-      ).toEqual({ ok: false, reason: "invalid", code: "invalid_input", field });
-      expect(invoke).not.toHaveBeenCalled();
-    },
-  );
-
-  it("returns a denial as denied (negative)", async () => {
-    invoke.mockRejectedValue(denied("commit_agent_definition"));
+  it("returns a runtime already running the harness as the conflict the handler named (negative)", async () => {
+    invoke.mockRejectedValue(
+      new kernel.HandlerError({
+        code: "conflict",
+        reason: "runtime_harness_taken",
+      }),
+    );
     expect(
-      await commitAgentDefinition("acme", "core-platform", draft),
-    ).toMatchObject({ ok: false, reason: "denied" });
+      await moveAgent("acme", "core-platform", "release-bot", "rtm_macslaptop"),
+    ).toEqual({ ok: false, reason: "conflict", code: "runtime_harness_taken" });
   });
 });
 
-describe("registerAgent", () => {
-  const OPENED = {
-    slug: "perf-watch",
-    agentKey: "acme.core.perf-watch",
-    path: ".oxagen/agents/perf-watch.toml",
-    generatedPath: ".claude/agents/perf-watch.md",
-    branch: "agents/perf-watch",
-    repository: "acme/platform",
-    baseRef: "main",
-    digest: `sha256:${"a".repeat(64)}`,
-    checks: [],
-    commitSha: "c0ffee",
-    pullRequest: {
-      number: 526,
-      url: "https://github.com/acme/platform/pull/526",
-    },
-  };
-  const draft = { slug: " perf-watch ", harness: "cursor", tier: "light" };
-
-  it("opens the Context PR with the wizard's file for the slug, harness and tier, and returns the pull request", async () => {
-    invoke.mockResolvedValue(OPENED);
-    expect(await registerAgent("acme", "core-platform", draft)).toEqual({
-      ok: true,
-      value: {
-        path: ".oxagen/agents/perf-watch.toml",
-        pullRequest: {
-          number: 526,
-          url: "https://github.com/acme/platform/pull/526",
-        },
+describe("assignAgentToolbelt (ADR-198)", () => {
+  it("gives the agent the belt for the workspace viewer and answers the version", async () => {
+    invoke.mockResolvedValue({
+      agentId: "agt_releasebot",
+      toolbelt: {
+        id: "tbt_reviewbelt",
+        name: "Review belt",
+        slug: "review-belt",
+        kind: "custom",
       },
+      version: 2,
     });
-    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
-    const [name, input, context] = invoke.mock.calls[0] ?? [];
-    expect(name).toBe("propose_agent");
-    expect(context).toEqual(expect.objectContaining(TENANT));
-    expect(input).toMatchObject({ slug: "perf-watch", harness: "cursor" });
-    const source =
-      typeof input === "object" &&
-      input !== null &&
-      "source" in input &&
-      typeof input.source === "string"
-        ? input.source
-        : "";
-    expect(source).toContain('slug = "perf-watch"');
-    expect(source).toContain('model_tier = "light"');
-    expect(source).toContain("[harness.cursor]");
-    expect(source).toContain("# .oxagen/agents/perf-watch.toml");
+    expect(
+      await assignAgentToolbelt(
+        "acme",
+        "core-platform",
+        "release-bot",
+        "tbt_reviewbelt",
+      ),
+    ).toEqual({ ok: true, value: { version: 2 } });
+    expect(invoke).toHaveBeenCalledWith(
+      "assign_agent_toolbelt",
+      { agentId: "release-bot", toolbeltId: "tbt_reviewbelt" },
+      expect.objectContaining(TENANT),
+    );
   });
 
-  it.each([
-    ["a slug with capitals", { slug: "Perf-Watch" }, "slug"],
-    ["a slug over 18 characters", { slug: "a-very-long-agent-slug" }, "slug"],
-    ["a harness off the list", { harness: "vim" }, "harness"],
-    ["a tier off the list", { tier: "heavy" }, "tier"],
-  ])(
-    "refuses %s before the kernel runs (negative)",
-    async (_what, change, field) => {
-      expect(
-        await registerAgent("acme", "core-platform", { ...draft, ...change }),
-      ).toEqual({ ok: false, reason: "invalid", code: "invalid_input", field });
-      expect(invoke).not.toHaveBeenCalled();
-      expect(requireViewer).not.toHaveBeenCalled();
-    },
-  );
+  it("refuses a toolbelt id that is not one before the kernel runs (negative)", async () => {
+    expect(
+      await assignAgentToolbelt("acme", "core-platform", "release-bot", ""),
+    ).toEqual({
+      ok: false,
+      reason: "invalid",
+      code: "invalid_input",
+      field: "toolbeltId",
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
 
   it("returns a denial as denied (negative)", async () => {
-    invoke.mockRejectedValue(denied("propose_agent"));
-    expect(await registerAgent("acme", "core-platform", draft)).toMatchObject({
-      ok: false,
-      reason: "denied",
-    });
+    invoke.mockRejectedValue(denied("assign_agent_toolbelt"));
+    expect(
+      await assignAgentToolbelt(
+        "acme",
+        "core-platform",
+        "release-bot",
+        "tbt_reviewbelt",
+      ),
+    ).toMatchObject({ ok: false, reason: "denied" });
   });
 });
 
@@ -621,24 +555,10 @@ describe("a person the workspace refuses", () => {
     ],
     ["setAgentSuspended", () => setAgentSuspended("acme", "x", "agt_a", true)],
     ["retireAgent", () => retireAgent("acme", "x", "agt_a")],
+    ["moveAgent", () => moveAgent("acme", "x", "agt_a", "rtm_gpubox")],
     [
-      "registerAgent",
-      () =>
-        registerAgent("acme", "x", {
-          slug: "perf-watch",
-          harness: "cursor",
-          tier: "light",
-        }),
-    ],
-    [
-      "commitAgentDefinition",
-      () =>
-        commitAgentDefinition("acme", "x", {
-          agentId: "agt_a",
-          branch: "b",
-          message: "",
-          source: "s",
-        }),
+      "assignAgentToolbelt",
+      () => assignAgentToolbelt("acme", "x", "agt_a", "tbt_reviewbelt"),
     ],
   ])("%s runs nothing (negative)", async (_name, run) => {
     requireViewer.mockRejectedValue(new Error("NEXT_NOT_FOUND"));

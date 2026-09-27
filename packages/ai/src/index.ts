@@ -6,7 +6,6 @@ export {
   modelIdOf,
   modelIdentityFor,
   resolveModelIdentity,
-  embeddingProvider,
   DEFAULT_TIER,
 } from "./models";
 export type {
@@ -117,8 +116,15 @@ export type {
 
 export { streamAgentReply } from "./stream";
 export type { StreamAgentReplyArgs } from "./stream";
-export { embedText, embedMany } from "./embed";
+export {
+  embedText,
+  embedMany,
+  EmbeddingUnavailableError,
+  EMBEDDING_MODEL,
+  EMBEDDING_DIMENSIONS,
+} from "./embed";
 export type { EmbedTextOpts } from "./embed";
+export type { VoyageInputType } from "./voyage";
 
 // Response cache — opt-in layered (exact + semantic) cache for deterministic
 // background inference. See ./cache; wired into generateObjectFor via `cache`.

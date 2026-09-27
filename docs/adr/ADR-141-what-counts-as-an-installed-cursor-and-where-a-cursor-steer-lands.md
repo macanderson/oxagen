@@ -1,13 +1,14 @@
 # ADR-141: What counts as an installed Cursor, and where a Cursor steer lands
 
-Status: Accepted
+Status: Accepted. The Cursor pid section amended on 2026-09-25 (#4322).
 
 Date: 2026-09-22
 
 Related: #3367, #3349, #3384, ADR-078, ADR-101, `packages/tacho/src/cli/deps.ts`,
 `packages/tacho/src/cli/detect.ts`,
 `packages/tacho/src/claude-code/cursor-adapter.ts`,
-`packages/tacho/src/collector/hook-handler.ts`
+`packages/tacho/src/collector/hook-handler.ts`, #3989, #4322, ADR-172,
+`packages/tacho/src/collector/daemon.ts`
 
 ## Context
 
@@ -107,6 +108,12 @@ assumption that produced the wrong `host.json` in the first place.
 
 ### A Cursor session carries no harness pid
 
+> **Amended 2026-09-25 (#4322).** The original section ended a Cursor session
+> on the six-hour idle sweep and left open whether a pid could replace it.
+> Mac accepted the idle bound for Cursor on 2026-09-25 and asked for it to be
+> as short as is safe. The bound is now one hour. This section states the
+> rule, the value, and why.
+
 *Added 2026-09-25 (#3989).* The daemon seals a session within one sweep of
 its harness process exiting, and an operator's `cancel` sends that process
 `SIGTERM` (`collector/inbox.ts`). Codex and Stella hooks pass the harness pid
@@ -118,12 +125,49 @@ extension starts that daemon detached, reuses one already listening on its
 socket, and one executor tracks many conversations. A pid found by walking up
 from the hook would therefore outlive every conversation it serves, and a
 `cancel` of one conversation would stop them all. A Cursor session ends on
-Cursor's own `sessionEnd`, or on the six-hour idle sweep, with ADR-159's
-twelve-hour close behind it.
+Cursor's own `sessionEnd`, or on the idle sweep, with ADR-159's twelve-hour
+close behind it.
+
+**The idle bound for a Cursor session is one hour** (`cursorIdleSessionMs` in
+`packages/tacho/src/collector/daemon.ts`). A Cursor session that ends without
+its `sessionEnd` stays open until then: Cursor quit or crashed mid-run, a
+window closed while the agent worked, or a conversation left open. Every
+other session with no pid keeps the six-hour bound (`idleSessionMs`).
+
+A live Cursor session goes quiet only between hooks, and Cursor fires one
+before and after every tool call, at each subagent's start and stop, after
+each reply, and at the end of each turn. So the longest quiet stretch inside a
+turn is one tool call or one reply. Cursor's hooks page states no limit on a
+tool call. Cursor's forum reports that the agent's shell tool gives up on a
+foreground command after about ten minutes, and that a longer wait set by
+the agent has held a fifteen-minute command (forum.cursor.com, "Timeout
+setting on terminal/shell Agent tool"). One hour is four times the longer
+figure.
+
+A shorter bound costs this. A session quiet for longer than the bound is
+sealed `crashed` at its last hook. That covers a person away between turns
+for more than an hour, a laptop asleep for more than an hour, and a single
+tool call that runs longer. The session's next hook reopens the chain with a
+`reopen` start, and the control plane reopens the run (ADR-172), so nothing
+recorded is lost. An operator message still queued on the session expires at
+the seal, and the run reads as ended until the next hook arrives.
+
+Oxagen does not look for a pid by another route. Which process runs a
+`cursor-agent` CLI hook was never checked, because the check needs a Cursor
+login. Customers never supply Oxagen a Cursor key, so no part of this design
+may rest on one, and the idle bound needs none.
 
 **Rejected: pass the daemon's pid for liveness only.** The daemon can be
 stopped and started again while its conversations continue, so its exit is
 not a conversation's end either.
+
+**Rejected: a liveness-only key from the Cursor editor's main process.**
+Cursor might pass the agent-host daemon a variable naming its main process,
+but confirming that needs the editor on a real machine, and the key needs a
+second registry field beside `record.pid`, because `cancel` signals
+`record.pid`. A daemon that survives a Cursor restart would also carry a
+stale main-process pid. The one-hour bound needs none of that, and a false
+close repairs itself on the next hook.
 
 ### A bridge is committed as a symlink and materialized on checkout
 

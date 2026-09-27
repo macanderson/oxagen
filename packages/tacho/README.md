@@ -119,6 +119,41 @@ page sees one continuous host. `reassign --harness claude-code,codex` with no
 target re-enrolls in place, which is the one way to drop a wrapper: `enroll`
 may add a harness on a re-apply but never silently removes one.
 
+### More than one agent
+
+A machine holds one enrollment per agent (ADR-203). Every agent keeps its
+files in a directory of its own, `~/.config/oxagen/tacho/agents/<id>/` (the
+tacho directory is `TACHO_HOME` when set), and no enrollment lives in the tacho
+directory itself. Each agent directory holds the same files under the same
+names: `host.json`, the device key, the credential store, the WAL, the spool,
+the daemon's state, and the harness receipts (`AGENT_FILES` in
+`src/host/paths.ts`). The id is 8 random hex characters and never changes.
+
+A harness belongs to at most one live agent. An enroll for a harness an agent
+already hooks acts on that agent. An enroll for harnesses no live agent hooks
+creates a new agent directory and revokes nothing, with a token or without
+one.
+
+One `tachod` runs a collector per agent, on that agent's ports, and one
+service serves them all. The commands that act on one agent name it by
+harness:
+
+```
+tacho unenroll --harness codex            # remove the agent that hooks Codex
+tacho unenroll --all                      # remove every agent on the machine
+tacho reassign --harness codex --workspace other
+tacho status --json                       # `enrollments` holds one report per agent
+```
+
+A bare `unenroll` or `reassign` on a machine with two enrollments refuses and
+lists them. `oxagen tacho unenroll` and `oxagen agent unenroll` without an
+agent take the same `--harness` and `--all`. Unenrolling one agent restarts
+the service for the agents that remain. `reassign` enrolls again through the
+CLI session, so a token-enrolled agent comes back under a hostname-derived
+agent key with no registered agent or mandate. It prints a warning before the
+revoke that says how to keep the link (#4410, ADR-203 known gaps). Spec §5.8
+has the full rules.
+
 ### Codex
 
 Codex CLI exposes a near clone of Claude Code's hook surface, so the adapter
@@ -167,10 +202,12 @@ and passes it as `TACHO_HARNESS_PID`. An operator's `cancel` sends that pid
 after 500 ms, and takes only a process named `codex` or `codex-<target>`.
 A Codex hook carries no pid on Windows, or under a Codex process that serves
 many threads: `app-server`, which the Codex GUI drives, `exec-server`, and
-the MCP server modes. A Cursor hook carries none
-either, because the process that runs Cursor's hooks serves many
-conversations and outlives each of them. Those sessions end on the harness's
-own `SessionEnd`, or after six idle hours.
+the MCP server modes. Those Codex sessions end on Codex's own `SessionEnd`,
+or after six idle hours. A Cursor hook carries no pid either, because the
+process that runs Cursor's hooks serves many conversations and outlives each
+of them. A Cursor session ends on Cursor's own `sessionEnd`, or after one
+hour with no hook (ADR-141). A session sealed that way reopens on its next
+hook.
 
 ## The gateway: the loopback model proxy
 

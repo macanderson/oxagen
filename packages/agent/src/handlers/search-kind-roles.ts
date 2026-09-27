@@ -3,13 +3,12 @@
  * contract of the capability that authoritatively lists that kind.
  *
  * `search_tools` queries the run, agent and approval tables directly rather
- * than invoking `list_runs`, `list_agent_defs` and `list_approvals`, so
- * without this it answered under its OWN roles — which are broader. A
- * workspace `Viewer` is allowed `search_tools` and denied `list_runs`, so
- * `kinds: ["run"]` handed a viewer run ids and goals the authoritative
- * capability refuses them; an org `Member` is allowed `search_tools` and
- * denied `list_agent_defs`, so `kinds: ["agent"]` did the same for agent
- * names, slugs and statuses.
+ * than invoking `list_runs`, `list_agents` and `list_approvals`, so without
+ * this it answered under its OWN roles, which are broader. A workspace
+ * `Viewer` is allowed `search_tools` and denied `list_runs` and
+ * `list_agents`, so `kinds: ["run"]` and `kinds: ["agent"]` handed a viewer
+ * run ids and goals, and agent names, slugs and statuses, that the
+ * authoritative capabilities refuse them.
  *
  * The lists are DERIVED from each source contract's `defaultRoles` rather
  * than restated here, so tightening `list_runs` tightens search in the same
@@ -18,7 +17,7 @@
  * time at a second call site is a control the next call site will not have.
  */
 import { agentApprovalList } from "@oxagen/oxagen/contracts/agent.approval.list";
-import { agentDefinitionList } from "@oxagen/oxagen/contracts/agent.definition.list";
+import { agentList } from "@oxagen/oxagen/contracts/agent.list";
 import { runList } from "@oxagen/oxagen/contracts/run.list";
 import type { SearchKind } from "@oxagen/oxagen/contracts/tools.search";
 
@@ -57,7 +56,7 @@ export const SEARCH_KIND_ROLES: Readonly<
   Partial<Record<SearchKind, KindRoles>>
 > = {
   run: rolesOf(runList),
-  agent: rolesOf(agentDefinitionList),
+  agent: rolesOf(agentList),
   approval: rolesOf(agentApprovalList),
 };
 

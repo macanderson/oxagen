@@ -1,8 +1,11 @@
-// A transcript read to its end. The Run page reads it at `steps` with whole
-// bodies for the Transcript tab, and at `everything` for the tabs that list
-// frames (Governed actions, Policy, Context). Every page carries the whole
-// run's counts and figures, counted on the server (ADR-182), so the read
-// answers the last page's, which are the most recent.
+// A transcript read to its end. The Run page reads it at `everything` for the
+// tabs that list frames (Governed actions, Policy, Context). The Transcript
+// tab reads its first page only and pages in the rest after it draws, since
+// every page costs a whole refold on the server (#4420). The first page
+// carries the whole run's counts and figures, counted on the server
+// (ADR-182). A page read from a cursor may carry them too, newer on a live
+// run, or carry none. The read answers the last page's when it carried them,
+// and the first page's otherwise.
 //
 // `get_run_transcript` answers one page of entries and a cursor. The tabs
 // used to take the first page and call it the run, and they said the list
@@ -56,6 +59,11 @@ export function isWhole(transcript: RunTranscript): boolean {
  * `isWhole` says it is a prefix. A page that fails after the first keeps what
  * was read and its cursor, so the tab says the list stops short rather than
  * failing a list it mostly holds.
+ *
+ * `frameCursor` is where a live reader's stream opens. Every page answers the
+ * head of the run's fold, so a read that stopped short of it (a failed page,
+ * or the page bound with more to read) answers none: the stream then opens at
+ * the run's first frame, and its signals page the missing entries in.
  */
 export async function readWholeTranscript(
   // Only the transcript read: a caller hands in its whole source, and a test
@@ -92,12 +100,21 @@ export async function readWholeTranscript(
     entries = mergeEntries(entries, next.value.entries);
     last = next.value;
   }
+  // A full page with a cursor is a page the loop did not follow: it failed
+  // or hit the bound. A live run's short last page is the head.
+  const short = last.cursor !== null && last.entries.length >= limit;
   return {
     ok: true,
     value: {
       ...last,
       entries,
       complete: first.value.complete && last.complete,
+      // `get_run_transcript` counts the run only on a read that starts at
+      // its first frame. Taking a later page's absent counts lost every
+      // chip's count, and the page's figures, on a run of two pages or more.
+      counts: last.counts ?? first.value.counts,
+      figures: last.figures ?? first.value.figures,
+      ...(short ? { frameCursor: null } : {}),
     },
   };
 }

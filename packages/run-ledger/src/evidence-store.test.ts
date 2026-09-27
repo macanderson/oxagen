@@ -7,6 +7,8 @@ import { createLocalKmsAdapter } from "@oxagen/crypto/kms";
 import { createFsAdapter, type StorageAdapter } from "@oxagen/storage";
 import { digestBytes } from "@oxagen/tacho";
 import {
+  BodyKeyGoneError,
+  BodyUnopenableError,
   createEvidenceStore,
   evidenceAssemblyKey,
   evidenceBodyKey,
@@ -136,6 +138,96 @@ describe("evidence body store", () => {
     ).rejects.toThrow();
   });
 
+  // Finding P3-1 of the ADR-182 fourth review: erasure destroys the key and
+  // leaves the object, so a reader must see a lasting failure, not a
+  // missing object and not a failure that may pass.
+  it("says a body's key is gone when the object is there and KMS says its key cannot be used", async () => {
+    const bytes = enc.encode("erased words");
+    const digest = digestBytes(bytes);
+    const { ref } = await store.put({
+      ...scope,
+      runId,
+      digest,
+      contentType: "text/plain",
+      bytes,
+    });
+    const pending = new Error("pending deletion");
+    pending.name = "KMSInvalidStateException";
+    const shredded = createEvidenceStore({
+      storage: fs,
+      writeCrypto: () => crypto,
+      readCrypto: () => ({
+        adapter: {
+          generateDataKey: () => Promise.reject(pending),
+          decryptDataKey: () => Promise.reject(pending),
+        },
+        keyId: crypto.keyId,
+      }),
+    });
+    const failure = await shredded.getBody(scope, ref).then(
+      () => null,
+      (err: unknown) => err,
+    );
+    expect(failure).toBeInstanceOf(BodyKeyGoneError);
+    expect(failure).toMatchObject({ keyId: crypto.keyId });
+  });
+
+  // Finding P2-A of the ADR-182 fifth review: a reference names the
+  // deployment KEK, so one body that does not open must not say the key is
+  // gone for every other body under it.
+  it("says only this body does not open when its envelope's tag fails", async () => {
+    const bytes = enc.encode("damaged words");
+    const digest = digestBytes(bytes);
+    const { ref } = await store.put({
+      ...scope,
+      runId,
+      digest,
+      contentType: "text/plain",
+      bytes,
+    });
+    const replaced = createEvidenceStore({
+      storage: fs,
+      writeCrypto: () => crypto,
+      readCrypto: () => ({
+        adapter: createLocalKmsAdapter(randomBytes(32)),
+        keyId: crypto.keyId,
+      }),
+    });
+    const failure = await replaced.getBody(scope, ref).then(
+      () => null,
+      (err: unknown) => err,
+    );
+    expect(failure).toBeInstanceOf(BodyUnopenableError);
+    expect(failure).not.toBeInstanceOf(BodyKeyGoneError);
+    expect(failure).toMatchObject({ keyId: crypto.keyId });
+  });
+
+  it("passes on a failure that may pass as it came (negative)", async () => {
+    const bytes = enc.encode("throttled words");
+    const digest = digestBytes(bytes);
+    const { ref } = await store.put({
+      ...scope,
+      runId,
+      digest,
+      contentType: "text/plain",
+      bytes,
+    });
+    const throttle = new Error("Rate exceeded");
+    throttle.name = "ThrottlingException";
+    const throttled = createEvidenceStore({
+      storage: fs,
+      writeCrypto: () => crypto,
+      readCrypto: () => ({
+        adapter: {
+          generateDataKey: () => Promise.reject(throttle),
+          decryptDataKey: () => Promise.reject(throttle),
+        },
+        keyId: crypto.keyId,
+      }),
+    });
+    await expect(throttled.getBody(scope, ref)).rejects.toBe(throttle);
+  });
+
   it("refuses a digest that is not sha256 and a reference it did not mint", async () => {
     await expect(
       store.put({
@@ -230,7 +322,10 @@ describe("evidence store write memory", () => {
     const { counting, put } = countingStore();
     const input = body("in flight twice");
 
-    const [a, b] = await Promise.all([counting.put(input), counting.put(input)]);
+    const [a, b] = await Promise.all([
+      counting.put(input),
+      counting.put(input),
+    ]);
 
     expect(put).toHaveBeenCalledTimes(1);
     expect(a.ref).toBe(b.ref);

@@ -45,3 +45,48 @@ export const RUN_PROGRESSED_EVENT = "cost/run.progressed";
  * `{ orgId, workspaceId, runPublicId }`.
  */
 export const RUN_ENRICH_EVENT = "run/enrich";
+
+/**
+ * Asks `run.fit` for a sealed run's Model fit reading (#3893, ADR-201). Sent
+ * by `cost.run-rollup` once the run's `cost.run_totals` row lands, because the
+ * reading reads that row's output and reasoning tokens. Data is
+ * `{ orgId, workspaceId, runId }`, where `runId` is the run's public id.
+ */
+export const RUN_FIT_REQUESTED_EVENT = "run/fit.requested";
+
+/**
+ * Asks `run.pull-request-backfill` to store a row for one pull request link
+ * a run recorded, and to read its state once from the forge (ADR-192). Sent
+ * by the tacho ingest handler for each root session and URL a batch's
+ * `oxagen:pr_link` or `pr.url` frames name, with an id that holds for that
+ * pair, so a re-sent batch asks once. Data is
+ * `{ orgId, workspaceId, rootSessionUuid, url }`.
+ */
+export const RUN_PULL_REQUEST_LINKED_EVENT = "run/pull-request.linked";
+
+/**
+ * Starts the timeout of one interjection a host raised (#3941, D8). Sent by
+ * the tacho ingest handler after the transaction that writes the
+ * `agent.interjections` row for a `control.interject` frame, with the id
+ * `interjection-raised:<interjection public id>`, so a re-sent batch starts
+ * one timeout. Consumed by the interjection timeout function, which sleeps
+ * until `expiresAt` and, when nobody has answered by then, writes the `deny`
+ * answer with source `timeout`.
+ */
+export const AGENT_INTERJECTION_RAISED_EVENT = "agent/interjection.raised";
+
+/**
+ * The data `AGENT_INTERJECTION_RAISED_EVENT` carries. A type alias rather than
+ * an interface: Inngest's `EventPayload` takes `Record<string, unknown>` data,
+ * and only an object type alias satisfies that index signature.
+ */
+export type AgentInterjectionRaisedEventData = {
+  /** The organization's uuid. */
+  orgId: string;
+  /** The workspace's uuid. */
+  workspaceId: string;
+  /** The interjection's public id (`inj_…`). */
+  interjectionId: string;
+  /** RFC 3339; the deadline the control plane computed, not the host's. */
+  expiresAt: string;
+};

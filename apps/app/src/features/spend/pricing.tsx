@@ -11,6 +11,7 @@
 import { useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type {
+  MissingClassWindow,
   PriceBook,
   PriceEntry,
   PriceTokenClass,
@@ -104,6 +105,35 @@ function Effective({ entry }: { entry: PriceEntry }) {
 }
 
 /**
+ * How much of one class ran unpriced, and when: the calls, their tokens (or
+ * requests, for server tool requests), and the span of those calls. A rate
+ * that starts after the first of them leaves them unpriced, which is the
+ * blank a run's cost shows (#3281).
+ */
+function WindowLine({ usage }: { usage: MissingClassWindow }) {
+  const t = useTranslations("spend.pricing");
+  const format = useFormatter();
+  const day = (iso: string) =>
+    format.dateTime(new Date(iso), { dateStyle: "medium" });
+  const values = {
+    calls: usage.calls,
+    units: usage.units,
+    from: day(usage.from),
+    to: day(usage.to),
+  };
+  return (
+    <span
+      data-window={usage.tokenClass}
+      className="block text-xs text-muted-foreground"
+    >
+      {usage.tokenClass === "server_tool_request"
+        ? t("unpriced.windowRequests", values)
+        : t("unpriced.windowTokens", values)}
+    </span>
+  );
+}
+
+/**
  * The models the book cannot price. This is the section that explains a blank
  * cost, so it says what the blank means — no cost at all, or a cost the
  * rollup could only estimate — and offers the rate that fixes it.
@@ -185,16 +215,25 @@ function UnpricedSection({
                 </span>
               </td>
               <td className={cell}>
-                <span className="flex flex-wrap gap-1">
-                  {model.missingClasses.map((tokenClass) => (
-                    <span
-                      key={tokenClass}
-                      data-class={tokenClass}
-                      className="rounded border border-border px-1.5 py-0.5 text-xs"
-                    >
-                      {t(`class.${tokenClass}`)}
-                    </span>
-                  ))}
+                <span className="flex flex-col gap-1.5">
+                  {model.missingClasses.map((tokenClass) => {
+                    const usage = model.missingClassWindows.find(
+                      (w) => w.tokenClass === tokenClass,
+                    );
+                    return (
+                      <span key={tokenClass}>
+                        <span
+                          data-class={tokenClass}
+                          className="rounded border border-border px-1.5 py-0.5 text-xs"
+                        >
+                          {t(`class.${tokenClass}`)}
+                        </span>
+                        {usage === undefined ? null : (
+                          <WindowLine usage={usage} />
+                        )}
+                      </span>
+                    );
+                  })}
                 </span>
               </td>
               <td className={cell}>

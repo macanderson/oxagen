@@ -126,6 +126,8 @@ export function Avatar({
   initials,
   size = 28,
   shape = "person",
+  fallbackTone = "soft",
+  fallbackFont = "sans",
   testId,
 }: {
   /** The stored value: an https URL, a designed-avatar string, or nothing. */
@@ -135,6 +137,10 @@ export function Avatar({
   /** The tile's side in CSS pixels; the glyph scales with it. */
   size?: number;
   shape?: AvatarShape;
+  /** The initials tile's tone when the value names no avatar. */
+  fallbackTone?: AvatarTone;
+  /** The initials tile's type when the value names no avatar. */
+  fallbackFont?: AvatarFont;
   testId?: string;
 }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -201,8 +207,8 @@ export function Avatar({
     );
 
   const text = spec.kind === "initials" ? spec.text : initials;
-  const tone: AvatarTone = spec.kind === "initials" ? spec.tone : "soft";
-  const font: AvatarFont = spec.kind === "initials" ? spec.font : "sans";
+  const tone: AvatarTone = spec.kind === "initials" ? spec.tone : fallbackTone;
+  const font: AvatarFont = spec.kind === "initials" ? spec.font : fallbackFont;
   return (
     <span
       aria-hidden="true"

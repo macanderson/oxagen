@@ -1,0 +1,18 @@
+{
+  "check": "hash",
+  "rule": "stale-stamp",
+  "severity": "error",
+  "description": "The body changed and the stamped id and hash no longer match it.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/billing/a-intel.billing.refunds-over-100.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/billing/a-intel.billing.refunds-over-100.md",
+      "line": 19,
+      "field": "hash"
+    }
+  ]
+}

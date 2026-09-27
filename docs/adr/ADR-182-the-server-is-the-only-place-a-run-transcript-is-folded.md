@@ -100,6 +100,28 @@ fold, and the client fold introduced with #3345.
   run has been read at `steps`. Recording that digest and blank flag at
   ingest would let the read settle both facts with no body read at all; that
   needs a ClickHouse column and is issue #4331.
+- Only a body read whole settles either fact. A body that could not be read,
+  for any reason, leaves its entry as the fold said, so a read that fails
+  never hides a row that a live page already holds or takes it out of a
+  count.
+  A failure that will repeat is remembered for a minute: the store has no
+  object, its bytes no longer hash, its envelope does not open, or KMS says
+  its key cannot be used. Erasure destroys the key and leaves the object, so
+  the last case is how an erased body reads. A kept digest answers only while
+  its key still opens bodies, which each read learns from the bodies it
+  reads, reading one body again for a key it has not read. So a process that
+  read a run before erasure and one that never did give the same answer, for
+  at most one read per key. Only KMS refusing the key marks the key gone. A
+  body whose own envelope does not open fails only itself, because a
+  reference names the deployment's KEK and one damaged body says nothing
+  about the others.
+- A later read that settles a body can move its entry from shown to quiet,
+  for example a blank prompt whose first read timed out. A live tail does not
+  send that entry again until the view rebases, so the page keeps the row
+  until then. That is accepted: the count is right, and a row a reader
+  already holds does not vanish mid-read.
+- A ledger model call that ended `cancelled` or `timeout` now counts as an
+  error, as a tool call that ended that way already did.
 - A chip selects what the Run page draws under it, so a chip's count in
   `counts.kinds` is the count of what the chip shows. `prompt` is the
   operator's prompt and no longer a model call's request, `responses` takes
@@ -113,10 +135,12 @@ fold, and the client fold introduced with #3345.
   draws a row under `responses` for every model step that answers it: what
   the model said, or a line naming what it called when it said nothing in
   words. A model step with nothing to draw, a call still waiting on its reply
-  or one kept as a digest with no figures, is `quiet`. The `figures.prompts`
+  or one kept as a digest with no figures, is `quiet`, unless it failed: a
+  failed step draws one failed row, so the errors count still holds it. The `figures.prompts`
   figure counts a prompt as the `prompt` chip does.
 - The Run page draws a row under a chip only when the entry's `kinds` carry
-  that chip, and marks a row failed only as the errors count does. The server
+  that chip, and marks a row failed only when the entry's `error` says the
+  errors count counted it. The server
   counts `thinking` from the reasoning tokens a provider reported, and
   `tools` from tool steps, so a kept thought of a step that reported none,
   and a call only the reply records, are drawn under `responses`. A failed

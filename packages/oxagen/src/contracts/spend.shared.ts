@@ -112,6 +112,11 @@ export const tokenCountsSchema = z
     cache_write_1h: z.number().int().nonnegative(),
     output: z.number().int().nonnegative(),
     reasoning: z.number().int().nonnegative(),
+    /**
+     * Provider-side tool requests, such as web searches. A count of requests,
+     * not tokens.
+     */
+    server_tool_request: z.number().int().nonnegative(),
   })
   .strict();
 export type TokenCounts = z.output<typeof tokenCountsSchema>;
@@ -159,3 +164,22 @@ export const spendFigureSchema = z
   })
   .strict();
 export type SpendFigure = z.output<typeof spendFigureSchema>;
+
+/**
+ * Runs in the window that recorded no usage, so no total counts their cost,
+ * broken out by the harness that ran them (#3304).
+ */
+export const unmeteredRunsSchema = z
+  .object({
+    total: z.number().int().nonnegative(),
+    byHarness: z.array(
+      z
+        .object({
+          harness: z.string(),
+          runs: z.number().int().nonnegative(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type UnmeteredRuns = z.output<typeof unmeteredRunsSchema>;

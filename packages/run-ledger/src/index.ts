@@ -121,16 +121,23 @@ export {
 // run's steps: the Run page and the summary job (ADR-182).
 export {
   TRANSCRIPT_FRAME_CAP,
+  listSubagentChains,
   listSubagentSessions,
+  namedSubagentChainRead,
   readRunChains,
   readTranscriptFrames,
+  readTranscriptWindow,
   subagentChainRead,
+  subagentChainsQuery,
   subagentSessionsQuery,
   withoutLateReports,
   type FrameRead,
   type RunChainReads,
+  type RunChainWindowReads,
   type SubagentChainPosition,
+  type SubagentChainRow,
   type SubagentRowRead,
+  type TranscriptWindowStart,
 } from "./run-read";
 // The one transcript fold: steps, turns as steps grouped by turn, and every
 // fact a reader would otherwise derive from the frames (ADR-182).
@@ -141,6 +148,7 @@ export {
   turnFolds,
   filterFoldsByKind,
   transcriptCounts,
+  countsAsError,
   frameCounts,
   toolUseClaimer,
   markWords,
@@ -151,6 +159,7 @@ export {
   RECALL_ITEM_MAX,
   TRANSCRIPT_NODES,
   TRANSCRIPT_OUTCOMES,
+  UNKEYED_TOOL_PAIRING,
   type TranscriptCounts,
   type FrameCounts,
   type TranscriptDecision,
@@ -288,6 +297,8 @@ export {
   MODEL_CALL_EVENT_TYPES,
   TOOL_CALL_EVENT_TYPES,
   TOOL_ENGINE_CALL_OUTCOMES,
+  contextWindowPayloadSchema,
+  type ContextWindowPayload,
   isForbiddenPayloadKey,
   assertNoForbiddenPayloadFields,
   validateInlineEventPayload,
@@ -305,6 +316,20 @@ export {
   type EventDigestInput,
   type EventStreamEntry,
 } from "./event-payload-registry";
+
+// The context windows a run recorded on its model-call frames, and the
+// assembler's manifests beside them (ADR-200).
+export {
+  assemblyOf,
+  isContextWindowEvent,
+  isLaterLlmCallSighting,
+  ledgerContextWindows,
+  tachoContextWindow,
+  type RecordedAssembly,
+  type RecordedWindow,
+  type RecordedWindowBlock,
+  type TachoModelCallRow,
+} from "./context-windows";
 
 // The one-shot, non-expiring finalization grant minted atomically with every
 // seal, and the durable obligation that guarantees its evidence is submitted.
@@ -426,3 +451,13 @@ export {
   type AttemptRejectionReason,
   type RunNotWritableReason,
 } from "./run-errors";
+
+// The run attestation a seal signs and stores (#4000, ADR-195).
+export {
+  ATTESTER_KEY_ENV,
+  deferredAttester,
+  sealAttestationPayload,
+  signSealAttestation,
+  type SealAttestationColumns,
+  type SealAttestationFigures,
+} from "./attester";

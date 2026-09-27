@@ -12,6 +12,9 @@ import { createPublicKey, verify } from "node:crypto";
 import { posix, win32 } from "node:path";
 import { jcs, type JsonValue } from "../digest";
 import { classifyTool } from "../claude-code/tools";
+import type { BuiltinAction } from "../policy/builtins";
+import { evaluateHookCall } from "../policy/hook";
+import type { CedarRuntime } from "../policy/runtime";
 import type { DenyGeneration, PolicyBundle } from "../wire";
 import { keyIdForPublicKey } from "./key-id";
 
@@ -572,6 +575,30 @@ export interface EvaluationInput {
   harnessReadOnly?: boolean;
   now: number;
   context?: MatchContext;
+  /**
+   * What the hook needs to decide the call with the bundle's Cedar policies
+   * (lane S12). Absent, or a bundle with no `cedar` part, leaves the call to
+   * the permission rules alone.
+   */
+  cedar?: CedarCallInput;
+}
+
+export interface CedarCallInput {
+  /** Cedar's evaluator, or `null` when this host has none installed. */
+  runtime: CedarRuntime | null;
+  /** The harness that sent the call. */
+  harness: string;
+  /** A custom agent's name, from `tacho hook --agent`. */
+  agent?: string;
+  /** The skill a subagent runs, as the harness named it. */
+  skill?: string;
+  /** The action, for a call the hook builds itself, such as a subagent start. */
+  action?: BuiltinAction;
+  /**
+   * The tool's name as the harness sent it, when an adapter renamed it:
+   * Cursor's `cursor_tool_name`. Cedar rules read it in `context.harness_tool`.
+   */
+  harness_tool?: string;
 }
 
 export interface Evaluation {
@@ -580,7 +607,14 @@ export interface Evaluation {
   /** What the rules said, before observe mode collapsed it to allow. */
   evaluated: PolicyDecisionValue;
   source: "bundle" | "harness" | "human";
+  /** The rules that decided, joined; `tacho.session_commands.policy_rule` stores it. */
   rule?: string;
+  /**
+   * The same rules as a list, the source of truth (#3971). A deny or ask
+   * names its one rule. An allow names the distinct rule that granted each
+   * shell segment, in segment order. Present exactly when `rule` is.
+   */
+  rules?: string[];
   reason_code: string;
   reason: string;
   read_only: boolean;
@@ -678,19 +712,22 @@ function firstMatch(
 }
 
 /**
- * The allow rule, or rules, that grant this call. A shell line is granted
- * only when every command in it is, but each command may be granted by a
- * different rule, as Claude Code does: `Bash(git add:*)` and `Bash(git
- * commit:*)` together grant `git add . && git commit -m x`.
+ * The allow rule, or rules, that grant this call, in the order they granted
+ * it. A shell line is granted only when every command in it is, but each
+ * command may be granted by a different rule, as Claude Code does:
+ * `Bash(git add:*)` and `Bash(git commit:*)` together grant
+ * `git add . && git commit -m x`. A rule that grants two segments is listed
+ * once, at the first segment it granted.
  */
 function allowMatch(
   rules: readonly string[],
   toolName: string,
   toolInput: Record<string, unknown> | undefined,
   context: MatchContext | undefined,
-): string | undefined {
+): string[] | undefined {
   const single = firstMatch(rules, toolName, toolInput, context, "allow");
-  if (single !== undefined || !isShellTool(toolName)) return single;
+  if (single !== undefined) return [single];
+  if (!isShellTool(toolName)) return undefined;
   const command = toolInput?.["command"];
   if (typeof command !== "string") return undefined;
   const segments = shellSegments(command);
@@ -707,7 +744,7 @@ function allowMatch(
     if (rule === undefined) return undefined;
     if (!used.includes(rule)) used.push(rule);
   }
-  return used.join(" and ");
+  return used;
 }
 
 /** Effects the classifier names as writes; a harness read-only claim cannot undo them. */
@@ -871,8 +908,24 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
       evaluated: "deny",
       source: "bundle",
       rule: denied,
+      rules: [denied],
       reason_code: "rule_deny",
       reason: `Denied by Oxagen policy rule ${denied}.`,
+      ...base,
+      stale,
+    };
+  }
+
+  // 3b. The steering record's Cedar policies (lane S12). A forbid denies
+  // here, after the deny rules and before any ask or allow rule, and a call
+  // whose deciding forbids all carry @decision("require_approval") asks.
+  // Cedar's allow means only that no policy objects: it answers last, below.
+  const cedar = decideWithCedar(input, readOnly);
+  if (cedar !== undefined && cedar.evaluated !== "allow") {
+    return {
+      ...cedar,
+      decision: bundle.mode === "observe" ? "allow" : cedar.evaluated,
+      source: "bundle",
       ...base,
       stale,
     };
@@ -896,6 +949,7 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
       evaluated: "ask",
       source: "bundle",
       rule: ask,
+      rules: [ask],
       reason_code: "rule_ask",
       reason: `Oxagen policy rule ${ask} requires a permission decision.`,
       ...base,
@@ -911,19 +965,38 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
     input.context,
   );
   if (allowed !== undefined) {
+    // `rule` keeps the joined form that `tacho.session_commands.policy_rule`
+    // and the hook's reason have always carried; `rules` is the list.
+    const rule = allowed.join(" and ");
     return {
       decision: "allow",
       evaluated: "allow",
       source: "bundle",
-      rule: allowed,
+      rule,
+      rules: allowed,
       reason_code: "rule_allow",
-      reason: `Allowed by Oxagen policy rule ${allowed}.`,
+      reason: `Allowed by Oxagen policy rule ${rule}.`,
       ...base,
       stale,
     };
   }
 
-  // 6. No rule: fall through to Claude Code's own flow.
+  // 6. No rule, or Cedar permits the call: fall through to the harness's own
+  // permission flow. A Cedar permit is not a standing grant. The grant
+  // permits every built-in tool so written policies can narrow it, and
+  // answering it as an explicit allow would skip every prompt the person set
+  // up in the harness. The answer names no rule, so the hook stays silent.
+  if (cedar !== undefined) {
+    return {
+      decision: bundle.mode === "observe" ? "allow" : "ask",
+      evaluated: "ask",
+      source: "bundle",
+      reason_code: cedar.reason_code,
+      reason: cedar.reason,
+      ...base,
+      stale,
+    };
+  }
   return {
     decision: bundle.mode === "observe" ? "allow" : "ask",
     evaluated: "ask",
@@ -934,4 +1007,121 @@ export function evaluatePreToolUse(input: EvaluationInput): Evaluation {
     ...base,
     stale,
   };
+}
+
+type CedarOutcome = Pick<
+  Evaluation,
+  "evaluated" | "rule" | "rules" | "reason_code" | "reason"
+>;
+
+function ruleNames(reasons: string[]): Pick<Evaluation, "rule" | "rules"> {
+  return reasons.length > 0 ? { rule: reasons.join(" and "), rules: reasons } : {};
+}
+
+/**
+ * Cedar's answer for a call, or `undefined` when Cedar does not decide it:
+ * the bundle carries no Cedar policies, the caller passed no Cedar input, or
+ * the tool is one of Oxagen's own, which the kernel decides. A host without
+ * the evaluator, or with a different Cedar version from the one that
+ * validated the policies, cannot decide. It denies every tool that changes
+ * anything and leaves reads to the permission rules.
+ */
+function decideWithCedar(
+  input: EvaluationInput,
+  readOnly: boolean,
+): CedarOutcome | undefined {
+  const cedarBundle = input.bundle.cedar;
+  if (cedarBundle === undefined || input.cedar === undefined) return undefined;
+  const { runtime, harness, agent, skill, action, harness_tool } = input.cedar;
+  if (runtime === null) {
+    if (readOnly) return undefined;
+    return {
+      evaluated: "deny",
+      reason_code: "cedar_unavailable",
+      reason:
+        "This agent's steering record decides tools with Cedar, and Cedar's evaluator is not installed on this host, so tools that change anything are denied.",
+    };
+  }
+  let hostVersion: string;
+  try {
+    hostVersion = runtime.getCedarVersion();
+  } catch (error) {
+    hostVersion = `unknown (${error instanceof Error ? error.message : String(error)})`;
+  }
+  if (hostVersion !== cedarBundle.cedar_version) {
+    // Another Cedar release can read the same policies differently, so the
+    // host does not guess at what the published set meant.
+    if (readOnly) return undefined;
+    return {
+      evaluated: "deny",
+      reason_code: "cedar_version_mismatch",
+      reason: `This agent's steering record was validated with Cedar ${cedarBundle.cedar_version}, and this host runs Cedar ${hostVersion}, so tools that change anything are denied until the two match.`,
+    };
+  }
+  let verdict: ReturnType<typeof evaluateHookCall>;
+  try {
+    verdict = evaluateHookCall({
+      runtime,
+      cedar: cedarBundle,
+      harness,
+      ...(agent !== undefined ? { agent } : {}),
+      toolName: input.toolName,
+      ...(input.toolInput !== undefined ? { toolInput: input.toolInput } : {}),
+      ...(harness_tool !== undefined ? { harnessTool: harness_tool } : {}),
+      ...(action !== undefined ? { action } : {}),
+      ...(skill !== undefined ? { skill } : {}),
+      now: input.now,
+    });
+  } catch (error) {
+    return {
+      evaluated: "deny",
+      reason_code: "cedar_error",
+      reason: `Cedar could not decide this call: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+  if (verdict === null) return undefined;
+  if (verdict.errors.length > 0) {
+    return {
+      evaluated: "deny",
+      ...ruleNames(verdict.reasons),
+      reason_code: "cedar_error",
+      reason: `Cedar could not decide ${verdict.action}: ${verdict.errors[0] as string}`,
+    };
+  }
+  if (verdict.principals.length === 0) {
+    return {
+      evaluated: "deny",
+      reason_code: "cedar_no_agent",
+      reason: agent !== undefined
+        ? `The steering record declares no agent named ${agent} on this host, so Cedar permits nothing.`
+        : `The steering record declares no agent that runs ${harness} on this host, so Cedar permits nothing.`,
+    };
+  }
+  const names = verdict.reasons.join(", ");
+  switch (verdict.decision) {
+    case "allow":
+      return {
+        evaluated: "allow",
+        ...ruleNames(verdict.reasons),
+        reason_code: "cedar_allow",
+        reason: `The steering record's Cedar policy ${names} permits this tool, so the harness's own permission flow decides.`,
+      };
+    case "require_approval":
+      return {
+        evaluated: "ask",
+        ...ruleNames(verdict.reasons),
+        reason_code: "cedar_require_approval",
+        reason: `The steering record's Cedar policy ${names} requires a person's approval.`,
+      };
+    case "deny":
+      return {
+        evaluated: "deny",
+        ...ruleNames(verdict.reasons),
+        reason_code: "cedar_deny",
+        reason:
+          verdict.reasons.length > 0
+            ? `Denied by the steering record's Cedar policy ${names}.`
+            : `No Cedar policy in the steering record permits ${verdict.action} for this agent.`,
+      };
+  }
 }

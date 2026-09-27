@@ -167,6 +167,17 @@ type Events = {
     };
   };
 
+  // ── Embeddings ─────────────────────────────────────────────────────────────
+  // Runs one pass of `embeddings/backfill`, which embeds nodes whose vector is
+  // null (#4148). Sent every 30 minutes by `embeddings/backfill-schedule`, and
+  // by an operator from the Inngest dashboard with no data.
+  "embeddings/backfill.requested": {
+    data: {
+      /** "schedule" from the cron. Absent when an operator sends it. */
+      source?: string;
+    };
+  };
+
   // ── Schema reconciliation ─────────────────────────────────────────────────
   // Fired by schema.reconcile.dispatch handler to kick off an async reconcile job.
   // Workers coerce existing KnowledgeNode/relationship properties to the target schema version.

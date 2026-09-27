@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderEntityText } from "./index";
+import { renderEntityText, storedEntityText } from "./index";
 
 describe("renderEntityText", () => {
   it("produces entityType + displayName + key:value fields", () => {
@@ -64,5 +64,43 @@ describe("renderEntityText", () => {
   it("produces a non-empty string for minimal input", () => {
     const text = renderEntityText("task", undefined, {});
     expect(text.trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe("storedEntityText", () => {
+  const properties = { state: "open", number: 42, merged: false };
+
+  it("renders the same text the pipeline embedded for the record", () => {
+    const text = storedEntityText({
+      entityType: "Issue",
+      displayName: "Fix login",
+      naturalKey: "github:con-1:issue-42",
+      properties: JSON.stringify(properties),
+    });
+    expect(text).toBe(renderEntityText("Issue", "Fix login", properties));
+  });
+
+  it("drops a display name that is the natural key, which the node stores when the record had none", () => {
+    const text = storedEntityText({
+      entityType: "Issue",
+      displayName: "github:con-1:issue-42",
+      naturalKey: "github:con-1:issue-42",
+      properties: JSON.stringify(properties),
+    });
+    expect(text).toBe(renderEntityText("Issue", undefined, properties));
+    expect(text).not.toContain("github:con-1:issue-42");
+  });
+
+  it("reads absent, malformed, and non-object properties as none", () => {
+    for (const raw of [null, "", "{not json", "[1,2]", "7"]) {
+      expect(
+        storedEntityText({
+          entityType: "Issue",
+          displayName: "Fix login",
+          naturalKey: "k",
+          properties: raw,
+        }),
+      ).toBe(renderEntityText("Issue", "Fix login", {}));
+    }
   });
 });

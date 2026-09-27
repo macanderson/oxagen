@@ -4,6 +4,8 @@ export type {
   GitHubPullRequest,
   GitHubClosingIssue,
   GitHubClosingIssues,
+  GitHubIssueStates,
+  GitHubRelease,
   GitHubPrComment,
   GitHubPrComments,
   GitHubCheckRun,
@@ -50,3 +52,4 @@ export {
   parseReturnTo,
   verifyInstallState,
 } from "./install-url";
+export * from "./deployments";

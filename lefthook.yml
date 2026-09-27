@@ -143,6 +143,14 @@ pre-push:
       glob: "apps/{web,docs}/**"
       run: pnpm check:prose
 
+    # The two harness bridges (.agents/skills for Codex, .cursor/commands for
+    # Cursor) must lead to .claude/. A Windows checkout without symlinks writes
+    # each as a text file, and Codex and Cursor then see nothing (#3367). The
+    # root `prepare` links them; this fails a push when one still leads nowhere.
+    bridges:
+      glob: "{.agents/**,.cursor/**,.claude/skills/**,.claude/commands/**,tools/scripts/ensure-harness-bridges.mjs}"
+      run: pnpm check:bridges
+
     # Registered env vars must validate against the schema — an unregistered var
     # (NEXT_PUBLIC_DOCS_URL, OXAGEN_LOCAL_DEV, …) silently red-jobs the CI gate.
     env-check:

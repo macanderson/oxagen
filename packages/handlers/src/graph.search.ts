@@ -49,6 +49,7 @@ export const graphSearchHandler: CapabilityHandler<typeof graphSearch> = async (
       surface: "app",
       executionStepId: null,
     },
+    inputType: "query",
   });
 
   type ResultRow = {

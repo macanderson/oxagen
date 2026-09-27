@@ -1,6 +1,7 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import type { ExecAsync } from "../host/service";
+import type { MeasuredPaths } from "./session-changes";
 
 export const WORKTREE_PATCH_MAX_BYTES = 256 * 1024;
 export const WORKTREE_UNTRACKED_MAX = 32;
@@ -17,6 +18,82 @@ export interface WorktreeSnapshot {
   patch: string;
   complete: boolean;
   limitations: string[];
+  /**
+   * On the session basis, what the hunks in `patch` were taken against
+   * (ADR-188 decision 5). The paths in `baseline_paths` against `baseline`,
+   * the paths in `pre_session_paths` against what they held at the session's
+   * first read, and every other path against `head_ref`, or against nothing
+   * when untracked. Absent on a snapshot of every change since `baseline`.
+   */
+  bases?: {
+    head_ref: string;
+    baseline_paths: string[];
+    pre_session_paths: string[];
+  };
+}
+
+/** A path as git prints it in a patch header, quoted when git would quote it. */
+function headerPath(prefix: string, path: string): string {
+  const name = `${prefix}${path}`;
+  // Git quotes a name holding a control byte, a quote, or a backslash, even
+  // with `core.quotePath=false`.
+  let quoted = false;
+  let out = "";
+  for (const ch of name) {
+    const code = ch.charCodeAt(0);
+    if (ch === '"' || ch === "\\") out += `\\${ch}`;
+    else if (ch === "\t") out += "\\t";
+    else if (ch === "\n") out += "\\n";
+    else if (code < 0x20 || code === 0x7f)
+      out += `\\${code.toString(8).padStart(3, "0")}`;
+    else {
+      out += ch;
+      continue;
+    }
+    quoted = true;
+  }
+  return quoted ? `"${out}"` : name;
+}
+
+/**
+ * A `git diff --no-index` patch from a pre-session copy, with its header
+ * naming the repo-relative path on both sides. Git names the copy by its
+ * path in Tacho's state directory, which would put that directory into the
+ * record. The hunks are left as git wrote them.
+ */
+export function relabelPreSessionPatch(
+  patch: string,
+  path: string,
+  sides: { before: boolean; after: boolean },
+): string {
+  if (patch.length === 0) return patch;
+  const lines = patch.split("\n");
+  const firstHunk = lines.findIndex(
+    (line) =>
+      line.startsWith("@@") ||
+      line.startsWith("Binary files ") ||
+      line.startsWith("GIT binary patch"),
+  );
+  const header = firstHunk === -1 ? lines : lines.slice(0, firstHunk);
+  const body = firstHunk === -1 ? [] : lines.slice(firstHunk);
+  const before = sides.before ? headerPath("a/", path) : "/dev/null";
+  const after = sides.after ? headerPath("b/", path) : "/dev/null";
+  const out = [
+    `diff --git ${headerPath("a/", path)} ${headerPath("b/", path)}`,
+  ];
+  for (const line of header) {
+    if (line.startsWith("--- ")) out.push(`--- ${before}`);
+    else if (line.startsWith("+++ ")) out.push(`+++ ${after}`);
+    else if (
+      /^(?:index |new file mode |deleted file mode |old mode |new mode )/.test(
+        line,
+      )
+    )
+      out.push(line);
+  }
+  if (body[0]?.startsWith("Binary files "))
+    body[0] = `Binary files ${before} and ${after} differ`;
+  return [...out, ...body].join("\n");
 }
 
 /** Keep only a forge host and repository path. Never retain remote credentials. */
@@ -91,20 +168,63 @@ async function worktreeFingerprint(
 }
 
 /**
+ * Whether some hunk in a session-basis patch was taken against a state
+ * other than `baseline`, so the patch is not a diff from `baseline`. The
+ * frame names `baseline` as the patch's base (`diff_base_sha`), and the
+ * limitation tells a reader not to apply it there.
+ *
+ * A file that held edits at the session's first read is taken against what
+ * it held then, which is never the baseline. A path taken against
+ * `head_ref` differs only when a commit between the baseline and `head_ref`
+ * changed it, as a pull does. A read that fails counts as mixed.
+ */
+async function mixedBases(
+  read: (args: string[], statuses?: number[]) => Promise<string | undefined>,
+  baseline: string | undefined,
+  measured: MeasuredPaths,
+): Promise<boolean> {
+  if (measured.fromPreSession.length > 0) return true;
+  if (
+    measured.fromHead.length === 0 ||
+    !baseline ||
+    !HASH.test(baseline) ||
+    measured.headRef === baseline
+  )
+    return false;
+  const moved = await read([
+    "diff",
+    "--name-only",
+    "-z",
+    "--no-renames",
+    baseline,
+    measured.headRef,
+    "--",
+    ...measured.fromHead.map((path) => `:(literal)${path}`),
+  ]);
+  return moved === undefined || moved.length > 0;
+}
+
+/**
  * Snapshot bytes describe the observed tree against `baseline`.
  *
- * `paths`, when given, are the repo-relative paths the reconciliation beside
- * this snapshot reports, and the patch covers those and nothing else. Without
- * it the patch held every difference from the baseline, so after a pull it
- * carried every upstream file the reconciliation had left out (ADR-188).
- * Without `paths`, as for a session measured the old way, the patch still
- * includes changes present before the run.
+ * `measured`, when given, is what the reconciliation beside this snapshot
+ * reported and what it measured each path against (`readSessionChanges`).
+ * The patch then covers those paths and no others, and takes each against
+ * the same state its row was counted from: a path the session committed
+ * against the baseline, a file that already held edits against its
+ * pre-session copy (#3384), and any other against the `HEAD` the
+ * reconciliation read. Taking every path against the baseline put a pulled
+ * hunk into the patch of a file the session then edited, beside a row that
+ * counted only the session's edit (#4320). A patch with a hunk that differs
+ * from what the baseline would give says so (`mixed_bases`). Without
+ * `measured`, as for a session measured the old way, the patch holds every
+ * change since the baseline, including changes present before the run.
  */
 export async function readWorktreeSnapshot(
   exec: ExecAsync,
   cwd: string,
   baseline?: string,
-  paths?: readonly string[],
+  measured?: MeasuredPaths,
 ): Promise<WorktreeSnapshot | undefined> {
   let directory = cwd;
   const read = async (
@@ -164,26 +284,85 @@ export async function readWorktreeSnapshot(
     patch += bytes.subarray(0, remaining).toString("utf8");
     remaining = Math.max(0, remaining - bytes.length);
   };
-  const reported = paths === undefined ? undefined : new Set(paths);
   // Disable external diff programs and textconv from repository configuration.
-  if (!base) limitations.push("baseline_not_recorded");
-  else if (reported === undefined || reported.size > 0)
-    append(
-      await read([
-        "diff",
-        "--no-ext-diff",
-        "--no-textconv",
-        "--no-color",
-        "--src-prefix=a/",
-        "--dst-prefix=b/",
-        base,
-        "--",
-        // `:(literal)`, so a path holding `*` or `?` names itself.
-        ...[...(reported ?? [])].map((path) => `:(literal)${path}`),
-      ]),
-    );
+  const trackedDiff = (ref: string, paths?: readonly string[]) =>
+    read([
+      "diff",
+      "--no-ext-diff",
+      "--no-textconv",
+      "--no-color",
+      "--src-prefix=a/",
+      "--dst-prefix=b/",
+      ref,
+      "--",
+      // `:(literal)`, so a path holding `*` or `?` names itself.
+      ...(paths ?? []).map((path) => `:(literal)${path}`),
+    ]);
+  // The untracked paths the patch covers. All of them without `measured`.
+  let fromNothing: ReadonlySet<string> | undefined;
+  if (measured === undefined) {
+    if (!base) limitations.push("baseline_not_recorded");
+    else append(await trackedDiff(base));
+  } else {
+    if (measured.fromBaseline.length > 0) {
+      if (!baseline || !HASH.test(baseline))
+        limitations.push("baseline_not_recorded");
+      else append(await trackedDiff(baseline, measured.fromBaseline));
+    }
+    // A path measured against HEAD is tracked or untracked. The tracked diff
+    // prints nothing for an untracked one, which the loop below takes.
+    if (measured.fromHead.length > 0) {
+      if (!HASH.test(measured.headRef)) limitations.push("diff_read_failed");
+      else append(await trackedDiff(measured.headRef, measured.fromHead));
+    }
+    // Each against what it held at the session's first read, as its row
+    // was counted: the copy, or nothing for a path that was absent then.
+    for (const { path, copy } of measured.fromPreSession) {
+      if (remaining === 0) {
+        limitations.push("patch_size_limit");
+        break;
+      }
+      let present: boolean;
+      try {
+        present = (await lstat(join(root, path))).isFile();
+      } catch {
+        present = false;
+      }
+      if (copy === null && !present) continue;
+      const raw = await read(
+        [
+          "diff",
+          "--no-index",
+          "--no-ext-diff",
+          "--no-textconv",
+          "--no-color",
+          "--src-prefix=a/",
+          "--dst-prefix=b/",
+          "--",
+          copy ?? "/dev/null",
+          present ? path : "/dev/null",
+        ],
+        [0, 1],
+      );
+      append(
+        raw === undefined
+          ? undefined
+          : relabelPreSessionPatch(raw, path, {
+              before: copy !== null,
+              after: present,
+            }),
+      );
+    }
+    // The rows were counted against the HEAD the reconciliation read. A
+    // commit since then moved the tree those counts describe.
+    if (head !== undefined && HASH.test(head) && head !== measured.headRef)
+      limitations.push("head_changed_during_capture");
+    if (await mixedBases(read, baseline, measured))
+      limitations.push("mixed_bases");
+    fromNothing = new Set(measured.fromHead);
+  }
   const untrackedPaths = (untracked?.split("\0").filter(Boolean) ?? []).filter(
-    (path) => reported === undefined || reported.has(path),
+    (path) => fromNothing === undefined || fromNothing.has(path),
   );
   if (untracked === undefined) limitations.push("untracked_read_failed");
   if (untrackedPaths.length > WORKTREE_UNTRACKED_MAX)
@@ -229,5 +408,16 @@ export async function readWorktreeSnapshot(
     patch,
     complete: limitations.length === 0,
     limitations: [...new Set(limitations)],
+    ...(measured === undefined
+      ? {}
+      : {
+          bases: {
+            head_ref: measured.headRef,
+            baseline_paths: [...measured.fromBaseline],
+            pre_session_paths: measured.fromPreSession.map(
+              (entry) => entry.path,
+            ),
+          },
+        }),
   };
 }

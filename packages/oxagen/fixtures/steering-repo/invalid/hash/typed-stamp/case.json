@@ -1,0 +1,18 @@
+{
+  "check": "hash",
+  "rule": "stale-stamp",
+  "severity": "error",
+  "description": "A new record carries an id and a hash the author typed.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/platform/a-intel.platform.typed-stamp.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/platform/a-intel.platform.typed-stamp.md",
+      "line": 5,
+      "field": "id"
+    }
+  ]
+}

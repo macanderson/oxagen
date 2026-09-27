@@ -1,0 +1,18 @@
+{
+  "check": "budget",
+  "rule": "always-on",
+  "severity": "warning",
+  "description": "Always-on steering passes the budget this PR sets. The check warns and never fails.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/governance.toml"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/governance.toml",
+      "line": 6,
+      "field": "steering.always_on_tokens"
+    }
+  ]
+}

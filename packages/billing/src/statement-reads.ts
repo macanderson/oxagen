@@ -5,6 +5,9 @@
  * Every read runs on the one transaction `withOrgDb` opens (ADR-086): the
  * organisation-wide read seam, which admits the org_only billing tables and
  * the org's agents in every workspace, and nothing of another organisation.
+ * The credit ledger reads are the exception. They run on a second
+ * organisation-wide transaction on the shared plane, where the credit ledger
+ * is written (#4338).
  * Each query ALSO names org_id: a local stack runs with the RLS bypass on, and
  * another organisation's rows must still stay out of the statement.
  *
@@ -41,6 +44,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { schema, type Tx, withOrgDb } from "@oxagen/database";
 import { readGauEntitlement } from "./contract-terms";
+import { withBillingOrgDb } from "./internal/platform-db";
 import { CREDIT_REASONS } from "./constants";
 import {
   assembleBillingStatement,
@@ -181,8 +185,19 @@ function invoiceRef(row: {
       };
 }
 
-/** `StatementReads` on one transaction. */
-export function postgresStatementReads(tx: Tx): StatementReads {
+/**
+ * `StatementReads` on one transaction, with the credit ledger reads on
+ * `credits`.
+ *
+ * `billing.credit_ledger` sits on the shared plane for every organisation
+ * (ADR-042 §2, #4338). `tx` follows the organisation's own plane, so for an
+ * organisation on a dedicated plane the two differ. They are the same
+ * transaction when the caller passes one.
+ */
+export function postgresStatementReads(
+  tx: Tx,
+  credits: Tx = tx,
+): StatementReads {
   const { gl, gb, gs, gr, po, inv, cl, dt } = tables();
   const { units, actions, groups } = aggregates();
   return {
@@ -504,7 +519,7 @@ export function postgresStatementReads(tx: Tx): StatementReads {
     },
 
     async creditBalanceBefore(orgId, at) {
-      const [row] = await tx
+      const [row] = await credits
         .select({
           cents: sql<string>`coalesce(sum(${cl.deltaCents}), 0)::text`,
         })
@@ -515,7 +530,7 @@ export function postgresStatementReads(tx: Tx): StatementReads {
 
     async creditMovements(orgId, p) {
       const positive = sql<boolean>`${cl.deltaCents} > 0`;
-      const rows = await tx
+      const rows = await credits
         .select({
           reason: cl.reason,
           positive,
@@ -546,7 +561,7 @@ export function postgresStatementReads(tx: Tx): StatementReads {
     },
 
     async assistantByOperator(orgId, p) {
-      const rows = await tx
+      const rows = await credits
         .select({
           key: sql<string | null>`${cl.createdById}::text`,
           cents: sql<string>`(-sum(${cl.deltaCents}))::text`,
@@ -696,7 +711,14 @@ export async function buildBillingStatement(
   opts: BuildStatementOptions = {},
 ): Promise<BillingStatement> {
   return withOrgDb((tx) =>
-    assembleBillingStatement(postgresStatementReads(tx), orgId, period, opts),
+    withBillingOrgDb((credits) =>
+      assembleBillingStatement(
+        postgresStatementReads(tx, credits),
+        orgId,
+        period,
+        opts,
+      ),
+    ),
   );
 }
 

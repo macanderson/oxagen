@@ -65,17 +65,34 @@ a dictionary oracle, and the digest would cost a table rebuild.
 
 The privacy processor gains an erasure path. For a user-scope request, the
 `erase-clickhouse-rows` step reads the subject's address from `auth.users`
-and calls `eraseClaudeSessionRows` (`packages/telemetry/src/claude-telemetry.ts`),
-which runs:
+and calls `submitClaudeSessionsErase`
+(`packages/telemetry/src/claude-telemetry.ts`), which queues this mutation
+and returns its id:
 
 ```sql
 ALTER TABLE claude_sessions DELETE WHERE user_email = {email:String}
 ```
 
-with `mutations_sync = 2`, so the step returns only after the rows are gone.
+Short `erase-clickhouse-rows-poll` steps then call
+`claudeSessionsEraseRemaining`, which reads that mutation in
+`system.mutations`, 15 seconds apart, for up to 15 minutes. The erase counts
+as done once the mutation has finished, and as failed as soon as ClickHouse
+reports it failing or once the 15 minutes run out. It waits only on its own
+mutation, so another mutation on the table that never finishes does not hold
+it up (#4316).
+
+The wait is split into steps because of two limits. The shared ClickHouse
+client gives up on a request after 30 seconds, so the first version, which
+waited inside the statement (`mutations_sync = 2`), failed on every large
+table. Inngest calls each step over HTTP through the load balancer and Caddy,
+and both close a request after 300 seconds, so a wait inside one step ends
+there. Inngest keeps a finished step's result, so a retried read never queues
+the mutation again.
+
 The step runs before `execute-erasure`, because that step overwrites the
 address in `auth.users`. The address never leaves the step: Inngest stores a
-step's return value, so the step returns only whether it erased anything.
+step's return value, so the step returns only whether it erased anything and
+the mutation's id.
 
 A ClickHouse failure does not block the auth purge. Inngest retries the step,
 and once it gives up, `execute-erasure` still deletes the person's credentials

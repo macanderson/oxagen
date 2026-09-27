@@ -1,0 +1,18 @@
+{
+  "check": "schema",
+  "rule": "unknown-field",
+  "severity": "error",
+  "description": "A record carries a field steering-record/v1 does not define. YAML reads the bare no as a string here, and the field is refused either way.",
+  "refused_by_reader": true,
+  "changed": [
+    "steering/platform/a-intel.platform.eu-data.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/platform/a-intel.platform.eu-data.md",
+      "line": 14,
+      "field": "residency"
+    }
+  ]
+}

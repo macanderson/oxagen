@@ -28,6 +28,17 @@ vi.mock("@oxagen/database", async (importOriginal) => {
       };
       return chain;
     },
+    update: () => {
+      const chain = {
+        set: () => chain,
+        where: (w: unknown) => {
+          mocks.wheres.push(w);
+          return chain;
+        },
+        returning: async () => mocks.rows,
+      };
+      return chain;
+    },
   };
   const run = async (fn: (t: unknown) => unknown) => fn(tx);
   return { ...real, withTenantDb: run, withSystemDb: run, withOrgDb: run };
@@ -143,5 +154,31 @@ describe("gitlabWebhookDeps", () => {
       gitlabWebhookDeps().requestSync!(SCOPE, "push"),
     ).resolves.toBeUndefined();
     expect(mocks.requestSteeringSync).toHaveBeenCalledWith([SCOPE], "push");
+  });
+
+  it("stores a merge request's state only in the connection's workspace, newer wins", async () => {
+    mocks.rows = [{ id: "r1" }, { id: "r2" }];
+    const written = await gitlabWebhookDeps().recordPullRequestState?.(
+      SCOPE,
+      { provider: "gitlab", repository: "acme/platform/api", number: 7 },
+      {
+        state: "merged",
+        draft: false,
+        sourceUpdatedAt: new Date("2026-09-25T10:00:00Z"),
+      },
+    );
+    expect(written).toBe(2);
+    const { sql, params } = sqlOf(mocks.wheres[0]);
+    expect(sql).toContain('"tacho"."run_pull_requests"."workspace_id" = $');
+    expect(sql).toContain('"source_updated_at" <= $');
+    expect(params).toEqual(
+      expect.arrayContaining([
+        SCOPE.orgId,
+        SCOPE.workspaceId,
+        "gitlab",
+        "acme/platform/api",
+        7,
+      ]),
+    );
   });
 });

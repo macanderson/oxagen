@@ -23,6 +23,7 @@ import {
   describeRemoval,
   isEnrolled,
   isRetired,
+  pendingRevokeText,
   statusBanner,
   TOAST_MS,
   uninstallFinished,
@@ -42,7 +43,6 @@ import { gatewayText, serviceStatusText } from "./tacho-status";
 import { computeAgentRows, HEALTH_LABEL, summarizeAgents } from "./agents";
 import {
   checkLiveSession,
-  sidecarEnv,
   type ConnectResult,
   connectRun,
   type DesktopState,
@@ -55,34 +55,46 @@ import {
   logTail,
   type OrgItem,
   readState,
+  readUpdatePolicy,
   removeLocalData,
+  reportBusy,
+  restartTachoService,
   runSidecar,
+  setAutoUpdate,
   type TachoStatus,
   tachoStatus,
   uninstallCli,
+  type UpdatePolicy,
   type WorkspaceItem,
 } from "./bridge";
 import {
+  addHarnessArgs,
   ago,
   collectorText,
   defaultRegistration,
   deregisterArgs,
   deregisterNeedsSession,
   describeCliInstall,
+  detectedMeta,
   enforcementText,
   enrollArgs,
   HARNESS_LABEL,
   HARNESSES,
   type Harness,
   loginArgs,
+  logoutArgs,
   needsWorkspacePick,
   pendingChange,
+  reapplyArgs,
   reassignArgs,
+  registrable,
   isConnected,
+  busyHoldsClose,
+  drivable,
+  withoutCommandLine,
   type SessionView,
   sessionLanded,
   unenrollArgs,
-  verifiable,
   wizardStep,
   workspaceUrl,
 } from "./commands";
@@ -92,7 +104,15 @@ import {
   type UpdateOffer,
   type UpdateWatch,
 } from "./update-watch";
-import { checkForUpdate, describeCheck, installUpdate } from "./updater";
+import {
+  checkForUpdate,
+  describeCheck,
+  describeRestart,
+  installInBackground,
+  installUpdate,
+  restartApp,
+  routeOffer,
+} from "./updater";
 
 const WRAP_AGENT_URL = "https://docs.oxagen.sh/docs/cli/wrap-an-agent";
 const DESKTOP_GUIDE_URL = "https://docs.oxagen.sh/docs/cli/desktop";
@@ -154,6 +174,9 @@ export function App() {
   // Set once an uninstall has left nothing behind: the Uninstall panel has
   // nothing more to offer and goes away until the machine is set up again.
   const [uninstalled, setUninstalled] = useState(false);
+  // The agent key whose revoke an uninstall could not finish: the retired
+  // host.json that named it is gone, so the screen after reads it from here.
+  const [pendingRevoke, setPendingRevoke] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   // Bumped after every sign-in so the org listing runs again: config.json's
@@ -182,39 +205,115 @@ export function App() {
   // every control for as long as the feed took to answer.
   const [checking, setChecking] = useState(false);
   // What the update watch found on its own. The prompt asks, and only the
-  // Install click downloads and relaunches.
+  // Install click downloads and relaunches. A Mac that passes the gates in
+  // update.rs installs in the background instead (ADR-202).
   const [updatePrompt, setUpdatePrompt] = useState<UpdateOffer | null>(null);
+  // `update_policy`, for the Updates panel. The watch's offer reads it again
+  // each time, since the folder's permissions can change while the app runs.
+  const [updatePolicy, setUpdatePolicy] = useState<UpdatePolicy | null>(null);
+  useEffect(() => {
+    void readUpdatePolicy().then(setUpdatePolicy);
+  }, []);
+  // The version an automatic install is working on, and the version it put
+  // on disk, which runs after a restart.
+  const [autoInstalling, setAutoInstalling] = useState<string | null>(null);
+  const [installedVersion, setInstalledVersion] = useState<string | null>(
+    null,
+  );
+  // The automatic install holds a close or a Quit only while the bundle swap
+  // and the collector restart run. The busy effect below reports this and
+  // `busy` together, so neither report undoes the other.
+  const installHoldRef = useRef(false);
+  const busyHoldRef = useRef(false);
   // The watch reads these between renders: it holds off the feed while an
-  // install runs or a check the person started is out. doCheckUpdate and
-  // doInstallUpdate set and clear them where they start and end, because
-  // this effect runs one commit later, and a background check that resolved
-  // in between would replace the install's caption. The effect keeps them in
-  // step with the state.
+  // install runs or a check the person started is out. doCheckUpdate,
+  // doInstallUpdate, and the automatic install set and clear them where they
+  // start and end, because this effect runs one commit later, and a
+  // background check that resolved in between would replace the install's
+  // caption. The effect keeps them in step with the state.
   const updateGateRef = useRef({ installing: false, checking: false });
   useEffect(() => {
-    updateGateRef.current = { installing: busy === "update", checking };
-  }, [busy, checking]);
+    updateGateRef.current = {
+      installing: busy === "update" || autoInstalling !== null,
+      checking,
+    };
+  }, [busy, checking, autoInstalling]);
   const watchRef = useRef<UpdateWatch | null>(null);
   // The watch starts once the running version is known: at launch, then
   // hourly, and on a focus 15 minutes or more after the last check.
   const appVersion = state?.app_version ?? null;
   useEffect(() => {
     if (appVersion === null) return;
+    const prompt = (offer: UpdateOffer) => {
+      setUpdate({
+        caption: describeCheck({
+          available: true,
+          version: offer.version,
+          currentVersion: offer.currentVersion,
+        }),
+        offered: offer.update,
+      });
+      setUpdatePrompt(offer);
+    };
+    // ADR-202 §2: download, install under the hold, restart the collector,
+    // then offer Restart. A failure writes to the Activity log and rejects,
+    // and `routeOffer` shows the prompt for the same version.
+    const installAutomatically = async (offer: UpdateOffer) => {
+      updateGateRef.current.installing = true;
+      setAutoInstalling(offer.version);
+      setUpdate({ caption: `installing v${offer.version}…`, offered: null });
+      const lines: LogLine[] = [
+        { text: `$ update to v${offer.version} (automatic)`, err: false },
+      ];
+      try {
+        await installInBackground(
+          offer.update,
+          async (holding) => {
+            installHoldRef.current = holding;
+            await reportBusy(holding || busyHoldRef.current);
+          },
+          async () => {
+            const restart = await restartTachoService();
+            // A restart that worked is not worth a line in someone else's
+            // Activity log. One that failed is.
+            if (!restart.ok) {
+              const text = describeRestart(restart);
+              if (text !== null) {
+                setLog((prev) => [...prev, { text, err: true }]);
+              }
+            }
+          },
+          (text) => lines.push({ text, err: false }),
+        );
+        watchRef.current?.handled(offer.version);
+        setInstalledVersion(offer.version);
+        setUpdate({ caption: `v${offer.version} installed`, offered: null });
+      } catch (e) {
+        const text = e instanceof Error ? e.message : String(e);
+        setLog((prev) => [...prev, ...lines, { text, err: true }]);
+        throw e;
+      } finally {
+        updateGateRef.current.installing = false;
+        setAutoInstalling(null);
+      }
+    };
     const watch = startUpdateWatch({
       currentVersion: appVersion,
       check: checkForUpdate,
       paused: () =>
         updateGateRef.current.installing || updateGateRef.current.checking,
       offer: (offer) => {
-        setUpdate({
-          caption: describeCheck({
-            available: true,
-            version: offer.version,
-            currentVersion: offer.currentVersion,
-          }),
-          offered: offer.update,
-        });
-        setUpdatePrompt(offer);
+        void routeOffer(
+          offer,
+          async () => {
+            const policy = await readUpdatePolicy();
+            if (policy !== null) setUpdatePolicy(policy);
+            return policy;
+          },
+          () => updateGateRef.current.installing,
+          installAutomatically,
+          prompt,
+        );
       },
       now: Date.now,
       setInterval: (run, ms) => window.setInterval(run, ms),
@@ -260,6 +359,14 @@ export function App() {
   // status` then: it would read the same files `enroll` or `unenroll` is
   // rewriting, and its transient failure replaced the action's own error.
   const busyRef = useRef(false);
+  // The Rust shell holds a close or a Quit until the running action ends, so
+  // closing the window never stops `tacho` between two file writes. A sign-in
+  // or a first run holds nothing: see `busyHoldsClose`. An automatic install
+  // mid-swap holds it too, whatever `busy` says.
+  useEffect(() => {
+    busyHoldRef.current = busyHoldsClose(busy);
+    void reportBusy(busyHoldRef.current || installHoldRef.current);
+  }, [busy]);
   // Set by a tick that wants `tacho status`, cleared by the read that asks
   // it. A tick that joins a plain read already out leaves it set, so the
   // next read asks instead of the hooks going unread for another 20 s.
@@ -342,7 +449,9 @@ export function App() {
   // A machine enrolled again, from here or from a terminal, has something to
   // uninstall again.
   useEffect(() => {
-    if (host !== null) setUninstalled(false);
+    if (host === null) return;
+    setUninstalled(false);
+    setPendingRevoke(null);
   }, [host]);
   useEffect(() => {
     if (toast === null) return;
@@ -533,13 +642,8 @@ export function App() {
     setConfirming(null);
     setLog([{ text: `$ ${sidecar} ${args.join(" ")}`, err: false }]);
     try {
-      const env = await sidecarEnv();
-      const run = runSidecar(
-        sidecar,
-        args,
-        (line, stream) =>
-          setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
-        { env },
+      const run = runSidecar(sidecar, args, (line, stream) =>
+        setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
       );
       let result: RunOutcome;
       if (landed) {
@@ -624,7 +728,7 @@ export function App() {
     );
   };
   const signOut = () =>
-    act("signout", "oxagen", ["logout"], () => {
+    act("signout", "oxagen", logoutArgs(), () => {
       setOrgs(null);
       setWorkspaces(null);
       setPickedOrg(null);
@@ -655,8 +759,9 @@ export function App() {
           ok: true,
           detail: `Registered ${joinLabels(chosen)} with Oxagen.`,
         });
-        // Only the wrapped ones: `tacho verify` cannot drive a connected app.
-        setRunPicks(verifiable(chosen));
+        // Only the ones `tacho verify` can drive: never a connected app, and
+        // never a Cursor the scan found without its command line.
+        setRunPicks(drivable(chosen, detected?.harnesses ?? null));
       },
       (result) => {
         const lines = result.stderr.trim().split("\n").filter(Boolean);
@@ -671,36 +776,51 @@ export function App() {
   };
 
   async function runConnect(only?: Harness[]) {
-    // `verifiable` again at the call site, not only where runPicks is set: a
+    // `drivable` again at the call site, not only where runPicks is set: a
     // connected app must never reach `tacho verify`, whichever path asked.
-    const picks = verifiable(only ?? runPicks ?? hostHarnesses);
+    const picks = drivable(
+      only ?? runPicks ?? hostHarnesses,
+      detected?.harnesses ?? null,
+    );
     if (picks.length === 0) return;
+    // The same guard as `act`: a second click that lands before React has
+    // disabled the button must not start a second verify loop beside the
+    // first, each recording its own run (#4318).
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy("connect");
     setError(null);
     setNotice(null);
     setConfirming(null);
     setLog([]);
     setRanOnce(true);
-    const results: Partial<Record<Harness, ConnectResult>> = { ...runs };
-    for (const h of picks) {
-      setLog((prev) => [
-        ...prev,
-        { text: `$ tacho verify --harness ${h}`, err: false },
-      ]);
-      try {
-        results[h] = await connectRun(h, (line, stream) =>
-          setLog((prev) => [...prev, { text: line, err: stream === "stderr" }]),
-        );
-      } catch (e) {
-        results[h] = {
-          ok: false,
-          detail: e instanceof Error ? e.message : String(e),
-        };
+    try {
+      const results: Partial<Record<Harness, ConnectResult>> = { ...runs };
+      for (const h of picks) {
+        setLog((prev) => [
+          ...prev,
+          { text: `$ tacho verify --harness ${h}`, err: false },
+        ]);
+        try {
+          results[h] = await connectRun(h, (line, stream) =>
+            setLog((prev) => [
+              ...prev,
+              { text: line, err: stream === "stderr" },
+            ]),
+          );
+        } catch (e) {
+          results[h] = {
+            ok: false,
+            detail: e instanceof Error ? e.message : String(e),
+          };
+        }
+        setRuns({ ...results });
       }
-      setRuns({ ...results });
+    } finally {
+      busyRef.current = false;
+      setBusy(null);
+      await refresh(true);
     }
-    setBusy(null);
-    await refresh(true);
   }
 
   const openWorkspace = () => {
@@ -775,13 +895,10 @@ export function App() {
 
   const addHarness = async (h: Harness) => {
     if (!host) return;
-    const harnesses = [...host.harnesses, h];
+    const call = addHarnessArgs(host.harnesses, h);
     if (!(await requireLiveSession("add"))) return;
-    return act(
-      "add",
-      "tacho",
-      ["reassign", "--harness", harnesses.join(",")],
-      () => setNotice(`${labelOf(h)} is now wrapped.`),
+    return act("add", call.sidecar, call.args, () =>
+      setNotice(`${labelOf(h)} is now wrapped.`),
     );
   };
 
@@ -793,7 +910,7 @@ export function App() {
     setBusy("uninstall");
     setError(null);
     setNotice(null);
-    setLog([{ text: "$ tacho unenroll --purge", err: false }]);
+    setLog([{ text: "$ tacho unenroll --all --purge", err: false }]);
     try {
       // Always, enrolled or not: `unenroll` strips Tacho's hooks and the
       // service whether or not host.json is there, and finishes a revoke an
@@ -814,6 +931,7 @@ export function App() {
         })),
         ...report.left.map((note) => ({ text: `left: ${note}`, err: true })),
       ]);
+      setPendingRevoke(report.pending_revoke?.agent_key ?? null);
       setNotice(describeRemoval(report, uninstallHint));
       if (uninstallFinished(report)) {
         setUninstalled(true);
@@ -916,9 +1034,23 @@ export function App() {
     setNotice(null);
     setUpdate({ caption: `installing v${offered.version}…`, offered });
     setLog([{ text: `$ update to v${offered.version}`, err: false }]);
+    const append = (text: string, err = false) =>
+      setLog((prev) => [...prev, { text, err }]);
     try {
-      const { relaunched } = await installUpdate(offered, (line) =>
-        setLog((prev) => [...prev, { text: line, err: false }]),
+      const { relaunched } = await installUpdate(
+        offered,
+        (line) => append(line),
+        async () => {
+          // The collector would otherwise run the old build until the next
+          // login (ADR-202 §4).
+          const restart = await restartTachoService();
+          const text = describeRestart(restart);
+          if (text !== null) append(text, !restart.ok);
+          // The relaunch is an exit request, and the Rust shell holds one
+          // while the page reports busy. Under the hold the window hid and
+          // the app never reopened.
+          await reportBusy(false);
+        },
       );
       // The version is on disk now. If the relaunch failed, the running
       // binary is still the old one and the feed still offers this version,
@@ -949,6 +1081,25 @@ export function App() {
       });
       updateGateRef.current.installing = false;
       setBusy(null);
+    }
+  }
+  // After an automatic install: relaunch into the build on disk.
+  async function doRestart() {
+    try {
+      await restartApp();
+    } catch (e) {
+      setError(
+        `Oxagen did not restart: ${e instanceof Error ? e.message : String(e)}. Quit it and open it again to use v${installedVersion}.`,
+      );
+    }
+  }
+  async function doSetAutoUpdate(enabled: boolean) {
+    try {
+      setUpdatePolicy(await setAutoUpdate(enabled));
+    } catch (e) {
+      setError(
+        `Could not save the update setting: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
 
@@ -1003,6 +1154,9 @@ export function App() {
       ? false
       : (state.cli_links_present ??
         (state.oxagen_on_path !== null || state.tacho_on_path !== null));
+  // The masthead offers Install for a version the watch or a check found,
+  // until the person's own install of it starts.
+  const installOffered = update.offered !== null && busy !== "update";
 
   // A running sidecar locks the pickers, with one exception: the sign-in that
   // fills them. Picking changes local state only, but `applyWorkspace` reads
@@ -1099,7 +1253,10 @@ export function App() {
   const stepClass = (n: number) =>
     `step ${step === n ? "active" : step > n ? "done" : "todo"}`;
   const stepMark = (n: number) => (step > n ? "✓" : String(n));
-  const runList = verifiable(runPicks ?? hostHarnesses);
+  const runList = drivable(
+    runPicks ?? hostHarnesses,
+    detected?.harnesses ?? null,
+  );
 
   // ── First run: the wizard ────────────────────────────────────────────────
   const wizard = (
@@ -1249,14 +1406,16 @@ export function App() {
                     {detected.harnesses.map((d) => (
                       <div
                         key={d.harness}
-                        className={`agent ${d.installed ? "" : "absent"}`}
+                        className={`agent ${registrable(d) ? "" : "absent"}`}
                       >
-                        <label className={`check ${d.installed ? "" : "off"}`}>
+                        <label
+                          className={`check ${registrable(d) ? "" : "off"}`}
+                        >
                           <input
                             type="checkbox"
                             id={`register-${d.harness}`}
                             checked={(registration ?? []).includes(d.harness)}
-                            disabled={!d.installed || busy !== null}
+                            disabled={!registrable(d) || busy !== null}
                             onChange={(e) =>
                               setRegistration((prev) => {
                                 const list = prev ?? [];
@@ -1268,11 +1427,7 @@ export function App() {
                           />
                           <span className="name">{d.label}</span>
                         </label>
-                        <span className="meta">
-                          {d.installed
-                            ? `${d.version ?? "installed"} · ${d.path}`
-                            : "not found on this machine"}
-                        </span>
+                        <span className="meta">{detectedMeta(d)}</span>
                       </div>
                     ))}
                   </div>
@@ -1414,16 +1569,18 @@ export function App() {
                 <p className="sub">
                   {runList.length > 0
                     ? `Oxagen sends each wrapped agent one small prompt ("reply OK") and confirms the run was recorded and sealed. That is your first data in the workspace.`
-                    : `Nothing here to drive: every app you registered is a connected app, which Oxagen governs through its own MCP gateway rather than through a hook. There is no headless prompt to send one. It reports the first time you use it. Open the workspace and watch it arrive.`}
+                    : `Nothing here to drive. A first run sends one prompt through an agent's command line, and no agent you registered has one here. A connected app reports through Oxagen's MCP gateway, and the Cursor editor through ~/.cursor/hooks.json. Each reports the first time you use it. Open the workspace and watch it arrive.`}
                 </p>
                 <div className="agents">
                   {hostHarnesses.map((h) => (
                     <div key={h} className="agent">
-                      {isConnected(h) ? (
-                        // Registered, so it shows; not verifiable, so it gets
+                      {isConnected(h) ||
+                      withoutCommandLine(h, detected?.harnesses ?? null) ? (
+                        // Registered, so it shows; not drivable, so it gets
                         // no checkbox. `tacho verify` returns ok:false for a
-                        // connected app by design — offering it as a target
-                        // reported a failure for something that cannot succeed.
+                        // connected app by design, and for a Cursor with no
+                        // command line: offering either as a target reported
+                        // a failure for something that cannot succeed.
                         <span className="name">{labelOf(h)}</span>
                       ) : (
                         <label className="check">
@@ -1446,13 +1603,15 @@ export function App() {
                       <span className="meta">
                         {isConnected(h)
                           ? "connected · reports when you use it"
-                          : runs[h]
-                            ? runs[h].ok
-                              ? `recorded · ${runs[h].seq ?? "?"} events sealed`
-                              : `failed · ${runs[h].detail}`
-                            : busy === "connect"
-                              ? "running…"
-                              : "ready"}
+                          : withoutCommandLine(h, detected?.harnesses ?? null)
+                            ? "reports when you use the editor"
+                            : runs[h]
+                              ? runs[h].ok
+                                ? `recorded · ${runs[h].seq ?? "?"} events sealed`
+                                : `failed · ${runs[h].detail}`
+                              : busy === "connect"
+                                ? "running…"
+                                : "ready"}
                       </span>
                     </div>
                   ))}
@@ -1541,7 +1700,7 @@ export function App() {
           <>
             <span className="sub">
               {hostHarnesses.length > 0
-                ? `This de-registers ${joinLabels(hostHarnesses)} and deletes the local event log. Sure?`
+                ? `This de-registers every agent enrolled on this machine, including ${joinLabels(hostHarnesses)}, and deletes the local event log. Sure?`
                 : "This removes the command line links, the local event log and your sign-in on this machine. Sure?"}
             </span>
             <button
@@ -1903,6 +2062,30 @@ export function App() {
         </div>
       </section>
 
+      {state?.platform === "macos" && updatePolicy && (
+        <section className="panel" aria-labelledby="updates">
+          <p className="eyebrow" id="updates">
+            Updates
+          </p>
+          <p className="sub">
+            With this on, Oxagen installs each new version in the background,
+            and your next restart runs it.
+          </p>
+          <label className="check">
+            <input
+              type="checkbox"
+              id="auto-update"
+              checked={updatePolicy.auto_update}
+              onChange={(e) => void doSetAutoUpdate(e.target.checked)}
+            />
+            Install updates automatically
+          </label>
+          {updatePolicy.auto_update && updatePolicy.blocker && (
+            <p className="sub">{updatePolicy.blocker}</p>
+          )}
+        </section>
+      )}
+
       {skewNote && (
         <section className="panel" aria-label="Tools out of date">
           <p className="sub">{skewNote}</p>
@@ -1910,7 +2093,7 @@ export function App() {
             <button
               type="button"
               onClick={() =>
-                act("reapply", "tacho", ["enroll"], () =>
+                act("reapply", "tacho", reapplyArgs(), () =>
                   setNotice(
                     "Hooks and the collector re-applied from this app.",
                   ),
@@ -1939,13 +2122,18 @@ export function App() {
         <p className="sub">
           {notice ?? "Run the setup again to register your agents."}
         </p>
-        {retiredHost && (
+        {retiredHost ? (
           <p className="sub">
             This machine was unenrolled while offline. {retiredHost.agent_key}{" "}
             still shows as active on the fleet page until the revoke goes
             through: sign in and uninstall, or revoke it from the fleet page.
           </p>
-        )}
+        ) : pendingRevoke !== null &&
+          !(notice ?? "").includes(pendingRevokeText(pendingRevoke)) ? (
+          // The uninstall's own notice says it first. Once another notice
+          // replaces that one, the step is still owed and still shown.
+          <p className="sub">{pendingRevokeText(pendingRevoke)}</p>
+        ) : null}
         <div className="row">
           <button type="button" className="primary" onClick={restartWizard}>
             Set up again
@@ -1966,10 +2154,12 @@ export function App() {
         <span className="spacer" />
         <span className="version">
           <span className={`dot ${dotClass}`} aria-hidden="true" />
+          {/* "Connected" is a tier (ADR-078), so collector health says
+              "collector running" rather than "connected" (#4318). */}
           {!host
             ? "not set up"
             : daemonUp
-              ? `connected · ${host.host_status}`
+              ? `collector running · ${host.host_status}`
               : "enrolled · collector not answering"}
           {state ? ` · v${state.app_version}` : ""}
         </span>
@@ -1986,13 +2176,23 @@ export function App() {
               {update.caption}
             </span>
           )}
-          {update.offered && busy !== "update" ? (
+          {autoInstalling !== null ? null : installOffered ? (
             <button
               type="button"
               onClick={doInstallUpdate}
               disabled={busy !== null || checking || !state}
             >
               Install
+            </button>
+          ) : installedVersion !== null ? (
+            // A restart while an action runs would be held like a Quit, and
+            // the app would exit instead of reopening.
+            <button
+              type="button"
+              onClick={doRestart}
+              disabled={busy !== null}
+            >
+              Restart
             </button>
           ) : (
             <button
@@ -2068,8 +2268,8 @@ export function App() {
               {state.host_path}: {state.host_error}. The machine may still be
               enrolled, so setup is not offered here, because it would write
               over that file. Run <code>tacho status</code> in a terminal to see
-              what is in place, or <code>tacho unenroll</code> to remove it,
-              then reopen Oxagen.
+              what is in place, or <code>tacho unenroll --all</code> to remove
+              it, then reopen Oxagen.
             </p>
           </section>
         ) : firstRun ? (

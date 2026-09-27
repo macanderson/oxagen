@@ -25,6 +25,10 @@ import {
 } from "@oxagen/oxagen/contracts/repository.tree.get";
 import { INIT_BRANCH } from "@oxagen/oxagen/contracts/repository.init_pr.open";
 import {
+  LEGACY_OXAGEN_DIR,
+  LEGACY_WORKSPACE_TOML_PATH,
+} from "@oxagen/oxagen/steering-repo/paths";
+import {
   GOVERNANCE_PATH,
   parseGovernanceMode,
 } from "./context.steering.policy";
@@ -36,8 +40,8 @@ import {
   type WorkspaceGithub,
 } from "./repository.bound";
 
-export const OXAGEN_DIR = ".oxagen/";
-export const WORKSPACE_TOML_PATH = ".oxagen/workspace.toml";
+export const OXAGEN_DIR = `${LEGACY_OXAGEN_DIR}/`;
+export const WORKSPACE_TOML_PATH = LEGACY_WORKSPACE_TOML_PATH;
 
 export interface RepositoryTreeDeps {
   github: WorkspaceGithub;

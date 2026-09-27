@@ -196,6 +196,7 @@ vi.mock("./plugin-type", async (importOriginal) => {
 });
 
 import { HandlerError, isHandlerError } from "@oxagen/oxagen";
+import { projectRunContextWindows } from "../dispatch/context-projection";
 import {
   AssistantStoppedError,
   AssistantTurnNeedsUserError,
@@ -304,7 +305,11 @@ function makeTx(world: World, captured: Captured) {
     update: (table: unknown) => ({
       set: (set: Record<string, unknown>) => {
         captured.updates.push({ table, set });
-        return { where: () => Promise.resolve() };
+        return {
+          where: () => ({
+            returning: () => Promise.resolve([{ id: CONVERSATION }]),
+          }),
+        };
       },
     }),
   };
@@ -723,6 +728,9 @@ describe("the prepared turn", () => {
       // materialised capabilities and the belt's two meta-tools. An empty
       // allowlist would read "no tools" on a run whose job is calling them.
       toolAllowlist: ["list_runs", "set_budget", SEARCH_TOOLS, LOAD_TOOLS],
+      // The windows the run records are projected as USED_CONTEXT lineage
+      // once it seals (ADR-200).
+      projectContext: projectRunContextWindows,
     });
 
     // The engine is declared the whole belt plus the meta-tools; the model is
@@ -771,7 +779,9 @@ describe("the prepared turn", () => {
         runId: "arun_0123456789abcdef012345",
       },
     });
-    expect(captured.updates[0]!.set).toMatchObject({
+    // The question marked the conversation active first (#4435).
+    expect(captured.updates[0]!.set).toEqual({ updatedAt: expect.any(Date) });
+    expect(captured.updates.at(-1)!.set).toMatchObject({
       activeLeafMessageId: "msg-assistant",
     });
   });
@@ -834,6 +844,44 @@ describe("the prepared turn", () => {
       },
     ]);
     expect(events).toHaveLength(2);
+  });
+
+  // #3370, the finding 9 added on 2026-09-19: the budget pause wrote its
+  // approval with no run, so `run_public_id` stayed null and the Run page's
+  // Policy tab never listed the approval the run was stopped on.
+  it("writes a budget pause's approval against the run the turn opened (negative)", async () => {
+    mocks.createApprovalRequest.mockResolvedValueOnce({
+      approvalId: "appr_budget",
+      approvalPublicId: "apr_budget",
+    });
+    mocks.waitForApproval.mockResolvedValueOnce({
+      approvalId: "appr_budget",
+      resolution: "approved",
+      note: null,
+    });
+    let continued: unknown;
+    // The guard pauses while the engine runs, which is after the run opened.
+    mocks.runGovernedTurn.mockImplementationOnce(async () => {
+      const [, , handlers] = mocks.createTurnBudgetGuard.mock.calls[0]!;
+      continued = await handlers.onPause({
+        costUsd: 1.2,
+        limitUsd: 1,
+        mode: "prompt",
+      });
+      return fakeTurn({});
+    });
+    await runTurn(request);
+    expect(continued).toBe(true);
+    expect(mocks.createApprovalRequest).toHaveBeenCalledTimes(1);
+    // The internal `agent_runs` id, which `resolveRunPublicId` reads back to
+    // the public one. The public `arun_…` id would record null.
+    expect(mocks.createApprovalRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capabilityName: "budget.turn.continue",
+        messageId: "msg-user",
+        runId: "run-uuid",
+      }),
+    );
   });
 
   it("names a parked card by the approval's public id, not its row uuid", async () => {
@@ -986,7 +1034,10 @@ describe("the prepared turn", () => {
         .filter((i) => i.table === schema.messages)
         .map((i) => i.values.role),
     ).toEqual(["user"]);
-    expect(captured.updates).toHaveLength(0);
+    // Only the question's activity mark (#4435). No reply moved the leaf.
+    expect(captured.updates.map((u) => u.set)).toEqual([
+      { updatedAt: expect.any(Date) },
+    ]);
   });
 
   describe("a long thread (#4171)", () => {

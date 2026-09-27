@@ -13,6 +13,7 @@ import {
   capturedDiffOf,
   checkoutOf,
   connectedRunRepositories,
+  foldProvisionalContexts,
   prLinkOf,
   readWorkPrLinks,
   readWorkContexts,
@@ -24,7 +25,13 @@ import {
   WORK_PR_LINK_CAP,
   WORK_SUBAGENT_CAP,
 } from "./lib/run-work";
-import { readWorkPullRequests, type RecordedRunPr } from "./lib/run-work-prs";
+import { readRunCommandRefFrames } from "./lib/run-command-refs";
+import {
+  readLedgerPrReceipts,
+  readWorkPullRequests,
+  type RecordedRunPr,
+} from "./lib/run-work-prs";
+import { readWorkReleases } from "./lib/run-work-releases";
 import { runScope } from "./run.list";
 
 export type RunWorkDeps = RunReadDeps & {
@@ -34,6 +41,10 @@ export type RunWorkDeps = RunReadDeps & {
   prLinks: typeof readWorkPrLinks;
   repositories: typeof connectedRunRepositories;
   pullRequests: typeof readWorkPullRequests;
+  /** The command and network frames that could name a release (#3890). */
+  commandFrames: typeof readRunCommandRefFrames;
+  /** The releases those frames created, with GitHub's state for each. */
+  releases: typeof readWorkReleases;
 };
 export function createRunWorkGetHandler(
   deps: RunWorkDeps,
@@ -47,50 +58,14 @@ export function createRunWorkGetHandler(
     const scope = runScope(ctx);
     const run = await resolveRun(deps, ctx, input.runId);
     if (run.source !== "tacho") {
-      const receipts: RecordedRunPr[] = [];
-      let cursor = "0";
-      let complete = false;
-      for (let page = 0; page < 20; page++) {
-        const events = await deps.store.readAttemptEventsSince(
-          run.runId,
-          cursor,
-          500,
-        );
-        for (const event of events) {
-          if (
-            event.eventType !== "provider_publish.pull_request_opened" ||
-            typeof event.payload !== "object" ||
-            event.payload === null
-          )
-            continue;
-          const payload = event.payload as Record<string, unknown>;
-          if (
-            typeof payload.provider_repository_id !== "string" ||
-            typeof payload.pull_request_number !== "number"
-          )
-            continue;
-          receipts.push({
-            repositoryId: payload.provider_repository_id,
-            number: payload.pull_request_number,
-            headSha:
-              typeof payload.head_commit_sha === "string"
-                ? payload.head_commit_sha
-                : null,
-          });
-        }
-        if (events.length < 500) {
-          complete = true;
-          break;
-        }
-        cursor = events.at(-1)!.runSeq;
-      }
+      const ledger = await readLedgerPrReceipts(deps.store, run.runId);
       const repositories = await deps.repositories(scope);
       const prs = await deps.pullRequests(
         scope,
         [],
         repositories,
         undefined,
-        receipts,
+        ledger.receipts,
       );
       return {
         runId: input.runId,
@@ -99,24 +74,32 @@ export function createRunWorkGetHandler(
         diffs: [],
         pullRequests: prs.pullRequests,
         subagents: [],
+        // A ledger run records no shell commands, so it records no release
+        // (#3890).
+        releases: [],
         complete: false,
         warnings: [
           "checkout_context_not_recorded",
           ...prs.warnings,
-          ...(complete ? [] : ["ledger_event_limit"]),
+          ...(ledger.complete ? [] : ["ledger_event_limit"]),
         ],
       };
     }
-    const [contexts, diffs, subagents, links, repositories] = await Promise.all(
-      [
+    const [contexts, diffs, subagents, links, repositories, frames] =
+      await Promise.all([
         deps.contexts(run.sessionUuid),
         deps.diffs(run.sessionUuid),
         deps.subagents(run.sessionUuid),
         deps.prLinks(run.sessionUuid),
         deps.repositories(scope),
-      ],
-    );
-    const checkouts = contexts
+        deps.commandFrames(run.sessionUuid),
+      ]);
+    // A session's first hook is sealed before its first Git read, so it names
+    // a path and nothing else. It folds into the Git context recorded at the
+    // same path, rather than standing as a checkout no repository or branch
+    // can match, which kept the work incomplete for good (#3791).
+    const located = foldProvisionalContexts(contexts);
+    const checkouts = located.rows
       .slice(0, WORK_CONTEXT_CAP)
       .map((row) => checkoutOf(row, repositories));
     // A PR the harness linked is a receipt: it names the PR outright, so it
@@ -145,15 +128,18 @@ export function createRunWorkGetHandler(
         headSha: null,
       });
     }
-    const prs = await deps.pullRequests(
-      scope,
-      checkouts,
-      repositories,
-      undefined,
-      receipts,
-    );
-    const warnings = [...new Set([...prs.warnings, ...linkWarnings])];
+    // The pull requests and the releases are separate GitHub reads, so they
+    // run side by side.
+    const [prs, releases] = await Promise.all([
+      deps.pullRequests(scope, checkouts, repositories, undefined, receipts),
+      deps.releases(scope, frames, checkouts, repositories),
+    ]);
+    const warnings = [
+      ...new Set([...prs.warnings, ...linkWarnings, ...releases.warnings]),
+    ];
     if (links.length > WORK_PR_LINK_CAP) warnings.push("pr_link_limit");
+    // Read before the fold: a query that hit its limit may have cut rows,
+    // whatever the fold leaves.
     if (contexts.length > WORK_CONTEXT_CAP) warnings.push("checkout_limit");
     if (diffs.length > WORK_DIFF_CAP) warnings.push("captured_diff_limit");
     if (subagents.length > WORK_SUBAGENT_CAP) warnings.push("subagent_limit");
@@ -167,9 +153,14 @@ export function createRunWorkGetHandler(
       runId: input.runId,
       machine: run.row.host?.hostname ? { name: run.row.host.hostname } : null,
       checkouts,
-      diffs: diffs.slice(0, WORK_DIFF_CAP).map(capturedDiffOf),
+      diffs: diffs.slice(0, WORK_DIFF_CAP).map((row) => {
+        const diff = capturedDiffOf(row);
+        const folded = located.alias.get(diff.checkoutId);
+        return folded === undefined ? diff : { ...diff, checkoutId: folded };
+      }),
       pullRequests: prs.pullRequests,
       subagents: subagents.slice(0, WORK_SUBAGENT_CAP).map(subagentOf),
+      releases: releases.releases,
       complete: warnings.length === 0,
       warnings,
     };
@@ -183,4 +174,6 @@ export const runWorkGetHandler = createRunWorkGetHandler({
   prLinks: readWorkPrLinks,
   repositories: connectedRunRepositories,
   pullRequests: readWorkPullRequests,
+  commandFrames: readRunCommandRefFrames,
+  releases: readWorkReleases,
 });

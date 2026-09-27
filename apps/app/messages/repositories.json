@@ -618,7 +618,6 @@
           "governanceToml": "mode = {mode}",
           "rules": "published records land here",
           "proposals": "candidates; steer nothing",
-          "agents": "one definition per agent",
           "gitignore": "ignore .stella/private/ and the local .oxagen/workspace.json"
         },
         "checksLabel": "What the checks will assert",

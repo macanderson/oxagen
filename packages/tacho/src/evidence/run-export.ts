@@ -19,7 +19,9 @@
  *
  *   wrapped frame (`tse_…`)
  *     link     prev_hash is the previous frame's hash (sha256("") at seq 0)
- *              and seq is dense.
+ *              and seq is dense, both within the frame's attempt. The run's
+ *              own chain is one attempt and each subagent chain is another,
+ *              whose `attempt_id` is its session uuid (#3823).
  *     export   the exact exported segment bytes match the signed
  *              archive_segment_digest, authenticating the projection.
  *     digest   from format 3, the frame carries `event`, the sealed Tacho
@@ -34,7 +36,7 @@
  * Ed25519 signature and key id, each ledger attempt's `event_stream_digest`
  * fold, and the redaction summary against the frames it summarises.
  */
-import { hashEvent } from "../chain";
+import { eventHashHolds } from "../chain";
 import { digestBytes, digestJcs, jcs, type JsonValue } from "../digest";
 import { keyIdForPublicKey } from "../host/key-id";
 import { type Attestation, verifyAttestation } from "./attestation";
@@ -68,6 +70,24 @@ export interface RunExportAttempt {
   enforcement_tier: string;
   completeness_gaps: string[];
   replay_grade: string | null;
+  /**
+   * Set on an attempt that is one of a wrapped run's subagent chains. Such
+   * an attempt's `attempt_id` is the chain's session uuid, and its frames
+   * chain from genesis at their own seq 0. Absent on the run's own chain
+   * and on every ledger attempt.
+   */
+  chain?: RunExportAttemptChain;
+}
+
+/** Where a subagent chain sits in its run. */
+export interface RunExportAttemptChain {
+  session_uuid: string;
+  /** The chain that spawned this one. */
+  parent_session_uuid: string | null;
+  subagent_id: string | null;
+  subagent_type: string | null;
+  /** The parent's tool call that spawned the subagent. */
+  spawn_tool_use_id: string | null;
 }
 
 export interface RunExportManifest {
@@ -145,6 +165,10 @@ export function normalizeInstant(value: string): string {
  *
  * The export and both verifiers build the frame with this rule, so a member
  * edited beside the event no longer matches what the event says.
+ *
+ * The top-level `body` repeats `event.body` on purpose. Format 3 keeps it so
+ * every wrapped frame has one shape, and the zip stores the copy for a few
+ * bytes. docs/capabilities/run.export.md records the decision (#3814).
  */
 export function wrappedFrameOf(
   event: Record<string, JsonValue | undefined>,
@@ -329,20 +353,21 @@ function checkWrappedFrame(
     return { digest: "broken", reasons: ["event is not a JSON object"] };
   }
   const reasons: string[] = [];
-  // A wrapped run's one attempt is its session, so every event must be one
-  // of that session's: a frame from another chain does not belong here.
+  // A wrapped run's attempt is one chain: its own session, or one subagent
+  // chain (#3823). Every event must be that chain's: a frame from another
+  // chain does not belong here.
   if (event["session_uuid"] !== attemptId) {
     reasons.push(
       `the event belongs to session ${String(event["session_uuid"])}, not ${attemptId}`,
     );
   }
-  let recomputed: string | null;
+  let holds: boolean;
   try {
-    recomputed = hashEvent(event);
+    holds = eventHashHolds(event, frame["hash"]);
   } catch {
-    recomputed = null;
+    holds = false;
   }
-  if (recomputed !== frame["hash"]) {
+  if (!holds) {
     reasons.push("the event does not hash to hash");
   }
   const content = asRecord(frame["content"]);

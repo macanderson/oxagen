@@ -21,7 +21,12 @@ describe("get_nav_counts contract", () => {
   });
 
   it("carries each count as a nullable non-negative integer", () => {
-    const counts = { approvals: 3, proposals: null, incidents: null };
+    const counts = {
+      approvals: 3,
+      interjections: 1,
+      proposals: null,
+      incidents: null,
+    };
     expect(shellNavCountsGet.output.parse(counts)).toEqual(counts);
     expect(
       shellNavCountsGet.output.safeParse({ ...counts, approvals: -1 }).success,
@@ -29,6 +34,10 @@ describe("get_nav_counts contract", () => {
     expect(
       shellNavCountsGet.output.safeParse({ approvals: 0, proposals: 0 })
         .success,
+    ).toBe(false);
+    const { interjections: _i, ...withoutInterjections } = counts;
+    expect(
+      shellNavCountsGet.output.safeParse(withoutInterjections).success,
     ).toBe(false);
   });
 });

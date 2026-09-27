@@ -28,6 +28,7 @@ import {
   BUNDLE_FEATURE_HOOK_FAIL_OPEN,
   BUNDLE_FEATURE_MODEL_PRICES,
   BUNDLE_FEATURE_STEERING_MANIFEST,
+  BUNDLE_FEATURE_UNBOUND_REPO,
   digestJcs,
   type JsonValue,
   type SteeringManifest,
@@ -40,6 +41,7 @@ import { and, asc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { z } from "zod";
 import { type BundleSigner, bundleSignerFromEnv } from "./tacho-bundle-signing";
 import { tachoHostApiKeyScopeSchema } from "./tacho-enrollment";
+import { agentBeltDenyPatterns } from "./toolbelts";
 import {
   hostModelBaseUrlsColumnReady,
   hostReadColumns,
@@ -47,7 +49,6 @@ import {
 import {
   type AgentBudgetDoc,
   budgetDocFromVersion,
-  containmentFromVersion,
   deriveBundleBudget,
   mapMandateToBundlePermissions,
 } from "./tacho-mandate";
@@ -61,6 +62,10 @@ import {
   readTachoSessionPolicyIn,
   type SessionPolicyTx,
 } from "./tacho-session-policy";
+import {
+  resolveUnboundRepo,
+  type UnboundRepoClause,
+} from "./tacho-unbound-repo";
 
 export type TachoHostRow = typeof schema.tachoHosts.$inferSelect;
 export type ControlEnvelope = z.output<typeof controlEnvelopeSchema>;
@@ -81,9 +86,11 @@ interface TachoTx {
     tachoControlCommands: { findMany: (args: unknown) => Promise<unknown> };
     retentionPolicyVersions: { findFirst: (args: unknown) => Promise<unknown> };
     // The mandate read (`resolveHostMandate`): the host's agent identity and
-    // its active version's config, for the budget half of the mandate.
+    // its active version's config, for the budget half of the mandate, and
+    // the host's runtime, for containment (ADR-204).
     agents: { findFirst: (args: unknown) => Promise<unknown> };
     agentVersions: { findFirst: (args: unknown) => Promise<unknown> };
+    runtimes: { findFirst: (args: unknown) => Promise<unknown> };
     // The decision-rules half of the mandate. `loadRuleSetIn` (`@oxagen/rules`)
     // reads it, and it runs on a cast to the real `Tx` because that signature
     // asks for the whole thing. Naming the table it touches is what keeps the
@@ -91,6 +98,12 @@ interface TachoTx {
     // type-checks past the cast and throws at the first call (#3710).
     workspaces: { findFirst: (args: unknown) => Promise<unknown> };
   };
+  // The `unbound_repo` read (`resolveUnboundRepo`, #3941) also runs on a cast
+  // to the real `Tx`, for a host that advertised the field: the head skills
+  // configuration, the workspace's slug and linked repositories, and, in a
+  // savepoint (`transaction`) with the organisation-wide read on, every
+  // repository binding head, binding and connection in the organisation.
+  transaction: (fn: (tx: never) => Promise<unknown>) => Promise<unknown>;
   // The steering read (`readWorkspaceSteering`): the ledger count and the
   // records joined to their pinned versions. The tool-RBAC half of the
   // mandate (`fetchAgentRunAuthzIn`, `@oxagen/iam`) also selects through
@@ -389,12 +402,19 @@ function modelPrices(host: TachoHostRow): {
 
 /** The tool-RBAC-and-budget half of a host's mandate, resolved for the wire. */
 export interface HostMandate {
-  invalidDefinition?: true;
+  /** The active version's config holds a budget it cannot read. */
+  invalidAgentConfig?: true;
   permissions: PolicyBundle["permissions"];
   budget: PolicyBundle["budget"];
   models?: PolicyBundle["models"];
-  /** The active definition requires the contained tier (ADR-152). */
+  /** The host's runtime requires the contained tier (ADR-152, ADR-204). */
   containment?: { required: true };
+  /**
+   * What the host asks when a session starts in a repository the
+   * organisation has not bound (#3941). Resolved only for a host that
+   * advertised `BUNDLE_FEATURE_UNBOUND_REPO` whose workspace has skills on.
+   */
+  unboundRepo?: UnboundRepoClause;
 }
 
 /**
@@ -434,22 +454,14 @@ function steeringManifest(
 }
 
 /**
- * The agent-definition `budget` and `containment` tables off the host's
- * agent's ACTIVE version definition source, with config as a fallback for
- * legacy versions. It is undefined when the host names no agent or has no
- * active version, and each table is undefined when the definition declares
- * none.
+ * The `budget` table off the config of the host's agent's ACTIVE version
+ * (ADR-198). It is undefined when the host names no agent, the agent has no
+ * active version, or the config declares no budget.
  */
-async function readAgentDefinition(
+async function readAgentVersionBudget(
   tx: TachoTx,
   agentId: string | null,
-): Promise<
-  | {
-      budget: AgentBudgetDoc | undefined;
-      containment: { required: true } | undefined;
-    }
-  | undefined
-> {
+): Promise<AgentBudgetDoc | undefined> {
   if (agentId === null) return undefined;
   const agent = (await tx.query.agents.findFirst({
     where: eq(schema.agents.id, agentId),
@@ -458,22 +470,46 @@ async function readAgentDefinition(
   if (!agent?.activeVersionId) return undefined;
   const version = (await tx.query.agentVersions.findFirst({
     where: eq(schema.agentVersions.id, agent.activeVersionId),
-    columns: { config: true, definitionSource: true },
-  })) as { config: unknown; definitionSource: string | null } | undefined;
-  return version === undefined
-    ? undefined
-    : {
-        budget: budgetDocFromVersion(version),
-        containment: containmentFromVersion(version),
-      };
+    columns: { config: true },
+  })) as { config: unknown } | undefined;
+  return version === undefined ? undefined : budgetDocFromVersion(version);
+}
+
+/**
+ * Whether the host's runtime requires the contained launcher (ADR-152,
+ * ADR-204). The runtime is the one the host enrollment binds, or the
+ * agent's current runtime for a host that binds none.
+ *
+ * The read does not filter out a deleted runtime. Deleting a runtime must
+ * not lift containment from a host still bound to it, so a deleted runtime
+ * that required containment still requires it here.
+ */
+async function readRuntimeContainment(
+  tx: TachoTx,
+  host: TachoHostRow,
+): Promise<boolean> {
+  let runtimeId = host.runtimeId ?? null;
+  if (runtimeId === null && host.agentId !== null) {
+    const agent = (await tx.query.agents.findFirst({
+      where: eq(schema.agents.id, host.agentId),
+      columns: { runtimeId: true },
+    })) as { runtimeId: string | null } | undefined;
+    runtimeId = agent?.runtimeId ?? null;
+  }
+  if (runtimeId === null) return false;
+  const runtime = (await tx.query.runtimes.findFirst({
+    where: eq(schema.runtimes.id, runtimeId),
+    columns: { containmentRequired: true },
+  })) as { containmentRequired: boolean } | undefined;
+  return runtime?.containmentRequired === true;
 }
 
 /**
  * The host's mandate, resolved from the agent it wraps: tool RBAC and
  * external-tool rules mapped onto the harness permission shape
  * (`mapMandateToBundlePermissions`, `packages/handlers/src/lib/tacho-mandate.ts`),
- * and the budget mode derived from the agent's own declared budget
- * (`deriveBundleBudget`).
+ * the budget mode derived from the agent's own declared budget
+ * (`deriveBundleBudget`), and containment from the host's runtime.
  *
  * Each half degrades independently, never to an invented value: tool RBAC
  * contributes nothing when the host names no agent principal
@@ -481,7 +517,9 @@ async function readAgentDefinition(
  * `register_agent` runs), the workspace's decision rules still apply either
  * way (they govern the workspace, not one agent's own grants), and the
  * budget stays `observed` when the host names no agent, the agent has no
- * published version, or its active definition carries no budget table.
+ * published version, or its active version's config carries no budget table.
+ * Containment is read before the budget and apart from it, so a budget the
+ * host cannot read never drops the runtime's containment from the mandate.
  */
 export async function resolveHostMandate(
   tx: TachoTx,
@@ -510,45 +548,75 @@ export async function resolveHostMandate(
         return scope.mcp?.ruleSets.flat() ?? [];
       })()
     : [];
+  // The agent's toolbelt (ADR-198): every imported MCP tool the belt leaves
+  // out is denied on the host, beside the RBAC rules. A belt narrows what the
+  // agent can reach and never allows anything, so it contributes deny rules
+  // only. A host enrolled with no agent carries no belt.
+  const beltDenies = host.agentId
+    ? await agentBeltDenyPatterns(tx as unknown as Tx, ctx, host.agentId)
+    : [];
   const ruleSet = await loadRuleSetIn(tx as unknown as Tx, ctx.workspaceId);
   const permissions = mapMandateToBundlePermissions({
-    mcpRules,
+    mcpRules: [
+      ...mcpRules,
+      ...beltDenies.map((pattern) => ({ pattern, effect: "deny" as const })),
+    ],
     externalToolRules: ruleSet?.rules ?? [],
   });
   const models = await workspaceModels(tx, ctx, host);
+  const containment = (await readRuntimeContainment(tx, host))
+    ? { containment: { required: true as const } }
+    : {};
+  const unbound = await unboundRepo(tx, ctx, host);
   try {
-    const definition = await readAgentDefinition(tx, host.agentId);
-    const budget = deriveBundleBudget(definition?.budget, {
-      enforcesDaily:
-        host.bundleFeatures?.includes(BUNDLE_FEATURE_DAILY_BUDGET) === true,
-    });
-    return {
-      permissions,
-      budget,
-      ...models,
-      ...(definition?.containment
-        ? { containment: definition.containment }
-        : {}),
-    };
+    const budget = deriveBundleBudget(
+      await readAgentVersionBudget(tx, host.agentId),
+      {
+        enforcesDaily:
+          host.bundleFeatures?.includes(BUNDLE_FEATURE_DAILY_BUDGET) === true,
+      },
+    );
+    return { permissions, budget, ...models, ...unbound, ...containment };
   } catch (error) {
-    if (
-      !isHandlerError(error) ||
-      !["invalid_definition_source", "invalid_definition_budget"].includes(
-        error.reason,
-      )
-    )
+    if (!isHandlerError(error) || error.reason !== "invalid_agent_config")
       throw error;
     logger.warn(
       { host: host.publicId, agentId: host.agentId, reason: error.reason },
-      "Invalid active definition suspends governed actions while evidence intake continues",
+      "Invalid active agent config suspends governed actions while evidence intake continues",
     );
     return {
       permissions,
       budget: { mode: "observed" },
-      invalidDefinition: true,
+      invalidAgentConfig: true,
       ...models,
+      ...unbound,
+      ...containment,
     };
   }
+}
+
+/** Whether this host named `unbound_repo` among the fields it can parse. */
+function parsesUnboundRepo(host: TachoHostRow): boolean {
+  const advertised: unknown = host.bundleFeatures;
+  return (
+    Array.isArray(advertised) &&
+    advertised.includes(BUNDLE_FEATURE_UNBOUND_REPO)
+  );
+}
+
+/**
+ * The `unbound_repo` clause for a host that advertised it can parse one
+ * (#3941). A host that did not is asked nothing and costs no read: the
+ * feature is checked before the transaction is touched.
+ */
+async function unboundRepo(
+  tx: TachoTx,
+  ctx: { orgId: string; workspaceId: string },
+  host: TachoHostRow,
+): Promise<Pick<HostMandate, "unboundRepo">> {
+  if (!parsesUnboundRepo(host)) return {};
+  const clause = await resolveUnboundRepo(tx as unknown as Tx, ctx, true);
+  return clause === undefined ? {} : { unboundRepo: clause };
 }
 
 /**
@@ -603,7 +671,7 @@ export function unsignedBundle(
         : ("unreadable" as const)
       : undefined;
   const status = tachoHostStatusSchema.parse(
-    (mandate.invalidDefinition || containment === "unreadable") &&
+    (mandate.invalidAgentConfig || containment === "unreadable") &&
       host.status === "active"
       ? "suspended"
       : host.status,
@@ -630,6 +698,10 @@ export function unsignedBundle(
     ...hookFailOpen(host),
     ...(containment === "signed"
       ? { containment: { required: true as const } }
+      : {}),
+    // Only to a host that can parse it: the host's bundle schema is strict.
+    ...(mandate.unboundRepo !== undefined && parsesUnboundRepo(host)
+      ? { unbound_repo: mandate.unboundRepo }
       : {}),
   };
   const etag = digestJcs(content as unknown as JsonValue).slice(

@@ -79,6 +79,15 @@ export const TACHO_EVENTS_INSERT_MAX_MEMORY_BYTES = 512 * 1024 * 1024;
  * of JSON (`TACHO_MAX_REQUEST_BYTES`), and 512 MiB is a third of the cap. An
  * insert that passes the bound fails with code 241, which ingest answers 503
  * with Retry-After.
+ *
+ * Measured (#4316), on ClickHouse 24.8 as CI runs it: a full request of the
+ * smallest frames, 5,692 frames in 4 MiB of JSON, peaks at 76 MiB once
+ * migration 0033 keeps every insert in the compact part layout. Before 0033
+ * the same batch wrote a wide part and failed at the 512 MiB bound every
+ * time. `tacho-events-insert.integration.test.ts` repeats the measurement on
+ * every CI run and prints it. Production's own week of inserts is not
+ * recorded here: its ClickHouse logs reach CloudWatch at warning level, with
+ * no per-query memory, and the table held no rows on 2026-09-25.
  */
 export const TACHO_EVENTS_INSERT_SETTINGS: ClickHouseSettings = {
   max_memory_usage: String(TACHO_EVENTS_INSERT_MAX_MEMORY_BYTES),
@@ -141,6 +150,12 @@ export interface TachoFrameRow {
   /** The reasoning effort the harness ran a model call at; empty when unrecorded. */
   effort?: string;
   /**
+   * When the control plane received the frame, as ClickHouse DateTime64
+   * text in UTC. The server's clock, never the producer's. Set by every read
+   * that projects the frame columns; absent on a row a caller built itself.
+   */
+  receivedAt?: string;
+  /**
    * The chain the frame was recorded on, and where that chain sits in the
    * run. Set only by {@link selectTachoSubagentEvents}, which reads frames
    * from more than one chain; a read of one session's chain leaves them unset.
@@ -182,6 +197,7 @@ interface RawTachoFrameRow {
   ttft_ms: string | number | null;
   api_duration_ms: string | number | null;
   effort?: string;
+  received_at_text?: string;
 }
 
 interface RawTachoChainFrameRow extends RawTachoFrameRow {
@@ -194,11 +210,19 @@ interface RawTachoChainFrameRow extends RawTachoFrameRow {
   spawn_depth: string | number;
 }
 
-/** The frame columns every read of `tacho_events` projects, in one place. */
+/**
+ * The frame columns every read of `tacho_events` projects, in one place.
+ *
+ * `received_at` is projected under another name. ClickHouse resolves a
+ * SELECT alias before a column of the same name anywhere in the query, so
+ * `toString(received_at) AS received_at` would turn a `WHERE received_at >`
+ * filter into a string comparison.
+ */
 const FRAME_COLUMNS = `
         seq, toString(ts) AS ts, event_id, kind, prev_hash, hash, content_digest, bytes_ref,
         redactions, body, source, fidelity, attrs, tool_name, tool_status, tool_use_id, model, provider,
-        policy_decision, cost_usd_micros, turn_seq, ttft_ms, api_duration_ms, effort`;
+        policy_decision, cost_usd_micros, turn_seq, ttft_ms, api_duration_ms, effort,
+        toString(received_at) AS received_at_text`;
 
 /**
  * A wrapped session's frames past `afterSeq`, in sequence order. The table is
@@ -285,6 +309,11 @@ function frameRowOf(r: RawTachoFrameRow): TachoFrameRow {
     apiDurationMs: nullableCount(r.api_duration_ms),
     // The reasoning effort the harness ran the call at; empty when unrecorded.
     effort: r.effort ?? "",
+    // When the control plane received the frame. A read that projects other
+    // columns leaves it off.
+    ...(r.received_at_text === undefined
+      ? {}
+      : { receivedAt: r.received_at_text }),
   };
 }
 
@@ -317,6 +346,12 @@ export async function selectTachoSubagentEvents(args: {
    */
   sessionUuids?: readonly string[];
   after: TachoChainPosition | null;
+  /**
+   * The last seq to read on each chain. With `after` just below it and one
+   * chain listed, the read returns one exact frame, seq 0 included, from a
+   * bounded range.
+   */
+  throughSeq?: number;
   limit: number;
 }): Promise<TachoFrameRow[]> {
   const res = await chSelect<RawTachoChainFrameRow>({
@@ -339,6 +374,7 @@ export async function selectTachoSubagentEvents(args: {
             ? ""
             : "AND (session_uuid, seq) > ({afterSession:UUID}, {afterSeq:UInt64})"
         }
+        ${args.throughSeq === undefined ? "" : "AND seq <= {throughSeq:Int64}"}
       ORDER BY session_uuid ASC, seq ASC
       LIMIT {limit:UInt32}
     `,
@@ -350,6 +386,7 @@ export async function selectTachoSubagentEvents(args: {
       ...(args.after === null
         ? {}
         : { afterSession: args.after.sessionUuid, afterSeq: args.after.seq }),
+      ...(args.throughSeq === undefined ? {} : { throughSeq: args.throughSeq }),
       limit: args.limit,
     },
   });
@@ -362,6 +399,62 @@ export async function selectTachoSubagentEvents(args: {
     subagentType: r.subagent_type ?? "",
     spawnToolUseId: r.spawn_tool_use_id ?? "",
     spawnDepth: Number(r.spawn_depth ?? 0),
+  }));
+}
+
+/** A chain's last readable frame, and how many frames it holds. */
+export interface TachoChainHead {
+  sessionUuid: string;
+  lastSeq: number;
+  /**
+   * Distinct seqs the chain holds. Ingest can accept a chain with a gap, so
+   * this can be less than `lastSeq + 1`.
+   */
+  frameCount: number;
+}
+
+/**
+ * The last seq ClickHouse holds on each listed chain under a root session,
+ * so a reader learns a subagent chain moved once its frame is readable
+ * (#3823). Postgres `seq_count` moves at ingest before the frame is inserted
+ * here, so a head read there can name a frame no read returns yet.
+ *
+ * Each chain is fenced by `root_session_uuid`, so a chain from another run
+ * answers nothing. A listed chain with no frame is absent from the answer.
+ * No `FINAL`: a redelivered row carries the same seq, so `max` and the
+ * distinct count are unchanged.
+ * The list puts `session_uuid` in the primary key's range. Tenant-filtered
+ * by the ambient scope through chSelect.
+ */
+export async function selectTachoChainHeads(args: {
+  rootSessionUuid: string;
+  sessionUuids: readonly string[];
+}): Promise<TachoChainHead[]> {
+  if (args.sessionUuids.length === 0) return [];
+  const res = await chSelect<{
+    session_uuid: string;
+    last_seq: string | number;
+    frame_count: string | number;
+  }>({
+    query: `
+      SELECT session_uuid, max(seq) AS last_seq, uniqExact(seq) AS frame_count
+      FROM ${TACHO_EVENTS_TABLE}
+      WHERE org_id = {orgId:UUID}
+        AND workspace_id = {workspaceId:UUID}
+        AND session_uuid IN {sessionUuids:Array(UUID)}
+        AND root_session_uuid = {rootSessionUuid:UUID}
+      GROUP BY session_uuid
+      ORDER BY session_uuid ASC
+    `,
+    params: {
+      rootSessionUuid: args.rootSessionUuid,
+      sessionUuids: [...args.sessionUuids],
+    },
+  });
+  return res.data.map((r) => ({
+    sessionUuid: r.session_uuid,
+    lastSeq: Number(r.last_seq),
+    frameCount: Number(r.frame_count),
   }));
 }
 
@@ -487,6 +580,14 @@ export async function selectTachoStoredFrames(args: {
  * in, which is the day the host charged it to. `FINAL` collapses a
  * redelivered frame so it is counted once.
  *
+ * The table partitions by the month of `received_at` (#4297), so the `ts`
+ * filter alone reads every month the workspace holds. The `received_at`
+ * bound keeps the read to the months around the day. It does not change
+ * which frames count: a frame stamped on the day reached the control plane
+ * no earlier than the day's start less the host clock's lead, and the bound
+ * allows a lead of one day. A host whose clock runs further ahead stamps its
+ * frames with a day that has not begun.
+ *
  * `hostEnrollmentIds` are the agent's hosts, every status included: a host
  * revoked at noon still spent its morning. Returns micro-USD by host
  * enrollment id; a host with no priced call that day is absent.
@@ -515,6 +616,7 @@ export async function selectAgentDaySpend(args: {
         AND cost_usd_micros IS NOT NULL
         AND ts >= toDateTime64({start:String}, 3, 'UTC')
         AND ts < toDateTime64({start:String}, 3, 'UTC') + INTERVAL 1 DAY
+        AND received_at >= toDateTime64({start:String}, 3, 'UTC') - INTERVAL 1 DAY
       GROUP BY host_enrollment_id
     `,
     params: {

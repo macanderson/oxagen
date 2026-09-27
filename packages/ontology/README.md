@@ -81,6 +81,10 @@ database provisioning, and the Neo4j schema migration.
   organization back (ADR-098).
 - Neo4j holds entities, relationships, lineage, and agent memory. Transactional
   state and counters stay out of it.
+- A new relationship type needs no DDL. `src/schema.cypher` lists each one in
+  its "New edge types" comment. The newest is `USED_CONTEXT`, from an
+  `:Execution` to each `:ContextManifest` its model requests recorded
+  (ADR-200).
 
 ## Tests
 

@@ -4,6 +4,7 @@ import { billingDunningSweep } from "./functions/billing.dunning-sweep";
 import { billingUsageDelivery } from "./functions/billing.usage-delivery";
 import { billingGauClose } from "./functions/billing.gau-close";
 import { costRunRollup } from "./functions/cost.run-rollup";
+import { runFit } from "./functions/run.fit";
 import { costRunProgress } from "./functions/cost.run-progress";
 import { tachoSessionIdleClose } from "./functions/tacho.session-idle-close";
 import { runLedgerIdleClose } from "./functions/run.ledger-idle-close";
@@ -45,6 +46,11 @@ import { mcpCredentialGrantRetention } from "./functions/mcp.credential-grant-re
 import { pluginCatalogSync } from "./functions/plugin.catalog-sync";
 import { schemaReconcile } from "./functions/schema.reconcile";
 import { memoryDecayPass } from "./functions/memory.decay-pass";
+import { stellaSessionArchive } from "./functions/stella.session-archive";
+import {
+  embeddingsBackfill,
+  embeddingsBackfillSchedule,
+} from "./functions/embeddings.backfill";
 import { observabilityCaptureFailure } from "./functions/observability.capture-failure";
 import {
   evidenceRunExport,
@@ -57,6 +63,9 @@ import {
   runEnrichOnFailure,
   runEnrichmentSweep,
 } from "./functions/run.enrich";
+import { runPullRequestBackfill } from "./functions/run.pull-request-backfill";
+import { agentInterjectionTimeout } from "./functions/agent.interjection-timeout";
+import { agentInterjectionTimeoutSweep } from "./functions/agent.interjection-timeout-sweep";
 
 // The DurableFunction objects returned by createFunction are also valid Inngest
 // function instances at runtime (they are Object.assign-ed Inngest functions).
@@ -71,6 +80,7 @@ export const functions: any[] = [
   billingGauClose,
   billingUsageDelivery,
   costRunRollup,
+  runFit,
   costRunProgress,
   tachoSessionIdleClose,
   runLedgerIdleClose,
@@ -105,6 +115,9 @@ export const functions: any[] = [
   pluginCatalogSync,
   schemaReconcile,
   memoryDecayPass,
+  stellaSessionArchive,
+  embeddingsBackfill,
+  embeddingsBackfillSchedule,
   observabilityCaptureFailure,
   evidenceRunExport,
   evidenceRunExportOnFailure,
@@ -113,4 +126,7 @@ export const functions: any[] = [
   runEnrich,
   runEnrichOnFailure,
   runEnrichmentSweep,
+  runPullRequestBackfill,
+  agentInterjectionTimeout,
+  agentInterjectionTimeoutSweep,
 ].filter((fn): fn is NonNullable<typeof fn> => fn != null);

@@ -3,7 +3,8 @@
 // test in agents.test.tsx does not draw: no operator, an operator with no name
 // or a blank one, no key, no description, no spend basis, no mandate count,
 // and a sort over columns where some rows hold nothing, which sort last in
-// either direction. Axe runs after every test (INV-26).
+// either direction, and the built-in assistant, which offers no action. Axe
+// runs after every test (INV-26).
 import {
   cleanup,
   fireEvent,
@@ -106,6 +107,27 @@ describe("AgentsTable › missing values", () => {
     expect(blank).toHaveTextContent("?");
   });
 
+  it("draws the owner's avatar when they set one, and their initials when they did not", () => {
+    renderTable([
+      row("pictured", {
+        operatorAvatarUrl: "https://avatars.example.com/marcus.png",
+      }),
+      row("plain", { operatorAvatarUrl: null }),
+    ]);
+    const [pictured, plain] = rows();
+    if (pictured === undefined || plain === undefined)
+      throw new Error("rows not drawn");
+    const image = within(pictured).getByTestId("operator-avatar");
+    expect(image).toHaveAttribute("data-avatar", "image");
+    expect(image).toHaveAttribute(
+      "src",
+      "https://avatars.example.com/marcus.png",
+    );
+    const initials = within(plain).getByTestId("operator-avatar");
+    expect(initials).toHaveAttribute("data-avatar", "initials");
+    expect(initials).toHaveTextContent("MB");
+  });
+
   it("names a keyless row by its slug in the list and in its actions", () => {
     renderTable([
       row("keyless", { agentKey: null, mandates: null, description: null }),
@@ -118,6 +140,31 @@ describe("AgentsTable › missing values", () => {
     expect(only).toHaveTextContent("not recorded");
     expect(
       within(only).getByRole("button", { name: "Deregister" }),
+    ).toBeInTheDocument();
+  });
+
+  // #4350: Deregister on the built-in assistant suspended the principal
+  // stella acts through, and stella stopped answering in the workspace.
+  it("offers the built-in assistant no action, only a managed badge (negative)", () => {
+    renderTable([row("qa-chat", { managed: true }), row("release-bot")]);
+    operations();
+    const byHref = (slug: string) => {
+      const found = rows().find(
+        (r) => r.querySelector("a")?.getAttribute("href") === href(slug),
+      );
+      if (found === undefined) throw new Error(`no row for ${slug}`);
+      return found;
+    };
+    const assistant = byHref("qa-chat");
+    expect(
+      within(assistant).queryByRole("button", { name: "Deregister" }),
+    ).toBeNull();
+    expect(within(assistant).queryByRole("link", { name: "Edit" })).toBeNull();
+    expect(assistant.querySelector("[data-managed]")).toHaveTextContent(
+      "managed by Oxagen",
+    );
+    expect(
+      within(byHref("release-bot")).getByRole("button", { name: "Deregister" }),
     ).toBeInTheDocument();
   });
 

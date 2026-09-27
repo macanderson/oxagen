@@ -1,0 +1,17 @@
+{
+  "check": "owned",
+  "rule": "managed-block",
+  "severity": "error",
+  "description": "The managed block in AGENTS.md was edited, so its text no longer matches the hash on its begin marker.",
+  "refused_by_reader": false,
+  "changed": [
+    "AGENTS.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "AGENTS.md",
+      "line": 1
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   ceilingOf,
+  CLAUDE_CODE_TOOL_USE_ID_META,
   createMcpGateway,
   filterToolsByMandate,
   gatewayToolsOf,
@@ -11,10 +12,12 @@ import {
   type McpGatewayDeps,
   parseJsonRpc,
   readRpcBody,
+  refusalRulesOf,
   RPC_INVALID_REQUEST,
   RPC_REFUSED,
   toolCountOf,
   tooManyToolsMessage,
+  toolUseIdOf,
 } from "./mcp-gateway";
 import { digestJcs, jcs, jsonByteLength } from "../digest";
 import { jsonContent } from "../evidence/frame-body";
@@ -373,6 +376,37 @@ describe("evidence", () => {
     ]);
   });
 
+  it("carries the tool-use id Claude Code names in _meta, and forwards the request untouched", async () => {
+    const { fetch, calls } = remote({ content: [] });
+    const { gw, records } = gateway({ fetch });
+    const call = {
+      ...CALL,
+      params: {
+        ...CALL.params,
+        _meta: { [CLAUDE_CODE_TOOL_USE_ID_META]: "toolu_01AbC" },
+      },
+    };
+    await gw.handle(call, CTX);
+    expect(records[0]?.toolUseId).toBe("toolu_01AbC");
+    expect(JSON.parse(calls[0]?.init.body ?? "{}")).toEqual(call);
+    // A call with no `_meta` names no id, and the record carries none.
+    await gw.handle(CALL, CTX);
+    expect(records[1]).not.toHaveProperty("toolUseId");
+  });
+
+  it("reads no tool-use id the envelope would refuse", () => {
+    const meta = (id: unknown) => ({
+      _meta: { [CLAUDE_CODE_TOOL_USE_ID_META]: id },
+    });
+    expect(toolUseIdOf(undefined)).toBeUndefined();
+    expect(toolUseIdOf({ _meta: null })).toBeUndefined();
+    expect(toolUseIdOf({ _meta: "toolu_1" })).toBeUndefined();
+    expect(toolUseIdOf(meta(7))).toBeUndefined();
+    expect(toolUseIdOf(meta(""))).toBeUndefined();
+    expect(toolUseIdOf(meta("t".repeat(513)))).toBeUndefined();
+    expect(toolUseIdOf(meta("t".repeat(512)))).toBe("t".repeat(512));
+  });
+
   it("records the arguments and the result, so the call replays", async () => {
     const result = { content: [{ type: "text", text: "42 nodes" }] };
     const { fetch } = remote(result);
@@ -476,6 +510,55 @@ describe("evidence", () => {
     await gw.handle(CALL, CTX);
     expect(records[0]?.status).toBe("rejected");
     expect(records[0]?.refusedReason).toBe("Tool blocked by workspace policy");
+    // The refusal named no rule, so the record names none.
+    expect(records[0]).not.toHaveProperty("ruleIds");
+  });
+
+  it("records the rules a refusal names, in order, and none from any other answer (#3971)", async () => {
+    const answer = (error: unknown) => {
+      const fetch: GatewayFetch = async () => ({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ jsonrpc: "2.0", id: 7, error }),
+      });
+      return gateway({ fetch });
+    };
+    const refused = answer({
+      code: RPC_REFUSED,
+      message: "refunds over $500 need a person",
+      data: { ruleIds: ["refund-cap", "", 7, "weekend-freeze"] },
+    });
+    await refused.gw.handle(CALL, CTX);
+    expect(refused.records[0]?.ruleIds).toEqual([
+      "refund-cap",
+      "weekend-freeze",
+    ]);
+    // A tool failure is not a decision, whatever its data says.
+    const failed = answer({
+      code: -32603,
+      message: "handler threw",
+      data: { ruleIds: ["refund-cap"] },
+    });
+    await failed.gw.handle(CALL, CTX);
+    expect(failed.records[0]?.status).toBe("error");
+    expect(failed.records[0]).not.toHaveProperty("ruleIds");
+  });
+
+  it("reads a refusal's rules within the envelope's bounds (negative)", () => {
+    const refusal = (data: unknown) => ({
+      jsonrpc: "2.0" as const,
+      id: 1,
+      error: { code: RPC_REFUSED, message: "denied", data },
+    });
+    expect(refusalRulesOf(refusal({ ruleIds: [] }))).toBeUndefined();
+    expect(refusalRulesOf(refusal({ ruleIds: "refund-cap" }))).toBeUndefined();
+    expect(refusalRulesOf(refusal(null))).toBeUndefined();
+    expect(refusalRulesOf(undefined)).toBeUndefined();
+    const many = refusalRulesOf(
+      refusal({ ruleIds: Array.from({ length: 80 }, () => "r".repeat(600)) }),
+    );
+    expect(many).toHaveLength(64);
+    expect(many?.[0]).toHaveLength(512);
   });
 
   it("records an ordinary tool failure as an error, not as a refusal", async () => {

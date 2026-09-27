@@ -28,7 +28,9 @@ vi.mock("@oxagen/database", async (importOriginal) => {
   return { ...dbMock, withOrgDb: dbMock.withTenantDb };
 });
 
+import { runInTenantScope } from "@oxagen/tenancy";
 import {
+  createReadRunPullRequests,
   matchesPullRequestFilter,
   postgresRunGitDiffs,
   pullRequestOf,
@@ -152,6 +154,118 @@ describe("readRunPullRequests", () => {
     chSelect.mockRejectedValue(new Error("down"));
     await expect(readRunPullRequests([A])).rejects.toThrow("down");
   });
+
+  // #4129 witness. Before the stored state was read, every link read null
+  // and Fleet said "status unknown" for a pull request long merged.
+  it("reads the state a forge reported and stored for a link", async () => {
+    chSelect.mockResolvedValue({
+      data: [
+        row(),
+        row({ url: "https://github.com/acme/api/pull/43", number: "43" }),
+      ],
+    });
+    tenantDb.rows = [
+      {
+        session: A,
+        url: "https://github.com/acme/api/pull/42",
+        state: "merged",
+        draft: false,
+        stateSeenAt: new Date("2026-09-25T10:00:00.000Z"),
+      },
+    ];
+    const out = await runInTenantScope(SCOPE, () => readRunPullRequests([A]));
+    expect(out.get(A)).toEqual([
+      {
+        url: "https://github.com/acme/api/pull/42",
+        number: 42,
+        repository: "acme/api",
+        state: "merged",
+        stateSeenAt: "2026-09-25T10:00:00.000Z",
+      },
+      // No row yet: read, and never reported.
+      {
+        url: "https://github.com/acme/api/pull/43",
+        number: 43,
+        repository: "acme/api",
+        state: null,
+        stateSeenAt: null,
+      },
+    ]);
+    // One Postgres read, fenced to the caller's tenant.
+    expect(tenantDb.sql).toHaveLength(1);
+    expect(tenantDb.sql[0]?.sql).toContain('"tacho"."run_pull_requests"');
+    expect(tenantDb.sql[0]?.params).toEqual(
+      expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId, A]),
+    );
+  });
+
+  it("reads an open draft as draft", async () => {
+    chSelect.mockResolvedValue({ data: [row()] });
+    tenantDb.rows = [
+      {
+        session: A,
+        url: "https://github.com/acme/api/pull/42",
+        state: "open",
+        draft: true,
+        stateSeenAt: new Date("2026-09-25T10:00:00.000Z"),
+      },
+    ];
+    const out = await runInTenantScope(SCOPE, () => readRunPullRequests([A]));
+    expect(out.get(A)?.[0]?.state).toBe("draft");
+  });
+});
+
+describe("createReadRunPullRequests", () => {
+  const link = {
+    url: "https://github.com/acme/api/pull/42",
+    number: 42,
+    repository: "acme/api",
+    state: null,
+  };
+
+  it("keeps every link, state unknown, when the state read fails (negative)", async () => {
+    const read = createReadRunPullRequests({
+      readLinks: () => Promise.resolve(new Map([[A, [link]]])),
+      readStates: () => Promise.reject(new Error("pg down")),
+      scope: () => SCOPE,
+    });
+    const out = await read([A]);
+    // No `stateSeenAt`: the read did not look, which is not "never reported".
+    expect(out.get(A)).toEqual([link]);
+  });
+
+  it("keeps every link when there is no tenant scope to read under (negative)", async () => {
+    const read = createReadRunPullRequests({
+      readLinks: () => Promise.resolve(new Map([[A, [link]]])),
+      readStates: () => Promise.resolve(new Map()),
+      scope: () => {
+        throw new Error("no scope");
+      },
+    });
+    expect((await read([A])).get(A)).toEqual([link]);
+  });
+
+  it("reads nothing for no sessions", async () => {
+    const readLinks = vi.fn();
+    const readStates = vi.fn();
+    const read = createReadRunPullRequests({
+      readLinks,
+      readStates,
+      scope: () => SCOPE,
+    });
+    expect(await read([])).toEqual(new Map());
+    expect(readLinks).not.toHaveBeenCalled();
+    expect(readStates).not.toHaveBeenCalled();
+  });
+
+  it("lets a frames failure reach the caller (negative)", async () => {
+    const read = createReadRunPullRequests({
+      readLinks: () => Promise.reject(new Error("ch down")),
+      readStates: () => Promise.resolve(new Map()),
+      scope: () => SCOPE,
+    });
+    await expect(read([A])).rejects.toThrow("ch down");
+  });
 });
 
 describe("postgresRunGitDiffs", () => {
@@ -186,6 +300,22 @@ describe("postgresRunGitDiffs", () => {
     expect(query?.params).toEqual(
       expect.arrayContaining([SCOPE.orgId, SCOPE.workspaceId, A, B]),
     );
+  });
+
+  // #3944, S-02: one file's line count can pass 2^31 - 1, and an ::int cast
+  // of the sum raised 22003 and dropped git's figures for the whole page.
+  it("sums the line counts as bigint", async () => {
+    tenantDb.rows = [{ chain: A, root: A, added: 2 ** 32, removed: 0 }];
+    const out = await postgresRunGitDiffs(SCOPE, [A]);
+    expect(out.get(A)).toEqual({ added: 2 ** 32, removed: 0 });
+    const [query] = tenantDb.sql;
+    expect(query?.sql).toContain(
+      'sum("tacho"."session_files"."lines_added"), 0)::bigint',
+    );
+    expect(query?.sql).toContain(
+      'sum("tacho"."session_files"."lines_removed"), 0)::bigint',
+    );
+    expect(query?.sql).not.toMatch(/::int\b/);
   });
 });
 

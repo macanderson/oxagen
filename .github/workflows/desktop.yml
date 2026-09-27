@@ -428,6 +428,22 @@ jobs:
           "apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/macos/Oxagen.app"
           apps/desktop/src-tauri/entitlements.plist
 
+      # The same script on a copy signed ad hoc without the hardened runtime.
+      # tauri signs every binary with it, so the step above always takes the
+      # script's hardened branch, and the branch that re-signs a copy with
+      # `--options runtime` had never run (#4313). The log shows each binary
+      # of the re-signed copy with flags=0x10002(adhoc,runtime), and the
+      # script fails if one still lacks the flag.
+      - name: Start a copy signed without the hardened runtime
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          plain="$RUNNER_TEMP/Plain.app"
+          rm -rf "$plain"
+          cp -R "apps/desktop/src-tauri/target/${{ matrix.triple }}/release/bundle/macos/Oxagen.app" "$plain"
+          codesign --force --deep -s - "$plain"
+          bash apps/desktop/scripts/smoke-macos-bundle.sh "$plain" apps/desktop/src-tauri/entitlements.plist
+
       # The bare CLI binaries next to the bundles, each with a .sha256, so the
       # Homebrew formula and the Scoop manifest in tools/packaging can install
       # tacho + oxagen without the app; on macOS the .dmg gets one too, for the

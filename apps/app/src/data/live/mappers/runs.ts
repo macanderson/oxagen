@@ -9,6 +9,47 @@ import type { ContractOutput } from "@/server/kernel";
 
 type RunListOutput = ContractOutput<typeof runList>;
 type RunListItem = RunListOutput["runs"][number];
+type RunListTokens = NonNullable<RunListItem["tokens"]>;
+type RunListPause = NonNullable<RunListItem["pause"]>;
+
+/** The rollup's snake-case token classes as the view names them. */
+function toRunTokenCounts(tokens: RunListTokens) {
+  return {
+    inputUncached: tokens.input_uncached,
+    cacheRead: tokens.cache_read,
+    cacheWrite5m: tokens.cache_write_5m,
+    cacheWrite1h: tokens.cache_write_1h,
+    output: tokens.output,
+    reasoning: tokens.reasoning,
+  };
+}
+
+/** A person's name as the view carries it: a blank one is none. */
+const nameOf = (name: string | null): string | null =>
+  name === null || name.trim() === "" ? null : name;
+
+/**
+ * `get_run`'s pause (#3972) as the Run header reads it: the commands by their
+ * `tcm_…` ids, the issuer by `usr_…`, and a blank name read as none, since
+ * the view refuses an empty one.
+ */
+function toRunPause(pause: RunListPause) {
+  return {
+    state: pause.state,
+    commandId: pause.commandId,
+    resumeCommandId: pause.resumeCommandId,
+    seq: pause.seq,
+    turn: pause.turn,
+    step: pause.step,
+    by:
+      pause.by === null
+        ? null
+        : { id: pause.by.id, name: nameOf(pause.by.name) },
+    issuedAt: pause.issuedAt,
+    appliedAt: pause.appliedAt,
+    reason: pause.reason,
+  };
+}
 
 /**
  * One row of `list_runs` as the tables and the Run header read it. The Run
@@ -27,6 +68,10 @@ export function toRunRow(
     operatorKind: run.operatorKind,
     operatorName: run.operatorName,
     operatorAttribution: run.operatorAttribution,
+    operatorAvatarUrl: run.operatorAvatarUrl,
+    // The role stamped when the run opened (#3999). A server that predates
+    // the field says nothing, which reads as not recorded.
+    operatorRole: run.operatorRole ?? null,
     status: run.status,
     reportedCost: run.reportedCost ?? null,
     outcome: run.outcome,
@@ -55,11 +100,28 @@ export function toRunRow(
             tier: run.model.tier,
           },
     effort: run.effort ?? null,
+    // get_run answers where the effort was read (#3891); list_runs leaves it
+    // out, and a row with no source says nothing about one.
+    effortSource: run.effortSource ?? null,
+    // The Model fit reading get_run stored for this seal (#3893); list_runs
+    // leaves it out, and a live run has none.
+    fit: run.fit ?? null,
     thinking: run.thinking ?? null,
     permissionMode: run.permissionMode ?? null,
     reportedTokens: run.reportedTokens ?? null,
+    // The rollup's counts (#3834). Null is "no rollup row"; absent is "the
+    // read did not look", and each stays what it is.
+    ...(run.tokens === undefined
+      ? {}
+      : {
+          tokens: run.tokens === null ? null : toRunTokenCounts(run.tokens),
+        }),
+    ...(run.cacheHitRate === undefined
+      ? {}
+      : { cacheHitRate: run.cacheHitRate }),
     machine: run.machine,
-    harness: run.harness ?? null,
+    place: run.place ?? null,
+    harness: run.harness,
     taskRef: run.taskRef,
     name: run.name,
     enrichmentEnabled: run.enrichmentEnabled ?? true,
@@ -82,6 +144,9 @@ export function toRunRow(
             number: pull.number,
             repository: pull.repository,
             state: pull.state,
+            ...(pull.stateSeenAt === undefined
+              ? {}
+              : { stateSeenAt: pull.stateSeenAt }),
           })),
         }),
     ...(run.pullRequestsOpened === undefined
@@ -95,6 +160,13 @@ export function toRunRow(
     steerBlock: run.steerBlock ?? null,
     ingressRevoked: run.ingressRevoked ?? false,
     ingressPaused: run.ingressPaused ?? false,
+    // `get_run` answers the pause; a `list_runs` row leaves it out. Absent is
+    // "not read" and null is "none in force", and each stays what it is.
+    ...(run.pause === undefined
+      ? {}
+      : { pause: run.pause === null ? null : toRunPause(run.pause) }),
+    // Absent for a wrapped session, whose store records no compaction.
+    ...(run.compacted === undefined ? {} : { compacted: run.compacted }),
     completenessGaps: run.completenessGaps,
     canSummarize: run.canSummarize,
     startedAt: run.startedAt,
@@ -108,6 +180,10 @@ export function toRunPage(out: RunListOutput): z.input<typeof RunPage> {
   return {
     runs: out.runs.map(toRunRow),
     nextCursor: out.nextCursor,
+    ...(out.liveRuns === undefined ? {} : { liveRuns: out.liveRuns }),
     ...(out.warnings === undefined ? {} : { warnings: out.warnings }),
+    // Absent when the read did not count; null past the bound (#3837).
+    ...(out.total === undefined ? {} : { total: out.total }),
+    ...(out.totalBound === undefined ? {} : { totalBound: out.totalBound }),
   };
 }

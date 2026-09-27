@@ -75,7 +75,6 @@ export const INIT_FILES = [
   ".oxagen/rules/governance.toml",
   ".oxagen/rules/.gitkeep",
   ".oxagen/proposals/.gitkeep",
-  ".oxagen/agents/.gitkeep",
   ".gitignore",
 ] as const;
 

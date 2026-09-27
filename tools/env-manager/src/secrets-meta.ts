@@ -40,7 +40,7 @@ export const ALIAS: Record<string, string> = {
   "oxagen-anthropic-key": "AI_GATEWAY_API_KEY",
   "oxagen-openai-api-key": "AI_GATEWAY_API_KEY",
   "mistral-api-key": "AI_GATEWAY_API_KEY",
-  "oxagen-embedding-api-key": "AI_GATEWAY_API_KEY",
+  "oxagen-embedding-api-key": "VOYAGE_API_KEY",
   // Postgres
   "oxagen-database-url": "DATABASE_URL",
   DATABASE_URL: "DATABASE_URL",
@@ -174,7 +174,14 @@ const PROVIDERS: Provider[] = [
     test: (n) => n.includes("openai"),
     url: "https://platform.openai.com/api-keys",
     describe: () =>
-      "OpenAI API key (image/embeddings). Routed through the AI Gateway in deployed envs.",
+      "OpenAI API key. Routed through the AI Gateway in deployed envs.",
+  },
+  {
+    id: "voyage",
+    test: (n) => n.includes("voyage"),
+    url: "https://dashboard.voyageai.com/",
+    describe: () =>
+      "Voyage AI key. Serves every embedding in deployed envs (VOYAGE_API_KEY).",
   },
   {
     id: "mistral",

@@ -58,6 +58,7 @@ describe("priceClasses", () => {
       cache_write_1h: 0n,
       output: 1_500_000_000n,
       reasoning: 750_000_000n,
+      server_tool_request: 0n,
     });
     expect(p.scaled).toBe(5_850_000_000n);
     expect(p.missedClasses).toEqual([]);

@@ -1,13 +1,21 @@
-// One runtime (mockup `rtDetail()`): the host, the agents on it, and how to roll
-// it back. Reached at /[org]/[ws]/runtimes/[runtime], where the segment is the
-// enrollment's public id (`tch_…`), because the enrollment is the row the
-// record holds.
+// One runtime, reached at /[org]/[ws]/runtimes/[runtime]. The segment is one
+// of two public ids, and each draws its own page:
 //
-// The spec's detail has no empty state: an id the list does not hold is a 404.
+// - A host enrollment (`tch_…`, mockup `rtDetail()`): the host, the agents on
+//   it, and how to roll it back, because the enrollment is the row the record
+//   holds for a machine.
+// - A named runtime (`rtm_…`, ADR-198): the slot hosts enroll against, its
+//   agents, and its containment (ADR-204). An org Owner or Admin changes
+//   containment here with a switch; everyone else reads the value.
+//
+// The spec's detail has no empty state: an id the workspace does not hold is
+// a 404.
+import { runtimeIdSchema } from "@oxagen/oxagen/contracts/runtime.shared";
 import { notFound } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import type {
+  NamedRuntime,
   RuntimeAgent,
   RuntimeAgents,
   RuntimeEnrollment,
@@ -26,7 +34,8 @@ import { SafeLink } from "@/ui/navigation";
 import { type OperatorIdentity, OperatorName } from "@/ui/operator";
 import { ReadFailure } from "@/ui/read-failure";
 import { cell } from "@/ui/table";
-import { SmokeSession, Unenroll } from "./controls";
+import { ContainmentSwitch, SmokeSession, Unenroll } from "./controls";
+import { AgentsCell, LastSeen } from "./named";
 import {
   COMMAND_HOOKS,
   Facts,
@@ -41,7 +50,7 @@ import {
   Panel,
   Sub,
 } from "./parts";
-import { RuntimesHeader } from "./runtimes";
+import { mayAddRuntime, RuntimesHeader } from "./runtimes";
 import { RuntimesFailure } from "./states";
 
 function HostPanel({
@@ -215,6 +224,7 @@ function operatorOf(
     name: member.name,
     kind: "human",
     email: member.email,
+    avatarUrl: member.avatarUrl,
   };
 }
 
@@ -461,6 +471,157 @@ function RuntimeLoaded({
   );
 }
 
+/** A named runtime's own facts: its slug, its agents, its live hosts, and when one last reported. */
+function NamedFactsPanel({ runtime }: { runtime: NamedRuntime }) {
+  const t = useTranslations("runtimes");
+  const locale = useLocale();
+  const facts: { term: string; value: ReactNode; testId: string }[] = [
+    {
+      term: t("add.slug"),
+      value: <span className={mono}>{runtime.slug}</span>,
+      testId: "fact-slug",
+    },
+    {
+      term: t("named.columns.agents"),
+      value: <AgentsCell runtime={runtime} />,
+      testId: "fact-agents",
+    },
+    {
+      term: t("named.columns.hosts"),
+      value: formatCount(runtime.liveHosts, locale),
+      testId: "fact-live-hosts",
+    },
+    {
+      term: t("named.columns.lastSeen"),
+      value: <LastSeen at={runtime.lastSeenAt} />,
+      testId: "fact-last-seen",
+    },
+  ];
+  return (
+    <Panel id="named-runtime-facts" title={runtime.name}>
+      <div className={panelBody}>
+        <Facts rows={facts} />
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * Containment (ADR-204): whether every agent on this runtime runs only under
+ * the contained launcher. An org Owner or Admin gets the switch; everyone
+ * else reads the value and who can change it.
+ */
+function ContainmentPanel({
+  runtime,
+  org,
+  ws,
+  canEdit,
+}: {
+  runtime: NamedRuntime;
+  org: string;
+  ws: string;
+  canEdit: boolean;
+}) {
+  const t = useTranslations("runtimes.containment");
+  return (
+    <Panel id="runtime-containment" title={t("title")}>
+      <div
+        data-testid="runtime-containment"
+        className={`${panelBody} flex flex-col gap-3 text-sm`}
+      >
+        <p className="text-muted-foreground">{t("lead")}</p>
+        {canEdit ? (
+          <ContainmentSwitch
+            org={org}
+            ws={ws}
+            runtimeId={runtime.id}
+            required={runtime.containmentRequired}
+          />
+        ) : (
+          <Facts
+            rows={[
+              {
+                term: t("term"),
+                value: (
+                  <>
+                    {runtime.containmentRequired
+                      ? t("required")
+                      : t("notRequired")}
+                    <Sub>{t("readOnly")}</Sub>
+                  </>
+                ),
+                testId: "runtime-containment-value",
+              },
+            ]}
+          />
+        )}
+      </div>
+      <Note>{t("note")}</Note>
+    </Panel>
+  );
+}
+
+/** A named runtime's page, below the page header. */
+function NamedRuntimeLoaded({
+  runtime,
+  org,
+  ws,
+  canEdit,
+}: {
+  runtime: NamedRuntime;
+  org: string;
+  ws: string;
+  canEdit: boolean;
+}) {
+  const t = useTranslations("runtimes.detail");
+  return (
+    <>
+      <div>
+        <SafeLink
+          to={routes.runtimes(org, ws)}
+          data-testid="runtime-back"
+          data-touch-target=""
+          className={`${buttonSecondary} min-h-7 px-2.5 text-xs`}
+        >
+          {t("back")}
+        </SafeLink>
+      </div>
+      <div className="flex flex-col gap-3.5">
+        <NamedFactsPanel runtime={runtime} />
+        <ContainmentPanel
+          runtime={runtime}
+          org={org}
+          ws={ws}
+          canEdit={canEdit}
+        />
+      </div>
+    </>
+  );
+}
+
+/** A named runtime's id (`rtm_…`, ADR-198), as against a host enrollment's (`tch_…`). */
+const NAMED_RUNTIME_ID = /^rtm_/;
+/**
+ * Reads the one runtime by id. Looking it up in the unfiltered list would miss
+ * a runtime sorted past that read's 500 cap and answer 404 for it. An id the
+ * contract would refuse names no runtime, so it is a 404 without a read.
+ */
+async function readNamedRuntime(
+  ctx: WsCtx,
+  source: DataSource,
+  runtime: string,
+) {
+  if (!runtimeIdSchema.safeParse(runtime).success)
+    return { state: "missing" as const, now: Date.now() };
+  const named = await source.runtimes.named(ctx, runtime);
+  if (!named.ok)
+    return { state: "failed" as const, read: named, now: Date.now() };
+  const found = named.value.runtimes.find((row) => row.id === runtime);
+  if (found === undefined)
+    return { state: "missing" as const, now: Date.now() };
+  return { state: "named" as const, runtime: found, now: Date.now() };
+}
+
 async function readRuntime(ctx: WsCtx, source: DataSource, runtime: string) {
   const list = await source.runtimes.list(ctx);
   if (!list.ok)
@@ -497,7 +658,9 @@ export async function Runtime({
   /** The signed-in person's name or email, for the access-denied state. */
   viewerName: string;
 }) {
-  const read = await readRuntime(ctx, source, runtime);
+  const read = NAMED_RUNTIME_ID.test(runtime)
+    ? await readNamedRuntime(ctx, source, runtime)
+    : await readRuntime(ctx, source, runtime);
   if (read.state === "failed")
     return (
       <RuntimesFailure
@@ -512,6 +675,30 @@ export async function Runtime({
       />
     );
   if (read.state === "missing") notFound();
+  const canEdit = mayAddRuntime(ctx);
+  if (read.state === "named")
+    return (
+      <>
+        {/* The breadcrumb ends on the runtime's name, not its id. */}
+        <PageRecord
+          route="runtimes"
+          id={read.runtime.id}
+          label={read.runtime.name}
+        />
+        <RuntimesHeader
+          org={org}
+          ws={ws}
+          wsName={ctx.wsName}
+          canAdd={canEdit}
+        />
+        <NamedRuntimeLoaded
+          runtime={read.runtime}
+          org={org}
+          ws={ws}
+          canEdit={canEdit}
+        />
+      </>
+    );
   return (
     <>
       {/* The breadcrumb ends on the runtime's name, not its enrollment id. */}
@@ -520,7 +707,12 @@ export async function Runtime({
         id={read.host.id}
         label={read.host.hostname}
       />
-      <RuntimesHeader org={org} ws={ws} wsName={ctx.wsName} />
+      <RuntimesHeader
+        org={org}
+        ws={ws}
+        wsName={ctx.wsName}
+        canAdd={canEdit}
+      />
       <RuntimeLoaded
         host={read.host}
         agents={read.agents}

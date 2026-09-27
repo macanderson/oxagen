@@ -596,7 +596,15 @@
         "ruleNotGated": "A tool pattern matches a tool that Oxagen does not route through the decision rules, so a rule over it would never be enforced. Nothing was changed.",
         "measureNotDeclared": "A condition names a measure that a matched tool does not declare. Nothing was changed.",
         "measureWrongType": "A condition names a measure of the wrong kind: a ceiling needs an amount or a count, and an allow list needs a text measure. Nothing was changed.",
-        "tooManyConsequences": "The rule’s tools carry more than 64 distinct consequences. Narrow its tool patterns. Nothing was changed."
+        "tooManyConsequences": "The rule’s tools carry more than 64 distinct consequences. Narrow its tool patterns. Nothing was changed.",
+        "toolbeltSlugTaken": "Another toolbelt in this workspace uses that slug. Choose another. Nothing was changed.",
+        "toolbeltSlugEmpty": "The name has no letter or digit to make a slug from. Type a slug. Nothing was changed.",
+        "toolbeltNotFound": "That toolbelt is no longer in this workspace. Reload the tab.",
+        "toolbeltInUse": "An agent still carries this toolbelt. Give it another toolbelt first. Nothing was changed.",
+        "allToolsIsDerived": "All tools follows the workspace’s tool settings and cannot be edited directly. Nothing was changed.",
+        "toolUnavailable": "That tool is unavailable in this workspace, so no toolbelt can turn it on. Nothing was changed.",
+        "toolNotFound": "No tool has that id in this workspace. Nothing was changed.",
+        "toolServerNotFound": "That server is no longer in this workspace. Reload the tab."
       }
     },
     "mandates": {
@@ -1017,24 +1025,72 @@
     },
     "toolbelts": {
       "title": "Toolbelts",
-      "caption": "A toolbelt is a named set of tool versions assigned to agents. It decides what a model is shown, and nothing else.",
-      "notBacked": "Toolbelts are not stored yet. A belt exists today only as the tool list computed for each agent, so there is no named set, owner or availability to show.",
-      "note": "Assigning a belt is not a permission. Every call on it still meets the agent’s roles, the policy on the tool version, the kill switches, and the mandate ledger. A belt with a red availability has a tool its agents can see and cannot call today.",
-      "new": {
-        "open": "New toolbelt",
-        "title": "New toolbelt",
-        "name": "Name",
-        "purpose": "What it is for",
-        "owner": "Owner",
-        "ownerHint": "A belt is a job, not a category, so a reviewer can tell from the name alone whether an agent should carry it.",
-        "note": "Creating a toolbelt is not built yet: nothing stores a named set of tool versions or who carries it.",
-        "confirm": "Create it"
+      "caption": "A toolbelt is the set of tools an agent is shown.",
+      "note": "A toolbelt grants nothing. Every call on it still meets the agent’s roles, the policy on the tool version, the kill switches and the mandate ledger.",
+      "new": "New toolbelt",
+      "columns": {
+        "belt": "Toolbelt",
+        "tools": "Tools",
+        "active": "Active",
+        "servers": "Servers",
+        "agents": "Agents",
+        "actions": "Actions"
       },
-      "assignments": {
-        "title": "Assignments",
-        "caption": "The same belt reaches many agents, which is what makes a change to it worth reviewing.",
-        "notBacked": "Assignments are not stored yet, so which agent carries which belt cannot be listed.",
-        "agents": "Each agent’s computed tool list is on its Toolbelt tab. Open Agents"
+      "allTools": "Every available tool",
+      "clonedFrom": "Clone of {name}",
+      "openBelt": "Open {name}",
+      "clone": {
+        "open": "Clone",
+        "openLabel": "Clone {name}",
+        "title": "Clone {name}",
+        "lead": "The new toolbelt starts with every tool {name} holds, each on or off as it is there. You can change it after.",
+        "name": "Name",
+        "nameHint": "Name the job the toolbelt is for.",
+        "slug": "Slug",
+        "slugHint": "Lowercase letters and digits joined by single hyphens.",
+        "description": "Description",
+        "submit": "Clone toolbelt",
+        "pending": "Cloning",
+        "errors": {
+          "nameRequired": "Name the toolbelt.",
+          "slugInvalid": "Use lowercase letters and digits joined by single hyphens.",
+          "slugTaken": "Another toolbelt in this workspace uses this slug. Choose another."
+        }
+      },
+      "belt": {
+        "close": "Close",
+        "allToolsNote": "All tools holds every tool an admin made available, each on or off as its default says. It cannot be edited directly. Clone it to build a toolbelt of your own.",
+        "adminNote": "A tool you make unavailable leaves every toolbelt. A default decides whether the tool starts on in All tools and in each new clone.",
+        "carriedBy": "Carried by",
+        "noAgents": "No agent carries this toolbelt.",
+        "empty": "This workspace has no tools yet. Import a provider to add its tools.",
+        "importLink": "Open Providers",
+        "notIncluded": "Not in this toolbelt",
+        "unavailable": "Unavailable",
+        "on": "On",
+        "off": "Off",
+        "toolOn": "{tool} on in this toolbelt",
+        "available": "Available",
+        "availableLabel": "{tool} available to toolbelts",
+        "defaultOn": "On by default",
+        "defaultOnLabel": "{tool} on by default",
+        "server": {
+          "remove": "Remove server",
+          "add": "Add server",
+          "turnOn": "Turn all on",
+          "turnOff": "Turn all off",
+          "makeAvailable": "Make all available",
+          "takeOut": "Make all unavailable"
+        },
+        "delete": {
+          "open": "Delete toolbelt",
+          "title": "Delete {name}",
+          "body": "No agent can be given this toolbelt after it is deleted. Agent versions that named it keep the record.",
+          "inUse": "{count, plural, one {# agent carries} other {# agents carry}} this toolbelt. Give each one another toolbelt first.",
+          "confirm": "Delete toolbelt",
+          "keep": "Keep it",
+          "pending": "Deleting"
+        }
       }
     },
     "policy": {

@@ -18,14 +18,23 @@
 //      nothing merged to settle: done.
 //   4. Every file under `.oxagen/rules/` at that head, planned against the
 //      registry and written in one transaction (context.steering.sync.store).
-//   5. The Context PRs: a merged one points at its published record, a closed
+//   5. The settings workspace.toml sets at that head, written to the
+//      workspace row. A problem with the file is a warning.
+//   6. The Context PRs: a merged one points at its published record, a closed
 //      one is rejected, and one whose head moved has its checks reset.
-//   6. The sync state, and a check on the head commit naming every problem.
+//   7. The sync state, and a check on the head commit naming every problem.
 import { HandlerError } from "@oxagen/oxagen";
 import {
   CHECK_NAMES,
   type CheckResult,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
+import {
+  type FileIssue,
+  readTomlFile,
+} from "@oxagen/oxagen/steering-repo/files";
+import { WORKSPACE_TOML_PATH } from "@oxagen/oxagen/steering-repo/paths";
+import { schemaDirective } from "@oxagen/oxagen/steering-repo/schema-ids";
+import { workspaceSchema } from "@oxagen/oxagen/steering-repo/workspace";
 import type {
   SteeringHost,
   SteeringRepository,
@@ -43,6 +52,7 @@ import {
 } from "./context.steering.sync.plan";
 import {
   postgresSyncStore,
+  type PublishedWorkspaceSettings,
   type SyncState,
   type SyncStore,
 } from "./context.steering.sync.store";
@@ -173,13 +183,82 @@ function capFindings(findings: SyncFinding[]): SyncFinding[] {
       path: RULES_DIR,
       lineageId: null,
       code: "schema",
-      message: `${cut} more record file problems are not listed. Fix the ones above and the next sync lists the rest.`,
+      message: `${cut} more steering file problems are not listed. Fix the ones above and the next sync lists the rest.`,
     },
   ];
 }
 
 function sameFindings(a: SyncFinding[], b: SyncFinding[]): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** What one read of workspace.toml gives the sync. */
+interface SettingsRead {
+  /** The settings to write, or null to keep the ones the workspace has. */
+  publish: PublishedWorkspaceSettings | null;
+  findings: SyncFinding[];
+}
+
+/**
+ * The settings workspace.toml sets at `ref` (workspace/v1). With no such
+ * file, the workspace falls back to every default. A file of that name whose
+ * first line does not name workspace/v1 is some other tool's configuration,
+ * so it sets nothing either.
+ *
+ * A workspace/v1 file that does not read cleanly leaves the last settings in
+ * place and becomes one warning. It is never an error: the file may sit at the
+ * root of a code repository, and its check must not fail over a file the
+ * record sync does not own.
+ */
+async function readWorkspaceSettings(
+  github: SteeringHost,
+  repo: SteeringRepository,
+  ref: string,
+): Promise<SettingsRead> {
+  const text = await github.readFile(repo, WORKSPACE_TOML_PATH, ref);
+  // A byte-order mark or a CRLF ending does not hide a workspace/v1 file.
+  // The reader below reports either one.
+  const firstLine = text?.replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0];
+  if (text === null || firstLine !== schemaDirective("workspace/v1"))
+    return { publish: { stellaArchiveAfterDays: null }, findings: [] };
+  const read = readTomlFile(text, "workspace/v1", workspaceSchema);
+  if (read.ok)
+    return {
+      publish: {
+        stellaArchiveAfterDays: read.value.stella?.archive_after_days ?? null,
+      },
+      findings: [],
+    };
+  return { publish: null, findings: [settingsFinding(read.issues)] };
+}
+
+/** A workspace.toml that did not read cleanly, as one warning. */
+function settingsFinding(issues: FileIssue[]): SyncFinding {
+  const first = issues[0] ?? { line: null, field: null, message: "" };
+  const at = first.line === null ? "" : ` at line ${first.line}`;
+  // Never the parser's own words, for the reason `where` gives in
+  // context.steering.sync.plan.ts: smol-toml can quote the lines around the
+  // error.
+  const parser = first.message.startsWith("the file is not TOML");
+  const field = first.field === null ? "" : `, ${first.field}`;
+  const reason = first.message.endsWith(".")
+    ? first.message
+    : `${first.message}.`;
+  const problem = parser
+    ? `${WORKSPACE_TOML_PATH} is not valid TOML${at}.`
+    : `${WORKSPACE_TOML_PATH}${at}${field}: ${reason}`;
+  const rest = issues.length - 1;
+  const more =
+    rest > 0
+      ? ` The file has ${rest} more ${rest === 1 ? "problem" : "problems"}.`
+      : "";
+  return {
+    level: "warning",
+    path: WORKSPACE_TOML_PATH,
+    lineageId: null,
+    code: first.field === null ? "not_toml" : "schema",
+    message: `${problem}${more} The workspace keeps its last settings.`,
+  };
 }
 
 /**
@@ -314,9 +393,27 @@ export async function syncWorkspaceSteering(
         retired: applied.retired,
       });
     }
+
+    // 5. The settings in workspace.toml at that head. Any push can change
+    // them, so the file is read whenever the head moves. Otherwise its last
+    // findings stand. A read that fails stops the sync, and the next run
+    // reads the file again.
+    let settingsFindings = (prior?.findings ?? []).filter(
+      (f) => f.path === WORKSPACE_TOML_PATH,
+    );
+    if (options.force || failedBefore || headMoved) {
+      const settings = await readWorkspaceSettings(deps.github, repo, head);
+      if (settings.publish)
+        await deps.store.publishWorkspaceSettings(scope, settings.publish);
+      settingsFindings = settings.findings;
+    }
+    findings = [
+      ...findings.filter((f) => f.path !== WORKSPACE_TOML_PATH),
+      ...settingsFindings,
+    ];
     outcome.findings = findings;
 
-    // 5. The Context PRs.
+    // 6. The Context PRs.
     for (const { row, pr } of pulls) {
       if (pr.merged && pr.baseRef !== repo.defaultBranch) {
         if (
@@ -401,7 +498,7 @@ export async function syncWorkspaceSteering(
         outcome.proposals.rejected += 1;
     }
 
-    // 6. The state, and the check on the head.
+    // 7. The state, and the check on the head.
     // One check per change to the rules, not per push: a commit that left
     // `.oxagen/rules/` alone gets no check of its own.
     const changedFindings = !sameFindings(findings, prior?.findings ?? []);
@@ -415,7 +512,7 @@ export async function syncWorkspaceSteering(
           title:
             findings.length === 0
               ? "The registry matches this commit"
-              : `${findings.length} record file ${findings.length === 1 ? "problem" : "problems"}`,
+              : `${findings.length} steering file ${findings.length === 1 ? "problem" : "problems"}`,
           summary: checkSummary(findings),
           startedAt: now.toISOString(),
           completedAt: deps.now().toISOString(),

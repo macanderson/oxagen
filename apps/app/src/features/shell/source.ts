@@ -6,10 +6,11 @@
 // composer, come from `shell.preferences`.
 //
 // The approvals drawer is organization-wide (mockup `apdBody()`): the topbar
-// button on every page counts every call parked for a person in every
-// workspace. `list_approvals` answers one workspace, so the chrome reads each
-// workspace the viewer belongs to, a few at a time and at most
-// WORKSPACE_BOUND of them, and says so when it stopped short (#3848).
+// button on every page counts every call parked for a person, and every
+// question an agent paused to ask (#3839), in every workspace.
+// `list_approvals` and `list_interjections` answer one workspace, so the
+// chrome reads each workspace the viewer belongs to, a few at a time and at
+// most WORKSPACE_BOUND of them, and says so when it stopped short (#3848).
 // The reads run when the layout renders: on a full load, and on the refresh
 // every governed write ends with. Nothing polls (#3805).
 import "server-only";
@@ -71,8 +72,9 @@ async function workspaceApprovals(
   // Each workspace is its own tenant scope, resolved the way its pages are, so
   // a membership removed since the list was read is a refusal, not a leak.
   const wsCtx = await requireViewer(ctx.orgSlug, place.slug);
-  const [pending, resolved] = await Promise.all([
+  const [pending, interjections, resolved] = await Promise.all([
     source.approvals.pending(wsCtx, { runId: null }),
+    source.interjections.open(wsCtx, { runId: null }),
     source.approvals.resolvedSince(wsCtx, { since }),
   ]);
   // The ledger is read only where a parked call names a mandate, the same
@@ -85,7 +87,13 @@ async function workspaceApprovals(
         mandates.set(mandate.id, mandate);
   }
   return {
-    approvals: { slug: place.slug, name: place.name, pending, resolved },
+    approvals: {
+      slug: place.slug,
+      name: place.name,
+      pending,
+      interjections,
+      resolved,
+    },
     mandates,
   };
 }

@@ -15,6 +15,8 @@ export {
   pullRequestFilterOf,
   readFleetPrefs,
 } from "./prefs";
+// The search, facets, order and page the Runs panel lists (#3837).
+export { parseListQuery } from "./list-query";
 export { FleetLoading } from "./loading";
 export { ApprovalsPanel } from "./approvals-panel";
 // The approvals drawer draws one card alone, with no panel heading around it,

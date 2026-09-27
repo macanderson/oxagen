@@ -388,15 +388,6 @@
       "verifiedAt": null,
       "verifiedBy": "static-trace/session_01LvTjUhzMz5nF1WWPn6K7N5"
     },
-    "get_agent_def": {
-      "route": "/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]",
-      "page": "apps/app_deprecated/src/app/[orgSlug]/[workspaceSlug]/workbench/agents/[agentId]/page.tsx",
-      "entry": "EditAgentPage RSC → getAgent() → AgentBuilder edit mode",
-      "testid": null,
-      "proof": null,
-      "verifiedAt": null,
-      "verifiedBy": "static-trace/session_013m6NfL2JC7RRCacXrvE2zg"
-    },
     "write_memory": {
       "route": "/[orgSlug]/[workspaceSlug]/ask",
       "page": "apps/app_deprecated/src/components/chat/message-footer.tsx",

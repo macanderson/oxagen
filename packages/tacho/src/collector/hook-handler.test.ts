@@ -193,6 +193,8 @@ describe("handleHookEvent over the recorded session", () => {
     expect(write[0]?.body).toMatchObject({
       policy_decision: "deny",
       policy_rule: "Write(**/probe.txt)",
+      // The list the Policy tab prints, beside the joined form (#3971).
+      policy_rules: ["Write(**/probe.txt)"],
       policy_source: "bundle",
       risk_grade: "medium",
     });
@@ -209,6 +211,7 @@ describe("handleHookEvent over the recorded session", () => {
     expect(read[1]?.body).toMatchObject({
       policy_decision: "allow",
       policy_rule: "Read",
+      policy_rules: ["Read"],
       bundle_version: 3,
       bundle_mode: "enforce",
     });

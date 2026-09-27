@@ -141,7 +141,7 @@ describe("tachod and the transcript", () => {
       exec: () => ({ status: 0, stdout: "", stderr: "" }),
       log: (line) => log.push(line),
       port: 0,
-      transcriptRoots: [join(paths.root, "no-transcripts")],
+      transcriptRoots: [join(paths.tachoDir, "no-transcripts")],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
     });
     handles.push(handle);
@@ -295,6 +295,58 @@ describe("tachod and the transcript", () => {
     expect(log.some((l) => l.includes("was not there"))).toBe(false);
   });
 
+  it("tails a running subagent's transcript onto the child chain before its SubagentStop", async () => {
+    const { handle, host, port, transcript, subagentTranscript } = await boot();
+    writeFileSync(transcript, "");
+    expect(
+      await post(port, host.local_token, "/hook", {
+        session_id: SESSION_ID,
+        hook_event_name: "SessionStart",
+        transcript_path: transcript,
+      }),
+    ).toBe(200);
+    expect(
+      await post(port, host.local_token, "/hook", {
+        session_id: SESSION_ID,
+        hook_event_name: "SubagentStart",
+        agent_id: SUBAGENT_ID,
+        agent_type: "Explore",
+      }),
+    ).toBe(200);
+    copyFileSync(
+      join(FIXTURES, "transcript", `subagent-${SUBAGENT_ID}.jsonl`),
+      subagentTranscript,
+    );
+    await handle.tick();
+    const parent = handle.registry.get(SESSION_ID)?.recorder;
+    const transcriptCalls = () =>
+      (parent?.snapshot().children[0]?.events ?? []).filter(
+        (e) => e.kind === "llm_call" && e.source === "transcript",
+      );
+    // On the child chain while the subagent still runs.
+    const live = transcriptCalls();
+    expect(live.length).toBeGreaterThan(0);
+    expect(live[0]?.subagent?.subagent_id).toBe(SUBAGENT_ID);
+    expect(
+      parent?.snapshot().children[0]?.events.map((e) => e.kind),
+    ).not.toContain("agent_stop");
+
+    // The SubagentStop that follows seals no second copy.
+    expect(
+      await post(port, host.local_token, "/hook", {
+        session_id: SESSION_ID,
+        hook_event_name: "SubagentStop",
+        agent_id: SUBAGENT_ID,
+        agent_type: "Explore",
+        agent_transcript_path: subagentTranscript,
+      }),
+    ).toBe(200);
+    expect(transcriptCalls()).toHaveLength(live.length);
+    expect(parent?.snapshot().children[0]?.events.map((e) => e.kind)).toContain(
+      "agent_stop",
+    );
+  });
+
   it("stamps an OTel api_request for a call the transcript already sealed as its duplicate", async () => {
     const { handle, host, port, transcript } = await boot();
     expect(
@@ -359,7 +411,7 @@ describe("tachod and the transcript", () => {
       exec: () => ({ status: 0, stdout: "", stderr: "" }),
       log: () => undefined,
       port: 0,
-      transcriptRoots: [join(paths.root, "no-transcripts")],
+      transcriptRoots: [join(paths.tachoDir, "no-transcripts")],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
     });
     handles.push(restarted);

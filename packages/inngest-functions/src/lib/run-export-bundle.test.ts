@@ -12,14 +12,19 @@ import {
   EVENT_SCHEMA_VERSION,
 } from "@oxagen/run-ledger";
 import {
+  type Attestation,
+  type AttestationPayload,
   attesterKeyFromPem,
   type ChainCursor,
+  type RunExportAttemptChain,
   digestBytes,
   GENESIS_CURSOR,
   hashEvent,
   type JsonValue,
+  legacyJcs,
   merkleRoot,
   sealEvent,
+  signAttestation,
   type UnsealedTachoEvent,
   verifyAttestation,
   verifyRunExport,
@@ -117,6 +122,7 @@ function ledgerSegment(over: Partial<SealedSegment> = {}): SealedSegment {
     replayGrade: "view",
     envelopes,
     digests,
+    sealAttestation: null,
     ...over,
   };
 }
@@ -152,6 +158,7 @@ function tachoSegment(): SealedSegment {
     replayGrade: "fork",
     envelopes,
     digests,
+    sealAttestation: null,
   };
 }
 
@@ -160,9 +167,20 @@ function tachoSegment(): SealedSegment {
  * the export builds them when the stored row rebuilds each event (#3733).
  */
 function carriedTachoSegment(
-  over: { attrs?: Record<string, string>; attempt?: string } = {},
+  over: {
+    attrs?: Record<string, string>;
+    attempt?: string;
+    /** Hash each event the way a build before tacho's own `jcs` did. */
+    olderHost?: boolean;
+    /**
+     * A subagent chain under the run's session: its events name this session
+     * and the run's as their root, and the segment is that chain's attempt.
+     */
+    subagent?: RunExportAttemptChain;
+  } = {},
 ): SealedSegment {
-  const session = "0a1b2c3d-0000-4000-8000-000000000000";
+  const root = "0a1b2c3d-0000-4000-8000-000000000000";
+  const session = over.subagent?.session_uuid ?? root;
   const unsealed = (
     kind: string,
     body: Record<string, unknown>,
@@ -172,7 +190,7 @@ function carriedTachoSegment(
       event_id: `ev_${kind}`,
       session_id: "harness-session",
       session_uuid: session,
-      root_session_uuid: session,
+      root_session_uuid: root,
       ts: "2026-09-14T12:00:00.000Z",
       fidelity: "sdk",
       source: "hook",
@@ -195,14 +213,29 @@ function carriedTachoSegment(
     unsealed("turn_end", {}),
   ].map((event) => {
     const sealed = sealEvent(event, cursor);
-    cursor = sealed.next;
-    return sealed.event;
+    if (over.olderHost !== true) {
+      cursor = sealed.next;
+      return sealed.event;
+    }
+    const { hash: _hash, ...rest } = sealed.event;
+    const hash = digestBytes(
+      legacyJcs(JSON.parse(JSON.stringify(rest)) as JsonValue),
+    );
+    cursor = { seq: cursor.seq + 1, prevHash: hash };
+    return { ...sealed.event, hash };
   });
   const envelopes = events.map((event) =>
     wrappedFrameOf(event as unknown as Record<string, JsonValue>, null),
   );
   return {
     ...tachoSegment(),
+    ...(over.subagent === undefined
+      ? {}
+      : {
+          attemptId: session,
+          attemptPublicId: session,
+          chain: over.subagent,
+        }),
     ...(over.attempt === undefined ? {} : { attemptPublicId: over.attempt }),
     envelopes,
     digests: events.map((event) => event.hash),
@@ -297,6 +330,97 @@ describe("the run export bundle", () => {
     ).toBe(true);
 
     expect(runVerifier(writeBundle(files))).toMatchObject({ ok: true });
+  });
+
+  describe("the signature the seal wrote (ADR-195)", () => {
+    const RUN = "arun_5f0c2e9a1b7d4c3e8f6a02";
+
+    /** The payload the export recomputes for one ledger segment. */
+    function payloadOf(segment: SealedSegment): AttestationPayload {
+      return {
+        run_id: RUN,
+        attempt_id: segment.attemptPublicId,
+        frame_count: segment.frameCount,
+        merkle_root: segment.merkleRoot,
+        archive_segment_digest: String(segment.archiveSegmentDigest),
+        enforcement_tier: segment.enforcementTier,
+        completeness_gaps: [...segment.completenessGaps],
+        replay_grade: segment.replayGrade,
+      };
+    }
+
+    function exportOf(segment: SealedSegment) {
+      const files = unpack(
+        buildRunExportBundle({
+          runId: RUN,
+          source: "ledger",
+          segments: [segment],
+          key,
+          now: new Date("2026-09-14T12:00:00.000Z"),
+        }).bytes,
+      );
+      const attestation = JSON.parse(files["attestation.json"] as string);
+      return { files, shipped: attestation.attestations[0] as Attestation };
+    }
+
+    it("ships the seal's signature when the seal's key is the deployment's key, and both verifiers hold", () => {
+      const base = ledgerSegment({ enforcementTier: "gateway" });
+      const sealed = signAttestation(payloadOf(base), key);
+      const { files, shipped } = exportOf({
+        ...base,
+        sealAttestation: { keyId: key.keyId, sig: sealed.sig },
+      });
+      expect(shipped).toEqual(sealed);
+      expect(shipped.payload.enforcement_tier).toBe("gateway");
+      expect(verifyAttestation(shipped, key.publicKeyPem)).toBe(true);
+      expect(runVerifier(writeBundle(files))).toMatchObject({ ok: true });
+    });
+
+    it("ships the seal's signature unchanged when the figures moved after the seal, and the verifier says so (negative)", () => {
+      // The seal signed two frames; the segment the export read holds three.
+      // Re-signing would attest the new figures. The export never does.
+      const base = ledgerSegment();
+      const sealed = signAttestation(
+        { ...payloadOf(base), frame_count: 2 },
+        key,
+      );
+      const { files, shipped } = exportOf({
+        ...base,
+        sealAttestation: { keyId: key.keyId, sig: sealed.sig },
+      });
+      expect(shipped.sig).toBe(sealed.sig);
+      expect(shipped.payload.frame_count).toBe(3);
+      expect(verifyAttestation(shipped, key.publicKeyPem)).toBe(false);
+      const script = runVerifier(writeBundle(files));
+      expect(script.ok).toBe(false);
+      expect(script.output).toMatch(
+        /attestation for arat_0123456789abcdefghjkmn does not verify/,
+      );
+    });
+
+    it("signs with the current key when the seal's key was rotated away from", () => {
+      const rotated = attesterKeyFromPem(
+        generateKeyPairSync("ed25519")
+          .privateKey.export({ type: "pkcs8", format: "pem" })
+          .toString(),
+      );
+      const base = ledgerSegment();
+      const sealed = signAttestation(payloadOf(base), rotated);
+      const { files, shipped } = exportOf({
+        ...base,
+        sealAttestation: { keyId: rotated.keyId, sig: sealed.sig },
+      });
+      expect(shipped.key_id).toBe(key.keyId);
+      expect(shipped.sig).not.toBe(sealed.sig);
+      expect(verifyAttestation(shipped, key.publicKeyPem)).toBe(true);
+      expect(runVerifier(writeBundle(files))).toMatchObject({ ok: true });
+    });
+
+    it("signs with the current key a seal that was written unsigned", () => {
+      const { shipped } = exportOf(ledgerSegment());
+      expect(shipped.key_id).toBe(key.keyId);
+      expect(verifyAttestation(shipped, key.publicKeyPem)).toBe(true);
+    });
   });
 
   it("the verifier fails on a changed frame, a dropped frame and a foreign key (negative)", () => {
@@ -509,13 +633,39 @@ describe("the run export bundle", () => {
     ).toMatch(/frame 3 .*broken: kind differs from the hashed event/);
   });
 
-  it("holds in both verifiers when a host names an attribute toJSON, which the platform hashes in insertion order", () => {
-    // canonicalize@1.0.8 writes an object with a toJSON member with
-    // JSON.stringify, keys unsorted. verify.mjs must reach the same bytes.
+  it("holds in both verifiers when a host names an attribute toJSON, with its keys sorted like any other object", () => {
+    // W-09: tacho's jcs follows RFC 8785 for a toJSON member too, so the
+    // frame's keys are sorted and verify.mjs reaches the same bytes.
     const bundle = buildRunExportBundle({
       runId: "tse_0a1b2c",
       source: "tacho",
       segments: [carriedTachoSegment({ attrs: { toJSON: "x", a: "y" } })],
+      key,
+      now: new Date(),
+    });
+    const files = unpack(bundle.bytes);
+    expect(files["frames.ndjson"]).toContain('"attrs":{"a":"y","toJSON":"x"}');
+    const { cli, script } = bothVerdicts(files);
+    expect(cli.ok).toBe(true);
+    expect(cli.frames.every((f) => f.digest === "held")).toBe(true);
+    expect(script.output).toMatch(/^HELD /m);
+    expect(script.ok).toBe(true);
+  });
+
+  it("holds in both verifiers for an older host's event that names an attribute toJSON, in the order it was sealed", () => {
+    // canonicalize@1.0.8 wrote an object with a toJSON member by
+    // JSON.stringify, keys unsorted, and an older host hashed that text. The
+    // frame keeps those keys in the order they were sealed in, and both
+    // verifiers accept the older form for such an event.
+    const bundle = buildRunExportBundle({
+      runId: "tse_0a1b2c",
+      source: "tacho",
+      segments: [
+        carriedTachoSegment({
+          attrs: { toJSON: "x", a: "y" },
+          olderHost: true,
+        }),
+      ],
       key,
       now: new Date(),
     });
@@ -581,6 +731,83 @@ describe("the run export bundle", () => {
     ]);
     expect(script.ok).toBe(false);
     expect(script.output).toContain(`frame 1 (${other} #0) broken: ${reason}`);
+  });
+
+  // #3823: a subagent records on a hash chain of its own from genesis at its
+  // own seq 0, so the export ships it as an attempt of its own.
+  it("verifies a run with a subagent chain as one attempt per chain, each from genesis, in both verifiers", () => {
+    const CHILD = "0a1b2c3d-0000-4000-8000-00000000c1d0";
+    const chain: RunExportAttemptChain = {
+      session_uuid: CHILD,
+      parent_session_uuid: "0a1b2c3d-0000-4000-8000-000000000000",
+      subagent_id: "agent-1",
+      subagent_type: "Explore",
+      spawn_tool_use_id: "toolu_A",
+    };
+    const own = carriedTachoSegment();
+    const child = carriedTachoSegment({ subagent: chain });
+    const bundle = buildRunExportBundle({
+      runId: "tse_0a1b2c",
+      source: "tacho",
+      segments: [own, child],
+      key,
+      now: new Date(),
+    });
+    expect(bundle.manifest.format).toBe("oxagen.run-export/3");
+    expect(bundle.manifest.frame_count).toBe(6);
+    expect(bundle.manifest.attempts.map((a) => a.attempt_id)).toEqual([
+      own.attemptPublicId,
+      CHILD,
+    ]);
+    expect(bundle.manifest.attempts[0]?.chain).toBeUndefined();
+    expect(bundle.manifest.attempts[1]?.chain).toEqual(chain);
+    const files = unpack(bundle.bytes);
+    expect(JSON.parse(files["manifest.json"]!).attempts[1].chain).toEqual(
+      chain,
+    );
+    const { cli, script } = bothVerdicts(files);
+    expect(cli.ok).toBe(true);
+    expect(script.ok).toBe(true);
+    // The child's first frame opens at genesis on its own chain.
+    expect(cli.frames[3]).toMatchObject({
+      attempt_id: CHILD,
+      seq: 0,
+      status: "held",
+      link: "held",
+      digest: "held",
+    });
+    expect(script.output).toContain(`frame 4 (${CHILD} #0) held`);
+  });
+
+  it("breaks a subagent chain's frames shipped as a continuation of the run's own chain (negative)", () => {
+    const own = carriedTachoSegment();
+    const child = carriedTachoSegment({
+      subagent: {
+        session_uuid: "0a1b2c3d-0000-4000-8000-00000000c1d0",
+        parent_session_uuid: own.attemptPublicId,
+        subagent_id: "agent-1",
+        subagent_type: null,
+        spawn_tool_use_id: null,
+      },
+    });
+    const merged: SealedSegment = {
+      ...own,
+      frameCount: 6,
+      envelopes: [...own.envelopes, ...child.envelopes],
+      digests: [...own.digests, ...child.digests],
+    };
+    const bundle = buildRunExportBundle({
+      runId: "tse_0a1b2c",
+      source: "tacho",
+      segments: [merged],
+      key,
+      now: new Date(),
+    });
+    const { cli, script } = bothVerdicts(unpack(bundle.bytes));
+    expect(cli.ok).toBe(false);
+    expect(cli.frames[3]?.status).toBe("broken");
+    expect(cli.frames[3]?.reasons).toContain("seq 0 where 3 was due");
+    expect(script.ok).toBe(false);
   });
 
   it("says a wrapped frame without its event is not carried, in the shipped verifier", () => {
@@ -818,5 +1045,53 @@ describe("the run export bundle", () => {
     expect(edited.checks.find((c) => c.name === "redactions")?.status).toBe(
       "broken",
     );
+  });
+
+  // #3814 kept the top-level `body` beside `event.body` in format 3
+  // (docs/capabilities/run.export.md). This pins the reason the bytes allow
+  // it: the second copy sits in the same line, well inside deflate's 32 KiB
+  // window, so the zip stores it as back-references.
+  it("stores a carried frame's second copy of its body for a few bytes once zipped", () => {
+    const session = "0a1b2c3d-0000-4000-8000-000000000000";
+    const frames = (withTopLevelBody: boolean): JsonValue[] =>
+      Array.from({ length: 50 }, (_, seq) => {
+        // About 2 KB of facts per frame that do not compress on their own.
+        const facts = Array.from({ length: 30 }, (_, i) =>
+          digestBytes(`${seq}:${i}`),
+        );
+        const event = {
+          v: "tacho/1.0",
+          event_id: `ev_${seq}`,
+          session_uuid: session,
+          seq,
+          ts: "2026-09-14T12:00:00.000Z",
+          kind: "tool_call",
+          prev_hash: digestBytes(`prev:${seq}`),
+          hash: digestBytes(`hash:${seq}`),
+          body: { tool_name: "Read", tool_status: "ok", facts },
+        };
+        const frame = wrappedFrameOf(event, null);
+        if (withTopLevelBody) return frame;
+        const { body: _shown, ...rest } = frame;
+        return rest;
+      });
+    const bundleOf = (envelopes: JsonValue[]) =>
+      buildRunExportBundle({
+        runId: "tse_0a1b2c",
+        source: "tacho",
+        segments: [{ ...tachoSegment(), frameCount: 50, envelopes }],
+        key,
+        now: OBSERVED,
+      });
+    const kept = bundleOf(frames(true));
+    const dropped = bundleOf(frames(false));
+    const ndjson = (bytes: Uint8Array) =>
+      unpack(bytes)["frames.ndjson"]?.length ?? 0;
+    // Unzipped, the second copy grows the frames by more than a third.
+    expect(ndjson(kept.bytes)).toBeGreaterThan(
+      ndjson(dropped.bytes) * (4 / 3),
+    );
+    // Zipped, it grows the bundle by less than five percent.
+    expect(kept.bytes.length).toBeLessThan(dropped.bytes.length * 1.05);
   });
 });

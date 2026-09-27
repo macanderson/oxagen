@@ -42,9 +42,9 @@ The API equivalent is two calls: `POST /v1/{orgSlug}/{workspaceSlug}/repository/
 | --- | --- |
 | Propose, open, check, merge and dismiss a Context PR | A merge request, with the checks as commit statuses |
 | Publish, revise and retire records, and set the governance mode | Through the same merge request flow |
-| Propose an agent, a skill or a configuration clone | Through the same merge request flow |
+| Propose a skill or a configuration clone | Through the same merge request flow |
 | `oxagen steering` freshness in a checkout | Matches the project's gitlab.com remote, nested groups included |
-| Repository tree, production branch, init pull request, agent definition commit, skill configuration | Not yet. Oxagen refuses these with `repository_host_unsupported` |
+| Repository tree, production branch, init pull request, skill configuration | Not yet. Oxagen refuses these with `repository_host_unsupported` |
 
 A project that moves to another group keeps working, because Oxagen addresses it by its numeric id. Records stay stamped with the path you approved when you bound it.
 

@@ -12,31 +12,32 @@
 // what the record holds.
 import { Folder, GitBranch, GitPullRequest } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { Suspense, use } from "react";
+import { type ReactNode, Suspense, use } from "react";
 import type { AgentDetail, AgentPage } from "@/data/contracts/agents";
 import type { RunOutputNode } from "@/data/contracts/run";
 import type { RunSubagent, RunWork } from "@/data/contracts/run-work";
-import type { RunRow } from "@/data/contracts/runs";
+import { isStale, type RunRow, staleReason } from "@/data/contracts/runs";
 import type { Read } from "@/data/read";
 import { parseGitHubUrl } from "@/shared/github-url";
 import { parsePullRequestUrl } from "@/shared/pull-request-url";
+import { routes } from "@/shared/safe-path";
 import type { OrgRole, WsRole } from "@/server/viewer";
 import { AgentCard } from "@/ui/agent-card";
 import { Badge } from "@/ui/badge";
-import { eyebrow, linkChip } from "@/ui/control-styles";
+import { buttonSecondary, eyebrow, linkChip } from "@/ui/control-styles";
 import { EnforcementTierBadge } from "@/ui/enforcement-tier";
 import { useFormatter } from "@/ui/formatter";
 import { Money } from "@/ui/money";
 import { formatCount } from "@/ui/money-format";
-import { GitHubLink, PullRequestLink } from "@/ui/navigation";
+import { GitHubLink, PullRequestLink, SafeLink } from "@/ui/navigation";
 import { ReplayGradeBadge } from "@/ui/replay-grade";
 import { StatusBadge } from "@/ui/status-badge";
 import { CopyPath } from "./copy-text";
-import { runFit, type RunFit } from "./fit";
-import type { RunMetrics } from "./metrics";
+import { DeliveryReport } from "./delivery-report";
+import { effortVerdict, fitOf, runEffort } from "./fit";
 import { ExportAction } from "./record-actions";
 import { ReplayActions } from "./replay-actions";
-import { RunControls } from "./run-controls";
+import { BannerResume, RunControls } from "./run-controls";
 import { SealRunAction } from "./seal-run";
 import type { Place } from "./tab-props";
 
@@ -88,19 +89,37 @@ export function useHarness(run: RunRow, agent: Read<AgentDetail> | null) {
   return { name: ta(`harness.${registered}`), version: null };
 }
 
-/** `fitBadge`: the reading's word as a state pill; nothing when it read fit or could not read. */
-function FitBadges({ fit }: { fit: RunFit }) {
+/**
+ * `fitBadge`: the stored reading's words as state pills (ADR-201), one for
+ * the model class and one for the effort. None on a live run or a run with no
+ * reading, none for a class the reading placed on no ladder, and none for an
+ * effort it did not see or whose value is not the one the rig prints.
+ */
+function FitBadges({ run }: { run: RunRow }) {
   const t = useTranslations("run.header.fit");
-  const model = fit.model;
-  if (model === null) return null;
-  return model.verdict === "fit" ? (
-    <Badge tone="allowed" data-testid="run-fit-model">
-      {t("fit")}
-    </Badge>
-  ) : (
-    <Badge tone="approval" data-testid="run-fit-model">
-      {t("wrongTier")}
-    </Badge>
+  const model = fitOf(run)?.model ?? null;
+  const effort = effortVerdict(run);
+  return (
+    <>
+      {model === null ? null : model.verdict === "fit" ? (
+        <Badge tone="allowed" data-testid="run-fit-model">
+          {t("fit")}
+        </Badge>
+      ) : (
+        <Badge tone="approval" data-testid="run-fit-model">
+          {t("wrongTier")}
+        </Badge>
+      )}
+      {effort === null ? null : effort.verdict === "fit" ? (
+        <Badge tone="allowed" data-testid="run-fit-effort">
+          {t("effortFit")}
+        </Badge>
+      ) : (
+        <Badge tone="approval" data-testid="run-fit-effort">
+          {t("wrongEffort")}
+        </Badge>
+      )}
+    </>
   );
 }
 
@@ -108,15 +127,14 @@ function FitBadges({ fit }: { fit: RunFit }) {
 function Rig({
   run,
   agent,
-  fit,
 }: {
   run: RunRow;
   agent: Read<AgentDetail> | null;
-  fit: RunFit;
 }) {
   const t = useTranslations("run.header");
   const harness = useHarness(run, agent);
   const model = run.model;
+  const effort = runEffort(run);
   return (
     <div
       data-testid="run-rig"
@@ -154,14 +172,16 @@ function Rig({
       >
         {model === null ? t("modelNotRecorded") : model.slug}
       </Chip>
-      {run.effort == null ? (
-        <Chip testId="run-effort" title={t(`effortWhy.${fit.effort.why}`)}>
-          {t("effort")}{" "}
-          <span className="font-normal text-dim">{t("notCaptured")}</span>
+      {/* The value only where the record holds it, titled with where it was
+          read; otherwise not captured, titled with why (#3891). */}
+      {effort.seen ? (
+        <Chip testId="run-effort" title={t(`effortSource.${effort.source}`)}>
+          {t("effort")} {t("effortValue", { value: effort.value })}
         </Chip>
       ) : (
-        <Chip testId="run-effort">
-          {t("effort")} {t("effortValue", { value: run.effort })}
+        <Chip testId="run-effort" title={t(`effortWhy.${effort.why}`)}>
+          {t("effort")}{" "}
+          <span className="font-normal text-dim">{t("notCaptured")}</span>
         </Chip>
       )}
       {run.thinking == null ? null : (
@@ -174,7 +194,7 @@ function Rig({
           {t("permissionMode", { value: run.permissionMode })}
         </Chip>
       )}
-      <FitBadges fit={fit} />
+      <FitBadges run={run} />
     </div>
   );
 }
@@ -214,13 +234,19 @@ function useHostFacts(run: RunRow): string {
   ].join(" ");
 }
 
-/** The host with no enrolled checkout: its name, and that no path is held. */
+/**
+ * The host with no path to copy. `enrolled` says the work read answered and
+ * the host enrolled no checkout, so the chip can say no path is held. Without
+ * that answer the chip names the host and claims nothing about a path.
+ */
 function MachineChip({
   run,
   machine,
+  enrolled = true,
 }: {
   run: RunRow;
   machine: string | null;
+  enrolled?: boolean;
 }) {
   const t = useTranslations("run.header");
   const facts = useHostFacts(run);
@@ -234,48 +260,115 @@ function MachineChip({
     <Chip
       code
       testId="run-machine"
-      title={t("withFacts", {
-        reading: t("pathNotEnrolled", { machine }),
-        facts,
-      })}
+      title={
+        enrolled
+          ? t("withFacts", {
+              reading: t("pathNotEnrolled", { machine }),
+              facts,
+            })
+          : facts
+      }
     >
       <Folder aria-hidden="true" className="size-3 flex-none" />
       {machine}
-      <span className="text-dim">{t("pathNotCaptured")}</span>
+      {enrolled ? (
+        <span className="text-dim">{t("pathNotCaptured")}</span>
+      ) : null}
     </Chip>
   );
 }
 
 /**
- * The checkout strip from what the outputs recorded, while the work read is
- * still in flight or when it failed: the pull requests, and the host.
+ * The working directory the session recorded, as `<machine>:<path>` to copy,
+ * or the host alone when the row holds no directory.
  */
-function WhereFromOutputs({
+function SessionPath({
+  run,
+  machine,
+  enrolled,
+}: {
+  run: RunRow;
+  machine: string | null;
+  enrolled: boolean;
+}) {
+  const t = useTranslations("run.header");
+  const facts = useHostFacts(run);
+  const path = run.place?.path ?? null;
+  if (machine === null || path === null)
+    return <MachineChip run={run} machine={machine} enrolled={enrolled} />;
+  return (
+    <CopyPath
+      text={`${machine}:${path}`}
+      title={t("withFacts", {
+        reading: t("pathSession", { machine }),
+        facts,
+      })}
+    />
+  );
+}
+
+/**
+ * The checkout strip from the row alone, while the work read is in flight
+ * (`pending`) or after it failed (`failed`): the repository, the branch and
+ * the working directory the session recorded, the pull requests the outputs
+ * recorded, and the host.
+ *
+ * It never says a fact was not captured. The work read is what would say so,
+ * and it has not answered. A failed read says it failed instead, so a read
+ * that failed is not shown as a gap in the recording.
+ */
+function WhereFromRow({
   run,
   pulls,
+  read,
 }: {
   run: RunRow;
   pulls: readonly RunOutputNode[] | null;
+  read: "pending" | "failed";
 }) {
   const t = useTranslations("run.header");
+  const branch = run.place?.branch ?? null;
+  const repository = run.place?.repository ?? null;
   return (
     <WhereRow>
-      <Chip>{t("repoNotCaptured")}</Chip>
-      {pulls === null || pulls.length === 0 ? (
-        <Chip>
-          <span className="text-dim">{t("noPullRequest")}</span>
-        </Chip>
-      ) : (
-        pulls.map((pull) => (
-          <PullChip
-            key={`${pull.seq ?? ""}${pull.name}`}
-            url={pull.note}
-            label={recordedPullLabel(pull)}
-            state={null}
-          />
-        ))
+      {repository === null ? null : (
+        <ForgeChip url={repository.url}>
+          {repository.owner}/{repository.name}
+        </ForgeChip>
       )}
-      <MachineChip run={run} machine={run.machine?.hostname ?? null} />
+      {read === "failed" ? (
+        <Chip
+          testId="run-work-unread"
+          title={t(repository === null ? "workUnreadWhy" : "workUnreadRepoWhy")}
+        >
+          <span className="text-dim">
+            {t(repository === null ? "repoNotRead" : "workNotRead")}
+          </span>
+        </Chip>
+      ) : null}
+      {branch === null ? null : (
+        <ForgeChip
+          url={repository === null ? null : `${repository.url}/tree/${branch}`}
+          code
+          testId="run-branch"
+        >
+          <GitBranch aria-hidden="true" className="size-3 flex-none" />
+          {branch}
+        </ForgeChip>
+      )}
+      {(pulls ?? []).map((pull) => (
+        <PullChip
+          key={`${pull.seq ?? ""}${pull.name}`}
+          url={pull.note}
+          label={recordedPullLabel(pull)}
+          state={null}
+        />
+      ))}
+      <SessionPath
+        run={run}
+        machine={run.machine?.hostname ?? null}
+        enrolled={false}
+      />
     </WhereRow>
   );
 }
@@ -297,16 +390,18 @@ function ForgeChip({
   children,
   code = false,
   title,
+  testId,
 }: {
   url: string | null;
   children: React.ReactNode;
   code?: boolean;
   title?: string;
+  testId?: string;
 }) {
   const target = parseGitHubUrl(url);
   if (target === null)
     return (
-      <Chip code={code} title={title}>
+      <Chip code={code} title={title} testId={testId}>
         {children}
       </Chip>
     );
@@ -314,6 +409,7 @@ function ForgeChip({
     <GitHubLink
       to={target}
       title={title}
+      data-testid={testId}
       className={`${linkChip} ${code ? "font-mono text-[10.5px] font-medium" : ""}`}
     >
       {children}
@@ -413,16 +509,30 @@ function WhereFromWork({
   const t = useTranslations("run.header");
   const facts = useHostFacts(run);
   const work = use(read);
-  if (!work.ok) return <WhereFromOutputs run={run} pulls={pulls} />;
+  if (!work.ok) return <WhereFromRow run={run} pulls={pulls} read="failed" />;
   const checkout = latestCheckout(work.value);
-  const repo = checkout?.repository ?? work.value.pullRequests[0]?.repository;
+  // With no enrolled checkout, the session's own record stands in: the
+  // branch its start recorded, and the connected repository its remote
+  // names. An enrolled checkout is the newer fact, so a checkout on a
+  // detached HEAD names no branch even when the session's start named one.
+  const sessionRepo =
+    checkout === null ? (run.place?.repository ?? undefined) : undefined;
+  const repo =
+    checkout?.repository ??
+    sessionRepo ??
+    work.value.pullRequests[0]?.repository;
   const prs = work.value.pullRequests;
+  const branch =
+    checkout === null ? (run.place?.branch ?? null) : checkout.branch;
+  // The repository that holds `branch`: the checkout's, or with none
+  // enrolled, the one the session's remote names. A pull request's
+  // repository need not hold the session's branch, so the session's branch
+  // is never linked into it.
+  const branchRepo = checkout === null ? sessionRepo : repo;
   // A branch that is a pull request's head links to the pull request, never
   // to `/tree/refs/pull/...`.
   const headPr =
-    checkout?.branch === null || checkout === null
-      ? undefined
-      : prs.find((pr) => pr.headRef === checkout.branch);
+    branch === null ? undefined : prs.find((pr) => pr.headRef === branch);
   const machine = work.value.machine?.name ?? run.machine?.hostname ?? null;
   // A pull request the frames recorded that the work read could not read
   // back (its repository is not connected, or it is a GitLab merge request)
@@ -436,25 +546,26 @@ function WhereFromWork({
         <Chip>
           {/* The branch chip beside it is what was captured, so only the
               repository is named as missing then. */}
-          {checkout?.branch == null
-            ? t("repoNotCaptured")
-            : t("repoOnlyNotCaptured")}
+          {branch === null ? t("repoNotCaptured") : t("repoOnlyNotCaptured")}
         </Chip>
       ) : (
         <ForgeChip url={repo.url}>
           {repo.owner}/{repo.name}
         </ForgeChip>
       )}
-      {checkout?.branch == null ? null : (
+      {branch === null ? null : (
         <ForgeChip
           url={
             headPr?.url ??
-            (repo === undefined ? null : `${repo.url}/tree/${checkout.branch}`)
+            (branchRepo === undefined
+              ? null
+              : `${branchRepo.url}/tree/${branch}`)
           }
           code
+          testId="run-branch"
         >
           <GitBranch aria-hidden="true" className="size-3 flex-none" />
-          {checkout.branch}
+          {branch}
         </ForgeChip>
       )}
       {prs.length === 0 && recordedOnly.length === 0 ? (
@@ -474,7 +585,7 @@ function WhereFromWork({
           ))}
           {recordedOnly.map((node) => (
             <PullChip
-              key={`${node.seq ?? ""}${node.name}`}
+              key={`${node.chainRef ?? ""}:${node.seq ?? ""}:${node.name}`}
               url={node.note}
               label={recordedPullLabel(node)}
               state={null}
@@ -483,7 +594,9 @@ function WhereFromWork({
         </>
       )}
       {machine === null || checkout === null ? (
-        <MachineChip run={run} machine={machine} />
+        // No enrolled checkout: the directory the session recorded, when the
+        // row holds one, else the host and that no path is held.
+        <SessionPath run={run} machine={machine} enrolled />
       ) : (
         <CopyPath
           text={`${machine}:${checkout.path}`}
@@ -688,6 +801,10 @@ function AgentLine({
  * is moving when it is waiting on a person. Paused wins over parked: a paused
  * run takes no step whatever its calls are waiting on.
  *
+ * Stale wins over both. A run whose host has gone quiet (`isStale`) may have
+ * stopped, and what the record last said about a pause or a parked call is
+ * no longer news of the run.
+ *
  * The word sits in a polite live region, so when a refresh of the page parks
  * a call or pauses the run, a screen reader hears the new word.
  */
@@ -696,7 +813,13 @@ function RunStatusWord({ run, parked }: { run: RunRow; parked: boolean }) {
   const live = run.status === "live";
   return (
     <span role="status" data-testid="run-status" className="inline-flex">
-      {live && run.ingressPaused === true ? (
+      {isStale(run) ? (
+        <StatusBadge
+          status={run.status}
+          outcome={run.outcome}
+          stale={staleReason(run)}
+        />
+      ) : live && run.ingressPaused === true ? (
         <Badge tone="approval" data-status="paused">
           {t("statusPaused")}
         </Badge>
@@ -712,23 +835,133 @@ function RunStatusWord({ run, parked }: { run: RunRow; parked: boolean }) {
 }
 
 /**
- * The banner under the header while the run is paused. A ledger run's ingress
- * fence holds every step. A wrapped run's host refuses its tool calls, and the
- * model may still write text, so each source gets its own sentence.
+ * The banner under the header while a pause is on its way or in force
+ * (#3972; mockup `pauseBanner`, pages/run.md): one line, "Pausing" or
+ * "Paused" at turn N · step M, then "takes effect at the next checkpoint" or
+ * who paused it and when, and the reason in their words. Then ▶ Resume run
+ * when paused, and Open the pause frame. Every part is read from `get_run`'s
+ * `pause`, and a part the record does not hold is left out rather than
+ * guessed. A resume on its way hides the banner, as the mockup does; the
+ * header's disabled Resuming… says it.
+ *
+ * The pause frame is the `oxagen:command_applied` frame the host sealed. A
+ * pause on its way has sealed none yet, and a ledger run's pause fences
+ * ingress and seals none, so the link gives way to one sentence saying which.
+ * A row whose read did not carry the pause says only that the run is paused.
  */
-function PauseBanner({ run }: { run: RunRow }) {
-  const t = useTranslations("run.header");
-  if (run.status !== "live" || run.ingressPaused !== true) return null;
+function PauseBanner({
+  run,
+  place,
+  orgRole,
+  wsRole,
+}: {
+  run: RunRow;
+  place: Place;
+  orgRole: OrgRole;
+  wsRole: WsRole;
+}) {
+  const t = useTranslations("run.header.pause");
+  const format = useFormatter();
+  if (run.status !== "live") return null;
+  const pause = run.pause ?? null;
+  const state = pause?.state ?? (run.ingressPaused === true ? "paused" : null);
+  if (state === null || state === "resuming") return null;
+  const pausing = state === "pausing";
+  const clock = (iso: string) =>
+    format.dateTime(new Date(iso), { timeStyle: "short" });
+  // The line's parts, in the mockup's order, joined by " · ".
+  const parts: { key: string; node: ReactNode }[] = [];
+  if (pause !== null && pause.step !== null)
+    parts.push({ key: "step", node: t("step", { step: pause.step }) });
+  if (pausing) parts.push({ key: "checkpoint", node: t("checkpoint") });
+  else if (pause !== null && pause.appliedAt !== null) {
+    const time = clock(pause.appliedAt);
+    parts.push({
+      key: "by",
+      node:
+        pause.by === null
+          ? t("at", { time })
+          : t("by", { name: pause.by.name ?? pause.by.id, time }),
+    });
+  }
+  if (pause !== null && pause.reason !== null)
+    parts.push({
+      key: "reason",
+      node: (
+        <span data-testid="run-paused-reason">
+          {t("reason", { reason: pause.reason })}
+        </span>
+      ),
+    });
+  const why =
+    pause === null
+      ? null
+      : run.source === "ledger"
+        ? t("noFrameLedger")
+        : pausing
+          ? t("noFramePending")
+          : pause.seq === null
+            ? t("noFrameRecorded")
+            : null;
   return (
-    <p
-      role="status"
+    <div
       data-testid="run-paused"
       data-source={run.source}
-      className="mb-3.5 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-[12.5px] text-foreground"
+      data-state={state}
+      className="mb-3.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] border border-info/40 bg-info/10 px-3.5 py-[11px] text-[12.5px] text-foreground"
     >
-      <b className="text-info">{t("pausedTitle")}</b>{" "}
-      {run.source === "tacho" ? t("pausedSession") : t("paused")}
-    </p>
+      <span aria-hidden="true" className="text-info">
+        ❙❙
+      </span>
+      {/* The line is the live region, so a pause that lands is heard; the
+          actions beside it are not announced with it. */}
+      <p role="status" className="m-0 min-w-0 flex-1">
+        <b className="text-info">
+          {pause === null || pause.turn === null
+            ? t(pausing ? "pausing" : "paused")
+            : t(pausing ? "pausingAt" : "pausedAt", { turn: pause.turn })}
+        </b>
+        {parts.map((part) => (
+          <span key={part.key}>
+            {" · "}
+            {part.node}
+          </span>
+        ))}
+        {why === null ? null : (
+          <span
+            data-testid="run-paused-no-frame"
+            className="block text-muted-foreground"
+          >
+            {why}
+          </span>
+        )}
+      </p>
+      {pausing ? null : (
+        <BannerResume
+          org={place.org}
+          ws={place.ws}
+          runId={run.id}
+          source={run.source}
+          commandBlock={run.commandBlock ?? null}
+          ingressRevoked={run.ingressRevoked}
+          ingressPaused={run.ingressPaused}
+          orgRole={orgRole}
+          wsRole={wsRole}
+        />
+      )}
+      {pause === null || pause.seq === null ? null : (
+        <SafeLink
+          to={routes.run(place.org, place.ws, run.id, {
+            tab: "actions",
+            body: pause.seq,
+          })}
+          data-testid="run-pause-frame"
+          className={buttonSecondary}
+        >
+          {t("openFrame")}
+        </SafeLink>
+      )}
+    </div>
   );
 }
 
@@ -738,7 +971,6 @@ export function RunHeader({
   roster,
   work,
   pulls,
-  metrics,
   orgRole,
   wsRole,
   place,
@@ -753,7 +985,6 @@ export function RunHeader({
   work: Promise<Read<RunWork>>;
   /** The pull requests the outputs recorded; null when the outputs read failed. */
   pulls: readonly RunOutputNode[] | null;
-  metrics: RunMetrics;
   /**
    * The viewer's two roles, because the writes gate on them differently:
    * `dispatch_command` admits an org Owner or Admin or a workspace Owner or
@@ -767,7 +998,6 @@ export function RunHeader({
   parked?: boolean;
 }) {
   const t = useTranslations("run");
-  const fit = runFit(run, metrics);
   const sealed = run.status !== "live";
   return (
     <>
@@ -805,8 +1035,10 @@ export function RunHeader({
               </Chip>
             )}
           </div>
-          <Rig run={run} agent={agent} fit={fit} />
-          <Suspense fallback={<WhereFromOutputs run={run} pulls={pulls} />}>
+          <Rig run={run} agent={agent} />
+          <Suspense
+            fallback={<WhereFromRow run={run} pulls={pulls} read="pending" />}
+          >
             <WhereFromWork read={work} run={run} pulls={pulls} />
           </Suspense>
           <Suspense fallback={null}>
@@ -828,7 +1060,12 @@ export function RunHeader({
           className="ml-auto flex flex-wrap items-start gap-2"
         >
           {sealed ? (
-            <ReplayActions org={place.org} ws={place.ws} run={run} />
+            <ReplayActions
+              org={place.org}
+              ws={place.ws}
+              run={run}
+              orgRole={orgRole}
+            />
           ) : (
             <RunControls
               org={place.org}
@@ -841,6 +1078,7 @@ export function RunHeader({
               steerBlock={run.steerBlock}
               ingressRevoked={run.ingressRevoked}
               ingressPaused={run.ingressPaused}
+              {...(run.pause === undefined ? {} : { pause: run.pause })}
               orgRole={orgRole}
               wsRole={wsRole}
             />
@@ -859,6 +1097,13 @@ export function RunHeader({
               wsRole={wsRole}
             />
           ) : null}
+          {/* Every command sent to the run and how far each got (#2953).
+              Export stays last, as the header always ends on it. */}
+          <DeliveryReport
+            org={place.org}
+            ws={place.ws}
+            query={{ runId: run.id }}
+          />
           <ExportAction
             org={place.org}
             ws={place.ws}
@@ -869,7 +1114,7 @@ export function RunHeader({
           />
         </div>
       </header>
-      <PauseBanner run={run} />
+      <PauseBanner run={run} place={place} orgRole={orgRole} wsRole={wsRole} />
     </>
   );
 }

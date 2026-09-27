@@ -27,7 +27,8 @@ import {
 import { z } from "zod";
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import { registerCapability } from "../registry";
-import { costSchema } from "./spend.shared";
+import { runEffortSourceSchema, runFitSchema } from "../run-fit";
+import { costSchema, ratioSchema, tokenCountsSchema } from "./spend.shared";
 
 /**
  * The surfaces an in-app agent turn is admitted on (`agent_runs.surface`;
@@ -48,6 +49,11 @@ export const runSourceSchema = z.enum(["ledger", "tacho"]);
  * `live`: the run is open. `sealed`: it ended and its record is sealed.
  * `halted`: an operator or policy stopped it (a ledger `cancelled`, a tacho
  * `aborted`).
+ *
+ * Paused and compacted are facts beside the status, not statuses of their
+ * own (ADR-193). A paused open run reads `live` with `ingressPaused: true`,
+ * and a compacted ended run reads `sealed` with `compacted: true`. Every
+ * open-run gate reads `live`, so a paused run stays open to all of them.
  */
 export const runStatusSchema = z.enum(["live", "sealed", "halted"]);
 
@@ -112,6 +118,20 @@ export const runSummarySchema = z
  * person whose name the record does not hold.
  */
 export const operatorKindSchema = z.enum(["human", "agent", "service"]);
+
+/**
+ * The workspace roles an operator can hold (`workspace.workspace_users.role`,
+ * lowercased), in the words a run records them (#3999).
+ */
+export const RUN_OPERATOR_ROLES = [
+  "owner",
+  "admin",
+  "member",
+  "billing",
+  "compliance",
+  "viewer",
+] as const;
+export const runOperatorRoleSchema = z.enum(RUN_OPERATOR_ROLES);
 
 /**
  * The model the run was served by, as its recorded id and what that id
@@ -246,12 +266,17 @@ export const runPullRequestSchema = z
     /** `owner/name` as the frame recorded it; null when it recorded none. */
     repository: z.string().max(512).nullable(),
     /**
-     * The state a store recorded for the pull request. `list_runs` reads no
-     * forge, and no store records a pull request's state yet, so this is null
-     * today: a caller renders "status unknown", never a guessed "open".
-     * `get_run_work` reads the live state from GitHub for one run.
+     * The state read from `tacho.run_pull_requests`, which forge webhooks and
+     * one read when the link landed keep current (ADR-192). Null when no row
+     * exists or no forge has reported the pull request, and a caller then
+     * renders "status unknown", never a guessed "open".
      */
     state: z.enum(["open", "draft", "merged", "closed"]).nullable(),
+    /**
+     * RFC 3339; when Oxagen last read `state` from the forge. Null when it
+     * never has. Absent when the read did not look.
+     */
+    stateSeenAt: z.string().datetime().nullable().optional(),
   })
   .strict();
 
@@ -272,6 +297,97 @@ export const runDiffSchema = z
 /** Which runs a page lists by their pull requests. */
 export const RUN_PULL_REQUEST_FILTERS = ["any", "with", "without"] as const;
 
+/**
+ * Where a run's pause stands (#3972).
+ *
+ * - `pausing`: a pause is queued and no host has applied it yet.
+ * - `paused`: the host applied the pause, and no resume has followed.
+ * - `resuming`: the run is paused and a resume is queued behind it.
+ *
+ * A run with no pause in force reads no pause at all, so the field is null.
+ */
+export const RUN_PAUSE_STATES = ["pausing", "paused", "resuming"] as const;
+
+/**
+ * The pause in force on a run: its state, the commands behind it, where it
+ * took hold, who asked for it, and when. Read from the run's
+ * `tacho.control_commands` rows, so every field is a recorded one.
+ */
+export const runPauseSchema = z
+  .object({
+    state: z.enum(RUN_PAUSE_STATES),
+    /** The pause command (`tcm_…`). */
+    commandId: z.string().min(1),
+    /** The resume command queued behind it (`tcm_…`); set only while `resuming`. */
+    resumeCommandId: z.string().min(1).nullable(),
+    /**
+     * The `seq` of the `oxagen:command_applied` frame the host sealed on the
+     * run's own chain, as a decimal string. Null while `pausing`, and for a
+     * ledger run, whose pause fences ingress and seals no frame.
+     */
+    seq: z.string().regex(/^\d+$/).nullable(),
+    /**
+     * The turn and step, both 1-based, at `seq`, or at the run's latest frame
+     * while `pausing`. Null when the position could not be read, and for a
+     * ledger run.
+     */
+    turn: z.number().int().positive().nullable(),
+    step: z.number().int().positive().nullable(),
+    /** The person who issued the pause; null when the row names none. */
+    by: z
+      .object({
+        /** The person's public id (`usr_…`). */
+        id: z.string().min(1),
+        /** Null when the user record holds no name. */
+        name: z.string().nullable(),
+      })
+      .strict()
+      .nullable(),
+    /** RFC 3339; when the pause was issued. */
+    issuedAt: z.string().datetime(),
+    /** RFC 3339; when the host applied it. Null while `pausing`. */
+    appliedAt: z.string().datetime().nullable(),
+    /** The reason the person gave; null when none was given. */
+    reason: z.string().nullable(),
+  })
+  .strict();
+
+/**
+ * The replay grades a page can filter on, plus `not_recorded` for a run whose
+ * seal recorded no grade (`replayGrade: null`).
+ */
+export const RUN_REPLAY_FILTERS = [...REPLAY_GRADES, "not_recorded"] as const;
+
+/**
+ * The columns `list_runs` can order across both stores. Frames, name, pull
+ * requests, lines changed and tokens are not here: no single SQL order covers
+ * them in both stores, so a page cannot sort on them.
+ */
+export const RUN_SORT_KEYS = [
+  "started",
+  "agent",
+  "operator",
+  "status",
+  "tier",
+  "replay",
+  "cost",
+] as const;
+
+/**
+ * The most runs `list_runs` counts for `total`, and the largest `offset` it
+ * accepts. Past it, `total` reads null and a caller shows the bound with a
+ * plus sign.
+ */
+export const RUN_LIST_TOTAL_BOUND = 10_000;
+
+/**
+ * The most UTF-16 code units a run's `name` or `taskRef` carries. A harness
+ * title and a ledger run's goal have no cap where they are written (a goal
+ * may run to 8,192 characters), so the reads cut a longer one on a
+ * code-point boundary and end it with an ellipsis (#4224).
+ */
+export const RUN_LABEL_MAX = 256;
+
 export const runItemSchema = z
   .object({
     id: runPublicIdSchema,
@@ -284,6 +400,12 @@ export const runItemSchema = z
      * resume its host applied (#4112). A sealed wrapped run is never paused.
      */
     ingressPaused: z.boolean().optional(),
+    /**
+     * The pause in force, with its place, actor, time and reason (#3972).
+     * Null when no pause is in force. `get_run` answers it; `list_runs`
+     * leaves it out.
+     */
+    pause: runPauseSchema.nullable().optional(),
     /** `org_ns.ws_ns.slug` (ADR-024); null when the ledger row names no agent. */
     agentKey: z.string().nullable(),
     /** The initiating principal's public id; null when none was recorded. */
@@ -298,6 +420,12 @@ export const runItemSchema = z
      */
     operatorName: z.string().nullable(),
     /**
+     * The person's avatar, from the same user row as `operatorName`: an https
+     * URL or a designed `avatar:v1:` value. Null for every principal that is
+     * not a person and for a person who set none, and never blank.
+     */
+    operatorAvatarUrl: z.string().min(1).nullable(),
+    /**
      * How the record came to name `operatorId`. `initiator` is the principal
      * the run itself was admitted for. `host_enroller` is the person who
      * enrolled the machine a wrapped session ran on: a wrapped session carries
@@ -306,6 +434,13 @@ export const runItemSchema = z
      * as the person at the keyboard. Null when no operator was recorded.
      */
     operatorAttribution: z.enum(["initiator", "host_enroller"]).nullable(),
+    /**
+     * The operator's workspace role when the run opened, stamped then and
+     * never read live (#3999). Null for a run recorded before the role was
+     * stamped, for an operator who is not a person, and for a person with no
+     * membership in the run's workspace.
+     */
+    operatorRole: runOperatorRoleSchema.nullable(),
     status: runStatusSchema,
     outcome: runOutcomeSchema,
     /**
@@ -331,12 +466,13 @@ export const runItemSchema = z
     costIsEstimate: z.boolean().optional(),
     reportedCost: runCostSchema.nullable().optional(),
     /**
-     * The goal a ledger run was admitted for. Null for a wrapped session: no
-     * dispatch record names its task, and a task is never inferred from a
-     * branch name or model output. The issues a session's pull requests close
-     * are read by `get_run_work`.
+     * The goal a ledger run was admitted for, cut to `RUN_LABEL_MAX` with an
+     * ellipsis. The run's spec keeps the whole goal. Null for a wrapped
+     * session: no dispatch record names its task, and a task is never
+     * inferred from a branch name or model output. The issues a session's
+     * pull requests close are read by `get_run_work`.
      */
-    taskRef: z.string().nullable(),
+    taskRef: z.string().max(RUN_LABEL_MAX).nullable(),
     /** RFC 3339. */
     startedAt: z.string().datetime(),
     /**
@@ -428,11 +564,24 @@ export const runItemSchema = z
      */
     effort: z.string().nullable().optional(),
     /**
+     * Where `effort` was read (#3891): `request` from a proxied model
+     * request's body, `harness` from the harness's own report. A request
+     * value wins over the harness's. Null exactly when `effort` is.
+     * `get_run` answers it; `list_runs` leaves it out.
+     */
+    effortSource: runEffortSourceSchema.nullable().optional(),
+    /**
      * Whether the session had always-on thinking enabled, from the latest
      * session config frame. Null when no frame recorded it, and for every
      * ledger run. `get_run` answers it; `list_runs` leaves it out.
      */
     thinking: z.boolean().nullable().optional(),
+    /**
+     * The Model fit reading for the sealed run (#3893). Null for a live run,
+     * for a run whose stored reading read an earlier seal, and for a run with
+     * no reading yet. `get_run` answers it; `list_runs` leaves it out.
+     */
+    fit: runFitSchema.nullable().optional(),
     /**
      * The permission mode the session ended in, falling back to the one it
      * started in. Null when none was recorded, and for every ledger run.
@@ -455,15 +604,47 @@ export const runItemSchema = z
       .optional(),
     /** The machine the run ran on; null for a ledger run. */
     machine: runMachineSchema.nullable(),
-    /** The recorded agent harness, independent of its model and wrapper. */
+    /**
+     * Where a wrapped session ran, as its start recorded it: the working
+     * directory and the git branch (the worktree's branch when it ran in one).
+     * Each is null where the session recorded none, and the whole is null for
+     * a ledger run, which records no host.
+     *
+     * `repository` is the connected repository whose remote matches the
+     * digest the session recorded, or null when none matches. The session
+     * keeps only that digest, so naming the repository takes a read of the
+     * workspace's connected repositories: `get_run` makes it, and `list_runs`
+     * does not, so a list row leaves `repository` out.
+     */
+    place: z
+      .object({
+        path: z.string().nullable(),
+        branch: z.string().nullable(),
+        repository: z
+          .object({
+            host: z.string(),
+            owner: z.string(),
+            name: z.string(),
+            url: z.string().url(),
+          })
+          .strict()
+          .nullable()
+          .optional(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
+    /**
+     * The recorded agent harness, independent of its model and wrapper. Null
+     * when the session recorded none, and for every ledger run.
+     */
     harness: z
       .object({
         name: z.string(),
         version: z.string().nullable(),
         runtime: z.string().nullable(),
       })
-      .nullable()
-      .optional(),
+      .nullable(),
     /** False when the workspace turned automatic run names and summaries off (ADR-153). */
     enrichmentEnabled: z.boolean().optional(),
     /**
@@ -471,8 +652,15 @@ export const runItemSchema = z
      * `model_refused` or `credit_refused:<code>`. Absent once an account exists.
      */
     enrichmentError: z.string().optional(),
-    /** The generated name; null until `summarize_run` wrote one. */
-    name: z.string().nullable(),
+    /**
+     * What the run is called, cut to `RUN_LABEL_MAX` with an ellipsis. A
+     * wrapped session reads the title its harness gave it first, then the
+     * name Oxagen wrote (the model's, or the fallback from the first
+     * prompt), then the title ingest derived. A ledger run reads the name
+     * Oxagen wrote. With automatic accounts turned off, only the harness
+     * title is read. Null when there is none.
+     */
+    name: z.string().max(RUN_LABEL_MAX).nullable(),
     summary: runSummarySchema.nullable(),
     /**
      * The pull requests the run's frames name, earliest first. Absent when
@@ -492,6 +680,29 @@ export const runItemSchema = z
     pullRequestsOpened: z.number().int().nonnegative().optional(),
     /** Lines added and removed; null when neither the harness nor git reported any. */
     diff: runDiffSchema.nullable().optional(),
+    /**
+     * The run's token counts by class, from its `cost.run_totals` row. Null
+     * when the run has no rollup row. The column is NOT NULL, so an unpriced
+     * row still carries counts. Never zero-filled for a missing row. Absent
+     * when the read did not look.
+     */
+    tokens: tokenCountsSchema.nullable().optional(),
+    /**
+     * `cost.run_totals.cache_hit_rate`: cache reads over uncached input plus
+     * cache reads, weighted by spend over the run's frames, from 0 to 1. Null
+     * when there is no row or the row holds none. Never 0 in place of a
+     * missing figure.
+     */
+    cacheHitRate: ratioSchema.nullable().optional(),
+    /**
+     * True when the run has ended and frame compaction removed its latest
+     * sealed attempt's hot frames, so the run is read from its archive segment
+     * (ADR-058). False for a ledger run that has not been compacted. Absent for
+     * a wrapped session, whose store records no recording compaction.
+     * `tacho.sessions.num_compactions` counts context compactions and is never
+     * read for this.
+     */
+    compacted: z.boolean().optional(),
   })
   .strict();
 
@@ -546,8 +757,8 @@ export const runList = registerCapability({
   description:
     "List the runs recorded in this workspace, newest first: evidence-ledger runs and root wrapped-agent sessions in one cursor-paged list, with the operator, the model, the machine, status, counts and metered cost each row recorded. The in-app agent's own turns are not listed.",
   mode: "sync",
-  surfaces: ["api", "mcp", "agent"],
-  layers: ["schema", "api", "mcp", "unit", "docs", "app"],
+  surfaces: ["api", "mcp", "agent", "cli"],
+  layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
   scoped: true,
   noBillingGate: true,
   mutates: false,
@@ -572,6 +783,54 @@ export const runList = registerCapability({
        * the read looks through a bounded number of runs per page.
        */
       pullRequests: z.enum(RUN_PULL_REQUEST_FILTERS).optional(),
+      /*
+       * The filters, search, sort and offset below are optional with no
+       * default, so a call that sends none lists exactly as a call before
+       * them did (#3837).
+       */
+      /** Only runs in these statuses. Absent lists every status. */
+      status: z.array(runStatusSchema).min(1).max(3).optional(),
+      /**
+       * Only runs published at these tiers. A ledger run with no graded seal
+       * reads `harness`.
+       */
+      tier: z.array(z.enum(GRADE_ENFORCEMENT_TIERS)).min(1).max(4).optional(),
+      /** Only runs with these grades; `not_recorded` matches a null grade. */
+      replayGrade: z.array(z.enum(RUN_REPLAY_FILTERS)).min(1).max(5).optional(),
+      /**
+       * A case-insensitive substring matched against the public id, the name,
+       * the harness title, the agent key, the operator's name, the model id,
+       * the hostname, and a ledger run's goal.
+       */
+      query: z.string().trim().min(1).max(200).optional(),
+      /**
+       * The order of the list. Absent means `started` descending. Nulls sort
+       * last in both directions.
+       */
+      sort: z
+        .object({
+          key: z.enum(RUN_SORT_KEYS),
+          dir: z.enum(["asc", "desc"]),
+        })
+        .strict()
+        .optional(),
+      /**
+       * Rows to skip in the filtered, sorted list. The handler refuses an
+       * `offset` sent with a `cursor` as `invalid_input` (`cursor_with_offset`).
+       */
+      offset: z.number().int().min(0).max(RUN_LIST_TOTAL_BOUND).optional(),
+      /**
+       * Answer `total` and `totalBound`. Counting reads every matching row in
+       * both stores up to the bound, so a caller that prints no pager (a
+       * picker, the agents page) leaves it off and pays for the page alone.
+       */
+      count: z.boolean().optional(),
+      /**
+       * `true` answers `liveRuns`, the workspace's live count. The count reads
+       * every root session the workspace holds, so a read that does not show
+       * it leaves this out and pays nothing for it. Fleet sets it.
+       */
+      countLive: z.boolean().optional(),
     })
     .strict(),
   output: z
@@ -579,11 +838,31 @@ export const runList = registerCapability({
       runs: z.array(runItemSchema).max(100),
       nextCursor: z.string().nullable(),
       /**
+       * How many runs in the workspace are live, whatever the page, the
+       * cursor or the pull-request filter: the ledger runs still running and
+       * the root wrapped sessions still open that `list_runs` would list. A
+       * wrapped session whose host is revoked or has not polled within
+       * `HOST_POLL_WINDOW_MS` is not counted, since its row reads stale. A
+       * session with no host is counted. Answered only when the input sets
+       * `countLive`, and absent when the count could not be read.
+       */
+      liveRuns: z.number().int().nonnegative().optional(),
+      /**
        * `pull_requests_unread`: the pull-request frames could not be read, so
        * rows carry no `pullRequests` and a filtered page decided on the
        * counted `pr_open` calls alone.
        */
       warnings: z.array(z.enum(["pull_requests_unread"])).optional(),
+      /**
+       * The runs that match every filter and the search across both stores,
+       * whatever the page. Null when more than `totalBound` match. Absent when
+       * the read did not count: the caller did not ask (`count`), a
+       * `pullRequests` filter of `with` or `without`, which only the
+       * ClickHouse frames answer, or a count that failed.
+       */
+      total: z.number().int().nonnegative().nullable().optional(),
+      /** `RUN_LIST_TOTAL_BOUND`, present whenever `total` is. */
+      totalBound: z.number().int().positive().optional(),
     })
     .strict(),
 });
@@ -593,4 +872,8 @@ export type RunListOutput = z.output<typeof runList.output>;
 export type RunItem = z.output<typeof runItemSchema>;
 export type RunPullRequest = z.output<typeof runPullRequestSchema>;
 export type RunDiff = z.output<typeof runDiffSchema>;
+export type RunPause = z.output<typeof runPauseSchema>;
+export type RunPauseState = (typeof RUN_PAUSE_STATES)[number];
 export type RunPullRequestFilter = (typeof RUN_PULL_REQUEST_FILTERS)[number];
+export type RunSortKey = (typeof RUN_SORT_KEYS)[number];
+export type RunReplayFilter = (typeof RUN_REPLAY_FILTERS)[number];

@@ -1,18 +1,34 @@
 "use client";
-// The Runtimes pages' client islands: the dialogs the page opens and the one
-// write, Unenroll.
+// The Runtimes pages' client islands: the dialogs the page opens and its three
+// writes, Add a runtime, the Containment switch and Unenroll.
+//
+// Add a runtime asks for a name and a slug and names the runtime
+// (`create_runtime`, ADR-198). The slug fills from the name by the one rule
+// every name-made slug follows (`slugFromName`: spaces become hyphens, every
+// other special character is dropped) until the person types one of their
+// own. A checkbox asks whether the runtime requires the contained launcher
+// (ADR-204), off unless the person ticks it. The only way on is registering
+// the runtime's first agent: the dialog lands on the register flow with the
+// runtime chosen.
+//
+// The Containment switch on a named runtime's page sets the same field later
+// (`update_runtime`, ADR-204). It writes at once, with no dialog, because the
+// change is reversible and a host reads it only at its next bundle fetch.
 //
 // Nothing here enrolls a host or writes a hook (runtimes.md: enrollment is an
-// installer, run on the host itself). Enroll a runtime is a link to the
-// Register an agent flow, whose wrap step shows the command; Show the CLI path
-// links the Oxagen app's installers, which put the CLI on the host's PATH, and
-// prints the command. Three controls the design draws have no capability behind
-// them: Request access, Open an incident and Run a smoke session. Each opens a
-// dialog that says what the product would do and that nothing records it yet,
-// rather than a button that silently does nothing: Request access is #3820,
-// Open an incident #3821, Run a smoke session #3819.
+// installer, run on the host itself). Show the CLI path links the Oxagen app's
+// installers, which put the CLI on the host's PATH, and prints the command.
+// Three controls the design draws have no capability behind them: Request
+// access, Open an incident and Run a smoke session. Each opens a dialog that
+// says what the product would do and that nothing records it yet, rather than
+// a button that silently does nothing: Request access is #3820, Open an
+// incident #3821, Run a smoke session #3819.
+import {
+  RUNTIME_SLUG_MAX,
+  slugFromName,
+} from "@oxagen/oxagen/contracts/runtime.shared";
 import { useTranslations } from "next-intl";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useId, useState, useTransition } from "react";
 import { routes } from "@/shared/safe-path";
 import { unanswered } from "@/ui/action-failure";
 import {
@@ -22,16 +38,32 @@ import {
   mono,
 } from "@/ui/control-styles";
 import { DesktopDownloads } from "@/ui/desktop-downloads";
+import { Field } from "@/ui/field";
 import { FormAlert } from "@/ui/form-feedback";
 import { SafeLink, useNavigate } from "@/ui/navigation";
 import { SheetDialog } from "@/ui/sheet-dialog";
-import { unenrollRuntime } from "./actions";
+import {
+  createRuntime,
+  setRuntimeContainment,
+  unenrollRuntime,
+} from "./actions";
 
 /** `.btn.danger`: the ink and the border carry the red; the word carries the meaning. */
 const buttonDanger = `${buttonSecondary} border-error/50! text-error-ink! hover:bg-error/10!`;
 
-/** Enroll a runtime: the wrap flow, at its first step. Gold unless the screen already has its gold action. */
-export function EnrollRuntime({
+/** Lowercase letters and digits in groups joined by single hyphens, the runtime slug's one spelling. */
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+type AddFailure = Exclude<
+  Awaited<ReturnType<typeof createRuntime>>,
+  { ok: true }
+>;
+
+/**
+ * Add a runtime: the dialog that names one and moves on to registering its
+ * first agent. Gold unless the screen already has its gold action.
+ */
+export function AddRuntime({
   org,
   ws,
   gold = true,
@@ -40,15 +72,230 @@ export function EnrollRuntime({
   ws: string;
   gold?: boolean;
 }) {
-  const t = useTranslations("runtimes.page");
+  const t = useTranslations("runtimes.add");
+  const page = useTranslations("runtimes.page");
+  const navigate = useNavigate();
+  const baseId = useId();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  // The slug follows the name until the person edits the slug by hand.
+  const [slugEdited, setSlugEdited] = useState(false);
+  // Off by default, the handler's default too (ADR-204).
+  const [containment, setContainment] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [slugError, setSlugError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  function reset() {
+    setName("");
+    setSlug("");
+    setSlugEdited(false);
+    setContainment(false);
+    setNameError(null);
+    setSlugError(null);
+    setFailure(null);
+  }
+
+  function failureText(result: AddFailure): string {
+    switch (result.reason) {
+      case "denied":
+        return t("failure.denied");
+      case "conflict":
+        return t("failure.refused", { code: result.code });
+      case "invalid":
+        return t("failure.invalid");
+      case "not_found":
+        return t("failure.refused", { code: result.code });
+      case "pending_approval":
+        return t("failure.pendingApproval", {
+          accessRequestId: result.accessRequestId,
+        });
+      case "unavailable":
+      case "exhausted":
+        return t("failure.unavailable", { code: result.code });
+    }
+  }
+
+  async function submit() {
+    if (pending) return;
+    const trimmedName = name.trim();
+    const trimmedSlug = slug.trim();
+    const badName = trimmedName === "" ? t("errors.nameRequired") : null;
+    const badSlug =
+      trimmedSlug === "" || !SLUG_PATTERN.test(trimmedSlug)
+        ? t("errors.slugInvalid")
+        : null;
+    setNameError(badName);
+    setSlugError(badSlug);
+    setFailure(null);
+    if (badName !== null || badSlug !== null) return;
+    setPending(true);
+    try {
+      const result = await createRuntime(org, ws, {
+        name: trimmedName,
+        slug: trimmedSlug,
+        ...(containment ? { containmentRequired: true } : {}),
+      });
+      if (result.ok) {
+        setOpen(false);
+        navigate.push(result.value.register);
+        return;
+      }
+      if (
+        result.reason === "conflict" &&
+        result.code === "runtime_slug_taken"
+      ) {
+        setSlugError(t("errors.slugTaken"));
+        return;
+      }
+      if (result.reason === "invalid" && result.field === "slug") {
+        setSlugError(t("errors.slugInvalid"));
+        return;
+      }
+      setFailure(failureText(result));
+    } catch {
+      setFailure(failureText(unanswered("action_failed")));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        data-testid="runtimes-add"
+        data-touch-target=""
+        aria-haspopup="dialog"
+        className={gold ? buttonPrimary : buttonSecondary}
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        {page("add")}
+      </button>
+      <SheetDialog
+        open={open}
+        onOpenChange={(next) => {
+          setOpen(next);
+          if (!next) reset();
+        }}
+        title={t("title")}
+        testId="runtimes-add-dialog"
+      >
+        <form
+          noValidate
+          aria-label={t("title")}
+          className="flex flex-col gap-4 text-sm"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <p className="text-muted-foreground">{t("lead")}</p>
+          {failure === null ? null : (
+            <FormAlert testId="runtimes-add-failure">{failure}</FormAlert>
+          )}
+          <Field
+            id={`${baseId}-name`}
+            name="name"
+            label={t("name")}
+            hint={t("nameHint")}
+            error={nameError ?? undefined}
+            autoComplete="off"
+            maxLength={128}
+            value={name}
+            onChange={(event) => {
+              const next = event.target.value;
+              setName(next);
+              if (!slugEdited) setSlug(slugFromName(next, RUNTIME_SLUG_MAX));
+            }}
+          />
+          <Field
+            id={`${baseId}-slug`}
+            name="slug"
+            label={t("slug")}
+            hint={t("slugHint")}
+            error={slugError ?? undefined}
+            autoComplete="off"
+            spellCheck={false}
+            maxLength={RUNTIME_SLUG_MAX}
+            className={mono}
+            value={slug}
+            onChange={(event) => {
+              setSlugEdited(true);
+              setSlug(event.target.value);
+            }}
+          />
+          <div className="flex flex-col gap-1">
+            {/* The label wraps the checkbox so its whole row is the 44px phone target. */}
+            <label
+              htmlFor={`${baseId}-containment`}
+              data-touch-target=""
+              className="flex items-center gap-2 font-medium"
+            >
+              <input
+                id={`${baseId}-containment`}
+                name="containmentRequired"
+                type="checkbox"
+                data-testid="runtimes-add-containment"
+                checked={containment}
+                aria-describedby={`${baseId}-containment-hint`}
+                onChange={(event) => {
+                  setContainment(event.target.checked);
+                }}
+                className="size-4"
+              />
+              {t("containment")}
+            </label>
+            <p
+              id={`${baseId}-containment-hint`}
+              className="text-xs text-muted-foreground"
+            >
+              {t("containmentHint")}
+            </p>
+          </div>
+          <p className="border-l-2 border-gold py-0.5 pl-3 text-[13px] text-foreground">
+            {t("next")}
+          </p>
+          <button
+            type="submit"
+            data-testid="runtimes-add-submit"
+            data-touch-target=""
+            aria-disabled={pending || undefined}
+            className={`${buttonPrimary} w-full`}
+          >
+            {pending ? t("pending") : t("submit")}
+          </button>
+        </form>
+      </SheetDialog>
+    </>
+  );
+}
+
+/** Register an agent on a runtime that has none yet: the register flow with the runtime chosen. */
+export function RegisterOnRuntime({
+  org,
+  ws,
+  runtimeId,
+  runtimeName,
+}: {
+  org: string;
+  ws: string;
+  runtimeId: string;
+  runtimeName: string;
+}) {
+  const t = useTranslations("runtimes.named");
   return (
     <SafeLink
-      to={routes.register(org, ws, "name")}
-      data-testid="runtimes-enroll"
-      data-touch-target=""
-      className={gold ? buttonPrimary : buttonSecondary}
+      to={routes.register(org, ws, "name", { runtime: runtimeId })}
+      data-testid="runtime-register-agent"
+      aria-label={t("registerOn", { runtime: runtimeName })}
+      className={`${linkText} relative z-10`}
     >
-      {t("enroll")}
+      {t("register")}
     </SafeLink>
   );
 }
@@ -183,6 +430,116 @@ export function SmokeSession({ hostname }: { hostname: string }) {
         {t("stub.smokeBody", { hostname })}
       </p>
     </DialogButton>
+  );
+}
+
+/** A refused or failed containment write, as the seam classified it (§3.2). */
+type ContainmentFailure = Exclude<
+  Awaited<ReturnType<typeof setRuntimeContainment>>,
+  { ok: true }
+>;
+
+/**
+ * The Containment switch (ADR-204): whether every agent on this runtime runs
+ * only under the contained launcher. It shows the value the record holds and
+ * moves when the page reads the record again, so it never shows a setting the
+ * record does not carry. A refusal leaves it where it was and names the
+ * reason. Rendered only for an org Owner or Admin; the handler checks the
+ * role again.
+ */
+export function ContainmentSwitch({
+  org,
+  ws,
+  runtimeId,
+  required,
+}: {
+  org: string;
+  ws: string;
+  runtimeId: string;
+  /** The value `list_runtimes` answered for this runtime. */
+  required: boolean;
+}) {
+  const t = useTranslations("runtimes.containment");
+  const navigate = useNavigate();
+  const id = useId();
+  // The transition holds `pending` through the page's re-read, so the switch
+  // stays busy until it shows the value just written.
+  const [pending, startTransition] = useTransition();
+  const [failure, setFailure] = useState<string | null>(null);
+
+  function failureText(result: ContainmentFailure): string {
+    switch (result.reason) {
+      case "denied":
+        return t("failure.denied");
+      case "not_found":
+        return t("failure.notFound");
+      case "conflict":
+        return t("failure.refused", { code: result.code });
+      case "invalid":
+        return t("failure.invalid");
+      case "pending_approval":
+        return t("failure.pendingApproval", {
+          accessRequestId: result.accessRequestId,
+        });
+      case "unavailable":
+      case "exhausted":
+        return t("failure.unavailable", { code: result.code });
+    }
+  }
+
+  function toggle(next: boolean) {
+    if (pending) return;
+    setFailure(null);
+    startTransition(async () => {
+      try {
+        const result = await setRuntimeContainment(org, ws, runtimeId, next);
+        if (result.ok) navigate.refresh();
+        else setFailure(failureText(result));
+      } catch {
+        setFailure(failureText(unanswered("action_failed")));
+      }
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        {/* The label wraps the switch so its whole row is the 44px phone target. */}
+        <label
+          htmlFor={id}
+          data-touch-target=""
+          className="flex items-center gap-2 font-medium"
+        >
+          <input
+            id={id}
+            type="checkbox"
+            role="switch"
+            data-testid="runtime-containment-switch"
+            checked={required}
+            aria-disabled={pending || undefined}
+            aria-describedby={`${id}-state`}
+            onChange={(event) => {
+              toggle(event.target.checked);
+            }}
+            className="size-4"
+          />
+          {t("label")}
+        </label>
+        {pending ? (
+          <span className="text-muted-foreground">{t("saving")}</span>
+        ) : null}
+      </div>
+      <p
+        id={`${id}-state`}
+        data-testid="runtime-containment-value"
+        className="text-sm text-muted-foreground"
+      >
+        {required ? t("required") : t("notRequired")}
+      </p>
+      {failure === null ? null : (
+        <FormAlert testId="runtime-containment-failure">{failure}</FormAlert>
+      )}
+    </div>
   );
 }
 

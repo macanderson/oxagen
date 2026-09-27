@@ -33,7 +33,10 @@ import type {
   PlanCard,
   UsageCredits,
 } from "./contracts/billing";
-import type { AssistantThread } from "./contracts/conversations";
+import type {
+  AssistantSession,
+  AssistantThread,
+} from "./contracts/conversations";
 import type { MandateDetail, MandateList } from "./contracts/mandates";
 import type { FirstFrame, OnboardingGate } from "./contracts/onboarding";
 import type {
@@ -51,6 +54,7 @@ import type {
   RunChain,
   RunCost,
   RunDetail,
+  RunFindings,
   RunFrameBody,
   RunOutputs,
   RunTranscript,
@@ -59,9 +63,24 @@ import type {
   TranscriptText,
   TranscriptZoom,
 } from "./contracts/run";
+import type { RunContext } from "./contracts/run-context";
+import type { RunIssues } from "./contracts/run-issues";
 import type { RunWork, RunOutcomesPolicy } from "./contracts/run-work";
-import type { PullRequestFilter, RunPage } from "./contracts/runs";
-import type { RuntimeAgents, RuntimeList } from "./contracts/runtimes";
+import type { InterjectionQueue } from "./contracts/interjections";
+import type {
+  CommandReport,
+  EnforcementTier,
+  PullRequestFilter,
+  RunPage,
+  RunReplayFilter,
+  RunSortKey,
+  RunStatus,
+} from "./contracts/runs";
+import type {
+  NamedRuntimeList,
+  RuntimeAgents,
+  RuntimeList,
+} from "./contracts/runtimes";
 import type {
   AssistantEngine,
   OrgChoice,
@@ -108,6 +127,7 @@ import type {
   McpServerList,
   ToolVersionPage,
 } from "./contracts/tools";
+import type { ToolbeltDetail, ToolbeltList } from "./contracts/toolbelts";
 import type { Read } from "./read";
 
 export interface DataSource {
@@ -160,14 +180,29 @@ export interface DataSource {
     assistantEngine(ctx: WsCtx): Promise<Read<AssistantEngine>>;
   };
   /**
-   * get_conversation with no id: the viewer's latest active conversation in
-   * the workspace, the thread the assistant flyout reopens (#4163), or null
-   * when the viewer has none. Caller:
-   * features/shell/assistant-thread-actions.ts, when the flyout opens in a
-   * workspace it has not read yet.
+   * The assistant flyout's conversations in the workspace, the viewer's own.
+   * Caller: features/shell/assistant-thread-actions.ts.
    */
   conversations: {
+    /**
+     * get_conversation with no id: the viewer's latest active conversation,
+     * the thread the flyout reopens (#4163), or null when the viewer has
+     * none. Read when the flyout opens in a workspace it has not read yet.
+     */
     latest(ctx: WsCtx): Promise<Read<AssistantThread | null>>;
+    /**
+     * list_conversations, active only: the flyout's session list (#4435),
+     * newest activity first, at most fifty. The archive sweep takes a
+     * conversation off it once it has been idle for the workspace's
+     * `[stella] archive_after_days`.
+     */
+    list(ctx: WsCtx): Promise<Read<readonly AssistantSession[]>>;
+    /**
+     * get_conversation with an id: the session the person picked from the
+     * list. An id that is not the viewer's, or was deleted, is a refusal
+     * with code `conversation_not_found`.
+     */
+    byId(ctx: WsCtx, conversationId: string): Promise<Read<AssistantThread>>;
   };
   /**
    * The Billing page's six noBillingGate reads, each Owner, Admin or Billing
@@ -202,9 +237,12 @@ export interface DataSource {
    * and `transcript` is `get_run_transcript` at one zoom level, each read by
    * its own tab, so a tab nobody opened makes no read. `frameBody` is
    * `get_run_frame_body`, one frame's bytes on demand (§3.5), read only when
-   * the Frames tab has a frame open, caller features/run/run.tsx. `chain` is
-   * `get_run_chain`, read only when the Chain and seal tab is open, because it
-   * walks the recording to find its gaps.
+   * the Frames tab has a frame open, caller features/run/run.tsx; `chainRef`
+   * names the subagent chain a frame was recorded on, and is omitted for the
+   * run's own chain (#3823). `chain` is `get_run_chain`, read only when the
+   * Chain and seal tab is open, because it walks the recording to find its
+   * gaps. `commands` is `list_commands`, the delivery report: one run's
+   * commands, or the commands one broadcast queued (#2953).
    */
   runs: {
     list(
@@ -215,6 +253,25 @@ export interface DataSource {
         limit?: number;
         /** Runs with or without pull requests; absent is every run. */
         pullRequests?: PullRequestFilter;
+        /** Only runs in these statuses; absent is every status. */
+        status?: RunStatus[];
+        /** Only runs published at these tiers; absent is every tier. */
+        tier?: EnforcementTier[];
+        /** Only runs with these grades; `not_recorded` is a run with none. */
+        replayGrade?: RunReplayFilter[];
+        /** A substring searched on the server; absent lists every run. */
+        query?: string;
+        /** The order; absent is newest first. */
+        sort?: { key: RunSortKey; dir: "asc" | "desc" };
+        /** Rows to skip in the filtered, sorted list. Never sent with a cursor. */
+        offset?: number;
+        /** Answer the page's `total`. Only a caller that draws a pager asks. */
+        count?: boolean;
+        /**
+         * Ask for the workspace's live count (`RunPage.liveRuns`). It reads
+         * every root session the workspace holds, so only Fleet's tile asks.
+         */
+        countLive?: boolean;
       },
     ): Promise<Read<RunPage>>;
     get(
@@ -226,7 +283,12 @@ export interface DataSource {
       ctx: WsCtx,
       runId: string,
       seq: string,
+      chainRef?: string,
     ): Promise<Read<RunFrameBody>>;
+    commands(
+      ctx: WsCtx,
+      q: { runId: string } | { commandIds: string[] },
+    ): Promise<Read<CommandReport>>;
     cost(ctx: WsCtx, runId: string): Promise<Read<RunCost>>;
     /**
      * `get_run_turns`, the run's per-turn ledger over every frame, read only
@@ -240,7 +302,8 @@ export interface DataSource {
      * `limit` is the entries a page carries, the contract's default when
      * omitted. `text` is how much of each body a page carries, the zoom's cap
      * when omitted, and `query` narrows the entries to those that hold it,
-     * searched on the server.
+     * searched on the server. `before` reads the page ahead of a cursor a
+     * backward page carried, and `from: "end"` reads the run's last page.
      */
     transcript(
       ctx: WsCtx,
@@ -249,6 +312,8 @@ export interface DataSource {
       q?: {
         kinds?: TranscriptKind[];
         after?: string | null;
+        before?: string;
+        from?: "start" | "end";
         limit?: number;
         text?: TranscriptText;
         query?: string;
@@ -262,6 +327,24 @@ export interface DataSource {
      */
     outputs(ctx: WsCtx, runId: string): Promise<Read<RunOutputs>>;
     work(ctx: WsCtx, runId: string): Promise<Read<RunWork>>;
+    /**
+     * `get_run_issues`, the issues the run worked on with their state as the
+     * forge reads it now, read by the Issues tab (#3970).
+     */
+    issues(ctx: WsCtx, runId: string): Promise<Read<RunIssues>>;
+    /**
+     * `list_findings` narrowed to the run: each open finding that cites it,
+     * with the frames it cites, read by the Cost tab (#4001).
+     */
+    findings(ctx: WsCtx, runId: string): Promise<Read<RunFindings>>;
+    /**
+     * `get_run_context`, each model request's window block by block and the
+     * assembler's manifests (ADR-200, #3894). Read by the Governed actions
+     * tab when the open frame is a model request or a manifest, callers
+     * features/run/actions-tab.tsx, and by the Context tab,
+     * features/run/context-tab.tsx.
+     */
+    context(ctx: WsCtx, runId: string): Promise<Read<RunContext>>;
     outcomesSettings(ctx: WsCtx): Promise<Read<RunOutcomesPolicy>>;
   };
   /** list_approvals, the workspace's pending approvals or one run's; caller: features/fleet/fleet.tsx. */
@@ -298,13 +381,33 @@ export interface DataSource {
     ): Promise<Read<{ items: ResolvedApprovalItem[]; more: boolean }>>;
   };
   /**
+   * list_interjections. `open` reads with `open: true`: the questions agents
+   * paused to ask that nobody has answered, walked to the end of the cursor
+   * under a bound, with `more` set when the bound stopped the walk (#3839);
+   * callers: features/fleet/fleet.tsx and features/shell/source.ts.
+   */
+  interjections: {
+    open(
+      ctx: WsCtx,
+      q: { runId: string | null },
+    ): Promise<Read<InterjectionQueue>>;
+    /**
+     * list_interjections with `open: false` for one run: its questions,
+     * answered or not, with each answer's path and receipt, so the Run page
+     * renders the question a host held the run on and how it was settled
+     * (#3941); caller: features/run/run.tsx. The answer itself is a write and
+     * goes through the Run page's server action, not a port.
+     */
+    forRun(ctx: WsCtx, runId: string): Promise<Read<InterjectionQueue>>;
+  };
+  /**
    * The Agents pages (#2956), each read by the agent's public id or slug:
    * list_agents, one cursor page of the workspace's identities, callers
    * features/agents/agents.tsx, features/tools/tools.tsx (the grant
    * dialog's agent picker) and features/fleet/fleet.tsx (the steer dialog's
    * agents and the Live runs tile's workspace total); get_agent, the identity with its credentials,
-   * roles, hosts and cached definition, callers features/agents/agent.tsx and
-   * agent-source.tsx; get_agent_toolbelt, the computed belt, and
+   * roles, hosts, runtime, toolbelt and versions (ADR-198), callers
+   * features/agents/agent.tsx and the register flow; get_agent_toolbelt, the computed belt, and
    * list_incidents narrowed to the agent, one cursor page, caller
    * features/agents/agent.tsx.
    */
@@ -590,6 +693,14 @@ export interface DataSource {
     ): Promise<Read<ConnectionList>>;
     /** list_mcp_servers: every registered MCP server in the workspace; no filter, no cursor */
     mcpServers(ctx: WsCtx): Promise<Read<McpServerList>>;
+    /**
+     * list_toolbelts (ADR-198): the All tools belt first, then its clones, and
+     * how many tools the workspace made available. Callers: the Toolbelts tab,
+     * the register flow's toolbelt step and the agent page's toolbelt control.
+     */
+    toolbelts(ctx: WsCtx): Promise<Read<ToolbeltList>>;
+    /** get_toolbelt: one belt's tools grouped by server, for the Toolbelts tab. */
+    toolbelt(ctx: WsCtx, toolbeltId: string): Promise<Read<ToolbeltDetail>>;
   };
   /**
    * The Runtimes page (roadmap mockups/pages/runtimes.md); caller:
@@ -597,10 +708,15 @@ export interface DataSource {
    * end of its cursor under a bound: one row per host enrollment, which is one
    * agent on one machine, because no host row exists. `agents` is
    * `list_agents` walked until every named key is found, for the Agents on
-   * this host table.
+   * this host table. `named` is `list_runtimes` (ADR-198): the runtimes the
+   * workspace named, each with its live agents by harness; callers: the
+   * Runtimes page, the register flow and the agent page's Move control. An
+   * `id` (`rtm_…`) reads that runtime alone, for the runtime page, since the
+   * unfiltered read stops at 500 runtimes.
    */
   runtimes: {
     list(ctx: WsCtx): Promise<Read<RuntimeList>>;
     agents(ctx: WsCtx, keys: readonly string[]): Promise<Read<RuntimeAgents>>;
+    named(ctx: WsCtx, id?: string): Promise<Read<NamedRuntimeList>>;
   };
 }

@@ -1,0 +1,7 @@
+#:schema https://oxagen.sh/schemas/agent/v1.json
+schema = "agent/v1"
+name = "a-intel.core.release-bot"
+label = "Release bot"
+operator = "priya"                  # an Oxagen member or team
+runtime = "ghost-runner"             # a runtime enrolled in Oxagen
+harness = "claude-code"             # a harness, or a framework adapter

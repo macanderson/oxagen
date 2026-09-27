@@ -21,6 +21,9 @@ The redacted body of one frame of a run (Mission Control spec §8.2, §8.4 `view
 |---|---|---|---|
 | `runId` | string | yes | `arun_…` or `tse_…` |
 | `seq` | string | yes | decimal, up to 19 digits: the frame's `run_seq` (ledger) or `seq` (wrapped) as `get_run` reports it |
+| `sessionUuid` | string | no | uuid: the subagent chain the frame was recorded on, as `get_run_transcript` names it (`sessionUuid` on a half or an entry's subagent) |
+
+A wrapped run's subagents each record on a chain of their own, numbered from 0 like the run's, so a subagent's `seq` also names a different frame on the run's own chain. Pass the chain's `sessionUuid` with the `seq` to read the subagent's frame. Omit it, or pass the run's own session, to read the run's own chain. The read names the chain and is fenced to the run's root session, so a chain of another run finds nothing.
 
 ## Output
 
@@ -35,7 +38,7 @@ A caller can recompute `digest` over the decoded bytes: what it read is what was
 
 ## Errors
 
-- `not_found` (404): `run_not_found` (no run with that id in the caller's workspace, whichever store minted it); `frame_not_found` (no frame at `seq`); `frame_has_no_body` (the frame carried no content).
+- `not_found` (404): `run_not_found` (no run with that id in the caller's workspace, whichever store minted it); `frame_not_found` (no frame at `seq` on the chain named; also a `sessionUuid` that is not a subagent chain under this run, and any `sessionUuid` on a ledger run, which has one chain); `frame_has_no_body` (the frame carried no content).
 - 500: the stored object does not hash to the recorded digest. The store answered something the record does not vouch for, and the bytes are not returned.
 
 ## Storage

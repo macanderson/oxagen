@@ -1,4 +1,5 @@
 import { spendGet } from "@oxagen/oxagen/contracts/spend.get";
+import type { UnmeteredRuns } from "@oxagen/oxagen/contracts/spend.shared";
 import { describe, expect, it, vi } from "vitest";
 import { compareRows, createSpendGetHandler, groupRows } from "./spend.get";
 import {
@@ -17,13 +18,57 @@ function harness(
   over: {
     daily?: ReturnType<typeof daily>[];
     runs?: ReturnType<typeof run>[];
+    unmetered?: UnmeteredRuns;
   } = {},
 ) {
   const readDailyTotals = vi.fn(async () => over.daily ?? []);
   const readRunTotals = vi.fn(async () => over.runs ?? []);
-  const handler = createSpendGetHandler({ readDailyTotals, readRunTotals });
-  return { handler, readDailyTotals, readRunTotals };
+  const readUnmeteredRuns = vi.fn(
+    async (): Promise<UnmeteredRuns> =>
+      over.unmetered ?? { total: 0, byHarness: [] },
+  );
+  const handler = createSpendGetHandler({
+    readDailyTotals,
+    readRunTotals,
+    readUnmeteredRuns,
+  });
+  return { handler, readDailyTotals, readRunTotals, readUnmeteredRuns };
 }
+
+describe("get_spend, runs with no usage (#3304)", () => {
+  it("says how many of the period's runs reported no usage, by harness, beside a total that leaves them out", async () => {
+    // A Codex run with its own base URL and a Cursor run record tool calls
+    // and no model usage; a Claude Code run beside them is priced. The total
+    // counts all three runs and can only price one.
+    const unmetered: UnmeteredRuns = {
+      total: 2,
+      byHarness: [
+        { harness: "codex", runs: 1 },
+        { harness: "cursor", runs: 1 },
+      ],
+    };
+    const h = harness({
+      runs: [
+        run({ modelCalls: 0, steps: 3 }),
+        run({ modelCalls: 0, steps: 2 }),
+        pricedRun(4_500n),
+      ],
+      unmetered,
+    });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    expect(h.readUnmeteredRuns).toHaveBeenCalledWith(SCOPE, PERIOD);
+    expect(out.unmeteredRuns).toEqual(unmetered);
+    expect(out.total.runs).toBe(3);
+    expect(out.total.cost?.micros).toBe("4500");
+    expect(() => spendGet.output.parse(out)).not.toThrow();
+  });
+
+  it("answers zero when every run reported usage", async () => {
+    const h = harness({ runs: [pricedRun(4_500n)] });
+    const out = await h.handler({ period: PERIOD, groupBy: "model" }, ctx());
+    expect(out.unmeteredRuns).toEqual({ total: 0, byHarness: [] });
+  });
+});
 
 describe("get_spend", () => {
   it("reads the level's day rows and every run row for the caller's workspace and period", async () => {

@@ -22,7 +22,7 @@ import {
 import { connect } from "node:net";
 import { join } from "node:path";
 import { deflateSync, gzipSync, zstdCompressSync } from "node:zlib";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyChain } from "../chain";
 import type { TachoEvent } from "../envelope";
 import { bodyIsPartial } from "../evidence/replay-grade";
@@ -59,7 +59,7 @@ import {
   withAnthropicSystemBlock,
   withOpenAiInstructions,
 } from "./model-injection";
-import { createModelProxy } from "./model-proxy";
+import { createModelProxy, requestEffortOf } from "./model-proxy";
 import { createModelProxyListener } from "./model-proxy-listener";
 import {
   resolveModelRoute,
@@ -395,8 +395,8 @@ describe("the loopback model proxy", () => {
       exec: () => ({ status: 0, stdout: "", stderr: "" }),
       log: (line) => log.push(line),
       port: 0,
-      home: join(paths.root, ".."),
-      transcriptRoots: [join(paths.root, "no-transcripts")],
+      home: join(paths.tachoDir, ".."),
+      transcriptRoots: [join(paths.tachoDir, "no-transcripts")],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
       modelUpstreams: {
         anthropic: vendorUrl,
@@ -544,6 +544,11 @@ describe("the loopback model proxy", () => {
       "oxagen.request_bytes": String(body.length),
       "oxagen.response_bytes": String(reply.length),
       "oxagen.stream": "0",
+      // The window the vendor read (ADR-200): no system and no tools, one
+      // message, measured as the message's JSON.
+      "oxagen.window": `system=0:0;tools=0:0;conversation=${Buffer.byteLength(
+        JSON.stringify({ role: "user", content: PROMPT }),
+      )}:1`,
     });
   });
 
@@ -579,7 +584,7 @@ describe("the loopback model proxy", () => {
     );
 
     const haystacks = [
-      ...walkFiles(paths.root).map((file) => readFileSync(file, "latin1")),
+      ...walkFiles(paths.tachoDir).map((file) => readFileSync(file, "latin1")),
       JSON.stringify(plane.ingested),
       log.join("\n"),
       JSON.stringify(handle.api.status()),
@@ -638,6 +643,32 @@ describe("the loopback model proxy", () => {
     );
     const ttft = frame!.body as { ttft_ms: number; api_duration_ms: number };
     expect(ttft.api_duration_ms).toBeGreaterThanOrEqual(ttft.ttft_ms + 200);
+  });
+
+  it("seals the effort the request asked for, and none when it asked for none (#3891)", async () => {
+    const fake = await vendor(streamingAnthropic(0));
+    const { port, session, frames } = await boot(fake.url);
+    const uuid = await session("sess-effort");
+    const send = (body: Record<string, unknown>) =>
+      call(port, {
+        path: "/anthropic/v1/messages",
+        headers: [
+          "X-Api-Key",
+          FAKE_KEY,
+          "X-Claude-Code-Session-Id",
+          "sess-effort",
+        ],
+        body: JSON.stringify({ model: "claude-sonnet-5", stream: true, ...body }),
+      });
+    await send({ messages: [], output_config: { effort: "high" } });
+    await until(() => frames(uuid).length === 1);
+    await send({ messages: [] });
+    await until(() => frames(uuid).length === 2);
+    const [asked, unasked] = frames(uuid);
+    expect(asked!.body).toMatchObject({ request_effort: "high" });
+    // A request that named no effort seals no member: the reader says the
+    // agent sent none, never a default Oxagen guessed.
+    expect(unasked!.body).not.toHaveProperty("request_effort");
   });
 
   it("stores the second call of a session without the messages the first already holds", async () => {
@@ -710,6 +741,152 @@ describe("the loopback model proxy", () => {
     expect(two!.content?.digest).toBe(
       sha(Buffer.from(body!.bytes_base64, "base64")),
     );
+  });
+
+  it("gives a call's seq to the next call when its frame never reached the WAL, with no gap and no fold against the lost body", async () => {
+    // #4311 item 2: the proxy sealed with no chain mark. A write that failed
+    // left the recorder one seq past the WAL's tail, so the next frame
+    // sealed a gap the control plane refuses the chain over. The next call
+    // also folded against the lost call's request, and pointed at a body
+    // nothing stored.
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, session, frames, log } = await boot(fake.url, {
+      bundle: RETAIN_MODEL_CALLS,
+    });
+    const uuid = await session("sess-lost-frame");
+    const before = handle.registry.get("sess-lost-frame")!.recorder.chainCursor;
+    const append = handle.wal.append.bind(handle.wal);
+    let failed = 0;
+    const fault = vi
+      .spyOn(handle.wal, "append")
+      .mockImplementation((events, bodies) => {
+        if (failed === 0 && events.some((event) => event.kind === "llm_call")) {
+          failed += 1;
+          throw Object.assign(new Error("ENOSPC: no space left on device"), {
+            code: "ENOSPC",
+          });
+        }
+        append(events, bodies);
+      });
+    const headers = [
+      "X-Api-Key",
+      FAKE_KEY,
+      "X-Claude-Code-Session-Id",
+      "sess-lost-frame",
+    ];
+    // A system prompt long enough that the second call would fold.
+    const system = [
+      {
+        type: "text",
+        text: `You are careful. ${"Read before you write. ".repeat(40)}`,
+      },
+    ];
+    const first = JSON.stringify({
+      model: "claude-sonnet-5",
+      stream: true,
+      system,
+      messages: [{ role: "user", content: PROMPT }],
+    });
+    expect(
+      (
+        await call(port, {
+          path: "/anthropic/v1/messages",
+          headers,
+          body: first,
+        })
+      ).status,
+    ).toBe(200);
+    await until(() => failed === 1);
+    await until(() =>
+      log.some((line) => line.includes("sealing the call's frame failed")),
+    );
+    expect(
+      handle.registry.get("sess-lost-frame")!.recorder.chainCursor,
+    ).toEqual(before);
+    const second = JSON.stringify({
+      model: "claude-sonnet-5",
+      stream: true,
+      system,
+      messages: [
+        { role: "user", content: PROMPT },
+        { role: "assistant", content: COMPLETION },
+        { role: "user", content: "and then?" },
+      ],
+    });
+    expect(
+      (
+        await call(port, {
+          path: "/anthropic/v1/messages",
+          headers,
+          body: second,
+        })
+      ).status,
+    ).toBe(200);
+    await until(() => frames(uuid).length === 1);
+    fault.mockRestore();
+
+    const [frame] = frames(uuid);
+    expect(frame!.seq).toBe(before.seq);
+    expect(verifyChain(handle.wal.read(uuid))).toMatchObject({ ok: true });
+    const [body] = handle.wal.bodiesFor([frame!]);
+    const exchange = JSON.parse(
+      Buffer.from(body!.bytes_base64, "base64").toString("utf8"),
+    ) as { request: string };
+    const stored = JSON.parse(exchange.request) as Record<string, unknown>;
+    expect(stored).not.toHaveProperty("$oxagen_prior");
+    expect(stored["messages"]).toHaveLength(3);
+    expect(stored).toHaveProperty("system");
+  });
+
+  it("gives a refusal's seq to the next frame when its frame never reached the WAL", async () => {
+    const fake = await vendor(streamingAnthropic(1));
+    const { handle, port, session, frames } = await boot(fake.url, {
+      bundle: {
+        budget: { mode: "enforced" as const },
+        models: { allow: ["claude-opus-*"], deny: [] },
+      },
+    });
+    const uuid = await session("sess-lost-refusal");
+    const before =
+      handle.registry.get("sess-lost-refusal")!.recorder.chainCursor;
+    const append = handle.wal.append.bind(handle.wal);
+    let failed = 0;
+    const fault = vi
+      .spyOn(handle.wal, "append")
+      .mockImplementation((events, bodies) => {
+        if (
+          failed === 0 &&
+          events.some((event) => event.kind === "policy_decision")
+        ) {
+          failed += 1;
+          throw Object.assign(new Error("ENOSPC: no space left on device"), {
+            code: "ENOSPC",
+          });
+        }
+        append(events, bodies);
+      });
+    const ask = () =>
+      call(port, {
+        path: "/anthropic/v1/messages",
+        headers: [
+          "X-Api-Key",
+          FAKE_KEY,
+          "X-Claude-Code-Session-Id",
+          "sess-lost-refusal",
+        ],
+        body: JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+      });
+    expect((await ask()).status).toBe(502);
+    expect(failed).toBe(1);
+    expect(
+      handle.registry.get("sess-lost-refusal")!.recorder.chainCursor,
+    ).toEqual(before);
+    expect((await ask()).status).toBe(403);
+    fault.mockRestore();
+    const [decision] = frames(uuid, "policy_decision");
+    expect(decision!.seq).toBe(before.seq);
+    expect(verifyChain(handle.wal.read(uuid))).toMatchObject({ ok: true });
+    expect(fake.requests).toHaveLength(0);
   });
 
   it("records the decoded request and the buffered stream as one frame body", async () => {
@@ -845,7 +1022,7 @@ describe("the loopback model proxy", () => {
     // would be a digest of a body that never ships, and an oracle for the
     // secret besides.
     expect(frame!.content?.digest).toBe(sha(bytes));
-    for (const file of walkFiles(paths.root))
+    for (const file of walkFiles(paths.tachoDir))
       expect(readFileSync(file, "latin1").includes(LEAKED_KEY)).toBe(false);
   });
 
@@ -1978,9 +2155,16 @@ describe("the loopback model proxy", () => {
     expect(sent.rawHeaders[sent.rawHeaders.indexOf("Content-Length") + 1]).toBe(
       String(sent.body.length),
     );
+    // What the injection added to the system block is the window's steering.
+    const harnessSystem = Buffer.byteLength(JSON.stringify("you are helpful"));
+    const sentSystem = Buffer.byteLength(
+      JSON.stringify({ type: "text", text: "you are helpful" }) +
+        JSON.stringify({ type: "text", text: "STEER: prefer small diffs" }),
+    );
     expect(frames(uuid)[0]!.attrs).toMatchObject({
       "oxagen.request_injected": "1",
       "oxagen.request_digest": sha(sent.body),
+      "oxagen.window": `system=${harnessSystem}:1;steering=${sentSystem - harnessSystem}:1;tools=0:0;conversation=0:0`,
     });
     expect(seenSessions).toEqual(["sess-seam"]);
 
@@ -2225,7 +2409,7 @@ describe("the loopback model proxy", () => {
   it("computes the gateway tier from traffic, never from a written base URL", async () => {
     const fake = await vendor(streamingAnthropic(1));
     const paths = scratchPaths();
-    const home = join(paths.root, "..");
+    const home = join(paths.tachoDir, "..");
     // The base URL is written for both harnesses before any session runs.
     await applyModelBaseUrls({
       home,
@@ -2265,7 +2449,7 @@ describe("the loopback model proxy", () => {
   it("forwards to the base URL enrollment displaced, so a corporate gateway still gets the call", async () => {
     const fake = await vendor(streamingAnthropic(1));
     const paths = scratchPaths();
-    const home = join(paths.root, "..");
+    const home = join(paths.tachoDir, "..");
     const { mkdirSync, writeFileSync } = await import("node:fs");
     mkdirSync(join(home, ".claude"), { recursive: true });
     writeFileSync(
@@ -2635,8 +2819,8 @@ describe("the credential seam (ADR-143)", () => {
       exec: () => ({ status: 0, stdout: "", stderr: "" }),
       log: (line) => log.push(line),
       port: 0,
-      home: join(paths.root, ".."),
-      transcriptRoots: [join(paths.root, "no-transcripts")],
+      home: join(paths.tachoDir, ".."),
+      transcriptRoots: [join(paths.tachoDir, "no-transcripts")],
       timers: { detectorMs: 0, sweepMs: 0, checkpointMs: 0, commandsPollMs: 0 },
       modelUpstreams: {
         anthropic: vendorUrl,
@@ -2732,7 +2916,7 @@ describe("the credential seam (ADR-143)", () => {
 
     await handle.tick();
     const haystacks = [
-      ...walkFiles(paths.root).map((file) => readFileSync(file, "latin1")),
+      ...walkFiles(paths.tachoDir).map((file) => readFileSync(file, "latin1")),
       JSON.stringify(plane.ingested),
       log.join("\n"),
       JSON.stringify(handle.api.status()),
@@ -3103,7 +3287,7 @@ describe("the credential seam (ADR-143)", () => {
       {},
       { harnesses: ["claude-code", "codex"] },
     );
-    const home = join(paths.root, "..");
+    const home = join(paths.tachoDir, "..");
     const key = readRunTokenKey(paths.runTokenKey)!;
     const nearlyOver = mintRunToken({
       key,
@@ -3253,6 +3437,8 @@ describe("the wire and the host file", () => {
       "containment",
       "daily_budget",
       "steer_next_step",
+      "unbound_repo",
+      "cedar",
     ]);
   });
 
@@ -3311,6 +3497,32 @@ describe("the wire and the host file", () => {
     expect(modelProxyPortFor({ port: 65535 })).toBe(65534);
     expect(modelProxyPortFor({ port: 47001, model_proxy_port: 5123 })).toBe(
       5123,
+    );
+  });
+});
+
+describe("requestEffortOf (#3891)", () => {
+  it("reads each vendor's own spelling of the effort setting", () => {
+    // Anthropic Messages.
+    expect(requestEffortOf({ output_config: { effort: "max" } })).toBe("max");
+    // OpenAI Responses.
+    expect(requestEffortOf({ reasoning: { effort: "low" } })).toBe("low");
+    // OpenAI Chat Completions.
+    expect(requestEffortOf({ reasoning_effort: "medium" })).toBe("medium");
+  });
+
+  it("reads nothing from a body that names no effort, or names it as something other than a word (negative)", () => {
+    expect(requestEffortOf(undefined)).toBeUndefined();
+    expect(requestEffortOf({ model: "claude-sonnet-5" })).toBeUndefined();
+    expect(requestEffortOf({ output_config: { effort: 3 } })).toBeUndefined();
+    expect(requestEffortOf({ output_config: "high" })).toBeUndefined();
+    expect(requestEffortOf({ reasoning: ["high"] })).toBeUndefined();
+    expect(requestEffortOf({ reasoning_effort: "   " })).toBeUndefined();
+  });
+
+  it("clamps a long value so the frame always seals", () => {
+    expect(requestEffortOf({ reasoning_effort: "x".repeat(600) })).toBe(
+      "x".repeat(32),
     );
   });
 });

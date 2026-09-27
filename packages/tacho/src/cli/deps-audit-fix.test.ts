@@ -15,8 +15,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Exec } from "../host/service";
-import { TEST_ENROLLMENT } from "../host/test-support";
-import { tachoPaths } from "../host/paths";
+import { TEST_AGENT_ID, TEST_ENROLLMENT } from "../host/test-support";
+import { agentPaths, tachoHome } from "../host/paths";
 import {
   defaultCliDeps,
   harnessFacts,
@@ -196,7 +196,7 @@ describe("the real deps with moved harness directories", () => {
       env,
       home,
       platform: "linux",
-      paths: tachoPaths(env, home, "linux"),
+      paths: agentPaths(tachoHome(env, home, "linux"), TEST_AGENT_ID),
     });
     return { home, deps };
   }

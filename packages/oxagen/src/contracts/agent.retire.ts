@@ -4,9 +4,9 @@
 // soft-deleted, every enrolled host revoked, and every mandate still active
 // or drafted against the agent's principal revoked, in one transaction
 // (ADR-106, #3124) — an active mandate does not survive its agent's
-// retirement, because a suspended principal can never draw on it. The
-// definition file in git is not touched here; removing it is a pull request
-// through `commit_agent_definition` with an empty definition.
+// retirement, because a suspended principal can never draw on it. Retiring
+// frees the agent's runtime and harness pair for the next registration
+// (ADR-198).
 //
 // A governance write on the identity, outside the metering surface:
 // `noBillingGate: true`. Roles: org Owner or Admin (INV-29).

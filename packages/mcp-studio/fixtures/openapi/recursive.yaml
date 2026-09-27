@@ -1,0 +1,94 @@
+# Recursive schemas: a category that holds its parent and its children, and
+# an employee and a manager that refer to each other.
+openapi: 3.0.3
+info:
+  title: a-intel catalog
+  version: 1.0.0
+servers:
+  - url: https://catalog.a-intel.com
+paths:
+  /categories/{id}:
+    get:
+      operationId: getCategory
+      summary: Read a category with its parent and children.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The category.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+  /employees/{id}:
+    get:
+      operationId: getEmployee
+      summary: Read an employee and their manager.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The employee.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+  /trees:
+    post:
+      operationId: createTree
+      summary: Create a category tree from a nested body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Category"
+      responses:
+        "201":
+          description: The root category.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+components:
+  schemas:
+    Category:
+      type: object
+      required: [name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        parent:
+          $ref: "#/components/schemas/Category"
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+    Employee:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        manager:
+          $ref: "#/components/schemas/Manager"
+    Manager:
+      allOf:
+        - $ref: "#/components/schemas/Employee"
+        - type: object
+          properties:
+            reports:
+              type: array
+              items:
+                $ref: "#/components/schemas/Employee"

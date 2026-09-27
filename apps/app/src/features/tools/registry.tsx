@@ -13,7 +13,8 @@
 //  - The ten categories the design groups by are not a registry attribute yet
 //    (#3921). The chips and the Category column show the consequence tags the
 //    classification records, which is what `list_tool_versions` filters on.
-//  - Toolbelts and Agents: no store holds a toolbelt or who carries it (#3852).
+//  - Toolbelts and Agents: belts are stored (ADR-198) and listed on their own
+//    tab, but no read answers which belts hold one tool version (#3852).
 import { useLocale, useTranslations } from "next-intl";
 import type {
   McpServerList,

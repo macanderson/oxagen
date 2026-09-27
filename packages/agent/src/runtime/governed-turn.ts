@@ -63,6 +63,11 @@ import {
   type GovernedTurnGoal,
   type TurnLedgerGoalVerdict,
 } from "./engine/goal";
+import type { ContextWindowPayload } from "@oxagen/run-ledger";
+import {
+  type ContextWindowLayout,
+  measureCompletionRequest,
+} from "./context-window";
 import { fromModelMessage, toCompletionMessages } from "./engine/messages";
 import { createPartMapper, type EnginePart } from "./engine/parts";
 import { createProviderPort } from "./engine/provider";
@@ -275,6 +280,15 @@ export interface GovernedTurnInput {
   fundedBy?: TurnFunding;
   /** Client-disconnect / cancel signal; cancels the turn on the engine. */
   abortSignal?: AbortSignal;
+  /**
+   * What the window holds besides conversation, so each model-call frame
+   * records the window block by block (ADR-200): the steering text `system`
+   * ends with, exactly as it was appended, and how many leading `history`
+   * messages the host placed there as context (a history summary). Every
+   * `contextMessages` entry is context. Omitted, the whole system prompt is
+   * `system` and every history message is conversation.
+   */
+  window?: { steering: string | null; historyContext: number };
   /** Observability hook for provider/stream errors; never swallows the part. */
   onError?: StreamAgentReplyArgs["onError"];
   /**
@@ -329,6 +343,12 @@ export interface TurnLedgerModelIntent {
    * to see what the agent was asked.
    */
   request?: unknown;
+  /**
+   * The request's context window, block by block, measured before the
+   * provider is contacted (ADR-200). Absent when the request carried nothing
+   * to measure.
+   */
+  window?: ContextWindowPayload;
 }
 
 /**
@@ -594,14 +614,30 @@ export async function runGovernedTurn(
   await assertEngineReady(client);
 
   const contracts = await toToolContracts(tools, input.governance ?? {});
+  const context = (input.contextMessages ?? []).filter(
+    (m): m is ModelMessage => m !== null && m !== undefined,
+  );
   const messages = toCompletionMessages({
     system: input.system,
     history: input.history,
-    context: (input.contextMessages ?? []).filter(
-      (m): m is ModelMessage => m !== null && m !== undefined,
-    ),
+    context,
     user: buildTurnUserMessage(input.instruction, input.attachments),
   });
+  // The parts of the window that are not conversation, as the engine will
+  // send them back on each completion (ADR-200).
+  const windowLayout: ContextWindowLayout = {
+    steering: input.window?.steering ?? null,
+    context: [
+      ...input.history.slice(0, input.window?.historyContext ?? 0),
+      ...context,
+    ]
+      .flatMap(fromModelMessage)
+      .flatMap((message) =>
+        typeof message.content === "string"
+          ? [{ role: message.role, content: message.content }]
+          : [],
+      ),
+  };
 
   const parts = new AsyncQueue<EnginePart>();
   const mapper = createPartMapper();
@@ -832,9 +868,20 @@ export async function runGovernedTurn(
         // until the provider answers. The completed event carries that one,
         // and the pair read together is what shows a gateway substitution.
         if (ledger) {
-          await recorded(() =>
-            ledger.modelCallStarted({ ...receipt, model: modelId, request }),
-          );
+          await recorded(() => {
+            // Measured inside the receipt, so a measurement that throws
+            // cancels the turn the way any receipt that cannot be built does.
+            const measured = measureCompletionRequest(
+              request.request,
+              windowLayout,
+            );
+            return ledger.modelCallStarted({
+              ...receipt,
+              model: modelId,
+              request,
+              ...(measured !== null ? { window: measured } : {}),
+            });
+          });
         }
         let result: CompletionResult;
         try {

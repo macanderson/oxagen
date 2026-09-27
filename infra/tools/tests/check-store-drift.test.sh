@@ -127,6 +127,71 @@ fi
 neo4j_declared_names "$WORK/nope.cypher" >/dev/null 2>&1
 expect_code 2 "$?" "cypher: an unreadable schema file is 'unknown', not 'nothing declared'"
 
+# --- neo4j_declared_vector_sizes -------------------------------------------
+#
+# A resize keeps the index name, so the name check read a schema.cypher that
+# moved every vector index from 1,536 to 1,024 dimensions as current (#4148).
+
+cat > "$WORK/vectors.cypher" <<'CYPHER'
+// CREATE VECTOR INDEX ghost_vectors IF NOT EXISTS FOR (n:Ghost) ON (n.embedding)
+// OPTIONS { indexConfig: { `vector.dimensions`: 64, `vector.similarity_function`: 'cosine' } };
+CREATE VECTOR INDEX memory_embedding_index IF NOT EXISTS
+FOR (n:AgentMemory) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1024, `vector.similarity_function`: 'cosine' } };
+DROP INDEX engram_memory_embedding_index IF EXISTS;
+CREATE INDEX execution_org IF NOT EXISTS FOR (n:Execution) ON (n.orgId);
+CREATE VECTOR INDEX graph_node_embedding_index IF NOT EXISTS
+FOR (n:GraphNode) ON (n.embedding)
+OPTIONS { indexConfig: { `vector.dimensions`: 1024, `vector.similarity_function`: 'cosine' } };
+CYPHER
+
+SIZES=$(neo4j_declared_vector_sizes "$WORK/vectors.cypher")
+contains "$SIZES" "memory_embedding_index 1024" "vector sizes: reads a multi-line vector index with its size"
+contains "$SIZES" "graph_node_embedding_index 1024" "vector sizes: reads every vector index"
+case "$SIZES" in
+  *ghost_vectors*) fail "vector sizes: a commented-out index must not count" ;;
+  *) pass ;;
+esac
+case "$SIZES" in
+  *execution_org*|*engram*) fail "vector sizes: only CREATE VECTOR INDEX statements count" ;;
+  *) pass ;;
+esac
+if [[ $(printf '%s\n' "$SIZES" | grep -c .) -eq 2 ]]; then pass; else
+  fail "vector sizes: expected exactly 2 pairs, got: $(printf '%s' "$SIZES" | tr '\n' ' ')"
+fi
+
+# An index of the old size reads as missing, so the gate applies the schema.
+printf 'graph_node_embedding_index 1024\nmemory_embedding_index 1536\n' > "$WORK/vec-present.txt"
+printf '%s\n' "$SIZES" > "$WORK/vec-declared.txt"
+MISSING=$(missing_from "$WORK/vec-declared.txt" "$WORK/vec-present.txt")
+contains "$MISSING" "memory_embedding_index 1024" "vector sizes: an index of the old size reads as behind"
+case "$MISSING" in
+  *graph_node_embedding_index*) fail "vector sizes: an index of the current size must not read as behind" ;;
+  *) pass ;;
+esac
+
+neo4j_declared_vector_sizes "$WORK/nope.cypher" >/dev/null 2>&1
+expect_code 2 "$?" "vector sizes: an unreadable schema file is 'unknown', not 'nothing declared'"
+
+# Each database is compared on its own, so a pooled database that is current
+# cannot hide an organisation database at the old size.
+printf 'memory_embedding_index 1024\n' > "$WORK/one-index.txt"
+DECLARED=$( { prefix_lines neo4j "$WORK/one-index.txt"; prefix_lines org-acme "$WORK/one-index.txt"; } )
+contains "$DECLARED" "neo4j memory_embedding_index 1024" "vector sizes: declares the pooled database's indexes"
+contains "$DECLARED" "org-acme memory_embedding_index 1024" "vector sizes: declares each organisation database's indexes"
+printf '%s\n' "$DECLARED" > "$WORK/db-declared.txt"
+printf 'neo4j memory_embedding_index 1024\norg-acme memory_embedding_index 1536\n' > "$WORK/db-present.txt"
+DB_MISSING=$(missing_from "$WORK/db-declared.txt" "$WORK/db-present.txt")
+contains "$DB_MISSING" "org-acme memory_embedding_index 1024" "vector sizes: an organisation database at the old size reads as behind"
+case "$DB_MISSING" in
+  *"neo4j memory_embedding_index"*) fail "vector sizes: a current pooled database must not read as behind" ;;
+  *) pass ;;
+esac
+: > "$WORK/empty.txt"
+if [[ -z $(prefix_lines neo4j "$WORK/empty.txt") ]]; then pass; else
+  fail "vector sizes: an empty result must prefix to nothing"
+fi
+
 # --- the real declarations this ships against ------------------------------
 #
 # The fixtures above prove the parsing; these prove it is pointed at something.
@@ -139,6 +204,8 @@ if [[ -f $REAL_CYPHER ]]; then
   n=$(printf '%s\n' "$REAL" | grep -c .)
   if [[ $n -gt 20 ]]; then pass; else fail "the real schema.cypher parsed to only $n names"; fi
   contains "$REAL" "tenant_public_id" "the real schema.cypher yields a constraint known to be in it"
+  REAL_SIZES=$(neo4j_declared_vector_sizes "$REAL_CYPHER")
+  contains "$REAL_SIZES" "graph_node_embedding_index 1024" "the real schema.cypher yields the universal vector index at 1,024 dimensions"
 else
   fail "packages/ontology/src/schema.cypher is gone — the Neo4j half of this check has no input"
 fi
@@ -437,14 +504,26 @@ contains "$CURL_OUT" "Failed to connect" "curl config: real curl reached the con
 # empty result, and the check reported "55 declared, 0 present" against a
 # database carrying all 55 (#3036). An empty database and a refused query must
 # not collapse into one another — the header is what tells them apart.
+#
+# cypher-shell prints that header only above a first row. A query that matches
+# nothing prints nothing, exactly like a query that never ran, so the script
+# writes every query to return at least one row (see the shipped-script checks
+# below). On 2026-09-26 the organisation database listing filtered in Cypher,
+# matched nothing on production, and blocked the migration gate on 3069a18.
 printf 'name\n"tenant_public_id"\n"execution_org"\n\n' > "$WORK/neo-ok.txt"
 OUT=$(neo_result_names "$WORK/neo-ok.txt"); CODE=$?
 expect_code 0 "$CODE" "neo4j result: a headed result is read"
 [[ $OUT == $'tenant_public_id\nexecution_org' ]] && pass || fail "neo4j result: expected two unquoted names, got: $OUT"
-printf 'name\n' > "$WORK/neo-empty.txt"
-OUT=$(neo_result_names "$WORK/neo-empty.txt"); CODE=$?
-expect_code 0 "$CODE" "neo4j result: a headed result with no rows is a real, empty answer"
-[[ -z $OUT ]] && pass || fail "neo4j result: an empty answer must print nothing, got: $OUT"
+# The vector size query answers a blank for every index that is not a vector
+# index, so a database with only lookup indexes still returns rows.
+printf 'name\n""\n"memory_embedding_index 1024"\n""\n' > "$WORK/neo-blanks.txt"
+OUT=$(neo_result_names "$WORK/neo-blanks.txt"); CODE=$?
+expect_code 0 "$CODE" "neo4j result: a result with blank rows is read"
+[[ $OUT == "memory_embedding_index 1024" ]] && pass || fail "neo4j result: blank rows must be dropped, got: $OUT"
+printf 'name\n""\n""\n' > "$WORK/neo-all-blank.txt"
+OUT=$(neo_result_names "$WORK/neo-all-blank.txt"); CODE=$?
+expect_code 0 "$CODE" "neo4j result: a database with no vector index is a real, empty answer"
+[[ -z $OUT ]] && pass || fail "neo4j result: only blank rows must print nothing, got: $OUT"
 printf 'Unsupported Java 17.0.20.1 detected. Please use Java(TM) 21 or Java(TM) 25 to run Cypher Shell.\n' > "$WORK/neo-java.txt"
 neo_result_names "$WORK/neo-java.txt" >/dev/null 2>&1
 expect_code 2 "$?" "neo4j result: cypher-shell refusing to run is 'unknown', not 'nothing present'"
@@ -479,6 +558,24 @@ if [[ $sent -ge 2 ]]; then pass; else fail "script: expected both ClickHouse rea
 
 bad=$(grep -oE 'neo_cypher "[^"]*' "$TOOLS/check-store-drift.sh" | grep -cv 'neo_cypher "SHOW' || true)
 expect_code 0 "$bad" "script: every Neo4j statement it sends is a SHOW"
+bad=$(grep -oE 'neo_cypher_on [^ ]+ "[^"]*' "$TOOLS/check-store-drift.sh" | grep -cv ' "SHOW' || true)
+expect_code 0 "$bad" "script: every Neo4j statement it sends to a named database is a SHOW"
+sent=$(grep -cE 'neo_cypher_on [^ ]+ "SHOW' "$TOOLS/check-store-drift.sh" || true)
+if [[ $sent -ge 2 ]]; then pass; else fail "script: expected the database listing and the vector read, found $sent"; fi
+
+# A query that matches no row prints nothing, which reads as unknown. The two
+# vector size queries filter outside Cypher so each always has a row: SHOW
+# DATABASES lists at least `system`, and every database has its lookup indexes.
+contains "$SCRIPT" "SHOW DATABASES YIELD name RETURN DISTINCT name" "script: lists every database and filters the organisation ones itself"
+contains "$SCRIPT" "RETURN CASE WHEN type = 'VECTOR' THEN" "script: reads every index and blanks the ones that are not vector indexes"
+case "$SCRIPT" in
+  *"SHOW DATABASES YIELD name WHERE"*) fail "script: a WHERE on SHOW DATABASES can match nothing, and nothing reads as unknown" ;;
+  *) pass ;;
+esac
+case "$SCRIPT" in
+  *"WHERE type = 'VECTOR'"*) fail "script: a WHERE on the vector index read can match nothing, and nothing reads as unknown" ;;
+  *) pass ;;
+esac
 contains "$SCRIPT" "_migrations" "script: reads the ledger db-migrate.ts actually writes"
 contains "$SCRIPT" "system.tables" "script: also asks which tables exist, not only the ledger"
 contains "$SCRIPT" "readonly=1" "script: read-only is enforced on the server, not asserted about the text"

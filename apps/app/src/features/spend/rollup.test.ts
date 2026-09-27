@@ -8,11 +8,13 @@ import type { SpendFinding, SpendReport } from "@/data/contracts/spend";
 import {
   basisOf,
   cacheHitRate,
+  cacheWriteShare,
   classesOf,
   findingsOn,
   perRun,
   reasoningShare,
   savingOf,
+  searchRequestsOf,
   sumClasses,
   sumCost,
   totalOf,
@@ -56,6 +58,19 @@ function finding(over: Partial<SpendFinding>): SpendFinding {
   };
 }
 
+describe("web search requests (#3721)", () => {
+  it("sums the requests over one level and keeps them out of the token total", () => {
+    const rows = [
+      { tokens: tokens({ server_tool_request: 3 }) },
+      { tokens: tokens({ server_tool_request: 2 }) },
+      // A view built before the rollup recorded searches carries no key.
+      { tokens: tokens() },
+    ];
+    expect(searchRequestsOf(rows)).toBe(5);
+    expect(totalOf(sumClasses(rows))).toBe(3 * 500);
+  });
+});
+
 describe("token classes", () => {
   it("folds the two cache-write TTLs into one class", () => {
     expect(classesOf(tokens())).toEqual({
@@ -80,11 +95,35 @@ describe("rates", () => {
     expect(cacheHitRate(classesOf(tokens()))).toBe(0.75);
   });
 
+  it("reads a rebuilt cache as the share of input written to it, beside a hit rate that leaves writes out (A-08)", () => {
+    // Little fresh input, a high hit rate, and as much written as read.
+    const rebuilt = classesOf(
+      tokens({
+        input_uncached: 5_000,
+        cache_read: 395_000,
+        cache_write_5m: 300_000,
+        cache_write_1h: 100_000,
+      }),
+    );
+    expect(cacheHitRate(rebuilt)).toBeCloseTo(0.9875);
+    expect(cacheWriteShare(rebuilt)).toBe(0.5);
+    // 50 written of 450 input tokens.
+    expect(cacheWriteShare(classesOf(tokens()))).toBeCloseTo(50 / 450);
+  });
+
   it("answers no rate over nothing, never a zero (negative)", () => {
     const none = classesOf(
-      tokens({ input_uncached: 0, cache_read: 0, output: 0, reasoning: 0 }),
+      tokens({
+        input_uncached: 0,
+        cache_read: 0,
+        cache_write_5m: 0,
+        cache_write_1h: 0,
+        output: 0,
+        reasoning: 0,
+      }),
     );
     expect(cacheHitRate(none)).toBeNull();
+    expect(cacheWriteShare(none)).toBeNull();
     expect(reasoningShare(none)).toBeNull();
   });
 

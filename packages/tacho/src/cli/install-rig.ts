@@ -199,6 +199,12 @@ export interface SeedOptions {
   /** Make `~/.claude/settings.json` a symlink into a dotfiles checkout. */
   symlinkedClaudeSettings?: boolean;
   platform?: RigPlatform;
+  /**
+   * Seed this directory instead of a fresh temporary one. It must be empty
+   * or absent. The real service manager run on Linux uses a fixed path that
+   * the user's systemd unit directory links to.
+   */
+  home?: string;
 }
 
 /**
@@ -282,8 +288,11 @@ export function rigClaudeDesktopConfig(
  */
 export function seedHome(options: SeedOptions = {}): RigHome {
   const platform = options.platform ?? "darwin";
+  if (options.home !== undefined) mkdirSync(options.home, { recursive: true });
   // realpath: macOS hands out /var/… which is a link to /private/var/…
-  const home = realpathSync(mkdtempSync(join(tmpdir(), "oxagen-rig-")));
+  const home = realpathSync(
+    options.home ?? mkdtempSync(join(tmpdir(), "oxagen-rig-")),
+  );
   if (options.symlinkedClaudeSettings === true) {
     put(join(home, "dotfiles", "claude-settings.json"), USER_CLAUDE_SETTINGS);
     mkdirSync(join(home, ".claude"), { recursive: true });
@@ -450,7 +459,25 @@ export interface RigOptions {
   gatewayListening?: boolean;
   /** Called with every exec before it runs, to observe ordering. */
   onExec?: (command: string, args: string[]) => void;
+  /**
+   * Hand the service manager's commands (`launchctl`, `systemctl`,
+   * `schtasks`, `tasklist`, `taskkill`) to the real one instead of the fake,
+   * and have the unit or task start `daemonCommand` (#4317). Kill points
+   * still fire before each command. The seed's platform must be the host's.
+   * Only `install-rig-real.test.ts` sets this, on a CI runner, never on a
+   * machine running a tachod of its own.
+   */
+  realServices?: { exec: Exec; daemonCommand: string[] };
 }
+
+/** The commands `realServices` hands to the operating system. */
+const SERVICE_COMMANDS = new Set([
+  "launchctl",
+  "systemctl",
+  "schtasks",
+  "tasklist",
+  "taskkill",
+]);
 
 /** The port the rig's fake model proxy reports. */
 export const RIG_GATEWAY_PORT = 47124;
@@ -504,6 +531,18 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
     pulse(`${command} ${verb ?? ""}`.trim());
     options.onExec?.(command, args);
     execs.push({ command, args });
+    if (options.realServices !== undefined && SERVICE_COMMANDS.has(command)) {
+      const result = options.realServices.exec(command, args);
+      // The fake daemon probe below answers while the unit is up, so it
+      // follows what the real service manager was asked to do.
+      if (result.status === 0) {
+        if (["bootstrap", "enable", "/Run"].includes(verb ?? ""))
+          machine.loaded = true;
+        if (["bootout", "disable", "/Delete"].includes(verb ?? ""))
+          machine.loaded = false;
+      }
+      return result;
+    }
     if (command === "launchctl") {
       if (args[0] === "bootstrap") machine.loaded = true;
       if (args[0] === "bootout") {
@@ -663,7 +702,7 @@ export function buildRig(seed: RigHome, options: RigOptions = {}): Rig {
       runtime: {
         hookCommand: `${quoted} hook`,
         credentialHelperCommand: `${quoted} credential issue --harness claude-code`,
-        daemonCommand: [tacho, "daemon"],
+        daemonCommand: options.realServices?.daemonCommand ?? [tacho, "daemon"],
         mcpStdioCommand: [tacho, "mcp-stdio"],
         binDir: bin,
       },

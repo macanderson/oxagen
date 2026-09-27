@@ -78,7 +78,12 @@ export function toolWindowStart(
   return new Date(Math.max(oldest, windowStart.getTime()));
 }
 
-/** The tool calls whose root session the window's runs name. */
+/**
+ * The tool calls whose root session the window's runs name. A call on the
+ * root's own chain carries no session, as a transcript body's frame does; a
+ * subagent's call names its chain, since its `seq` counts on that chain alone
+ * (#4001).
+ */
 export function toObservations(
   rows: readonly ToolCallObservationRow[],
   runIdBySession: ReadonlyMap<string, string>,
@@ -96,6 +101,7 @@ export function toObservations(
       outputDigest: r.outputDigest,
       isMutating: r.isMutating,
       resultTokens: r.resultTokens,
+      sessionUuid: r.sessionUuid === r.rootSessionUuid ? null : r.sessionUuid,
     });
   }
   return out;

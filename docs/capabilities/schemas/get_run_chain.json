@@ -1,11 +1,12 @@
 {
   "name": "get_run_chain",
   "domain": "run",
-  "description": "Read what makes one run's record tamper-evident: the hash rule, the Merkle root, the signed checkpoints, the sequence and body gaps the recording shows, the seal, and the replay-grade ladder with the reason each rung is or is not reached.",
+  "description": "Read what makes one run's record tamper-evident: the hash rule, the Merkle root, the signed checkpoints, the sequence and body gaps the recording shows, the seal, and the replay-grade ladder with the reason each rung is or is not reached. A wrapped run's subagent chains are answered one by one.",
   "mode": "sync",
   "surfaces": [
     "api",
-    "mcp"
+    "mcp",
+    "cli"
   ],
   "sensitivity": "medium",
   "agent": null,
@@ -271,6 +272,63 @@
                   "type": "null"
                 }
               ]
+            },
+            "archiveSegmentDigest": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "attestation": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "alg": {
+                      "const": "ed25519"
+                    },
+                    "keyId": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "sig": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "signsOver": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "run_id",
+                          "attempt_id",
+                          "frame_count",
+                          "merkle_root",
+                          "archive_segment_digest",
+                          "enforcement_tier",
+                          "completeness_gaps",
+                          "replay_grade"
+                        ]
+                      },
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "alg",
+                    "keyId",
+                    "sig",
+                    "signsOver"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -281,7 +339,9 @@
             "finalEventDigest",
             "eventStreamDigest",
             "merkleRoot",
-            "archiveSegmentRef"
+            "archiveSegmentRef",
+            "archiveSegmentDigest",
+            "attestation"
           ],
           "additionalProperties": false
         }
@@ -342,6 +402,226 @@
       },
       "complete": {
         "type": "boolean"
+      },
+      "chains": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "sessionUuid": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "parentSessionUuid": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "subagentId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "subagentType": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "frameCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "firstSeq": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "lastSeq": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "gaps": {
+              "type": "object",
+              "properties": {
+                "missingSequences": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "from": {
+                        "type": "string"
+                      },
+                      "to": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "from",
+                      "to"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "missingFrameCount": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "missingBodies": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "missingSequences",
+                "missingFrameCount",
+                "missingBodies"
+              ],
+              "additionalProperties": false
+            },
+            "checkpoints": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "seq": {
+                    "type": "string"
+                  },
+                  "chainHead": {
+                    "type": "string"
+                  },
+                  "eventCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "signedAt": {
+                    "type": "string"
+                  },
+                  "deviceKeyFingerprint": {
+                    "type": "string"
+                  },
+                  "platformKeyId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "countersignedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "anchorRoot": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "anchoredAt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "seq",
+                  "chainHead",
+                  "eventCount",
+                  "signedAt",
+                  "deviceKeyFingerprint",
+                  "platformKeyId",
+                  "countersignedAt",
+                  "anchorRoot",
+                  "anchoredAt"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "finalHash": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sealedAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "complete": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "sessionUuid",
+            "parentSessionUuid",
+            "subagentId",
+            "subagentType",
+            "frameCount",
+            "firstSeq",
+            "lastSeq",
+            "gaps",
+            "checkpoints",
+            "finalHash",
+            "sealedAt",
+            "complete"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 200
       }
     },
     "required": [

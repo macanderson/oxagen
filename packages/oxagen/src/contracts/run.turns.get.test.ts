@@ -41,6 +41,7 @@ describe("get_run_turns contract", () => {
       runId: "tse_abc123",
       turns: [turn()],
       complete: true,
+      chains: [],
     });
     expect(out.turns[0]).toEqual(turn());
   });
@@ -56,6 +57,7 @@ describe("get_run_turns contract", () => {
         }),
       ],
       complete: true,
+      chains: [],
     });
     expect(out.turns[0]?.cost).toBeNull();
     expect(out.turns[0]?.tokens).toEqual({
@@ -70,11 +72,37 @@ describe("get_run_turns contract", () => {
         runId: "tse_abc123",
         turns: [row],
         complete: true,
+        chains: [],
       }).success;
     expect(parse(turn({ turn: 0 }))).toBe(false);
     expect(parse(turn({ seq: "tse_1" }))).toBe(false);
     expect(parse(turn({ steps: 40 }))).toBe(false);
     expect(parse(turn({ frames: -1 }))).toBe(false);
+  });
+
+  it("places each subagent chain at the turn that spawned it, and refuses a turn numbered from 0 (#4001)", () => {
+    const chain = {
+      sessionUuid: "3f6c0b1e-9a3d-4c2b-8e57-0d1f2a3b4c5d",
+      turn: 2,
+    };
+    const answer = {
+      runId: "tse_abc123",
+      turns: [turn(), turn({ turn: 2, seq: "62" })],
+      complete: true,
+      chains: [chain],
+    };
+    expect(runTurnsGet.output.parse(answer).chains).toEqual([chain]);
+    for (const chains of [
+      [{ ...chain, turn: 0 }],
+      [{ ...chain, sessionUuid: "sub-1" }],
+      [{ ...chain, seq: "4" }],
+    ]) {
+      expect(runTurnsGet.output.safeParse({ ...answer, chains }).success).toBe(
+        false,
+      );
+    }
+    const { chains: _unread, ...unanswered } = answer;
+    expect(runTurnsGet.output.safeParse(unanswered).success).toBe(false);
   });
 
   it("caps an answer at RUN_TURNS_MAX turns", () => {
@@ -86,6 +114,7 @@ describe("get_run_turns contract", () => {
         runId: "tse_abc123",
         turns,
         complete: false,
+        chains: [],
       }).success,
     ).toBe(false);
     expect(
@@ -93,6 +122,7 @@ describe("get_run_turns contract", () => {
         runId: "tse_abc123",
         turns: turns.slice(0, RUN_TURNS_MAX),
         complete: false,
+        chains: [],
       }).success,
     ).toBe(true);
   });

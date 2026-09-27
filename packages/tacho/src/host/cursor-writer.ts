@@ -185,7 +185,7 @@ export function absoluteHookCommandProblem(
  * Everything else is telemetry: after the fact, nothing left to permit, and
  * a long wait there would only slow the agent down.
  */
-function timeoutFor(event: CursorHookEventName): number {
+export function cursorHookTimeoutS(event: CursorHookEventName): number {
   const claude = CURSOR_TO_CLAUDE_EVENT[event];
   if (Object.hasOwn(COMMAND_HOOK_TIMEOUTS_S, claude))
     return COMMAND_HOOK_TIMEOUTS_S[
@@ -202,7 +202,7 @@ export function cursorHookEntries(
 ): Record<CursorHookEventName, HookEntry[]> {
   const out = {} as Record<CursorHookEventName, HookEntry[]>;
   for (const event of CURSOR_HOOK_EVENTS) {
-    const base = commandHookEntry(config, timeoutFor(event), "cursor");
+    const base = commandHookEntry(config, cursorHookTimeoutS(event), "cursor");
     out[event] = [
       { ...base, failClosed: CURSOR_ENFORCEMENT_EVENTS.includes(event) },
     ];

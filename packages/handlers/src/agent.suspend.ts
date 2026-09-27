@@ -5,6 +5,9 @@
 // refused with `conflict`, and a
 // suspend of a suspended agent (or a resume of an active one) answers the
 // current state and the principal's recorded write instant, without a write.
+// The built-in assistant (`qa-chat`) cannot be suspended, because stella acts
+// through its principal (#4350). It can still be resumed, so a principal
+// suspended before that refusal existed has a way back.
 import { schema, withTenantDb } from "@oxagen/database";
 import { emitSecurityEvent } from "@oxagen/database/security";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
@@ -13,7 +16,11 @@ import { HandlerError } from "@oxagen/oxagen";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
 import { eq } from "drizzle-orm";
 import { AGENT_IDENTITY_ROLES } from "./agent.register";
-import { assertNotRetired, requireAgentIdentity } from "./lib/agent-identity";
+import {
+  assertNotManaged,
+  assertNotRetired,
+  requireAgentIdentity,
+} from "./lib/agent-identity";
 import { logger } from "./logger";
 
 export const agentSuspendHandler: CapabilityHandler<
@@ -32,6 +39,7 @@ export const agentSuspendHandler: CapabilityHandler<
   const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
   const result = await withTenantDb(async (tx) => {
     const agent = await requireAgentIdentity(tx, input.agentId, scope);
+    if (input.suspended) assertNotManaged(agent);
     assertNotRetired(agent);
     if (!agent.principalId || agent.principalUpdatedAt === null) {
       throw new HandlerError({

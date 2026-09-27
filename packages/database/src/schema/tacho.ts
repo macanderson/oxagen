@@ -12,8 +12,8 @@
  *   - Every table carries org_id + workspace_id NOT NULL -> standard
  *     tenant_isolation RLS (tenant-policy.manifest.ts).
  *   - Public id prefixes: tch_ hosts, tse_ sessions, tsm_ session models,
- *     tsf_ session files, tsc_ session commands, tcm_ control commands,
- *     tin_ incidents, tck_ checkpoints.
+ *     tsf_ session files, trp_ run pull requests, tsc_ session commands,
+ *     tcm_ control commands, tin_ incidents, tck_ checkpoints.
  */
 import { sql } from "drizzle-orm";
 import {
@@ -36,6 +36,7 @@ import {
   orgScopeMixin,
 } from "./_mixins";
 import { tachoSchema } from "./_schemas";
+import { runEnrichmentCandidate } from "./run-enrichment";
 
 const ts = (name: string) =>
   timestamp(name, { withTimezone: true, mode: "date" });
@@ -136,12 +137,19 @@ export const TACHO_COMMAND_TERMINAL_OUTCOMES = [
   "failed",
 ] as const;
 /**
- * What a command row is addressed to: the host that carries it, or the run
- * it steers. A broadcast (`@agents`, `@<agent>`) is resolved to one row per
- * recipient run at dispatch, so no row is addressed to an agent or a
- * workspace; the address travels in `payload.address`.
+ * What a command row is addressed to: the host that carries it, the run it
+ * steers, or an agent with no run in flight. A broadcast (`@agents`,
+ * `@<agent>`) is resolved to one row per recipient run at dispatch, and the
+ * address travels in `payload.address`.
+ *
+ * An `agent` row is a steer queued for the agent's next run (#2953):
+ * `target_id` is the agent key. When the agent's next root session starts,
+ * ingest re-addresses the row to that run (`target_kind` `run`, `target_id`
+ * its `tse_…`), and the host applies it before the run's first model call.
+ * No host acknowledges an `agent` row while it is still addressed to the
+ * agent. No row is addressed to a workspace.
  */
-export const TACHO_COMMAND_TARGET_KINDS = ["host", "run"] as const;
+export const TACHO_COMMAND_TARGET_KINDS = ["host", "run", "agent"] as const;
 /** Spec §7.3 delivery modes: which model request a steer rides. */
 export const TACHO_DELIVERY_MODES = [
   "next_step",
@@ -181,6 +189,10 @@ export const tachoHosts = tachoSchema.table(
     agentId: uuid("agent_id"),
     agentPrincipalId: uuid("agent_principal_id"),
     apiKeyId: uuid("api_key_id").notNull(),
+    // The runtime this enrollment binds (agent.runtimes, app-enforced; ADR-198).
+    // A token enrollment takes the agent's runtime; an operator enrollment
+    // finds or creates the runtime its hostname names.
+    runtimeId: uuid("runtime_id"),
     // Host facts (the readable forms live here under RLS; ClickHouse gets digests)
     hostname: text("hostname").notNull(),
     hostnameDigest: text("hostname_digest").notNull(),
@@ -301,6 +313,9 @@ export const tachoHosts = tachoSchema.table(
   },
   (t) => ({
     orgIdx: index("tacho_hosts_org_idx").on(t.orgId, t.workspaceId),
+    runtimeIdx: index("tacho_hosts_runtime_idx")
+      .on(t.runtimeId)
+      .where(sql`${t.runtimeId} IS NOT NULL`),
     apiKeyUniq: uniqueIndex("tacho_hosts_api_key_uniq").on(t.apiKeyId),
     // One live host per agent key; a revoked host gives its key up.
     agentKeyUniq: uniqueIndex("tacho_hosts_agent_key_uniq")
@@ -343,6 +358,11 @@ export const tachoSessions = tachoSchema.table(
     agentPrincipalId: uuid("agent_principal_id"),
     initiatingPrincipalId: uuid("initiating_principal_id"),
     initiatingUserId: uuid("initiating_user_id"),
+    // The operator's workspace role when the session opened, lowercased
+    // (#3999). Written once, by the genesis row, and never updated, so a
+    // later role change does not rewrite the record. Null on a session
+    // recorded before the column and for an operator with no membership.
+    operatorRole: text("operator_role"),
     rootSessionUuid: uuid("root_session_uuid").notNull(),
     parentSessionUuid: uuid("parent_session_uuid"),
     subagentId: text("subagent_id"),
@@ -506,6 +526,13 @@ export const tachoSessions = tachoSchema.table(
     totalCostMicros: bigint("total_cost_micros", { mode: "number" })
       .notNull()
       .default(0),
+    // The total the harness reported for itself at `agent_stop`
+    // (`total_cost_usd_micros`), kept apart from `total_cost_micros`. A
+    // session the host's model proxy metered keeps its observed total, and
+    // this column holds what the harness claimed beside it (#3944, S-07).
+    harnessReportedCostMicros: bigint("harness_reported_cost_micros", {
+      mode: "number",
+    }),
     costBasis: text("cost_basis"),
     hasUnknownModelCost: boolean("has_unknown_model_cost"),
     durationMs: bigint("duration_ms", { mode: "number" }),
@@ -643,11 +670,31 @@ export const tachoSessions = tachoSchema.table(
     // Why the last automatic account failed, as a short reason code; null
     // once an account is written or the run is no longer due.
     summaryError: text("summary_error"),
+    // What enrichment has spent on this run's accounts across every job, in
+    // micro-dollars. `run.enrich` adds each model call's price and stops at
+    // `ENRICHMENT_RUN_TOTAL_BUDGET_USD` (#4312).
+    summarySpentUsdMicros: bigint("summary_spent_usd_micros", {
+      mode: "number",
+    })
+      .notNull()
+      .default(0),
     // The title the harness gave the session itself (Claude Code's
     // `ai-title`), and the frame time it carried. It outranks `name` and
     // `title` on the Run page, and an older frame never replaces it.
     harnessTitle: text("harness_title"),
     harnessTitleAt: timestamp("harness_title_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    // The Model fit reading (#3893), computed from the record after the seal:
+    // the reading without its provenance, the rule version, when it was
+    // read, and the seal it read. The four are set together. A reading whose
+    // `fit_sealed_at` is not the session's `sealed_at` read an earlier seal
+    // and is not answered.
+    fitReading: jsonb("fit_reading"),
+    fitMethod: text("fit_method"),
+    fitReadAt: timestamp("fit_read_at", { withTimezone: true, mode: "date" }),
+    fitSealedAt: timestamp("fit_sealed_at", {
       withTimezone: true,
       mode: "date",
     }),
@@ -675,6 +722,14 @@ export const tachoSessions = tachoSchema.table(
       "tacho_sessions_summary_check",
       sql`(${t.summary} IS NULL) = (${t.summaryGeneratedAt} IS NULL) AND (${t.summary} IS NULL) = (${t.summaryModel} IS NULL)`,
     ),
+    fitCheck: check(
+      "tacho_sessions_fit_check",
+      sql`(${t.fitReading} IS NULL) = (${t.fitMethod} IS NULL) AND (${t.fitReading} IS NULL) = (${t.fitReadAt} IS NULL) AND (${t.fitReading} IS NULL) = (${t.fitSealedAt} IS NULL)`,
+    ),
+    operatorRoleCheck: check(
+      "tacho_sessions_operator_role_check",
+      sql`${t.operatorRole} IS NULL OR ${t.operatorRole} IN ('owner', 'admin', 'member', 'billing', 'compliance', 'viewer')`,
+    ),
     outcomeCheck: check(
       "tacho_sessions_outcome_check",
       sql`${t.outcome} IN (${sql.raw(inList(TACHO_SESSION_OUTCOMES))})`,
@@ -694,6 +749,15 @@ export const tachoSessions = tachoSchema.table(
     openLastEventIdx: index("tacho_sessions_open_last_event_idx")
       .on(t.lastEventAt)
       .where(sql`${t.sealedAt} IS NULL`),
+    // The run-enrichment sweep's candidates (#3784): root sessions the sweep
+    // may find due. A session that was enriched and has not changed since
+    // leaves the index, so the sweep stops reading every session the
+    // workspace ever recorded. The sweep's WHERE carries the same predicate.
+    enrichmentCandidateIdx: index("tacho_sessions_enrichment_candidate_idx")
+      .on(t.orgId, t.workspaceId)
+      .where(
+        sql`${t.parentSessionUuid} IS NULL AND ${runEnrichmentCandidate(t)}`,
+      ),
     hashCheck: check(
       "tacho_sessions_hash_check",
       sql`(${t.lastHash} IS NULL OR ${t.lastHash} ~ '^sha256:[0-9a-f]{64}$') AND (${t.finalHash} IS NULL OR ${t.finalHash} ~ '^sha256:[0-9a-f]{64}$')`,
@@ -767,8 +831,12 @@ export const tachoSessionFiles = tachoSchema.table(
     bytesWritten: bigint("bytes_written", { mode: "number" })
       .notNull()
       .default(0),
-    linesAdded: integer("lines_added").notNull().default(0),
-    linesRemoved: integer("lines_removed").notNull().default(0),
+    // bigint: git reconciliation assigns these from the envelope's u32, which
+    // passes the int4 limit (#3944, S-02).
+    linesAdded: bigint("lines_added", { mode: "number" }).notNull().default(0),
+    linesRemoved: bigint("lines_removed", { mode: "number" })
+      .notNull()
+      .default(0),
     /**
      * What git said about this path at the last reconciliation: added,
      * modified, deleted or renamed. Null means no current changed-file
@@ -788,6 +856,74 @@ export const tachoSessionFiles = tachoSchema.table(
       t.path,
     ),
     orgIdx: index("tacho_session_files_org_idx").on(t.orgId, t.workspaceId),
+  }),
+);
+
+// ── run_pull_requests ────────────────────────────────────────────────────────
+// One row per pull request (or GitLab merge request) a root session's record
+// names, with the state a forge last reported for it (#4129, ADR-192). Forge
+// webhooks keep the state current, and one read when the link lands fills it
+// before the first delivery. The link itself stays in the session's frames:
+// this row holds only what the frames cannot, the state.
+export const tachoRunPullRequests = tachoSchema.table(
+  "run_pull_requests",
+  {
+    ...idMixin("trp"),
+    ...auditMixin(),
+    ...orgScopeMixin(),
+    /** The root `tacho.sessions.id` whose record names the pull request. */
+    sessionId: uuid("session_id").notNull(),
+    /** The https URL as the frame recorded it. */
+    url: text("url").notNull(),
+    provider: text("provider").notNull(),
+    /**
+     * Lower-cased `owner/name`, or the GitLab project path. A match key for
+     * webhook deliveries only, never shown.
+     */
+    repository: text("repository").notNull(),
+    /** The pull request number, or the GitLab merge request iid. */
+    number: integer("number").notNull(),
+    /** `open`, `merged` or `closed`; null until a forge reported one. */
+    state: text("state"),
+    /** Only an open pull request can be a draft. */
+    draft: boolean("draft").notNull().default(false),
+    /** When Oxagen last read the state; null when it never has. */
+    stateSeenAt: ts("state_seen_at"),
+    /**
+     * The forge's `updated_at` for the state held here. A delivery older than
+     * it never overwrites the row, because forges deliver out of order.
+     */
+    sourceUpdatedAt: ts("source_updated_at"),
+  },
+  (t) => ({
+    sessionUrlUniq: uniqueIndex("tacho_run_pull_requests_uniq").on(
+      t.sessionId,
+      t.url,
+    ),
+    // The webhook lookup: every row one delivery updates.
+    forgeIdx: index("tacho_run_pull_requests_forge_idx").on(
+      t.orgId,
+      t.provider,
+      t.repository,
+      t.number,
+    ),
+    orgIdx: index("tacho_run_pull_requests_org_idx").on(t.orgId, t.workspaceId),
+    providerCheck: check(
+      "tacho_run_pull_requests_provider_check",
+      sql`${t.provider} IN ('github', 'gitlab')`,
+    ),
+    stateCheck: check(
+      "tacho_run_pull_requests_state_check",
+      sql`${t.state} IS NULL OR ${t.state} IN ('open', 'merged', 'closed')`,
+    ),
+    numberCheck: check(
+      "tacho_run_pull_requests_number_check",
+      sql`${t.number} > 0`,
+    ),
+    draftCheck: check(
+      "tacho_run_pull_requests_draft_check",
+      sql`NOT ${t.draft} OR ${t.state} IS NULL OR ${t.state} = 'open'`,
+    ),
   }),
 );
 
@@ -838,7 +974,10 @@ export const tachoControlCommands = tachoSchema.table(
     hostId: uuid("host_id"),
     sessionId: uuid("session_id"),
     targetKind: text("target_kind").notNull(),
-    /** The recipient's public id: `tch_…` for a host, `tse_…`/`arun_…` for a run. */
+    /**
+     * The recipient's public id: `tch_…` for a host, `tse_…`/`arun_…` for a
+     * run. The agent key (`org_ns.ws_ns.slug`) for an agent.
+     */
     targetId: text("target_id").notNull(),
     command: text("command").notNull(),
     payload: jsonb("payload").notNull().default(sql`'{}'::jsonb`),

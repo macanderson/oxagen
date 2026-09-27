@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 // The Policy tab (mockup `pRun`, the policy branch) and `entriesOf`, which the
-// tab strip counts with: one row per decision frame, Frame, Call and Outcome
-// from the record, and the rules, taint and latency the transcript does not
+// tab strip counts with: one row per decision frame, Frame, Call, Outcome and
+// Rules from the record, and the taint and latency the transcript does not
 // carry said to be not recorded rather than guessed. A frame on a subagent's
-// chain is named and not linked, a list read short says it is a prefix, and a
-// failed read says it failed.
+// chain links by its chain and seq, a list read short says it is a prefix, and
+// a failed read says it failed.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -48,6 +48,8 @@ const policyEntry = (seq: string, chainRef?: string) =>
       decision: "deny",
       type: "policy_decision",
       harness: false,
+      rules: [],
+      taint: null,
       at: AT,
     },
     ...(chainRef === undefined
@@ -94,13 +96,14 @@ describe("PolicyDecisions", () => {
     await expectNoAxe(container);
   });
 
-  it("says the rules, taint and latency are not recorded rather than drawing a guess (negative)", () => {
+  it("says a decision that named no rule fired none, and that taint and latency are not recorded (negative)", () => {
     renderPolicy(readOk(evidenceTranscript()));
     const [row] = screen.getAllByTestId("run-policy-decision");
     if (row === undefined) throw new Error("a row");
     const cells = within(row).getAllByRole("cell");
+    // The rules are the record's own list (#3971); taint has no producer.
     expect(cells.slice(3).map((cell) => cell.textContent)).toEqual([
-      "not recorded",
+      "none",
       "not recorded",
       "not recorded",
     ]);
@@ -108,7 +111,7 @@ describe("PolicyDecisions", () => {
     expect(screen.getByText(/not on the transcript yet/)).toBeTruthy();
   });
 
-  it("links the run's own decision and names a subagent's without a link, because the player reads the run's chain", () => {
+  it("links the run's own decision by its seq and a subagent's by its chain and seq (#3823)", () => {
     renderPolicy(
       readOk(
         runTranscript({
@@ -119,9 +122,15 @@ describe("PolicyDecisions", () => {
     const [own, subagent] = screen.getAllByTestId("run-policy-decision");
     if (own === undefined || subagent === undefined)
       throw new Error("two rows");
-    expect(within(own).getByRole("link", { name: "4" })).toBeTruthy();
-    expect(within(subagent).queryByRole("link", { name: "4" })).toBeNull();
-    expect(within(subagent).getByText("4")).toBeTruthy();
+    expect(within(own).getByRole("link", { name: "4" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=4",
+    );
+    // The subagent's frame 4 is not the run's frame 4: the link names both.
+    expect(within(subagent).getByRole("link", { name: "4" })).toHaveAttribute(
+      "href",
+      `/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=${CHAIN}%3A4`,
+    );
     expect(within(own).getByText("Bash")).toBeTruthy();
     expect(within(own).getByText("deny")).toBeTruthy();
     expect(
@@ -176,7 +185,10 @@ describe("PolicyDecisions", () => {
       "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=9",
     );
     // The entry's own chain decides the link when no decision names one.
-    expect(within(subagent).queryByRole("link")).toBeNull();
+    expect(within(subagent).getByRole("link", { name: "9" })).toHaveAttribute(
+      "href",
+      `/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=${CHAIN}%3A9`,
+    );
     for (const row of [own, subagent]) {
       const cells = within(row).getAllByRole("cell");
       expect(cells[1]).toHaveTextContent("not recordedpolicy_decision");
@@ -210,6 +222,8 @@ describe("PolicyDecisions", () => {
                   decision: word,
                   type: "policy_decision",
                   harness: false,
+                  rules: [],
+                  taint: null,
                   at: AT,
                 },
               }),
@@ -275,6 +289,8 @@ describe("PolicyDecisions by who decided", () => {
         type: source === "human" ? "command" : "policy_decision",
         at: AT,
         harness,
+        rules: [],
+        taint: null,
         ...(source === null ? {} : { source }),
       },
     });

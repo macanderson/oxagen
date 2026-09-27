@@ -47,6 +47,8 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   // agent.agent_versions excluded: immutable child, no org cols, FK → agents.
   // It has no RLS policy, so the agents policy does not cover it (#2156).
   { table: "agent.agents", policyClass: "standard" },
+  // The named runtimes agents run on (ADR-198).
+  { table: "agent.runtimes", policyClass: "standard" },
   // Workspace agent-asset registry (20260831120000_agent_asset_registry.sql):
   // tool declarations + context records + the append-only promotions ledger.
   // All tenant-authored (no builtin sentinel rows), so plain standard.
@@ -65,6 +67,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },
   { table: "agent.approval_requests", policyClass: "standard" },
+  { table: "agent.interjections", policyClass: "standard" },
   // Durable agent-engine v2 run rows + append-only event log (Phase 2a;
   // docs/specs/agent-engine-v2). Both carry orgScopeMixin (org_id +
   // workspace_id NOT NULL) + tenant_isolation RLS added in the Phase 2a
@@ -336,6 +339,9 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   //   20260915202300_mandates_and_ledger.sql). Both carry orgScopeMixin.
   { table: "tools.mandates", policyClass: "standard" },
   { table: "tools.mandate_ledger", policyClass: "standard" },
+  // Toolbelts and their members (ADR-198). Both carry orgScopeMixin.
+  { table: "tools.toolbelts", policyClass: "standard" },
+  { table: "tools.toolbelt_tools", policyClass: "standard" },
 
   { table: "skills.config_versions", policyClass: "standard" },
   { table: "skills.resolutions", policyClass: "standard" },
@@ -347,6 +353,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "tacho.sessions", policyClass: "standard" },
   { table: "tacho.session_models", policyClass: "standard" },
   { table: "tacho.session_files", policyClass: "standard" },
+  { table: "tacho.run_pull_requests", policyClass: "standard" },
   { table: "tacho.session_commands", policyClass: "standard" },
   { table: "tacho.control_commands", policyClass: "standard" },
   { table: "tacho.incidents", policyClass: "standard" },

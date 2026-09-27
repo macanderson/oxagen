@@ -54,6 +54,22 @@ class FakeEventSource {
     this.onmessage?.();
   }
 
+  /** The route sent the run's row, as it does each time the stream opens. */
+  run(data: string) {
+    this.listeners.get("run")?.(new MessageEvent("run", { data }));
+  }
+
+  /** The route sent the subagent chains' heads under this cursor. */
+  chains(cursor: string) {
+    this.chainsRaw(
+      JSON.stringify({ chains: { cursor, heads: [], complete: true } }),
+    );
+  }
+
+  chainsRaw(data: string) {
+    this.listeners.get("chains")?.(new MessageEvent("chains", { data }));
+  }
+
   /** The route closed the stream with its terminator. */
   done(payload: unknown) {
     this.listeners.get("done")?.(
@@ -116,6 +132,107 @@ describe("useRunStream", () => {
     expect(latest().init?.withCredentials).toBe(true);
   });
 
+  it("opens after the last frame the reader holds, so the route does not send the run again (A-06)", () => {
+    // Opened bare, the route sends every frame from the run's first, 200 to
+    // a read: an 8,000-frame run took 40 reads before anything new arrived,
+    // and each batch told the page to read a tail it already had.
+    renderHook(() =>
+      useRunStream({
+        url: URL_UNDER_TEST,
+        after: "ZjozOTk5",
+        enabled: true,
+        onFrames: vi.fn(),
+      }),
+    );
+    expect(opened).toHaveLength(1);
+    expect(latest().url).toBe(`${URL_UNDER_TEST}?after=ZjozOTk5`);
+  });
+
+  it("keeps the stream open when the reader's cursor moves (negative)", () => {
+    // The stream keeps its own place once open. A page re-read that moves the
+    // transcript's cursor must not close the connection and open another.
+    const { rerender } = renderHook(
+      ({ after }: { after: string }) =>
+        useRunStream({
+          url: URL_UNDER_TEST,
+          after,
+          enabled: true,
+          onFrames: vi.fn(),
+        }),
+      { initialProps: { after: "ZjozOTk5" } },
+    );
+    rerender({ after: "Zjo0MDEw" });
+    expect(opened).toHaveLength(1);
+    expect(opened[0]?.closed).toBe(false);
+  });
+
+  it("retries from the reader's cursor when the route failed before it wrote a frame", () => {
+    renderHook(() =>
+      useRunStream({
+        url: URL_UNDER_TEST,
+        after: "ZjozOTk5",
+        enabled: true,
+        onFrames: vi.fn(),
+      }),
+    );
+    act(() => {
+      latest().open();
+      latest().serverError({ code: "stream_unavailable", cursor: null });
+      vi.advanceTimersByTime(1000);
+    });
+    expect(opened).toHaveLength(2);
+    expect(latest().url).toBe(`${URL_UNDER_TEST}?after=ZjozOTk5`);
+  });
+
+  it("hands the row the route sends on open to onRun, so a page can notice its host went quiet (A-02)", () => {
+    const onRun = vi.fn();
+    renderHook(() =>
+      useRunStream({
+        url: URL_UNDER_TEST,
+        enabled: true,
+        onFrames: vi.fn(),
+        onRun,
+      }),
+    );
+    act(() => {
+      latest().open();
+      latest().run(
+        JSON.stringify({
+          run: {
+            id: "tse_7k2m9q",
+            status: "live",
+            commandBlock: "host_offline",
+            turns: 4,
+          },
+        }),
+      );
+    });
+    expect(onRun).toHaveBeenCalledTimes(1);
+    expect(onRun).toHaveBeenCalledWith({
+      status: "live",
+      commandBlock: "host_offline",
+    });
+  });
+
+  it("drops a run payload that is not a row (negative)", () => {
+    const onRun = vi.fn();
+    const onFrames = vi.fn();
+    const { result } = renderHook(() =>
+      useRunStream({ url: URL_UNDER_TEST, enabled: true, onFrames, onRun }),
+    );
+    act(() => {
+      latest().open();
+      latest().run("not json");
+      latest().run(JSON.stringify({ run: { status: "running" } }));
+      latest().run(JSON.stringify(null));
+      vi.advanceTimersByTime(5000);
+    });
+    expect(onRun).not.toHaveBeenCalled();
+    expect(onFrames).not.toHaveBeenCalled();
+    expect(result.current).toBe("open");
+    expect(latest().closed).toBe(false);
+  });
+
   it("reports connecting until the route answers, then open", () => {
     const { result } = follow();
     expect(result.current).toBe("connecting");
@@ -136,6 +253,54 @@ describe("useRunStream", () => {
     const { result } = follow();
     expect(opened).toHaveLength(0);
     expect(result.current).toBe("off");
+  });
+
+  // #3823: a subagent's frames never arrive as frames past the run's own
+  // cursor. A moved head is the signal to read the tail.
+  it("reads the tail when a subagent chain's head moves, coalesced with frames", () => {
+    const { onFrames } = follow();
+    act(() => {
+      latest().open();
+      latest().chains("h:1");
+      latest().frame();
+      latest().chains("h:2");
+    });
+    expect(onFrames).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(750);
+    });
+    expect(onFrames).toHaveBeenCalledTimes(1);
+    act(() => {
+      latest().chains("h:3");
+      vi.advanceTimersByTime(750);
+    });
+    expect(onFrames).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not read the tail for heads it already saw, a reopen included (negative)", () => {
+    const { onFrames } = follow();
+    act(() => {
+      latest().open();
+      latest().chains("h:1");
+      vi.advanceTimersByTime(750);
+    });
+    expect(onFrames).toHaveBeenCalledTimes(1);
+    act(() => {
+      latest().chains("h:1");
+      latest().done({ reason: "idle", cursor: "cur_1" });
+    });
+    // The idle close reads the tail once, as it always does.
+    expect(onFrames).toHaveBeenCalledTimes(2);
+    act(() => {
+      // The route writes the heads again on every open.
+      latest().open();
+      latest().chains("h:1");
+      latest().chainsRaw("not json");
+      latest().chainsRaw(JSON.stringify({ chains: { heads: [] } }));
+      vi.advanceTimersByTime(5000);
+    });
+    expect(opened).toHaveLength(2);
+    expect(onFrames).toHaveBeenCalledTimes(2);
   });
 
   it("calls back once for a burst of frames, not once per frame", () => {

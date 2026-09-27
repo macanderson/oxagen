@@ -12,7 +12,9 @@
           "operatorId": null,
           "operatorKind": "agent",
           "operatorName": "release-bot",
+          "operatorAvatarUrl": null,
           "operatorAttribution": null,
+          "operatorRole": null,
           "status": "sealed",
           "outcome": "completed",
           "turns": 3,
@@ -34,6 +36,7 @@
           "canSummarize": false,
           "model": null,
           "machine": null,
+          "harness": null,
           "name": "Release notes",
           "summary": null
         },
@@ -44,7 +47,9 @@
           "operatorId": null,
           "operatorKind": "agent",
           "operatorName": "release-bot",
+          "operatorAvatarUrl": null,
           "operatorAttribution": null,
+          "operatorRole": null,
           "status": "sealed",
           "outcome": "completed",
           "turns": 3,
@@ -66,6 +71,7 @@
           "canSummarize": false,
           "model": null,
           "machine": null,
+          "harness": null,
           "name": "Release notes",
           "summary": null
         }

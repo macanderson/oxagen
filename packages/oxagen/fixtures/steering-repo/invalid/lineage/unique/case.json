@@ -1,0 +1,22 @@
+{
+  "check": "lineage",
+  "rule": "unique",
+  "severity": "error",
+  "description": "Two files share a lineage.",
+  "refused_by_reader": false,
+  "changed": [
+    "steering/security/a-intel.platform.no-push-to-main.md"
+  ],
+  "removed": [],
+  "expect": [
+    {
+      "path": "steering/security/a-intel.platform.no-push-to-main.md",
+      "line": 3,
+      "field": "lineage"
+    },
+    {
+      "path": "steering/platform/a-intel.platform.no-push-to-main.md",
+      "field": "lineage"
+    }
+  ]
+}

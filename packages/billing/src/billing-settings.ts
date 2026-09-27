@@ -9,7 +9,8 @@
  * inserts, so a read never writes.
  */
 
-import { withTenantDb, withSystemDb, schema, type Tx } from "@oxagen/database";
+import { withSystemDb, schema, type Tx } from "@oxagen/database";
+import { withBillingDb } from "./internal/platform-db";
 import { eq } from "drizzle-orm";
 import { billingProvider } from "./client";
 import { logger } from "./logger";
@@ -120,7 +121,7 @@ function rowToSettings(row: {
  * (`org_billing_settings_org_idx`) ensures at most one row per org.
  *
  * `opts.system` routes the read/upsert through {@link withSystemDb} instead of
- * {@link withTenantDb}. Request paths always run inside a tenant scope and must
+ * {@link withBillingDb}. Request paths always run inside a tenant scope and must
  * leave this false so RLS stays load-bearing; only trusted cross-tenant crons
  * that sweep every org with no active scope (e.g. billing.dunning-sweep) pass
  * `system: true`, mirroring sweepDunning()'s own withSystemDb usage.
@@ -131,7 +132,7 @@ export async function getOrgBillingSettings(
 ): Promise<OrgBillingSettings> {
   const start = Date.now();
 
-  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const runner = opts?.system ? withSystemDb : withBillingDb;
   const row = await runner(async (tx) => {
     // Attempt to create a default row; silently no-ops if one already exists.
     await tx
@@ -189,7 +190,7 @@ export async function readOrgBillingSettings(
   orgId: string,
   opts?: { system?: boolean },
 ): Promise<OrgGauBillingSettings> {
-  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const runner = opts?.system ? withSystemDb : withBillingDb;
   const row = await runner((tx) =>
     tx.query.orgBillingSettings.findFirst({
       where: eq(schema.orgBillingSettings.orgId, orgId),
@@ -246,7 +247,7 @@ export async function setAutoTopup(
   if (!Number.isInteger(input.blocks) || input.blocks < 1) {
     throw new Error("billing-settings: auto top-up blocks must be >= 1");
   }
-  const row = await withTenantDb(async (tx) => {
+  const row = await withBillingDb(async (tx) => {
     const [saved] = await tx
       .insert(schema.orgBillingSettings)
       .values({
@@ -441,7 +442,7 @@ export async function updateAutoReloadSettings(
   if ("paymentMethodId" in input)
     patch.autoReloadPaymentMethodId = input.paymentMethodId ?? null;
 
-  await withTenantDb((tx) =>
+  await withBillingDb((tx) =>
     tx
       .update(schema.orgBillingSettings)
       .set(patch)
@@ -481,7 +482,7 @@ export async function updateAssistantSpendCap(
     );
   }
   await getOrgBillingSettings(orgId);
-  const row = await withTenantDb(async (tx) => {
+  const row = await withBillingDb(async (tx) => {
     const [updated] = await tx
       .update(schema.orgBillingSettings)
       .set({

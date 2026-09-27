@@ -18,6 +18,7 @@ import {
 } from "@/data/contracts/money";
 import {
   type PricedClasses,
+  type RunSearches,
   TOKEN_CLASSES,
   type TokenClass,
   type TokenFigures,
@@ -49,7 +50,10 @@ function priceOf(
 }
 
 export type ClassPrices = {
-  /** Every class's recorded cost: the total row of Spend by token class. */
+  /**
+   * Every class's recorded cost, web searches included when the run ran
+   * any: the total row of Spend by token class.
+   */
   total: Money | null;
   /** The four input classes: what the six input areas cost together. */
   input: Money | null;
@@ -64,8 +68,17 @@ export type ClassPrices = {
 export function classPrices(
   priced: PricedClasses | null,
   tokens: TokenFigures | null,
+  searches: RunSearches | null = null,
 ): ClassPrices {
-  const total = priceOf(priced, TOKEN_CLASSES);
+  const classes = priceOf(priced, TOKEN_CLASSES);
+  // The searches' cost is part of what the run spent, so the total row adds
+  // it (#3721). Unknown when either part is.
+  const total =
+    searches === null
+      ? classes
+      : classes === null || searches.cost === null
+        ? null
+        : sumMoney([classes, searches.cost]);
   const input = priceOf(priced, INPUT);
   const writes = priceOf(priced, CACHE_WRITE);
   return {
@@ -79,6 +92,20 @@ export function classPrices(
     cacheWriteShare:
       writes === null || total === null ? null : ratioOfMicros(writes, total),
   };
+}
+
+/**
+ * The share of input tokens the run wrote to the cache:
+ * (cache_write_5m + cache_write_1h) ÷ (input_uncached + cache_read +
+ * cache_write_5m + cache_write_1h). The cache hit rate leaves writes out of
+ * its denominator, so a run that rebuilt its cache again and again can still
+ * read a high hit rate. This share is where the rebuild shows. Null with no
+ * input token.
+ */
+export function cacheRebuildShare(tokens: TokenFigures | null): number | null {
+  if (tokens === null || tokens.input === 0) return null;
+  const { byClass } = tokens;
+  return (byClass.cache_write_5m + byClass.cache_write_1h) / tokens.input;
 }
 
 /** A class's cost as a share of the total; null when either has no recorded cost. */

@@ -7,6 +7,7 @@ import {
   RUN_TURNS_MAX,
   runTurnsGet,
 } from "@oxagen/oxagen/contracts/run.turns.get";
+import { UNKEYED_TOOL_PAIRING } from "@oxagen/run-ledger";
 import type { TachoChainTurnFacts, TachoTurnGroup } from "@oxagen/telemetry";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -48,10 +49,7 @@ const group = (over: Partial<TachoTurnGroup> = {}): TachoTurnGroup => ({
   firstAt: "2026-09-11 09:00:01.000",
   frames: 10,
   modelCalls: 2,
-  modelRequests: 0,
-  modelResponses: 0,
   keyedToolCalls: 3,
-  unkeyedToolRequests: 0,
   unkeyedToolCalls: 0,
   costMicros: 250,
   inputUncached: 40,
@@ -133,11 +131,13 @@ describe("get_run_turns on a wrapped run", () => {
       sessionUuids: [ROOT, CHILD],
     });
     // A subagent's own turn_start opens no turn of the run.
+    // The query pairs unkeyed tool halves by the fold's own rule 3 (#4308).
     expect(h.tachoTurnGroups).toHaveBeenCalledWith({
       rootSessionUuid: ROOT,
       sessionUuids: [ROOT, CHILD],
       turnStarts: [1, 40],
       observedFrom: [],
+      pairing: UNKEYED_TOOL_PAIRING,
     });
     expect(runTurnsGet.output.parse(out)).toEqual(out);
     expect(out.complete).toBe(true);
@@ -148,6 +148,33 @@ describe("get_run_turns on a wrapped run", () => {
       [2, "40", null],
     ]);
     expect(out.turns[1]?.cumulativeCost?.micros).toBe("250");
+  });
+
+  it("answers the turn a subagent chain was spawned in (#4001)", async () => {
+    const h = harness({
+      children: [CHILD],
+      facts: [facts(), facts({ sessionUuid: CHILD, turnStarts: [0] })],
+      groups: [
+        group(),
+        group({
+          turnKey: 40,
+          firstSeq: 40,
+          firstAt: "2026-09-11 09:05:00.000",
+          spawns: [{ seq: 41, toolUseId: "tu_task", subagentId: null }],
+        }),
+        group({
+          sessionUuid: CHILD,
+          turnKey: null,
+          firstSeq: 0,
+          firstAt: "2026-09-11 09:05:02.000",
+          parentSessionUuid: ROOT,
+          spawnToolUseId: "tu_task",
+        }),
+      ],
+    });
+    const out = await h.turns(input(TACHO_ID), ctx());
+    expect(out.chains).toEqual([{ sessionUuid: CHILD, turn: 2 }]);
+    expect(runTurnsGet.output.parse(out)).toEqual(out);
   });
 
   it("names each chain the proxy observed, and from which frame", async () => {
@@ -174,7 +201,12 @@ describe("get_run_turns on a wrapped run", () => {
   it("answers no turns, and makes no grouped read, for a run with no frames", async () => {
     const h = harness({ facts: [] });
     const out = await h.turns(input(TACHO_ID), ctx());
-    expect(out).toEqual({ runId: TACHO_ID, turns: [], complete: true });
+    expect(out).toEqual({
+      runId: TACHO_ID,
+      turns: [],
+      complete: true,
+      chains: [],
+    });
     expect(h.tachoTurnGroups).not.toHaveBeenCalled();
   });
 
@@ -185,7 +217,12 @@ describe("get_run_turns on a wrapped run", () => {
     });
     const out = await h.turns(input(TACHO_ID), ctx());
     // A run's turns are the root's. A subagent chain alone opens none.
-    expect(out).toEqual({ runId: TACHO_ID, turns: [], complete: true });
+    expect(out).toEqual({
+      runId: TACHO_ID,
+      turns: [],
+      complete: true,
+      chains: [],
+    });
     expect(h.tachoTurnGroups).not.toHaveBeenCalled();
   });
 
@@ -254,6 +291,8 @@ describe("get_run_turns on a ledger run", () => {
     expect(out).toMatchObject({
       runId: LEDGER_ID,
       complete: true,
+      // A ledger run records no subagent chains.
+      chains: [],
       turns: [
         {
           turn: 1,

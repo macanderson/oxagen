@@ -16,11 +16,13 @@
 // store that does not exist, so null.
 import { z } from "zod";
 import { registerCapability } from "../registry";
+import { runtimeRefSchema } from "./runtime.shared";
 import { costSchema } from "./spend.shared";
+import { toolbeltRefSchema } from "./toolbelt.shared";
 
 const instant = z.string().datetime({ offset: true });
 
-/** MC spec §6.2. `custom` is the value the legacy `create_agent_def` path implied. */
+/** MC spec §6.2. `custom` is the value an agent registered before its harness was recorded carries. */
 export const agentHarnessSchema = z.enum([
   "stella",
   "claude-code",
@@ -66,12 +68,32 @@ export const agentListItem = z
     /** `org_ns.ws_ns.slug` (ADR-024); null until the namespaces are backfilled. */
     agentKey: z.string().nullable(),
     harness: agentHarnessSchema,
+    /**
+     * The runtime the agent runs on now (ADR-198). Null for an agent Oxagen
+     * runs on no named runtime (stella's in-app assistant) and for an agent
+     * registered before runtimes existed that the backfill could not place.
+     */
+    runtime: runtimeRefSchema.nullable(),
+    /** The toolbelt the agent carries now. Null only when the workspace has no belt yet. */
+    toolbelt: toolbeltRefSchema.nullable(),
+    /**
+     * True for the built-in assistant every workspace carries (`qa-chat`,
+     * `isManagedAgentType`). Oxagen owns it: no identity write accepts it,
+     * and its kill switch is how a person stops it.
+     */
+    managed: z.boolean(),
     /** `prn_…` of the delegated principal; null on a row that predates Agent RBAC. */
     principalId: z.string().nullable(),
     /** `usr_…` of the person the agent acts for (`principals.parent_user_id`); null when none. */
     operatorId: z.string().nullable(),
     /** The operator's display name (`auth.users.display_name`); null when there is no operator. */
     operatorName: z.string().nullable(),
+    /**
+     * The operator's avatar (`auth.users.avatar_url`): an https URL or a
+     * designed `avatar:v1:` value. Null when there is no operator or the
+     * operator set none, and never blank.
+     */
+    operatorAvatarUrl: z.string().min(1).nullable(),
     status: agentIdentityStatusSchema,
     /** The model tier the definition names. No store records it on the identity row: null. */
     tier: z.string().nullable(),

@@ -26,7 +26,7 @@ process.env.NEO4J_PASSWORD ??= "oxagen-dev";
 process.env.NEO4J_DATABASE ??= "neo4j";
 
 vi.mock("@oxagen/ai", () => ({
-  embedText: vi.fn().mockResolvedValue(new Array(1536).fill(0.1)),
+  embedText: vi.fn().mockResolvedValue(new Array(1024).fill(0.1)),
 }));
 
 const { runInTenantScope } = await import("@oxagen/tenancy");
@@ -96,7 +96,7 @@ async function ensureDedupSchema(): Promise<void> {
     await s.run(
       `CREATE VECTOR INDEX entity_node_embedding_index IF NOT EXISTS
        FOR (n:EntityNode) ON (n.embedding)
-       OPTIONS { indexConfig: { \`vector.dimensions\`: 1536, \`vector.similarity_function\`: 'cosine' } }`,
+       OPTIONS { indexConfig: { \`vector.dimensions\`: 1024, \`vector.similarity_function\`: 'cosine' } }`,
     );
     // The vector index must be ONLINE before Pass B can query it by name;
     // no-op once it already exists.

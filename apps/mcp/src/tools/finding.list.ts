@@ -8,6 +8,9 @@ export const schema = {
   status: findingList.input.shape.status.describe(
     "open (default), applied or dismissed",
   ),
+  runId: findingList.input.shape.runId.describe(
+    "a run's public id (arun_… or tse_…): list only the findings that cite it, each with the frames it cites there",
+  ),
 };
 
 export const metadata: ToolMetadata = {

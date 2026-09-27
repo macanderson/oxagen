@@ -5,7 +5,10 @@
 // THIS file verbatim.  Every remaining package ships no config of its own and
 // lets flat-config discovery walk up from its directory to this file.
 import tseslint from "typescript-eslint";
-import { tenancySeamRestrictedImports } from "./eslint.tenancy-seams.mjs";
+import {
+  tenancySeamRestrictedImports,
+  tenancySeamRestrictedSyntax,
+} from "./eslint.tenancy-seams.mjs";
 
 export default tseslint.config(
   // Global ignores — applied to every package that uses this config.
@@ -90,6 +93,10 @@ export default tseslint.config(
       // OXA-1515: forbid raw data-store seam clients outside their owning
       // packages so tenant RLS scoping can't be bypassed by accident.
       "no-restricted-imports": ["error", tenancySeamRestrictedImports],
+
+      // #4338: only the billing seam opens a tenant transaction on the shared
+      // plane.
+      "no-restricted-syntax": ["error", ...tenancySeamRestrictedSyntax],
     },
   },
   // Test files: relax unsafe-assignment/member-access/call warnings — vitest's
@@ -128,6 +135,15 @@ export default tseslint.config(
       "packages/telemetry/**",
     ],
     rules: { "no-restricted-imports": "off" },
+  },
+  // The one file that opens billing transactions on the shared plane (#4338),
+  // and the package that defines the option and tests it.
+  {
+    files: [
+      "packages/billing/src/internal/platform-db.ts",
+      "packages/database/**",
+    ],
+    rules: { "no-restricted-syntax": "off" },
   },
   // The Better Auth Drizzle adapter needs a persistent raw db() connection
   // handle (it only touches non-RLS-policied global auth tables). This is the

@@ -242,8 +242,12 @@ export function enrolledAgent(
     description: null,
     agentKey: "acme.core-platform.release-manager",
     harness: "claude-code",
+    managed: false,
+    runtime: null,
+    toolbelt: null,
     operatorId: null,
     operatorName: null,
+    operatorAvatarUrl: null,
     principalId: null,
     credentials: 1,
     hosts: 1,
@@ -349,8 +353,8 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
   };
   const refuse = () => Promise.reject(new Error("not a Steering read"));
   const source: DataSource = {
-    runtimes: { list: refuse, agents: refuse },
-    conversations: { latest: refuse },
+    runtimes: { list: refuse, agents: refuse, named: refuse },
+    conversations: { latest: refuse, list: refuse, byId: refuse },
     pretenant: { orgs: refuse, workspaces: refuse },
     shell: {
       context: refuse,
@@ -367,11 +371,16 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       turns: refuse,
       transcript: refuse,
       chain: refuse,
+      commands: refuse,
       outputs: refuse,
       work: refuse,
       outcomesSettings: refuse,
+      issues: refuse,
+      context: refuse,
+      findings: refuse,
     },
     approvals: { pending: refuse, resolved: refuse, resolvedSince: refuse },
+    interjections: { open: refuse, forRun: refuse },
     agents: {
       list: () => Promise.resolve(reads.agents),
       get: refuse,
@@ -466,6 +475,8 @@ export function steeringSource(overrides: Partial<SteeringReads> = {}) {
       approvalRules: refuse,
       connections: refuse,
       mcpServers: refuse,
+      toolbelts: refuse,
+      toolbelt: refuse,
     },
   };
   return { source, calls };

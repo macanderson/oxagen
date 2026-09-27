@@ -23,7 +23,7 @@ import {
 import { unsignedBundle } from "../host/test-support";
 import type { Exec, ExecAsync } from "../host/service";
 import type { TachoEvent } from "../envelope";
-import { type DaemonHandle, startDaemon } from "./daemon";
+import { type DaemonHandle, type DaemonTimers, startDaemon } from "./daemon";
 
 const SESSION = "11111111-2222-3333-4444-555555555555";
 /** A second live session, for the cases about one tick's batch of sessions. */
@@ -107,6 +107,7 @@ describe("the daemon's git seam", () => {
     // `ticking` guard rather than about the order inside a single tick.
     driver?: { shipMs: number },
     existingPaths?: ReturnType<typeof scratchPaths>,
+    timers?: Partial<DaemonTimers>,
   ) {
     const paths = existingPaths ?? scratchPaths();
     const signer = bundleSigner();
@@ -143,7 +144,7 @@ describe("the daemon's git seam", () => {
       log: () => undefined,
       listen: driver !== undefined,
       ...(driver !== undefined ? { port: 0 } : {}),
-      transcriptRoots: [`${paths.root}/no-transcripts`],
+      transcriptRoots: [`${paths.tachoDir}/no-transcripts`],
       timers: {
         detectorMs: 0,
         sweepMs: 0,
@@ -151,6 +152,7 @@ describe("the daemon's git seam", () => {
         commandsPollMs: 0,
         ...(driver ?? {}),
         ...(driver !== undefined ? { bundleRefreshMs: 0 } : {}),
+        ...timers,
       },
     });
     handles.push(handle);
@@ -899,6 +901,190 @@ describe("the daemon's git seam", () => {
     expect(polls).toBeGreaterThanOrEqual(3);
 
     release();
+  });
+
+  it("seals an ended session while a long tick holds the driver", async () => {
+    // A new install ships its whole backlog inside one tick, and on one
+    // laptop that tick ran for two minutes and forty-one seconds. The tick
+    // starts the git lane only at its end, so a parked SessionEnd waited that
+    // long for its final read, and `tacho verify` gave up after fifteen
+    // seconds. The driver now starts that read while the tick is still
+    // running. Shipping never answers here, so the tick never reaches its end.
+    let shipping = false;
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+      undefined,
+      undefined,
+      { shipMs: 10 },
+      undefined,
+      { stopDrainMs: 50 },
+    );
+    handle.shipper.drain = () => {
+      shipping = true;
+      return new Promise(() => undefined);
+    };
+    await handle.api.handleHook(hook("SessionStart"));
+    const holding = Date.now() + 2_000;
+    while (!shipping && Date.now() < holding)
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(shipping).toBe(true);
+
+    await handle.api.handleHook(hook("SessionEnd"));
+    const sealing = Date.now() + 2_000;
+    while (
+      handle.registry.get(SESSION)?.sealed !== true &&
+      Date.now() < sealing
+    )
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(handle.registry.get(SESSION)?.sealed).toBe(true);
+    expect(reconciliations(handle)).toHaveLength(1);
+    expect(frames(handle).map((event) => event.kind)).toContain("agent_stop");
+  });
+
+  it("lists a parked SessionEnd as ending until its final read seals the chain", async () => {
+    // `tacho verify` waits longer only when `/sessions` says the chain is
+    // ending, so this field is the contract between the two.
+    const handle = await boot(fakeGit(() => REPO_ANSWERS, []), () => 1_000);
+    const listed = () =>
+      handle.api.sessions().find((entry) => entry["session_id"] === SESSION);
+    await handle.api.handleHook(hook("SessionStart"));
+    expect(listed()).toMatchObject({ sealed: false, ending: false });
+    await handle.api.handleHook(hook("SessionEnd"));
+    expect(listed()).toMatchObject({ sealed: false, ending: true });
+    await handle.tick();
+    expect(listed()).toMatchObject({ sealed: true, ending: false });
+  });
+
+  it("seals the host chain and returns inside its budget while a worktree read is stuck", async () => {
+    // The process gives `stop` five seconds (`STOP_GRACE_MS`) and then exits.
+    // Waiting out a read that will not answer ran past that every time, so
+    // the host chain never got its `agent_stop`.
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let probeStarted = false;
+    const stuck: ExecAsync = async () => {
+      probeStarted = true;
+      await held;
+      return { status: 1, stdout: "", stderr: "released" };
+    };
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+      stuck,
+      undefined,
+      undefined,
+      undefined,
+      { stopLaneMs: 50, stopDrainMs: 50 },
+    );
+    await handle.api.handleHook(hook("SessionStart"));
+    await handle.api.handleHook(hook("Stop"));
+    void handle.flushGitReads();
+    const probing = Date.now() + 2_000;
+    while (!probeStarted && Date.now() < probing)
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(probeStarted).toBe(true);
+
+    const started = Date.now();
+    await handle.stop();
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(handle.wal.read(handle.hostRecorder.sessionUuid).at(-1)?.kind).toBe(
+      "agent_stop",
+    );
+    release();
+  });
+
+  it("stops shipping at its budget", async () => {
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { stopLaneMs: 50, stopDrainMs: 50 },
+    );
+    // A control plane that takes the batch and never answers.
+    handle.shipper.drain = () => new Promise(() => undefined);
+    const started = Date.now();
+    await handle.stop();
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(handle.wal.read(handle.hostRecorder.sessionUuid).at(-1)?.kind).toBe(
+      "agent_stop",
+    );
+  });
+
+  it("seals the host chain inside its budget while a hook holds the queue", async () => {
+    // A push hook reads the remote a gateway-held credential names, and each
+    // read may take ten seconds. `stop` sealed the host chain behind it, and
+    // behind every hook queued after it, so the process exited first.
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let pushProbe = false;
+    const execAsync: ExecAsync = async (_command, args) => {
+      if (args.includes("symbolic-ref")) {
+        pushProbe = true;
+        await held;
+      }
+      return { status: 128, stdout: "", stderr: "not a repository" };
+    };
+    const paths = scratchPaths();
+    const handle = await boot(
+      fakeGit(() => REPO_ANSWERS, []),
+      () => 1_000,
+      execAsync,
+      undefined,
+      undefined,
+      paths,
+      { stopLaneMs: 50, stopQueueMs: 50, stopDrainMs: 50 },
+    );
+    writeHostFile(paths.hostFile, {
+      ...readHostFile(paths.hostFile)!,
+      github_repositories: [
+        {
+          cwd: CWD,
+          repository: "acme/repo",
+          harness: "claude-code",
+          url: "http://127.0.0.1:47123/github/acme/repo.git",
+          helper: "!tacho github credential --harness claude-code",
+          remotes: [],
+        },
+      ],
+    });
+    await handle.api.handleHook(hook("SessionStart"));
+    const pushing = handle.api.handleHook(
+      hook("PostToolUse", {
+        tool_name: "Bash",
+        tool_use_id: "toolu_push",
+        tool_input: { command: "git push" },
+        tool_response: { stdout: "", stderr: "", interrupted: false },
+      }),
+    );
+    const probing = Date.now() + 2_000;
+    while (!pushProbe && Date.now() < probing)
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(pushProbe).toBe(true);
+    const queued = handle.api.handleHook(
+      hook("UserPromptSubmit", { prompt: "next" }),
+    );
+
+    const started = Date.now();
+    await handle.stop();
+    expect(Date.now() - started).toBeLessThan(1_000);
+    // The seal lands as soon as the push hook finishes, and the hook queued
+    // behind the push is refused, so tacho-hook spools it.
+    release();
+    await pushing;
+    await expect(queued).rejects.toThrow("stopping");
+    const hostChain = () => handle.wal.read(handle.hostRecorder.sessionUuid);
+    const sealing = Date.now() + 2_000;
+    while (hostChain().at(-1)?.kind !== "agent_stop" && Date.now() < sealing)
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(hostChain().at(-1)?.kind).toBe("agent_stop");
   });
 
   it("does not reconcile on a tool call or a prompt", async () => {

@@ -92,8 +92,8 @@ describe("shell.context", () => {
     scripted(orgsRead, workspacesRead);
     expect(await shell.context(ctx)).toEqual(
       readOk({
-        orgs: [{ slug: "acme", name: "Acme Robotics" }],
-        workspaces: [{ slug: "core", name: "Core platform" }],
+        orgs: [{ slug: "acme", name: "Acme Robotics", avatarUrl: null }],
+        workspaces: [{ slug: "core", name: "Core platform", avatarUrl: null }],
       }),
     );
     expect(kernelRead).toHaveBeenCalledWith(ctx, {
@@ -238,10 +238,20 @@ const wsCtx = unsafeMint(WsCtx, {
 describe("shell.counts", () => {
   it("reads get_nav_counts under the shell's page key and keeps a null count null", async () => {
     kernelRead.mockResolvedValue(
-      readOk({ approvals: 3, proposals: null, incidents: null }),
+      readOk({
+        approvals: 3,
+        interjections: null,
+        proposals: null,
+        incidents: null,
+      }),
     );
     expect(await shell.counts(wsCtx)).toEqual(
-      readOk({ approvals: 3, proposals: null, incidents: null }),
+      readOk({
+        approvals: 3,
+        interjections: null,
+        proposals: null,
+        incidents: null,
+      }),
     );
     expect(kernelRead).toHaveBeenCalledWith(wsCtx, {
       contract: shellNavCountsGet,

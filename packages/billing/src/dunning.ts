@@ -1,4 +1,5 @@
-import { withTenantDb, withSystemDb, schema } from "@oxagen/database";
+import { withSystemDb, schema } from "@oxagen/database";
+import { withBillingDb } from "./internal/platform-db";
 import type { Tx } from "@oxagen/database";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import {
@@ -56,7 +57,7 @@ export interface OrgBillingStatus {
 export async function getOrgBillingStatus(
   orgId: string,
 ): Promise<OrgBillingStatus> {
-  const [settings, sub] = await withTenantDb(async (tx) =>
+  const [settings, sub] = await withBillingDb(async (tx) =>
     Promise.all([
       tx.query.orgBillingSettings.findFirst({
         where: eq(schema.orgBillingSettings.orgId, orgId),

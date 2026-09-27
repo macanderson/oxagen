@@ -5,16 +5,20 @@
 // state, with an axe check in every case. Each tile figure is recomputed from
 // the rows the table draws, so a tile that disagreed with its table fails.
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
+import { HOST_POLL_WINDOW_MS } from "@oxagen/oxagen/contracts/run.list";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { readError } from "@/data/read";
+import { STALE_REREAD_MS } from "@/data/contracts/runs";
+import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
 import { IntlProvider } from "@/test/intl";
 import {
@@ -22,6 +26,8 @@ import {
   approvalItem,
   approvalQueue,
   fleetSource,
+  interjectionItem,
+  interjectionQueue,
   NOW,
   runPage,
   runRow,
@@ -63,6 +69,10 @@ vi.mock("@/server/session", () => ({
   ),
 }));
 vi.mock("@/server/tenancy-lookups", () => ({ systemLookups: {} }));
+// Steer the fleet opens the Run lane's delivery report from its receipt. Its
+// own test covers that path, so here the report is a stub and the Run lane's
+// server actions never load.
+vi.mock("@/features/run/client", () => ({ DeliveryReport: () => null }));
 
 const { WsCtx } = await import("@/server/viewer");
 const { unsafeMint } = await import("@/server/viewer.testing");
@@ -78,6 +88,19 @@ const ctx = unsafeMint(WsCtx, {
   wsSlug: "core-platform",
   wsName: "Core platform",
   wsRole: "member",
+});
+
+/** A viewer of the organization and the workspace, whom dispatch refuses. */
+const viewerCtx = unsafeMint(WsCtx, {
+  userId: "usr_marcusbell",
+  orgId: "7a000000-0000-4000-8000-0000000000a1",
+  orgSlug: "acme",
+  orgName: "Acme Robotics",
+  orgRole: "viewer",
+  workspaceId: "7b000000-0000-4000-8000-000000000001",
+  wsSlug: "core-platform",
+  wsName: "Core platform",
+  wsRole: "viewer",
 });
 
 const DENIED = {
@@ -131,6 +154,28 @@ const RUNS = [
 ];
 const PARKED = approvalItem({ id: "apr_parked", runId: "arun_parked" });
 
+/** A page holding one live ledger run, for the controls its row offers. */
+const ledgerRuns = (over: Parameters<typeof runRow>[0] = {}) =>
+  runPage([runRow({ id: "arun_ledger", source: "ledger", ...over })]);
+
+/**
+ * Cancel a ledger run's evidence ingress from its open dialog. A cancel
+ * cannot be undone, so it takes two clicks: the first shows the confirm.
+ */
+async function cancelIngress(
+  user: ReturnType<typeof userEvent.setup>,
+  dialog: HTMLElement,
+) {
+  await user.click(
+    within(dialog).getByRole("button", { name: "Cancel evidence ingress" }),
+  );
+  await user.click(
+    within(dialog).getByRole("button", {
+      name: "Revoke evidence ingress for good",
+    }),
+  );
+}
+
 /** One `list_agents` page with its cursor, for the roster's walk. */
 function pageValue(
   keys: string[],
@@ -149,6 +194,9 @@ async function renderFleet(
   view: {
     prefs?: Parameters<typeof Fleet>[0]["prefs"];
     pullRequests?: Parameters<typeof Fleet>[0]["pullRequests"];
+    list?: Parameters<typeof Fleet>[0]["list"];
+    /** A viewer other than the workspace member the page reads as. */
+    ctx?: typeof ctx;
   } = {},
 ) {
   const { source, calls } = fleetSource(reads);
@@ -157,9 +205,15 @@ async function renderFleet(
   return { container, calls };
 }
 
+/**
+ * The workspace's live runs as `list_runs` counts them: more than the two
+ * open runs on the page, since the tile counts the workspace.
+ */
+const WORKSPACE_LIVE = 5;
+
 const loaded = (over: Partial<Parameters<typeof fleetSource>[0]> = {}) =>
   renderFleet({
-    runs: runPage(RUNS),
+    runs: runPage(RUNS, null, WORKSPACE_LIVE),
     approvals: approvalQueue([PARKED]),
     agents: agentPage(["acme.core.release-bot", "acme.core.docs"], 64),
     ...over,
@@ -204,11 +258,24 @@ describe("Fleet reads", () => {
       "c1",
     );
     // The page size is the read's own limit (25 until the person picks
-    // another), and every run is listed until a filter is chosen.
+    // another), and every run is listed until a filter is chosen. Fleet
+    // asks for the total, because its pager prints one, and for the
+    // workspace's live count, since the Live runs tile sits above every page.
     expect(calls.runs).toEqual([
-      [ctx, { cursor: "c1", limit: 25, pullRequests: "any" }],
+      [
+        ctx,
+        {
+          cursor: "c1",
+          limit: 25,
+          pullRequests: "any",
+          count: true,
+          countLive: true,
+        },
+      ],
     ]);
     expect(calls.approvals).toEqual([[ctx, { runId: null }]]);
+    // The open questions, for the waiting tile (#3839).
+    expect(calls.interjections).toEqual([[ctx, { runId: null }]]);
     expect(calls.agents).toEqual([[ctx, { cursor: null }]]);
   });
 
@@ -333,9 +400,9 @@ describe("summary tiles", () => {
       "Spend shown",
       "Tokens shown",
     ]);
-    // One live run: the other open run has a call parked, so it is waiting.
+    // The workspace's count, not the page's two open rows (A-04).
     expect(tile("Live runs")).toHaveTextContent(
-      "Live runs1of 64 agents in this workspace",
+      "Live runs5of 64 agents in this workspace",
     );
     // 4.13 + 0.61 + 2.87; the halted run recorded no cost.
     expect(tile("Spend shown")).toHaveTextContent("$7.61");
@@ -345,9 +412,10 @@ describe("summary tiles", () => {
     expect(tile("Tokens shown")).toHaveTextContent(
       "Tokens shownnot recordedno cache figure recorded",
     );
-    // No token figure is typed or zeroed: both lines carry the gap they wait on.
-    for (const part of tile("Tokens shown").querySelectorAll("[data-recorded]"))
-      expect(part).toHaveAttribute("data-gap", "G3");
+    // No row carries a token figure, so none is typed or zeroed (#3834).
+    expect(
+      within(tile("Tokens shown")).getByTestId("tokens-not-recorded"),
+    ).toHaveAttribute("data-recorded", "false");
   });
 
   it("marks an open run's cost as an estimate, in its cell and in Spend shown (#3980)", async () => {
@@ -400,6 +468,41 @@ describe("summary tiles", () => {
     );
   });
 
+  // #3304. A wrapped run whose harness reported no usage says so in its cost
+  // cell, and the tile names the harness beside a total that leaves it out.
+  it("says a wrapped run reported no usage, in its cell and in Spend shown", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          id: "tse_codex",
+          source: "tacho",
+          status: "sealed",
+          cost: null,
+          tokens: {
+            inputUncached: 0,
+            cacheRead: 0,
+            cacheWrite5m: 0,
+            cacheWrite1h: 0,
+            output: 0,
+            reasoning: 0,
+          },
+          harness: { name: "codex", version: null, runtime: "codex" },
+        }),
+        runRow({ id: "arun_done", cost: usd("2870000") }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    expect(
+      within(row("tse_codex")).getByTestId("row-cost-no-usage"),
+    ).toHaveTextContent("no usage reported");
+    expect(screen.getByTestId("spend-basis")).toHaveTextContent(
+      "gateway_observed · USD · 1 run reported no usage (codex 1)",
+    );
+    expect(screen.getByTestId("spend-basis")).not.toHaveTextContent(
+      "no cost recorded",
+    );
+  });
+
   it("shows the rolled-up cost over the reported one (negative)", async () => {
     await renderFleet({
       runs: runPage([
@@ -425,17 +528,45 @@ describe("summary tiles", () => {
     window.addEventListener("oxagen:open-approvals", opened);
     await loaded();
     expect(waitingTile()).toHaveTextContent(
-      "Waiting on a human1oldest approval has waited 2:30 of 10m · interjections not recorded · open the drawer",
+      "Waiting on a human1oldest approval has waited 2:30 of 10m · open the drawer",
     );
     fireEvent.click(waitingTile());
     expect(opened).toHaveBeenCalledOnce();
     window.removeEventListener("oxagen:open-approvals", opened);
   });
 
-  it("says nothing is parked on an empty queue", async () => {
+  it("says nothing is waiting on an empty queue", async () => {
     await loaded({ approvals: NO_APPROVALS });
     expect(waitingTile()).toHaveTextContent(
-      "0nothing is parked · interjections not recorded · open the drawer",
+      "0nothing is waiting · open the drawer",
+    );
+  });
+
+  // #3839: the tile counted approvals alone and said interjections were not
+  // recorded. It now adds the open questions and names them.
+  it("adds an open interjection to the approvals and names it beside the oldest approval", async () => {
+    await loaded({ interjections: interjectionQueue([interjectionItem()]) });
+    expect(waitingTile()).toHaveTextContent(
+      "Waiting on a human2oldest approval has waited 2:30 of 10m · 1 interjection · open the drawer",
+    );
+    expect(screen.queryByTestId("interjections-not-recorded")).toBeNull();
+  });
+
+  it("names the interjection's own wait against its 30-minute window when no approval waits", async () => {
+    await loaded({
+      approvals: NO_APPROVALS,
+      interjections: interjectionQueue([interjectionItem()]),
+    });
+    expect(waitingTile()).toHaveTextContent(
+      "1an interjection has waited 3:36 of 30m · open the drawer",
+    );
+  });
+
+  it("counts the approvals as a floor and says the interjections were not read (negative)", async () => {
+    await loaded({ interjections: readError("record_unmappable", 502) });
+    expect(waitingTile()).toHaveTextContent("1+");
+    expect(screen.getByTestId("interjections-unread")).toHaveTextContent(
+      "interjections not read: record_unmappable",
     );
   });
 
@@ -447,20 +578,28 @@ describe("summary tiles", () => {
     );
   });
 
+  it("says the live runs were not counted when the read carried no count, never the page's figure (negative)", async () => {
+    await loaded({ runs: runPage(RUNS) });
+    expect(tile("Live runs")).toHaveTextContent(
+      "Live runsnot countedof 64 agents in this workspace",
+    );
+    expect(screen.getByTestId("live-not-counted")).toBeTruthy();
+  });
+
   it("names what the waiting and live tiles could not read, never a zero (negative)", async () => {
     await loaded({
       approvals: DENIED,
       agents: { ok: false, reason: "denied", permission: "agent.read" },
     });
     expect(waitingTile()).toHaveTextContent(
-      "approvals not read: workspace.read · interjections not recorded",
+      "Waiting on a human—approvals not read: workspace.read",
     );
     expect(tile("Live runs")).toHaveTextContent(
       "the workspace's agents were not read",
     );
   });
 
-  it("changes Spend shown and Live runs with the filter chips", async () => {
+  it("changes Spend shown with the filter chips, and keeps Live runs on the workspace's count (A-04)", async () => {
     await loaded();
     const user = userEvent.setup();
     await user.click(screen.getByTestId("chip-sealed"));
@@ -472,7 +611,8 @@ describe("summary tiles", () => {
     expect(screen.getByTestId("spend-basis")).toHaveTextContent(
       "gateway_observed · USD",
     );
-    expect(tile("Live runs")).toHaveTextContent("Live runs0");
+    // The tile says "in this workspace", so no chip and no page changes it.
+    expect(tile("Live runs")).toHaveTextContent("Live runs5");
     expect(rows()).toHaveLength(1);
     await user.click(screen.getByTestId("chip-parked"));
     expect(rows().map((r) => r.dataset.state)).toEqual(["parked"]);
@@ -526,8 +666,30 @@ describe("the Runs panel", () => {
     expect(row("arun_sealed")).toHaveTextContent("retry");
     expect(
       within(row("arun_halted")).getByTestId("row-tokens"),
-    ).toHaveAttribute("data-gap", "G3");
+    ).toHaveAttribute("data-recorded", "false");
     expect(row("arun_halted")).toHaveTextContent("not recorded");
+  });
+
+  it("draws the operator's avatar when they set one, and their initials when they did not", async () => {
+    await renderFleet({
+      runs: runPage([
+        runRow({
+          id: "tse_pictured",
+          operatorAvatarUrl: "https://avatars.example.com/marcus.png",
+        }),
+        runRow({ id: "tse_plain", operatorAvatarUrl: null }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    const image = within(row("tse_pictured")).getByTestId("operator-avatar");
+    expect(image).toHaveAttribute("data-avatar", "image");
+    expect(image).toHaveAttribute(
+      "src",
+      "https://avatars.example.com/marcus.png",
+    );
+    const initials = within(row("tse_plain")).getByTestId("operator-avatar");
+    expect(initials).toHaveAttribute("data-avatar", "initials");
+    expect(initials).toHaveTextContent("MB");
   });
 
   // A workspace that turned enrichment off shows no generated name anywhere
@@ -569,12 +731,99 @@ describe("the Runs panel", () => {
         .getAllByRole("option")
         .map((o) => o.textContent),
     ).toEqual([
+      // The lifecycle words the record holds (#3837). Parked comes from the
+      // approvals read, so the chips find it and the read cannot filter on it.
       "All · Status",
-      "halted",
       "live",
-      "parked for approval",
       "sealed",
+      "halted",
     ]);
+  });
+
+  it("says stale, with a still dot, on a live row whose host has not checked in for five minutes (A-02)", async () => {
+    await loaded({
+      runs: runPage([
+        runRow({
+          id: "tse_quiet",
+          source: "tacho",
+          status: "live",
+          commandBlock: "host_offline",
+        }),
+        runRow({ id: "tse_heard", source: "tacho", status: "live" }),
+      ]),
+      approvals: approvalQueue([
+        approvalItem({ id: "apr_quiet", runId: "tse_quiet" }),
+      ]),
+    });
+    const quiet = row("tse_quiet");
+    const badge = quiet.querySelector<HTMLElement>("span[data-status]");
+    expect(badge).toHaveTextContent(/^stale$/);
+    expect(badge).toHaveAttribute("data-stale", "true");
+    expect(quiet.querySelector("[data-pulse]")).toBeNull();
+    // Stale wins over the parked call: the host that holds it went quiet.
+    expect(quiet).not.toHaveTextContent("parked for approval");
+    // Negative: a live run whose host checks in still pulses live.
+    const heard = row("tse_heard");
+    expect(heard.querySelector("span[data-status]")).toHaveTextContent(
+      /^live$/,
+    );
+    expect(heard.querySelector("[data-pulse]")).not.toBeNull();
+  });
+
+  describe("reading a live wrapped run's light again (A-02, #4343 review)", () => {
+    // Fleet read a run's stale light once, when it loaded, so a Fleet left
+    // open kept pulsing live after the host went quiet. With no stream to
+    // say so, it reads itself again once per host poll window.
+    let visibility: DocumentVisibilityState = "visible";
+    beforeEach(() => {
+      vi.useFakeTimers({
+        now: NOW,
+        toFake: ["Date", "setInterval", "clearInterval"],
+      });
+      visibility = "visible";
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => visibility,
+      });
+    });
+    afterEach(() => {
+      Reflect.deleteProperty(document, "visibilityState");
+    });
+    const advance = (ms: number) => {
+      act(() => {
+        vi.advanceTimersByTime(ms);
+      });
+    };
+
+    it("reads the page again once per host poll window while it lists a live wrapped run", async () => {
+      await loaded({
+        runs: runPage([
+          runRow({ id: "tse_open", source: "tacho", status: "live" }),
+          runRow({ id: "tse_done", source: "tacho", status: "sealed" }),
+        ]),
+      });
+      // The window is the one the row's stale reading uses.
+      expect(STALE_REREAD_MS).toBe(HOST_POLL_WINDOW_MS);
+      advance(STALE_REREAD_MS - 1);
+      expect(refresh).not.toHaveBeenCalled();
+      advance(1);
+      expect(refresh).toHaveBeenCalledTimes(1);
+      // Negative: a hidden tab is not read.
+      visibility = "hidden";
+      advance(STALE_REREAD_MS);
+      expect(refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it("reads nothing again when no listed run can go stale (negative)", async () => {
+      await loaded({
+        runs: runPage([
+          runRow({ id: "arun_open", source: "ledger", status: "live" }),
+          runRow({ id: "tse_done", source: "tacho", status: "sealed" }),
+        ]),
+      });
+      advance(STALE_REREAD_MS * 3);
+      expect(refresh).not.toHaveBeenCalled();
+    });
   });
 
   it("marks the chips, the pager and the row actions as 44px touch targets on a phone", async () => {
@@ -607,15 +856,12 @@ describe("the Runs panel", () => {
     );
   });
 
-  it("draws the Tokens sort where the design has it, disabled until runs carry tokens (G3)", async () => {
+  it("draws the Tokens header with no sort while the server cannot order by tokens (#3834, #3837)", async () => {
     await loaded();
-    const sort = screen.getByTestId("sort-tokens");
-    expect(sort).toBeDisabled();
-    expect(sort).toHaveAccessibleName("Sort by Tokens");
-    expect(sort).toHaveAttribute(
-      "title",
-      "Runs carry no token figure yet, so there is nothing to sort.",
-    );
+    expect(screen.queryByRole("button", { name: /Sort by Tokens/ })).toBeNull();
+    expect(
+      screen.getByRole("columnheader", { name: /^Tokens/ }),
+    ).toBeInTheDocument();
   });
 
   it("reads a live run with a parked call as parked for approval, and resolves it on the Run page", async () => {
@@ -664,6 +910,10 @@ describe("the Runs panel", () => {
     expect(
       within(dialog).getByRole("button", { name: "Cancel" }),
     ).toBeInTheDocument();
+    // A wrapped run's row offers Pause alone. Cancel is the ledger's control.
+    expect(
+      within(dialog).queryByRole("button", { name: "Cancel evidence ingress" }),
+    ).toBeNull();
     await user.type(
       within(dialog).getByLabelText(
         "Reason — the model reads this on resume, so write it for the agent",
@@ -690,26 +940,563 @@ describe("the Runs panel", () => {
     expect(refresh).toHaveBeenCalled();
   });
 
-  it("says why a ledger run cannot be paused and sends nothing (negative)", async () => {
+  // #3665: a live ledger run's row refused every command and named a Cancel
+  // the page did not have. It now offers what the Run page offers: Pause of
+  // the run's evidence ingress, and Cancel. A paused run's row opens its Run
+  // page, where Resume is.
+  it("cancels a live ledger run's evidence ingress from its row and says what changed", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_1"] },
+    });
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    expect(dialog).toHaveTextContent("refuses further appends");
+    // The wrapped copy names a control frame the ledger never writes.
+    expect(dialog).not.toHaveTextContent("control.pause");
+    // Both commands, Cancel in the danger style. The dialog renders outside
+    // the container, so the check runs over the whole document.
+    await expectNoAxe(document.body);
+    await user.type(within(dialog).getByLabelText("Reason"), "Key leaked");
+    await cancelIngress(user, dialog);
+    expect(dispatchRunCommand).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_ledger",
+      "cancel",
+      "Key leaked",
+    );
+    expect(
+      await within(dialog).findByTestId("ledger-applied"),
+    ).toHaveTextContent("Further appends are refused");
+    expect(refresh).not.toHaveBeenCalled();
+    // Closing re-reads the page, so the row shows what the ledger now holds.
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  // #2953: the row refused Pause on every ledger run, though dispatch_command
+  // has fenced a ledger run's evidence ingress since #3637. The dialog says
+  // the command is recorded as a receipt, not a frame, and sends the reason.
+  it("pauses a live ledger run's evidence ingress from its row", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_2"] },
+    });
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    expect(screen.queryByTestId("pause-refusal")).toBeNull();
+    expect(dialog).toHaveTextContent(
+      "Pause refuses new evidence batches at the next ingest boundary.",
+    );
+    expect(dialog).toHaveTextContent("command receipt · operator authority");
+    expect(dialog).toHaveTextContent(
+      "The reason is recorded with the command. Oxagen does not send it to the external process.",
+    );
+    expect(dialog).not.toHaveTextContent("control.pause frame");
+    await user.type(within(dialog).getByLabelText("Reason"), "Audit hold");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Pause evidence ingress" }),
+    );
+    expect(dispatchRunCommand).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_ledger",
+      "pause",
+      "Audit hold",
+    );
+    const applied = await within(dialog).findByTestId("ledger-applied");
+    expect(applied).toHaveTextContent("Evidence ingress is paused.");
+    expect(applied).toHaveAttribute("role", "status");
+    await expectNoAxe(document.body);
+  });
+
+  // Review round 1 on #4382: the dialog stayed mounted between rows, so the
+  // next ledger row's Pause opened on "Evidence ingress is paused." for a run
+  // it had not paused, with no buttons. Each row now opens a dialog of its own.
+  it("opens the next row's dialog with nothing the last one showed (negative)", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_7"] },
+    });
     await loaded({
-      runs: runPage([runRow({ id: "arun_ledger", source: "ledger" })]),
+      runs: runPage([
+        runRow({ id: "arun_first", source: "ledger" }),
+        runRow({ id: "arun_second", source: "ledger" }),
+      ]),
+      approvals: NO_APPROVALS,
+    });
+    const user = userEvent.setup();
+    await user.click(within(row("arun_first")).getByTestId("row-pause"));
+    const first = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await user.click(
+      within(first).getByRole("button", { name: "Pause evidence ingress" }),
+    );
+    expect(
+      await within(first).findByTestId("ledger-applied"),
+    ).toHaveTextContent("Evidence ingress is paused.");
+    await user.click(within(first).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("pause-dialog")).toBeNull();
+    });
+    // The page is read again, so the run that paused shows it.
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await user.click(within(row("arun_second")).getByTestId("row-pause"));
+    const second = screen.getByRole("dialog", { name: "Evidence ingress" });
+    expect(second).toHaveTextContent("arun_second");
+    expect(within(second).queryByTestId("ledger-applied")).toBeNull();
+    for (const name of ["Pause evidence ingress", "Cancel evidence ingress"])
+      expect(within(second).getByRole("button", { name })).toBeEnabled();
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+  });
+
+  // Review round 2 on #4382: the board mounts one dialog per run (`key`), so
+  // closing it while a command was in flight unmounted it. A refusal that
+  // came back then went nowhere, and reopening the row let a second command
+  // go. The dialog now waits for the answer, and the answer lands in it.
+  it("holds a ledger dialog open while its command is in flight, and shows the refusal it comes back with (negative)", async () => {
+    let settle: (value: unknown) => void = () => undefined;
+    dispatchRunCommand.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await cancelIngress(user, dialog);
+    expect(
+      await within(dialog).findByRole("button", { name: "Cancelling" }),
+    ).toBeDisabled();
+    // Both close buttons wait for the answer, and so does Escape.
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: "Close Evidence ingress" }),
+    ).toBeDisabled();
+    await expectNoAxe(document.body);
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog", { name: "Evidence ingress" })).toBe(
+      dialog,
+    );
+    settle({ ok: false, reason: "denied", code: "run_sealed" });
+    expect(
+      await within(dialog).findByTestId("pause-failure"),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByTestId("ledger-applied")).toBeNull();
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+    // With the answer in, the dialog closes again.
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("pause-dialog")).toBeNull();
+    });
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("holds a wrapped run's pause dialog open while the pause is in flight, and shows the refusal in it (negative)", async () => {
+    let settle: (value: unknown) => void = () => undefined;
+    dispatchRunCommand.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    await loaded({
+      runs: runPage([runRow({ id: "tse_first", source: "tacho" })]),
+      approvals: NO_APPROVALS,
+    });
+    const user = userEvent.setup();
+    await user.click(within(row("tse_first")).getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Pause this run" });
+    await user.click(
+      within(dialog).getByRole("button", {
+        name: "Pause at the next boundary",
+      }),
+    );
+    expect(
+      await within(dialog).findByRole("button", { name: "Queueing" }),
+    ).toBeDisabled();
+    // The footer's Cancel and the header's Close wait for the answer, and so
+    // does Escape.
+    expect(
+      within(dialog).getByRole("button", { name: "Cancel" }),
+    ).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeDisabled();
+    await expectNoAxe(document.body);
+    await user.keyboard("{Escape}");
+    expect(screen.getByRole("dialog", { name: "Pause this run" })).toBe(dialog);
+    settle({ ok: false, reason: "denied", code: "host_offline" });
+    expect(
+      await within(dialog).findByTestId("pause-failure"),
+    ).toBeInTheDocument();
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  // The dialog cannot close while a command is in flight, but the board can
+  // go away under it. The answer then draws nothing, and the page is read
+  // again, so the row shows what the command changed.
+  it.each([
+    ["ledger", "arun_gone", "Pause evidence ingress"],
+    ["tacho", "tse_gone", "Pause at the next boundary"],
+  ] as const)(
+    "reads the page again when the board goes away before a %s run's pause is answered (negative)",
+    async (source, id, button) => {
+      let settle: (value: unknown) => void = () => undefined;
+      dispatchRunCommand.mockReturnValue(
+        new Promise((resolve) => {
+          settle = resolve;
+        }),
+      );
+      await loaded({
+        runs: runPage([runRow({ id, source })]),
+        approvals: NO_APPROVALS,
+      });
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId("row-pause"));
+      await user.click(screen.getByRole("button", { name: button }));
+      expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+      cleanup();
+      settle({ ok: true, value: { commandIds: ["tcm_10"] } });
+      await waitFor(() => {
+        expect(refresh).toHaveBeenCalledTimes(1);
+      });
+    },
+  );
+
+  // Review round 2 on #4382: closing unmounts the dialog (`key`), so nothing
+  // checked that focus still goes back to the row that opened it.
+  it("gives focus back to the row's Pause button when the dialog closes", async () => {
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    const pause = screen.getByTestId("row-pause");
+    await user.click(pause);
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    // The dialog takes focus once it has opened.
+    await waitFor(() => {
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("pause-dialog")).toBeNull();
+    });
+    await waitFor(() => {
+      expect(pause).toHaveFocus();
+    });
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
+  });
+
+  // Review round 1 on #4382: an irreversible Cancel sat one click behind a
+  // row button labelled Pause. A cancel now takes a second, confirming click.
+  it("asks for a second click before it cancels a ledger run's ingress, and sends nothing on the first (negative)", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_9"] },
+    });
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Cancel evidence ingress" }),
+    );
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
+    const warning =
+      "Cancel cannot be undone. The run then cannot append more frames or receive a fresh run credential.";
+    expect(
+      within(dialog).getByTestId("pause-cancel-warning"),
+    ).toHaveTextContent(warning);
+    // The confirm names what cannot be undone, and focus waits on the way
+    // back.
+    const back = within(dialog).getByRole("button", { name: "Back" });
+    await waitFor(() => {
+      expect(back).toHaveFocus();
+    });
+    expect(
+      within(dialog).getByRole("button", {
+        name: "Revoke evidence ingress for good",
+      }),
+    ).toHaveAccessibleDescription(warning);
+    expect(
+      within(dialog).queryByRole("button", { name: "Pause evidence ingress" }),
+    ).toBeNull();
+    await expectNoAxe(document.body);
+    // Back returns to both commands, and still sends nothing. Back removes
+    // itself, so focus goes to the button that opened the confirm step.
+    await user.click(back);
+    expect(within(dialog).queryByTestId("pause-cancel-warning")).toBeNull();
+    expect(
+      within(dialog).getByRole("button", { name: "Pause evidence ingress" }),
+    ).toBeEnabled();
+    const cancel = within(dialog).getByRole("button", {
+      name: "Cancel evidence ingress",
+    });
+    await waitFor(() => {
+      expect(cancel).toHaveFocus();
+    });
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
+    // The confirming click is the one that sends the cancel.
+    await cancelIngress(user, dialog);
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+    expect(dispatchRunCommand).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_ledger",
+      "cancel",
+      "",
+    );
+    expect(
+      await within(dialog).findByTestId("ledger-applied"),
+    ).toHaveTextContent("Further appends are refused");
+  });
+
+  // A paused row reads paused and links to its Run page, which offers Resume
+  // (controls.test.tsx covers it there). The row sends no command and opens
+  // no dialog.
+  it("sends a ledger run whose ingress is paused to its Run page, where Resume is (negative)", async () => {
+    await loaded({
+      runs: ledgerRuns({ ingressPaused: true }),
+      approvals: NO_APPROVALS,
+    });
+    const paused = row("arun_ledger");
+    expect(paused.dataset.state).toBe("paused");
+    expect(within(paused).getByTestId("row-open")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/arun_ledger",
+    );
+    expect(within(paused).queryByTestId("row-pause")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
+  });
+
+  it("says a cancelled ledger run's ingress is revoked, and sends nothing (negative)", async () => {
+    await loaded({
+      runs: ledgerRuns({ ingressRevoked: true }),
       approvals: NO_APPROVALS,
     });
     const user = userEvent.setup();
     await user.click(screen.getByTestId("row-pause"));
     expect(screen.getByTestId("pause-refusal")).toHaveTextContent(
-      "Pause refuses the next evidence batch",
+      "Evidence ingress is revoked.",
+    );
+    for (const name of ["Pause evidence ingress", "Cancel evidence ingress"])
+      expect(screen.getByRole("button", { name })).toBeDisabled();
+    expect(screen.getByLabelText("Reason")).toBeDisabled();
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
+    await expectNoAxe(document.body);
+  });
+
+  it("says a viewer cannot command a ledger run, and sends nothing (negative)", async () => {
+    await renderFleet(
+      { runs: ledgerRuns(), approvals: NO_APPROVALS },
+      null,
+      undefined,
+      { ctx: viewerCtx },
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    expect(screen.getByTestId("pause-refusal")).toHaveTextContent(
+      "Sending a command needs an organization Owner or Admin role",
+    );
+    for (const name of ["Pause evidence ingress", "Cancel evidence ingress"])
+      expect(screen.getByRole("button", { name })).toBeDisabled();
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
+  });
+
+  it("names the refusal a ledger cancel came back with, and claims no change (negative)", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: false,
+      reason: "denied",
+      code: "run_sealed",
+    });
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await cancelIngress(user, dialog);
+    expect(await screen.findByTestId("pause-failure")).toBeInTheDocument();
+    expect(screen.queryByTestId("ledger-applied")).toBeNull();
+    // The confirm step stays, so the person can send it again or go back.
+    // The refusal is set after the action's await, which React renders
+    // before the transition ends, so the button keeps its in-flight name
+    // for one more render.
+    expect(
+      await within(dialog).findByRole("button", {
+        name: "Revoke evidence ingress for good",
+      }),
+    ).toBeEnabled();
+    const back = within(dialog).getByRole("button", { name: "Back" });
+    expect(back).toBeEnabled();
+    await expectNoAxe(document.body);
+    // Review round 3 on #4382: Back left the refusal on screen, under two
+    // commands it did not answer. It now goes with the confirm step, and
+    // focus goes to the button that opened it.
+    await user.click(back);
+    expect(within(dialog).queryByTestId("pause-failure")).toBeNull();
+    const cancel = within(dialog).getByRole("button", {
+      name: "Cancel evidence ingress",
+    });
+    await waitFor(() => {
+      expect(cancel).toHaveFocus();
+    });
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+  });
+
+  // Review round 3 on #4382: a double click on "Cancel evidence ingress" sent
+  // the cancel whenever the layout put the confirm button under the second
+  // click. The confirm button now refuses any click past the first of a
+  // series, wherever it lands.
+  it("sends no cancel on a double click's second click, and sends it on a single click (negative)", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: ["tcm_11"] },
+    });
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Cancel evidence ingress" }),
+    );
+    const revoke = within(dialog).getByRole("button", {
+      name: "Revoke evidence ingress for good",
+    });
+    fireEvent.click(revoke, { detail: 2 });
+    expect(dispatchRunCommand).not.toHaveBeenCalled();
+    expect(
+      within(dialog).getByTestId("pause-cancel-warning"),
+    ).toBeInTheDocument();
+    fireEvent.click(revoke, { detail: 1 });
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+    expect(dispatchRunCommand).toHaveBeenCalledWith(
+      "acme",
+      "core-platform",
+      "arun_ledger",
+      "cancel",
+      "",
     );
     expect(
-      screen.getByRole("button", { name: "Pause at the next boundary" }),
+      await within(dialog).findByTestId("ledger-applied"),
+    ).toHaveTextContent("Further appends are refused");
+  });
+
+  it("says a ledger command no live run took, claims no change, and re-reads nothing on close (negative)", async () => {
+    dispatchRunCommand.mockResolvedValue({
+      ok: true,
+      value: { commandIds: [] },
+    });
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Pause evidence ingress" }),
+    );
+    expect(
+      await within(dialog).findByTestId("pause-failure"),
+    ).toHaveTextContent("No live run took this command.");
+    expect(within(dialog).queryByTestId("ledger-applied")).toBeNull();
+    // Nothing changed, so closing the dialog has nothing to re-read.
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByTestId("pause-dialog")).toBeNull();
+    });
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("says a ledger command went unanswered when the call throws, and claims no change (negative)", async () => {
+    dispatchRunCommand.mockRejectedValue(new Error("socket hang up"));
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await cancelIngress(user, dialog);
+    expect(await screen.findByTestId("pause-failure")).toBeInTheDocument();
+    expect(screen.queryByTestId("ledger-applied")).toBeNull();
+    // The failure draws with the buttons it frees, not before them.
+    expect(
+      within(dialog).getByRole("button", {
+        name: "Revoke evidence ingress for good",
+      }),
+    ).toBeEnabled();
+    expect(within(dialog).getByRole("button", { name: "Close" })).toBeEnabled();
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the cancel in flight on its own button and holds the way back until the ledger answers", async () => {
+    let settle: (value: unknown) => void = () => undefined;
+    dispatchRunCommand.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await cancelIngress(user, dialog);
+    expect(
+      await within(dialog).findByRole("button", { name: "Cancelling" }),
     ).toBeDisabled();
+    // Back waits too, so the confirm step cannot change under the answer.
+    expect(within(dialog).getByRole("button", { name: "Back" })).toBeDisabled();
+    settle({ ok: true, value: { commandIds: ["tcm_5"] } });
+    expect(
+      await within(dialog).findByTestId("ledger-applied"),
+    ).toHaveTextContent("Further appends are refused");
+    expect(dispatchRunCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it("names a pause in flight on its own button and leaves Cancel's name alone", async () => {
+    let settle: (value: unknown) => void = () => undefined;
+    dispatchRunCommand.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    await loaded({ runs: ledgerRuns(), approvals: NO_APPROVALS });
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const dialog = screen.getByRole("dialog", { name: "Evidence ingress" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Pause evidence ingress" }),
+    );
+    expect(
+      await within(dialog).findByRole("button", { name: "Queueing" }),
+    ).toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: "Cancel evidence ingress" }),
+    ).toBeDisabled();
+    settle({ ok: true, value: { commandIds: ["tcm_6"] } });
+    expect(
+      await within(dialog).findByTestId("ledger-applied"),
+    ).toHaveTextContent("Evidence ingress is paused.");
+  });
+
+  it("names the role before the revoked ingress for a viewer on a cancelled ledger run, as the Run page does (negative)", async () => {
+    await renderFleet(
+      { runs: ledgerRuns({ ingressRevoked: true }), approvals: NO_APPROVALS },
+      null,
+      undefined,
+      { ctx: viewerCtx },
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId("row-pause"));
+    const refusal = screen.getByTestId("pause-refusal");
+    expect(refusal).toHaveTextContent(
+      "Sending a command needs an organization Owner or Admin role",
+    );
+    expect(refusal).not.toHaveTextContent("Evidence ingress is revoked.");
     expect(dispatchRunCommand).not.toHaveBeenCalled();
   });
 
   it("says why a run whose host stopped polling cannot be paused (negative)", async () => {
     await loaded({
       runs: runPage([
-        // A wrapped run: a ledger run is refused first, for its own reason.
+        // A wrapped run: a ledger run has no host for this block to name.
         runRow({
           id: "tse_quiet",
           source: "tacho",
@@ -805,7 +1592,9 @@ describe("list controls", () => {
   it("lists every run the read returned, and says when the read stopped before the oldest run", async () => {
     await loaded({ runs: runPage(many, "c2"), approvals: NO_APPROVALS });
     expect(rows()).toHaveLength(12);
-    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–12 of 12+");
+    expect(screen.getByTestId("pager-range")).toHaveTextContent(
+      "12 runs on this page",
+    );
     expect(screen.getByRole("link", { name: "Older runs" })).toHaveAttribute(
       "href",
       "/acme/core-platform?cursor=c2",
@@ -850,38 +1639,152 @@ describe("list controls", () => {
       "href",
       "/acme/core-platform",
     );
-    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–12 of 12");
+    // A later cursor page is not rows 1–12 of 12: nothing counted it (#4370
+    // review). It says how many rows it holds and nothing more.
+    const range = screen.getByTestId("pager-range");
+    expect(range).toHaveTextContent("12 runs on this page");
+    expect(range).not.toHaveTextContent("1–12");
   });
 
-  it("searches, filters on a facet and sorts on a column", async () => {
+  // #3837: the search, the facets, the order and the page are the read's.
+  it("sends a search, a facet and a column's order to the read as a navigation", async () => {
     await loaded({ runs: runPage(many), approvals: NO_APPROVALS });
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText("Search this list"), "arun_07");
-    expect(rows()).toHaveLength(1);
-    await user.clear(screen.getByLabelText("Search this list"));
+    await user.type(screen.getByRole("searchbox"), "arun_07{Enter}");
+    expect(push).toHaveBeenLastCalledWith("/acme/core-platform?q=arun_07");
+    // The rows are the read's: typing filters nothing on this page.
+    expect(rows()).toHaveLength(12);
     await user.selectOptions(screen.getByTestId("facet-tier"), "gateway");
-    expect(rows()).toHaveLength(4);
-    expect(
-      within(screen.getByTestId("facet-status"))
-        .getAllByRole("option")
-        .map((o) => o.textContent),
-    ).toEqual(["All · Status", "sealed"]);
-    await user.selectOptions(screen.getByTestId("facet-tier"), "");
-    const frames = screen.getByRole("button", { name: "Sort by Frames" });
-    await user.click(frames);
-    expect(frames.closest("th")).toHaveAttribute("aria-sort", "ascending");
-    expect(rows()[0]).toHaveTextContent("arun_00");
-    await user.click(frames);
-    expect(frames.closest("th")).toHaveAttribute("aria-sort", "descending");
-    expect(rows()[0]).toHaveTextContent("arun_11");
+    expect(push).toHaveBeenLastCalledWith("/acme/core-platform?tier=gateway");
+    await user.click(screen.getByRole("button", { name: "Sort by Cost" }));
+    expect(push).toHaveBeenLastCalledWith(
+      "/acme/core-platform?sort=cost&dir=asc",
+    );
   });
 
-  it("says no rows match when a search finds none (negative)", async () => {
-    await loaded({ runs: runPage(many), approvals: NO_APPROVALS });
+  it("sorts only the columns the read can order, and marks the order the URL asked for", async () => {
+    const { calls } = await renderFleet(
+      { runs: runPage(many), approvals: NO_APPROVALS },
+      null,
+      undefined,
+      {
+        list: {
+          q: "",
+          status: [],
+          tier: [],
+          replay: [],
+          sort: "cost",
+          dir: "desc",
+          page: 1,
+        },
+      },
+    );
+    expect(calls.runs[0]?.[1]).toMatchObject({
+      sort: { key: "cost", dir: "desc" },
+    });
+    const cost = screen.getByRole("button", { name: "Sort by Cost" });
+    expect(cost.closest("th")).toHaveAttribute("aria-sort", "descending");
+    // Frames, Run, Pull requests and Lines have no single order in both
+    // stores, so their headers do not sort.
+    for (const column of ["Frames", "Run", "Lines"])
+      expect(
+        screen.queryByRole("button", { name: `Sort by ${column}` }),
+      ).toBeNull();
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText("Search this list"), "zzz");
+    await user.click(cost);
+    expect(push).toHaveBeenLastCalledWith("/acme/core-platform");
+  });
+
+  it("reads the pager from the read's total, with page buttons to the last page", async () => {
+    const { container } = await loaded({
+      runs: readOk({
+        runs: many,
+        nextCursor: null,
+        total: 279,
+        totalBound: 10_000,
+      }),
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("1–12 of 279");
+    expect(screen.getByRole("link", { name: "Page 12" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform?page=12",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("reads page N at its offset and keeps the list on the pager's links", async () => {
+    const { calls } = await renderFleet(
+      {
+        runs: readOk({
+          runs: many,
+          nextCursor: null,
+          total: 279,
+          totalBound: 10_000,
+        }),
+        approvals: NO_APPROVALS,
+      },
+      null,
+      undefined,
+      {
+        list: {
+          q: "deploy",
+          status: ["sealed"],
+          tier: [],
+          replay: [],
+          sort: "started",
+          dir: "desc",
+          page: 3,
+        },
+      },
+    );
+    expect(calls.runs[0]?.[1]).toEqual({
+      cursor: null,
+      limit: 25,
+      pullRequests: "any",
+      status: ["sealed"],
+      query: "deploy",
+      offset: 50,
+      count: true,
+      countLive: true,
+    });
+    expect(screen.getByTestId("pager-range")).toHaveTextContent("51–62 of 279");
+    expect(screen.getByRole("link", { name: "Previous" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform?q=deploy&status=sealed&page=2",
+    );
+  });
+
+  it("keeps the table and says no rows match when a search finds none (negative)", async () => {
+    const { calls } = await renderFleet(
+      {
+        runs: readOk({
+          runs: [],
+          nextCursor: null,
+          total: 0,
+          totalBound: 10_000,
+        }),
+        approvals: NO_APPROVALS,
+      },
+      null,
+      undefined,
+      {
+        list: {
+          q: "zzz",
+          status: [],
+          tier: [],
+          replay: [],
+          sort: "started",
+          dir: "desc",
+          page: 1,
+        },
+      },
+    );
+    expect(calls.runs[0]?.[1]).toMatchObject({ query: "zzz" });
+    expect(screen.queryByTestId("fleet-empty")).toBeNull();
     expect(runsPanel()).toHaveTextContent("No rows match.");
     expect(screen.getByTestId("pager-range")).toHaveTextContent("0 of 0");
+    expect(screen.getByRole("searchbox")).toHaveValue("zzz");
   });
 });
 
@@ -903,6 +1806,14 @@ describe("not-loaded states", () => {
     expect(
       within(empty).getByRole("link", { name: "Open Agents" }),
     ).toHaveAttribute("href", "/acme/core-platform/agents");
+    // The CLI path to a first run (#2950): the enroll command, set as code.
+    const enroll = within(empty).getByTestId("fleet-empty-enroll");
+    expect(enroll).toHaveTextContent(
+      "To record an agent that already runs on a machine, run oxagen agent enroll on that machine.",
+    );
+    expect(within(enroll).getByText("oxagen agent enroll").tagName).toBe(
+      "CODE",
+    );
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.queryByRole("table")).toBeNull();
   });
@@ -924,11 +1835,20 @@ describe("not-loaded states", () => {
     expect(error).toHaveTextContent(
       "The control plane answered 503 run_index_unavailable. Nothing was changed. Runs kept recording while this page was down. Frames are written by the collector on each host, not by Oxagen.",
     );
-    // A failed read records no trace id or region (#3841); the instant is
-    // the design's UTC form.
+    // This read recorded no trace id or region (#3841), and each part says
+    // so; the instant is the design's UTC form.
     expect(screen.getByTestId("fleet-error-trace").textContent).toMatch(
-      /^trace and region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
+      /^trace not recorded · region not recorded · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z$/,
     );
+    expect(screen.getByTestId("fleet-error-trace-id")).toHaveAttribute(
+      "data-recorded",
+      "false",
+    );
+    expect(screen.getByTestId("fleet-error-region")).toHaveAttribute(
+      "data-recorded",
+      "false",
+    );
+    expect(screen.queryByTestId("fleet-error-request")).toBeNull();
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     // The design's errorState glyph: a circle with an exclamation mark, in
     // the failed tone alone.
@@ -1009,6 +1929,108 @@ describe("not-loaded states", () => {
     expect(
       screen.getByRole("button", { name: "Send the request" }),
     ).toBeDisabled();
+  });
+
+  // #3841: the error line and Decided by read from the record.
+  it("error: prints the trace, the region and the request the seam recorded, and attaches them to an incident", async () => {
+    const { container } = await renderFleet({
+      runs: readError("run_index_unavailable", 503, {
+        traceId: "01K5RSXQ7F2E",
+        region: "us-east-1",
+        requestId: "0192f1c4-0000-7000-8000-00000000c0de",
+      }),
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getByTestId("fleet-error-trace").textContent).toMatch(
+      /^trace 01K5RSXQ7F2E · us-east-1 · \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}Z · request 0192f1c4-0000-7000-8000-00000000c0de$/,
+    );
+    for (const id of ["fleet-error-trace-id", "fleet-error-region"])
+      expect(screen.getByTestId(id)).toHaveAttribute("data-recorded", "true");
+    await expectNoAxe(container);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Open an incident" }));
+    const attach = within(
+      screen.getByRole("dialog", { name: "Open an incident" }),
+    ).getByRole("list", { name: "Attach" });
+    expect(
+      within(attach)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual([
+      "503 run_index_unavailable",
+      "core-platform",
+      expect.stringMatching(/Z$/),
+      "trace 01K5RSXQ7F2E",
+      "request 0192f1c4-0000-7000-8000-00000000c0de",
+    ]);
+  });
+
+  it("error: says which part was not recorded when only some were", async () => {
+    await renderFleet({
+      runs: readError("run_index_unavailable", 503, {
+        traceId: null,
+        region: "us-east-1",
+      }),
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getByTestId("fleet-error-trace").textContent).toMatch(
+      /^trace not recorded · us-east-1 · /,
+    );
+    expect(screen.getByTestId("fleet-error-trace-id")).toHaveAttribute(
+      "data-recorded",
+      "false",
+    );
+  });
+
+  it("access denied: names the IAM rule that decided", async () => {
+    const { container } = await renderFleet({
+      runs: {
+        ...DENIED,
+        decidedBy: { source: "iam", id: "8:default" },
+        traceId: null,
+        region: null,
+      },
+      approvals: NO_APPROVALS,
+    });
+    const decided = screen.getByTestId("fleet-decided-by");
+    expect(decided).toHaveTextContent("IAM rule 8:default");
+    // 8:default means no grant matched. No deny beat an allow, so the line
+    // does not say one did (#4370 review).
+    expect(decided).not.toHaveTextContent("deny wins");
+    expect(decided).toHaveAttribute("data-recorded", "true");
+    expect(within(decided).getByText("8:default").tagName).toBe("CODE");
+    expect(screen.getByTestId("fleet-denied")).toHaveTextContent(
+      "do not include workspace.read on core-platform",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("access denied: names the decision rule that refused the read, and says a rule refused it", async () => {
+    await renderFleet({
+      runs: {
+        ...DENIED,
+        decidedBy: { source: "decision_rule", id: "rul_no_weekend_reads" },
+      },
+      approvals: NO_APPROVALS,
+    });
+    expect(screen.getByTestId("fleet-decided-by")).toHaveTextContent(
+      "decision rule rul_no_weekend_reads",
+    );
+    expect(screen.getByTestId("fleet-denied")).toHaveTextContent(
+      "A decision rule on Acme Robotics refused this read.",
+    );
+  });
+
+  it("access denied: says the rule was not recorded when the record names none", async () => {
+    await renderFleet({
+      runs: { ...DENIED, decidedBy: null },
+      approvals: NO_APPROVALS,
+    });
+    const decided = screen.getByTestId("fleet-decided-by");
+    expect(decided).toHaveTextContent(
+      "policy not recorded · deny wins over every allow",
+    );
+    expect(decided).toHaveAttribute("data-recorded", "false");
   });
 
   it("pending: carries the id of the access request still waiting", async () => {

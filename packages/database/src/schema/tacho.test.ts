@@ -18,6 +18,7 @@ import {
   TACHO_RUNTIMES,
   TACHO_SESSION_OUTCOMES,
   tachoSessionCommands,
+  tachoSessionFiles,
   tachoSessionModels,
   tachoSessions,
 } from "./tacho";
@@ -184,17 +185,24 @@ describe("tacho session counters and durations are bigint (#3944)", () => {
     ],
     session_models: ["requests", "web_search_requests", "api_duration_ms"],
     session_commands: ["duration_ms"],
+    // Assigned from the envelope's u32 by git reconciliation, which passes the
+    // int4 limit. The per-event counts below them stay int4.
+    session_files: ["lines_added", "lines_removed"],
   };
   /** One bounded value each, never a running total, so int4 holds them. */
   const STAYS_INT4: Record<string, readonly string[]> = {
     sessions: ["api_error_status", "bundle_version"],
     session_models: ["context_window", "max_output_tokens"],
     session_commands: ["exit_status"],
+    // Each adds one per event, so a session would need two billion events on
+    // one file to reach the int4 limit.
+    session_files: ["reads", "writes", "edits", "deletes"],
   };
   const TABLES = {
     sessions: tachoSessions,
     session_models: tachoSessionModels,
     session_commands: tachoSessionCommands,
+    session_files: tachoSessionFiles,
   } as const;
 
   /** The SQL type Drizzle declares for each column of one table. */

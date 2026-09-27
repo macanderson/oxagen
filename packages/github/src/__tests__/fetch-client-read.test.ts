@@ -775,3 +775,209 @@ it("reads a failing check beyond the first CI page and reports completeness", as
   });
   expect(result.complete).toBe(true);
 });
+
+// ---------------------------------------------------------------------------
+// getIssues (#3970)
+// ---------------------------------------------------------------------------
+
+describe("getIssues", () => {
+  const answer = {
+    data: {
+      repository: {
+        n482: {
+          __typename: "Issue",
+          number: 482,
+          title: "Release notes for 4.11.0",
+          url: "https://github.com/acme/repo/issues/482",
+          state: "OPEN",
+          stateReason: null,
+        },
+        n480: {
+          __typename: "Issue",
+          number: 480,
+          title: "Old bug",
+          url: "https://github.com/acme/repo/issues/480",
+          state: "CLOSED",
+          stateReason: "NOT_PLANNED",
+        },
+        n511: {
+          __typename: "PullRequest",
+          number: 511,
+          title: "Release notes",
+          url: "https://github.com/acme/repo/pull/511",
+          state: "MERGED",
+        },
+        n9999: null,
+      },
+    },
+    errors: [
+      {
+        message:
+          "Could not resolve to an issue or pull request with the number of 9999.",
+      },
+    ],
+  };
+
+  it("reads every number in one aliased GraphQL call, and reports a pull request and a missing number as such", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(makeResponse(answer));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await createGitHubClient({ token: "tok" }).getIssues({
+      owner: "acme",
+      repo: "repo",
+      numbers: [482, 480, 511, 9999, 482],
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("https://api.github.com/graphql");
+    const body = JSON.parse(init.body);
+    expect(body.variables).toEqual({ owner: "acme", repo: "repo" });
+    // One alias per distinct number.
+    expect(body.query.match(/issueOrPullRequest\(number: \d+\)/g)).toEqual([
+      "issueOrPullRequest(number: 482)",
+      "issueOrPullRequest(number: 480)",
+      "issueOrPullRequest(number: 511)",
+      "issueOrPullRequest(number: 9999)",
+    ]);
+    expect(result).toEqual({
+      issues: [
+        {
+          number: 482,
+          title: "Release notes for 4.11.0",
+          state: "open",
+          stateReason: null,
+          url: "https://github.com/acme/repo/issues/482",
+          isPullRequest: false,
+        },
+        {
+          number: 480,
+          title: "Old bug",
+          state: "closed",
+          stateReason: "not_planned",
+          url: "https://github.com/acme/repo/issues/480",
+          isPullRequest: false,
+        },
+        {
+          number: 511,
+          title: "Release notes",
+          state: "closed",
+          stateReason: null,
+          url: "https://github.com/acme/repo/pull/511",
+          isPullRequest: true,
+        },
+      ],
+      missing: [9999],
+    });
+  });
+
+  it("asks nothing for no numbers", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      createGitHubClient({ token: "tok" }).getIssues({
+        owner: "acme",
+        repo: "repo",
+        numbers: [],
+      }),
+    ).resolves.toEqual({ issues: [], missing: [] });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses more than 50 numbers rather than reading part of them (negative)", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    await expect(
+      createGitHubClient({ token: "tok" }).getIssues({
+        owner: "acme",
+        repo: "repo",
+        numbers: Array.from({ length: 51 }, (_, i) => i + 1),
+      }),
+    ).rejects.toThrow(RangeError);
+  });
+
+  it("throws when GitHub refuses the repository, never reading every issue as missing (negative)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(
+        makeResponse({
+          data: { repository: null },
+          errors: [{ message: "Could not resolve to a Repository" }],
+        }),
+      ),
+    );
+    await expect(
+      createGitHubClient({ token: "tok" }).getIssues({
+        owner: "acme",
+        repo: "gone",
+        numbers: [1],
+      }),
+    ).rejects.toThrow("Could not resolve to a Repository");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listReleases (#3890)
+// ---------------------------------------------------------------------------
+
+describe("listReleases", () => {
+  it("reads the first 100 releases, drafts included", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse([
+        {
+          tag_name: "v4.11.0",
+          name: "v4.11.0",
+          html_url: "https://github.com/acme/repo/releases/tag/untagged-1",
+          draft: true,
+          prerelease: false,
+          published_at: null,
+        },
+        {
+          tag_name: "v4.10.3",
+          name: "",
+          html_url: "https://github.com/acme/repo/releases/tag/v4.10.3",
+          draft: false,
+          prerelease: false,
+          published_at: "2026-09-01T10:00:00Z",
+        },
+      ]),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const releases = await createGitHubClient({ token: "tok" }).listReleases({
+      owner: "acme",
+      repo: "repo",
+    });
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      "https://api.github.com/repos/acme/repo/releases?per_page=100",
+    );
+    expect(releases).toEqual([
+      {
+        tagName: "v4.11.0",
+        name: "v4.11.0",
+        htmlUrl: "https://github.com/acme/repo/releases/tag/untagged-1",
+        draft: true,
+        prerelease: false,
+        publishedAt: null,
+      },
+      {
+        tagName: "v4.10.3",
+        // GitHub answers an empty title for a release with none.
+        name: null,
+        htmlUrl: "https://github.com/acme/repo/releases/tag/v4.10.3",
+        draft: false,
+        prerelease: false,
+        publishedAt: "2026-09-01T10:00:00Z",
+      },
+    ]);
+  });
+
+  it("throws on a refused read (negative)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce(makeResponse({ message: "Not Found" }, 404)),
+    );
+    await expect(
+      createGitHubClient({ token: "tok" }).listReleases({
+        owner: "acme",
+        repo: "gone",
+      }),
+    ).rejects.toThrow("GitHub API error 404");
+  });
+});

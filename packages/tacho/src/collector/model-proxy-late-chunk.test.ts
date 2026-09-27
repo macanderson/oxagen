@@ -1,5 +1,6 @@
 /**
- * A response chunk that arrives after its call settled (#4107).
+ * A response chunk that arrives after its call settled (#4107), and a call
+ * still streaming when its session ends (C-04).
  *
  * A real socket cannot decide when its last chunk lands relative to
  * `settle`, so the upstream here is a fake: `node:http`'s `request` hands
@@ -123,8 +124,10 @@ describe("a response chunk after its call settled", () => {
     const host = registry.ensure("tachod-late-chunk", {
       harness: "claude-code",
     }).record;
-    const uuid = registry.ensure("sess-late", { harness: "claude-code" }).record
-      .recorder.sessionUuid;
+    const session = registry.ensure("sess-late", {
+      harness: "claude-code",
+    }).record;
+    const uuid = session.recorder.sessionUuid;
     const events: TachoEvent[] = [];
     const log: string[] = [];
     const bundle = unsignedBundle({}) as PolicyBundle;
@@ -157,39 +160,159 @@ describe("a response chunk after its call settled", () => {
     });
 
     // The caller's side: a streaming call that has read its headers.
-    const body = JSON.stringify({ model: "claude-sonnet-5", stream: true });
-    const caller = request({
-      host: "127.0.0.1",
-      port,
-      method: "POST",
-      path: "/anthropic/v1/messages",
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Length": String(Buffer.byteLength(body)),
-        "X-Claude-Code-Session-Id": "sess-late",
-      },
-      agent: false,
-    });
-    caller.on("error", () => undefined);
-    const answered = new Promise<void>((resolve) =>
-      caller.on("response", (res) => {
-        res.on("error", () => undefined);
-        res.resume();
-        resolve();
-      }),
-    );
-    caller.end(body);
+    const call = async (
+      body = JSON.stringify({ model: "claude-sonnet-5", stream: true }),
+    ) => {
+      const index = upstreams.length;
+      const caller = request({
+        host: "127.0.0.1",
+        port,
+        method: "POST",
+        path: "/anthropic/v1/messages",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": String(Buffer.byteLength(body)),
+          "X-Claude-Code-Session-Id": "sess-late",
+        },
+        agent: false,
+      });
+      caller.on("error", () => undefined);
+      const answered = new Promise<void>((resolve) =>
+        caller.on("response", (res) => {
+          res.on("error", () => undefined);
+          res.resume();
+          resolve();
+        }),
+      );
+      caller.end(body);
 
-    await until(() => upstreams.length === 1);
-    const upstreamReq = upstreams[0]!;
-    const upstream = vendorResponse(headers);
-    upstreamReq.emit("response", upstream);
-    await answered;
+      await until(() => upstreams.length === index + 1);
+      const upstreamReq = upstreams[index]!;
+      const upstream = vendorResponse(headers);
+      upstreamReq.emit("response", upstream);
+      await answered;
+      return { caller, upstreamReq, upstream };
+    };
+    const { caller, upstreamReq, upstream } = await call();
 
     const frames = () =>
       events.filter((e) => e.session_uuid === uuid && e.kind === "llm_call");
-    return { proxy, uuid, caller, upstream, upstreamReq, frames, log };
+    const hostFrames = () =>
+      events.filter(
+        (e) =>
+          e.session_uuid === host.recorder.sessionUuid && e.kind === "llm_call",
+      );
+    return {
+      proxy,
+      uuid,
+      caller,
+      upstream,
+      upstreamReq,
+      frames,
+      hostFrames,
+      log,
+      registry,
+      session,
+      host,
+      call,
+    };
   }
+
+  describe("when its session ends mid-stream", () => {
+    it("is filed on the host's chain, not after the session's agent_stop", async () => {
+      const { upstream, frames, hostFrames, registry, session } = await start();
+      upstream.emit("data", EARLY);
+      // SessionEnd seals the chain while the response is still streaming.
+      registry.seal(session);
+      upstream.end();
+      await until(() => hostFrames().length === 1);
+      expect(frames()).toEqual([]);
+      const [frame] = hostFrames();
+      expect(frame!.attrs["oxagen.correlation"]).toBe("session_closed");
+      expect(frame!.body).toMatchObject({ input_tokens: 1000 });
+      // The frame names the session it belongs to, and how the proxy
+      // matched the call to it.
+      expect(frame!.attrs["oxagen.session_uuid"]).toBe(
+        session.recorder.sessionUuid,
+      );
+      expect(frame!.attrs["oxagen.session_correlation"]).toBe("harness_header");
+    });
+
+    it("counts the call once when the session's own record of it arrives later", async () => {
+      const { upstream, hostFrames, registry, session } = await start();
+      upstream.emit("data", EARLY);
+      registry.seal(session);
+      upstream.end();
+      await until(() => hostFrames().length === 1);
+      // The OTel exporter reports the same call on the session's chain.
+      const late = session.recorder.sealCollectorEvent(
+        "llm_call",
+        { provider: "anthropic", message_id: "msg_1", input_tokens: 1000 },
+        { source: "otel_log" },
+      );
+      expect(late.attrs["oxagen.llm_call_duplicate_of"]).toBe("collector");
+    });
+
+    it("stores the request whole, and the next call folds against nothing", async () => {
+      const { upstream, frames, hostFrames, registry, session, call } =
+        await start();
+      upstream.emit("data", EARLY);
+      upstream.end();
+      await until(() => frames().length === 1);
+      // A conversation long enough that the next call folds its prefix.
+      const turn = (n: number) => ({
+        role: "user",
+        content: `message ${n} ${"x".repeat(2_000)}`,
+      });
+      const messages = (count: number) =>
+        JSON.stringify({
+          model: "claude-sonnet-5",
+          stream: true,
+          system: "s".repeat(2_000),
+          messages: Array.from({ length: count }, (_, i) => turn(i)),
+        });
+      const settle = async (body: string, count: number) => {
+        const next = await call(body);
+        next.upstream.emit("data", EARLY);
+        next.upstream.end();
+        await until(() => frames().length === count);
+      };
+      await settle(messages(3), 2);
+      // While the session is open, a call folds the prefix it shares with
+      // the one before it.
+      await settle(messages(4), 3);
+      expect(frames()[2]!.attrs["oxagen.request_prior_digest"]).toBeDefined();
+
+      const closing = await call(messages(5));
+      closing.upstream.emit("data", EARLY);
+      registry.seal(session);
+      closing.upstream.end();
+      await until(() => hostFrames().length === 1);
+      const [filed] = hostFrames();
+      expect(filed!.attrs["oxagen.request_prior_digest"]).toBeUndefined();
+      expect(filed!.attrs["oxagen.request_stored_bytes"]).toBe(
+        filed!.attrs["oxagen.request_full_bytes"],
+      );
+
+      // A resume, then a call whose prefix matches the one filed on the
+      // host's chain: it must not point there.
+      registry.ensure("sess-late", {
+        harness: "claude-code",
+        lastHookEvent: "SessionStart",
+      });
+      await settle(messages(6), 4);
+      expect(frames()[3]!.attrs["oxagen.request_prior_digest"]).toBeUndefined();
+    });
+
+    it("is filed on the host's chain while the session's terminal waits for the WAL", async () => {
+      const { upstream, frames, hostFrames, session } = await start();
+      upstream.emit("data", EARLY);
+      session.pendingTerminal = true;
+      upstream.end();
+      await until(() => hostFrames().length === 1);
+      expect(frames()).toEqual([]);
+    });
+  });
 
   it("is ignored once the caller closed, and the frame digests only what came before", async () => {
     const { caller, upstream, upstreamReq, frames } = await start();

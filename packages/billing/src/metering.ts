@@ -1,6 +1,6 @@
 import type { Tx } from "@oxagen/database";
 import { and, eq, gte, sql } from "drizzle-orm";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema } from "@oxagen/database";
 import {
   consumeCredits,
   effectiveBalance,
@@ -9,6 +9,7 @@ import {
 } from "./credits";
 import { CREDIT_REASONS, type CreditReason } from "./constants";
 import { getOrgBillingSettings } from "./billing-settings";
+import { withBillingDb } from "./internal/platform-db";
 import {
   providerCostUsd,
   resolveMeterMarkup,
@@ -90,10 +91,10 @@ export function assistantSpendWindowStart(now: Date = new Date()): Date {
  * Credits the platform key has spent on this organisation's assistant turns
  * since the start of the month: the sum of `consume_assistant_tokens` debits.
  * A debit is negative in the ledger, so the sum is negated. Reads through
- * withTenantDb, so the caller must be inside a tenant scope.
+ * withBillingDb, so the caller must be inside a tenant scope.
  */
 export async function assistantSpendThisMonth(orgId: string): Promise<bigint> {
-  const rows = await withTenantDb((tx) =>
+  const rows = await withBillingDb((tx) =>
     tx
       .select({
         spent: sql<string>`COALESCE(-SUM(${schema.creditLedger.deltaCents}), 0)`,

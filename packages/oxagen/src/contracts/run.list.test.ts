@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { canSummarizeRun, runItemSchema, runList } from "./run.list";
+import {
+  canSummarizeRun,
+  RUN_LABEL_MAX,
+  RUN_LIST_TOTAL_BOUND,
+  RUN_REPLAY_FILTERS,
+  runItemSchema,
+  runList,
+} from "./run.list";
 
 const item = {
   id: "tse_4q8r1t6v3x5z0b2d7h2k9m",
@@ -8,7 +15,9 @@ const item = {
   operatorId: null,
   operatorKind: null,
   operatorName: null,
+  operatorAvatarUrl: null,
   operatorAttribution: null,
+  operatorRole: null,
   status: "sealed",
   outcome: "completed",
   turns: 2,
@@ -17,6 +26,7 @@ const item = {
   cost: null,
   model: null,
   machine: null,
+  harness: null,
   taskRef: null,
   startedAt: "2026-09-08T10:06:03.000Z",
   sealedAt: "2026-09-08T10:06:30.000Z",
@@ -37,6 +47,7 @@ describe("list_runs run row: who ran it, on what, with which model", () => {
       operatorId: "prn_0123456789abcdefghjkmn",
       operatorKind: "human",
       operatorName: "Marcus Bell",
+      operatorAvatarUrl: "https://avatars.example.com/marcus.png",
       model: {
         id: "claude-sonnet-5",
         provider: "anthropic",
@@ -51,6 +62,13 @@ describe("list_runs run row: who ran it, on what, with which model", () => {
       },
     };
     expect(runItemSchema.parse(full)).toEqual(full);
+  });
+
+  it("refuses a blank avatar and a row without the avatar key (negative)", () => {
+    expect(runItemSchema.safeParse({ ...item, operatorAvatarUrl: "" }).success)
+      .toBe(false);
+    const { operatorAvatarUrl: _dropped, ...rest } = item;
+    expect(runItemSchema.safeParse(rest).success).toBe(false);
   });
 
   it("lets a model name a vendor without naming a class, and a machine omit what enrolment did not record", () => {
@@ -85,11 +103,87 @@ describe("list_runs run row: who ran it, on what, with which model", () => {
     ).toBe(false);
   });
 
+  it("carries the operator's stamped workspace role, and refuses a role outside the six (#3999)", () => {
+    const stamped = {
+      ...item,
+      operatorId: "prn_0123456789abcdefghjkmn",
+      operatorKind: "human",
+      operatorAttribution: "initiator",
+      operatorRole: "member",
+    };
+    expect(runItemSchema.parse(stamped)).toEqual(stamped);
+    expect(
+      runItemSchema.safeParse({ ...stamped, operatorRole: "Member" }).success,
+    ).toBe(false);
+    expect(
+      runItemSchema.safeParse({ ...stamped, operatorRole: "guest" }).success,
+    ).toBe(false);
+    const { operatorRole: _r, ...unstamped } = stamped;
+    expect(runItemSchema.safeParse(unstamped).success).toBe(false);
+  });
+
+  it("carries where the effort was read and the Model fit reading, both optional (#3891, #3893)", () => {
+    const fit = {
+      method: "run-fit/v1",
+      readAt: "2026-09-08T10:07:00.000Z",
+      sealedAt: "2026-09-08T10:06:30.000Z",
+      read: {
+        prompts: 1,
+        turns: 2,
+        steps: 7,
+        failed: 0,
+        outputTokens: 4120,
+        reasoningTokens: null,
+      },
+      model: { verdict: "over", tier: "opus", suggest: "sonnet" },
+      effort: { verdict: "unseen", why: "not_proxied" },
+    };
+    const read = { ...item, effort: "high", effortSource: "request", fit };
+    expect(runItemSchema.parse(read)).toEqual(read);
+    expect(runItemSchema.parse(item)).toEqual(item);
+    expect(
+      runItemSchema.safeParse({ ...item, effortSource: "guess" }).success,
+    ).toBe(false);
+    expect(
+      runItemSchema.safeParse({ ...item, fit: { ...fit, method: "run-fit/v0" } })
+        .success,
+    ).toBe(false);
+    expect(
+      runItemSchema.safeParse({
+        ...item,
+        fit: { ...fit, model: { verdict: "over", tier: "opus" } },
+      }).success,
+    ).toBe(false);
+  });
+
   it("refuses a row that leaves the new fields out entirely (negative)", () => {
     const { operatorKind: _k, ...withoutKind } = item;
     expect(runItemSchema.safeParse(withoutKind).success).toBe(false);
     const { model: _m, ...withoutModel } = item;
     expect(runItemSchema.safeParse(withoutModel).success).toBe(false);
+  });
+
+  it("carries the recorded harness, or null for a ledger run and a session that recorded none (#3790)", () => {
+    const wrapped = {
+      ...item,
+      harness: { name: "Claude Code", version: "2.1.0", runtime: null },
+    };
+    expect(runItemSchema.parse(wrapped)).toEqual(wrapped);
+    const ledger = {
+      ...item,
+      id: "arun_5f0c2e9a1b7d4c3e8f6a02",
+      source: "ledger",
+    };
+    expect(runItemSchema.parse(ledger).harness).toBeNull();
+  });
+
+  it("refuses a row with no harness key, so a reader never sees the field vanish (negative)", () => {
+    const { harness: _h, ...withoutHarness } = item;
+    expect(runItemSchema.safeParse(withoutHarness).success).toBe(false);
+    expect(
+      runList.output.safeParse({ runs: [withoutHarness], nextCursor: null })
+        .success,
+    ).toBe(false);
   });
 });
 
@@ -103,7 +197,8 @@ describe("list_runs contract", () => {
   });
 
   it("is a low-risk read the in-app agent may call without approval", () => {
-    expect(runList.surfaces).toEqual(["api", "mcp", "agent"]);
+    expect(runList.surfaces).toEqual(["api", "mcp", "agent", "cli"]);
+    expect(runList.layers).toContain("cli");
     expect(runList.agent).toEqual({
       requiresApproval: false,
       riskLevel: "low",
@@ -164,6 +259,24 @@ describe("list_runs contract", () => {
     expect(
       runItemSchema.safeParse({ ...item, summary: { text: "x" } }).success,
     ).toBe(false);
+  });
+
+  // #4224: a harness title and a ledger run's goal have no bound where they
+  // are written, and the reads cut both to the display cap.
+  it("holds the name and the task reference to the display cap (negative)", () => {
+    expect(RUN_LABEL_MAX).toBe(256);
+    const within = "x".repeat(RUN_LABEL_MAX);
+    const over = "x".repeat(RUN_LABEL_MAX + 1);
+    expect(
+      runItemSchema.safeParse({ ...item, name: within, taskRef: within })
+        .success,
+    ).toBe(true);
+    expect(runItemSchema.safeParse({ ...item, name: over }).success).toBe(
+      false,
+    );
+    expect(runItemSchema.safeParse({ ...item, taskRef: over }).success).toBe(
+      false,
+    );
   });
 
   it("refuses an id neither store mints and a status outside the three", () => {
@@ -286,5 +399,121 @@ describe("run outcome", () => {
     const failed = runItemSchema.parse({ ...item, outcome: "failed" });
     expect(completed.status).toBe(failed.status);
     expect(completed.outcome).not.toBe(failed.outcome);
+  });
+});
+
+describe("list_runs tokens, cache hit rate and compaction (#3834, #3835)", () => {
+  const tokens = {
+    input_uncached: 1200,
+    cache_read: 48_000,
+    cache_write_5m: 3000,
+    cache_write_1h: 0,
+    output: 900,
+    reasoning: 0,
+    server_tool_request: 0,
+  };
+
+  it("carries the rollup's token counts and cache hit rate, or null for a run with no rollup row", () => {
+    const priced = { ...item, tokens, cacheHitRate: 0.97, compacted: true };
+    expect(runItemSchema.parse(priced)).toEqual(priced);
+    const unpriced = { ...item, tokens: null, cacheHitRate: null };
+    expect(runItemSchema.parse(unpriced)).toEqual(unpriced);
+    expect(runItemSchema.parse(item)).toEqual(item);
+  });
+
+  it("refuses a rate outside 0..1 and a token class the rollup does not keep (negative)", () => {
+    expect(
+      runItemSchema.safeParse({ ...item, cacheHitRate: 1.2 }).success,
+    ).toBe(false);
+    expect(
+      runItemSchema.safeParse({ ...item, tokens: { ...tokens, extra: 1 } })
+        .success,
+    ).toBe(false);
+  });
+
+  it("keeps paused and compacted out of the status (ADR-193, negative)", () => {
+    expect(runItemSchema.safeParse({ ...item, status: "paused" }).success).toBe(
+      false,
+    );
+    expect(
+      runItemSchema.safeParse({ ...item, status: "compacted" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("list_runs pull request state (#4129)", () => {
+  it("carries when the state was last read, or null when it never was", () => {
+    const row = {
+      ...item,
+      pullRequests: [
+        {
+          url: "https://github.com/acme/api/pull/7",
+          number: 7,
+          repository: "acme/api",
+          state: "merged",
+          stateSeenAt: "2026-09-25T10:00:00.000Z",
+        },
+        {
+          url: "https://github.com/acme/api/pull/8",
+          number: 8,
+          repository: "acme/api",
+          state: null,
+          stateSeenAt: null,
+        },
+      ],
+    };
+    expect(runItemSchema.parse(row)).toEqual(row);
+  });
+});
+
+describe("list_runs filters, search, sort and total (#3837)", () => {
+  it("lists exactly as before when a call sends none of them", () => {
+    expect(runList.input.parse({ limit: 25 })).toEqual({ limit: 25 });
+  });
+
+  it("accepts every filter, the search, a sort and an offset", () => {
+    const input = {
+      limit: 25,
+      status: ["live", "halted"],
+      tier: ["gateway", "observe"],
+      replayGrade: ["fork", "not_recorded"],
+      query: "  mac-studio  ",
+      sort: { key: "cost", dir: "asc" },
+      offset: 50,
+    };
+    expect(runList.input.parse(input)).toEqual({
+      ...input,
+      query: "mac-studio",
+    });
+    expect(RUN_REPLAY_FILTERS).toContain("not_recorded");
+  });
+
+  it("refuses an empty filter, a paused status, an unknown sort key and an offset past the bound (negative)", () => {
+    const bad = [
+      { status: [] },
+      { status: ["paused"] },
+      { tier: ["cloud"] },
+      { replayGrade: ["replay"] },
+      { query: "   " },
+      { sort: { key: "tokens", dir: "asc" } },
+      { sort: { key: "cost", dir: "up" } },
+      { offset: -1 },
+      { offset: RUN_LIST_TOTAL_BOUND + 1 },
+    ];
+    for (const input of bad) {
+      expect(runList.input.safeParse(input).success).toBe(false);
+    }
+  });
+
+  it("carries a bounded total, null past the bound, or none when not counted", () => {
+    const base = { runs: [], nextCursor: null };
+    expect(runList.output.parse(base)).toEqual(base);
+    const counted = { ...base, total: 42, totalBound: RUN_LIST_TOTAL_BOUND };
+    expect(runList.output.parse(counted)).toEqual(counted);
+    const past = { ...base, total: null, totalBound: RUN_LIST_TOTAL_BOUND };
+    expect(runList.output.parse(past)).toEqual(past);
+    expect(runList.output.safeParse({ ...base, total: -1 }).success).toBe(
+      false,
+    );
   });
 });

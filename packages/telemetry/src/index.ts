@@ -27,6 +27,7 @@ export * from "./stella-operational-events";
 export * from "./tacho-events";
 export * from "./tacho-turns";
 export * from "./tacho-events-ddl";
+export * from "./tacho-events-retention";
 export * from "./cost-frames";
 export * from "./claude-telemetry";
 export { chInsert, chSelect } from "./tenant";

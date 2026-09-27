@@ -696,6 +696,20 @@ describe("merge requests", () => {
     expect(calls[0]?.url).toBe(`${API}/projects/42/merge_requests/7`);
   });
 
+  it("getMergeRequest carries the draft flag and GitLab's updated_at", async () => {
+    const { c } = client({
+      body: { ...MR, draft: true, updated_at: "2026-09-25T10:00:00Z" },
+    });
+    expect(await c.getMergeRequest({ project: 42, iid: 7 })).toMatchObject({
+      draft: true,
+      updatedAt: "2026-09-25T10:00:00Z",
+    });
+    const older = client({ body: { ...MR, work_in_progress: false } });
+    const mr = await older.c.getMergeRequest({ project: 42, iid: 7 });
+    expect(mr.draft).toBe(false);
+    expect(mr).not.toHaveProperty("updatedAt");
+  });
+
   it("mergeMergeRequest pins the sha", async () => {
     const { c, calls } = client({ body: { ...MR, state: "merged" } });
     await c.mergeMergeRequest({

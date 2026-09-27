@@ -3,11 +3,13 @@
 // the frame list. The tab reads "Player" on a run with no policy decision;
 // the tab strip names it, and this draws the same thing either way.
 //
-// The open frame is `?body=<seq>`, the first frame shown when the URL names
-// none. `GovernedActionsTab` makes the tab's own reads (the open frame's body,
-// the approvals recorded on the run, and the mandate ledger when a parked call
-// names a mandate) and returns the view; the page calls it as a function, so
-// it calls no hook itself and every component it returns is synchronous.
+// The open frame is `?body=<seq>`, or `?body=<chain>:<seq>` for a subagent's
+// frame (#3823), and the first frame shown when the URL names none.
+// `GovernedActionsTab` makes the tab's own reads (the open frame's body,
+// the approvals recorded on the run, the mandate ledger when a parked call
+// names a mandate, and the delivery report when the open frame records an
+// operator's command) and returns the view; the page calls it as a function,
+// so it calls no hook itself and every component it returns is synchronous.
 import type {
   ApprovalItem,
   ApprovalQueue,
@@ -16,15 +18,22 @@ import type {
 } from "@/data/contracts/approvals";
 import type { MandateRow } from "@/data/contracts/mandates";
 import type { RunFrameBody, TranscriptEntry } from "@/data/contracts/run";
+import type { RunContext } from "@/data/contracts/run-context";
+import type { CommandReport } from "@/data/contracts/runs";
 import type { DataSource } from "@/data/ports";
 import type { Read } from "@/data/read";
 import type { WsCtx } from "@/server/viewer";
 import { routes, type SafePath } from "@/shared/safe-path";
+import { ControlInspector } from "./control-inspector";
+import { frameKey } from "./frame-link";
 import { FrameList, FramePanel, FramesEmpty, FramesPager } from "./frames";
 import { PlayerBar } from "./player-bar";
 import {
+  type ControlCommand,
+  controlOf,
   entriesBySeq,
   isApprovalFrame,
+  kindOf,
   markOf,
   matchApprovals,
   type OpenFrame,
@@ -37,6 +46,12 @@ import {
   decisionOf,
 } from "./player-model";
 import { ParkedElsewhere, ParkedHere } from "./parked-calls";
+import {
+  AssembledContext,
+  drawsAssembly,
+  drawsWindow,
+  RequestWindow,
+} from "./request-window";
 import { DecidedApprovals } from "./resolved-approvals";
 import type { FrameTabProps } from "./tab-props";
 import { RunTimeline } from "./timeline";
@@ -78,7 +93,7 @@ async function readApprovals(
  * The open frame's body, read on demand: when the URL names the frame, and the
  * frame retained bytes or this page does not hold its envelope. The first
  * frame shown opens with no read, and a frame that kept its digest alone has
- * nothing to read.
+ * nothing to read. A subagent's frame is read by its chain and seq.
  */
 async function readBody(
   source: DataSource,
@@ -91,25 +106,87 @@ async function readBody(
   const retained =
     frame === null ||
     (frame.body.digest !== null && frame.body.fidelity === "full");
-  return retained ? source.runs.frameBody(ctx, runId, open.seq) : null;
+  if (!retained) return null;
+  return open.chainRef === undefined
+    ? source.runs.frameBody(ctx, runId, open.seq)
+    : source.runs.frameBody(ctx, runId, open.seq, open.chainRef);
+}
+
+/**
+ * The operator's command the open frame records, or null for any other frame
+ * (`controlOf`). A frame off this page is read by the type its transcript
+ * entry carries. A command is applied on the run's own chain, so a
+ * subagent's frame records none, even where its seq matches a command frame
+ * on the run's chain (#3823).
+ */
+function openCommand(
+  open: OpenFrame | null,
+  entries: ReadonlyMap<string, TranscriptEntry>,
+): ControlCommand | null {
+  if (open === null || open.chainRef !== undefined) return null;
+  const entry = entries.get(open.seq);
+  const type = open.frame?.type ?? entry?.type ?? null;
+  return type === null ? null : controlOf(type, entry);
+}
+
+/**
+ * The delivery report, read only while the open frame records an operator's
+ * command, so its inspector can say how that command was asked for and how it
+ * was carried (#2953). Every other frame makes no read.
+ */
+function readCommands(
+  source: DataSource,
+  ctx: WsCtx,
+  runId: string,
+  command: ControlCommand | null,
+): Promise<Read<CommandReport> | null> {
+  return command === null
+    ? Promise.resolve(null)
+    : source.runs.commands(ctx, { runId });
+}
+
+/**
+ * `get_run_context`, read only when the open frame is a model request or the
+ * frame the assembler's manifest was sealed into (ADR-200): the one frame
+ * whose panel draws what it holds. Any other frame makes no read.
+ */
+function readContext(
+  source: DataSource,
+  ctx: WsCtx,
+  runId: string,
+  open: OpenFrame | null,
+): Promise<Read<RunContext>> | null {
+  // `get_run_context` reads the run's own chain, so a subagent's frame, whose
+  // seq names a different frame there, draws no window and makes no read.
+  if (open === null || open.chainRef !== undefined) return null;
+  const type = open.frame?.type ?? null;
+  return drawsWindow(type) || drawsAssembly(type)
+    ? source.runs.context(ctx, runId)
+    : null;
 }
 
 export async function GovernedActionsTab(props: FrameTabProps) {
-  const { ctx, source, run, detail, view, now } = props;
+  const { ctx, source, run, detail, view, now, everything } = props;
   const open = openFrameOf(detail.frames.frames, view.body);
-  const [body, approvals] = await Promise.all([
+  const command = openCommand(open, entriesBySeq(everything));
+  const [body, approvals, commands, context] = await Promise.all([
     readBody(source, ctx, run.id, open),
     readApprovals(source, ctx, run.id, now),
+    readCommands(source, ctx, run.id, command),
+    readContext(source, ctx, run.id, open),
   ]);
   return (
     <GovernedActions
       props={props}
       open={open}
       body={body}
+      context={context}
       pending={approvals.pending}
       resolved={approvals.resolved}
       mandates={approvals.mandates}
       now={approvals.now}
+      command={command}
+      commands={commands}
     />
   );
 }
@@ -124,28 +201,39 @@ function GovernedActions({
   props,
   open,
   body,
+  context,
   pending,
   resolved,
   mandates,
   now,
+  command,
+  commands,
 }: {
   props: FrameTabProps;
   open: OpenFrame | null;
   body: Read<RunFrameBody> | null;
+  /** `get_run_context`; null when the open frame draws no window or manifest. */
+  context: Read<RunContext> | null;
   pending: Read<ApprovalQueue>;
   resolved: Read<ResolvedApprovals>;
   mandates: ReadonlyMap<string, MandateRow>;
   now: number;
+  /** The operator's command the open frame records; null for any other frame. */
+  command: ControlCommand | null;
+  /** The delivery report, read only when `command` is set. */
+  commands: Read<CommandReport> | null;
 }) {
   const { run, detail, view, place, everything, metrics } = props;
   const page = detail.frames;
   const frames = page.frames;
   const cursor = view.frames;
-  const hrefOf = (seq: string): SafePath =>
+  // A frame's key: its seq on the run's own chain, which every frame of the
+  // page is on, and `<chain>:<seq>` on a subagent's.
+  const hrefOf = (key: string): SafePath =>
     routes.run(place.org, place.ws, place.runId, {
       tab: "actions",
       ...(cursor === null ? {} : { frames: cursor }),
-      body: seq,
+      body: key,
     });
   const pager = (
     <FramesPager
@@ -169,14 +257,19 @@ function GovernedActions({
     ...pendingItems,
     ...decidedItems,
   ]);
-  const hereItem = open === null ? undefined : matches.byFrame.get(open.seq);
+  // The open frame's seq on the page's own chain. A subagent's frame shares
+  // its seq with a different frame here, so it matches no approval and marks
+  // no tick or row as open.
+  const openSeq =
+    open === null || open.chainRef !== undefined ? null : open.seq;
+  const hereItem = openSeq === null ? undefined : matches.byFrame.get(openSeq);
   const parkedHere =
     hereItem === undefined || isDecided(hereItem) ? null : hereItem;
   const unmatched = pendingItems.filter(
     (item) => !matches.matched.has(item.id),
   );
   const elsewhere = [...matches.byFrame.entries()].flatMap(([seq, item]) =>
-    seq === open?.seq || isDecided(item) ? [] : [{ item, seq }],
+    seq === openSeq || isDecided(item) ? [] : [{ item, seq }],
   );
   const cards = { mandates, now, org: place.org, ws: place.ws };
   const parkedElsewhere = (
@@ -199,13 +292,27 @@ function GovernedActions({
     );
 
   const entries = entriesBySeq(everything);
-  const entry: TranscriptEntry | undefined = entries.get(open.seq);
+  const entry: TranscriptEntry | undefined = entries.get(frameKey(open));
   const xs = tickPositions(frames);
   const steps = stepsOf(frames, open);
   const target = (seq: string | null) => (seq === null ? null : hrefOf(seq));
   const approvalFrame =
     open.frame !== null &&
     isApprovalFrame(open.frame.type, open.frame.toolStatus);
+  // The model frame after a steer on this page: the call that carried it.
+  const carrierFrame =
+    open.index < 0
+      ? undefined
+      : frames
+          .slice(open.index + 1)
+          .find((frame) => kindOf(frame.type) === "model");
+  // A model request's window, or the assembler's manifest (ADR-200).
+  const kindPanel =
+    context === null ? null : drawsWindow(open.frame?.type ?? null) ? (
+      <RequestWindow read={context} seq={open.seq} hrefOf={hrefOf} />
+    ) : (
+      <AssembledContext read={context} seq={open.seq} />
+    );
 
   return (
     <>
@@ -216,7 +323,7 @@ function GovernedActions({
         marks={timelineMarks(frames, xs, entries)}
         entries={entries}
         total={run.frames}
-        openSeq={open.seq}
+        openSeq={openSeq}
         hrefOf={hrefOf}
         live={run.status === "live"}
         pager={pager}
@@ -268,6 +375,27 @@ function GovernedActions({
                 />
               ) : null
             }
+            control={
+              command === null || commands === null ? null : (
+                <ControlInspector
+                  command={command}
+                  seq={open.seq}
+                  read={commands}
+                  carrier={
+                    carrierFrame === undefined
+                      ? null
+                      : {
+                          seq: carrierFrame.seq,
+                          href: hrefOf(carrierFrame.seq),
+                        }
+                  }
+                  org={place.org}
+                  ws={place.ws}
+                  runId={place.runId}
+                />
+              )
+            }
+            kindPanel={kindPanel}
             steps={steps}
             hrefOf={hrefOf}
             shown={frames.length}
@@ -277,7 +405,7 @@ function GovernedActions({
         <FrameList
           frames={frames}
           entries={entries}
-          openSeq={open.seq}
+          openSeq={openSeq}
           hrefOf={hrefOf}
           state={runStateOf(run)}
         />

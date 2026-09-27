@@ -1,0 +1,250 @@
+{
+  "name": "get_run_issues",
+  "domain": "run",
+  "description": "Read the issues one run worked on: the task it was admitted for, the issues its pull requests close, and the issues its frames name, each with its state as the forge reads it now, whether that state could be read, what the run did to it, and the frames that show it.",
+  "mode": "sync",
+  "surfaces": [
+    "api",
+    "mcp"
+  ],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "runId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "runId": {
+        "type": "string"
+      },
+      "issues": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "ref": {
+              "type": "string",
+              "minLength": 1
+            },
+            "repository": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "type": "string"
+                    },
+                    "owner": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "connected": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "host",
+                    "owner",
+                    "name",
+                    "url",
+                    "connected"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "number": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "closed",
+                    "in_progress",
+                    "blocked"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "statusRead": {
+              "type": "string",
+              "enum": [
+                "read",
+                "no_connection",
+                "not_github",
+                "repository_unknown",
+                "not_found",
+                "read_failed",
+                "read_limit"
+              ]
+            },
+            "readAt": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "relation": {
+              "type": "string",
+              "enum": [
+                "task",
+                "resolves",
+                "referenced"
+              ]
+            },
+            "resolvedBy": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "number": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  }
+                },
+                "required": [
+                  "number",
+                  "url"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20
+            },
+            "actions": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "viewed",
+                  "commented",
+                  "created",
+                  "edited",
+                  "closed",
+                  "reopened",
+                  "mentioned"
+                ]
+              }
+            },
+            "edge": {
+              "type": "string",
+              "enum": [
+                "stated",
+                "observed"
+              ]
+            },
+            "frameSeqs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 20
+            },
+            "url": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uri"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "ref",
+            "repository",
+            "number",
+            "title",
+            "status",
+            "statusRead",
+            "readAt",
+            "relation",
+            "resolvedBy",
+            "actions",
+            "edge",
+            "frameSeqs",
+            "url"
+          ],
+          "additionalProperties": false
+        },
+        "maxItems": 200
+      },
+      "complete": {
+        "type": "boolean"
+      },
+      "warnings": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "runId",
+      "issues",
+      "complete",
+      "warnings"
+    ],
+    "additionalProperties": false
+  }
+}

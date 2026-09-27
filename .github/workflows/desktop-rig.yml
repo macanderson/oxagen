@@ -1,15 +1,27 @@
 # The install and uninstall rig for the desktop app and Tacho.
 #
-# Two halves, both against a scratch HOME and a fake launchctl / systemctl,
-# never the runner's own home directory:
+# Three parts, all against a scratch HOME, never the runner's own home
+# directory:
 #   - packages/tacho/src/cli/install-rig.test.ts: enroll, enroll again,
 #     unenroll, unenroll again, the tree compared byte for byte, plus the
 #     failure variants (malformed settings, a read-only file, a symlinked
-#     settings file, an offline revoke, the process dying at each step).
+#     settings file, an offline revoke, the process dying at each step). It
+#     drives a fake launchctl, systemctl and schtasks, and builds POSIX paths
+#     for every platform branch, so it runs on the Linux and macOS legs only.
+#   - packages/tacho/src/cli/install-rig-real.test.ts: the same round trip
+#     with launchctl, systemctl, schtasks, tasklist and taskkill run for real,
+#     on every leg (#4317). The unit or task starts a stub daemon.
 #   - apps/desktop/src-tauri (cargo test): Link into PATH and Uninstall over
-#     injected roots, the same comparison.
-# It also runs cargo fmt --check and clippy, which no other workflow does:
-# desktop.yml only builds on a tag.
+#     injected roots, the same comparison. On the Windows leg it also runs
+#     the user PATH scripts against the runner's real HKCU\Environment and
+#     the `.cmd` shim ownership test (#4318).
+# It also runs cargo fmt --check and clippy on every OS, which no other
+# workflow does: desktop.yml only builds on a tag or a dispatch.
+#
+# The webdriver job builds the app with its real sidecars and clicks through
+# every panel action that needs no Oxagen session (the scan, Sign out, the
+# start of Sign in, and the poll's `tacho status`) through tauri-driver, in a
+# scratch HOME with a stand-in control plane (#4318 item 6).
 name: Desktop install rig
 
 on:
@@ -33,15 +45,20 @@ permissions:
 
 jobs:
   rig:
-    name: Install, reinstall, uninstall, compare
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    name: Install, reinstall, uninstall, compare (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v5
 
       - uses: ./.github/actions/pnpm-install
 
       - name: Tacho rig (enroll and unenroll against a snapshot)
+        if: runner.os != 'Windows'
         run: pnpm --filter @oxagen/tacho exec vitest run src/cli/install-rig.test.ts src/host/install-hardening.test.ts
 
       - name: Install Rust
@@ -56,6 +73,7 @@ jobs:
           workspaces: apps/desktop/src-tauri
 
       - name: WebKit, for the Tauri crate to compile
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev
@@ -66,6 +84,7 @@ jobs:
         run: node apps/desktop/scripts/rig-stubs.mjs
 
       - name: cargo fmt
+        if: runner.os == 'Linux'
         working-directory: apps/desktop/src-tauri
         run: cargo fmt --check
 
@@ -73,6 +92,105 @@ jobs:
         working-directory: apps/desktop/src-tauri
         run: cargo clippy --all-targets -- -D warnings
 
+      # On Windows the PATH test writes each registry value it read before
+      # and after an edit to windows-user-path.json, which the upload below
+      # keeps (#4318).
       - name: Desktop rig (link and uninstall against a snapshot)
         working-directory: apps/desktop/src-tauri
+        env:
+          DESKTOP_RIG_EVIDENCE: ${{ runner.temp }}/rig-evidence
         run: cargo test --lib
+
+      # systemctl --user needs a user manager, which a runner starts only with
+      # lingering on. The manager reads units from the real home, so the rig's
+      # home, a fixed path here, gets the runner's unit directory linked to it.
+      - name: A systemd user manager for the real service manager run
+        if: runner.os == 'Linux'
+        run: |
+          sudo loginctl enable-linger "$USER"
+          runtime="/run/user/$(id -u)"
+          echo "XDG_RUNTIME_DIR=$runtime" >> "$GITHUB_ENV"
+          for _ in $(seq 1 30); do
+            XDG_RUNTIME_DIR="$runtime" systemctl --user show-environment >/dev/null 2>&1 && break
+            sleep 1
+          done
+          XDG_RUNTIME_DIR="$runtime" systemctl --user show-environment >/dev/null
+          if [ -e "$HOME/.config/systemd/user" ]; then
+            echo "::error::$HOME/.config/systemd/user already exists; the run would write into it"
+            exit 1
+          fi
+          home="$RUNNER_TEMP/rig-home"
+          mkdir -p "$HOME/.config/systemd"
+          ln -s "$home/.config/systemd/user" "$HOME/.config/systemd/user"
+          echo "TACHO_RIG_HOME=$home" >> "$GITHUB_ENV"
+
+      # The same round trip on the runner's real launchd, systemd or Task
+      # Scheduler, plus an install killed after the unit or task is written
+      # (#4317). A hosted runner has no tachod of its own, so a real bootout
+      # stops nothing but the rig's.
+      - name: Tacho rig against the real service manager
+        env:
+          TACHO_RIG_REAL_SERVICES: "1"
+          TACHO_RIG_EVIDENCE: ${{ runner.temp }}/rig-evidence
+        run: pnpm --filter @oxagen/tacho exec vitest run src/cli/install-rig-real.test.ts
+
+      - name: Keep the snapshots and service manager calls
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rig-real-services-${{ matrix.os }}
+          path: ${{ runner.temp }}/rig-evidence
+          if-no-files-found: ignore
+
+  webdriver:
+    name: Panel actions in the built app (ubuntu-22.04)
+    # Linux only: tauri-driver drives WebKitWebDriver there, and macOS has no
+    # WebDriver for WKWebView.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: ./.github/actions/pnpm-install
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable branch
+        with:
+          toolchain: stable
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: webdriver
+
+      - name: WebKit, its WebDriver, and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev webkit2gtk-driver xvfb
+
+      - name: tauri-driver
+        run: cargo install tauri-driver --locked
+
+      - name: Build sidecars
+        run: pnpm --filter @oxagen/desktop sidecars
+
+      # A debug build with the frontend embedded, and no installers or
+      # updater artifacts, which need the signing key.
+      - name: Build the app
+        working-directory: apps/desktop
+        run: pnpm tauri build --debug --no-bundle --config src-tauri/tauri.unsigned.conf.json
+
+      - name: Click through the panel actions
+        working-directory: apps/desktop
+        env:
+          E2E_EVIDENCE: ${{ runner.temp }}/webdriver-evidence
+        run: xvfb-run -a node scripts/e2e-webdriver.mjs
+
+      - name: Keep the record of the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webdriver-panel-actions
+          path: ${{ runner.temp }}/webdriver-evidence
+          if-no-files-found: ignore

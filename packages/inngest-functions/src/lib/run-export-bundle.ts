@@ -2,7 +2,9 @@
 // produces (Mission Control spec §13.4; App. E; ADR-058). Pure: the segments
 // and the attester key come from the caller.
 //
-//   manifest.json     the run, its sealed attempts and their seal figures
+//   manifest.json     the run, its sealed attempts and their seal figures; a
+//                     wrapped run's subagent chain is one more attempt, with
+//                     a `chain` block naming where it sits in the run
 //   frames.ndjson     one JCS envelope per frame, in sequence order
 //   attestation.json  one Ed25519 attestation per sealed attempt (spec §8.3)
 //                     plus the verifying public key and its id
@@ -17,10 +19,13 @@
 import { zipSync } from "fflate";
 import {
   type Attestation,
+  type AttestationPayload,
   type AttesterKey,
   digestBytes,
+  eventHashRule,
   jcs,
   type JsonValue,
+  legacyJcs,
   merkleRoot,
   RUN_EXPORT_FORMAT,
   type RunExportManifest,
@@ -40,10 +45,44 @@ interface RunExportBundle {
 const encoder = new TextEncoder();
 
 /**
- * The attestation payload of one sealed attempt. A wrapped session has no
- * archive segment: its root is computed here over the chain hashes and its
- * segment digest is the digest of the NDJSON lines the bundle carries, so
- * the attestation still names the bytes a verifier holds.
+ * One frame's line in `frames.ndjson`. Every frame is RFC 8785 (`jcs`) but
+ * one kind: an event an older host sealed while its content held a member
+ * named `toJSON`. That hash was taken over the text `canonicalize@1.0.8`
+ * wrote (`legacyJcs`), which keeps that object's keys in the order they were
+ * sealed in, so its frame is written the same way. A verifier parses the
+ * line, reads the keys in that order, and gets the hash back.
+ */
+function frameText(envelope: JsonValue): string {
+  const event =
+    typeof envelope === "object" &&
+    envelope !== null &&
+    !Array.isArray(envelope)
+      ? envelope["event"]
+      : undefined;
+  if (
+    typeof event === "object" &&
+    event !== null &&
+    !Array.isArray(event) &&
+    eventHashRule(event, event["hash"]) === "legacy"
+  )
+    return legacyJcs(envelope);
+  return jcs(envelope);
+}
+
+/**
+ * The attestation of one sealed attempt. A wrapped session has no archive
+ * segment: its root is computed here over the chain hashes and its segment
+ * digest is the digest of the NDJSON lines the bundle carries, so the
+ * attestation still names the bytes a verifier holds.
+ *
+ * A ledger seal signed its figures when it was written (ADR-195). When the
+ * seal's key is the deployment's key, the bundle ships that signature over
+ * the figures the export recomputed, and signs nothing new. Ed25519 is
+ * deterministic, so a signature that does not verify means the stored
+ * segment or the seal row changed after the seal. Re-signing would hide
+ * that, so the export never does: the verifier reports it. A seal signed by
+ * a key the deployment has since rotated away from, or not signed at all, is
+ * signed here with the current key, as before.
  */
 function attestSegment(
   runId: string,
@@ -56,20 +95,22 @@ function attestSegment(
       : segment.merkleRoot;
   const segmentDigest =
     segment.archiveSegmentDigest ??
-    digestBytes(encoder.encode(segment.envelopes.map(jcs).join("\n")));
-  const attestation = signAttestation(
-    {
-      run_id: runId,
-      attempt_id: segment.attemptPublicId,
-      frame_count: segment.frameCount,
-      merkle_root: root,
-      archive_segment_digest: segmentDigest,
-      enforcement_tier: segment.enforcementTier,
-      completeness_gaps: [...segment.completenessGaps],
-      replay_grade: segment.replayGrade,
-    },
-    key,
-  );
+    digestBytes(encoder.encode(segment.envelopes.map(frameText).join("\n")));
+  const payload: AttestationPayload = {
+    run_id: runId,
+    attempt_id: segment.attemptPublicId,
+    frame_count: segment.frameCount,
+    merkle_root: root,
+    archive_segment_digest: segmentDigest,
+    enforcement_tier: segment.enforcementTier,
+    completeness_gaps: [...segment.completenessGaps],
+    replay_grade: segment.replayGrade,
+  };
+  const stored = segment.sealAttestation;
+  const attestation: Attestation =
+    stored !== null && stored.keyId === key.keyId
+      ? { payload, key_id: stored.keyId, alg: "ed25519", sig: stored.sig }
+      : signAttestation(payload, key);
   return { attestation, merkleRoot: root, segmentDigest };
 }
 
@@ -101,10 +142,11 @@ export function buildRunExportBundle(input: {
       enforcement_tier: segment.enforcementTier,
       completeness_gaps: [...segment.completenessGaps],
       replay_grade: segment.replayGrade,
+      ...(segment.chain === undefined ? {} : { chain: { ...segment.chain } }),
     })),
   };
   const envelopes = input.segments.flatMap((segment) => segment.envelopes);
-  const frames = envelopes.map((envelope) => jcs(envelope)).join("\n");
+  const frames = envelopes.map(frameText).join("\n");
   const redactions = summarizeRunExportRedactions(envelopes);
   const attestationFile: JsonValue = {
     public_key_pem: input.key.publicKeyPem,
@@ -133,7 +175,9 @@ export function buildRunExportBundle(input: {
  * RFC 8785 yields for these shapes); each ledger frame's payload and event
  * digest and dense attempt sequence; each wrapped frame's prev_hash link
  * and, where the frame carries its event, the event's hash and the members
- * shown beside it (the rule is `wrappedFrameOf` in @oxagen/tacho);
+ * shown beside it (the rule is `wrappedFrameOf` in @oxagen/tacho), with the
+ * link and the sequence starting over at each attempt, since a subagent
+ * chain is an attempt of its own from genesis at its seq 0;
  * each ledger attempt's stream fold; the RFC 6962 tree over the frame
  * digests; the Ed25519 check with the bundled key, whose id must be the first
  * 16 hex chars of sha256 over the JSON string of the PEM (the platform's
@@ -161,16 +205,24 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest();
 const hex = (buf) => "sha256:" + buf.toString("hex");
 const DIGEST = /^sha256:[0-9a-f]{64}$/;
 
-// The same rule as canonicalize@1.0.8, which @oxagen/tacho hashes with. Its
-// first line matters: an object with a toJSON member is written by
-// JSON.stringify, keys unsorted, so a host that names an attribute toJSON
-// still gets the digest the platform sealed.
-function canonical(value) {
-  if (value === null || typeof value !== "object" || value.toJSON != null) return JSON.stringify(value);
-  if (Array.isArray(value)) return "[" + value.map((v) => canonical(v === undefined ? null : v)).join(",") + "]";
-  return "{" + Object.keys(value).sort().filter((k) => value[k] !== undefined).map((k) => JSON.stringify(k) + ":" + canonical(value[k])).join(",") + "}";
+// RFC 8785 (JCS), the rule @oxagen/tacho's jcs follows: keys sorted at every
+// depth, a member named toJSON included. canonicalize@1.0.8, which tacho used
+// before, wrote an object with a toJSON member by JSON.stringify, keys
+// unsorted. legacy keeps that rule, for an event an older host sealed.
+function canonical(value, legacy = false) {
+  if (value === null || typeof value !== "object" || typeof value.toJSON === "function" || (legacy && value.toJSON != null)) return JSON.stringify(value);
+  if (Array.isArray(value)) return "[" + value.map((v) => canonical(v === undefined ? null : v, legacy)).join(",") + "]";
+  return "{" + Object.keys(value).sort().filter((k) => value[k] !== undefined).map((k) => JSON.stringify(k) + ":" + canonical(value[k], legacy)).join(",") + "}";
 }
 const digestJcs = (value) => hex(sha256(Buffer.from(canonical(value), "utf8")));
+// The two rules differ only for a value holding a toJSON member.
+function hasToJson(value) {
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some(hasToJson);
+  if (Object.hasOwn(value, "toJSON") && value.toJSON != null) return true;
+  return Object.values(value).some(hasToJson);
+}
+const eventHashHolds = (unhashed, hash) => digestJcs(unhashed) === hash || (hasToJson(unhashed) && hex(sha256(Buffer.from(canonical(unhashed, true), "utf8"))) === hash);
 // The ledger digests observed_at as Date.toISOString(); an older segment may
 // spell the same instant as Postgres text (2026-07-21 12:00:00.123+00).
 function instant(value) {
@@ -217,7 +269,7 @@ function checkWrapped(f, attemptId) {
   const why = [];
   if (f.event.session_uuid !== attemptId) why.push("the event belongs to session " + f.event.session_uuid + ", not " + attemptId);
   const { hash: _hash, ...unhashed } = f.event;
-  if (digestJcs(unhashed) !== f.hash) why.push("the event does not hash to hash");
+  if (!eventHashHolds(unhashed, f.hash)) why.push("the event does not hash to hash");
   const expected = wrappedFrameOf(f.event, typeof f.content?.bytes_ref === "string" ? f.content.bytes_ref : null);
   const differs = [...new Set([...Object.keys(expected), ...Object.keys(f)])].filter((k) => k !== "event")
     .filter((k) => canonical(f[k]) !== canonical(expected[k])).sort();

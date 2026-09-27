@@ -4,6 +4,7 @@
 // refuses every production edge to a `*.builders` module.
 import { readOk } from "@/data/read";
 import type { ApprovalItem } from "@/data/contracts/approvals";
+import type { InterjectionItem } from "@/data/contracts/interjections";
 import type { AssistantEngine } from "@/data/contracts/shell";
 import type { ActionResult } from "@/server/kernel";
 import type { ShellData, WorkspaceApprovals } from "./shell-data";
@@ -27,8 +28,10 @@ const SHELL_ORG = {
 } as const;
 
 const SHELL_CONTEXT = readOk({
-  orgs: [SHELL_ORG],
-  workspaces: [{ slug: "core-platform", name: "Core platform" }],
+  orgs: [{ ...SHELL_ORG, avatarUrl: null }],
+  workspaces: [
+    { slug: "core-platform", name: "Core platform", avatarUrl: null },
+  ],
 });
 
 /** The shell data the layout's viewer yields, with any field overridden. */
@@ -78,7 +81,32 @@ export function shellWorkspace(
     slug: "core-platform",
     name: "Core platform",
     pending: readOk({ items: [], more: false }),
+    interjections: readOk({ items: [], more: false }),
     resolved: readOk({ items: [], more: false }),
+    ...overrides,
+  };
+}
+
+/** One open question, raised 3m 36s before the read with a 30-minute window. */
+export function interjectionItem(
+  overrides: Partial<InterjectionItem> = {},
+): InterjectionItem {
+  return {
+    id: "inj_01K5RSA4TW",
+    runId: "tse_01K5RS9D3K",
+    agentKey: "acme.core.release-manager",
+    question: "Which branch should the release cut from?",
+    raisedAt: "2026-09-23T09:27:32Z",
+    expiresAt: "2026-09-23T09:57:32Z",
+    answeredAt: null,
+    answer: null,
+    answeredBy: null,
+    kind: "question",
+    raisedSeq: null,
+    body: null,
+    repository: null,
+    path: null,
+    receiptId: null,
     ...overrides,
   };
 }

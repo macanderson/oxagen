@@ -4,6 +4,18 @@ Oxagen is workforce management for autonomous agents, on the shared agent contro
 
 Oxagen governs agents; it does not run them (ADR-043). Stella is the coding agent; Oxagen is the governor, grounder, explainer, meter and rater. Monorepo built around one primitive: a **capability kernel** that every surface (API, MCP, web app, CLI) calls through a single `invoke()` function — where governance (IAM + entitlement), metering (ClickHouse→Stripe), and lineage are enforced.
 
+## Local execution
+
+Mac set this on 2026-09-26 for every repository on this machine. Local builds, test runs, dev servers, and git hooks ran the laptop out of memory and killed agent runs partway through, and every killed run costs money. CI is the only place code is built, checked, or tested.
+
+- Do not run the gate, a build, a typecheck, a lint, or any test, not even one test file. Push the branch and read the CI result. Read a failed job with `gh run view --job <id> --log-failed`.
+- Do not start a dev server: no `next dev`, `next start`, `pnpm dev`, a server under `cargo run`, or anything else that listens on a port.
+- Do not start Docker or Colima, and do not run anything that needs them.
+- Do not run Biome in any form.
+- Git hooks are off on this machine. `LEFTHOOK=0` and `HUSKY=0` are set for every shell and every Claude Code session. Do not reinstall a hook, turn one back on, or run a hook's commands by hand.
+- Code generators and small integrity scripts that only read and write files are allowed, such as regenerating a checksum, a schema index, or a message catalogue.
+- Put this rule, word for word, in the prompt of every subagent you start.
+
 ## Layout
 
 ```
@@ -115,6 +127,8 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 
 ## Repo-Specific Tooling
 
+CI runs the gate, build, lint, typecheck, and test commands in this table. None of them is run on this machine. `pnpm dev` starts Docker and the dev servers, so it is not run here. `pnpm format` runs Biome, so it is not run here. `pnpm dist:local` builds the desktop app, so it is not run here. `pnpm db:migrate`, `pnpm db:atlas-validate`, and the seed commands need the local Docker databases, so they are not run here either. Code generators and small integrity scripts that only read and write files stay allowed.
+
 | Command | What it does |
 |---|---|
 | `pnpm dev` | Start all apps + Docker (Postgres :5433, ClickHouse :8123, Neo4j :7687) |
@@ -148,7 +162,7 @@ Cross-domain Postgres queries use `src/relations.ts` (Drizzle). Never write raw 
 | `pnpm check:versions` | Every tracked manifest carries the root version, whatever its language (`package.json`, `Cargo.toml`, `Cargo.lock`); `--fix` writes it. Part of `check:contracts` |
 | `pnpm test:e2e` | Run the three Playwright specs (`apps/app/e2e`: `login`, `pay`, `page-load`). The suite holds exactly these three and gains no fourth — every other flow is a component test (`.claude/skills/oxagen-testing`, `apps/app/ARCHITECTURE.md` §6.3). |
 
-**Narrow test runs** (never run all tests): `pnpm --filter @oxagen/<pkg> test:unit <file>.test.ts`
+**Narrow test runs**: CI runs the tests, and none is run on this machine, not even one file. Where tests do run, the narrow form is `pnpm --filter @oxagen/<pkg> test:unit <file>.test.ts`.
 
 **No `--` before the filename.** `pnpm --filter <pkg> test:unit -- <file>` does NOT
 narrow the run — it runs every test file in the package. pnpm forwards the
@@ -161,9 +175,9 @@ agents obeying the never-run-all-tests rule were violating it and reading a gree
 result as compliance. `pnpm --filter <pkg> exec vitest run <path>` also works and
 is unambiguous.
 
-**Local verification policy:** CI runs builds, lint, typechecks, coverage, and test suites. On the shared machine, run at most one test file for code this task changed, in isolation. Do not run `pnpm gate`, `pnpm gate:full`, or a package-wide suite locally. Lightweight integrity checks and configured git hooks still apply. `CLAUDE.md` has the verification workflow.
+**Local verification policy:** CI runs builds, lint, typechecks, coverage, and test suites. None of them runs on this shared machine, not even one test file. Do not run `pnpm gate`, `pnpm gate:full`, or any test locally. Lightweight integrity checks still apply. Git hooks are off on this machine. `CLAUDE.md` has the verification workflow.
 
-**Affected-package caveat:** `pnpm gate` selects packages changed since `origin/main`. If `HEAD` equals `origin/main`, it may select no packages. An empty selection is not verification evidence. Inspect the actual CI jobs and their output.
+**Affected-package caveat:** CI runs `pnpm gate`, and it is not run on this machine. The gate selects packages changed since `origin/main`. If `HEAD` equals `origin/main`, it may select no packages. An empty selection is not verification evidence. Inspect the actual CI jobs and their output.
 
 **Release script flags**: `tsx tools/scripts/release.ts major --dry-run` (preview without writing), `--set X.Y.Z` (exact version), `--no-npm` / `--no-git` / `--no-notes` (skip individual steps), `--from <ref>` (regenerate notes for an existing tag).
 
@@ -181,7 +195,7 @@ is unambiguous.
 
 ## Local Development
 
-**Docker via Colima** (macOS): `colima start` before `pnpm dev`. The Docker socket is at `~/.colima/default/docker.sock`. If `docker ps` fails with "Cannot connect to the Docker daemon", restart Colima: `colima stop && colima start`.
+**Docker via Colima** (macOS): Colima, Docker, and `pnpm dev` are not run on this machine. CI starts the databases its jobs need. On a machine that runs the dev stack, `colima start` comes before `pnpm dev`. The Docker socket is at `~/.colima/default/docker.sock`. If `docker ps` fails with "Cannot connect to the Docker daemon", restart Colima: `colima stop && colima start`.
 
 **Docker services** (`docker-compose.dev.yml`): Postgres 16 (`:5433`, user/pass `oxagen`/`oxagen`), Neo4j 5.24 (`:7474` UI, `:7687` Bolt`, pass `oxagen-dev`), ClickHouse 24.8 (`:8123` HTTP, `:9000` native`). Host port 5433 avoids collision with a system Postgres on 5432.
 
@@ -193,13 +207,13 @@ is unambiguous.
 
 ## CI Config
 
-`.github/workflows/pipeline.yml` jobs: `preflight` (runs on every trigger, and on a push to `main` skips the rest of this run when a later push already superseded it, so a merge burst cannot queue full runs without bound — `check-main-preflight.mjs`); `atlas-validate`; `checks` (lint + typecheck, then `check:manifest` / `check:contracts` / `env:check` / `db:lint-migrations` / `check:db-migrate-script`, `check:audit-coverage`, `check:ui-parity --strict`, and `check:manifest:tickets`, which still files Linear tickets for parity gaps — a no-op today because the key is revoked; #2980 moves it and the nightly's `e2e:failure-ticket` to GitHub issues); `test` (migrate Postgres/ClickHouse/Neo4j, seed, build, unit tests, coverage thresholds); `e2e`; `rls-integration`; `rds-compatibility`; then `deploy-web` and `deploy-node` on `main`. `migration-gate` runs between them on a push to `main`: it applies pending Postgres, ClickHouse and Neo4j migrations, re-checks all three, and `deploy-node` waits on it (SCR-006, #3653). `deploy-web` is deliberately ungated — it publishes static HTML and opens no database connection. `publish-installers` runs after `deploy-node` and dispatches `desktop.yml`, which builds the desktop app for all four targets at the deployed commit as `X.Y.(Z+1)-N` and publishes it to downloads.oxagen.sh, moving the version-free `latest/` links the enrollment screens and docs use (ADR-158). `pnpm gate` mirrors the checks and test jobs. Other workflows: `migration-label.yml` labels a schema-changing PR `migration-required` (SCR-006); `vision-gate.yml` LLM-judges the PR diff against `docs/VISION.md` (advisory); `dod-check.yml` / `dod-close-guard.yml` / `dod-recheck.yml` enforce SCR-003; `triage-guard.yml` strips creator-applied priorities (SCR-005), except the P0 that `deployment-failure.yml` puts on the issue it files when a `main` run goes red or a deploy fails; `cancel-closed-pr-runs.yml` cancels a PR's CI runs when it merges or closes, so dead runs stop holding the runners the deploying `main` run waits for; `scr-corpus-check.yml` fails if any of the five org repos still carries `docs/scr/` (ADR-137); `nightly.yml`, `release.yml`, `linear-release.yml` (release notes to Linear, unrelated to issue tracking), `infra*.yml`, `store-migrate.yml`, `where-is-production.yml` are operational. CI runs inside `ghcr.io/macanderson/oxagen-ci-*` containers with Atlas baked in.
+`.github/workflows/pipeline.yml` jobs: `preflight` (runs on every trigger, and on a push to `main` skips the rest of this run when a later push already superseded it, so a merge burst cannot queue full runs without bound — `check-main-preflight.mjs`); `atlas-validate`; `checks` (lint + typecheck, then `check:manifest` / `check:contracts` / `env:check` / `db:lint-migrations` / `check:db-migrate-script`, `check:audit-coverage`, `check:ui-parity --strict`, and `check:manifest:tickets`, which still files Linear tickets for parity gaps — a no-op today because the key is revoked; #2980 moves it and the nightly's `e2e:failure-ticket` to GitHub issues); `build` (a matrix of three lanes: `apps/app`, `apps/app_deprecated`, and every other app, with no service containers); `unit` (a matrix of four lanes: `apps/app`, `packages/handlers`, `apps/app_deprecated`, and every other package, each migrating and seeding Postgres/ClickHouse/Neo4j, then running coverage thresholds); `test` (the required check, which passes only when every `build` and `unit` lane passed); `e2e` (builds `apps/app` alone); `rls-integration`; `rds-compatibility`; then `deploy-web` and `deploy-node` on `main`. `migration-gate` runs between them on a push to `main`: it applies pending Postgres, ClickHouse and Neo4j migrations, re-checks all three, and `deploy-node` waits on it (SCR-006, #3653). `deploy-web` is deliberately ungated — it publishes static HTML and opens no database connection. `publish-installers` runs after `deploy-node` and dispatches `desktop.yml`, which builds the desktop app for all four targets at the deployed commit as `X.Y.(Z+1)-N` and publishes it to downloads.oxagen.sh, moving the version-free `latest/` links the enrollment screens and docs use (ADR-158). `pnpm gate` mirrors the checks and test jobs. Other workflows: `migration-label.yml` labels a schema-changing PR `migration-required` (SCR-006); `vision-gate.yml` LLM-judges the PR diff against `docs/VISION.md` (advisory); `dod-check.yml` / `dod-close-guard.yml` / `dod-recheck.yml` enforce SCR-003; `triage-guard.yml` strips creator-applied priorities (SCR-005), except the P0 that `deployment-failure.yml` puts on the issue it files when a `main` run goes red or a deploy fails; `cancel-closed-pr-runs.yml` cancels a PR's CI runs when it merges or closes, so dead runs stop holding the runners the deploying `main` run waits for; `scr-corpus-check.yml` fails if any of the five org repos still carries `docs/scr/` (ADR-137); `nightly.yml`, `release.yml`, `linear-release.yml` (release notes to Linear, unrelated to issue tracking), `infra*.yml`, `store-migrate.yml`, `where-is-production.yml` are operational. CI runs inside `ghcr.io/macanderson/oxagen-ci-*` containers with Atlas baked in.
 
 Production Postgres changes run through `infra/tools/run-db-migrations.sh`. Its dry run reports pending migrations. With `--apply`, it applies Atlas migrations and then runs the bundled `seedPlatform()` entry and seed assets in a Node container on the app node. A failed seed fails the operation; rerunning is idempotent. The RDS compatibility job verifies the same artifact against a fresh database without superuser privileges.
 
 **Concurrency**: a push to `main` gets its own group, keyed by commit; everything else groups by ref so a new push supersedes the run before it. GitHub keeps one *queued* run per group, so a shared group means a third merge evicts the second before it starts — and when merges outpace the run, that chain never terminates. Nothing finishes, `deploy-web`/`deploy-node` never run because they need a passing check, and cancelled runs read as ordinary cleanup so nothing goes red. That took out eight deploys on 2026-09-07 (#2730). ADR-046 has the reasoning and what it costs; `tools/scripts/check-main-concurrency.mjs` fails `check:contracts` if the expression loses `github.sha`, because reverting it would look like a tidy-up.
 
-**Pre-commit hooks** (lefthook): Biome format (staged files), ESLint fix (staged files), staged-file typecheck via `tools/scripts/typecheck-staged.mjs`, atlas-validate (only when migration files are staged). **Pre-push hooks**: `check:prose` for changes under `apps/web` or `apps/docs`, `check:contracts` + `env:check` for matched source files, plus `check:messages` when `apps/app`'s catalogues or sources change and `check:contextgraph-fixtures` when the CGP fixtures change. Test suites run in CI. `check:messages` regenerates nothing; it fails when `apps/app/src/i18n/messages.d.ts` is stale against `messages/*.json`, which is the one way a key the catalogue plainly holds becomes a `NamespacedMessageKeys` type error. Run `pnpm --filter @oxagen/app gen:messages` and commit the result.
+**Pre-commit hooks** (lefthook) are configured for other machines and are off on this one. On those machines they run Biome format (staged files), ESLint fix (staged files), staged-file typecheck via `tools/scripts/typecheck-staged.mjs`, and atlas-validate (only when migration files are staged). **Pre-push hooks** are configured for other machines and are off on this one too. On those machines they run `check:prose` for changes under `apps/web` or `apps/docs`, `check:contracts` + `env:check` for matched source files, plus `check:messages` when `apps/app`'s catalogues or sources change and `check:contextgraph-fixtures` when the CGP fixtures change. Test suites run in CI. `check:messages` regenerates nothing; it fails when `apps/app/src/i18n/messages.d.ts` is stale against `messages/*.json`, which is the one way a key the catalogue plainly holds becomes a `NamespacedMessageKeys` type error. Run `pnpm --filter @oxagen/app gen:messages` and commit the result.
 
 ## Git Workflow
 
@@ -220,9 +234,25 @@ Production Postgres changes run through `infra/tools/run-db-migrations.sh`. Its 
 - **The count does not license a worse fix.** A finding you can fix correctly in the fourth round is still better fixed than filed.
 - **Why three.** An automated reviewer reports on each push, so a PR that fixes everything it is told generates new findings by fixing them, and a green, tested change can sit behind cosmetic notes while production carries the defects it fixes. Mac set this bound on 2026-09-19, at three rounds, replacing a first draft of two.
 
+**Agent-monitored PRs count passes (pass rule).** Mac set this on 2026-09-26. On a PR labelled `agent-monitored-pr`, the pass rule in Agent-monitored pull requests below replaces the round rule above. It also replaces the P2 default above, except that residue from unrelated changes still splits into one issue per change. Pass 1 fixes every P0, P1, and P2 finding. Pass 2 fixes P0 and P1. From pass 3 on, only a P0 is fixed, and every P1 and P2 finding left goes to the PR's residue issue. A P0 still blocks at every pass. Agents label every PR they open, so the round rule governs a PR only when it lacks the label.
+
 **This rule is repo-local.** SCR-004 still requires fixing findings that can ride the PR. The severity and round rules above define the exception at merge time. This file owns those rules, and `CLAUDE.md` imports them. The standing-decisions block below is the record of those decisions in this repository. Connected repositories are steered from the workspace. They do not carry a copy.
 
 **Review main integrations for lost fixes (#3237, ADR-110).** A clean three-way squash merge normally preserves changes made only on `main`. In the #3222/#3178 incident, the PR branch had already merged the fix from `main`, but that integration commit discarded the CLI exemption. The squash then landed the damaged branch. Before merging, integrate current `main`, review the resolutions, and check the behavior both sides changed. `pipeline.yml` runs `tools/scripts/check-stale-merge-base.mjs` as an advisory overlap scan for branches behind `main`. Its exact-line signals can include formatting, and an up-to-date result does not inspect earlier integrations. Requiring up-to-date branches remains a maintainer setting decision. It cannot prevent a bad integration resolution. The historical audit and retained evidence are linked from ADR-110. Separately, `pnpm check:contracts` asserts that `packages/iam/src/machine-key-scope.ts` branches on every scope purpose value a live key can carry.
+
+## Agent-monitored pull requests
+
+Mac set this on 2026-09-26 for every repository. The `agent-monitored-pr` label marks a PR that an agent watches until it merges or closes. A labelled PR comes before other work, and its fixes run in parallel wherever that is safe.
+
+- **Label every PR an agent opens.** Pass `--label agent-monitored-pr` to `gh pr create`. If the repository has no such label, create it first: `gh label create agent-monitored-pr --color fd0880 --description "Agent polls every 60 seconds fixes CI, comments, conflicts."`
+- **Poll the PR every 60 seconds.** Each poll reads the PR's state, its mergeability, and the checks on the head commit. It reads every review thread with no inline reply after the reviewer's last comment. `gh pr view --json` does not return review threads, so read them with `gh api graphql` (`pullRequest.reviewThreads`). It also reads review bodies and top-level comments, because a finding there has no thread. Answer each finding there once, with a PR comment that quotes it, and record the id of the comment you answered. Start every comment a watcher posts with `<!-- pr-watch -->`. Skip comments that start with that marker or with `<!-- pr-claim -->`, so a watcher does not answer its own comments.
+- **Fix by review pass.** Pass N is the Nth review one reviewer submits on the PR. On pass 1, fix every P0, P1, and P2 finding. On pass 2, fix P0 and P1. From pass 3 on, fix P0 only. A P0 blocks the PR at every pass.
+- **File one residue issue.** Carry every P1 and P2 finding left unfixed into a single issue for the PR. Its title ends with `(residue #<PR>)`, and its body links the PR. Reply inline on every thread you handle, with the commit that fixed it or a link to the residue issue.
+- **Let the pass rule govern review findings.** On a labelled PR, the pass rule decides which review findings get fixed, in place of any repository rule on review rounds or on fixing every finding in the PR. Residue goes to one issue, even where a repository files each finding alone. Where a repository allows one change per issue, residue from unrelated changes splits into one issue per change. A defect you notice yourself still follows fix over file. A P3 finding follows the repository's usual rules.
+- **Clear conflicts and CI failures as they appear.** When the PR conflicts, merge the base branch in, resolve it, and push. When a job fails, read its failing step with `gh run view --job <id> --log-failed`, fix it, and push without waiting for the rest of the run.
+- **Dispatch subagents.** Give each independent fix its own subagent when no two fixes touch the same file. Stay active until the PR merges or closes.
+- **Search for the label every 60 seconds.** A session that watches PRs runs `gh search prs --owner macanderson --label agent-monitored-pr --state open --limit 1000` every 60 seconds. Without `--limit`, gh returns 30 results, and GitHub search returns at most 1000. The session takes each labelled PR that no live claim holds.
+- **Claim a PR before the first write.** A PR has one writer. Two writers on one branch restart each other's CI and reject each other's pushes. To claim, post a PR comment whose first line is `<!-- pr-claim --> <login> <session-word> <runtime> <session name>`, then read the PR's comments again. The session word is one word that names your session, such as a job id. A claim holds for 90 minutes after it is posted. The oldest claim that still holds owns the PR. If that claim is not yours, delete your comment and message the owner instead of pushing. Before your claim lapses, post a new one and delete the old one. Delete your claim when you stop watching the PR. Agents chose this claim on 2026-09-26 to answer review findings, in the format of stella's `scripts/pr-claim.sh`, and Mac has not ruled on it.
 
 ## Documentation
 
@@ -292,7 +322,7 @@ Shell chrome in `apps/app/src/features/shell/` must use the component-level desi
 | Content panel | `bg-app-panel-bg`, `text-app-panel-fg` | `bg-background`, `text-foreground` |
 | Drawers, flyout, phone-bar count pills | `bg-app-raised-bg`, `text-app-raised-fg` | `bg-card`, `bg-app-panel-bg` |
 | Topbar / header | `bg-app-topbar-bg`, `text-app-topbar-fg`, `border-app-topbar-border` | `bg-background`, `border-border` |
-| App chrome links | `text-app-link-fg`, `hover:text-app-link-hover-fg`, `text-app-link-active-fg` | `text-muted-foreground`, `text-foreground` |
+| App chrome links and icon buttons | `text-app-link-fg`, `hover:text-app-link-hover-fg`, `text-app-link-active-fg`, `hover:bg-app-link-hover-bg`, `bg-app-link-active-bg` | `text-muted-foreground`, `text-foreground`, `bg-secondary` |
 | Sidebar surface | `bg-sidebar-bg`, `text-sidebar-fg` | `bg-sidebar`, `text-sidebar-foreground` |
 | Sidebar nav items | `text-sidebar-nav-link-fg`, `hover:bg-sidebar-nav-link-hover-bg`, etc. | `text-sidebar-foreground`, `hover:bg-sidebar-accent` |
 | Sidebar group labels | `text-sidebar-nav-label-fg` | `text-muted-foreground` |
@@ -319,8 +349,8 @@ not carry a copy.
   (inner loop):** Never compile or run the full test suite while developing.
   Build and test only the crates/packages/modules touched by the change
   (plus direct dependents on interface changes). The full suite is CI's job.
-  Here: `pnpm --filter <package> test:unit <file>.test.ts`, never bare `pnpm test`
-  or `turbo run test:unit`. **Not `... test`**: no workspace package defines a
+  Here: CI runs every build and test, and none of them runs on this machine,
+  not even one test file. **Not `... test`**: no workspace package defines a
   `test` script, so `pnpm --filter <package> test` exits 0 having run nothing at
   all. Only the repo root defines one, and it is `turbo run test:unit`, the full
   suite this rule exists to keep out of the inner loop.

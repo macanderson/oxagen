@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { HandlerError } from "@oxagen/oxagen";
 import { OXAGEN_PR_LABELS } from "@oxagen/github";
+import { LEGACY_SKILLS_CONFIG_PATH } from "@oxagen/oxagen/steering-repo/paths";
 import { parseSkillConfig } from "./skill-resolution";
 import type { SkillConfigStore, SkillScope } from "./skill-config.store";
 import type { SkillRepository } from "./skill-config.repository";
 
-const PATH = ".oxagen/skills.toml";
+const PATH = LEGACY_SKILLS_CONFIG_PATH;
 
 /**
  * The newest commit reachable from `ref` that touched the configuration file.

@@ -5,6 +5,7 @@ import { dataSource } from "@/data/source";
 import {
   Fleet,
   FLEET_PREFS_COOKIE,
+  parseListQuery,
   pullRequestFilterOf,
   readFleetPrefs,
 } from "@/features/fleet";
@@ -24,14 +25,17 @@ export async function generateMetadata(): Promise<Metadata> {
 // route and not to every page under the workspace.
 //
 // The runs table's columns and page size are the person's saved choice, read
-// from its cookie here so the first render draws the table they left.
+// from its cookie here so the first render draws the table they left. The
+// search, facets, order and page are the URL's (`parseListQuery`), and the
+// runs read applies them (#3837).
 export default async function FleetPage({
   params,
   searchParams,
 }: PageProps<"/[org]/[ws]">) {
   const { org, ws } = await params;
   const ctx = await requireViewer(org, ws);
-  const { cursor, prs } = await searchParams;
+  const query = await searchParams;
+  const { cursor, prs } = query;
   const prefs = readFleetPrefs(
     (await cookies()).get(FLEET_PREFS_COOKIE)?.value,
   );
@@ -46,6 +50,7 @@ export default async function FleetPage({
         cursor={firstParam(cursor) ?? null}
         prefs={prefs}
         pullRequests={pullRequestFilterOf(firstParam(prs))}
+        list={parseListQuery(query)}
         banners={<OnboardingGate ctx={ctx} source={dataSource()} />}
       />
     </main>

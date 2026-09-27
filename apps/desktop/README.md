@@ -29,9 +29,10 @@ to, add or drop a wrapper, and unenroll. Spec: `docs/specs/oxagen-desktop/spec.h
 
 | Seam | Kind | Source | Wired by |
 |---|---|---|---|
-| Sidecar bridge (`Command.sidecar`) | boundary | `apps/desktop/src/bridge.ts` | Every panel action. `externalBin` in `src-tauri/tauri.conf.json` lists `binaries/tacho` and `binaries/oxagen` |
+| Sidecar bridge (`run_sidecar`) | boundary | `apps/desktop/src/bridge.ts`, `apps/desktop/src-tauri/src/sidecar.rs` | Every panel action. The Rust shell runs only the commands on its allowlist, with an environment it sets. `src-tauri/sidecar-calls.json` lists one of each argv `commands.ts` builds, and both test suites read it. `externalBin` in `src-tauri/tauri.conf.json` lists `binaries/tacho` and `binaries/oxagen` |
 | Panel-to-argv mapping and the `Harness` union | boundary | `apps/desktop/src/commands.ts` | `apps/desktop/src/app.tsx`. The union must track `WRAPPED_HARNESSES` in `packages/tacho/src/wire.ts` plus `claude-desktop` (ADR-101) |
-| Sidecar and updater permissions | boundary | `apps/desktop/src-tauri/capabilities/default.json` | Tauri, at runtime |
+| Opener and updater permissions | boundary | `apps/desktop/src-tauri/capabilities/default.json` | Tauri, at runtime. The page holds no shell permission |
+| Close guard | boundary | `apps/desktop/src-tauri/src/activity.rs` | A close or a Quit while a command that writes files runs hides the window, and the app exits when the work ends. A second Quit exits at once. Sign-in and a first run hold nothing. On macOS the Dock's Quit and a logout skip it |
 | User-scoped API calls (`USER_ROUTES`) | boundary | `apps/desktop/src-tauri/src/lib.rs` | The Workspace panel. Served by `apps/api/src/app.ts` |
 | Release feed (`latest.json`) | boundary | `apps/desktop/src-tauri/tauri.conf.json` (`plugins.updater.endpoints`) | `apps/desktop/src/updater.ts` |
 
@@ -74,8 +75,9 @@ collector's `/status` on loopback) and every action runs a sidecar:
 | Workspace | `POST /v1/user/organizations`, `POST /v1/user/workspaces` | `tacho reassign --org … --workspace …`; `oxagen tacho reassign … --default` when the CLI default should follow |
 | Wrappers | `host.harnesses`, hook presence per harness | `tacho reassign --harness …` |
 | Command line | PATH, `cli_install` state | linked automatically on every launch; "Link into PATH" / "Remove links" for manual control |
+| Updates (macOS) | `autoUpdate` in `desktop.json`, `update_policy` | "Install updates automatically" writes `autoUpdate` through `set_auto_update` |
 | Uninstall | — | `remove_local_data` after unenroll; then the platform uninstaller |
-| Masthead | the release feed, at launch, hourly, on focus, and on demand | `tauri-plugin-updater`: check, download + verify, install, relaunch |
+| Masthead | the release feed, at launch, hourly, on focus, and on demand | `tauri-plugin-updater`: check, download + verify, install, restart the collector, relaunch. A Mac that passes the ADR-202 gates installs in the background and shows Restart |
 
 ### What installing does
 
@@ -189,6 +191,16 @@ pickers, `tacho detect`, and with `--enroll` the enroll, `tacho status` and a
 recorded first run per agent. It writes `oxagen-e2e-smoke-<host>.json`.
 Without `--enroll` it changes nothing on the machine.
 
+`scripts/e2e-webdriver.mjs` clicks through the built app on Linux with
+tauri-driver: the scan, Sign out, the start of Sign in, and the poll's `tacho
+status`, each through the sidecar allowlist, in a scratch HOME with a stand-in
+control plane. It also checks that the page cannot start `tacho daemon` or
+spawn a process through the shell plugin. The `webdriver` job in
+`desktop-rig.yml` runs it and keeps each step, with the window's text at
+it, as an artifact.
+Run it under `xvfb-run -a` after `pnpm sidecars` and `pnpm tauri build --debug
+--no-bundle`.
+
 Needs Rust (stable), a Node built with single-executable support, and, on
 Linux, `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`. The
 sidecars are Node SEAs, so `sidecars` fails before `tauri build` ever runs on a
@@ -210,9 +222,14 @@ the masthead fetches
 `https://github.com/macanderson/oxagen/releases/download/desktop-latest/latest.json`,
 and **Install** downloads the bundle for this platform, verifies it against
 the minisign public key in `tauri.conf.json` (`plugins.updater.pubkey`),
-installs it and relaunches. Download milestones stream into the Activity
-panel. The pure half (caption, byte formatting, the milestone gate) is
-covered by `src/updater.test.ts`.
+installs it, restarts the collector, and relaunches. Download milestones
+stream into the Activity panel. The pure half (caption, byte formatting, the
+milestone gate, the order of the install steps) is covered by
+`src/updater.test.ts`.
+
+Install releases the page's busy hold before it relaunches. The relaunch is
+an exit request, and the Rust shell holds an exit while the page is busy, so
+a relaunch under the hold used to hide the window and never reopen the app.
 
 ### Bundled UI
 
@@ -228,9 +245,10 @@ the updater feed.
 `src/update-watch.ts` reads the feed at launch, every hour, and when the window
 takes focus with the last check at least 15 minutes old. When the feed offers
 a newer version, a panel names it with **Install and relaunch** and **Later**,
-and the masthead shows **Install**. The watch installs nothing and relaunches
-nothing. Only the click on Install does, and Install stays disabled while
-another action runs. **Later** hides the panel for that version until the next
+and the masthead shows **Install**. The watch itself installs nothing and
+relaunches nothing. On a Mac that passes the gates below, the app installs the
+offer in the background. Everywhere else only the click on Install does, and
+Install stays disabled while another action runs. **Later** hides the panel for that version until the next
 launch. A check that fails stays quiet, because an offline laptop would
 otherwise raise an error every hour. The masthead button still reports its own
 failures. The watch skips a version the masthead's own check already found,
@@ -255,6 +273,40 @@ loads a remote page:
   id, and applying a new build needs an install, not a reload.
 - Push a reload event from the deploy pipeline. Deploys do not move the feed
   (ADR-158), and an app left open would still need an install.
+
+### Automatic install
+
+ADR-202 records this design. On macOS, when the watch offers a version, the
+app asks `update_policy` (`src-tauri/src/update.rs`) whether it may install
+without asking. It may when all five gates pass:
+
+1. The platform is macOS. Windows and Linux keep the prompt, because their
+   installers either quit the app or ask for a password.
+2. The app runs from an `.app` bundle.
+3. The bundle does not run from a translocated or mounted path (the same
+   test the CLI linker uses).
+4. You can write to the bundle and to the folder that holds it, so the swap
+   needs no administrator password.
+5. The bundle sits on the same volume as the temp folder, where the plugin
+   parks the old bundle during the swap.
+
+The **Install updates automatically** checkbox in the Updates panel turns it
+off. It writes `autoUpdate` to `~/.config/oxagen/desktop.json`. A missing key
+or `true` means on, and any other value means off. When the box is on but a
+gate fails, the panel names the gate in one sentence.
+
+The automatic install downloads first, with no hold on quit, so a quit
+mid-download drops it and the next launch checks again. Then it takes the busy
+hold, swaps the bundle, restarts the collector, and releases the hold. It
+never relaunches the app. The masthead shows **Restart**, and the next launch
+runs the new build either way. A download, signature, or install error logs
+to the Activity panel and falls back to the prompt for the same version.
+
+Every install restarts the collector (`restart_tacho_service`): launchd's
+`kickstart -k` on macOS, `systemctl --user restart` on Linux. The collector
+runs from the sidecar inside the bundle, so without the restart it kept the
+old binary until the next sign-out or `tacho enroll`. The restart skips a
+service that is not loaded (macOS) or not active (Linux), so it starts nothing.
 
 ### Signing key
 
@@ -307,12 +359,15 @@ src/            React UI (app.tsx), the sidecar bridge (bridge.ts, tested with
 src-tauri/      Rust shell: state reads, the two user-scoped API calls, tray;
                 cli_install.rs (PATH install: automatic on launch, and the
                 "Link into PATH" / "Remove links" commands, with unit-tested
-                decision functions); capabilities/default.json scopes the
-                sidecars and the updater; tauri.unsigned.conf.json is the
-                no-key overlay
+                decision functions); sidecar.rs (the sidecar allowlist and
+                run_sidecar); activity.rs (the close guard);
+                capabilities/default.json scopes the opener and the updater;
+                tauri.unsigned.conf.json is the no-key overlay
 scripts/        sidecars.mjs (stage binaries), icons.mjs, publish-downloads.mjs
                 and check-latest.mjs (the downloads host), e2e-smoke.mjs (an
                 installed app against the live control plane),
+                e2e-webdriver.mjs (the built app's session-free panel
+                actions through tauri-driver),
                 smoke-macos-bundle.sh (CI: start the signed bundle's sidecars
                 and app under the hardened runtime), rig-stubs.mjs
 ```

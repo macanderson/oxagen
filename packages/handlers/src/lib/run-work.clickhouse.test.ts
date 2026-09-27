@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 import { runInTenantScope } from "@oxagen/tenancy";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  capturedDiffOf,
   readSessionConfig,
   readSessionTitle,
   readWorkContexts,
+  readRunPrLinks,
   readWorkDiffs,
   readWorkPrLinks,
   readWorkSubagents,
@@ -83,11 +85,21 @@ const FRAMES = [
     git_remote_digest: "sha256:remote",
     content_digest: "sha256:diff",
     bytes_ref: "blob",
+    // The seal took a token out of the patch after the collector called the
+    // snapshot complete (#3791).
+    redactions: JSON.stringify([
+      {
+        path: "bytes:10-50",
+        reason: "github_token",
+        original_digest: `sha256:${"d".repeat(64)}`,
+      },
+    ]),
     attrs: {
       repository_url: REPOSITORY,
       diff_head_sha: "b".repeat(40),
       diff_base_sha: "c".repeat(40),
       diff_complete: "true",
+      "oxagen.content_redactions_total": "2",
     },
   }),
   frame(14, false, {
@@ -109,6 +121,75 @@ const FRAMES = [
   }),
 ];
 
+// A subagent chain under the run, and one under another run in the same
+// workspace (#3823). Each numbers its frames from 0.
+const child = randomUUID();
+const otherRoot = randomUUID();
+const foreign = randomUUID();
+const CHILD_PR = "https://github.com/acme/app/pull/43";
+const FOREIGN_PR = "https://github.com/acme/app/pull/99";
+
+/** A `pr_link` frame on a subagent chain, under `root`. */
+function chainLink(
+  sessionUuid: string,
+  root: string,
+  seq: number,
+  pr: string,
+) {
+  const ts = `2026-09-24 10:01:${String(seq).padStart(2, "0")}.000`;
+  return {
+    org_id: scope.orgId,
+    workspace_id: scope.workspaceId,
+    session_uuid: sessionUuid,
+    root_session_uuid: root,
+    parent_session_uuid: root,
+    seq,
+    ts,
+    received_at: ts,
+    chain_verified: true,
+    kind: "oxagen:pr_link",
+    attrs: {
+      "pr.url": pr,
+      "pr.number": pr.split("/").at(-1),
+      "pr.repository": "acme/app",
+    },
+  };
+}
+
+const CHAIN_FRAMES = [
+  chainLink(child, session, 2, CHILD_PR),
+  // The subagent linked the run's own PR as well.
+  chainLink(child, session, 3, PR),
+  chainLink(foreign, otherRoot, 0, FOREIGN_PR),
+];
+
+// A run whose own chain and first subagent both linked the same 30 PRs, and
+// whose second subagent linked one more. The subagent ids are sorted, so the
+// chain that re-linked the 30 reads ahead of the one that linked the 31st.
+const busy = randomUUID();
+const [relinker, latecomer] = [randomUUID(), randomUUID()].sort() as [
+  string,
+  string,
+];
+const SHARED_PRS = Array.from(
+  { length: 30 },
+  (_, i) => `https://github.com/acme/app/pull/${100 + i}`,
+);
+const LATE_PR = "https://github.com/acme/app/pull/200";
+const BUSY_FRAMES = [
+  ...SHARED_PRS.map((pr, i) => chainLink(busy, busy, i, pr)),
+  ...SHARED_PRS.map((pr, i) => chainLink(relinker, busy, i, pr)),
+  chainLink(latecomer, busy, 0, LATE_PR),
+];
+
+// A gateway session whose proxied request carried its own effort, which wins
+// over the harness's setting (#3891).
+const proxied = randomUUID();
+const PROXIED_FRAMES = [
+  frame(0, true, { kind: "session_config", effort_level_setting: "max" }),
+  frame(1, true, { kind: "llm_call", request_effort: "low" }),
+].map((row) => ({ ...row, session_uuid: proxied, root_session_uuid: proxied }));
+
 const read = <T>(fn: () => Promise<T>) => runInTenantScope(scope, fn);
 
 describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
@@ -121,7 +202,7 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
     await clickhouse().insert({
       table: "tacho_events",
       format: "JSONEachRow",
-      values: FRAMES,
+      values: [...FRAMES, ...CHAIN_FRAMES, ...BUSY_FRAMES, ...PROXIED_FRAMES],
     });
   });
   afterAll(async () => {
@@ -167,7 +248,7 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
     ]);
   });
 
-  it("reads the captured diff with its observed time", async () => {
+  it("reads the captured diff with its observed time and its redactions", async () => {
     const diffs = await read(() => readWorkDiffs(session));
     expect(
       diffs.map((row) => ({
@@ -175,6 +256,7 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
         observed_at: row.observed_at,
         path: row.path,
         head: row.head,
+        redaction_count: Number(row.redaction_count),
       })),
     ).toEqual([
       {
@@ -182,7 +264,11 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
         observed_at: "2026-09-24 10:00:13.000",
         path: "/work/app-wt",
         head: "b".repeat(40),
+        redaction_count: 2,
       },
+    ]);
+    expect(diffs.map(capturedDiffOf)).toMatchObject([
+      { completeness: "partial", limitations: ["content_redacted"] },
     ]);
   });
 
@@ -192,7 +278,49 @@ describe.skipIf(!reachable)("run work reads on ClickHouse", () => {
     );
     await expect(read(() => readSessionConfig(session))).resolves.toEqual({
       effort: "max",
+      effortSource: "harness",
       thinking: true,
+    });
+  });
+
+  it("reads the PR links of the run's own chain, then each subagent chain under it, and none of another run's", async () => {
+    const links = await read(() => readRunPrLinks(session, [child, foreign]));
+    // The subagent's link to the run's own PR is the same PR, read once at
+    // the run's frame.
+    expect(
+      links.map((row) => [row.session_uuid, row.url, String(row.first_seq)]),
+    ).toEqual([
+      [session, PR, "10"],
+      [session, DOTTED_PR, "16"],
+      [child, CHILD_PR, "2"],
+    ]);
+  });
+
+  it("counts a PR linked on two chains once against the limit", async () => {
+    // Grouped by chain and URL, the run's 30 PRs and the subagent's 30
+    // re-links filled the 51 rows the limit allows, and the 31st PR, which
+    // only the second subagent linked, was never read.
+    const links = await read(() =>
+      readRunPrLinks(busy, [relinker, latecomer]),
+    );
+    expect(links).toHaveLength(31);
+    expect(
+      links.slice(0, 30).every((row) => row.session_uuid === busy),
+    ).toBe(true);
+    expect(
+      links.slice(0, 30).map((row) => [row.url, String(row.first_seq)]),
+    ).toEqual(SHARED_PRS.map((pr, i) => [pr, String(i)]));
+    expect(links.at(-1)).toMatchObject({
+      session_uuid: latecomer,
+      url: LATE_PR,
+    });
+  });
+
+  it("reads a proxied request's effort ahead of the harness's setting (#3891)", async () => {
+    await expect(read(() => readSessionConfig(proxied))).resolves.toEqual({
+      effort: "low",
+      effortSource: "request",
+      thinking: null,
     });
   });
 });

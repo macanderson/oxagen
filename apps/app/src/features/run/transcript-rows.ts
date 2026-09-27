@@ -59,6 +59,14 @@ export function entryKey(entry: TranscriptEntry): string {
   return entry.key;
 }
 
+/**
+ * How many entries the Transcript tab reads at once: the page it opens on,
+ * each page ahead of a live run's tail, and each page a replay reads ahead of
+ * its playhead. Every read refolds the run on the server (#4340), so a page
+ * is sized to fill the view, not to hold the run (#4427).
+ */
+export const TRANSCRIPT_PAGE = 50;
+
 /** A transcript with at least one entry: the only kind the view draws. */
 export type Frames = readonly [TranscriptEntry, ...TranscriptEntry[]];
 
@@ -69,15 +77,22 @@ export function isNonEmpty(
 }
 
 /**
- * `page` merged into `held` by each entry's key: an entry the reader already
- * holds is replaced where it stands, and a new one is appended in the order
- * the page sent it.
+ * `page` merged into `held` by each entry's key. An entry the reader already
+ * holds is replaced where it stands. A new entry is added in the order the
+ * page sent it: one whose parent the reader holds goes after the last entry
+ * held under that parent, and any other goes at the end.
  *
  * `get_run_transcript` sends an entry again when it has grown since it was
  * sent: a step that gained its result, a turn that gained a step, a Task call
  * whose subagent recorded more (#4048). The grown copy is the one to show,
  * and appending it drew the same step twice. Replacing in place keeps the
  * row where the reader saw it, and keeps the last entry the run's latest.
+ *
+ * A tail page also sends a subagent's entry that landed before the cursor
+ * (#4083). The server places it under the call that spawned it, ahead of
+ * entries the reader holds. Placed there here too, the list keeps the
+ * server's order, so the transport reaches it with its call and not at the
+ * foot of the run.
  */
 export function mergeEntries(
   held: Frames,
@@ -92,35 +107,121 @@ export function mergeEntries(
   page: readonly TranscriptEntry[],
 ): readonly TranscriptEntry[] {
   const out = [...held];
-  const at = new Map(out.map((entry, index) => [entryKey(entry), index]));
+  let at = new Map(out.map((entry, index) => [entryKey(entry), index]));
   for (const entry of page) {
     const key = entryKey(entry);
     const index = at.get(key);
-    if (index === undefined) {
+    if (index !== undefined) {
+      out[index] = entry;
+      continue;
+    }
+    const parent =
+      entry.parentKey === null ? undefined : at.get(entry.parentKey);
+    const place =
+      parent === undefined ? out.length : subtreeEnd(out, parent) + 1;
+    if (place === out.length) {
       at.set(key, out.length);
       out.push(entry);
-    } else out[index] = entry;
+    } else {
+      out.splice(place, 0, entry);
+      at = new Map(out.map((kept, i) => [entryKey(kept), i]));
+    }
   }
   return out;
 }
 
 /**
- * A fresh read of the whole run laid over what a reader holds: the fresh
- * read's entries in the fresh read's order, then each held entry it does not
- * carry, which a reader paged in past that read's bound.
+ * The position of the last entry in `entries` under the one at `root`, at any
+ * depth, or `root` when none is. The server places a subagent's entries after
+ * the call that spawned it, so each one's parent comes before it.
+ */
+function subtreeEnd(entries: readonly TranscriptEntry[], root: number): number {
+  const rootEntry = entries[root];
+  if (rootEntry === undefined) return root;
+  const under = new Set([entryKey(rootEntry)]);
+  let end = root;
+  for (let index = root + 1; index < entries.length; index += 1) {
+    const entry = entries[index];
+    if (entry === undefined || entry.parentKey === null) continue;
+    if (under.has(entry.parentKey)) {
+      under.add(entryKey(entry));
+      end = index;
+    }
+  }
+  return end;
+}
+
+/**
+ * A fresh read of the whole run laid over what a reader holds: the held
+ * entries ahead of the first one the fresh read carries, the fresh read's
+ * entries in the fresh read's order, then each held entry it does not carry,
+ * which a reader paged in past that read's bound.
  *
- * `mergeEntries` appends what is new, which is right for a tail page and
- * wrong here. A subagent frame recorded late is placed by the server after
- * the call that spawned it, before entries the reader already holds (#4083).
- * Appended, it would draw at the foot of the run, away from its call.
+ * `mergeEntries` places a new entry under its parent or at the end, which is
+ * right for a tail page. A fresh read carries the server's order for every
+ * entry, including a subagent's entry recorded late under the call that
+ * spawned it (#4083), so this takes that order whole.
+ *
+ * A reader that opened at the run's end and scrolled up holds entries ahead
+ * of a fresh tail read, and they stay ahead of it. A fresh read that shares
+ * no entry with what the reader holds answers null: the two do not overlap,
+ * so neither can be placed by the other.
  */
 export function rebaseEntries(
   fresh: Frames,
   held: readonly TranscriptEntry[],
-): Frames {
+): Frames | null {
   const known = new Set(fresh.map(entryKey));
-  const past = held.filter((entry) => !known.has(entryKey(entry)));
-  return past.length === 0 ? fresh : [...fresh, ...past];
+  const first = held.findIndex((entry) => known.has(entryKey(entry)));
+  if (first === -1) return held.length === 0 ? fresh : null;
+  const past = held
+    .slice(first)
+    .filter((entry) => !known.has(entryKey(entry)));
+  if (first === 0 && past.length === 0) return fresh;
+  const out = [...held.slice(0, first), ...fresh, ...past];
+  return isNonEmpty(out) ? out : fresh;
+}
+
+/**
+ * The entries a reader holds with an older page laid ahead of them: the
+ * page's entries it does not hold, in the page's order, then what it held.
+ * An entry it already holds, grown since, is replaced where it stands.
+ */
+export function prependEntries(
+  held: Frames,
+  page: readonly TranscriptEntry[],
+): Frames {
+  const known = new Map(held.map((entry, index) => [entryKey(entry), index]));
+  const out = [...held];
+  const older: TranscriptEntry[] = [];
+  for (const entry of page) {
+    const index = known.get(entryKey(entry));
+    if (index === undefined) older.push(entry);
+    else out[index] = entry;
+  }
+  const next = [...older, ...out];
+  return isNonEmpty(next) ? next : held;
+}
+
+/**
+ * A page read after the cursor, for a reader that holds only the run's last
+ * entries. The server sends an entry again when it grows, including one
+ * ahead of the first entry the reader holds, which it never sent this
+ * reader. That entry is left for the page ahead, which carries it grown,
+ * rather than drawn at the foot of the run. What remains merges as any page.
+ */
+export function mergeTail(
+  held: Frames,
+  page: readonly TranscriptEntry[],
+): Frames {
+  const known = new Set(held.map(entryKey));
+  const floor = held[0].elapsedMs;
+  return mergeEntries(
+    held,
+    page.filter(
+      (entry) => known.has(entryKey(entry)) || entry.elapsedMs >= floor,
+    ),
+  );
 }
 
 // ── The feed ────────────────────────────────────────────────────────────────
@@ -137,7 +238,7 @@ export const FEED_GROUPS: readonly FeedGroup[] = TRANSCRIPT_KINDS.filter(
   (kind): kind is FeedGroup => kind !== "policy" && kind !== "errors",
 );
 
-/** A frame a row links to. `chainRef` is set for a subagent's frame, which no link can open by seq. */
+/** A frame a row links to. `chainRef` is set for a subagent's frame, which a link opens by its chain and seq. */
 export type FrameRef = { seq: string; type: string; chainRef: string | null };
 
 /** A decision a rule or a person made about a call, and the frame that records it. */
@@ -182,7 +283,7 @@ type FeedBase = {
   elapsedMs: number;
   /** The chip that shows or hides the row; null for a row no chip governs. */
   group: FeedGroup | null;
-  /** The entry's call failed, or a rule, a person or the harness refused it. */
+  /** The server counts the row's entry under errors (`error`): it failed or was refused. */
   failed: boolean;
   subagent: TranscriptEntry["subagent"];
   /**
@@ -208,7 +309,11 @@ export type FeedRow = FeedBase &
          * takes without reading the reply, is what the chip shows.
          */
         kind: "calls";
-        /** The tools the reply called, in order; empty when it called none the record kept. */
+        /**
+         * The tools the reply called that a tool step recorded, in order;
+         * each is drawn as that step's row. A call no tool step recorded is
+         * drawn as its own row after this one, so it is not named here.
+         */
         tools: string[];
       }
     | {
@@ -267,21 +372,6 @@ function gateOf(gate: TranscriptEntry["gates"][number]): FeedGate {
 }
 
 /**
- * The entry failed, was refused, or answers the errors chip, as the server
- * states it: the rule `transcriptCounts` counts errors by, so the errors
- * toggle shows the entries its count counted. Every row of an entry takes
- * this, including a call the entry's reply made that no tool step recorded,
- * whose own result the server does not read.
- */
-function failedOf(entry: TranscriptEntry): boolean {
-  return (
-    entry.outcome === "failed" ||
-    entry.outcome === "denied" ||
-    entry.kinds.includes("errors")
-  );
-}
-
-/**
  * The chip a row of `entry` is drawn under. A row appears under a chip only
  * when the server counted its entry there (`kinds`), so a chip's count is
  * the entries it shows (ADR-182). A row the page would file under a chip the
@@ -310,7 +400,11 @@ function base(
     at: entry.at,
     elapsedMs: entry.elapsedMs,
     group: chipOf(entry, group),
-    failed: failedOf(entry),
+    // The server says which entries `counts.errors` counts (`error`), so the
+    // errors toggle shows the entries its count counted. Every row of an
+    // entry takes it, including a call the entry's reply made that no tool
+    // step recorded, whose own result the server does not read.
+    failed: entry.error,
     subagent: entry.subagent,
     parent: entry.parentKey,
     spent: entry.cumulativeCost,
@@ -490,7 +584,8 @@ function blockToolRow(
  * Each row's chip is the server's (`chipOf`): a kept thought is drawn under
  * `thinking` when the step reported reasoning tokens and under `responses`
  * when it did not, and a call no tool step recorded is drawn under
- * `responses`.
+ * `responses`. A step that failed and has nothing else to draw draws one
+ * failed row, so the errors count is what the errors toggle shows.
  */
 function modelRows(entry: TranscriptEntry): FeedRow[] {
   const reply = entry.response;
@@ -544,7 +639,9 @@ function modelRows(entry: TranscriptEntry): FeedRow[] {
       ...base(`${entry.key}:calls`, entry, "responses"),
       kind: "calls",
       tools: (blocks ?? []).flatMap((block) =>
-        block.kind === "tool_use" ? [block.tool ?? block.name] : [],
+        block.kind === "tool_use" && block.stepKey !== null
+          ? [block.tool ?? block.name]
+          : [],
       ),
     });
   }
@@ -569,6 +666,19 @@ function modelRows(entry: TranscriptEntry): FeedRow[] {
       blockToolRow(block, `${entry.key}:u${String(index)}`, entry, frame),
     );
   });
+  // A call that failed with no reply kept and no figures still shows: the
+  // server counts it under errors, so it draws one failed row naming the
+  // model, under no chip.
+  if (rows.length === 0 && entry.error) {
+    rows.push({
+      ...base(`${entry.key}:failed`, entry, null),
+      kind: "event",
+      name: entry.model?.split("/").pop() ?? entry.type,
+      text: null,
+      gates: [],
+      frame,
+    });
+  }
   return rows;
 }
 

@@ -28,9 +28,6 @@ function once(
 export const WIZARDS: Partial<
   Record<CreateKind, () => Promise<AnyWizardKind>>
 > = {
-  agent: once(() =>
-    import("./agent-wizard").then((m) => wizardKind(m.agentWizard)),
-  ),
   skill: once(() =>
     import("./skill-wizard").then((m) => wizardKind(m.skillWizard)),
   ),

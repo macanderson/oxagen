@@ -106,6 +106,9 @@ interface GLMergeRequest {
   squash_commit_sha?: string | null;
   merged_at?: string | null;
   detailed_merge_status?: string | null;
+  draft?: boolean;
+  work_in_progress?: boolean;
+  updated_at?: string | null;
 }
 
 interface GLCommitStatus {
@@ -279,6 +282,12 @@ function mapMergeRequest(json: GLMergeRequest): GitLabMergeRequest {
     mergedAt: json.merged_at ?? null,
     detailedMergeStatus: json.detailed_merge_status ?? null,
     projectId: String(json.project_id),
+    ...(typeof json.draft === "boolean"
+      ? { draft: json.draft }
+      : typeof json.work_in_progress === "boolean"
+        ? { draft: json.work_in_progress }
+        : {}),
+    ...(json.updated_at ? { updatedAt: json.updated_at } : {}),
   };
 }
 

@@ -34,10 +34,14 @@
 // Pause and Resume share one slot, enabled or disabled: a running run offers
 // Pause and a paused one offers Resume, never both (#4112). `ingressPaused`
 // says which. A ledger run reads it from its ingress fence, a wrapped run from
-// the last pause or resume its host applied. After a pause or resume is queued
-// and its dialog closed, the page re-reads the run every few seconds, for at
-// most a minute, until the status says the command took effect, so a person
-// does not have to reload to see it.
+// the last pause or resume its host applied. While a pause or a resume is on
+// its way (`get_run`'s `pause.state`, #3972), the slot holds a disabled
+// "Pausing…" or "Resuming…" instead, and the rest of the set follows
+// pages/run.md: Steer stays while pausing, and nothing else is offered while
+// resuming. After a pause or resume is queued and its dialog closed, or while
+// one is on its way when the page loads, the page re-reads the run every few
+// seconds, for at most a minute, until the status says the command took
+// effect, so a person does not have to reload to see it.
 //
 // Re-reading the run refreshes the route the person is on, so the tab, zoom
 // and frames page they were using stay put.
@@ -70,13 +74,57 @@ import { haltRun, type QueuedCommand, steerRun } from "./actions";
 
 type Command = "pause" | "resume" | "steer" | "cancel";
 
+/** A slot in the header's set: a command, or the disabled word for one on its way. */
+type Slot = Command | "pausing" | "resuming";
+
+/** Where the run's pause stands, as the header draws its set. */
+type HaltState = "running" | "pausing" | "paused" | "resuming";
+
 /**
- * The commands a live run offers, in header order. Pause and Resume share the
- * first slot, because only one of them can change the run: Pause while it
- * runs, Resume while it is paused.
+ * The pause's state from `get_run`'s `pause` when the read carried one, and
+ * from `ingressPaused` otherwise: a row that did not read the pause is
+ * running or paused, never on its way.
  */
-function commandsFor(paused: boolean): readonly Command[] {
-  return [paused ? "resume" : "pause", "steer", "cancel"];
+function haltStateOf(
+  paused: boolean,
+  pause: RunRow["pause"] | undefined,
+): HaltState {
+  if (pause !== undefined && pause !== null) return pause.state;
+  return paused ? "paused" : "running";
+}
+
+/**
+ * The slots a live run offers, in header order (pages/run.md, the actions
+ * table). Pause and Resume share the first slot, because only one of them can
+ * change the run: Pause while it runs, Resume while it is paused, and the
+ * disabled word while either is on its way.
+ */
+function slotsFor(state: HaltState): readonly Slot[] {
+  switch (state) {
+    case "running":
+      return ["pause", "steer", "cancel"];
+    case "pausing":
+      return ["pausing", "steer"];
+    case "paused":
+      return ["resume", "steer", "cancel"];
+    case "resuming":
+      return ["resuming"];
+  }
+}
+
+/** The disabled word a pause or a resume on its way draws in the first slot. */
+function PendingSlot({ slot }: { slot: "pausing" | "resuming" }) {
+  const t = useTranslations("run.commands");
+  return (
+    <button
+      type="button"
+      disabled
+      data-testid={`run-${slot}`}
+      className={buttonSecondary}
+    >
+      {t(`${slot}.open`)}
+    </button>
+  );
 }
 
 /**
@@ -92,10 +140,14 @@ export const HALT_FOLLOW_READS = 15;
 
 /**
  * Re-read the run until its paused state matches the one a queued pause or
- * resume asked for, at most `HALT_FOLLOW_READS` times. Returns the function
- * that starts following: `true` for a pause, `false` for a resume.
+ * resume asked for, or while `between` says one is on its way, at most
+ * `HALT_FOLLOW_READS` times. Returns the function that starts following:
+ * `true` for a pause, `false` for a resume.
  */
-function useFollowHalt(paused: boolean): (expected: boolean) => void {
+function useFollowHalt(
+  paused: boolean,
+  between: boolean,
+): (expected: boolean) => void {
   const navigate = useNavigate();
   // Read through a ref so a new router object does not restart the count. The
   // write sits in an effect rather than in the body: React does not promise a
@@ -112,7 +164,7 @@ function useFollowHalt(paused: boolean): (expected: boolean) => void {
   // The status caught up, so stop following. Setting state while rendering is
   // React's pattern for state that tracks a prop.
   if (expected !== null && expected === paused) setExpected(null);
-  const following = expected !== null && expected !== paused;
+  const following = between || (expected !== null && expected !== paused);
   useEffect(() => {
     if (!following) return;
     let reads = 0;
@@ -201,10 +253,13 @@ function CommandDialog({
   write,
   ledgerControl = false,
   onQueuedClose,
+  testId = `run-${command}`,
 }: {
   command: Command;
   runId: string;
   ledgerControl?: boolean;
+  /** The button's test id; the dialog's is this with `-dialog`. */
+  testId?: string;
   /**
    * Called when the dialog closes after the control plane queued the command
    * for at least one recipient, so the page can follow the run's status.
@@ -269,7 +324,7 @@ function CommandDialog({
     <>
       <button
         type="button"
-        data-testid={`run-${command}`}
+        data-testid={testId}
         // `.btn.danger`: Cancel ends the run, so it carries the failed hue
         // as ink; every other control is a plain `.btn`.
         className={command === "cancel" ? buttonDanger : buttonSecondary}
@@ -283,7 +338,7 @@ function CommandDialog({
         open={open}
         onOpenChange={openChange}
         title={t(`${command}.title`, { run: runId })}
-        testId={`run-${command}-dialog`}
+        testId={`${testId}-dialog`}
       >
         {queued === null ? (
           <form
@@ -320,7 +375,7 @@ function CommandDialog({
               <DeliveryPicker value={mode} onChange={setMode} />
             ) : null}
             {failure === null ? null : (
-              <FormAlert testId={`run-${command}-failure`}>{failure}</FormAlert>
+              <FormAlert testId={`${testId}-failure`}>{failure}</FormAlert>
             )}
             <SubmitButton
               pending={pending}
@@ -372,26 +427,26 @@ function CommandDialog({
 function DisabledControls({
   reason,
   testId,
-  paused,
+  state,
 }: {
   reason: string;
   testId: string;
-  /** Draws Resume in Pause's slot, as the enabled set would. */
-  paused: boolean;
+  /** Draws the set the enabled controls would, Resume or the word on its way included. */
+  state: HaltState;
 }) {
   const t = useTranslations("run.commands");
   return (
     <div className="flex flex-col items-start gap-2 lg:items-end">
       <div className="flex flex-wrap gap-2">
-        {commandsFor(paused).map((command) => (
+        {slotsFor(state).map((slot) => (
           <button
-            key={command}
+            key={slot}
             type="button"
             disabled
-            data-testid={`run-${command}`}
-            className={command === "cancel" ? buttonDanger : buttonSecondary}
+            data-testid={`run-${slot}`}
+            className={slot === "cancel" ? buttonDanger : buttonSecondary}
           >
-            {t(`${command}.open`)}
+            {t(`${slot}.open`)}
           </button>
         ))}
       </div>
@@ -415,6 +470,7 @@ export function RunControls({
   steerBlock = null,
   ingressRevoked = false,
   ingressPaused = false,
+  pause,
   orgRole,
   wsRole,
 }: {
@@ -434,11 +490,20 @@ export function RunControls({
   steerBlock?: SteerBlock | null;
   ingressRevoked?: boolean;
   ingressPaused?: boolean;
+  /**
+   * `get_run`'s pause (#3972): a pause or a resume on its way draws its
+   * disabled word. Absent when the read did not carry it.
+   */
+  pause?: RunRow["pause"];
   orgRole: OrgRole;
   wsRole: WsRole;
 }) {
   const t = useTranslations("run.commands");
-  const follow = useFollowHalt(ingressPaused);
+  const state = haltStateOf(ingressPaused, pause);
+  const follow = useFollowHalt(
+    ingressPaused,
+    state === "pausing" || state === "resuming",
+  );
   if (status !== "live") return null;
   // The one slot Pause and Resume share, and the command it sends.
   const halt = ingressPaused ? "resume" : "pause";
@@ -450,7 +515,7 @@ export function RunControls({
       <DisabledControls
         reason={t(`blocked.${COMMAND_BLOCK_COPY[commandBlock]}`)}
         testId="host-no-control"
-        paused={ingressPaused}
+        state={state}
       />
     );
   }
@@ -459,7 +524,7 @@ export function RunControls({
       <DisabledControls
         reason={t("roleReason")}
         testId="role-no-control"
-        paused={ingressPaused}
+        state={state}
       />
     );
   }
@@ -468,17 +533,19 @@ export function RunControls({
       <DisabledControls
         reason={t("ledgerRevoked")}
         testId="ledger-ingress-revoked"
-        paused={ingressPaused}
+        state={state}
       />
     );
   if (source === "ledger") {
     return (
       <div className="flex flex-col items-start gap-2 lg:items-end">
         <div className="flex flex-wrap gap-2">
-          {commandsFor(ingressPaused).map((command) =>
-            command === "steer" ? (
+          {slotsFor(state).map((slot) =>
+            slot === "pausing" || slot === "resuming" ? (
+              <PendingSlot key={slot} slot={slot} />
+            ) : slot === "steer" ? (
               <button
-                key={command}
+                key={slot}
                 type="button"
                 disabled
                 data-testid="run-steer"
@@ -488,12 +555,12 @@ export function RunControls({
               </button>
             ) : (
               <CommandDialog
-                key={command}
-                command={command}
+                key={slot}
+                command={slot}
                 runId={runId}
                 ledgerControl
-                write={(text) => haltRun(org, ws, runId, command, text)}
-                {...(command === "cancel" ? {} : { onQueuedClose: followHalt })}
+                write={(text) => haltRun(org, ws, runId, slot, text)}
+                {...(slot === "cancel" ? {} : { onQueuedClose: followHalt })}
               />
             ),
           )}
@@ -509,10 +576,12 @@ export function RunControls({
   }
   const controls = (
     <div className="flex flex-wrap gap-2">
-      {commandsFor(ingressPaused).map((command) =>
-        command === "steer" && steerBlock !== null ? (
+      {slotsFor(state).map((slot) =>
+        slot === "pausing" || slot === "resuming" ? (
+          <PendingSlot key={slot} slot={slot} />
+        ) : slot === "steer" && steerBlock !== null ? (
           <button
-            key={command}
+            key={slot}
             type="button"
             disabled
             data-testid="run-steer"
@@ -520,20 +589,20 @@ export function RunControls({
           >
             {t("steer.open")}
           </button>
-        ) : command === "steer" ? (
+        ) : slot === "steer" ? (
           <CommandDialog
-            key={command}
-            command={command}
+            key={slot}
+            command={slot}
             runId={runId}
             write={(text, mode) => steerRun(org, ws, runId, text, mode)}
           />
         ) : (
           <CommandDialog
-            key={command}
-            command={command}
+            key={slot}
+            command={slot}
             runId={runId}
-            write={(text) => haltRun(org, ws, runId, command, text)}
-            {...(command === "cancel" ? {} : { onQueuedClose: followHalt })}
+            write={(text) => haltRun(org, ws, runId, slot, text)}
+            {...(slot === "cancel" ? {} : { onQueuedClose: followHalt })}
           />
         ),
       )}
@@ -550,5 +619,50 @@ export function RunControls({
         {t(`steerBlocked.${STEER_BLOCK_COPY[steerBlock]}`)}
       </p>
     </div>
+  );
+}
+
+/**
+ * The pause banner's ▶ Resume run (mockup `pauseBanner`, pages/run.md): the
+ * resume the header's first slot sends, drawn only where that slot is
+ * enabled. A viewer who cannot command the run, or a run no command reaches,
+ * gets nothing here, because the header's disabled set already says why.
+ */
+export function BannerResume({
+  org,
+  ws,
+  runId,
+  source,
+  commandBlock = null,
+  ingressRevoked = false,
+  ingressPaused = false,
+  orgRole,
+  wsRole,
+}: {
+  org: string;
+  ws: string;
+  runId: string;
+  source: RunRow["source"];
+  commandBlock?: CommandBlock | null;
+  ingressRevoked?: boolean;
+  ingressPaused?: boolean;
+  orgRole: OrgRole;
+  wsRole: WsRole;
+}) {
+  const follow = useFollowHalt(ingressPaused, false);
+  if (source !== "ledger" && commandBlock !== null) return null;
+  if (!canCommandRun(orgRole, wsRole)) return null;
+  if (source === "ledger" && ingressRevoked) return null;
+  return (
+    <CommandDialog
+      command="resume"
+      runId={runId}
+      ledgerControl={source === "ledger"}
+      testId="pause-banner-resume"
+      write={(text) => haltRun(org, ws, runId, "resume", text)}
+      onQueuedClose={() => {
+        follow(false);
+      }}
+    />
   );
 }

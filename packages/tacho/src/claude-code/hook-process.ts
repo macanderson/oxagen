@@ -5,24 +5,31 @@
  * the settings writers install `tacho hook --enrollment ... [--harness ...]`;
  * a custom agent runs `tacho hook --agent <name>`).
  */
-import { tachoPaths } from "../host/paths";
+import { agentPathsForEnrollment } from "../host/agents";
+import { tachoHome } from "../host/paths";
 import { ulid } from "../ids";
-import { agentFromArgv, harnessFromArgv, runTachoHook } from "./hook-client";
+import {
+  agentFromArgv,
+  enrollmentFromArgv,
+  harnessFromArgv,
+  runTachoHook,
+} from "./hook-client";
 
 /** The most stdin bytes one hook process reads before it stops waiting for more. */
 export const MAX_HOOK_STDIN_BYTES = 8 * 1024 * 1024;
 
 /**
  * The longest this process waits for the harness to finish writing and
- * close stdin. Well under the shortest command-hook timeout Claude Code
- * enforces on the events this binary answers (10s for `SessionStart`,
- * `UserPromptSubmit`, `Stop` and `SessionEnd`; 15s for `PreToolUse`; 600s
- * for `PermissionRequest`: `COMMAND_HOOK_TIMEOUTS_S` and
- * `SESSION_END_TIMEOUT_S` in `host/settings-writer.ts`), so a stdin that
- * never closes still gets an answer from this process instead of the
- * harness timing the whole command out itself with no output at all.
+ * close stdin. The shortest timeout a harness gives a hook this binary
+ * answers is five seconds (the telemetry hooks of Codex, Cursor and Stella,
+ * and `SessionEnd` on Codex and Cursor). Two seconds leaves the rest of that
+ * for the daemon, a local decision and the spool write, so a stdin that
+ * never closes still gets an answer instead of the harness killing the
+ * command with no output at all. The earlier five-second wait equalled that
+ * timeout. `runTachoHook` takes the time spent here off the daemon's
+ * response budget.
  */
-export const STDIN_READ_DEADLINE_MS = 5_000;
+export const STDIN_READ_DEADLINE_MS = 2_000;
 
 interface StdinRead {
   text: string;
@@ -92,7 +99,13 @@ export async function runHookProcess(
     const hookId = ulid(Date.now());
     const { text: stdin, truncated } = await readStdin();
     const result = await runTachoHook({
-      paths: tachoPaths(process.env),
+      // A machine can hold one enrollment per agent (ADR-203), and the hook
+      // entry names the one it was written for.
+      paths: agentPathsForEnrollment(
+        tachoHome(process.env),
+        enrollmentFromArgv(argv),
+        harnessFromArgv(argv),
+      ),
       env: process.env,
       stdin,
       hookId,
@@ -101,6 +114,8 @@ export async function runHookProcess(
         ? { agent: agentFromArgv(argv) as string }
         : {}),
       platform: process.platform,
+      // From process start, so Node's own start-up counts too.
+      elapsedMs: () => process.uptime() * 1_000,
     });
     if (truncated) {
       process.stderr.write(

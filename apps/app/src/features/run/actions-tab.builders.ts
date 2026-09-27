@@ -255,6 +255,8 @@ export function releaseTranscript(): RunTranscript {
               decision: spec.decision,
               type: spec.type,
               harness: false,
+              rules: [],
+              taint: null,
               at: at(spec.ms),
             },
       cost:

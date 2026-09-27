@@ -175,6 +175,7 @@ CREATE TABLE IF NOT EXISTS tacho_events (
   workflow_run_id String,
   workflow_name String,
   workspace_host_paths Array(String),
+  request_effort String,
   prompt_digest String,
   prompt_length Nullable(UInt32),
   prompt_source String,
@@ -202,6 +203,7 @@ CREATE TABLE IF NOT EXISTS tacho_events (
   turn_message_count Nullable(UInt32),
   policy_decision LowCardinality(String),
   policy_rule String,
+  policy_rules Array(String),
   policy_source LowCardinality(String),
   policy_reason_code String,
   policy_reason_digest String,
@@ -397,9 +399,9 @@ CREATE TABLE IF NOT EXISTS tacho_events (
   chain_verified Bool
 )
 ENGINE = ReplacingMergeTree(received_at)
-PARTITION BY toYYYYMM(ts)
+PARTITION BY toYYYYMM(received_at)
 ORDER BY (org_id, workspace_id, session_uuid, seq)
-SETTINGS index_granularity = 8192;
+SETTINGS index_granularity = 8192, min_bytes_for_wide_part = 67108864, vertical_merge_algorithm_min_rows_to_activate = 1;
 
 ALTER TABLE tacho_events ADD INDEX IF NOT EXISTS tacho_events_idem_idx event_id_idem TYPE bloom_filter GRANULARITY 4;
 ALTER TABLE tacho_events ADD INDEX IF NOT EXISTS tacho_events_tool_use_idx tool_use_id TYPE bloom_filter GRANULARITY 4;

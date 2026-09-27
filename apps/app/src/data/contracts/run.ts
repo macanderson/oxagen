@@ -14,7 +14,7 @@
 import { z } from "zod";
 import { PublicId } from "./common";
 import { Cost } from "./money";
-import { EnforcementTier, ReplayGrade, RunRow } from "./runs";
+import { EnforcementTier, ReplayGrade, RunRow, RunTokenCounts } from "./runs";
 
 const Count = z.number().int().nonnegative();
 const Ratio = z.number().min(0).max(1);
@@ -51,6 +51,12 @@ export const RunFrame = z.object({
   cursor: z.string(),
   /** The ledger's run-global `run_seq` or a wrapped session's dense `seq`. */
   seq: z.string().regex(/^\d+$/),
+  /**
+   * The subagent chain the frame was recorded on, as that chain's session
+   * uuid; absent on the run's own chain. A subagent chain numbers its frames
+   * from 0, so `seq` names a frame only together with this.
+   */
+  chainRef: z.string().optional(),
   /** The recorded event type, e.g. `model.call_completed`. */
   type: z.string(),
   /** The evidence stage the event belongs to. */
@@ -69,7 +75,7 @@ export const RunFrame = z.object({
   /** How the tool call ended, as its producer recorded it; null when it recorded none. */
   toolStatus: z.string().nullable(),
   /** The approval a parked tool call waits on (`apr_…`); null on every other frame. */
-  approvalId: z.string().nullable(),
+  approvalId: PublicId.nullable(),
   body: FrameBody,
   cost: Cost.nullable(),
 });
@@ -98,6 +104,8 @@ export type RunFramePage = z.infer<typeof RunFramePage>;
  */
 export const RunFrameBody = z.object({
   seq: z.string().regex(/^\d+$/),
+  /** The subagent chain the frame was read from; absent on the run's own chain. */
+  chainRef: z.string().optional(),
   /** Null exactly when no bytes were retained. */
   contentType: z.string().nullable(),
   /** The redacted body as text; null when no bytes were retained or they are not UTF-8. */
@@ -122,14 +130,6 @@ export const RunDetail = z.object({
 });
 export type RunDetail = z.infer<typeof RunDetail>;
 
-const TokenCounts = z.object({
-  inputUncached: Count,
-  cacheRead: Count,
-  cacheWrite5m: Count,
-  cacheWrite1h: Count,
-  output: Count,
-  reasoning: Count,
-});
 /**
  * A model's recorded cost split by token class. The rollup priced each frame
  * from the price book at the frame's instant (ADR-060), so these are the
@@ -154,9 +154,16 @@ const RunCostModel = z.object({
 });
 
 const RunCostByModel = RunCostModel.extend({
-  tokens: TokenCounts,
+  tokens: RunTokenCounts,
   /** `cost` by token class; null exactly when `cost` is. */
   costByClass: CostByClass.nullable(),
+  /**
+   * The web searches the model's calls ran, which the book prices per
+   * request (#3721). Requests, not tokens, so no token figure counts them.
+   */
+  searchRequests: Count.optional(),
+  /** What those searches cost, as recorded; null exactly when `costByClass` is. */
+  searchCost: Cost.nullable().optional(),
   /**
    * What the model's cache reads saved against uncached input, as the rollup
    * recorded it. Null when it was not recorded, including a row rolled up
@@ -167,11 +174,23 @@ const RunCostByModel = RunCostModel.extend({
   hasUnpriced: z.boolean(),
 });
 
-const RunCostByTool = z.object({ name: z.string().min(1), calls: Count });
+const RunCostByTool = z.object({
+  name: z.string().min(1),
+  calls: Count,
+  /** The tool-result tokens its calls' spans recorded; null when none did. */
+  resultTokens: Count.nullable(),
+  /**
+   * `resultTokens` at the run's uncached input rate, always `estimated`. It
+   * attributes input the run's cost already counts and never adds to it.
+   */
+  cost: Cost.nullable(),
+});
 
 const RunCostRollup = z.object({
   cost: Cost.nullable(),
-  tokens: TokenCounts,
+  tokens: RunTokenCounts,
+  /** Every model's web search requests, summed (#3721). */
+  searchRequests: Count.optional(),
   /** cache_read ÷ (input_uncached + cache_read), spend-weighted. */
   cacheHitRate: Ratio.nullable(),
   turns: Count.nullable(),
@@ -180,6 +199,16 @@ const RunCostRollup = z.object({
   toolCalls: Count,
   retries: Count.nullable(),
   productiveRatio: Ratio.nullable(),
+  /**
+   * The steps that advanced the run and the steps that did not. Null together
+   * until the rollup grades the run; when set they sum to `steps`.
+   */
+  advancedSteps: Count.nullable(),
+  unproductiveSteps: Count.nullable(),
+  /** Why the unproductive steps made no progress; null exactly when the counts are. */
+  unproductiveCauses: z
+    .object({ failed: Count, repeated: Count, retried: Count })
+    .nullable(),
   byModel: z.array(RunCostByModel),
   byTool: z.array(RunCostByTool),
   /** The price entries the frames were priced with (spec §12.2). */
@@ -211,6 +240,22 @@ const RunCostProvisional = z.object({
 export const RunCost = z.object({
   rollup: RunCostRollup.nullable(),
   provisional: RunCostProvisional.nullable().optional(),
+  /**
+   * The agent's sealed runs in the 30 days before this one, this run
+   * excluded. Null when the run names no agent or the agent has too few runs
+   * in the window. Each figure is null when too few of those runs carry it.
+   */
+  baseline: z
+    .object({
+      windowDays: z.literal(30),
+      /** This run's start, the end of the window. */
+      before: z.iso.datetime({ offset: true }),
+      runs: Count,
+      medianCost: Cost.nullable(),
+      productiveRatio: Ratio.nullable(),
+    })
+    .nullable()
+    .optional(),
 });
 export type RunCost = z.infer<typeof RunCost>;
 
@@ -248,8 +293,61 @@ export type RunTurn = z.infer<typeof RunTurn>;
 export const RunTurns = z.object({
   turns: z.array(RunTurn),
   complete: z.boolean(),
+  /**
+   * The turn each subagent chain's frames count toward. A cited subagent
+   * frame is placed at its chain's turn, and a root-chain frame at the last
+   * turn whose `seq` is at or below it. Empty for a ledger run.
+   */
+  chains: z.array(
+    z.object({
+      sessionUuid: z.uuid(),
+      turn: z.number().int().positive(),
+    }),
+  ),
 });
 export type RunTurns = z.infer<typeof RunTurns>;
+
+/**
+ * `list_findings` for one run: each open finding that cites the run, with the
+ * frames it cites there. The Cost tab pins a finding to the turns its frames
+ * fall in.
+ */
+export const RunFindings = z.object({
+  findings: z.array(
+    z.object({
+      id: PublicId,
+      kind: z.enum([
+        "cache_writes_never_read",
+        "duplicate_tool_calls",
+        "repeated_shell_commands",
+        "unpaged_results",
+      ]),
+      /** The level's key: a tool name, an agent key, an operator, or the workspace. */
+      subject: z.string(),
+      saving: Cost,
+      confidence: z.enum(["high", "medium"]),
+      citation: z.object({
+        /** True for a finding that cites the whole run and pins no turn. */
+        runLevel: z.boolean(),
+        /** Null when the finding was written before frames were cited. */
+        frames: z
+          .array(
+            z.object({
+              seq: z.string().regex(/^\d+$/),
+              sessionUuid: z.uuid().optional(),
+            }),
+          )
+          .nullable(),
+        /**
+         * Every call the finding cites in the run, including any past the
+         * cap. Null on an older finding whose evidence did not count the run.
+         */
+        framesTotal: Count.nullable(),
+      }),
+    }),
+  ),
+});
+export type RunFindings = z.infer<typeof RunFindings>;
 
 const TRANSCRIPT_ZOOMS = ["turns", "steps", "everything"] as const;
 export const TranscriptZoom = z.enum(TRANSCRIPT_ZOOMS);
@@ -429,8 +527,8 @@ export const TranscriptBody = z.object({
   /**
    * The subagent chain the frame was recorded on; absent on the run's own
    * chain. A subagent's chain is numbered from 0 like the run's, so `seq`
-   * names a frame only together with this, and `get_run_frame_body`, which
-   * reads the run's own chain, cannot open it.
+   * names a frame only together with this. `get_run_frame_body` opens the
+   * frame when passed both.
    */
   chainRef: z.string().optional(),
   type: z.string(),
@@ -478,6 +576,10 @@ const TranscriptDecision = z.object({
    */
   harness: z.boolean().default(false),
   at: z.iso.datetime({ offset: true }),
+  /** The rule ids or permission patterns that matched, in evaluation order; empty when none. */
+  rules: z.array(z.string()).default([]),
+  /** Null when no producer assessed taint; empty when one assessed the inputs as untainted. */
+  taint: z.array(z.string()).nullable().default(null),
 });
 
 /**
@@ -597,6 +699,12 @@ export const TranscriptEntry = z.object({
   quiet: z.boolean(),
   /** How the entry's call ended; null for an entry that records no call. */
   outcome: TranscriptOutcome.nullable(),
+  /**
+   * The server counts the entry under `counts.errors`: it failed, it was
+   * refused, or it answers the errors chip. The page marks its rows failed
+   * by this and by no rule of its own (ADR-182).
+   */
+  error: z.boolean(),
   /** The approval a parked call waits on (`apr_…`); null otherwise. */
   approvalId: PublicId.nullable(),
   /** Every decision folded into the entry, in the order recorded. */
@@ -712,8 +820,21 @@ export const RunTranscript = z.object({
   entries: z.array(TranscriptEntry),
   /** The point to continue from; null when nothing lies past this page. */
   cursor: z.string().nullable(),
+  /**
+   * The point to read the page ahead of this one from, on a read from the end
+   * or before a cursor; null when this page opens at the run's first entry.
+   * Absent on a read from the start or after a cursor.
+   */
+  before: z.string().nullable().optional(),
   /** False when the run has more frames than one transcript could carry. */
   complete: z.boolean(),
+  /**
+   * Where the run's stream opens for a reader holding this transcript: the
+   * cursor of the last frame on the run's own chain the read folded. Null or
+   * absent when the read folded none, and the stream then opens at the run's
+   * first frame.
+   */
+  frameCursor: z.string().nullable().optional(),
   /** The run's entries counted at this zoom; null when the answer carried none. */
   counts: TranscriptCounts.nullable(),
   /** The run's figures; null when the answer carried none. */
@@ -794,6 +915,52 @@ const ChainSeal = z.object({
   /** Null on a seal that predates the Merkle root. */
   merkleRoot: z.string().nullable(),
   archiveSegmentRef: z.string().nullable(),
+  /** sha256 over the stored segment's bytes; null on an older seal and a wrapped session's. */
+  archiveSegmentDigest: z.string().nullable(),
+  /**
+   * The attester's signature over the seal, with the names of the seal fields
+   * it signs. Null on a seal written before attestation or with no attester
+   * key, and on a wrapped session's seal.
+   *
+   * `keyRef` is the contract's `keyId`: the digest of the attester's public
+   * key, not a public id, so it is a `…Ref` (INV-11), as `platformKey` is.
+   */
+  attestation: z
+    .object({
+      alg: z.literal("ed25519"),
+      keyRef: z.string(),
+      sig: z.string(),
+      signsOver: z.array(z.string()).min(1),
+    })
+    .nullable(),
+});
+
+/**
+ * One subagent chain of a wrapped run, walked on its own (#3823). Its gaps are
+ * numbered on its own `seq`, which starts at 0 like the run's.
+ */
+const ChainSubagent = z.object({
+  /** The chain's session uuid. */
+  chainRef: z.string(),
+  /** The chain that spawned this one; null when none was recorded. */
+  parentChainRef: z.string().nullable(),
+  /**
+   * The harness's name for the subagent; null when none was recorded. A
+   * harness identifier, not a public id, so it is carried as a reference.
+   */
+  subagentRef: z.string().nullable(),
+  /** The subagent's type (`Explore`, `general-purpose`); null when none was recorded. */
+  subagentType: z.string().nullable(),
+  frameCount: Count,
+  firstSeq: z.string().regex(/^\d+$/).nullable(),
+  lastSeq: z.string().regex(/^\d+$/).nullable(),
+  gaps: ChainGaps.omit({ recorded: true }),
+  checkpoints: z.array(ChainCheckpoint),
+  /** The chain's last hash at its seal; null while it is unsealed. */
+  finalHash: z.string().nullable(),
+  sealedAt: z.iso.datetime({ offset: true }).nullable(),
+  /** False when the walk stopped before the chain's last frame. */
+  complete: z.boolean(),
 });
 
 /** One rung of the replay ladder, and the machine-readable reason it stands where it does. */
@@ -825,6 +992,11 @@ export const RunChain = z.object({
   ladder: z.array(ReplayLadderRung),
   /** False when the run has more frames than the walk read, so these are a prefix's gaps. */
   complete: z.boolean(),
+  /**
+   * Each subagent chain of a wrapped run, walked on its own. Absent on a
+   * ledger run. The figures above describe the run's own chain only.
+   */
+  chains: z.array(ChainSubagent).optional(),
 });
 export type RunChain = z.infer<typeof RunChain>;
 
@@ -864,6 +1036,11 @@ const RunOutputState = z.enum([
 export const RunOutputNode = z.object({
   /** The frame that produced it, for the `fr N` chip; null on a gate, which the record gives no frame. */
   seq: z.string().regex(/^\d+$/).nullable(),
+  /**
+   * The subagent chain that produced the node, as its session uuid; absent
+   * on the run's own chain. `seq` names a frame only together with this.
+   */
+  chainRef: z.string().optional(),
   kind: RunOutputKind,
   /** The mono name: a path, a commit sha, `#482`, a capability, or a path locator. */
   name: z.string().min(1),

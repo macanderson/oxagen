@@ -170,6 +170,36 @@ async function tenantPlaneDb(
 }
 
 /**
+ * Which Postgres plane a tenant transaction opens on.
+ *
+ * `"tenant"`, the default, is the organisation's own data plane (ADR-042). The
+ * resolver picks it, and a degraded or disabled plane fails closed.
+ *
+ * `"shared"` is the platform's shared plane, whatever plane the organisation's
+ * tenant data lives on. ADR-042 §2 keeps platform tables (billing, IAM, auth,
+ * org) there, and ADR-134 settles a dedicated-plane organisation's model usage
+ * there. The tenant GUCs are set exactly as on the default plane, so RLS still
+ * fences every row. The resolver is not consulted, so a degraded dedicated
+ * plane does not stop a platform write.
+ *
+ * A tenant-data table read on the shared plane finds none of a dedicated-plane
+ * organisation's rows. So only `packages/billing/src/internal/platform-db.ts`
+ * passes this option, and the root ESLint config refuses a second argument to
+ * `withTenantDb` or `withOrgDb` anywhere else (#4338).
+ */
+export interface TenantDbOptions {
+  plane?: "tenant" | "shared";
+}
+
+async function transactionPlane(
+  orgId: string,
+  opts: TenantDbOptions | undefined,
+): Promise<{ database: Database; planeKey: string }> {
+  if (opts?.plane === "shared") return { database: db(), planeKey: "shared" };
+  return tenantPlaneDb(orgId);
+}
+
+/**
  * Run DB work in a tenant-scoped transaction. Sets the per-transaction GUCs
  * that the RLS policies read. When enforcement is OFF, also sets
  * app.rls_bypass='on' so policies don't yet filter (seeding window). When
@@ -178,22 +208,40 @@ async function tenantPlaneDb(
  * The bypass GUC is always set ('on'/'off') so the policy expression always
  * evaluates a known value rather than defaulting on missing GUC.
  *
+ * `opts.plane` picks the plane; see {@link TenantDbOptions}.
+ *
  * Keep the body focused — do not wrap long LLM/tool calls in one withTenantDb;
  * the transaction is held for the callback's lifetime.
  */
-export async function withTenantDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
-  const { orgId, workspaceId } = requireScope();
-  const bypass = rlsEnforced() ? "off" : "on";
+export async function withTenantDb<T>(
+  fn: (tx: Tx) => Promise<T>,
+  opts?: TenantDbOptions,
+): Promise<T> {
+  const scope = requireScope();
   // The SAME GUC/RLS setup runs on a dedicated plane as on the shared one — a
   // customer-controlled endpoint is a second place the policies are enforced,
   // never an excuse to skip them.
-  const { database, planeKey } = await tenantPlaneDb(orgId);
+  const { database, planeKey } = await transactionPlane(scope.orgId, opts);
+  return tenantTransaction(database, planeKey, scope, fn);
+}
+
+/**
+ * Open a workspace-scoped tenant transaction: set the org, workspace, org-wide
+ * and bypass GUCs the policies read, then run `fn`.
+ */
+function tenantTransaction<T>(
+  database: Database,
+  planeKey: string,
+  scope: { orgId: string; workspaceId: string },
+  fn: (tx: Tx) => Promise<T>,
+): Promise<T> {
+  const bypass = rlsEnforced() ? "off" : "on";
   return runOnPlane(planeKey, () =>
     database.transaction(async (tx) => {
       await tx.execute(sql`
       select
-        set_config('app.current_org_id', ${orgId}, true),
-        set_config('app.current_workspace_id', ${workspaceGuc(workspaceId)}, true),
+        set_config('app.current_org_id', ${scope.orgId}, true),
+        set_config('app.current_workspace_id', ${workspaceGuc(scope.workspaceId)}, true),
         set_config('app.org_wide', 'off', true),
         set_config('app.rls_bypass', ${bypass}, true)
     `);
@@ -262,15 +310,24 @@ export async function withTenantDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
  *    off. This is the one under-read `withOrgDb` can still produce, and it is
  *    derivable from the table's class rather than from a list of names.
  *
+ * Inside an open `withTenantDb` callback, use `withTransactionOrgWideRead`
+ * instead: it widens the same read on the connection the caller holds.
+ *
  * Requires an active tenant scope, like `withTenantDb` — the scope is where the
  * organisation comes from. The workspace in that scope is ignored, which is the
  * point: a caller in a real workspace that asks for the organisation gets the
  * organisation.
+ *
+ * `opts.plane` picks the plane, as it does for `withTenantDb`; see
+ * {@link TenantDbOptions}.
  */
-export async function withOrgDb<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+export async function withOrgDb<T>(
+  fn: (tx: Tx) => Promise<T>,
+  opts?: TenantDbOptions,
+): Promise<T> {
   const { orgId } = requireScope();
   const bypass = rlsEnforced() ? "off" : "on";
-  const { database, planeKey } = await tenantPlaneDb(orgId);
+  const { database, planeKey } = await transactionPlane(orgId, opts);
   return runOnPlane(planeKey, () =>
     database.transaction(async (tx) => {
       // The workspace GUC is set to the EMPTY STRING, not to
@@ -349,6 +406,51 @@ export async function withTransactionOrgScope<T>(
     const result = await fn(orgTx);
     await orgTx.execute(
       sql`select set_config('app.current_workspace_id', ${previous?.workspace ?? ""}, true)`,
+    );
+    return result;
+  });
+}
+
+/**
+ * Run an ORGANISATION-WIDE READ inside an already-open tenant transaction,
+ * on the same connection.
+ *
+ * `withOrgDb` opens its own transaction. Called from inside a `withTenantDb`
+ * callback, that holds one pool connection while it waits for a second, and
+ * enough concurrent callers doing so exhaust the pool waiting on each other.
+ * The control plane builds a Tacho host's policy bundle inside the host's
+ * tenant transaction on every poll and every ingest batch, so a read there
+ * that needs every workspace's rows (which repositories the organisation
+ * bound, #3941) cannot nest `withOrgDb`.
+ *
+ * This turns `app.org_wide` on in a savepoint, runs `fn`, and puts the
+ * previous value back. Everything `withOrgDb` states about the widening holds
+ * here, because the policies enforce it, not the caller:
+ *
+ *  - `app.org_wide` is the whole predicate of the `FOR SELECT` policy
+ *    `tenant_org_wide_read`, beside `org_id = app.current_org_id`. It is in
+ *    no `tenant_isolation` clause and no WITH CHECK, so an UPDATE, a DELETE
+ *    or an INSERT inside `fn` is judged exactly as it was before the call.
+ *  - The org GUC, the bypass GUC and the workspace GUC are left as the
+ *    caller set them. Only the read of this organisation's rows widens.
+ *  - `workspace_only` tables have no org-wide policy and read as before.
+ *
+ * A savepoint restores transaction-local settings when `fn` throws, so a
+ * failed read leaves the widening off. On success the prior value is
+ * restored explicitly before the caller's own statements resume.
+ */
+export async function withTransactionOrgWideRead<T>(
+  tx: Tx,
+  fn: (orgTx: Tx) => Promise<T>,
+): Promise<T> {
+  return tx.transaction(async (orgTx) => {
+    const [previous] = await orgTx.execute<{ org_wide: string | null }>(
+      sql`select current_setting('app.org_wide', true) as org_wide`,
+    );
+    await orgTx.execute(sql`select set_config('app.org_wide', 'on', true)`);
+    const result = await fn(orgTx);
+    await orgTx.execute(
+      sql`select set_config('app.org_wide', ${previous?.org_wide ?? "off"}, true)`,
     );
     return result;
   });

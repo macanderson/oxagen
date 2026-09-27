@@ -1,6 +1,6 @@
 {
   "name": "@oxagen/tacho",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "description": "Tacho: the Oxagen wrapper that records, gates, and evidences Claude Code, Claude Agent SDK, and custom agents. Leaf package: no @oxagen/* runtime dependency.",
   "type": "module",
@@ -12,7 +12,8 @@
     "./collector": "./src/collector/index.ts",
     "./host": "./src/host/index.ts",
     "./cli": "./src/cli/index.ts",
-    "./trace": "./src/trace/index.ts"
+    "./trace": "./src/trace/index.ts",
+    "./policy": "./src/policy/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -22,11 +23,11 @@
     "bundle": "node scripts/bundle.mjs",
     "prepublish:standalone": "node scripts/prepare-standalone-publish.mjs",
     "publish:standalone": "pnpm run bundle && pnpm run prepublish:standalone",
-    "compile": "pnpm run bundle && node ../../tools/sea/compile.mjs --entry dist-standalone/sea/tacho.cjs --name tacho --out dist-bin"
+    "compile": "pnpm run bundle && node ../../tools/sea/compile.mjs --entry dist-standalone/sea/tacho.cjs --name tacho --out dist-bin --asset cedar_wasm_bg.wasm=node_modules/@cedar-policy/cedar-wasm/nodejs/cedar_wasm_bg.wasm"
   },
   "dependencies": {
+    "@cedar-policy/cedar-wasm": "4.13.0",
     "@contextgraphprotocol/typescript-sdk": "0.1.0",
-    "canonicalize": "1.0.8",
     "commander": "12.1.0",
     "zod": "3.25.76"
   },

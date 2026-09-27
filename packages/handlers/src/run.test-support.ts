@@ -4,7 +4,11 @@
 // shape of a canned reply.
 import type { CapabilityContext } from "@oxagen/oxagen";
 import { schema } from "@oxagen/database";
-import type { AttemptEventReadRecord, RunSummary } from "@oxagen/run-ledger";
+import type {
+  AttemptEventReadRecord,
+  RunSummary,
+  SubagentChainRow,
+} from "@oxagen/run-ledger";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import { NO_BODY } from "@oxagen/run-ledger";
 import {
@@ -134,6 +138,10 @@ export function seal(
     terminalStatus: "completed",
     finalEventDigest: `sha256:${"e".repeat(64)}`,
     eventStreamDigest: `sha256:${"d".repeat(64)}`,
+    // An unsigned seal by default: a deployment with no attester key.
+    archiveSegmentDigest: `sha256:${"9".repeat(64)}`,
+    attestationKeyId: null,
+    attestationSig: null,
     ...over,
   };
 }
@@ -177,6 +185,7 @@ export function ledgerRun(
       operatorPublicId: "prn_0123456789abcdefghjkmn",
       operatorKind: "human",
       operatorUserName: "Marcus Bell",
+      operatorUserAvatarUrl: null,
       goal: "review the PR",
     },
     ...rest,
@@ -222,6 +231,7 @@ export function tachoSession(
     operatorPublicId: "prn_0123456789abcdefghjkmn",
     operatorKind: "human",
     operatorUserName: "Marcus Bell",
+    operatorUserAvatarUrl: null,
     host: {
       hostname: "mac-studio.local",
       platform: "darwin",
@@ -240,6 +250,7 @@ function tachoRowOf(row: TachoFixture): TachoSessionRow {
     operatorPublicId: row.operatorPublicId,
     operatorKind: row.operatorKind,
     operatorUserName: row.operatorUserName,
+    operatorUserAvatarUrl: row.operatorUserAvatarUrl,
     host: row.host,
   };
 }
@@ -504,6 +515,55 @@ export function memoryTachoFrames(sessionUuid: string, rows: TachoFrameRow[]) {
 }
 
 /**
+ * An in-memory `selectTachoSubagentEvents` over `rows`, which may hold the
+ * chains of several runs. Like the query, it reads the chains under the root
+ * alone (`root_session_uuid`, never the root's own), only the listed ones
+ * when `sessionUuids` is given, in (session, seq) order, strictly after the
+ * position, at or below `throughSeq` when one is given, at most `limit`.
+ * It reads `rows` as they are at each call, so a test can record a frame
+ * between two reads.
+ */
+export function memorySubagentFrames(rows: TachoFrameRow[]) {
+  const ordered = () =>
+    [...rows].sort((a, b) =>
+      a.sessionUuid === b.sessionUuid
+        ? a.seq - b.seq
+        : (a.sessionUuid ?? "") < (b.sessionUuid ?? "")
+          ? -1
+          : 1,
+    );
+  return (args: {
+    rootSessionUuid: string;
+    sessionUuids?: readonly string[];
+    after: { sessionUuid: string; seq: number } | null;
+    throughSeq?: number;
+    limit: number;
+  }) =>
+    Promise.resolve(
+      ordered()
+        .filter((r) => {
+          const session = r.sessionUuid ?? "";
+          if (r.rootSessionUuid !== args.rootSessionUuid) return false;
+          if (session === args.rootSessionUuid) return false;
+          if (
+            args.sessionUuids !== undefined &&
+            !args.sessionUuids.includes(session)
+          )
+            return false;
+          if (args.throughSeq !== undefined && r.seq > args.throughSeq)
+            return false;
+          const after = args.after;
+          if (after === null) return true;
+          return (
+            session > after.sessionUuid ||
+            (session === after.sessionUuid && r.seq > after.seq)
+          );
+        })
+        .slice(0, args.limit),
+    );
+}
+
+/**
  * An in-memory `readAttemptEventsSince`: strictly after the cursor, ascending,
  * at most `limit`. `log` may grow between reads, which is how a long-poll test
  * lands an event mid-wait.
@@ -516,4 +576,101 @@ export function memoryEvents(log: AttemptEventReadRecord[]) {
         .sort((a, b) => Number(BigInt(a.runSeq) - BigInt(b.runSeq)))
         .slice(0, limit),
     );
+}
+
+/** A subagent chain's `tacho.sessions` row, and the root it records under. */
+export type SubagentChainFixture = SubagentChainRow & {
+  rootSessionUuid: string;
+};
+
+/** One subagent chain under `rootSessionUuid`, as `listSubagentChains` answers it. */
+export function subagentChain(
+  over: Partial<SubagentChainFixture> & {
+    sessionUuid: string;
+    rootSessionUuid: string;
+  },
+): SubagentChainFixture {
+  return {
+    // The row id beside the session uuid, as the root fixture's pair reads.
+    sessionId: `${over.sessionUuid.slice(0, 15)}000${over.sessionUuid.slice(18)}`,
+    parentSessionUuid: over.rootSessionUuid,
+    subagentId: "agent-1",
+    subagentType: "Explore",
+    spawnToolUseId: "toolu_A",
+    seqCount: 0,
+    startedAt: new Date("2026-09-11T09:01:00.000Z"),
+    lastEventAt: new Date("2026-09-11T09:02:00.000Z"),
+    createdAt: new Date("2026-09-11T09:01:00.000Z"),
+    finalHash: null,
+    sealedAt: null,
+    enforcementTier: "observe",
+    completenessGaps: [],
+    replayGrade: null,
+    ...over,
+  };
+}
+
+/**
+ * An in-memory `listSubagentChains` over `rows`, which may hold the chains
+ * of several runs. Like the query, it lists the chains under the root alone
+ * (never the root's own), only the named ones when `sessionUuids` is given,
+ * in the order they started, at most `limit`.
+ */
+export function memorySubagentChains(rows: readonly SubagentChainFixture[]) {
+  return (
+    rootSessionUuid: string,
+    options: { sessionUuids?: readonly string[]; limit?: number } = {},
+  ): Promise<SubagentChainRow[]> =>
+    Promise.resolve(
+      rows
+        .filter(
+          (r) =>
+            r.rootSessionUuid === rootSessionUuid &&
+            r.sessionUuid !== rootSessionUuid &&
+            (options.sessionUuids === undefined ||
+              options.sessionUuids.includes(r.sessionUuid)),
+        )
+        .sort(
+          (a, b) =>
+            a.startedAt.getTime() - b.startedAt.getTime() ||
+            (a.sessionId < b.sessionId ? -1 : a.sessionId > b.sessionId ? 1 : 0),
+        )
+        .slice(0, options.limit ?? Number.POSITIVE_INFINITY)
+        .map(({ rootSessionUuid: _root, ...row }) => row),
+    );
+}
+
+/**
+ * An in-memory `selectTachoChainHeads` over `rows`: the last seq and the
+ * distinct seq count each listed chain holds under the root, fenced by
+ * `root_session_uuid`, with a chain that holds no row left out. `rows` may
+ * grow between reads, which is how a long-poll test lands a subagent's frame
+ * mid-wait.
+ */
+export function memoryChainHeads(rows: TachoFrameRow[]) {
+  return (args: {
+    rootSessionUuid: string;
+    sessionUuids: readonly string[];
+  }): Promise<
+    { sessionUuid: string; lastSeq: number; frameCount: number }[]
+  > => {
+    const seqs = new Map<string, Set<number>>();
+    for (const r of rows) {
+      const session = r.sessionUuid ?? "";
+      if (r.rootSessionUuid !== args.rootSessionUuid) continue;
+      if (!args.sessionUuids.includes(session)) continue;
+      const held = seqs.get(session) ?? new Set<number>();
+      held.add(r.seq);
+      seqs.set(session, held);
+    }
+    return Promise.resolve(
+      [...seqs.entries()]
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(([sessionUuid, held]) => ({
+          sessionUuid,
+          lastSeq: Math.max(...held),
+          frameCount: held.size,
+        })),
+    );
+  };
 }

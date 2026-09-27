@@ -16,6 +16,7 @@ import {
 } from "./run-frames";
 import type { AttemptEventReadRecord } from "./run-store";
 import {
+  countsAsError,
   filterFoldsByKind,
   foldTranscript,
   frameCounts,
@@ -31,6 +32,7 @@ import {
   type TranscriptRecallBody,
   transcriptCounts,
   turnFolds,
+  UNKEYED_TOOL_PAIRING,
   wordsHalf,
 } from "./transcript-steps";
 
@@ -274,6 +276,34 @@ describe("the everything zoom", () => {
       ]);
     });
 
+    it("names the rules that fired, and says no producer assessed taint (#3971)", () => {
+      const decided = (seq: number, body: Record<string, unknown>) =>
+        w(seq, "policy_decision", {
+          policyDecision: "allow",
+          body: JSON.stringify({ policy_source: "bundle", ...body }),
+        });
+      const entries = foldTranscript(
+        [
+          // A current hook writes the list beside the joined form.
+          decided(1, {
+            policy_rule: "Bash(git add:*) and Bash(git commit:*)",
+            policy_rules: ["Bash(git add:*)", "Bash(git commit:*)"],
+          }),
+          // A row sealed before the list existed carries the joined form alone.
+          decided(2, { policy_rule: "Read" }),
+          // A decision no rule made names none.
+          decided(3, {}),
+        ],
+        "everything",
+      );
+      expect(entries.map((e) => e.decision?.rules)).toEqual([
+        ["Bash(git add:*)", "Bash(git commit:*)"],
+        ["Read"],
+        [],
+      ]);
+      expect(entries.map((e) => e.decision?.taint)).toEqual([null, null, null]);
+    });
+
     it("never becomes the decision of a call, and stays an entry of its own", () => {
       const folded = stepFolds([
         w(0, "tool_requested", { toolName: "Read", toolUseId: "toolu_r" }),
@@ -290,6 +320,60 @@ describe("the everything zoom", () => {
       ]);
       expect(nth(folded, 0).decision).toBeNull();
       expect(nth(folded, 1).decision?.decision).toBe("steer");
+    });
+  });
+
+  describe("a question the host held the loop to ask (#3941)", () => {
+    it("reads the question and its answer as policy entries of their own", () => {
+      const entries = foldTranscript(
+        [
+          w(0, "agent_start"),
+          w(1, "repo.unknown"),
+          w(2, "control.interject"),
+          w(3, "control.answer", {
+            body: JSON.stringify({ path: "deny", source: "timeout" }),
+          }),
+          w(4, "skills.resolved"),
+        ],
+        "everything",
+      );
+      expect(entries.map((e) => [e.opening.type, e.node, e.kind])).toEqual([
+        ["agent_start", "control", "frame"],
+        ["repo.unknown", "control", "frame"],
+        ["control.interject", "policy", "policy"],
+        ["control.answer", "policy", "policy"],
+        ["skills.resolved", "control", "frame"],
+      ]);
+    });
+
+    it("never becomes the decision of the turn it falls inside", () => {
+      // The question is about the run, like an operator's command: the turn
+      // it lands in made no decision because of it.
+      const [turn] = foldTranscript(
+        [
+          w(1, "turn_start", { turnSeq: 1 }),
+          w(2, "control.interject", { turnSeq: 1 }),
+          w(3, "control.answer", { turnSeq: 1 }),
+        ],
+        "turns",
+      );
+      expect(turn?.kind).toBe("turn");
+      expect(turn?.members.map((m) => m.type)).toEqual([
+        "turn_start",
+        "control.interject",
+        "control.answer",
+      ]);
+      expect(turn?.decision).toBeNull();
+      expect(turn?.gates).toEqual([]);
+    });
+
+    it("stays out of the gates an unkeyed tool call may pair across, which ADR-191's SQL reads", () => {
+      expect(UNKEYED_TOOL_PAIRING.gates).toContain("policy_decision");
+      expect(UNKEYED_TOOL_PAIRING.gates).not.toContain("control.interject");
+      expect(UNKEYED_TOOL_PAIRING.gates).not.toContain("control.answer");
+      expect(UNKEYED_TOOL_PAIRING.gates).not.toContain(
+        "oxagen:command_applied",
+      );
     });
   });
 });
@@ -1598,6 +1682,40 @@ describe("transcriptCounts", () => {
       tools: 1,
       usage: 2,
     });
+  });
+});
+
+// Finding P2-2 of the ADR-182 fourth review: a model call that failed with
+// no reply kept and no figures was quiet, so it drew nothing and
+// `counts.errors` left it out.
+describe("a failed model call with nothing kept", () => {
+  it("shows, and counts as an error, however little it kept", () => {
+    const folds = stepFolds([
+      ledger(1, "model.engine_call_started", { model_call_id: "m1" }),
+      ledger(2, "model.engine_call_completed", {
+        model_call_id: "m1",
+        outcome: "failed",
+      }),
+    ]);
+    const [step] = folds;
+    expect(step).toMatchObject({ node: "model", quiet: false });
+    expect(step?.outcome).toBe("failed");
+    expect([...(step?.kinds ?? [])]).toEqual(["errors"]);
+    expect(folds.map(countsAsError)).toEqual([true]);
+    const counts = transcriptCounts(folds, TRANSCRIPT_KINDS);
+    expect(counts.entries).toBe(1);
+    expect(counts.errors).toBe(1);
+  });
+
+  it("stays quiet when it neither failed nor kept anything (negative)", () => {
+    const folds = stepFolds([
+      ledger(1, "model.engine_call_started", { model_call_id: "m1" }),
+      ledger(2, "model.engine_call_completed", { model_call_id: "m1" }),
+    ]);
+    expect(folds.map((fold) => [fold.quiet, countsAsError(fold)])).toEqual([
+      [true, false],
+    ]);
+    expect(transcriptCounts(folds, TRANSCRIPT_KINDS).errors).toBe(0);
   });
 });
 

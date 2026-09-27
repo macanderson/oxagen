@@ -1,21 +1,21 @@
 "use server";
-// The writes on an agent identity (#2956; ADR-057 decision 3) and on its
-// definition file (ADR-057 decision 1), each through the kernel seam for the
-// workspace viewer the URL names. Every contract here is `noBillingGate` and
-// role-checked in its handler (INV-29): rotate, suspend and retire by an org
-// Owner or Admin, commit by an Owner, Admin or Member; a refusal comes back as
-// `denied` with nothing changed. request_mandate (#2957) joins them: an agent
-// operator asks for authority and the accountable role decides. The roles
-// block below is the third identity write (#2956): an org Owner or Admin
-// attaches an IAM role to the agent's delegated principal, or detaches one.
+// The writes on an agent (#2956; ADR-057 decision 3; ADR-198), each through
+// the kernel seam for the workspace viewer the URL names. Every contract here
+// is `noBillingGate` and role-checked in its handler (INV-29): rotate,
+// suspend, retire, move and assign a toolbelt by an org Owner or Admin; a
+// refusal comes back as `denied` with nothing changed. request_mandate
+// (#2957) joins them: an agent operator asks for authority and the
+// accountable role decides. The roles block below is the third identity write
+// (#2956): an org Owner or Admin attaches an IAM role to the agent's delegated
+// principal, or detaches one.
 import { agentCredentialRotate } from "@oxagen/oxagen/contracts/agent.credential.rotate";
-import { agentDefinitionCommit } from "@oxagen/oxagen/contracts/agent.definition.commit";
-import { agentPropose } from "@oxagen/oxagen/contracts/agent.propose";
+import { agentMove } from "@oxagen/oxagen/contracts/agent.move";
 import { agentRetire } from "@oxagen/oxagen/contracts/agent.retire";
 import { agentRoleAssign } from "@oxagen/oxagen/contracts/agent.role.assign";
 import { agentRoleList } from "@oxagen/oxagen/contracts/agent.role.list";
 import { agentRoleRevoke } from "@oxagen/oxagen/contracts/agent.role.revoke";
 import { agentSuspend } from "@oxagen/oxagen/contracts/agent.suspend";
+import { agentToolbeltAssign } from "@oxagen/oxagen/contracts/agent.toolbelt.assign";
 import { costCenterList } from "@oxagen/oxagen/contracts/cost_center.list";
 import { costCenterSet } from "@oxagen/oxagen/contracts/cost_center.set";
 import { iamRoleList } from "@oxagen/oxagen/contracts/iam.role.list";
@@ -29,15 +29,6 @@ import {
   listOf,
   mandateLimitsOf,
 } from "@/data/contracts/mandates";
-import { getTranslations } from "next-intl/server";
-import {
-  AGENT_HARNESSES,
-  type AgentHarness,
-  draftAgentDefinition,
-  isAgentSlug,
-  MODEL_TIERS,
-  type ModelTier,
-} from "@/features/create";
 import type { ActionResult } from "@/server/kernel";
 import { kernelRead, kernelWrite, readToActionResult } from "@/server/kernel";
 import { requireViewer, viewerTimeZone } from "@/server/viewer";
@@ -82,59 +73,51 @@ export async function setAgentSuspended(
     : result;
 }
 
-/** What the Register an agent dialog collects. */
-export type RegisterDraft = { slug: string; harness: string; tier: string };
+// ── Runtime and toolbelt: the agent's versions (ADR-198) ─────────────────────
+// An agent keeps its principal, its roles and its runs for life. Its runtime
+// and its toolbelt can change, and each change writes a new agent version.
+// `move_agent` also revokes the agent's live host enrollments on the old
+// runtime, so the new machine can enroll. Both admit an org Owner or Admin in
+// their handlers; anyone else gets `denied` with nothing written. A runtime
+// that already runs a live agent with this agent's harness comes back
+// `conflict` with code `runtime_harness_taken`.
 
-/**
- * Register an agent from the Agents list: opens the Context PR that adds
- * `.oxagen/agents/<slug>.toml` and the generated harness file beside it,
- * through propose_agent, and writes no Postgres row (agents.md, Register an
- * agent). The definition is the agent wizard's draft for a slug, a harness and
- * a model tier, so the two entry points write the same file; the wizard lets
- * the operator edit it first, this dialog does not. propose_agent runs its six
- * checks before anything reaches GitHub, and a failed check comes back as
- * `conflict` with `agent_check_<name>` and nothing written.
- */
-export async function registerAgent(
+/** Puts the agent on another runtime; its principal, roles and runs stay. */
+export async function moveAgent(
   org: string,
   ws: string,
-  draft: RegisterDraft,
-): Promise<
-  ActionResult<{ path: string; pullRequest: { number: number; url: string } }>
-> {
-  const slug = draft.slug.trim();
-  if (!isAgentSlug(slug)) return refuseField("slug");
-  const harness = AGENT_HARNESSES.find((h) => h === draft.harness);
-  if (harness === undefined) return refuseField("harness");
-  const tier = MODEL_TIERS.find((m) => m === draft.tier);
-  if (tier === undefined) return refuseField("tier");
+  agentId: string,
+  runtimeId: string,
+): Promise<ActionResult<{ version: number; revokedHosts: number }>> {
+  if (!/^rtm_[0-9a-z]+$/.test(runtimeId)) return refuseField("runtimeId");
   const ctx = await requireViewer(org, ws);
-  const t = await getTranslations("createAgent.definition.file");
-  const source = draftAgentDefinition({
-    slug,
-    desc: "",
-    tier: tier satisfies ModelTier,
-    harness: harness satisfies AgentHarness,
-    belt: [],
-    copy: {
-      header: t("header"),
-      placeholder: t("placeholder"),
-      stayInside: t("stayInside"),
-    },
-  });
-  const result = await kernelWrite(ctx, agentPropose, {
-    slug,
-    harness,
-    source,
-  });
+  const result = await kernelWrite(ctx, agentMove, { agentId, runtimeId });
   return result.ok
     ? {
         ok: true,
         value: {
-          path: result.value.path,
-          pullRequest: result.value.pullRequest,
+          version: result.value.version,
+          revokedHosts: result.value.revokedHosts,
         },
       }
+    : result;
+}
+
+/** Gives the agent another toolbelt; its grants do not change. */
+export async function assignAgentToolbelt(
+  org: string,
+  ws: string,
+  agentId: string,
+  toolbeltId: string,
+): Promise<ActionResult<{ version: number }>> {
+  if (!/^tbt_[0-9a-z]+$/.test(toolbeltId)) return refuseField("toolbeltId");
+  const ctx = await requireViewer(org, ws);
+  const result = await kernelWrite(ctx, agentToolbeltAssign, {
+    agentId,
+    toolbeltId,
+  });
+  return result.ok
+    ? { ok: true, value: { version: result.value.version } }
     : result;
 }
 
@@ -557,46 +540,6 @@ export async function issueAgentEnrollmentToken(
           token: result.value.token,
           expiresAt: result.value.expiresAt,
           enrollCommand: result.value.enrollCommand,
-        },
-      }
-    : result;
-}
-
-export type DefinitionDraft = {
-  agentId: string;
-  branch: string;
-  /** The commit and pull request title; blank leaves it to the handler. */
-  message: string;
-  source: string;
-};
-
-/** Commits the file to `branch` (never the default branch) and opens, or reuses, its pull request. */
-export async function commitAgentDefinition(
-  org: string,
-  ws: string,
-  draft: DefinitionDraft,
-): Promise<
-  ActionResult<{
-    branch: string;
-    commitSha: string;
-    pullRequest: { number: number; url: string };
-  }>
-> {
-  const ctx = await requireViewer(org, ws);
-  const message = draft.message.trim();
-  const result = await kernelWrite(ctx, agentDefinitionCommit, {
-    agentId: draft.agentId,
-    branch: draft.branch.trim(),
-    source: draft.source,
-    ...(message === "" ? {} : { message }),
-  });
-  return result.ok
-    ? {
-        ok: true,
-        value: {
-          branch: result.value.branch,
-          commitSha: result.value.commitSha,
-          pullRequest: result.value.pullRequest,
         },
       }
     : result;

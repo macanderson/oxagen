@@ -54,6 +54,8 @@ import {
   addFrameUsage,
   boundaryHalf,
   COMMAND_APPLIED,
+  CONTROL_ANSWER,
+  CONTROL_INTERJECT,
   FAILED_OUTCOMES,
   type FrameUsage,
   frameKey,
@@ -116,6 +118,17 @@ export interface TranscriptDecision {
    */
   harness: boolean;
   at: Date;
+  /**
+   * The rule ids or permission patterns that matched, in evaluation order
+   * (#3971), from `FrameIdentity.rules`. Empty when the frame names none.
+   */
+  rules: string[];
+  /**
+   * The taint labels a producer assessed on the call's inputs (#3971). Null
+   * means no producer assessed taint, which is every decision today
+   * (ADR-070); an empty list would mean one assessed the inputs as clean.
+   */
+  taint: string[] | null;
 }
 
 /**
@@ -201,10 +214,35 @@ const TOOL_CLOSE: Readonly<Record<string, string>> = {
   tool_requested: "tool_call",
   "tool.engine_call_started": "tool.engine_call_completed",
 };
-/** Decisions about a tool call; an operator command is about the run instead. */
+/**
+ * Policy frames about the run rather than about any one call: an operator's
+ * command, and a question the host held the loop to ask with its answer
+ * (#3941).
+ */
+const RUN_DECISIONS: ReadonlySet<string> = new Set([
+  COMMAND_APPLIED,
+  CONTROL_INTERJECT,
+  CONTROL_ANSWER,
+]);
+/** Decisions about a tool call. A run decision is about the run instead. */
 const TOOL_GATE: ReadonlySet<string> = new Set(
-  [...POLICY_TYPES].filter((type) => type !== COMMAND_APPLIED),
+  [...POLICY_TYPES].filter((type) => !RUN_DECISIONS.has(type)),
 );
+/**
+ * Rule 3's vocabulary, for the grouped SQL behind a wrapped run's per-turn
+ * ledger (`selectTachoTurnGroups`, ADR-191). That query cannot call this
+ * fold, so it counts an unkeyed tool call by the same rule, spelled for the
+ * store: a request pairs with the receipt of its own spelling when nothing
+ * but these gates sits between them on its chain. It builds that rule from
+ * this object, so the two cannot name different kinds.
+ */
+export const UNKEYED_TOOL_PAIRING: {
+  readonly closes: ReadonlyArray<readonly [request: string, receipt: string]>;
+  readonly gates: readonly string[];
+} = {
+  closes: Object.entries(TOOL_CLOSE),
+  gates: [...TOOL_GATE],
+};
 /**
  * The effect frames the recorder writes about a tool call: the command it
  * ran, the file it touched, the host it reached (tacho spec §6.1). They are
@@ -236,6 +274,13 @@ const CONTROL: ReadonlySet<string> = new Set([
   "subagent_stop",
   "turn_start",
   "turn_end",
+  // The repository the session runs in, what an answer bound or made for
+  // it, and which skills it may load (#3941, #3098).
+  "repo.unknown",
+  "repo.bound",
+  "workspace.created",
+  "skills.resolved",
+  "skills.searched",
 ]);
 const REPLY: ReadonlySet<string> = new Set(["turn_end", "oxagen:message"]);
 /** Decision sources that are the agent's harness checking itself. */
@@ -273,17 +318,20 @@ function decisionOf(frame: RunFrame): TranscriptDecision | null {
     source,
     harness: source !== null && HARNESS_SOURCES.has(source),
     at: frame.observedAt,
+    rules: frame.identity.rules ?? [],
+    taint: frame.identity.taint ?? null,
   };
 }
 
 /**
  * The decision `frame` records about the call an entry holds. An operator
- * command is about the run, not about any one call, so folding it into a
- * step or a turn does not make it that entry's decision. It is the decision
- * of the entry it opens.
+ * command, or a question the host held the loop to ask and its answer, is
+ * about the run, not about any one call, so folding it into a step or a turn
+ * does not make it that entry's decision. It is the decision of the entry it
+ * opens.
  */
 function callDecisionOf(frame: RunFrame): TranscriptDecision | null {
-  return frame.type === COMMAND_APPLIED ? null : decisionOf(frame);
+  return RUN_DECISIONS.has(frame.type) ? null : decisionOf(frame);
 }
 
 /** The word a decision recorded; null when the frame recorded only its type. */
@@ -591,10 +639,12 @@ function modelFacts(
   return {
     node: "model",
     // A model step draws a row under `responses` when its reply was kept,
-    // and a usage row when it carried a cost, tokens or an effort. One that
-    // did neither draws nothing: a call still waiting on its reply, or one
-    // kept as a digest with no figures. So it is quiet, and counts nowhere.
-    quiet: !kinds.has("responses") && !kinds.has("usage"),
+    // a usage row when it carried a cost, tokens or an effort, and a failed
+    // row when it failed with neither. One that did none of these draws
+    // nothing: a call still waiting on its reply, or one kept as a digest
+    // with no figures. So it is quiet, and counts nowhere.
+    quiet:
+      !kinds.has("responses") && !kinds.has("usage") && !kinds.has("errors"),
     outcome: kinds.has("errors")
       ? "failed"
       : halves.response === null
@@ -1059,6 +1109,22 @@ export interface TranscriptCounts {
   policy: number;
 }
 
+/**
+ * Whether the entry is an error of the run: it failed, it was refused, or a
+ * frame in it answers the errors chip. `counts.errors` counts these, and
+ * each entry states it (`error`), so a reader marks a row failed by the same
+ * rule and keeps none of its own (ADR-182).
+ */
+export function countsAsError(
+  fold: Pick<TranscriptFold, "outcome" | "kinds">,
+): boolean {
+  return (
+    fold.outcome === "failed" ||
+    fold.outcome === "denied" ||
+    fold.kinds.has("errors")
+  );
+}
+
 export function transcriptCounts(
   folds: readonly TranscriptFold[],
   vocabulary: readonly TranscriptKind[],
@@ -1073,12 +1139,7 @@ export function transcriptCounts(
     if (fold.quiet) continue;
     for (const kind of fold.kinds) kinds[kind] = (kinds[kind] ?? 0) + 1;
     entries += 1;
-    if (
-      fold.outcome === "failed" ||
-      fold.outcome === "denied" ||
-      fold.kinds.has("errors")
-    )
-      errors += 1;
+    if (countsAsError(fold)) errors += 1;
     if (fold.kinds.has("policy") && fold.decision?.harness !== true)
       policy += 1;
   }

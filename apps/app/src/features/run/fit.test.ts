@@ -1,203 +1,48 @@
-// Model fit (pages/run.md, Model fit): whether the class the run ran on was
-// the right size, read from prompts, failed tool calls, turns and steps. The
-// rig strip and the Cost tab's panel both read `runFit`, so these tests hold
-// the reading itself: where it refuses to read, where it claims a rung, and
-// where it stops at the end of a ladder.
+// Model fit on the page (pages/run.md, Model fit; ADR-201): the page computes
+// no reading. It draws the one `get_run` stored, and prints the effort the
+// record holds. These tests hold the three helpers the rig strip and the Cost
+// tab's panel share, so the two cannot disagree: the effort as recorded, the
+// reading of a sealed run, and the effort verdict beside the recorded value.
 import { describe, expect, it } from "vitest";
 import type { RunRow } from "@/data/contracts/runs";
-import { runFit } from "./fit";
-import type { RunMetrics } from "./metrics";
+import { effortVerdict, fitOf, runEffort, type RunFit } from "./fit";
 import { runRow } from "./run.builders";
 
-/**
- * Metrics that carry only what the reading is keyed on: one prompt, a whole
- * transcript and no tool calls. Every other figure is absent, so a test sets
- * the one field its branch reads.
- */
-function metrics(overrides: Partial<RunMetrics> = {}): RunMetrics {
+/** A stored reading of the builder's seal: a fit model and the effort it read. */
+function reading(effort: RunFit["effort"]): RunFit {
   return {
-    whole: true,
-    tokens: null,
-    priced: null,
-    cost: null,
-    costIsEstimate: false,
-    cacheHit: null,
-    productiveRatio: null,
-    prompts: { count: 1, corrective: 0 },
-    wall: {
-      ms: null,
-      sealed: false,
-      closedIdle: false,
-      ticking: null,
-      parts: null,
-      lead: null,
+    method: "run-fit/v1",
+    readAt: "2026-09-15T08:45:00.000Z",
+    sealedAt: "2026-09-15T08:40:00.000Z",
+    read: {
+      prompts: 1,
+      turns: 8,
+      steps: 40,
+      failed: 0,
+      outputTokens: 1_000,
+      reasoningTokens: 300,
     },
-    modelCalls: null,
-    toolCalls: { count: 0, failed: 0, tools: [] },
-    families: null,
-    batches: null,
-    errors: null,
-    perModelCall: null,
-    reportedTokens: null,
-    provisional: null,
-    ...overrides,
+    model: { verdict: "fit", tier: "sonnet" },
+    effort,
   };
 }
 
-/**
- * The run's tool calls as the server counted them; `failed` is the only
- * figure the reading reads.
- */
-function calls(count: number, failed: number): RunMetrics["toolCalls"] {
-  return { count, failed, tools: [{ name: "Bash", calls: count }] };
-}
-
-/** A sealed run on the middle class of the Anthropic ladder, too long to be small. */
 function run(overrides: Partial<RunRow> = {}): RunRow {
-  return runRow({
-    turns: 8,
-    steps: 40,
-    model: { slug: "claude-sonnet-5", provider: "anthropic", tier: "sonnet" },
-    enforcementTier: "harness",
-    ...overrides,
-  });
+  return runRow({ enforcementTier: "harness", ...overrides });
 }
 
-describe("runFit", () => {
-  it("reads a long first-try run on the middle class as a fit, and names what it read", () => {
-    const fit = runFit(run(), metrics({ toolCalls: calls(1, 0) }));
-    expect(fit.read).toEqual({ prompts: 1, turns: 8, steps: 40, failed: 0 });
-    expect(fit.model).toEqual({ verdict: "fit", tier: "sonnet" });
-  });
-
-  it("argues one rung down for a small first-try run", () => {
-    const fit = runFit(run({ turns: 2 }), metrics());
-    expect(fit.model).toEqual({
-      verdict: "over",
-      tier: "sonnet",
-      suggest: "haiku",
+describe("runEffort", () => {
+  it("prints the recorded effort with where it was read", () => {
+    expect(runEffort(run({ effort: "low", effortSource: "request" }))).toEqual(
+      { seen: true, value: "low", source: "request" },
+    );
+    // A server that predates the source says nothing, and the value is the
+    // harness's report, the only place it could have come from then.
+    expect(runEffort(run({ effort: "high", effortSource: null }))).toEqual({
+      seen: true,
+      value: "high",
+      source: "harness",
     });
-  });
-
-  it("counts a run as small on its turns or its steps alone, at the bound itself", () => {
-    // Three turns is small however many steps; twelve steps is small however many turns.
-    expect(runFit(run({ turns: 3, steps: 90 }), metrics()).model).toMatchObject(
-      { verdict: "over" },
-    );
-    expect(
-      runFit(run({ turns: 30, steps: 12 }), metrics()).model,
-    ).toMatchObject({ verdict: "over" });
-    // One past both bounds is not small.
-    expect(runFit(run({ turns: 4, steps: 13 }), metrics()).model).toEqual({
-      verdict: "fit",
-      tier: "sonnet",
-    });
-  });
-
-  it("argues one rung up when the operator prompted again, and when a tool call failed", () => {
-    const reprompted = runFit(
-      run(),
-      metrics({ prompts: { count: 3, corrective: 2 } }),
-    );
-    expect(reprompted.model).toEqual({
-      verdict: "under",
-      tier: "sonnet",
-      suggest: "opus",
-    });
-    const failed = runFit(run(), metrics({ toolCalls: calls(3, 2) }));
-    expect(failed.read?.failed).toBe(2);
-    expect(failed.model).toMatchObject({ verdict: "under", suggest: "opus" });
-  });
-
-  it("reads a redone run as under even when it was small: a retry outweighs a short run", () => {
-    const fit = runFit(
-      run({ turns: 2, steps: 5 }),
-      metrics({ toolCalls: calls(1, 1) }),
-    );
-    expect(fit.model).toMatchObject({ verdict: "under", suggest: "opus" });
-  });
-
-  it("claims no rung below the smallest class or above the largest, and calls the run a fit (negative)", () => {
-    const smallest = runFit(
-      run({
-        turns: 1,
-        model: { slug: "claude-haiku-5", provider: "anthropic", tier: "haiku" },
-      }),
-      metrics(),
-    );
-    expect(smallest.model).toEqual({ verdict: "fit", tier: "haiku" });
-    const largest = runFit(
-      run({
-        model: { slug: "claude-opus-5", provider: "anthropic", tier: "opus" },
-      }),
-      metrics({ prompts: { count: 2, corrective: 1 } }),
-    );
-    expect(largest.model).toEqual({ verdict: "fit", tier: "opus" });
-  });
-
-  it.each<[string, string, string]>([
-    ["mini", "over", "nano"],
-    ["flash", "over", "flash-lite"],
-    ["flash-lite", "under", "flash"],
-  ])(
-    "climbs the %s class's own family ladder, never another vendor's",
-    (tier, verdict, suggest) => {
-      const redone = verdict === "under";
-      const fit = runFit(
-        run({
-          turns: redone ? 8 : 1,
-          model: { slug: `model-${tier}`, provider: "vendor", tier },
-        }),
-        metrics({
-          prompts: { count: redone ? 2 : 1, corrective: redone ? 1 : 0 },
-        }),
-      );
-      expect(fit.model).toEqual({ verdict, tier, suggest });
-    },
-  );
-
-  it("names what it read but claims no rung for a class on no ladder, or no class at all (negative)", () => {
-    const unknown = runFit(
-      run({ model: { slug: "x-1", provider: "x", tier: "ultra" } }),
-      metrics(),
-    );
-    expect(unknown.read).not.toBeNull();
-    expect(unknown.model).toBeNull();
-    const untiered = runFit(
-      run({ model: { slug: "x-1", provider: "x", tier: null } }),
-      metrics(),
-    );
-    expect(untiered.read).not.toBeNull();
-    expect(untiered.model).toBeNull();
-    const unmodelled = runFit(run({ model: null }), metrics());
-    expect(unmodelled.read).not.toBeNull();
-    expect(unmodelled.model).toBeNull();
-  });
-
-  it("reads nothing when the record lacks the prompts, the turns or the tool calls (negative)", () => {
-    for (const fit of [
-      runFit(run(), metrics({ prompts: null })),
-      runFit(run({ turns: null }), metrics()),
-      runFit(run(), metrics({ toolCalls: null })),
-    ]) {
-      expect(fit.read).toBeNull();
-      expect(fit.model).toBeNull();
-    }
-  });
-
-  it("reads nothing for a sealed run whose transcript stops short, since its counts are floors (negative)", () => {
-    const fit = runFit(run(), metrics({ whole: false }));
-    expect(fit.read).toBeNull();
-    expect(fit.model).toBeNull();
-  });
-
-  it("still reads a live run whose transcript is not whole, since that is everything recorded so far", () => {
-    const fit = runFit(
-      run({ status: "live", sealedAt: null }),
-      metrics({ whole: false }),
-    );
-    expect(fit.read).toEqual({ prompts: 1, turns: 8, steps: 40, failed: 0 });
-    expect(fit.model).toEqual({ verdict: "fit", tier: "sonnet" });
   });
 
   it.each<[RunRow["enforcementTier"], "not_sent" | "not_proxied"]>([
@@ -206,18 +51,92 @@ describe("runFit", () => {
     ["harness", "not_proxied"],
     ["observe", "not_proxied"],
   ])(
-    "never reads the effort at the %s tier, and says it was %s",
+    "says why no effort is shown at the %s tier: %s (negative)",
     (enforcementTier, why) => {
-      const fit = runFit(run({ enforcementTier }), metrics());
-      expect(fit.effort).toEqual({ verdict: "unseen", why });
+      expect(runEffort(run({ enforcementTier, effort: null }))).toEqual({
+        seen: false,
+        why,
+      });
+      expect(runEffort(run({ enforcementTier, effort: "" }))).toEqual({
+        seen: false,
+        why,
+      });
+      // A row that leaves the effort out, as list_runs does.
+      expect(runEffort(run({ enforcementTier }))).toEqual({
+        seen: false,
+        why,
+      });
     },
   );
+});
 
-  it("names the effort's reason even when it reads nothing else (negative)", () => {
-    const fit = runFit(
-      run({ enforcementTier: "gateway" }),
-      metrics({ prompts: null }),
-    );
-    expect(fit.effort).toEqual({ verdict: "unseen", why: "not_sent" });
+describe("fitOf", () => {
+  it("draws the stored reading of a sealed run", () => {
+    const fit = reading({ verdict: "unseen", why: "not_proxied" });
+    expect(fitOf(run({ fit }))).toBe(fit);
+  });
+
+  it("draws no reading for a live run or a run with none stored (negative)", () => {
+    const fit = reading({ verdict: "unseen", why: "not_proxied" });
+    expect(fitOf(run({ status: "live", sealedAt: null, fit }))).toBeNull();
+    expect(fitOf(run({ fit: null }))).toBeNull();
+  });
+});
+
+describe("effortVerdict", () => {
+  it("names the reading's move beside the value the rig prints", () => {
+    const over = run({
+      effort: "high",
+      effortSource: "request",
+      fit: reading({
+        verdict: "over",
+        effort: "high",
+        source: "request",
+        suggest: "medium",
+      }),
+    });
+    expect(effortVerdict(over)).toEqual({ verdict: "over", suggest: "medium" });
+    const fits = run({
+      effort: "medium",
+      effortSource: "harness",
+      fit: reading({ verdict: "fit", effort: "medium", source: "harness" }),
+    });
+    expect(effortVerdict(fits)).toEqual({ verdict: "fit" });
+  });
+
+  it("names no verdict about a value the rig does not print, or with no reading (negative)", () => {
+    // The reading read another value than the record now holds.
+    expect(
+      effortVerdict(
+        run({
+          effort: "low",
+          effortSource: "request",
+          fit: reading({
+            verdict: "under",
+            effort: "medium",
+            source: "request",
+            suggest: "high",
+          }),
+        }),
+      ),
+    ).toBeNull();
+    // The record holds no effort, whatever the reading says.
+    expect(
+      effortVerdict(
+        run({
+          effort: null,
+          fit: reading({ verdict: "fit", effort: "high", source: "harness" }),
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      effortVerdict(
+        run({
+          effort: "high",
+          fit: reading({ verdict: "unseen", why: "not_sent" }),
+        }),
+      ),
+    ).toBeNull();
+    expect(effortVerdict(run({ effort: "high", fit: null }))).toBeNull();
   });
 });

@@ -4,8 +4,24 @@
  * payload, held the process open indefinitely instead of answering within
  * its own budget.
  */
-import { describe, expect, it } from "vitest";
-import { MAX_HOOK_STDIN_BYTES, readStdin } from "./hook-process";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { runTachoHook } from "./hook-client";
+import {
+  MAX_HOOK_STDIN_BYTES,
+  readStdin,
+  runHookProcess,
+  STDIN_READ_DEADLINE_MS,
+} from "./hook-process";
+
+vi.mock("./hook-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./hook-client")>()),
+  runTachoHook: vi.fn(async () => ({
+    stdout: "{}\n",
+    stderr: "",
+    exitCode: 0,
+    path: "local" as const,
+  })),
+}));
 
 /** An async-iterable Buffer source `readStdin` can read and destroy. */
 interface FakeSource {
@@ -83,5 +99,43 @@ describe("readStdin", () => {
   it("does not report truncated for a normal read even though the deadline timer was armed", async () => {
     const result = await readStdin(sourceOf(["{}"]), 5_000, 1_000_000);
     expect(result.truncated).toBe(false);
+  });
+
+  it("gives up on a stdin that never closes after two seconds by default", async () => {
+    // Under half the five seconds Codex, Cursor and Stella give a telemetry
+    // hook. The old five-second wait equalled that timeout.
+    expect(STDIN_READ_DEADLINE_MS).toBeLessThanOrEqual(2_000);
+    vi.useFakeTimers();
+    try {
+      let done = false;
+      const read = readStdin(stallingSource("partial")).then((result) => {
+        done = true;
+        return result;
+      });
+      await vi.advanceTimersByTimeAsync(STDIN_READ_DEADLINE_MS - 1);
+      expect(done).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await read).toEqual({ text: "partial", truncated: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("runHookProcess", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("passes the time since the process started, so it comes off the daemon's wait", async () => {
+    vi.spyOn(process, "stdin", "get").mockReturnValue(
+      sourceOf(['{"session_id":"s","hook_event_name":"Stop"}']) as never,
+    );
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    await runHookProcess(["node", "tacho-hook"]);
+    const deps = vi.mocked(runTachoHook).mock.calls[0]?.[0];
+    expect(deps?.stdin).toBe('{"session_id":"s","hook_event_name":"Stop"}');
+    // Node's start-up and the stdin read count, not only what follows.
+    expect(deps?.elapsedMs?.()).toBeGreaterThan(0);
   });
 });

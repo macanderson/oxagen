@@ -71,11 +71,13 @@ import pino from "pino";
 import { buildChatSystemPrompt } from "../system-prompt";
 import { createApprovalRequest, waitForApproval } from "./approval";
 import { ASSISTANT_MESSAGE_STOPPED } from "./assistant-message-status";
+import { projectRunContextWindows } from "../dispatch/context-projection";
 import { recallWorkspaceMemoryMessage } from "./assistant-recall";
 import { toolCallsFromReceipts } from "./assistant-tool-calls";
 import {
   assistantSystemPrompt,
   loadAssistantSteering,
+  steeringSection,
 } from "./assistant-steering";
 import {
   openAssistantRun,
@@ -462,7 +464,8 @@ async function runPreparedTurn(
   //
   // `runIdRef` is filled in once `openAssistantRun` opens the run below.
   // Every materialized tool's `execute` closure reads it at call time, so a
-  // parked approval attaches to this turn's run (finding 9).
+  // parked approval attaches to this turn's run (finding 9). The budget
+  // pause's approval reads it the same way, when the pause fires.
   const runIdRef: { current: string | null } = { current: null };
 
   const [materialised, promptConfig, recalledMemory] = await inScope(() =>
@@ -540,6 +543,11 @@ async function runPreparedTurn(
         createApprovalRequest({
           ...scope,
           messageId,
+          // The run this turn opened, read when the pause fires: the engine
+          // runs only after `runIdRef` is set below, so the Run page's
+          // Policy tab lists the pause with the run's other approvals
+          // (#3370, the added finding 9).
+          runId: runIdRef.current,
           capabilityName: BUDGET_CONTINUE_CAPABILITY,
           inputPreview,
           riskLevel: "low",
@@ -590,6 +598,9 @@ async function runPreparedTurn(
         LOAD_TOOLS,
       ]),
     ],
+    // USED_CONTEXT lineage for the windows the run records, projected once
+    // it seals and never on the turn's path (ADR-200).
+    projectContext: projectRunContextWindows,
   });
   hooks.onRun?.({ runId: run.runPublicId });
   // Every materialized tool's `execute` closure reads this at call time
@@ -655,6 +666,14 @@ async function runPreparedTurn(
         pageContextMessage(request.pageContext),
         recalledMemory,
       ],
+      // What the model-call frames count apart from the conversation
+      // (ADR-200): the steering the system prompt ends with, and the summary
+      // at the head of the history when the turn carried one.
+      window: {
+        steering: steeringSection(steering),
+        historyContext:
+          compacted.frame !== null && compacted.frame.text !== null ? 1 : 0,
+      },
       instruction: request.content,
       tools: belt.tools,
       modelTools: belt.modelTools,
@@ -930,6 +949,26 @@ type Scope = { orgId: string; workspaceId: string };
 /** A `cnv_` public id; anything else `conversationId` carries is the uuid. */
 const CONVERSATION_PUBLIC_ID = /^cnv_/i;
 
+/** The most code points a title keeps from the first question. */
+const TITLE_MAX_CODE_POINTS = 80;
+
+/**
+ * Name a new conversation after its first question. Runs of whitespace
+ * collapse to one space, and a question past 80 code points is cut and ends
+ * in an ellipsis. The cut counts code points, so it never splits an emoji or
+ * other astral character. A question that is only whitespace leaves the
+ * title null.
+ *
+ * Exported for its own test.
+ */
+export function conversationTitleFrom(question: string): string | null {
+  const text = question.replace(/\s+/g, " ").trim();
+  if (text === "") return null;
+  const codePoints = Array.from(text);
+  if (codePoints.length <= TITLE_MAX_CODE_POINTS) return text;
+  return `${codePoints.slice(0, TITLE_MAX_CODE_POINTS).join("").trimEnd()}…`;
+}
+
 /**
  * Resolve or open the conversation and append the person's message, then
  * load the prior turns as the transcript, newest last, without the message
@@ -987,13 +1026,36 @@ export async function appendUserMessage(
       .limit(1);
     if (!existing) throw new ConversationNotFoundError(named);
     conversation = existing;
+    // A question is activity. The nightly archive (#4435) takes a
+    // conversation whose updated_at is older than the workspace's window, so
+    // the question bumps it here rather than waiting for the reply. A turn
+    // still running, or one that failed, then never reads as idle.
+    //
+    // The archive can land between the read above and this update. The
+    // update repeats the archived and deleted checks, and Postgres checks
+    // them again on the row the archive committed, so the turn then finds
+    // no row and refuses as it would for an archived conversation. When
+    // this update commits first, the archive's own check on updated_at
+    // skips the row.
+    const [bumped] = await tx
+      .update(schema.conversations)
+      .set({ updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.conversations.id, existing.id),
+          isNull(schema.conversations.deletedAt),
+          isNull(schema.conversations.archivedAt),
+        ),
+      )
+      .returning({ id: schema.conversations.id });
+    if (!bumped) throw new ConversationNotFoundError(named);
   } else {
     const [created] = await tx
       .insert(schema.conversations)
       .values({
         ...scope,
         userId,
-        title: null,
+        title: conversationTitleFrom(request.content),
         status: "active",
         createdById: userId,
         updatedById: userId,

@@ -1,0 +1,60 @@
+{
+  "schema": "mcp-tools-lock/v1",
+  "server": "stripe",
+  "source": {
+    "server_version": "2026.09.1",
+    "type": "remote",
+    "url": "https://mcp.stripe.com"
+  },
+  "tools": {
+    "create_refund": {
+      "definition_hash": "sha256:85a690f9248d4663c850f1d79f6876f74253f59368ef948580c08d6897b463c3",
+      "upstream": {
+        "annotations": {
+          "destructiveHint": true
+        },
+        "description": "Create a refund for a charge.",
+        "inputSchema": {
+          "properties": {
+            "amount": {
+              "type": "integer"
+            },
+            "charge": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "charge"
+          ],
+          "type": "object"
+        },
+        "name": "create_refund"
+      },
+      "upstream_hash": "sha256:eedae6aec59512b997384942309dc91e6f1ddc894b7b67b2a289fe4eec99df61",
+      "version": 4
+    },
+    "list_charges": {
+      "definition_hash": "sha256:163c945663e8ced81e9ca8fc1db95d0a3fe9eaf00703637cae00877f6d23650c",
+      "upstream": {
+        "annotations": {
+          "readOnlyHint": true
+        },
+        "description": "List charges, newest first.",
+        "inputSchema": {
+          "properties": {
+            "customer": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "name": "list_charges"
+      },
+      "upstream_hash": "sha256:771a97ee8660cc4830554d173a5b34f73182672faa674a42c7b18f7a111dd87a",
+      "version": 1
+    }
+  }
+}

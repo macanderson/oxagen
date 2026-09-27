@@ -1,6 +1,7 @@
-import { withTenantDb, withSystemDb, schema, type Tx } from "@oxagen/database";
+import { withSystemDb, schema, type Tx } from "@oxagen/database";
 import { inTransaction } from "./internal/in-transaction";
-import { and, asc, eq, inArray, isNull, or, sql, gt } from "drizzle-orm";
+import { withBillingDb } from "./internal/platform-db";
+import { and, asc, desc, eq, inArray, isNull, or, sql, gt } from "drizzle-orm";
 import { CREDIT_REASONS } from "./constants";
 import { MICRO_CREDITS_PER_CREDIT } from "./pricing";
 
@@ -51,7 +52,7 @@ export async function createCreditLot(
     throw new Error("amountCents must be greater than zero");
   }
 
-  return await withTenantDb(async (tx) => {
+  return await withBillingDb(async (tx) => {
     // 1. Insert the lot.
     const [lot] = await tx
       .insert(schema.creditLots)
@@ -143,6 +144,40 @@ export async function upsertBalanceMirror(
     });
 }
 
+/**
+ * The org's credit_balances mirror, for display. The mirror drifts above the
+ * spendable balance once a lot expires (see {@link createCreditLot}), so a
+ * gate reads {@link effectiveBalance} instead. Zero when the org has no row.
+ */
+export async function readBalanceMirror(orgId: string): Promise<bigint> {
+  const row = await withBillingDb((tx) =>
+    tx.query.creditBalances.findFirst({
+      where: eq(schema.creditBalances.orgId, orgId),
+      columns: { balanceCents: true },
+    }),
+  );
+  return row?.balanceCents ?? 0n;
+}
+
+/**
+ * The org's newest credit ledger rows, newest first, for display. The ledger
+ * is a platform table on the shared plane (ADR-042 §2), so an organisation on
+ * its own database reads it here and not through `withTenantDb`.
+ */
+export async function recentCreditLedger(
+  orgId: string,
+  limit: number,
+): Promise<Array<typeof schema.creditLedger.$inferSelect>> {
+  return withBillingDb((tx) =>
+    tx
+      .select()
+      .from(schema.creditLedger)
+      .where(eq(schema.creditLedger.orgId, orgId))
+      .orderBy(desc(schema.creditLedger.createdAt))
+      .limit(limit),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Legacy grantCredits shim — preserved so callers compile without changes.
 // Internally creates a lot with source='free_grant' and no expiry.
@@ -209,7 +244,7 @@ export async function grantCredits(
  * sum without being deleted.
  *
  * `opts.system` routes the read through {@link withSystemDb} instead of
- * {@link withTenantDb}. Request paths always run inside a tenant scope and must
+ * {@link withBillingDb}. Request paths always run inside a tenant scope and must
  * leave this false so RLS stays load-bearing; only trusted cross-tenant crons
  * that sweep every org with no active scope (e.g. billing.dunning-sweep) pass
  * `system: true`, mirroring sweepDunning()'s own withSystemDb usage.
@@ -219,7 +254,7 @@ export async function effectiveBalance(
   opts?: { system?: boolean },
 ): Promise<bigint> {
   const now = new Date();
-  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const runner = opts?.system ? withSystemDb : withBillingDb;
   const rows = await runner((tx) =>
     tx
       .select({
@@ -643,7 +678,7 @@ export async function consumeCredits(
       owedCents,
     };
   };
-  return inTransaction(transaction, run);
+  return inTransaction(transaction, run, withBillingDb);
 }
 
 // ---------------------------------------------------------------------------
@@ -667,14 +702,14 @@ function owedInBuckets(carryByReason: Record<string, number>): bigint {
  *
  * The turn credit gate reads balance minus this, so an org that outran its
  * credits is not admitted again until a grant has covered what it owes.
- * Reads through withTenantDb (the caller is inside a tenant scope), or
+ * Reads through withBillingDb (the caller is inside a tenant scope), or
  * withSystemDb with `opts.system` for a cross-tenant sweep.
  */
 export async function owedCredits(
   orgId: string,
   opts?: { system?: boolean },
 ): Promise<bigint> {
-  const runner = opts?.system ? withSystemDb : withTenantDb;
+  const runner = opts?.system ? withSystemDb : withBillingDb;
   const rows = await runner((tx) =>
     tx
       .select({

@@ -1,0 +1,221 @@
+// mcp-tools-lock/v1 sources: a lock source follows server.toml's rules for
+// where a definition comes from, so a lock is never looser than the file
+// it pins.
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import type { z } from "zod";
+import { formatJson } from "./json";
+import {
+  definitionLockSourceSchema,
+  localLockSourceSchema,
+  mcpLockSourceSchema,
+  registryLockSourceSchema,
+} from "./lock";
+import { parseLock } from "./parse";
+
+interface Issue {
+  path: string;
+  message: string;
+}
+
+/** Every issue zod reports for a value, with its path joined by dots. */
+function issues(schema: z.ZodTypeAny, value: unknown): Issue[] {
+  const parsed = schema.safeParse(value);
+  return parsed.success
+    ? []
+    : parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message }));
+}
+
+const hash = `sha256:${"a".repeat(64)}`;
+const commit = "4be91d2c0a7e5f3b9d18e6a2c4f0b7d95e3a1c86";
+
+/** A definition lock source with the given fields and a document hash. */
+function source(fields: Record<string, unknown>): Record<string, unknown> {
+  return { document_hash: hash, ...fields };
+}
+
+const repository = {
+  type: "openapi",
+  from: "repository",
+  repo: "github.com/a-intel/billing-service",
+  path: "openapi/billing.yaml",
+  ref: "main",
+  commit,
+};
+
+describe("definition lock source location", () => {
+  it("accepts each place a definition comes from", () => {
+    const accepted = [
+      repository,
+      { type: "openapi", from: "url", url: "https://billing.a-intel.com/openapi.yaml" },
+      { type: "openapi", from: "upload" },
+      { type: "graphql", from: "introspection" },
+      { type: "grpc", from: "reflection" },
+    ];
+    for (const fields of accepted) expect(issues(definitionLockSourceSchema, source(fields))).toStrictEqual([]);
+  });
+
+  it("requires the url when the definition came from a url", () => {
+    expect(issues(definitionLockSourceSchema, source({ type: "openapi", from: "url" }))).toStrictEqual([
+      { path: "url", message: "url is required when from is url" },
+    ]);
+  });
+
+  it("requires the repository fields and the commit when it came from a repository", () => {
+    expect(issues(definitionLockSourceSchema, source({ type: "openapi", from: "repository" }))).toStrictEqual([
+      { path: "repo", message: "repo is required when from is repository" },
+      { path: "path", message: "path is required when from is repository" },
+      { path: "ref", message: "ref is required when from is repository" },
+      { path: "commit", message: "commit is required when from is repository" },
+    ]);
+  });
+
+  it("refuses a url on a repository source and a repository on a url source", () => {
+    expect(
+      issues(definitionLockSourceSchema, source({ ...repository, url: "https://billing.a-intel.com/openapi.yaml" })),
+    ).toStrictEqual([{ path: "url", message: "url is not allowed when from is repository" }]);
+    const url = { type: "openapi", from: "url", url: "https://billing.a-intel.com/openapi.yaml" };
+    expect(issues(definitionLockSourceSchema, source({ ...url, repo: repository.repo }))).toStrictEqual([
+      { path: "repo", message: "repo is not allowed when from is url" },
+    ]);
+  });
+
+  it("refuses a repository, a commit, or a url on an upload or a live read", () => {
+    const upload = { type: "openapi", from: "upload", repo: repository.repo };
+    expect(issues(definitionLockSourceSchema, source(upload))).toStrictEqual([
+      { path: "repo", message: "repo is not allowed when from is upload" },
+    ]);
+    expect(issues(definitionLockSourceSchema, source({ type: "grpc", from: "upload", commit }))).toStrictEqual([
+      { path: "commit", message: "commit is not allowed when from is upload" },
+    ]);
+    const introspection = { type: "graphql", from: "introspection", url: "https://api.a-intel.com/graphql" };
+    expect(issues(definitionLockSourceSchema, source(introspection))).toStrictEqual([
+      { path: "url", message: "url is not allowed when from is introspection" },
+    ]);
+  });
+});
+
+describe("definition lock source type", () => {
+  it("refuses a from the type cannot come from", () => {
+    const refused: Array<[string, string, string]> = [
+      ["openapi", "introspection", "an OpenAPI definition comes from one of repository, url, upload"],
+      ["openapi", "reflection", "an OpenAPI definition comes from one of repository, url, upload"],
+      ["graphql", "reflection", "a GraphQL definition comes from one of repository, url, upload, introspection"],
+      ["grpc", "introspection", "a gRPC definition comes from one of repository, url, upload, reflection"],
+    ];
+    for (const [type, from, message] of refused) {
+      expect(issues(definitionLockSourceSchema, source({ type, from }))).toStrictEqual([{ path: "from", message }]);
+    }
+  });
+
+  it("keeps security schemes to OpenAPI", () => {
+    const schemes = { bearer: { type: "http_bearer" } };
+    expect(
+      issues(definitionLockSourceSchema, source({ type: "openapi", from: "upload", security_schemes: schemes })),
+    ).toStrictEqual([]);
+    for (const type of ["graphql", "grpc"]) {
+      expect(
+        issues(definitionLockSourceSchema, source({ type, from: "upload", security_schemes: schemes })),
+      ).toStrictEqual([{ path: "security_schemes", message: `security_schemes is not allowed when type is ${type}` }]);
+    }
+  });
+
+  it("reports a bad source through parseLock with the field path", () => {
+    const text = readFileSync(new URL("../../fixtures/servers/billing/tools.lock.json", import.meta.url), "utf8");
+    const lock = JSON.parse(text) as { source: Record<string, unknown> };
+    expect(parseLock(text).ok).toBe(true);
+    expect(parseLock(formatJson({ ...lock, source: { ...lock.source, from: "upload" } }))).toStrictEqual({
+      ok: false,
+      issues: [
+        { line: null, field: "source.repo", message: "repo is not allowed when from is upload" },
+        { line: null, field: "source.path", message: "path is not allowed when from is upload" },
+        { line: null, field: "source.ref", message: "ref is not allowed when from is upload" },
+        { line: null, field: "source.commit", message: "commit is not allowed when from is upload" },
+      ],
+    });
+  });
+});
+
+describe("MCP lock sources", () => {
+  const pinnedPackage = { name: "@modelcontextprotocol/server-filesystem", version: "2026.9.1", digest: hash };
+  const registryPackage = { ...pinnedPackage, registry_type: "npm" };
+  const launch = { command: "npx", args: ["--yes", "@modelcontextprotocol/server-filesystem@2026.9.1", "${WORK_DIR}"] };
+  const registry = {
+    type: "registry",
+    registry: "https://registry.modelcontextprotocol.io",
+    server: "io.github.github/github-mcp-server",
+    version: "1.2.0",
+  };
+
+  const endpoint = { url: "https://api.githubcopilot.com/mcp/", transport: "http" };
+
+  it("accepts a registry entry that names its endpoint or its package", () => {
+    expect(issues(mcpLockSourceSchema, { ...registry, ...endpoint })).toStrictEqual([]);
+    expect(issues(mcpLockSourceSchema, { ...registry, ...endpoint, transport: "sse" })).toStrictEqual([]);
+    expect(issues(mcpLockSourceSchema, { ...registry, package: registryPackage, ...launch })).toStrictEqual([]);
+  });
+
+  it("pins how a remote registry entry is reached", () => {
+    expect(issues(mcpLockSourceSchema, { ...registry, url: endpoint.url })).toStrictEqual([
+      { path: "transport", message: "transport is required when url is set" },
+    ]);
+    expect(
+      issues(mcpLockSourceSchema, { ...registry, package: registryPackage, ...launch, transport: "http" }),
+    ).toStrictEqual([
+      { path: "transport", message: "transport is not allowed without url: only a remote entry has one" },
+    ]);
+    expect(issues(registryLockSourceSchema, { ...registry, ...endpoint, transport: "streamable-http" })).toStrictEqual([
+      { path: "transport", message: "Invalid enum value. Expected 'http' | 'sse', received 'streamable-http'" },
+    ]);
+  });
+
+  it("refuses a registry entry that names neither its endpoint nor its package", () => {
+    expect(issues(mcpLockSourceSchema, registry)).toStrictEqual([
+      { path: "url", message: "url or package is required: the catalog entry names one of them" },
+    ]);
+  });
+
+  it("refuses a registry entry that names both its endpoint and its package", () => {
+    const both = { ...registry, ...endpoint, package: registryPackage, ...launch };
+    expect(issues(mcpLockSourceSchema, both)).toStrictEqual([
+      {
+        path: "package",
+        message: "package is not allowed when url is set: a catalog entry names an endpoint or a package",
+      },
+    ]);
+  });
+
+  it("requires the command and args with a package", () => {
+    expect(issues(mcpLockSourceSchema, { ...registry, package: registryPackage })).toStrictEqual([
+      { path: "command", message: "command is required when package is set" },
+      { path: "args", message: "args is required when package is set" },
+    ]);
+  });
+
+  it("refuses a command or args with a url", () => {
+    expect(issues(mcpLockSourceSchema, { ...registry, ...endpoint, ...launch })).toStrictEqual([
+      { path: "command", message: "command is not allowed without package: only a package entry has a launch" },
+      { path: "args", message: "args is not allowed without package: only a package entry has a launch" },
+    ]);
+  });
+
+  it("requires the registry type of a registry package, and only there", () => {
+    expect(issues(registryLockSourceSchema, { ...registry, package: pinnedPackage, ...launch })).toStrictEqual([
+      { path: "package.registry_type", message: "Required" },
+    ]);
+    const local = { type: "local", command: "npx", package: registryPackage };
+    expect(issues(localLockSourceSchema, local)).toStrictEqual([
+      { path: "package", message: "Unrecognized key(s) in object: 'registry_type'" },
+    ]);
+  });
+
+  it("requires a local server's pinned package", () => {
+    const local = { type: "local", command: "npx @modelcontextprotocol/server-filesystem" };
+    const pinned = { ...local, package: pinnedPackage, server_version: "0.6.2" };
+    expect(issues(mcpLockSourceSchema, pinned)).toStrictEqual([]);
+    expect(issues(localLockSourceSchema, local)).toStrictEqual([{ path: "package", message: "Required" }]);
+    expect(
+      issues(localLockSourceSchema, { ...local, package: { ...pinnedPackage, digest: "sha256:zz" } }),
+    ).toStrictEqual([{ path: "package.digest", message: "Invalid" }]);
+  });
+});

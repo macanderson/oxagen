@@ -19,6 +19,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RunTranscript, TranscriptZoom } from "@/data/contracts/run";
+import type { RunRow } from "@/data/contracts/runs";
 import type { PriceBook } from "@/data/contracts/spend";
 import { readError, readOk } from "@/data/read";
 import { expectNoAxe } from "@/test/expect-no-axe";
@@ -46,7 +47,9 @@ import {
   transcriptEntry,
   transcriptFigures,
 } from "./run.builders";
+import { runIssue, runIssues } from "./issues.builders";
 import { releaseTranscript } from "./transcript.builders";
+import { TRANSCRIPT_PAGE } from "./transcript-rows";
 
 /**
  * The page's two transcript reads, told apart by zoom: the run at `steps`,
@@ -91,6 +94,7 @@ vi.mock("./actions", () => ({
   exportRun: vi.fn(),
   readRunExport: vi.fn(),
   sealRun: vi.fn(),
+  answerInterjection: vi.fn(),
 }));
 vi.mock("next-intl/server", async () => {
   const { translator } = await import("@/test/intl");
@@ -116,12 +120,54 @@ const ctx = unsafeMint(WsCtx, {
   wsRole: "member",
 });
 
+/** The Transcript tab's read of a stopped run: its first page (#4427). */
+const TRANSCRIPT_TAB_READ = {
+  kinds: [],
+  limit: TRANSCRIPT_PAGE,
+  text: "full",
+  from: "start",
+};
+
 const DENIED = {
   ok: false,
   reason: "denied",
   permission: "run.read",
 } as const;
 const DOWN = readError("frame_store_unreachable", 502);
+
+/** A pause in force on the run (#3972), as `get_run` answers it. */
+function pauseRecord(
+  over: Partial<NonNullable<RunRow["pause"]>> = {},
+): NonNullable<RunRow["pause"]> {
+  return {
+    state: "paused",
+    commandId: "tcm_p",
+    resumeCommandId: null,
+    seq: "41",
+    turn: 3,
+    step: 12,
+    by: { id: "usr_0a", name: "Ada Park" },
+    issuedAt: "2026-09-15T08:56:00.000Z",
+    appliedAt: "2026-09-15T08:56:04.000Z",
+    reason: "budget review",
+    ...over,
+  };
+}
+
+/** A live wrapped run carrying `pause`, held unless the pause is on its way. */
+function pausedDetail(pause: NonNullable<RunRow["pause"]>) {
+  return ok(
+    runDetail({
+      run: runRow({
+        status: "live",
+        sealedAt: null,
+        source: "tacho",
+        ingressPaused: pause.state !== "pausing",
+        pause,
+      }),
+    }),
+  );
+}
 
 /** The same workspace seen by an organization Member: `export_run` refuses this role. */
 const memberCtx = unsafeMint(WsCtx, {
@@ -454,6 +500,175 @@ describe("header", () => {
     await expectNoAxe(container);
   });
 
+  it.each<[string, Partial<RunRow>, string, string]>([
+    [
+      "a proxied request's effort, titled with the request",
+      { effort: "low", effortSource: "request", enforcementTier: "gateway" },
+      "effort low",
+      "Read from the model request Oxagen proxied.",
+    ],
+    [
+      "the harness's reported effort, titled with the harness",
+      { effort: "high", effortSource: "harness" },
+      "effort high",
+      "Reported by the harness.",
+    ],
+    [
+      "not captured on an observe run, because Oxagen never read the request",
+      { effort: null, effortSource: null, enforcementTier: "observe" },
+      "effort not captured",
+      "The model call did not go through Oxagen, so the request body was never read.",
+    ],
+    [
+      "not captured on a gateway run whose request carried none",
+      { effort: null, effortSource: null, enforcementTier: "gateway" },
+      "effort not captured",
+      "The call went through Oxagen and its request carried no effort setting, so the model used its own default.",
+    ],
+  ])("prints %s (#3891)", async (_case, row, text, title) => {
+    const { container } = await renderRun({
+      detail: ok(runDetail({ run: runRow(row) })),
+      transcript: ok(runTranscript()),
+    });
+    const chip = screen.getByTestId("run-effort");
+    expect(chip).toHaveTextContent(text);
+    expect(chip).toHaveAttribute("title", title);
+    await expectNoAxe(container);
+  });
+
+  /** A stored reading of a sealed run: a class too heavy and an effort that fits. */
+  const READING: NonNullable<RunRow["fit"]> = {
+    method: "run-fit/v1",
+    readAt: "2026-09-15T08:45:00.000Z",
+    sealedAt: "2026-09-15T08:40:00.000Z",
+    read: {
+      prompts: 1,
+      turns: 2,
+      steps: 5,
+      failed: 0,
+      outputTokens: 1_000,
+      reasoningTokens: 100,
+    },
+    model: { verdict: "over", tier: "sonnet", suggest: "haiku" },
+    effort: { verdict: "fit", effort: "high", source: "request" },
+  };
+
+  it("draws the rig's fit badges from the stored reading (#3893)", async () => {
+    const { container } = await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            effort: "high",
+            effortSource: "request",
+            fit: READING,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const rig = within(screen.getByTestId("run-rig"));
+    expect(rig.getByTestId("run-fit-model")).toHaveTextContent(
+      "Wrong model tier",
+    );
+    expect(rig.getByTestId("run-fit-effort")).toHaveTextContent("Effort fit");
+    await expectNoAxe(container);
+  });
+
+  it("draws the rig's other two badges: a model class that fits, and an effort the reading would move (#3893)", async () => {
+    const { container } = await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            effort: "high",
+            effortSource: "request",
+            fit: {
+              ...READING,
+              model: { verdict: "fit", tier: "sonnet" },
+              effort: {
+                verdict: "over",
+                effort: "high",
+                source: "request",
+                suggest: "medium",
+              },
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const rig = within(screen.getByTestId("run-rig"));
+    expect(rig.getByTestId("run-fit-model")).toHaveTextContent("Model fit");
+    expect(rig.getByTestId("run-fit-effort")).toHaveTextContent(
+      "Wrong effort setting",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("draws no fit badge on a live run, and no effort badge for an effort the reading did not see (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            outcome: "running",
+            sealedAt: null,
+            effort: "high",
+            effortSource: "request",
+            fit: READING,
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByTestId("run-fit-model")).toBeNull();
+    expect(screen.queryByTestId("run-fit-effort")).toBeNull();
+    cleanup();
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            effort: null,
+            fit: {
+              ...READING,
+              effort: { verdict: "unseen", why: "not_proxied" },
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-fit-model")).toBeTruthy();
+    expect(screen.queryByTestId("run-fit-effort")).toBeNull();
+  });
+
+  it.each<[string, Partial<RunRow>, string, string]>([
+    [
+      "a recorded effort",
+      { effort: "high", effortSource: "request", fit: READING },
+      "effort high",
+      "Effort high, read from the model request, fits this run.",
+    ],
+    [
+      "no effort on a gateway run",
+      { effort: null, effortSource: null, enforcementTier: "gateway" },
+      "effort not captured",
+      "This agent sent no effort setting, so the model used its own default.",
+    ],
+  ])(
+    "prints the same effort on the rig and on the Cost tab's effort card: %s (regression #3893)",
+    async (_case, row, rig, card) => {
+      await renderRun(
+        {
+          detail: ok(runDetail({ run: runRow(row) })),
+          transcript: ok(runTranscript()),
+        },
+        { tab: "cost" },
+      );
+      expect(screen.getByTestId("run-effort")).toHaveTextContent(rig);
+      expect(screen.getByTestId("fit-effort-card")).toHaveTextContent(card);
+    },
+  );
+
   it("reads the agent's 30-day runs and spend onto its card, and leaves them off when the roster does not hold it", async () => {
     await renderRun({
       detail: ok(runDetail()),
@@ -696,11 +911,12 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
     });
-    // A wrapped run's host refuses tool calls. It holds no ingress fence.
-    expect(screen.getByTestId("run-paused")).toHaveTextContent(
-      "Paused. The host refuses this agent's tool calls until you resume it.",
-    );
-    expect(screen.getByTestId("run-paused")).not.toHaveTextContent("Ingress");
+    // A row whose read carried no pause says only that the run is paused:
+    // no place, no person and no frame is guessed for it (#3972).
+    const banner = screen.getByTestId("run-paused");
+    expect(within(banner).getByRole("status")).toHaveTextContent(/^Paused$/);
+    expect(screen.queryByTestId("run-pause-frame")).toBeNull();
+    expect(screen.queryByTestId("run-paused-no-frame")).toBeNull();
     cleanup();
     await renderRun({
       detail: ok(runDetail()),
@@ -725,7 +941,7 @@ describe("header", () => {
     await expectNoAxe(container);
   });
 
-  it("says paused over parked, and offers Resume once, with the run's other controls", async () => {
+  it("says paused over parked, and offers Resume in the header and in the banner", async () => {
     const { container } = await renderRun({
       detail: ok(
         runDetail({
@@ -741,12 +957,16 @@ describe("header", () => {
       approvals: ok({ items: [approval()], more: false }),
     });
     expect(screen.getByTestId("run-status")).toHaveTextContent(/^paused$/);
-    expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused.");
-    // Resume takes Pause's place in the header, beside Cancel; the banner only
-    // says why the run is waiting.
+    expect(screen.getByTestId("run-paused")).toHaveTextContent("Paused");
+    // Resume takes Pause's place in the header, beside Cancel, and the banner
+    // carries its own, as pages/run.md draws it (#3972).
     expect(screen.getByTestId("run-resume")).toHaveTextContent("Resume run");
-    expect(screen.getAllByRole("button", { name: /resume/i })).toHaveLength(1);
-    expect(screen.getByTestId("run-paused").querySelector("button")).toBeNull();
+    expect(
+      within(screen.getByTestId("run-paused")).getByTestId(
+        "pause-banner-resume",
+      ),
+    ).toHaveTextContent("▶ Resume run");
+    expect(screen.getAllByRole("button", { name: /resume/i })).toHaveLength(2);
     await expectNoAxe(container);
   });
 
@@ -759,6 +979,117 @@ describe("header", () => {
     const status = screen.getByTestId("run-status");
     expect(status).toHaveTextContent(/^completed$/);
     expect(status).not.toHaveTextContent("parked");
+  });
+
+  it("says stale, with a still dot, once a live run's host has not checked in for five minutes (A-02)", async () => {
+    // A lost laptop or a killed daemon stops polling. The run stays open
+    // until Oxagen closes it after 12 hours with no event, and its light
+    // used to pulse live for all of them.
+    const { container } = await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "tacho",
+            commandBlock: "host_offline",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [], more: false }),
+    });
+    const status = screen.getByTestId("run-status");
+    expect(status).toHaveTextContent(/^stale$/);
+    expect(status.querySelector("[data-pulse]")).toBeNull();
+    expect(status.querySelector("[data-stale='true']")).toHaveAttribute(
+      "title",
+      expect.stringContaining("has not heard from this run's host"),
+    );
+    await expectNoAxe(container);
+  });
+
+  it("says stale over parked and paused, since the host that held them went quiet", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "tacho",
+            ingressPaused: true,
+            commandBlock: "host_offline",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [approval()], more: false }),
+    });
+    expect(screen.getByTestId("run-status")).toHaveTextContent(/^stale$/);
+  });
+
+  it("says stale on a live run whose host was revoked, and says why (#4343 review)", async () => {
+    // A revoked host's polls and events are refused, so its run is as
+    // unreachable as an offline one. It pulsed live until the 12-hour close.
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            status: "live",
+            sealedAt: null,
+            source: "tacho",
+            commandBlock: "host_revoked",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      approvals: ok({ items: [], more: false }),
+    });
+    const status = screen.getByTestId("run-status");
+    expect(status).toHaveTextContent(/^stale$/);
+    expect(status.querySelector("[data-pulse]")).toBeNull();
+    const badge = status.querySelector("[data-stale='true']");
+    expect(badge).toHaveAttribute(
+      "title",
+      expect.stringContaining("This run's host was revoked"),
+    );
+    // Negative: not the offline host's reason.
+    expect(badge?.getAttribute("title")).not.toContain("five minutes");
+  });
+
+  it("pulses live while the host checks in, and on a run with no host to check in (negative)", async () => {
+    for (const commandBlock of [null, "no_host"] as const) {
+      await renderRun({
+        detail: ok(
+          runDetail({
+            run: runRow({
+              status: "live",
+              sealedAt: null,
+              source: "tacho",
+              commandBlock,
+            }),
+          }),
+        ),
+        transcript: ok(runTranscript()),
+        approvals: ok({ items: [], more: false }),
+      });
+      const status = screen.getByTestId("run-status");
+      expect(status).toHaveTextContent(/^live$/);
+      expect(status.querySelector("[data-pulse]")).not.toBeNull();
+      cleanup();
+    }
+  });
+
+  it("reads an ended run's outcome, not stale, whatever its host last did (negative)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({ commandBlock: "host_offline" }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-status")).toHaveTextContent(/^completed$/);
   });
 
   it("reads live on a live run with nothing parked and ingress open (negative)", async () => {
@@ -785,8 +1116,9 @@ describe("header", () => {
       ),
       transcript: ok(runTranscript()),
     });
+    // No kind is recorded, so no role segment: only a person holds one.
     expect(screen.getByTestId("run-operator-name")).toHaveTextContent(
-      /^prn_unknown_kindoperator$/,
+      /^prn_unknown_kindoperator · core-platform$/,
     );
     expect(screen.getByTestId("run-operator")).not.toHaveTextContent(
       "not recorded",
@@ -799,7 +1131,10 @@ describe("header", () => {
       transcript: ok(runTranscript()),
     });
     const operator = screen.getByTestId("run-operator-name");
-    expect(operator).toHaveTextContent(/^Marcus Belloperator$/);
+    // The builder's run predates the role stamp (#3999).
+    expect(operator).toHaveTextContent(
+      /^Marcus Belloperator · role not recorded · core-platform$/,
+    );
     expect(operator.getAttribute("data-operator-id")).toBe("prn_marcusbell");
     // The id is a key, not a label: it is in the hover card, never in the line.
     expect(
@@ -809,6 +1144,31 @@ describe("header", () => {
     expect(screen.getByTestId("operator-card")).toHaveTextContent(
       "prn_marcusbell",
     );
+  });
+
+  it("draws the operator's avatar in the line and in the hover card, and their initials when they set none", async () => {
+    const url = "https://avatars.example.com/marcus.png";
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ operatorAvatarUrl: url }) })),
+      transcript: ok(runTranscript()),
+    });
+    const avatar = screen.getByTestId("run-operator-avatar");
+    expect(avatar).toHaveAttribute("data-avatar", "image");
+    expect(avatar).toHaveAttribute("src", url);
+    await userEvent.hover(screen.getByTestId("run-operator-name"));
+    const card = screen.getByTestId("operator-card");
+    expect(card.querySelector('[data-avatar="image"]')).toHaveAttribute(
+      "src",
+      url,
+    );
+    cleanup();
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ operatorAvatarUrl: null }) })),
+      transcript: ok(runTranscript()),
+    });
+    const initials = screen.getByTestId("run-operator-avatar");
+    expect(initials).toHaveAttribute("data-avatar", "initials");
+    expect(initials).toHaveTextContent("MB");
   });
 
   it("omits witness details from the operator view", async () => {
@@ -867,7 +1227,7 @@ describe("header", () => {
     expect(chips).not.toHaveTextContent("$612.48");
   });
 
-  it("draws the pull requests the outputs recorded when the work read fails, and says the repository was not captured (negative)", async () => {
+  it("draws the pull requests the outputs recorded when the work read fails, and says the read failed, not that nothing was captured (A-05)", async () => {
     await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
@@ -881,17 +1241,229 @@ describe("header", () => {
       ),
     });
     const checkout = within(await screen.findByTestId("run-checkout"));
-    expect(
-      checkout.getByText("repository and branch not captured"),
-    ).toBeTruthy();
+    const unread = checkout.getByTestId("run-work-unread");
+    expect(unread).toHaveTextContent("repository not read");
+    expect(unread.getAttribute("title")).toContain(
+      "The read of this run's work failed",
+    );
+    // A failed read is not a gap in the recording.
+    expect(checkout.queryByText(/not captured/)).toBeNull();
     expect(checkout.getByText("acme/platform#482")).toBeTruthy();
     expect(checkout.getByText("acme/docs#17")).toBeTruthy();
     expect(checkout.queryByText("no pull request")).toBeNull();
-    // No checkout was read, so no path is offered to copy.
+    // The row holds no directory, so no path is offered to copy.
     expect(checkout.queryByTestId("run-checkout-path")).toBeNull();
     expect(checkout.getByTestId("run-machine")).toHaveTextContent(
-      "mac-studio.local",
+      /^mac-studio\.local$/,
     );
+  });
+
+  it("draws the branch and the directory the session recorded when the work read fails (A-05)", async () => {
+    // tacho.sessions holds the session's cwd and git branch. The strip said
+    // "repository and branch not captured" and "path not captured" over them
+    // whenever the ClickHouse work read failed.
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      work: readError("clickhouse_unavailable", 503),
+    });
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    expect(checkout.getByTestId("run-branch")).toHaveTextContent("fix/tags");
+    const path = checkout.getByTestId("run-checkout-path");
+    expect(path).toHaveTextContent("mac-studio.local:/Users/mb/src/platform");
+    expect(path.getAttribute("title")).toContain(
+      "The session recorded this working directory on mac-studio.local.",
+    );
+    expect(checkout.getByTestId("run-work-unread")).toBeTruthy();
+    expect(checkout.queryByText(/not captured/)).toBeNull();
+  });
+
+  it("claims nothing about the checkout while the work read is in flight (A-05)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      // Never answers, so the strip stays on its fallback.
+      work: () => new Promise(() => {}),
+    });
+    const checkout = within(screen.getByTestId("run-checkout"));
+    expect(checkout.getByTestId("run-branch")).toHaveTextContent("fix/tags");
+    expect(checkout.getByTestId("run-checkout-path")).toHaveTextContent(
+      "mac-studio.local:/Users/mb/src/platform",
+    );
+    // Negative: neither a gap in the recording nor a failure is claimed, and
+    // no pull request is said to be missing before the read answers.
+    expect(checkout.queryByText(/not captured/)).toBeNull();
+    expect(checkout.queryByTestId("run-work-unread")).toBeNull();
+    expect(checkout.queryByText("no pull request")).toBeNull();
+  });
+
+  it("draws the session's branch and directory when the host enrolled no checkout (A-05)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const checkout = within(await screen.findByTestId("run-checkout"));
+    // The branch is recorded, so only the repository is named as missing.
+    expect(checkout.getByText("repository not captured")).toBeTruthy();
+    expect(checkout.getByText("fix/tags")).toBeTruthy();
+    expect(checkout.getByTestId("run-checkout-path")).toHaveTextContent(
+      "mac-studio.local:/Users/mb/src/platform",
+    );
+    expect(checkout.queryByText("path not captured")).toBeNull();
+  });
+
+  it("names the repository the session's remote matches while the work read is pending or failed (A-05)", async () => {
+    const place = {
+      path: "/Users/mb/src/platform",
+      branch: "fix/tags",
+      repository: {
+        host: "github.com",
+        owner: "acme",
+        name: "platform",
+        url: "https://github.com/acme/platform",
+      },
+    };
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ place }) })),
+      transcript: ok(runTranscript()),
+      work: readError("clickhouse_unavailable", 503),
+    });
+    const failed = within(await screen.findByTestId("run-checkout"));
+    expect(
+      failed.getByRole("link", { name: "acme/platform" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform");
+    // The branch is the session's, on the session's repository.
+    expect(
+      failed.getByRole("link", { name: "fix/tags" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform/tree/fix/tags");
+    // The read still says it failed, and no longer that the repository is unread.
+    const unread = failed.getByTestId("run-work-unread");
+    expect(unread).toHaveTextContent(/^work not read$/);
+    expect(unread.getAttribute("title")).not.toContain("its repository");
+    expect(failed.queryByText("repository not read")).toBeNull();
+    cleanup();
+
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ place }) })),
+      transcript: ok(runTranscript()),
+      work: () => new Promise(() => {}),
+    });
+    const pending = within(screen.getByTestId("run-checkout"));
+    expect(pending.getByRole("link", { name: "acme/platform" })).toBeTruthy();
+    expect(pending.queryByTestId("run-work-unread")).toBeNull();
+  });
+
+  it("links the session's branch into the session's repository when no checkout was enrolled (A-05)", async () => {
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: {
+              path: "/Users/mb/src/platform",
+              branch: "fix/tags",
+              repository: {
+                host: "github.com",
+                owner: "acme",
+                name: "platform",
+                url: "https://github.com/acme/platform",
+              },
+            },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    expect(strip.getByRole("link", { name: "acme/platform" })).toBeTruthy();
+    expect(
+      strip.getByRole("link", { name: "fix/tags" }).getAttribute("href"),
+    ).toBe("https://github.com/acme/platform/tree/fix/tags");
+    expect(strip.queryByText(/not captured/)).toBeNull();
+  });
+
+  it("never links the session's branch into a pull request's repository (negative, #4343 review)", async () => {
+    // With no checkout enrolled, the repository came from the first pull
+    // request, and the session's branch was linked into it: a session whose
+    // first pull request went to another repository linked a branch that
+    // does not exist there.
+    const docs = {
+      host: "github.com",
+      owner: "acme",
+      name: "docs",
+      url: "https://github.com/acme/docs",
+      connected: true,
+    };
+    const [pr] = runWork().pullRequests;
+    if (pr === undefined) throw new Error("the builder holds a pull request");
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      work: ok(
+        runWork({
+          checkouts: [],
+          pullRequests: [
+            {
+              ...pr,
+              repository: docs,
+              number: 17,
+              url: "https://github.com/acme/docs/pull/17",
+              headRef: "docs/tags",
+              checkoutRefs: [],
+            },
+          ],
+        }),
+      ),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    expect(strip.getByTestId("run-branch")).toHaveTextContent("fix/tags");
+    expect(strip.queryByRole("link", { name: "fix/tags" })).toBeNull();
+    expect(screen.getByTestId("run-checkout").innerHTML).not.toContain(
+      "/tree/fix/tags",
+    );
+  });
+
+  it("names no branch for an enrolled checkout on a detached HEAD, whatever the session's start named (negative, #4343 review)", async () => {
+    const [checkout] = runWork().checkouts;
+    if (checkout === undefined) throw new Error("the builder holds a checkout");
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            place: { path: "/Users/mb/src/platform", branch: "fix/tags" },
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+      work: ok(runWork({ checkouts: [{ ...checkout, branch: null }] })),
+    });
+    const strip = within(await screen.findByTestId("run-checkout"));
+    // The checkout is the newer fact: it says the HEAD named no branch.
+    expect(strip.queryByText("fix/tags")).toBeNull();
+    expect(strip.queryByTestId("run-branch")).toBeNull();
   });
 
   it("links a branch that heads no pull request to its tree on the forge", async () => {
@@ -1078,13 +1650,16 @@ describe("controls", () => {
       expect(screen.getByTestId(`run-${command}`)).not.toBeDisabled();
     }
     const banner = screen.getByTestId("run-paused");
-    expect(banner).toHaveTextContent("refuses this agent's tool calls");
-    expect(banner).not.toHaveTextContent("Evidence ingress");
+    expect(banner).toHaveAttribute("data-state", "paused");
+    expect(within(banner).getByTestId("pause-banner-resume")).toBeEnabled();
     await expectNoAxe(container);
   });
 
-  it("names evidence ingress in a paused ledger run's banner", async () => {
-    await renderRun({
+  // #3972: a ledger run's pause fences ingress and seals no frame, so the
+  // banner names who paused it and why, and says why there is no frame to
+  // open rather than offering one.
+  it("names who paused a ledger run and why, and says it sealed no frame", async () => {
+    const { container } = await renderRun({
       detail: ok(
         runDetail({
           run: runRow({
@@ -1092,14 +1667,118 @@ describe("controls", () => {
             sealedAt: null,
             source: "ledger",
             ingressPaused: true,
+            pause: {
+              state: "paused",
+              commandId: "tcm_p",
+              resumeCommandId: null,
+              seq: null,
+              turn: null,
+              step: null,
+              by: { id: "usr_0a", name: "Ada Park" },
+              issuedAt: "2026-09-15T08:56:00.000Z",
+              appliedAt: "2026-09-15T08:56:00.000Z",
+              reason: "budget review",
+            },
           }),
         }),
       ),
       transcript: ok(runTranscript()),
     });
+    const line = within(screen.getByTestId("run-paused")).getByRole("status");
+    expect(line).toHaveTextContent(/^Paused · by Ada Park at .+ · “budget review”/);
+    expect(line).not.toHaveTextContent("turn");
+    expect(screen.getByTestId("run-paused-no-frame")).toHaveTextContent(
+      "A ledger run's pause fences evidence ingress and seals no frame.",
+    );
+    expect(screen.queryByTestId("run-pause-frame")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("reads where a paused wrapped run stopped, who paused it, when and why, with Resume and its frame (#3972)", async () => {
+    const { container } = await renderRun({
+      detail: pausedDetail(pauseRecord()),
+      transcript: ok(runTranscript()),
+    });
     const banner = screen.getByTestId("run-paused");
-    expect(banner).toHaveTextContent("Evidence ingress is paused");
-    expect(banner).not.toHaveTextContent("tool calls");
+    expect(within(banner).getByRole("status")).toHaveTextContent(
+      /^Paused at turn 3 · step 12 · by Ada Park at .+ · “budget review”$/,
+    );
+    expect(within(banner).getByTestId("pause-banner-resume")).toBeEnabled();
+    expect(within(banner).getByTestId("run-pause-frame")).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=41",
+    );
+    expect(screen.queryByTestId("run-paused-no-frame")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("reads a pause on its way at the run's head, with the header's disabled Pausing and no frame yet (#3972)", async () => {
+    const { container } = await renderRun({
+      detail: pausedDetail(
+        pauseRecord({
+          state: "pausing",
+          seq: null,
+          turn: 2,
+          step: 7,
+          appliedAt: null,
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const banner = screen.getByTestId("run-paused");
+    expect(within(banner).getByRole("status")).toHaveTextContent(
+      "Pausing at turn 2 · step 7 · takes effect at the next checkpoint · “budget review”",
+    );
+    expect(screen.getByTestId("run-paused-no-frame")).toHaveTextContent(
+      "The pause frame is written when the host applies the pause.",
+    );
+    expect(within(banner).queryByTestId("pause-banner-resume")).toBeNull();
+    expect(screen.queryByTestId("run-pause-frame")).toBeNull();
+    expect(screen.getByTestId("run-pausing")).toBeDisabled();
+    expect(screen.queryByTestId("run-pause")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("draws no banner while a resume is on its way, and the header's disabled Resuming says it (#3972)", async () => {
+    const { container } = await renderRun({
+      detail: pausedDetail(
+        pauseRecord({ state: "resuming", resumeCommandId: "tcm_r" }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByTestId("run-paused")).toBeNull();
+    expect(screen.getByTestId("run-resuming")).toBeDisabled();
+    expect(screen.queryByTestId("run-resume")).toBeNull();
+    expect(screen.queryByTestId("run-cancel")).toBeNull();
+    await expectNoAxe(container);
+  });
+
+  it("says the host recorded no frame when an applied pause names none, and offers no link (negative)", async () => {
+    await renderRun({
+      detail: pausedDetail(pauseRecord({ seq: null })),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-paused-no-frame")).toHaveTextContent(
+      "The host recorded no frame for this pause.",
+    );
+    expect(screen.queryByTestId("run-pause-frame")).toBeNull();
+  });
+
+  it("leaves out each part the record does not hold, and names an unnamed person by id (negative)", async () => {
+    await renderRun({
+      detail: pausedDetail(
+        pauseRecord({
+          turn: null,
+          step: null,
+          by: { id: "usr_0a", name: null },
+          reason: null,
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    const line = within(screen.getByTestId("run-paused")).getByRole("status");
+    expect(line).toHaveTextContent(/^Paused · by usr_0a at [^·]+$/);
+    expect(screen.queryByTestId("run-paused-reason")).toBeNull();
   });
 
   it("draws Resume alone, disabled, on a paused wrapped run a viewer cannot command (negative)", async () => {
@@ -1219,6 +1898,35 @@ describe("controls", () => {
     ).toBeTruthy();
   });
 
+  // #3370 (#3399 finding 4): the header drew Fork enabled for any viewer of a
+  // forkable ledger run, and fork_run refused an organization Viewer.
+  it("offers Fork in the header to an organization Owner on a sealed ledger run graded fork", async () => {
+    const { container } = await renderRun({
+      detail: ok(runDetail({ run: runRow({ source: "ledger" }) })),
+      transcript: ok(runTranscript()),
+    });
+    const actions = within(screen.getByTestId("run-actions"));
+    expect(actions.getByTestId("run-fork")).toBeEnabled();
+    await expectNoAxe(container);
+  });
+
+  it("draws Fork disabled in the header for an organization Viewer on the same run, with the role as the reason (negative)", async () => {
+    const { container } = await renderRun(
+      {
+        detail: ok(runDetail({ run: runRow({ source: "ledger" }) })),
+        transcript: ok(runTranscript()),
+      },
+      { viewer: viewerCtx },
+    );
+    const actions = within(screen.getByTestId("run-actions"));
+    const fork = actions.getByTestId("run-fork");
+    expect(fork).toBeDisabled();
+    expect(fork.getAttribute("title")).toContain(
+      "Forking needs an organization Owner, Admin or Member role.",
+    );
+    await expectNoAxe(container);
+  });
+
   it("offers Summarize on a sealed run that has none", async () => {
     await renderRun({
       detail: ok(runDetail({ run: runRow({ name: null, summary: null }) })),
@@ -1286,6 +1994,23 @@ describe("the outputs spine", () => {
     await expectNoAxe(container);
   });
 
+  it("holds the side column to its track, so a long output path cannot push it past the page", async () => {
+    const path =
+      "/Users/dev/Projects/.worktrees/oxagen/s0-steering-repo-contract/packages/oxagen/src/steering/contract.ts";
+    await renderRun({
+      detail: ok(runDetail()),
+      transcript: ok(runTranscript()),
+      outputs: ok(runOutputs([runOutputNode({ name: path })])),
+    });
+    const work = screen.getByRole("complementary", { name: "The work" });
+    // jsdom lays nothing out, so the class is the evidence. Without a
+    // `minmax(0,1fr)` column the grid's implicit `auto` column grows to the
+    // unwrapped path, and the title's `truncate` never cuts it.
+    expect(work.className).toContain("grid-cols-1");
+    const spine = within(work).getByTestId("run-outputs");
+    expect(within(spine).getByText(path).className).toContain("truncate");
+  });
+
   it("folds an outputs read that throws to the run's read error, and the page still renders", async () => {
     await renderRun({
       detail: ok(runDetail()),
@@ -1302,7 +2027,7 @@ describe("the outputs spine", () => {
 });
 
 describe("tabs", () => {
-  it("opens Transcript by default, and reads the run once, at steps, whole", async () => {
+  it("opens Transcript by default, and reads the run's first page once, at steps", async () => {
     const { calls } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
@@ -1311,13 +2036,37 @@ describe("tabs", () => {
     // The Transcript tab, the stat row and every tab count share the steps
     // read, with whole bodies. No open tab lists frames, and the counts of
     // the frames ride the steps read, so the run is not read at everything.
+    // A stopped run's tab reads its first page and replays it (#4427).
     expect(calls.transcript).toEqual([
-      [ctx, "tse_7k2m9q", "steps", { kinds: [], limit: 500, text: "full" }],
+      [ctx, "tse_7k2m9q", "steps", TRANSCRIPT_TAB_READ],
     ]);
     expect(calls.cost).toHaveLength(1);
     expect(calls.chain).toHaveLength(0);
     // The per-turn ledger belongs to the Cost tab.
     expect(calls.turns).toHaveLength(0);
+  });
+
+  it("reads one page at steps before it draws, though a full page with a cursor has more behind it (#4420)", async () => {
+    // Every page refolds the whole run on the server, so reading the run to
+    // its end held the page for one read per page. The Transcript tab reads
+    // the rest once it draws. The Issues tab draws no transcript.
+    const { calls } = await renderRun(
+      {
+        detail: ok(runDetail()),
+        transcript: ok(
+          runTranscript({
+            entries: Array.from({ length: 500 }, (_, i) =>
+              transcriptEntry({ seq: String(i + 1), endSeq: String(i + 1) }),
+            ),
+            cursor: "cGFnZTE",
+          }),
+        ),
+      },
+      { tab: "issues" },
+    );
+    expect(calls.transcript).toEqual([
+      [ctx, "tse_7k2m9q", "steps", { kinds: [], limit: 500, text: "full" }],
+    ]);
   });
 
   it("opens Transcript for a tab that is not a section, and Cost for the retired proof tab (negative)", async () => {
@@ -1344,6 +2093,8 @@ describe("tabs", () => {
     const { container } = await renderRun({
       detail: ok(runDetail()),
       transcript: ok(runTranscript()),
+      // One issue: the task (#3970).
+      issues: ok(runIssues()),
     });
     const tabs = within(screen.getByRole("tablist", { name: "Run sections" }));
     expect(
@@ -1524,6 +2275,8 @@ describe("transcript", () => {
     // come from the page's one read at steps.
     expect(calls.transcript.map((call) => call[2])).toEqual(["steps"]);
     const tab = screen.getByRole("region", { name: "Transcript" });
+    // A stopped run replays from its first row; the test reads its end.
+    fireEvent.click(within(tab).getByRole("button", { name: "To the end" }));
     const chips = within(screen.getByTestId("transcript-chips"))
       .getAllByRole("button", { pressed: true })
       .map((chip) => chip.getAttribute("data-testid"));
@@ -1563,7 +2316,7 @@ describe("transcript", () => {
   // Carried from #4026, which added rewind and to-the-end buttons and the
   // mockup's speeds to the turn-and-step transport this page replaced. The
   // feed's transport counts rows drawn (`at / total`) rather than frames.
-  it("rewinds to the first row, jumps to the last, and offers the mockup's four speeds", async () => {
+  it("plays a stopped run as it opens, jumps to the last row, rewinds to the first, and offers the mockup's four speeds", async () => {
     await renderRun(
       { detail: ok(runDetail()), transcript: ok(mockupTranscript()) },
       { tab: "transcript" },
@@ -1573,7 +2326,10 @@ describe("transcript", () => {
     if (total === undefined) throw new Error("no total in the readout");
     const rewind = screen.getByRole("button", { name: "Rewind" });
     const end = screen.getByRole("button", { name: "To the end" });
-    // A sealed run opens at its end.
+    // A stopped run plays from its first row as the page opens (#4427).
+    expect(screen.getByTestId("tx-play")).toHaveTextContent("pause");
+    fireEvent.click(end);
+    expect(readout).toHaveTextContent(`${total} / ${total}`);
     expect(end).toBeDisabled();
     fireEvent.click(rewind);
     expect(readout).toHaveTextContent(`0 / ${total}`);
@@ -1999,11 +2755,7 @@ describe("chips", () => {
     );
     // The chips show and hide rows; the read keeps every entry.
     expect(calls.transcript[0]?.[2]).toBe("steps");
-    expect(calls.transcript[0]?.[3]).toEqual({
-      kinds: [],
-      limit: 500,
-      text: "full",
-    });
+    expect(calls.transcript[0]?.[3]).toEqual(TRANSCRIPT_TAB_READ);
     expect(screen.getByTestId("chip-tools")).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -2056,11 +2808,7 @@ describe("chips", () => {
       { detail: ok(runDetail()), transcript: byZoom(releaseTranscript()) },
       { tab: "transcript", kinds: "none" },
     );
-    expect(calls.transcript[0]?.[3]).toEqual({
-      kinds: [],
-      limit: 500,
-      text: "full",
-    });
+    expect(calls.transcript[0]?.[3]).toEqual(TRANSCRIPT_TAB_READ);
     expect(screen.getByTestId("chip-tools")).toHaveAttribute(
       "aria-pressed",
       "false",
@@ -2388,7 +3136,9 @@ describe("figures", () => {
     });
     const cost = within(screen.getByTestId("run-stat-cost"));
     expect(cost.getByText("$2.50")).toBeTruthy();
-    expect(cost.getByText("agent reported, provisional")).toBeTruthy();
+    expect(
+      cost.getByText("provisional figure the agent reported"),
+    ).toBeTruthy();
     // Nothing records what the unproductive steps cost.
     expect(
       within(screen.getByTestId("run-stat-wasted")).getByText("not recorded"),
@@ -2518,17 +3268,13 @@ describe("the work", () => {
         "src/release/cut.ts",
       ),
     ).toBeTruthy();
-    // The base is the branch the pull request merges into (#3890). No read
-    // carries a release, so that row says so rather than naming one.
+    // The base is the branch the pull request merges into (#3890). The
+    // session created no release, so the panel draws no Release row.
     const rows = changes
       .getAllByRole("term")
       .map((term) => [term.textContent, term.nextElementSibling?.textContent]);
-    expect(rows).toEqual(
-      expect.arrayContaining([
-        ["Base", "main"],
-        ["Release", "not recorded"],
-      ]),
-    );
+    expect(rows).toEqual(expect.arrayContaining([["Base", "main"]]));
+    expect(rows.map(([term]) => term)).not.toContain("Release");
     expect(
       changes.getByRole("link", { name: "main" }).getAttribute("href"),
     ).toBe("https://github.com/acme/platform/tree/main");
@@ -2879,9 +3625,28 @@ describe("an open run's cost and the idle close (#3980)", () => {
 });
 
 describe("issues", () => {
-  it("lists the task the run was started on", async () => {
+  it("lists the issues get_run_issues answers, the task first", async () => {
     const { container } = await renderRun(
-      { detail: ok(runDetail()), transcript: ok(runTranscript()) },
+      {
+        detail: ok(runDetail()),
+        transcript: ok(runTranscript()),
+        issues: ok(
+          runIssues({
+            issues: [
+              runIssue({
+                ref: "ENG-4121",
+                repository: null,
+                number: null,
+                title: null,
+                status: null,
+                statusRead: "not_github",
+                readAt: null,
+                url: null,
+              }),
+            ],
+          }),
+        ),
+      },
       { tab: "issues" },
     );
     const issues = within(screen.getByRole("region", { name: "Issues" }));
@@ -2894,7 +3659,7 @@ describe("issues", () => {
     await expectNoAxe(container);
   });
 
-  it("says a run with no task reference names no issue, and counts a floor while GitHub's closing list is unread (negative)", async () => {
+  it("says a run that names no issue has none, and counts a floor when a limit cut the list (negative)", async () => {
     await renderRun(
       {
         detail: ok(runDetail({ run: runRow({ taskRef: null }) })),
@@ -2902,11 +3667,8 @@ describe("issues", () => {
       },
       { tab: "issues" },
     );
-    // No pull request was recorded, so the answer is exact.
     expect(
-      screen.getByText(
-        "This run names no issue, and no pull request it opened closes one.",
-      ),
+      screen.getByText("No issue is linked to this session."),
     ).toBeTruthy();
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent(/^0$/);
     cleanup();
@@ -2914,44 +3676,45 @@ describe("issues", () => {
       {
         detail: ok(runDetail({ run: runRow({ taskRef: null }) })),
         transcript: ok(runTranscript()),
-        work: ok(runWork()),
+        issues: ok(
+          runIssues({
+            issues: [],
+            complete: false,
+            warnings: ["closing_issues_read_failed"],
+          }),
+        ),
       },
       { tab: "issues" },
     );
-    // A recorded pull request whose closing list GitHub did not return.
-    expect(
-      screen.getByText(
-        "This run names no issue. GitHub did not return the issues its pull requests close.",
-      ),
-    ).toBeTruthy();
     expect(screen.getByTestId("run-tab-count-issues")).toHaveTextContent("0+");
   });
 
-  it("counts the issues the run's pull requests close in the tab, the same rows the table draws", async () => {
-    const work = runWork();
+  it("counts the rows the table draws in the tab, from the one issues read", async () => {
     await renderRun(
       {
         detail: ok(runDetail()),
         transcript: ok(runTranscript()),
-        work: ok({
-          ...work,
-          pullRequests: work.pullRequests.map((pr) => ({
-            ...pr,
-            closingIssues: {
-              issues: [
-                {
-                  owner: "acme",
-                  repo: "platform",
-                  number: 490,
-                  title: "Release checklist",
-                  url: "https://github.com/acme/platform/issues/490",
-                  state: "open" as const,
-                },
-              ],
-              complete: true,
-            },
-          })),
-        }),
+        issues: ok(
+          runIssues({
+            issues: [
+              runIssue(),
+              runIssue({
+                ref: "a-intel/platform#490",
+                number: 490,
+                relation: "resolves",
+                resolvedBy: [
+                  {
+                    number: 511,
+                    url: "https://github.com/a-intel/platform/pull/511",
+                  },
+                ],
+                edge: "observed",
+                frameSeqs: ["36"],
+                url: "https://github.com/a-intel/platform/issues/490",
+              }),
+            ],
+          }),
+        ),
       },
       { tab: "issues" },
     );
@@ -2978,6 +3741,8 @@ describe("policy and context", () => {
       decision: "deny",
       type: "policy.denied",
       harness: false,
+      rules: [],
+      taint: null,
       at: "2026-09-20T00:00:00Z",
     },
   });
@@ -3040,6 +3805,8 @@ describe("policy and context", () => {
         at: "2026-09-20T00:00:00Z",
         source: "harness",
         harness: true,
+        rules: [],
+        taint: null,
       },
     });
     // The server counts the two decisions under the policy chip, and only
@@ -3086,7 +3853,7 @@ describe("policy and context", () => {
     expect(screen.getByText("This run recorded no recall.")).toBeTruthy();
   });
 
-  it("says a list is missing later decisions when a page lies past the one read, and names a subagent's frame without a link (negative)", async () => {
+  it("says a list is missing later decisions when a page lies past the one read, and links a subagent's frame by its chain (negative)", async () => {
     // `complete` is the read's frame cap. The list used to claim it was whole
     // whenever the cap held, however many pages were left.
     await renderRun(
@@ -3121,12 +3888,16 @@ describe("policy and context", () => {
         "The transcript read stopped short, so later decisions are missing here.",
       ),
     ).toBeTruthy();
-    // The Frames tab reads the run's own chain: seq 41 there is another frame.
+    // Seq 41 on the run's own chain is another frame, so the link names the
+    // subagent's chain beside the seq, and the Governed actions tab reads
+    // the frame on that chain (#3823).
     const policy = within(
       screen.getByRole("region", { name: "Policy decisions" }),
     );
-    expect(policy.queryByRole("link", { name: "41" })).toBeNull();
-    expect(policy.getByText("41")).toBeTruthy();
+    expect(policy.getByRole("link", { name: "41" })).toHaveAttribute(
+      "href",
+      "/acme/core-platform/runs/tse_7k2m9q?tab=actions&body=0192d4a8-7c1e-7a00-8000-0000000000c1%3A41",
+    );
   });
 
   it("says a list from a transcript that stopped short is missing later decisions (negative)", async () => {
@@ -3177,8 +3948,12 @@ describe("what the session recorded", () => {
       transcript: ok(runTranscript()),
     });
     expect(screen.getByTestId("run-effort")).toHaveTextContent("effort medium");
-    // A recorded value carries no "why it is missing" reading.
-    expect(screen.getByTestId("run-effort")).not.toHaveAttribute("title");
+    // A recorded value is titled with where it was read, and a row that names
+    // no source reads as the harness's (#3891).
+    expect(screen.getByTestId("run-effort")).toHaveAttribute(
+      "title",
+      "Reported by the harness.",
+    );
     expect(screen.getByTestId("run-thinking")).toHaveTextContent("thinking on");
     expect(screen.getByTestId("run-permission-mode")).toHaveTextContent(
       "mode acceptEdits",
@@ -3252,6 +4027,52 @@ describe("what the session recorded", () => {
     const operator = within(screen.getByTestId("run-operator"));
     expect(operator.getByText("enrolled the host")).toBeTruthy();
     expect(operator.queryByText("operator")).toBeNull();
+  });
+
+  // #3999, ADR-197: the role the operator held in this workspace when the run
+  // opened, as pages/run.md draws the Summary.
+  it("prints the operator's stamped workspace role and the workspace beside the operator", async () => {
+    const { container } = await renderRun({
+      detail: ok(runDetail({ run: runRow({ operatorRole: "owner" }) })),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-operator-name")).toHaveTextContent(
+      /^Marcus Belloperator · workspace\.owner · core-platform$/,
+    );
+    expect(screen.getByTestId("run-operator-role")).toHaveTextContent(
+      "workspace.owner",
+    );
+    await expectNoAxe(container);
+  });
+
+  it("says a person's role is not recorded on a run from before the stamp, and draws no role for an agent (negative)", async () => {
+    await renderRun({
+      detail: ok(runDetail({ run: runRow({ operatorRole: null }) })),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.getByTestId("run-operator-role")).toHaveTextContent(
+      "role not recorded",
+    );
+    expect(screen.getByTestId("run-operator")).not.toHaveTextContent(
+      "workspace.",
+    );
+    cleanup();
+    await renderRun({
+      detail: ok(
+        runDetail({
+          run: runRow({
+            operatorKind: "agent",
+            operatorName: null,
+            operatorRole: "owner",
+          }),
+        }),
+      ),
+      transcript: ok(runTranscript()),
+    });
+    expect(screen.queryByTestId("run-operator-role")).toBeNull();
+    expect(screen.getByTestId("run-operator")).toHaveTextContent(
+      "core-platform",
+    );
   });
 
   it("lists the subagents the session started under the checkout, and draws no row when it started none", async () => {
@@ -3335,9 +4156,7 @@ describe("what the session recorded", () => {
     });
     const tokens = screen.getByTestId("run-stat-tokens");
     expect(tokens).toHaveTextContent("1,160");
-    expect(tokens).toHaveTextContent(
-      "reported by the session, provisional until the rollup",
-    );
+    expect(tokens).toHaveTextContent("provisional count the session reported");
   });
 });
 

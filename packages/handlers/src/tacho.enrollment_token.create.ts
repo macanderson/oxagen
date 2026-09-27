@@ -17,7 +17,7 @@ import { schema, withTenantDb } from "@oxagen/database";
 import { cryptoRandom } from "@oxagen/database/schema";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
 import { and, eq, isNull } from "drizzle-orm";
-import { assertNotRetired } from "./lib/agent-identity";
+import { assertNotManaged, assertNotRetired } from "./lib/agent-identity";
 import { enrollCommandFor, hashEnrollmentToken } from "./lib/onboarding";
 import { logger } from "./logger";
 
@@ -46,6 +46,7 @@ export const tachoEnrollmentTokenCreateHandler: CapabilityHandler<
         id: schema.agents.id,
         publicId: schema.agents.publicId,
         slug: schema.agents.slug,
+        agentType: schema.agents.agentType,
         status: schema.agents.status,
         harness: schema.agents.harness,
         orgNamespace: schema.organizations.namespace,
@@ -76,6 +77,8 @@ export const tachoEnrollmentTokenCreateHandler: CapabilityHandler<
         message: `No agent "${input.agentId}" in this workspace`,
       });
     }
+    // No host runs the built-in assistant: stella runs inside Oxagen (#4350).
+    assertNotManaged(agent);
     assertNotRetired(agent);
     const [row] = await tx
       .insert(schema.tachoEnrollmentTokens)

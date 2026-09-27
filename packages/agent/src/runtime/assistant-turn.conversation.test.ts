@@ -13,6 +13,7 @@ import {
   appendAssistantMessage,
   appendUserMessage,
   ConversationNotFoundError,
+  conversationTitleFrom,
 } from "./assistant-turn";
 
 const dialect = new PgDialect();
@@ -30,15 +31,17 @@ const CONVERSATION = {
 interface Captured {
   lookups: { where: string; params: unknown[] }[];
   inserts: { table: string; values: Record<string, unknown> }[];
-  updates: { table: string; set: Record<string, unknown> }[];
+  updates: { table: string; set: Record<string, unknown>; where?: string }[];
 }
 
 /**
  * A transaction whose conversation lookup answers `found`. The lookup is the
  * read that projects `publicId`. The history read (#4195) also selects from
- * conversations, for the stored summary, and answers no summary here.
+ * conversations, for the stored summary, and answers no summary here. An
+ * update answers one row unless `archivedMeanwhile`, which stands for the
+ * nightly archive committing between the lookup and the activity update.
  */
-function fakeTx(found: (typeof CONVERSATION)[]) {
+function fakeTx(found: (typeof CONVERSATION)[], archivedMeanwhile = false) {
   const captured: Captured = { lookups: [], inserts: [], updates: [] };
   const tx = {
     select: (projection?: Record<string, unknown>) => ({
@@ -77,8 +80,22 @@ function fakeTx(found: (typeof CONVERSATION)[]) {
     }),
     update: (table: Parameters<typeof getTableName>[0]) => ({
       set: (set: Record<string, unknown>) => {
-        captured.updates.push({ table: getTableName(table), set });
-        return { where: () => Promise.resolve() };
+        const update: Captured["updates"][number] = {
+          table: getTableName(table),
+          set,
+        };
+        captured.updates.push(update);
+        return {
+          where: (cond: SQL) => {
+            update.where = dialect.sqlToQuery(cond).sql;
+            return {
+              returning: () =>
+                Promise.resolve(
+                  archivedMeanwhile ? [] : [{ id: CONVERSATION.id }],
+                ),
+            };
+          },
+        };
       },
     }),
   };
@@ -158,12 +175,101 @@ describe("appendUserMessage", () => {
     ).toHaveLength(0);
     expect(captured.inserts[0]).toMatchObject({
       table: CONVERSATIONS,
-      values: { userId: USER, status: "active", ...SCOPE },
+      values: {
+        userId: USER,
+        title: "what is live?",
+        status: "active",
+        ...SCOPE,
+      },
     });
     expect(out).toMatchObject({
       conversationId: "new-conversation",
       conversationPublicId: "cnv_new",
     });
+  });
+
+  it("names a new conversation after its first question, with whitespace collapsed", async () => {
+    const { tx, captured } = fakeTx([]);
+    const question = {
+      ...ask(null),
+      content: "  why did\n\nthe deploy\t fail?  ",
+    };
+    await appendUserMessage(tx, SCOPE, USER, question, "chat");
+    expect(captured.inserts[0]?.values.title).toBe("why did the deploy fail?");
+  });
+
+  it("marks a continued conversation active when the question is written, before any reply", async () => {
+    // The nightly archive (#4435) reads updated_at. A question whose turn is
+    // still running, or failed, must not leave the conversation looking idle.
+    const { tx, captured } = fakeTx([CONVERSATION]);
+    await appendUserMessage(tx, SCOPE, USER, ask(CONVERSATION.id), "chat");
+    const bumps = captured.updates.filter(
+      (u) => u.table === CONVERSATIONS && "updatedAt" in u.set,
+    );
+    expect(bumps).toHaveLength(1);
+    expect(bumps[0]?.set.updatedAt).toBeInstanceOf(Date);
+    // The archive may land after the lookup, so the update checks again.
+    expect(bumps[0]?.where).toMatch(/"archived_at" is null/);
+    expect(bumps[0]?.where).toMatch(/"deleted_at" is null/);
+  });
+
+  it("refuses the question when the archive lands between the lookup and the activity update (negative)", async () => {
+    // Postgres checks the update's archived_at filter again on the row the
+    // archive committed, so the update answers no row.
+    const { tx, captured } = fakeTx([CONVERSATION], true);
+    const refused = appendUserMessage(
+      tx,
+      SCOPE,
+      USER,
+      ask(CONVERSATION.id),
+      "chat",
+    );
+    await expect(refused).rejects.toBeInstanceOf(ConversationNotFoundError);
+    expect(captured.inserts).toHaveLength(0);
+  });
+
+  it("writes no activity bump for a new conversation, whose insert sets it", async () => {
+    const { tx, captured } = fakeTx([]);
+    await appendUserMessage(tx, SCOPE, USER, ask(null), "chat");
+    expect(
+      captured.updates.filter((u) => u.table === CONVERSATIONS),
+    ).toHaveLength(0);
+  });
+
+  it("leaves the title of a continued conversation alone", async () => {
+    const { tx, captured } = fakeTx([CONVERSATION]);
+    await appendUserMessage(tx, SCOPE, USER, ask(CONVERSATION.id), "chat");
+    expect(captured.inserts.map((i) => i.table)).not.toContain(CONVERSATIONS);
+    expect(captured.updates.filter((u) => "title" in u.set)).toHaveLength(0);
+  });
+});
+
+describe("conversationTitleFrom", () => {
+  it("keeps a question of 80 code points whole", () => {
+    const question = "a".repeat(80);
+    expect(conversationTitleFrom(question)).toBe(question);
+  });
+
+  it("cuts a longer question to 80 code points and ends it in an ellipsis", () => {
+    const title = conversationTitleFrom("b".repeat(100));
+    expect(title).toBe(`${"b".repeat(80)}…`);
+    expect(Array.from(title ?? "")).toHaveLength(81);
+  });
+
+  it("cuts on a code point, so an emoji at the edge stays whole", () => {
+    // Each emoji is two UTF-16 units, so a cut by string length keeps 40.
+    const title = conversationTitleFrom("😀".repeat(90));
+    expect(title).toBe(`${"😀".repeat(80)}…`);
+  });
+
+  it("drops the space the cut leaves before the ellipsis", () => {
+    const title = conversationTitleFrom(`${"c".repeat(79)} ${"d".repeat(30)}`);
+    expect(title).toBe(`${"c".repeat(79)}…`);
+  });
+
+  it("answers null for a question that is only whitespace", () => {
+    expect(conversationTitleFrom(" \n\t ")).toBeNull();
+    expect(conversationTitleFrom("")).toBeNull();
   });
 });
 
