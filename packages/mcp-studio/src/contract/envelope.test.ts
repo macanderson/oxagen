@@ -106,11 +106,11 @@ describe("relay-envelope/v1", () => {
     expect(relayEnvelopeSchema.safeParse(atLimit).success).toBe(true);
   });
 
-  it("refuses an instant whose offset is out of range, which no clock can read", () => {
+  it("refuses an instant whose offset is out of range, once, with the offset rule", () => {
     for (const field of ["issued_at", "expires_at"] as const) {
       const envelope = { ...relayEnvelope, [field]: "2026-09-26T12:00:00+99:99" };
       expect(pathsAndMessages(relayEnvelopeSchema.safeParse(envelope))).toStrictEqual([
-        { path: field, message: `${field} is not an instant a clock can read` },
+        { path: field, message: "the offset must be Z, or +HH:MM or -HH:MM with hours 00 to 23 and minutes 00 to 59" },
       ]);
     }
   });

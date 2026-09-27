@@ -1,0 +1,55 @@
+// ledger-descriptor-set.ts: the FileDescriptorSet of fixtures/grpc/ledger.proto,
+// as base64, the form a manifest's descriptor_set takes.
+//
+// Regenerate it when ledger.proto changes. From a folder that holds a copy of
+// the proto under proto/:
+//
+//   npx --yes @bufbuild/buf@1.73.0 build proto --as-file-descriptor-set \
+//     --exclude-source-info -o ledger.binpb
+//   base64 -i ledger.binpb
+//
+// Then update LEDGER_PROTO_SHA256. descriptors.test.ts fails while the hash
+// and the proto disagree.
+
+/** The SHA-256 of fixtures/grpc/ledger.proto that this descriptor set was built from. */
+export const LEDGER_PROTO_SHA256 = "84d173f206eb58ac20407bba45caa23ea3398e194d5f39b1dd84c7f3be7d05e1";
+
+/** ledger.proto with google/protobuf/any.proto and timestamp.proto, as base64. */
+export const LEDGER_DESCRIPTOR_SET = [
+  "CuQBChlnb29nbGUvcHJvdG9idWYvYW55LnByb3RvEg9nb29nbGUucHJvdG9idWYiNgoDQW55EhkKCHR5cGVfdXJsGAEgASgJ",
+  "Ugd0eXBlVXJsEhQKBXZhbHVlGAIgASgMUgV2YWx1ZUJ2ChNjb20uZ29vZ2xlLnByb3RvYnVmQghBbnlQcm90b1ABWixnb29n",
+  "bGUuZ29sYW5nLm9yZy9wcm90b2J1Zi90eXBlcy9rbm93bi9hbnlwYqICA0dQQqoCHkdvb2dsZS5Qcm90b2J1Zi5XZWxsS25v",
+  "d25UeXBlc2IGcHJvdG8zCv8BCh9nb29nbGUvcHJvdG9idWYvdGltZXN0YW1wLnByb3RvEg9nb29nbGUucHJvdG9idWYiOwoJ",
+  "VGltZXN0YW1wEhgKB3NlY29uZHMYASABKANSB3NlY29uZHMSFAoFbmFub3MYAiABKAVSBW5hbm9zQoUBChNjb20uZ29vZ2xl",
+  "LnByb3RvYnVmQg5UaW1lc3RhbXBQcm90b1ABWjJnb29nbGUuZ29sYW5nLm9yZy9wcm90b2J1Zi90eXBlcy9rbm93bi90aW1l",
+  "c3RhbXBwYvgBAaICA0dQQqoCHkdvb2dsZS5Qcm90b2J1Zi5XZWxsS25vd25UeXBlc2IGcHJvdG8zCpMQCgxsZWRnZXIucHJv",
+  "dG8SEWFfaW50ZWwubGVkZ2VyLnYxGhlnb29nbGUvcHJvdG9idWYvYW55LnByb3RvGh9nb29nbGUvcHJvdG9idWYvdGltZXN0",
+  "YW1wLnByb3RvIjsKBU1vbmV5EhYKBmFtb3VudBgBIAEoA1IGYW1vdW50EhoKCGN1cnJlbmN5GAIgASgJUghjdXJyZW5jeSKm",
+  "BAoFRW50cnkSDgoCaWQYASABKAlSAmlkEh0KCmFjY291bnRfaWQYAiABKAlSCWFjY291bnRJZBIwCgRraW5kGAMgASgOMhwu",
+  "YV9pbnRlbC5sZWRnZXIudjEuRW50cnlLaW5kUgRraW5kEi4KBW1vbmV5GAQgASgLMhguYV9pbnRlbC5sZWRnZXIudjEuTW9u",
+  "ZXlSBW1vbmV5EjcKCXBvc3RlZF9hdBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBSCHBvc3RlZEF0EjwKBmxh",
+  "YmVscxgGIAMoCzIkLmFfaW50ZWwubGVkZ2VyLnYxLkVudHJ5LkxhYmVsc0VudHJ5UgZsYWJlbHMSHwoLcmVsYXRlZF9pZHMY",
+  "ByADKAlSCnJlbGF0ZWRJZHMSLAoGZGV0YWlsGAggASgLMhQuZ29vZ2xlLnByb3RvYnVmLkFueVIGZGV0YWlsEh8KCmludm9p",
+  "Y2VfaWQYCSABKAlIAFIJaW52b2ljZUlkEiEKC3RyYW5zZmVyX2lkGAogASgJSABSCnRyYW5zZmVySWQSIQoLbWFudWFsX25v",
+  "dGUYCyABKAlIAFIKbWFudWFsTm90ZRIaCghyZXZlcnNlZBgMIAEoCFIIcmV2ZXJzZWQaOQoLTGFiZWxzRW50cnkSEAoDa2V5",
+  "GAEgASgJUgNrZXkSFAoFdmFsdWUYAiABKAlSBXZhbHVlOgI4AUIICgZzb3VyY2UiIQoPR2V0RW50cnlSZXF1ZXN0Eg4KAmlk",
+  "GAEgASgJUgJpZCK2AwoQUG9zdEVudHJ5UmVxdWVzdBIdCgphY2NvdW50X2lkGAEgASgJUglhY2NvdW50SWQSMAoEa2luZBgC",
+  "IAEoDjIcLmFfaW50ZWwubGVkZ2VyLnYxLkVudHJ5S2luZFIEa2luZBIuCgVtb25leRgDIAEoCzIYLmFfaW50ZWwubGVkZ2Vy",
+  "LnYxLk1vbmV5UgVtb25leRJHCgZsYWJlbHMYBCADKAsyLy5hX2ludGVsLmxlZGdlci52MS5Qb3N0RW50cnlSZXF1ZXN0Lkxh",
+  "YmVsc0VudHJ5UgZsYWJlbHMSLAoGZGV0YWlsGAUgASgLMhQuZ29vZ2xlLnByb3RvYnVmLkFueVIGZGV0YWlsEh8KCmludm9p",
+  "Y2VfaWQYBiABKAlIAFIJaW52b2ljZUlkEiEKC3RyYW5zZmVyX2lkGAcgASgJSABSCnRyYW5zZmVySWQSIQoLbWFudWFsX25v",
+  "dGUYCCABKAlIAFIKbWFudWFsTm90ZRo5CgtMYWJlbHNFbnRyeRIQCgNrZXkYASABKAlSA2tleRIUCgV2YWx1ZRgCIAEoCVIF",
+  "dmFsdWU6AjgBQggKBnNvdXJjZSI9ChNSZXZlcnNlRW50cnlSZXF1ZXN0Eg4KAmlkGAEgASgJUgJpZBIWCgZyZWFzb24YAiAB",
+  "KAlSBnJlYXNvbiJlChJMaXN0RW50cmllc1JlcXVlc3QSHQoKYWNjb3VudF9pZBgBIAEoCVIJYWNjb3VudElkEjAKBXNpbmNl",
+  "GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcFIFc2luY2UiRAoNVXBsb2FkU3VtbWFyeRIWCgZwb3N0ZWQYASAB",
+  "KAVSBnBvc3RlZBIbCgllbnRyeV9pZHMYAiADKAlSCGVudHJ5SWRzKlQKCUVudHJ5S2luZBIaChZFTlRSWV9LSU5EX1VOU1BF",
+  "Q0lGSUVEEAASFAoQRU5UUllfS0lORF9ERUJJVBABEhUKEUVOVFJZX0tJTkRfQ1JFRElUEAIy/QMKBkxlZGdlchJNCghHZXRF",
+  "bnRyeRIiLmFfaW50ZWwubGVkZ2VyLnYxLkdldEVudHJ5UmVxdWVzdBoYLmFfaW50ZWwubGVkZ2VyLnYxLkVudHJ5IgOQAgES",
+  "SgoJUG9zdEVudHJ5EiMuYV9pbnRlbC5sZWRnZXIudjEuUG9zdEVudHJ5UmVxdWVzdBoYLmFfaW50ZWwubGVkZ2VyLnYxLkVu",
+  "dHJ5ElUKDFJldmVyc2VFbnRyeRImLmFfaW50ZWwubGVkZ2VyLnYxLlJldmVyc2VFbnRyeVJlcXVlc3QaGC5hX2ludGVsLmxl",
+  "ZGdlci52MS5FbnRyeSIDkAICElUKC0xpc3RFbnRyaWVzEiUuYV9pbnRlbC5sZWRnZXIudjEuTGlzdEVudHJpZXNSZXF1ZXN0",
+  "GhguYV9pbnRlbC5sZWRnZXIudjEuRW50cnkiA5ACATABElgKDVVwbG9hZEVudHJpZXMSIy5hX2ludGVsLmxlZGdlci52MS5Q",
+  "b3N0RW50cnlSZXF1ZXN0GiAuYV9pbnRlbC5sZWRnZXIudjEuVXBsb2FkU3VtbWFyeSgBElAKC1N5bmNFbnRyaWVzEiMuYV9p",
+  "bnRlbC5sZWRnZXIudjEuUG9zdEVudHJ5UmVxdWVzdBoYLmFfaW50ZWwubGVkZ2VyLnYxLkVudHJ5KAEwAUIoWiZnaXRodWIu",
+  "Y29tL2EtaW50ZWwvbGVkZ2VyL2dlbi9sZWRnZXJ2MWIGcHJvdG8z",
+].join("");

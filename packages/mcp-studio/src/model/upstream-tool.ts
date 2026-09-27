@@ -29,6 +29,7 @@ import {
   toolKeySchema,
   upstreamToolNameSchema,
 } from "../contract/primitives";
+import { TOOL_DESCRIPTION_MAX } from "../contract/tools";
 
 // ── Request templates ────────────────────────────────────────────────────────
 
@@ -229,7 +230,11 @@ export const upstreamToolSchema = z
       "An MCP tool's own name, or the suggested tool key for an operation, field, or method: create_refund.",
     ),
     title: z.string().min(1).optional(),
-    description: z.string().optional().describe("From the source, cut at 1,024 characters. Absent when the source has none."),
+    description: z
+      .string()
+      .max(TOOL_DESCRIPTION_MAX)
+      .optional()
+      .describe("From the source, cut at 1,024 characters. Absent when the source has none."),
     inputSchema: objectJsonSchemaSchema.describe("Every input in one object, before tools.toml applies."),
     outputSchema: objectJsonSchemaSchema.optional(),
     annotations: lockedMcpToolAnnotationsSchema
@@ -247,3 +252,15 @@ export type UpstreamTool = z.output<typeof upstreamToolSchema>;
 export type UpstreamToolOf<K extends RequestKind> = UpstreamTool & {
   request: Extract<RequestTemplate, { kind: K }>;
 };
+
+/**
+ * A source's description cut to 1,024 UTF-16 code units, the length zod
+ * counts. A cut that would split a surrogate pair drops the pair's first half
+ * too, so the text stays valid. Every importer cuts with this.
+ */
+export function cutDescription(text: string): string {
+  if (text.length <= TOOL_DESCRIPTION_MAX) return text;
+  const last = text.charCodeAt(TOOL_DESCRIPTION_MAX - 1);
+  const splitsPair = last >= 0xd800 && last <= 0xdbff;
+  return text.slice(0, splitsPair ? TOOL_DESCRIPTION_MAX - 1 : TOOL_DESCRIPTION_MAX);
+}
