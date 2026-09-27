@@ -6607,6 +6607,86 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "tool_definition_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "tool_definition_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "context_frame_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "context_frame_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "steering_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "steering_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "system_context_digest": {
+                      "type": "string"
+                    },
+                    "system_context_parts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "system",
+                              "tool",
+                              "steering",
+                              "context"
+                            ]
+                          },
+                          "name": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "provider": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "digest": {
+                            "type": "string"
+                          },
+                          "tokens": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 4294967295
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "name",
+                          "digest",
+                          "tokens"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 1024
+                    },
                     "mcp_server_name": {
                       "type": "string",
                       "maxLength": 512
@@ -13171,6 +13251,86 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "tool_definition_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "tool_definition_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "context_frame_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "context_frame_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "steering_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "steering_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "system_context_digest": {
+                      "type": "string"
+                    },
+                    "system_context_parts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "system",
+                              "tool",
+                              "steering",
+                              "context"
+                            ]
+                          },
+                          "name": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "provider": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "digest": {
+                            "type": "string"
+                          },
+                          "tokens": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 4294967295
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "name",
+                          "digest",
+                          "tokens"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 1024
+                    },
                     "prompt_digest": {
                       "type": "string"
                     },
@@ -15291,6 +15451,86 @@
                     "request_effort": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "tool_definition_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "tool_definition_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "context_frame_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "context_frame_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "steering_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "steering_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "system_context_digest": {
+                      "type": "string"
+                    },
+                    "system_context_parts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "system",
+                              "tool",
+                              "steering",
+                              "context"
+                            ]
+                          },
+                          "name": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "provider": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "digest": {
+                            "type": "string"
+                          },
+                          "tokens": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 4294967295
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "name",
+                          "digest",
+                          "tokens"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 1024
                     }
                   },
                   "additionalProperties": false
@@ -19234,6 +19474,86 @@
                     "request_effort": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "tool_definition_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "tool_definition_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "context_frame_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "context_frame_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "steering_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "steering_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "system_context_digest": {
+                      "type": "string"
+                    },
+                    "system_context_parts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "system",
+                              "tool",
+                              "steering",
+                              "context"
+                            ]
+                          },
+                          "name": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "provider": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "digest": {
+                            "type": "string"
+                          },
+                          "tokens": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 4294967295
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "name",
+                          "digest",
+                          "tokens"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 1024
                     }
                   },
                   "additionalProperties": false
@@ -24179,6 +24499,86 @@
                     "request_effort": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "tool_definition_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "tool_definition_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "context_frame_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "context_frame_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "steering_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "steering_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "system_context_digest": {
+                      "type": "string"
+                    },
+                    "system_context_parts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "system",
+                              "tool",
+                              "steering",
+                              "context"
+                            ]
+                          },
+                          "name": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "provider": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "digest": {
+                            "type": "string"
+                          },
+                          "tokens": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 4294967295
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "name",
+                          "digest",
+                          "tokens"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 1024
                     }
                   },
                   "additionalProperties": false
@@ -28251,6 +28651,86 @@
                       "type": "string",
                       "maxLength": 512
                     },
+                    "tool_definition_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "tool_definition_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "context_frame_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "context_frame_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "steering_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "steering_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "system_context_digest": {
+                      "type": "string"
+                    },
+                    "system_context_parts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "system",
+                              "tool",
+                              "steering",
+                              "context"
+                            ]
+                          },
+                          "name": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "provider": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "digest": {
+                            "type": "string"
+                          },
+                          "tokens": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 4294967295
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "name",
+                          "digest",
+                          "tokens"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 1024
+                    },
                     "mcp_server_name": {
                       "type": "string",
                       "maxLength": 512
@@ -28944,6 +29424,86 @@
                     "request_effort": {
                       "type": "string",
                       "maxLength": 512
+                    },
+                    "tool_definition_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "tool_definition_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "context_frame_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "context_frame_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "steering_tokens": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 4294967295
+                    },
+                    "steering_tokens_basis": {
+                      "type": "string",
+                      "enum": [
+                        "reported",
+                        "estimated"
+                      ]
+                    },
+                    "system_context_digest": {
+                      "type": "string"
+                    },
+                    "system_context_parts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "system",
+                              "tool",
+                              "steering",
+                              "context"
+                            ]
+                          },
+                          "name": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "provider": {
+                            "type": "string",
+                            "maxLength": 512
+                          },
+                          "digest": {
+                            "type": "string"
+                          },
+                          "tokens": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 4294967295
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "name",
+                          "digest",
+                          "tokens"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 1024
                     },
                     "mcp_server_name": {
                       "type": "string",

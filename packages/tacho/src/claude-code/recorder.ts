@@ -38,6 +38,10 @@ import {
   withoutUsage,
 } from "./llm-call-dedupe";
 import {
+  type SystemContextState,
+  SystemContextTracker,
+} from "./system-context";
+import {
   TOOL_CALL_DUPLICATE_OF_ATTR,
   ToolCallLedger,
   type ToolCallLedgerState,
@@ -186,6 +190,11 @@ export interface RecorderState {
   llmCalls?: LlmCallLedgerState;
   /** Tool calls already sealed, by `tool_use_id`; see `tool-call-dedupe.ts`. */
   toolCalls?: ToolCallLedgerState;
+  /**
+   * The session's steering and the system contexts this turn already listed;
+   * see `system-context.ts`. Absent in states written before #4493.
+   */
+  systemContext?: SystemContextState;
   children: Record<
     string,
     {
@@ -231,6 +240,7 @@ export interface ChainMark {
   turnReply: DraftContent | undefined;
   llmCalls: LlmCallLedgerState;
   toolCalls: ToolCallLedgerState;
+  systemContext: SystemContextState;
   /** One mark per subagent chain open at the time, by subagent id. */
   children: Map<
     string,
@@ -416,6 +426,12 @@ export class SessionRecorder {
   private llmCalls = new LlmCallLedger();
   private toolCalls = new ToolCallLedger();
   /**
+   * What the chain's model calls carry as their system context and token
+   * sources: the session's steering, from its `steering.manifest` frame, and
+   * which contexts this turn already listed (#4493).
+   */
+  private systemContext = new SystemContextTracker();
+  /**
    * The recorder whose ledgers judge this chain's model and tool calls, when
    * it is not this one. A subagent's call reaches more than one chain: the
    * proxy seals a model call on the root, the subagent's transcript and hooks
@@ -559,6 +575,7 @@ export class SessionRecorder {
     Object.assign(this.totals, state.totals);
     this.llmCalls = new LlmCallLedger(state.llmCalls);
     this.toolCalls = new ToolCallLedger(state.toolCalls);
+    this.systemContext = new SystemContextTracker(state.systemContext);
     for (const [subagentId, link] of Object.entries(state.children)) {
       const recorder = new SessionRecorder({
         context: this.options.context,
@@ -597,6 +614,7 @@ export class SessionRecorder {
 
   /** The chain position and sticky context, for persistence across restarts. */
   state(): RecorderState {
+    const systemContext = this.systemContext.state();
     const children: RecorderState["children"] = {};
     for (const [subagentId, link] of this.children) {
       children[subagentId] = {
@@ -641,6 +659,7 @@ export class SessionRecorder {
       totals: { ...this.totals },
       llmCalls: this.llmCalls.state(),
       toolCalls: this.toolCalls.state(),
+      ...(Object.keys(systemContext).length > 0 ? { systemContext } : {}),
       children,
     };
   }
@@ -672,6 +691,7 @@ export class SessionRecorder {
       turnReply: this.turnReply,
       llmCalls: this.llmCalls.state(),
       toolCalls: this.toolCalls.state(),
+      systemContext: this.systemContext.state(),
       children,
     };
   }
@@ -731,6 +751,7 @@ export class SessionRecorder {
     this.stopped = mark.stopped;
     this.llmCalls = new LlmCallLedger(mark.llmCalls);
     this.toolCalls = new ToolCallLedger(mark.toolCalls);
+    this.systemContext = new SystemContextTracker(mark.systemContext);
   }
 
   /**
@@ -838,18 +859,35 @@ export class SessionRecorder {
         ? this.llmCallSighting(body, fields.source ?? "collector")
         : NO_SIGHTING;
     const duplicate = sighting.attrs ?? {};
-    const event = this.seal(kind, body, {
-      ts: fields.ts ?? this.now(),
-      source: fields.source ?? "collector",
-      ...(fields.hook_event_name !== undefined
-        ? { hook_event_name: fields.hook_event_name }
-        : {}),
-      attrs: { ...fields.attrs, ...duplicate },
-      ...(fields.fidelity !== undefined ? { fidelity: fields.fidelity } : {}),
-      ...(fields.content !== undefined ? { content: fields.content } : {}),
-      turn: {},
-    });
+    // The call's system context and token sources, measured from the request
+    // the proxy recorded (#4493). A member the producer set itself wins.
+    const measured =
+      kind === "llm_call"
+        ? this.systemContext.measure(
+            fields.content,
+            fields.attrs,
+            this.turnOpen ? `turn:${this.turnSeq}` : `idle:${this.turnSeq}`,
+          )
+        : undefined;
+    const event = this.seal(
+      kind,
+      measured !== undefined ? { ...measured.facts, ...body } : body,
+      {
+        ts: fields.ts ?? this.now(),
+        source: fields.source ?? "collector",
+        ...(fields.hook_event_name !== undefined
+          ? { hook_event_name: fields.hook_event_name }
+          : {}),
+        attrs: { ...fields.attrs, ...measured?.attrs, ...duplicate },
+        ...(fields.fidelity !== undefined ? { fidelity: fields.fidelity } : {}),
+        ...(fields.content !== undefined ? { content: fields.content } : {}),
+        turn: {},
+      },
+    );
     sighting.commit();
+    measured?.commit();
+    if (kind === "steering.manifest")
+      this.systemContext.noteSteeringManifest(body);
     if (kind === "agent_stop") this.stopped = true;
     return event;
   }
