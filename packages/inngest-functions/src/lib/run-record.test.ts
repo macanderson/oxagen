@@ -64,6 +64,7 @@ vi.mock("@oxagen/telemetry", () => ({
   selectTachoSubagentEvents: mocks.selectTachoSubagentEvents,
 }));
 
+import { NonRetriableError } from "@oxagen/functions";
 import { TRANSCRIPT_FRAME_CAP } from "@oxagen/run-ledger";
 import {
   readSealedSegments,
@@ -77,6 +78,7 @@ const SCOPE = {
 };
 const OTHER_WORKSPACE = "0192d4a8-7c1e-7a00-8000-0000000000b2";
 const SESSION = "0192d4a8-7c1e-7a00-8000-00000000c0de";
+const HEAD_HASH = `sha256:${"f".repeat(64)}`;
 
 function tachoRow(seq: number): TachoFrameRow {
   return {
@@ -139,6 +141,8 @@ describe("resolveRunRecord", () => {
         enforcementTier: "gateway",
         completenessGaps: ["tool_bodies", 3],
         replayGrade: "view",
+        seqCount: 12,
+        finalHash: HEAD_HASH,
       },
     ]);
     const record = await resolveRunRecord(SCOPE, "tse_4q8r1t6v3x5z0b2d7h2k9m");
@@ -148,6 +152,8 @@ describe("resolveRunRecord", () => {
       enforcementTier: "gateway",
       completenessGaps: ["tool_bodies"],
       replayGrade: "view",
+      seqCount: 12,
+      finalHash: HEAD_HASH,
     });
     expect(scopes).toEqual([SCOPE]);
     const [query] = compiled;
@@ -299,6 +305,8 @@ describe("readSealedSegments", () => {
       enforcementTier: "gateway",
       completenessGaps: [],
       replayGrade: "view",
+      seqCount: 501,
+      finalHash: null,
     });
     expect(segment?.frameCount).toBe(501);
     expect(segment?.digests.at(-1)).toBe(rows[500]?.hash);
@@ -371,6 +379,8 @@ describe("readSealedSegments", () => {
       enforcementTier: "harness",
       completenessGaps: [],
       replayGrade: null,
+      seqCount: 2,
+      finalHash: null,
     });
     const [carried, bare] = (segment?.envelopes ?? []) as Array<
       Record<string, unknown>
@@ -433,6 +443,8 @@ describe("readSealedSegments", () => {
       enforcementTier: "harness",
       completenessGaps: [],
       replayGrade: null,
+      seqCount: 1,
+      finalHash: null,
     });
     const [carried] = (segment?.envelopes ?? []) as Array<
       Record<string, JsonValue>
@@ -453,10 +465,13 @@ describe("readSealedSegments", () => {
 
   // #3823: a subagent records on a hash chain of its own from genesis, so
   // each chain is attested and verified as an attempt of its own.
-  it("adds one segment per subagent chain, with its own row's seal and a chain block, and leaves out a chain with no frame", async () => {
+  describe("subagent chains (#3823)", () => {
     const CHILD = "0192d4a8-7c1e-7a00-8000-00000000c1d0";
     const EMPTY = "0192d4a8-7c1e-7a00-8000-00000000c1d1";
-    const chainRow = (sessionUuid: string) => ({
+    const chainRow = (
+      sessionUuid: string,
+      over: { seqCount?: number; finalHash?: string | null } = {},
+    ) => ({
       sessionUuid,
       sessionId: `${sessionUuid.slice(0, 15)}000${sessionUuid.slice(18)}`,
       parentSessionUuid: SESSION,
@@ -467,73 +482,168 @@ describe("readSealedSegments", () => {
       startedAt: new Date("2026-09-11T09:01:00.000Z"),
       lastEventAt: new Date("2026-09-11T09:02:00.000Z"),
       createdAt: new Date("2026-09-11T09:01:00.000Z"),
-      finalHash: null,
-      sealedAt: null,
+      finalHash: null as string | null,
+      sealedAt: null as Date | null,
       enforcementTier: "observe",
       completenessGaps: ["tool_bodies", 3],
       replayGrade: "inspect",
+      ...over,
     });
-    const compiled: string[] = [];
-    const db = drizzle.mock({ schema });
-    mocks.withTenantDb.mockImplementation(
-      (fn: (tx: unknown) => { toSQL(): { sql: string } }) => {
-        compiled.push(fn(db).toSQL().sql);
-        return Promise.resolve([chainRow(CHILD), chainRow(EMPTY)]);
-      },
-    );
-    const bySession: Record<string, TachoFrameRow[]> = {
-      [SESSION]: [tachoRow(0), tachoRow(1)],
-      [CHILD]: [tachoRow(0), tachoRow(1)],
-      [EMPTY]: [],
-    };
-    mocks.selectTachoEventRecords.mockImplementation(
-      ({ sessionUuid, afterSeq }: { sessionUuid: string; afterSeq: number }) =>
-        Promise.resolve(
-          (bySession[sessionUuid] ?? [])
-            .filter((r) => r.seq > afterSeq)
-            .map((frame) => ({ frame, envelope: {} })),
-        ),
-    );
-    const segments = await readSealedSegments(SCOPE, {
-      source: "tacho",
+    const ROOT = {
+      source: "tacho" as const,
       sessionUuid: SESSION,
       enforcementTier: "gateway",
-      completenessGaps: [],
+      completenessGaps: [] as string[],
       replayGrade: "view",
-    });
-    expect(
-      segments.map((s) => [s.attemptPublicId, s.frameCount, s.chain]),
-    ).toEqual([
-      [SESSION, 2, undefined],
-      [
-        CHILD,
-        2,
-        {
-          session_uuid: CHILD,
-          parent_session_uuid: SESSION,
-          subagent_id: "agent-1",
-          subagent_type: "Explore",
-          spawn_tool_use_id: "toolu_A",
+      seqCount: 2,
+      finalHash: null,
+    };
+
+    /**
+     * Postgres lists `chains` under the run, and the event store holds
+     * `bySession`'s rows. Answers the SQL the chain list compiled.
+     */
+    function stored(
+      chains: ReturnType<typeof chainRow>[],
+      bySession: Record<string, TachoFrameRow[]>,
+    ) {
+      const compiled: string[] = [];
+      const db = drizzle.mock({ schema });
+      mocks.withTenantDb.mockImplementation(
+        (fn: (tx: unknown) => { toSQL(): { sql: string } }) => {
+          compiled.push(fn(db).toSQL().sql);
+          return Promise.resolve(chains);
         },
-      ],
-    ]);
-    // The child's seal is its own row's, never the run's.
-    expect(segments[1]).toMatchObject({
-      attemptId: CHILD,
-      enforcementTier: "observe",
-      completenessGaps: ["tool_bodies"],
-      replayGrade: "inspect",
-      merkleRoot: "",
-      archiveSegmentDigest: null,
+      );
+      mocks.selectTachoEventRecords.mockImplementation(
+        ({
+          sessionUuid,
+          afterSeq,
+        }: {
+          sessionUuid: string;
+          afterSeq: number;
+        }) =>
+          Promise.resolve(
+            (bySession[sessionUuid] ?? [])
+              .filter((r) => r.seq > afterSeq)
+              .map((frame) => ({ frame, envelope: {} })),
+          ),
+      );
+      return compiled;
+    }
+
+    const readSessions = () =>
+      mocks.selectTachoEventRecords.mock.calls.map(
+        (call) => (call[0] as { sessionUuid: string }).sessionUuid,
+      );
+
+    it("adds one segment per subagent chain, with its own row's seal and a chain block, and leaves out a chain that recorded nothing", async () => {
+      const compiled = stored(
+        [chainRow(CHILD), chainRow(EMPTY, { seqCount: 0 })],
+        {
+          [SESSION]: [tachoRow(0), tachoRow(1)],
+          [CHILD]: [tachoRow(0), tachoRow(1)],
+        },
+      );
+      const segments = await readSealedSegments(SCOPE, ROOT);
+      expect(
+        segments.map((s) => [s.attemptPublicId, s.frameCount, s.chain]),
+      ).toEqual([
+        [SESSION, 2, undefined],
+        [
+          CHILD,
+          2,
+          {
+            session_uuid: CHILD,
+            parent_session_uuid: SESSION,
+            subagent_id: "agent-1",
+            subagent_type: "Explore",
+            spawn_tool_use_id: "toolu_A",
+          },
+        ],
+      ]);
+      // The child's seal is its own row's, never the run's.
+      expect(segments[1]).toMatchObject({
+        attemptId: CHILD,
+        enforcementTier: "observe",
+        completenessGaps: ["tool_bodies"],
+        replayGrade: "inspect",
+        merkleRoot: "",
+        archiveSegmentDigest: null,
+      });
+      expect(segments[0]).toMatchObject({
+        enforcementTier: "gateway",
+        replayGrade: "view",
+      });
+      // A chain that recorded nothing is not even read.
+      expect(readSessions()).not.toContain(EMPTY);
+      // The chains were listed under the run's root, fenced to the workspace.
+      expect(compiled[0]).toMatch(/"sessions"\."root_session_uuid" = \$\d+/);
+      expect(compiled[0]).toMatch(/"sessions"\."workspace_id" = \$\d+/);
+      expect(scopes).toEqual([SCOPE]);
     });
-    expect(segments[0]).toMatchObject({
-      enforcementTier: "gateway",
-      replayGrade: "view",
+
+    // Codex on #4421: ingest moves seq_count before ClickHouse returns the
+    // batch, so a read right after a seal can see a prefix of a child.
+    it("refuses a child whose recorded head the event store does not return yet, with an error the job retries (negative)", async () => {
+      stored([chainRow(CHILD, { seqCount: 3 })], {
+        [SESSION]: [tachoRow(0), tachoRow(1)],
+        [CHILD]: [tachoRow(0), tachoRow(1)],
+      });
+      const error = await readSealedSegments(SCOPE, ROOT).then(
+        () => null,
+        (e: unknown) => e,
+      );
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(
+        `chain ${CHILD} records seq 2 as its head, and the event store returns frames through seq 1`,
+      );
+      // A plain Error: the export job retries it, where a NonRetriableError
+      // would fail the export at once.
+      expect(error).not.toBeInstanceOf(NonRetriableError);
     });
-    // The chains were listed under the run's root, fenced to the workspace.
-    expect(compiled[0]).toMatch(/"sessions"\."root_session_uuid" = \$\d+/);
-    expect(compiled[0]).toMatch(/"sessions"\."workspace_id" = \$\d+/);
-    expect(scopes).toEqual([SCOPE]);
+
+    it("refuses a child whose recorded frames the event store returns none of (negative)", async () => {
+      stored([chainRow(CHILD)], {
+        [SESSION]: [tachoRow(0), tachoRow(1)],
+      });
+      await expect(readSealedSegments(SCOPE, ROOT)).rejects.toThrow(
+        `chain ${CHILD} records seq 1 as its head, and the event store returns no frame`,
+      );
+    });
+
+    it("signs a sealed child whose seal frame is followed by a later frame, and refuses one whose seal frame is not returned (negative)", async () => {
+      // A host's seal holds against a late frame, so the seal's frame is
+      // not always the last one.
+      stored([chainRow(CHILD, { finalHash: tachoRow(0).hash })], {
+        [SESSION]: [tachoRow(0), tachoRow(1)],
+        [CHILD]: [tachoRow(0), tachoRow(1)],
+      });
+      const segments = await readSealedSegments(SCOPE, ROOT);
+      expect(segments.map((s) => s.attemptId)).toEqual([SESSION, CHILD]);
+
+      stored([chainRow(CHILD, { finalHash: HEAD_HASH })], {
+        [SESSION]: [tachoRow(0), tachoRow(1)],
+        [CHILD]: [tachoRow(0), tachoRow(1)],
+      });
+      await expect(readSealedSegments(SCOPE, ROOT)).rejects.toThrow(
+        `chain ${CHILD} sealed at ${HEAD_HASH}, and the event store returns no frame with that hash`,
+      );
+    });
+
+    it("refuses the run's own chain read as a prefix, before it lists a child (negative)", async () => {
+      stored([chainRow(CHILD)], {
+        [SESSION]: [tachoRow(0), tachoRow(1)],
+        [CHILD]: [tachoRow(0), tachoRow(1)],
+      });
+      await expect(
+        readSealedSegments(SCOPE, { ...ROOT, seqCount: 3 }),
+      ).rejects.toThrow(
+        `chain ${SESSION} records seq 2 as its head, and the event store returns frames through seq 1`,
+      );
+      expect(mocks.withTenantDb).not.toHaveBeenCalled();
+      expect(readSessions()).toEqual([SESSION]);
+    });
   });
 
   // #3814: each row used to search every reading it leaves open, although
@@ -589,6 +699,8 @@ describe("readSealedSegments", () => {
       enforcementTier: "harness",
       completenessGaps: [],
       replayGrade: null,
+      seqCount: 2,
+      finalHash: null,
     });
     expect(
       (segment?.envelopes ?? []).map(
@@ -657,6 +769,8 @@ describe("readSealedSegments", () => {
       enforcementTier: "harness",
       completenessGaps: [],
       replayGrade: null,
+      seqCount: 2,
+      finalHash: null,
     });
     const calls = mocks.unflattenEventReading.mock.calls;
     const first = (
@@ -700,6 +814,9 @@ const WRAPPED = {
   enforcementTier: "harness",
   completenessGaps: [] as string[],
   replayGrade: null,
+  // The transcript read does not check the recorded head. Only the export does.
+  seqCount: 0,
+  finalHash: null,
 };
 
 // The run's own chain as the jobs read it, with no subagent chain listed.

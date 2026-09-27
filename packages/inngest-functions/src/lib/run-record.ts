@@ -87,6 +87,10 @@ type RunRecord =
       enforcementTier: string;
       completenessGaps: string[];
       replayGrade: string | null;
+      /** The chain's next free seq, which ingest moves before ClickHouse. */
+      seqCount: number;
+      /** The hash the seal recorded, or null while the session is open. */
+      finalHash: string | null;
     };
 
 const gapsOf = (value: unknown): string[] =>
@@ -125,6 +129,8 @@ export async function resolveRunRecord(
             enforcementTier: schema.tachoSessions.enforcementTier,
             completenessGaps: schema.tachoSessions.completenessGaps,
             replayGrade: schema.tachoSessions.replayGrade,
+            seqCount: schema.tachoSessions.seqCount,
+            finalHash: schema.tachoSessions.finalHash,
           })
           .from(schema.tachoSessions)
           .where(
@@ -143,6 +149,8 @@ export async function resolveRunRecord(
         enforcementTier: row.enforcementTier,
         completenessGaps: gapsOf(row.completenessGaps),
         replayGrade: row.replayGrade,
+        seqCount: row.seqCount,
+        finalHash: row.finalHash,
       };
     }
     const store = ledgerStore();
@@ -298,6 +306,46 @@ function tachoEnvelope(row: TachoFrameRow): JsonValue {
   };
 }
 
+/**
+ * Refuses a chain whose recorded head ClickHouse cannot return yet. Ingest
+ * moves `seq_count` before the batch's insert is readable, so a read right
+ * after a seal can return a prefix of the chain, or nothing. Signing that
+ * prefix would leave the later frames out of an export that claims to hold
+ * the whole chain. The error is a plain `Error`, so the export job retries
+ * the read, and marks the export failed with this message once its retries
+ * run out.
+ *
+ * The head is the highest seq read, not the last row's, so a chain with a
+ * recorded break below its head still passes. A sealed chain also needs its
+ * seal's frame among the rows. A host's seal holds against later frames, so
+ * that frame is not always the last one.
+ */
+function assertHeadReadable(
+  sessionUuid: string,
+  records: readonly TachoEventRecord[],
+  row: { seqCount: number; finalHash: string | null },
+): void {
+  if (row.seqCount === 0) return;
+  const recorded = row.seqCount - 1;
+  const head = records.reduce(
+    (highest, record) => Math.max(highest, record.frame.seq),
+    -1,
+  );
+  if (head < recorded) {
+    throw new Error(
+      `chain ${sessionUuid} records seq ${recorded} as its head, and the event store returns ${head < 0 ? "no frame" : `frames through seq ${head}`}`,
+    );
+  }
+  if (
+    row.finalHash !== null &&
+    !records.some((record) => record.frame.hash === row.finalHash)
+  ) {
+    throw new Error(
+      `chain ${sessionUuid} sealed at ${row.finalHash}, and the event store returns no frame with that hash`,
+    );
+  }
+}
+
 /** A wrapped chain's segment, built from its stored rows. */
 function tachoSegment(
   sessionUuid: string,
@@ -333,9 +381,13 @@ function tachoSegment(
  * on a hash chain of its own, from genesis at its own seq 0, so each chain is
  * attested and verified as an attempt of its own, with the chain's session
  * uuid as its id and its tier, gaps and grade from the chain's own row. A
- * chain with no stored frame has nothing to attest and is left out. A ledger
- * attempt sealed before the recorder (no segment) fails the read: an export
- * attests what the seal committed to, and that seal committed to nothing.
+ * chain that recorded no frame has nothing to attest and is left out. Every
+ * other chain is read through the head its row records
+ * (`assertHeadReadable`). A child that never sealed, such as a crashed
+ * subagent, is signed at that head rather than held until its idle close. A
+ * ledger attempt sealed before the recorder (no segment) fails the read: an
+ * export attests what the seal committed to, and that seal committed to
+ * nothing.
  */
 export async function readSealedSegments(
   scope: RunScope,
@@ -343,17 +395,14 @@ export async function readSealedSegments(
 ): Promise<SealedSegment[]> {
   return runInTenantScope(scope, async () => {
     if (record.source === "tacho") {
-      const segments = [
-        tachoSegment(
-          record.sessionUuid,
-          await allTachoRecords(record.sessionUuid),
-          record,
-        ),
-      ];
+      const own = await allTachoRecords(record.sessionUuid);
+      assertHeadReadable(record.sessionUuid, own, record);
+      const segments = [tachoSegment(record.sessionUuid, own, record)];
       const chains = await listSubagentChains(scope, record.sessionUuid);
       for (const chain of chains) {
+        if (chain.seqCount === 0) continue;
         const records = await allTachoRecords(chain.sessionUuid);
-        if (records.length === 0) continue;
+        assertHeadReadable(chain.sessionUuid, records, chain);
         segments.push({
           ...tachoSegment(chain.sessionUuid, records, {
             enforcementTier: chain.enforcementTier,
