@@ -11,7 +11,7 @@
 import type { Tx } from "@oxagen/database";
 import { describe, expect, it } from "vitest";
 import type { RunTotalsRecord } from "./cost-rollup";
-import { writeRunTotals } from "./cost-rollup-store";
+import { type RunTokenSources, writeRunTotals } from "./cost-rollup-store";
 
 type Written = {
   values: Record<string, unknown>;
@@ -148,5 +148,53 @@ describe("writeRunTotals", () => {
       ],
       steps: { failed: 1, repeated: 0, retried: 0 },
     });
+  });
+});
+
+describe("writeRunTotals token sources (#4493)", () => {
+  async function writeSources(sources?: RunTokenSources): Promise<Written[]> {
+    const { tx, written } = recordingTx();
+    await writeRunTotals(
+      tx,
+      record,
+      new Date("2026-09-15T10:00:00.000Z"),
+      sources,
+    );
+    return written;
+  }
+
+  it("writes the three sums on the insert and on a rebuild", async () => {
+    const [{ values, set }] = (await writeSources({
+      toolDefinitionTokens: 12_400,
+      contextFrameTokens: null,
+      steeringTokens: 0,
+    })) as [Written];
+    const expected = {
+      toolDefinitionTokens: 12_400,
+      contextFrameTokens: null,
+      steeringTokens: 0,
+    };
+    expect(values).toMatchObject(expected);
+    expect(set).toMatchObject(expected);
+  });
+
+  it("writes null, never zero, for sources the caller did not pass", async () => {
+    const [{ values, set }] = (await writeSources()) as [Written];
+    for (const row of [values, set]) {
+      expect(row.toolDefinitionTokens).toBeNull();
+      expect(row.contextFrameTokens).toBeNull();
+      expect(row.steeringTokens).toBeNull();
+    }
+  });
+
+  it("clamps a sum past the integer column's range", async () => {
+    const [{ values }] = (await writeSources({
+      toolDefinitionTokens: 3_000_000_000,
+      contextFrameTokens: 2_147_483_647,
+      steeringTokens: 5,
+    })) as [Written];
+    expect(values.toolDefinitionTokens).toBe(2_147_483_647);
+    expect(values.contextFrameTokens).toBe(2_147_483_647);
+    expect(values.steeringTokens).toBe(5);
   });
 });

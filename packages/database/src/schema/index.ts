@@ -29,6 +29,7 @@ export * from "./cost-run-pr-outcomes";
 export * from "./tools";
 export * from "./cms";
 export * from "./skills";
+export * from "./memory";
 
 // Relations must be exported for Drizzle to include them in the schema
 export * from "../relations";

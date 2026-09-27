@@ -15,7 +15,7 @@ import {
   toolRefSchema,
   toolTargetSchema,
 } from "./common";
-import { recordKindSchema } from "./record";
+import { recordKindSchema } from "./record-kind";
 
 /** A grade from 1, poor, to 5, excellent. */
 export const gradeSchema = z.number().int().min(1).max(5);
