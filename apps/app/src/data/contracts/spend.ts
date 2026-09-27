@@ -165,7 +165,7 @@ const Instant = z.iso.datetime();
 /** The span a finding or a list of findings covers. */
 const FindingWindow = z.object({ from: Instant, to: Instant });
 
-/** The kinds the findings job detects (ADR-062's detector table, ADR-206). */
+/** The kinds the findings job detects (ADR-062's detector table, ADR-208). */
 export const FINDING_KINDS = [
   "cache_writes_never_read",
   "duplicate_tool_calls",

@@ -60,4 +60,4 @@ A read that names `runId` adds `citation` to each finding: what it cites in that
 | `cache_writes_never_read` | operator (`prn_…`), or the agent when the run names no operator | the written prefix sent uncached |
 | `unpaged_results` | tool | the same result capped at 4,000 tokens |
 
-A turn counts only when every tool call it made is a repeat. Its whole cost counts once, and `calls` counts turns for these three kinds. A run whose model calls the job did not read has its repeats cited with no price. ADR-206 has the rules, and ADR-062's detector table has the rollup and frame fields each kind reads.
+A turn counts only when every tool call it made is a repeat. Its whole cost counts once, and `calls` counts turns for these three kinds. A run whose model calls the job did not read has its repeats cited with no price. ADR-208 has the rules, and ADR-062's detector table has the rollup and frame fields each kind reads.

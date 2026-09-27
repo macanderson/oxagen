@@ -1,6 +1,6 @@
 /**
  * requests.ts — each run's tool calls in time order, with each call's repeat
- * flag and the model request that made it (ADR-206). Spin loops, repeated
+ * flag and the model request that made it (ADR-208). Spin loops, repeated
  * shell commands, duplicate tool calls, and unpaged results all read this one
  * view, so they agree on what a repeat is.
  *
@@ -15,7 +15,7 @@
  * finish a model call in one millisecond. The chain keeps their requests
  * apart. A call whose chain has no such frame takes the run's latest frame at
  * or before it: the proxy records a subagent's model call on the root chain
- * (ADR-168), so that call still lands by time alone (ADR-206 names the gap).
+ * (ADR-168), so that call still lands by time alone (ADR-208 names the gap).
  */
 import type { RunTotalsRecord } from "../cost-rollup";
 import { RepeatedCalls, repeatKindOf } from "../step-grade";

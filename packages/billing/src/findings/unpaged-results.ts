@@ -2,7 +2,7 @@
  * Unpaged results (detector 5): a tool call whose result is above
  * `UNPAGED_RESULT_TOKENS`, re-priced at one page of `PAGE_TOKENS` at the
  * run's input price. It prices a part of a request, so it claims no frame
- * (ADR-206, counting rule 2). A call a repeat finding can cite is left to
+ * (ADR-208, counting rule 2). A call a repeat finding can cite is left to
  * that finding, whether or not its request counted.
  */
 import type { RunTotalsRecord } from "../cost-rollup";

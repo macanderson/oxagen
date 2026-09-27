@@ -1,4 +1,4 @@
-# ADR-206: Unproductive spend counts each model-call frame once
+# ADR-208: Unproductive spend counts each model-call frame once
 
 - **Status:** Accepted
 - **Date:** 2026-09-26

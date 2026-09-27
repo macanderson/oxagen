@@ -4,7 +4,7 @@
  * the saving is the write premium: the write cost minus the written tokens at
  * the run's input price. Cited at the run's operator, or at its agent when it
  * names no operator. It prices a part of each request, so it claims no frame
- * (ADR-206, counting rule 2).
+ * (ADR-208, counting rule 2).
  */
 import { priceInputTokens, runInputPrice } from "../cost-rollup";
 import {

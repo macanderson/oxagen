@@ -27,7 +27,7 @@
 // the decision on it, and the detectors cite only runs that started after it.
 //
 // `finding_claims` holds the model calls each whole-call finding priced, so
-// the headline unproductive spend counts a call once (ADR-206).
+// the headline unproductive spend counts a call once (ADR-208).
 import { PROOF_VERDICTS } from "@oxagen/run-evidence";
 import { sql } from "drizzle-orm";
 import {
@@ -511,7 +511,7 @@ export const costCenters = costSchema.table(
 // ── findings ──────────────────────────────────────────────────────────────────
 /**
  * The finding kinds (spec §12.8; ADR-062's detector table). The first four
- * shipped with ADR-062. ADR-206 adds `spin_loops` and the seven kinds the
+ * shipped with ADR-062. ADR-208 adds `spin_loops` and the seven kinds the
  * later unproductive spend detectors write, so each lane adds a detector
  * without a migration of its own.
  */
@@ -533,7 +533,7 @@ export type FindingKind = (typeof FINDING_KINDS)[number];
 
 /**
  * The detectors whose findings price whole model calls and claim them
- * (ADR-206, counting rule 1): 1 is spin and poll loops, 7 is recurring runs,
+ * (ADR-208, counting rule 1): 1 is spin and poll loops, 7 is recurring runs,
  * and 8 is spend with no outcome. The headline counts a claimed call once,
  * under the lowest of these numbers that claims it.
  */
@@ -650,7 +650,7 @@ export const findings = costSchema.table(
 
 // ── finding_claims ────────────────────────────────────────────────────────────
 /**
- * The model calls a finding claims (ADR-206). A finding from detector 1, 7,
+ * The model calls a finding claims (ADR-208). A finding from detector 1, 7,
  * or 8 prices whole calls, and it writes one row per call it priced. The
  * headline unproductive spend adds these rows and counts a call once, under
  * the lowest detector that claims it. The rows go with their finding: a pass

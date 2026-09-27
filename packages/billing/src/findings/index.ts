@@ -1,6 +1,6 @@
 /**
  * The PURE findings detectors (Mission Control spec §12.8; ADR-062,
- * ADR-206). No I/O: ../findings-store.ts reads the run rows, the tool-call
+ * ADR-208). No I/O: ../findings-store.ts reads the run rows, the tool-call
  * frames, and the model-call frames, and writes `cost.findings` and
  * `cost.finding_claims`. This module is what the tests exercise.
  *

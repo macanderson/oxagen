@@ -1,6 +1,6 @@
 /**
  * shared.ts — the types, limits, and arithmetic every findings detector uses
- * (Mission Control spec §12.8; ADR-062, ADR-206). No I/O: ../findings-store.ts
+ * (Mission Control spec §12.8; ADR-062, ADR-208). No I/O: ../findings-store.ts
  * reads the run rows, the tool-call frames, and the model-call frames, and
  * writes `cost.findings` and `cost.finding_claims`.
  *
@@ -9,7 +9,7 @@
  * part of a request (a result, a cache write) re-prices tokens at the run's
  * own input price. A detector that prices a whole request (a spin loop, a
  * turn of repeats) takes the request's own priced cost, and claims its frame
- * so the headline counts it once (ADR-206). A call or request with no price
+ * so the headline counts it once (ADR-208). A call or request with no price
  * is cited but not covered. Confidence is the share of cited items the
  * counterfactual covers, and a group whose coverage is under half is not
  * written.
@@ -102,7 +102,7 @@ export interface ToolCallObservation {
 }
 
 /**
- * One model call of a run, priced once by the rollup's rule (ADR-206). A
+ * One model call of a run, priced once by the rollup's rule (ADR-208). A
  * request finding counts this frame's whole cost.
  */
 export interface PricedRequestFrame {
@@ -131,12 +131,12 @@ export interface PricedRequestFrame {
 
 /**
  * The detectors whose findings add to the unproductive spend headline, in
- * the order they claim a frame (ADR-206, counting rule 1): 1 spin loops,
+ * the order they claim a frame (ADR-208, counting rule 1): 1 spin loops,
  * 7 recurring runs, 8 spend with no outcome.
  */
 export type CountingDetector = 1 | 7 | 8;
 
-/** One model-call frame a whole-request finding claims (ADR-206). */
+/** One model-call frame a whole-request finding claims (ADR-208). */
 export interface FindingClaim {
   detector: CountingDetector;
   /** The run's public id. */
@@ -467,7 +467,7 @@ export interface DetectContext {
   /**
    * The frames a counting detector already claimed this pass, by
    * `claimKey(runId, frameKey)`. A later detector skips them, so a frame
-   * counts under the first detector in counting order (ADR-206).
+   * counts under the first detector in counting order (ADR-208).
    */
   claimed: Set<string>;
   /** The tool calls a finding already cites, which a later detector skips. */
@@ -476,7 +476,7 @@ export interface DetectContext {
 
 /**
  * One detector as `detectFindings` runs it. `counting` names the headline
- * detector a whole-request finding claims frames as (ADR-206); null for a
+ * detector a whole-request finding claims frames as (ADR-208); null for a
  * detector that prices a part of a request and claims none.
  */
 export interface Detector {

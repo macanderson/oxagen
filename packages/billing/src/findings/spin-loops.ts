@@ -1,5 +1,5 @@
 /**
- * Spin loops (detector 1, ADR-206): an agent that made the same call
+ * Spin loops (detector 1, ADR-208): an agent that made the same call
  * `SPIN_LOOP_REPEATS` or more times in a row on one chain of a run, and got
  * the same result each time. A request counts when every tool call it made is
  * a repeat and one of them is in such a streak. Its whole priced cost counts

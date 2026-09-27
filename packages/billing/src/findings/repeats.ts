@@ -1,5 +1,5 @@
 /**
- * Repeated shell commands and duplicate tool calls (detector 1, ADR-206). A
+ * Repeated shell commands and duplicate tool calls (detector 1, ADR-208). A
  * model request counts when every tool call it made repeats an earlier call
  * of the run with the same input and the same result. Its whole priced cost
  * counts once, against nothing: the request did no work the run needed. A

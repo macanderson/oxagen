@@ -1,6 +1,6 @@
 /**
  * claims.ts — the unproductive spend headline from the frames findings claim
- * (ADR-206). The headline adds detectors 1, 7, and 8. A frame counts once,
+ * (ADR-208). The headline adds detectors 1, 7, and 8. A frame counts once,
  * under the first of them that claims it, so two findings that claim one
  * frame add its cost once. Each operator's total is the frames counted under
  * that operator's runs, and the operator totals sum to the headline.

@@ -1,4 +1,4 @@
--- ADR-206: the unproductive spend contract.
+-- ADR-208: the unproductive spend contract.
 --
 -- Written by hand against the drizzle schema (packages/database/src/schema/cost.ts,
 -- `findings` and `findingClaims`) in the shape `atlas migrate diff` emits.

@@ -2,7 +2,7 @@
 // replaces the workspace's open findings and keeps a proven finding's public
 // id, a decision that commits while a pass is writing stays decided, a
 // workspace whose runs stopped is still visited until its open findings go,
-// and the headline counts a frame two findings claim once (ADR-206). Runs wherever DATABASE_URL points at
+// and the headline counts a frame two findings claim once (ADR-208). Runs wherever DATABASE_URL points at
 // a migrated database — CI's `test` job migrates Postgres with Atlas before
 // `turbo run build test:unit` and carries DATABASE_URL in turbo's globalEnv;
 // a local run without one is skipped, not red. Every row it writes is removed

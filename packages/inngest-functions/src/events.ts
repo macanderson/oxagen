@@ -90,3 +90,12 @@ export type AgentInterjectionRaisedEventData = {
   /** RFC 3339; the deadline the control plane computed, not the host's. */
   expiresAt: string;
 };
+
+/**
+ * Asks `memory.curate` to settle one workspace's memory PRs and open the
+ * day's memory PR (ADR-206). Sent by `run.reflect` when a sealed run leaves
+ * 20 or more memories waiting in the workspace, and by `memory.curate-daily`
+ * once a day for every workspace with memory work. Data is
+ * `{ orgId, workspaceId }`. Deliveries for one workspace are debounced.
+ */
+export const MEMORY_CURATE_REQUESTED_EVENT = "memory/curate.requested";

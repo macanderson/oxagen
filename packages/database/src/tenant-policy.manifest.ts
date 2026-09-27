@@ -63,6 +63,12 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "agent.context_appends", policyClass: "standard" },
   // The repository sync's per-workspace state (ADR-184).
   { table: "agent.context_sync_state", policyClass: "standard" },
+  // Memories, reflections, and memory PRs (ADR-206); org_id + workspace_id NOT NULL.
+  { table: "agent.memory_reflections", policyClass: "standard" },
+  { table: "agent.memory_prs", policyClass: "standard" },
+  { table: "agent.memories", policyClass: "standard" },
+  { table: "agent.memory_rejections", policyClass: "standard" },
+  { table: "agent.memory_recalls", policyClass: "standard" },
   { table: "agent.agent_executions", policyClass: "standard" },
   { table: "agent.agent_execution_steps", policyClass: "standard" },
   { table: "agent.agent_tool_calls", policyClass: "standard" },
@@ -150,7 +156,7 @@ export const POLICY_MANIFEST: readonly PolicyEntry[] = [
   { table: "cost.daily_totals", policyClass: "standard" },
   // The findings job's output (ADR-062); org_id + workspace_id NOT NULL.
   { table: "cost.findings", policyClass: "standard" },
-  // The model calls a finding claims (ADR-206); org_id + workspace_id NOT NULL.
+  // The model calls a finding claims (ADR-208); org_id + workspace_id NOT NULL.
   { table: "cost.finding_claims", policyClass: "standard" },
   // The loops that reached a workspace's no-progress limit (spend spec,
   // detector 1); org_id + workspace_id NOT NULL.

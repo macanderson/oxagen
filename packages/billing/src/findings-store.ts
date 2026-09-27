@@ -3,7 +3,7 @@
  * (./findings/): a workspace's run rows and root sessions from Postgres, its
  * tool-call frames and model-call frames from ClickHouse, and the
  * `cost.findings` and `cost.finding_claims` rows (Mission Control spec
- * §12.8; ADR-062, ADR-206).
+ * §12.8; ADR-062, ADR-208).
  *
  * The findings job runs on the system connection with explicit org and
  * workspace predicates, outside a tenant scope. Handlers read the rows
@@ -57,7 +57,7 @@ const claims = schema.findingClaims;
 export const TOOL_CALL_READ_MAX = 200_000;
 /**
  * Runs one pass reads model-call frames for, most repeats first. A repeat on
- * a run past this cap is cited, and nothing prices it (ADR-206).
+ * a run past this cap is cited, and nothing prices it (ADR-208).
  */
 export const FRAME_RUNS_READ_MAX = 200;
 /** Model-call frame reads one pass runs at once. */
@@ -497,7 +497,7 @@ export async function writeFindings(
 }
 
 /**
- * Replace one open finding's claims with its draft's (ADR-206). A deleted
+ * Replace one open finding's claims with its draft's (ADR-208). A deleted
  * finding takes its claims with it through the foreign key.
  */
 async function writeClaims(
@@ -536,7 +536,7 @@ async function writeClaims(
 
 /**
  * The unproductive spend headline over a window, and each operator's share
- * of it (ADR-206). It adds the frames that open and applied findings claim
+ * of it (ADR-208). It adds the frames that open and applied findings claim
  * and that ran in the window. A frame counts once, under the first detector
  * in counting order that claims it, so the operator totals sum to the
  * headline. A dismissed finding's claims do not count. The org and workspace
