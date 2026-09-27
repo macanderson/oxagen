@@ -1006,7 +1006,8 @@ export class FakeGitHub implements SteeringGitHub {
       return this.refused("GitHub API error 409: Head branch was modified");
     }
     this.merges.push(args);
-    const mergeSha = `merge${args.number}`;
+    // A full 40-character object id: S5's publish() refuses any other commit.
+    const mergeSha = String(args.number).padStart(40, "0");
     for (const [key, content] of this.files)
       if (key.startsWith(`${head}:`))
         this.files.set(`${mergeSha}:${key.slice(head.length + 1)}`, content);
