@@ -37,9 +37,9 @@ const MIXED_CURRENCY = "ranking_mixed_currency";
  * Who reads the ranking: an org Owner or Admin, or the workspace's Owner, the
  * roles get_operator_ranking's defaultRoles allow and its handler asserts. The
  * page asks for every role the kernel grants, so it never gates narrower than
- * the check it guards (`WsCtx.wsRole`, #3143). Until a person can hold a
- * workspace IAM role (#3198), the handler refuses a workspace Owner who is an
- * org Member, and the section shows that refusal as its denied state.
+ * the check it guards (`WsCtx.wsRole`, #3143). No person holds a workspace IAM
+ * role yet (#3198), so the handler reads the workspace Owner from the same
+ * membership row `wsRole` comes from.
  */
 export function canReadOperatorRanking(
   ctx: Pick<WsCtx, "orgRole" | "wsRole">,

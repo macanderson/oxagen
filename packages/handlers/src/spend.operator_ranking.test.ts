@@ -64,6 +64,7 @@ function harness(
   over: {
     spend?: OperatorSpend[];
     policy?: { pseudonyms: boolean; salt: string | null };
+    workspaceRole?: string | null;
   } = {},
 ) {
   const deps = {
@@ -74,6 +75,7 @@ function harness(
         new Map(ids.map((id) => [id, facts(id)])),
     ),
     readPolicy: vi.fn(async () => over.policy ?? { pseudonyms: false, salt: null }),
+    readWorkspaceRole: vi.fn(async () => over.workspaceRole ?? null),
   } satisfies OperatorRankingDeps;
   return { deps, handler: createOperatorRankingHandler(deps) };
 }
@@ -354,6 +356,49 @@ describe("get_operator_ranking roles", () => {
     });
     expect(h.deps.readClaims).not.toHaveBeenCalled();
     expect(h.deps.readPolicy).not.toHaveBeenCalled();
+  });
+
+  // No person holds a workspace IAM role yet (#3198), so the handler reads the
+  // workspace Owner from the membership row when the IAM check refuses.
+  it("lets the workspace's membership Owner read the ranking", async () => {
+    roleGate.roles = { org: "Member" };
+    const h = harness(claims, { workspaceRole: "owner" });
+    const out = await h.handler({ period: PERIOD }, ctx());
+    expect(out.operators).toHaveLength(1);
+    expect(h.deps.readWorkspaceRole).toHaveBeenCalledWith(
+      SCOPE,
+      ctx().userId,
+    );
+  });
+
+  it.each<[string, string | null]>([
+    ["a membership Member", "member"],
+    ["a membership Admin", "admin"],
+    ["a person with no membership row", null],
+  ])("denies %s whom the IAM check refused", async (_label, role) => {
+    roleGate.roles = { org: "Member" };
+    const h = harness(claims, { workspaceRole: role });
+    await expect(h.handler({ period: PERIOD }, ctx())).rejects.toMatchObject({
+      code: "forbidden",
+      reason: "org_role_required",
+    });
+    expect(h.deps.readClaims).not.toHaveBeenCalled();
+  });
+
+  it("does not read the membership row when the IAM check allows", async () => {
+    roleGate.roles = { org: "Admin" };
+    const h = harness(claims, { workspaceRole: "member" });
+    await h.handler({ period: PERIOD }, ctx());
+    expect(h.deps.readWorkspaceRole).not.toHaveBeenCalled();
+  });
+
+  it("refuses a call with no acting person without reading the membership row", async () => {
+    roleGate.roles = { org: null };
+    const h = harness(claims, { workspaceRole: "owner" });
+    await expect(
+      h.handler({ period: PERIOD }, { ...ctx(), userId: null }),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "no_principal" });
+    expect(h.deps.readWorkspaceRole).not.toHaveBeenCalled();
   });
 });
 

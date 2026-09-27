@@ -8,7 +8,9 @@
 // figure is `countClaims` over that run's rows. The dedupe key holds the run
 // id, so the run figures partition the headline too.
 //
-// Managers read it: an org Owner or Admin, or the workspace's Owner. With the
+// Managers read it: an org Owner or Admin, or the workspace's Owner. No person
+// holds a workspace IAM role yet (#3198), so the workspace Owner is read from
+// the membership row when the IAM check refuses. With the
 // pseudonym setting on, a pseudonym replaces each name, and the answer drops
 // the key, the facts, and the run ids, since a run page names its operator.
 // It also drops the unproductive share and the run count: the share gives
@@ -23,9 +25,13 @@ import {
   readUnproductiveClaims,
   type UnproductiveClaim,
 } from "@oxagen/billing";
-import { schema, withTenantDb } from "@oxagen/database";
+import { schema, withSystemDb, withTenantDb } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import { type CapabilityHandler, HandlerError } from "@oxagen/oxagen";
+import {
+  type CapabilityHandler,
+  HandlerError,
+  isHandlerError,
+} from "@oxagen/oxagen";
 import type { OperatorFacts } from "@oxagen/oxagen/contracts/operator.shared";
 import {
   OPERATOR_RANKING_RUNS_MAX,
@@ -64,6 +70,11 @@ export type OperatorRankingDeps = {
   ) => Promise<OperatorSpend[]>;
   readOperatorFacts: ReadOperatorFacts;
   readPolicy: (scope: RankingScope) => Promise<PseudonymPolicy>;
+  /** The person's `workspace_users.role`, lowercased, or null when absent. */
+  readWorkspaceRole: (
+    scope: RankingScope,
+    userId: string,
+  ) => Promise<string | null>;
 };
 
 /** Who may read the ranking: the roles the contract's defaultRoles allow. */
@@ -71,6 +82,28 @@ export const RANKING_ROLES = {
   org: ["Owner", "Admin"],
   workspace: ["Owner"],
 } as const;
+
+async function readWorkspaceRole(
+  scope: RankingScope,
+  userId: string,
+): Promise<string | null> {
+  // withSystemDb, as capability-role-guard reads it: this read decides
+  // whether the caller may act in the scope, so it must not depend on it.
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select({ role: schema.workspaceUsers.role })
+      .from(schema.workspaceUsers)
+      .where(
+        and(
+          eq(schema.workspaceUsers.workspaceId, scope.workspaceId),
+          eq(schema.workspaceUsers.userId, userId),
+        ),
+      )
+      .limit(1),
+  );
+  // The column holds both casings (capability-role-guard's permittedRoles).
+  return rows[0]?.role?.toLowerCase() ?? null;
+}
 
 async function readClaims(
   scope: RankingScope,
@@ -169,11 +202,23 @@ export function createOperatorRankingHandler(
 ): CapabilityHandler<typeof spendOperatorRanking> {
   return async (input, ctx): Promise<SpendOperatorRankingOutput> => {
     const userId = await resolveActingUserId(ctx);
-    await assertOrgRole(
-      { ...ctx, userId },
-      { org: [...RANKING_ROLES.org], workspace: [...RANKING_ROLES.workspace] },
-    );
     const scope = { orgId: ctx.orgId, workspaceId: ctx.workspaceId };
+    try {
+      await assertOrgRole(
+        { ...ctx, userId },
+        {
+          org: [...RANKING_ROLES.org],
+          workspace: [...RANKING_ROLES.workspace],
+        },
+      );
+    } catch (err) {
+      if (!isHandlerError(err) || err.code !== "forbidden" || !userId) {
+        throw err;
+      }
+      // No person holds a workspace IAM role yet (#3198), so the workspace
+      // Owner comes from the membership row.
+      if ((await deps.readWorkspaceRole(scope, userId)) !== "owner") throw err;
+    }
     const { from, to } = input.period;
     const window = { start: dayBounds(from).start, end: dayBounds(to).next };
 
@@ -268,4 +313,5 @@ export const spendOperatorRankingHandler = createOperatorRankingHandler({
   readOperatorSpend,
   readOperatorFacts,
   readPolicy: readPseudonymPolicy,
+  readWorkspaceRole,
 });
