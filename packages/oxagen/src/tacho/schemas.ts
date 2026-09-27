@@ -148,3 +148,16 @@ export const sessionSummarySchema = z
     title: z.string().nullable(),
   })
   .strict();
+
+/**
+ * A machine group's name (mcp-studio-spec, Local servers, Machines). The
+ * pattern is the one server.toml's source.machines accepts
+ * (`machineGroupSchema` in packages/tacho/src/collector/local-servers/wire.ts)
+ * and the CHECK on tacho.machine_group_members enforces.
+ */
+export const machineGroupNameSchema = z
+  .string()
+  .regex(
+    /^[a-z0-9][a-z0-9-]{0,62}$/,
+    "a machine group is lowercase letters, digits, and hyphens",
+  );

@@ -67,7 +67,7 @@ export const repositoryUnlinkHandler: CapabilityHandler<
         message: `No repository with binding ${input.bindingId} is linked to this workspace`,
       });
     }
-    if (head.role === "main") {
+    if (schema.isSteeringHeadRole(head.role)) {
       throw new HandlerError({
         code: "conflict",
         reason: "main_repo_unlink_refused",

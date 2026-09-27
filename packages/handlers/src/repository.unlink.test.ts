@@ -127,6 +127,21 @@ describe("unlink_repository", () => {
     expect(writes.inserts).toBe(0);
   });
 
+  it("refuses a steering head with main_repo_unlink_refused, the same as a main head", async () => {
+    const writes = wire({
+      head: [{ id: "head-steer", role: "steering", fullName: "Acme/Rules" }],
+    });
+    await expect(
+      repositoryUnlinkHandler(INPUT, makeCTX()),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "main_repo_unlink_refused",
+    });
+    expect(writes.deletes).toHaveLength(0);
+    expect(writes.updates).toBe(0);
+    expect(writes.inserts).toBe(0);
+  });
+
   it("deletes only the linked head — the binding versions it pointed at stay — and answers the contract's shape", async () => {
     const writes = wire({
       head: [{ id: "head-linked", role: "linked", fullName: "Acme/Docs" }],

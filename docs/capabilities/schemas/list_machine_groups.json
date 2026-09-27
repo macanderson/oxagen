@@ -1,0 +1,84 @@
+{
+  "name": "list_machine_groups",
+  "domain": "tacho",
+  "description": "List the workspace's machine groups and the machines in each, with each machine's hostname and enrollment status.",
+  "mode": "sync",
+  "surfaces": [],
+  "sensitivity": "medium",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "group": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "groups": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "group": {
+              "type": "string"
+            },
+            "machines": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "machineId": {
+                    "type": "string"
+                  },
+                  "hostname": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "paused",
+                      "suspended",
+                      "revoked"
+                    ]
+                  },
+                  "addedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "machineId",
+                  "hostname",
+                  "status",
+                  "addedAt"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "group",
+            "machines"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "groups"
+    ],
+    "additionalProperties": false
+  }
+}

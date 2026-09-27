@@ -84,7 +84,9 @@ export async function selectGovernedRepository(
     )
     .limit(1);
   if (!row) return null;
-  return { ...row, role: row.role === "main" ? "main" : "linked" };
+  // A `steering` head is the workspace's main head under its new name, so it
+  // maps to "main" and not to "linked".
+  return { ...row, role: row.role === "linked" ? "linked" : "main" };
 }
 
 export interface GithubTokenIssueDeps {
