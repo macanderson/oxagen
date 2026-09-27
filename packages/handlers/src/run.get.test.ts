@@ -1,6 +1,6 @@
 import { CapabilityError } from "@oxagen/oxagen/kernel";
 import { isHandlerError } from "@oxagen/oxagen/handler-error";
-import { runGet } from "@oxagen/oxagen/contracts/run.get";
+import { RUN_CHAIN_HEADS_MAX, runGet } from "@oxagen/oxagen/contracts/run.get";
 import type { AttemptEventReadRecord } from "@oxagen/run-ledger";
 import type { TachoFrameRow } from "@oxagen/telemetry";
 import { describe, expect, it, vi } from "vitest";
@@ -31,6 +31,7 @@ import {
   rollupCostRow,
   seal,
   subagentChain,
+  type SubagentChainFixture,
   summary,
   tachoRow,
   tachoSession,
@@ -954,6 +955,8 @@ describe("get_run subagent chains (#3823)", () => {
       /** Runs after each fake sleep; a test lands a subagent frame here. */
       onSleep?: (count: number, children: TachoFrameRow[]) => void;
       headsFail?: boolean;
+      /** The chains Postgres lists; the three above unless a test names more. */
+      chains?: SubagentChainFixture[];
     } = {},
   ) {
     const stores = memoryStores(
@@ -972,7 +975,7 @@ describe("get_run subagent chains (#3823)", () => {
     let clock = 1_000_000;
     const sleeps: number[] = [];
     const headReads: string[][] = [];
-    const listed = memorySubagentChains(chains);
+    const listed = memorySubagentChains(over.chains ?? chains);
     const lists: string[] = [];
     const heads = memoryChainHeads(children);
     const deps: RunGetDeps = {
@@ -1143,6 +1146,47 @@ describe("get_run subagent chains (#3823)", () => {
     // for their heads again.
     expect(lists).toEqual([SESSION_UUID, SESSION_UUID]);
     expect(headReads).toHaveLength(1 + 3);
+  });
+
+  // Codex review on #4421: the cursor hashed only the heads the answer
+  // carried, so a chain past RUN_CHAIN_HEADS_MAX could record without waking
+  // the long poll or the run stream.
+  it("wakes a long poll when a chain past the heads cap records, and still answers the capped heads", async () => {
+    const many = Array.from({ length: RUN_CHAIN_HEADS_MAX + 1 }, (_, i) =>
+      subagentChain({
+        sessionUuid: `0192d4a8-7c1e-7a00-8000-0000000d${i.toString(16).padStart(4, "0")}`,
+        rootSessionUuid: SESSION_UUID,
+        startedAt: new Date(Date.UTC(2026, 8, 11, 9, 0, i)),
+      }),
+    );
+    const last = many.at(-1)?.sessionUuid ?? "";
+    const { get, headReads } = chainHarness({
+      status: "running",
+      root: [tachoRow(0)],
+      chains: many,
+      onSleep: (count, children) => {
+        if (count === 2) children.push(onChain(last, 0));
+      },
+    });
+    const opened = await get(input({ runId: TACHO_ID }), ctx());
+    expect(opened.chains?.heads).toHaveLength(RUN_CHAIN_HEADS_MAX);
+    expect(opened.chains?.complete).toBe(false);
+    // The heads read covers every chain, the one past the cap too.
+    expect(headReads[0]).toHaveLength(RUN_CHAIN_HEADS_MAX + 1);
+    const waited = await get(
+      input({
+        runId: TACHO_ID,
+        framesAfter: opened.frames.cursor ?? "",
+        chainsAfter: opened.chains?.cursor,
+        waitMs: 20_000,
+      }),
+      ctx(),
+    );
+    expect(waited.frames.frames).toEqual([]);
+    expect(waited.chains?.cursor).not.toBe(opened.chains?.cursor);
+    expect(
+      waited.chains?.heads.some((head) => head.sessionUuid === last),
+    ).toBe(false);
   });
 
   it("waits out the budget when no chain moves, and never waits on chains without chainsAfter (negative)", async () => {

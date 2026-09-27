@@ -190,25 +190,29 @@ export function chainsCursor(
 
 /**
  * Every subagent chain under a wrapped run with its head: Postgres lists the
- * chains (`listed`, one more than RUN_CHAIN_HEADS_MAX), and ClickHouse
- * answers each one's last frame, so a head names a frame a read can return.
- * A chain holds its frames from seq 0 without holes, so its count is its last
- * seq plus one. The list stops at RUN_CHAIN_HEADS_MAX chains and says so.
+ * chains (`listed`, every one the run has), and ClickHouse answers each one's
+ * last frame, so a head names a frame a read can return. A chain holds its
+ * frames from seq 0 without holes, so its count is its last seq plus one. The
+ * heads stop at RUN_CHAIN_HEADS_MAX chains and say so.
+ *
+ * The cursor hashes every listed chain's head, the ones past the cap too, so
+ * a chain the answer leaves out still wakes the long poll and the run stream
+ * when it records (Codex review on #4421). ClickHouse reads the heads by
+ * `session_uuid`, the primary key's range, whatever the count.
  */
 async function readChainHeads(
   chainHeads: typeof selectTachoChainHeads,
   rootSessionUuid: string,
   listed: readonly SubagentChainRow[],
 ): Promise<RunChains> {
-  const rows = listed.slice(0, RUN_CHAIN_HEADS_MAX);
   const read = await chainHeads({
     rootSessionUuid,
-    sessionUuids: rows.map((row) => row.sessionUuid),
+    sessionUuids: listed.map((row) => row.sessionUuid),
   });
   const lastSeqOf = new Map(
     read.map((head) => [head.sessionUuid.toLowerCase(), head.lastSeq]),
   );
-  const heads = rows.map((row) => {
+  const all = listed.map((row) => {
     const last = lastSeqOf.get(row.sessionUuid.toLowerCase());
     return {
       sessionUuid: row.sessionUuid,
@@ -221,8 +225,8 @@ async function readChainHeads(
     };
   });
   return {
-    cursor: chainsCursor(heads),
-    heads,
+    cursor: chainsCursor(all),
+    heads: all.slice(0, RUN_CHAIN_HEADS_MAX),
     complete: listed.length <= RUN_CHAIN_HEADS_MAX,
   };
 }
@@ -250,7 +254,8 @@ function chainWatch(
   let last: Promise<RunChains | undefined> | undefined;
   const read = (): Promise<RunChains | undefined> => {
     if (failed) return Promise.resolve(undefined);
-    listing ??= list(root, { limit: RUN_CHAIN_HEADS_MAX + 1 });
+    // Every chain, not the capped page of heads: the cursor covers them all.
+    listing ??= list(root);
     last = listing
       .then((listed) => readChainHeads(heads, root, listed))
       .catch((err: unknown) => {
