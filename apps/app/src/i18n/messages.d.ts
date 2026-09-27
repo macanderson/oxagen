@@ -1007,6 +1007,14 @@ type Messages = {
             duplicate_tool_calls: string;
             repeated_shell_commands: string;
             unpaged_results: string;
+            spin_loops: string;
+            standing_context: string;
+            idle_cache_rewrites: string;
+            cache_busts: string;
+            model_class_fit: string;
+            repeated_instructions: string;
+            recurring_runs: string;
+            spend_with_no_outcome: string;
           };
         };
       };
@@ -8202,6 +8210,28 @@ type Messages = {
         duplicate_tool_calls: string;
         repeated_shell_commands: string;
         unpaged_results: string;
+        spin_loops: string;
+        standing_context: string;
+        idle_cache_rewrites: string;
+        cache_busts: string;
+        model_class_fit: string;
+        repeated_instructions: string;
+        recurring_runs: string;
+        spend_with_no_outcome: string;
+      };
+      kindDefinition: {
+        cache_writes_never_read: string;
+        duplicate_tool_calls: string;
+        repeated_shell_commands: string;
+        unpaged_results: string;
+        spin_loops: string;
+        standing_context: string;
+        idle_cache_rewrites: string;
+        cache_busts: string;
+        model_class_fit: string;
+        repeated_instructions: string;
+        recurring_runs: string;
+        spend_with_no_outcome: string;
       };
       level: {
         tool: string;
