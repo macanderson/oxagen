@@ -18,6 +18,7 @@ import {
   startReplay,
   type ReplayApproval,
   type ReplayPlan,
+  type ReplayRun,
 } from "./model-class-replay";
 import { findingFingerprint } from "./shared";
 
@@ -235,6 +236,13 @@ describe("planReplay", () => {
     );
   });
 
+  it("holds the sample to five and refuses a size that is not a whole number", () => {
+    const runs = Array.from({ length: 10 }, (_, i) => run([opus(10 - i)]));
+    expect(plan(runs, { sampleMax: 10 })!.runs).toHaveLength(REPLAY_SAMPLE_MAX);
+    for (const sampleMax of [0, -1, 2.5, Number.NaN, Number.POSITIVE_INFINITY])
+      expect(() => plan(runs, { sampleMax })).toThrow(RangeError);
+  });
+
   it("leaves out a run it cannot price, has no record of, or cannot move", () => {
     const priced = run();
     const cached = run([
@@ -295,6 +303,29 @@ describe("startReplay", () => {
     const approval = approve(p);
     const result = startReplay(p, approval, OWNERS);
     expect(result).toEqual({ ok: true, start: { plan: p, approval } });
+  });
+
+  it("hands the dispatcher frozen copies the caller cannot change", () => {
+    const mine = plan([run(), run()])!;
+    const result = startReplay(mine, approve(mine), OWNERS);
+    if (!result.ok) throw new Error(result.refusal);
+    const { start } = result;
+    const runs = mine.runs as ReplayRun[];
+    runs.push(runs[0]!);
+    (runs[0]!.models[0]! as { to: string }).to = OPUS;
+    expect(start.plan).not.toBe(mine);
+    expect(start.plan.runs).toHaveLength(2);
+    expect(start.plan.runs[0]!.models[0]!.to).toBe("claude-sonnet-5");
+    for (const part of [
+      start,
+      start.plan,
+      start.plan.runs,
+      start.plan.runs[0],
+      start.plan.runs[0]!.models,
+      start.plan.runs[0]!.models[0],
+      start.approval,
+    ])
+      expect(Object.isFrozen(part)).toBe(true);
   });
 
   it("refuses without an approval", () => {

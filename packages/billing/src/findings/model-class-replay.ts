@@ -22,43 +22,47 @@ export const REPLAY_SAMPLE_MAX = 5;
 /** One sampled run, as the replay reruns it. */
 export interface ReplayRun {
   /** The run's public id. */
-  runId: string;
+  readonly runId: string;
   /** Each model the run used and the model the replay runs it on; the same model when it has no smaller class. */
-  models: { from: string; to: string }[];
+  readonly models: readonly { readonly from: string; readonly to: string }[];
   /** What the run cost as measured, in micro-units. */
-  measuredMicros: bigint;
+  readonly measuredMicros: bigint;
   /** What the replay is estimated to cost: the run repriced at the smaller class. */
-  estimatedMicros: bigint;
+  readonly estimatedMicros: bigint;
 }
 
 export interface ReplayPlan {
-  kind: "model_class_fit";
+  readonly kind: "model_class_fit";
   /** The finding the plan replays. */
-  fingerprint: string;
-  subject: string;
-  currency: string;
-  runs: ReplayRun[];
+  readonly fingerprint: string;
+  readonly subject: string;
+  readonly currency: string;
+  readonly runs: readonly ReplayRun[];
   /** The sum of the sampled runs' estimates, which the approval must show. */
-  estimatedMicros: bigint;
-  plannedAt: Date;
+  readonly estimatedMicros: bigint;
+  readonly plannedAt: Date;
   /** SHA-256 over every field above, so an approval binds to this plan alone. */
-  digest: string;
+  readonly digest: string;
 }
 
 /** A person's approval of one plan, with the cost it showed them. */
 export interface ReplayApproval {
-  planDigest: string;
+  readonly planDigest: string;
   /** The estimated cost the approval showed, in micro-units. */
-  shownMicros: bigint;
-  shownCurrency: string;
+  readonly shownMicros: bigint;
+  readonly shownCurrency: string;
   /** The key of the person who approved. */
-  approvedBy: string;
-  approvedAt: Date;
+  readonly approvedBy: string;
+  readonly approvedAt: Date;
 }
 
 declare const approvedByOwner: unique symbol;
 
-/** A replay the gate let start. Only {@link startReplay} returns one. */
+/**
+ * A replay the gate let start. Only {@link startReplay} returns one. Its plan
+ * and approval are frozen copies, so a caller that changes the objects it
+ * passed in cannot change what the owner approved.
+ */
 export type ReplayStart = {
   readonly plan: ReplayPlan;
   readonly approval: ReplayApproval;
@@ -117,6 +121,10 @@ function spread(n: number, count: number): number[] {
  * out when it is absent from `runs`, has no model with a smaller class, or
  * the book cannot price it, since the approval must show a cost for every
  * run it starts. Null when the finding is another kind or no run is left.
+ *
+ * `sampleMax` lowers the sample size. A value above {@link REPLAY_SAMPLE_MAX}
+ * is held to it, and a value that is not a whole number of at least 1 throws
+ * a `RangeError`.
  */
 export function planReplay(args: {
   finding: Pick<
@@ -129,6 +137,11 @@ export function planReplay(args: {
   sampleMax?: number;
 }): ReplayPlan | null {
   const { finding } = args;
+  const sampleMax = args.sampleMax ?? REPLAY_SAMPLE_MAX;
+  if (!Number.isInteger(sampleMax) || sampleMax < 1)
+    throw new RangeError(
+      `sampleMax must be a whole number of at least 1, got ${sampleMax}`,
+    );
   if (finding.kind !== "model_class_fit") return null;
   const book = args.book ?? inCodeListBook();
   const priced: ReplayRun[] = [];
@@ -161,7 +174,7 @@ export function planReplay(args: {
   );
   const sample = spread(
     priced.length,
-    Math.max(1, args.sampleMax ?? REPLAY_SAMPLE_MAX),
+    Math.min(sampleMax, REPLAY_SAMPLE_MAX),
   ).map((i) => priced[i]!);
   const plan: Omit<ReplayPlan, "digest"> = {
     kind: "model_class_fit",
@@ -175,18 +188,57 @@ export function planReplay(args: {
   return { ...plan, digest: replayPlanDigest(plan) };
 }
 
+/** A frozen copy of a plan, with its runs, their models, and its date copied. */
+function frozenPlan(plan: ReplayPlan): ReplayPlan {
+  return Object.freeze({
+    kind: plan.kind,
+    fingerprint: plan.fingerprint,
+    subject: plan.subject,
+    currency: plan.currency,
+    runs: Object.freeze(
+      plan.runs.map((r) =>
+        Object.freeze({
+          runId: r.runId,
+          models: Object.freeze(
+            r.models.map((m) => Object.freeze({ from: m.from, to: m.to })),
+          ),
+          measuredMicros: r.measuredMicros,
+          estimatedMicros: r.estimatedMicros,
+        }),
+      ),
+    ),
+    estimatedMicros: plan.estimatedMicros,
+    plannedAt: new Date(plan.plannedAt.getTime()),
+    digest: plan.digest,
+  });
+}
+
+/** A frozen copy of an approval, with its date copied. */
+function frozenApproval(approval: ReplayApproval): ReplayApproval {
+  return Object.freeze({
+    planDigest: approval.planDigest,
+    shownMicros: approval.shownMicros,
+    shownCurrency: approval.shownCurrency,
+    approvedBy: approval.approvedBy,
+    approvedAt: new Date(approval.approvedAt.getTime()),
+  });
+}
+
 /**
  * The gate a replay starts through. It refuses unless an owner of the runs
  * approved this plan, after it was made, with the plan's estimated cost in
  * front of them. The dispatcher that reruns the runs takes only the value
- * this returns.
+ * this returns. The gate checks frozen copies of the plan and the approval
+ * and returns those copies, so what it checked is what the dispatcher runs.
  */
 export function startReplay(
-  plan: ReplayPlan,
-  approval: ReplayApproval | null,
+  given: ReplayPlan,
+  givenApproval: ReplayApproval | null,
   owners: ReadonlySet<string>,
 ): { ok: true; start: ReplayStart } | { ok: false; refusal: ReplayRefusal } {
-  if (approval === null) return { ok: false, refusal: "no_approval" };
+  if (givenApproval === null) return { ok: false, refusal: "no_approval" };
+  const plan = frozenPlan(given);
+  const approval = frozenApproval(givenApproval);
   const { digest, ...fields } = plan;
   if (replayPlanDigest(fields) !== digest)
     return { ok: false, refusal: "plan_changed" };
@@ -201,5 +253,5 @@ export function startReplay(
     return { ok: false, refusal: "not_an_owner" };
   if (approval.approvedAt.getTime() < plan.plannedAt.getTime())
     return { ok: false, refusal: "approved_before_plan" };
-  return { ok: true, start: { plan, approval } as ReplayStart };
+  return { ok: true, start: Object.freeze({ plan, approval }) as ReplayStart };
 }
