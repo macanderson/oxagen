@@ -4,7 +4,7 @@
 // URL names, and both are `noBillingGate` — a mandate is authority, not spend.
 //
 // **Neither action decides who may write.** `update_mandate_limits` and
-// `revoke_mandate` each resolve the mandate's consequence tags, read the
+// `revoke_mandate` each resolve the mandate's impacts, read the
 // workspace's `consequence_roles` overrides, and call `assertConsequenceRole`
 // before they touch a row (`packages/handlers/src/mandate.limits.update.ts`,
 // `mandate.revoke.ts`), which reaches `assertOrgRole` in `@oxagen/iam`. That is

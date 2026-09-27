@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { registerCapability } from "../registry";
-import { consequenceTagSchema } from "./tool.classification";
+import { impactSchema } from "./tool.classification";
 
 /**
  * What a kill switch stops (MC spec §6.11). Every level is a deny that takes
@@ -9,7 +9,7 @@ import { consequenceTagSchema } from "./tool.classification";
  * The `id` is the public id of the target: `tlv_…`, `mcs_…`, `mcrd_…`,
  * `agt_…`, an operator's `usr_…` (or their raw user uuid, kept for backward
  * compatibility), a workspace id, the organisation id, or, for a class, the
- * consequence tag every tool carrying it is stopped by.
+ * impact every tool carrying it is stopped by.
  */
 export const killSwitchTargetKindSchema = z.enum([
   "tool_version",
@@ -42,7 +42,7 @@ export const killSwitchTargetSchema = z.discriminatedUnion("kind", [
   }),
   z.object({ kind: z.literal("workspace"), id: z.string().uuid() }),
   z.object({ kind: z.literal("org"), id: z.string().uuid() }),
-  z.object({ kind: z.literal("class"), id: consequenceTagSchema }),
+  z.object({ kind: z.literal("class"), id: impactSchema }),
 ]);
 
 /** The org-wide and workspace generations after the flip (the one invalidation counter). */

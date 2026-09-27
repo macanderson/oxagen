@@ -14,7 +14,7 @@ An agent operator asks for authority (Agents › mandates): the same shape as
 (`grant_mandate` with `requestId`) or decline (`revoke_mandate`). A draft
 grants nothing: the decision gate reads active mandates only.
 
-The mandate shape (spec §6.9 part 3): `agentId` (`agt_…`), `consequenceTags`,
+The mandate shape (spec §6.9 part 3): `agentId` (`agt_…`), `impacts`,
 `limits` (measure → `{ perCall?, perPeriod?, period: daily | weekly | monthly,
 currencyOrUnit, kind? }`, integer strings: micros for a currency, whole units
 otherwise), `targets` (measure → `{ allow, deny }` globs over a text measure),

@@ -17,7 +17,7 @@
 //   4. On a row the mandate gate parked (ADR-059 decision 4), the mandate's
 //      approval rule decides who answers (MC spec §6.9): an agent principal
 //      is refused `agent_cannot_resolve_own_mandate`; the caller holds an
-//      org role the workspace names for every consequence tag on the mandate
+//      org role the workspace names for every impact on the mandate
 //      (assertConsequenceRole, INV-29); and, when the rule names approvers,
 //      is one of them (assertApprover). Each refusal is `forbidden` and
 //      leaves before the ledger or the row is touched.
@@ -149,7 +149,7 @@ export async function agentApprovalResolveHandler(
     }
     await assertConsequenceRole(
       ctx,
-      parked.mandate.consequenceTags,
+      parked.mandate.impacts,
       parked.overrides,
     );
     await assertApprover(ctx, parked.mandate.approval.approvers);

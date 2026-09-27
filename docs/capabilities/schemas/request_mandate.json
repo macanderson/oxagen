@@ -27,7 +27,7 @@
       "agentId": {
         "type": "string"
       },
-      "consequenceTags": {
+      "impacts": {
         "type": "array",
         "items": {
           "type": "string"
@@ -162,7 +162,7 @@
     },
     "required": [
       "agentId",
-      "consequenceTags",
+      "impacts",
       "limits",
       "tools",
       "purpose",
@@ -216,7 +216,7 @@
           }
         ]
       },
-      "consequenceTags": {
+      "impacts": {
         "type": "array",
         "items": {
           "type": "string"
@@ -470,7 +470,7 @@
       "requestedBy",
       "grantedBy",
       "roleAtGrant",
-      "consequenceTags",
+      "impacts",
       "limits",
       "targets",
       "tools",

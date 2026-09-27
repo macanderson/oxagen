@@ -152,11 +152,13 @@ const INPUT = {
   policy_group: undefined,
   source: "builtin" as const,
   manifest: { name: "read_file" },
-  consequence_tags: [] as string[],
+  impacts: [] as string[],
   measures: {},
   effect_id_path: undefined,
 };
 
+// The hash input keeps the pre-rename key, so stored checksums stay valid
+// (toolChecksum in lib/tool-registry.ts).
 const EXPECTED_CHECKSUM = sha256Hex(
   canonicalJson({
     consequence_tags: [],
@@ -261,7 +263,7 @@ describe("tool.declaration.publish handler", () => {
           id: "v2-uuid",
           versionNumber: 2,
           checksum: "0".repeat(64),
-          consequenceTags: [],
+          impacts: [],
           measures: {},
           effectIdPath: null,
         },
@@ -312,7 +314,7 @@ describe("tool.declaration.publish handler", () => {
 describe("tool.declaration.publish roles", () => {
   const TOOL = { id: "tool-uuid", publicId: "tol_1", slug: "read_file" };
   const MONEY = {
-    consequenceTags: ["moves_money"],
+    impacts: ["moves_money"],
     measures: {
       amount: { path: "amount", type: "amount", unit: "USD", scale: 2 },
     },
@@ -320,7 +322,7 @@ describe("tool.declaration.publish roles", () => {
   };
   const MONEY_INPUT = {
     ...INPUT,
-    consequence_tags: MONEY.consequenceTags,
+    impacts: MONEY.impacts,
     measures: MONEY.measures as typeof INPUT.measures,
     effect_id_path: MONEY.effectIdPath,
   };
@@ -395,7 +397,7 @@ describe("tool.declaration.publish roles", () => {
     await expect(
       toolDeclarationPublishHandler(INPUT, CTX),
     ).resolves.toMatchObject({ published: true, version: 3 });
-    expect(mocks.insertedValues[0]).toMatchObject({ consequenceTags: [] });
+    expect(mocks.insertedValues[0]).toMatchObject({ impacts: [] });
   });
 
   it("asks the workspace's override for the office", async () => {
@@ -430,7 +432,7 @@ describe("tool.declaration.publish roles", () => {
   });
 
   it.each([
-    ["consequence_tags", { consequence_tags: ["moves_money"] }],
+    ["impacts", { impacts: ["moves_money"] }],
     ["measures", { measures: MONEY.measures as typeof INPUT.measures }],
     ["effect_id_path", { effect_id_path: "id" }],
   ])(

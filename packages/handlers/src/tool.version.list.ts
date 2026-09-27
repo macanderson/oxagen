@@ -11,7 +11,7 @@
 //      this handler did not write is invalid_input.
 //   3. Read one row past the page: tools joined to their active version,
 //      optionally only those carrying the category tag in either half of the
-//      consequence tags (the declared `consequence_tags` column or the
+//      impacts (the declared `impacts` column or the
 //      classified `classification` jsonb), and optionally only those imported
 //      from one server, named by its `mcs_…` public id.
 //   4. Decide the gate each row is under today from the switches that are on
@@ -41,7 +41,7 @@ import {
 import { countRecentToolInvocations } from "@oxagen/telemetry";
 import {
   registryCapabilityId,
-  unionConsequenceTags,
+  unionImpacts,
 } from "@oxagen/agent/runtime/tool-registry-facts";
 import { and, asc, eq, gt, isNull, or, sql, type SQL } from "drizzle-orm";
 import { logger } from "./logger";
@@ -98,8 +98,8 @@ export interface RegistryRow {
   riskGrade: string;
   classifiedRiskGrade: string | null;
   classification: unknown;
-  /** The declared half of the consequence tags (agent.tool_versions.consequence_tags). */
-  consequenceTags: string[] | null;
+  /** The declared half of the impacts (agent.tool_versions.impacts). */
+  impacts: string[] | null;
   classifiedAt: Date | null;
   schemaOrigin: string;
   checksum: string;
@@ -153,7 +153,7 @@ export function registryPageQuery(
       riskGrade: versions.riskGrade,
       classifiedRiskGrade: versions.classifiedRiskGrade,
       classification: versions.classification,
-      consequenceTags: versions.consequenceTags,
+      impacts: versions.impacts,
       classifiedAt: versions.classifiedAt,
       schemaOrigin: versions.schemaOrigin,
       checksum: versions.checksum,
@@ -166,17 +166,17 @@ export function registryPageQuery(
         eq(tools.orgId, scope.orgId),
         eq(tools.workspaceId, scope.workspaceId),
         isNull(tools.deletedAt),
-        // The category is a consequence tag, and a tag lives in either half:
+        // The category is an impact, and a tag lives in either half:
         // the declared text[] column or the classified jsonb. Filtering on the
         // jsonb alone hid every declared-tag tool from the page the class kill
         // switch is operated from.
         // Both halves are written with a jsonb_path_ops / array GIN index
-        // (tool_versions_classification_tags_gin,
-        // tool_versions_consequence_tags_gin), so `@>` on either is an index
+        // (tool_versions_classification_impacts_gin,
+        // tool_versions_impacts_gin), so `@>` on either is an index
         // lookup rather than a scan of the workspace's registry.
         q.category === null
           ? undefined
-          : sql`(${versions.classification}->'consequenceTags' @> ${JSON.stringify([q.category])}::jsonb OR ${versions.consequenceTags} @> ARRAY[${q.category}]::text[])`,
+          : sql`(${versions.classification}->'impacts' @> ${JSON.stringify([q.category])}::jsonb OR ${versions.impacts} @> ARRAY[${q.category}]::text[])`,
         // The server is named by its public id, the one the page and the MCP
         // tool know; the join above already carries it. A declared tool has
         // no server, so the left join's null never matches.
@@ -234,7 +234,7 @@ export function gateOf(
     workspaceId: string;
     capabilityId: string;
     serverId: string | null;
-    consequenceTags: readonly string[];
+    impacts: readonly string[];
   },
 ): ToolGate {
   const hit = matchKillSwitch(
@@ -354,7 +354,7 @@ export function createToolVersionListHandler(
           serverId: row.mcpServerId,
           // The same union the gateway's gate matches on, so the page and the
           // gate agree about which tools a class switch stops.
-          consequenceTags: unionConsequenceTags(row),
+          impacts: unionImpacts(row),
         }),
         calls30d: calls === null ? null : (calls.get(capabilityId) ?? 0),
         updatedAt: row.updatedAt.toISOString(),

@@ -498,6 +498,7 @@ describe("mcp.credentials (mcpCredentials)", () => {
       "org_listing_id",
       "auth_kind",
       "status",
+      "name",
     ]);
   });
 });
@@ -510,6 +511,10 @@ describe("mcp.mcp_servers (mcpServers)", () => {
   });
   it("has org_id column", () => {
     expect(cols).toContain("org_id");
+  });
+  it("has the steering columns", () => {
+    expect(cols).toContain("origin");
+    expect(cols).toContain("steering_name");
   });
 
   it("triggers getTableConfig (ExtraConfigBuilder callback)", () => {

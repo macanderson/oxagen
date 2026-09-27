@@ -15,8 +15,9 @@
 //      version or the cache already holds are not read again.
 //   6. MCP Studio's project() (lane M13), so the tool registry follows the
 //      merge. It gets every folder under tools/servers/, so it can tell a
-//      server that did not compile from one the merge removed. Until M13
-//      builds it, publish goes on with a warning.
+//      server that did not compile from one the merge removed. A publisher
+//      binds it through `withToolProjection` in @oxagen/handlers, which this
+//      package cannot import. Deps without it publish with a warning.
 //   7. Store the version, then switch the published version in one write.
 //      When either write fails after project() ran, the registry is projected
 //      back to the published version, with the folders at that version's
@@ -63,10 +64,12 @@ export interface PublishDeps {
   /** Tags the commit. */
   tag: (repository: string, name: string, commit: string) => Promise<void>;
   /**
-   * MCP Studio's project() (lane M13). Unset until it is built. `folders`
-   * names every folder under tools/servers/ at the bundle's commit, including
-   * servers that did not compile, so project() retires only the servers a
-   * merge removed.
+   * MCP Studio's project() (lane M13). Build deps through
+   * `withToolProjection` in @oxagen/handlers to set it. When it is unset, the
+   * version publishes with a warning and the registry keeps its tools.
+   * `folders` names every folder under tools/servers/ at the bundle's commit,
+   * including servers that did not compile, so project() retires only the
+   * servers a merge removed.
    */
   project?: (bundle: Bundle, options?: { folders?: string[] }) => Promise<void>;
   /** Compiles a server folder. MCP Studio's compile() when unset. */

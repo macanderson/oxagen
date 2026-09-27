@@ -4206,7 +4206,7 @@
       "writes": []
     }
   ],
-  "contentHash": "c321fa1cbcedf1f3427109601b18c1ac2866b011dbf26647caa83a255e89a3ad",
+  "contentHash": "84b45b754421797054764f4b1635b48a0bb2134d1fd43c9d57155eb5fce9ba2f",
   "domains": [
     {
       "name": "agent",
@@ -10209,7 +10209,7 @@
           "type": "text"
         },
         {
-          "name": "consequence_tags",
+          "name": "impacts",
           "nullable": false,
           "primaryKey": false,
           "type": "text[]"
@@ -18758,6 +18758,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "mcp",
@@ -18897,6 +18903,18 @@
         },
         {
           "name": "last_import_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "origin",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "steering_name",
           "nullable": true,
           "primaryKey": false,
           "type": "text"
@@ -24619,7 +24637,7 @@
           "type": "text"
         },
         {
-          "name": "consequence_tags",
+          "name": "impacts",
           "nullable": false,
           "primaryKey": false,
           "type": "text[]"

@@ -14,7 +14,7 @@
  *
  * `checkMandate` is what the decision gate runs for an agent principal:
  * it looks the capability up as a declared tool, reads the version's
- * consequence tags and measures, finds the covering mandate, reserves, and
+ * impacts and measures, finds the covering mandate, reserves, and
  * either lets the call proceed, parks it for a person, or refuses it.
  */
 import { randomUUID } from "node:crypto";
@@ -104,7 +104,7 @@ export interface MandateRecord {
   orgId: string;
   workspaceId: string;
   agentPrincipalId: string;
-  consequenceTags: string[];
+  impacts: string[];
   limits: MandateLimits;
   targets: MandateTargets;
   tools: string[];
@@ -167,7 +167,7 @@ export function parseMandateRow(row: typeof m.$inferSelect): MandateRecord {
     orgId: row.orgId,
     workspaceId: row.workspaceId,
     agentPrincipalId: row.agentPrincipalId,
-    consequenceTags: row.consequenceTags,
+    impacts: row.impacts,
     limits,
     legacyKindMeasures,
     targets: mandateTargetsSchema.parse(row.targets),
@@ -696,8 +696,8 @@ async function findCoveringMandate(
     )
     .orderBy(asc(m.createdAt));
   for (const row of rows) {
-    const covers = args.tool.consequenceTags.every((t) =>
-      row.consequenceTags.includes(t),
+    const covers = args.tool.impacts.every((t) =>
+      row.impacts.includes(t),
     );
     if (covers && toolMatches(row.tools, args.tool.slug, args.tool.version)) {
       return parseMandateRow(row);
@@ -800,7 +800,7 @@ export async function decideMandate(
   return withTenantDb(async (tx): Promise<CheckOutcome> => {
     await lockDecisionRulesIn(tx, args.workspaceId);
     const tool = await loadDeclaredTool(tx, args.workspaceId, args.capability);
-    if (tool === null || tool.consequenceTags.length === 0)
+    if (tool === null || tool.impacts.length === 0)
       return { kind: "no_opinion" };
 
     const found = await findCoveringMandate(tx, {
@@ -814,7 +814,7 @@ export async function decideMandate(
         kind: "deny",
         reason: "no_mandate",
         mandate: null,
-        detail: `no active mandate covers ${tool.consequenceTags.join(", ")} for ${tool.slug}@${tool.version}`,
+        detail: `no active mandate covers ${tool.impacts.join(", ")} for ${tool.slug}@${tool.version}`,
       };
     }
 
@@ -1034,7 +1034,7 @@ export async function decideMandate(
     // The mandate's own approval rule.
     const ruleIds: string[] = [];
     for (const tag of mandate.approval.alwaysHumanFor) {
-      if (tool.consequenceTags.includes(tag)) {
+      if (tool.impacts.includes(tag)) {
         ruleIds.push(`mandate:${mandate.publicId}:always_human_for:${tag}`);
       }
     }

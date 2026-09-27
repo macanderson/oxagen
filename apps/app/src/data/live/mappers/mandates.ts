@@ -146,7 +146,7 @@ function toMandateRow(
     requestedBy: item.requestedBy,
     grantedBy: item.grantedBy,
     roleAtGrant: item.roleAtGrant,
-    consequenceTags: item.consequenceTags,
+    impacts: item.impacts,
     tools: item.tools,
     targets: Object.entries(item.targets).map(([measure, rule]) => ({
       measure,

@@ -7,11 +7,10 @@
 //
 // The classification keys are the fields of today's ToolClassification in
 // snake case, and the enums are the same zod schemas, imported from
-// packages/oxagen/src/contracts/tool.classification.ts. `impacts` is today's
-// `consequenceTags` until lane M13 renames it (classification.ts maps it).
+// packages/oxagen/src/contracts/tool.classification.ts.
 import { z } from "zod";
 import {
-  consequenceTagSchema,
+  impactSchema,
   toolClassificationSchema,
   toolEgressClassSchema,
   toolMeasureSchema,
@@ -113,9 +112,9 @@ export const toolsEntrySchema = withChecks(
       risk: toolRiskGradeSchema,
       side_effect: toolSideEffectClassSchema,
       egress: toolEgressClassSchema,
-      impacts: uniqueList(consequenceTagSchema, "impacts", 32)
+      impacts: uniqueList(impactSchema, "impacts", 32)
         .optional()
-        .describe("What a call can do. Today's consequenceTags."),
+        .describe("What a call can do, such as moves_money."),
       measures: z
         .record(classificationShape.measures.keySchema, toolsMeasureSchema)
         .optional()
