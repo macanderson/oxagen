@@ -89,7 +89,7 @@ describe("the sweep and the spool", () => {
       now: () => 5_000,
       log: () => undefined,
       listen: false,
-      transcriptRoots: [`${paths.root}/no-transcripts`],
+      transcriptRoots: [`${paths.tachoDir}/no-transcripts`],
       timers: {
         detectorMs: 60 * 60_000,
         sweepMs: 0,

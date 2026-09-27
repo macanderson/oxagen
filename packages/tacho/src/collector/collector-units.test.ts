@@ -430,7 +430,7 @@ describe("detector", () => {
       registry,
       hostRecorder: () => host.recorder,
       listProcesses: () => processes,
-      transcriptRoots: [paths.claudeProjects, join(paths.root, "missing")],
+      transcriptRoots: [paths.claudeProjects, join(paths.tachoDir, "missing")],
       readSettings: () => settings,
       enrollment: () => ({
         enrollmentId: TEST_ENROLLMENT,
