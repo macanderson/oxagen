@@ -27,6 +27,7 @@ import {
   runInputPrice,
   type RunTotalsRecord,
 } from "../cost-rollup";
+import type { PromptRead } from "./prompts";
 import type { RunView } from "./requests";
 
 /** The most cited frames a finding stores per run; the contract's own cap (#4001). */
@@ -220,6 +221,8 @@ export interface DetectInput {
    * cited but not covered.
    */
   frames?: ReadonlyMap<string, readonly PricedRequestFrame[]>;
+  /** The window's operator prompts, for detector 6; absent when the store read none. */
+  prompts?: PromptRead;
 }
 
 export function findingFingerprint(

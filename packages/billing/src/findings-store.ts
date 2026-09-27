@@ -39,13 +39,17 @@ import {
   countClaims,
   detectFindings,
   FINDINGS_WINDOW_DAYS,
+  instructionProposals,
   microsOf,
   runsWithRepeats,
   type FindingDraft,
+  type InstructionProposal,
   type PricedRequestFrame,
+  type PromptRead,
   type ToolCallObservation,
   type UnproductiveSpend,
 } from "./findings";
+import { openInstructionProposals, readRunPrompts } from "./findings-prompts";
 import { loadPriceBookSlice, type PriceBook } from "./price-book";
 
 const totals = schema.runTotals;
@@ -101,6 +105,21 @@ interface FindingsPassDeps {
   ) => Promise<Map<string, PricedRequestFrame[]>>;
   /** Per fingerprint, the latest decision on it. */
   readDecisions: (scope: FindingsScope) => Promise<Map<string, Date>>;
+  /**
+   * The window's operator prompts for the named runs, and the frames that
+   * price them (detector 6); absent, the pass reads none.
+   */
+  readPrompts?: (
+    scope: FindingsScope,
+    window: { start: Date; end: Date },
+    runIdBySession: ReadonlyMap<string, string>,
+    runIds: ReadonlySet<string>,
+  ) => Promise<PromptRead | undefined>;
+  /** Opens a steering record proposal per repeated instruction; absent, the pass opens none. */
+  openProposals?: (
+    scope: FindingsScope,
+    proposals: readonly InstructionProposal[],
+  ) => Promise<void>;
   write: (
     scope: FindingsScope,
     passStartedAt: Date,
@@ -579,6 +598,9 @@ const productionDeps: FindingsPassDeps = {
   readFrames,
   readDecisions,
   write: writeFindings,
+  readPrompts: (scope, window, runIdBySession, runIds) =>
+    readRunPrompts(scope, window, runIdBySession, runIds, readFrames),
+  openProposals: openInstructionProposals,
 };
 
 /**
@@ -619,6 +641,11 @@ export async function runFindingsPass(
     reads.length === 0
       ? new Map<string, PricedRequestFrame[]>()
       : await deps.readFrames(scope, reads);
+  // A workspace with no runs in the window has no prompt to read.
+  const prompts =
+    runIds.size === 0
+      ? undefined
+      : await deps.readPrompts?.(scope, { start, end }, runIdBySession, runIds);
   const drafts = detectFindings({
     window: { start, end },
     toolWindowStart: toolWindowStart(start, rows, TOOL_CALL_READ_MAX),
@@ -626,8 +653,11 @@ export async function runFindingsPass(
     toolCalls,
     decidedSince,
     frames,
+    ...(prompts ? { prompts } : {}),
   });
-  return { findings: await deps.write(scope, end, decidedSince, drafts) };
+  const written = await deps.write(scope, end, decidedSince, drafts);
+  await deps.openProposals?.(scope, instructionProposals(prompts, runs));
+  return { findings: written };
 }
 
 /**
