@@ -2,6 +2,7 @@ import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
 import { setMemoryRunner } from "@oxagen/inngest-functions/memory-runner";
 import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
+import { setRunPrOutcomesRunner } from "@oxagen/inngest-functions/run-pr-outcomes-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
 import { setSteeringRepoProvisionRunner } from "@oxagen/inngest-functions/steering-repo-provision-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
@@ -138,6 +139,18 @@ registerHandlersOnce("@oxagen/handlers", () => {
       request,
     ),
   );
+  // The hourly run outcome refresh (#4491) reads GitHub through this package
+  // too. It runs in the workspace's tenant scope, and is loaded on its first
+  // run.
+  setRunPrOutcomesRunner(async (scope) => {
+    const [{ runInTenantScope }, refresh] = await Promise.all([
+      import("@oxagen/tenancy"),
+      import("./lib/run-pr-outcomes-refresh"),
+    ]);
+    return runInTenantScope(scope, () =>
+      refresh.refreshRunPrOutcomes(refresh.defaultOutcomeRefreshDeps(), scope),
+    );
+  });
   // The interjection timeout (#3941) lives there too, and is loaded on its
   // first run.
   setInterjectionTimeoutRunner({
