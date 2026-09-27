@@ -293,10 +293,15 @@ export interface MemoryStore {
    * memory PR, or a recall row for the retirement check. Reads across tenants.
    */
   listCurateWorkspaces(): Promise<MemoryScope[]>;
-  /** Store the run's reflection. Returns its id, or null when the run already has one. */
+  /**
+   * Store the run's reflection and its lesson memories in one transaction,
+   * the lessons carrying the reflection's id. Returns its id, or null when the
+   * run already has one, and then writes nothing.
+   */
   insertReflection(
     scope: MemoryScope,
     draft: ReflectionDraft,
+    lessons?: MemoryDraft[],
   ): Promise<string | null>;
   /** Does the run already have a reflection? */
   hasReflection(scope: MemoryScope, runPublicId: string): Promise<boolean>;

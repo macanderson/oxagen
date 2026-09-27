@@ -10,6 +10,7 @@ import { and, asc, count, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import type {
   MemoryCapture,
+  MemoryDraft,
   MemoryPrRecord,
   MemoryScope,
   MemoryStore,
@@ -27,6 +28,44 @@ const scoped = (
   and(eq(table.orgId, scope.orgId), eq(table.workspaceId, scope.workspaceId));
 
 const distinct = (values: string[]) => [...new Set(values)];
+
+/**
+ * Insert memories inside a transaction the caller holds, skipping any whose
+ * dedupe key exists. Returns the count written.
+ */
+async function insertMemoryRows(
+  tx: Tx,
+  scope: MemoryScope,
+  drafts: MemoryDraft[],
+  reflectionId: string | null,
+): Promise<number> {
+  if (drafts.length === 0) return 0;
+  const m = schema.memories;
+  const written = await tx
+    .insert(m)
+    .values(
+      drafts.map((draft) => ({
+        orgId: scope.orgId,
+        workspaceId: scope.workspaceId,
+        agentLineage: draft.agentLineage,
+        runPublicId: draft.runPublicId,
+        capture: draft.capture,
+        statement: draft.statement,
+        statementHash: draft.statementHash,
+        kind: draft.kind,
+        repos: draft.repos,
+        appliesTo: draft.appliesTo,
+        tools: draft.tools,
+        evidence: draft.evidence,
+        source: draft.source,
+        dedupeKey: draft.dedupeKey,
+        reflectionId,
+      })),
+    )
+    .onConflictDoNothing({ target: [m.workspaceId, m.dedupeKey] })
+    .returning({ id: m.id });
+  return written.length;
+}
 
 /**
  * A jsonb list of strings. SQL null, JSON null, and any other shape read as
@@ -109,10 +148,10 @@ export const postgresMemoryStore: MemoryStore = {
     return [...scopes.values()];
   },
 
-  async insertReflection(scope, draft) {
+  async insertReflection(scope, draft, lessons = []) {
     const t = schema.memoryReflections;
-    const [row] = await inScope(scope, (tx) =>
-      tx
+    return inScope(scope, async (tx) => {
+      const [row] = await tx
         .insert(t)
         .values({
           orgId: scope.orgId,
@@ -127,9 +166,11 @@ export const postgresMemoryStore: MemoryStore = {
           toolFeedback: draft.toolFeedback,
         })
         .onConflictDoNothing({ target: [t.workspaceId, t.runPublicId] })
-        .returning({ id: t.id }),
-    );
-    return row?.id ?? null;
+        .returning({ id: t.id });
+      if (row === undefined) return null;
+      await insertMemoryRows(tx, scope, lessons, row.id);
+      return row.id;
+    });
   },
 
   async hasReflection(scope, runPublicId) {
@@ -146,33 +187,9 @@ export const postgresMemoryStore: MemoryStore = {
 
   async insertMemories(scope, drafts, reflectionId) {
     if (drafts.length === 0) return 0;
-    const m = schema.memories;
-    const written = await inScope(scope, (tx) =>
-      tx
-        .insert(m)
-        .values(
-          drafts.map((draft) => ({
-            orgId: scope.orgId,
-            workspaceId: scope.workspaceId,
-            agentLineage: draft.agentLineage,
-            runPublicId: draft.runPublicId,
-            capture: draft.capture,
-            statement: draft.statement,
-            statementHash: draft.statementHash,
-            kind: draft.kind,
-            repos: draft.repos,
-            appliesTo: draft.appliesTo,
-            tools: draft.tools,
-            evidence: draft.evidence,
-            source: draft.source,
-            dedupeKey: draft.dedupeKey,
-            reflectionId: reflectionId ?? null,
-          })),
-        )
-        .onConflictDoNothing({ target: [m.workspaceId, m.dedupeKey] })
-        .returning({ id: m.id }),
+    return inScope(scope, (tx) =>
+      insertMemoryRows(tx, scope, drafts, reflectionId ?? null),
     );
-    return written.length;
   },
 
   async countWaiting(scope) {
