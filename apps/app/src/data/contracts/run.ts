@@ -820,6 +820,12 @@ export const RunTranscript = z.object({
   entries: z.array(TranscriptEntry),
   /** The point to continue from; null when nothing lies past this page. */
   cursor: z.string().nullable(),
+  /**
+   * The point to read the page ahead of this one from, on a read from the end
+   * or before a cursor; null when this page opens at the run's first entry.
+   * Absent on a read from the start or after a cursor.
+   */
+  before: z.string().nullable().optional(),
   /** False when the run has more frames than one transcript could carry. */
   complete: z.boolean(),
   /**

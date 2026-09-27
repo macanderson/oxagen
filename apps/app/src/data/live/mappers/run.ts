@@ -422,6 +422,7 @@ export function toRunTranscript(
       matches: entry.matches ?? [],
     })),
     cursor: out.cursor,
+    ...(out.before === undefined ? {} : { before: out.before }),
     complete: out.complete,
     frameCursor: out.frameCursor ?? null,
     counts: countsOf(out.counts),

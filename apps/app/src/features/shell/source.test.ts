@@ -46,7 +46,7 @@ const resolvedSince = vi.fn<DataSource["approvals"]["resolvedSince"]>();
 const mandatesList = vi.fn();
 const source = {
   runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
-  conversations: { latest: vi.fn() },
+  conversations: { latest: vi.fn(), list: vi.fn(), byId: vi.fn() },
   pretenant: { orgs: vi.fn(), workspaces: vi.fn() },
   shell: { context, preferences, counts, notifications, assistantEngine },
   billing: {

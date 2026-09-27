@@ -45,7 +45,11 @@ vi.mock("./assistant-stream-client", () => ({
 }));
 vi.mock("./assistant-actions", () => ({ readAssistantReply: vi.fn() }));
 const loadAssistantThread = vi.fn();
-vi.mock("./assistant-thread-actions", () => ({ loadAssistantThread }));
+vi.mock("./assistant-thread-actions", () => ({
+  loadAssistantThread,
+  listAssistantSessions: vi.fn(),
+  openAssistantSession: vi.fn(),
+}));
 vi.mock("./assistant-parked-approvals", () => ({
   AssistantParkedApprovals: () => null,
 }));

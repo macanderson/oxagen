@@ -86,6 +86,7 @@
 // with bytes the record does not vouch for. So does a body the store cannot
 // answer at all: one missing object must not blank the whole page.
 import type { CapabilityHandler } from "@oxagen/oxagen";
+import { CapabilityError } from "@oxagen/oxagen/kernel";
 import {
   runTranscriptGet,
   type RunTranscriptGetOutput,
@@ -479,6 +480,23 @@ export function decodeTranscriptCursor(raw: string): TranscriptCursor | null {
 }
 
 /**
+ * `b:<key>`: the opening frame of the first entry a page read `from` the end
+ * or `before` a cursor sent. A read `before` it sends the entries ahead of
+ * that entry. It carries no receipt: the page ahead of it is read as the run
+ * stands then, whole.
+ */
+export function encodeBeforeCursor(key: string): string {
+  return Buffer.from(`b:${key}`, "utf8").toString("base64url");
+}
+
+/** The frame a `before` cursor names, or null for one this handler did not write. */
+export function decodeBeforeCursor(raw: string): string | null {
+  const text = Buffer.from(raw, "base64url").toString("utf8");
+  if (!text.startsWith("b:")) return null;
+  return decodeKey(text.slice(2));
+}
+
+/**
  * The position in `frames` a cursor's frame holds, or the position just
  * before the next frame of its chain when that frame is no longer shown (a
  * model call's copy that a richer one replaced). -1 reads from the start.
@@ -662,6 +680,34 @@ export function planTranscriptPage(
 }
 
 /**
+ * The page that ends just before fold `end`: at most `limit` folds, in fold
+ * order, and `start`, the first of them. A read `from` the end passes the
+ * number of folds, and a read `before` a cursor the fold the cursor names.
+ *
+ * `through` and `high` are where a reader stands who holds every fold up to
+ * the page's last, as a reader that paged forward to it would. So a read
+ * after the cursor they make sends what follows the page, and what grew past
+ * `high` since. A fold ahead of the page that grows is sent that way too,
+ * although the reader was never sent it: a reader that holds only a tail
+ * places such an entry by its time, or leaves it for the page ahead.
+ */
+export function planPageBefore(
+  folds: readonly FoldSpan[],
+  end: number,
+  limit: number,
+): TranscriptPagePlan & { start: number } {
+  const stop = Math.max(0, Math.min(end, folds.length));
+  const start = Math.max(0, stop - limit);
+  const indexes: number[] = [];
+  for (let i = start; i < stop; i += 1) indexes.push(i);
+  let high = -1;
+  for (let i = 0; i < stop; i += 1) {
+    high = Math.max(high, (folds[i] as FoldSpan).end);
+  }
+  return { indexes, through: stop - 1, high, start };
+}
+
+/**
  * The folds a page read from a cursor can still send, the cursor given as
  * frame positions in the run as read (`cursorPosition`): those that open
  * after its `through` frame, those at or before it whose last frame lies
@@ -722,6 +768,24 @@ function foldThrough(
     if ((spans[i] as FoldSpan).open <= position) through = i;
   }
   return through;
+}
+
+/**
+ * The fold index a `before` cursor's entry opens at: the page ahead of it
+ * ends just before this fold. When no fold opens at the key any longer (its
+ * opening frame was a model call's copy a richer one replaced), the first
+ * fold that opens after the frame's position, so every fold that opens at or
+ * before it is ahead of the reader's first entry.
+ */
+function foldBefore(
+  spans: readonly FoldSpan[],
+  openKeys: readonly string[],
+  shown: readonly RunFrame[],
+  key: string,
+): number {
+  const exact = openKeys.indexOf(key);
+  if (exact !== -1) return exact;
+  return foldThrough(spans, openKeys, shown, key) + 1;
 }
 
 // ---- Bodies ---------------------------------------------------------------------------
@@ -1602,6 +1666,25 @@ export function createRunTranscriptGetHandler(
     if (input.after !== undefined && after === null) {
       throw invalidCursor(runTranscriptGet.name);
     }
+    const before =
+      input.before === undefined ? null : decodeBeforeCursor(input.before);
+    if (input.before !== undefined && before === null) {
+      throw invalidCursor(runTranscriptGet.name);
+    }
+    // A read stands in one place: after a cursor, before one, or at an end.
+    const places = [input.after, input.before, input.from].filter(
+      (place) => place !== undefined,
+    );
+    if (places.length > 1) {
+      throw new CapabilityError(
+        runTranscriptGet.name,
+        "invalid_input",
+        "conflicting_position",
+      );
+    }
+    // A read from the end or before a cursor pages backward: it sends the
+    // folds just ahead of a point, and says where the page ahead of it opens.
+    const backward = input.from === "end" || before !== null;
 
     const scope = runScope(ctx);
     const run = await resolveRun(deps, ctx, input.runId);
@@ -1620,8 +1703,9 @@ export function createRunTranscriptGetHandler(
       input.query === undefined ? (after?.from ?? null) : null,
     );
     const shown = read.frames;
-    // The first read holds the run from its first frame, and is the only one
-    // that counts the whole run (#3823).
+    // A read with no `after` cursor (from the start, from the end, or before
+    // a cursor) holds the run from its first frame, and is the only one that
+    // counts the whole run (#3823).
     const first = input.after === undefined;
     // The fold runs over every frame, then the chips narrow its entries, so
     // a filtered read shows the same steps, turns and turn numbers as an
@@ -1772,21 +1856,35 @@ export function createRunTranscriptGetHandler(
       ...fold.span,
       received: receivedOf(fold),
     }));
+    const openKeys = folds.map((fold) => frameKey(fold.opening));
     const through =
       after === null || at === null
         ? -1
-        : foldThrough(
-            spans,
-            folds.map((fold) => frameKey(fold.opening)),
-            shown,
-            after.through,
-          );
-    const plan = planTranscriptPage(
-      spans,
-      at === null ? null : { through, high: at.highAt, received: receipt },
-      input.limit,
-      run.source === "tacho" ? readAt - RECEIPT_SETTLE_MS : undefined,
-    );
+        : foldThrough(spans, openKeys, shown, after.through);
+    const backPlan = backward
+      ? planPageBefore(
+          spans,
+          before === null
+            ? folds.length
+            : foldBefore(spans, openKeys, shown, before),
+          input.limit,
+        )
+      : null;
+    // A read from the end stands where a reader that paged forward to the
+    // run's last entry would, so its receipt is the one such a read sets
+    // (`planTranscriptPage`). A page read before a cursor carries none: the
+    // reader holds the entries after it already, and a receipt would stand
+    // for frames it was not sent.
+    if (backPlan !== null && before === null && run.source === "tacho")
+      backPlan.received = { after: readAt - RECEIPT_SETTLE_MS, sent: 0 };
+    const plan =
+      backPlan ??
+      planTranscriptPage(
+        spans,
+        at === null ? null : { through, high: at.highAt, received: receipt },
+        input.limit,
+        run.source === "tacho" ? readAt - RECEIPT_SETTLE_MS : undefined,
+      );
     const page = plan.indexes.map((i) => folds[i] as TranscriptFold);
     // Where the next read's window starts. A search reads the whole run and
     // pages without one. While a page stops inside a batch of late entries
@@ -1859,12 +1957,26 @@ export function createRunTranscriptGetHandler(
       !read.complete && nextFrom !== null && nextFrom.seq !== from?.seq;
     const cursor = live || more || onward ? nextCursor() : null;
     const frameCursor = frameCursorOf(read.frames);
+    // Where the page ahead of a backward page opens: null once the page
+    // opens at the first entry.
+    const ahead =
+      backPlan === null
+        ? {}
+        : {
+            before:
+              backPlan.start > 0 && backPlan.indexes.length > 0
+                ? encodeBeforeCursor(
+                    frameKey((folds[backPlan.start] as TranscriptFold).opening),
+                  )
+                : null,
+          };
     if (page.length === 0) {
       return {
         zoom: input.zoom,
         kinds: input.kinds,
         entries: [],
         cursor,
+        ...ahead,
         complete: read.complete,
         frameCursor,
         ...tallies,
@@ -2007,6 +2119,7 @@ export function createRunTranscriptGetHandler(
       kinds: input.kinds,
       entries,
       cursor,
+      ...ahead,
       complete: read.complete,
       frameCursor,
       ...tallies,

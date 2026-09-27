@@ -25,4 +25,4 @@ model = "bge-large-en-v1.5"
 credential = "oxagen:credential/embeddings"
 
 [stella]
-archive_after_days = 7                        # days with no activity before a session archives
+archive_after_days = 0                        # days with no activity before a session archives

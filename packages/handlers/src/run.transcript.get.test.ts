@@ -23,9 +23,12 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createRunTranscriptGetHandler,
   cursorPosition,
+  decodeBeforeCursor,
   decodeTranscriptCursor,
   elapsedMs,
+  encodeBeforeCursor,
   encodeTranscriptCursor,
+  planPageBefore,
   planTranscriptPage,
   RECEIPT_SETTLE_MS,
   readWords,
@@ -691,6 +694,105 @@ describe("get_run_transcript", () => {
     expect(decodeTranscriptCursor(three)).toBeNull();
   });
 
+  it("reads the last page from the end and pages backward to the first entry", async () => {
+    const { transcript } = harness(rows);
+    const whole = await transcript(input({ zoom: "everything" }), ctx());
+    // A read from the start answers no `before`: the reader holds the head.
+    expect("before" in whole).toBe(false);
+    const tail = await transcript(
+      input({ zoom: "everything", limit: 3, from: "end" }),
+      ctx(),
+    );
+    expect(tail.entries.map((e) => e.seq)).toEqual(["4", "5", "6"]);
+    // A sealed run's tail holds its last entry, so nothing lies past it.
+    expect(tail.cursor).toBeNull();
+    expect(tail.before).not.toBeNull();
+    const middle = await transcript(
+      input({ zoom: "everything", limit: 3, before: tail.before as string }),
+      ctx(),
+    );
+    // A backward page is the entries a forward read sends there, the prefix
+    // sum from the run's start included.
+    expect(middle.entries).toEqual(whole.entries.slice(1, 4));
+    const head = await transcript(
+      input({ zoom: "everything", limit: 3, before: middle.before as string }),
+      ctx(),
+    );
+    expect(head.entries.map((e) => e.seq)).toEqual(["0"]);
+    expect(head.before).toBeNull();
+    // The counts and figures are the whole run's on every page.
+    expect(tail.counts).toEqual(whole.counts);
+    expect(tail.figures).toEqual(whole.figures);
+    expect(tail.frameCursor).toBe(whole.frameCursor);
+  });
+
+  it("answers a live run's tail with the cursor a reader of every page holds", async () => {
+    const { transcript } = harness(rows, {
+      outcome: "running",
+      sealedAt: null,
+    });
+    const whole = await transcript(input({ zoom: "everything" }), ctx());
+    const tail = await transcript(
+      input({ zoom: "everything", limit: 2, from: "end" }),
+      ctx(),
+    );
+    expect(tail.entries.map((e) => e.seq)).toEqual(["5", "6"]);
+    expect(decodeTranscriptCursor(tail.cursor as string)).toEqual(
+      decodeTranscriptCursor(whole.cursor as string),
+    );
+    const caughtUp = await transcript(
+      input({ zoom: "everything", after: tail.cursor as string }),
+      ctx(),
+    );
+    expect(caughtUp.entries).toEqual([]);
+  });
+
+  it("refuses a before cursor it did not write, and a read at two positions (negative)", async () => {
+    const { transcript } = harness(rows);
+    const first = await transcript(
+      input({ zoom: "everything", limit: 3 }),
+      ctx(),
+    );
+    const tail = await transcript(
+      input({ zoom: "everything", limit: 3, from: "end" }),
+      ctx(),
+    );
+    await expect(
+      transcript(input({ zoom: "everything", before: "not-ours" }), ctx()),
+    ).rejects.toThrow();
+    // A forward cursor is not a `before` cursor.
+    await expect(
+      transcript(
+        input({ zoom: "everything", before: first.cursor as string }),
+        ctx(),
+      ),
+    ).rejects.toThrow();
+    await expect(
+      transcript(
+        input({
+          zoom: "everything",
+          from: "end",
+          before: tail.before as string,
+        }),
+        ctx(),
+      ),
+    ).rejects.toThrow("conflicting_position");
+    await expect(
+      transcript(
+        input({
+          zoom: "everything",
+          from: "start",
+          after: first.cursor as string,
+        }),
+        ctx(),
+      ),
+    ).rejects.toThrow("conflicting_position");
+    expect(decodeBeforeCursor(encodeBeforeCursor("42"))).toBe("42");
+    expect(
+      decodeBeforeCursor(encodeTranscriptCursor({ through: "1", high: "1" })),
+    ).toBeNull();
+  });
+
   it("a digest_only recording answers every half with text null and says so", async () => {
     const { transcript, getBody } = harness(
       rows.map((r) => ({ ...r, bytesRef: "" })),
@@ -937,6 +1039,50 @@ describe("get_run_transcript", () => {
       ctx(),
     );
     expect(second.entries.map((e) => [e.seq, e.endSeq])).toEqual([["2", "4"]]);
+  });
+});
+
+describe("planPageBefore", () => {
+  const span = (open: number, end: number) => ({ open, end });
+
+  it("sends the folds just ahead of a point and stands on the last of them", () => {
+    const folds = [span(0, 0), span(1, 2), span(3, 3), span(4, 6)];
+    expect(planPageBefore(folds, 4, 2)).toEqual({
+      indexes: [2, 3],
+      through: 3,
+      high: 6,
+      start: 2,
+    });
+    expect(planPageBefore(folds, 2, 5)).toEqual({
+      indexes: [0, 1],
+      through: 1,
+      high: 2,
+      start: 0,
+    });
+    expect(planPageBefore(folds, 0, 2)).toEqual({
+      indexes: [],
+      through: -1,
+      high: -1,
+      start: 0,
+    });
+    expect(planPageBefore([], 0, 2)).toEqual({
+      indexes: [],
+      through: -1,
+      high: -1,
+      start: 0,
+    });
+  });
+
+  it("stands past a fold ahead of the page that ends after the page does (negative)", () => {
+    // A Task call open across the page: its end is the reader's `high`, so a
+    // read after the page sends it only once it grows again.
+    const folds = [span(0, 9), span(1, 1), span(2, 2)];
+    expect(planPageBefore(folds, 3, 2)).toEqual({
+      indexes: [1, 2],
+      through: 2,
+      high: 9,
+      start: 1,
+    });
   });
 });
 

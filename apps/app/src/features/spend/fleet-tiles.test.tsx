@@ -37,7 +37,7 @@ const fleet = vi.fn<DataSource["spend"]["fleet"]>();
 const refuse = () => Promise.reject(new Error("not a Fleet spend read"));
 const source: DataSource = {
   runtimes: { list: refuse, agents: refuse, named: refuse },
-  conversations: { latest: refuse },
+  conversations: { latest: refuse, list: refuse, byId: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
   shell: {
     context: refuse,

@@ -46,6 +46,7 @@ import { mcpCredentialGrantRetention } from "./functions/mcp.credential-grant-re
 import { pluginCatalogSync } from "./functions/plugin.catalog-sync";
 import { schemaReconcile } from "./functions/schema.reconcile";
 import { memoryDecayPass } from "./functions/memory.decay-pass";
+import { stellaSessionArchive } from "./functions/stella.session-archive";
 import {
   embeddingsBackfill,
   embeddingsBackfillSchedule,
@@ -114,6 +115,7 @@ export const functions: any[] = [
   pluginCatalogSync,
   schemaReconcile,
   memoryDecayPass,
+  stellaSessionArchive,
   embeddingsBackfill,
   embeddingsBackfillSchedule,
   observabilityCaptureFailure,

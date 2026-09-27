@@ -258,13 +258,17 @@ export async function readTranscriptPage(
   q: {
     kinds?: readonly TranscriptKind[];
     after?: string;
+    /** A cursor a backward page carried: the read answers the page ahead of it. */
+    before?: string;
+    /** `"end"` reads the run's last page, as a live run's tab opens on it. */
+    from?: "start" | "end";
     text?: TranscriptText;
     query?: string;
     /**
-     * Entries on the page, at most the contract's `TRANSCRIPT_ENTRY_MAX`. The
-     * player reads the run past its first page at the most a page holds,
-     * since every page costs a whole refold on the server (#4340). A search
-     * reads the default.
+     * Entries on the page, at most the contract's `TRANSCRIPT_ENTRY_MAX`. A
+     * live view catches up with the run at the most a page holds, since
+     * every page costs a whole refold on the server (#4340); a replay and a
+     * page ahead read `TRANSCRIPT_PAGE`. A search reads the default.
      */
     limit?: number;
   },
@@ -274,10 +278,20 @@ export async function readTranscriptPage(
     kinds: [...(q.kinds ?? [])],
     limit: Math.min(q.limit ?? TRANSCRIPT_ENTRY_DEFAULT, TRANSCRIPT_ENTRY_MAX),
     ...(q.after === undefined ? {} : { after: q.after }),
+    ...(q.before === undefined ? {} : { before: q.before }),
+    ...(q.from === undefined ? {} : { from: q.from }),
     ...(q.text === undefined ? {} : { text: q.text }),
     ...(q.query === undefined ? {} : { query: q.query }),
   });
   if (!read.ok && read.reason === "error" && read.code === "invalid_input") {
+    if (q.before !== undefined) {
+      return {
+        ok: false,
+        reason: "invalid",
+        code: "invalid_cursor",
+        field: "before",
+      };
+    }
     return q.after === undefined
       ? { ok: false, reason: "invalid", code: "invalid_query", field: "query" }
       : {

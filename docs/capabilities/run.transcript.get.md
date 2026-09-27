@@ -35,9 +35,21 @@ A compacted ledger attempt is read from its archive segment (spec §13.3, ADR-05
 | `zoom` | `turns` \| `steps` \| `everything` | yes | |
 | `kinds` | string[] | no | the chips pressed; empty (the default) keeps every frame |
 | `after` | string | no | an entry cursor from an earlier read |
+| `before` | string | no | a `before` cursor from an earlier read: the page is the `limit` entries just ahead of the entry it names (see Reading backward) |
+| `from` | `start` \| `end` | no | where a read with no cursor opens: the first entry (`start`, the default) or the last `limit` entries (`end`) |
 | `text` | `excerpt` \| `full` | no | how much of each body to carry; omitted takes the zoom's cap (see below) |
 | `query` | string | no | words to search the entries for, ignoring case; trimmed, 1 to 200 characters (see Search) |
 | `limit` | integer | no | 1–500, default 200 |
+
+## Reading backward
+
+A view that follows a live run opens at its end, and a reader scrolls up from there. `from: "end"` reads the last `limit` entries, and `before` reads the `limit` entries just ahead of the first one a reader holds. Each answers `before`, the cursor for the page ahead of it, which is null once the page opens at the first entry.
+
+A backward page also answers `cursor`, the point a reader would continue from had it paged forward to the page's last entry. A read `from` the end answers the same cursor a reader who read every page would hold, receipt included, so a live view reads `after` it as frames land. A read `before` a cursor answers one with no receipt, and a reader that holds a later cursor keeps its own.
+
+An entry ahead of a tail page that grows after the read is sent again by the next read `after` its cursor, though the reader was never sent it. A reader that holds only a tail places that entry by its time, or leaves it for the page ahead.
+
+A read sends at most one of `after`, `before`, and `from`. Every read, backward or not, folds the run up to its frame cap, so a backward page costs what a first page costs. A `query` on a backward read searches every entry, as a first page does.
 
 ## Zoom levels
 
@@ -115,6 +127,7 @@ The Run page's transcript mockup (`mockups/pages/run-transcript.md`) draws the s
 | `entries[].cost` | `{ micros, currency, basis }` or null | the folded frames' cost records summed; null when none carried one. Ledger frames carry no cost record; spend is metered per run |
 | `entries[].cumulativeCost` | `{ micros, currency, basis }` or null | every cost record of the run up to and including this entry (spec §8.4 prefix sum), so a page never restates the run's spend as the page's |
 | `cursor` | string or null | the point to continue from; null when nothing lies past this page |
+| `before` | string or null | on a read `from` the end or `before` a cursor, the point to read the page ahead of this one from; null when the page opens at the run's first entry. Absent on every other read |
 | `complete` | boolean | false when the read stopped at its 10 000-frame cap before the run's last frame, so the transcript is a prefix. A read from a cursor reads a window that starts later in the run (see Cursor), so a reader pages past the 10 000th frame and a later page can read true |
 | `frameCursor` | string or null | the `get_run` frame cursor of the last frame on the run's own chain that the read folded; null when it folded none. A reader that follows a live run passes it to the run's stream as `after`, so the stream sends only frames the read did not hold. A subagent's frames are on chains of their own and are passed over |
 | `counts` | object or absent | present only on a read from the run's first frame, with no `after`. A read from a cursor reads a window of the run and carries none, so a reader keeps the counts its first read returned (#3823). The counts are the run's entries at the zoom read, counted over every entry that is not `quiet`, whatever the chips or query: `kinds` (entries per chip), `entries`, `errors` (entries that failed or were refused, or answer the errors chip), and `policy` (entries that answer the policy chip, except the harness checking itself). A quiet entry draws no row, so no count holds it. The unit is the entry: a model step that said two things counts once. At `everything` the words are not read (see Words), so there a prompt or reply whose words are blank or repeat still counts |
@@ -312,5 +325,6 @@ The counts cover the whole run, whatever `--kinds` keeps. A page read with `--af
 
 - `not_found` (404): no run with that id in the caller's workspace.
 - `invalid_input` (`invalid_cursor`): a cursor this capability did not write. A stale cursor is refused rather than treated as the start, which would silently restart and repeat the run.
+- `invalid_input` (`conflicting_position`): more than one of `after`, `before`, and `from`.
 
 The interface renders the recorded fidelity word and never a stronger one (spec §8.4).

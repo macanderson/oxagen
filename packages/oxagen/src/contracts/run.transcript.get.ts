@@ -847,7 +847,7 @@ export const runTranscriptGet = registerCapability({
   name: "get_run_transcript",
   domain: "run",
   description:
-    "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost. A read can search the entries. A read from the run's start carries the run's counts and figures.",
+    "Read one run as a transcript at a zoom level (turns, steps or everything), derived on the server from its frames and retained bodies: each step one entry carrying the request and the result it was made with, the decision folded into it, and its own and the run's cumulative cost. A read can search the entries. A read with no `after` cursor carries the run's counts and figures.",
   mode: "sync",
   surfaces: ["api", "mcp", "cli"],
   layers: ["schema", "api", "mcp", "cli", "unit", "docs", "app"],
@@ -875,6 +875,17 @@ export const runTranscriptGet = registerCapability({
        * `query`, it reads a window of the run past the cursor.
        */
       after: z.string().max(256).optional(),
+      /**
+       * A `before` cursor from an earlier read: the page is the `limit`
+       * entries just ahead of the entry it names. Not sent with `after`.
+       */
+      before: z.string().max(256).optional(),
+      /**
+       * Where a read with no cursor opens: at the run's first entry (`start`,
+       * the default) or at its last `limit` entries (`end`), as a view that
+       * follows a live run opens. Not sent with a cursor.
+       */
+      from: z.enum(["start", "end"]).optional(),
       /** How much of each body to carry; omitted takes the zoom's cap. */
       text: transcriptTextSchema.optional(),
       /**
@@ -898,6 +909,12 @@ export const runTranscriptGet = registerCapability({
       entries: z.array(transcriptEntrySchema).max(TRANSCRIPT_ENTRY_MAX),
       /** The point to continue from; null when nothing lies past this page. */
       cursor: z.string().nullable(),
+      /**
+       * The point to read the page ahead of this one from, on a read `from`
+       * the end or `before` a cursor; null when this page opens at the run's
+       * first entry. Absent on a read from the start or after a cursor.
+       */
+      before: z.string().nullable().optional(),
       /**
        * False when the run has more frames than the read could fold, so the
        * transcript is a prefix and the caller says so rather than presenting

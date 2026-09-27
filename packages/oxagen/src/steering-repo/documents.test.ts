@@ -147,6 +147,22 @@ describe("workspace schema", () => {
     ["a budget field it does not know", { budget: { per_day_micros: 1 } }, ["budget"]],
     ["block_merge as text", { code_checks: { block_merge: "no" } }, ["code_checks", "block_merge"]],
     ["a tool definition budget of zero", { tools: { definition_budget: 0 } }, ["tools", "definition_budget"]],
+    [
+      "a session archive after zero days",
+      { stella: { archive_after_days: 0 } },
+      ["stella", "archive_after_days"],
+    ],
+    [
+      "a session archive past a year",
+      { stella: { archive_after_days: 366 } },
+      ["stella", "archive_after_days"],
+    ],
+    [
+      "a session archive after part of a day",
+      { stella: { archive_after_days: 1.5 } },
+      ["stella", "archive_after_days"],
+    ],
+    ["a stella field it does not know", { stella: { archive: true } }, ["stella"]],
     ["a top-level field it does not know", { colour: "blue" }, []],
   ])("refuses %s", (_name, patch, path) => {
     const issues = issuesOf(workspaceSchema, { ...WORKSPACE, ...patch });

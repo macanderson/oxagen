@@ -27,7 +27,7 @@ const orgs = vi.fn();
 const workspaces = vi.fn();
 const source = {
   runtimes: { list: vi.fn(), agents: vi.fn(), named: vi.fn() },
-  conversations: { latest: vi.fn() },
+  conversations: { latest: vi.fn(), list: vi.fn(), byId: vi.fn() },
   pretenant: { orgs, workspaces },
   shell: {
     context: vi.fn(),

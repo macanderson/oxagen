@@ -8,14 +8,15 @@
 // the agent and the approvals parked on the run), shapes the figures once
 // (`runMetrics`), and hands the open tab the whole bundle. The transcript is
 // folded and counted on the server (ADR-182): the tab counts are its
-// `counts`, and the figures its `figures`. The first page carries both for
-// the whole run (#3823, D6), so the page draws from it, and the Transcript
-// tab reads the rest once it is on screen (#4420). The run at `everything`,
-// one entry per frame, is read to its end only for a tab that lists frames.
-// The badges of those tabs count frames, and the `steps` read carries those
-// counts too (`counts.frames`), so no other tab reads the run a second time.
-// A tab's own heavy read (the chain, a frame body) happens only when that tab
-// is open.
+// `counts`, and the figures its `figures`. A read that starts at the run's
+// first frame carries both for the whole run: the first page, and every page
+// read from the end or before a cursor (#3823, D6). So the page draws from
+// one page, and the Transcript tab reads the rest a page at a time as the
+// reader goes (#4420, #4427). The run at `everything`, one entry per frame,
+// is read to its end only for a tab that lists frames. The badges of those
+// tabs count frames, and the `steps` read carries those counts too
+// (`counts.frames`), so no other tab reads the run a second time. A tab's own
+// heavy read (the chain, a frame body) happens only when that tab is open.
 import { notFound } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Suspense, type ReactNode } from "react";
@@ -48,7 +49,8 @@ import {
   type TabFigure,
   tabOf,
 } from "./tabs";
-import { parseKinds, TranscriptTab } from "./transcript";
+import { parseKinds, TranscriptTab, transcriptFrom } from "./transcript";
+import { TRANSCRIPT_PAGE } from "./transcript-rows";
 import { readWholeTranscript } from "./whole-transcript";
 import { ChangesLoading, ChangesPanel } from "./work";
 import { readRunIssues } from "./run-issues";
@@ -322,13 +324,24 @@ export async function Run({
         ),
       // One page, not the run to its end: every page rereads and refolds the
       // whole run on the server (#4340), so a run of 15 pages held the page
-      // for 15 reads in a row (#4420). The page's head `frameCursor` is where
-      // the stream opens, and the tab pages the rest in after it draws.
-      source.runs.transcript(ctx, run.id, "steps", {
-        kinds: [],
-        limit: TRANSCRIPT_ENTRY_MAX,
-        text: "full",
-      }),
+      // for 15 reads in a row (#4420). The page's `frameCursor` is where the
+      // stream opens, and the tab pages the rest in after it draws. The
+      // Transcript tab reads one screen's worth, from a live run's end or
+      // any other run's first entry (#4427). Every other tab reads the head
+      // at the most a page holds, as the Context tab's first request needs.
+      source.runs.transcript(
+        ctx,
+        run.id,
+        "steps",
+        selected === "transcript"
+          ? {
+              kinds: [],
+              limit: TRANSCRIPT_PAGE,
+              text: "full",
+              from: transcriptFrom(run),
+            }
+          : { kinds: [], limit: TRANSCRIPT_ENTRY_MAX, text: "full" },
+      ),
       listsFrames
         ? readWholeTranscript(source, ctx, run.id, "everything")
         : null,

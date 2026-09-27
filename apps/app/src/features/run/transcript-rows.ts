@@ -59,6 +59,14 @@ export function entryKey(entry: TranscriptEntry): string {
   return entry.key;
 }
 
+/**
+ * How many entries the Transcript tab reads at once: the page it opens on,
+ * each page ahead of a live run's tail, and each page a replay reads ahead of
+ * its playhead. Every read refolds the run on the server (#4340), so a page
+ * is sized to fill the view, not to hold the run (#4427).
+ */
+export const TRANSCRIPT_PAGE = 50;
+
 /** A transcript with at least one entry: the only kind the view draws. */
 export type Frames = readonly [TranscriptEntry, ...TranscriptEntry[]];
 
@@ -144,22 +152,76 @@ function subtreeEnd(entries: readonly TranscriptEntry[], root: number): number {
 }
 
 /**
- * A fresh read of the whole run laid over what a reader holds: the fresh
- * read's entries in the fresh read's order, then each held entry it does not
- * carry, which a reader paged in past that read's bound.
+ * A fresh read of the whole run laid over what a reader holds: the held
+ * entries ahead of the first one the fresh read carries, the fresh read's
+ * entries in the fresh read's order, then each held entry it does not carry,
+ * which a reader paged in past that read's bound.
  *
  * `mergeEntries` places a new entry under its parent or at the end, which is
  * right for a tail page. A fresh read carries the server's order for every
  * entry, including a subagent's entry recorded late under the call that
  * spawned it (#4083), so this takes that order whole.
+ *
+ * A reader that opened at the run's end and scrolled up holds entries ahead
+ * of a fresh tail read, and they stay ahead of it. A fresh read that shares
+ * no entry with what the reader holds answers null: the two do not overlap,
+ * so neither can be placed by the other.
  */
 export function rebaseEntries(
   fresh: Frames,
   held: readonly TranscriptEntry[],
-): Frames {
+): Frames | null {
   const known = new Set(fresh.map(entryKey));
-  const past = held.filter((entry) => !known.has(entryKey(entry)));
-  return past.length === 0 ? fresh : [...fresh, ...past];
+  const first = held.findIndex((entry) => known.has(entryKey(entry)));
+  if (first === -1) return held.length === 0 ? fresh : null;
+  const past = held
+    .slice(first)
+    .filter((entry) => !known.has(entryKey(entry)));
+  if (first === 0 && past.length === 0) return fresh;
+  const out = [...held.slice(0, first), ...fresh, ...past];
+  return isNonEmpty(out) ? out : fresh;
+}
+
+/**
+ * The entries a reader holds with an older page laid ahead of them: the
+ * page's entries it does not hold, in the page's order, then what it held.
+ * An entry it already holds, grown since, is replaced where it stands.
+ */
+export function prependEntries(
+  held: Frames,
+  page: readonly TranscriptEntry[],
+): Frames {
+  const known = new Map(held.map((entry, index) => [entryKey(entry), index]));
+  const out = [...held];
+  const older: TranscriptEntry[] = [];
+  for (const entry of page) {
+    const index = known.get(entryKey(entry));
+    if (index === undefined) older.push(entry);
+    else out[index] = entry;
+  }
+  const next = [...older, ...out];
+  return isNonEmpty(next) ? next : held;
+}
+
+/**
+ * A page read after the cursor, for a reader that holds only the run's last
+ * entries. The server sends an entry again when it grows, including one
+ * ahead of the first entry the reader holds, which it never sent this
+ * reader. That entry is left for the page ahead, which carries it grown,
+ * rather than drawn at the foot of the run. What remains merges as any page.
+ */
+export function mergeTail(
+  held: Frames,
+  page: readonly TranscriptEntry[],
+): Frames {
+  const known = new Set(held.map(entryKey));
+  const floor = held[0].elapsedMs;
+  return mergeEntries(
+    held,
+    page.filter(
+      (entry) => known.has(entryKey(entry)) || entry.elapsedMs >= floor,
+    ),
+  );
 }
 
 // ── The feed ────────────────────────────────────────────────────────────────

@@ -2,7 +2,9 @@
 // latest conversation in a workspace, read back through `get_conversation`,
 // and the turns on it. Only what the flyout draws is carried: the question,
 // the reply with the run it was recorded as, the tool calls that run made
-// (#4161), and the writes it parked.
+// (#4161), and the writes it parked. The flyout's session list (#4435) reads
+// the viewer's active conversations through `list_conversations`, one row
+// each.
 import { z } from "zod";
 import { PublicId } from "./common";
 
@@ -61,3 +63,23 @@ export const AssistantThread = z.object({
   truncated: z.boolean(),
 });
 export type AssistantThread = z.infer<typeof AssistantThread>;
+
+/**
+ * One of the viewer's active conversations in the workspace, as the flyout's
+ * session list draws it (#4435).
+ */
+export const AssistantSession = z.object({
+  /** The `cnv_` id the flyout opens it by. */
+  id: PublicId,
+  /**
+   * The first question, as `ask_assistant` titles a conversation it opens.
+   * Null for a conversation opened before it did, which the list shows as
+   * "Untitled session".
+   */
+  title: z.string().nullable(),
+  /**
+   * The last turn. The list sorts by it, and the archive sweep counts from it.
+   */
+  updatedAt: z.iso.datetime({ offset: true }),
+});
+export type AssistantSession = z.infer<typeof AssistantSession>;

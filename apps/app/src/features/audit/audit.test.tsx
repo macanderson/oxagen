@@ -107,7 +107,7 @@ const workspaces = vi.fn<DataSource["org"]["workspaces"]>();
 const refuse = () => Promise.reject(new Error("not an Audit read"));
 const source: DataSource = {
   runtimes: { list: refuse, agents: refuse, named: refuse },
-  conversations: { latest: refuse },
+  conversations: { latest: refuse, list: refuse, byId: refuse },
   pretenant: { orgs: refuse, workspaces: refuse },
   shell: {
     context: refuse,
