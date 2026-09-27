@@ -207,10 +207,18 @@ export async function seedAgent(
   });
 }
 
-/** A named runtime in the tenant's workspace (ADR-198). */
+/**
+ * A named runtime in the tenant's workspace (ADR-198). It requires no
+ * containment unless `containmentRequired` says so (ADR-204).
+ */
 export async function seedRuntime(
   tenant: SeededTenant,
-  over: { name: string; slug: string; workspaceId?: string },
+  over: {
+    name: string;
+    slug: string;
+    workspaceId?: string;
+    containmentRequired?: boolean;
+  },
 ): Promise<{ id: string; publicId: string; name: string; slug: string }> {
   // tenancy: test fixture seeding outside any request; the row is scoped to
   // the seeded tenant's orgId and workspaceId and removed by cleanupTenants.
@@ -222,6 +230,7 @@ export async function seedRuntime(
         workspaceId: over.workspaceId ?? tenant.workspaceId,
         name: over.name,
         slug: over.slug,
+        containmentRequired: over.containmentRequired ?? false,
         createdById: tenant.userId,
         updatedById: tenant.userId,
       })

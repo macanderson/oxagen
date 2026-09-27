@@ -21,6 +21,18 @@ describe("create_runtime contract", () => {
     });
   });
 
+  it("takes whether the runtime requires the contained launcher (ADR-204)", () => {
+    expect(
+      runtimeCreate.input.parse({ name: "Build box", containmentRequired: true }),
+    ).toEqual({ name: "Build box", containmentRequired: true });
+    expect(
+      runtimeCreate.input.safeParse({
+        name: "Build box",
+        containmentRequired: "yes",
+      }).success,
+    ).toBe(false);
+  });
+
   it("refuses an empty name and a slug outside the one spelling", () => {
     expect(runtimeCreate.input.safeParse({ name: "   " }).success).toBe(false);
     for (const slug of [

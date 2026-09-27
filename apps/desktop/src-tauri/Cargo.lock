@@ -2623,7 +2623,7 @@ dependencies = [
 
 [[package]]
 name = "oxagen-desktop"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "dirs 7.0.0",
  "serde",

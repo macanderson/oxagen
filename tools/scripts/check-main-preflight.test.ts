@@ -223,6 +223,8 @@ describe("guardProblems", () => {
   it("names every job the queue-depth fix must cover", () => {
     expect(GATED_JOBS).toEqual([
       "checks",
+      "build",
+      "unit",
       "test",
       "e2e",
       "rls-integration",

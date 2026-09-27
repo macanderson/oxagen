@@ -1,7 +1,7 @@
 {
   "name": "create_runtime",
   "domain": "runtime",
-  "description": "Name a runtime in this workspace: a laptop, a VM or a cloud workspace agents run on. The slug is derived from the name unless one is given. Register an agent on it next.",
+  "description": "Name a runtime in this workspace: a laptop, a VM or a cloud workspace agents run on. The slug is derived from the name unless one is given. containmentRequired makes every agent on it run only under the contained launcher. Register an agent on it next.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -32,6 +32,9 @@
         "type": "string",
         "minLength": 1,
         "maxLength": 40
+      },
+      "containmentRequired": {
+        "type": "boolean"
       }
     },
     "required": [

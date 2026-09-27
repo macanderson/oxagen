@@ -46,6 +46,12 @@ export const runtimes = agentSchema.table(
     // Derived from the name by `slugFromName` (packages/oxagen/src/workspace-slug.ts)
     // unless the caller types one. A deleted runtime gives its slug up.
     slug: citext("slug").notNull(),
+    // Whether every agent on this runtime runs only under the contained
+    // launcher (ADR-152). The host bundle reads it from the host's runtime,
+    // not from the agent's version config (ADR-204).
+    containmentRequired: boolean("containment_required")
+      .notNull()
+      .default(false),
   },
   (t) => ({
     workspaceSlugUniq: uniqueIndex("runtimes_workspace_slug_uniq")

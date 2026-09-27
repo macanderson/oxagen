@@ -494,6 +494,7 @@ after the registered name separately when their contract uses a dotted stem.
 | --- | --- | --- |
 | [create_runtime](runtime.create.md) | [runtime.create.ts](../../packages/oxagen/src/contracts/runtime.create.ts) | api, mcp |
 | [list_runtimes](runtime.list.md) | [runtime.list.ts](../../packages/oxagen/src/contracts/runtime.list.ts) | api, mcp |
+| [update_runtime](runtime.update.md) | [runtime.update.ts](../../packages/oxagen/src/contracts/runtime.update.ts) | api, mcp |
 
 ## Schema
 

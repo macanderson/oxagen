@@ -62,6 +62,7 @@ import { agentMove } from "@oxagen/oxagen/contracts/agent.move";
 import { agentToolbeltAssign } from "@oxagen/oxagen/contracts/agent.toolbelt.assign";
 import { runtimeCreate } from "@oxagen/oxagen/contracts/runtime.create";
 import { runtimeList } from "@oxagen/oxagen/contracts/runtime.list";
+import { runtimeUpdate } from "@oxagen/oxagen/contracts/runtime.update";
 import { toolbeltList } from "@oxagen/oxagen/contracts/toolbelt.list";
 import { toolbeltGet } from "@oxagen/oxagen/contracts/toolbelt.get";
 import { toolbeltClone } from "@oxagen/oxagen/contracts/toolbelt.clone";
@@ -196,6 +197,7 @@ import { agentMoveRoute } from "./agent.move";
 import { agentToolbeltAssignRoute } from "./agent.toolbelt.assign";
 import { runtimeCreateRoute } from "./runtime.create";
 import { runtimeListRoute } from "./runtime.list";
+import { runtimeUpdateRoute } from "./runtime.update";
 import { toolbeltListRoute } from "./toolbelt.list";
 import { toolbeltGetRoute } from "./toolbelt.get";
 import { toolbeltCloneRoute } from "./toolbelt.clone";
@@ -571,8 +573,24 @@ const ROUTES: ThinRoute[] = [
     route: runtimeCreateRoute as unknown as Hono<never>,
     method: "POST",
     capability: runtimeCreate.name,
-    body: { name: "Mac's laptop" },
+    body: { name: "Mac's laptop", containmentRequired: true },
     invalidBody: { name: "Mac's laptop", slug: "Macs-Laptop" },
+    status: 200,
+  },
+  {
+    file: "runtime.update",
+    route: runtimeUpdateRoute as unknown as Hono<never>,
+    method: "POST",
+    capability: runtimeUpdate.name,
+    body: {
+      runtimeId: "rtm_0123456789abcdefghjkmn",
+      containmentRequired: true,
+    },
+    // Containment is a yes or no (ADR-204): a string is refused.
+    invalidBody: {
+      runtimeId: "rtm_0123456789abcdefghjkmn",
+      containmentRequired: "yes",
+    },
     status: 200,
   },
   {
