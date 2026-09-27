@@ -1,5 +1,6 @@
 // The Runtimes writes. Add a runtime names one through `create_runtime`
-// (ADR-198) and answers the register flow with that runtime chosen. Unenroll
+// (ADR-198) and answers the register flow with that runtime chosen. The
+// Containment switch sets one field through `update_runtime` (ADR-204). Unenroll
 // (runtimes.md, Permissions: `runtime.unenroll`) resolves the viewer the URL
 // names and revokes the one enrollment the page shows through
 // `revoke_tacho_enrollment`, sending no reason it did not ask for. A refusal
@@ -21,7 +22,12 @@ const { tachoEnrollmentRevoke } = await import(
 const { runtimeCreate } = await import(
   "@oxagen/oxagen/contracts/runtime.create"
 );
-const { createRuntime, unenrollRuntime } = await import("./actions");
+const { runtimeUpdate } = await import(
+  "@oxagen/oxagen/contracts/runtime.update"
+);
+const { createRuntime, setRuntimeContainment, unenrollRuntime } = await import(
+  "./actions"
+);
 
 const ctx = { marker: "viewer", orgSlug: "acme", wsSlug: "core-platform" };
 
@@ -71,6 +77,32 @@ describe("createRuntime", () => {
     });
   });
 
+  it("asks for containment only when the person chose it (ADR-204)", async () => {
+    kernelWrite.mockResolvedValue({
+      ok: true,
+      value: { runtime: { id: "rtm_gpu", name: "GPU box", slug: "gpu-box" } },
+    });
+    await createRuntime("acme", "core-platform", {
+      name: "GPU box",
+      slug: "gpu-box",
+      containmentRequired: true,
+    });
+    expect(kernelWrite).toHaveBeenLastCalledWith(ctx, runtimeCreate, {
+      name: "GPU box",
+      slug: "gpu-box",
+      containmentRequired: true,
+    });
+    await createRuntime("acme", "core-platform", {
+      name: "GPU box",
+      slug: "gpu-box",
+      containmentRequired: false,
+    });
+    expect(kernelWrite).toHaveBeenLastCalledWith(ctx, runtimeCreate, {
+      name: "GPU box",
+      slug: "gpu-box",
+    });
+  });
+
   it("returns a taken slug as the conflict the handler named", async () => {
     const taken = { ok: false, reason: "conflict", code: "runtime_slug_taken" };
     kernelWrite.mockResolvedValue(taken);
@@ -87,6 +119,75 @@ beforeEach(() => {
   kernelWrite.mockReset();
   requireViewer.mockReset();
   requireViewer.mockResolvedValue(ctx);
+});
+
+describe("setRuntimeContainment (ADR-204)", () => {
+  it("sends the runtime and the new value, and answers the value recorded", async () => {
+    kernelWrite.mockResolvedValue({
+      ok: true,
+      value: {
+        runtime: {
+          id: "rtm_macslaptop",
+          name: "Mac's laptop",
+          slug: "macs-laptop",
+        },
+        containmentRequired: true,
+      },
+    });
+    const result = await setRuntimeContainment(
+      "acme",
+      "core-platform",
+      "rtm_macslaptop",
+      true,
+    );
+    expect(requireViewer).toHaveBeenCalledWith("acme", "core-platform");
+    expect(kernelWrite).toHaveBeenCalledWith(ctx, runtimeUpdate, {
+      runtimeId: "rtm_macslaptop",
+      containmentRequired: true,
+    });
+    expect(result).toEqual({ ok: true, value: { containmentRequired: true } });
+  });
+
+  it("sends a false value rather than leaving the field out", async () => {
+    kernelWrite.mockResolvedValue({
+      ok: true,
+      value: {
+        runtime: {
+          id: "rtm_macslaptop",
+          name: "Mac's laptop",
+          slug: "macs-laptop",
+        },
+        containmentRequired: false,
+      },
+    });
+    await expect(
+      setRuntimeContainment("acme", "core-platform", "rtm_macslaptop", false),
+    ).resolves.toEqual({ ok: true, value: { containmentRequired: false } });
+    expect(kernelWrite).toHaveBeenCalledWith(ctx, runtimeUpdate, {
+      runtimeId: "rtm_macslaptop",
+      containmentRequired: false,
+    });
+  });
+
+  it("returns a refusal as the seam classified it (negative)", async () => {
+    const denied = { ok: false, reason: "denied", code: "forbidden" };
+    kernelWrite.mockResolvedValue(denied);
+    await expect(
+      setRuntimeContainment("acme", "core-platform", "rtm_macslaptop", true),
+    ).resolves.toEqual(denied);
+  });
+
+  it("returns a runtime that is gone as not_found (negative)", async () => {
+    const gone = {
+      ok: false,
+      reason: "not_found",
+      code: "runtime_not_found",
+    };
+    kernelWrite.mockResolvedValue(gone);
+    await expect(
+      setRuntimeContainment("acme", "core-platform", "rtm_gone", true),
+    ).resolves.toEqual(gone);
+  });
 });
 
 describe("unenrollRuntime", () => {

@@ -873,7 +873,18 @@
           "ceilingValue": {
             "caller": "the agent's grants intersected with yours",
             "sentinel": "no person resolved, so the unprivileged ceiling"
-          }
+          },
+          "fieldLater": "These budgets are read-only for now. A field to set an agent’s own budget comes later."
+        },
+        "containment": {
+          "title": "Containment",
+          "lead": "The agent’s runtime decides whether it runs only under the contained launcher.",
+          "term": "Contained launcher",
+          "required": "Required",
+          "notRequired": "Not required",
+          "setOn": "set on the runtime <runtime>{name}</runtime>",
+          "noRuntime": "This agent runs on no named runtime, so nothing requires it.",
+          "note": "An organization Owner or Admin changes it on the runtime’s page. The change applies to every agent on that runtime and reaches each host on its next bundle fetch."
         }
       },
       "activity": {

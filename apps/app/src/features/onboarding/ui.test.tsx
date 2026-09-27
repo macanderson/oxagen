@@ -90,6 +90,7 @@ const RUNTIMES: NamedRuntimeList = {
       ],
       liveHosts: 1,
       lastSeenAt: null,
+      containmentRequired: false,
     },
     {
       id: "rtm_buildbox",
@@ -99,6 +100,7 @@ const RUNTIMES: NamedRuntimeList = {
       agents: [],
       liveHosts: 0,
       lastSeenAt: null,
+      containmentRequired: false,
     },
   ],
 };

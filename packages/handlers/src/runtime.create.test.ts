@@ -1,5 +1,6 @@
 // create_runtime and list_runtimes (ADR-198, #4369), and the runtime a host
-// enrollment binds.
+// enrollment binds. Both carry whether the runtime requires the contained
+// launcher (ADR-204, #4372).
 //
 // The role gate is proven with a tx double, the way agent.identity.test.ts
 // proves its own. The writes and reads are proven against a real Postgres;
@@ -7,6 +8,7 @@
 //
 //   DATABASE_URL=postgres://oxagen:oxagen@localhost:5433/oxagen \
 //     pnpm --filter @oxagen/handlers exec vitest run src/runtime.create.test.ts
+import { generateKeyPairSync } from "node:crypto";
 import {
   afterAll,
   beforeAll,
@@ -115,7 +117,7 @@ describe("create_runtime: the role gate and the slug", () => {
 describe.skipIf(!process.env.DATABASE_URL)(
   "runtimes against Postgres",
   async () => {
-    const { withSystemDb } = await import("@oxagen/database");
+    const { withSystemDb, withTenantDb } = await import("@oxagen/database");
     const { runInTenantScope } = await import("@oxagen/tenancy");
     const { eq } = await import("drizzle-orm");
     const support = await import(
@@ -170,6 +172,60 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(typed.runtime.slug).toBe("macs-laptop-2");
     });
 
+    it("create_runtime records whether the runtime requires containment, false when left out", async () => {
+      const contained = await inScope(() =>
+        runtimeCreateHandler(
+          { name: "Locked box", containmentRequired: true },
+          ctx(),
+        ),
+      );
+      const open = await inScope(() =>
+        runtimeCreateHandler({ name: "Open box" }, ctx()),
+      );
+      const rows = await withSystemDb((tx) =>
+        tx
+          .select({
+            publicId: schema.runtimes.publicId,
+            containmentRequired: schema.runtimes.containmentRequired,
+          })
+          .from(schema.runtimes)
+          .where(eq(schema.runtimes.orgId, tenant.orgId)),
+      );
+      const byId = new Map(rows.map((r) => [r.publicId, r]));
+      expect(byId.get(contained.runtime.id)?.containmentRequired).toBe(true);
+      expect(byId.get(open.runtime.id)?.containmentRequired).toBe(false);
+
+      const listed = runtimeList.output.parse(
+        await inScope(() => runtimeListHandler({}, ctx())),
+      );
+      expect(
+        listed.items.find((i) => i.id === contained.runtime.id)
+          ?.containmentRequired,
+      ).toBe(true);
+      expect(
+        listed.items.find((i) => i.id === open.runtime.id)?.containmentRequired,
+      ).toBe(false);
+    });
+
+    it("list_runtimes with an id reads that runtime alone, and none for an unknown id", async () => {
+      const wanted = await inScope(() =>
+        runtimeCreateHandler({ name: "Wanted box" }, ctx()),
+      );
+      await inScope(() => runtimeCreateHandler({ name: "Other box" }, ctx()));
+
+      const one = runtimeList.output.parse(
+        await inScope(() => runtimeListHandler({ id: wanted.runtime.id }, ctx())),
+      );
+      expect(one.items.map((i) => i.id)).toEqual([wanted.runtime.id]);
+
+      const none = runtimeList.output.parse(
+        await inScope(() =>
+          runtimeListHandler({ id: "rtm_nosuchruntime" }, ctx()),
+        ),
+      );
+      expect(none.items).toEqual([]);
+    });
+
     it("list_runtimes names each runtime's live agents and host enrollments", async () => {
       const created = await inScope(() =>
         runtimeCreateHandler({ name: "GPU box" }, ctx()),
@@ -210,6 +266,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         name: "GPU box",
         slug: "gpu-box",
         liveHosts: 1,
+        containmentRequired: false,
         agents: [
           {
             id: agent.publicId,
@@ -240,6 +297,176 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
       expect(clash.id).not.toBe(first.id);
       expect(clash.slug).toBe("build-box-2");
+    });
+
+    it("an enrollment that carries containment makes the hostname's runtime require it, and never lifts it", async () => {
+      const scope = { orgId: tenant.orgId, workspaceId: tenant.workspaceId };
+      const open = await withSystemDb((tx) =>
+        findOrCreateHostRuntime(tx, scope, "Contained-Box", tenant.userId),
+      );
+      expect(open.containmentRequired).toBe(false);
+      const contained = await withSystemDb((tx) =>
+        findOrCreateHostRuntime(tx, scope, "contained-box", tenant.userId, {
+          containmentRequired: true,
+        }),
+      );
+      expect(contained.id).toBe(open.id);
+      expect(contained.containmentRequired).toBe(true);
+      const later = await withSystemDb((tx) =>
+        findOrCreateHostRuntime(tx, scope, "Contained-Box", tenant.userId, {
+          containmentRequired: false,
+        }),
+      );
+      expect(later.containmentRequired).toBe(true);
+      const fresh = await withSystemDb((tx) =>
+        findOrCreateHostRuntime(tx, scope, "Fresh-Box", tenant.userId, {
+          containmentRequired: true,
+        }),
+      );
+      expect(fresh.containmentRequired).toBe(true);
+    });
+
+    it("an unplaced agent whose version requires containment carries it to each runtime on its first enrollment there, and into that host's mandate", async () => {
+      const { mintHostEnrollment, requireEnrollmentSigning } = await import(
+        "./lib/tacho-host-enroll"
+      );
+      const pem = generateKeyPairSync("ed25519")
+        .privateKey.export({ type: "pkcs8", format: "pem" })
+        .toString();
+      vi.stubEnv("TACHO_ENROLLMENT_SIGNING_SECRET", "runtime-create-test");
+      vi.stubEnv("TACHO_BUNDLE_SIGNING_PRIVATE_KEY", pem.replace(/\n/g, "\\n"));
+      vi.stubEnv("TACHO_INGEST_ENDPOINTS", "https://api.example.test/v1/tacho");
+
+      // An agent the runtime backfill left unplaced: no runtime and no host,
+      // with its requirement only in its active version's config.
+      const unplaced = async (slug: string, config: Record<string, unknown>) => {
+        const agent = await support.seedAgent(tenant, {
+          slug,
+          harness: "claude-code",
+          status: "active",
+          runtimeId: null,
+        });
+        await withSystemDb(async (tx) => {
+          const [version] = await tx
+            .insert(schema.agentVersions)
+            .values({
+              agentId: agent.id,
+              version: 1,
+              config,
+              createdById: tenant.userId,
+            })
+            .returning({ id: schema.agentVersions.id });
+          await tx
+            .update(schema.agents)
+            .set({ activeVersionId: version!.id })
+            .where(eq(schema.agents.id, agent.id));
+        });
+        return agent;
+      };
+      const enroll = (
+        agent: Awaited<ReturnType<typeof unplaced>>,
+        hostname: string,
+        fill: number,
+      ) =>
+        inScope(() =>
+          withTenantDb((tx) =>
+            mintHostEnrollment(tx, {
+              orgId: tenant.orgId,
+              workspaceId: tenant.workspaceId,
+              userId: tenant.userId,
+              agentKey: agent.agentKey!,
+              agent: { id: agent.id, principalId: agent.principalId },
+              facts: {
+                hostname,
+                osUser: "dev",
+                platform: "darwin",
+                devicePublicKey: `ed25519:${Buffer.alloc(32, fill).toString("base64")}`,
+                harnesses: ["claude-code"],
+                managed: false,
+                validityDays: 30,
+              },
+              signing: requireEnrollmentSigning("runtime_create_test"),
+              issuedAt: new Date(),
+            }),
+          ),
+        );
+      const runtimeOf = async (id: string | null) => {
+        const [row] = await withSystemDb((tx) =>
+          tx
+            .select({
+              slug: schema.runtimes.slug,
+              containmentRequired: schema.runtimes.containmentRequired,
+            })
+            .from(schema.runtimes)
+            .where(eq(schema.runtimes.id, id!)),
+        );
+        return row;
+      };
+
+      try {
+        const strict = await unplaced("strict-claude", {
+          containment: { required: true },
+        });
+        const minted = await enroll(strict, "Strict-Box.local", 5);
+        expect(await runtimeOf(minted.host.runtimeId)).toEqual({
+          slug: "strict-box",
+          containmentRequired: true,
+        });
+        expect(minted.mandate.containment).toEqual({ required: true });
+        // The enrollment binds the runtime; it does not move the agent.
+        const [agentRow] = await withSystemDb((tx) =>
+          tx
+            .select({ runtimeId: schema.agents.runtimeId })
+            .from(schema.agents)
+            .where(eq(schema.agents.id, strict.id)),
+        );
+        expect(agentRow?.runtimeId).toBeNull();
+
+        // An owner turns containment off and the host is revoked. Enrolling
+        // the agent on the same machine again does not carry the requirement
+        // back: the carry runs on the agent's first enrollment on a runtime.
+        // One live host per agent key, so each host is revoked before the
+        // agent enrolls again.
+        const revoke = (hostId: string) =>
+          withSystemDb((tx) =>
+            tx
+              .update(schema.tachoHosts)
+              .set({ status: "revoked", revokedAt: new Date() })
+              .where(eq(schema.tachoHosts.id, hostId)),
+          );
+        await withSystemDb((tx) =>
+          tx
+            .update(schema.runtimes)
+            .set({ containmentRequired: false })
+            .where(eq(schema.runtimes.id, minted.host.runtimeId!)),
+        );
+        await revoke(minted.host.id);
+        const again = await enroll(strict, "Strict-Box.local", 7);
+        expect(again.host.runtimeId).toBe(minted.host.runtimeId);
+        expect(await runtimeOf(again.host.runtimeId)).toEqual({
+          slug: "strict-box",
+          containmentRequired: false,
+        });
+        expect(again.mandate.containment).toBeUndefined();
+
+        // A machine the agent has not run on before still gets the carry.
+        await revoke(again.host.id);
+        const second = await enroll(strict, "Second-Box.local", 8);
+        expect(await runtimeOf(second.host.runtimeId)).toEqual({
+          slug: "second-box",
+          containmentRequired: true,
+        });
+
+        const loose = await unplaced("loose-claude", {});
+        const open = await enroll(loose, "Loose-Box.local", 6);
+        expect(await runtimeOf(open.host.runtimeId)).toEqual({
+          slug: "loose-box",
+          containmentRequired: false,
+        });
+        expect(open.mandate.containment).toBeUndefined();
+      } finally {
+        vi.unstubAllEnvs();
+      }
     });
   },
 );

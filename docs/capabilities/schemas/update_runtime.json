@@ -1,7 +1,7 @@
 {
-  "name": "create_runtime",
+  "name": "update_runtime",
   "domain": "runtime",
-  "description": "Name a runtime in this workspace: a laptop, a VM or a cloud workspace agents run on. The slug is derived from the name unless one is given. containmentRequired makes every agent on it run only under the contained launcher. Register an agent on it next.",
+  "description": "Rename a runtime or change whether every agent on it must run under the contained launcher. A field left out keeps its value. Hosts bound to the runtime carry the change on their next bundle fetch.",
   "mode": "sync",
   "surfaces": [
     "api",
@@ -23,22 +23,20 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "properties": {
+      "runtimeId": {
+        "type": "string"
+      },
       "name": {
         "type": "string",
         "minLength": 1,
         "maxLength": 128
-      },
-      "slug": {
-        "type": "string",
-        "minLength": 1,
-        "maxLength": 40
       },
       "containmentRequired": {
         "type": "boolean"
       }
     },
     "required": [
-      "name"
+      "runtimeId"
     ],
     "additionalProperties": false
   },
@@ -67,10 +65,14 @@
           "slug"
         ],
         "additionalProperties": false
+      },
+      "containmentRequired": {
+        "type": "boolean"
       }
     },
     "required": [
-      "runtime"
+      "runtime",
+      "containmentRequired"
     ],
     "additionalProperties": false
   }

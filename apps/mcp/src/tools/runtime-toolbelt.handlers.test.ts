@@ -19,6 +19,7 @@ import agentMoveTool, * as agentMoveModule from "./agent.move";
 import agentToolbeltAssignTool, * as agentToolbeltAssignModule from "./agent.toolbelt.assign";
 import runtimeCreateTool, * as runtimeCreateModule from "./runtime.create";
 import runtimeListTool, * as runtimeListModule from "./runtime.list";
+import runtimeUpdateTool, * as runtimeUpdateModule from "./runtime.update";
 import toolStateSetTool, * as toolStateSetModule from "./tool.state.set";
 import toolbeltCloneTool, * as toolbeltCloneModule from "./toolbelt.clone";
 import toolbeltDeleteTool, * as toolbeltDeleteModule from "./toolbelt.delete";
@@ -69,8 +70,16 @@ const CASES: Case[] = [
     tool: asTool(runtimeCreateTool),
     schema: runtimeCreateModule.schema,
     metadataName: runtimeCreateModule.metadata.name,
-    args: { name: "Mac's laptop" },
+    args: { name: "Mac's laptop", containmentRequired: true },
     output: { runtime: RUNTIME },
+  },
+  {
+    name: "update_runtime",
+    tool: asTool(runtimeUpdateTool),
+    schema: runtimeUpdateModule.schema,
+    metadataName: runtimeUpdateModule.metadata.name,
+    args: { runtimeId: RUNTIME.id, containmentRequired: true },
+    output: { runtime: RUNTIME, containmentRequired: true },
   },
   {
     name: "list_runtimes",
@@ -83,6 +92,7 @@ const CASES: Case[] = [
         {
           ...RUNTIME,
           createdAt: AT,
+          containmentRequired: false,
           agents: [],
           liveHosts: 0,
           lastSeenAt: null,
