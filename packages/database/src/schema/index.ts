@@ -29,6 +29,7 @@ export * from "./tools";
 export * from "./cms";
 export * from "./skills";
 export * from "./memory";
+export * from "./steering";
 
 // Relations must be exported for Drizzle to include them in the schema
 export * from "../relations";
