@@ -8,8 +8,10 @@
 // healthy; refused when the PR's head is no longer the commit the checks ran
 // on, or when the PR no longer targets the production branch. Outside solo
 // mode the PR also needs an approval at that commit, unless the merger is an
-// owner or holds merge_without_review; the ledger and the trailers then say
-// that nobody reviewed it.
+// owner or holds merge_pr_without_review (ADR-213); the ledger and the
+// trailers then say that nobody reviewed it. merge_pr_without_review runs
+// this same handler under its own name
+// (context.pr.merge_without_review.ts).
 //
 // At the head of the queue, a branch that no longer holds the production
 // branch is brought up to date and checked again (recheckContextPr). In a
@@ -62,10 +64,12 @@ import {
   type CapabilityHandler,
 } from "@oxagen/oxagen";
 import { contextPrMerge } from "@oxagen/oxagen/contracts/context.pr.merge";
+import { contextPrMergeWithoutReview } from "@oxagen/oxagen/contracts/context.pr.merge_without_review";
 import type { RepoHealth } from "@oxagen/oxagen/steering-repo/health";
 import type { PublishResult } from "@oxagen/steering-bundle";
 import { recheckContextPr } from "./context.pr.open";
 import { steeringDeps, type SteeringDeps } from "./context.steering.deps";
+import { holdsCapability } from "./lib/capability-holder";
 import {
   assertProductionBase,
   assertSameHost,
@@ -103,13 +107,13 @@ type Scope = { orgId: string; workspaceId: string };
 
 /**
  * The parts of a merge other lanes supply. Each has a default until its lane
- * lands: every repository reads healthy, nobody holds merge_without_review,
+ * lands: every repository reads healthy, nobody holds merge_pr_without_review,
  * the version is the ledger length plus one, and nothing is published.
  */
 export interface MergeSeams {
   /** The steering repo's health (S2). */
   readHealth?: (scope: Scope, repo: SteeringRepository) => Promise<RepoHealth>;
-  /** Whether the user holds merge_without_review in the workspace. */
+  /** Whether the user holds merge_pr_without_review in the workspace. */
   holdsMergeWithoutReview?: (scope: Scope, userId: string) => Promise<boolean>;
   /**
    * The version a merge becomes when no publisher assigns it: in a legacy
@@ -181,9 +185,14 @@ function mergeable(row: ProposalRow | null, proposalId: string): RecordedRow {
 const passedChecks = (row: ProposalRow): string[] =>
   row.checks.filter((c) => c.status === "passed").map((c) => c.name);
 
+/**
+ * The merge handler. `capability` is the name the `steering.published`
+ * event carries: merge_pr_without_review runs this handler under its own.
+ */
 export function createMergeContextPrHandler(
   deps: SteeringDeps,
   seams: MergeSeams = {},
+  capability: string = contextPrMerge.name,
 ): CapabilityHandler<typeof contextPrMerge> {
   const readHealth =
     seams.readHealth ?? (async (): Promise<RepoHealth> => "healthy");
@@ -434,7 +443,7 @@ export function createMergeContextPrHandler(
         actorUserId: userId,
         orgId: ctx.orgId,
         workspaceId: ctx.workspaceId,
-        capability: "merge_context_pr",
+        capability,
         outcome: "success",
         ip: null,
         userAgent: null,
@@ -763,12 +772,20 @@ async function mergedAtOnGitHub(
   }
 }
 
+/**
+ * The seams production binds. Whether a merger holds merge_pr_without_review
+ * is the organization's IAM answer (ADR-213).
+ */
+export const productionMergeSeams: MergeSeams = {
+  holdsMergeWithoutReview: (scope, userId) =>
+    holdsCapability(contextPrMergeWithoutReview, scope, userId),
+  // Each workspace publishes through its own version store and host, and
+  // each version writes the workspace's tool registry (M13).
+  publisher: (scope, host) =>
+    steeringPublisher({ scope, host, extend: withToolProjection }),
+};
+
 export const mergeContextPrHandler = createMergeContextPrHandler(
   steeringDeps(),
-  {
-    // Each workspace publishes through its own version store and host, and
-    // each version writes the workspace's tool registry (M13).
-    publisher: (scope, host) =>
-      steeringPublisher({ scope, host, extend: withToolProjection }),
-  },
+  productionMergeSeams,
 );

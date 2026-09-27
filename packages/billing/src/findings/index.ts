@@ -10,6 +10,7 @@
  */
 import type { FindingKind } from "@oxagen/database/schema";
 import { cacheWritesNeverRead } from "./cache-writes-never-read";
+import { modelClassFit } from "./model-class-fit";
 import { buildRunViews } from "./requests";
 import { repeats } from "./repeats";
 import {
@@ -44,6 +45,7 @@ export const DETECTORS: readonly Detector[] = [
   spendWithNoOutcome,
   cacheWritesNeverRead,
   unpagedResults,
+  modelClassFit,
 ];
 
 /** The kinds the registered detectors write. */

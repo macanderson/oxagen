@@ -225,6 +225,63 @@ describe("a context record published through a GitLab merge request", () => {
     expect(h.store.records).toHaveLength(0);
   });
 
+  it.each([
+    ["keeps approvals on push", false],
+    ["will not say whether it resets approvals", null],
+  ] as const)(
+    "refuses the merge when the project %s, so no approval binds to the head",
+    async (_case, reset) => {
+      const { api, h } = gitlabHarness();
+      const proposalId = await propose(h);
+      await createOpenContextPrHandler(h)({ proposalId }, ctx());
+      api.resetApprovalsOnPush = reset;
+
+      await expect(
+        createMergeContextPrHandler(h)(
+          { proposalId },
+          ctx({ userId: REVIEWER }),
+        ),
+      ).rejects.toMatchObject({
+        code: "conflict",
+        reason: "approvals_not_head_bound",
+      });
+      expect(api.merges).toHaveLength(0);
+      expect(h.store.records).toHaveLength(0);
+    },
+  );
+
+  it("asks the reviewer to approve again after Oxagen rebases the merge request, because GitLab keeps the old approval", async () => {
+    const { api, h } = gitlabHarness();
+    const proposalId = await propose(h);
+    await createOpenContextPrHandler(h)({ proposalId }, ctx());
+    const checked = api.branches.get(BRANCH)!;
+    api.commit("main", "other.md", "x\n");
+    const merge = createMergeContextPrHandler(h);
+
+    await expect(
+      merge({ proposalId }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({ code: "forbidden", reason: "approval_required" });
+    expect(api.rebases).toEqual([1]);
+    expect(api.merges).toHaveLength(0);
+    const rebased = api.branches.get(BRANCH)!;
+    expect(rebased).not.toBe(checked);
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "checks_passed",
+      headSha: rebased,
+    });
+
+    // The reviewer approves the rebased head, and the merge goes through.
+    api.approvedBy = [{ id: 501, username: "reviewer" }];
+    const merged = await merge({ proposalId }, ctx({ userId: REVIEWER }));
+    expect(merged.status).toBe("merged");
+    expect(api.merges).toEqual([
+      expect.objectContaining({
+        sha: rebased,
+        message: expect.stringContaining(`Oxagen-Approved-By: ${REVIEWER}\n`),
+      }),
+    ]);
+  });
+
   it("fails a check when the branch changes another file, so nothing merges", async () => {
     const { api, h } = gitlabHarness();
     const proposalId = await propose(h);
@@ -893,17 +950,164 @@ describe("the GitLab seam's merge-queue calls", () => {
     expect(api.branches.has("gone")).toBe(false);
   });
 
-  it("lists approvals with each reviewer's linked Oxagen user and no head", async () => {
-    const { api, seam, repo, mr, linkAccount } = await onBranch();
+  it("lists approvals with each reviewer's linked Oxagen user at the current head", async () => {
+    const { api, seam, repo, mr, head, linkAccount } = await onBranch();
     api.approvedBy = [
       { id: 501, username: "reviewer" },
       { id: 777, username: "stranger" },
     ];
     await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([
-      { userId: REVIEWER, login: "reviewer", commitSha: null },
-      { userId: null, login: "stranger", commitSha: null },
+      { userId: REVIEWER, login: "reviewer", commitSha: head },
+      { userId: null, login: "stranger", commitSha: head },
     ]);
     expect(linkAccount).toHaveBeenCalledWith("gitlab", "777");
+    // The setting is read first, then the approvals, then the diff versions
+    // each approval is placed on.
+    expect(api.restCalls.slice(-3)).toEqual([
+      "GET /approvals",
+      "GET /merge_requests/1/approvals",
+      "GET /merge_requests/1/versions",
+    ]);
+  });
+
+  it("places an approval given before the queue's rebase on the old head, and a new one on the rebased head", async () => {
+    const { api, seam, repo, head, mr } = await onBranch();
+    // The reviewer approves the head the author pushed.
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([
+      { userId: REVIEWER, login: "reviewer", commitSha: head },
+    ]);
+    const main = api.commit("main", "z", "1");
+    const out = await seam.updateBranch(repo, {
+      number: mr.number,
+      branch: "b",
+      expectedHead: head,
+      base: main,
+    });
+    // GitLab keeps the approval across the rebase. It still covers only the
+    // head the reviewer saw.
+    expect(api.approvedBy).toHaveLength(1);
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([
+      { userId: REVIEWER, login: "reviewer", commitSha: head },
+    ]);
+    api.approvedBy = [{ id: 501, username: "reviewer" }];
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([
+      { userId: REVIEWER, login: "reviewer", commitSha: out.headSha },
+    ]);
+  });
+
+  it("refuses as gitlab_refused while GitLab has not recorded the head as a version", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    const pushed = api.commit("b", "a", "pushed");
+    // GitLab has not yet recorded the push, and the reviewer approves.
+    api.versions.get(mr.number)!.pop();
+    api.approvedBy = [{ id: 501, username: "reviewer" }];
+    await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "gitlab_refused",
+      message: expect.stringContaining(`GitLab has not recorded ${pushed}`),
+    });
+  });
+
+  it("drops an approval older than every version", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.approvedBy = [
+      { id: 777, username: "stranger", at: "2026-09-23T09:00:00.000Z" },
+    ];
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([]);
+  });
+
+  it.each([
+    ["no time", null],
+    ["an unreadable time", "yesterday"],
+  ])(
+    "refuses approvals_not_head_bound for an approval with %s, before reading the versions",
+    async (_label, at) => {
+      const { api, seam, repo, mr } = await onBranch();
+      api.approvedBy = [
+        { id: 777, username: "stranger" },
+        { id: 501, username: "reviewer", at },
+      ];
+      await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+        code: "conflict",
+        reason: "approvals_not_head_bound",
+        message: expect.stringContaining(
+          `GitLab did not report when reviewer approved !${mr.number}`,
+        ),
+      });
+      expect(api.restCalls).not.toContain("GET /merge_requests/1/versions");
+    },
+  );
+
+  it("answers no approvals without reading the diff versions", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.approvedBy = [];
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([]);
+    expect(api.restCalls).not.toContain("GET /merge_requests/1/versions");
+  });
+
+  it("drops an approval when a push follows it, so none stands on the new head", async () => {
+    const { api, seam, repo, mr, head } = await onBranch();
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([
+      { userId: REVIEWER, login: "reviewer", commitSha: head },
+    ]);
+    api.commit("b", "a", "pushed after the approval");
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([]);
+  });
+
+  it("refuses approvals_not_head_bound when the project keeps approvals on push", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.resetApprovalsOnPush = false;
+    // GitLab keeps the approval across the push, so it no longer shows which
+    // head was reviewed.
+    api.commit("b", "a", "pushed after the approval");
+    expect(api.approvedBy).toHaveLength(1);
+    await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "approvals_not_head_bound",
+      message: expect.stringContaining('Turn on "Reset approvals on push"'),
+    });
+    expect(api.restCalls).not.toContain("GET /merge_requests/1/approvals");
+  });
+
+  it("refuses approvals_not_head_bound when GitLab will not read the setting", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.resetApprovalsOnPush = null;
+    await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "approvals_not_head_bound",
+      message: expect.stringContaining("The setting needs GitLab Premium."),
+    });
+  });
+
+  it("refuses approvals_not_head_bound when GitLab answers 404 for the setting", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.approvalSettingsError = 404;
+    await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "approvals_not_head_bound",
+    });
+  });
+
+  it.each([429, 500, 503])(
+    "lets a %i on the setting read escape as gitlab_refused, so a retry can pass",
+    async (status) => {
+      const { api, seam, repo, mr } = await onBranch();
+      api.approvalSettingsError = status;
+      await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+        code: "conflict",
+        reason: "gitlab_refused",
+        message: expect.stringContaining(String(status)),
+      });
+      expect(api.restCalls).not.toContain("GET /merge_requests/1/approvals");
+    },
+  );
+
+  it("names a revoked token, not the setting, when GitLab rejects the approvals read", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.revoked = true;
+    await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+      reason: "gitlab_credential_rejected",
+    });
   });
 
   it("records a publish as a successful deployment with no page of its own", async () => {

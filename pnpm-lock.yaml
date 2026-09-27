@@ -745,6 +745,9 @@ importers:
       '@oxagen/oxagen':
         specifier: workspace:*
         version: link:../../packages/oxagen
+      '@oxagen/steering-check':
+        specifier: workspace:*
+        version: link:../../packages/steering-check
       '@oxagen/steering-freshness':
         specifier: workspace:*
         version: link:../../packages/steering-freshness

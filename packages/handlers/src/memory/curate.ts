@@ -154,16 +154,22 @@ function dropMemories(
   return { drops, kept };
 }
 
-/** The run a memory came from, or its capture and source when it has no run. */
-function runKey(memory: StoredMemory): string {
-  return memory.runPublicId ?? `${memory.capture}:${memory.source ?? ""}`;
+/**
+ * The run a memory came from, or null when it has none. A memory with no run
+ * is not evidence from a run (ADR-206 §8), and a local_gateway memory never
+ * has one (§11). Counting it by its capture and source would let 2 memory
+ * files on one laptop bring back a rejected statement (#4538).
+ */
+function runKey(memory: StoredMemory): string | null {
+  return memory.runPublicId;
 }
 
 /**
  * Hold each memory whose statement an open memory PR already proposes. Hold
  * each rejected statement too, until memories from 2 distinct runs repeat it
- * after its latest rejection. Then every memory with that statement goes on,
- * the older ones included.
+ * after its latest rejection. A memory with no run does not count toward
+ * those 2. Once they are met, every memory with that statement goes on, the
+ * older ones and the ones with no run included.
  */
 function holdMemories(
   memories: StoredMemory[],
@@ -186,8 +192,10 @@ function holdMemories(
   for (const memory of memories) {
     const at = rejectedAt.get(memory.statementHash);
     if (at === undefined || memory.createdAt.getTime() <= at) continue;
+    const run = runKey(memory);
+    if (run === null) continue;
     const runs = newRuns.get(memory.statementHash) ?? new Set<string>();
-    runs.add(runKey(memory));
+    runs.add(run);
     newRuns.set(memory.statementHash, runs);
   }
   const held: string[] = [];

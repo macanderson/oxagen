@@ -432,15 +432,14 @@ export async function digestRun(
     runPublicId,
     agentLineage: run.agentLineage,
   });
-  const reflectionId = await deps.store.insertReflection(scope, reflection);
-  if (reflectionId === null) return "exists";
-  if (run.agentLineage !== null && reflection.lessons.length > 0)
-    await deps.store.insertMemories(
-      scope,
-      lessonMemories(reflection),
-      reflectionId,
-    );
-  return "written";
+  // One write: a reflection stored without its lessons would lose them, since
+  // a retry finds the reflection and returns "exists".
+  const reflectionId = await deps.store.insertReflection(
+    scope,
+    reflection,
+    run.agentLineage === null ? [] : lessonMemories(reflection),
+  );
+  return reflectionId === null ? "exists" : "written";
 }
 
 // ── The curator ─────────────────────────────────────────────────────────────
