@@ -73,7 +73,13 @@
  * Run via `pnpm release:<patch|minor|major>` (wraps this with --env-file-if-exists).
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { argv, env, exit } from "node:process";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -606,6 +612,10 @@ async function main(): Promise<void> {
     const history = collectHistory(next, opts.fromRef, opts.highlight);
     console.log(kleur.dim(`    history range: ${history.fromRef}..HEAD`));
     notes = await generateNotes(history);
+    // release.yml reads this to say in the release PR's body who wrote the
+    // notes. It used to claim a model wrote them even after the fallback ran.
+    if (env.GITHUB_OUTPUT && !opts.dryRun)
+      appendFileSync(env.GITHUB_OUTPUT, `notes_source=${notes.source}\n`);
     if (!opts.dryRun) {
       const written = writeNotes(next, notes, install);
       toStage.push(
