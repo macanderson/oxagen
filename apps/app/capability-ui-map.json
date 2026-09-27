@@ -407,7 +407,7 @@
     "get_conversation": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "The shell's assistant flyout reads the viewer's latest thread in the workspace when it opens, so a reload or a workspace rename shows the same thread, and New session starts a fresh one (features/shell/assistant-threads.ts, features/shell/assistant-thread-actions.ts)",
+      "entry": "The shell's assistant flyout reads the viewer's latest thread in the workspace when it opens, so a reload or a workspace rename shows the same thread, and New thread starts a fresh one (features/shell/assistant-threads.ts, features/shell/assistant-thread-actions.ts)",
       "testid": "assistant-new-thread",
       "proof": "apps/app/src/features/shell/assistant-flyout.threads.test.tsx",
       "verifiedAt": "2026-09-25",
@@ -759,7 +759,7 @@
     "list_conversations": {
       "route": "/[org]/[ws]",
       "page": "apps/app/src/app/[org]/layout.tsx",
-      "entry": "The shell's assistant flyout lists the viewer's active sessions in the workspace behind its Sessions button, and a row opens that session in the thread (features/shell/assistant-sessions.tsx, features/shell/assistant-thread-actions.ts)",
+      "entry": "The shell's assistant flyout lists the viewer's active threads in the workspace behind its Threads button, and a row opens that thread (features/shell/assistant-sessions.tsx, features/shell/assistant-thread-actions.ts)",
       "testid": "assistant-sessions",
       "proof": "apps/app/src/features/shell/assistant-flyout.threads.test.tsx",
       "verifiedAt": "2026-09-26",
