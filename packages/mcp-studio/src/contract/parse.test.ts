@@ -248,6 +248,25 @@ describe("parseToolsToml", () => {
     });
   });
 
+  it("refuses a TOML nan, inf, or date in a shaping map, which JSON cannot write", () => {
+    const lines = [
+      ...toolsLines,
+      "fixed = { amount = nan, placed_at = 2026-09-26T12:00:00Z }",
+      "defaults = { limit = inf }",
+    ];
+    const at = lineOf(lines, "[tools.create_refund]");
+    const finite = "a JSON number is finite: nan and inf have no JSON form";
+    const date = "a date has no JSON form: write it as a string";
+    expect(parseToolsToml(file(lines))).toStrictEqual({
+      ok: false,
+      issues: [
+        { line: at, field: "tools.list_charges.fixed.amount", message: finite },
+        { line: at, field: "tools.list_charges.fixed.placed_at", message: date },
+        { line: at, field: "tools.list_charges.defaults.limit", message: finite },
+      ],
+    });
+  });
+
   it("reports a cross-field check on the tool's field, at the first tools table", () => {
     const lines = withLine(toolsLines, 'select = ["data[].id", "data[].amount", "has_more"]', "max_items = 50");
     expect(parseToolsToml(file(lines))).toStrictEqual({

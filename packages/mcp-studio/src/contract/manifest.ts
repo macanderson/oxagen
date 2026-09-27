@@ -23,6 +23,7 @@ import { definitionLockSourceSchema, mcpLockSourceSchema } from "./lock";
 import {
   base64Schema,
   environmentNameSchema,
+  finiteJsonValueSchema,
   headerNameSchema,
   httpUrlSchema,
   inputNameSchema,
@@ -79,8 +80,8 @@ export type ManifestClassification = z.output<typeof manifestClassificationSchem
 export const manifestShapingSchema = z
   .object({
     hide: z.array(inputNameSchema),
-    fixed: z.record(inputNameSchema, z.unknown()),
-    defaults: z.record(inputNameSchema, z.unknown()),
+    fixed: z.record(inputNameSchema, finiteJsonValueSchema),
+    defaults: z.record(inputNameSchema, finiteJsonValueSchema),
     rename: z.record(inputNameSchema, z.string().min(1)).describe("Upstream name to the name the agent sees."),
     select: z.array(resultPathSchema),
     redact: z.array(resultPathSchema),

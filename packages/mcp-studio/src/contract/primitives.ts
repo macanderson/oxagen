@@ -156,6 +156,34 @@ export type JsonValue = unknown;
 /** A JSON object with any keys. */
 export const jsonObjectSchema = z.record(z.string(), z.unknown());
 
+type PathIssue = { path: (string | number)[]; message: string };
+
+/** Each place a parsed value stops being JSON, at its path. */
+function nonJsonIssues(value: unknown, path: (string | number)[]): PathIssue[] {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return [];
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? [] : [{ path, message: "a JSON number is finite: nan and inf have no JSON form" }];
+  }
+  if (Array.isArray(value)) return value.flatMap((item, index) => nonJsonIssues(item, [...path, index]));
+  if (value instanceof Date) return [{ path, message: "a date has no JSON form: write it as a string" }];
+  if (typeof value === "object") {
+    const prototype: unknown = Object.getPrototypeOf(value);
+    if (prototype === Object.prototype || prototype === null) {
+      return Object.entries(value).flatMap(([key, item]) => nonJsonIssues(item, [...path, key]));
+    }
+  }
+  return [{ path, message: "not a JSON value" }];
+}
+
+/**
+ * Any value JSON can write. TOML can write nan, inf, and dates, and JSON has
+ * no form for any of them, so this refuses each one at its path. JSON Schema
+ * needs no rule for it, because JSON text cannot hold these values.
+ */
+export const finiteJsonValueSchema = z.unknown().superRefine((value, ctx) => {
+  for (const issue of nonJsonIssues(value, [])) ctx.addIssue({ code: z.ZodIssueCode.custom, ...issue });
+});
+
 /** A JSON Schema whose type is object, as MCP requires of inputSchema and outputSchema. */
 export const objectJsonSchemaSchema = z
   .object({ type: z.literal("object") })

@@ -20,6 +20,7 @@ import {
 } from "@oxagen/oxagen/contracts/tool.classification";
 import { atMostOne, dependentRequired, uniqueList, withChecks, type CustomCheck } from "./checks";
 import {
+  finiteJsonValueSchema,
   graphqlFieldSchema,
   grpcMethodSchema,
   headerNameSchema,
@@ -130,11 +131,11 @@ export const toolsEntrySchema = withChecks(
         .describe("Replaces the source's description."),
       hide: uniqueList(inputNameSchema, "hide", 256).optional().describe("Inputs that leave the schema."),
       fixed: z
-        .record(inputNameSchema, z.unknown())
+        .record(inputNameSchema, finiteJsonValueSchema)
         .optional()
         .describe("Inputs set on every call. A fixed input leaves the schema."),
       defaults: z
-        .record(inputNameSchema, z.unknown())
+        .record(inputNameSchema, finiteJsonValueSchema)
         .optional()
         .describe("Values for inputs the model leaves out."),
       rename: z

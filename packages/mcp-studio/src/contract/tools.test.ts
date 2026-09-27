@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import { toJsonSchema } from "@oxagen/oxagen/steering-repo/json-schema";
+import { manifestShapingSchema } from "./manifest";
 import { MAX_RESULT_BYTES_LIMIT, mcpToolsSchema, toolsEntrySchema } from "./tools";
 
 interface Issue {
@@ -233,5 +234,63 @@ describe("field values", () => {
     expect(issues(mcpToolsSchema, { schema: "mcp-tools/v2" })).toStrictEqual([
       { path: "schema", message: 'Invalid literal value, expected "mcp-tools/v1"' },
     ]);
+  });
+});
+
+describe("fixed and defaults", () => {
+  const finite = "a JSON number is finite: nan and inf have no JSON form";
+
+  it("accept any JSON value, nested", () => {
+    const values = {
+      reason: "requested_by_customer",
+      amount: 500,
+      strict: false,
+      note: null,
+      tags: ["a", { at: 1.5 }],
+    };
+    const bare = Object.assign(Object.create(null) as Record<string, unknown>, { depth: 2 });
+    for (const field of ["fixed", "defaults"]) {
+      expect(issues(toolsEntrySchema, { ...classified, [field]: { ...values, bare } })).toStrictEqual([]);
+    }
+  });
+
+  it.each(["fixed", "defaults"])("refuse nan and inf in %s, at the value's path", (field) => {
+    const shaping = {
+      amount: Number.NaN,
+      limits: [1, Number.POSITIVE_INFINITY],
+      floor: { at: Number.NEGATIVE_INFINITY },
+    };
+    expect(issues(toolsEntrySchema, { ...classified, [field]: shaping })).toStrictEqual([
+      { path: `${field}.amount`, message: finite },
+      { path: `${field}.limits.1`, message: finite },
+      { path: `${field}.floor.at`, message: finite },
+    ]);
+  });
+
+  it("refuse a date and any other value JSON cannot write", () => {
+    const fixed = { at: new Date("2026-09-26T12:00:00Z"), big: 1n, map: new Map() };
+    expect(issues(toolsEntrySchema, { ...classified, fixed })).toStrictEqual([
+      { path: "fixed.at", message: "a date has no JSON form: write it as a string" },
+      { path: "fixed.big", message: "not a JSON value" },
+      { path: "fixed.map", message: "not a JSON value" },
+    ]);
+  });
+
+  it("refuse nan and inf in the manifest's resolved shaping too", () => {
+    const shaping = {
+      hide: [],
+      fixed: { amount: Number.NaN },
+      defaults: { limit: Number.POSITIVE_INFINITY },
+      rename: {},
+      select: [],
+      redact: [],
+      max_result_bytes: 65_536,
+      deadline_ms: 30_000,
+    };
+    expect(issues(manifestShapingSchema, shaping)).toStrictEqual([
+      { path: "fixed.amount", message: finite },
+      { path: "defaults.limit", message: finite },
+    ]);
+    expect(issues(manifestShapingSchema, { ...shaping, fixed: { amount: 500 }, defaults: {} })).toStrictEqual([]);
   });
 });
