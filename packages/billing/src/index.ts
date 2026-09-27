@@ -39,12 +39,14 @@ export {
   applyOutcomeDelivery,
   listOutcomeRuns,
   listWorkspacesForOutcomes,
-  markPullRequestsReverted,
   type OutcomeRun,
+  pruneRevertEvidence,
   readOutcomeRows,
+  readRevertEvidence,
   readRunTerminalReasons,
   readTachoRunPrLinks,
   saveOutcomeRows,
+  saveRevertEvidence,
   type TachoPrLink,
 } from "./run-pr-outcomes-store";
 export * from "./discount";

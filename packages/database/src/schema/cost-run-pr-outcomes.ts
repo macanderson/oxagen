@@ -21,6 +21,7 @@ import {
   integer,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -144,6 +145,74 @@ export const runPrOutcomes = costSchema.table(
     revertedCheck: check(
       "run_pr_outcomes_reverted_check",
       sql`NOT ${t.reverted} OR ${t.revertedBy} IS NOT NULL`,
+    ),
+  }),
+);
+
+// cost.run_pr_reverts: every revert Oxagen saw, kept until the outcome row it
+// reverts exists (#4491).
+//
+// A revert can arrive before its target row does. The hourly refresh writes a
+// run's rows, and learns a pull request's merge commit, only when it reads
+// the run. A merged revert pull request or a pushed `git revert` commit that
+// lands first would find no row to mark. The GitHub deliveries and the hourly
+// refresh write each revert here before they mark or write any outcome row,
+// and every refresh pass folds the reverts of the trailing 30 days into the
+// rows it writes. A row keeps the first revert it gets.
+//
+// One revert names one target: a pull request by `number`, or a merge commit
+// by `merge_commit_sha` on the branch the reverting commit landed on. Rows
+// older than the outcome window are pruned hourly. Like `run_pr_outcomes`, it
+// is a derived index.
+export const runPrReverts = costSchema.table(
+  "run_pr_reverts",
+  {
+    id: uuid("id").primaryKey().default(uuidv7Default),
+    ...orgScopeMixin(),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    /** Lower-cased `owner/name` of the reverted pull request or merge commit. */
+    repository: text("repository").notNull(),
+    /** The reverted pull request, or null when the target is a merge commit. */
+    number: integer("number"),
+    /** The reverted merge commit, or null when the target is a pull request. */
+    mergeCommitSha: text("merge_commit_sha"),
+    /**
+     * The branch the reverting commit landed on. A merge commit target must
+     * have merged into it. Null matches any branch.
+     */
+    branch: text("branch"),
+    /** The revert: `github:owner/repo#N` for a pull request, or `github:owner/repo@sha` for a commit. */
+    revertedBy: text("reverted_by").notNull(),
+    /** When the revert landed: the reverting pull request's merge, or the commit's time. */
+    revertedAt: ts("reverted_at"),
+    /** When Oxagen saw the revert. */
+    readAt: ts("read_at").notNull(),
+  },
+  (t) => ({
+    // One row per revert and target. A commit pushed to two branches is two
+    // rows, since only one of them may be the branch its target merged into.
+    revertUniq: unique("run_pr_reverts_uniq")
+      .on(
+        t.orgId,
+        t.workspaceId,
+        t.revertedBy,
+        t.repository,
+        t.number,
+        t.mergeCommitSha,
+        t.branch,
+      )
+      .nullsNotDistinct(),
+    // The refresh's read: one workspace's reverts in the window.
+    workspaceReadIdx: index("run_pr_reverts_workspace_read_idx").on(
+      t.orgId,
+      t.workspaceId,
+      t.readAt,
+    ),
+    // The hourly prune across every workspace.
+    readIdx: index("run_pr_reverts_read_idx").on(t.readAt),
+    targetCheck: check(
+      "run_pr_reverts_target_check",
+      sql`(${t.number} > 0 AND ${t.mergeCommitSha} IS NULL) OR (${t.number} IS NULL AND ${t.mergeCommitSha} IS NOT NULL)`,
     ),
   }),
 );

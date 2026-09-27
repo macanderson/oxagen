@@ -259,9 +259,9 @@ describe("tenant policy manifest", () => {
     // (#4129), 2026-09-25.
     // 132 adds agent.runtimes, tools.toolbelts and tools.toolbelt_tools
     // (ADR-198, 2026-09-26).
-    // 133 adds cost.run_pr_outcomes (#4491), what each run's pull requests
-    // became.
-    expect(POLICY_MANIFEST.length).toBe(133);
+    // 134 adds cost.run_pr_outcomes (#4491), what each run's pull requests
+    // became, and cost.run_pr_reverts, the reverts kept until their rows exist.
+    expect(POLICY_MANIFEST.length).toBe(134);
   });
 
   it("covers the ADR-055 GAU tables as org_only (WL-24)", () => {

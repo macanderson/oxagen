@@ -12,10 +12,17 @@
 //      the app already receives (`ingestion/entity.received`) into the rows:
 //      a pull request's new state, and the reverts a merged pull request body
 //      or a `git revert` commit records.
+//
+// Both keep each revert in `cost.run_pr_reverts` before they write a row, and
+// every refresh pass marks its rows with the reverts kept there. A revert can
+// arrive before the refresh writes the row it reverts. The hourly function
+// deletes the reverts Oxagen saw more than a day before the window opens.
 import {
   applyOutcomeDelivery,
   listWorkspacesForOutcomes,
+  OUTCOME_WINDOW_DAYS,
   outcomeDeliveryOf,
+  pruneRevertEvidence,
 } from "@oxagen/billing";
 import { createFunction } from "../create-function";
 import {
@@ -24,10 +31,14 @@ import {
 } from "../lib/run-pr-outcomes-runner";
 import { logger } from "../logger";
 
+/** A kept revert outlives the window by one day, so no pass misses one at its edge. */
+const REVERT_RETENTION_MS = (OUTCOME_WINDOW_DAYS + 1) * 24 * 60 * 60 * 1000;
+
 /**
  * Hourly at 15 past: one refresh pass per workspace with a sealed run in the
- * window. One workspace's failed pass does not stop the sweep, and the next
- * hour retries it.
+ * window, then one delete of the kept reverts older than the window. One
+ * workspace's failed pass does not stop the sweep, and the next hour retries
+ * it.
  */
 export const [costRunPrOutcomesHourly] = createFunction(
   { id: "cost.run-pr-outcomes-hourly", retries: 2 },
@@ -57,11 +68,14 @@ export const [costRunPrOutcomesHourly] = createFunction(
       passed += 1;
       rows += out.rows;
     }
+    const pruned = await step.run("prune-reverts", () =>
+      pruneRevertEvidence(new Date(Date.now() - REVERT_RETENTION_MS)),
+    );
     logger.info(
-      { workspaces: scopes.length, passed, rows },
+      { workspaces: scopes.length, passed, rows, pruned },
       "cost.run-pr-outcomes-hourly complete",
     );
-    return { workspaces: scopes.length, passed, rows };
+    return { workspaces: scopes.length, passed, rows, pruned };
   },
 );
 

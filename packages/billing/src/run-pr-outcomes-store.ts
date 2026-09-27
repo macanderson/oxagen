@@ -16,17 +16,20 @@ import {
   type OutcomeScope,
   OUTCOME_WINDOW_DAYS,
   type PrRef,
+  type RevertEvidence,
   type RevertMark,
   type RunPrCiState,
   type RunPrProvider,
   type RunPrState,
   ledgerTerminalReason,
+  revertEvidenceOf,
   revertPlanOf,
   tachoTerminalReason,
   withStateRead,
 } from "./run-pr-outcomes";
 
 const outcomes = schema.runPrOutcomes;
+const reverts = schema.runPrReverts;
 const totals = schema.runTotals;
 const sessions = schema.tachoSessions;
 const links = schema.tachoRunPullRequests;
@@ -382,7 +385,7 @@ export async function markPullRequestsReverted(
   mark: RevertMark,
 ): Promise<number> {
   if (targets.length === 0) return 0;
-  // tenancy: delivery or scheduled refresh outside a tenant scope; each update is filtered by orgId and workspaceId.
+  // tenancy: webhook delivery outside a tenant scope; each update is filtered by orgId and workspaceId.
   return withSystemDb(async (tx) => {
     let marked = 0;
     for (const target of targets) {
@@ -485,18 +488,96 @@ async function applyPullRequestState(
 }
 
 /**
+ * Keep reverts until the rows they revert exist. A revert already kept stays
+ * as first written, so a retried delivery or a second pass writes nothing.
+ */
+export async function saveRevertEvidence(
+  scope: OutcomeScope,
+  evidence: readonly RevertEvidence[],
+): Promise<number> {
+  if (evidence.length === 0) return 0;
+  // tenancy: delivery or scheduled refresh outside a tenant scope; every row carries the orgId and workspaceId it is filtered by.
+  const rows = await withSystemDb((tx) =>
+    tx
+      .insert(reverts)
+      .values(
+        evidence.map((e) => ({
+          orgId: scope.orgId,
+          workspaceId: scope.workspaceId,
+          repository: e.repository.toLowerCase(),
+          number: e.number,
+          mergeCommitSha: e.mergeCommitSha,
+          branch: e.branch,
+          revertedBy: e.mark.by,
+          revertedAt: e.mark.at,
+          readAt: e.mark.readAt,
+        })),
+      )
+      .onConflictDoNothing()
+      .returning({ id: reverts.id }),
+  );
+  return rows.length;
+}
+
+/**
+ * The workspace's reverts Oxagen saw since the given time. The refresh asks
+ * for the outcome window: a revert of a run's pull request lands after the
+ * run started, so every revert of a run in the window was seen inside it.
+ */
+export async function readRevertEvidence(
+  scope: OutcomeScope,
+  since: Date,
+): Promise<RevertEvidence[]> {
+  // tenancy: scheduled refresh outside a tenant scope; the read is filtered by orgId and workspaceId.
+  const rows = await withSystemDb((tx) =>
+    tx
+      .select()
+      .from(reverts)
+      .where(
+        and(
+          eq(reverts.orgId, scope.orgId),
+          eq(reverts.workspaceId, scope.workspaceId),
+          gte(reverts.readAt, since),
+        ),
+      ),
+  );
+  return rows.map((r) => ({
+    repository: r.repository,
+    number: r.number,
+    mergeCommitSha: r.mergeCommitSha,
+    branch: r.branch,
+    mark: { by: r.revertedBy, at: r.revertedAt, readAt: r.readAt },
+  }));
+}
+
+/** Delete the reverts Oxagen saw before the given time, in every workspace. */
+export async function pruneRevertEvidence(before: Date): Promise<number> {
+  // tenancy: global scheduled job prunes rows across all orgs by age alone; it reads no row's contents.
+  const rows = await withSystemDb((tx) =>
+    tx
+      .delete(reverts)
+      .where(lt(reverts.readAt, before))
+      .returning({ id: reverts.id }),
+  );
+  return rows.length;
+}
+
+/**
  * Apply one GitHub delivery: a pull request's new state to its rows, and the
- * reverts a merged pull request or a pushed commit records.
+ * reverts a merged pull request or a pushed commit records. A revert is kept
+ * before any row is marked, so one whose target row the refresh has not
+ * written yet still reaches it when the refresh writes it.
  */
 export async function applyOutcomeDelivery(
   scope: OutcomeScope,
   delivery: OutcomeDelivery,
 ): Promise<{ rows: number; reverted: number }> {
+  const plan = revertPlanOf(delivery);
+  if (plan !== null) await saveRevertEvidence(scope, revertEvidenceOf(plan));
   const rows =
     delivery.kind === "pull_request"
       ? await applyPullRequestState(scope, delivery)
       : 0;
-  const plan = revertPlanOf(delivery);
   if (plan === null) return { rows, reverted: 0 };
   const reverted =
     plan.kind === "pull_requests"

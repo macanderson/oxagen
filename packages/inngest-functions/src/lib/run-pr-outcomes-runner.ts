@@ -24,7 +24,7 @@ export interface RunPrOutcomesResult {
   deferred: number;
   /** Rows written. */
   rows: number;
-  /** Rows marked reverted from the bodies this pass read. */
+  /** Rows this pass marked reverted, from the reverts kept in `cost.run_pr_reverts`. */
   reverted: number;
 }
 

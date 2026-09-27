@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   listWorkspacesForOutcomes: vi.fn(),
   applyOutcomeDelivery: vi.fn(),
+  pruneRevertEvidence: vi.fn(),
   createFunction: vi.fn(),
   warn: vi.fn(),
 }));
@@ -14,6 +15,7 @@ vi.mock("@oxagen/billing", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@oxagen/billing")>()),
   listWorkspacesForOutcomes: mocks.listWorkspacesForOutcomes,
   applyOutcomeDelivery: mocks.applyOutcomeDelivery,
+  pruneRevertEvidence: mocks.pruneRevertEvidence,
 }));
 vi.mock("../logger", () => ({
   logger: { info: vi.fn(), warn: mocks.warn, error: vi.fn() },
@@ -64,6 +66,8 @@ beforeEach(() => {
   steps.length = 0;
   mocks.listWorkspacesForOutcomes.mockReset();
   mocks.applyOutcomeDelivery.mockReset();
+  mocks.pruneRevertEvidence.mockReset();
+  mocks.pruneRevertEvidence.mockResolvedValue(0);
   mocks.warn.mockReset();
 });
 
@@ -81,8 +85,28 @@ describe("cost.run-pr-outcomes-hourly", () => {
     setRunPrOutcomesRunner(runner);
     const out = await hourly().handler({ step });
     expect(runner.mock.calls).toEqual([[WS_A], [WS_B]]);
-    expect(steps).toEqual(["list-workspaces", "outcomes-ws-a", "outcomes-ws-b"]);
-    expect(out).toEqual({ workspaces: 2, passed: 2, rows: 8 });
+    expect(steps).toEqual([
+      "list-workspaces",
+      "outcomes-ws-a",
+      "outcomes-ws-b",
+      "prune-reverts",
+    ]);
+    expect(out).toEqual({ workspaces: 2, passed: 2, rows: 8, pruned: 0 });
+  });
+
+  it("deletes the kept reverts Oxagen saw more than 31 days ago, after the passes", async () => {
+    mocks.listWorkspacesForOutcomes.mockResolvedValue([]);
+    mocks.pruneRevertEvidence.mockResolvedValue(3);
+    const day = 24 * 60 * 60 * 1000;
+    const start = Date.now();
+    const out = await hourly().handler({ step });
+    const end = Date.now();
+    expect(steps).toEqual(["list-workspaces", "prune-reverts"]);
+    expect(mocks.pruneRevertEvidence).toHaveBeenCalledTimes(1);
+    const [before] = mocks.pruneRevertEvidence.mock.calls[0] as [Date];
+    expect(before.getTime()).toBeGreaterThanOrEqual(start - 31 * day);
+    expect(before.getTime()).toBeLessThanOrEqual(end - 31 * day);
+    expect(out).toEqual({ workspaces: 0, passed: 0, rows: 0, pruned: 3 });
   });
 
   it("goes on past a workspace whose pass fails", async () => {
@@ -93,7 +117,7 @@ describe("cost.run-pr-outcomes-hourly", () => {
       .mockResolvedValueOnce({ runs: 1, forgeReads: 1, deferred: 0, rows: 1, reverted: 0 });
     setRunPrOutcomesRunner(runner);
     const out = await hourly().handler({ step });
-    expect(out).toEqual({ workspaces: 2, passed: 1, rows: 1 });
+    expect(out).toEqual({ workspaces: 2, passed: 1, rows: 1, pruned: 0 });
     expect(mocks.warn).toHaveBeenCalledTimes(1);
   });
 });

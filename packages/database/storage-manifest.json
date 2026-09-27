@@ -4188,7 +4188,7 @@
       "writes": []
     }
   ],
-  "contentHash": "80de6ea9db996e050aa08ba05d285419e5af6793614b0d937d99e244a42aa3ab",
+  "contentHash": "c0d1bbe9cf0e7fb8fcd7b6535b086318a0c07ed3806fa5563c8994408e38e1e7",
   "domains": [
     {
       "name": "agent",
@@ -4353,6 +4353,7 @@
         "postgres:cost.price_book_initializations",
         "postgres:cost.price_entries",
         "postgres:cost.run_pr_outcomes",
+        "postgres:cost.run_pr_reverts",
         "postgres:cost.run_totals"
       ]
     },
@@ -4658,7 +4659,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 157
+      "tableCount": 158
     },
     {
       "domains": [
@@ -14368,6 +14369,82 @@
       "domain": "cost",
       "id": "postgres:cost.run_pr_outcomes",
       "name": "run_pr_outcomes",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "created_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "repository",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "number",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "integer"
+        },
+        {
+          "name": "merge_commit_sha",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "branch",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "reverted_by",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "reverted_at",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "read_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        }
+      ],
+      "domain": "cost",
+      "id": "postgres:cost.run_pr_reverts",
+      "name": "run_pr_reverts",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true

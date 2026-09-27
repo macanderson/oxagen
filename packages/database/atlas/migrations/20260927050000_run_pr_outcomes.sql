@@ -70,3 +70,45 @@ DO $$ BEGIN
     GRANT SELECT, INSERT, UPDATE, DELETE ON cost.run_pr_outcomes TO oxagen_app;
   END IF;
 END $$;
+
+-- cost.run_pr_reverts: every revert Oxagen saw, kept until the outcome row it
+-- reverts exists. The GitHub deliveries and the hourly refresh write a revert
+-- here before they mark or write any outcome row, and each refresh pass folds
+-- the reverts of the trailing 30 days into the rows it writes. One row names
+-- one target: a pull request by number, or a merge commit on the branch the
+-- reverting commit landed on. The hourly function prunes rows older than the
+-- window.
+
+CREATE TABLE IF NOT EXISTS cost.run_pr_reverts (
+  id uuid PRIMARY KEY DEFAULT COALESCE(CASE WHEN to_regprocedure('public.uuid_generate_v7()') IS NOT NULL THEN uuid_generate_v7() ELSE uuid_generate_v4() END, uuid_generate_v4()) NOT NULL,
+  org_id uuid NOT NULL,
+  workspace_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  repository text NOT NULL,
+  number integer,
+  merge_commit_sha text,
+  branch text,
+  reverted_by text NOT NULL,
+  reverted_at timestamptz,
+  read_at timestamptz NOT NULL,
+  CONSTRAINT "run_pr_reverts_uniq" UNIQUE NULLS NOT DISTINCT (org_id, workspace_id, reverted_by, repository, number, merge_commit_sha, branch),
+  CONSTRAINT "run_pr_reverts_target_check" CHECK ((number > 0 AND merge_commit_sha IS NULL) OR (number IS NULL AND merge_commit_sha IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS run_pr_reverts_workspace_read_idx ON cost.run_pr_reverts (org_id, workspace_id, read_at);
+CREATE INDEX IF NOT EXISTS run_pr_reverts_read_idx ON cost.run_pr_reverts (read_at);
+ALTER TABLE cost.run_pr_reverts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cost.run_pr_reverts FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON cost.run_pr_reverts;
+DROP POLICY IF EXISTS tenant_org_wide_read ON cost.run_pr_reverts;
+CREATE POLICY tenant_isolation ON cost.run_pr_reverts
+  USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
+  WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
+CREATE POLICY tenant_org_wide_read ON cost.run_pr_reverts
+  FOR SELECT
+  USING (current_setting('app.org_wide', true) = 'on' AND org_id = nullif(current_setting('app.current_org_id', true), '')::uuid);
+
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'oxagen_app') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON cost.run_pr_reverts TO oxagen_app;
+  END IF;
+END $$;

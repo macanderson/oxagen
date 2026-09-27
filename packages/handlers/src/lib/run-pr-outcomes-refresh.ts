@@ -6,44 +6,53 @@
 //      record holds (`tacho.run_pull_requests`), and the
 //      `provider_publish.pull_request_opened` receipts a ledger run recorded,
 //   2. reads from GitHub the state, head commit CI, and head branch of each
-//      pull request whose row is not settled, at most 60 per pass, oldest
-//      read first,
-//   3. writes the rows that changed, with the run's terminal reason on each,
-//   4. marks reverted the pull requests a merged pull request's body names
-//      (`Reverts owner/repo#N`), and
-//   5. gives a run that opened no pull request one `none` row that carries
+//      pull request whose row is not settled, at most 60 per pass, least
+//      recently asked first,
+//   3. keeps the reverts a merged pull request's body names
+//      (`Reverts owner/repo#N`) in `cost.run_pr_reverts`,
+//   4. marks each row with the kept reverts that name it: the ones found in
+//      step 3, and the ones the GitHub deliveries and earlier passes kept,
+//   5. writes the rows that changed, with the run's terminal reason on each,
+//      and
+//   6. gives a run that opened no pull request one `none` row that carries
 //      its terminal reason.
 //
-// A human revert of a run's pull request reaches the table through the
-// GitHub deliveries (functions/cost.run-pr-outcomes.ts), not through this
-// pass. A GitLab merge request keeps the state its link holds, since the pass
-// reads only GitHub.
+// A revert is kept before any row is written, so a pass that fails after it
+// loses nothing: the reverting pull request's row can settle, and the next
+// pass still reads the revert back. A human revert of a run's pull request
+// reaches the table through the GitHub deliveries
+// (functions/cost.run-pr-outcomes.ts), which keep it the same way. A GitLab
+// merge request keeps the state its link holds, since the pass reads only
+// GitHub.
 import {
   blankOutcome,
   ciStateOf,
   type CiRead,
   listOutcomeRuns,
-  markPullRequestsReverted,
   needsForgeRead,
   OUTCOME_FORGE_READS_PER_PASS,
+  OUTCOME_WINDOW_DAYS,
   type OutcomeRow,
   type OutcomeRun,
   type OutcomeScope,
-  type PrRef,
   type PrStateRead,
   prKeyOf,
   readOutcomeRows,
+  readRevertEvidence,
   readRunTerminalReasons,
   readTachoRunPrLinks,
-  type RevertMark,
+  type RevertEvidence,
+  revertEvidenceOf,
   revertTargetsOf,
   type RunPr,
   type RunPrState,
   saveOutcomeRows,
+  saveRevertEvidence,
   type TachoPrLink,
   withCiRead,
   withHeadBranchRead,
   withStateRead,
+  withStoredReverts,
   withTerminalReason,
 } from "@oxagen/billing";
 import { schema, withTenantDb } from "@oxagen/database";
@@ -68,6 +77,8 @@ export const OUTCOME_LEDGER_READS_PER_PASS = 100;
 
 /** GitHub reads one pass runs at a time. */
 const FORGE_READ_CONCURRENCY = 6;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** A pull request a ledger run's receipt names, with the head commit it recorded. */
 export interface LedgerRunPr extends RunPr {
@@ -111,12 +122,14 @@ export interface OutcomeRefreshDeps {
     runIds: readonly string[],
   ): Promise<Map<string, LedgerRunPr[]>>;
   readForge(scope: OutcomeScope, pr: RunPr): Promise<ForgeOutcome>;
-  saveRows(scope: OutcomeScope, rows: readonly OutcomeRow[]): Promise<number>;
-  markReverted(
+  /** The reverts kept for the workspace that Oxagen saw since the given time. */
+  readReverts(scope: OutcomeScope, since: Date): Promise<RevertEvidence[]>;
+  /** Keep reverts until their rows exist. A revert already kept is not written again. */
+  saveReverts(
     scope: OutcomeScope,
-    targets: readonly PrRef[],
-    mark: RevertMark,
+    evidence: readonly RevertEvidence[],
   ): Promise<number>;
+  saveRows(scope: OutcomeScope, rows: readonly OutcomeRow[]): Promise<number>;
 }
 
 interface Candidate {
@@ -189,12 +202,18 @@ export async function refreshRunPrOutcomes(
     return { runs: 0, forgeReads: 0, deferred: 0, rows: 0, reverted: 0 };
   const runIds = runs.map((r) => r.runId);
   const runById = new Map(runs.map((r) => [r.runId, r]));
-  const [reasons, stored, links] = await Promise.all([
+  // A revert of a run's pull request lands after the run started, so the
+  // reverts Oxagen saw inside the window cover every run in it.
+  const [reasons, stored, links, keptReverts] = await Promise.all([
     deps.terminalReasons(scope, runs),
     deps.readRows(scope, runIds),
     deps.tachoLinks(
       scope,
       runs.filter((r) => r.runSource === "tacho").map((r) => r.runId),
+    ),
+    deps.readReverts(
+      scope,
+      new Date(now.getTime() - OUTCOME_WINDOW_DAYS * DAY_MS),
     ),
   ]);
   const storedByKey = new Map(stored.map((r) => [keyOf(r.runId, r.prKey), r]));
@@ -266,7 +285,7 @@ export async function refreshRunPrOutcomes(
     } else due.set(c.row.prKey, { prKey: c.row.prKey, pr: c.pr, readAt, group: [c] });
   }
   const order = [...due.values()].sort((a, b) => a.readAt - b.readAt);
-  const reverts: { targets: PrRef[]; mark: RevertMark }[] = [];
+  const foundReverts: RevertEvidence[] = [];
   let forgeReads = 0;
   let spent = 0;
   let next = 0;
@@ -299,14 +318,17 @@ export async function refreshRunPrOutcomes(
       (t) => !(t.repository === repository && t.number === item.pr.number),
     );
     if (targets.length > 0)
-      reverts.push({
-        targets,
-        mark: {
-          by: item.prKey,
-          at: read.state.mergedAt ?? read.state.closedAt,
-          readAt: read.state.readAt,
-        },
-      });
+      foundReverts.push(
+        ...revertEvidenceOf({
+          kind: "pull_requests",
+          targets,
+          mark: {
+            by: item.prKey,
+            at: read.state.mergedAt ?? read.state.closedAt,
+            readAt: read.state.readAt,
+          },
+        }),
+      );
   };
   const lane = async (): Promise<void> => {
     while (next < order.length && spent < OUTCOME_FORGE_READS_PER_PASS) {
@@ -318,6 +340,30 @@ export async function refreshRunPrOutcomes(
     }
   };
   await Promise.all(Array.from({ length: FORGE_READ_CONCURRENCY }, lane));
+
+  // Keep this pass's reverts before any row is written. The reverting pull
+  // request's row settles in the same write, and the pass does not read a
+  // settled pull request again, so a revert not kept first would be lost if
+  // the write failed.
+  await deps.saveReverts(scope, foundReverts);
+  const revertsByRepository = new Map<string, RevertEvidence[]>();
+  for (const e of [...keptReverts, ...foundReverts]) {
+    const list = revertsByRepository.get(e.repository);
+    if (list) list.push(e);
+    else revertsByRepository.set(e.repository, [e]);
+  }
+  let reverted = 0;
+  for (const c of candidates.values()) {
+    const evidence =
+      c.row.repository === null
+        ? undefined
+        : revertsByRepository.get(c.row.repository);
+    if (!evidence) continue;
+    const marked = withStoredReverts(c.row, evidence);
+    if (marked === c.row) continue;
+    c.row = marked;
+    reverted += 1;
+  }
 
   const rows: OutcomeRow[] = [];
   const withReason = (row: OutcomeRow): OutcomeRow => {
@@ -350,9 +396,6 @@ export async function refreshRunPrOutcomes(
   }
 
   const written = await deps.saveRows(scope, rows);
-  let reverted = 0;
-  for (const r of reverts)
-    reverted += await deps.markReverted(scope, r.targets, r.mark);
   return {
     runs: runs.length,
     forgeReads,
@@ -541,7 +584,8 @@ export function defaultOutcomeRefreshDeps(): OutcomeRefreshDeps {
       if (client === null) return "no_connection";
       return readGithubOutcome(client, pr);
     },
+    readReverts: readRevertEvidence,
+    saveReverts: saveRevertEvidence,
     saveRows: saveOutcomeRows,
-    markReverted: markPullRequestsReverted,
   };
 }

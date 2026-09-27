@@ -2,10 +2,10 @@ import {
   type OutcomeRow,
   type OutcomeRun,
   prKeyOf,
+  type RevertEvidence,
   type RunPrCiState,
   type RunPrState,
   type TachoPrLink,
-  withRevert,
 } from "@oxagen/billing";
 import { GitHubApiError, type GitHubClient } from "@oxagen/github";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -102,14 +102,27 @@ interface FakeInput {
   links?: TachoPrLink[];
   ledger?: Record<string, LedgerRunPr[]>;
   forge?: Record<string, ForgeOutcome | Error>;
+  /** Reverts already kept, as a GitHub delivery or an earlier pass keeps them. */
+  reverts?: RevertEvidence[];
 }
 
-/** Dependencies over an in-memory table, which saves and marks as the store does. */
+const sameRevert = (a: RevertEvidence, b: RevertEvidence) =>
+  a.repository === b.repository &&
+  a.number === b.number &&
+  a.mergeCommitSha === b.mergeCommitSha &&
+  a.branch === b.branch &&
+  a.mark.by === b.mark.by;
+
+/** Dependencies over an in-memory table and revert store, which save as the store does. */
 function fake(input: FakeInput) {
   const rows = new Map<string, OutcomeRow>();
   const reads: string[] = [];
   const saved: OutcomeRow[][] = [];
   const ledgerAsked: string[][] = [];
+  const reverts: RevertEvidence[] = [...(input.reverts ?? [])];
+  const revertsAsked: Date[] = [];
+  const writes: string[] = [];
+  const control = { failSaveRows: false };
   const deps: OutcomeRefreshDeps = {
     now: () => NOW,
     listRuns: () => Promise.resolve(input.runs),
@@ -133,31 +146,44 @@ function fake(input: FakeInput) {
       const found = input.forge?.[key] ?? "unreadable";
       return found instanceof Error ? Promise.reject(found) : Promise.resolve(found);
     },
+    readReverts: (_scope, since) => {
+      revertsAsked.push(since);
+      return Promise.resolve(
+        reverts.filter((e) => e.mark.readAt.getTime() >= since.getTime()),
+      );
+    },
+    saveReverts: (_scope, evidence) => {
+      writes.push("saveReverts");
+      let n = 0;
+      for (const e of evidence) {
+        if (reverts.some((kept) => sameRevert(kept, e))) continue;
+        reverts.push(e);
+        n += 1;
+      }
+      return Promise.resolve(n);
+    },
     saveRows: (_scope, next) => {
+      writes.push("saveRows");
+      if (control.failSaveRows)
+        return Promise.reject(new Error("connection terminated"));
       saved.push([...next]);
       for (const row of next) rows.set(`${row.runId} ${row.prKey}`, row);
       for (const row of next)
         if (row.prKey !== "none") rows.delete(`${row.runId} none`);
       return Promise.resolve(next.length);
     },
-    markReverted: (_scope, targets, mark) => {
-      let n = 0;
-      for (const [key, row] of rows) {
-        if (
-          row.provider === "github" &&
-          !row.reverted &&
-          targets.some(
-            (t) => t.repository === row.repository && t.number === row.number,
-          )
-        ) {
-          rows.set(key, withRevert(row, mark));
-          n += 1;
-        }
-      }
-      return Promise.resolve(n);
-    },
   };
-  return { deps, rows, reads, saved, ledgerAsked };
+  return {
+    deps,
+    rows,
+    reads,
+    saved,
+    ledgerAsked,
+    reverts,
+    revertsAsked,
+    writes,
+    control,
+  };
 }
 
 const rowOf = (rows: Map<string, OutcomeRow>, runId: string, prKey: string) =>
@@ -233,6 +259,140 @@ describe("refreshRunPrOutcomes", () => {
     const out = await refreshRunPrOutcomes(t.deps, SCOPE);
     expect(rowOf(t.rows, "tse_a1", "github:acme/app#5")?.reverted).toBe(false);
     expect(out.reverted).toBe(0);
+  });
+
+  it("keeps the reverts it found before it writes any row, so a failed write loses none", async () => {
+    const forgeByKey: Record<string, ForgeOutcome | Error> = {
+      "github:acme/app#5": forge("merged", { mergedAt: hoursAgo(5) }),
+      "github:acme/app#9": forge("merged", {
+        mergedAt: hoursAgo(2),
+        body: "Reverts acme/app#5",
+      }),
+    };
+    const t = fake({
+      runs: [run("tse_a1"), run("tse_b2")],
+      links: [link("tse_a1", 5), link("tse_b2", 9)],
+      forge: forgeByKey,
+    });
+    t.control.failSaveRows = true;
+    await expect(refreshRunPrOutcomes(t.deps, SCOPE)).rejects.toThrow(
+      "connection terminated",
+    );
+    expect(t.writes).toEqual(["saveReverts", "saveRows"]);
+    expect(t.reverts).toEqual([
+      {
+        repository: "acme/app",
+        number: 5,
+        mergeCommitSha: null,
+        branch: null,
+        mark: { by: "github:acme/app#9", at: hoursAgo(2), readAt: NOW },
+      },
+    ]);
+    // The next pass cannot read the reverting pull request, so only the kept
+    // revert can mark the row.
+    t.control.failSaveRows = false;
+    forgeByKey["github:acme/app#9"] = "unreadable";
+    const out = await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(rowOf(t.rows, "tse_a1", "github:acme/app#5")).toMatchObject({
+      reverted: true,
+      revertedBy: "github:acme/app#9",
+      revertedAt: hoursAgo(2),
+      revertedReadAt: NOW,
+    });
+    expect(out.reverted).toBe(1);
+  });
+
+  it("marks a row first written after the pass that found its revert", async () => {
+    const runs = [run("tse_b2")];
+    const t = fake({
+      runs,
+      links: [link("tse_b2", 9), link("tse_a1", 5)],
+      forge: {
+        "github:acme/app#5": forge("merged", { mergedAt: hoursAgo(5) }),
+        "github:acme/app#9": forge("merged", {
+          mergedAt: hoursAgo(2),
+          body: "Reverts acme/app#5",
+        }),
+      },
+    });
+    const first = await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(first.reverted).toBe(0);
+    t.reads.length = 0;
+    runs.push(run("tse_a1"));
+    const second = await refreshRunPrOutcomes(t.deps, SCOPE);
+    // The reverting pull request settled on the first pass and is not read again.
+    expect(t.reads).toEqual(["github:acme/app#5"]);
+    expect(rowOf(t.rows, "tse_a1", "github:acme/app#5")).toMatchObject({
+      reverted: true,
+      revertedBy: "github:acme/app#9",
+      revertedAt: hoursAgo(2),
+    });
+    expect(second.reverted).toBe(1);
+  });
+
+  it("marks a new row with a revert a GitHub delivery kept before the row existed", async () => {
+    const t = fake({
+      runs: [run("tse_a1")],
+      links: [link("tse_a1", 5)],
+      forge: { "github:acme/app#5": forge("merged", { mergedAt: hoursAgo(5) }) },
+      reverts: [
+        {
+          repository: "acme/app",
+          number: 5,
+          mergeCommitSha: null,
+          branch: null,
+          mark: { by: "github:acme/app#9", at: hoursAgo(4), readAt: hoursAgo(4) },
+        },
+      ],
+    });
+    const out = await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(t.revertsAsked).toEqual([new Date(NOW.getTime() - 30 * 86_400_000)]);
+    expect(rowOf(t.rows, "tse_a1", "github:acme/app#5")).toMatchObject({
+      reverted: true,
+      revertedBy: "github:acme/app#9",
+      revertedAt: hoursAgo(4),
+      revertedReadAt: hoursAgo(4),
+    });
+    expect(out.reverted).toBe(1);
+  });
+
+  it("marks a row by a kept merge commit revert only on the branch the revert landed on", async () => {
+    const onMain = `github:acme/app@${"e".repeat(40)}`;
+    const t = fake({
+      runs: [run("tse_a1"), run("tse_b2")],
+      links: [link("tse_a1", 5), link("tse_b2", 6)],
+      forge: {
+        "github:acme/app#5": forge("merged", { mergeCommitSha: "c".repeat(40) }),
+        "github:acme/app#6": forge("merged", { mergeCommitSha: "d".repeat(40) }),
+      },
+      reverts: [
+        {
+          repository: "acme/app",
+          number: null,
+          mergeCommitSha: "c".repeat(40),
+          branch: "main",
+          mark: { by: onMain, at: hoursAgo(2), readAt: hoursAgo(2) },
+        },
+        {
+          repository: "acme/app",
+          number: null,
+          mergeCommitSha: "d".repeat(40),
+          branch: "release",
+          mark: {
+            by: `github:acme/app@${"f".repeat(40)}`,
+            at: hoursAgo(2),
+            readAt: hoursAgo(2),
+          },
+        },
+      ],
+    });
+    const out = await refreshRunPrOutcomes(t.deps, SCOPE);
+    expect(rowOf(t.rows, "tse_a1", "github:acme/app#5")).toMatchObject({
+      reverted: true,
+      revertedBy: onMain,
+    });
+    expect(rowOf(t.rows, "tse_b2", "github:acme/app#6")?.reverted).toBe(false);
+    expect(out.reverted).toBe(1);
   });
 
   it("records a pull request closed without merging, with its close time", async () => {

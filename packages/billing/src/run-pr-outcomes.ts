@@ -259,7 +259,7 @@ export function withTerminalReason(
  * is settled once its pull request is closed or merged, its CI finished, and
  * its head branch was read at least an hour after the close. Anything else,
  * including a row never written, is read again. A revert is not a reason:
- * deliveries and the bodies the refresh reads mark those.
+ * the reverts kept in `cost.run_pr_reverts` mark those on every pass.
  */
 export function needsForgeRead(row: OutcomeRow | undefined): boolean {
   if (!row) return true;
@@ -519,4 +519,76 @@ export function revertPlanOf(delivery: OutcomeDelivery): RevertPlan | null {
       readAt: delivery.readAt,
     },
   };
+}
+
+/**
+ * One revert of one target, as `cost.run_pr_reverts` keeps it. The target is
+ * a pull request by number, or a merge commit by sha. The store keeps it
+ * until the outcome row it reverts exists, since a revert can arrive before
+ * the refresh writes that row.
+ */
+export interface RevertEvidence {
+  repository: string;
+  /** The reverted pull request, or null when the target is a merge commit. */
+  number: number | null;
+  /** The reverted merge commit, or null when the target is a pull request. */
+  mergeCommitSha: string | null;
+  /** The branch the reverting commit landed on. Null matches any branch. */
+  branch: string | null;
+  mark: RevertMark;
+}
+
+/** The evidence a revert plan records: one per target. */
+export function revertEvidenceOf(plan: RevertPlan): RevertEvidence[] {
+  if (plan.kind === "pull_requests")
+    return plan.targets.map((t) => ({
+      repository: t.repository.toLowerCase(),
+      number: t.number,
+      mergeCommitSha: null,
+      branch: null,
+      mark: plan.mark,
+    }));
+  return plan.shas.map((sha) => ({
+    repository: plan.repository.toLowerCase(),
+    number: null,
+    mergeCommitSha: sha,
+    branch: plan.branch,
+    mark: plan.mark,
+  }));
+}
+
+/**
+ * Whether the evidence reverts the row's pull request. A pull request target
+ * matches by repository and number. A merge commit target matches the row's
+ * merge commit, on the branch the pull request merged into, as
+ * `markMergeCommitsReverted` matches it.
+ */
+export function evidenceReverts(evidence: RevertEvidence, row: OutcomeRow): boolean {
+  if (row.provider !== "github" || row.repository !== evidence.repository)
+    return false;
+  if (evidence.number !== null) return row.number === evidence.number;
+  return (
+    row.mergeCommitSha !== null &&
+    row.mergeCommitSha === evidence.mergeCommitSha &&
+    (evidence.branch === null || row.baseRef === evidence.branch)
+  );
+}
+
+/**
+ * The row marked with the earliest stored revert that names it. A row already
+ * reverted keeps its revert, as `withRevert` does.
+ */
+export function withStoredReverts(
+  row: OutcomeRow,
+  evidence: readonly RevertEvidence[],
+): OutcomeRow {
+  if (row.reverted) return row;
+  let first: RevertEvidence | null = null;
+  for (const e of evidence)
+    if (
+      evidenceReverts(e, row) &&
+      (first === null || e.mark.readAt.getTime() < first.mark.readAt.getTime())
+    )
+      first = e;
+  return first === null ? row : withRevert(row, first.mark);
 }

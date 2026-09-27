@@ -11,12 +11,15 @@ import {
   prKeyOf,
   repositoryOfCommitUrl,
   revertedShasOf,
+  type RevertEvidence,
+  revertEvidenceOf,
   revertPlanOf,
   revertTargetsOf,
   tachoTerminalReason,
   withCiRead,
   withRevert,
   withStateRead,
+  withStoredReverts,
 } from "./run-pr-outcomes";
 
 const at = (iso: string) => new Date(iso);
@@ -487,5 +490,118 @@ describe("revertPlanOf", () => {
       branch: "main",
       mark: { by: `github:acme/app@${SHA_B}`, at: at("2026-09-27T11:30:00Z"), readAt },
     });
+  });
+});
+
+describe("revertEvidenceOf", () => {
+  const mark = {
+    by: "github:acme/app#9",
+    at: at("2026-09-27T11:00:00Z"),
+    readAt: at("2026-09-27T12:00:00Z"),
+  };
+
+  it("keeps one revert per pull request a plan names, with no commit or branch", () => {
+    expect(
+      revertEvidenceOf({
+        kind: "pull_requests",
+        targets: [
+          { repository: "Acme/App", number: 5 },
+          { repository: "acme/lib", number: 2 },
+        ],
+        mark,
+      }),
+    ).toEqual([
+      { repository: "acme/app", number: 5, mergeCommitSha: null, branch: null, mark },
+      { repository: "acme/lib", number: 2, mergeCommitSha: null, branch: null, mark },
+    ]);
+  });
+
+  it("keeps one revert per merge commit a plan names, with the branch it landed on", () => {
+    expect(
+      revertEvidenceOf({
+        kind: "merge_commits",
+        repository: "Acme/App",
+        shas: [SHA_M, SHA_A],
+        branch: "main",
+        mark,
+      }),
+    ).toEqual([
+      { repository: "acme/app", number: null, mergeCommitSha: SHA_M, branch: "main", mark },
+      { repository: "acme/app", number: null, mergeCommitSha: SHA_A, branch: "main", mark },
+    ]);
+  });
+});
+
+describe("withStoredReverts", () => {
+  const mark = (by: string, readAt: string) => ({
+    by,
+    at: at("2026-09-27T11:00:00Z"),
+    readAt: at(readAt),
+  });
+  const byNumber = (
+    number: number,
+    by = "github:acme/app#9",
+    readAt = "2026-09-27T12:00:00Z",
+    repository = "acme/app",
+  ): RevertEvidence => ({
+    repository,
+    number,
+    mergeCommitSha: null,
+    branch: null,
+    mark: mark(by, readAt),
+  });
+  const byCommit = (sha: string, branch: string | null): RevertEvidence => ({
+    repository: "acme/app",
+    number: null,
+    mergeCommitSha: sha,
+    branch,
+    mark: mark(`github:acme/app@${SHA_B}`, "2026-09-27T12:00:00Z"),
+  });
+
+  it("marks the row a kept revert names by number", () => {
+    expect(withStoredReverts(settled(), [byNumber(5)])).toMatchObject({
+      reverted: true,
+      revertedBy: "github:acme/app#9",
+      revertedAt: at("2026-09-27T11:00:00Z"),
+      revertedReadAt: at("2026-09-27T12:00:00Z"),
+    });
+  });
+
+  it("leaves the row alone when no kept revert names it", () => {
+    const row = settled();
+    expect(withStoredReverts(row, [byNumber(6)])).toBe(row);
+    expect(
+      withStoredReverts(row, [byNumber(5, undefined, undefined, "acme/lib")]),
+    ).toBe(row);
+  });
+
+  it("marks the row by its merge commit on the branch it merged into", () => {
+    const row = settled({ mergeCommitSha: SHA_M, baseRef: "main" });
+    expect(withStoredReverts(row, [byCommit(SHA_M, "main")]).reverted).toBe(true);
+    expect(withStoredReverts(row, [byCommit(SHA_M, "release")])).toBe(row);
+    expect(withStoredReverts(row, [byCommit(SHA_A, "main")])).toBe(row);
+  });
+
+  it("marks the row by its merge commit on any branch when the revert has none", () => {
+    const row = settled({ mergeCommitSha: SHA_M, baseRef: "release" });
+    expect(withStoredReverts(row, [byCommit(SHA_M, null)]).reverted).toBe(true);
+  });
+
+  it("does not match a merge commit revert to a row with no merge commit", () => {
+    const row = settled({ mergeCommitSha: null, baseRef: "main" });
+    expect(withStoredReverts(row, [byCommit(SHA_M, null)])).toBe(row);
+  });
+
+  it("marks the row with the revert Oxagen saw first", () => {
+    const out = withStoredReverts(settled(), [
+      byNumber(5, "github:acme/app#11", "2026-09-27T13:00:00Z"),
+      byNumber(5, "github:acme/app#9", "2026-09-27T12:00:00Z"),
+    ]);
+    expect(out.revertedBy).toBe("github:acme/app#9");
+  });
+
+  it("keeps the revert a row already carries", () => {
+    const row = withRevert(settled(), mark("github:acme/app#7", "2026-09-27T11:30:00Z"));
+    expect(withStoredReverts(row, [byNumber(5)])).toBe(row);
   });
 });
