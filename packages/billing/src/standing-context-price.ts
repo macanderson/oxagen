@@ -266,14 +266,29 @@ export interface StandingSourcePrice {
 }
 
 /**
+ * What a run paid for one uncached input token, as `runInputPrice` reads it,
+ * and null when a model with uncached input has an unpriced call. Such a
+ * model's tokens count every call and its cost only the priced ones, so the
+ * ratio would read low, as with `runReadPrice`.
+ */
+function runUncachedPrice(run: PricedRun): InputPrice | null {
+  for (const m of run.breakdown.models) {
+    if (m.tokens.input_uncached === 0) continue;
+    if (m.hasUnpriced || m.costMicros === null) return null;
+  }
+  return runInputPrice(run);
+}
+
+/**
  * The price a run re-read its standing context at: its cache read price, or
  * its input price when it read nothing from the cache, since then it sent
- * the prefix uncached. Null when that price is not known. A run that read the
- * cache and has no read price never falls back to the input price, which
- * would price its cache reads at the uncached rate.
+ * the prefix uncached. Null when that price is not known, including when a
+ * model the price reads has an unpriced call. A run that read the cache and
+ * has no read price never falls back to the input price, which would price
+ * its cache reads at the uncached rate.
  */
 export function standingReadPrice(run: PricedRun): InputPrice | null {
-  return readTheCache(run) ? runReadPrice(run) : runInputPrice(run);
+  return readTheCache(run) ? runReadPrice(run) : runUncachedPrice(run);
 }
 
 /**

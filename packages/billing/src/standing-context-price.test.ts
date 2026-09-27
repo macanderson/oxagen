@@ -107,6 +107,20 @@ describe("standingReadPrice", () => {
     model.costMicros = 9_000n;
     expect(standingReadPrice(run)).toEqual({ micros: 9_000n, tokens: 3_000n });
   });
+
+  it("is null for a cache-free run whose uncached input includes an unpriced call", () => {
+    const run = priced(0, 0n);
+    const model = run.breakdown.models[0]!;
+    model.tokens = { ...model.tokens, input_uncached: 3_000 };
+    model.costByClass = { ...model.costByClass, input_uncached: 6_000n };
+    model.costMicros = 6_000n;
+    model.hasUnpriced = true;
+    expect(standingReadPrice(run)).toBeNull();
+    // A row stored before `hasUnpriced` existed marks it by a null cost.
+    model.hasUnpriced = false;
+    model.costMicros = null;
+    expect(standingReadPrice(run)).toBeNull();
+  });
 });
 
 const ORG = "00000000-0000-4000-8000-000000000001";
