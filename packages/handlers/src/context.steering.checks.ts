@@ -1,9 +1,19 @@
-// context.steering.checks.ts — the six §10.3 checks a Context PR passes
-// before Oxagen merges it (ADR-061), the same rules as `stella context
-// validate`: schema, lineage uniqueness, record_hash recomputation, a secret
-// and PII scan, conflict against active records, and constraint_effect. Each
-// is a pure function of the committed file and what the registry holds, so
-// each has a failing fixture in context.steering.checks.test.ts.
+// context.steering.checks.ts: the checks a steering PR runs, and the six
+// checks a PR for one record file under rules/ runs.
+//
+// A steering PR runs the checks in @oxagen/steering-check. checkSteeringChange()
+// reads the PR's head and base trees through a SteeringTreeHost and passes
+// them to that package's runChecks(). It adds no rule of its own.
+//
+// A PR that Oxagen opens for one record file under rules/ (ADR-061) still runs
+// the six §10.3 checks below, the same rules as `stella context validate`:
+// schema, lineage uniqueness, record_hash recomputation, a secret and PII
+// scan, conflict against active records, and constraint_effect. They read the
+// proposal row and one TOML file, which the steering layout does not have, so
+// they stay here until that flow moves to the steering layout. Each is a pure
+// function of the committed file and what the registry holds, so each has a
+// failing fixture in context.steering.checks.test.ts.
+import { HandlerError } from "@oxagen/oxagen";
 import {
   CHECK_NAMES,
   type CheckName,
@@ -11,6 +21,28 @@ import {
   type RecordKind,
 } from "@oxagen/oxagen/contracts/context.steering.shared";
 import { CONTEXT_RECORD_LABEL_MAX } from "@oxagen/oxagen/context-record-label";
+import {
+  AGENTS_DIR,
+  AGENTS_MD_PATH,
+  CLAUDE_MD_PATH,
+  GITATTRIBUTES_PATH,
+  POLICY_DIR,
+  README_PATH,
+  STEERING_DIR,
+  TOOLS_DIR,
+  WORKSPACE_TOML_PATH,
+} from "@oxagen/oxagen/steering-repo/paths";
+import {
+  findSecretsAndPii,
+  runChecks as runSteeringChecks,
+  type CheckInput,
+  type CheckReport,
+  type SteeringTree,
+} from "@oxagen/steering-check";
+import type {
+  SteeringHost,
+  SteeringRepository,
+} from "./context.steering.github";
 import {
   RECORD_SCHEMA_TAG,
   parseRecordFile,
@@ -323,141 +355,9 @@ function checkRecordHash(ctx: CheckContext): CheckOutcome {
   };
 }
 
-// Secrets, mirroring the detector Stella's `stella context validate` reuses
-// (stella-learn/src/redact.rs): a vendor-prefixed token, a JWT by shape, a
-// long mixed-case opaque blob, a value after a sensitive key name, a PEM
-// block. PII: an email address, a US social security number, a payment card
-// number that passes Luhn.
-const SECRET_PREFIXES = [
-  "ghp_",
-  "gho_",
-  "ghu_",
-  "ghs_",
-  "ghr_",
-  "github_pat_",
-  "glpat-",
-  "xoxb-",
-  "xoxp-",
-  "xoxa-",
-  "xoxs-",
-  "npm_",
-  "dop_v1_",
-  "doo_v1_",
-  "sk_live_",
-  "sk_test_",
-  "rk_live_",
-  "sk-",
-  "AKIA",
-  "ASIA",
-  "AIza",
-  "ya29.",
-  "SG.",
-  "hf_",
-  "shpat_",
-  "sq0atp-",
-  "sq0csp-",
-];
-const SENSITIVE_KEY_MARKERS = [
-  "password",
-  "passwd",
-  "secret",
-  "token",
-  "apikey",
-  "api_key",
-  "accesskey",
-  "access_key",
-  "privatekey",
-  "private_key",
-  "credential",
-  "authorization",
-  "auth_token",
-  "bearer",
-  "session_id",
-  "client_secret",
-];
-const TOKEN = /[A-Za-z0-9_\-./+~]+/g;
-
-function isJwt(token: string): boolean {
-  const parts = token.split(".");
-  return (
-    parts.length === 3 &&
-    parts[0]!.startsWith("eyJ") &&
-    parts[0]!.length >= 8 &&
-    parts[1]!.length >= 8 &&
-    parts[2]!.length > 0
-  );
-}
-
-function isHighEntropyBlob(token: string): boolean {
-  if (token.length < 32 || token.includes("/") || token.includes("."))
-    return false;
-  if (!/^[A-Za-z0-9_\-+~]+$/.test(token)) return false;
-  return /[A-Z]/.test(token) && /[a-z]/.test(token) && /[0-9]/.test(token);
-}
-
-function isSecretToken(token: string): boolean {
-  if (token.length < 8) return false;
-  if (
-    SECRET_PREFIXES.some(
-      (p) => token.startsWith(p) && token.length > p.length + 4,
-    )
-  ) {
-    return true;
-  }
-  return isJwt(token) || isHighEntropyBlob(token);
-}
-
-function luhn(digits: string): boolean {
-  let sum = 0;
-  let double = false;
-  for (let i = digits.length - 1; i >= 0; i -= 1) {
-    let d = Number(digits[i]);
-    if (double) {
-      d *= 2;
-      if (d > 9) d -= 9;
-    }
-    sum += d;
-    double = !double;
-  }
-  return sum % 10 === 0;
-}
-
-/** The findings in one text, each naming what was found. */
-export function findSecretsAndPii(text: string): string[] {
-  const findings: string[] = [];
-  if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(text))
-    findings.push("private key block");
-  for (const token of text.match(TOKEN) ?? []) {
-    if (isSecretToken(token)) {
-      findings.push("credential token");
-      break;
-    }
-  }
-  const keyed =
-    /([A-Za-z_][A-Za-z0-9_-]*)\s*[=:]\s*["']?([A-Za-z0-9_\-./+~]{8,})/g;
-  for (const m of text.matchAll(keyed)) {
-    const key = m[1]!.toLowerCase();
-    if (
-      !key.endsWith("_env") &&
-      SENSITIVE_KEY_MARKERS.some((k) => key.includes(k))
-    ) {
-      findings.push(`value after sensitive key ${m[1]}`);
-      break;
-    }
-  }
-  if (/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/.test(text))
-    findings.push("email address");
-  if (/\b\d{3}-\d{2}-\d{4}\b/.test(text))
-    findings.push("US social security number");
-  for (const m of text.matchAll(/\b(?:\d[ -]?){13,19}\b/g)) {
-    const digits = m[0].replace(/[ -]/g, "");
-    if (digits.length >= 13 && digits.length <= 19 && luhn(digits)) {
-      findings.push("payment card number");
-      break;
-    }
-  }
-  return findings;
-}
+// The secret and personal-data scanner moved to @oxagen/steering-check
+// unchanged. The callers that import it from here still can.
+export { findSecretsAndPii };
 
 function scanForSecretsAndPii(fields: Record<string, string>): string[] {
   const findings: string[] = [];
@@ -627,4 +527,142 @@ export async function runChecks(
     await hooks.finish(name, outcome);
   }
   return allPassed;
+}
+
+/**
+ * Reads a steering repo at one commit. Pass a commit SHA as `ref`, so every
+ * read in one check run sees the same tree.
+ */
+export interface SteeringTreeHost {
+  /** Every file path in the steering layout at `ref`. */
+  listFiles(ref: string): Promise<string[]>;
+  /** The file's text at `ref`, or null when `ref` has no such file. */
+  readFile(ref: string, path: string): Promise<string | null>;
+}
+
+/** How many file reads loadSteeringTree() keeps in flight at once. */
+export const STEERING_TREE_READS_AT_ONCE = 8;
+
+/** The files at the root of a steering repo that the checks read. */
+const STEERING_ROOT_FILES = [
+  AGENTS_MD_PATH,
+  CLAUDE_MD_PATH,
+  README_PATH,
+  GITATTRIBUTES_PATH,
+  WORKSPACE_TOML_PATH,
+] as const;
+
+/** The folders of a steering repo. The checks read every file under them. */
+const STEERING_TREE_DIRS = [
+  AGENTS_DIR,
+  STEERING_DIR,
+  TOOLS_DIR,
+  POLICY_DIR,
+] as const;
+
+/**
+ * A SteeringTreeHost over the host a workspace steers through. It lists every
+ * file under agents/, steering/, tools/, and policy/, and each root file the
+ * checks read. The host lists folders only, so a root file is found by
+ * reading it. The adapter keeps that text for the one readFile() call that
+ * follows, so each root file is read once.
+ */
+export function steeringTreeHost(
+  host: Pick<SteeringHost, "listFiles" | "readFile">,
+  repo: SteeringRepository,
+): SteeringTreeHost {
+  const rootTexts = new Map<string, string>();
+  const key = (ref: string, path: string) => `${ref}\n${path}`;
+  return {
+    async listFiles(ref) {
+      const [listed, roots] = await Promise.all([
+        Promise.all(
+          STEERING_TREE_DIRS.map((dir) => host.listFiles(repo, ref, dir)),
+        ),
+        Promise.all(
+          STEERING_ROOT_FILES.map(async (path) => {
+            const text = await host.readFile(repo, path, ref);
+            if (text === null) return null;
+            rootTexts.set(key(ref, path), text);
+            return path;
+          }),
+        ),
+      ]);
+      return [
+        ...roots.filter((path): path is string => path !== null),
+        ...listed.flat(),
+      ];
+    },
+    async readFile(ref, path) {
+      const kept = rootTexts.get(key(ref, path));
+      if (kept === undefined) return host.readFile(repo, path, ref);
+      rootTexts.delete(key(ref, path));
+      return kept;
+    },
+  };
+}
+
+/**
+ * Every file the host lists at `ref`, keyed by path in path order. It keeps
+ * at most STEERING_TREE_READS_AT_ONCE reads in flight. A listed file that
+ * reads as missing means the ref moved during the read, so it throws rather
+ * than check a tree with a file left out.
+ */
+export async function loadSteeringTree(
+  host: SteeringTreeHost,
+  ref: string,
+): Promise<SteeringTree> {
+  const paths = [...new Set(await host.listFiles(ref))].sort();
+  const texts: string[] = new Array<string>(paths.length);
+  let next = 0;
+  const reader = async () => {
+    while (next < paths.length) {
+      const index = next;
+      next += 1;
+      const path = paths[index] as string;
+      const text = await host.readFile(ref, path);
+      if (text === null) {
+        throw new HandlerError({
+          code: "conflict",
+          reason: "steering_tree_moved",
+          message: `Oxagen listed ${path} at ${ref} and then could not read it. The branch may have moved during the read. Run the checks again.`,
+        });
+      }
+      texts[index] = text;
+    }
+  };
+  await Promise.all(
+    Array.from(
+      { length: Math.min(STEERING_TREE_READS_AT_ONCE, paths.length) },
+      reader,
+    ),
+  );
+  return new Map(paths.map((path, index) => [path, texts[index] as string]));
+}
+
+/** What checkSteeringChange() reads: two commits and what runChecks() takes besides the trees. */
+export interface SteeringChangeInput extends Omit<CheckInput, "files" | "base"> {
+  host: SteeringTreeHost;
+  /** The steering PR's head commit. */
+  head: string;
+  /**
+   * The production branch commit the steering PR merges into. Null checks
+   * the head tree whole, as for a repository's first publish.
+   */
+  base: string | null;
+}
+
+/**
+ * Run the steering PR checks on one change. It loads the head tree, then the
+ * base tree, and passes both to @oxagen/steering-check's runChecks(). The
+ * report passes when no finding is an error. It throws only when a tree
+ * cannot be read.
+ */
+export async function checkSteeringChange(
+  input: SteeringChangeInput,
+): Promise<CheckReport> {
+  const { host, head, base, ...rest } = input;
+  const files = await loadSteeringTree(host, head);
+  const baseTree = base === null ? null : await loadSteeringTree(host, base);
+  return runSteeringChecks({ ...rest, files, base: baseTree });
 }

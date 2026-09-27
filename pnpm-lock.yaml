@@ -1486,6 +1486,9 @@ importers:
       '@oxagen/steering-assembler':
         specifier: workspace:*
         version: link:../steering-assembler
+      '@oxagen/steering-check':
+        specifier: workspace:*
+        version: link:../steering-check
       '@oxagen/storage':
         specifier: workspace:*
         version: link:../storage
