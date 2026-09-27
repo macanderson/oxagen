@@ -202,7 +202,7 @@ function cutList(value: unknown, rules: ResultRules): { value: unknown; text: st
  */
 export function shapeValue(value: unknown, rules: ResultRules, notes: readonly string[]): CallToolResult {
   if (value === undefined) return withNotes({ content: [textItem("The upstream returned no content.")] }, notes);
-  let json = value;
+  let json: unknown = value;
   if (typeof value === "string") {
     const parsed = parseJson(value);
     if (!parsed.ok) return withNotes(cutText(value, rules), notes);

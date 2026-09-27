@@ -15,6 +15,8 @@ export * from "./credentials";
 export * from "./sender";
 export * from "./transport";
 export { executeCall, type CallEnvironment, type ExecutedCall, type ExecuteOptions } from "./call";
+export { refusedAddress, resolvePublicAddress, type AddressLookup } from "./cloud/address";
+export { createCloudTransport, type CloudTransportOptions } from "./cloud/transport";
 export { createGraphqlSender, type GraphqlSenderOptions } from "./graphql";
 export { grpcSender, type GrpcStreamResult } from "./grpc";
 export { createHttpSender, type HttpSenderOptions } from "./http";
