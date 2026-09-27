@@ -181,6 +181,34 @@ describe("tacho_events DDL", () => {
     );
   });
 
+  it("carries the token sources and the system context, forward as well as generated (#4493)", () => {
+    // 0027 for a cluster bootstrapped today, 0036 for every cluster that
+    // applied 0027 before the members existed. The counts are Nullable so a
+    // row with no measurement reads null, never zero.
+    const columns = [
+      "tool_definition_tokens Nullable(UInt32)",
+      "tool_definition_tokens_basis LowCardinality(String)",
+      "context_frame_tokens Nullable(UInt32)",
+      "context_frame_tokens_basis LowCardinality(String)",
+      "steering_tokens Nullable(UInt32)",
+      "steering_tokens_basis LowCardinality(String)",
+      "system_context_digest String",
+      "system_context_parts String",
+    ];
+    const ddl = tachoEventsMigration();
+    const forward = readFileSync(
+      join(here, "migrations", "0036_tacho_events_token_sources.sql"),
+      "utf8",
+    );
+    for (const column of columns) {
+      expect(ddl).toContain(column);
+      expect(forward).toContain(`ADD COLUMN IF NOT EXISTS ${column} AFTER `);
+    }
+    expect(forward).toContain(
+      "ADD COLUMN IF NOT EXISTS tool_definition_tokens Nullable(UInt32) AFTER request_effort",
+    );
+  });
+
   it("expires rows thirteen months after the control plane received them (#3944)", () => {
     // The hot window ADR-058 sets for a run's frame rows. The clock is
     // received_at, the server's, never ts, which the producer chooses. The
