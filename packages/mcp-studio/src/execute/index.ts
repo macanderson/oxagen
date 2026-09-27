@@ -3,61 +3,37 @@
 //
 // execute() validates the arguments against the effective input schema,
 // shapes the input, resolves the credential, sends through the Sender for
-// the request template kind, and shapes the result into an MCP tools/call
-// result. The decision (step 4) happened before it was called.
-import type { ManifestServer, ManifestTool } from "../contract/manifest";
-import { notBuiltAsync } from "../not-built";
+// the request template kind, pages when tools.toml asks, and shapes the
+// result into an MCP tools/call result. The decision (step 4) happened
+// before it was called.
+import type { ManifestTool } from "../contract/manifest";
+import { executeCall, type CallEnvironment, type ExecuteOptions } from "./call";
 import type { CredentialSource } from "./credentials";
-import { createGraphqlSender } from "./graphql";
-import { createHttpSender } from "./http";
-import { createMcpSender } from "./mcp";
-import type { Sender } from "./sender";
 import type { CallToolResult, Transport } from "./transport";
 
 export * from "./credentials";
 export * from "./sender";
 export * from "./transport";
+export { executeCall, type CallEnvironment, type ExecutedCall, type ExecuteOptions } from "./call";
 export { createGraphqlSender, type GraphqlSenderOptions } from "./graphql";
 export { grpcSender, type GrpcStreamResult } from "./grpc";
 export { createHttpSender, type HttpSenderOptions } from "./http";
 export { createMcpSender, MCP_PROTOCOL_VERSION, sendLocal, type McpSenderOptions } from "./mcp";
-
-/** Where a call runs: the server, the environment, and the person running the agent. */
-export interface CallEnvironment {
-  server: ManifestServer;
-  /** A key of server.environments: the sandbox for an agent's call, or the one an operator picked in Try it. */
-  name: string;
-  /** The operator, for operator-oauth. */
-  operator: string | undefined;
-}
+export { defaultSenders, graphqlSender, httpSender, mcpSender } from "./senders";
 
 /**
  * Run one call and return the MCP tools/call result the agent receives. An
  * upstream failure, a schema error, and a missing operator token are isError
- * results. It rejects only when the CredentialSource rejects.
+ * results. It rejects only when the CredentialSource rejects. executeCall
+ * returns the same result with each exchange, for Studio to save as a test.
  */
-export function execute(
+export async function execute(
   tool: ManifestTool,
   args: Record<string, unknown>,
   environment: CallEnvironment,
   credentials: CredentialSource,
   transport: Transport,
+  options: ExecuteOptions = {},
 ): Promise<CallToolResult> {
-  return notBuiltAsync("execute", tool, args, environment, credentials, transport);
+  return (await executeCall(tool, args, environment, credentials, transport, options)).result;
 }
-
-/**
- * tools/call with the upstream name, over a streamable HTTP session. Retries
- * only when the server cannot have received the call.
- */
-export const mcpSender: Sender<"mcp"> = createMcpSender();
-
-/**
- * The request built from an OpenAPI operation. Retries GET, HEAD, OPTIONS,
- * PUT, DELETE, and a keyed POST on 429, 502, 503, and 504, up to 3 times,
- * after Retry-After.
- */
-export const httpSender: Sender<"http"> = createHttpSender();
-
-/** One POST with the selection set and the arguments as variables. A query retries as GET does. A mutation never does. */
-export const graphqlSender: Sender<"graphql"> = createGraphqlSender();
