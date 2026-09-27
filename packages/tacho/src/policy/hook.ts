@@ -1,23 +1,28 @@
 /**
- * Decides one built-in tool call in `PreToolUse` from the Cedar policies in
- * the cached bundle (lane S12).
+ * Decides one tool call in `PreToolUse` from the Cedar policies in the cached
+ * bundle (lane S12).
  *
- * The hook maps the harness's tool name to a built-in action, so Claude
- * Code's `Bash` and Codex's `shell` are both `builtin__shell`, and asks
- * Cedar with the agent as the principal. A tool the gateway serves
- * (`mcp__…`) is left to the gateway, which sees the call's full context. The
- * hook knows no taint, rate, or prior calls, so it sends those parts empty,
- * on the `harness` tier.
+ * The hook maps the harness's tool name to a Cedar action and asks Cedar
+ * with the agent as the principal. A built-in tool maps through the
+ * harness's table, so Claude Code's `Bash` and Codex's `shell` are both
+ * `builtin__shell`. A direct MCP call, `mcp__<server>__<tool>`, is the action
+ * `<server>__<tool>` when the workspace imported that tool, and
+ * `builtin__shell` otherwise. A tool on Oxagen's own server
+ * (`mcp__oxagen__…`) is left to the kernel, which decides it on the server
+ * with the call's full context. The hook knows no taint, rate, or prior
+ * calls, so it sends those parts empty, on the `harness` tier.
  */
 import type { EntityJson } from "@cedar-policy/cedar-wasm/nodejs";
-import type { CedarBundle, CedarPrincipalEntry } from "../wire";
+import type { CedarBundle, CedarPrincipalEntry, CedarToolEntry } from "../wire";
 import {
   BUILTIN_TOOLS,
+  FALLBACK_BUILTIN,
   builtinActionFor,
   harnessNamesSkill,
   type BuiltinAction,
+  type CedarToolClass,
 } from "./builtins";
-import { callContext } from "./context";
+import { callContext, typedArgs, type CedarArgValue } from "./context";
 import {
   readCedarDecision,
   stricterVerdict,
@@ -65,9 +70,30 @@ export function principalsFor(
   return cedar.principals.filter((p) => p.harness === harness);
 }
 
-/** Whether a harness tool is one the gateway serves, which the hook leaves to the gateway. */
-export function isGatewayTool(toolName: string): boolean {
-  return toolName.startsWith("mcp__") || toolName.startsWith("MCP:");
+const MCP_PREFIX = "mcp__";
+
+/** The prefix of a tool on Oxagen's own MCP server. */
+export const OXAGEN_TOOL_PREFIX = "mcp__oxagen__";
+
+/**
+ * Whether a harness tool is one of Oxagen's own. The kernel decides those on
+ * the server, so the hook leaves them alone (tacho spec, section 7.2).
+ */
+export function isOxagenTool(toolName: string): boolean {
+  return toolName.startsWith(OXAGEN_TOOL_PREFIX);
+}
+
+/**
+ * The Cedar action id of a direct MCP call: `mcp__github__merge_pull_request`
+ * is `github__merge_pull_request`. `undefined` for a name that is not an MCP
+ * tool in that form, such as Cursor's `MCP:<tool>` when the payload named no
+ * server.
+ */
+export function mcpActionFor(toolName: string): string | undefined {
+  if (!toolName.startsWith(MCP_PREFIX)) return undefined;
+  const id = toolName.slice(MCP_PREFIX.length);
+  const split = id.indexOf("__");
+  return split > 0 && split < id.length - 2 ? id : undefined;
 }
 
 function text(value: unknown): string | undefined {
@@ -135,6 +161,12 @@ export interface HookCedarCall {
   toolName: string;
   toolInput?: Readonly<Record<string, unknown>>;
   /**
+   * The tool's name as the harness sent it, when an adapter renamed it:
+   * Cursor's `Shell` arrives as `Bash`. Rules read it in
+   * `context.harness_tool`. Absent, `toolName` is the harness's own name.
+   */
+  harnessTool?: string;
+  /**
    * The action, for a call the hook builds itself rather than one the harness
    * named: a subagent start is `builtin__start_subagent` on every harness.
    */
@@ -145,33 +177,80 @@ export interface HookCedarCall {
 }
 
 export interface HookCedarVerdict extends CedarVerdict {
-  action: BuiltinAction;
+  /** The Cedar action the call was decided as: a built-in, or an imported tool's `<server>__<tool>`. */
+  action: string;
   /** The agents the call was decided for. Empty when no agent on this host runs the harness. */
   principals: string[];
 }
 
+/** The action a call is decided as, its classification, and each set of arguments it is decided with. */
+interface HookRequest {
+  action: string;
+  tool: CedarToolClass;
+  argSets: Record<string, CedarArgValue>[];
+  /** Arguments of the wrong type. Any one of them denies the call. */
+  errors: string[];
+}
+
+function importedToolRequest(
+  action: string,
+  tool: CedarToolEntry,
+  input: Readonly<Record<string, unknown>> | undefined,
+): HookRequest {
+  const { args, errors } = typedArgs(input, tool.args);
+  const { args: _types, ...classification } = tool;
+  return { action, tool: classification, argSets: [args], errors };
+}
+
+function hookRequest(call: HookCedarCall): HookRequest {
+  const mcpAction = call.action === undefined ? mcpActionFor(call.toolName) : undefined;
+  if (mcpAction !== undefined && Object.hasOwn(call.cedar.tools, mcpAction)) {
+    return importedToolRequest(
+      mcpAction,
+      call.cedar.tools[mcpAction] as CedarToolEntry,
+      call.toolInput,
+    );
+  }
+  // A direct MCP tool the workspace did not import is decided as the shell,
+  // the strictest built-in, like any other tool the hook cannot name.
+  const action =
+    call.action ??
+    (mcpAction !== undefined ? FALLBACK_BUILTIN : builtinActionFor(call.harness, call.toolName));
+  return {
+    action,
+    tool: BUILTIN_TOOLS[action],
+    argSets: builtinArgSets(call.toolName, call.toolInput),
+    errors: [],
+  };
+}
+
 /**
- * Cedar's decision for one built-in call, or `null` for a tool the gateway
- * serves. The strictest verdict across the call's agents and argument sets
- * wins. A call no agent on this host can own is denied: the grant permits
- * nothing to an agent the steering record does not declare.
+ * Cedar's decision for one tool call, or `null` for one of Oxagen's own
+ * tools, which the kernel decides. The strictest verdict across the call's
+ * agents and argument sets wins. A call no agent on this host can own is
+ * denied: the grant permits nothing to an agent the steering record does
+ * not declare.
  */
 export function evaluateHookCall(call: HookCedarCall): HookCedarVerdict | null {
-  if (isGatewayTool(call.toolName)) return null;
-  const action = call.action ?? builtinActionFor(call.harness, call.toolName);
+  if (isOxagenTool(call.toolName)) return null;
+  const request = hookRequest(call);
+  const { action } = request;
   const principals = principalsFor(call.cedar, call.harness, call.agent);
   if (principals.length === 0) {
     return { decision: "deny", reasons: [], errors: [], action, principals: [] };
   }
+  const names = principals.map((p) => p.name);
+  if (request.errors.length > 0) {
+    return { decision: "deny", reasons: [], errors: request.errors, action, principals: names };
+  }
   const skill =
     call.skill !== undefined && harnessNamesSkill(call.harness) ? call.skill : undefined;
-  const argSets = builtinArgSets(call.toolName, call.toolInput);
   let verdict: CedarVerdict | undefined;
   for (const principal of principals) {
     const entities = principalEntities(principal);
-    for (const args of argSets) {
+    for (const args of request.argSets) {
       const context = callContext({
-        tool: { name: action, ...BUILTIN_TOOLS[action] },
+        tool: { name: action, ...request.tool },
         args,
         now: call.now,
         tier: "harness",
@@ -181,7 +260,7 @@ export function evaluateHookCall(call: HookCedarCall): HookCedarVerdict | null {
         ...(principal.budget_remaining_cents !== undefined
           ? { budget_remaining_cents: principal.budget_remaining_cents }
           : {}),
-        harness_tool: call.toolName,
+        harness_tool: call.harnessTool ?? call.toolName,
         ...(skill !== undefined ? { skill } : {}),
       });
       const answer = call.runtime.isAuthorized({
@@ -198,9 +277,5 @@ export function evaluateHookCall(call: HookCedarCall): HookCedarVerdict | null {
       verdict = verdict === undefined ? next : stricterVerdict(verdict, next);
     }
   }
-  return {
-    ...(verdict as CedarVerdict),
-    action,
-    principals: principals.map((p) => p.name),
-  };
+  return { ...(verdict as CedarVerdict), action, principals: names };
 }

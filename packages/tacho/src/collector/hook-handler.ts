@@ -728,7 +728,8 @@ export async function handleHookEvent(
  * What Cedar needs to decide a call in this session, or undefined when the
  * bundle carries no Cedar policies. A custom agent is picked by its name,
  * and any other session by its harness. Claude Code names the subagent a
- * call runs in (`agent_type`), and that name is the call's skill.
+ * call runs in (`agent_type`), and that name is the call's skill. Cursor's
+ * own tool name reaches Cedar as `context.harness_tool`.
  */
 async function cedarCallFor(
   view: PolicyView,
@@ -747,6 +748,10 @@ async function cedarCallFor(
     ...(custom !== undefined ? { agent: custom } : {}),
     ...(input.agent_type !== undefined ? { skill: input.agent_type } : {}),
     ...(action !== undefined ? { action } : {}),
+    // Cursor's adapter renames `Shell` to `Bash` and keeps Cursor's own name here.
+    ...(typeof input["cursor_tool_name"] === "string"
+      ? { harness_tool: input["cursor_tool_name"] }
+      : {}),
   };
 }
 

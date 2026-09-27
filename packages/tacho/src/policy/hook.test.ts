@@ -3,7 +3,8 @@ import {
   CALL_RESOURCE,
   builtinArgSets,
   evaluateHookCall,
-  isGatewayTool,
+  isOxagenTool,
+  mcpActionFor,
   patchPaths,
   principalEntities,
   principalsFor,
@@ -13,6 +14,7 @@ import { requireCedarRuntime, type CedarRuntime } from "./runtime";
 import {
   CI_REVIEWER,
   DOCS_WRITER,
+  REFUND_ACTION,
   RELEASE_BOT,
   testCedarBundle,
 } from "./test-schema";
@@ -218,10 +220,112 @@ when { context.args has subagent && context.args.subagent == "general-purpose" }
     });
   });
 
-  it("leaves a tool the gateway serves to the gateway", () => {
+  it("leaves one of Oxagen's own tools to the kernel", () => {
     const cedar = testCedarBundle(NO_SHELL);
-    expect(evaluateHookCall(call({ cedar, toolName: "mcp__billing__create_refund" }))).toBeNull();
-    expect(evaluateHookCall(call({ cedar, harness: "cursor", toolName: "MCP:billing" }))).toBeNull();
+    expect(evaluateHookCall(call({ cedar, toolName: "mcp__oxagen__query_ontology" }))).toBeNull();
+  });
+
+  it("decides an imported MCP tool as its own action, with typed arguments", () => {
+    const policies = {
+      "refunds.over-100": `@id("refunds.over-100")
+forbid (principal, action == Action::"${REFUND_ACTION}", resource)
+when { context.args has amount_cents && context.args.amount_cents > 10000 };`,
+    };
+    const cedar = testCedarBundle({ ...NO_SHELL, ...policies });
+    const large = evaluateHookCall(
+      call({
+        cedar,
+        toolName: "mcp__billing__create_refund",
+        toolInput: { amount_cents: 15000, customer: "cus_1", note: "not in the schema" },
+      }),
+    );
+    expect(large).toEqual({
+      decision: "deny",
+      reasons: ["refunds.over-100"],
+      errors: [],
+      action: REFUND_ACTION,
+      principals: [RELEASE_BOT.name],
+    });
+    const small = evaluateHookCall(
+      call({
+        cedar,
+        toolName: "mcp__billing__create_refund",
+        toolInput: { amount_cents: 500, customer: "cus_1" },
+      }),
+    );
+    expect(small?.decision).toBe("allow");
+    expect(small?.action).toBe(REFUND_ACTION);
+  });
+
+  it("denies an imported tool whose argument has the wrong type", () => {
+    const verdict = evaluateHookCall(
+      call({
+        cedar: testCedarBundle({}),
+        toolName: "mcp__billing__create_refund",
+        toolInput: { amount_cents: "a lot" },
+      }),
+    );
+    expect(verdict).toEqual({
+      decision: "deny",
+      reasons: [],
+      errors: ["Argument amount_cents is not a Long."],
+      action: REFUND_ACTION,
+      principals: [RELEASE_BOT.name],
+    });
+  });
+
+  it("decides an MCP tool the workspace did not import as the shell", () => {
+    const cedar = testCedarBundle(NO_SHELL);
+    const denied = evaluateHookCall(
+      call({ cedar, toolName: "mcp__github__merge_pull_request", toolInput: { number: 7 } }),
+    );
+    expect(denied).toEqual({
+      decision: "deny",
+      reasons: ["shell.not-for-bots"],
+      errors: [],
+      action: "builtin__shell",
+      principals: [RELEASE_BOT.name],
+    });
+    const allowed = evaluateHookCall(
+      call({ cedar, harness: "stella", toolName: "mcp__github__merge_pull_request" }),
+    );
+    expect(allowed?.decision).toBe("allow");
+    expect(allowed?.action).toBe("builtin__shell");
+  });
+
+  it("names the MCP tool in context.harness_tool", () => {
+    const policies = {
+      "no-merge": `@id("no-merge")
+forbid (principal, action, resource)
+when { context has harness_tool && context.harness_tool == "mcp__github__merge_pull_request" };`,
+    };
+    const cedar = testCedarBundle(policies);
+    expect(
+      evaluateHookCall(call({ cedar, toolName: "mcp__github__merge_pull_request" }))?.decision,
+    ).toBe("deny");
+    expect(evaluateHookCall(call({ cedar, toolName: "mcp__github__get_issue" }))?.decision).toBe(
+      "allow",
+    );
+  });
+
+  it("reads the harness's own tool name when an adapter renamed the tool", () => {
+    const policies = {
+      "no-cursor-shell": `@id("no-cursor-shell")
+forbid (principal, action, resource)
+when { context has harness_tool && context.harness_tool == "Shell" };`,
+    };
+    const cedar = testCedarBundle(policies);
+    expect(evaluateHookCall(call({ cedar, harnessTool: "Shell" }))?.decision).toBe("deny");
+    expect(evaluateHookCall(call({ cedar }))?.decision).toBe("allow");
+  });
+
+  it("decides Cursor's MCP tool with no server as the shell", () => {
+    const cedar = testCedarBundle(NO_SHELL);
+    cedar.principals.push({ ...RELEASE_BOT, name: "a-intel.core.editor", harness: "cursor" });
+    const verdict = evaluateHookCall(call({ cedar, harness: "cursor", toolName: "MCP:search" }));
+    expect(verdict?.action).toBe("builtin__shell");
+    expect(verdict?.principals).toEqual(["a-intel.core.editor"]);
+    expect(verdict?.decision).toBe("allow");
   });
 
   it("denies when the request does not match the schema", () => {
@@ -273,11 +377,27 @@ describe("principalsFor", () => {
   });
 });
 
-describe("isGatewayTool", () => {
-  it("names the tools the gateway serves", () => {
-    expect(isGatewayTool("mcp__github__create_issue")).toBe(true);
-    expect(isGatewayTool("MCP:github")).toBe(true);
-    expect(isGatewayTool("Bash")).toBe(false);
+describe("isOxagenTool", () => {
+  it("names only the tools on Oxagen's own server", () => {
+    expect(isOxagenTool("mcp__oxagen__query_ontology")).toBe(true);
+    expect(isOxagenTool("mcp__github__create_issue")).toBe(false);
+    expect(isOxagenTool("MCP:github")).toBe(false);
+    expect(isOxagenTool("Bash")).toBe(false);
+  });
+});
+
+describe("mcpActionFor", () => {
+  it("drops the prefix from a direct MCP tool's name", () => {
+    expect(mcpActionFor("mcp__github__merge_pull_request")).toBe("github__merge_pull_request");
+    expect(mcpActionFor("mcp__billing__create_refund")).toBe(REFUND_ACTION);
+  });
+
+  it("returns undefined for a name that is not a server and a tool", () => {
+    expect(mcpActionFor("Bash")).toBeUndefined();
+    expect(mcpActionFor("MCP:search")).toBeUndefined();
+    expect(mcpActionFor("mcp__github")).toBeUndefined();
+    expect(mcpActionFor("mcp____tool")).toBeUndefined();
+    expect(mcpActionFor("mcp__github__")).toBeUndefined();
   });
 });
 

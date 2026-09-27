@@ -1,11 +1,37 @@
 /**
  * A Cedar schema and policies for tacho's own tests. The schema has the
  * shape `@oxagen/policy` writes to `policy/schema.cedarschema`: the full
- * `Call` context, and one action per built-in tool.
+ * `Call` context, one action per built-in tool, and one imported MCP tool,
+ * `billing__create_refund`.
  */
-import type { CedarBundle } from "../wire";
+import { createRequire } from "node:module";
+import type { CedarBundle, CedarToolEntry } from "../wire";
 import { BUILTIN_NAMES } from "./builtins";
-import { CEDAR_WASM_VERSION } from "./runtime";
+import type { CedarRuntime } from "./runtime";
+
+/** The imported tool the test schema declares, and the test bundle lists. */
+export const REFUND_ACTION = "billing__create_refund";
+
+export const REFUND_TOOL: CedarToolEntry = {
+  version: 2,
+  risk: "high",
+  side_effect: "irreversible",
+  egress: "third_party",
+  impacts: ["customer_funds"],
+  args: { amount_cents: "Long", customer: "String" },
+};
+
+/**
+ * What the installed evaluator reports, which a published bundle carries as
+ * `cedar_version`. Read from the package, not a constant, so a test bundle
+ * always matches the evaluator the tests run.
+ */
+export function installedCedarVersion(): string {
+  const cedar = createRequire(import.meta.url)(
+    "@cedar-policy/cedar-wasm/nodejs",
+  ) as Pick<CedarRuntime, "getCedarVersion">;
+  return cedar.getCedarVersion();
+}
 
 export const TEST_CEDAR_SCHEMA = `entity Workspace;
 
@@ -32,7 +58,9 @@ type Args = {
   pattern?: String,
   query?: String,
   subagent?: String,
-  url?: String
+  url?: String,
+  amount_cents?: Long,
+  customer?: String
 };
 
 type Call = {
@@ -51,7 +79,7 @@ type Call = {
   skill?: String
 };
 
-action ${BUILTIN_NAMES.map((n) => `"builtin__${n}"`).join(", ")}
+action ${BUILTIN_NAMES.map((n) => `"builtin__${n}"`).join(", ")}, "${REFUND_ACTION}"
   appliesTo {
     principal: Agent,
     resource: Target,
@@ -59,7 +87,7 @@ action ${BUILTIN_NAMES.map((n) => `"builtin__${n}"`).join(", ")}
   };
 `;
 
-/** The grant: every agent may call every built-in tool, so each test policy narrows it. */
+/** The grant: every agent may call every tool, so each test policy narrows it. */
 export const TEST_GRANT = `@id("grant.builtin")
 permit (principal, action, resource);`;
 
@@ -87,13 +115,16 @@ export const DOCS_WRITER = {
   workspace: "core",
 } as const;
 
-/** A bundle's `cedar` part with the grant, the given policies, and the three test agents. */
+/**
+ * A bundle's `cedar` part with the grant, the given policies, the three test
+ * agents, and the imported refund tool.
+ */
 export function testCedarBundle(
   policies: Record<string, string>,
   approvalIds: string[] = [],
 ): CedarBundle {
   return {
-    cedar_version: CEDAR_WASM_VERSION,
+    cedar_version: installedCedarVersion(),
     policies: { "grant.builtin": TEST_GRANT, ...policies },
     approval_ids: approvalIds,
     schema: TEST_CEDAR_SCHEMA,
@@ -102,5 +133,6 @@ export function testCedarBundle(
       { ...CI_REVIEWER },
       { ...DOCS_WRITER },
     ],
+    tools: { [REFUND_ACTION]: { ...REFUND_TOOL, args: { ...REFUND_TOOL.args } } },
   };
 }

@@ -150,6 +150,36 @@ describe("decideLocally with Cedar policies", () => {
     });
     expect(unknown.evaluation?.reason_code).toBe("cedar_no_agent");
   });
+
+  it("gives Cedar Cursor's own tool name after the adapter renamed it", () => {
+    const cedar = testCedarBundle({
+      "no-cursor-shell": `@id("no-cursor-shell")
+forbid (principal, action, resource)
+when { context has harness_tool && context.harness_tool == "Shell" };`,
+    });
+    cedar.principals.push({
+      name: "a-intel.core.editor",
+      operator: "mac@a-intel.com",
+      runtime: "laptop-7",
+      harness: "cursor",
+      workspace: "core",
+    });
+    const cursorHost = testHostFile(signer, signer.sign(unsignedBundle({ cedar })));
+    const decide = (extra: Record<string, unknown>) =>
+      decideLocally(
+        cursorHost,
+        parse("PreToolUse", { tool_name: "Bash", tool_input: { command: "ls" }, ...extra }),
+        NOW,
+        undefined,
+        { runtime, harness: "cursor" },
+      );
+    expect(decide({ cursor_tool_name: "Shell" }).evaluation).toMatchObject({
+      decision: "deny",
+      reason_code: "cedar_deny",
+      rule: "no-cursor-shell",
+    });
+    expect(decide({}).evaluation?.reason_code).toBe("cedar_allow");
+  });
 });
 
 describe("runTachoHook with the daemon down", () => {

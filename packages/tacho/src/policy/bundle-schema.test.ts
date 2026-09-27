@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { unsignedBundle } from "../host/test-support";
 import { cedarBundleSchema, policyBundleSchema } from "../wire";
-import { testCedarBundle } from "./test-schema";
+import { REFUND_ACTION, REFUND_TOOL, testCedarBundle } from "./test-schema";
 
 const SIGNATURE = { key_id: "k1", alg: "ed25519", sig: "c2ln" } as const;
 
@@ -43,6 +43,30 @@ describe("cedarBundleSchema", () => {
         principals: [{ ...cedar.principals[0], budget_remaining_cents: -1 }],
       }).success,
     ).toBe(false);
+  });
+
+  it("carries each imported tool's classification and argument types", () => {
+    const cedar = testCedarBundle({});
+    expect(cedarBundleSchema.parse(cedar).tools).toEqual({
+      [REFUND_ACTION]: REFUND_TOOL,
+    });
+    expect(cedarBundleSchema.parse({ ...cedar, tools: {} }).tools).toEqual({});
+  });
+
+  it("refuses an imported tool with an unknown class, argument type, or field", () => {
+    const cedar = testCedarBundle({});
+    const withTool = (tool: Record<string, unknown>) =>
+      cedarBundleSchema.safeParse({ ...cedar, tools: { [REFUND_ACTION]: tool } }).success;
+    expect(withTool({ ...REFUND_TOOL, risk: "extreme" })).toBe(false);
+    expect(withTool({ ...REFUND_TOOL, side_effect: "delete" })).toBe(false);
+    expect(withTool({ ...REFUND_TOOL, egress: "anywhere" })).toBe(false);
+    expect(withTool({ ...REFUND_TOOL, version: -1 })).toBe(false);
+    expect(withTool({ ...REFUND_TOOL, args: { amount_cents: "Decimal" } })).toBe(false);
+    expect(withTool({ ...REFUND_TOOL, owner: "billing" })).toBe(false);
+    const { tools: _tools, ...withoutTools } = cedar;
+    expect(cedarBundleSchema.safeParse(withoutTools).success).toBe(false);
+    const { cedar_version: _version, ...withoutVersion } = cedar;
+    expect(cedarBundleSchema.safeParse(withoutVersion).success).toBe(false);
   });
 
   it("refuses more than 2048 policies", () => {

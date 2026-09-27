@@ -594,6 +594,11 @@ export interface CedarCallInput {
   skill?: string;
   /** The action, for a call the hook builds itself, such as a subagent start. */
   action?: BuiltinAction;
+  /**
+   * The tool's name as the harness sent it, when an adapter renamed it:
+   * Cursor's `cursor_tool_name`. Cedar rules read it in `context.harness_tool`.
+   */
+  harness_tool?: string;
 }
 
 export interface Evaluation {
@@ -1016,9 +1021,10 @@ function ruleNames(reasons: string[]): Pick<Evaluation, "rule" | "rules"> {
 /**
  * Cedar's answer for a call, or `undefined` when Cedar does not decide it:
  * the bundle carries no Cedar policies, the caller passed no Cedar input, or
- * the gateway serves the tool. A host without the evaluator cannot decide,
- * so it denies every tool that changes anything and leaves reads to the
- * permission rules.
+ * the tool is one of Oxagen's own, which the kernel decides. A host without
+ * the evaluator, or with a different Cedar version from the one that
+ * validated the policies, cannot decide. It denies every tool that changes
+ * anything and leaves reads to the permission rules.
  */
 function decideWithCedar(
   input: EvaluationInput,
@@ -1026,7 +1032,7 @@ function decideWithCedar(
 ): CedarOutcome | undefined {
   const cedarBundle = input.bundle.cedar;
   if (cedarBundle === undefined || input.cedar === undefined) return undefined;
-  const { runtime, harness, agent, skill, action } = input.cedar;
+  const { runtime, harness, agent, skill, action, harness_tool } = input.cedar;
   if (runtime === null) {
     if (readOnly) return undefined;
     return {
@@ -1034,6 +1040,22 @@ function decideWithCedar(
       reason_code: "cedar_unavailable",
       reason:
         "This agent's steering record decides tools with Cedar, and Cedar's evaluator is not installed on this host, so tools that change anything are denied.",
+    };
+  }
+  let hostVersion: string;
+  try {
+    hostVersion = runtime.getCedarVersion();
+  } catch (error) {
+    hostVersion = `unknown (${error instanceof Error ? error.message : String(error)})`;
+  }
+  if (hostVersion !== cedarBundle.cedar_version) {
+    // Another Cedar release can read the same policies differently, so the
+    // host does not guess at what the published set meant.
+    if (readOnly) return undefined;
+    return {
+      evaluated: "deny",
+      reason_code: "cedar_version_mismatch",
+      reason: `This agent's steering record was validated with Cedar ${cedarBundle.cedar_version}, and this host runs Cedar ${hostVersion}, so tools that change anything are denied until the two match.`,
     };
   }
   let verdict: ReturnType<typeof evaluateHookCall>;
@@ -1045,6 +1067,7 @@ function decideWithCedar(
       ...(agent !== undefined ? { agent } : {}),
       toolName: input.toolName,
       ...(input.toolInput !== undefined ? { toolInput: input.toolInput } : {}),
+      ...(harness_tool !== undefined ? { harnessTool: harness_tool } : {}),
       ...(action !== undefined ? { action } : {}),
       ...(skill !== undefined ? { skill } : {}),
       now: input.now,

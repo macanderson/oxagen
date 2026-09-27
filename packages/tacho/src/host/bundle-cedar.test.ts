@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { evaluatePreToolUse, type EvaluationInput } from "./bundle";
 import { bundleSigner, unsignedBundle } from "./test-support";
 import { requireCedarRuntime, type CedarRuntime } from "../policy/runtime";
-import { TEST_CEDAR_SCHEMA, testCedarBundle } from "../policy/test-schema";
+import { REFUND_ACTION, TEST_CEDAR_SCHEMA, testCedarBundle } from "../policy/test-schema";
 import type { CedarBundle, PolicyBundle } from "../wire";
 
 const NOW = Date.parse("2026-09-22T11:30:00.000Z");
@@ -179,11 +179,101 @@ describe("PreToolUse with Cedar policies", () => {
     });
   });
 
-  it("leaves a gateway tool to the permission rules", () => {
-    const evaluation = evaluatePreToolUse(
-      input(signed(testCedarBundle(NO_SHELL)), { toolName: "mcp__github__get_issue", toolInput: {} }),
-    );
-    expect(evaluation).toMatchObject({ decision: "allow", reason_code: "rule_allow" });
+  it("decides a direct MCP tool the workspace did not import as the shell", () => {
+    const mcp = { toolName: "mcp__github__get_issue", toolInput: {} };
+    expect(evaluatePreToolUse(input(signed(testCedarBundle(NO_SHELL)), mcp))).toMatchObject({
+      decision: "deny",
+      reason_code: "cedar_deny",
+      rules: ["shell.not-for-bots"],
+    });
+    // With no forbid, the bundle's allow rule for mcp__github__* answers.
+    expect(evaluatePreToolUse(input(signed(testCedarBundle({})), mcp))).toMatchObject({
+      decision: "allow",
+      reason_code: "rule_allow",
+    });
+  });
+
+  it("decides an imported MCP tool from its arguments", () => {
+    const refundsOver100 = {
+      "refunds.over-100": `@id("refunds.over-100")
+forbid (principal, action == Action::"${REFUND_ACTION}", resource)
+when { context.args has amount_cents && context.args.amount_cents > 10000 };`,
+    };
+    const bundle = signed(testCedarBundle(refundsOver100));
+    const refund = (amount: unknown) =>
+      evaluatePreToolUse(
+        input(bundle, {
+          toolName: "mcp__billing__create_refund",
+          toolInput: { amount_cents: amount, customer: "cus_1" },
+        }),
+      );
+    expect(refund(15000)).toMatchObject({
+      decision: "deny",
+      reason_code: "cedar_deny",
+      rules: ["refunds.over-100"],
+    });
+    expect(refund(500)).toMatchObject({ decision: "ask", reason_code: "cedar_allow" });
+    const mistyped = refund("15000");
+    expect(mistyped).toMatchObject({ decision: "deny", reason_code: "cedar_error" });
+    expect(mistyped.reason).toContain("Argument amount_cents is not a Long.");
+  });
+
+  it("leaves one of Oxagen's own tools to the kernel", () => {
+    expect(
+      evaluatePreToolUse(
+        input(signed(testCedarBundle(NO_SHELL)), {
+          toolName: "mcp__oxagen__query_ontology",
+          toolInput: {},
+        }),
+      ),
+    ).toMatchObject({ decision: "ask", reason_code: "no_rule" });
+  });
+
+  it("passes the harness's own tool name through to Cedar", () => {
+    const noCursorShell = {
+      "no-cursor-shell": `@id("no-cursor-shell")
+forbid (principal, action, resource)
+when { context has harness_tool && context.harness_tool == "Shell" };`,
+    };
+    const bundle = signed(testCedarBundle(noCursorShell));
+    expect(
+      evaluatePreToolUse({
+        ...input(bundle),
+        cedar: { runtime, harness: "claude-code", harness_tool: "Shell" },
+      }),
+    ).toMatchObject({ decision: "deny", rules: ["no-cursor-shell"] });
+    expect(evaluatePreToolUse(input(bundle))).toMatchObject({
+      decision: "ask",
+      reason_code: "cedar_allow",
+    });
+  });
+
+  it("denies a tool that changes anything when the host runs another Cedar version", () => {
+    const cedar = { ...testCedarBundle({}), cedar_version: "0.0.0" };
+    const bash = evaluatePreToolUse(input(signed(cedar)));
+    expect(bash).toMatchObject({ decision: "deny", reason_code: "cedar_version_mismatch" });
+    expect(bash.reason).toContain("validated with Cedar 0.0.0");
+    expect(bash.reason).toContain(`this host runs Cedar ${runtime.getCedarVersion()}`);
+    expect(
+      evaluatePreToolUse(
+        input(signed(cedar), { toolName: "Read", toolInput: { file_path: "/repo/README.md" } }),
+      ),
+    ).toMatchObject({ decision: "allow", reason_code: "rule_allow" });
+  });
+
+  it("denies a tool that changes anything when the evaluator cannot name its version", () => {
+    const silent = {
+      ...runtime,
+      getCedarVersion: () => {
+        throw new Error("wasm trap");
+      },
+    } as CedarRuntime;
+    const evaluation = evaluatePreToolUse({
+      ...input(signed(testCedarBundle({}))),
+      cedar: { runtime: silent, harness: "claude-code" },
+    });
+    expect(evaluation).toMatchObject({ decision: "deny", reason_code: "cedar_version_mismatch" });
+    expect(evaluation.reason).toContain("unknown (wasm trap)");
   });
 
   it("leaves the call to the permission rules when the bundle has no Cedar part", () => {

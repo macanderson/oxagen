@@ -649,6 +649,10 @@ export function decideLocally(
             ? { skill: input.agent_type }
             : {}),
           ...(action !== undefined ? { action } : {}),
+          // Cursor's adapter renames `Shell` to `Bash` and keeps Cursor's own name here.
+          ...(typeof input["cursor_tool_name"] === "string"
+            ? { harness_tool: input["cursor_tool_name"] }
+            : {}),
         };
   const bundleVerified = verifyBundle(
     host.bundle,

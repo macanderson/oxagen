@@ -858,6 +858,78 @@
                 },
                 "minItems": 1,
                 "maxItems": 64
+              },
+              "tools": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "risk": {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "critical"
+                      ]
+                    },
+                    "side_effect": {
+                      "type": "string",
+                      "enum": [
+                        "read",
+                        "write",
+                        "irreversible"
+                      ]
+                    },
+                    "egress": {
+                      "type": "string",
+                      "enum": [
+                        "local",
+                        "org_tenant",
+                        "third_party"
+                      ]
+                    },
+                    "impacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "maxItems": 64
+                    },
+                    "args": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string",
+                        "enum": [
+                          "String",
+                          "Long",
+                          "Bool",
+                          "Set<String>",
+                          "Set<Long>"
+                        ]
+                      },
+                      "x-server-validated": true,
+                      "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "risk",
+                    "side_effect",
+                    "egress",
+                    "impacts",
+                    "args"
+                  ],
+                  "additionalProperties": false
+                },
+                "x-server-validated": true,
+                "x-server-validated-note": "The server applies at least one further constraint that this schema does not express. Validating against this schema is necessary but not sufficient; the capability may still refuse the payload."
               }
             },
             "required": [
@@ -865,7 +937,8 @@
               "policies",
               "approval_ids",
               "schema",
-              "principals"
+              "principals",
+              "tools"
             ],
             "additionalProperties": false
           },

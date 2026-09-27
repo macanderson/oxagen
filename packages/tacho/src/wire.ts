@@ -7,6 +7,7 @@
 import { z } from "zod";
 import { SHA256_DIGEST_PATTERN } from "./digest";
 import { TACHO_RUNTIMES, tachoEventSchema, type TachoEvent } from "./envelope";
+import { CEDAR_ARG_TYPES } from "./policy/context";
 
 export const TACHO_BATCH_SCHEMA = "tacho.batch.v1" as const;
 export const TACHO_BUNDLE_SCHEMA = "tacho.bundle.v1" as const;
@@ -739,16 +740,42 @@ export const cedarPrincipalSchema = z
 export type CedarPrincipalEntry = z.output<typeof cedarPrincipalSchema>;
 
 /**
+ * One tool the workspace imported, keyed in the bundle by its Cedar action
+ * id, `<server>__<tool>`: the classification its rules read in
+ * `context.tool`, and the Cedar type of each argument a rule can read in
+ * `context.args`.
+ */
+export const cedarToolSchema = z
+  .object({
+    version: z.number().int().nonnegative(),
+    risk: z.enum(["low", "medium", "high", "critical"]),
+    side_effect: z.enum(["read", "write", "irreversible"]),
+    egress: z.enum(["local", "org_tenant", "third_party"]),
+    impacts: z.array(z.string().min(1).max(64)).max(64),
+    args: z
+      .record(cedarIdSchema, z.enum(CEDAR_ARG_TYPES))
+      .refine((a) => Object.keys(a).length <= 256, "at most 256 arguments"),
+  })
+  .strict();
+
+export type CedarToolEntry = z.output<typeof cedarToolSchema>;
+
+/**
  * The Cedar part of the signed bundle: the steering record's compiled
- * policies, the agents this host runs, and the schema each request is
- * validated against (lane S12). The hook decides each built-in tool call in
- * `PreToolUse` from this, with no call to the control plane. A tool the
- * gateway serves (`mcp__…`) is decided by the gateway, which sees the call's
- * full context.
+ * policies, the agents this host runs, the tools the workspace imported, and
+ * the schema each request is validated against (lane S12). The hook decides
+ * each tool call a harness makes in `PreToolUse` from this, with no call to
+ * the control plane. That covers built-in tools and MCP tools the harness
+ * calls directly. A tool on Oxagen's own server (`mcp__oxagen__…`) is left to
+ * the kernel, which decides it with the call's full context.
  */
 export const cedarBundleSchema = z
   .object({
-    /** The cedar-wasm version the set was validated with. */
+    /**
+     * What cedar-wasm's `getCedarVersion()` returned when the set was
+     * validated at publish. A host whose evaluator answers another version
+     * lets only read-only tools through.
+     */
     cedar_version: z.string().min(1).max(32),
     /** Every compiled policy by its id: the grant and the steering repo's rules. */
     policies: z
@@ -760,6 +787,13 @@ export const cedarBundleSchema = z
     schema: z.string().min(1).max(1_048_576),
     /** The agents whose `runtime` is this host. */
     principals: z.array(cedarPrincipalSchema).min(1).max(64),
+    /**
+     * Every tool the workspace imported, by its action id. A direct MCP call
+     * to a tool not listed here is decided as `builtin__shell`.
+     */
+    tools: z
+      .record(cedarIdSchema, cedarToolSchema)
+      .refine((t) => Object.keys(t).length <= 4096, "at most 4096 tools"),
   })
   .strict();
 
