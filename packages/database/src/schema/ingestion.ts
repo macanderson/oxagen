@@ -537,7 +537,7 @@ export const repositoryBindings = ingestionSchema.table(
 // advisory lock and refuses, as a 23505 carrying a constraint name, a
 // steering head where another workspace holds any head for the repository,
 // and a linked head where another workspace holds it as its steering head
-// (20260927090000 narrowed both from "main or steering" to steering). The
+// (20260927185600 narrowed both from "main or steering" to steering). The
 // partial index below holds the steering-against-steering half on its own;
 // the trigger holds the rest.
 export const repositoryBindingHeads = ingestionSchema.table(
@@ -551,7 +551,7 @@ export const repositoryBindingHeads = ingestionSchema.table(
     currentBindingId: uuid("current_binding_id").notNull(),
     // 'steering': the workspace's steering record source, of which it has
     // exactly one and which no other workspace holds. Lane S1 provisions it
-    // as the steering repo Oxagen creates and holds, and 20260927090000 moved
+    // as the steering repo Oxagen creates and holds, and 20260927185600 moved
     // every former 'main' head here (ADR-212). 'linked': a code repository
     // the workspace can see but is not steered by, of which it may have many
     // and which many workspaces may link. No default: the one writer,
@@ -578,7 +578,7 @@ export const repositoryBindingHeads = ingestionSchema.table(
     // name predates the steering role and stays, because the handlers map a
     // 23505 on it to `main_repo_claimed`. See
     // 20260918040000_repository_main_binding_is_exclusive.sql and
-    // 20260927090000_repository_binding_heads_main_to_steering.sql.
+    // 20260927185600_repository_binding_heads_main_to_steering.sql.
     mainRepositoryUniq: uniqueIndex(
       "repository_binding_heads_main_repository_uq",
     )
@@ -616,7 +616,7 @@ export type RepositoryBindingHead = typeof repositoryBindingHeads.$inferSelect;
  * asks "which repository steers this workspace" filters on this list, never
  * on one literal.
  *
- * 20260927090000 moved every `main` head to `steering` and the role check
+ * 20260927185600 moved every `main` head to `steering` and the role check
  * dropped `main`, so the list holds one role. The readers keep the list, so a
  * later role joins them in one edit here.
  */

@@ -33,7 +33,7 @@ export function workspaceRepositoriesLock(workspaceId: string) {
 /**
  * A head's role (`repository_binding_heads_role_check`). `steering` is the
  * workspace's steering record source, of which it has one; `linked` is a code
- * repository, of which it may have many. 20260927090000 moved every former
+ * repository, of which it may have many. 20260927185600 moved every former
  * `main` head to `steering` (ADR-212).
  */
 export type RepositoryHeadRole = "linked" | "steering";

@@ -1,5 +1,5 @@
-// The GitLab steering reader's head role. Every head that steers carries role
-// `steering`, and a linked head never steers.
+// The GitLab steering reader's head role and connection kinds. Every head that
+// steers carries role `steering`, and a linked head never steers.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -52,6 +52,7 @@ describe("readGitLabConnection head roles", () => {
     const query = new PgDialect().sqlToQuery(db.whereCalls[0] as SQL);
     expect(query.sql).toMatch(/"role" in \(\$\d+\)/);
     expect(query.params).toContain("steering");
+    expect(query.params).not.toContain("main");
     expect(query.params).not.toContain("linked");
   });
 

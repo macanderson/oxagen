@@ -1,12 +1,12 @@
 /**
- * `20260927090000_repository_binding_heads_main_to_steering.sql`, applied to
+ * `20260927185600_repository_binding_heads_main_to_steering.sql`, applied to
  * the state it was written for.
  *
  * CI migrates this database before the suite runs, so the table already
  * carries the migration. Each test puts the pre-migration schema back inside
  * one transaction, seeds heads the old schema allowed, applies the migration
  * file as written, and rolls everything back. The pre-migration schema comes
- * from 20260926120000's own file, plus the two things 20260927090000 changed
+ * from 20260926120000's own file, plus the two things 20260927185600 changed
  * that the earlier file does not restore: the per-workspace steering index and
  * the `main` default. The migration is read from its file rather than restated
  * here, so a change to it is a change to what these tests apply.
@@ -47,7 +47,7 @@ function migrationFile(name: string): string {
 }
 
 const MIGRATION = migrationFile(
-  "20260927090000_repository_binding_heads_main_to_steering.sql",
+  "20260927185600_repository_binding_heads_main_to_steering.sql",
 );
 const PREVIOUS = migrationFile(
   "20260926120000_repository_binding_heads_steering_role.sql",
@@ -63,11 +63,11 @@ function moveBlock(): string {
     .map((part) => `${part}$$;`)
     .find((part) => part.includes('UPDATE "ingestion"."repository_binding_heads"'));
   if (!chunk) {
-    throw new Error("20260927090000 no longer updates repository_binding_heads");
+    throw new Error("20260927185600 no longer updates repository_binding_heads");
   }
   const start = chunk.indexOf("DO $$");
   if (start < 0) {
-    throw new Error("the head move in 20260927090000 is no longer a DO block");
+    throw new Error("the head move in 20260927185600 is no longer a DO block");
   }
   return chunk.slice(start);
 }
@@ -187,7 +187,7 @@ async function bindingCount(tx: Tx): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
-/** Puts the table back in the state 20260927090000 was written against. */
+/** Puts the table back in the state 20260927185600 was written against. */
 async function restorePreviousSchema(tx: Tx): Promise<void> {
   await tx`DROP INDEX IF EXISTS ingestion.repository_binding_heads_workspace_steering_uq`;
   await tx.unsafe(PREVIOUS);
@@ -308,7 +308,7 @@ async function expectRefusal(
   });
 }
 
-describe("20260927090000: every main head becomes steering or linked", () => {
+describe("20260927185600: every main head becomes steering or linked", () => {
   it("keeps one steering head per workspace and demotes every other main head to linked", async () => {
     await withMigratedFixture(async (tx) => {
       // In the order orgHeads reads them: by workspace, then repository.
@@ -433,7 +433,7 @@ describe("20260927090000: every main head becomes steering or linked", () => {
   });
 });
 
-describe("20260927090000 on a state the old guard refuses", () => {
+describe("20260927185600 on a state the old guard refuses", () => {
   it("stops the apply when a main repository is also linked in another workspace", async () => {
     // 20260918200000 removed these pairs and its trigger refuses new ones, so
     // production cannot hold one. If one exists, the apply stops on the guard

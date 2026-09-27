@@ -218,7 +218,8 @@ describe("steering/sync-sweep", () => {
 
   it("reads only steering binding heads", async () => {
     // A linked repository does not steer. Sweeping it would cost a sync per
-    // linked head every five minutes for nothing.
+    // linked head every five minutes for nothing. Every steering head is
+    // role 'steering'.
     await runSweep(fakeStep());
     const query = new PgDialect().sqlToQuery(
       mocks.where[0] as Parameters<PgDialect["sqlToQuery"]>[0],

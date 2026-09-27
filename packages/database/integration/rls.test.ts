@@ -173,7 +173,7 @@ beforeAll(async () => {
 
     // ingestion.repository_binding_heads — NOT NULL: id, org_id,
     // workspace_id, connection_id, provider, provider_repository_id,
-    // current_binding_id, role (no default since 20260927090000),
+    // current_binding_id, role (no default since 20260927185600),
     // created_at/updated_at (default). No public_id; pins to the binding just
     // seeded above so current_binding_id is a real (if unenforced) reference.
     await tx`

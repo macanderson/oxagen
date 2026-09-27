@@ -3,7 +3,7 @@
  * workspace filters on STEERING_HEAD_ROLES, so the list has to name only roles
  * the table's CHECK admits, and `linked` must never be one of them.
  *
- * 20260927090000 moved every `main` head to `steering` and dropped `main`
+ * 20260927185600 moved every `main` head to `steering` and dropped `main`
  * from the CHECK (ADR-212). The schema here has to say the same, or Atlas
  * reads drift and a reader built on the list asks for a role no row holds.
  */
