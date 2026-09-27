@@ -41,7 +41,7 @@ export function toolVersionListOutput(
         classification: {
           sideEffect: "irreversible",
           egress: "third_party",
-          consequenceTags: ["moves_money"],
+          impacts: ["moves_money"],
           measures: {
             amount: {
               path: "$.amount",

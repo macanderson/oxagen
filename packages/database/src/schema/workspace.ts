@@ -47,7 +47,7 @@ export const workspaces = workspaceSchema.table(
     // merges it atomically via jsonb `||`.
     promptConfig: jsonb("prompt_config").notNull().default(sql`'{}'::jsonb`),
     settings: jsonb("settings").notNull().default(sql`'{}'::jsonb`),
-    // Consequence tag → the IAM org role names that may grant, change or
+    // Impact → the IAM org role names that may grant, change or
     // revoke a mandate for that consequence (ADR-059 decision 1). Overrides
     // only: a tag with no entry takes DEFAULT_CONSEQUENCE_ROLES from
     // @oxagen/oxagen/mandates/schemas. Written by update_workspace_settings.

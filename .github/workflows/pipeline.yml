@@ -318,9 +318,9 @@ jobs:
   # whole-repo run took 40 minutes there (run 36283641852): 15 building, 23 in
   # coverage. Every lane now starts `.github/actions/turbo-cache`, the S3-backed
   # cache that replaced Vercel's, so a task whose inputs did not change is
-  # restored rather than rerun. The lanes below run the same builds and the same suites with the
-  # same thresholds, in parallel. `test` at the end keeps the job name the
-  # ruleset requires and the deploy jobs need.
+  # restored rather than rerun. The lanes below run the same builds and the
+  # same suites with the same thresholds, in parallel. `test` at the end keeps
+  # the job name the ruleset requires and the deploy jobs need.
   #
   # Build lanes carry no service containers. `next build` and `xmcp build`
   # validate the environment at import time and never connect to a store, which

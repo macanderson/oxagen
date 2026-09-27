@@ -7,7 +7,7 @@ import { buildContext } from "../context";
 export const schema = {
   ...toolVersionList.input.shape,
   category: toolVersionList.input.shape.category.describe(
-    "Only versions carrying this consequence tag (snake_case, e.g. moves_money)",
+    "Only versions carrying this impact (snake_case, e.g. moves_money)",
   ),
   serverId: toolVersionList.input.shape.serverId.describe(
     "Only versions imported from this server (its mcs_… id from list_mcp_servers)",

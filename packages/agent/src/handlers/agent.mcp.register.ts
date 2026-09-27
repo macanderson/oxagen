@@ -3,17 +3,25 @@ import {
   redactUrlCredentials,
   UnsafeOutboundUrlError,
 } from "@oxagen/config/public-url";
+import { and, eq } from "drizzle-orm";
+import pino from "pino";
 import { withTenantDb, schema } from "@oxagen/database";
 import type { CapabilityContext } from "../types";
 import { healthcheck, type McpToolDescriptor } from "../dispatch/mcp-client";
 import { captureToolSnapshots } from "../runtime/mcp-snapshots";
 import { encryptMcpAuthConfig } from "../runtime/mcp-server-auth-crypto";
+import { steeringWriter, type OpenedSteeringPr } from "../runtime/steering-pr";
 import type {
   AgentMcpRegisterInput,
   AgentMcpRegisterOutput,
 } from "@oxagen/oxagen/contracts/agent.mcp.register";
 
 export type { AgentMcpRegisterInput, AgentMcpRegisterOutput };
+
+const logger = pino({
+  level: process.env.LOG_LEVEL ?? "info",
+  base: { app: "agent.mcp" },
+});
 
 // ── SSRF protection ───────────────────────────────────────────────────────────
 // The endpointUrl is attacker-influenceable (an authenticated org admin supplies
@@ -65,6 +73,16 @@ export async function agentMcpRegisterHandler(
     assertNoUrlCredentials(input.endpointUrl);
   }
 
+  // Once the workspace's tools live in its steering repo, a remote server is
+  // added through a steering PR (M13, #4478). The row is written as a
+  // proposed, disabled row that holds the secret and the tool snapshots. The
+  // first publish after the PR merges takes it over and turns it on. A stdio
+  // server has no server folder form and stays a direct row.
+  const writer =
+    input.transportType === "streamable-http"
+      ? await steeringWriter({ orgId: ctx.orgId, workspaceId: ctx.workspaceId })
+      : null;
+
   // Run the health check before insert so we persist the live tool list
   // alongside the row — the chat surface lists external tools without a
   // second roundtrip. The probe also returns full per-tool JSONSchema
@@ -103,6 +121,7 @@ export async function agentMcpRegisterHandler(
         lastHealthcheckAt: new Date(),
         discoveredTools: probe.discoveredTools as object,
         createdById: ctx.userId,
+        ...(writer === null ? {} : { origin: "proposed", enabled: false }),
       })
       .returning({
         id: schema.mcpServers.id,
@@ -125,9 +144,42 @@ export async function agentMcpRegisterHandler(
     });
   }
 
-  return {
+  const output = {
     mcpServerId: row.publicId,
     healthStatus: probe.status,
     discoveredTools: probe.discoveredTools,
   };
+  if (writer === null) return output;
+
+  let pr: OpenedSteeringPr;
+  try {
+    pr = await writer.addServer({
+      orgId: ctx.orgId,
+      workspaceId: ctx.workspaceId,
+      serverId: row.id,
+      actorUserId: ctx.userId,
+    });
+  } catch (error) {
+    // No steering PR opened, so the proposed row has nothing to wait for.
+    // A failed delete is logged, and the caller still gets the writer's error,
+    // which says why the server was not added.
+    await withTenantDb((tx) =>
+      tx
+        .update(schema.mcpServers)
+        .set({ deletedAt: new Date(), deletedById: ctx.userId, updatedAt: new Date() })
+        .where(
+          and(
+            eq(schema.mcpServers.id, row.id),
+            eq(schema.mcpServers.workspaceId, ctx.workspaceId),
+          ),
+        ),
+    ).catch((deleteError: unknown) => {
+      logger.error(
+        { err: deleteError, serverId: row.id, workspaceId: ctx.workspaceId },
+        "register_mcp_server: the steering PR did not open and the proposed row was not deleted",
+      );
+    });
+    throw error;
+  }
+  return { ...output, steeringPr: { number: pr.number, url: pr.url } };
 }

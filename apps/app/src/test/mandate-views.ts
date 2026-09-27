@@ -49,7 +49,7 @@ export function mandateRow(overrides: Partial<MandateRow> = {}): MandateRow {
     requestedBy: "usr_marcusbell",
     grantedBy: "usr_priyanatarajan",
     roleAtGrant: "Billing",
-    consequenceTags: ["moves_money"],
+    impacts: ["moves_money"],
     tools: ["stripe__create_payment@*"],
     targets: [
       { measure: "amount", allow: ["vendor:aws", "vendor:github"], deny: ["*"] },

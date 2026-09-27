@@ -1,0 +1,57 @@
+{
+  "name": "add_group_machine",
+  "domain": "tacho",
+  "description": "Put an enrolled machine in a machine group, so it can run the local servers that name the group.",
+  "mode": "sync",
+  "surfaces": [],
+  "sensitivity": "high",
+  "agent": null,
+  "chain": {
+    "produces": [],
+    "consumes": [],
+    "chainHints": []
+  },
+  "render": null,
+  "input": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "group": {
+        "type": "string"
+      },
+      "machineId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "group",
+      "machineId"
+    ],
+    "additionalProperties": false
+  },
+  "output": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {
+      "group": {
+        "type": "string"
+      },
+      "machineId": {
+        "type": "string"
+      },
+      "addedAt": {
+        "type": "string"
+      },
+      "added": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "group",
+      "machineId",
+      "addedAt",
+      "added"
+    ],
+    "additionalProperties": false
+  }
+}

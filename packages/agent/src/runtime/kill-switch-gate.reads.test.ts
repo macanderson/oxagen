@@ -80,14 +80,14 @@ describe("postgresKillSwitchReads.readSnapshot", () => {
         slug: `mcp.${SERVER}.create_payment`,
         name: "create_payment",
         mcpServerId: SERVER,
-        classification: { consequenceTags: ["moves_money", 7] },
+        classification: { impacts: ["moves_money", 7] },
       },
       {
         source: "custom",
         slug: "lookup_invoice",
         name: "lookup_invoice",
         mcpServerId: null,
-        classification: { consequenceTags: "not a list" },
+        classification: { impacts: "not a list" },
       },
     ]);
     mocks.withRepeatableReadTenantDb.mockImplementation(

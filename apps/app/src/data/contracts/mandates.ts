@@ -134,7 +134,7 @@ export const MandateRow = z.object({
   grantedBy: PublicId.nullable(),
   roleAtGrant: z.string().min(1).nullable(),
   /** The consequences this mandate answers for (`moves_money`, `changes_access`). */
-  consequenceTags: z.array(z.string().min(1)),
+  impacts: z.array(z.string().min(1)),
   /** The tool patterns it covers, over `slug@version`. */
   tools: z.array(z.string().min(1)),
   /** Which targets each measure may be drawn against; empty when the grant named no rule. */
@@ -446,14 +446,14 @@ export function blindSpotOf(
 // truncated consequence set is still syntactically valid — so it is requested,
 // granted exactly as submitted, and covers no tool.
 
-/** `consequenceTagSchema`: snake_case, 2 to 64 characters. */
-export const CONSEQUENCE_TAG = /^[a-z][a-z0-9_]{1,63}$/;
+/** `impactSchema`: snake_case, 2 to 64 characters. */
+export const IMPACT = /^[a-z][a-z0-9_]{1,63}$/;
 
-/** `consequenceTagSchema`'s length ceiling, for the field that collects them. */
-const CONSEQUENCE_TAG_MAX = 64;
+/** `impactSchema`'s length ceiling, for the field that collects them. */
+const IMPACT_MAX = 64;
 
-/** `mandateSchema.consequenceTags`: `.min(1).max(16)`. */
-const MAX_CONSEQUENCE_TAGS = 16;
+/** `mandateSchema.impacts`: `.min(1).max(16)`. */
+const MAX_IMPACTS = 16;
 
 /**
  * `MEASURE_VALUE`: an integer string of up to thirty digits, no leading zero.
@@ -485,7 +485,7 @@ export const PURPOSE_MAX = 2000;
  * chosen number is the bound that drifts.
  */
 export const CONSEQUENCE_OTHER_MAX =
-  MAX_CONSEQUENCE_TAGS * CONSEQUENCE_TAG_MAX + (MAX_CONSEQUENCE_TAGS - 1) * 2;
+  MAX_IMPACTS * IMPACT_MAX + (MAX_IMPACTS - 1) * 2;
 
 /**
  * `mandateApproverSchema`: `role:<org role>` or `user:<usr_…>`, either casing.
@@ -502,8 +502,8 @@ export const APPROVER_ROLES = [
   "Billing",
 ] as const;
 
-/** The starter set of consequence tags (MC spec §6.9 part 1); a workspace adds its own. */
-export const STARTER_CONSEQUENCE_TAGS = [
+/** The starter set of impacts (MC spec §6.9 part 1); a workspace adds its own. */
+export const STARTER_IMPACTS = [
   "moves_money",
   "destroys_data",
   "alters_production",
@@ -619,15 +619,15 @@ export function mandateLimitsOf(
 
 /**
  * The consequence set a form names, deduplicated, or null when it is empty,
- * too long, or holds a tag `consequenceTagSchema` refuses. A mandate covers a
+ * too long, or holds a tag `impactSchema` refuses. A mandate covers a
  * tool only when it names every tag the tool declares, so this is a set and not
  * a choice.
  */
-export function consequenceTagsOf(raw: string): string[] | null {
+export function impactsOf(raw: string): string[] | null {
   const tags = [...new Set(listOf(raw))];
   return tags.length === 0 ||
-    tags.length > MAX_CONSEQUENCE_TAGS ||
-    !tags.every((tag) => CONSEQUENCE_TAG.test(tag))
+    tags.length > MAX_IMPACTS ||
+    !tags.every((tag) => IMPACT.test(tag))
     ? null
     : tags;
 }

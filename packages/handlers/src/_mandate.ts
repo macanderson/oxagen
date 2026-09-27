@@ -9,7 +9,7 @@
 import { canAccessACL, resolveOrgTierDetailed } from "@oxagen/billing";
 import { schema, type Tx } from "@oxagen/database";
 import { assertOrgRole, resolveActingUserId } from "@oxagen/iam/org-role";
-import { unionConsequenceTags } from "@oxagen/oxagen/contracts/tool.classification";
+import { unionImpacts } from "@oxagen/oxagen/contracts/tool.classification";
 import { HandlerError, type CheckedContext } from "@oxagen/oxagen";
 import {
   CALLS_MEASURE,
@@ -140,7 +140,7 @@ export function assertAgentActive(
 
 /**
  * Denied by construction (§6.9 rule 1): every tool pattern matches at least
- * one declared, enabled tool whose active version carries a consequence tag,
+ * one declared, enabled tool whose active version carries an impact,
  * and every matched tool declares a measure for every limit and every target
  * the mandate names. `calls` is built in and needs no declaration. An
  * untagged tool is left out because the gate has no opinion on its calls
@@ -181,7 +181,7 @@ export async function assertToolsDeclareMeasures(
       slug: schema.tools.slug,
       version: schema.toolVersions.versionNumber,
       measures: schema.toolVersions.measures,
-      consequenceTags: schema.toolVersions.consequenceTags,
+      impacts: schema.toolVersions.impacts,
       classification: schema.toolVersions.classification,
     })
     .from(schema.tools)
@@ -236,14 +236,14 @@ export async function assertToolsDeclareMeasures(
     // `no_tool_matches`.
     const matched = declared.filter(
       (t) =>
-        unionConsequenceTags(t).length > 0 &&
+        unionImpacts(t).length > 0 &&
         toolMatches([pattern], t.slug, t.version),
     );
     if (matched.length === 0) {
       throw new HandlerError({
         code: "conflict",
         reason: "no_tool_matches",
-        message: `Tool pattern "${pattern}" matches no declared tool with a consequence tag in this workspace`,
+        message: `Tool pattern "${pattern}" matches no declared tool with an impact in this workspace`,
       });
     }
     for (const tool of matched) {
@@ -547,7 +547,7 @@ export async function mapMandates(
         : null,
       grantedBy: row.grantedBy ? (users.get(row.grantedBy) ?? null) : null,
       roleAtGrant: row.roleAtGrant,
-      consequenceTags: record.consequenceTags,
+      impacts: record.impacts,
       limits: record.limits,
       targets: record.targets,
       tools: record.tools,

@@ -27,7 +27,7 @@ export const ToolEgress = z.enum(["local", "org_tenant", "third_party"]);
 export type ToolEgress = z.infer<typeof ToolEgress>;
 
 /** snake_case, the starter set and every customer tag; the registry's "category". */
-const ConsequenceTag = z.string().regex(/^[a-z][a-z0-9_]{1,63}$/);
+const Impact = z.string().regex(/^[a-z][a-z0-9_]{1,63}$/);
 
 /** The tag that makes a tool version financial (spec §6.9; the mockup's `moves_funds`). */
 export const MONEY_TAG = "moves_money";
@@ -64,7 +64,7 @@ const ToolMeasure = z.object({
 export const ToolClassification = z.object({
   sideEffect: ToolSideEffect,
   egress: ToolEgress,
-  consequenceTags: z.array(ConsequenceTag),
+  impacts: z.array(Impact),
   dataClasses: z.array(z.string().min(1)),
   measures: z.array(ToolMeasure),
 });
@@ -161,7 +161,7 @@ export const KillSwitchKind = z.enum(KILL_SWITCH_KINDS);
 export type KillSwitchKind = z.infer<typeof KillSwitchKind>;
 
 /**
- * What a switch names. `ref` is the target's public id, or the consequence tag
+ * What a switch names. `ref` is the target's public id, or the impact
  * for a class switch — and, for the operator, workspace and org kinds, the
  * database uuid the contract carries, which the page never prints as a label.
  */
@@ -258,11 +258,11 @@ export const ApprovalRule = z.object({
   /** The contract admits an offset here, so the view does too. */
   lastWrittenAt: z.iso.datetime({ offset: true }),
   /**
-   * The consequence tags the rule's tools carried when it was last written.
+   * The impacts the rule's tools carried when it was last written.
    * Null when the record carries no stamp, which the evaluator reads as "does
    * not qualify" until the rule is saved again.
    */
-  authoredConsequences: z.array(ConsequenceTag).nullable(),
+  authoredConsequences: z.array(Impact).nullable(),
   /** Calls this rule released with no person in the window. */
   released: Count,
   /** Calls in the window that reached a person with this rule read beside them. */
