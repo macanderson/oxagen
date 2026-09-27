@@ -1,9 +1,11 @@
 // tests-files.ts: the lines of a server's tests/calls.jsonl and
 // tests/selection.jsonl (mcp-studio-spec, Try it and tests).
 //
-// calls.jsonl holds calls saved from Studio's Try it panel. The compile check
-// replays each one with no network: the shaped result must match, and for a
-// server built from a definition the built request must match too.
+// calls.jsonl holds calls saved from Studio's Try it panel. Each call keeps
+// every upstream exchange in the order it was sent: one for an unpaged call,
+// and one per page for a paged call. The compile check replays the exchanges
+// in order with no network. Each built request must match its recorded
+// request, and the shaped result must match the recorded result.
 // selection.jsonl holds tasks and the tool a model should pick for each.
 import { z } from "zod";
 import { instantSchema, toolNameSchema } from "@oxagen/oxagen/steering-repo/common";
@@ -71,10 +73,9 @@ export const recordedMcpResponseSchema = z
   })
   .strict();
 
-export const recordedCallSchema = z
+/** One request that went upstream and the response that came back. */
+export const recordedExchangeSchema = z
   .object({
-    tool: toolKeySchema.describe("The tool's key in tools.toml."),
-    arguments: jsonObjectSchema.describe("As the agent sent them."),
     request: z
       .union([
         recordedHttpRequestSchema,
@@ -86,6 +87,18 @@ export const recordedCallSchema = z
     response: z
       .union([recordedHttpResponseSchema, recordedGrpcResponseSchema, recordedMcpResponseSchema])
       .describe("What came back."),
+  })
+  .strict();
+export type RecordedExchange = z.output<typeof recordedExchangeSchema>;
+
+export const recordedCallSchema = z
+  .object({
+    tool: toolKeySchema.describe("The tool's key in tools.toml."),
+    arguments: jsonObjectSchema.describe("As the agent sent them."),
+    exchanges: z
+      .array(recordedExchangeSchema)
+      .min(1, "a recorded call has at least one exchange")
+      .describe("Every upstream exchange in the order it was sent: one per page for a paged call."),
     result: jsonValueSchema.describe("The shaped result's structuredContent, or its text when it has none."),
     recorded_at: instantSchema.optional(),
   })

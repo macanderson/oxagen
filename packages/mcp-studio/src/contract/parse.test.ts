@@ -424,9 +424,7 @@ describe("parseToolManifest", () => {
 });
 
 // One saved call for each kind of source.
-const httpCall = {
-  tool: "create_refund",
-  arguments: { charge: "ch_1" },
+const refundExchange = {
   request: {
     method: "POST",
     path: "/refunds",
@@ -434,28 +432,45 @@ const httpCall = {
     body: { charge: "ch_1" },
   },
   response: { status: 200, body: { id: "re_1", status: "succeeded" } },
+};
+const httpCall = {
+  tool: "create_refund",
+  arguments: { charge: "ch_1" },
+  exchanges: [refundExchange],
   result: { id: "re_1", status: "succeeded" },
   recorded_at: "2026-09-26T12:00:00Z",
 };
 const graphqlCall = {
   tool: "list_issues",
   arguments: { first: 2 },
-  request: { query: "query ($first: Int) { issues(first: $first) { nodes { id } } }", variables: { first: 2 } },
-  response: { status: 200, body: { data: { issues: { nodes: [] } } } },
+  exchanges: [
+    {
+      request: { query: "query ($first: Int) { issues(first: $first) { nodes { id } } }", variables: { first: 2 } },
+      response: { status: 200, body: { data: { issues: { nodes: [] } } } },
+    },
+  ],
   result: { nodes: [] },
 };
 const grpcCall = {
   tool: "list_entries",
   arguments: { account: "a1" },
-  request: { method: "a_intel.ledger.v1.Ledger/ListEntries", message: { account: "a1" } },
-  response: { code: "OK", messages: [{ id: "e1" }, { id: "e2" }] },
+  exchanges: [
+    {
+      request: { method: "a_intel.ledger.v1.Ledger/ListEntries", message: { account: "a1" } },
+      response: { code: "OK", messages: [{ id: "e1" }, { id: "e2" }] },
+    },
+  ],
   result: { items: [{ id: "e1" }, { id: "e2" }] },
 };
 const mcpCall = {
   tool: "get_issue",
   arguments: { number: 1 },
-  request: { name: "get-issue", arguments: { number: 1 } },
-  response: { content: [{ type: "text", text: "Issue 1" }], isError: false },
+  exchanges: [
+    {
+      request: { name: "get-issue", arguments: { number: 1 } },
+      response: { content: [{ type: "text", text: "Issue 1" }], isError: false },
+    },
+  ],
   result: "Issue 1",
 };
 
@@ -486,11 +501,38 @@ describe("parseRecordedCalls", () => {
     });
   });
 
+  it("reads a paged call with one exchange per page, in the order they were sent", () => {
+    const pagedCall = {
+      tool: "list_charges",
+      arguments: { customer_id: "cus_81" },
+      exchanges: [
+        {
+          request: { method: "GET", path: "/customers/cus_81/charges" },
+          response: { status: 200, body: { data: [{ id: "ch_2" }], next_cursor: "c2" } },
+        },
+        {
+          request: { method: "GET", path: "/customers/cus_81/charges", query: { cursor: "c2" } },
+          response: { status: 200, body: { data: [{ id: "ch_1" }] } },
+        },
+      ],
+      result: { data: [{ id: "ch_2" }, { id: "ch_1" }] },
+    };
+    expect(parseRecordedCalls(jsonLines([pagedCall]))).toStrictEqual({ ok: true, value: [pagedCall] });
+  });
+
+  it("refuses a call with no exchanges", () => {
+    expect(parseRecordedCalls(jsonLines([{ ...mcpCall, exchanges: [] }]))).toStrictEqual({
+      ok: false,
+      issues: [{ line: 1, field: "exchanges", message: "a recorded call has at least one exchange" }],
+    });
+  });
+
   it("refuses a request path that does not start with /", () => {
-    const call = { ...httpCall, request: { ...httpCall.request, path: "refunds" } };
+    const exchange = { ...refundExchange, request: { ...refundExchange.request, path: "refunds" } };
+    const call = { ...httpCall, exchanges: [exchange] };
     expect(parseRecordedCalls(jsonLines([call]))).toStrictEqual({
       ok: false,
-      issues: [{ line: 1, field: "request.path", message: "a path starts with / and has no fragment" }],
+      issues: [{ line: 1, field: "exchanges.0.request.path", message: "a path starts with / and has no fragment" }],
     });
   });
 });
