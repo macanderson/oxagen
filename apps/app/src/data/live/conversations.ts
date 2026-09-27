@@ -19,6 +19,9 @@ import type { DataSource } from "@/data/ports";
 import { readError, readOk } from "@/data/read";
 import { kernelRead } from "@/server/kernel";
 
+// The port names the viewer context; a live adapter may not import the viewer.
+type WsCtx = Parameters<DataSource["conversations"]["latest"]>[0];
+
 /** The newest messages a reopened thread shows: fifty turns. */
 const THREAD_MESSAGES = 100;
 
@@ -71,7 +74,7 @@ function toAssistantThread(conversation: StoredConversation): unknown {
 
 /** A stored conversation as a thread, or record_unmappable, reported once. */
 function threadView(
-  orgId: string,
+  ctx: WsCtx,
   conversation: StoredConversation,
   method: "latest" | "byId",
 ) {
@@ -80,7 +83,7 @@ function threadView(
   captureError({
     error: view.error,
     source: "app",
-    orgId,
+    orgId: ctx.orgId,
     context: `conversations.${method} record_unmappable`,
   });
   return readError("record_unmappable", 502);
@@ -96,7 +99,7 @@ export const conversations: DataSource["conversations"] = {
     if (!read.ok) return read;
     const { conversation } = read.value;
     if (conversation === null) return readOk(null);
-    return threadView(ctx.orgId, conversation, "latest");
+    return threadView(ctx, conversation, "latest");
   },
 
   async list(ctx) {
@@ -136,6 +139,6 @@ export const conversations: DataSource["conversations"] = {
     // The handler refuses an id it cannot find rather than answering null,
     // so a null here is a contract the handler broke.
     if (conversation === null) return readError("conversation_not_found", 404);
-    return threadView(ctx.orgId, conversation, "byId");
+    return threadView(ctx, conversation, "byId");
   },
 };
