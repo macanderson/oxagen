@@ -847,6 +847,9 @@ function wire(db: FakeDb): void {
                 ? undefined
                 : { config: db.activeConfig },
           },
+          // The host's runtime, for containment (ADR-204). These hosts bind
+          // no runtime, so the envelope requires no containment.
+          runtimes: { findFirst: async () => undefined },
           workspaces: { findFirst: async () => db.workspace },
         },
         // Two reads share `select`, told apart by the table. The steering

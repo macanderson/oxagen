@@ -5,6 +5,8 @@
 - **Owners:** platform
 - **Supersedes:** ADR-057 decision 1 (git is the definition of record) and the
   legacy `create/update/publish_agent_def` path it left in place.
+- **Amended by:** ADR-204 (decision 2: containment is the runtime's setting,
+  and the version config holds only the budget).
 - **Refines:** ADR-024 (the agent key and the 18-character agent slug),
   ADR-179 (a re-enrolled host carries on its predecessor's sessions).
 - **Related:** issue #4369, issue #3852 (named toolbelts),
@@ -157,7 +159,9 @@ drops the six cache columns (`definition_path`, `definition_digest`,
   revoking the first. That change is #4371.
 - No surface edits a per-agent budget or `[containment]` after the Definition
   tab goes. The values the migration copied stay enforced. Editing them waits
-  on a decision about where agent-scope limits live (#4372).
+  on a decision about where agent-scope limits live (#4372). ADR-204 moved
+  containment to the runtime, where an Owner or Admin sets it. The budget
+  still has no editor.
 - Existing agents keep their principals. The backfill places each live agent
   on the runtime of its newest host. Where two live agents with one harness
   shared a hostname, the newer one keeps the runtime and the older one is left

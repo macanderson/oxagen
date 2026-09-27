@@ -322,6 +322,7 @@ import "./contracts/run.work.get";
 import "./contracts/runtime.create";
 import "./contracts/runtime.list";
 import "./contracts/runtime.shared";
+import "./contracts/runtime.update";
 import "./contracts/schema.chat";
 import "./contracts/schema.delete";
 import "./contracts/schema.export";

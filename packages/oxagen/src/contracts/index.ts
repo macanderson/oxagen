@@ -34,6 +34,7 @@ import { agentMove } from "./agent.move";
 import { agentToolbeltAssign } from "./agent.toolbelt.assign";
 import { runtimeCreate } from "./runtime.create";
 import { runtimeList } from "./runtime.list";
+import { runtimeUpdate } from "./runtime.update";
 import { toolbeltList } from "./toolbelt.list";
 import { toolbeltGet } from "./toolbelt.get";
 import { toolbeltClone } from "./toolbelt.clone";
@@ -682,6 +683,7 @@ export {
   agentToolbeltAssign,
   runtimeCreate,
   runtimeList,
+  runtimeUpdate,
   toolbeltList,
   toolbeltGet,
   toolbeltClone,
@@ -1098,6 +1100,7 @@ export const contracts: readonly CapabilityDeclaration[] = [
   agentToolbeltAssign,
   runtimeCreate,
   runtimeList,
+  runtimeUpdate,
   toolbeltList,
   toolbeltGet,
   toolbeltClone,

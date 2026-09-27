@@ -41,6 +41,7 @@ const ROLE_CHECKED_CONTRACTS = [
   "move_agent",
   "assign_agent_toolbelt",
   "create_runtime",
+  "update_runtime",
   "clone_toolbelt",
   "update_toolbelt",
   "delete_toolbelt",

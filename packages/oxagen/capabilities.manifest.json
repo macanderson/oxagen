@@ -5448,6 +5448,24 @@
       }
     },
     {
+      "name": "update_runtime",
+      "file": "runtime.update.ts",
+      "domain": "runtime",
+      "mode": "sync",
+      "surfaces": [
+        "api",
+        "mcp"
+      ],
+      "layers": {
+        "schema": true,
+        "api": true,
+        "mcp": true,
+        "unit": true,
+        "docs": true,
+        "app": true
+      }
+    },
+    {
       "name": "run_schema_chat",
       "file": "schema.chat.ts",
       "domain": "schema",

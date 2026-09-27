@@ -44,6 +44,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       cloud = await support.seedRuntime(tenant, {
         name: "Cloud VM",
         slug: "cloud-vm",
+        containmentRequired: true,
       });
       allTools = await support.seedToolbelt(tenant);
       alpha = await support.seedAgent(tenant, {
@@ -113,6 +114,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             agentId: alpha.id,
             version: 3,
             // The limits the migration copied out of the definition file.
+            // The containment table is ignored: the runtime holds it (ADR-204).
             config: {
               budget: { per_run_micros: 2_500_000, per_day_micros: 40_000_000 },
               containment: { required: true },
@@ -199,12 +201,67 @@ describe.skipIf(!process.env.DATABASE_URL)(
       ]);
       expect(out.versions[2]!.toolbelt).toBeNull();
       expect(out.versions[0]!.createdBy).toBe(tenant.userPublicId);
-      // The ceilings the host bundle enforces, read from the active version.
+      // The ceilings the host bundle enforces: the budget from the active
+      // version, containment from the Cloud VM runtime.
       expect(out.limits).toEqual({
         perRun: { micros: "2500000", currency: "USD" },
         perDay: { micros: "40000000", currency: "USD" },
         containmentRequired: true,
         invalid: false,
+      });
+    });
+
+    /** Seed an agent on `runtimeId` whose active version holds `config`. */
+    async function agentWithActiveConfig(
+      slug: string,
+      runtimeId: string,
+      config: Record<string, unknown>,
+    ) {
+      const agent = await support.seedAgent(tenant, { slug, runtimeId });
+      await withSystemDb(async (tx) => {
+        const [version] = await tx
+          .insert(schema.agentVersions)
+          .values({
+            agentId: agent.id,
+            version: 1,
+            config,
+            createdById: tenant.userId,
+            changeKind: "registered",
+            runtimeId,
+          })
+          .returning({ id: schema.agentVersions.id });
+        await tx
+          .update(schema.agents)
+          .set({ activeVersionId: version!.id })
+          .where(eq(schema.agents.id, agent.id));
+      });
+      return agent;
+    }
+
+    it("reads containment from the agent's runtime and ignores the version's containment table (ADR-204)", async () => {
+      await agentWithActiveConfig("on-laptop", laptop.id, {
+        containment: { required: true },
+      });
+      const out = await get(tenant, "on-laptop");
+      expect(out.runtime?.slug).toBe("macs-laptop");
+      expect(out.limits).toEqual({
+        perRun: null,
+        perDay: null,
+        containmentRequired: false,
+        invalid: false,
+      });
+    });
+
+    it("keeps the runtime's containment beside a budget it cannot read", async () => {
+      await agentWithActiveConfig("broken-budget", cloud.id, {
+        budget: "none",
+      });
+      const out = await get(tenant, "broken-budget");
+      expect(out.limits).toEqual({
+        perRun: null,
+        perDay: null,
+        containmentRequired: true,
+        invalid: true,
       });
     });
 
