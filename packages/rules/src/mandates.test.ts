@@ -15,7 +15,7 @@ const BASE_ROW = {
   orgId: "org_1",
   workspaceId: "ws_1",
   agentPrincipalId: "prn_1",
-  consequenceTags: ["moves_money"],
+  impacts: ["moves_money"],
   targets: {},
   tools: ["stripe__create_payment@*"],
   approvalRules: { humanAbove: {}, alwaysHumanFor: [], approvers: [] },

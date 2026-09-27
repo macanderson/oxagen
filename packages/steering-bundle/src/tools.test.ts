@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   NotBuiltError,
   parseLock,
+  parseToolsToml,
   type ManifestServer,
   type McpToolsLock,
 } from "@oxagen/mcp-studio";
@@ -114,17 +115,54 @@ describe("lockedSecuritySchemes", () => {
 
 // ── One folder ───────────────────────────────────────────────────────────────
 
+/** The tool keys a folder's tools.toml imports, in order. */
+function toolKeys(name: string): string[] {
+  const read = parseToolsToml(file(`tools/servers/${name}/tools.toml`));
+  if (!read.ok) throw new Error(`${name}'s tools.toml does not parse`);
+  return Object.keys(read.value.tools ?? {}).sort();
+}
+
+/** Each tool's three pins, by tool key. */
+function pinsOf(
+  tools: Record<string, { definition_hash: string; version: number; upstream_hash: string }>,
+): Record<string, { definition_hash: string; version: number; upstream_hash: string }> {
+  return Object.fromEntries(
+    Object.entries(tools).map(([key, { definition_hash, version, upstream_hash }]) => [
+      key,
+      { definition_hash, version, upstream_hash },
+    ]),
+  );
+}
+
+const BILLING_TOOLS_TOML = "tools/servers/billing/tools.toml";
+
+/** Billing's tools.toml with a new description for get_charge, which billing's lock does not pin. */
+function billingToolsWithNewDescription(): string {
+  const before = 'description = "Read one charge by its id. Amounts are in cents."';
+  const text = file(BILLING_TOOLS_TOML);
+  if (!text.includes(before)) {
+    throw new Error(`${BILLING_TOOLS_TOML} no longer describes get_charge as this test expects`);
+  }
+  return text.replace(before, 'description = "Read one charge."');
+}
+
+const STALE_LOCK = "The lock's definition_hash for get_charge is not the compiled one. Run lock again.";
+
 describe("compileServerFolder", () => {
-  it("compiles the billing folder, or stops at compile until MCP Studio builds it", () => {
-    let compiled: ManifestServer | undefined;
-    try {
-      compiled = compileServerFolder(folder("billing"));
-    } catch (error) {
-      expect(error).toBeInstanceOf(NotBuiltError);
-      expect((error as NotBuiltError).module).toMatch(/^compile/);
-      return;
-    }
-    expect(compiled.name).toBe("billing");
+  it.each(["billing", "stripe"])("compiles the %s folder and pins each tool to its lock", (name) => {
+    const compiled = compileServerFolder(folder(name));
+    const locked = lock(name);
+
+    expect(compiled.name).toBe(name);
+    expect(compiled.pinned).toEqual(locked.source);
+    expect(Object.keys(compiled.tools).sort()).toEqual(toolKeys(name));
+    expect(pinsOf(compiled.tools)).toEqual(pinsOf(locked.tools));
+  });
+
+  it("refuses a lock that no longer pins what compiles", () => {
+    expect(() =>
+      compileServerFolder({ ...folder("billing"), tools: billingToolsWithNewDescription() }),
+    ).toThrow(STALE_LOCK);
   });
 
   it("names server.toml when it does not parse", () => {
@@ -183,6 +221,21 @@ describe("serverNames", () => {
 });
 
 describe("buildTools", () => {
+  it("compiles every fixture server with MCP Studio's compile()", async () => {
+    const result = await buildTools(await reader(files), compileServerFolder);
+    expect(result.servers.map((server) => server.name)).toEqual(["billing", "stripe"]);
+    expect(result.imported).toEqual([...BILLING_TOOLS, ...STRIPE_TOOLS]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("leaves out a server whose lock no longer pins what compiles", async () => {
+    const tree = new Map(files);
+    tree.set(BILLING_TOOLS_TOML, billingToolsWithNewDescription());
+    const result = await buildTools(await reader(tree), compileServerFolder);
+    expect(result.servers.map((server) => server.name)).toEqual(["stripe"]);
+    expect(result.warnings).toEqual([`tools/servers/billing is left out: ${STALE_LOCK}`]);
+  });
+
   it("leaves out each server compile refuses, and still lists the imported tools", async () => {
     const compiler: ToolCompiler = () => {
       throw new NotBuiltError("compile");

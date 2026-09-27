@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { NotBuiltError } from "@oxagen/mcp-studio";
+import { NotBuiltError, toolManifestSchema } from "@oxagen/mcp-studio";
 import { fixtureRepo } from "@oxagen/oxagen/steering-repo/fixture-repo";
 import type { BundleIdentity } from "./build";
 import {
@@ -168,6 +168,16 @@ describe("publish", () => {
     });
     expect(result.warnings).toContain(PROJECT_UNSET_WARNING);
     expect(result.reads).toBeGreaterThan(0);
+  });
+
+  it("compiles each server with MCP Studio's compile() when no compiler is set", async () => {
+    const { deps } = setup({ compiler: undefined });
+
+    const result = published(await publish(deps, IDENTITY, FIRST_COMMIT));
+
+    const manifest = toolManifestSchema.parse(result.bundle.tools);
+    expect(manifest.servers.map((server) => server.name)).toEqual(FIXTURE_FOLDERS);
+    expect(result.warnings.filter((warning) => warning.startsWith("tools/servers/"))).toEqual([]);
   });
 
   it("changes nothing when the published commit is published again", async () => {

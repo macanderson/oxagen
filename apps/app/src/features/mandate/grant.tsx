@@ -60,7 +60,7 @@ function Row({
 
 /**
  * The approval rule as sentences. `humanAbove` is a measure-keyed record of
- * thresholds, `alwaysHumanFor` a list of consequence tags, and `approvers` the
+ * thresholds, `alwaysHumanFor` a list of impacts, and `approvers` the
  * entries that narrow who may answer. Each is omitted when it is empty rather
  * than printed as an empty list, except `approvers`: empty there means the
  * consequence roles decide, which is a rule and not an absence.
@@ -153,7 +153,7 @@ export function MandateGrant({ mandate }: { mandate: MandateRow }) {
           )}
         </Row>
         <Row label={t("effect")}>
-          <span className={mono}>{mandate.consequenceTags.join(", ")}</span>
+          <span className={mono}>{mandate.impacts.join(", ")}</span>
         </Row>
         <Row label={t("counterparties")}>
           {mandate.targets.length === 0 ? (

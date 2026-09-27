@@ -118,6 +118,9 @@ function Card({
             {t(`findings.confidence.${finding.confidence}`)}
           </span>
         </div>
+        <p className="text-[12px] text-muted-foreground">
+          {t(`findings.kindDefinition.${finding.kind}`)}
+        </p>
         <p
           className={`text-[12.5px] ${finding.level === "operator" ? "" : mono}`}
         >

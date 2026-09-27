@@ -801,7 +801,7 @@ export class FakeGitHub implements SteeringGitHub {
     _repo: SteeringRepository,
     branch: string,
     from: string,
-    options?: { exclusive: boolean },
+    options?: { exclusive: boolean; at?: string },
   ) {
     if (this.heads.has(branch)) {
       if (options?.exclusive) {
@@ -814,7 +814,7 @@ export class FakeGitHub implements SteeringGitHub {
       return;
     }
     this.branches.push({ branch, from });
-    this.heads.set(branch, this.shaOf(from));
+    this.heads.set(branch, options?.at ?? this.shaOf(from));
   }
   async reconcileFiles(
     _repo: SteeringRepository,

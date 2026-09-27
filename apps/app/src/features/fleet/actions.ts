@@ -11,7 +11,7 @@
 // nothing, so opening a card and looking at what a rule said costs nothing.
 //
 // **This action decides nothing about who may answer.** The handler resolves
-// the mandate's consequence tags, reads the workspace's `consequence_roles`
+// the mandate's impacts, reads the workspace's `consequence_roles`
 // overrides, checks the mandate's named approvers, and refuses an agent
 // principal, all before it touches a row (`assertOrgRole`,
 // `assertConsequenceRole`, `assertApprover`; INV-29). A refusal comes back as

@@ -13,7 +13,7 @@ export const schema = {
     "Risk grade: low, medium, high or critical",
   ),
   classification: toolClassificationSet.input.shape.classification.describe(
-    "Side-effect class, egress class, consequence tags, measures (paths into the input) and data classes",
+    "Side-effect class, egress class, impacts, measures (paths into the input) and data classes",
   ),
   reason: toolClassificationSet.input.shape.reason.describe(
     "Why the version is classified this way; recorded on the version",

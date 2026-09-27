@@ -350,6 +350,25 @@ describe("the GitHub seam", () => {
     });
   });
 
+  it("creates a branch at the commit it is given in one call", async () => {
+    const createBranch = vi
+      .fn()
+      .mockResolvedValue({ ref: "refs/heads/memory/x", sha: "planned" });
+    const { gh } = seam(fakeClient({ createBranch }));
+    const repo = await gh.resolveRepository(SCOPE);
+    await gh.ensureBranch(repo, "memory/x", "main", {
+      exclusive: true,
+      at: "planned",
+    });
+    expect(createBranch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        branch: "memory/x",
+        fromBranch: "main",
+        fromSha: "planned",
+      }),
+    );
+  });
+
   it("records a check run's url, answers null when the token cannot write checks, and refuses on anything else", async () => {
     const createCheckRun = vi
       .fn()

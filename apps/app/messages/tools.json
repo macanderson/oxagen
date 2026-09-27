@@ -38,7 +38,7 @@
       "allProviders": "All providers",
       "categoriesNote": "These tags and counts are this page of the registry. A tag carried only by a version on a later page appears once you reach that page.",
       "allOnPage": "All on this page",
-      "categoriesDeclaredNote": "The chips and the Category column show the consequence tags a version’s classification records. The ten categories that group tools by what they act on are not recorded on a version yet. A version can also carry tags declared where it was published, which the filter and a class kill switch match too, so a tag can select a version whose row shows none.",
+      "categoriesDeclaredNote": "The chips and the Category column show the impacts a version’s classification records. The ten categories that group tools by what they act on are not recorded on a version yet. A version can also carry impacts declared where it was published, which the filter and a class kill switch match too, so an impact can select a version whose row shows none.",
       "categoriesFilteredNote": "While a tag is selected, these chips count only the versions matching it: they are the tags carried alongside that one, not the registry's. Clear the filter to see the rest.",
       "unclassified": "Unclassified",
       "noTags": "No tag",
@@ -99,7 +99,7 @@
       "categoriesDialog": {
         "open": "What the categories mean",
         "title": "Tool categories",
-        "lead": "The chips group the registry by the consequence tags each version’s classification records. The starter set:",
+        "lead": "The chips group the registry by the impacts each version’s classification records. The starter set:",
         "tags": {
           "moves_money": "Moves funds or commits spend. A call needs a mandate that covers it.",
           "destroys_data": "Deletes or overwrites data that cannot be read back.",
@@ -163,11 +163,11 @@
         "apiName": "API name"
       },
       "classify": {
-        "lead": "Classification describes the tool and decides nothing by itself: a class kill switch matches a version by its consequence tags at call time, and the approval rules are written against it. Reclassifying is a governed action and is recorded in Audit.",
+        "lead": "Classification describes the tool and decides nothing by itself: a class kill switch matches a version by its impacts at call time, and the approval rules are written against it. Reclassifying is a governed action and is recorded in Audit.",
         "riskGrade": "Risk grade",
         "sideEffect": "Side effect",
         "egress": "Egress",
-        "consequenceTags": "Consequence tags",
+        "impacts": "Impacts",
         "tagsHint": "Space- or comma-separated, snake_case. The starter set is moves_money, destroys_data, alters_production, communicates_externally, changes_access, changes_entitlement; a tag of your own that fits the pattern is accepted.",
         "dataClasses": "Data classes",
         "dataClassesHint": "One per line. A data class is free text up to 64 characters, so it may contain spaces: customer financial data is one class, not three.",
@@ -455,7 +455,7 @@
         "operator": "Operator’s agents"
       },
       "blastRadius": {
-        "class": "Every tool version carrying this consequence tag, across the organization — including one imported tomorrow.",
+        "class": "Every tool version carrying this impact, across the organization — including one imported tomorrow.",
         "org": "Every agent in every workspace of this organization.",
         "workspace": "Every agent in this workspace.",
         "tool_server": "Every tool version this provider has published.",
@@ -478,7 +478,7 @@
         "kind": "Level",
         "target": "Target",
         "targetHint": {
-          "class": "Pick the consequence tag every stopped tool carries, or type one, such as moves_money.",
+          "class": "Pick the impact every stopped tool carries, or type one, such as moves_money.",
           "org": "This organization.",
           "workspace": "This workspace.",
           "tool_server": "Pick a registered server.",
@@ -493,7 +493,7 @@
         "blastBody": "Every affected call is denied at its next boundary. Nothing in flight is killed, and nothing is destroyed — you can clear this switch at any time.",
         "restoreTitle": "What this restores",
         "restoreBody": "Denied calls resume at the next boundary. Nothing that was denied while the switch was on is retried.",
-        "classNote": "A class switch names no server and no agent: it matches a tool version by its declared consequence tags, so a tool imported tomorrow carrying this tag is denied the moment it enters the registry.",
+        "classNote": "A class switch names no server and no agent: it matches a tool version by its declared impacts, so a tool imported tomorrow carrying this impact is denied the moment it enters the registry.",
         "connectionNote": "A connection switch also revokes every credential grant that drew on it.",
         "reason": "Reason — recorded on every denied call",
         "takesEffect": "Takes effect",
@@ -525,7 +525,7 @@
       "unbacked": {
         "irreversible": "every irreversible tool",
         "egress": "every tool with egress third_party",
-        "note": "A class switch stops tools by consequence tag, and side effect and egress are not tags, so this switch cannot be flipped yet."
+        "note": "A class switch stops tools by impact, and side effect and egress are not impacts, so this switch cannot be flipped yet."
       },
       "edit": {
         "open": "Edit",
@@ -611,7 +611,7 @@
       "title": "Mandates ledger",
       "lead": "The mandates this workspace has recorded — granted, requested, expired and revoked — with what each has settled, what calls in flight hold, and what is left. A mandate is the only thing that lets an agent carry a consequence, and every draw on it reserves, then settles or releases.",
       "empty": "This workspace has recorded no mandate: none granted, and none requested.",
-      "emptyDetail": "A call that carries a consequence tag with no mandate is denied before dispatch, whether or not the tool is on the agent's belt.",
+      "emptyDetail": "A call that carries an impact with no mandate is denied before dispatch, whether or not the tool is on the agent's belt.",
       "notGranted": "not granted",
       "requestedBy": "requested by {user}",
       "columns": {
@@ -651,7 +651,7 @@
       "agentsUnavailable": "The workspace's agents could not be read, so there is no agent to pick. Reload the page to try again.",
       "agentsEmpty": "This workspace has no agent that can hold a mandate. A retired agent cannot.",
       "consequenceOther": "Others the tools declare, separated by commas",
-      "consequenceTagsHint": "Name every consequence the covered tools declare. A mandate covers a tool only when it names all of them. Your org role has to be accountable for every consequence you name.",
+      "impactsHint": "Name every impact the covered tools declare. A mandate covers a tool only when it names all of them. Your org role has to be accountable for every impact you name.",
       "toolsHint": "Pick a tool, or type a pattern over slug@version such as github__*. Each has to match a declared tool. Everything else is denied.",
       "limits": "Limits",
       "limitsHint": "Name a measure limit, a calls cap, or both. Every figure is whole units and is recorded exactly as typed.",
@@ -678,7 +678,7 @@
       "pending": "Granting",
       "fields": {
         "agentId": "Agent",
-        "consequenceTags": "Consequences",
+        "impacts": "Impacts",
         "measure": "Measure",
         "unit": "Unit",
         "perCall": "Per call",

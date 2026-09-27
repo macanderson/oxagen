@@ -5,19 +5,19 @@ import { z } from "zod";
  *
  * Classification describes a tool and decides nothing by itself: a class kill
  * switch (`set_kill_switch` with `target.kind = "class"`) matches a version by
- * its consequence tags at call time, and approval rules and mandates (their
+ * its impacts at call time, and approval rules and mandates (their
  * own lanes) are written against it. The risk grade the classifier sets is
  * carried on the wire beside this object and stored on the version's
  * `classified_risk_grade`; the declared `risk_grade` and the checksum over it
  * stay as published. A new version of the tool starts with the classification
  * of the version it replaces.
  *
- * The consequence-tag starter set is the spec's; a customer extends it with
+ * The impact starter set is the spec's; a customer extends it with
  * any tag that fits the pattern, so the schema admits the pattern and not the
  * list. Measures are paths into the tool's input, each with a type and, for
  * money, the path to its currency.
  */
-export const CONSEQUENCE_TAG_STARTER_SET = [
+export const IMPACT_STARTER_SET = [
   "moves_money",
   "destroys_data",
   "alters_production",
@@ -27,11 +27,11 @@ export const CONSEQUENCE_TAG_STARTER_SET = [
 ] as const;
 
 /** snake_case, 2–64 characters: the starter set and every customer tag. */
-export const consequenceTagSchema = z
+export const impactSchema = z
   .string()
   .regex(
     /^[a-z][a-z0-9_]{1,63}$/,
-    "a consequence tag is snake_case, 2 to 64 characters",
+    "an impact is snake_case, 2 to 64 characters",
   );
 
 export const toolSideEffectClassSchema = z.enum([
@@ -90,7 +90,7 @@ export const toolClassificationSchema = z
   .object({
     sideEffect: toolSideEffectClassSchema,
     egress: toolEgressClassSchema,
-    consequenceTags: z.array(consequenceTagSchema).max(32),
+    impacts: z.array(impactSchema).max(32),
     measures: z.record(
       z
         .string()
@@ -101,10 +101,10 @@ export const toolClassificationSchema = z
   })
   .strict()
   .superRefine((c, ctx) => {
-    if (new Set(c.consequenceTags).size !== c.consequenceTags.length) {
+    if (new Set(c.impacts).size !== c.impacts.length) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["consequenceTags"],
+        path: ["impacts"],
         message: "a tag appears once",
       });
     }
@@ -116,11 +116,11 @@ export type ToolRiskGrade = z.output<typeof toolRiskGradeSchema>;
 // ── The effective classification ────────────────────────────────────────────
 //
 // A tool version states its consequences in two places, written by two
-// capabilities behind two different gates: `consequence_tags` (text[]) is the
+// capabilities behind two different gates: `impacts` (text[]) is the
 // declared half, written by `publish_tool_declaration` and `import_tools`
-// behind `assertConsequenceRole`; `classification->'consequenceTags'` is the
+// behind `assertConsequenceRole`; `classification->'impacts'` is the
 // classified half, written by `set_tool_classification` behind Owner/Admin.
-// Both draw on one vocabulary (`consequenceTagSchema`).
+// Both draw on one vocabulary (`impactSchema`).
 //
 // EVERY reader that decides authority or a floor must come through the
 // functions below, and the reason is the whole history of this file: the
@@ -136,32 +136,32 @@ export type ToolRiskGrade = z.output<typeof toolRiskGradeSchema>;
 
 /** The shape every reader passes in: the two halves as the row carries them. */
 export interface ClassificationHalves {
-  consequenceTags: readonly string[] | null;
+  impacts: readonly string[] | null;
   classification: unknown;
 }
 
 /** The classified half, read defensively — a malformed jsonb contributes nothing. */
 function classifiedPart(raw: unknown): {
   sideEffect: string | null;
-  consequenceTags: string[];
+  impacts: string[];
 } {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
-    return { sideEffect: null, consequenceTags: [] };
+    return { sideEffect: null, impacts: [] };
   }
   const c = raw as Record<string, unknown>;
-  const tags = Array.isArray(c.consequenceTags)
-    ? c.consequenceTags.filter(
+  const tags = Array.isArray(c.impacts)
+    ? c.impacts.filter(
         (t): t is string => typeof t === "string" && t.length > 0,
       )
     : [];
   return {
     sideEffect: typeof c.sideEffect === "string" ? c.sideEffect : null,
-    consequenceTags: tags,
+    impacts: tags,
   };
 }
 
 /**
- * The consequence tags a version carries, from BOTH halves, deduped.
+ * The impacts a version carries, from BOTH halves, deduped.
  *
  * A union, never a replacement, and the asymmetry is the argument. Union is
  * monotonic for a floor — it only ever adds reasons a call needs a person:
@@ -182,12 +182,12 @@ function classifiedPart(raw: unknown): {
  * Sorting once, here, gives all five readers the same answer and gives that
  * comparison a stable basis.
  */
-export function unionConsequenceTags(row: ClassificationHalves): string[] {
+export function unionImpacts(row: ClassificationHalves): string[] {
   const tags = new Set<string>();
-  for (const t of row.consequenceTags ?? []) {
+  for (const t of row.impacts ?? []) {
     if (typeof t === "string" && t.length > 0) tags.add(t);
   }
-  for (const t of classifiedPart(row.classification).consequenceTags) {
+  for (const t of classifiedPart(row.classification).impacts) {
     tags.add(t);
   }
   return [...tags].sort();

@@ -11,7 +11,7 @@
 // `gitlab.com/<group>/<name>`, as the bundle names it.
 //
 // The migration that creates these tables and their tenant policies is
-// 20260927160000_steering_versions.sql.
+// 20260927174500_steering_versions.sql.
 import {
   check,
   index,

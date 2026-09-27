@@ -118,6 +118,15 @@ export const MAX_BATCH_SIZE = 5;
 export const MAX_BATCH_TIMEOUT_SECONDS = 30;
 
 /**
+ * The largest `concurrency.limit` Inngest's plan accepts. Inngest checks it at
+ * sync, and one function over it fails the sync for the whole app.
+ * `agent/interjection-timeout` asked for 10, the sync answered 400 with
+ * "higher concurrency limits (10) than your plan limit of 5", and
+ * `deploy api.oxagen.sh` failed on 7eed65652.
+ */
+export const MAX_CONCURRENCY_LIMIT = 5;
+
+/**
  * Seconds in one `<number><unit>` component of an Inngest duration, or `null`
  * for a unit `TimeStr` does not admit.
  *
@@ -202,6 +211,11 @@ function buildInngestConfig(
     inngestConfig.retries = config.retries;
   }
   if (config.concurrency) {
+    if (config.concurrency.limit > MAX_CONCURRENCY_LIMIT) {
+      throw new Error(
+        `${config.id}: concurrency.limit ${config.concurrency.limit} is over Inngest's limit of ${MAX_CONCURRENCY_LIMIT}, and the sync would refuse every function in the app`,
+      );
+    }
     inngestConfig.concurrency = config.concurrency;
   }
   if (config.cancelOn) {

@@ -119,7 +119,7 @@ function imported(inputSchema: Record<string, unknown>): PublishToolArgs {
 const tagged = {
   sideEffect: "irreversible",
   egress: "third_party",
-  consequenceTags: ["moves_money"],
+  impacts: ["moves_money"],
   measures: {},
   dataClasses: [],
 };
@@ -208,8 +208,8 @@ describe("publishTool", () => {
         workspaceId: WS,
         capabilityId,
         serverId: SERVER,
-        consequenceTags: (second!.classification as typeof tagged)
-          .consequenceTags,
+        impacts: (second!.classification as typeof tagged)
+          .impacts,
       }),
     ).toEqual({ kind: "killed_class", switchId: "emd_1" });
   });

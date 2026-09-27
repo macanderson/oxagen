@@ -4206,7 +4206,7 @@
       "writes": []
     }
   ],
-  "contentHash": "31d3a9659c37790d5aaf2af5636d0b8c6557e010f35fac78ae6a53dcd7c4208c",
+  "contentHash": "f6bd27e8ccb92f86bb7ead4cc46eba4db66b86e4d4a7076759fcc26387ad4537",
   "domains": [
     {
       "name": "agent",
@@ -4374,6 +4374,7 @@
       "tables": [
         "postgres:cost.cost_centers",
         "postgres:cost.daily_totals",
+        "postgres:cost.finding_claims",
         "postgres:cost.findings",
         "postgres:cost.no_progress_hits",
         "postgres:cost.price_book_initializations",
@@ -4686,7 +4687,7 @@
       ],
       "kind": "postgres",
       "purpose": "Transactional state — users, orgs, permissions, billing, configs, durable application state.",
-      "tableCount": 165
+      "tableCount": 166
     },
     {
       "domains": [
@@ -10350,7 +10351,7 @@
           "type": "text"
         },
         {
-          "name": "consequence_tags",
+          "name": "impacts",
           "nullable": false,
           "primaryKey": false,
           "type": "text[]"
@@ -14410,6 +14411,83 @@
       "domain": "cost",
       "id": "postgres:cost.daily_totals",
       "name": "daily_totals",
+      "rls": "standard",
+      "store": "postgres",
+      "tenantScoped": true
+    },
+    {
+      "columns": [
+        {
+          "name": "id",
+          "nullable": false,
+          "primaryKey": true,
+          "type": "uuid"
+        },
+        {
+          "name": "org_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "workspace_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "uuid"
+        },
+        {
+          "name": "finding_id",
+          "nullable": false,
+          "primaryKey": false,
+          "references": "postgres:cost.findings",
+          "type": "uuid"
+        },
+        {
+          "name": "detector",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "smallint"
+        },
+        {
+          "name": "run_id",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "frame_key",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "frame_at",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "operator_key",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "cost_micros",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "bigint"
+        },
+        {
+          "name": "currency",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        }
+      ],
+      "domain": "cost",
+      "id": "postgres:cost.finding_claims",
+      "name": "finding_claims",
       "rls": "standard",
       "store": "postgres",
       "tenantScoped": true
@@ -18822,6 +18900,12 @@
           "nullable": true,
           "primaryKey": false,
           "type": "timestamp with time zone"
+        },
+        {
+          "name": "name",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
         }
       ],
       "domain": "mcp",
@@ -18961,6 +19045,18 @@
         },
         {
           "name": "last_import_digest",
+          "nullable": true,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "origin",
+          "nullable": false,
+          "primaryKey": false,
+          "type": "text"
+        },
+        {
+          "name": "steering_name",
           "nullable": true,
           "primaryKey": false,
           "type": "text"
@@ -24683,7 +24779,7 @@
           "type": "text"
         },
         {
-          "name": "consequence_tags",
+          "name": "impacts",
           "nullable": false,
           "primaryKey": false,
           "type": "text[]"

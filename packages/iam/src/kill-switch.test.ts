@@ -54,7 +54,7 @@ const call = {
   capabilityId: `mcp.${SERVER}.create_payment`,
   serverId: SERVER,
   connectionId: CONNECTION,
-  consequenceTags: ["moves_money"],
+  impacts: ["moves_money"],
   agentId: "agt_finops",
   operatorUserId: USER,
 };
@@ -115,11 +115,11 @@ describe("matchKillSwitch", () => {
     expect(
       matchKillSwitch(switches, {
         ...call,
-        consequenceTags: ["destroys_data"],
+        impacts: ["destroys_data"],
       }),
     ).toBeNull();
     expect(
-      matchKillSwitch(switches, { ...call, consequenceTags: [] }),
+      matchKillSwitch(switches, { ...call, impacts: [] }),
     ).toBeNull();
   });
 
