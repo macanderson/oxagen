@@ -1,0 +1,60 @@
+{
+  "tools": [
+    {
+      "name": "create_issue",
+      "title": "Create issue",
+      "description": "Create an issue in a repository.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "title": { "type": "string" },
+          "body": { "type": "string" }
+        },
+        "required": ["owner", "repo", "title"]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "number": { "type": "integer" },
+          "url": { "type": "string" }
+        },
+        "required": ["number", "url"]
+      },
+      "annotations": {
+        "title": "Create issue",
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": true,
+        "costHint": "low"
+      },
+      "icons": [{ "src": "https://github.githubassets.com/favicons/favicon.svg", "mimeType": "image/svg+xml" }],
+      "_meta": { "io.github/scopes": ["repo"] }
+    },
+    {
+      "name": "list_repositories",
+      "description": "List the repositories you can read.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "per_page": { "type": "integer", "minimum": 1, "maximum": 100 }
+        }
+      }
+    },
+    {
+      "name": "search-code",
+      "description": "Search code across repositories.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string" }
+        },
+        "required": ["query"]
+      },
+      "annotations": { "readOnlyHint": true }
+    }
+  ],
+  "nextCursor": "eyJwYWdlIjoyfQ=="
+}

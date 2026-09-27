@@ -1,0 +1,33 @@
+get:
+  operationId: listItems
+  summary: List items in stock.
+  parameters:
+    - name: warehouse
+      in: query
+      schema:
+        type: string
+  responses:
+    "200":
+      description: The items.
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              $ref: "../schemas/item.yaml"
+post:
+  operationId: createItem
+  summary: Add an item to the catalogue.
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: "../schemas/item.yaml"
+  responses:
+    "201":
+      description: The item.
+      content:
+        application/json:
+          schema:
+            $ref: "../schemas/item.yaml"

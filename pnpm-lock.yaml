@@ -1705,6 +1705,40 @@ importers:
         specifier: 2.1.9
         version: 2.1.9(@types/node@25.9.8)(jsdom@30.0.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(supports-color@8.1.1)(terser@5.48.0)
 
+  packages/mcp-studio:
+    dependencies:
+      '@oxagen/oxagen':
+        specifier: workspace:*
+        version: link:../oxagen
+      '@oxagen/run-evidence':
+        specifier: workspace:*
+        version: link:../run-evidence
+      smol-toml:
+        specifier: 1.9.0
+        version: 1.9.0
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 25.9.8
+        version: 25.9.8
+      '@vitest/coverage-v8':
+        specifier: 2.1.9
+        version: 2.1.9(supports-color@8.1.1)(vitest@2.1.9)
+      eslint:
+        specifier: 9.39.5
+        version: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 2.1.9
+        version: 2.1.9(@types/node@25.9.8)(jsdom@30.1.1(@noble/hashes@2.2.0))(lightningcss@1.33.0)(supports-color@8.1.1)(terser@5.48.0)
+
   packages/notifications:
     dependencies:
       '@oxagen/config':

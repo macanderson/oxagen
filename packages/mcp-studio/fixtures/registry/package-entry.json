@@ -1,0 +1,19 @@
+{
+  "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+    "name": "io.github.modelcontextprotocol/server-filesystem",
+    "description": "Read and write files in the directories you allow.",
+    "version": "2026.8.1",
+    "packages": [
+      {
+        "registryType": "npm",
+        "identifier": "@modelcontextprotocol/server-filesystem",
+        "version": "2026.8.1",
+        "transport": { "type": "stdio" },
+        "packageArguments": [
+          { "type": "positional", "valueHint": "directory", "isRequired": true }
+        ]
+      }
+    ]
+  }
+}

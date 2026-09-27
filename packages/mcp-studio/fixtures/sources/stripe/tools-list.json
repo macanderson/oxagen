@@ -1,0 +1,41 @@
+{
+  "tools": [
+    {
+      "name": "create_refund",
+      "description": "Create a refund for a charge.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "charge": { "type": "string" },
+          "amount": { "type": "integer" }
+        },
+        "required": ["charge"]
+      },
+      "annotations": { "destructiveHint": true },
+      "_meta": { "com.stripe/api-version": "2026-09-01" }
+    },
+    {
+      "name": "list_charges",
+      "description": "List charges, newest first.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "customer": { "type": "string" },
+          "limit": { "type": "integer" }
+        }
+      },
+      "annotations": { "readOnlyHint": true }
+    },
+    {
+      "name": "create_customer",
+      "description": "Create a customer.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string" },
+          "name": { "type": "string" }
+        }
+      }
+    }
+  ]
+}

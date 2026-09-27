@@ -1,0 +1,28 @@
+#:schema https://oxagen.sh/schemas/mcp-server/v1.json
+# Invalid: two environments and no sandbox mark, so no environment is the one
+# every agent's calls go to.
+schema = "mcp-server/v1"
+name = "stripe"
+label = "Stripe"
+description = "Payments, refunds, and invoices in the a-intel Stripe account."
+
+[source]
+type = "remote"
+url = "https://mcp.stripe.com"
+transport = "http"
+
+[auth]
+mode = "service"
+scheme = "oauth"
+
+[environments.test]
+credential = "oxagen:credential/stripe-test"
+
+[environments.live]
+credential = "oxagen:credential/stripe-live"
+
+[exposure]
+mode = "direct"
+
+[sync]
+schedule = "daily"
