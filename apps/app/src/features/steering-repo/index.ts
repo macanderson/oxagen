@@ -4,15 +4,9 @@
 // steering host. The routes import from here; nothing else reaches into the
 // folder (eslint: `@/features/*/*` is restricted).
 export { steeringGithubHref, steeringGitlabPath } from "./hrefs";
-export type { SteeringGithubLeg } from "./hrefs";
 export { SteeringRepoHealthBanner } from "./health-banner";
 export { SteeringRepoProvisioning } from "./provisioning";
 export { readSteeringRepo } from "./read";
 export { SteeringRepoSection } from "./section";
 export { SteeringRepoUnavailable } from "./unavailable";
-export type {
-  RepoHealth,
-  SteeringRepoRead,
-  SteeringRepoStep,
-  SteeringRepoView,
-} from "./types";
+export type { SteeringRepoRead } from "./types";
