@@ -65,7 +65,10 @@ request, as detector 3 does.
 5. **A frame key is the store's `at` text, then `#`, then its position.** The
    store prints `at` with microseconds, and a JavaScript `Date` keeps
    milliseconds. The key keeps the store's text, and the position (0, 1, 2)
-   separates frames of one run at the same instant, in read order.
+   separates frames of one run at the same instant. The job sorts those
+   frames by their content before it numbers them, so a frame keeps its key
+   whatever order the store returns them in. Two frames with the same content
+   are interchangeable, so their order does not matter.
 6. **A request counts only when every tool call it made is a repeat.** The
    repeat rule is the rollup's (ADR-199): the same tool, input digest, and
    output digest as an earlier call of the run, on the `Bash` tool or on a
@@ -74,6 +77,8 @@ request, as detector 3 does.
    counterfactual is 0. A request that also made one new call does not count.
    The evidence counts requests, and the prose calls them turns.
 7. **A tool call belongs to the latest frame of its run at or before it.**
+   The job compares the microseconds the store printed for both, since two
+   events of one millisecond would otherwise tie.
    Model-call frames carry no chain, so a subagent's call can land on a
    parent's frame that ran just before it. Calls before a run's first frame
    form a request with no frame. It is cited and not priced.

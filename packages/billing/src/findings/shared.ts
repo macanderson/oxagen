@@ -55,11 +55,35 @@ export const FINDINGS_MAX = 50;
 /** Runs itemised in a finding's evidence, largest saving first. */
 export const EVIDENCE_RUNS = 10;
 
+/**
+ * An RFC 3339 time in microseconds since the epoch. The store prints six
+ * fractional digits, and a Date keeps three, so two times in one millisecond
+ * compare equal as Dates. Digits past the sixth are dropped. The value stays
+ * under 2^53 until the year 2255.
+ */
+export function microsOf(text: string): number {
+  const m = /^(.*?)\.(\d+)(Z|[+-]\d{2}:?\d{2})$/.exec(text);
+  if (m === null) return Date.parse(text) * 1000;
+  const seconds = Date.parse(`${m[1]}${m[3]}`);
+  return seconds * 1000 + Number(m[2]!.slice(0, 6).padEnd(6, "0"));
+}
+
+/** A call's or frame's time in microseconds, from its store text when known. */
+export function timeOf(x: { at: Date; atMicros?: number }): number {
+  return x.atMicros ?? x.at.getTime() * 1000;
+}
+
 /** One tool call of a wrapped run, as the hook recorded it. */
 export interface ToolCallObservation {
   /** The run's public id (`tse_…`). */
   runId: string;
   at: Date;
+  /**
+   * `at` in microseconds since the epoch, from the store's own text; absent
+   * when only a Date is known. A Date drops the store's sub-millisecond
+   * digits, so a call and a frame in one millisecond need this to order.
+   */
+  atMicros?: number;
   seq: number;
   tool: string;
   inputDigest: string;
@@ -89,6 +113,8 @@ export interface PricedRequestFrame {
    */
   key: string;
   at: Date;
+  /** `at` in microseconds since the epoch, as on {@link ToolCallObservation}. */
+  atMicros?: number;
   /** The frame's priced cost in micros; null when no price covers it. */
   costMicros: bigint | null;
   /** Every token the frame carried, of every class. */

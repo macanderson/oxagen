@@ -20,9 +20,11 @@ import {
   FINDINGS_MAX,
   FINDINGS_PER_KIND,
   findingFingerprint,
+  microsOf,
   MIN_SAVING_MICROS,
   PAGE_TOKENS,
   SPIN_LOOP_REPEATS,
+  timeOf,
   UNPAGED_RESULT_TOKENS,
   type ClaimRow,
   type DetectInput,
@@ -191,6 +193,31 @@ describe("runInputPrice", () => {
     const noInput = run();
     noInput.breakdown.models[0]!.tokens.input_uncached = 0;
     expect(runInputPrice(noInput)).toBeNull();
+  });
+});
+
+describe("microsOf", () => {
+  const second = Date.parse("2026-09-27T05:30:12Z") * 1_000;
+
+  it("reads the store's six fractional digits, which a Date drops", () => {
+    expect(microsOf("2026-09-27T05:30:12.500500Z")).toBe(second + 500_500);
+    expect(microsOf("2026-09-27T05:30:12.500900Z")).toBe(second + 500_900);
+  });
+
+  it("pads a shorter fraction, drops digits past the sixth, and reads an offset", () => {
+    expect(microsOf("2026-09-27T05:30:12.5Z")).toBe(second + 500_000);
+    expect(microsOf("2026-09-27T05:30:12.5005009Z")).toBe(second + 500_500);
+    expect(microsOf("2026-09-27T07:30:12.000001+02:00")).toBe(second + 1);
+  });
+
+  it("reads a time with no fraction as a whole second", () => {
+    expect(microsOf("2026-09-27T05:30:12Z")).toBe(second);
+  });
+
+  it("is what timeOf uses, and timeOf falls back to the Date", () => {
+    const at = new Date("2026-09-27T05:30:12.500Z");
+    expect(timeOf({ at, atMicros: second + 500_500 })).toBe(second + 500_500);
+    expect(timeOf({ at })).toBe(second + 500_000);
   });
 });
 
@@ -505,6 +532,36 @@ describe("repeated shell commands and duplicate tool calls", () => {
       request(r, 1.5).key,
     ]);
   });
+
+  it("gives a call to the request before it when a later request shares its millisecond", () => {
+    const r = run();
+    const base = r.startedAt.getTime();
+    const toolCalls = [
+      call(r, { at: 2 }),
+      call(r, { at: 3.5, atMicros: (base + 3_500) * 1_000 + 500, seq: 3 }),
+      call(r, { at: 4, inputDigest: "in-2", seq: 4 }),
+    ];
+    const made = frameAt(new Date(base + 3_000));
+    const later = {
+      ...frameAt(new Date(base + 3_500)),
+      atMicros: (base + 3_500) * 1_000 + 900,
+    };
+    // By the millisecond alone, `later` made the repeat and the new call, so
+    // nothing would count.
+    const [finding, ...rest] = detect({
+      runs: [r],
+      toolCalls,
+      frames: new Map([
+        [r.runId, [frameAt(new Date(base + 1_000)), made, later]],
+      ]),
+    });
+    expect(rest).toEqual([]);
+    expect(finding).toMatchObject({
+      kind: "duplicate_tool_calls",
+      savingMicros: TURN_MICROS,
+    });
+    expect(finding!.claims?.map((c) => c.frameKey)).toEqual([made.key]);
+  });
 });
 
 describe("spin loops", () => {
@@ -579,9 +636,7 @@ describe("spin loops", () => {
     const toolCalls = [
       ...Array.from({ length: half + 1 }, (_, i) => call(r, { at: i + 1 })),
       call(r, { at: half + 2, inputDigest: "in-2" }),
-      ...Array.from({ length: half }, (_, i) =>
-        call(r, { at: half + 3 + i }),
-      ),
+      ...Array.from({ length: half }, (_, i) => call(r, { at: half + 3 + i })),
     ];
     const findings = detect({
       runs: [r],

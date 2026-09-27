@@ -39,6 +39,7 @@ import {
   countClaims,
   detectFindings,
   FINDINGS_WINDOW_DAYS,
+  microsOf,
   runsWithRepeats,
   type FindingDraft,
   type PricedRequestFrame,
@@ -141,6 +142,7 @@ export function toObservations(
     out.push({
       runId,
       at: new Date(r.at),
+      atMicros: microsOf(r.at),
       seq: r.seq,
       tool: r.tool,
       inputDigest: r.inputDigest,
@@ -214,19 +216,47 @@ function toModelCallFrame(row: ModelCallFrameRow): ModelCallFrame {
   };
 }
 
+/** A frame row's `at` text and every field it carries, in a fixed order. */
+function rowContent(row: ModelCallFrameRow): string {
+  return JSON.stringify([
+    row.at,
+    row.model,
+    row.provider,
+    row.inputUncached,
+    row.cacheRead,
+    row.cacheWrite5m,
+    row.cacheWrite1h,
+    row.output,
+    row.reasoning,
+    row.serverToolRequests,
+    row.reportedCostMicros,
+    row.basis,
+  ]);
+}
+
 /**
  * One run's model-call frames, each priced once by the rollup's rule, in time
- * order. A frame's key is its `at` exactly as the store printed it, then `#`
- * and its place among the run's frames at that instant, in read order.
+ * order to the microsecond. A frame's key is its `at` exactly as the store
+ * printed it, then `#` and its place among the run's frames at that instant.
+ * The store can return two frames of one instant in either order, so the
+ * place follows each frame's content, and a frame keeps its key from one
+ * pass to the next. Two frames with the same content are interchangeable.
  */
 export function pricedFrames(
   book: PriceBook,
   orgId: string,
   rows: readonly ModelCallFrameRow[],
 ): PricedRequestFrame[] {
+  const ordered = rows
+    .map((row) => ({ row, micros: microsOf(row.at), text: rowContent(row) }))
+    .sort(
+      (a, b) =>
+        a.micros - b.micros ||
+        (a.text < b.text ? -1 : a.text > b.text ? 1 : 0),
+    );
   const atCount = new Map<string, number>();
   const out: PricedRequestFrame[] = [];
-  for (const row of rows) {
+  for (const { row, micros } of ordered) {
     const n = atCount.get(row.at) ?? 0;
     atCount.set(row.at, n + 1);
     const frame = toModelCallFrame(row);
@@ -235,6 +265,7 @@ export function pricedFrames(
     out.push({
       key: `${row.at}#${n}`,
       at: frame.at,
+      atMicros: micros,
       costMicros:
         priced.scaled === null
           ? null
@@ -249,7 +280,7 @@ export function pricedFrames(
       basis: priced.basis,
     });
   }
-  return out.sort((a, b) => a.at.getTime() - b.at.getTime());
+  return out;
 }
 
 async function readFrames(

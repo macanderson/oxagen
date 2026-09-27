@@ -10,16 +10,18 @@
  * identical call returns, so it is never a repeat here.
  *
  * A tool call belongs to the latest model-call frame of its run at or before
- * the call. Frames carry no chain, so a subagent's call can land on a
- * parent's frame that ran just before it (ADR-206 names the gap).
+ * the call, compared to the microsecond the store printed. Frames carry no
+ * chain, so a subagent's call can land on a parent's frame that ran just
+ * before it (ADR-206 names the gap).
  */
 import type { RunTotalsRecord } from "../cost-rollup";
 import { RepeatedCalls, repeatKindOf } from "../step-grade";
-import type {
-  CallFrame,
-  DetectInput,
-  PricedRequestFrame,
-  ToolCallObservation,
+import {
+  timeOf,
+  type CallFrame,
+  type DetectInput,
+  type PricedRequestFrame,
+  type ToolCallObservation,
 } from "./shared";
 
 export type RepeatKind = "shell" | "read";
@@ -47,8 +49,8 @@ export interface RunView {
 }
 
 function byTime(a: ToolCallObservation, b: ToolCallObservation): number {
-  return a.at.getTime() !== b.at.getTime()
-    ? a.at.getTime() - b.at.getTime()
+  return timeOf(a) !== timeOf(b)
+    ? timeOf(a) - timeOf(b)
     : a.runId !== b.runId
       ? a.runId < b.runId
         ? -1
@@ -93,14 +95,14 @@ function attribute(
   calls: readonly ViewCall[],
   frames: readonly PricedRequestFrame[],
 ): RunRequest[] {
-  const ordered = [...frames].sort((a, b) => a.at.getTime() - b.at.getTime());
+  const ordered = [...frames].sort((a, b) => timeOf(a) - timeOf(b));
   const requests: RunRequest[] = [];
   let before: RunRequest | null = null;
   const byFrame = new Map<PricedRequestFrame, RunRequest>();
   let i = -1;
   for (const c of calls) {
-    const at = c.call.at.getTime();
-    while (i + 1 < ordered.length && ordered[i + 1]!.at.getTime() <= at) i += 1;
+    const at = timeOf(c.call);
+    while (i + 1 < ordered.length && timeOf(ordered[i + 1]!) <= at) i += 1;
     if (i < 0) {
       if (before === null) {
         before = { frame: null, calls: [] };

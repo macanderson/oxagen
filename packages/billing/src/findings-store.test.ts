@@ -139,6 +139,17 @@ describe("toObservations", () => {
     ]);
   });
 
+  it("keeps the store's microseconds, which a Date drops", () => {
+    const [out] = toObservations(
+      [row({ at: "2026-09-10T10:00:00.500500Z" })],
+      new Map([[SESSION, RUN_ID]]),
+    );
+    expect(out!.at).toEqual(new Date("2026-09-10T10:00:00.500Z"));
+    expect(out!.atMicros).toBe(
+      Date.parse("2026-09-10T10:00:00Z") * 1_000 + 500_500,
+    );
+  });
+
   it("names a subagent's chain and leaves the root's own chain unnamed (#4001)", () => {
     const SUBAGENT = "00000000-0000-4000-8000-0000000000cc";
     const out = toObservations(
@@ -279,6 +290,35 @@ describe("pricedFrames", () => {
     });
     // With no reported figure either, the frame is unpriced.
     expect(out[2]).toMatchObject({ costMicros: null, basis: null });
+  });
+
+  it("orders two frames of one millisecond by the microsecond", () => {
+    const second = Date.parse("2026-09-10T10:00:00Z") * 1_000;
+    const out = pricedFrames([], SCOPE.orgId, [
+      frameRow({ at: "2026-09-10T10:00:00.500900Z" }),
+      frameRow({ at: "2026-09-10T10:00:00.500500Z" }),
+    ]);
+    expect(out.map((f) => [f.key, f.atMicros])).toEqual([
+      ["2026-09-10T10:00:00.500500Z#0", second + 500_500],
+      ["2026-09-10T10:00:00.500900Z#0", second + 500_900],
+    ]);
+  });
+
+  it("gives a frame the same key whatever order the store returns one instant's frames in", () => {
+    const cheap = frameRow();
+    const dear = frameRow({ reportedCostMicros: "30000" });
+    const keyed = (rows: ModelCallFrameRow[]) =>
+      pricedFrames([], SCOPE.orgId, rows).map((f) => [f.key, f.costMicros]);
+    expect(keyed([dear, cheap])).toEqual([
+      ["2026-09-10T10:00:00.500000Z#0", 15_000n],
+      ["2026-09-10T10:00:00.500000Z#1", 30_000n],
+    ]);
+    expect(keyed([cheap, dear])).toEqual(keyed([dear, cheap]));
+    // Two frames with the same content are interchangeable.
+    expect(keyed([cheap, frameRow()])).toEqual([
+      ["2026-09-10T10:00:00.500000Z#0", 15_000n],
+      ["2026-09-10T10:00:00.500000Z#1", 15_000n],
+    ]);
   });
 });
 

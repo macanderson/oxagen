@@ -48,9 +48,13 @@ CREATE INDEX "finding_claims_workspace_frame_at_idx" ON "cost"."finding_claims" 
 ALTER TABLE cost.finding_claims ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cost.finding_claims FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON cost.finding_claims;
+DROP POLICY IF EXISTS tenant_org_wide_read ON cost.finding_claims;
 CREATE POLICY tenant_isolation ON cost.finding_claims
   USING (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid))
   WITH CHECK (current_setting('app.rls_bypass', true) = 'on' OR (org_id = nullif(current_setting('app.current_org_id', true), '')::uuid AND workspace_id = nullif(current_setting('app.current_workspace_id', true), '')::uuid));
+CREATE POLICY tenant_org_wide_read ON cost.finding_claims
+  FOR SELECT
+  USING (current_setting('app.org_wide', true) = 'on' AND org_id = nullif(current_setting('app.current_org_id', true), '')::uuid);
 
 -- ── Grants ───────────────────────────────────────────────────────────────────
 DO $$
