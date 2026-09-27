@@ -40,9 +40,21 @@ Every PR you open gets a watcher from the first push until it merges or closes. 
 - **Resolve conflicts as soon as they appear.** When `mergeable` reads `CONFLICTING`, merge current `origin/main` into the branch, resolve each conflict, check the behavior both sides changed (ADR-110), and push. A conflicting PR gets no CI run at all, so `gh pr checks` can read green while nothing ran.
 - **A schema change needs only its label.** If the diff changes a schema, confirm `migration-required` is on the PR, and add it if `migration-label.yml` has not. `migration-gate` applies the migration on merge (SCR-006).
 - **Report checks as they are.** Pending is pending. A cancelled or skipped required job is not a pass. Name the job and its state.
-- **Answer review findings** under the severity and round rules in `AGENTS.md` under Git Workflow.
+- **Answer review findings** under the severity and round rules in `AGENTS.md` under Git Workflow. On a PR labelled `agent-monitored-pr`, the pass rule in Agent-monitored pull requests replaces the round rule.
 
 Stop the watcher when the PR merges or closes, and say which in your report.
+
+## Agent-monitored pull requests
+
+Mac set this on 2026-09-26 for every repository. The `agent-monitored-pr` label marks a PR that an agent watches until it merges or closes. A labelled PR comes before other work, and its fixes run in parallel wherever that is safe.
+
+- **Label every PR an agent opens.** Pass `--label agent-monitored-pr` to `gh pr create`. If the repository has no such label, create it first: `gh label create agent-monitored-pr --color fd0880 --description "Agent polls every 60 seconds fixes CI, comments, conflicts."`
+- **Poll the PR every 60 seconds.** Each poll reads the PR's state, its mergeability, the checks on the head commit, and every review thread with no inline reply after the reviewer's last comment. `gh pr view --json` does not return review threads, so read them with `gh api graphql` (`pullRequest.reviewThreads`).
+- **Fix by review pass.** Pass N is the Nth review one reviewer submits on the PR. On pass 1, fix every P0, P1, and P2 finding. On pass 2, fix P0 and P1. From pass 3 on, fix P0 only. A P0 blocks the PR at every pass.
+- **File one residue issue.** Carry every P1 and P2 finding left unfixed into a single issue for the PR. Its title ends with `(residue #<PR>)`, and its body links the PR. Reply inline on every thread you handle, with the commit that fixed it or a link to the residue issue.
+- **Clear conflicts and CI failures as they appear.** When the PR conflicts, merge the base branch in, resolve it, and push. When a job fails, read its failing step with `gh run view --job <id> --log-failed`, fix it, and push without waiting for the rest of the run.
+- **Dispatch subagents.** Give each independent fix its own subagent when no two fixes touch the same file. Stay active until the PR merges or closes.
+- **Search for the label every 60 seconds.** A session that watches PRs runs `gh search prs --owner macanderson --label agent-monitored-pr --state open` every 60 seconds and takes each labelled PR that no live session owns. A PR has one writer. Two writers on one branch restart each other's CI and reject each other's pushes, so check `~/.claude/jobs/*/state.json` for an owner first, and message that session instead of pushing to its branch.
 
 ## Verification policy
 
@@ -164,7 +176,7 @@ One issue carries one full change. Include context, paths, reproduction steps wh
 - Add no attribution to an issue, an issue comment, or a PR: no "Generated with Claude Code" footer, no `claude.ai/code` session link, and no co-author line. Mac had them stripped from every issue on 2026-09-25.
 - CI files a `P0` issue labelled `deployment-failure` when `main` goes red or a production deploy fails, and closes it when a later run recovers (`.github/workflows/deployment-failure.yml`). This is the one priority label a workflow applies; `triage-guard.yml` exempts it. Record the root cause and fixing PR in a comment, and leave the open and close to CI, because the time between them is the recovery-time statistic.
 - Close an issue as completed only with verification. Use not planned with an explanation for duplicates, superseded work, or a decision not to proceed.
-- Follow the review severity and three-round residue rules in `AGENTS.md` under Git Workflow. That file owns the rule, including the fourth-round P1 exception and the P0 block.
+- Follow the review severity and three-round residue rules in `AGENTS.md` under Git Workflow. That file owns the rule, including the fourth-round P1 exception and the P0 block. On a PR labelled `agent-monitored-pr`, the pass rule replaces the round rule.
 
 Four issue fields carry what a label cannot. When these fields are available in GitHub,
 set them when you open an issue and correct them when you learn better. Until they are

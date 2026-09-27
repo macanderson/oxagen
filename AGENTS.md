@@ -234,9 +234,23 @@ Production Postgres changes run through `infra/tools/run-db-migrations.sh`. Its 
 - **The count does not license a worse fix.** A finding you can fix correctly in the fourth round is still better fixed than filed.
 - **Why three.** An automated reviewer reports on each push, so a PR that fixes everything it is told generates new findings by fixing them, and a green, tested change can sit behind cosmetic notes while production carries the defects it fixes. Mac set this bound on 2026-09-19, at three rounds, replacing a first draft of two.
 
+**Agent-monitored PRs count passes (pass rule).** Mac set this on 2026-09-26. On a PR labelled `agent-monitored-pr`, the pass rule in Agent-monitored pull requests below replaces the round rule and the P2 default above. Pass 1 fixes every P0, P1, and P2 finding. Pass 2 fixes P0 and P1. From pass 3 on, only a P0 is fixed, and every P1 and P2 finding left goes to the PR's one residue issue. A P0 still blocks at every pass. Agents label every PR they open, so the round rule governs a PR only when it lacks the label.
+
 **This rule is repo-local.** SCR-004 still requires fixing findings that can ride the PR. The severity and round rules above define the exception at merge time. This file owns those rules, and `CLAUDE.md` imports them. The standing-decisions block below is the record of those decisions in this repository. Connected repositories are steered from the workspace. They do not carry a copy.
 
 **Review main integrations for lost fixes (#3237, ADR-110).** A clean three-way squash merge normally preserves changes made only on `main`. In the #3222/#3178 incident, the PR branch had already merged the fix from `main`, but that integration commit discarded the CLI exemption. The squash then landed the damaged branch. Before merging, integrate current `main`, review the resolutions, and check the behavior both sides changed. `pipeline.yml` runs `tools/scripts/check-stale-merge-base.mjs` as an advisory overlap scan for branches behind `main`. Its exact-line signals can include formatting, and an up-to-date result does not inspect earlier integrations. Requiring up-to-date branches remains a maintainer setting decision. It cannot prevent a bad integration resolution. The historical audit and retained evidence are linked from ADR-110. Separately, `pnpm check:contracts` asserts that `packages/iam/src/machine-key-scope.ts` branches on every scope purpose value a live key can carry.
+
+## Agent-monitored pull requests
+
+Mac set this on 2026-09-26 for every repository. The `agent-monitored-pr` label marks a PR that an agent watches until it merges or closes. A labelled PR comes before other work, and its fixes run in parallel wherever that is safe.
+
+- **Label every PR an agent opens.** Pass `--label agent-monitored-pr` to `gh pr create`. If the repository has no such label, create it first: `gh label create agent-monitored-pr --color fd0880 --description "Agent polls every 60 seconds fixes CI, comments, conflicts."`
+- **Poll the PR every 60 seconds.** Each poll reads the PR's state, its mergeability, the checks on the head commit, and every review thread with no inline reply after the reviewer's last comment. `gh pr view --json` does not return review threads, so read them with `gh api graphql` (`pullRequest.reviewThreads`).
+- **Fix by review pass.** Pass N is the Nth review one reviewer submits on the PR. On pass 1, fix every P0, P1, and P2 finding. On pass 2, fix P0 and P1. From pass 3 on, fix P0 only. A P0 blocks the PR at every pass.
+- **File one residue issue.** Carry every P1 and P2 finding left unfixed into a single issue for the PR. Its title ends with `(residue #<PR>)`, and its body links the PR. Reply inline on every thread you handle, with the commit that fixed it or a link to the residue issue.
+- **Clear conflicts and CI failures as they appear.** When the PR conflicts, merge the base branch in, resolve it, and push. When a job fails, read its failing step with `gh run view --job <id> --log-failed`, fix it, and push without waiting for the rest of the run.
+- **Dispatch subagents.** Give each independent fix its own subagent when no two fixes touch the same file. Stay active until the PR merges or closes.
+- **Search for the label every 60 seconds.** A session that watches PRs runs `gh search prs --owner macanderson --label agent-monitored-pr --state open` every 60 seconds and takes each labelled PR that no live session owns. A PR has one writer. Two writers on one branch restart each other's CI and reject each other's pushes, so check `~/.claude/jobs/*/state.json` for an owner first, and message that session instead of pushing to its branch.
 
 ## Documentation
 
