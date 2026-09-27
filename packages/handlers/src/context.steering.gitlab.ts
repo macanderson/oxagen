@@ -277,6 +277,40 @@ function describeStatus(title: string, summary: string): string {
     : `${text.slice(0, STATUS_DESCRIPTION_LIMIT - 1)}…`;
 }
 
+/**
+ * Refuse a merge when the project keeps approvals across a push. GitLab does
+ * not say which head a reviewer approved, so an approval proves a review of
+ * the current head only when "Reset approvals on push" is on. A setting that
+ * is off, or that GitLab will not read, refuses with
+ * `approvals_not_head_bound`. A rejected token still escapes as a 401, so the
+ * caller names the token.
+ */
+async function requireApprovalsResetOnPush(
+  rest: GitLabRest,
+  projectPath: string,
+  fullName: string,
+): Promise<void> {
+  let reset: boolean | null | undefined;
+  try {
+    const out = await rest.request<{
+      reset_approvals_on_push?: boolean | null;
+    }>("GET", `${projectPath}/approvals`);
+    reset = out.data.reset_approvals_on_push;
+  } catch (err) {
+    if (isStatus(err, 401)) throw err;
+    reset = null;
+  }
+  if (reset === true) return;
+  throw new HandlerError({
+    code: "conflict",
+    reason: "approvals_not_head_bound",
+    message:
+      reset === false
+        ? `${fullName} keeps approvals when new commits are pushed, so an approval may not cover the head being merged. Turn on "Reset approvals on push" (Settings > Merge requests > Approval settings), or run the steering repo repair.`
+        : `GitLab would not say whether ${fullName} resets approvals on push, so an approval may not cover the head being merged. Turn on "Reset approvals on push" (Settings > Merge requests > Approval settings), or run the steering repo repair. The setting needs GitLab Premium.`,
+  });
+}
+
 function asPullRequest(mr: GitLabMergeRequest) {
   return {
     baseRef: mr.targetBranch,
@@ -816,20 +850,33 @@ export function createSteeringGitLab(
     },
 
     listApprovals(repo, number) {
-      return callRest(repo, async (rest, path) => {
+      return callRest(repo, async (rest, path, gl, project) => {
+        // GitLab does not say which head a reviewer approved. An approval
+        // binds to the current head only when the project drops approvals on
+        // every push, so the merge reads that setting first and refuses
+        // without it.
+        await requireApprovalsResetOnPush(rest, path, repo.fullName);
         const out = await rest.request<{
           approved_by?: { user: { id: number; username: string } | null }[];
         }>("GET", `${path}/merge_requests/${number}/approvals`);
         const users = (out.data.approved_by ?? []).flatMap((a) =>
           a.user ? [a.user] : [],
         );
-        // GitLab does not say which head each reviewer approved, so an
-        // approval stands whatever the head is now.
+        // The head is read after the approvals. A push between the two reads
+        // makes a head the merge queue never produced, so no approval of it
+        // counts.
+        const head = (await gl.getMergeRequest({ project, iid: number })).sha;
+        if (!head)
+          throw new HandlerError({
+            code: "conflict",
+            reason: "gitlab_refused",
+            message: `GitLab did not report a head commit for !${number}. Merge again once GitLab shows the merge request's commits.`,
+          });
         return Promise.all(
           users.map(async (user) => ({
             userId: await linkAccount(GITLAB_PROVIDER, String(user.id)),
             login: user.username,
-            commitSha: null,
+            commitSha: head,
           })),
         );
       });

@@ -64,6 +64,12 @@ export class FakeGitLabApi {
   approvedBy: { id: number; username: string }[] = [
     { id: 501, username: "reviewer" },
   ];
+  /**
+   * The project's "Reset approvals on push" setting. When true, a push to an
+   * open merge request's branch drops every approval. Null answers the read
+   * 403, as a tier without approval settings does.
+   */
+  resetApprovalsOnPush: boolean | null = true;
   deployments: {
     environment: string;
     sha: string;
@@ -147,11 +153,23 @@ export class FakeGitLabApi {
     this.addCommit(mr.sourceBranch, files, `rebase ${mr.sourceBranch}`);
     return null;
   }
-  /** A commit anyone with push access makes on a branch. */
+  /**
+   * A commit anyone with push access makes on a branch. A push to an open
+   * merge request drops its approvals when the project resets them on push.
+   * A rebase through the API keeps them, as GitLab does.
+   */
   commit(branch: string, path: string, content: string): string {
     const files = this.tree(branch);
     files.set(path, content);
-    return this.addCommit(branch, files, `edit ${path}`);
+    const sha = this.addCommit(branch, files, `edit ${path}`);
+    if (
+      this.resetApprovalsOnPush === true &&
+      this.mergeRequests.some(
+        (m) => m.state === "opened" && m.sourceBranch === branch,
+      )
+    )
+      this.approvedBy = [];
+    return sha;
   }
   addCommit(
     branch: string,
@@ -198,7 +216,8 @@ export class FakeGitLabApi {
 
 /**
  * The plain REST calls the steering seam makes, answered from one fake
- * project: merge base, rebase and its poll, approvals and deployments.
+ * project: merge base, rebase and its poll, approval settings, approvals and
+ * deployments.
  */
 function restOver(api: FakeGitLabApi): GitLabRest {
   const answer = <T>(status: number, data: unknown): GitLabRestResponse<T> => ({
@@ -222,6 +241,13 @@ function restOver(api: FakeGitLabApi): GitLabRest {
         const id = a && b ? api.mergeBase(a, b) : null;
         if (!id) throw new GitLabApiError(400, "Could not find merge base");
         return answer<T>(200, { id });
+      }
+      if (route === "GET /approvals") {
+        if (api.resetApprovalsOnPush === null)
+          throw new GitLabApiError(403, "403 Forbidden");
+        return answer<T>(200, {
+          reset_approvals_on_push: api.resetApprovalsOnPush,
+        });
       }
       if (route === "POST /deployments") {
         if (api.deploymentsRefused)

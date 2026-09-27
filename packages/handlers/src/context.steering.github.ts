@@ -343,8 +343,10 @@ export interface SteeringChangedFile {
  * `userId` is the Oxagen user the host account is linked to, or null when
  * nobody linked it: an approval by a stranger to the workspace counts for
  * nothing. `commitSha` is the head the reviewer approved, or null when the
- * host does not say (GitLab), in which case the approval stands whatever the
- * head is now.
+ * host did not name one, in which case the approval stands whatever the head
+ * is now. GitLab never names one. Its adapter reports the current head, and
+ * only for a project that drops approvals on every push. Any other GitLab
+ * project refuses with `approvals_not_head_bound`.
  */
 export interface SteeringApproval {
   userId: string | null;

@@ -224,6 +224,31 @@ describe("a context record published through a GitLab merge request", () => {
     expect(h.store.records).toHaveLength(0);
   });
 
+  it.each([
+    ["keeps approvals on push", false],
+    ["will not say whether it resets approvals", null],
+  ] as const)(
+    "refuses the merge when the project %s, so no approval binds to the head",
+    async (_case, reset) => {
+      const { api, h } = gitlabHarness();
+      const proposalId = await propose(h);
+      await createOpenContextPrHandler(h)({ proposalId }, ctx());
+      api.resetApprovalsOnPush = reset;
+
+      await expect(
+        createMergeContextPrHandler(h)(
+          { proposalId },
+          ctx({ userId: REVIEWER }),
+        ),
+      ).rejects.toMatchObject({
+        code: "conflict",
+        reason: "approvals_not_head_bound",
+      });
+      expect(api.merges).toHaveLength(0);
+      expect(h.store.records).toHaveLength(0);
+    },
+  );
+
   it("fails a check when the branch changes another file, so nothing merges", async () => {
     const { api, h } = gitlabHarness();
     const proposalId = await propose(h);
@@ -833,17 +858,64 @@ describe("the GitLab seam's merge-queue calls", () => {
     expect(api.branches.has("gone")).toBe(false);
   });
 
-  it("lists approvals with each reviewer's linked Oxagen user and no head", async () => {
-    const { api, seam, repo, mr, linkAccount } = await onBranch();
+  it("lists approvals with each reviewer's linked Oxagen user at the current head", async () => {
+    const { api, seam, repo, mr, head, linkAccount } = await onBranch();
     api.approvedBy = [
       { id: 501, username: "reviewer" },
       { id: 777, username: "stranger" },
     ];
     await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([
-      { userId: REVIEWER, login: "reviewer", commitSha: null },
-      { userId: null, login: "stranger", commitSha: null },
+      { userId: REVIEWER, login: "reviewer", commitSha: head },
+      { userId: null, login: "stranger", commitSha: head },
     ]);
     expect(linkAccount).toHaveBeenCalledWith("gitlab", "777");
+    // The setting is read before the approvals, and the head after them.
+    expect(api.restCalls.slice(-2)).toEqual([
+      "GET /approvals",
+      "GET /merge_requests/1/approvals",
+    ]);
+  });
+
+  it("drops an approval when a push follows it, so none stands on the new head", async () => {
+    const { api, seam, repo, mr, head } = await onBranch();
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([
+      { userId: REVIEWER, login: "reviewer", commitSha: head },
+    ]);
+    api.commit("b", "a", "pushed after the approval");
+    await expect(seam.listApprovals(repo, mr.number)).resolves.toEqual([]);
+  });
+
+  it("refuses approvals_not_head_bound when the project keeps approvals on push", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.resetApprovalsOnPush = false;
+    // GitLab keeps the approval across the push, so it no longer shows which
+    // head was reviewed.
+    api.commit("b", "a", "pushed after the approval");
+    expect(api.approvedBy).toHaveLength(1);
+    await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "approvals_not_head_bound",
+      message: expect.stringContaining('Turn on "Reset approvals on push"'),
+    });
+    expect(api.restCalls).not.toContain("GET /merge_requests/1/approvals");
+  });
+
+  it("refuses approvals_not_head_bound when GitLab will not read the setting", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.resetApprovalsOnPush = null;
+    await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+      code: "conflict",
+      reason: "approvals_not_head_bound",
+      message: expect.stringContaining("steering repo repair"),
+    });
+  });
+
+  it("names a revoked token, not the setting, when GitLab rejects the approvals read", async () => {
+    const { api, seam, repo, mr } = await onBranch();
+    api.revoked = true;
+    await expect(seam.listApprovals(repo, mr.number)).rejects.toMatchObject({
+      reason: "gitlab_credential_rejected",
+    });
   });
 
   it("records a publish as a successful deployment with no page of its own", async () => {
