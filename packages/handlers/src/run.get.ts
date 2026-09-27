@@ -55,8 +55,8 @@ import {
   connectedRunRepositories,
   readSessionConfig,
   readSessionTitle,
+  repositoryDigest,
   runEffortOf,
-  workDigest,
 } from "./lib/run-work";
 import { logger } from "./logger";
 import {
@@ -332,9 +332,7 @@ export async function readSessionRepository(
   digest: string,
 ): Promise<PlaceRepository | null> {
   const repositories = await connectedRunRepositories(scope);
-  const match = repositories.find(
-    (repo) => workDigest(`${repo.host}/${repo.owner}/${repo.name}`) === digest,
-  );
+  const match = repositories.find((repo) => repositoryDigest(repo) === digest);
   return match === undefined
     ? null
     : {
@@ -623,6 +621,12 @@ export function createRunGetHandler(
         ...(config === null ? {} : { thinking: config.thinking }),
         fit: reading,
         ...withRepository(run.item.place, named),
+        // As ingest stamped it when the session opened. A ledger run has no
+        // git remote to match, so it answers false.
+        repositoryUnlinked:
+          run.source === "tacho"
+            ? (run.row.session.repositoryUnlinked ?? false)
+            : false,
         ...(paused === undefined ? {} : { pause: paused }),
       },
       frames: {

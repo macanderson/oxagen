@@ -422,6 +422,13 @@ export const tachoSessions = tachoSchema.table(
     projectDir: text("project_dir"),
     transcriptPath: text("transcript_path"),
     gitRemoteDigest: text("git_remote_digest"),
+    /**
+     * True when the session's `git_remote_digest` matched no repository
+     * linked to the workspace when the session opened. Ingest writes it once,
+     * on the genesis row. Nothing refuses an unlinked session, and its cost
+     * goes to the workspace the host's key names either way.
+     */
+    repositoryUnlinked: boolean("repository_unlinked").notNull().default(false),
     gitBranch: text("git_branch"),
     gitHeadShaStart: text("git_head_sha_start"),
     gitHeadShaEnd: text("git_head_sha_end"),

@@ -88,6 +88,12 @@ export const tachoSessionGet = registerCapability({
         terminalReason: z.string().nullable(),
         projectDir: z.string().nullable(),
         gitRemoteDigest: z.string().nullable(),
+        /**
+         * True when the session's git remote matched no repository linked to
+         * the workspace at session start. The run's cost goes to the agent's
+         * workspace either way.
+         */
+        repositoryUnlinked: z.boolean(),
         gitHeadShaStart: z.string().nullable(),
         worktreeBranch: z.string().nullable(),
         inputTokens: z.number().int(),
