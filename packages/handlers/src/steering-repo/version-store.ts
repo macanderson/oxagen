@@ -71,6 +71,25 @@ const scoped = (
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/**
+ * `store` for a publish() that runs inside a withLock its caller holds. Its
+ * withLock runs `fn` at once, since taking the lock again would wait on the
+ * caller's own hold. Every other method is the store's own. The Postgres
+ * store's setPublished reads the lease token the caller's withLock took, so
+ * a hold that lapsed still publishes nothing.
+ */
+export function heldVersionStore(store: VersionStore): VersionStore {
+  return {
+    withLock: <T>(_repository: string, fn: () => Promise<T>) => fn(),
+    current: (repository) => store.current(repository),
+    highestVersion: (repository) => store.highestVersion(repository),
+    versionAt: (repository, commit) => store.versionAt(repository, commit),
+    put: (bundle) => store.put(bundle),
+    setPublished: (repository, pointer) =>
+      store.setPublished(repository, pointer),
+  };
+}
+
 /** The published steering versions of one workspace, in Postgres. */
 export function postgresVersionStore(
   scope: VersionScope,

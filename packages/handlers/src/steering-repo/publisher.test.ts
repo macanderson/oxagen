@@ -40,6 +40,7 @@ import {
   steeringRepositoryKey,
   steeringSyncPublish,
 } from "./publisher";
+import { heldVersionStore } from "./version-store";
 
 const SCOPE = {
   orgId: "0192d4a8-7c1e-7a00-8000-00000000ac3e",
@@ -275,6 +276,63 @@ describe("steeringPublisher", () => {
       health: "diverged",
     });
     expect(fake.listTree).not.toHaveBeenCalled();
+  });
+});
+
+describe("steeringPublisher withLock", () => {
+  it("publishes under the lock it holds, and a publish that takes the lock waits for it", async () => {
+    const { host } = fakeHost();
+    const store = memoryVersionStore();
+    const publisher = steeringPublisher({
+      scope: SCOPE,
+      host,
+      store,
+      extend: noCompiler,
+      now,
+    });
+    const order: string[] = [];
+    let waiting: Promise<unknown> | null = null;
+    const result = await publisher.withLock(REPO, async (held) => {
+      // A sync's publish() takes the lock itself, so it waits for this one.
+      waiting = publisher
+        .publish(REPO, HEAD)
+        .then((r) => order.push(`sync ${r.status}`));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await expect(store.highestVersion(KEY)).resolves.toBe(0);
+      const published = await held(HEAD);
+      order.push(`held ${published.status}`);
+      return published;
+    });
+    expect(result).toMatchObject({ status: "published", version: 1 });
+    await waiting;
+    // The sync ran after the hold ended and found the commit published.
+    expect(order).toEqual(["held published", "sync current"]);
+  });
+});
+
+describe("heldVersionStore", () => {
+  it("runs withLock's callback at once and passes every other call to the store", async () => {
+    const store = memoryVersionStore();
+    const held = heldVersionStore(store);
+    // The outer hold is still open when the held store's withLock runs, so
+    // taking the store's lock again would never return.
+    await expect(
+      store.withLock(KEY, () => held.withLock(KEY, async () => "inner")),
+    ).resolves.toBe("inner");
+
+    await steeringPublisher({
+      scope: SCOPE,
+      host: fakeHost().host,
+      store,
+      extend: noCompiler,
+      now,
+    }).publish(REPO, HEAD);
+    await expect(held.highestVersion(KEY)).resolves.toBe(1);
+    await expect(held.versionAt(KEY, HEAD)).resolves.toEqual({
+      version: 1,
+      published: true,
+    });
+    await expect(held.current(KEY)).resolves.toMatchObject({ version: 1 });
   });
 });
 

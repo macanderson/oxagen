@@ -51,6 +51,7 @@ import {
   type StoredVersion,
 } from "@oxagen/steering-bundle";
 import { logger } from "./logger";
+import { heldVersionStore } from "./steering-repo/version-store";
 import { parseChecked } from "./context.steering.checks";
 import { stampRecordObject } from "./context.steering.file";
 import { MERGE_CLAIM_SECONDS } from "./context.steering.store";
@@ -118,7 +119,9 @@ const LATER = "0000000000000000000000000000000000000520";
 /**
  * S5's publish() over the fixture repo and an in-memory version store, bound
  * as the merge binds it. The production branch head is `tip.head`, so a test
- * can publish an earlier commit first.
+ * can publish an earlier commit first. `publish` records each publish the
+ * merge makes under the store's lock. `deps` takes the lock itself, as the
+ * repository sync does.
  */
 function s5Publisher() {
   const tip = { head: "0000000000000000000000000000000000000519" };
@@ -136,14 +139,32 @@ function s5Publisher() {
     now: () => new Date("2026-09-27T08:00:00Z"),
   };
   const publish = vi.fn(async (_repo: unknown, commit: string) =>
-    publishBundle(deps, BUNDLE_IDENTITY, commit),
+    publishBundle(
+      { ...deps, store: heldVersionStore(store) },
+      BUNDLE_IDENTITY,
+      commit,
+    ),
   );
   const publisher: SteeringPublisher = {
     repository: () => BUNDLE_IDENTITY.repository,
     store,
-    publish,
+    publish: (_repo, commit) => publishBundle(deps, BUNDLE_IDENTITY, commit),
+    withLock: (repo, fn) =>
+      store.withLock(BUNDLE_IDENTITY.repository, () =>
+        fn((commit) => publish(repo, commit)),
+      ),
   };
   return { tip, store, deps, publish, publisher };
+}
+
+/** A publisher with a stubbed publish() and a lock that holds nothing. */
+function unlockedPublisher(
+  parts: Omit<SteeringPublisher, "withLock">,
+): SteeringPublisher {
+  return {
+    ...parts,
+    withLock: (repo, fn) => fn((commit) => parts.publish(repo, commit)),
+  };
 }
 
 const proposalInput = (over: Record<string, unknown> = {}) =>
@@ -1734,7 +1755,7 @@ describe("merge_context_pr", () => {
       }),
     );
     const publisher = vi.fn(
-      (): SteeringPublisher => ({
+      (): SteeringPublisher => unlockedPublisher({
         repository: () => BUNDLE_IDENTITY.repository,
         store: { versionAt, highestVersion },
         publish,
@@ -2110,6 +2131,109 @@ describe("merge_context_pr", () => {
     ]);
   });
 
+  it("in a steering repo, holds the version store's lock from the version read through publish(), so a sync during the landing cannot take the trailer's version", async () => {
+    const h = steeringHarness();
+    const { id } = await steeringPrPassed(h);
+    const s5 = s5Publisher();
+    // Version 1 is an earlier commit, published before this merge.
+    s5.tip.head = "5eed000000000000000000000000000000000000";
+    await publishBundle(
+      s5.deps,
+      BUNDLE_IDENTITY,
+      "5eed000000000000000000000000000000000000",
+    );
+    s5.tip.head = "0000000000000000000000000000000000000519";
+
+    // While the stamp lands, the production branch reads another commit and
+    // the repository sync publishes it. Unless the merge holds the lock, the
+    // sync takes version 2, the version already in the merge's trailer.
+    const side = "51de000000000000000000000000000000000000";
+    const commitFiles = h.github.commitFiles.bind(h.github);
+    let sync: Promise<PublishResult> | null = null;
+    let first: string | null = null;
+    h.github.commitFiles = async (repo, args) => {
+      const out = await commitFiles(repo, args);
+      if (sync === null) {
+        s5.tip.head = side;
+        const started = publishBundle(s5.deps, BUNDLE_IDENTITY, side);
+        sync = started;
+        first = await Promise.race([
+          started.then(() => "sync"),
+          new Promise<string>((resolve) =>
+            setTimeout(() => resolve("landing"), 50),
+          ),
+        ]);
+        s5.tip.head = "0000000000000000000000000000000000000519";
+      }
+      return out;
+    };
+    const out = await createMergeContextPrHandler(h, {
+      publisher: () => s5.publisher,
+    })({ proposalId: id }, ctx({ userId: REVIEWER }));
+
+    // The sync waited for the merge's lock.
+    expect(first).toBe("landing");
+    expect(out.status).toBe("merged");
+    expect(h.github.merges[0]!.commitMessage).toMatch(/\nOxagen-Version: 2$/);
+    expect(s5.store.published.get(BUNDLE_IDENTITY.repository)).toMatchObject({
+      version: 2,
+      commit: "0000000000000000000000000000000000000519",
+    });
+    // Once the merge let go, the sync found its commit was no longer the
+    // production branch's head.
+    await expect(sync).resolves.toMatchObject({ status: "stale", commit: side });
+    expect(h.github.deployments).toEqual([
+      expect.objectContaining({
+        description: "Steering version 2 from #519",
+      }),
+    ]);
+  });
+
+  it("in a steering repo, refuses publish_in_progress before claiming or merging when another publish holds the lock", async () => {
+    const h = steeringHarness();
+    const { id } = await steeringPrPassed(h);
+    const publish = vi.fn(
+      async (): Promise<PublishResult> => ({
+        status: "current",
+        version: 1,
+        commit: "0000000000000000000000000000000000000519",
+      }),
+    );
+    const held = vi.fn(async () => {
+      throw new HandlerError({
+        code: "conflict",
+        reason: "publish_in_progress",
+        message:
+          "Another publish of github.com/a-intel/oxagen-core-platform held its lock for over 60 seconds. The next sync publishes it again.",
+      });
+    });
+    await expect(
+      createMergeContextPrHandler(h, {
+        publisher: () => ({
+          repository: () => BUNDLE_IDENTITY.repository,
+          store: {
+            versionAt: async () => null,
+            highestVersion: async () => 0,
+          },
+          publish,
+          withLock: held,
+        }),
+      })({ proposalId: id }, ctx({ userId: REVIEWER })),
+    ).rejects.toMatchObject({
+      code: "conflict",
+      reason: "publish_in_progress",
+      message: expect.stringContaining("so nothing merged. Merge again"),
+    });
+    expect(held).toHaveBeenCalledTimes(1);
+    expect(h.github.stamps).toHaveLength(0);
+    expect(h.github.merges).toHaveLength(0);
+    expect(publish).not.toHaveBeenCalled();
+    expect(h.store.proposals[0]).toMatchObject({
+      status: "checks_passed",
+      mergeClaimedAt: null,
+    });
+  });
+
   it("in a steering repo, refuses version_mismatch when publish() assigns a version other than the trailer's, before the deployment and the event", async () => {
     const h = steeringHarness();
     const { id } = await steeringPrPassed(h);
@@ -2122,7 +2246,7 @@ describe("merge_context_pr", () => {
     );
     await expect(
       createMergeContextPrHandler(h, {
-        publisher: () => ({
+        publisher: () => unlockedPublisher({
           repository: () => BUNDLE_IDENTITY.repository,
           store: {
             versionAt: async () => null,
@@ -2155,7 +2279,7 @@ describe("merge_context_pr", () => {
     const warn = vi.spyOn(logger, "warn");
     try {
       const out = await createMergeContextPrHandler(h, {
-        publisher: () => ({
+        publisher: () => unlockedPublisher({
           repository: () => BUNDLE_IDENTITY.repository,
           store: {
             versionAt: async () => null,
@@ -2344,7 +2468,7 @@ describe("merge_context_pr", () => {
       }),
     );
     const merge = createMergeContextPrHandler(h, {
-      publisher: () => ({
+      publisher: () => unlockedPublisher({
         repository: () => BUNDLE_IDENTITY.repository,
         store,
         publish,
@@ -2394,7 +2518,7 @@ describe("merge_context_pr", () => {
     const warn = vi.spyOn(logger, "warn");
     try {
       const out = await createMergeContextPrHandler(h, {
-        publisher: () => ({
+        publisher: () => unlockedPublisher({
           repository: () => BUNDLE_IDENTITY.repository,
           store: {
             versionAt: async () => null,

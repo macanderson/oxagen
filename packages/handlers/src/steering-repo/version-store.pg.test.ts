@@ -4,7 +4,11 @@ import { afterAll, describe, expect, it } from "vitest";
 import { closeDatabase, schema, withSystemDb } from "@oxagen/database";
 import type { Bundle } from "@oxagen/oxagen/steering-repo/bundle";
 import { and, eq, inArray } from "drizzle-orm";
-import { postgresVersionStore, type VersionScope } from "./version-store";
+import {
+  heldVersionStore,
+  postgresVersionStore,
+  type VersionScope,
+} from "./version-store";
 
 const REPOSITORY = "github.com/a-intel/steering";
 const scopes: VersionScope[] = [];
@@ -161,6 +165,36 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await expect(store.current(REPOSITORY)).resolves.toMatchObject({
         version: 1,
       });
+    });
+
+    it("publishes through a held store under the caller's lease, and refuses one with no lease", async () => {
+      const store = postgresVersionStore(newScope());
+      const held = heldVersionStore(store);
+      // The merge's hold: the held store's withLock runs at once, and its
+      // setPublished reads the lease the outer withLock took.
+      await store.withLock(REPOSITORY, () =>
+        held.withLock(REPOSITORY, async () => {
+          await held.put(bundle(1, commit(1)));
+          await held.setPublished(REPOSITORY, {
+            version: 1,
+            commit: commit(1),
+            ledger: null,
+          });
+        }),
+      );
+      await expect(store.current(REPOSITORY)).resolves.toMatchObject({
+        version: 1,
+        commit: commit(1),
+      });
+      await expect(
+        held.withLock(REPOSITORY, () =>
+          held.setPublished(REPOSITORY, {
+            version: 1,
+            commit: commit(1),
+            ledger: null,
+          }),
+        ),
+      ).rejects.toThrow("only inside withLock");
     });
 
     it("runs one publish of a repository at a time in one process", async () => {

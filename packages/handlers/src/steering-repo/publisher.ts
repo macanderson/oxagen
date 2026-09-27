@@ -12,7 +12,9 @@
 //   bundle names.
 // - steeringPublishDeps: publish()'s deps over the workspace's host and its
 //   Postgres version store. `withToolProjection` (M13) adds project().
-// - steeringPublisher: what merge_context_pr calls.
+// - steeringPublisher: what merge_context_pr calls. Its withLock holds the
+//   store's lock from the version read through publish(), so the version a
+//   merge writes into its trailer is the one publish() assigns.
 // - steeringSyncPublish: the repository sync's publish port
 //   (`SyncDeps.publish`), over the same publisher.
 import { schema, withSystemDb } from "@oxagen/database";
@@ -34,7 +36,14 @@ import type {
 } from "../context.steering.github";
 import type { SyncPublish, SyncPublished } from "../context.steering.sync";
 import { readSteeringLayout } from "./merge-queue";
-import { postgresVersionStore, type VersionScope } from "./version-store";
+import {
+  heldVersionStore,
+  postgresVersionStore,
+  type VersionScope,
+} from "./version-store";
+
+/** publish() at `commit`, under a lock its caller already holds. */
+export type HeldPublish = (commit: string) => Promise<PublishResult>;
 
 /**
  * S5's publish() and the version store it assigns versions from. Both are
@@ -46,8 +55,23 @@ export interface SteeringPublisher {
   repository: (repo: SteeringRepository) => string;
   /** The version store publish() assigns versions from. */
   store: Pick<VersionStore, "versionAt" | "highestVersion">;
-  /** S5's publish() at `commit`, bound to `store` and the repository. */
+  /**
+   * S5's publish() at `commit`, bound to `store` and the repository. It takes
+   * the store's lock itself, so it must never run inside `withLock`: the
+   * inner call would wait on the outer one's hold.
+   */
   publish: (repo: SteeringRepository, commit: string) => Promise<PublishResult>;
+  /**
+   * Run `fn` under the store's lock for the repository, across every
+   * process. `fn` gets a publish() that runs under that same hold, so no
+   * other publish can take a version between `fn`'s read of the store and
+   * its publish. A lock another publish holds for over a minute refuses
+   * `publish_in_progress` before `fn` runs.
+   */
+  withLock: <T>(
+    repo: SteeringRepository,
+    fn: (publish: HeldPublish) => Promise<T>,
+  ) => Promise<T>;
 }
 
 /** publish()'s deps before MCP Studio adds project(). */
@@ -208,17 +232,27 @@ export function steeringPublisher(
   },
 ): SteeringPublisher {
   const store = options.store ?? postgresVersionStore(options.scope);
+  const publishWith = async (
+    lockStore: VersionStore,
+    repo: SteeringRepository,
+    commit: string,
+  ) => {
+    const deps = steeringPublishDeps({ ...options, store: lockStore, repo });
+    return publish(
+      options.extend ? options.extend(deps) : deps,
+      await steeringBundleIdentity(options.scope, repo),
+      commit,
+    );
+  };
+  const held = heldVersionStore(store);
   return {
     repository: steeringRepositoryKey,
     store,
-    publish: async (repo, commit) => {
-      const deps = steeringPublishDeps({ ...options, store, repo });
-      return publish(
-        options.extend ? options.extend(deps) : deps,
-        await steeringBundleIdentity(options.scope, repo),
-        commit,
-      );
-    },
+    publish: (repo, commit) => publishWith(store, repo, commit),
+    withLock: (repo, fn) =>
+      store.withLock(steeringRepositoryKey(repo), () =>
+        fn((commit) => publishWith(held, repo, commit)),
+      ),
   };
 }
 
