@@ -101,6 +101,7 @@ describe("the prose gate", () => {
     const hits = proseHits({
       summary: "A seamless release — really!",
       body: "## What changed\n\n- Very robust now.",
+      source: "model",
     });
     expect(hits.join("\n")).toMatch(/em dash/);
     expect(hits.join("\n")).toMatch(/avoid: seamless/);
