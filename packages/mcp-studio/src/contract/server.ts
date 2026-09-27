@@ -8,7 +8,7 @@
 import { z } from "zod";
 import { credentialRefSchema, repoPathSchema } from "@oxagen/oxagen/steering-repo/common";
 import { DEFAULT_SERVER_DEFINITION_BUDGET } from "@oxagen/oxagen/steering-repo/tokens";
-import { uniqueList, withChecks, type CustomCheck } from "./checks";
+import { uniqueList, withChecks, type Check, type CustomCheck } from "./checks";
 import {
   environmentNameSchema,
   headerNameSchema,
@@ -94,25 +94,40 @@ export const localSourceSchema = z
   .strict()
   .describe("A local MCP server the local gateway runs on an enrolled machine.");
 
-const definitionLocationChecks = (extra: readonly string[]) => [
-  {
-    kind: "require" as const,
-    when: { field: "from", is: "repository" },
-    fields: ["repo", "path", "ref"],
-  },
-  { kind: "forbid" as const, when: { field: "from", is: "repository" }, fields: ["url"] },
-  { kind: "require" as const, when: { field: "from", is: "url" }, fields: ["url"] },
-  {
-    kind: "forbid" as const,
-    when: { field: "from", is: "url" },
-    fields: ["repo", "path", "ref"],
-  },
-  ...["upload", ...extra].map((from) => ({
-    kind: "forbid" as const,
-    when: { field: "from", is: from },
-    fields: ["repo", "path", "ref", "url"],
-  })),
-];
+/**
+ * Where each kind of definition can come from. Introspection and reflection
+ * read the definition from the first environment's endpoint.
+ */
+export const DEFINITION_FROMS = {
+  openapi: ["repository", "url", "upload"],
+  graphql: ["repository", "url", "upload", "introspection"],
+  grpc: ["repository", "url", "upload", "reflection"],
+} as const satisfies Record<string, readonly [string, ...string[]]>;
+
+/**
+ * The location fields each `from` needs and refuses. `extra` names the
+ * sources past repository, url, and upload that carry no location.
+ * `repositoryFields` are the fields a repository location has: repo, path,
+ * and ref in server.toml, and the lock adds the commit ref resolved to.
+ */
+export function definitionLocationChecks(
+  extra: readonly string[],
+  repositoryFields: readonly string[] = ["repo", "path", "ref"],
+): Check[] {
+  return [
+    { kind: "require", when: { field: "from", is: "repository" }, fields: repositoryFields },
+    { kind: "forbid", when: { field: "from", is: "repository" }, fields: ["url"] },
+    { kind: "require", when: { field: "from", is: "url" }, fields: ["url"] },
+    { kind: "forbid", when: { field: "from", is: "url" }, fields: repositoryFields },
+    ...["upload", ...extra].map(
+      (from): Check => ({
+        kind: "forbid",
+        when: { field: "from", is: from },
+        fields: [...repositoryFields, "url"],
+      }),
+    ),
+  ];
+}
 
 function definitionSource<Type extends "openapi" | "graphql" | "grpc">(
   type: Type,
@@ -138,17 +153,17 @@ function definitionSource<Type extends "openapi" | "graphql" | "grpc">(
 
 export const openapiSourceSchema = definitionSource(
   "openapi",
-  ["repository", "url", "upload"],
+  DEFINITION_FROMS.openapi,
   "An OpenAPI 3.0 or 3.1 document, or Swagger 2.0.",
 );
 export const graphqlSourceSchema = definitionSource(
   "graphql",
-  ["repository", "url", "upload", "introspection"],
+  DEFINITION_FROMS.graphql,
   "A GraphQL schema. introspection reads it from the first environment's endpoint.",
 );
 export const grpcSourceSchema = definitionSource(
   "grpc",
-  ["repository", "url", "upload", "reflection"],
+  DEFINITION_FROMS.grpc,
   "A protobuf package. reflection reads it from the first environment's endpoint.",
 );
 

@@ -294,9 +294,28 @@ describe("auth", () => {
   });
 
   it("limits the scheme to oauth, bearer, basic, and header outside OpenAPI", () => {
-    expect(
-      issues(server(remote, { auth: { mode: "service", scheme: "ApiKeyAuth", credential: "oxagen:credential/x" } })),
-    ).toStrictEqual([{ path: "auth.scheme", message: "auth.scheme is one of oauth, bearer, basic, header" }]);
+    const apiKeyAuth = { mode: "service", scheme: "ApiKeyAuth", credential: "oxagen:credential/x" };
+    const outsideOpenApi = [
+      server(remote, { auth: apiKeyAuth }),
+      server({ type: "graphql", from: "introspection" }, { auth: apiKeyAuth, environments: oneEnvironment }),
+      server({ type: "grpc", from: "reflection" }, { auth: apiKeyAuth, environments: oneEnvironment }),
+    ];
+    for (const value of outsideOpenApi) {
+      expect(issues(value)).toStrictEqual([
+        { path: "auth.scheme", message: "auth.scheme is one of oauth, bearer, basic, header" },
+      ]);
+    }
+  });
+
+  // Pinned as it stands: mode none refuses auth.credential but not a
+  // credential on an environment, which the manifest then carries. PR #4416
+  // lists this as a contract gap.
+  it("accepts an environment credential when the mode is none", () => {
+    const value = server(remote, {
+      auth: { mode: "none" },
+      environments: { live: { credential: "oxagen:credential/x" } },
+    });
+    expect(issues(value)).toStrictEqual([]);
   });
 
   it("requires a header for the header scheme, and only for it", () => {
@@ -348,6 +367,21 @@ describe("environments", () => {
         message: "a server built from a definition needs at least one environment with its url",
       },
     ]);
+  });
+
+  it("requires an environment for a GraphQL or gRPC server read live", () => {
+    const live = [
+      server({ type: "graphql", from: "introspection" }, { auth: serviceAuth }),
+      server({ type: "grpc", from: "reflection" }, { auth: serviceAuth }),
+    ];
+    for (const value of live) {
+      expect(issues(value)).toStrictEqual([
+        {
+          path: "environments",
+          message: "a server built from a definition needs at least one environment with its url",
+        },
+      ]);
+    }
   });
 
   it("requires each environment of a definition server to name its url", () => {

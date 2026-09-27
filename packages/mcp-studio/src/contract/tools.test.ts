@@ -171,7 +171,12 @@ describe("cross-field checks", () => {
 
 describe("field values", () => {
   it("refuse a grade outside today's enum", () => {
-    expect(issues(toolsEntrySchema, { ...classified, risk: "severe" })).toHaveLength(1);
+    expect(issues(toolsEntrySchema, { ...classified, risk: "severe" })).toStrictEqual([
+      {
+        path: "risk",
+        message: "Invalid enum value. Expected 'low' | 'medium' | 'high' | 'critical', received 'severe'",
+      },
+    ]);
   });
 
   it("refuse a renamed input that is not an identifier", () => {
@@ -190,8 +195,13 @@ describe("field values", () => {
 
   it("refuse a result size over 1 MB, in an entry and in defaults", () => {
     const over = MAX_RESULT_BYTES_LIMIT + 1;
-    expect(issues(toolsEntrySchema, { ...classified, max_result_bytes: over })).toHaveLength(1);
-    expect(issues(mcpToolsSchema, { schema: "mcp-tools/v1", defaults: { max_result_bytes: over } })).toHaveLength(1);
+    const message = `Number must be less than or equal to ${MAX_RESULT_BYTES_LIMIT}`;
+    expect(issues(toolsEntrySchema, { ...classified, max_result_bytes: over })).toStrictEqual([
+      { path: "max_result_bytes", message },
+    ]);
+    expect(issues(mcpToolsSchema, { schema: "mcp-tools/v1", defaults: { max_result_bytes: over } })).toStrictEqual([
+      { path: "defaults.max_result_bytes", message },
+    ]);
   });
 
   it("refuse a GraphQL field and a gRPC method in the wrong form", () => {
@@ -220,6 +230,8 @@ describe("field values", () => {
   });
 
   it("refuse another schema id", () => {
-    expect(issues(mcpToolsSchema, { schema: "mcp-tools/v2" })).toHaveLength(1);
+    expect(issues(mcpToolsSchema, { schema: "mcp-tools/v2" })).toStrictEqual([
+      { path: "schema", message: 'Invalid literal value, expected "mcp-tools/v1"' },
+    ]);
   });
 });

@@ -488,8 +488,10 @@ describe("parseRecordedCalls", () => {
 
   it("refuses a request path that does not start with /", () => {
     const call = { ...httpCall, request: { ...httpCall.request, path: "refunds" } };
-    const result = parseRecordedCalls(jsonLines([call]));
-    expect(result.ok).toBe(false);
+    expect(parseRecordedCalls(jsonLines([call]))).toStrictEqual({
+      ok: false,
+      issues: [{ line: 1, field: "request.path", message: "a path starts with / and has no fragment" }],
+    });
   });
 });
 

@@ -36,7 +36,9 @@ describe("tools/list shapes", () => {
   });
 
   it("refuse an input schema whose type is not object", () => {
-    expect(mcpToolSchema.safeParse({ name: "x", inputSchema: { type: "string" } }).success).toBe(false);
+    const parsed = mcpToolSchema.safeParse({ name: "x", inputSchema: { type: "string" } });
+    const found = parsed.error?.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message }));
+    expect(found).toStrictEqual([{ path: "inputSchema.type", message: 'Invalid literal value, expected "object"' }]);
   });
 });
 

@@ -13,10 +13,10 @@ import { z } from "zod";
 import { gitObjectIdSchema, repoPathSchema, sha256Schema } from "@oxagen/oxagen/steering-repo/common";
 import { securitySchemeSchema } from "../model/security-scheme";
 import { upstreamToolSchema } from "../model/upstream-tool";
-import { withChecks } from "./checks";
+import { withChecks, type CustomCheck } from "./checks";
 import { lockedMcpToolSchema } from "./mcp-tool";
 import { httpUrlSchema, serverNameSchema, toolKeySchema } from "./primitives";
-import { gitRefSchema, sourceRepoSchema } from "./server";
+import { DEFINITION_FROMS, definitionLocationChecks, gitRefSchema, sourceRepoSchema } from "./server";
 
 /** A lock file is at most 5 MB. */
 export const LOCK_BYTES_MAX = 5 * 1024 * 1024;
@@ -75,7 +75,45 @@ export const mcpLockSourceSchema = z.union([
 ]);
 export type McpLockSource = z.output<typeof mcpLockSourceSchema>;
 
-/** Where a definition came from when the lock was written, and the hash of its bytes. */
+type DefinitionType = keyof typeof DEFINITION_FROMS;
+
+const DEFINITION_LABELS: Record<DefinitionType, string> = {
+  openapi: "an OpenAPI",
+  graphql: "a GraphQL",
+  grpc: "a gRPC",
+};
+
+/**
+ * A lock source's from is one its type can come from, as in server.toml.
+ * OpenAPI has no introspection or reflection, and GraphQL and gRPC each
+ * have only their own.
+ */
+const fromFitsType: CustomCheck = {
+  issues(value) {
+    const type = value.type as DefinitionType;
+    const froms: readonly string[] = DEFINITION_FROMS[type];
+    return froms.includes(String(value.from))
+      ? []
+      : [
+          {
+            path: ["from"],
+            message: `${DEFINITION_LABELS[type]} definition comes from one of ${froms.join(", ")}`,
+          },
+        ];
+  },
+  json: {
+    allOf: Object.entries(DEFINITION_FROMS).map(([type, froms]) => ({
+      if: { properties: { type: { const: type } }, required: ["type"] },
+      then: { properties: { from: { enum: [...froms] } } },
+    })),
+  },
+};
+
+/**
+ * Where a definition came from when the lock was written, and the hash of
+ * its bytes. It follows server.toml's source rules, and a repository source
+ * also records the commit its ref resolved to.
+ */
 export const definitionLockSourceSchema = withChecks(
   z
     .object({
@@ -98,8 +136,10 @@ export const definitionLockSourceSchema = withChecks(
     })
     .strict(),
   [
-    { kind: "require", when: { field: "from", is: "repository" }, fields: ["repo", "path", "ref", "commit"] },
-    { kind: "require", when: { field: "from", is: "url" }, fields: ["url"] },
+    fromFitsType,
+    ...definitionLocationChecks(["introspection", "reflection"], ["repo", "path", "ref", "commit"]),
+    { kind: "forbid", when: { field: "type", is: "graphql" }, fields: ["security_schemes"] },
+    { kind: "forbid", when: { field: "type", is: "grpc" }, fields: ["security_schemes"] },
   ],
 );
 export type DefinitionLockSource = z.output<typeof definitionLockSourceSchema>;
