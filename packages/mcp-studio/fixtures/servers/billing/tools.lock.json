@@ -1,0 +1,211 @@
+{
+  "schema": "mcp-tools-lock/v1",
+  "server": "billing",
+  "source": {
+    "commit": "4be91d2c0a7e5f3b9d18e6a2c4f0b7d95e3a1c86",
+    "document_hash": "sha256:6d1eba73eafc77cd78b8193fe8eee6ef217a9d56711351dde07344d76cdcf55b",
+    "from": "repository",
+    "path": "openapi/billing.yaml",
+    "ref": "main",
+    "repo": "github.com/a-intel/billing-service",
+    "security_schemes": {
+      "oauth": {
+        "authorization_url": "https://login.a-intel.com/oauth/authorize",
+        "scopes": [
+          "billing"
+        ],
+        "token_url": "https://login.a-intel.com/oauth/token",
+        "type": "oauth2"
+      }
+    },
+    "type": "openapi"
+  },
+  "tools": {
+    "create_refund": {
+      "definition_hash": "sha256:5423aae537c26f446dc3edb7c595e6f9f8a3e5f2f3a0385015bc4da3863d5e6a",
+      "upstream": {
+        "description": "Create a refund for a charge.",
+        "inputSchema": {
+          "properties": {
+            "X-Request-Source": {
+              "type": "string"
+            },
+            "amount": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "charge_id": {
+              "description": "The charge to refund.",
+              "type": "string"
+            },
+            "reason": {
+              "enum": [
+                "duplicate",
+                "fraudulent",
+                "requested_by_customer"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "charge_id"
+          ],
+          "type": "object"
+        },
+        "name": "create_refund",
+        "outputSchema": {
+          "properties": {
+            "amount": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "string"
+            },
+            "status": {
+              "enum": [
+                "pending",
+                "succeeded",
+                "failed",
+                "canceled"
+              ],
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "request": {
+          "body": {
+            "in": "spread",
+            "media_type": "application/json",
+            "properties": [
+              "charge_id",
+              "amount",
+              "reason"
+            ],
+            "required": true
+          },
+          "kind": "http",
+          "method": "POST",
+          "operation": "createRefund",
+          "parameters": [
+            {
+              "in": "header",
+              "name": "X-Request-Source",
+              "property": "X-Request-Source",
+              "required": false
+            }
+          ],
+          "path": "/refunds",
+          "response": {
+            "media_type": "application/json",
+            "status": "201"
+          },
+          "security": [
+            {
+              "oauth": [
+                "billing"
+              ]
+            }
+          ]
+        }
+      },
+      "upstream_hash": "sha256:8436b7d4efdf2761d90ec03f5eacbf08cbbb2a3573405af32be8960430b5b87d",
+      "version": 1
+    },
+    "list_charges": {
+      "definition_hash": "sha256:bd126ac1bffd94a9b08fe4ac52bd4f2a35017c6a44de3fcf3ce3d9323e9f6dd4",
+      "upstream": {
+        "description": "List a customer's charges.",
+        "inputSchema": {
+          "properties": {
+            "cursor": {
+              "description": "The next_cursor from the previous page.",
+              "type": "string"
+            },
+            "customer_id": {
+              "description": "The customer whose charges to list.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "customer_id"
+          ],
+          "type": "object"
+        },
+        "name": "list_charges",
+        "outputSchema": {
+          "properties": {
+            "data": {
+              "items": {
+                "properties": {
+                  "amount": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "pending",
+                      "succeeded",
+                      "failed"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "next_cursor": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "paging": {
+          "input": "cursor",
+          "items": "data",
+          "next": "next_cursor",
+          "style": "cursor"
+        },
+        "request": {
+          "kind": "http",
+          "method": "GET",
+          "operation": "listCharges",
+          "parameters": [
+            {
+              "in": "path",
+              "name": "customer_id",
+              "property": "customer_id",
+              "required": true
+            },
+            {
+              "in": "query",
+              "name": "cursor",
+              "property": "cursor",
+              "required": false
+            }
+          ],
+          "path": "/customers/{customer_id}/charges",
+          "response": {
+            "media_type": "application/json",
+            "status": "200"
+          },
+          "security": [
+            {
+              "oauth": [
+                "billing"
+              ]
+            }
+          ]
+        }
+      },
+      "upstream_hash": "sha256:5663eaf332f70d11bd3175d583b707d0a3ea08b42234c8c547795f65d78f5f0a",
+      "version": 1
+    }
+  }
+}

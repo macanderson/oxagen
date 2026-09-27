@@ -1,0 +1,25 @@
+#:schema https://oxagen.sh/schemas/mcp-server/v1.json
+# One environment and no sandbox mark: every agent's calls go to live.
+schema = "mcp-server/v1"
+name = "sentry"
+label = "Sentry"
+description = "Errors and releases in the a-intel Sentry organization."
+
+[source]
+type = "remote"
+url = "https://mcp.sentry.dev/mcp"
+transport = "http"
+
+[auth]
+mode = "service"
+scheme = "header"
+header = "X-Sentry-Token"
+
+[environments.live]
+credential = "oxagen:credential/sentry"
+
+[exposure]
+mode = "direct"
+
+[sync]
+schedule = "manual"

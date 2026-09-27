@@ -1,0 +1,21 @@
+# A document split across files. Paths and schemas live beside this file and
+# are reached by relative $ref, including one file that refers to another.
+openapi: 3.0.3
+info:
+  title: a-intel inventory
+  version: 2.1.0
+servers:
+  - url: https://inventory.a-intel.com
+security:
+  - api_key: []
+paths:
+  /items:
+    $ref: "./paths/items.yaml"
+  /items/{sku}:
+    $ref: "./paths/item.yaml"
+components:
+  securitySchemes:
+    api_key:
+      type: apiKey
+      in: header
+      name: X-Inventory-Key

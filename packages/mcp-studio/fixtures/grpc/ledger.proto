@@ -1,0 +1,101 @@
+// a-intel ledger. Unary, client-streaming, server-streaming, and bidi
+// methods; an Any field; a oneof, an enum, a map, and a repeated field; and
+// all three idempotency levels.
+syntax = "proto3";
+
+package a_intel.ledger.v1;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/a-intel/ledger/gen/ledgerv1";
+
+// The ledger of money moving between accounts.
+service Ledger {
+  // Read one entry.
+  rpc GetEntry(GetEntryRequest) returns (Entry) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Post an entry. Posting twice posts twice.
+  rpc PostEntry(PostEntryRequest) returns (Entry);
+
+  // Reverse an entry. Reversing it again changes nothing.
+  rpc ReverseEntry(ReverseEntryRequest) returns (Entry) {
+    option idempotency_level = IDEMPOTENT;
+  }
+
+  // Stream every entry for an account, oldest first.
+  rpc ListEntries(ListEntriesRequest) returns (stream Entry) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+
+  // Post many entries in one call. The reply counts them.
+  rpc UploadEntries(stream PostEntryRequest) returns (UploadSummary);
+
+  // Post entries and read the ledger's view of each as it lands.
+  rpc SyncEntries(stream PostEntryRequest) returns (stream Entry);
+}
+
+enum EntryKind {
+  ENTRY_KIND_UNSPECIFIED = 0;
+  ENTRY_KIND_DEBIT = 1;
+  ENTRY_KIND_CREDIT = 2;
+}
+
+message Money {
+  // The amount in the currency's minor unit.
+  int64 amount = 1;
+  // An ISO 4217 code, such as USD.
+  string currency = 2;
+}
+
+message Entry {
+  string id = 1;
+  string account_id = 2;
+  EntryKind kind = 3;
+  Money money = 4;
+  google.protobuf.Timestamp posted_at = 5;
+  map<string, string> labels = 6;
+  repeated string related_ids = 7;
+  // Whatever the posting system attached. The ledger stores it unread.
+  google.protobuf.Any detail = 8;
+  oneof source {
+    string invoice_id = 9;
+    string transfer_id = 10;
+    string manual_note = 11;
+  }
+  bool reversed = 12;
+}
+
+message GetEntryRequest {
+  string id = 1;
+}
+
+message PostEntryRequest {
+  string account_id = 1;
+  EntryKind kind = 2;
+  Money money = 3;
+  map<string, string> labels = 4;
+  google.protobuf.Any detail = 5;
+  oneof source {
+    string invoice_id = 6;
+    string transfer_id = 7;
+    string manual_note = 8;
+  }
+}
+
+message ReverseEntryRequest {
+  string id = 1;
+  string reason = 2;
+}
+
+message ListEntriesRequest {
+  string account_id = 1;
+  google.protobuf.Timestamp since = 2;
+}
+
+message UploadSummary {
+  int32 posted = 1;
+  repeated string entry_ids = 2;
+}

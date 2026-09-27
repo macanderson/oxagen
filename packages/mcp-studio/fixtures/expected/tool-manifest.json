@@ -1,0 +1,470 @@
+{
+  "schema": "tool-manifest/v1",
+  "servers": [
+    {
+      "auth": {
+        "apply": {
+          "authorization_url": "https://login.a-intel.com/oauth/authorize",
+          "scopes": [
+            "billing"
+          ],
+          "token_url": "https://login.a-intel.com/oauth/token",
+          "type": "oauth2"
+        },
+        "mode": "operator-oauth",
+        "scheme": "oauth"
+      },
+      "description": "Charges, refunds, and invoices in the a-intel billing service.",
+      "environments": {
+        "production": {
+          "credential": "oxagen:credential/billing-oauth-client",
+          "network": "relay:a-intel-east",
+          "sandbox": false,
+          "url": "https://billing.internal.a-intel.com/v2"
+        },
+        "sandbox": {
+          "credential": "oxagen:credential/billing-oauth-client",
+          "network": "cloud",
+          "sandbox": true,
+          "url": "https://billing-sandbox.a-intel.com/v2"
+        }
+      },
+      "exposure": {
+        "definition_budget": 8000,
+        "mode": "direct"
+      },
+      "label": "Billing API",
+      "name": "billing",
+      "pinned": {
+        "commit": "4be91d2c0a7e5f3b9d18e6a2c4f0b7d95e3a1c86",
+        "document_hash": "sha256:6d1eba73eafc77cd78b8193fe8eee6ef217a9d56711351dde07344d76cdcf55b",
+        "from": "repository",
+        "path": "openapi/billing.yaml",
+        "ref": "main",
+        "repo": "github.com/a-intel/billing-service",
+        "security_schemes": {
+          "oauth": {
+            "authorization_url": "https://login.a-intel.com/oauth/authorize",
+            "scopes": [
+              "billing"
+            ],
+            "token_url": "https://login.a-intel.com/oauth/token",
+            "type": "oauth2"
+          }
+        },
+        "type": "openapi"
+      },
+      "search": null,
+      "source": {
+        "from": "repository",
+        "path": "openapi/billing.yaml",
+        "ref": "main",
+        "repo": "github.com/a-intel/billing-service",
+        "type": "openapi"
+      },
+      "tokens": {
+        "definitions": 349,
+        "request": 349
+      },
+      "tools": {
+        "create_refund": {
+          "classification": {
+            "data_classes": [],
+            "egress": "org_tenant",
+            "impacts": [
+              "moves_money"
+            ],
+            "measures": {},
+            "risk": "high",
+            "side_effect": "irreversible"
+          },
+          "definition": {
+            "annotations": {
+              "destructiveHint": true,
+              "openWorldHint": false,
+              "readOnlyHint": false
+            },
+            "description": "Refund part or all of a captured charge. amount is in cents and defaults to the whole charge.",
+            "inputSchema": {
+              "properties": {
+                "amount": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "charge_id": {
+                  "description": "The charge to refund.",
+                  "type": "string"
+                },
+                "reason": {
+                  "enum": [
+                    "duplicate",
+                    "fraudulent",
+                    "requested_by_customer"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "charge_id"
+              ],
+              "type": "object"
+            },
+            "name": "billing__create_refund",
+            "outputSchema": {
+              "properties": {
+                "amount": {
+                  "type": "integer"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "status": {
+                  "enum": [
+                    "pending",
+                    "succeeded",
+                    "failed",
+                    "canceled"
+                  ],
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "definition_hash": "sha256:5423aae537c26f446dc3edb7c595e6f9f8a3e5f2f3a0385015bc4da3863d5e6a",
+          "name": "billing__create_refund",
+          "request": {
+            "body": {
+              "in": "spread",
+              "media_type": "application/json",
+              "properties": [
+                "charge_id",
+                "amount",
+                "reason"
+              ],
+              "required": true
+            },
+            "kind": "http",
+            "method": "POST",
+            "operation": "createRefund",
+            "parameters": [
+              {
+                "in": "header",
+                "name": "X-Request-Source",
+                "property": "X-Request-Source",
+                "required": false
+              }
+            ],
+            "path": "/refunds",
+            "response": {
+              "media_type": "application/json",
+              "status": "201"
+            },
+            "security": [
+              {
+                "oauth": [
+                  "billing"
+                ]
+              }
+            ]
+          },
+          "shaping": {
+            "deadline_ms": 30000,
+            "defaults": {},
+            "fixed": {
+              "X-Request-Source": "oxagen"
+            },
+            "hide": [
+              "X-Request-Source"
+            ],
+            "idempotency_header": "Idempotency-Key",
+            "max_result_bytes": 65536,
+            "redact": [],
+            "rename": {},
+            "select": []
+          },
+          "tokens": 167,
+          "upstream_hash": "sha256:8436b7d4efdf2761d90ec03f5eacbf08cbbb2a3573405af32be8960430b5b87d",
+          "version": 1
+        },
+        "list_charges": {
+          "classification": {
+            "data_classes": [],
+            "egress": "org_tenant",
+            "impacts": [],
+            "measures": {},
+            "risk": "low",
+            "side_effect": "read"
+          },
+          "definition": {
+            "annotations": {
+              "destructiveHint": false,
+              "openWorldHint": false,
+              "readOnlyHint": true
+            },
+            "description": "List one customer's charges, newest first. Amounts are in cents.",
+            "inputSchema": {
+              "properties": {
+                "cursor": {
+                  "description": "The next_cursor from the previous page.",
+                  "type": "string"
+                },
+                "customer_id": {
+                  "description": "The customer whose charges to list.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "customer_id"
+              ],
+              "type": "object"
+            },
+            "name": "billing__list_charges",
+            "outputSchema": {
+              "properties": {
+                "data": {
+                  "items": {
+                    "properties": {
+                      "amount": {
+                        "type": "integer"
+                      },
+                      "currency": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "enum": [
+                          "pending",
+                          "succeeded",
+                          "failed"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "next_cursor": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "definition_hash": "sha256:bd126ac1bffd94a9b08fe4ac52bd4f2a35017c6a44de3fcf3ce3d9323e9f6dd4",
+          "name": "billing__list_charges",
+          "paging": {
+            "input": "cursor",
+            "items": "data",
+            "next": "next_cursor",
+            "style": "cursor"
+          },
+          "request": {
+            "kind": "http",
+            "method": "GET",
+            "operation": "listCharges",
+            "parameters": [
+              {
+                "in": "path",
+                "name": "customer_id",
+                "property": "customer_id",
+                "required": true
+              },
+              {
+                "in": "query",
+                "name": "cursor",
+                "property": "cursor",
+                "required": false
+              }
+            ],
+            "path": "/customers/{customer_id}/charges",
+            "response": {
+              "media_type": "application/json",
+              "status": "200"
+            },
+            "security": [
+              {
+                "oauth": [
+                  "billing"
+                ]
+              }
+            ]
+          },
+          "shaping": {
+            "deadline_ms": 30000,
+            "defaults": {},
+            "fixed": {},
+            "hide": [],
+            "max_items": 10000,
+            "max_result_bytes": 65536,
+            "paginate": "cursor",
+            "redact": [],
+            "rename": {},
+            "select": []
+          },
+          "tokens": 182,
+          "upstream_hash": "sha256:5663eaf332f70d11bd3175d583b707d0a3ea08b42234c8c547795f65d78f5f0a",
+          "version": 1
+        }
+      }
+    },
+    {
+      "auth": {
+        "apply": {
+          "type": "oauth2"
+        },
+        "mode": "service",
+        "scheme": "oauth"
+      },
+      "description": "Payments, refunds, and invoices in the a-intel Stripe account.",
+      "environments": {
+        "live": {
+          "credential": "oxagen:credential/stripe-live",
+          "network": "cloud",
+          "sandbox": false,
+          "url": "https://mcp.stripe.com"
+        },
+        "test": {
+          "credential": "oxagen:credential/stripe-test",
+          "network": "cloud",
+          "sandbox": true,
+          "url": "https://mcp.stripe.com"
+        }
+      },
+      "exposure": {
+        "definition_budget": 8000,
+        "mode": "direct"
+      },
+      "label": "Stripe",
+      "name": "stripe",
+      "pinned": {
+        "server_version": "2026.09.1",
+        "type": "remote",
+        "url": "https://mcp.stripe.com"
+      },
+      "search": null,
+      "source": {
+        "transport": "http",
+        "type": "remote",
+        "url": "https://mcp.stripe.com"
+      },
+      "tokens": {
+        "definitions": 145,
+        "request": 145
+      },
+      "tools": {
+        "create_refund": {
+          "classification": {
+            "data_classes": [],
+            "egress": "third_party",
+            "impacts": [
+              "moves_money"
+            ],
+            "measures": {},
+            "risk": "high",
+            "side_effect": "irreversible"
+          },
+          "definition": {
+            "annotations": {
+              "destructiveHint": true,
+              "openWorldHint": true,
+              "readOnlyHint": false
+            },
+            "description": "Refund part or all of a captured charge. The amount is in cents.",
+            "inputSchema": {
+              "properties": {
+                "amount": {
+                  "type": "integer"
+                },
+                "charge": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "charge"
+              ],
+              "type": "object"
+            },
+            "name": "stripe__create_refund"
+          },
+          "definition_hash": "sha256:85a690f9248d4663c850f1d79f6876f74253f59368ef948580c08d6897b463c3",
+          "name": "stripe__create_refund",
+          "request": {
+            "kind": "mcp",
+            "tool": "create_refund"
+          },
+          "shaping": {
+            "deadline_ms": 30000,
+            "defaults": {},
+            "fixed": {},
+            "hide": [],
+            "max_result_bytes": 16384,
+            "redact": [],
+            "rename": {},
+            "select": []
+          },
+          "tokens": 80,
+          "upstream_hash": "sha256:eedae6aec59512b997384942309dc91e6f1ddc894b7b67b2a289fe4eec99df61",
+          "version": 1
+        },
+        "list_charges": {
+          "classification": {
+            "data_classes": [],
+            "egress": "third_party",
+            "impacts": [],
+            "measures": {},
+            "risk": "low",
+            "side_effect": "read"
+          },
+          "definition": {
+            "annotations": {
+              "destructiveHint": false,
+              "openWorldHint": true,
+              "readOnlyHint": true
+            },
+            "description": "List charges, newest first.",
+            "inputSchema": {
+              "properties": {
+                "customer": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            },
+            "name": "stripe__list_charges"
+          },
+          "definition_hash": "sha256:163c945663e8ced81e9ca8fc1db95d0a3fe9eaf00703637cae00877f6d23650c",
+          "name": "stripe__list_charges",
+          "request": {
+            "kind": "mcp",
+            "tool": "list_charges"
+          },
+          "shaping": {
+            "deadline_ms": 30000,
+            "defaults": {},
+            "fixed": {},
+            "hide": [],
+            "max_result_bytes": 16384,
+            "redact": [],
+            "rename": {},
+            "select": [
+              "data[].id",
+              "data[].amount",
+              "data[].status",
+              "has_more"
+            ]
+          },
+          "tokens": 65,
+          "upstream_hash": "sha256:771a97ee8660cc4830554d173a5b34f73182672faa674a42c7b18f7a111dd87a",
+          "version": 1
+        }
+      }
+    }
+  ]
+}
