@@ -187,6 +187,21 @@ describe("local-call-envelope/v1", () => {
       { path: "expires_at", message: "expires_at must be after issued_at" },
     ]);
   });
+
+  it("keeps deadline_ms and signs it", () => {
+    const bounded = { ...localEnvelope, deadline_ms: 45_000 };
+    expect(localCallEnvelopeSchema.parse(bounded)).toStrictEqual(bounded);
+    expect(envelopeSigningBytes({ ...bounded, deadline_ms: 300_000 })).not.toEqual(envelopeSigningBytes(bounded));
+  });
+
+  it.each([
+    [0, "Number must be greater than or equal to 1"],
+    [300_001, "Number must be less than or equal to 300000"],
+    [1.5, "Expected integer, received float"],
+  ])("refuses a deadline_ms of %s", (deadline, message) => {
+    const result = localCallEnvelopeSchema.safeParse({ ...localEnvelope, deadline_ms: deadline });
+    expect(pathsAndMessages(result)).toStrictEqual([{ path: "deadline_ms", message }]);
+  });
 });
 
 describe("envelopeSigningBytes", () => {

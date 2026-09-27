@@ -5,11 +5,13 @@
 // The local gateway runs the call only when the envelope's signature checks,
 // its expiry has not passed, its nonce is new, the arguments it received hash
 // to arguments_hash, the tool's locked version matches, and the command's
-// package digest matches the lock. It keeps no cached decisions.
+// package digest matches the lock. It stops the call when deadline_ms passes.
+// It keeps no cached decisions.
 import { z } from "zod";
 import { sha256Schema, toolNameSchema } from "@oxagen/oxagen/steering-repo/common";
 import { withChecks } from "./checks";
 import {
+  envelopeDeadlineSchema,
   envelopeSignatureSchema,
   expiresAtSchema,
   expiryCheck,
@@ -31,6 +33,9 @@ export const localCallEnvelopeSchema = withChecks(
       ),
       arguments_hash: sha256Schema.describe(
         "SHA-256 over the RFC 8785 form of the upstream arguments, after the input was shaped.",
+      ),
+      deadline_ms: envelopeDeadlineSchema.describe(
+        "How long the local gateway lets the call run before it stops it. 30000 when omitted.",
       ),
       machine: z
         .string()

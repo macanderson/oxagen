@@ -39,6 +39,12 @@
       "pattern": "^sha256:[0-9a-f]{64}$",
       "description": "SHA-256 over the RFC 8785 form of the upstream arguments, after the input was shaped."
     },
+    "deadline_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 300000,
+      "description": "How long the local gateway lets the call run before it stops it. 30000 when omitted."
+    },
     "machine": {
       "type": "string",
       "pattern": "^[A-Za-z0-9_-]{1,64}$",
