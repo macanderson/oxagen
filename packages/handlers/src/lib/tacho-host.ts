@@ -49,7 +49,6 @@ import {
 import {
   type AgentBudgetDoc,
   budgetDocFromVersion,
-  containmentFromVersion,
   deriveBundleBudget,
   mapMandateToBundlePermissions,
 } from "./tacho-mandate";
@@ -87,9 +86,11 @@ interface TachoTx {
     tachoControlCommands: { findMany: (args: unknown) => Promise<unknown> };
     retentionPolicyVersions: { findFirst: (args: unknown) => Promise<unknown> };
     // The mandate read (`resolveHostMandate`): the host's agent identity and
-    // its active version's config, for the budget half of the mandate.
+    // its active version's config, for the budget half of the mandate, and
+    // the host's runtime, for containment (ADR-204).
     agents: { findFirst: (args: unknown) => Promise<unknown> };
     agentVersions: { findFirst: (args: unknown) => Promise<unknown> };
+    runtimes: { findFirst: (args: unknown) => Promise<unknown> };
     // The decision-rules half of the mandate. `loadRuleSetIn` (`@oxagen/rules`)
     // reads it, and it runs on a cast to the real `Tx` because that signature
     // asks for the whole thing. Naming the table it touches is what keeps the
@@ -401,12 +402,12 @@ function modelPrices(host: TachoHostRow): {
 
 /** The tool-RBAC-and-budget half of a host's mandate, resolved for the wire. */
 export interface HostMandate {
-  /** The active version's config holds a budget or containment it cannot read. */
+  /** The active version's config holds a budget it cannot read. */
   invalidAgentConfig?: true;
   permissions: PolicyBundle["permissions"];
   budget: PolicyBundle["budget"];
   models?: PolicyBundle["models"];
-  /** The active version's config requires the contained tier (ADR-152). */
+  /** The host's runtime requires the contained tier (ADR-152, ADR-204). */
   containment?: { required: true };
   /**
    * What the host asks when a session starts in a repository the
@@ -453,21 +454,14 @@ function steeringManifest(
 }
 
 /**
- * The `budget` and `containment` tables off the config of the host's agent's
- * ACTIVE version (ADR-198). It is undefined when the host names no agent or
- * has no active version, and each table is undefined when the config
- * declares none.
+ * The `budget` table off the config of the host's agent's ACTIVE version
+ * (ADR-198). It is undefined when the host names no agent, the agent has no
+ * active version, or the config declares no budget.
  */
-async function readAgentVersionLimits(
+async function readAgentVersionBudget(
   tx: TachoTx,
   agentId: string | null,
-): Promise<
-  | {
-      budget: AgentBudgetDoc | undefined;
-      containment: { required: true } | undefined;
-    }
-  | undefined
-> {
+): Promise<AgentBudgetDoc | undefined> {
   if (agentId === null) return undefined;
   const agent = (await tx.query.agents.findFirst({
     where: eq(schema.agents.id, agentId),
@@ -478,20 +472,44 @@ async function readAgentVersionLimits(
     where: eq(schema.agentVersions.id, agent.activeVersionId),
     columns: { config: true },
   })) as { config: unknown } | undefined;
-  return version === undefined
-    ? undefined
-    : {
-        budget: budgetDocFromVersion(version),
-        containment: containmentFromVersion(version),
-      };
+  return version === undefined ? undefined : budgetDocFromVersion(version);
+}
+
+/**
+ * Whether the host's runtime requires the contained launcher (ADR-152,
+ * ADR-204). The runtime is the one the host enrollment binds, or the
+ * agent's current runtime for a host that binds none.
+ *
+ * The read does not filter out a deleted runtime. Deleting a runtime must
+ * not lift containment from a host still bound to it, so a deleted runtime
+ * that required containment still requires it here.
+ */
+async function readRuntimeContainment(
+  tx: TachoTx,
+  host: TachoHostRow,
+): Promise<boolean> {
+  let runtimeId = host.runtimeId ?? null;
+  if (runtimeId === null && host.agentId !== null) {
+    const agent = (await tx.query.agents.findFirst({
+      where: eq(schema.agents.id, host.agentId),
+      columns: { runtimeId: true },
+    })) as { runtimeId: string | null } | undefined;
+    runtimeId = agent?.runtimeId ?? null;
+  }
+  if (runtimeId === null) return false;
+  const runtime = (await tx.query.runtimes.findFirst({
+    where: eq(schema.runtimes.id, runtimeId),
+    columns: { containmentRequired: true },
+  })) as { containmentRequired: boolean } | undefined;
+  return runtime?.containmentRequired === true;
 }
 
 /**
  * The host's mandate, resolved from the agent it wraps: tool RBAC and
  * external-tool rules mapped onto the harness permission shape
  * (`mapMandateToBundlePermissions`, `packages/handlers/src/lib/tacho-mandate.ts`),
- * and the budget mode derived from the agent's own declared budget
- * (`deriveBundleBudget`).
+ * the budget mode derived from the agent's own declared budget
+ * (`deriveBundleBudget`), and containment from the host's runtime.
  *
  * Each half degrades independently, never to an invented value: tool RBAC
  * contributes nothing when the host names no agent principal
@@ -500,6 +518,8 @@ async function readAgentVersionLimits(
  * way (they govern the workspace, not one agent's own grants), and the
  * budget stays `observed` when the host names no agent, the agent has no
  * published version, or its active version's config carries no budget table.
+ * Containment is read before the budget and apart from it, so a budget the
+ * host cannot read never drops the runtime's containment from the mandate.
  */
 export async function resolveHostMandate(
   tx: TachoTx,
@@ -544,20 +564,19 @@ export async function resolveHostMandate(
     externalToolRules: ruleSet?.rules ?? [],
   });
   const models = await workspaceModels(tx, ctx, host);
+  const containment = (await readRuntimeContainment(tx, host))
+    ? { containment: { required: true as const } }
+    : {};
   const unbound = await unboundRepo(tx, ctx, host);
   try {
-    const limits = await readAgentVersionLimits(tx, host.agentId);
-    const budget = deriveBundleBudget(limits?.budget, {
-      enforcesDaily:
-        host.bundleFeatures?.includes(BUNDLE_FEATURE_DAILY_BUDGET) === true,
-    });
-    return {
-      permissions,
-      budget,
-      ...models,
-      ...unbound,
-      ...(limits?.containment ? { containment: limits.containment } : {}),
-    };
+    const budget = deriveBundleBudget(
+      await readAgentVersionBudget(tx, host.agentId),
+      {
+        enforcesDaily:
+          host.bundleFeatures?.includes(BUNDLE_FEATURE_DAILY_BUDGET) === true,
+      },
+    );
+    return { permissions, budget, ...models, ...unbound, ...containment };
   } catch (error) {
     if (!isHandlerError(error) || error.reason !== "invalid_agent_config")
       throw error;
@@ -571,6 +590,7 @@ export async function resolveHostMandate(
       invalidAgentConfig: true,
       ...models,
       ...unbound,
+      ...containment,
     };
   }
 }

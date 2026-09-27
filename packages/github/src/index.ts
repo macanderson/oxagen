@@ -52,3 +52,4 @@ export {
   parseReturnTo,
   verifyInstallState,
 } from "./install-url";
+export * from "./deployments";

@@ -362,6 +362,25 @@ const LOCKUP_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 604.125
 const MACOS_FIRST_LAUNCH = `<div id="macos-first-launch"><h2>First launch on macOS</h2><p>Builds are not yet notarized, so macOS refuses the first launch and offers Move to Trash. Choose Done or Cancel instead. Then open System Settings &gt; Privacy &amp; Security (System Preferences &gt; Security &amp; Privacy on macOS 12), click Open Anyway, and confirm with Open and your login password. The button shows for about an hour after the refused launch.</p><p>Or clear the quarantine flag in a terminal, then open Oxagen:</p><pre>xattr -dr com.apple.quarantine /Applications/Oxagen.app</pre></div>`;
 
 /**
+ * ADR-202: every block that hands out an installer says that the macOS app
+ * updates itself. The docs blocks and the web app's `DesktopDownloads` carry
+ * the same notice; the Updates section of the desktop guide has the details.
+ */
+const MACOS_UPDATES = `<div id="macos-updates"><h2>Updates on macOS</h2><p>On macOS, the app installs new versions on its own and runs them after your next restart. To turn this off, clear Install updates automatically in the app's Updates panel. Windows and Linux ask first. <a href="https://docs.oxagen.sh/docs/cli/desktop#updates">How updates work</a>.</p></div>`;
+
+/**
+ * True when `version` installs updates by itself: 2.1.2 and later. Only the
+ * base version counts, so a build `2.1.2-N` of main counts too. This code
+ * merged after the background install (#4422), so a build that renders this
+ * page carries it.
+ */
+export function updatesItself(version: string): boolean {
+  const match = VERSION.exec(version);
+  if (match === null) return false;
+  return compareVersions(`${match[1]}.${match[2]}.${match[3]}`, "2.1.2") >= 0;
+}
+
+/**
  * The page at https://downloads.oxagen.sh/. House brand: obsidian first with
  * the white theme on `prefers-color-scheme: light` or `data-theme="light"`,
  * the three faces, the 12px radius, the 1120px wrap. Gold appears on the mark
@@ -432,6 +451,10 @@ ${body}
       };
   }
   const picksJson = JSON.stringify(picks);
+  // ADR-202: said above the button and every table, so no download route
+  // skips it.
+  const macUpdates =
+    sorted.some((e) => e.os === "macOS") && updatesItself(input.version);
   const fontFaces = [
     ["Space Grotesk", "space-grotesk-latin-600.woff2", "600"],
     ["Space Grotesk", "space-grotesk-latin-700.woff2", "700"],
@@ -481,6 +504,7 @@ h2{font:600 20px/1.25 var(--font-display);color:var(--fg);margin:0 0 6px}
 .btn:hover{background:#F1CE65;border-color:#F1CE65}
 .cta .alt{color:var(--muted);font-size:14px}
 .cta .alt a{color:var(--fg)}
+.hero .updates{margin:16px 0 0}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;padding:36px 0}
 .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px 20px 12px;min-width:0}
 .panel[aria-current="true"]{border:3px double var(--rule)}
@@ -513,6 +537,7 @@ footer a{color:var(--muted)}
 <p class="lede">The Oxagen app signs this machine in to your organization and registers the Claude Code, Codex, Cursor, and stella installs it finds. Every run they make is recorded, and every action routed through Oxagen is answered by your rules.</p>
 <p class="meta"><span>${build ? "Build" : "Version"} <code>${version}</code></span><span>Published <code>${escapeHtml(input.publishedAt)}</code></span><span><a href="${links.notes}">${build ? "Releases" : "Release notes"}</a></span></p>
 <div class="cta">${primary}<span class="alt" id="alt">Other platforms and architectures are listed below. Each file has a SHA-256.</span></div>
+${macUpdates ? '<p class="note updates">On macOS, the app installs new versions on its own after a restart. <a href="#macos-updates">How to turn this off</a>.</p>' : ""}
 </section>
 <div class="grid">
 ${section("macOS", 'macOS 12 or newer. Open the .dmg and drag Oxagen to Applications. Builds are not yet notarized, so the first launch takes the steps under <a href="#macos-first-launch">First launch on macOS</a>.')}
@@ -521,6 +546,7 @@ ${section("Linux", "x86_64. Install the package for your distribution. The AppIm
 </div>
 <section class="verify">
 ${sorted.some((e) => e.os === "macOS") ? MACOS_FIRST_LAUNCH : ""}
+${macUpdates ? MACOS_UPDATES : ""}
 <div><h2>Verify a download</h2><p>Every file in this version is listed in <a href="desktop/${encodeURIComponent(input.version)}/SHA256SUMS.txt">SHA256SUMS.txt</a>. Put it beside the file you downloaded and run:</p><pre>shasum -a 256 -c SHA256SUMS.txt</pre></div>
 <div><h2>Command line only</h2><p>The <code>tacho</code> and <code>oxagen</code> executables ship inside the app and link onto your PATH on first launch.${
     input.cliRelease === false || build
