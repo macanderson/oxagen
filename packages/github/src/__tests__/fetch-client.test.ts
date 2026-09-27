@@ -640,6 +640,38 @@ describe("createBranch", () => {
       "https://api.github.com/repos/acme/my-repo/git/ref/heads/trunk",
     );
   });
+
+  it("creates the branch at fromSha without reading a branch", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      makeResponse({
+        ref: "refs/heads/feature-z",
+        object: { sha: "cafef00d" },
+      }),
+    ); // POST refs
+    vi.stubGlobal("fetch", fetchMock);
+    const client = createGitHubClient({ token: "tok" });
+
+    const result = await client.createBranch({
+      owner: "acme",
+      repo: "my-repo",
+      branch: "feature-z",
+      fromBranch: "develop",
+      fromSha: "cafef00d",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [postUrl, postInit] = fetchMock.mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(postUrl).toBe("https://api.github.com/repos/acme/my-repo/git/refs");
+    expect(postInit.method).toBe("POST");
+    expect(JSON.parse(postInit.body as string)).toEqual({
+      ref: "refs/heads/feature-z",
+      sha: "cafef00d",
+    });
+    expect(result).toEqual({ ref: "refs/heads/feature-z", sha: "cafef00d" });
+  });
 });
 
 // ---------------------------------------------------------------------------
