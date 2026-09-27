@@ -1295,9 +1295,13 @@ export async function runAnswer(
   writer.write(
     `Answered ${result.interjectionId} on ${result.runId}. Receipt ${result.receiptId}.`,
   );
-  if (result.path === "create" && result.workspace && result.repository)
+  // Since lane S1 (#4450) a create binds no repository, so `repository` is
+  // null on a create. An older server still names the one it bound.
+  if (result.path === "create" && result.workspace)
     writer.write(
-      `Created the workspace ${result.workspace.slug} (${result.workspace.publicId}) for ${result.repository.fullName}. Its skills are off.`,
+      result.repository
+        ? `Created the workspace ${result.workspace.slug} (${result.workspace.publicId}) for ${result.repository.fullName}. Its skills are off.`
+        : `Created the workspace ${result.workspace.slug} (${result.workspace.publicId}). Its skills are off, and no repository is linked to it yet.`,
     );
   else if (result.path === "link" && result.repository)
     writer.write(

@@ -2,6 +2,7 @@ import { setRunSealedSender } from "@oxagen/agent/runtime/run-sealed-event";
 import { setInterjectionTimeoutRunner } from "@oxagen/inngest-functions/interjection-timeout-runner";
 import { setRunFitRunner } from "@oxagen/inngest-functions/run-fit-runner";
 import { setPullRequestBackfillRunner } from "@oxagen/inngest-functions/run-pull-request-backfill-runner";
+import { setSteeringRepoProvisionRunner } from "@oxagen/inngest-functions/steering-repo-provision-runner";
 import { setSteeringSyncRunner } from "@oxagen/inngest-functions/steering-sync-runner";
 import {
   registerHandler,
@@ -53,6 +54,33 @@ registerHandlersOnce("@oxagen/handlers", () => {
       headSha: out.headSha,
       retryAfterSeconds: out.retryAfterSeconds,
     };
+  });
+  // Provisioning a steering repo (lane S1, #4450) runs the steps in
+  // ./steering_repo.provision, which @oxagen/inngest-functions cannot import.
+  // A workspace step that binds the repository enters the workspace's tenant
+  // scope itself. The organization repository has no workspace, so its steps
+  // run outside a tenant scope.
+  setSteeringRepoProvisionRunner({
+    steps: async () =>
+      (await import("./steering_repo.provision")).STEERING_REPO_STEPS,
+    runStep: async (scope, step) => {
+      const provision = await import("./steering_repo.provision");
+      if (!provision.isSteeringRepoStep(step))
+        throw Object.assign(new Error(`unknown provision step ${step}`), {
+          isNonRetriable: true,
+        });
+      return provision.runSteeringRepoStep(
+        provision.steeringRepoProvisionDeps({ actorUserId: scope.actorUserId }),
+        scope.workspaceId === null
+          ? { kind: "organization", orgId: scope.orgId }
+          : {
+              kind: "workspace",
+              orgId: scope.orgId,
+              workspaceId: scope.workspaceId,
+            },
+        step,
+      );
+    },
   });
   // The durable Model fit reading (#3893, ADR-201) reads the run the way the
   // Run page does, through this package, which @oxagen/inngest-functions

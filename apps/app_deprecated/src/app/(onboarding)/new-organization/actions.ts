@@ -122,13 +122,12 @@ export async function createOrgAction(
   }
   const org = orgInput.data;
 
-  // The first workspace is born without a main repository, on purpose: the
-  // org does not exist until the transaction below commits, so it holds no
-  // GitHub authorization and no repository is reachable to bind. The spec
-  // sanctions exactly this (Mission Control spec §7; ADR-099): onboarding
-  // binds the main repo one step later and the workspace stays provisional
-  // until it does. `create_workspace` requires `mainRepo`, so this validates
-  // the name and slug rules alone rather than the full contract.
+  // The first workspace is born without a main repository: the org does not
+  // exist until the transaction below commits, so it holds no GitHub
+  // authorization and no repository is reachable to bind (Mission Control
+  // spec §7; ADR-099). This validates the name and slug rules alone.
+  // `create_workspace` takes `mainRepo` only as a deprecated, ignored field
+  // (lane S1, #4450).
   const workspaceInput = workspaceCreate.input
     .omit({ mainRepo: true })
     .safeParse({
