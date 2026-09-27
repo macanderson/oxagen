@@ -87,7 +87,8 @@ export const memoryPullRequests = agentSchema.table(
     number: integer("number").notNull(),
     url: text("url").notNull(),
     status: text("status").notNull().default("open"),
-    // [{ lineage, path, kind, memoryIds, statementHashes }], one per record.
+    // [{ action, lineage, path, kind, memoryIds, statementHashes }], one per
+    // record the PR proposes or retires.
     records: jsonb("records").notNull().default(sql`'[]'::jsonb`),
     openedAt: timestamp("opened_at", { withTimezone: true, mode: "date" })
       .notNull()
@@ -209,6 +210,12 @@ export const memoryRecalls = agentSchema.table(
       withTimezone: true,
       mode: "date",
     })
+      .notNull()
+      .defaultNow(),
+    // When a person last decided on the record: its memory PR merged, or a
+    // proposal to retire it merged or closed. A contradiction counts only
+    // lessons written after it.
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),
   },

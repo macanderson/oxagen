@@ -1104,6 +1104,20 @@ export const ENV_REGISTRY: Record<string, EnvVarMeta> = {
     valueOrigin: "manual",
     placeholder: "",
   },
+  TACHO_MEMORY_CAPTURE: {
+    group: "Inngest",
+    description:
+      "Set to 1 on the operator's machine to let the Tacho collector read each wrapped " +
+      "harness's memory folder and send what changed to the workspace as memories for the " +
+      "curator (ADR-206). Off by default, and never a deployment value: it is read by the " +
+      "collector on the laptop, not by the server.",
+    secret: false,
+    clientExposed: false,
+    services: [],
+    requiredIn: [],
+    valueOrigin: "manual",
+    placeholder: "",
+  },
   TACHO_MCP_ENDPOINT: {
     group: "Inngest",
     description:

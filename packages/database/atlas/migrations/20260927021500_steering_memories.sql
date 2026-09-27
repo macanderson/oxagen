@@ -9,7 +9,8 @@
 -- 4. agent.memory_rejections: a hash of each statement whose record did not
 --    merge, so the curator does not propose it again without new evidence.
 -- 5. agent.memory_recalls: how often, and when last, a run recalled each
---    steering record. Retirement reads it.
+--    steering record, and when a person last decided on it. Retirement
+--    reads it.
 --
 -- Every table is tenant-isolated like every org-scoped table.
 
@@ -102,7 +103,8 @@ CREATE TABLE IF NOT EXISTS agent.memory_recalls (
   workspace_id uuid NOT NULL,
   lineage text NOT NULL,
   recall_count integer NOT NULL DEFAULT 0,
-  last_recalled_at timestamptz NOT NULL DEFAULT now()
+  last_recalled_at timestamptz NOT NULL DEFAULT now(),
+  reviewed_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS memory_recalls_lineage_uq ON agent.memory_recalls (workspace_id, lineage);
 
