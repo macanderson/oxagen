@@ -73,6 +73,7 @@ describe("memory", () => {
     ["an empty tools list", { tools: [] }, ["tools"], "too_small"],
     ["an empty evidence entry", { evidence: [""] }, ["evidence", 0], "too_small"],
     ["a time with no offset", { created_at: "2026-09-19 14:02" }, ["created_at"], "invalid_string"],
+    ["an offset out of range", { created_at: "2026-09-19T14:02:11+99:99" }, ["created_at"], "custom"],
   ])("refuses %s", (_name, patch, path, code) => {
     expect(issuesOf({ ...MEMORY, ...patch })).toEqual([{ path, code }]);
   });
